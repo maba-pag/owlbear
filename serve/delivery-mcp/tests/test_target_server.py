@@ -6,10 +6,11 @@ import asyncio
 import hashlib
 import json
 import logging
+import os
 import subprocess
 import threading
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from unittest.mock import Mock, patch
@@ -1526,6 +1527,7 @@ DELIVERY_TOOLS = {
     "recover_publication_baseline",
     "transition_delivery",
     "settle_worker_invocation",
+    "release_stuck_worker",
     "recover_claim",
     "recover_integration_repair_claim",
     "show_integration_attention",
@@ -2046,6 +2048,186 @@ async def test_registered_settlement_accepts_ended_without_result_only_without_r
     assert not settled.is_error
     assert runtime.active_claims() == ()
     assert json.loads(owner_result.read_bytes())["failure_code"] == "worker-ended-without-result"
+
+
+def _stall_iso(value: datetime) -> str:
+    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
+
+
+def _registered_diagnostic(result: Any) -> dict[str, object]:
+    _prefix, marker, content = result.content[0].text.partition("{")
+    assert marker, result.content[0].text
+    return json.loads(marker + content)
+
+
+def _stall_planning_case(tmp_path: Path) -> tuple[PortfolioApplication, Any, Any, Path, Any, datetime, list[str]]:
+    start = datetime.now(UTC).replace(microsecond=0)
+    now = [_stall_iso(start)]
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path, {"change-a": DeliveryStage.PLANNING}, clock=lambda: now[0]
+    )
+    launch = application.acquire_actions().launch_packages[0]
+    return application, runtimes["change-a"], coordinator, state_root, launch, start, now
+
+
+@pytest.mark.asyncio
+async def test_registered_release_stuck_worker_settles_quiet_planner_and_replays(tmp_path: Path) -> None:
+    application, runtime, _coordinator, state_root, launch, start, now = _stall_planning_case(tmp_path)
+    request = {
+        "change_id": "change-a",
+        "outcome_id": "OUT-001",
+        "attempt_id": launch.claim.attempt_id,
+        "claim_id": launch.claim.claim_id,
+    }
+    owner_result = state_root / "changes/change-a/retry-ledger/owner-results" / f"{launch.claim.attempt_id}.json"
+    now[0] = _stall_iso(start + timedelta(minutes=10))
+
+    async with Client(assemble_target_server(application)) as client:
+        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+        released = await client.call_tool("release_stuck_worker", request)
+        frontier = runtime.frontier_bytes()
+        replayed = await client.call_tool("release_stuck_worker", request)
+
+    tool = tools["release_stuck_worker"]
+    assert set(tool.input_schema["properties"]) == {"change_id", "outcome_id", "attempt_id", "claim_id"}
+    assert set(tool.input_schema["required"]) == {"change_id", "attempt_id", "claim_id"}
+    assert tool.input_schema["additionalProperties"] is False
+    assert tool.annotations is not None
+    assert tool.annotations.read_only_hint is False
+    assert tool.annotations.idempotent_hint is True
+    assert tool.annotations.destructive_hint is False
+    assert not released.is_error
+    assert released.structured_content == runtime.show_binding("OUT-001").model_dump(mode="json")
+    assert released.structured_content["active_claim"] is None
+    assert json.loads(owner_result.read_bytes())["failure_code"] == "worker-released-stuck"
+    assert not replayed.is_error
+    assert replayed.structured_content == released.structured_content
+    assert runtime.frontier_bytes() == frontier
+
+
+@pytest.mark.asyncio
+async def test_registered_release_stuck_worker_refuses_recent_worktree_activity_without_mutation(
+    tmp_path: Path,
+) -> None:
+    application, runtime, coordinator, state_root, launch, start, now = _stall_planning_case(tmp_path)
+    worktree = launch.worktree_path
+    touched = start + timedelta(minutes=5)
+    activity = worktree / "planner-notes.txt"
+    activity.write_text("recent\n", encoding="utf-8")
+    os.utime(activity, (touched.timestamp(), touched.timestamp()))
+    now[0] = _stall_iso(touched + timedelta(seconds=30))
+    owner_result = state_root / "changes/change-a/retry-ledger/owner-results" / f"{launch.claim.attempt_id}.json"
+    before = (runtime.frontier_bytes(), runtime.retry_ledger().read(), coordinator.show("change-a"))
+
+    async with Client(assemble_target_server(application)) as client:
+        refused = await client.call_tool(
+            "release_stuck_worker",
+            {
+                "change_id": "change-a",
+                "outcome_id": "OUT-001",
+                "attempt_id": launch.claim.attempt_id,
+                "claim_id": launch.claim.claim_id,
+            },
+        )
+
+    assert refused.is_error
+    assert refused.structured_content is None
+    diagnostic = _registered_diagnostic(refused)
+    assert diagnostic["code"] == "ERR_DELIVERY_WORKER_ACTIVE"
+    assert diagnostic["retry_safe"] is True
+    assert diagnostic["current_authority_identity"] == "change-a"
+    assert f"Retry at or after {_stall_iso(touched + timedelta(minutes=2))}" in diagnostic["detail"]
+    assert (runtime.frontier_bytes(), runtime.retry_ledger().read(), coordinator.show("change-a")) == before
+    assert runtime.show_binding("OUT-001").active_claim == launch.claim
+    assert not owner_result.exists()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "request_update",
+    [
+        {"outcome_id": "OUT-1"},
+        {"attempt_id": ""},
+        {"confirmed_lost": True},
+        {"elapsed_time": 600},
+    ],
+)
+async def test_registered_release_stuck_worker_sanitizes_invalid_arguments_before_effects(
+    tmp_path: Path,
+    request_update: dict[str, object],
+) -> None:
+    application, runtime, _coordinator, _state_root, launch, start, now = _stall_planning_case(tmp_path)
+    now[0] = _stall_iso(start + timedelta(minutes=10))
+    request = {
+        "change_id": "change-a",
+        "outcome_id": "OUT-001",
+        "attempt_id": launch.claim.attempt_id,
+        "claim_id": launch.claim.claim_id,
+        **request_update,
+    }
+    frontier = runtime.frontier_bytes()
+
+    async with Client(assemble_target_server(application)) as client:
+        refused = await client.call_tool("release_stuck_worker", request)
+
+    assert refused.is_error
+    assert refused.content[0].text == "Error executing tool release_stuck_worker: " + json.dumps(
+        {
+            "code": "ERR_TARGET_PARAM_VALIDATION",
+            "detail": "Invalid tool arguments. Check the tool input schema.",
+            "current_authority_identity": "portfolio",
+            "retry_safe": False,
+        },
+        separators=(",", ":"),
+    )
+    assert runtime.frontier_bytes() == frontier
+    assert runtime.show_binding("OUT-001").active_claim == launch.claim
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("disposition", ["host-lost", "released-stuck"])
+async def test_registered_settlement_rejects_engine_worker_dispositions(tmp_path: Path, disposition: str) -> None:
+    application, runtime, _coordinator, state_root, launch, start, now = _stall_planning_case(tmp_path)
+    now[0] = _stall_iso(start + timedelta(minutes=10))
+    identity = {"change_id": "change-a", "claim_id": launch.claim.claim_id, "attempt_id": launch.claim.attempt_id}
+    settlements = (
+        {**identity, "outcome_id": "OUT-001", "disposition": disposition},
+        {
+            **identity,
+            "outcome_id": "OUT-001",
+            "task_id": "TASK-001",
+            "expected_last_reviewed_commit": "a" * 40,
+            "disposition": disposition,
+        },
+        {
+            **identity,
+            "expected_head": "a" * 40,
+            "expected_reviewed_base": "a" * 40,
+            "report_id": "b" * 64,
+            "disposition": disposition,
+            "outcome": "ended-without-report",
+            "host_id": "host",
+            "session_id": "session",
+        },
+    )
+    owner_result = state_root / "changes/change-a/retry-ledger/owner-results" / f"{launch.claim.attempt_id}.json"
+    before = (runtime.frontier_bytes(), runtime.retry_ledger().read())
+
+    async with Client(assemble_target_server(application)) as client:
+        tool = {tool.name: tool for tool in (await client.list_tools()).tools}["settle_worker_invocation"]
+        results = [
+            await client.call_tool("settle_worker_invocation", {"settlement": settlement}) for settlement in settlements
+        ]
+
+    for result in results:
+        assert result.is_error
+        assert _registered_diagnostic(result)["code"] == "ERR_TARGET_PARAM_VALIDATION"
+    definitions = tool.input_schema["$defs"]
+    for name in ("DeliveryPlanningRetrySettlement", "DeliveryBuilderInvocationSettlement"):
+        assert disposition not in definitions[name]["properties"]["disposition"]["enum"]
+    assert (runtime.frontier_bytes(), runtime.retry_ledger().read()) == before
+    assert runtime.show_binding("OUT-001").active_claim == launch.claim
+    assert not owner_result.exists()
 
 
 async def _acquire_registered_change_action(client: Any, change_id: str, capabilities: list[str]) -> Any:

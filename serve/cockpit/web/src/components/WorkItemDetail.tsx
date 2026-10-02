@@ -70,7 +70,7 @@ interface WorkItemDetailProps {
   actionResult: string | null;
   onAnswerRequest: (requestId: string, resolution: DeliveryRequestResolution) => Promise<Error | null>;
   onClearBlock: (blockId: string, note: string, locators: string[]) => Promise<Error | null>;
-  onRecoverClaim: (attemptId: string, claimId: string) => Promise<Error | null>;
+  onReleaseStuckWorker: (attemptId: string, claimId: string) => Promise<Error | null>;
   onPreviewBackward: (target: WorkItemStage) => Promise<BackwardMovePreview | null>;
   onMoveBackward: (target: WorkItemStage, reason: string, snapshotVersion: string) => Promise<Error | null>;
   onReconcilePublication: () => Promise<Error | null>;
@@ -387,13 +387,18 @@ function elapsedAge(startedAt: string): string {
   return `${Math.max(Math.floor(elapsed / 60_000), 0)}m`;
 }
 
-function ClaimSection({ detail, pendingAction, actionError, onRecoverClaim }: WorkItemDetailProps) {
+function ClaimSection({ detail, pendingAction, actionError, onReleaseStuckWorker }: WorkItemDetailProps) {
   const claim = detail.item.active_claim;
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [actionFailed, setActionFailed] = useState(false);
   if (!claim) return null;
-  const recover = async () => {
-    const error = await onRecoverClaim(claim.attempt_id, claim.claim_id);
+  const readiness = detail.item.card.readiness ?? detail.item.readiness;
+  const releasable =
+    (claim.worker_role === "planner" || claim.worker_role === "builder") &&
+    Boolean(claim.attempt_id && claim.claim_id) &&
+    (readiness?.status === "running" || readiness?.reason_code === "worker-stall-wait");
+  const release = async () => {
+    const error = await onReleaseStuckWorker(claim.attempt_id, claim.claim_id);
     setActionFailed(error !== null);
     if (!error) setConfirmOpen(false);
   };
@@ -436,9 +441,10 @@ function ClaimSection({ detail, pendingAction, actionError, onRecoverClaim }: Wo
       </p>
       {claim.continuation ? (
         <p className="mt-static-md text-sm leading-relaxed" data-testid="claim-continuation-custody">
-          Delivery holds this custody as an engine continuation. Caller-confirmed recovery is not supported for it.
+          Delivery holds this custody as an engine continuation.
         </p>
-      ) : (
+      ) : null}
+      {releasable ? (
         <PButton
           className="mt-static-md"
           type="button"
@@ -450,9 +456,9 @@ function ClaimSection({ detail, pendingAction, actionError, onRecoverClaim }: Wo
             setConfirmOpen(true);
           }}
         >
-          Request claim recovery
+          Release stuck worker
         </PButton>
-      )}
+      ) : null}
       {confirmOpen ? (
         <PModal
           open
@@ -461,15 +467,19 @@ function ClaimSection({ detail, pendingAction, actionError, onRecoverClaim }: Wo
           dismissButton={false}
           disableBackdropClick
           onDismiss={() => setConfirmOpen(false)}
-          aria={{ role: "alertdialog", "aria-label": "Request claim recovery" }}
+          aria={{ role: "alertdialog", "aria-label": "Release stuck worker" }}
         >
           <ConfirmationContent onClose={() => setConfirmOpen(false)}>
             <PHeading tag="h2" size="lg">
-              Request claim recovery
+              Release stuck worker
             </PHeading>
             <p className="text-sm">
-              This request does not stop a worker or prove it has stopped. Delivery keeps custody and files unchanged
-              unless supported host evidence proves every old writer is closed or excluded.
+              Use this only for a worker whose chat was stopped or whose VS Code window closed. Delivery records the
+              attempt as failed, and it counts toward this work's retry budget.
+            </p>
+            <p className="text-sm">
+              The worktree, including uncommitted work, is preserved for the next attempt. Delivery refuses the release
+              and changes nothing if the worktree changed in the last two minutes.
             </p>
             <dl className="grid gap-static-xs break-all text-sm">
               <dt>Attempt</dt>
@@ -482,8 +492,8 @@ function ClaimSection({ detail, pendingAction, actionError, onRecoverClaim }: Wo
               <PButton type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>
                 Cancel
               </PButton>
-              <PButton type="button" disabled={pendingAction !== null} onClick={() => void recover()}>
-                {pendingAction === "recover" ? "Requesting..." : "Request recovery"}
+              <PButton type="button" disabled={pendingAction !== null} onClick={() => void release()}>
+                {pendingAction === "release-stuck" ? "Releasing..." : "Confirm release"}
               </PButton>
             </div>
           </ConfirmationContent>
@@ -1966,7 +1976,9 @@ function PublicationSection(props: WorkItemDetailProps) {
 function ActionFeedback({ error, result }: { error: Error | null; result: string | null }) {
   if (error) {
     const code = error instanceof WorkItemApiError ? error.code : "ERR_DELIVERY_CONTROL";
-    const waiting = code === "ERR_DELIVERY_ACCEPTANCE_WAITING";
+    const retryAfter = error instanceof WorkItemApiError ? error.retryAfter : null;
+    const workerActive = code === "ERR_DELIVERY_WORKER_ACTIVE";
+    const waiting = code === "ERR_DELIVERY_ACCEPTANCE_WAITING" || workerActive;
     return (
       <p
         className={[
@@ -1977,7 +1989,21 @@ function ActionFeedback({ error, result }: { error: Error | null; result: string
         role={waiting ? "status" : "alert"}
       >
         <PIcon name={waiting ? "warning" : "error"} size="sm" aria-hidden="true" />
-        <strong>{code}</strong>: {error.message}
+        <span>
+          <strong>{code}</strong>:{" "}
+          {workerActive && retryAfter ? (
+            <>
+              The worktree changed recently, so the worker may still be active. Nothing was changed. Try again at or
+              after{" "}
+              <time dateTime={retryAfter} data-testid="worker-active-retry-after">
+                {retryAfter}
+              </time>
+              .
+            </>
+          ) : (
+            error.message
+          )}
+        </span>
       </p>
     );
   }

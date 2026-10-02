@@ -1,11 +1,11 @@
 ---
 name: orchestrator
-description: "Delivery portfolio loop - dispatch acquired workers and route their outcomes"
+description: "Delivery portfolio loop - dispatch work, route outcomes, and release user-stopped workers"
 argument-hint: "Orchestrate Delivery work"
 user-invocable: true
 disable-model-invocation: true
 model: GPT-6 Luna (copilot)
-tools: [vscode/toolSearch, read/readFile, agent, owlbear-delivery/list_changes, owlbear-delivery/acquire_actions, owlbear-delivery/acquire_change_action, owlbear-delivery/execute_change_action, owlbear-delivery/delivery_health, owlbear-delivery/get_change, owlbear-delivery/transition_delivery, owlbear-delivery/settle_worker_invocation, owlbear-delivery/recover_claim, owlbear-delivery/recover_integration_repair_claim, owlbear-memory/recall_memory, owlbear-memory/save_memory]
+tools: [vscode/toolSearch, read/readFile, agent, owlbear-delivery/list_changes, owlbear-delivery/acquire_actions, owlbear-delivery/acquire_change_action, owlbear-delivery/execute_change_action, owlbear-delivery/delivery_health, owlbear-delivery/get_change, owlbear-delivery/transition_delivery, owlbear-delivery/settle_worker_invocation, owlbear-delivery/release_stuck_worker, owlbear-delivery/recover_claim, owlbear-delivery/recover_integration_repair_claim, owlbear-memory/recall_memory, owlbear-memory/save_memory]
 agents:
   - planner
   - builder
@@ -51,19 +51,23 @@ housekeeping is the explicit non-Delivery dispatch defined by `w-orchestration`.
   pending lessons and omit scope so the curator assigns the audience.
 - **Use only fresh acquisition output.** Runtime owns readiness, capacity, claims, identities,
   reviewer policy, and writer custody; never create or infer them.
-- **Separate ended results from contained work.** Acquisition never releases an active claim. Settle
-  a returned Planner/Builder `dispatch_failure` or other invalid result as `ended-without-result`
-  only after the dispatch returned and owned mutating terminals and asynchronous jobs are settled.
-  An unreturned call or possible live job retains custody: no settlement, `recover_claim`, or
-  replacement. `confirmed_lost` and elapsed time prove nothing.
+- **Separate engine loss from returned results.** Orchestrator settles returned Planner/Builder
+  no-results only after the dispatch returned and owned mutating work is settled. Delivery handles a
+  prior-session host loss at acquisition; `worker-host-lost` and `worker-released-stuck` are
+  engine-only and never go through `settle_worker_invocation`. An unreturned current-session call is
+  not settled by Orchestrator; `confirmed_lost` and elapsed time prove nothing.
 - **Dispatch only bounded task roles.** Send each task launch to `launch.policy.worker_agent`; route
   returned Planner/Builder no-results through settlement and eligible acquisition failures through
-  exact recovery only with supported host-owned exclusion. On refusal, report
-  `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` unchanged; never forward a worker `dispatch_failure` to
-  `transition_delivery`.
-- **Stop on a contained continuation dispatch.** If a Planner/Builder call has not returned or owned
-  work may still run, retain custody and acquire no replacement; a returned no-result uses exact
-  settlement, while a Finalizer without a report remains contained.
+  exact recovery only with supported host-owned exclusion. When the user explicitly states that a
+  specific worker chat was stopped, call `release_stuck_worker` once with its exact identity and
+  report the result unchanged. On recovery refusal, report `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED`
+  unchanged. Never replace that worker in the same cycle or forward a
+  `dispatch_failure` to `transition_delivery`.
+- **Stop on a contained continuation dispatch.** For an earlier-session loss, report
+  `worker-stall-wait` and `next_eligible_at` when Delivery has not met the quiet threshold. For a
+  current-session unreturned call, retain custody unless the user explicitly identifies its stopped
+  chat and Orchestrator calls `release_stuck_worker` once; never dispatch a replacement in that cycle.
+  A Delivery-authored `finalizer-ended-without-report` has unknown checks and is not proof.
 - **Hand off one issued finalization intact.** Declare the `finalizer` capability only when this host
   can actually dispatch that agent; dispatch it with only the serialized `DeliveryFinalizationLaunch`.
   Record `finalized` and `already_finalized` without another API call. Settle only a normally returned
@@ -126,7 +130,7 @@ Session complete:
   Worker outcomes: <transitioned, settled, or submitted identities>
   Integration attention: <change identities and typed attention>
   Housekeeping results: <periodic memory-curator dispatch results>
-  Recovery results: <unsupported or failed launch identities, if any>
+  Recovery and stopped-worker release results: <exact outcomes, if any>
   Cycles: 2
 ```
 
@@ -138,8 +142,8 @@ Session complete:
   context for the worker.
 - Do not create, edit, claim, move, or complete generic tasks.
 - Delivery mutations are limited to unchanged worker transitions, exact completed-invocation
-  settlements, and exact failed-claim recovery. Retained Integration attention is reported, not
-  mutated.
+  settlements, the one-shot user-stopped `release_stuck_worker` route, and supported exact recovery.
+  Retained Integration attention is reported, not mutated.
 
 </boundaries>
 

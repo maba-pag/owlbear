@@ -26,7 +26,7 @@ import {
   reconcileWorkItemAcceptance,
   reconcileWorkItemPublication,
   recoverWorkItemChange,
-  recoverWorkItemClaim,
+  releaseStuckWorker,
   resolveWorkItemAttention,
   resolveWorkItemTargetSync,
   resumeWorkItemChange,
@@ -645,11 +645,11 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
           ),
         "Block cleared.",
       ),
-    recoverClaim: (attemptId: string, claimId: string) =>
+    releaseStuckWorker: (attemptId: string, claimId: string) =>
       mutate(
-        "recover",
-        () => recoverWorkItemClaim(identity.changeId, currentDetail().item.card.work_item_id, attemptId, claimId),
-        "Claim recovered.",
+        "release-stuck",
+        () => releaseStuckWorker(identity.changeId, currentDetail().item.card.work_item_id, attemptId, claimId),
+        "Stuck worker released. The attempt was recorded as failed; its work is preserved.",
       ),
     previewBackward: async (target: WorkItemStage) => {
       setPendingAction("preview");

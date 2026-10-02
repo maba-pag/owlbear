@@ -133,6 +133,8 @@ from owlbear_delivery_mcp.target_models import (
     RecoverOutOfBandHeadRequest,
     RecoverPublicationBaselineParams,
     RecoverPublicationBaselineRequest,
+    ReleaseStuckWorkerParams,
+    ReleaseStuckWorkerRequest,
     RepairChangeParams,
     RepairChangeRequest,
     RepairClaimContextParams,
@@ -241,6 +243,7 @@ DELIVERY_OPERATION_NAMES = (
     "recover_publication_baseline",
     "transition_delivery",
     "settle_worker_invocation",
+    "release_stuck_worker",
     "recover_claim",
     "recover_integration_repair_claim",
     "show_integration_attention",
@@ -1068,6 +1071,24 @@ class TargetMCPAdapter:
                 params.settlement,
                 host_id=params.host_id,
                 session_id=params.session_id,
+            ),
+        )
+
+    async def release_stuck_worker(self, request: ReleaseStuckWorkerRequest) -> dict[str, object]:
+        """Settle one exact stopped worker as a failed attempt once its worktree stays quiet.
+
+        Omit ``outcome_id`` to release the Change's Finalizer attempt. Recent worktree activity fails with
+        ``ERR_DELIVERY_WORKER_ACTIVE`` and changes nothing; replaying a completed release returns its result.
+        """
+        params = self._validate(ReleaseStuckWorkerParams, request)
+        return await asyncio.to_thread(
+            self._call,
+            params,
+            lambda: self._application.release_stuck_worker(
+                params.change_id,
+                params.outcome_id,
+                params.attempt_id,
+                params.claim_id,
             ),
         )
 

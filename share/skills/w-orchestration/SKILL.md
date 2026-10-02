@@ -90,13 +90,14 @@ preserve the report's code and `checks_state` (`not-run`, `failed`, or `unknown`
 proof or as evidence that the Finalizer process is closed.
 
 A missing or malformed report identity, missing or mismatched operation identity, malformed result,
-`dispatch_failure`, or dispatch/transport that may still be running is unknown execution: do not settle,
-recover, reacquire, or redispatch; report the issued attempt and retain custody. If the settlement call
-errors or returns a malformed result, re-read `get_change` before any retry; retry only the identical
-settlement when that view proves the same issued attempt is still active and unfinished. Otherwise
-report the engine-observed state or unknown outcome without retrying. Never call a lower-level
-settlement operation or forward a Finalizer result to
-`transition_delivery`.
+`dispatch_failure`, or a dispatch/transport that may still be running is unknown execution: do not call
+`settle_worker_invocation`, `recover_claim`, reacquire, or redispatch. If the user explicitly states that
+this exact Finalizer chat was stopped, use the separate `release_stuck_worker` route in Step 2 once;
+otherwise report the issued attempt and retain custody. A Delivery-authored
+`finalizer-ended-without-report` has `checks_state: unknown` and is not proof. If the settlement call
+errors or returns a malformed result, re-read `get_change` before retrying the identical settlement;
+otherwise report the engine-observed or unknown outcome. Never call a lower-level settlement operation
+or forward a Finalizer result to `transition_delivery`.
 
 Continuation and finalization custody is engine-held; caller confirmation cannot release it through
 `recover_claim`. For Planner or Builder, a returned dispatch error, empty or `no response` result,
@@ -107,12 +108,13 @@ exact continuation `owner_id` and `process_id` as outer `host_id` and `session_i
 returned identity values. After settlement, re-read `get_change`, report the exact receipt, and do not
 dispatch a replacement in the same continuation cycle; a later fresh acquisition follows engine
 backoff.
-
-If the dispatch call has not returned (including Orchestrator or VS Code death/restart mid-run,
-disconnected transport, or a cancelled wait), or any owned mutating terminal or asynchronous job may
-still be running, retain custody: do not settle, call `recover_claim`, acquire a replacement action,
-or redispatch. `confirmed_lost` is never evidence. Finalizer's no-report/malformed-result behavior
-remains as stated above: retain custody without settlement or recovery.
+A dispatch that never returned in a previous session is handled by Delivery during a later acquisition.
+When Delivery reports `worker-stall-wait`, report its `next_eligible_at` and yield; do not settle,
+recover, release, or dispatch a replacement. Within the current session, an unreturned dispatch or any
+owned mutating terminal or asynchronous job that may still be running is not settled by Orchestrator.
+If the user explicitly states that the specific worker chat was stopped, use the separate one-shot
+`release_stuck_worker` route in Step 2. `confirmed_lost`, elapsed time, disconnection, and a cancelled
+wait are never evidence for `settle_worker_invocation` or `recover_claim`.
 
 ### Continuation Dispositions
 
@@ -121,7 +123,7 @@ A non-acquired result carries no launch. Respond to its `kind` exactly:
 | `kind` | Required response |
 | --- | --- |
 | `busy` | Yield. Report the in-progress operation; do not poll in a loop, revoke custody, or recover a claim |
-| `waiting` | Yield to the named condition and report the reason code; no dispatch, no capability upgrade |
+| `waiting` | Yield with reason; report `next_eligible_at` for `worker-stall-wait`. No dispatch or capability upgrade |
 | `human` | Yield to the user with the reason code and readiness; the next actor is not this loop |
 | `stale` | Refresh once: re-read `get_change` and re-acquire once with the fresh basis. If the second attempt is stale again, report both observations and stop |
 | `reconciled` | Report the preserved `engine_result` unchanged; continue only from a fresh observation |
@@ -135,12 +137,14 @@ another Change identity, restate design content, or treat the handoff as approva
 
 ### Continuation Refresh And Output
 
-After a released engine action, recorded worker settlement, or recorded worker transition, re-observe
-with `get_change` and acquire again for the same Change. Stop on the first yielding, unsupported, unavailable, or terminal
-disposition, or when readiness offers no further action. Report the Change identity, each acquired
-action and its exact disposition, forwarded transitions and worker settlement results, preserved
-engine results and failure envelopes, the retained custody statement when one applies, and the exact
-next user command when the engine authored one.
+After a `release_stuck_worker` result, report it and stop the current cycle; do not reacquire or
+dispatch a replacement in that cycle. After a released engine action, ordinary worker settlement, or
+worker transition, re-observe with `get_change` and acquire again for the same Change. Stop on the
+first yielding, unsupported, unavailable, or terminal disposition, or when readiness offers no
+further action. Report the Change identity, each acquired action and its exact disposition, forwarded
+transitions and worker settlement results, preserved engine results and failure envelopes, the
+retained custody statement when one applies, and the exact next user command when the engine authored
+one.
 
 ## Step 1 - Acquire One Current Batch
 
@@ -148,7 +152,9 @@ Before using a target operation, call it directly when a callable binding is alr
 deferred inventory listing does not override that binding. If a required target operation has no
 direct callable binding, load the target tools once with `tool_search` using:
 
-`OwlBear Delivery target portfolio list_changes acquire_actions delivery_health get_change transition_delivery settle_worker_invocation recover_claim recover_integration_repair_claim`
+`OwlBear Delivery target portfolio list_changes acquire_actions delivery_health get_change
+transition_delivery settle_worker_invocation release_stuck_worker recover_claim
+recover_integration_repair_claim`
 
 Before calling `acquire_actions`, require callable bindings for `transition_delivery`,
 `settle_worker_invocation`, `recover_claim`, `recover_integration_repair_claim`, and
@@ -156,7 +162,11 @@ Before calling `acquire_actions`, require callable bindings for `transition_deli
 for each operation with no direct callable binding. If any binding remains unavailable or its
 focused search returns a tool error, report the exact missing operation and end the session without
 acquisition. Transition, settlement, and recovery are required dispatch safety authority, not
-optional operations to discover after a claim has been acquired.
+optional operations to discover after a claim has been acquired. `release_stuck_worker` is optional
+for normal acquisition. When the user explicitly identifies a stopped worker and Orchestrator needs
+this route, require its callable binding at the point of use; if it is not directly bound, run one
+focused `tool_search` for that exact operation. A missing release binding does not block ordinary
+acquisition and is never a reason to use `settle_worker_invocation` or `recover_claim` instead.
 
 Call `list_changes` only for bounded portfolio reporting. Call `acquire_actions` once for the
 current cycle. Its `DeliveryAcquisitionResult` is the sole source of task launch order,
@@ -164,13 +174,18 @@ typed `integration_attention`, acquisition failures, and the optional `health_hi
 `health_hint` is non-empty, immediately call `delivery_health` with `{}` and report its bounded
 diagnostics before dispatching any launch. Do not dispatch or recover a Change identified by those
 diagnostics; quarantined Changes have no actionable launch authority. Active claims remain occupied until the
-exact verified recovery operation completes. `recover_claim` does not accept timeout or caller
+exact verified settlement or supported recovery completes. `recover_claim` does not accept timeout or caller
 confirmation as evidence. Without supported host-owned exclusion it returns
 `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` with `retry_safe: false`, leaving custody and files unchanged.
 Closure must cover the invocation, descendant writers and outstanding tool jobs with no ability to
 resume, or enforce restart-durable exclusion from every managed filesystem, Git and mutation resource.
 Report the typed result unchanged. Do not filter for capacity, infer readiness, create identities,
 or reserve writer custody.
+
+Delivery may settle an earlier-session claim as `worker-host-lost` during acquisition only after its
+issuing host lock is free and the worktree has been quiet for at least two minutes. A `worker-stall-wait`
+readiness is a wait, not a launch: report its `next_eligible_at` and yield without calling a settlement
+or recovery operation.
 
 ## Step 2 - Dispatch Or Recover Each Launch
 
@@ -186,10 +201,29 @@ Planner/Builder dispatch error, empty or `no response` result, malformed or sche
 or identity-mismatched result. Preserve any available failure diagnostics for the report.
 
 Only settle after Orchestrator observes that the dispatch call returned and all owned mutating
-terminals and asynchronous jobs are settled. A dispatch call that has not returned (including
-Orchestrator or VS Code death/restart mid-run, disconnected transport, or a cancelled wait), or any
-owned mutating terminal or asynchronous job that may still be running, remains contained: do not
-settle, call `recover_claim`, or dispatch a replacement. `confirmed_lost` is never evidence.
+terminals and asynchronous jobs are settled. A dispatch call that has not returned, or any owned
+mutating terminal or asynchronous job that may still be running, is not settled by Orchestrator. For a
+previous-session dispatch, rely on Delivery's host-lock and quiet-worktree check at acquisition; report
+`worker-stall-wait` with its retry time and yield when that check is not yet eligible.
+
+### Release A User-Stopped Worker
+
+Use `release_stuck_worker` only when the user explicitly states that the specific worker chat/window
+was stopped. If that statement is ambiguous, ask which exact worker was stopped before mutating. Take
+`change_id`, `outcome_id`, `attempt_id`, and `claim_id` unchanged from the acquisition result or one
+fresh `get_change` view; for a Finalizer attempt, pass `outcome_id: null`. Never infer identity from
+conversation, elapsed time, or a worker's missing response. Call the tool once and report its result
+unchanged. If it returns `ERR_DELIVERY_WORKER_ACTIVE`, include the returned retry time and leave custody
+and files unchanged; do not retry or dispatch a replacement in the same cycle. This is a user decision
+consumed by Delivery's quiet-worktree check, not a process-control operation.
+
+`worker-host-lost` and `worker-released-stuck` are engine-only dispositions; never send either through
+`settle_worker_invocation`. Each records the same failed-attempt semantics as `ended-without-result`,
+preserves worktree bytes, staging, commits, and refs, and counts in the same three-attempt episode.
+After backoff, a fresh Builder receives `prior_attempts` and triages the preserved same-task work; a
+Planner retries under the same bounded episode. Three failures exhaust the episode. When a lost or
+released Finalizer has no report, Delivery authors a `worker-ended` report with code
+`finalizer-ended-without-report` and `checks_state: unknown`; it is diagnostic history, not proof.
 
 An acquisition failure carrying attempt and claim IDs is not a worker dispatch result and uses the
 exact recovery route. Report recovery attention unchanged without interpreting Git, liveness, or
@@ -272,11 +306,13 @@ failure history. After settlement, re-read `get_change`, report the exact receip
 a replacement in the same cycle.
 
 An unreturned dispatch (Orchestrator or VS Code died/restarted mid-run, disconnected transport, or a
-cancelled wait), or any owned mutating terminal or asynchronous job that may still be running, remains
-contained: do not settle, call `recover_claim`, or dispatch a replacement. Elapsed time and
-`confirmed_lost` are not evidence. Malformed Planner/Builder output is not a timeout; use
-`ended-without-result` only when its observation precondition is met. Finalizer without a valid
-report remains contained under the Finalizer rule above.
+cancelled wait), or any owned mutating terminal or asynchronous job that may still be running, is not
+settled by Orchestrator. The separate user-stopped route above may call `release_stuck_worker` once;
+previous-session loss is handled by Delivery at acquisition. Elapsed time and `confirmed_lost` are not
+evidence for normal settlement or `recover_claim`. Malformed Planner/Builder output is not a timeout;
+use `ended-without-result` only when its observation precondition is met. Finalizer without a valid
+report remains unknown unless Delivery settles a lost or explicitly released attempt, in which case
+its engine-authored `finalizer-ended-without-report` remains non-proof.
 
 A normal Builder `return` to `design` is settled through the same typed envelope. Settlement clears
 the exact active claim, records its failed attempt, and retains the task/results lineage and managed
@@ -298,7 +334,9 @@ or attempt recovery without the Step 2 evidence.
 
 For an ended Planner/Builder dispatch, identity mismatch or malformed/schema-invalid output uses
 `ended-without-result` under Step 2, with launch identities; publish no substitute. A dispatch that
-has not returned or whose owned work may still run remains contained. A rejected `transition_delivery`
+has not returned during the current session is not settled by Orchestrator. Step 2 permits one
+`release_stuck_worker` call after an explicit user stop; previous-session loss is handled by Delivery
+at acquisition. A rejected `transition_delivery`
 call for worker-output schema validation after the invocation ended and its owned work settled also
 uses this settlement; report the exact failure instead of forwarding or retrying the invalid transition.
 
@@ -354,7 +392,8 @@ stages as bounded acquisition attention and stop; do not infer a launch or mutat
 
 Report forwarded transition and settlement identities, typed Integration attention, periodic
 housekeeping results,
-exact recovery results, unclaimed acquisition failures, bounded acquisition attention, and cycle
+exact recovery and stopped-worker release results, unclaimed acquisition failures, bounded acquisition
+attention, and cycle
 count. Report quiescence
 only when both acquisition and the final work-item projection are empty. Do not translate those typed
 results into invented completion or scheduling state.

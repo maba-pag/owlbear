@@ -39,6 +39,7 @@ from owlbear_cockpit.target_models import (
     PublicationChecksObservationResponse,
     PublicationSupersessionResponse,
     RecoverChangeWorktreeBody,
+    ReleaseStuckWorkerBody,
     ResolveChangeAttentionBody,
     ResumeChangeBody,
     SupersedePublicationBody,
@@ -83,9 +84,11 @@ from owlbear_delivery.work_items import (
     WorkItemScope,
     WorkItemStage,
 )
+from owlbear_delivery.worker_stall import DeliveryWorkerActiveError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from datetime import datetime
 
 
 class TargetCockpitService:
@@ -178,6 +181,17 @@ class TargetCockpitService:
                 body.attempt_id,
                 body.claim_id,
                 confirmed_lost=body.confirmed_lost,
+            )
+        )
+
+    def release_stuck_worker(self, change_id: str, body: ReleaseStuckWorkerBody) -> object:
+        """Settle one exact stopped worker as a failed attempt once its worktree stays quiet."""
+        return self._invoke(
+            lambda: self._application.release_stuck_worker(
+                change_id,
+                body.outcome_id,
+                body.attempt_id,
+                body.claim_id,
             )
         )
 
@@ -443,6 +457,7 @@ class TargetCockpitService:
                 failure.code,
                 failure.detail,
                 retry_safe=failure.retry_safe,
+                retry_after=exc.retry_after if isinstance(exc, DeliveryWorkerActiveError) else None,
             )
 
 
@@ -571,6 +586,14 @@ def _register_outcome_controls(router: APIRouter) -> None:
         service: _TargetService,
     ) -> object:
         return service.recover_claim(change_id, outcome_id, body)
+
+    @router.post("/changes/{change_id}/workers/release-stuck")
+    def release_stuck_worker(
+        change_id: str,
+        body: ReleaseStuckWorkerBody,
+        service: _TargetService,
+    ) -> object:
+        return service.release_stuck_worker(change_id, body)
 
     @router.post("/changes/{change_id}/outcomes/{outcome_id}/move-backward")
     def move_backward(
@@ -793,16 +816,23 @@ def _http_status(category: DeliveryFailureCategory) -> int:
     return 409
 
 
-def _http_error(status_code: int, code: object, detail: str, *, retry_safe: bool) -> None:
-    raise HTTPException(
-        status_code=status_code,
-        detail={
-            "code": str(code),
-            "detail": detail,
-            "authority": "delivery",
-            "retry_safe": retry_safe,
-        },
-    )
+def _http_error(
+    status_code: int,
+    code: object,
+    detail: str,
+    *,
+    retry_safe: bool,
+    retry_after: datetime | None = None,
+) -> None:
+    content: dict[str, object] = {
+        "code": str(code),
+        "detail": detail,
+        "authority": "delivery",
+        "retry_safe": retry_safe,
+    }
+    if retry_after is not None:
+        content["retry_after"] = retry_after.isoformat().replace("+00:00", "Z")
+    raise HTTPException(status_code=status_code, detail=content)
 
 
 async def handle_target_http_error(request: Request, exc: Exception) -> JSONResponse:

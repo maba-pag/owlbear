@@ -65,6 +65,9 @@ export const READINESS_REASON_LABELS: Record<DeliveryReadinessReasonCode, string
   "retry-containment":
     "A prior attempt has no authoritative outcome. Preserve custody; no caller action can retry or release it.",
   "retry-ledger-unavailable": "Retry authority could not be read safely.",
+  "worker-stall-wait":
+    "The process that started this worker has exited. " +
+    "Delivery records a failed attempt once the worktree stays unchanged.",
 };
 
 /** Truthful check labels: absence of a run is never reported as a pass. */

@@ -48,7 +48,7 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 | designer-challenger | GPT-6.1 Sol (copilot) | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design` | None | `PreToolUse`: deny writes except scratch |
 | planner | Claude Opus 5.5 (copilot) | `w-frontier-planning` | planner-challenger, Explore | `PreToolUse`: deny writes except scratch; terminal read-only; publishes advisory-reviewed task chains and returns worker-owned transitions |
 | planner-challenger | GPT-6.1 Sol (copilot) | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | None | `PreToolUse`: deny writes except scratch |
-| orchestrator | GPT-6 Luna (copilot) | `w-orchestration` | see below | Planner/Builder: `ended-without-result`. |
+| orchestrator | GPT-6 Luna | `w-orchestration` | see below | Returned no-results settle; host-loss is engine-owned. |
 | repairer | GPT-6 Luna | `h-decision-requests` | None | One exact Change view and one bounded answer/repair interaction; high-level Delivery tools only, no repository or worker authority |
 | builder | GPT-6 Luna | `w-packet-building`, `r-workspace-governance`, `h-codebase-orientation` | build-reviewer | Assigned Change worktree only; successful Build uses the claim-bound submit-result facade; normally returned retry/block/Planning-or-Design-return transitions are settled by Orchestrator, while other supported transitions are forwarded; `SessionStart`: repository context; `PostToolUse`: lint changed files |
 | build-reviewer | GPT-6.1 Sol (copilot) | `r-challenger-protocol`, `h-codebase-orientation` | None | Exact-commit task-result or finalization review with read-only Git; `PreToolUse`: deny writes except scratch; terminal read-only |
@@ -64,7 +64,12 @@ Tool allowlists remain in agent frontmatter; they are not duplicated here.
 Orchestrator acquires and dispatches work, then forwards ordinary transitions and routes typed
 attention and admitted Change repair proposals. It runs periodic memory curation and has no repository
 write tools. Returned Planner/Builder no-results use `ended-without-result` only after dispatch return
-and owned mutators settle; unreturned work stays contained. Finalizer remains report-backed.
+and owned mutators settle. Delivery settles a previous-session host loss at acquisition after the
+issuer lock is free and the worktree is quiet; `worker-stall-wait` yields with its retry time. A
+user-confirmed stopped chat may use `release_stuck_worker` once. `worker-host-lost` and
+`worker-released-stuck` are engine-only and never go through Orchestrator settlement. A lost or
+released Finalizer without a report receives `finalizer-ended-without-report` with unknown checks,
+not proof.
 
 ## Prompt Entry Map
 
@@ -78,6 +83,7 @@ and owned mutators settle; unreturned work stays contained. Finalizer remains re
 | `challenge-implementation_sol` | Current agent directed by `.github/prompts` | Dispatches a fresh unnamed read-only subagent with `GPT-6.1 Sol (copilot)`; caller reconciles findings and owns the verdict |
 | `finalize-change` | `prompt` -> finalizer | Agent required-reading loads `w-change-finalization`; engine proof and exact reviewed finalization |
 | `inspect-change` | built-in `ask` mode | Read-only Change diagnosis through `get_change` and `delivery_health` only; no mutation or host repair |
+| `release-stuck-worker` | `prompt` -> orchestrator | Claim from `get_change`; confirm stop if needed; release once |
 | `address-pr-feedback` | Current agent directed by prompt | Loads `w-address-pr-feedback`; `start` evaluates and repairs external review threads, while `resume` publishes the fresh finalized head before replying and resolving threads |
 | `resolve-target-conflict` | Current agent directed by prompt | Loads `w-target-conflict-resolution`; resolves exact target merges in the managed Change worktree and hands off to finalization |
 | `resolve-delivery-attention` | Temporary recovery/exception prompt | Loads `w-delivery-attention-resolution`; binds one exact Change or Integration attention before interactive diagnosis; retire only after Cockpit and Delivery provide tested guided routes for all prompt-only recovery capabilities |
@@ -150,7 +156,8 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 | memory-curator | orchestrator | Scheduled memory housekeeping is unavailable; the failure is reported and does not stop independent Delivery acquisition |
 | Explore | designer, planner, orchestrator | Broad read-only orientation must be performed by the caller or omitted |
 
-Eligible exact-recovery refusals report `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED`, leaving custody retained.
+`recover_claim` refusals report `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` and retain custody. The
+user-stopped release route is separate.
 
 The agent validator enforces ND3 metadata and frontmatter-to-`<agents>` alignment; see
 `h-agent-structure` for the nesting rules.

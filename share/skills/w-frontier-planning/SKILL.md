@@ -24,6 +24,8 @@ the unchanged outcome and claim identities. A normal Planner return with this re
 Orchestrator through `settle_worker_invocation` using the exact launch identity; Planner returns the
 `RetryDelivery` unchanged and never calls the settlement operation itself. Settlement records the
 completed attempt without publishing a plan; fresh acquisition owns any later attempt.
+Delivery-settled `worker-host-lost` and `worker-released-stuck` predecessors count like other failed
+Planner attempts in the same three-attempt episode; only fresh acquisition grants a retry.
 
 ## Step 1 - Ground The Task Chain
 

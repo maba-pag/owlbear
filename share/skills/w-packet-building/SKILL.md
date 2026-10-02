@@ -14,10 +14,11 @@ route.
 ## Step 0 - Validate Launch, Context, And Custody
 
 A normal Builder settlement preserves the managed worktree. An `ended-without-result` settlement
-does too; the next same-task Builder may start with predecessor work and must triage it before edits.
-Use fresh `builder_handoff_context`, Build context, and its `prior_attempts` projection, including
-when the predecessor crashed or ended without returning a transition. An unreturned dispatch or
-unsettled owned mutator remains contained and does not permit a replacement claim.
+does too. `worker-host-lost` and `worker-released-stuck` settlements do too; after any settled
+predecessor, the next same-task Builder must triage its work before edits. Use fresh
+`builder_handoff_context`, Build context, and its `prior_attempts` projection, including when the
+predecessor crashed or its chat was stopped without returning a transition. An unsettled dispatch or
+owned mutator that may still run remains contained and does not permit a replacement claim.
 
 Require one serialized `DeliveryLaunchPackage` whose policy and claim roles are `builder`, whose
 task IDs match, and whose writer identity matches the claim attempt, claim, owner, and process. Call
@@ -65,11 +66,12 @@ reason: <recorded prerequisite failure>
 ### Triage An Unclean Worktree
 
 A same-task Builder claim may start with dirty, staged, or committed predecessor work, including
-work left by a `dispatch_failure` or a crash without a transition. An `ended-without-result` receipt
-preserves that material and records the failed attempt; fresh Build context supplies `prior_attempts`.
-The new Builder must inspect and triage this state under the rules below before editing. Orchestrator
-does not clean the worktree or ask the user to do Git recovery. A dispatch that has not returned or
-whose owned mutator may still run remains contained and does not authorize this handoff.
+work left by a `dispatch_failure`, a crash, or a settled `worker-host-lost` or
+`worker-released-stuck` attempt. Each settled no-result receipt preserves that material and records
+the failed attempt; fresh Build context supplies `prior_attempts`. The new Builder must inspect and
+triage this state under the rules below before editing. Orchestrator does not clean the worktree or
+ask the user to do Git recovery. A dispatch that has not returned or whose owned mutator may still
+run remains contained and does not authorize this handoff.
 
 Inspect the assigned worktree before editing with `git status --short`, `git diff`,
 `git diff --cached`, and `git ls-files --others --exclude-standard`. Compare every changed path and

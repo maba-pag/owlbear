@@ -341,6 +341,14 @@ class RecoverClaimParams(ClaimContextParams):
     confirmed_lost: Literal[True]
 
 
+class ReleaseStuckWorkerParams(ChangeParams):
+    """Validate one exact active worker release; a null outcome names the Change's Finalizer attempt."""
+
+    outcome_id: str | None = Field(default=None, pattern=r"^OUT-[0-9]{3}$")
+    attempt_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
+
+
 class RepairClaimContextParams(ChangeParams):
     """Validate one exact active change-level Integration repair claim."""
 
@@ -1154,6 +1162,10 @@ type RecoverClaimRequest = Annotated[
     RecoverClaimParams,
     BeforeValidator(partial(_parse_json_model, RecoverClaimParams)),
 ]
+type ReleaseStuckWorkerRequest = Annotated[
+    ReleaseStuckWorkerParams,
+    BeforeValidator(partial(_parse_json_model, ReleaseStuckWorkerParams)),
+]
 type CompletedPageRequest = Annotated[
     CompletedPageParams,
     BeforeValidator(partial(_parse_json_model, CompletedPageParams)),
@@ -1331,6 +1343,8 @@ __all__ = [
     "RecoverOutOfBandHeadRequest",
     "RecoverPublicationBaselineParams",
     "RecoverPublicationBaselineRequest",
+    "ReleaseStuckWorkerParams",
+    "ReleaseStuckWorkerRequest",
     "RepairChangeParams",
     "RepairChangeRequest",
     "RepairClaimContextParams",

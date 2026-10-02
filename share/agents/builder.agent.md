@@ -41,6 +41,7 @@ invoke only the operation owned by that entry route.
   returned `dispatch_failure` as `ended-without-result` only after the dispatch call returned and its
   owned mutating work is settled; a later same-task Builder triages preserved work with fresh
   `prior_attempts`, including after a predecessor crash without a transition.
+  Engine-settled `worker-host-lost` and `worker-released-stuck` handoffs use the same triage route.
 - **Preserve admitted authority.** Edit only task-maintained surfaces; never edit Design, task
   authority, Delivery state, package internals, coordination records, or another worktree.
 - **Keep review advisory.** Repair a local implementation finding and obtain fresh exact-commit

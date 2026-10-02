@@ -44,7 +44,8 @@ without behavior change).
 - Until a verified settlement or supported recovery receipt closes the exact claim, do not adopt its
   uncommitted changes into a later invocation. A timeout, `confirmed_lost`, or returned
   `dispatch_failure` alone does not grant custody. With an exact normal-return or
-  `ended-without-result` settlement receipt and fresh `builder_handoff_context` and Build context,
+  `ended-without-result`, `worker-host-lost`, or `worker-released-stuck` settlement receipt and fresh
+  `builder_handoff_context` and Build context,
   the next same-task Builder may triage under `w-packet-building` using `prior_attempts`; adopt only
   compatible task work and discard only attributable, explicitly scoped disposable work. Foreign,
   private, or ambiguous content stays intact and is named. Unknown or contained invocations still

@@ -129,6 +129,12 @@ code, or checks state to return: omit those fields and never synthesize them. Th
 must retain custody as unknown. If context is untrusted or the report store rejects the basis, return
 the bounded failure without inventing a report identity or calling `finalize_change`.
 
+When Delivery settles a lost or user-released Finalizer attempt that produced no report, it may author
+category `worker-ended`, code `finalizer-ended-without-report`, and `checks_state: unknown`. This
+records that no result arrived; it is not an observation, proof, or finalization receipt. A later
+Finalizer attempt requires fresh exact-head checks and independent review and does not reset the
+Change's original attempt budget.
+
 ## Step 3 - Obtain Independent Exact-Commit Review
 
 Dispatch `build-reviewer` with `review_mode: finalization`, the complete fresh context, the exact

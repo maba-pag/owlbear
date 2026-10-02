@@ -353,7 +353,7 @@ function SelectedWorkItemDetail({
           actionResult={selectedDetail.actionResult}
           onAnswerRequest={selectedDetail.answerRequest}
           onClearBlock={selectedDetail.clearBlock}
-          onRecoverClaim={selectedDetail.recoverClaim}
+          onReleaseStuckWorker={selectedDetail.releaseStuckWorker}
           onPreviewBackward={selectedDetail.previewBackward}
           onMoveBackward={selectedDetail.moveBackward}
           onReconcilePublication={selectedDetail.reconcilePublication}

@@ -25,6 +25,11 @@ Delivery stores per-Change custody records under
 `.owlbear/delivery/runtime/transactions/`. The sibling `runtime/claims/` namespace contains
 acquisition, publication, and verification locks.
 
+Each Delivery MCP process holds `.owlbear/delivery/runtime/hosts/<id>.lock` for its lifetime. Claims
+record their issuer under
+`.owlbear/delivery/runtime/changes/<change>/claim-issuers/<attempt>.json` for acquisition-time
+liveness checks.
+
 ### Tools
 
 The server exposes these operation groups:
@@ -33,7 +38,13 @@ The server exposes these operation groups:
 | --- | --- |
 | Design | `create_design_session`, `put_design`, `read_design_session`, `revise_design_session`, `publish_design_checkpoint`, `derive_delivery_contract`, `admit_change` |
 | Portfolio | `list_work_items`, `list_changes`, `get_change`, `answer`, `set_change_intent`, `delivery_health`, `propose_quarantined_delivery_state_snapshot_repair`, `repair_stranded_frontier`, `repair_quarantined_delivery_state_snapshot`, `repair`, `repair_delivery_state_snapshot`, `recover_out_of_band_head`, `repair_target_sync_publication`, `list_retained_change_worktrees`, `show_work_item`, `show_work_item_view`, `show_operator_context`, `preview_administrative_move`, `administrative_move`, `acquire_actions`, `acquire_change_action`, `execute_change_action`, `show_plan_context`, `show_build_context`, `show_finalization_context`, `report_finalization_failure` |
-| Delivery | `publish_delivery_plan`, `submit_result`, `finalize_change`, `mark_change_ready`, `prepare_review_repair`, `reconcile_finalization_head`, `reconcile_change_checkpoint`, `sync_change_with_target`, `adopt_external_head`, `promote_external_head`, `abort_target_sync_conflict`, `resolve_target_sync_conflict`, `observe_acceptance`, `cleanup_abandoned_change_worktree`, `cleanup_abandoned_change_worktree_after_target_sync_discard`, `cleanup_completed_change_worktree`, `recover_change_worktree`, `recover_publication_baseline`, `transition_delivery`, `settle_worker_invocation`, `recover_claim` |
+| Delivery | `publish_delivery_plan`, `submit_result`, `finalize_change`, `mark_change_ready` |
+| Delivery | `prepare_review_repair`, `reconcile_finalization_head`, `reconcile_change_checkpoint` |
+| Delivery | `sync_change_with_target`, `adopt_external_head`, `promote_external_head`, `abort_target_sync_conflict` |
+| Delivery | `resolve_target_sync_conflict`, `observe_acceptance`, `cleanup_abandoned_change_worktree` |
+| Delivery | `cleanup_abandoned_change_worktree_after_target_sync_discard`, `cleanup_completed_change_worktree` |
+| Delivery | `recover_change_worktree`, `recover_publication_baseline`, `transition_delivery` |
+| Delivery | `settle_worker_invocation`, `release_stuck_worker`, `recover_claim` |
 | Publication | `observe_change_publication_checks`, `supersede_publication` |
 | Integration attention | `show_integration_attention`, `recover_integration_repair_claim` |
 | Completed changes | `list_completed_changes`, `search_completed_changes`, `show_completed_change` |
@@ -70,16 +81,28 @@ unavailable results. `report_finalization_failure` accepts only bounded structur
 and retains a report without creating finalization proof or changing worker custody.
 
 `settle_worker_invocation` accepts strict typed Planner, Builder or Finalizer settlement for an exact
-invocation that the native Orchestrator observed ending. Planner/Builder identity is supplied by the
-issued launch context and host/session envelope; Finalizer identity remains in its report-backed
-typed settlement. In addition to normal outcomes and completed timeouts, an ended Planner/Builder
-dispatch without a valid result uses `ended-without-result` only after the dispatch returned and its
-owned mutating terminals and asynchronous jobs are settled. It records `worker-ended-without-result`,
-preserves work, and charges the same bounded episode; the same task becomes eligible after backoff.
-Builder triages preserved work from fresh Build context and `prior_attempts`. An unreturned,
-disconnected or cancelled dispatch, or possibly running owned work, remains contained; it cannot be
-settled, recovered, or replaced on caller confirmation. Report-backed Finalizer failure remains
-passive attention, not successful proof; a Finalizer that ends without a report remains contained.
+invocation that the native Orchestrator observed ending. Planner/Builder identity comes from the
+issued launch context and host/session envelope; Finalizer settlement uses its report-backed typed
+identity. Normal results and completed timeouts use this route. A returned Planner/Builder no-result
+uses `ended-without-result` only after owned mutating work settles; it records a failed attempt and
+preserves work for same-task retry after backoff.
+
+At the next acquisition, Delivery checks a previous-session claim's issuer lock and worktree. If the
+lock is free and Git-reported changed paths, index, HEAD/branch ref, and worktree root have stayed
+unchanged for two minutes, Delivery records engine-only `worker-host-lost`; before then readiness is
+`worker-stall-wait` with `next_eligible_at`.
+
+When the user states that a specific worker chat was stopped, `release_stuck_worker` accepts its exact
+claim identity once and applies the same quiet-worktree check. `ERR_DELIVERY_WORKER_ACTIVE` returns a
+retry time and leaves custody and files unchanged. This is a user decision, not process control.
+Elapsed time, disconnection, and `confirmed_lost` are not settlement evidence.
+
+`worker-host-lost` and `worker-released-stuck` are engine-only and never pass through
+`settle_worker_invocation`. Both count in the same three-attempt episode and preserve work, staging,
+commits, and refs. A fresh Builder triages from Build context and `prior_attempts`; Planner retries.
+A lost or released Finalizer without a report gets a `worker-ended` report with code
+`finalizer-ended-without-report` and `checks_state: unknown`. It is not proof; a fresh Finalizer needs
+new exact-head evidence and review under the original budget.
 
 ## Configuration
 

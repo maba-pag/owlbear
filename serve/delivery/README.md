@@ -24,7 +24,7 @@ The main public areas are:
 | --- | --- |
 | Authored Specification | `DesignPackageStore` create, verified read, compare-and-swap revision, and checkpoint |
 | Compilation and admission | Deterministic contract derivation, validation, package binding, and atomic runtime admission |
-| Operational Delivery | `DeliveryRuntime` and `PortfolioApplication` outcome stages, frontier acquisition, typed role contexts, publication, worker transitions, requests, and exact-claim recovery |
+| Operational Delivery | Acquisition, typed contexts, transitions, host-loss settlement, and stopped-worker release |
 | Work projection | Portfolio work items with dependency readiness, typed attention, requests, blocks, task progress, and bounded Delivery health diagnostics |
 | Coordination | Per-Change writer custody under `runtime/coordination/changes`, one shared execution budget, warm worktrees, and reviewed source boundaries |
 | Publication and acceptance | Change-branch checkpoints, draft pull-request reconciliation, review-repair preparation, finalization, acceptance observation, and publication supersession |
@@ -32,9 +32,16 @@ The main public areas are:
 | Integration attention | Typed Integration attention and exact repair-claim recovery remain current public operations |
 
 Planner/Builder settlements cover normal outcomes, completed timeouts, and
-`ended-without-result` after the dispatch has returned and owned mutating work is settled. The latter
-counts as a failed attempt and preserves work for same-task retry after backoff; unreturned calls and
-possibly running jobs retain custody. Finalizer settlement remains report-backed.
+`ended-without-result` after the dispatch has returned and owned mutating work is settled. Delivery
+also settles a previous-session claim as engine-only `worker-host-lost` during acquisition after its
+issuer lock is free and the worktree has been quiet for two minutes. Before then, readiness reports
+`worker-stall-wait` with `next_eligible_at`. A user who stopped a specific chat may call
+`release_stuck_worker` once; it uses the same quiet guard and returns `ERR_DELIVERY_WORKER_ACTIVE` with
+a retry time without changing custody or files when the worktree is not quiet. Neither
+`worker-host-lost` nor `worker-released-stuck` is sent through `settle_worker_invocation`; both count
+as failed attempts in the same three-attempt episode and preserve work for same-task retry after
+backoff. A lost or released Finalizer without a report receives an engine-authored
+`finalizer-ended-without-report` diagnostic with unknown checks, not proof.
 
 Assembly is not a live Delivery stage or public Change authority. Historical runtime captures may
 still contain reducible Assembly metadata, and legacy completed-history records retain their
@@ -157,12 +164,13 @@ tracked baseline:
 
 An active Planner or Builder claim is checked lazily during the next `acquire_frontier_work()` call;
 `claim_timeout_seconds` (3600 seconds by default) identifies elapsed claims but is not proof that a
-worker stopped. The current runtime refuses claim recovery with
-`ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` and leaves the claim and worktree unchanged. The default
-host evidence provider is unavailable, so expired claims remain retained and continue to consume
-capacity. Because execution capacity is shared, enough retained claims can stall acquisition,
-finalization, and engine continuation across the portfolio. The loader merges `host.local.json` over
-`host.json` when the overlay exists; a timeout or caller confirmation does not clear custody.
+worker stopped. `recover_claim` remains separate and refuses with
+`ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` without supported host exclusion. At the next acquisition,
+Delivery settles a previous-session claim as `worker-host-lost` only when its issuer lock is free and
+the worktree has been quiet for two minutes. Until then readiness may report `worker-stall-wait` with
+`next_eligible_at`; unsettled claims continue to consume shared capacity. The loader merges
+`host.local.json` over `host.json` when the overlay exists; a timeout or caller confirmation alone
+does not clear custody.
 
 Native Orchestrator settlement is separate from unknown-worker recovery. An exact normally returned
 invocation, or an actually ended timeout with owned mutation jobs settled, can release its execution

@@ -113,6 +113,7 @@ _TARGET_ROLE_TOOLS = {
         "get_change",
         "transition_delivery",
         "settle_worker_invocation",
+        "release_stuck_worker",
         "recover_claim",
         "recover_integration_repair_claim",
     },
@@ -496,6 +497,19 @@ def test_inspect_change_prompt_uses_effective_read_only_allowlist() -> None:
     content = path.read_text(encoding="utf-8")
     assert "cannot enforce this read-only surface" in content
     assert "raw Git" in content
+
+
+def test_release_stuck_worker_prompt_has_minimal_allowlist() -> None:
+    path = _PROMPTS_ROOT / "release-stuck-worker.prompt.md"
+    assert path.is_file()
+    metadata = _frontmatter(path)
+
+    assert metadata["agent"] == "orchestrator"
+    assert metadata["tools"] == [
+        "owlbear-delivery/get_change",
+        "owlbear-delivery/release_stuck_worker",
+    ]
+    assert _PROMPT_VALIDATOR.validate_prompt(path) == []
 
 
 def test_prompt_validator_rejects_inspect_change_allowlist_drift(tmp_path: Path) -> None:
@@ -909,6 +923,46 @@ def test_memory_curator_required_skill_falls_back_to_shared_root() -> None:
     assert "owlbear-memory/commit_memory_batch" in agent
 
 
+def _assert_stopped_worker_release_guidance() -> None:
+    orchestration = " ".join((_SKILLS_ROOT / "w-orchestration/SKILL.md").read_text(encoding="utf-8").split())
+    dispatch = orchestration[
+        orchestration.index("## Step 2 - Dispatch Or Recover Each Launch") : orchestration.index(
+            "## Step 3 - Route One Completed Worker Result"
+        )
+    ]
+    finalization = " ".join((_SKILLS_ROOT / "w-change-finalization/SKILL.md").read_text(encoding="utf-8").split())
+    finalizer = " ".join((_AGENTS_ROOT / "finalizer.agent.md").read_text(encoding="utf-8").split())
+    release_prompt = (_PROMPTS_ROOT / "release-stuck-worker.prompt.md").read_text(encoding="utf-8")
+    operator_guide = (_REPO_ROOT / "setup/operating-owlbear.md").read_text(encoding="utf-8")
+    delivery_readme = (_REPO_ROOT / "serve/delivery/README.md").read_text(encoding="utf-8")
+    delivery_mcp = " ".join((_REPO_ROOT / "serve/delivery-mcp/README.md").read_text(encoding="utf-8").split())
+    cockpit_readme = (_REPO_ROOT / "serve/cockpit/README.md").read_text(encoding="utf-8")
+    wiring = " ".join((_REPO_ROOT / "share/WIRING.md").read_text(encoding="utf-8").split())
+
+    assert "`worker-host-lost` and `worker-released-stuck` are engine-only dispositions" in orchestration
+    assert "never send either through `settle_worker_invocation`" in orchestration
+    assert "`worker-stall-wait`" in orchestration
+    assert "`release_stuck_worker` only when the user explicitly states" in dispatch
+    assert "Call the tool once and report its result unchanged" in dispatch
+    assert "ERR_DELIVERY_WORKER_ACTIVE" in dispatch
+    assert "do not retry or dispatch a replacement in the same cycle" in dispatch
+    assert "Delivery may settle an earlier-session claim as `worker-host-lost`" in orchestration
+    assert (
+        "category `worker-ended`, code `finalizer-ended-without-report`, and `checks_state: unknown`"
+    ) in finalization
+    assert "not an observation, proof, or finalization receipt" in finalization
+    assert "`finalizer-ended-without-report` has `checks_state: unknown` and is not proof" in finalizer
+    assert "ask them to" in release_prompt
+    assert "release_stuck_worker` exactly once" in release_prompt
+    assert "no same-cycle replacement" in operator_guide
+    assert "VS Code crash/restart" in operator_guide
+    assert "ERR_DELIVERY_WORKER_ACTIVE" in operator_guide
+    assert "release_stuck_worker" in delivery_readme
+    assert "release_stuck_worker" in delivery_mcp
+    assert "Release stuck worker" in cockpit_readme
+    assert "release-stuck-worker" in wiring
+
+
 def test_worker_settlement_guidance_matches_native_contract() -> None:
     packet = " ".join((_SKILLS_ROOT / "w-packet-building/SKILL.md").read_text(encoding="utf-8").split())
     planning = " ".join((_SKILLS_ROOT / "w-frontier-planning/SKILL.md").read_text(encoding="utf-8").split())
@@ -918,6 +972,8 @@ def test_worker_settlement_guidance_matches_native_contract() -> None:
             "## Step 3 - Route One Completed Worker Result"
         )
     ]
+    _assert_stopped_worker_release_guidance()
+
     attention = " ".join(
         (_SKILLS_ROOT / "w-delivery-attention-resolution/SKILL.md").read_text(encoding="utf-8").split()
     )
@@ -941,7 +997,6 @@ def test_worker_settlement_guidance_matches_native_contract() -> None:
     assert "does not approve or admit a revision" in packet
     assert "normal Planner return" in planning
     assert "`retry` abandons the current attempt" not in packet
-    assert "settle_worker_invocation" in orchestration
     assert "DeliveryPlanningRetrySettlement" in orchestration
     assert "DeliveryBuilderInvocationSettlement" in orchestration
     assert all(
@@ -956,15 +1011,23 @@ def test_worker_settlement_guidance_matches_native_contract() -> None:
             ),
             (dispatch, "Orchestrator observes that the dispatch call returned"),
             (dispatch, "all owned mutating terminals and asynchronous jobs are settled"),
-            (dispatch, "dispatch call that has not returned"),
-            (dispatch, "Orchestrator or VS Code death/restart mid-run"),
-            (dispatch, "disconnected transport"),
-            (dispatch, "cancelled wait"),
+            (dispatch, "A dispatch call that has not returned"),
             (dispatch, "any owned mutating terminal or asynchronous job that may still be running"),
-            (dispatch, "do not settle, call `recover_claim`, or dispatch a replacement"),
-            (dispatch, "`confirmed_lost` is never evidence"),
+            (dispatch, "is not settled by Orchestrator"),
+            (dispatch, "`release_stuck_worker` only when the user explicitly states"),
+            (dispatch, "Call the tool once and report its result unchanged"),
+            (dispatch, "`ERR_DELIVERY_WORKER_ACTIVE`"),
+            (dispatch, "do not retry or dispatch a replacement in the same cycle"),
             (orchestration, "ended-without-result"),
-            (packet, "predecessor crashed or ended without returning a transition"),
+            (orchestration, "A dispatch that never returned in a previous session"),
+            (orchestration, "`worker-stall-wait`"),
+            (orchestration, "`worker-host-lost` and `worker-released-stuck` are engine-only dispositions"),
+            (orchestration, "never send either through `settle_worker_invocation`"),
+            (orchestration, "After a `release_stuck_worker` result, report it and stop the current cycle"),
+            (orchestration, "`confirmed_lost`, elapsed time, disconnection, and a cancelled wait are never evidence"),
+            (packet, "predecessor crashed or its chat was stopped without returning a transition"),
+            (packet, "`worker-host-lost` and `worker-released-stuck` settlements do too"),
+            (planning, "Delivery-settled `worker-host-lost` and `worker-released-stuck` predecessors"),
             (packet, "`prior_attempts`"),
         )
     )
@@ -988,8 +1051,8 @@ def test_worker_settlement_guidance_matches_native_contract() -> None:
     assert "eligible for recovery after the configured" not in delivery_readme
     assert "confirmed-dead claim recovery" not in operator_guide
     assert "Clean matching Builder custody is restarted and released" not in delivery_readme
-    assert "If they occupy every" in operator_guide
-    assert "enough retained claims can stall acquisition" in delivery_readme
+    assert "If active claims occupy every slot" in operator_guide
+    assert "unsettled claims continue to consume shared capacity" in delivery_readme
     assert "expose and recover current typed Integration attention" not in delivery_mcp_readme
     assert "ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED" in delivery_mcp_readme
     assert "recover confirmed-dead claims or worktrees" not in cockpit_readme
@@ -1000,13 +1063,16 @@ def test_worker_settlement_guidance_matches_native_contract() -> None:
     assert "recovers exact failed claims" not in wiring
     assert "dispatch failure instead triggers the matching exact claim recovery" not in wiring
     assert "ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED" in wiring
-    assert "leaving custody retained" in wiring
+    assert "and retain custody" in wiring
     assert "During exact-claim recovery after a crash or unstructured worker return" not in workspace_governance
     assert all(
         phrase in workspace_governance
         for phrase in (
             "Unknown or contained invocations still forbid adoption",
-            "`ended-without-result` settlement receipt and fresh `builder_handoff_context` and Build context",
+            (
+                "`ended-without-result`, `worker-host-lost`, or `worker-released-stuck` settlement receipt and fresh "
+                "`builder_handoff_context` and Build context"
+            ),
         )
     )
 

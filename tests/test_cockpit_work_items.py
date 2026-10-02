@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
@@ -27,6 +28,7 @@ from serve.delivery.tests.test_portfolio_application import (
     _loader_engine_state_snapshot,
     _loader_registered_engine_action_fixture,
     _make_provider_readback_unavailable,
+    _portfolio,
     _seed_loader_composed_completed_change,
     _startup_config,
     _workspace_mutation_snapshot,
@@ -131,6 +133,7 @@ from owlbear_delivery.work_items import (
     WorkItemStage,
     WorkItemTargetSyncView,
 )
+from owlbear_delivery.worker_stall import DeliveryWorkerActiveError
 from owlbear_delivery_github import GitHubCliPublicationProvider
 
 
@@ -451,6 +454,13 @@ class _DeliveryApplicationFake:
         self.calls.append(("recover", args))
         assert confirmed_lost
         return {"status": "recovered", "attempt_id": args[2], "claim_id": args[3]}
+
+    def release_stuck_worker(self, *args: object) -> dict[str, object]:
+        self.calls.append(("release-stuck", args))
+        failure = self.failures.get("release_stuck_worker")
+        if failure is not None:
+            raise failure
+        return {"change_id": args[0], "attempt_id": args[2], "claim_id": args[3]}
 
     def administrative_move(self, *args: object) -> dict[str, object]:
         self.calls.append(("move", args))
@@ -915,6 +925,116 @@ def test_http_recovery_rejects_stale_claim_identity_before_mutation(tmp_path: Pa
         response = client.post("/api/changes/change-a/outcomes/OUT-001/claims/recover", json=body)
     assert response.status_code == 409
     unchanged()
+
+
+def _stall_iso(value: datetime) -> str:
+    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
+
+
+def _stall_planning_case(tmp_path: Path):
+    start = datetime.now(UTC).replace(microsecond=0)
+    now = [_stall_iso(start)]
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path, {"change-a": DeliveryStage.PLANNING}, clock=lambda: now[0]
+    )
+    launch = application.acquire_actions().launch_packages[0]
+    body = {"outcome_id": "OUT-001", "attempt_id": launch.claim.attempt_id, "claim_id": launch.claim.claim_id}
+    owner_result = state_root / "changes/change-a/retry-ledger/owner-results" / f"{launch.claim.attempt_id}.json"
+    return application, runtimes["change-a"], coordinator, launch, body, owner_result, start, now
+
+
+def test_http_release_stuck_worker_settles_quiet_planner_and_replays(tmp_path: Path) -> None:
+    application, runtime, _coordinator, _launch, body, owner_result, start, now = _stall_planning_case(tmp_path)
+    now[0] = _stall_iso(start + timedelta(minutes=10))
+
+    with TestClient(assemble_target_app(application)) as client:
+        released = client.post("/api/changes/change-a/workers/release-stuck", json=body)
+        frontier = runtime.frontier_bytes()
+        replayed = client.post("/api/changes/change-a/workers/release-stuck", json=body)
+
+    assert released.status_code == replayed.status_code == 200
+    assert released.json() == runtime.show_binding("OUT-001").model_dump(mode="json")
+    assert released.json()["active_claim"] is None
+    assert replayed.json() == released.json()
+    assert runtime.frontier_bytes() == frontier
+    assert json.loads(owner_result.read_bytes())["failure_code"] == "worker-released-stuck"
+
+
+def test_http_release_stuck_worker_reports_recent_activity_as_retryable_conflict(tmp_path: Path) -> None:
+    application, runtime, coordinator, launch, body, owner_result, start, now = _stall_planning_case(tmp_path)
+    worktree = launch.worktree_path
+    touched = start + timedelta(minutes=5)
+    activity = worktree / "planner-notes.txt"
+    activity.write_text("recent\n", encoding="utf-8")
+    os.utime(activity, (touched.timestamp(), touched.timestamp()))
+    now[0] = _stall_iso(touched + timedelta(seconds=30))
+    before = (runtime.frontier_bytes(), runtime.retry_ledger().read(), coordinator.show("change-a"))
+
+    with TestClient(assemble_target_app(application)) as client:
+        response = client.post("/api/changes/change-a/workers/release-stuck", json=body)
+
+    retry_after = _stall_iso(touched + timedelta(minutes=2))
+    assert response.status_code == 409
+    diagnostic = response.json()
+    assert diagnostic["code"] == "ERR_DELIVERY_WORKER_ACTIVE"
+    assert diagnostic["authority"] == "delivery"
+    assert diagnostic["retry_safe"] is True
+    assert diagnostic["retry_after"] == retry_after
+    assert retry_after in diagnostic["detail"]
+    assert (runtime.frontier_bytes(), runtime.retry_ledger().read(), coordinator.show("change-a")) == before
+    assert runtime.show_binding("OUT-001").active_claim == launch.claim
+    assert not owner_result.exists()
+
+
+@pytest.mark.parametrize(
+    "update",
+    [{"outcome_id": "OUT-1"}, {"attempt_id": ""}, {"confirmed_lost": True}, {"stop_assertion": {"stopped": True}}],
+)
+def test_http_release_stuck_worker_rejects_malformed_identity_before_mutation(
+    tmp_path: Path, update: dict[str, object]
+) -> None:
+    application, runtime, _coordinator, launch, body, owner_result, start, now = _stall_planning_case(tmp_path)
+    now[0] = _stall_iso(start + timedelta(minutes=10))
+    frontier = runtime.frontier_bytes()
+
+    with TestClient(assemble_target_app(application)) as client:
+        response = client.post("/api/changes/change-a/workers/release-stuck", json={**body, **update})
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "code": "ERR_DELIVERY_HTTP_VALIDATION",
+        "detail": "Delivery request input is malformed",
+        "authority": "delivery",
+        "retry_safe": False,
+    }
+    assert runtime.frontier_bytes() == frontier
+    assert runtime.show_binding("OUT-001").active_claim == launch.claim
+    assert not owner_result.exists()
+
+
+def test_http_release_stuck_worker_forwards_finalizer_release_without_outcome() -> None:
+    client, application = _client()
+
+    response = client.post(
+        "/api/changes/change-a/workers/release-stuck",
+        json={"attempt_id": "final-attempt", "claim_id": "final-claim"},
+    )
+
+    assert response.status_code == 200
+    assert application.calls == [("release-stuck", ("change-a", None, "final-attempt", "final-claim"))]
+
+
+def test_http_release_stuck_worker_without_retry_time_omits_retry_after() -> None:
+    client, _application = _client({"release_stuck_worker": DeliveryWorkerActiveError(None)})
+
+    response = client.post(
+        "/api/changes/change-a/workers/release-stuck",
+        json={"outcome_id": "OUT-001", "attempt_id": "attempt", "claim_id": "claim"},
+    )
+
+    assert response.status_code == 409
+    assert set(response.json()) == {"code", "detail", "authority", "retry_safe"}
+    assert response.json()["code"] == "ERR_DELIVERY_WORKER_ACTIVE"
 
 
 def test_http_absent_host_still_writing_descendant_stays_contained_across_restarts(tmp_path: Path) -> None:

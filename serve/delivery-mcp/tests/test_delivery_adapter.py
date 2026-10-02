@@ -116,6 +116,7 @@ from owlbear_delivery.portfolio_operating import (
 from owlbear_delivery.publication_provider import PublicationProviderError, PublicationProviderFailureCode
 from owlbear_delivery.recovery import DeliveryWorkerExclusionRequiredError
 from owlbear_delivery.work_items import WorkItemNextActor
+from owlbear_delivery.worker_stall import DeliveryWorkerActiveError
 from owlbear_delivery_mcp.target_models import ReportFinalizationFailureParams
 from owlbear_delivery_mcp.target_server import (
     DELIVERY_OPERATION_ANNOTATIONS,
@@ -1145,6 +1146,7 @@ def _requests() -> dict[str, dict[str, object]]:
             "session_id": "session",
         },
         "recover_claim": {**claim, "confirmed_lost": True},
+        "release_stuck_worker": claim,
         "recover_integration_repair_claim": repair_claim,
         "show_integration_attention": change,
         "list_completed_changes": {"limit": 25},
@@ -1259,6 +1261,7 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
         "cleanup_completed_change_worktree": (CHANGE, DIGEST),
         "resolve_change_disposition": (CHANGE, DIGEST),
         "prepare_review_repair": (CHANGE,),
+        "release_stuck_worker": (CHANGE, "OUT-001", "attempt", "claim"),
         "settle_worker_invocation": (
             DeliveryPlanningRetrySettlement(
                 change_id=CHANGE,
@@ -1548,6 +1551,63 @@ async def test_publication_baseline_recovery_requires_literal_confirmation_befor
     diagnostic = json.loads(str(exc_info.value))
     assert diagnostic["code"] == "ERR_TARGET_PARAM_VALIDATION"
     assert application.calls == []
+
+
+@pytest.mark.asyncio
+async def test_release_stuck_worker_forwards_absent_outcome_as_finalizer_release() -> None:
+    application = _RecordingApplication()
+    adapter = TargetMCPAdapter(application)  # type: ignore[arg-type]
+
+    await adapter.release_stuck_worker({"change_id": CHANGE, "attempt_id": "final-attempt", "claim_id": "final"})
+    await adapter.release_stuck_worker(
+        {"change_id": CHANGE, "outcome_id": None, "attempt_id": "final-attempt", "claim_id": "final"}
+    )
+
+    assert application.calls == [
+        ("release_stuck_worker", (CHANGE, None, "final-attempt", "final"), {}),
+        ("release_stuck_worker", (CHANGE, None, "final-attempt", "final"), {}),
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "request_update",
+    [
+        {"outcome_id": "OUT-1"},
+        {"attempt_id": ""},
+        {"claim_id": None},
+        {"confirmed_lost": True},
+        {"elapsed_time": 600},
+    ],
+)
+async def test_release_stuck_worker_rejects_invalid_or_extra_parameters(request_update: dict[str, object]) -> None:
+    application = _RecordingApplication()
+    adapter = TargetMCPAdapter(application)  # type: ignore[arg-type]
+
+    with pytest.raises(ToolError) as exc_info:
+        await adapter.release_stuck_worker({**_requests()["release_stuck_worker"], **request_update})
+
+    diagnostic = json.loads(str(exc_info.value))
+    assert diagnostic["code"] == "ERR_TARGET_PARAM_VALIDATION"
+    assert diagnostic["retry_safe"] is False
+    assert application.calls == []
+
+
+@pytest.mark.asyncio
+async def test_release_stuck_worker_active_worktree_maps_to_retryable_conflict_with_retry_time() -> None:
+    retry_after = datetime(2026, 10, 2, 12, 2, tzinfo=UTC)
+    application = _RecordingApplication({"release_stuck_worker": DeliveryWorkerActiveError(retry_after)})
+    adapter = TargetMCPAdapter(application)  # type: ignore[arg-type]
+
+    with pytest.raises(ToolError) as exc_info:
+        await adapter.release_stuck_worker(_requests()["release_stuck_worker"])
+
+    diagnostic = json.loads(str(exc_info.value))
+    assert diagnostic["code"] == "ERR_DELIVERY_WORKER_ACTIVE"
+    assert diagnostic["retry_safe"] is True
+    assert diagnostic["current_authority_identity"] == CHANGE
+    assert "2026-10-02T12:02:00Z" in diagnostic["detail"]
+    assert "unchanged" in diagnostic["detail"]
 
 
 def test_report_finalization_failure_request_reuses_core_structural_validation() -> None:

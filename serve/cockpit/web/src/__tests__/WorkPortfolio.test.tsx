@@ -447,6 +447,7 @@ let pendingPublicationChecksRelease: (() => void) | null;
 let moveBackwardUpdatesDetailStage: WorkItemCardView["stage"];
 let moveBackwardFailure: boolean;
 let mutationFailurePath: string | null;
+let releaseStuckWorkerActive: boolean;
 let designFailure: boolean;
 let acceptanceObservationFailure: boolean;
 let acceptanceReconciliationProviderUnavailable: boolean;
@@ -632,7 +633,21 @@ function installFetch() {
         currentDetail = detail({ ...currentDetail.item, block: null });
         return response({});
       }
-      if (method === "POST" && url.endsWith("/claims/recover")) {
+      if (method === "POST" && url.endsWith("/workers/release-stuck")) {
+        if (releaseStuckWorkerActive) {
+          return response(
+            {
+              code: "ERR_DELIVERY_WORKER_ACTIVE",
+              detail:
+                "Custody, files and retry accounting are unchanged. The worker's worktree changed recently or could " +
+                "not be observed safely, so the worker may still be active. Retry at or after 2026-10-02T12:02:00Z.",
+              authority: "delivery",
+              retry_safe: true,
+              retry_after: "2026-10-02T12:02:00Z",
+            },
+            409,
+          );
+        }
         currentDetail = detail({ ...currentDetail.item, active_claim: null });
         return response({});
       }
@@ -846,6 +861,7 @@ beforeEach(() => {
   moveBackwardUpdatesDetailStage = null;
   moveBackwardFailure = false;
   mutationFailurePath = null;
+  releaseStuckWorkerActive = false;
   designFailure = false;
   acceptanceObservationFailure = false;
   acceptanceReconciliationProviderUnavailable = false;
@@ -1781,28 +1797,43 @@ it("keeps block evidence available when clearing the block fails", async () => {
   await waitFor(() => expect(clear.disabled).toBe(false));
 });
 
-it("keeps claim recovery and backward movement explicit and confirmable", async () => {
+const runningBuilderClaim = {
+  attempt_id: "attempt-one",
+  claim_id: "claim-one",
+  owner_id: "host-one",
+  process_id: "session-one",
+  continuation: false,
+  started_at: "2026-08-08T10:00:00Z",
+  worker_role: "builder" as const,
+  task_id: "TASK-001",
+};
+
+it("releases a stuck worker after an explicit confirmation and keeps backward movement confirmable", async () => {
   currentDetail = detail({
     card: card({ stage: "implementation" }),
-    active_claim: {
-      attempt_id: "attempt-one",
-      claim_id: "claim-one",
-      owner_id: "host-one",
-      process_id: "session-one",
-      continuation: false,
-      started_at: "2026-08-08T10:00:00Z",
-      worker_role: "builder",
-      task_id: "TASK-001",
-    },
+    active_claim: runningBuilderClaim,
+    readiness: readiness({ status: "running", reason_code: "active-custody" }),
   });
   const { container } = renderPage("/delivery/change-alpha/outcome%3AOUT-001");
-  await screen.findByText("Request claim recovery");
-  fireEvent.click(screen.getByText("Request claim recovery"));
-  expect(screen.getByText(/This request does not stop a worker or prove it has stopped/)).toBeInTheDocument();
-  fireEvent.click(screen.getByText("Request recovery"));
+  await screen.findByText("Release stuck worker");
+  fireEvent.click(screen.getByText("Release stuck worker"));
+  const dialog = screen.getByRole("alertdialog");
+  expect(dialog).toHaveTextContent("Use this only for a worker whose chat was stopped or whose VS Code window closed.");
+  expect(dialog).toHaveTextContent("counts toward this work's retry budget");
+  expect(dialog).toHaveTextContent("The worktree, including uncommitted work, is preserved for the next attempt.");
+  expect(dialog.textContent ?? "").not.toMatch(/\bstops?\b|\bkill|\bterminal\b|\brun the\b|\bcommand\b/i);
+  fireEvent.click(within(dialog).getByText("Confirm release"));
   await waitFor(() =>
-    expect(requests.some(({ url, method }) => method === "POST" && url.endsWith("/claims/recover"))).toBe(true),
+    expect(requests).toContainEqual({
+      url: "/api/changes/change-alpha/workers/release-stuck",
+      method: "POST",
+      body: { outcome_id: "OUT-001", attempt_id: "attempt-one", claim_id: "claim-one" },
+    }),
   );
+  expect(
+    await screen.findByText("Stuck worker released. The attempt was recorded as failed; its work is preserved."),
+  ).toBeInTheDocument();
+  expect(requests.some(({ url }) => url.endsWith("/claims/recover"))).toBe(false);
 
   fireEvent.click(screen.getByText("Administrative actions"));
   const [stage, reason] = await waitFor(() => {
@@ -1834,42 +1865,46 @@ it("keeps claim recovery and backward movement explicit and confirmable", async 
   expect(await screen.findByText("Moved backward. Reset: OUT-002.")).toBeInTheDocument();
 });
 
-it("keeps claim recovery confirmation open when recovery fails", async () => {
+it("keeps the release confirmation open and shows the retry time when the worker may still be active", async () => {
   currentDetail = detail({
     card: card({ stage: "implementation" }),
-    active_claim: {
-      attempt_id: "attempt-one",
-      claim_id: "claim-one",
-      owner_id: "host-one",
-      process_id: "session-one",
-      continuation: false,
-      started_at: "2026-08-08T10:00:00Z",
-      worker_role: "builder",
-      task_id: "TASK-001",
-    },
+    active_claim: runningBuilderClaim,
+    readiness: readiness({ status: "waiting", reason_code: "worker-stall-wait" }),
   });
-  mutationFailurePath = "/claims/recover";
+  releaseStuckWorkerActive = true;
   renderPage("/delivery/change-alpha/outcome%3AOUT-001");
-  await screen.findByText("Request claim recovery");
-  fireEvent.click(screen.getByText("Request claim recovery"));
-  fireEvent.click(screen.getByText("Request recovery"));
+  await screen.findByText("Release stuck worker");
+  fireEvent.click(screen.getByText("Release stuck worker"));
+  fireEvent.click(screen.getByText("Confirm release"));
 
   await waitFor(() =>
     expect(requests).toContainEqual({
-      url: "/api/changes/change-alpha/outcomes/OUT-001/claims/recover",
+      url: "/api/changes/change-alpha/workers/release-stuck",
       method: "POST",
-      body: {
-        attempt_id: "attempt-one",
-        claim_id: "claim-one",
-        confirmed_lost: true,
-      },
+      body: { outcome_id: "OUT-001", attempt_id: "attempt-one", claim_id: "claim-one" },
     }),
   );
   const dialog = screen.getByRole("alertdialog");
-  expect(within(dialog).getByRole("alert")).toHaveTextContent(
-    "The Delivery operation was rejected while the confirmation was open.",
-  );
-  expect(within(dialog).getByText("Request claim recovery")).toBeInTheDocument();
+  const feedback = await within(dialog).findByRole("status");
+  expect(feedback).toHaveTextContent("ERR_DELIVERY_WORKER_ACTIVE");
+  expect(feedback).toHaveTextContent("the worker may still be active. Nothing was changed.");
+  expect(within(feedback).getByTestId("worker-active-retry-after")).toHaveTextContent("2026-10-02T12:02:00Z");
+  expect(within(feedback).getByTestId("worker-active-retry-after")).toHaveAttribute("datetime", "2026-10-02T12:02:00Z");
+  expect(within(dialog).getByText("Release stuck worker")).toBeInTheDocument();
+  expect(screen.getByTestId("work-item-detail")).toHaveTextContent("attempt-one");
+});
+
+it("offers stuck-worker release only for running or stall-waiting claims", async () => {
+  currentDetail = detail({
+    card: card({ stage: "implementation" }),
+    active_claim: runningBuilderClaim,
+    readiness: readiness({ status: "blocked", next_actor: "none", reason_code: "retry-transition-contained" }),
+  });
+  renderPage("/delivery/change-alpha/outcome%3AOUT-001");
+
+  const inspector = await screen.findByTestId("work-item-detail");
+  expect(inspector).toHaveTextContent("Active claim");
+  expect(within(inspector).queryByText("Release stuck worker")).not.toBeInTheDocument();
 });
 
 it("clears a backward target that becomes invalid after a successful move", async () => {
@@ -5625,6 +5660,7 @@ it("labels every continuation readiness reason without blanking a new engine sta
     "acceptance-wait",
     "retry-containment",
     "retry-ledger-unavailable",
+    "worker-stall-wait",
   ];
   expect(new Set(continuationReasons.map((reason) => READINESS_REASON_LABELS[reason])).size).toBe(
     continuationReasons.length,
@@ -5773,7 +5809,7 @@ it("renders the bounded attempt history of an exhausted retry episode", async ()
   expect(entries[2]).toHaveTextContent("3. repair failed at 2026-08-04T02:00:00Z");
 });
 
-it("reports engine continuation custody as provenance without offering caller-confirmed recovery", async () => {
+it("offers release for a running continuation worker with its exact claim identity", async () => {
   currentDetail = detail({
     card: card({ stage: "implementation" }),
     active_claim: {
@@ -5786,19 +5822,49 @@ it("reports engine continuation custody as provenance without offering caller-co
       worker_role: "builder",
       task_id: null,
     },
+    readiness: readiness({ status: "running", reason_code: "active-custody" }),
   });
   renderPage("/delivery/change-alpha/outcome%3AOUT-001");
 
   const inspector = await screen.findByTestId("work-item-detail");
   expect(within(inspector).getByTestId("claim-continuation-custody")).toHaveTextContent(
-    "Caller-confirmed recovery is not supported for it.",
+    "Delivery holds this custody as an engine continuation.",
   );
   expect(inspector).toHaveTextContent("Engine continuation");
   expect(inspector).toHaveTextContent("cockpit-host");
   expect(inspector).toHaveTextContent("cockpit-session");
   expect(inspector).toHaveTextContent("not evidence that the worker is still running");
-  expect(within(inspector).queryByText("Request claim recovery")).not.toBeInTheDocument();
-  expect(requests.filter((request) => request.method !== "GET")).toEqual([]);
+  fireEvent.click(within(inspector).getByText("Release stuck worker"));
+  fireEvent.click(screen.getByText("Confirm release"));
+
+  await waitFor(() =>
+    expect(requests).toContainEqual({
+      url: "/api/changes/change-alpha/workers/release-stuck",
+      method: "POST",
+      body: { outcome_id: "OUT-001", attempt_id: "attempt-continuation", claim_id: "claim-continuation" },
+    }),
+  );
+});
+
+it("does not offer stuck-worker release when a claim is missing its identifiers", async () => {
+  currentDetail = detail({
+    card: card({ stage: "implementation" }),
+    active_claim: {
+      attempt_id: "",
+      claim_id: "",
+      owner_id: "cockpit-host",
+      process_id: "cockpit-session",
+      continuation: true,
+      started_at: "2026-09-13T10:00:00Z",
+      worker_role: "builder",
+      task_id: null,
+    },
+    readiness: readiness({ status: "running", reason_code: "active-custody" }),
+  });
+  renderPage("/delivery/change-alpha/outcome%3AOUT-001");
+
+  const inspector = await screen.findByTestId("work-item-detail");
+  expect(within(inspector).queryByText("Release stuck worker")).not.toBeInTheDocument();
 });
 
 it("exposes the coordination status behind an unreadable Change record", async () => {

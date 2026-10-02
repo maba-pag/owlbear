@@ -38,7 +38,13 @@ evidence no longer matches the context.
 - **Use Delivery as authority.** Require `show_finalization_context` and preserve its exact branch, worktree, Change head, reviewed head, and publication phase.
 - **Keep the managed Change worktree exclusive.** Use read-only inspection and proof there; never edit, create another worktree, mutate target refs, fetch, push, or change the user's checkout.
 - **Record exact-head observations.** Run the relevant maintained checks read-only in the managed Change worktree and author typed observations for the exact reviewed head; do not use target/profile authority or invent a proof executor.
-- **Retain bounded failures.** When trusted current context exists but custody preflight, a maintained check, or independent review fails, submit only the admitted structural fields through `report_finalization_failure`; preserve not-run/failed/unknown state and the returned report identity without repairing custody or claiming successful proof. If basis or report storage is unavailable, expose that bounded failure without inventing an identity.
+- **Retain bounded failures.** When trusted current context exists but custody preflight, a maintained
+  check, or independent review fails, submit only the admitted structural fields through
+  `report_finalization_failure`; preserve not-run/failed/unknown state and the returned report identity
+  without repairing custody or claiming successful proof. If basis or report storage is unavailable,
+  expose that bounded failure without inventing an identity. A Delivery-authored
+  `finalizer-ended-without-report` has `checks_state: unknown` and is not proof; any new Finalizer
+  attempt needs fresh exact-head observations and independent review under the original attempt budget.
 - **Require independent finalization review.** Dispatch `build-reviewer` with `review_mode: finalization`, require the exact commit echo and advisory pass, and keep reviewer identity distinct from finalizer identity.
 - **Preserve reviewer memory provenance.** Save a qualified `memory_candidate` with its supplied
   reviewer `source_agent` and no scope; discard malformed or low-signal candidates without repair.

@@ -99,7 +99,8 @@ export type DeliveryReadinessReasonCode =
   | "retry-exhausted"
   | "acceptance-wait"
   | "retry-containment"
-  | "retry-ledger-unavailable";
+  | "retry-ledger-unavailable"
+  | "worker-stall-wait";
 export type FinalizationFailureCode =
   | "workspace-dirty"
   | "workspace-preflight-failed"
@@ -107,12 +108,14 @@ export type FinalizationFailureCode =
   | "maintained-check-unavailable"
   | "independent-review-failed"
   | "independent-review-unavailable"
-  | "proof-mutated-worktree";
+  | "proof-mutated-worktree"
+  | "finalizer-ended-without-report";
 export type FinalizationFailureCategory =
   | "custody-preflight"
   | "maintained-check"
   | "independent-review"
-  | "proof-mutation";
+  | "proof-mutation"
+  | "worker-ended";
 
 export interface DeliveryReadinessBasis {
   contract_digest: string | null;
@@ -792,14 +795,23 @@ export class WorkItemApiError extends Error {
   readonly code: string;
   readonly authority: string | null;
   readonly retrySafe: boolean;
+  readonly retryAfter: string | null;
 
-  constructor(status: number, code: string, detail: string, authority: string | null, retrySafe: boolean) {
+  constructor(
+    status: number,
+    code: string,
+    detail: string,
+    authority: string | null,
+    retrySafe: boolean,
+    retryAfter: string | null = null,
+  ) {
     super(detail);
     this.name = "WorkItemApiError";
     this.status = status;
     this.code = code;
     this.authority = authority;
     this.retrySafe = retrySafe;
+    this.retryAfter = retryAfter;
   }
 }
 
@@ -817,6 +829,7 @@ async function workItemRequest<T>(url: string, options: WorkItemRequestOptions):
     typeof nested.detail === "string" ? nested.detail : `Delivery request failed with status ${response.status}`,
     typeof nested.authority === "string" ? nested.authority : null,
     nested.retry_safe === true,
+    typeof nested.retry_after === "string" ? nested.retry_after : null,
   );
 }
 
@@ -925,17 +938,17 @@ export function clearWorkItemBlock(
   });
 }
 
-/** The legacy flag requests recovery; it is not host-owned worker exclusion evidence. */
-export function recoverWorkItemClaim(
+/** A null outcome names the Change's Finalizer attempt; recent worktree activity is refused unchanged. */
+export function releaseStuckWorker(
   changeId: string,
-  outcomeId: string,
+  outcomeId: string | null,
   attemptId: string,
   claimId: string,
 ): Promise<unknown> {
   return controlRequest(
-    `/api/changes/${encodeURIComponent(changeId)}/outcomes/${encodeURIComponent(outcomeId)}/claims/recover`,
-    "ERR_WORK_ITEM_CLAIM_RECOVERY",
-    { confirmed_lost: true, attempt_id: attemptId, claim_id: claimId },
+    `/api/changes/${encodeURIComponent(changeId)}/workers/release-stuck`,
+    "ERR_WORK_ITEM_RELEASE_STUCK_WORKER",
+    { outcome_id: outcomeId, attempt_id: attemptId, claim_id: claimId },
   );
 }
 
