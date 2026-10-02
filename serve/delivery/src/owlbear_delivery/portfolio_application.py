@@ -270,8 +270,10 @@ from owlbear_delivery.worker_stall import (
     DEFAULT_WORKER_QUIET_PERIOD,
     DeliveryClaimIssuer,
     DeliveryWorkerActiveError,
-    HostLockLivenessProbe,
+    ProcessTableWorktreeProbe,
+    ProcessWindowLivenessProbe,
     claim_issuer_path,
+    describe_active_processes,
     is_issuable_attempt_id,
 )
 
@@ -295,7 +297,7 @@ if TYPE_CHECKING:
         VerifiedDesignPackage,
     )
     from owlbear_delivery.work_items import WorkItemDetail, WorkItemProjection
-    from owlbear_delivery.worker_stall import WorkerHostInstance, WorkerHostLivenessProbe
+    from owlbear_delivery.worker_stall import WindowHostIdentity, WindowLivenessProbe, WorktreeProcessProbe
 
 
 def _timestamp(value: str) -> datetime:
@@ -304,6 +306,30 @@ def _timestamp(value: str) -> datetime:
         message = "Delivery claim timestamps must include a timezone"
         raise ValueError(message)
     return parsed.astimezone(UTC)
+
+
+def _worker_stall_prompt(change_id: str, stall: _WorkerStall) -> str:
+    if stall.active_processes:
+        verb = "is" if len(stall.active_processes) == 1 else "are"
+        wait = (
+            f"{describe_active_processes(stall.active_processes)} {verb} still active in its worktree. Delivery "
+            "settles the claim as a failed attempt during a later acquisition once they exit and the worktree stays "
+            "unchanged for the quiet period"
+        )
+    elif stall.eligible_at is not None:
+        wait = (
+            "Delivery settles the claim as a failed attempt during the next acquisition after its worktree stays "
+            "unchanged until next_eligible_at"
+        )
+    else:
+        wait = (
+            "Its worktree or processes cannot be observed safely. Delivery settles the claim as a failed attempt "
+            "once they can be observed and the worktree stays unchanged for the quiet period"
+        )
+    return (
+        f"/continue-change {change_id} The VS Code window that issued the active worker claim has closed. {wait}; "
+        "do not edit the worktree or dispatch a replacement before then."
+    )
 
 
 def _health_detail(detail: str | None, fallback: str) -> str:
@@ -1990,8 +2016,9 @@ class PortfolioApplicationDependencies:
     health_diagnostics: tuple[DeliveryHealthDiagnostic, ...] = ()
     recovery_evidence_provider: RecoveryEvidenceProvider = field(default_factory=UnavailableRecoveryEvidenceProvider)
     proof_attempt_store_factory: Callable[[str], ProofAttemptStore] | None = None
-    host_instance: WorkerHostInstance | None = None
-    host_liveness_probe: WorkerHostLivenessProbe | None = None
+    issuer_window: WindowHostIdentity | None = None
+    window_liveness_probe: WindowLivenessProbe | None = None
+    worktree_process_probe: WorktreeProcessProbe | None = None
     worker_quiet_period: timedelta = DEFAULT_WORKER_QUIET_PERIOD
 
 
@@ -2017,6 +2044,7 @@ class _Candidate:
 class _WorkerStall:
     eligible_at: datetime | None
     quiet: bool
+    active_processes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -2099,8 +2127,9 @@ class PortfolioApplication:
         self._startup_health_diagnostics = dependencies.health_diagnostics
         self._recovery_evidence_provider = dependencies.recovery_evidence_provider
         self._proof_attempt_store_factory = dependencies.proof_attempt_store_factory
-        self._host_instance = dependencies.host_instance
-        self._host_liveness_probe = dependencies.host_liveness_probe or HostLockLivenessProbe(self._target_root)
+        self._issuer_window = dependencies.issuer_window
+        self._window_liveness_probe = dependencies.window_liveness_probe or ProcessWindowLivenessProbe()
+        self._worktree_process_probe = dependencies.worktree_process_probe or ProcessTableWorktreeProbe()
         self._worker_quiet_period = dependencies.worker_quiet_period
         self._execution_capacity = config.execution_capacity
         self._claim_timeout = timedelta(seconds=config.claim_timeout_seconds)
@@ -5305,7 +5334,7 @@ class PortfolioApplication:
             claim = runtime.require_active_claim(outcome_id, attempt_id, claim_id).active_claim
             if claim is None or claim.worker_role not in {DeliveryWorkerRole.PLANNER, DeliveryWorkerRole.BUILDER}:
                 self._fail("stuck-worker release supports only an active Planner or Builder claim")
-            self._require_quiet_worktree(change_id)
+            self._require_quiet_worktree(change_id, claim.started_at)
             return self._apply_worker_settlement(
                 runtime, self._engine_worker_envelope(runtime, outcome_id, claim, "released-stuck")
             )
@@ -5331,13 +5360,13 @@ class PortfolioApplication:
             self._raise_finalizer_settlement_conflict(
                 "stuck-worker release does not match the active Finalizer attempt"
             )
-        self._require_quiet_worktree(change_id)
+        self._require_quiet_worktree(change_id, attempt.writer.claimed_at)
         return self._settle_stalled_finalizer(runtime, attempt, "released-stuck")
 
-    def _require_quiet_worktree(self, change_id: str) -> None:
-        eligible_at = self._worker_quiet_eligibility(change_id)
-        if eligible_at is None or _timestamp(self._clock()) < eligible_at:
-            raise DeliveryWorkerActiveError(eligible_at)
+    def _require_quiet_worktree(self, change_id: str, issued_at: str) -> None:
+        guard = self._worker_settlement_guard(change_id, issued_at)
+        if not guard.quiet:
+            raise DeliveryWorkerActiveError(guard.eligible_at, guard.active_processes)
 
     def _active_finalizer_writer_attempt(self, change_id: str) -> ChangeFinalizationAttempt | None:
         coordination = self._coordinator.show(change_id)
@@ -5432,16 +5461,26 @@ class PortfolioApplication:
             disposition=disposition,
         )
 
-    def _worker_quiet_eligibility(self, change_id: str) -> datetime | None:
-        """Return when the Change worktree becomes quiet, or None when it cannot be observed safely."""
+    def _worker_settlement_guard(self, change_id: str, issued_at: str) -> _WorkerStall:
+        """Refuse settlement while leftover processes use the worktree or it changed within the quiet period."""
         try:
-            newest = self._workspace_manager.observe_worktree_activity(change_id)
+            issued_after: datetime | None = _timestamp(issued_at)
+        except ValueError:
+            issued_after = None  # Unknown issue time: every unreadable process blocks.
+        try:
+            roots = self._workspace_manager.worker_process_roots(change_id)
+            before = self._workspace_manager.observe_worktree_activity(change_id)
+            processes = self._worktree_process_probe.active_processes(roots, issued_after=issued_after)
+            if processes:
+                return _WorkerStall(eligible_at=None, quiet=False, active_processes=processes)
+            # A write while processes were scanned must still count against the quiet period.
+            newest = max(before, self._workspace_manager.observe_worktree_activity(change_id))
         except (OSError, RuntimeError, subprocess.SubprocessError, ValueError):
-            return None
+            return _WorkerStall(eligible_at=None, quiet=False)
         eligible_at = newest + self._worker_quiet_period
         if eligible_at.microsecond:
             eligible_at = eligible_at.replace(microsecond=0) + timedelta(seconds=1)
-        return eligible_at
+        return _WorkerStall(eligible_at=eligible_at, quiet=_timestamp(self._clock()) >= eligible_at)
 
     def _publish_claim_issuer(self, change_id: str, outcome_id: str, claim: DeliveryActiveClaim) -> None:
         self._publish_issuer(
@@ -5457,8 +5496,8 @@ class PortfolioApplication:
         role: str,
         issued_at: str,
     ) -> None:
-        """Bind one issued worker identity to this process's host lock before it can be dispatched."""
-        if self._host_instance is None or not is_issuable_attempt_id(attempt_id):
+        """Bind one issued worker identity to this process's VS Code window, if known, before dispatch."""
+        if not is_issuable_attempt_id(attempt_id):
             return
         issuer = DeliveryClaimIssuer(
             change_id=change_id,
@@ -5466,7 +5505,7 @@ class PortfolioApplication:
             attempt_id=attempt_id,
             claim_id=claim_id,
             role=role,
-            issuer_instance=self._host_instance.instance_id,
+            window=self._issuer_window,
             issued_at=issued_at,
         )
         publish_record(self._target_root, claim_issuer_path(change_id, attempt_id), issuer)
@@ -5481,7 +5520,7 @@ class PortfolioApplication:
         return DeliveryClaimIssuer.model_validate_json(content)
 
     def _worker_stall(self, change_id: str, outcome_id: str, claim: DeliveryActiveClaim) -> _WorkerStall | None:
-        """Return stall evidence only when the claim's recorded issuer no longer holds its host lock."""
+        """Return stall evidence only when the claim's recorded issuing window process is gone."""
         if claim.worker_role not in {DeliveryWorkerRole.PLANNER, DeliveryWorkerRole.BUILDER}:
             return None
         return self._issuer_stall(change_id, outcome_id, claim.attempt_id, claim.claim_id, claim.worker_role.value)
@@ -5511,11 +5550,9 @@ class PortfolioApplication:
             role,
         ):
             self._fail("claim issuer record does not match its active worker")
-        if self._host_liveness_probe.host_state(issuer.issuer_instance) != "lost":
+        if issuer.window is None or self._window_liveness_probe.window_state(issuer.window) != "gone":
             return None
-        eligible_at = self._worker_quiet_eligibility(change_id)
-        quiet = eligible_at is not None and _timestamp(self._clock()) >= eligible_at
-        return _WorkerStall(eligible_at=eligible_at, quiet=quiet)
+        return self._worker_settlement_guard(change_id, issuer.issued_at)
 
     def _observed_worker_stalls(self, snapshot: DeliveryPortfolioSnapshot) -> dict[str, _WorkerStall]:
         stalls: dict[str, _WorkerStall] = {}
@@ -5537,7 +5574,7 @@ class PortfolioApplication:
         *,
         checkpoint_locked: bool,
     ) -> tuple[int, tuple[DeliveryAcquisitionFailure, ...]]:
-        """Settle quiet claims whose issuing host is gone; each Change fails closed independently."""
+        """Settle quiet claims whose issuing window is gone; each Change fails closed independently."""
         settled = 0
         failures: list[DeliveryAcquisitionFailure] = []
         for change_id in change_ids:
@@ -5571,7 +5608,7 @@ class PortfolioApplication:
                         detail="Worker stall evidence is unavailable; active claims and worktrees are unchanged.",
                         retry_condition=(
                             "Restore readable claim-issuer and worktree evidence, or release a stopped worker "
-                            "explicitly once its worktree is quiet."
+                            "explicitly once no process uses its worktree and it stays unchanged."
                         ),
                     )
                 )
@@ -6923,7 +6960,7 @@ class PortfolioApplication:
         cards: tuple[WorkItemCardView, ...],
         decisions: tuple[DeliveryReadiness, ...],
     ) -> tuple[DeliveryReadiness, ...]:
-        """Replace running readiness for claims whose issuing host is gone with the exact quiet wait."""
+        """Replace running readiness for claims whose issuing window is gone with the exact leftover-work wait."""
         stalls = self._observed_worker_stalls(snapshot)
         try:
             finalizer = self._finalizer_stall(snapshot.contract.change_id)
@@ -6934,21 +6971,27 @@ class PortfolioApplication:
         frontier = snapshot.frontier
         active = sum(binding.active_claim is not None for binding in frontier.bindings)
         change_stalled = finalizer is not None or (len(stalls) == active and frontier.integration_repair_claim is None)
-        eligible = (finalizer[1].eligible_at,) if finalizer is not None else ()
-        eligible += tuple(stall.eligible_at for stall in stalls.values())
-        change_stall = None if None in eligible else max(eligible)
+        observed = ((finalizer[1],) if finalizer is not None else ()) + tuple(stalls.values())
+        eligible = tuple(stall.eligible_at for stall in observed)
+        change_stall = _WorkerStall(
+            eligible_at=None if None in eligible else max(eligible),
+            quiet=False,
+            # Every stall of one Change scans the same worktree; repeat counts would overstate it.
+            active_processes=next((stall.active_processes for stall in observed if stall.active_processes), ()),
+        )
         updated: list[DeliveryReadiness] = []
         for card, decision in zip(cards, decisions, strict=True):
             if card.scope is WorkItemScope.OUTCOME and card.work_item_id in stalls:
-                eligible_at = stalls[card.work_item_id].eligible_at
+                stall = stalls[card.work_item_id]
             elif card.scope is WorkItemScope.CHANGE_PUBLICATION and change_stalled:
-                eligible_at = change_stall
+                stall = change_stall
             else:
                 updated.append(decision)
                 continue
             if decision.status != "running":
                 updated.append(decision)
                 continue
+            eligible_at = stall.eligible_at
             updated.append(
                 decision.model_copy(
                     update={
@@ -6960,12 +7003,7 @@ class PortfolioApplication:
                         "next_eligible_at": (
                             eligible_at.isoformat().replace("+00:00", "Z") if eligible_at is not None else None
                         ),
-                        "prompt": (
-                            f"/continue-change {snapshot.contract.change_id} The process that issued the active "
-                            "worker claim has exited. Delivery settles the claim as a failed attempt during the next "
-                            "acquisition after its worktree stays unchanged until next_eligible_at; do not edit the "
-                            "worktree or dispatch a replacement before then."
-                        ),
+                        "prompt": _worker_stall_prompt(snapshot.contract.change_id, stall),
                     }
                 )
             )
@@ -11437,7 +11475,6 @@ class PortfolioApplication:
                 source.source_head,
                 candidate.binding.outcome_id,
             )
-            self._publish_claim_issuer(candidate.change_id, candidate.binding.outcome_id, claim)
             participant = self._workspace_manager.prepare_builder_handoff_acquisition(
                 candidate.change_id,
                 writer,
@@ -11445,6 +11482,7 @@ class PortfolioApplication:
                 lock,
                 task_id=candidate.task_id,
             )
+            self._publish_claim_issuer(candidate.change_id, candidate.binding.outcome_id, claim)
             candidate.runtime.activate_claim(
                 activation,
                 builder_handoff_participant=participant,

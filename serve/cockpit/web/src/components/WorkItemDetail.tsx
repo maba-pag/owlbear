@@ -479,7 +479,7 @@ function ClaimSection({ detail, pendingAction, actionError, onReleaseStuckWorker
             </p>
             <p className="text-sm">
               The worktree, including uncommitted work, is preserved for the next attempt. Delivery refuses the release
-              and changes nothing if the worktree changed in the last two minutes.
+              and changes nothing while any process still uses the worktree or if it changed in the last 30 seconds.
             </p>
             <dl className="grid gap-static-xs break-all text-sm">
               <dt>Attempt</dt>
@@ -898,6 +898,12 @@ function ReadinessSection({ readiness }: { readiness: DeliveryReadiness | null |
       {!readiness.executable ? (
         <p className="mt-static-xs text-xs text-contrast-medium" data-testid="readiness-not-executable">
           Delivery offers no runnable operation for this Work Item right now.
+        </p>
+      ) : null}
+      {readiness.reason_code === "worker-stall-wait" && !readiness.next_eligible_at ? (
+        <p className="mt-static-xs text-xs text-contrast-medium" data-testid="worker-stall-no-eligible-time">
+          No eligible time yet: processes still use this worker's worktree, or it cannot be observed safely. The
+          readiness prompt names any such processes.
         </p>
       ) : null}
       <dl className="mt-static-xs grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md text-xs">

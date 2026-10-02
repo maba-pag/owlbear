@@ -614,8 +614,9 @@ class WorkItemProjector:
                 ),
                 "retry-ledger-unavailable": "Retry authority could not be read; preserve state before continuing.",
                 "worker-stall-wait": (
-                    "The process that issued this worker claim has exited. Delivery settles the claim as a failed "
-                    "attempt once its worktree stays unchanged for the quiet period; preserve the worktree."
+                    "The VS Code window that issued this worker claim has closed. Delivery settles the claim as "
+                    "a failed attempt once no process uses its worktree and it stays unchanged for the quiet "
+                    "period; preserve the worktree."
                 ),
             }
             self._cards = tuple(

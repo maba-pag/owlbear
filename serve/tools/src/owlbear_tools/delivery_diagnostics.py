@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import errno
 import json
+import math
 import os
 import re
 import stat
@@ -48,9 +49,9 @@ SUPPORTED_VERSIONS = {
 
 _CHANGE_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _FIXED_ENTRY_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
-_HOST_LOCK_NAME = re.compile(r"^[0-9a-f]{32}\.lock$")
 _INVALID_CHANGE_ID = "invalid Change ID"
 _INVALID_INVOCATION = "ERR_INVALID_INVOCATION"
+_WINDOW_HOST_NAME_MAX_LENGTH = 256
 _CHANGE_RECORD_NAME_PATTERNS = {
     "$digest": re.compile(r"^[0-9a-f]{64}$"),
     "$digest.json": re.compile(r"^[0-9a-f]{64}\.json$"),
@@ -280,7 +281,6 @@ class _Inspection:
             "config": 0,
             "host": 0,
             "host_local": 0,
-            "host_locks": 0,
             "frontier": 0,
             "change_records": 0,
             "coordination": 0,
@@ -291,7 +291,6 @@ class _Inspection:
         }
         self.selected_runtime_change_seen = False
         self.runtime_frontier_changes: set[str] = set()
-        self.claim_issuer_instances: set[str] = set()
         self.transaction_scan_unknown = False
         self.incomplete = False
         self.entries_seen = 0
@@ -761,6 +760,27 @@ def _change_record_sort_key(layout: dict[str, object], name: str) -> tuple[int, 
     return len(layout), name
 
 
+def _claim_issuer_window_is_valid(window: object) -> bool:
+    if window is None:
+        return True
+    if not isinstance(window, dict) or set(window) != {"pid", "create_time", "name"}:
+        return False
+    pid = window.get("pid")
+    create_time = window.get("create_time")
+    name = window.get("name")
+    return (
+        isinstance(pid, int)
+        and not isinstance(pid, bool)
+        and pid > 1
+        and isinstance(create_time, (int, float))
+        and not isinstance(create_time, bool)
+        and create_time >= 0
+        and (not isinstance(create_time, float) or math.isfinite(create_time))
+        and isinstance(name, str)
+        and 1 <= len(name) <= _WINDOW_HOST_NAME_MAX_LENGTH
+    )
+
+
 def _change_record_shape(content: bytes, kind: str, inspection: _Inspection) -> None:
     try:
         value = json.loads(content.decode("utf-8"))
@@ -792,13 +812,10 @@ def _change_record_shape(content: bytes, kind: str, inspection: _Inspection) -> 
         inspection.records[-1]["status"] = "unsupported"
     else:
         inspection.records[-1]["schema_version"] = schema
-        if kind == "claim_issuer":
-            issuer_instance = value.get("issuer_instance")
-            if not isinstance(issuer_instance, str) or not _HOST_LOCK_NAME.fullmatch(f"{issuer_instance}.lock"):
-                inspection.diagnostic("CLAIM_ISSUER_MALFORMED")
-                inspection.records[-1]["status"] = "malformed"
-                return
-            inspection.claim_issuer_instances.add(issuer_instance)
+        if kind == "claim_issuer" and ("window" not in value or not _claim_issuer_window_is_valid(value["window"])):
+            inspection.diagnostic("CLAIM_ISSUER_MALFORMED")
+            inspection.records[-1]["status"] = "malformed"
+            return
         inspection.records[-1]["status"] = "supported"
 
 
@@ -1495,70 +1512,6 @@ def _scan_logs(runtime_fd: int, inspection: _Inspection) -> None:  # noqa: C901,
         _close_directory(runtime_fd, "logs", logs_fd, logs_opened, inspection)
 
 
-def _scan_host_locks(runtime_fd: int, inspection: _Inspection) -> None:
-    hosts = _open_optional_pending_directory(runtime_fd, "hosts", inspection, "HOSTS")
-    if hosts is None:
-        return
-    hosts_fd, hosts_opened = hosts
-    try:
-        for name in _directory_names(hosts_fd, inspection):
-            if not _HOST_LOCK_NAME.fullmatch(name):
-                _unrecognized_change_entry(inspection)
-                continue
-            try:
-                info = os.stat(name, dir_fd=hosts_fd, follow_symlinks=False)
-            except OSError:
-                inspection.diagnostic("HOST_LOCK_UNREADABLE")
-                inspection.transaction_scan_unknown = True
-                continue
-            if stat.S_ISLNK(info.st_mode):
-                inspection.diagnostic("SYMLINK_REJECTED")
-                inspection.transaction_scan_unknown = True
-            elif not stat.S_ISREG(info.st_mode):
-                inspection.diagnostic("SPECIAL_FILE_REJECTED")
-                inspection.transaction_scan_unknown = True
-            else:
-                inspection.counts["host_locks"] += 1
-    finally:
-        _close_directory(runtime_fd, "hosts", hosts_fd, hosts_opened, inspection)
-
-
-def _scan_selected_host_locks(runtime_fd: int, inspection: _Inspection) -> None:
-    if not inspection.claim_issuer_instances:
-        return
-    hosts = _open_optional_pending_directory(runtime_fd, "hosts", inspection, "HOSTS")
-    if hosts is None:
-        if not inspection.entry_budget_exhausted:
-            inspection.diagnostic("HOST_LOCK_UNREADABLE")
-        inspection.transaction_scan_unknown = True
-        return
-    hosts_fd, hosts_opened = hosts
-    try:
-        for issuer_instance in sorted(inspection.claim_issuer_instances):
-            name = f"{issuer_instance}.lock"
-            if not _HOST_LOCK_NAME.fullmatch(name):
-                _unrecognized_change_entry(inspection)
-                continue
-            if not inspection.charge_entry(hosts_fd, name):
-                break
-            try:
-                info = os.stat(name, dir_fd=hosts_fd, follow_symlinks=False)
-            except OSError:
-                inspection.diagnostic("HOST_LOCK_UNREADABLE")
-                inspection.transaction_scan_unknown = True
-                continue
-            if stat.S_ISLNK(info.st_mode):
-                inspection.diagnostic("SYMLINK_REJECTED")
-                inspection.transaction_scan_unknown = True
-            elif not stat.S_ISREG(info.st_mode):
-                inspection.diagnostic("SPECIAL_FILE_REJECTED")
-                inspection.transaction_scan_unknown = True
-            else:
-                inspection.counts["host_locks"] += 1
-    finally:
-        _close_directory(runtime_fd, "hosts", hosts_fd, hosts_opened, inspection)
-
-
 def _scan_runtime(delivery_fd: int, inspection: _Inspection, *, selected: str | None) -> None:
     runtime = _open_directory(delivery_fd, "runtime", inspection, "RUNTIME", required=True)
     if runtime is None:
@@ -1583,10 +1536,6 @@ def _scan_runtime(delivery_fd: int, inspection: _Inspection, *, selected: str | 
             _scan_packages(delivery_fd, inspection, selected=selected)
             if inventory is not None:
                 _scan_change_receipts(inventory, inspection)
-            if selected is None:
-                _scan_host_locks(runtime_fd, inspection)
-            else:
-                _scan_selected_host_locks(runtime_fd, inspection)
             if selected is None:
                 _scan_logs(runtime_fd, inspection)
         finally:

@@ -1075,10 +1075,11 @@ class TargetMCPAdapter:
         )
 
     async def release_stuck_worker(self, request: ReleaseStuckWorkerRequest) -> dict[str, object]:
-        """Settle one exact stopped worker as a failed attempt once its worktree stays quiet.
+        """Settle one user-confirmed stopped worker as a failed attempt once nothing still uses its worktree.
 
-        Omit ``outcome_id`` to release the Change's Finalizer attempt. Recent worktree activity fails with
-        ``ERR_DELIVERY_WORKER_ACTIVE`` and changes nothing; replaying a completed release returns its result.
+        Omit ``outcome_id`` to release the Change's Finalizer attempt. A live process using the worktree, or a
+        worktree write in the last 30 seconds, fails with ``ERR_DELIVERY_WORKER_ACTIVE`` and changes nothing;
+        ``retry_after`` is given only for the write case. Replaying a completed release returns its result.
         """
         params = self._validate(ReleaseStuckWorkerParams, request)
         return await asyncio.to_thread(

@@ -967,13 +967,13 @@ def test_http_release_stuck_worker_reports_recent_activity_as_retryable_conflict
     activity = worktree / "planner-notes.txt"
     activity.write_text("recent\n", encoding="utf-8")
     os.utime(activity, (touched.timestamp(), touched.timestamp()))
-    now[0] = _stall_iso(touched + timedelta(seconds=30))
+    now[0] = _stall_iso(touched + timedelta(seconds=10))
     before = (runtime.frontier_bytes(), runtime.retry_ledger().read(), coordinator.show("change-a"))
 
     with TestClient(assemble_target_app(application)) as client:
         response = client.post("/api/changes/change-a/workers/release-stuck", json=body)
 
-    retry_after = _stall_iso(touched + timedelta(minutes=2))
+    retry_after = _stall_iso(touched + timedelta(seconds=30))
     assert response.status_code == 409
     diagnostic = response.json()
     assert diagnostic["code"] == "ERR_DELIVERY_WORKER_ACTIVE"
@@ -981,6 +981,36 @@ def test_http_release_stuck_worker_reports_recent_activity_as_retryable_conflict
     assert diagnostic["retry_safe"] is True
     assert diagnostic["retry_after"] == retry_after
     assert retry_after in diagnostic["detail"]
+    assert (runtime.frontier_bytes(), runtime.retry_ledger().read(), coordinator.show("change-a")) == before
+    assert runtime.show_binding("OUT-001").active_claim == launch.claim
+    assert not owner_result.exists()
+
+
+class _BusyWorktreeProbe:
+    def __init__(self) -> None:
+        self.roots: list[tuple[Path, ...]] = []
+
+    def active_processes(self, roots: tuple[Path, ...], *, issued_after: datetime | None) -> tuple[str, ...]:  # noqa: ARG002
+        self.roots.append(roots)
+        return ("node",)
+
+
+def test_http_release_stuck_worker_reports_live_worktree_process_without_retry_time(tmp_path: Path) -> None:
+    application, runtime, coordinator, launch, body, owner_result, start, now = _stall_planning_case(tmp_path)
+    probe = _BusyWorktreeProbe()
+    application._worktree_process_probe = probe  # noqa: SLF001 - inject the host process table like core tests.
+    now[0] = _stall_iso(start + timedelta(minutes=10))
+    before = (runtime.frontier_bytes(), runtime.retry_ledger().read(), coordinator.show("change-a"))
+
+    with TestClient(assemble_target_app(application)) as client:
+        response = client.post("/api/changes/change-a/workers/release-stuck", json=body)
+
+    assert response.status_code == 409
+    diagnostic = response.json()
+    assert set(diagnostic) == {"code", "detail", "authority", "retry_safe"}
+    assert diagnostic["code"] == "ERR_DELIVERY_WORKER_ACTIVE"
+    assert "1 process (node) is still active in the worker's worktree" in diagnostic["detail"]
+    assert launch.worktree_path.resolve() in {root.resolve() for root in probe.roots[0]}
     assert (runtime.frontier_bytes(), runtime.retry_ledger().read(), coordinator.show("change-a")) == before
     assert runtime.show_binding("OUT-001").active_claim == launch.claim
     assert not owner_result.exists()

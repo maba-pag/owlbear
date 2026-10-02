@@ -355,9 +355,10 @@ from owlbear_delivery.work_items import (
 )
 from owlbear_delivery.worker_stall import (
     DeliveryClaimIssuer,
-    DeliveryHostInstance,
     DeliveryWorkerActiveError,
-    HostLockLivenessProbe,
+    ProcessTableWorktreeProbe,
+    ProcessWindowLivenessProbe,
+    WindowHostIdentity,
 )
 
 __all__ = [
@@ -488,7 +489,6 @@ __all__ = [
     "DeliveryHealthStatus",
     "DeliveryHealthView",
     "DeliveryHostConfig",
-    "DeliveryHostInstance",
     "DeliveryIntegrationAttention",
     "DeliveryIntegrationAttentionCode",
     "DeliveryIntegrationAttentionDisposition",
@@ -578,7 +578,6 @@ __all__ = [
     "FinalizerSettlementReceipt",
     "FindPublicationPullRequest",
     "GeneratedPullRequestSummaryReceipt",
-    "HostLockLivenessProbe",
     "IntegrationContext",
     "MarkChangePullRequestReady",
     "ObserveChangePublicationChecks",
@@ -605,6 +604,8 @@ __all__ = [
     "PreservationProvenanceEvidence",
     "PreservationProvenanceProvider",
     "PreservationRejectedError",
+    "ProcessTableWorktreeProbe",
+    "ProcessWindowLivenessProbe",
     "PromoteExternalHead",
     "PublicationBaselineRecoveryReceipt",
     "PublicationBaselineUnavailableError",
@@ -663,6 +664,7 @@ __all__ = [
     "UpdateGeneratedPullRequestSummary",
     "UpdatePublicationPullRequest",
     "VerifiedDesignPackage",
+    "WindowHostIdentity",
     "WorkItemAttention",
     "WorkItemDetail",
     "WorkItemProjection",

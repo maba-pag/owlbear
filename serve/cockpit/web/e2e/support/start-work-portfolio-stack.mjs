@@ -103,12 +103,26 @@ try {
 process.on("SIGTERM", cleanup);
 process.on("SIGINT", cleanup);
 
-// A worker that is still running keeps writing to its worktree.
+// A worker that is still running keeps writing to its worktree inside the 30-second write guard.
 const activeFile = join(stuckFixture, ".owlbear/delivery/worktrees/stuck-active-e2e/product.txt");
 activeWorker = setInterval(() => {
   const now = new Date();
   utimes(activeFile, now, now).catch(() => {});
 }, 10_000);
+
+// A leftover worker process keeps its working directory in the busy worktree; it exits with this stack.
+const busyWorker = spawn(
+  process.execPath,
+  [
+    "-e",
+    `const pid = Number(process.argv[1]);
+setInterval(() => { try { process.kill(pid, 0); } catch { process.exit(0); } }, 500);`,
+    String(process.pid),
+  ],
+  { cwd: join(stuckFixture, ".owlbear/delivery/worktrees/stuck-busy-e2e"), detached: true, stdio: "ignore" },
+);
+busyWorker.unref();
+servers.push(busyWorker);
 
 startCockpit(stuckFixture, "4176");
 try {

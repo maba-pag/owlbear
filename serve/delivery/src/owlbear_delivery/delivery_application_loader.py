@@ -77,12 +77,12 @@ from owlbear_delivery.portfolio_operating import (
     DeliveryHealthResolution,
 )
 from owlbear_delivery.runtime_transaction import RuntimeTransaction, TransactionParticipant
-from owlbear_delivery.worker_stall import DeliveryHostInstance
 
 if TYPE_CHECKING:
     from owlbear_delivery.delivery_runtime import DeliveryRequest, _DeliveryBuilderHandoffChangeIntentReceipt
     from owlbear_delivery.publication_provider import PublicationProvider
     from owlbear_delivery.target_contract import DeliveryContract
+    from owlbear_delivery.worker_stall import WindowHostIdentity
 
 
 class _LoaderModel(BaseModel):
@@ -2316,15 +2316,6 @@ def _bounded_health_detail(detail: str, fallback: str) -> str:
     return (compact or fallback)[:240]
 
 
-def _acquire_host_instance(runtime_root: Path) -> DeliveryHostInstance | None:
-    """Own one process-lifetime claim-issuer lock; without it, host loss is never inferred."""
-    try:
-        return DeliveryHostInstance.acquire(runtime_root)
-    except OSError:
-        _logger.warning("Delivery host lock is unavailable; automatic host-loss settlement is disabled.")
-        return None
-
-
 def _compose_application(  # noqa: PLR0913, PLR0917 - composition binds independent authority owners.
     config: DeliveryStartupConfig,
     host_config: DeliveryHostConfig,
@@ -2332,6 +2323,7 @@ def _compose_application(  # noqa: PLR0913, PLR0917 - composition binds independ
     contracts: dict[str, DeliveryContract],
     publication_provider: PublicationProvider | None,
     health_diagnostics: tuple[DeliveryHealthDiagnostic, ...] = (),
+    issuer_host: WindowHostIdentity | None = None,
 ) -> PortfolioApplication:
     package_store = DesignPackageStore(
         paths.package_root,
@@ -2388,7 +2380,7 @@ def _compose_application(  # noqa: PLR0913, PLR0917 - composition binds independ
             else None
         ),
         health_diagnostics=(*health_diagnostics, *runtime_diagnostics),
-        host_instance=_acquire_host_instance(paths.runtime_root),
+        issuer_window=issuer_host,
     )
     application_config = PortfolioApplicationConfig(
         package_root=paths.package_root,
@@ -2436,8 +2428,13 @@ def load_delivery_application(
     *,
     workspace_root: Path,
     publication_provider: PublicationProvider | None = None,
+    issuer_host: WindowHostIdentity | None = None,
 ) -> PortfolioApplication:
-    """Validate external identities before constructing the Delivery state owners."""
+    """Validate external identities before constructing the Delivery state owners.
+
+    Only a process whose agents receive its claims passes ``issuer_host``; claims issued without it are
+    never settled automatically and need user-confirmed release.
+    """
     paths = _derive_paths(workspace_root)
     _validate_git_config(config, paths)
     host_config = _load_host_config(paths)
@@ -2462,4 +2459,5 @@ def load_delivery_application(
         contracts,
         publication_provider,
         health_diagnostics,
+        issuer_host,
     )

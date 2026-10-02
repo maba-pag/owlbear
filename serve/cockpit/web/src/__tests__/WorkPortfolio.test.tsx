@@ -447,7 +447,7 @@ let pendingPublicationChecksRelease: (() => void) | null;
 let moveBackwardUpdatesDetailStage: WorkItemCardView["stage"];
 let moveBackwardFailure: boolean;
 let mutationFailurePath: string | null;
-let releaseStuckWorkerActive: boolean;
+let releaseStuckWorkerActive: "write" | "processes" | "unobservable" | null;
 let designFailure: boolean;
 let acceptanceObservationFailure: boolean;
 let acceptanceReconciliationProviderUnavailable: boolean;
@@ -634,16 +634,42 @@ function installFetch() {
         return response({});
       }
       if (method === "POST" && url.endsWith("/workers/release-stuck")) {
-        if (releaseStuckWorkerActive) {
+        if (releaseStuckWorkerActive === "write") {
           return response(
             {
               code: "ERR_DELIVERY_WORKER_ACTIVE",
               detail:
-                "Custody, files and retry accounting are unchanged. The worker's worktree changed recently or could " +
-                "not be observed safely, so the worker may still be active. Retry at or after 2026-10-02T12:02:00Z.",
+                "Custody, files and retry accounting are unchanged. The worker's worktree changed recently, so the " +
+                "worker may still be active. Retry at or after 2026-10-02T12:00:30Z.",
               authority: "delivery",
               retry_safe: true,
-              retry_after: "2026-10-02T12:02:00Z",
+              retry_after: "2026-10-02T12:00:30Z",
+            },
+            409,
+          );
+        }
+        if (releaseStuckWorkerActive === "processes") {
+          return response(
+            {
+              code: "ERR_DELIVERY_WORKER_ACTIVE",
+              detail:
+                "Custody, files and retry accounting are unchanged. 1 process (node) is still active in the " +
+                "worker's worktree, so the worker may still be running. Retry after they exit.",
+              authority: "delivery",
+              retry_safe: true,
+            },
+            409,
+          );
+        }
+        if (releaseStuckWorkerActive === "unobservable") {
+          return response(
+            {
+              code: "ERR_DELIVERY_WORKER_ACTIVE",
+              detail:
+                "Custody, files and retry accounting are unchanged. The worker's worktree or its processes could " +
+                "not be observed safely, so the worker may still be active.",
+              authority: "delivery",
+              retry_safe: true,
             },
             409,
           );
@@ -861,7 +887,7 @@ beforeEach(() => {
   moveBackwardUpdatesDetailStage = null;
   moveBackwardFailure = false;
   mutationFailurePath = null;
-  releaseStuckWorkerActive = false;
+  releaseStuckWorkerActive = null;
   designFailure = false;
   acceptanceObservationFailure = false;
   acceptanceReconciliationProviderUnavailable = false;
@@ -1821,6 +1847,10 @@ it("releases a stuck worker after an explicit confirmation and keeps backward mo
   expect(dialog).toHaveTextContent("Use this only for a worker whose chat was stopped or whose VS Code window closed.");
   expect(dialog).toHaveTextContent("counts toward this work's retry budget");
   expect(dialog).toHaveTextContent("The worktree, including uncommitted work, is preserved for the next attempt.");
+  expect(dialog).toHaveTextContent(
+    "changes nothing while any process still uses the worktree or if it changed in the last 30 seconds.",
+  );
+  expect(dialog.textContent ?? "").not.toMatch(/two minutes/i);
   expect(dialog.textContent ?? "").not.toMatch(/\bstops?\b|\bkill|\bterminal\b|\brun the\b|\bcommand\b/i);
   fireEvent.click(within(dialog).getByText("Confirm release"));
   await waitFor(() =>
@@ -1865,13 +1895,17 @@ it("releases a stuck worker after an explicit confirmation and keeps backward mo
   expect(await screen.findByText("Moved backward. Reset: OUT-002.")).toBeInTheDocument();
 });
 
-it("keeps the release confirmation open and shows the retry time when the worker may still be active", async () => {
+it.each([
+  ["write", "the worker may still be active. Nothing was changed."],
+  ["processes", "1 process (node) is still active in the worker's worktree"],
+  ["unobservable", "could not be observed safely"],
+] as const)("keeps the release confirmation open when a %s guard refuses the release", async (guard, message) => {
   currentDetail = detail({
     card: card({ stage: "implementation" }),
     active_claim: runningBuilderClaim,
     readiness: readiness({ status: "waiting", reason_code: "worker-stall-wait" }),
   });
-  releaseStuckWorkerActive = true;
+  releaseStuckWorkerActive = guard;
   renderPage("/delivery/change-alpha/outcome%3AOUT-001");
   await screen.findByText("Release stuck worker");
   fireEvent.click(screen.getByText("Release stuck worker"));
@@ -1887,11 +1921,34 @@ it("keeps the release confirmation open and shows the retry time when the worker
   const dialog = screen.getByRole("alertdialog");
   const feedback = await within(dialog).findByRole("status");
   expect(feedback).toHaveTextContent("ERR_DELIVERY_WORKER_ACTIVE");
-  expect(feedback).toHaveTextContent("the worker may still be active. Nothing was changed.");
-  expect(within(feedback).getByTestId("worker-active-retry-after")).toHaveTextContent("2026-10-02T12:02:00Z");
-  expect(within(feedback).getByTestId("worker-active-retry-after")).toHaveAttribute("datetime", "2026-10-02T12:02:00Z");
+  expect(feedback).toHaveTextContent(message);
+  if (guard === "write") {
+    const retryAfter = within(feedback).getByTestId("worker-active-retry-after");
+    expect(retryAfter).toHaveTextContent("2026-10-02T12:00:30Z");
+    expect(retryAfter).toHaveAttribute("datetime", "2026-10-02T12:00:30Z");
+  } else {
+    expect(within(feedback).queryByTestId("worker-active-retry-after")).not.toBeInTheDocument();
+    expect(feedback).not.toHaveTextContent("Retry at or after");
+  }
   expect(within(dialog).getByText("Release stuck worker")).toBeInTheDocument();
   expect(screen.getByTestId("work-item-detail")).toHaveTextContent("attempt-one");
+});
+
+it("explains a stall wait without an eligible time while processes still use the worktree", async () => {
+  const prompt = "/continue-change change-alpha 1 process (node) is still active in its worktree.";
+  currentDetail = detail({
+    card: card({ stage: "implementation" }),
+    active_claim: runningBuilderClaim,
+    readiness: readiness({ status: "waiting", reason_code: "worker-stall-wait", next_eligible_at: null, prompt }),
+  });
+  renderPage("/delivery/change-alpha/outcome%3AOUT-001");
+
+  const inspector = await screen.findByTestId("work-item-detail");
+  expect(within(inspector).getByTestId("readiness-prompt")).toHaveTextContent(prompt);
+  expect(within(inspector).getByTestId("worker-stall-no-eligible-time")).toHaveTextContent(
+    "processes still use this worker's worktree",
+  );
+  expect(inspector).not.toHaveTextContent("Next eligible at");
 });
 
 it("offers stuck-worker release only for running or stall-waiting claims", async () => {

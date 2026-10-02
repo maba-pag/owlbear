@@ -9,11 +9,9 @@ import json
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import patch
 
 from pydantic import BaseModel
 
-from owlbear_delivery import delivery_application_loader
 from owlbear_delivery.acceptance import (
     CompletionDisplayMetadata,
     CompletionEvidence,
@@ -397,8 +395,8 @@ def _write_config(workspace: Path) -> DeliveryStartupConfig:
     return config
 
 
-def _write_host_config(workspace: Path) -> None:
-    config = DeliveryHostConfig(schema_version=1, execution_capacity=2)
+def _write_host_config(workspace: Path, execution_capacity: int = 2) -> None:
+    config = DeliveryHostConfig(schema_version=1, execution_capacity=execution_capacity)
     path = workspace / ".owlbear/delivery/runtime/host.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(config.model_dump_json(), encoding="utf-8")
@@ -431,6 +429,7 @@ def seed_delivery(workspace: Path) -> None:
 STUCK_WORKER_CHANGES = {
     "stuck-quiet-e2e": "Quiet stopped worker",
     "stuck-active-e2e": "Active worker",
+    "stuck-busy-e2e": "Busy worker",
 }
 
 
@@ -457,16 +456,15 @@ def seed_stuck_workers(workspace: Path) -> None:
     store = DesignPackageStore(workspace / ".owlbear/delivery/packages", workspace)
     for change_id in STUCK_WORKER_CHANGES:
         _write_planning_change(runtime_root, head, store, change_id)
-    _write_host_config(workspace)
+    _write_host_config(workspace, len(STUCK_WORKER_CHANGES))
     workspace_manager = ChangeWorkspaceManager(
         workspace, workspace / ".owlbear/delivery/worktrees", PortfolioCoordinator(runtime_root), "main"
     )
     for change_id in STUCK_WORKER_CHANGES:
         workspace_manager.ensure(change_id)
     config = _write_config(workspace)
-    # Without a host lock no issuer record is written, so the stall sweep cannot settle these claims itself.
-    with patch.object(delivery_application_loader, "_acquire_host_instance", return_value=None):
-        application = load_delivery_application(config, workspace_root=workspace)
+    # Without an issuing window the claims carry ``window: null``, so only an explicit release can settle them.
+    application = load_delivery_application(config, workspace_root=workspace)
     for change_id in STUCK_WORKER_CHANGES:
         for _ in range(3):
             acquired = application.acquire_change_action(

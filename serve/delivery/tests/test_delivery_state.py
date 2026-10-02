@@ -73,6 +73,7 @@ from owlbear_delivery import (
     RetryDelivery,
     ReturnDelivery,
     SyncChangeWithTarget,
+    WindowHostIdentity,
 )
 from owlbear_delivery.acceptance import (
     CompletionDisplayMetadata,
@@ -2788,7 +2789,7 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
         github_repository="example/project",
         delivery_state_branch="owlbear/delivery-state",
     )
-    application = load_delivery_application(config, workspace_root=fresh)
+    application = load_delivery_application(config, workspace_root=fresh, issuer_host=_TEST_WINDOW)
     launch = application.acquire_frontier_work().launch_packages[0]
     assert launch.claim.worker_role is DeliveryWorkerRole.BUILDER
     handoff_context = None
@@ -3143,19 +3144,35 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
         assert git_state_before == _workspace_git_state(fresh, launch.worktree_path)
 
 
+_TEST_WINDOW = WindowHostIdentity(pid=4242, create_time=1_700_000_000.5, name="Code Helper (Plugin)")
+
+
+class _ClosedWindowWithoutLeftovers:
+    def window_state(self, _window: WindowHostIdentity) -> str:
+        return "gone"
+
+    def active_processes(self, _roots: tuple[Path, ...], *, issued_after: datetime | None) -> tuple[str, ...]:  # noqa: ARG002
+        return ()
+
+
 def _settle_engine_worker_ending(application, launch, disposition: str) -> OutcomeAuthorityBinding:
     """Settle through the engine owner with a quiet observation; quiescence itself is proven elsewhere."""
     quiet_activity = datetime(1970, 1, 1, tzinfo=UTC)
+    environment = _ClosedWindowWithoutLeftovers()
     with (
         patch.object(application, "_clock", return_value="1970-01-02T00:00:00Z"),
         patch.object(application._workspace_manager, "observe_worktree_activity", return_value=quiet_activity),  # noqa: SLF001
+        patch.object(application, "_worktree_process_probe", environment),
     ):
         if disposition == "released-stuck":
             return application.release_stuck_worker(
                 launch.change_id, launch.outcome_id, launch.claim.attempt_id, launch.claim.claim_id
             )
-        application._host_instance.close()  # noqa: SLF001 - simulates the issuing process exiting.
-        application.acquire_frontier_work()
+        issuer = application._read_claim_issuer(launch.change_id, launch.claim.attempt_id)  # noqa: SLF001
+        assert issuer is not None
+        assert issuer.window == _TEST_WINDOW
+        with patch.object(application, "_window_liveness_probe", environment):
+            application.acquire_frontier_work()
     return application._runtimes[launch.change_id].show_binding(launch.outcome_id)  # noqa: SLF001
 
 
@@ -3219,7 +3236,7 @@ def test_remote_state_bootstrap_preserves_requestless_planner_settlement(tmp_pat
         github_repository="example/project",
         delivery_state_branch="owlbear/delivery-state",
     )
-    application = load_delivery_application(config, workspace_root=fresh)
+    application = load_delivery_application(config, workspace_root=fresh, issuer_host=_TEST_WINDOW)
     launch = application.acquire_frontier_work().launch_packages[0]
     assert launch.claim.worker_role is DeliveryWorkerRole.PLANNER
     if disposition in {"host-lost", "released-stuck"}:

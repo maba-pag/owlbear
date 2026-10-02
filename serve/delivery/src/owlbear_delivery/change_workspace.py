@@ -3079,6 +3079,20 @@ class ChangeWorkspaceManager:
             path_metadata=path_metadata,
         )
 
+    def worker_process_roots(self, change_id: str) -> tuple[Path, Path]:
+        """Return the registered Change worktree and its own Git administration directory."""
+        worktree = self._registered_worker_worktree(change_id)
+        return worktree, self._resolve_managed_index(worktree).administration
+
+    def _registered_worker_worktree(self, change_id: str) -> Path:
+        coordination = self._coordinator.show(change_id)
+        worktree = self._canonical_worktree_path(change_id, coordination.worktree_path)
+        registration = self._registered_worktrees_all().get(worktree.resolve())
+        if registration is None or registration.branch != coordination.branch:
+            msg = "worker worktree registration does not match its Change"
+            raise PreservationRejectedError(msg)
+        return worktree
+
     def observe_worktree_activity(self, change_id: str) -> datetime:
         """Return the newest change time of a registered Change worktree without refreshing Git state.
 
@@ -3088,11 +3102,7 @@ class ChangeWorkspaceManager:
         exceeds its bound or changes before the walk completes; callers must treat that as active.
         """
         coordination = self._coordinator.show(change_id)
-        worktree = self._canonical_worktree_path(change_id, coordination.worktree_path)
-        registration = self._registered_worktrees_all().get(worktree.resolve())
-        if registration is None or registration.branch != coordination.branch:
-            msg = "worker worktree registration does not match its Change"
-            raise PreservationRejectedError(msg)
+        worktree = self._registered_worker_worktree(change_id)
         ignored = self._ignored_inventory_paths(
             self._preservation_git(
                 "status", "--porcelain=v1", "-z", "--ignored=matching", "--untracked-files=normal", cwd=worktree

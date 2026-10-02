@@ -3,15 +3,20 @@
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import itertools
 import json
 import os
 import subprocess
 import sys
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
+import psutil
 import pytest
 from pydantic import ValidationError
 from serve.delivery.tests.test_portfolio_application import (
@@ -55,26 +60,47 @@ from owlbear_delivery.finalization_reports import (
 from owlbear_delivery.portfolio_application import DeliveryActionBusyError
 from owlbear_delivery.recovery import RetryLedger
 from owlbear_delivery.worker_stall import (
-    DeliveryHostInstance,
+    DEFAULT_WORKER_QUIET_PERIOD,
     DeliveryWorkerActiveError,
-    HostLockLivenessProbe,
+    ObservedProcess,
+    ProcessObservationError,
+    ProcessTableWorktreeProbe,
+    ProcessVanishedError,
+    ProcessWindowLivenessProbe,
+    WindowHostIdentity,
+    WorktreeProcessScanError,
+    psutil_process,
 )
 
-_HOST = "a" * 32
-_QUIET = timedelta(minutes=2)
-
-
-@dataclass(frozen=True)
-class _Host:
-    instance_id: str = _HOST
+_WINDOW = WindowHostIdentity(pid=4242, create_time=1_700_000_000.5, name="Code Helper (Plugin)")
+_HOST = _WINDOW.pid
+_QUIET = timedelta(seconds=30)
+_ISSUED = datetime(2026, 1, 1, tzinfo=UTC)
 
 
 class _Probe:
-    def __init__(self) -> None:
-        self.states: dict[str, str] = {}
+    """Fake host environment: window liveness by pid and the worktree process table."""
 
-    def host_state(self, instance_id: str) -> str:
-        return self.states.get(instance_id, "alive")
+    def __init__(self) -> None:
+        self.states: dict[int, str] = {}
+        self.processes: tuple[str, ...] = ()
+        self.scan_fails = False
+        self.scanned_roots: list[tuple[Path, ...]] = []
+        self.issued_after: list[datetime | None] = []
+        self.during_scan: Callable[[], None] | None = None
+
+    def window_state(self, window: WindowHostIdentity) -> str:
+        return self.states.get(window.pid, "alive")
+
+    def active_processes(self, roots: tuple[Path, ...], *, issued_after: datetime | None) -> tuple[str, ...]:
+        self.scanned_roots.append(roots)
+        self.issued_after.append(issued_after)
+        if self.during_scan is not None:
+            self.during_scan()
+        if self.scan_fails:
+            message = "process table unavailable"
+            raise WorktreeProcessScanError(message)
+        return self.processes
 
 
 def _iso(value: datetime) -> str:
@@ -90,7 +116,7 @@ def _stall_portfolio(
     stages: dict[str, DeliveryStage],
     now: list[str],
     *,
-    host: _Host | None = None,
+    window: WindowHostIdentity | None = _WINDOW,
     capacity: int = 3,
 ):
     base, runtimes, coordinator, state_root = _portfolio(
@@ -107,9 +133,9 @@ def _stall_portfolio(
             coordinator=coordinator,
             workspace_manager=base._workspace_manager,
             completed_history_catalog=CompletedHistoryCatalog(state_root),
-            host_instance=host if host is not None else _Host(),
-            host_liveness_probe=probe,
-            worker_quiet_period=_QUIET,
+            issuer_window=window,
+            window_liveness_probe=probe,
+            worktree_process_probe=probe,
         ),
         PortfolioApplicationConfig(
             package_root=tmp_path / "packages",
@@ -199,45 +225,559 @@ def _churn_ignored_content(worktree: Path) -> None:
     (worktree / ".venv" / "lib" / "x").unlink()
 
 
-def test_host_lock_tracks_real_subprocess_lifetime(tmp_path: Path) -> None:
-    runtime_root = tmp_path / "runtime"
-    runtime_root.mkdir()
-    script = (
-        "import sys\n"
-        "from pathlib import Path\n"
-        "from owlbear_delivery.worker_stall import DeliveryHostInstance\n"
-        "host = DeliveryHostInstance.acquire(Path(sys.argv[1]))\n"
-        "print(host.instance_id, flush=True)\n"
-        "sys.stdin.read()\n"
-    )
-    environment = {**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)}
-    process = subprocess.Popen(  # noqa: S603 - fixed interpreter and inline script.
-        (sys.executable, "-c", script, str(runtime_root)),
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        env=environment,
-        text=True,
-    )
-    try:
-        assert process.stdout is not None
-        instance_id = process.stdout.readline().strip()
-        probe = HostLockLivenessProbe(runtime_root)
-        assert probe.host_state(instance_id) == "alive"
-        assert probe.host_state(instance_id) == "alive"
-    finally:
-        assert process.stdin is not None
-        process.stdin.close()
-        process.wait(timeout=30)
-    assert probe.host_state(instance_id) == "lost"
-    assert probe.host_state("b" * 32) == "unknown"
-    assert probe.host_state("../escape") == "unknown"
+def _lookup(*rows: ObservedProcess, denied: frozenset[int] = frozenset()):
+    table = {row.pid: row for row in rows}
 
-    own = DeliveryHostInstance.acquire(runtime_root)
+    def lookup(pid: int) -> ObservedProcess | None:
+        if pid in denied:
+            message = "denied"
+            raise ProcessObservationError(message)
+        return table.get(pid)
+
+    return lookup
+
+
+@pytest.mark.parametrize(
+    "wrappers", [(), ("uv",), ("python3.14", "uv", "-zsh"), ("Python", "env", "uvx", "bash", "sh")]
+)
+def test_window_identity_capture_skips_the_server_and_launcher_wrappers(wrappers: tuple[str, ...]) -> None:
+    rows = [ObservedProcess(pid=900, parent_pid=800, create_time=9.0, name="owlbear-delivery-mcp")]
+    for offset, name in enumerate(wrappers):
+        rows.append(ObservedProcess(pid=800 - offset, parent_pid=799 - offset, create_time=8.0, name=name))
+    window_pid = 800 - len(wrappers)
+    rows.append(ObservedProcess(pid=window_pid, parent_pid=1, create_time=5.5, name="Code Helper (Plugin)"))
+
+    assert WindowHostIdentity.capture(_lookup(*rows), pid=900) == WindowHostIdentity(
+        pid=window_pid, create_time=5.5, name="Code Helper (Plugin)"
+    )
+
+
+@pytest.mark.parametrize("case", ["launchers-to-init", "parent-gone", "parent-denied", "server-unobservable"])
+def test_window_identity_capture_returns_none_without_an_identifiable_window(case: str) -> None:
+    server = ObservedProcess(pid=900, parent_pid=800, create_time=9.0, name="python3")
+    rows = {
+        "launchers-to-init": (server, ObservedProcess(pid=800, parent_pid=1, create_time=8.0, name="zsh")),
+        "parent-gone": (server,),
+        "parent-denied": (server,),
+        "server-unobservable": (),
+    }[case]
+    denied = frozenset({800} if case == "parent-denied" else {900} if case == "server-unobservable" else ())
+
+    assert WindowHostIdentity.capture(_lookup(*rows, denied=denied), pid=900) is None
+
+
+def test_window_liveness_requires_the_exact_recorded_process() -> None:
+    window = WindowHostIdentity(pid=100, create_time=5.5, name="Code Helper (Plugin)")
+    rows: dict[int, ObservedProcess] = {}
+    probe = ProcessWindowLivenessProbe(rows.get)
+
+    rows[100] = ObservedProcess(pid=100, parent_pid=1, create_time=5.5, name="Code Helper (Plugin)")
+    assert probe.window_state(window) == "alive"
+    rows[100] = ObservedProcess(pid=100, parent_pid=1, create_time=5.7, name="Code Helper (Plugin)")
+    assert probe.window_state(window) == "alive"
+    rows[100] = ObservedProcess(pid=100, parent_pid=1, create_time=125.5, name="Code Helper (Plugin)")
+    assert probe.window_state(window) == "gone"
+    del rows[100]
+    assert probe.window_state(window) == "gone"
+    assert ProcessWindowLivenessProbe(_lookup(denied=frozenset({100}))).window_state(window) == "unknown"
+
+
+def _sleeping_python(cwd: Path, opened: Path | None = None) -> subprocess.Popen[str]:
+    script = "import sys\n"
+    if opened is not None:
+        script += f"handle = open({str(opened)!r})\n"
+    script += "print('ready', flush=True)\nsys.stdin.read()\n"
+    process = subprocess.Popen(  # noqa: S603 - fixed interpreter and inline script.
+        (sys.executable, "-c", script), cwd=cwd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
+    )
+    assert process.stdout is not None
+    assert process.stdout.readline().strip() == "ready"
+    return process
+
+
+def _stop(process: subprocess.Popen[str]) -> None:
+    assert process.stdin is not None
+    process.stdin.close()
+    process.wait(timeout=30)
+
+
+def test_real_window_liveness_tracks_process_exit(tmp_path: Path) -> None:
+    process = _sleeping_python(tmp_path)
     try:
-        assert probe.host_state(own.instance_id) == "alive"
+        observed = psutil_process(process.pid)
+        assert observed is not None
+        window = WindowHostIdentity(pid=observed.pid, create_time=observed.create_time, name=observed.name)
+        assert ProcessWindowLivenessProbe().window_state(window) == "alive"
     finally:
-        own.close()
-    assert probe.host_state(own.instance_id) == "lost"
+        _stop(process)
+    assert ProcessWindowLivenessProbe().window_state(window) == "gone"
+    captured = WindowHostIdentity.capture()
+    assert captured is None or (captured.pid != os.getpid() and not captured.name.lower().startswith("python"))
+
+
+@pytest.mark.parametrize("link", ["cwd", "open-admin-file"])
+def test_real_process_table_detects_a_leftover_process_until_it_exits(tmp_path: Path, link: str) -> None:
+    worktree = tmp_path / "worktree"
+    administration = tmp_path / "repository" / ".git" / "worktrees" / "worktree"
+    elsewhere = tmp_path / "elsewhere"
+    for directory in (worktree, administration, elsewhere):
+        directory.mkdir(parents=True)
+    (administration / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+    probe = ProcessTableWorktreeProbe()
+    issued = datetime.now(UTC)
+    roots = (worktree, administration)
+    assert probe.active_processes(roots, issued_after=issued) == ()
+    opened = None if link == "cwd" else administration / "HEAD"
+    process = _detached_python(worktree if opened is None else elsewhere, tmp_path / "control", opened)
+    try:
+        assert len(probe.active_processes(roots, issued_after=issued)) == 1
+    finally:
+        _stop_detached(process, tmp_path / "control")
+    assert probe.active_processes(roots, issued_after=issued) == ()
+
+
+def test_real_process_table_ignores_delivery_own_subprocesses(tmp_path: Path) -> None:
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    issued = datetime.now(UTC)
+    process = _sleeping_python(worktree)
+    try:
+        assert ProcessTableWorktreeProbe().active_processes((worktree,), issued_after=issued) == ()
+    finally:
+        _stop(process)
+
+
+def _detached_python(cwd: Path, control: Path, opened: Path | None = None) -> psutil.Process:
+    """Start a sleeper reparented away from this process, as a stopped worker's leftover would be."""
+    control.mkdir()
+    sleeper = "import pathlib, time\n"
+    if opened is not None:
+        sleeper += f"handle = open({str(opened)!r})\n"
+    sleeper += (
+        f"control = pathlib.Path({str(control)!r})\n"
+        "(control / 'ready').touch()\n"
+        "while not (control / 'stop').exists():\n"
+        "    time.sleep(0.05)\n"
+    )
+    launcher = (
+        "import subprocess, sys\n"
+        f"child = subprocess.Popen((sys.executable, '-c', {sleeper!r}), cwd={str(cwd)!r}, start_new_session=True,"
+        " stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
+        "print(child.pid)\n"
+    )
+    launched = subprocess.run(  # noqa: S603 - fixed interpreter and inline script.
+        (sys.executable, "-c", launcher), capture_output=True, text=True, check=True, timeout=30
+    )
+    process = psutil.Process(int(launched.stdout.strip()))
+    deadline = time.monotonic() + 30
+    while not (control / "ready").exists():
+        assert time.monotonic() < deadline
+        time.sleep(0.05)
+    return process
+
+
+def _stop_detached(process: psutil.Process, control: Path) -> None:
+    (control / "stop").touch()
+    with contextlib.suppress(psutil.NoSuchProcess):
+        process.wait(timeout=30)
+
+
+@dataclass(frozen=True)
+class _FakeProcess:
+    name: str
+    working: Path | None = None
+    files: tuple[Path, ...] = ()
+    children: bool = False
+    terminal: bool | None = True
+    failure: str | None = None
+    create_time: float | None = _ISSUED.timestamp() - 3600
+
+    def cwd(self) -> Path | None:
+        if self.failure == "vanished":
+            raise ProcessVanishedError(self.failure)
+        if self.failure == "unreadable":
+            raise ProcessObservationError(self.failure)
+        return self.working
+
+    def open_files(self) -> tuple[Path, ...]:
+        if self.failure in {"unreadable", "files-unreadable"}:
+            raise ProcessObservationError(self.failure)
+        return self.files
+
+    def has_live_children(self) -> bool:
+        return self.children
+
+    def has_terminal(self) -> bool:
+        if self.terminal is None:
+            message = "terminal unreadable"
+            raise ProcessObservationError(message)
+        return self.terminal
+
+
+_NEW = _ISSUED.timestamp() + 5
+_WITHIN_TOLERANCE = _ISSUED.timestamp() - 0.5
+_GUARD_CASES = {
+    "non-shell-cwd": (_FakeProcess("node", working=Path("W/src")), True),
+    "open-admin-file": (_FakeProcess("git", working=Path("E"), files=(Path("A/index.lock"),)), True),
+    "idle-shell-cwd": (_FakeProcess("zsh", working=Path("W")), False),
+    "login-shell-cwd": (_FakeProcess("-bash", working=Path("W/sub")), False),
+    "shell-with-child": (_FakeProcess("bash", working=Path("W"), children=True), True),
+    "shell-with-open-file": (_FakeProcess("fish", working=Path("W"), files=(Path("W/notes.txt"),)), True),
+    "shell-without-terminal": (_FakeProcess("sh", working=Path("W"), terminal=False), True),
+    "shell-terminal-unreadable-new": (_FakeProcess("zsh", working=Path("W"), terminal=None, create_time=_NEW), True),
+    "shell-terminal-unreadable-old": (_FakeProcess("zsh", working=Path("W"), terminal=None), False),
+    "unrelated": (_FakeProcess("Code Helper", working=Path("E"), files=(Path("E/x"),)), False),
+    "vanished": (_FakeProcess("ghost", failure="vanished", create_time=_NEW), False),
+    "unreadable-started-after-claim": (_FakeProcess("worker", failure="unreadable", create_time=_NEW), True),
+    "unreadable-within-tolerance": (
+        _FakeProcess("worker", failure="unreadable", create_time=_WITHIN_TOLERANCE),
+        True,
+    ),
+    "unreadable-unknown-start": (_FakeProcess("worker", failure="unreadable", create_time=None), True),
+    "unreadable-started-before-claim": (_FakeProcess("lsd", failure="unreadable"), False),
+    "unreadable-unknown-issue-time": (_FakeProcess("lsd", failure="unreadable"), True),
+    "files-unreadable-cwd-inside-old": (_FakeProcess("node", working=Path("W"), failure="files-unreadable"), True),
+    "files-unreadable-elsewhere-new": (
+        _FakeProcess("node", working=Path("E"), failure="files-unreadable", create_time=_NEW),
+        True,
+    ),
+    "files-unreadable-elsewhere-old": (_FakeProcess("node", working=Path("E"), failure="files-unreadable"), False),
+}
+
+
+@pytest.mark.parametrize("case", sorted(_GUARD_CASES))
+def test_process_guard_classifies_leftover_processes(tmp_path: Path, case: str) -> None:
+    roots = {"W": tmp_path / "worktree", "A": tmp_path / "repository/.git/worktrees/worktree", "E": tmp_path / "e"}
+
+    def rooted(path: Path | None) -> Path | None:
+        return None if path is None else roots[path.parts[0]].joinpath(*path.parts[1:])
+
+    fake, blocks = _GUARD_CASES[case]
+    process = dataclasses.replace(fake, working=rooted(fake.working), files=tuple(rooted(path) for path in fake.files))
+    probe = ProcessTableWorktreeProbe(lambda: iter((process,)))
+    issued_after = None if case.endswith("unknown-issue-time") else _ISSUED
+
+    assert probe.active_processes((roots["W"], roots["A"]), issued_after=issued_after) == (
+        (fake.name,) if blocks else ()
+    )
+
+
+class _FakePsutilProcess:
+    def __init__(self, info: dict[str, object], failure: Exception | None, cwd: Path) -> None:
+        self.info = info
+        self._failure = failure
+        self._cwd = cwd
+
+    def cwd(self) -> str:
+        if self._failure is not None:
+            raise self._failure
+        return str(self._cwd)
+
+    def open_files(self) -> list[object]:
+        if self._failure is not None:
+            raise self._failure
+        return []
+
+    def terminal(self) -> str | None:
+        return None
+
+    def children(self) -> list[object]:
+        return []
+
+
+_PSUTIL_CASES = {
+    "owner-unknown-new": (None, None, _NEW, True),
+    "owner-unknown-old": (None, None, _ISSUED.timestamp() - 3600, False),
+    "denied-new": ("own", psutil.AccessDenied(9_001), _NEW, True),
+    "denied-unknown-start": ("own", psutil.AccessDenied(9_001), None, True),
+    "denied-old": ("own", psutil.AccessDenied(9_001), _ISSUED.timestamp() - 3600, False),
+    "vanished-new": ("own", psutil.NoSuchProcess(9_001), _NEW, False),
+    "zombie-new": ("own", psutil.ZombieProcess(9_001), _NEW, False),
+    "other-user-new": ("other", psutil.AccessDenied(9_001), _NEW, False),
+}
+
+
+@pytest.mark.parametrize("case", sorted(_PSUTIL_CASES))
+def test_psutil_process_table_blocks_unreadable_processes_started_after_the_claim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, case: str
+) -> None:
+    owner, failure, created, blocks = _PSUTIL_CASES[case]
+    uids = None if owner is None else SimpleNamespace(real=os.getuid() + (owner == "other"))
+    info = {"pid": 9_001, "name": "sandboxed", "uids": uids, "create_time": created}
+    row = _FakePsutilProcess(info, failure, tmp_path / "elsewhere")
+    monkeypatch.setattr(psutil, "process_iter", lambda _attrs: iter((row,)))
+
+    names = ProcessTableWorktreeProbe().active_processes((tmp_path / "worktree",), issued_after=_ISSUED)
+
+    assert names == (("sandboxed",) if blocks else ())
+
+
+@pytest.mark.parametrize("failure", [OSError("denied"), WorktreeProcessScanError("unavailable")])
+def test_process_guard_fails_closed_when_the_table_cannot_be_scanned(tmp_path: Path, failure: Exception) -> None:
+    def source():
+        raise failure
+
+    with pytest.raises(WorktreeProcessScanError):
+        ProcessTableWorktreeProbe(source).active_processes((tmp_path,), issued_after=_ISSUED)
+
+
+def _restart(application: PortfolioApplication, now: list[str], probe: _Probe) -> PortfolioApplication:
+    """Model a fresh Delivery process over the same state: no window of its own, real window liveness."""
+    identities = (f"restart-{index:03}" for index in itertools.count(1))
+    return PortfolioApplication(
+        application._runtimes,
+        PortfolioApplicationDependencies(
+            target_root=application._target_root,
+            package_store=application._package_store,
+            authority_registry=application._authority_registry,
+            coordinator=application._coordinator,
+            workspace_manager=application._workspace_manager,
+            completed_history_catalog=application._completed_history_catalog,
+            worktree_process_probe=probe,
+        ),
+        PortfolioApplicationConfig(
+            package_root=application._package_root,
+            execution_capacity=application._execution_capacity,
+            role_policies=_policies(),
+        ),
+        PortfolioApplicationHooks(identity_factory=lambda: next(identities), clock=lambda: now[0]),
+    )
+
+
+def test_delivery_restart_with_live_window_keeps_claim_until_that_window_exits(tmp_path: Path) -> None:
+    window_process = _sleeping_python(tmp_path)
+    observed = psutil_process(window_process.pid)
+    assert observed is not None
+    window = WindowHostIdentity(pid=observed.pid, create_time=observed.create_time, name=observed.name)
+    start = _real_now()
+    now = [_iso(start)]
+    try:
+        application, runtimes, _coordinator, state_root, probe = _stall_portfolio(
+            tmp_path, {"change-a": DeliveryStage.PLANNING}, now, window=window
+        )
+        claim = _acquire_planning_claim(application)
+        issuer = json.loads(_issuer_path(state_root, "change-a", claim.attempt_id).read_bytes())
+        assert issuer["window"] == window.model_dump(mode="json")
+        restarted = _restart(application, now, probe)
+        now[0] = _iso(start + timedelta(minutes=30))
+        frontier_before = runtimes["change-a"].frontier_bytes()
+
+        restarted.acquire_frontier_work()
+
+        assert runtimes["change-a"].frontier_bytes() == frontier_before
+        readiness = restarted.show_work_item_view("change-a", "outcome:OUT-001").readiness
+        assert readiness is not None
+        assert (readiness.status, readiness.reason_code) == ("running", "active-custody")
+    finally:
+        _stop(window_process)
+
+    restarted.acquire_frontier_work()
+
+    assert runtimes["change-a"].show_binding("OUT-001").active_claim is None
+    assert _owner_failure_code(state_root, "change-a", claim.attempt_id) == "worker-host-lost"
+
+
+def test_leftover_process_blocks_window_loss_settlement_without_a_retry_time(tmp_path: Path) -> None:
+    start = _real_now()
+    now = [_iso(start)]
+    application, runtimes, _coordinator, state_root, probe = _stall_portfolio(
+        tmp_path, {"change-a": DeliveryStage.PLANNING}, now
+    )
+    claim = _acquire_planning_claim(application)
+    worktree = application._workspace_manager.show("change-a").worktree_path
+    probe.states[_HOST] = "gone"
+    probe.processes = ("node", "node", "pytest-helper")
+    now[0] = _iso(start + timedelta(minutes=30))
+    runtime = runtimes["change-a"]
+    frontier_before = runtime.frontier_bytes()
+    ledger_before = runtime.retry_ledger().read()
+
+    application.acquire_frontier_work()
+    application.acquire_change_action(_continuation_request(application, "change-a"))
+
+    assert runtime.frontier_bytes() == frontier_before
+    assert runtime.retry_ledger().read() == ledger_before
+    roots = probe.scanned_roots[-1]
+    assert roots[0] == worktree
+    assert roots[1].parent.name == "worktrees"
+    assert probe.issued_after[-1] == datetime.fromisoformat(claim.started_at)
+    for readiness in (
+        application.get_change("change-a").readiness,
+        application.show_work_item_view("change-a", "outcome:OUT-001").readiness,
+    ):
+        assert readiness is not None
+        assert (readiness.status, readiness.reason_code) == ("waiting", "worker-stall-wait")
+        assert readiness.next_eligible_at is None
+        assert readiness.prompt is not None
+        assert "3 processes (node, pytest-helper) are still active" in readiness.prompt
+        assert str(worktree) not in readiness.prompt
+
+    probe.processes = ()
+    application.acquire_frontier_work()
+
+    assert runtime.show_binding("OUT-001").active_claim is None
+    assert _owner_failure_code(state_root, "change-a", claim.attempt_id) == "worker-host-lost"
+
+
+@pytest.mark.parametrize("role", ["planner", "builder", "finalizer"])
+def test_leftover_process_blocks_confirmed_release_without_a_retry_time(tmp_path: Path, role: str) -> None:
+    start = _real_now()
+    now = [_iso(start)]
+    if role == "builder":
+        application, runtime, _coordinator, state_root, probe, launch, _head = _builder_with_workspace_changes(
+            tmp_path, now
+        )
+        identity = (launch.outcome_id, launch.claim.attempt_id, launch.claim.claim_id)
+        issued = launch.claim.started_at
+    else:
+        stage = DeliveryStage.PLANNING if role == "planner" else DeliveryStage.COMPLETED
+        application, runtimes, _coordinator, state_root, probe = _stall_portfolio(tmp_path, {"change-a": stage}, now)
+        runtime = runtimes["change-a"]
+        if role == "planner":
+            claim = _acquire_planning_claim(application)
+            identity = ("OUT-001", claim.attempt_id, claim.claim_id)
+            issued = claim.started_at
+        else:
+            acquired = application.acquire_change_action(_continuation_request(application))
+            assert acquired.finalization is not None
+            writer = acquired.finalization.attempt.writer
+            identity = (None, writer.attempt_id, writer.claim_id)
+            issued = writer.claimed_at
+    worktree = application._workspace_manager.show("change-a").worktree_path
+    probe.processes = ("node",)
+    now[0] = _iso(start + timedelta(minutes=30))
+    frontier_before = runtime.frontier_bytes()
+    ledger_before = runtime.retry_ledger().read()
+
+    with pytest.raises(DeliveryWorkerActiveError) as raised:
+        application.release_stuck_worker("change-a", *identity)
+
+    assert probe.issued_after[-1] == datetime.fromisoformat(issued)
+    assert raised.value.code == "ERR_DELIVERY_WORKER_ACTIVE"
+    assert raised.value.retry_after is None
+    assert raised.value.active_processes == ("node",)
+    assert "1 process (node) is still active in the worker's worktree" in str(raised.value)
+    assert "Retry at or after" not in str(raised.value)
+    assert str(worktree) not in str(raised.value)
+    classification = classify_delivery_failure(raised.value)
+    assert classification is not None
+    assert classification.retry_safe is True
+    assert runtime.frontier_bytes() == frontier_before
+    assert runtime.retry_ledger().read() == ledger_before
+    assert application._read_finalizer_settlement_receipt("change-a", identity[1]) is None
+
+    probe.processes = ()
+    application.release_stuck_worker("change-a", *identity)
+
+    if role == "finalizer":
+        assert application._read_finalizer_settlement_receipt("change-a", identity[1]) is not None
+    else:
+        assert runtime.show_binding(identity[0]).active_claim is None
+    assert _owner_failure_code(state_root, "change-a", identity[1]) in {
+        "worker-released-stuck",
+        "finalizer-ended-without-report",
+    }
+
+
+@pytest.mark.parametrize("entry", ["release", "window-lost-sweep"])
+def test_process_scan_failure_fails_closed(tmp_path: Path, entry: str) -> None:
+    start = _real_now()
+    now = [_iso(start)]
+    application, runtimes, _coordinator, state_root, probe = _stall_portfolio(
+        tmp_path, {"change-a": DeliveryStage.PLANNING}, now
+    )
+    claim = _acquire_planning_claim(application)
+    probe.scan_fails = True
+    probe.states[_HOST] = "gone"
+    now[0] = _iso(start + timedelta(minutes=30))
+    runtime = runtimes["change-a"]
+    frontier_before = runtime.frontier_bytes()
+
+    if entry == "release":
+        with pytest.raises(DeliveryWorkerActiveError) as raised:
+            application.release_stuck_worker("change-a", "OUT-001", claim.attempt_id, claim.claim_id)
+        assert raised.value.retry_after is None
+        assert "could not be observed safely" in str(raised.value)
+    else:
+        application.acquire_frontier_work()
+        readiness = application.show_work_item_view("change-a", "outcome:OUT-001").readiness
+        assert readiness is not None
+        assert (readiness.reason_code, readiness.next_eligible_at) == ("worker-stall-wait", None)
+
+    assert runtime.frontier_bytes() == frontier_before
+    assert not (state_root / "changes/change-a/retry-ledger/owner-results" / f"{claim.attempt_id}.json").exists()
+
+
+@pytest.mark.parametrize("recorded", ["earlier", "unparseable"])
+def test_window_loss_scan_uses_the_issuer_record_issue_time(tmp_path: Path, recorded: str) -> None:
+    start = _real_now()
+    now = [_iso(start)]
+    application, runtimes, _coordinator, state_root, probe = _stall_portfolio(
+        tmp_path, {"change-a": DeliveryStage.PLANNING}, now
+    )
+    claim = _acquire_planning_claim(application)
+    path = _issuer_path(state_root, "change-a", claim.attempt_id)
+    record = json.loads(path.read_bytes())
+    issued = start - timedelta(hours=1)
+    record["issued_at"] = _iso(issued) if recorded == "earlier" else "not-a-time"
+    path.write_text(json.dumps(record), encoding="utf-8")
+    probe.states[_HOST] = "gone"
+    probe.processes = ("node",)
+    now[0] = _iso(start + timedelta(minutes=30))
+    frontier_before = runtimes["change-a"].frontier_bytes()
+
+    application.acquire_frontier_work()
+
+    assert probe.issued_after
+    assert set(probe.issued_after) == {issued if recorded == "earlier" else None}
+    assert runtimes["change-a"].frontier_bytes() == frontier_before
+
+
+@pytest.mark.parametrize("entry", ["release", "window-lost-sweep"])
+def test_write_during_process_scan_keeps_worker_claim(tmp_path: Path, entry: str) -> None:
+    start = _real_now()
+    now = [_iso(start)]
+    application, runtimes, _coordinator, state_root, probe = _stall_portfolio(
+        tmp_path, {"change-a": DeliveryStage.PLANNING}, now
+    )
+    claim = _acquire_planning_claim(application)
+    runtime = runtimes["change-a"]
+    written = application._workspace_manager.show("change-a").worktree_path / "late-output.txt"
+    current = start + timedelta(minutes=10)
+    now[0] = _iso(current)
+
+    def write_now() -> None:
+        written.write_text("late worker output\n", encoding="utf-8")
+        os.utime(written, (current.timestamp(), current.timestamp()))
+
+    probe.during_scan = write_now
+    frontier_before = runtime.frontier_bytes()
+    ledger_before = runtime.retry_ledger().read()
+
+    if entry == "release":
+        with pytest.raises(DeliveryWorkerActiveError) as raised:
+            application.release_stuck_worker("change-a", "OUT-001", claim.attempt_id, claim.claim_id)
+        assert raised.value.retry_after == current + _QUIET
+    else:
+        probe.states[_HOST] = "gone"
+        application.acquire_frontier_work()
+        readiness = application.show_work_item_view("change-a", "outcome:OUT-001").readiness
+        assert readiness is not None
+        assert (readiness.reason_code, readiness.next_eligible_at) == ("worker-stall-wait", _iso(current + _QUIET))
+
+    assert written.exists()
+    assert runtime.show_binding("OUT-001").active_claim is not None
+    assert runtime.frontier_bytes() == frontier_before
+    assert runtime.retry_ledger().read() == ledger_before
+    probe.during_scan = None
+    now[0] = _iso(current + _QUIET)
+    if entry == "release":
+        settled = application.release_stuck_worker("change-a", "OUT-001", claim.attempt_id, claim.claim_id)
+        assert settled.active_claim is None
+    else:
+        application.acquire_frontier_work()
+        assert runtime.show_binding("OUT-001").active_claim is None
+        assert _owner_failure_code(state_root, "change-a", claim.attempt_id) == "worker-host-lost"
 
 
 @pytest.mark.parametrize("ignored_content", ["no-ignored", "ignored-caches"])
@@ -259,11 +799,11 @@ def test_host_lost_quiet_builder_settles_and_resumes_same_task_with_preserved_wo
         "attempt_id": launch.claim.attempt_id,
         "claim_id": launch.claim.claim_id,
         "role": "builder",
-        "issuer_instance": _HOST,
+        "window": {"pid": _WINDOW.pid, "create_time": _WINDOW.create_time, "name": _WINDOW.name},
         "issued_at": launch.claim.started_at,
     }
     before_workspace = _workspace_content_snapshot(launch.worktree_path)
-    probe.states[_HOST] = "lost"
+    probe.states[_HOST] = "gone"
     now[0] = _iso(start + timedelta(minutes=10))
 
     application.acquire_change_action(_continuation_request(application, "change-a"))
@@ -331,7 +871,8 @@ def test_host_lost_recent_worktree_change_waits_until_exact_quiet_boundary(tmp_p
     activity = worktree / "planner-notes.txt"
     activity.write_text("recent\n", encoding="utf-8")
     os.utime(activity, (touched.timestamp(), touched.timestamp()))
-    probe.states[_HOST] = "lost"
+    probe.states[_HOST] = "gone"
+    assert DEFAULT_WORKER_QUIET_PERIOD == _QUIET
     eligible = touched + _QUIET
     now[0] = _iso(eligible - timedelta(seconds=1))
     frontier_before = runtime.frontier_bytes()
@@ -361,19 +902,25 @@ def test_host_lost_recent_worktree_change_waits_until_exact_quiet_boundary(tmp_p
     assert _owner_failure_code(state_root, "change-a", claim.attempt_id) == "worker-host-lost"
 
 
-@pytest.mark.parametrize("case", ["live-host", "unknown-host", "no-issuer-record"])
-def test_stall_sweep_leaves_claims_without_host_loss_evidence(tmp_path: Path, case: str) -> None:
+@pytest.mark.parametrize("case", ["live-window", "unknown-window", "no-issuer-record", "no-window-identity"])
+def test_stall_sweep_leaves_claims_without_window_loss_evidence(tmp_path: Path, case: str) -> None:
     start = _real_now()
     now = [_iso(start)]
     application, runtimes, _coordinator, state_root, probe = _stall_portfolio(
-        tmp_path, {"change-a": DeliveryStage.PLANNING}, now
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+        now,
+        window=None if case == "no-window-identity" else _WINDOW,
     )
     claim = _acquire_planning_claim(application)
-    if case == "unknown-host":
+    if case == "unknown-window":
         probe.states[_HOST] = "unknown"
     elif case == "no-issuer-record":
         _issuer_path(state_root, "change-a", claim.attempt_id).unlink()
-        probe.states[_HOST] = "lost"
+        probe.states[_HOST] = "gone"
+    elif case == "no-window-identity":
+        assert json.loads(_issuer_path(state_root, "change-a", claim.attempt_id).read_bytes())["window"] is None
+        probe.states[_HOST] = "gone"
     now[0] = _iso(start + timedelta(minutes=30))
     runtime = runtimes["change-a"]
     frontier_before = runtime.frontier_bytes()
@@ -397,7 +944,7 @@ def test_stall_sweep_isolates_an_unreadable_issuer_record_to_its_change(tmp_path
     launches = {launch.change_id: launch for launch in application.acquire_frontier_work().launch_packages}
     assert set(launches) == {"change-a", "change-b"}
     _issuer_path(state_root, "change-a", launches["change-a"].claim.attempt_id).write_bytes(b"{not-json")
-    probe.states[_HOST] = "lost"
+    probe.states[_HOST] = "gone"
     now[0] = _iso(start + timedelta(minutes=30))
     blocked_before = runtimes["change-a"].frontier_bytes()
 
@@ -446,7 +993,7 @@ def test_release_stuck_worker_refuses_active_worktree_without_mutation(tmp_path:
     )
     touched = start + timedelta(minutes=5)
     os.utime(launch.worktree_path / "untracked.txt", (touched.timestamp(), touched.timestamp()))
-    now[0] = _iso(touched + timedelta(seconds=30))
+    now[0] = _iso(touched + timedelta(seconds=10))
     frontier_before = runtime.frontier_bytes()
     ledger_before = runtime.retry_ledger().read()
     coordination_before = coordinator.show("change-a")
@@ -479,7 +1026,7 @@ def test_release_stuck_worker_refuses_recent_activity_hidden_from_status(tmp_pat
     )
     touched = start + timedelta(minutes=5)
     target = _hidden_activity(launch.worktree_path, scenario, touched)
-    now[0] = _iso(touched + timedelta(seconds=30))
+    now[0] = _iso(touched + timedelta(seconds=10))
     target_times = target.lstat().st_mtime_ns, target.lstat().st_ctime_ns
     before = (
         runtime.frontier_bytes(),
@@ -647,7 +1194,7 @@ def test_activity_during_observation_keeps_worker_claim(
             application.release_stuck_worker("change-a", "OUT-001", claim.attempt_id, claim.claim_id)
         assert raised.value.code == "ERR_DELIVERY_WORKER_ACTIVE"
     else:
-        probe.states[_HOST] = "lost"
+        probe.states[_HOST] = "gone"
         application.acquire_frontier_work()
 
     assert fired
@@ -743,7 +1290,7 @@ def test_file_overwritten_after_activity_walk_keeps_worker_claim(  # noqa: PLR09
             application.release_stuck_worker("change-a", outcome_id, claim.attempt_id, claim.claim_id)
         assert raised.value.code == "ERR_DELIVERY_WORKER_ACTIVE"
     else:
-        probe.states[_HOST] = "lost"
+        probe.states[_HOST] = "gone"
         application.acquire_frontier_work()
 
     assert parents
@@ -778,8 +1325,8 @@ def test_host_lost_waits_for_deletion_inside_ignored_directory(tmp_path: Path) -
     worktree = application._workspace_manager.show("change-a").worktree_path
     touched = start + timedelta(minutes=5)
     _hidden_activity(worktree, "deleted-ignored-entry", touched)
-    probe.states[_HOST] = "lost"
-    now[0] = _iso(touched + timedelta(seconds=30))
+    probe.states[_HOST] = "gone"
+    now[0] = _iso(touched + timedelta(seconds=10))
     frontier_before = runtime.frontier_bytes()
 
     assert application.acquire_frontier_work().launch_packages == ()
@@ -1029,7 +1576,7 @@ def test_engine_and_caller_worker_endings_share_one_exhausting_builder_episode(t
     workspace = _workspace_content_snapshot(launch.worktree_path)
     attempt_ids = [launch.claim.attempt_id]
 
-    probe.states[_HOST] = "lost"
+    probe.states[_HOST] = "gone"
     now[0] = _iso(start + timedelta(minutes=10))
     application.acquire_frontier_work()
     assert runtime.show_binding(launch.outcome_id).active_claim is None
@@ -1120,7 +1667,7 @@ def test_ended_finalizer_settles_as_reported_attention_and_retries_under_one_bud
     now[0] = _iso(start + timedelta(minutes=10))
 
     if mode == "host-lost":
-        probe.states[_HOST] = "lost"
+        probe.states[_HOST] = "gone"
         application.acquire_frontier_work()
         probe.states[_HOST] = "alive"
     else:

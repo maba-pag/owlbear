@@ -74,6 +74,7 @@ from owlbear_delivery import (
     OutcomeAuthorityBinding,
     PortfolioApplication,
     RetryDelivery,
+    WindowHostIdentity,
 )
 from owlbear_delivery.change_workspace import ChangeTargetSyncReceipt
 from owlbear_delivery.delivery_application_loader import (
@@ -2115,7 +2116,7 @@ async def test_registered_release_stuck_worker_refuses_recent_worktree_activity_
     activity = worktree / "planner-notes.txt"
     activity.write_text("recent\n", encoding="utf-8")
     os.utime(activity, (touched.timestamp(), touched.timestamp()))
-    now[0] = _stall_iso(touched + timedelta(seconds=30))
+    now[0] = _stall_iso(touched + timedelta(seconds=10))
     owner_result = state_root / "changes/change-a/retry-ledger/owner-results" / f"{launch.claim.attempt_id}.json"
     before = (runtime.frontier_bytes(), runtime.retry_ledger().read(), coordinator.show("change-a"))
 
@@ -2136,7 +2137,7 @@ async def test_registered_release_stuck_worker_refuses_recent_worktree_activity_
     assert diagnostic["code"] == "ERR_DELIVERY_WORKER_ACTIVE"
     assert diagnostic["retry_safe"] is True
     assert diagnostic["current_authority_identity"] == "change-a"
-    assert f"Retry at or after {_stall_iso(touched + timedelta(minutes=2))}" in diagnostic["detail"]
+    assert f"Retry at or after {_stall_iso(touched + timedelta(seconds=30))}" in diagnostic["detail"]
     assert (runtime.frontier_bytes(), runtime.retry_ledger().read(), coordinator.show("change-a")) == before
     assert runtime.show_binding("OUT-001").active_claim == launch.claim
     assert not owner_result.exists()
@@ -3447,6 +3448,7 @@ async def test_complete_config_constructs_application_before_lifespan_yield(
     async with app_lifespan(mcp) as context:
         tools = {tool.name: tool for tool in await mcp.list_tools()}
         assert isinstance(context.application, PortfolioApplication)
+        assert context.application._issuer_window == WindowHostIdentity.capture()  # noqa: SLF001
         assert set(tools) == DELIVERY_TOOLS
         assert not (repository / ".owlbear/delivery/runtime/capacity.json").exists()
 
@@ -3463,18 +3465,23 @@ def test_mcp_startup_delegates_owner_construction_to_delivery(
     _write_config(path, _config())
     config = load_delivery_config(path)
     application = object()
-    calls: list[tuple[object, Path, object]] = []
+    window = WindowHostIdentity(pid=4242, create_time=1_700_000_000.5, name="Code Helper (Plugin)")
+    calls: list[tuple[object, Path, object, object]] = []
 
-    def load_core(candidate: object, *, workspace_root: Path, publication_provider: object) -> object:
-        calls.append((candidate, workspace_root, publication_provider))
+    def load_core(
+        candidate: object, *, workspace_root: Path, publication_provider: object, issuer_host: object
+    ) -> object:
+        calls.append((candidate, workspace_root, publication_provider, issuer_host))
         return application
 
     monkeypatch.setattr(live_server, "load_core_delivery_application", load_core)
+    monkeypatch.setattr(live_server.WindowHostIdentity, "capture", classmethod(lambda _cls: window))
 
     assert load_delivery_application(config, repository) is application
     assert len(calls) == 1
     assert calls[0][:2] == (config, repository)
     assert isinstance(calls[0][2], GitHubCliPublicationProvider)
+    assert calls[0][3] is window
 
 
 @pytest.mark.asyncio
