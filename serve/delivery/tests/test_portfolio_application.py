@@ -4079,6 +4079,113 @@ def test_exhausted_builder_retry_projects_read_only_diagnostic_without_clear_act
     assert "approved current authority" in view.card.next_step
 
 
+def _builder_retry_history(items) -> list[tuple[int, str, str, str | None]]:
+    return [(item.ordinal, item.kind, item.status, item.failure_code) for item in items]
+
+
+def _exhaust_builder_retry_with_distinct_codes(tmp_path: Path):
+    """Fail one Builder task three times with distinct codes across a restart; return the reopened application."""
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtime, _coordinator, state_root, first, _head, _workspace, settlement = _builder_retry_handoff_setup(
+        tmp_path, now, add_workspace_changes=False
+    )
+    _settle_builder_handoff_attempt(application, first.claim, settlement)
+    contexts = []
+
+    now[0] = "2026-08-04T01:00:00Z"
+    acquired = application.acquire_change_action(_continuation_request(application, "change-a"))
+    assert acquired.launch is not None, acquired
+    second = acquired.launch
+    assert second.task_id == first.task_id
+    contexts.append(
+        application.show_build_context(
+            second.change_id, second.outcome_id, second.claim.attempt_id, second.claim.claim_id
+        )
+    )
+    _settle_builder_handoff_attempt(
+        application,
+        second.claim,
+        DeliveryBuilderInvocationSettlement(
+            change_id=second.change_id,
+            outcome_id=second.outcome_id,
+            claim_id=second.claim.claim_id,
+            attempt_id=second.claim.attempt_id,
+            task_id=second.task_id,
+            expected_last_reviewed_commit=second.last_reviewed_commit,
+            disposition="completed-timeout",
+        ),
+    )
+
+    now[0] = "2026-08-04T02:00:00Z"
+    reopened, _reopened_coordinator, _manager = _reopen_portfolio(
+        tmp_path, state_root, application._runtimes, clock=lambda: now[0]
+    )
+    acquired = reopened.acquire_change_action(_continuation_request(reopened, "change-a"))
+    assert acquired.launch is not None, acquired
+    third = acquired.launch
+    assert third.task_id == first.task_id
+    contexts.append(
+        reopened.show_build_context(third.change_id, third.outcome_id, third.claim.attempt_id, third.claim.claim_id)
+    )
+    _settle_builder_handoff_attempt(
+        reopened,
+        third.claim,
+        DeliveryBuilderInvocationSettlement(
+            change_id=third.change_id,
+            outcome_id=third.outcome_id,
+            claim_id=third.claim.claim_id,
+            attempt_id=third.claim.attempt_id,
+            task_id=third.task_id,
+            expected_last_reviewed_commit=third.last_reviewed_commit,
+            disposition="normal-return",
+            request=RetryDelivery(
+                action="retry",
+                outcome_id=third.outcome_id,
+                claim_id=third.claim.claim_id,
+                attempt_id=third.claim.attempt_id,
+                abandoned_commit=third.source_head,
+                failure_code="builder-review-failed",
+            ),
+        ),
+    )
+    return reopened, runtime, contexts
+
+
+def test_builder_retry_history_reaches_fresh_builder_and_exhaustion_diagnosis(tmp_path: Path) -> None:
+    application, runtime, contexts = _exhaust_builder_retry_with_distinct_codes(tmp_path)
+
+    second_context, third_context = contexts
+    assert _builder_retry_history(second_context.prior_attempts) == [(1, "original", "failed", "builder-failed")]
+    assert _builder_retry_history(third_context.prior_attempts) == [
+        (1, "original", "failed", "builder-failed"),
+        (2, "repair", "failed", "worker-timeout"),
+    ]
+    assert [item.observed_at for item in third_context.prior_attempts] == [
+        "2026-08-04T00:00:00Z",
+        "2026-08-04T01:00:00Z",
+    ]
+    episode = runtime.retry_ledger().read().episodes[0]
+    assert episode.stop_code is not None
+    assert episode.stop_code.value == "retry-exhausted"
+    expected = [
+        (1, "original", "failed", "builder-failed"),
+        (2, "repair", "failed", "worker-timeout"),
+        (3, "repair", "failed", "builder-review-failed"),
+    ]
+
+    view = application.show_work_item_view("change-a", "outcome:OUT-001")
+    assert view.readiness is not None
+    assert view.readiness.reason_code == "retry-exhausted"
+    assert view.readiness.next_actor.value == "agent"
+    assert view.readiness.attempts == 3
+    assert _builder_retry_history(view.readiness.retry_history) == expected
+    change = application.get_change("change-a")
+    assert change.kind == "available"
+    exhausted = next(item for item in change.unresolved_outcomes if item.outcome_id == "OUT-001")
+    assert exhausted.card.readiness is not None
+    assert _builder_retry_history(exhausted.card.readiness.retry_history) == expected
+
+
 def test_exhausted_builder_return_to_planning_projects_read_only_diagnostic(tmp_path: Path) -> None:
     now = ["2026-08-04T00:00:00Z"]
     application, runtime, coordinator, _state_root, first, _head, _workspace, retry_settlement = (

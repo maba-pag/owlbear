@@ -193,6 +193,8 @@ from owlbear_delivery.publication_provider import (
 )
 from owlbear_delivery.recovery import (
     MAX_RECOVERY_INTENTS,
+    MAX_RETRY_HISTORY_ATTEMPTS,
+    DeliveryRetryAttemptView,
     DeliveryWorkerExclusionRequiredError,
     RecoveryEvidence,
     RecoveryEvidenceProvider,
@@ -1273,6 +1275,7 @@ class DeliveryBuildContext(_ApplicationModel):
     requests: tuple[DeliveryRequest, ...]
     return_context: DeliveryReturnContext | None = None
     recovery_attention: DeliveryRecoveryAttention | None = None
+    prior_attempts: tuple[DeliveryRetryAttemptView, ...] = Field(default=(), max_length=MAX_RETRY_HISTORY_ATTEMPTS)
 
 
 class DeliveryFinalizationContext(_ApplicationModel):
@@ -6632,6 +6635,7 @@ class PortfolioApplication:
             else RetryFailureClass.MECHANICAL
         )
         episode: RetryEpisodeSummary | None = None
+        history: tuple[DeliveryRetryAttemptView, ...] = ()
         try:
             retry_ledger = RetryLedger(self._target_root, snapshot.contract.change_id, clock=self._clock)
             if action is WorkItemActionKind.SYNC_TARGET:
@@ -6645,6 +6649,13 @@ class PortfolioApplication:
                     key = self._retry_readiness_key(snapshot, card, decision, exact_head, binding)
                     if key is not None:
                         episode = retry_ledger.episode(key)
+            if episode is not None and (
+                episode.failure_class is not failure_class
+                or (handoff_attempt_id is not None and episode.stop_code is not RetryStopCode.EXHAUSTED)
+            ):
+                episode = None
+            if episode is not None:
+                history = retry_ledger.attempt_history(episode)
         except (OSError, RetryLedgerConflictError, RetryLedgerCorruptError, RuntimeError, ValueError):
             unavailable = decision.model_copy(
                 update={
@@ -6656,16 +6667,13 @@ class PortfolioApplication:
                 }
             )
             return self._with_engine_action_prompt(snapshot.contract.change_id, unavailable)
-        if (
-            episode is None
-            or episode.failure_class is not failure_class
-            or (handoff_attempt_id is not None and episode.stop_code is not RetryStopCode.EXHAUSTED)
-        ):
+        if episode is None:
             return decision
         updates: dict[str, object] = {
             "attempts": episode.total_attempts,
             "next_eligible_at": episode.next_eligible_at,
             "stop_reason": episode.stop_code.value if episode.stop_code is not None else None,
+            "retry_history": history,
         }
         backoff_active = episode.next_eligible_at is not None and _timestamp(self._clock()) < _timestamp(
             episode.next_eligible_at
@@ -9298,6 +9306,21 @@ class PortfolioApplication:
             for result in runtime.show_binding(candidate.outcome_id).results
             if result.task_id in predecessor_task_ids or candidate.outcome_id in dependency_outcomes
         )
+        try:
+            ledger = runtime.retry_ledger(clock=self._clock)
+            episode = ledger.episode_for_attempt(attempt_id)
+            prior_attempts = () if episode is None else ledger.attempt_history(episode, before_attempt_id=attempt_id)
+        except (OSError, RetryLedgerConflictError, RetryLedgerCorruptError, RuntimeError, ValueError) as exc:
+            self._fail("Build retry history is unavailable", exc)
+        if episode is not None and (
+            episode.key.outcome_id != outcome_id
+            or episode.key.action_kind != f"{DeliveryWorkerRole.BUILDER.value}-claim"
+            or (
+                episode.key.task_lineage != task.task_id
+                and not any(alias.alias_kind == "task" and alias.value == task.task_id for alias in episode.aliases)
+            )
+        ):
+            self._fail("Build retry history does not match the active claim")
         return DeliveryBuildContext(
             launch=launch,
             task=task,
@@ -9307,6 +9330,7 @@ class PortfolioApplication:
             requests=binding.requests,
             return_context=binding.return_context,
             recovery_attention=binding.recovery_attention,
+            prior_attempts=prior_attempts,
         )
 
     def _repair_proposal(self, snapshot: DeliveryPortfolioSnapshot) -> DeliveryRepairProposal | None:

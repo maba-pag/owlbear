@@ -2562,6 +2562,7 @@ def test_list_and_detail_preserve_known_unavailable_change_projection() -> None:
                 "attempts": 0,
                 "next_eligible_at": None,
                 "stop_reason": None,
+                "retry_history": [],
                 "prompt": None,
             },
         },

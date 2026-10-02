@@ -152,6 +152,15 @@ export interface FinalizationAttempt {
   applicability: "current" | "historical";
 }
 
+/** Bounded metadata for one durable retry attempt; never failure prose or paths. */
+export interface DeliveryRetryAttempt {
+  ordinal: number;
+  kind: "original" | "repair" | "observation";
+  status: "pending" | "failed" | "waiting" | "succeeded" | "contained" | "paused";
+  failure_code: string | null;
+  observed_at: string | null;
+}
+
 /** Engine-computed eligibility for one supported action at a captured basis. */
 export interface DeliveryReadiness {
   status: DeliveryReadinessStatus;
@@ -166,6 +175,7 @@ export interface DeliveryReadiness {
   attempts?: number;
   next_eligible_at?: string | null;
   stop_reason?: string | null;
+  retry_history?: DeliveryRetryAttempt[];
   prompt?: string | null;
 }
 

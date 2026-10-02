@@ -897,6 +897,25 @@ function ReadinessSection({ readiness }: { readiness: DeliveryReadiness | null |
         <ReadinessBasisRows basis={readiness.basis} />
       </dl>
       {readiness.last_attempt ? <ReadinessAttempt attempt={readiness.last_attempt} /> : null}
+      {readiness.retry_history?.length ? (
+        <div className="mt-static-sm border-t border-contrast-low pt-static-sm" data-testid="readiness-retry-history">
+          <strong className="text-sm">Attempt history</strong>
+          <ol className="mt-static-xs text-xs">
+            {readiness.retry_history.map((attempt) => (
+              <li key={attempt.ordinal}>
+                {attempt.ordinal}. {attempt.kind} {attempt.status}
+                {attempt.failure_code ? (
+                  <>
+                    {" "}
+                    <code>{attempt.failure_code}</code>
+                  </>
+                ) : null}
+                {attempt.observed_at ? ` at ${attempt.observed_at}` : null}
+              </li>
+            ))}
+          </ol>
+        </div>
+      ) : null}
     </SectionCard>
   );
 }

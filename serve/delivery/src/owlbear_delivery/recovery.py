@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
@@ -28,6 +29,9 @@ _DIGEST_LENGTH = 64
 MAX_RECOVERY_INTENTS = 256
 _MAX_PROVENANCE_VALUE_LENGTH = 512
 _MAX_REPAIR_BINDINGS = 256
+# Three budgeted attempts (or 3 automatic + 1 explicit observation) plus refunded human pauses.
+MAX_RETRY_HISTORY_ATTEMPTS = 6
+_RETRY_FAILURE_CODE_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
 MAX_ADMITTED_PATH_LENGTH = 4096
 _ADMITTED_AUTHORITY_FIELDS = frozenset(
     {"admitted_task_id", "admitted_task_digest", "admitted_task_scope", "admitted_paths"}
@@ -554,6 +558,16 @@ class RetryAttemptOutcome(_RecoveryModel):
     stop_code: RetryStopCode | None = None
 
 
+class DeliveryRetryAttemptView(_RecoveryModel):
+    """Bounded public metadata for one durable retry attempt; never detail text or paths."""
+
+    ordinal: int = Field(ge=1)
+    kind: Literal["original", "repair", "observation"]
+    status: Literal["pending", "failed", "waiting", "succeeded", "contained", "paused"]
+    failure_code: str | None = Field(default=None, pattern=_RETRY_FAILURE_CODE_PATTERN)
+    observed_at: str | None = Field(default=None, max_length=64)
+
+
 class RetryRepairBinding(_RecoveryModel):
     """Durable linkage from a Builder repair reservation back to its failed action."""
 
@@ -792,6 +806,65 @@ class RetryLedger:
     def episode_for_attempt(self, attempt_id: str) -> RetryEpisodeSummary | None:
         """Return the immutable episode owning one attempt alias."""
         return _episode_for_attempt(self.read(), attempt_id)
+
+    def attempt_history(
+        self,
+        episode: RetryEpisodeSummary,
+        *,
+        before_attempt_id: str | None = None,
+    ) -> tuple[DeliveryRetryAttemptView, ...]:
+        """Project the newest bounded attempts of the episode's current budget, oldest first, without mutation."""
+        if episode.key.change_id != self.change_id:
+            raise ValueError("retry episode belongs to another Change")
+        budget_start = max(
+            (
+                episode.attempt_ids.index(item) + 1
+                for item in episode.accepted_attempt_ids
+                if item in episode.attempt_ids
+            ),
+            default=0,
+        )
+        attempt_ids = episode.attempt_ids[budget_start:]
+        if before_attempt_id is not None:
+            if before_attempt_id not in attempt_ids:
+                raise RetryLedgerConflictError("attempt is not part of this retry episode")
+            attempt_ids = attempt_ids[: attempt_ids.index(before_attempt_id)]
+        first = max(0, len(attempt_ids) - MAX_RETRY_HISTORY_ATTEMPTS)
+        return tuple(
+            self._attempt_view(episode, attempt_id, ordinal)
+            for ordinal, attempt_id in enumerate(attempt_ids[first:], start=first + 1)
+        )
+
+    def _attempt_view(self, episode: RetryEpisodeSummary, attempt_id: str, ordinal: int) -> DeliveryRetryAttemptView:
+        attempt = self._read_attempt(attempt_id)
+        if attempt.episode_id != episode.episode_id or attempt.key != episode.key:
+            raise RetryLedgerCorruptError
+        outcome_id = next(
+            (
+                identity
+                for status in ("failed", "succeeded", "contained", "paused")
+                if (identity := digest(f"{attempt_id}:{status}".encode())) in episode.outcome_ids
+            ),
+            None,
+        )
+        if outcome_id is None:
+            return DeliveryRetryAttemptView(ordinal=ordinal, kind=attempt.kind, status="pending")
+        try:
+            outcome = RetryAttemptOutcome.model_validate_json(
+                read_record(self.runtime_root, self._outcomes_path / f"{outcome_id}.json")
+            )
+        except (OSError, TypeError, ValueError) as exc:
+            raise RetryLedgerCorruptError from exc
+        if outcome.attempt_id != attempt_id or outcome.episode_id != episode.episode_id:
+            raise RetryLedgerCorruptError
+        code = outcome.failure_code
+        return DeliveryRetryAttemptView(
+            ordinal=ordinal,
+            kind=attempt.kind,
+            status=outcome.status,
+            failure_code=code if code is not None and re.fullmatch(_RETRY_FAILURE_CODE_PATTERN, code) else None,
+            observed_at=outcome.observed_at,
+        )
 
     def import_legacy_failures(
         self,

@@ -28,6 +28,7 @@ from owlbear_delivery.delivery_runtime import (
 )
 from owlbear_delivery.draft_pull_request import PublicationPullRequestObservationReceipt
 from owlbear_delivery.finalization_reports import FinalizationAttempt
+from owlbear_delivery.recovery import MAX_RETRY_HISTORY_ATTEMPTS, DeliveryRetryAttemptView
 from owlbear_delivery.target_contract import DeliveryCommitment, DeliveryContract, DeliveryOutcome
 
 
@@ -325,6 +326,7 @@ class DeliveryReadiness(_ProjectionModel):
     attempts: int = Field(default=0, ge=0)
     next_eligible_at: str | None = None
     stop_reason: str | None = None
+    retry_history: tuple[DeliveryRetryAttemptView, ...] = Field(default=(), max_length=MAX_RETRY_HISTORY_ATTEMPTS)
     prompt: str | None = None
 
     @model_validator(mode="after")

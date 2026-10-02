@@ -35,8 +35,8 @@ Before edits, enter only `launch.worktree_path` and require:
 - writer custody still matches the active claim;
 - the worktree state has been triaged under the rules below; the final candidate must leave the entire
   managed worktree clean;
-- any predecessor results, resolved requests, return context, and recovery attention come only from
-  this fresh Build context.
+- any predecessor results, prior attempts, resolved requests, return context, and recovery attention
+  come only from this fresh Build context.
 
 The branch, `HEAD`, ancestry, writer custody, and worktree-cleanliness observations must come from the
 Builder's own direct tool calls in the assigned worktree. A delegated execution report or caller prose

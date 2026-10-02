@@ -11,6 +11,7 @@ from unittest.mock import patch
 import pytest
 
 from owlbear_delivery.recovery import (
+    MAX_RETRY_HISTORY_ATTEMPTS,
     RetryEpisodeKey,
     RetryFailureClass,
     RetryLedger,
@@ -254,6 +255,80 @@ def test_settled_failure_is_attempt_specific_after_refunded_pause(tmp_path: Path
     assert refunded.total_attempts == 1
     assert refunded.settled_failure("finalizer-1")
     assert not refunded.settled_failure("finalizer-2")
+
+
+def test_attempt_history_is_ordered_bounded_metadata_without_detail(tmp_path: Path) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    key = _engine_key()
+    first = ledger.reserve(key, failure_class="mechanical", now=_START, attempt_id="attempt-1")
+    ledger.record_failure(first, failure_code="builder-failed", failure_detail="/private/path secret", now=_START)
+    second = ledger.reserve(key, failure_class="mechanical", now=_START + timedelta(seconds=2), attempt_id="attempt-2")
+    ledger.record_failure(second, failure_code="free text: not a code!", now=_START + timedelta(seconds=2))
+    ledger.reserve(key, failure_class="mechanical", now=_START + timedelta(seconds=10), attempt_id="attempt-3")
+    episode = ledger.episode(key)
+    assert episode is not None
+
+    history = RetryLedger(tmp_path, "change-a").attempt_history(episode)
+
+    assert [(item.ordinal, item.kind, item.status, item.failure_code) for item in history] == [
+        (1, "original", "failed", "builder-failed"),
+        (2, "repair", "failed", None),
+        (3, "repair", "pending", None),
+    ]
+    assert [item.observed_at for item in history] == ["2026-08-04T00:00:00Z", "2026-08-04T00:00:02Z", None]
+    serialized = "".join(item.model_dump_json() for item in history)
+    assert "private" not in serialized
+    assert "free text" not in serialized
+    assert ledger.attempt_history(episode, before_attempt_id="attempt-3") == history[:2]
+    with pytest.raises(RetryLedgerConflictError):
+        ledger.attempt_history(episode, before_attempt_id="foreign-attempt")
+
+
+def test_attempt_history_keeps_only_newest_bounded_attempts(tmp_path: Path) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    key = _engine_key()
+    total = MAX_RETRY_HISTORY_ATTEMPTS + 2
+    for index in range(1, total + 1):
+        reservation = ledger.reserve(key, failure_class="mechanical", now=_START, attempt_id=f"paused-{index}")
+        ledger.record_pause(reservation.attempt_id, now=_START)
+    episode = ledger.episode(key)
+    assert episode is not None
+    assert len(episode.attempt_ids) == total
+
+    history = ledger.attempt_history(episode)
+
+    assert [item.ordinal for item in history] == list(range(3, total + 1))
+    assert {item.status for item in history} == {"paused"}
+
+
+def test_attempt_history_restarts_with_the_budget_after_accepted_progress(tmp_path: Path) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    key = _engine_key()
+    first = ledger.reserve(key, failure_class="mechanical", now=_START, attempt_id="attempt-1")
+    ledger.record_failure(first, failure_code="builder-failed", now=_START)
+    accepted = ledger.reserve(
+        key, failure_class="mechanical", now=_START + timedelta(seconds=2), attempt_id="attempt-2"
+    )
+    episode = ledger.record_accepted_progress(accepted, now=_START + timedelta(seconds=2))
+
+    assert ledger.attempt_history(episode) == ()
+
+    ledger.reserve(key, failure_class="mechanical", now=_START + timedelta(seconds=3), attempt_id="attempt-3")
+    episode = ledger.episode(key)
+    assert episode is not None
+    assert [(item.ordinal, item.status) for item in ledger.attempt_history(episode)] == [(1, "pending")]
+
+
+def test_attempt_history_fails_closed_when_an_outcome_record_is_missing(tmp_path: Path) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    key = _engine_key()
+    reservation = ledger.reserve(key, failure_class="mechanical", now=_START, attempt_id="attempt-1")
+    episode = ledger.record_failure(reservation, failure_code="builder-failed", now=_START)
+    outcome = digest(b"attempt-1:failed")
+    (tmp_path / "changes/change-a/retry-ledger/outcomes" / f"{outcome}.json").unlink()
+
+    with pytest.raises(RetryLedgerCorruptError):
+        ledger.attempt_history(episode)
 
 
 def test_verified_release_preserves_budget_for_worker_episode(tmp_path: Path) -> None:

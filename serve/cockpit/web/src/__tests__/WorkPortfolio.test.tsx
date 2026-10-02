@@ -5741,6 +5741,38 @@ it.each([
   expect(screen.queryByTestId("readiness-prompt")).not.toBeInTheDocument();
 });
 
+it("renders the bounded attempt history of an exhausted retry episode", async () => {
+  currentDetail = detail({
+    readiness: readiness({
+      status: "blocked",
+      reason_code: "retry-exhausted",
+      next_actor: "agent",
+      attempts: 3,
+      stop_reason: "retry-exhausted",
+      retry_history: [
+        {
+          ordinal: 1,
+          kind: "original",
+          status: "failed",
+          failure_code: "builder-failed",
+          observed_at: "2026-08-04T00:00:00Z",
+        },
+        { ordinal: 2, kind: "repair", status: "failed", failure_code: "worker-timeout", observed_at: null },
+        { ordinal: 3, kind: "repair", status: "failed", failure_code: null, observed_at: "2026-08-04T02:00:00Z" },
+      ],
+    }),
+  });
+  renderPage("/delivery/change-alpha/outcome%3AOUT-001");
+
+  const history = await screen.findByTestId("readiness-retry-history");
+  expect(history).toHaveTextContent("Attempt history");
+  const entries = within(history).getAllByRole("listitem");
+  expect(entries).toHaveLength(3);
+  expect(entries[0]).toHaveTextContent("1. original failed builder-failed at 2026-08-04T00:00:00Z");
+  expect(entries[1]).toHaveTextContent("2. repair failed worker-timeout");
+  expect(entries[2]).toHaveTextContent("3. repair failed at 2026-08-04T02:00:00Z");
+});
+
 it("reports engine continuation custody as provenance without offering caller-confirmed recovery", async () => {
   currentDetail = detail({
     card: card({ stage: "implementation" }),

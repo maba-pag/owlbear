@@ -312,6 +312,7 @@ from owlbear_delivery.publication_provider import (
     failed_required_publication_checks,
 )
 from owlbear_delivery.recovery import (
+    DeliveryRetryAttemptView,
     DeliveryWorkerExclusionRequiredError,
     RecoveryEvidence,
     RecoveryEvidenceProvider,
@@ -518,6 +519,7 @@ __all__ = [
     "DeliveryResultSubmissionResult",
     "DeliveryRetainedChangeWorktree",
     "DeliveryRetainedWorktreeCleanupBlockReason",
+    "DeliveryRetryAttemptView",
     "DeliveryRetryDiagnostic",
     "DeliveryReturnContext",
     "DeliveryReview",

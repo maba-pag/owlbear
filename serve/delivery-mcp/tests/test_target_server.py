@@ -25,6 +25,7 @@ from serve.delivery.tests.test_portfolio_application import (
     _canonical,
     _continuation_request,
     _engine_action,
+    _exhaust_builder_retry_with_distinct_codes,
     _failure_request,
     _loader_activation_state_snapshot,
     _loader_composed_engine_fixture,
@@ -119,6 +120,47 @@ async def test_registered_explicit_acceptance_is_one_bounded_read(tmp_path: Path
     assert (episode.total_attempts, episode.explicit_observations, episode.reset_count) == (
         (3, 1, 0) if exhausted else (1, 0, 0)
     )
+
+
+@pytest.mark.asyncio
+async def test_registered_get_change_exposes_exhausted_builder_retry_history(tmp_path: Path) -> None:
+    application, runtime, _contexts = _exhaust_builder_retry_with_distinct_codes(tmp_path)
+    ledger_before = runtime.retry_ledger().read()
+
+    async with Client(assemble_target_server(application)) as client:
+        result = await client.call_tool("get_change", {"change_id": "change-a"})
+
+    assert not result.is_error
+    payload = result.structured_content
+    assert payload is not None
+    exhausted = next(item for item in payload["unresolved_outcomes"] if item["outcome_id"] == "OUT-001")
+    readiness = exhausted["card"]["readiness"]
+    assert readiness["reason_code"] == "retry-exhausted"
+    assert readiness["next_actor"] == "agent"
+    assert readiness["retry_history"] == [
+        {
+            "ordinal": 1,
+            "kind": "original",
+            "status": "failed",
+            "failure_code": "builder-failed",
+            "observed_at": "2026-08-04T00:00:00Z",
+        },
+        {
+            "ordinal": 2,
+            "kind": "repair",
+            "status": "failed",
+            "failure_code": "worker-timeout",
+            "observed_at": "2026-08-04T01:00:00Z",
+        },
+        {
+            "ordinal": 3,
+            "kind": "repair",
+            "status": "failed",
+            "failure_code": "builder-review-failed",
+            "observed_at": "2026-08-04T02:00:00Z",
+        },
+    ]
+    assert runtime.retry_ledger().read() == ledger_before
 
 
 @pytest.mark.asyncio
