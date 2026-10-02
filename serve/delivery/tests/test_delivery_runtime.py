@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
@@ -4716,3 +4717,39 @@ def test_administrative_move_rejects_a_stale_preview(tmp_path: Path) -> None:
                 expected_version=preview.snapshot_version,
             )
         )
+
+
+_FRESH_EXPORT_COMPLETENESS_SCRIPT = """
+import inspect
+import json
+
+from pydantic import BaseModel
+from pydantic_core import to_jsonable_python
+
+import owlbear_delivery
+from owlbear_delivery import OutcomeAuthorityBinding
+
+incomplete = sorted(
+    name
+    for name in owlbear_delivery.__all__
+    if inspect.isclass(model := getattr(owlbear_delivery, name))
+    and issubclass(model, BaseModel)
+    and not model.__pydantic_complete__
+)
+binding = OutcomeAuthorityBinding.model_construct(outcome_id="OUT-001", plan_scope_id="SCOPE-001")
+print(json.dumps({"incomplete": incomplete, "binding": to_jsonable_python(binding)}))
+"""
+
+
+def test_fresh_process_exports_only_complete_models() -> None:
+    result = subprocess.run(  # noqa: S603
+        (sys.executable, "-c", _FRESH_EXPORT_COMPLETENESS_SCRIPT),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    observed = json.loads(result.stdout.strip().splitlines()[-1])
+    assert observed["incomplete"] == []
+    assert observed["binding"]["outcome_id"] == "OUT-001"

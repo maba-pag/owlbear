@@ -11806,6 +11806,10 @@ class PortfolioApplication:
         raise PortfolioApplicationError(message) from cause
 
 
+# Forward references resolve only now; incomplete models fail bare serialization in adapters.
+DeliveryContinuationResult.model_rebuild()
+
+
 __all__ = [
     "ChangeExternalHeadPromotionReceipt",
     "DeliveryAcceptanceReconciliationOutcome",

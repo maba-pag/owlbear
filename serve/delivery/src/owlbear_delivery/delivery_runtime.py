@@ -6761,6 +6761,12 @@ def _reference(message: str, cause: Exception | None = None) -> None:
     raise DeliveryRuntimeReferenceError(message) from cause
 
 
+# Forward references resolve only now; incomplete models fail bare serialization in adapters.
+DeliveryRecoveryAttention.model_rebuild()
+OutcomeAuthorityBinding.model_rebuild()
+DeliveryFrontier.model_rebuild()
+
+
 __all__ = [
     "DELIVERY_TRANSITION_ADAPTER",
     "ActivateDeliveryClaim",

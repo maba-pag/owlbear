@@ -1012,6 +1012,57 @@ def test_http_release_stuck_worker_rejects_malformed_identity_before_mutation(
     assert not owner_result.exists()
 
 
+_FRESH_COCKPIT_SERIALIZATION_SCRIPT = """
+import inspect
+import json
+
+from fastapi.testclient import TestClient
+from pydantic import BaseModel
+
+import owlbear_cockpit.main  # noqa: F401
+import owlbear_delivery
+from owlbear_cockpit.routes.target_work import assemble_target_app
+from owlbear_delivery import OutcomeAuthorityBinding
+
+incomplete = sorted(
+    name
+    for name in owlbear_delivery.__all__
+    if inspect.isclass(model := getattr(owlbear_delivery, name))
+    and issubclass(model, BaseModel)
+    and not model.__pydantic_complete__
+)
+binding = OutcomeAuthorityBinding.model_construct(outcome_id="OUT-001", plan_scope_id="SCOPE-001")
+
+
+class _Application:
+    def release_stuck_worker(self, *_args):
+        return binding
+
+
+client = TestClient(assemble_target_app(_Application()), raise_server_exceptions=False)
+response = client.post(
+    "/api/changes/change-a/workers/release-stuck",
+    json={"outcome_id": "OUT-001", "attempt_id": "attempt", "claim_id": "claim"},
+)
+print(json.dumps({"incomplete": incomplete, "status": response.status_code, "body": response.text}))
+"""
+
+
+def test_fresh_cockpit_process_serializes_bare_delivery_models() -> None:
+    result = subprocess.run(  # noqa: S603
+        (sys.executable, "-c", _FRESH_COCKPIT_SERIALIZATION_SCRIPT),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    observed = json.loads(result.stdout.strip().splitlines()[-1])
+    assert observed["incomplete"] == []
+    assert observed["status"] == 200, observed["body"]
+    assert json.loads(observed["body"])["outcome_id"] == "OUT-001"
+
+
 def test_http_release_stuck_worker_forwards_finalizer_release_without_outcome() -> None:
     client, application = _client()
 
