@@ -1780,7 +1780,8 @@ def test_installed_console_creates_no_bytecode_or_project_writes(tmp_path: Path)
     tools = Path(__file__).parents[1]
     wheels = tmp_path / "wheels"
     subprocess.run(  # noqa: S603 - maintained offline build with fixed arguments
-        [uv, "build", "--offline", "--wheel", "--out-dir", str(wheels), str(tools)],
+        # The running interpreter avoids requiring the repository's pinned .python-version offline.
+        [uv, "build", "--offline", "--wheel", "--python", sys.executable, "--out-dir", str(wheels), str(tools)],
         check=True,
         capture_output=True,
         timeout=30,
