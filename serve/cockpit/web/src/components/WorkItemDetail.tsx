@@ -389,18 +389,27 @@ function elapsedAge(startedAt: string): string {
 
 function ClaimSection({ detail, pendingAction, actionError, onReleaseStuckWorker }: WorkItemDetailProps) {
   const claim = detail.item.active_claim;
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmTarget, setConfirmTarget] = useState<{ attemptId: string; claimId: string } | null>(null);
   const [actionFailed, setActionFailed] = useState(false);
   if (!claim) return null;
   const readiness = detail.item.card.readiness ?? detail.item.readiness;
+  // A stall wait belongs to Delivery's automatic window-loss settlement, not to a user release.
   const releasable =
     (claim.worker_role === "planner" || claim.worker_role === "builder") &&
     Boolean(claim.attempt_id && claim.claim_id) &&
-    (readiness?.status === "running" || readiness?.reason_code === "worker-stall-wait");
+    readiness?.status === "running";
+  // Polling may replace the claim; the dialog only ever confirms the claim it was opened for.
+  const confirmOpen =
+    releasable &&
+    confirmTarget !== null &&
+    confirmTarget.attemptId === claim.attempt_id &&
+    confirmTarget.claimId === claim.claim_id;
+  const closeConfirmation = () => setConfirmTarget(null);
   const release = async () => {
-    const error = await onReleaseStuckWorker(claim.attempt_id, claim.claim_id);
+    if (!confirmTarget) return;
+    const error = await onReleaseStuckWorker(confirmTarget.attemptId, confirmTarget.claimId);
     setActionFailed(error !== null);
-    if (!error) setConfirmOpen(false);
+    if (!error) closeConfirmation();
   };
   return (
     <section aria-labelledby="work-claim-heading">
@@ -453,7 +462,7 @@ function ClaimSection({ detail, pendingAction, actionError, onReleaseStuckWorker
           disabled={pendingAction !== null}
           onClick={() => {
             setActionFailed(false);
-            setConfirmOpen(true);
+            setConfirmTarget({ attemptId: claim.attempt_id, claimId: claim.claim_id });
           }}
         >
           Release stuck worker
@@ -466,10 +475,10 @@ function ClaimSection({ detail, pendingAction, actionError, onReleaseStuckWorker
           aria-modal="true"
           dismissButton={false}
           disableBackdropClick
-          onDismiss={() => setConfirmOpen(false)}
+          onDismiss={closeConfirmation}
           aria={{ role: "alertdialog", "aria-label": "Release stuck worker" }}
         >
-          <ConfirmationContent onClose={() => setConfirmOpen(false)}>
+          <ConfirmationContent onClose={closeConfirmation}>
             <PHeading tag="h2" size="lg">
               Release stuck worker
             </PHeading>
@@ -483,13 +492,13 @@ function ClaimSection({ detail, pendingAction, actionError, onReleaseStuckWorker
             </p>
             <dl className="grid gap-static-xs break-all text-sm">
               <dt>Attempt</dt>
-              <dd>{claim.attempt_id}</dd>
+              <dd>{confirmTarget?.attemptId}</dd>
               <dt>Claim</dt>
-              <dd>{claim.claim_id}</dd>
+              <dd>{confirmTarget?.claimId}</dd>
             </dl>
             {actionFailed && actionError ? <ActionFeedback error={actionError} result={null} /> : null}
             <div className="flex flex-wrap justify-end gap-static-xs">
-              <PButton type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>
+              <PButton type="button" variant="secondary" onClick={closeConfirmation}>
                 Cancel
               </PButton>
               <PButton type="button" disabled={pendingAction !== null} onClick={() => void release()}>

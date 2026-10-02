@@ -1903,7 +1903,7 @@ it.each([
   currentDetail = detail({
     card: card({ stage: "implementation" }),
     active_claim: runningBuilderClaim,
-    readiness: readiness({ status: "waiting", reason_code: "worker-stall-wait" }),
+    readiness: readiness({ status: "running", reason_code: "active-custody" }),
   });
   releaseStuckWorkerActive = guard;
   renderPage("/delivery/change-alpha/outcome%3AOUT-001");
@@ -1949,9 +1949,49 @@ it("explains a stall wait without an eligible time while processes still use the
     "processes still use this worker's worktree",
   );
   expect(inspector).not.toHaveTextContent("Next eligible at");
+  expect(within(inspector).queryByText("Release stuck worker")).not.toBeInTheDocument();
 });
 
-it("offers stuck-worker release only for running or stall-waiting claims", async () => {
+it.each([
+  ["another claim", { attempt_id: "attempt-two", claim_id: "claim-two" }, "running"],
+  ["a stall wait", {}, "worker-stall-wait"],
+] as const)("withdraws an open release confirmation when polling shows %s", async (_case, identity, next) => {
+  vi.useFakeTimers();
+  try {
+    currentDetail = detail({
+      card: card({ stage: "implementation" }),
+      active_claim: runningBuilderClaim,
+      readiness: readiness({ status: "running", reason_code: "active-custody" }),
+    });
+    renderPage("/delivery/change-alpha/outcome%3AOUT-001");
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    fireEvent.click(screen.getByText("Release stuck worker"));
+    expect(screen.getByRole("alertdialog")).toHaveTextContent("attempt-one");
+
+    currentDetail = detail({
+      card: card({ stage: "implementation" }),
+      active_claim: { ...runningBuilderClaim, ...identity },
+      readiness:
+        next === "running"
+          ? readiness({ status: "running", reason_code: "active-custody" })
+          : readiness({ status: "waiting", reason_code: "worker-stall-wait" }),
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000);
+    });
+
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(screen.queryByText("Confirm release")).not.toBeInTheDocument();
+    expect(requests.some(({ url }) => url.endsWith("/workers/release-stuck"))).toBe(false);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("offers stuck-worker release only for running claims", async () => {
   currentDetail = detail({
     card: card({ stage: "implementation" }),
     active_claim: runningBuilderClaim,
