@@ -3110,9 +3110,13 @@ class ChangeWorkspaceManager:
         for path in (managed_index.path, managed_index.administration, head, reference):
             observed[path] = _activity_stamp(path.lstat())
             newest = max(newest, observed[path].times)
-        # Directory times are read before their listing, so a change in any of them invalidates the walk.
+        # Any sampled entry that changed or vanished since it was read invalidates the walk.
         for path, stamp in observed.items():
-            if _activity_stamp(path.lstat()) != stamp:
+            try:
+                current = _activity_stamp(path.lstat())
+            except FileNotFoundError:
+                current = None
+            if current != stamp:
                 msg = "worktree changed while its activity was observed"
                 raise PreservationRejectedError(msg)
         if newest >= started:
@@ -9228,7 +9232,7 @@ class _ActivityWalkBudget:
 def _worktree_tree_activity_ns(worktree: Path, ignored: frozenset[str], observed: dict[Path, _ActivityStamp]) -> int:
     """Return the newest mtime/ctime in the worktree, excluding its top-level `.git` and ignored subtrees.
 
-    Records every directory's stamp in `observed` so the caller can revalidate them after the walk.
+    Records every sampled entry's stamp in `observed` so the caller can revalidate them after the walk.
     """
     budget = _ActivityWalkBudget(_ACTIVITY_WALK_MAX_ENTRIES, time.monotonic() + _ACTIVITY_WALK_SECONDS)
     descriptor = os.open(worktree, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
@@ -9258,9 +9262,9 @@ def _directory_activity_ns(
                 directories.append(entry.name)
                 continue
             # An ignored directory's own times still reveal entries created or removed directly inside it.
+            # Files are retained too: an in-place overwrite changes the file without touching its directory.
             entry_stamp = _activity_stamp(entry.stat(follow_symlinks=False))
-            if entry.is_dir(follow_symlinks=False):
-                observed[directory / entry.name] = entry_stamp
+            observed[directory / entry.name] = entry_stamp
             newest = max(newest, entry_stamp.times)
     for name in directories:
         # O_NOFOLLOW fails closed if the directory was swapped for a symlink after listing.

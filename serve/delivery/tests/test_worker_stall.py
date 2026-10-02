@@ -664,6 +664,109 @@ def test_activity_during_observation_keeps_worker_claim(
         assert _owner_failure_code(state_root, "change-a", claim.attempt_id) == "worker-host-lost"
 
 
+def _inject_overwrite_after_walk(
+    monkeypatch: pytest.MonkeyPatch, target: Path, mtime: str
+) -> list[tuple[tuple[int, int], tuple[int, int]]]:
+    """Rewrite one already-scanned file in place with identical bytes as soon as the walk ends."""
+    content = target.read_bytes()
+    real_walk = change_workspace._worktree_tree_activity_ns
+    parents: list[tuple[tuple[int, int], tuple[int, int]]] = []
+
+    def walk(worktree: Path, ignored: frozenset[str], observed: dict) -> int:
+        newest = real_walk(worktree, ignored, observed)
+        before, parent = target.lstat(), target.parent.lstat()
+        target.write_bytes(content)
+        if mtime == "restored":
+            os.utime(target, ns=(before.st_atime_ns, before.st_mtime_ns))
+        after = target.parent.lstat()
+        parents.append(((parent.st_mtime_ns, parent.st_ctime_ns), (after.st_mtime_ns, after.st_ctime_ns)))
+        return newest
+
+    monkeypatch.setattr(change_workspace, "_worktree_tree_activity_ns", walk)
+    return parents
+
+
+def _overwrite_target(worktree: Path, tracked: Path, kind: str) -> Path:
+    if kind == "tracked":
+        _git(worktree, "ls-files", "--error-unmatch", tracked.name)
+        return tracked
+    (worktree / ".gitignore").write_text("*.log\n", encoding="utf-8")
+    target = worktree / "debug.log"
+    target.write_text("ignored output\n", encoding="utf-8")
+    _git(worktree, "check-ignore", "-q", target.name)
+    return target
+
+
+@pytest.mark.parametrize("mtime", ["restored", "new"])
+@pytest.mark.parametrize(
+    ("role", "entry", "kind"),
+    [
+        ("planner", "release", "tracked"),
+        ("planner", "release", "ignored"),
+        ("planner", "host-lost-sweep", "tracked"),
+        ("planner", "host-lost-sweep", "ignored"),
+        ("builder", "release", "tracked"),
+        ("builder", "release", "ignored"),
+        ("builder", "host-lost-sweep", "tracked"),
+        ("builder", "host-lost-sweep", "ignored"),
+    ],
+)
+def test_file_overwritten_after_activity_walk_keeps_worker_claim(  # noqa: PLR0913, PLR0917 - one scenario matrix.
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, role: str, entry: str, kind: str, mtime: str
+) -> None:
+    start = _real_now()
+    now = [_iso(start)]
+    if role == "planner":
+        application, runtimes, coordinator, state_root, probe = _stall_portfolio(
+            tmp_path, {"change-a": DeliveryStage.PLANNING}, now
+        )
+        claim = _acquire_planning_claim(application)
+        runtime, outcome_id = runtimes["change-a"], "OUT-001"
+        worktree = application._workspace_manager.show("change-a").worktree_path
+        tracked = worktree / "product.txt"
+    else:
+        application, runtime, coordinator, state_root, probe, launch, _head = _builder_with_workspace_changes(
+            tmp_path, now
+        )
+        claim, outcome_id, worktree = launch.claim, launch.outcome_id, launch.worktree_path
+        tracked = worktree / "committed.txt"
+    target = _overwrite_target(worktree, tracked, kind)
+    # Every write, including the injected overwrite, is older than the quiet period by the injected clock.
+    now[0] = _iso(start + timedelta(minutes=10))
+    parents = _inject_overwrite_after_walk(monkeypatch, target, mtime)
+    frontier_before = runtime.frontier_bytes()
+    ledger_before = runtime.retry_ledger().read()
+    coordination_before = coordinator.show("change-a")
+
+    if entry == "release":
+        with pytest.raises(DeliveryWorkerActiveError) as raised:
+            application.release_stuck_worker("change-a", outcome_id, claim.attempt_id, claim.claim_id)
+        assert raised.value.code == "ERR_DELIVERY_WORKER_ACTIVE"
+    else:
+        probe.states[_HOST] = "lost"
+        application.acquire_frontier_work()
+
+    assert parents
+    assert all(before == after for before, after in parents)
+    binding = runtime.show_binding(outcome_id)
+    assert binding.active_claim is not None
+    assert binding.active_claim.attempt_id == claim.attempt_id
+    assert binding.builder_handoff_context is None
+    assert runtime.frontier_bytes() == frontier_before
+    assert runtime.retry_ledger().read() == ledger_before
+    assert coordinator.show("change-a") == coordination_before
+    assert coordinator.show("change-a").builder_handoff is None
+    monkeypatch.undo()
+    if entry == "release":
+        application.release_stuck_worker("change-a", outcome_id, claim.attempt_id, claim.claim_id)
+        code = "worker-released-stuck"
+    else:
+        application.acquire_frontier_work()
+        code = "worker-host-lost"
+    assert runtime.show_binding(outcome_id).active_claim is None
+    assert _owner_failure_code(state_root, "change-a", claim.attempt_id) == code
+
+
 def test_host_lost_waits_for_deletion_inside_ignored_directory(tmp_path: Path) -> None:
     start = _real_now()
     now = [_iso(start)]
