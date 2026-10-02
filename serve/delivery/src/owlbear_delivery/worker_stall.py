@@ -220,8 +220,23 @@ def _is_idle_interactive_shell(process: ProcessView) -> bool:
     return _is_interactive_invocation(argv)
 
 
+def _worktree_cwd_blocks(process: ProcessView, roots: tuple[Path, ...]) -> bool:
+    """A process working in the worktree blocks unless it is a fully verified idle interactive shell."""
+    if process.name.lower().lstrip("-") not in SHELL_PROCESS_NAMES:
+        return True
+    try:
+        if any(_contains(path, roots) for path in process.open_files()):
+            return True
+        # Only an interactive prompt whose sole link is its working directory is idle.
+        return not _is_idle_interactive_shell(process)
+    except ProcessVanishedError:
+        raise
+    except ProcessObservationError:
+        return True
+
+
 def _blocks(process: ProcessView, roots: tuple[Path, ...]) -> bool:
-    """Judge readable evidence first; raise ``ProcessObservationError`` only when none already blocks."""
+    """Judge readable evidence first; raise ``ProcessObservationError`` only when no worktree link is established."""
     unreadable: ProcessObservationError | None = None
     cwd: Path | None = None
     try:
@@ -230,9 +245,8 @@ def _blocks(process: ProcessView, roots: tuple[Path, ...]) -> bool:
         raise
     except ProcessObservationError as exc:
         unreadable = exc
-    cwd_inside = cwd is not None and _contains(cwd, roots)
-    if cwd_inside and process.name.lower().lstrip("-") not in SHELL_PROCESS_NAMES:
-        return True
+    if cwd is not None and _contains(cwd, roots):
+        return _worktree_cwd_blocks(process, roots)
     try:
         if any(_contains(path, roots) for path in process.open_files()):
             return True
@@ -242,8 +256,7 @@ def _blocks(process: ProcessView, roots: tuple[Path, ...]) -> bool:
         unreadable = exc
     if unreadable is not None:
         raise unreadable
-    # Only an interactive prompt whose sole link is its working directory is idle.
-    return cwd_inside and not _is_idle_interactive_shell(process)
+    return False
 
 
 def _observation_error(exc: BaseException) -> ProcessObservationError:
@@ -358,7 +371,8 @@ def psutil_user_processes() -> Iterator[ProcessView]:
 def _may_be_worker_leftover(process: ProcessView, issued_after: datetime | None) -> bool:
     """A worker's leftover started after its claim was issued; unknown times cannot rule that out."""
     created = process.create_time
-    if issued_after is None or created is None:
+    # A naive time depends on the host's local zone, so it cannot rule out a leftover either.
+    if issued_after is None or issued_after.tzinfo is None or created is None:
         return True
     try:
         threshold = issued_after.timestamp() - _CREATE_TIME_TOLERANCE_SECONDS

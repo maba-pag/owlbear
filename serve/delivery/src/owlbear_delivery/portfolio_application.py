@@ -5464,9 +5464,10 @@ class PortfolioApplication:
     def _worker_settlement_guard(self, change_id: str, issued_at: str) -> _WorkerStall:
         """Refuse settlement while leftover processes use the worktree or it changed within the quiet period."""
         try:
-            issued_after: datetime | None = _timestamp(issued_at)
+            issued_after = _timestamp(issued_at)
         except (ValueError, OverflowError):
-            issued_after = None  # Unknown or unrepresentable issue time: every unreadable process blocks.
+            # Without the claim's issue time, no process can be ruled out as its leftover.
+            return _WorkerStall(eligible_at=None, quiet=False)
         try:
             roots = self._workspace_manager.worker_process_roots(change_id)
             before = self._workspace_manager.observe_worktree_activity(change_id)

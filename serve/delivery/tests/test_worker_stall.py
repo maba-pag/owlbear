@@ -572,7 +572,15 @@ _GUARD_CASES = {
     "shell-with-open-file": (_FakeProcess("fish", working=Path("W"), files=(Path("W/notes.txt"),)), True),
     "shell-without-terminal": (_FakeProcess("sh", working=Path("W"), terminal=False), True),
     "shell-terminal-unreadable-new": (_FakeProcess("zsh", working=Path("W"), terminal=None, create_time=_NEW), True),
-    "shell-terminal-unreadable-old": (_FakeProcess("zsh", working=Path("W"), terminal=None), False),
+    "shell-terminal-unreadable-old": (_FakeProcess("zsh", working=Path("W"), terminal=None), True),
+    "shell-files-unreadable-cwd-inside-old": (
+        _FakeProcess("sh", working=Path("W"), terminal=False, failure="files-unreadable", argv=("sh", "-c", "x")),
+        True,
+    ),
+    "idle-shell-files-unreadable-cwd-inside-old": (
+        _FakeProcess("zsh", working=Path("W"), failure="files-unreadable"),
+        True,
+    ),
     "unrelated": (_FakeProcess("Code Helper", working=Path("E"), files=(Path("E/x"),)), False),
     "vanished": (_FakeProcess("ghost", failure="vanished", create_time=_NEW), False),
     "unreadable-started-after-claim": (_FakeProcess("worker", failure="unreadable", create_time=_NEW), True),
@@ -915,31 +923,40 @@ def test_window_loss_scan_uses_the_issuer_record_issue_time(tmp_path: Path, reco
     )
     path.write_text(json.dumps(record), encoding="utf-8")
     probe.states[_HOST] = "gone"
-    probe.processes = ("node",)
+    probe.processes = () if recorded != "earlier" else ("node",)
     now[0] = _iso(start + timedelta(minutes=30))
     frontier_before = runtimes["change-a"].frontier_bytes()
+    ledger_before = runtimes["change-a"].retry_ledger().read()
 
     application.acquire_frontier_work()
 
-    assert probe.issued_after
-    assert set(probe.issued_after) == {issued if recorded == "earlier" else None}
+    if recorded == "earlier":
+        assert set(probe.issued_after) == {issued}
+    else:
+        # Unknown issue time fails closed before any scan, even when no process would block.
+        assert probe.issued_after == []
+        readiness = application.show_work_item_view("change-a", "outcome:OUT-001").readiness
+        assert readiness is not None
+        assert (readiness.reason_code, readiness.next_eligible_at) == ("worker-stall-wait", None)
     assert runtimes["change-a"].frontier_bytes() == frontier_before
+    assert runtimes["change-a"].retry_ledger().read() == ledger_before
 
 
 @pytest.mark.parametrize("recorded", sorted(_UNCONVERTIBLE_ISSUE_TIMES))
-def test_release_guard_treats_an_unconvertible_issue_time_as_unknown(tmp_path: Path, recorded: str) -> None:
+def test_release_guard_fails_closed_on_an_unconvertible_issue_time(tmp_path: Path, recorded: str) -> None:
     now = [_iso(_real_now())]
     application, _runtimes, _coordinator, _state_root, probe = _stall_portfolio(
         tmp_path, {"change-a": DeliveryStage.PLANNING}, now
     )
     _acquire_planning_claim(application)
-    probe.processes = ("node",)
+    probe.processes = ()
 
     with pytest.raises(DeliveryWorkerActiveError) as raised:
         application._require_quiet_worktree("change-a", _UNCONVERTIBLE_ISSUE_TIMES[recorded])
 
-    assert probe.issued_after == [None]
-    assert raised.value.active_processes == ("node",)
+    assert probe.issued_after == []
+    assert raised.value.active_processes == ()
+    assert raised.value.retry_after is None
 
 
 @pytest.mark.parametrize("entry", ["release", "window-lost-sweep"])
