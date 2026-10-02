@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from itertools import pairwise
 from pathlib import Path
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Annotated, Literal, TypedDict, Unpack, cast
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
@@ -54,7 +55,7 @@ from owlbear_delivery.runtime_transaction import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping
     from pathlib import Path
 
     from owlbear_delivery.change_workspace import (
@@ -1578,15 +1579,20 @@ type DeliveryTransition = Annotated[
 ]
 DELIVERY_TRANSITION_ADAPTER = TypeAdapter(DeliveryTransition)
 
+# Ended invocations without a typed inner request, keyed to their reserved retry failure codes.
+REQUESTLESS_WORKER_SETTLEMENT_FAILURE_CODES: Mapping[str, str] = MappingProxyType(
+    {"completed-timeout": "worker-timeout", "ended-without-result": "worker-ended-without-result"}
+)
+
 
 class DeliveryPlanningRetrySettlement(_DeliveryModel):
-    """Trusted Orchestrator report for one completed Planner retry invocation."""
+    """Trusted Orchestrator report for one ended Planner retry invocation."""
 
     change_id: str = Field(min_length=1, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
     outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
     claim_id: str = Field(min_length=1)
     attempt_id: str = Field(min_length=1)
-    disposition: Literal["normal-return", "completed-timeout"]
+    disposition: Literal["normal-return", "completed-timeout", "ended-without-result"]
     request: RetryDelivery | None = None
 
     @model_validator(mode="after")
@@ -1598,17 +1604,17 @@ class DeliveryPlanningRetrySettlement(_DeliveryModel):
             if self.request.outcome_id != self.outcome_id or self.request.claim_id != self.claim_id:
                 message = "Planner retry request does not match its settlement identity"
                 raise ValueError(message)
-            if self.request.failure_code == "worker-timeout":
-                message = "worker-timeout is reserved for completed Planner timeouts"
+            if self.request.failure_code in REQUESTLESS_WORKER_SETTLEMENT_FAILURE_CODES.values():
+                message = f"{self.request.failure_code} is reserved for request-less Planner settlements"
                 raise ValueError(message)
         elif self.request is not None:
-            message = "completed Planner timeout cannot carry an inner request"
+            message = f"{self.disposition} Planner settlement cannot carry an inner request"
             raise ValueError(message)
         return self
 
 
 class DeliveryBuilderInvocationSettlement(_DeliveryModel):
-    """Trusted Orchestrator report for one completed Builder invocation."""
+    """Trusted Orchestrator report for one ended Builder invocation."""
 
     change_id: str = Field(min_length=1, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
     outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
@@ -1616,7 +1622,7 @@ class DeliveryBuilderInvocationSettlement(_DeliveryModel):
     attempt_id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
     task_id: str = Field(min_length=1, max_length=256)
     expected_last_reviewed_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
-    disposition: Literal["normal-return", "completed-timeout"]
+    disposition: Literal["normal-return", "completed-timeout", "ended-without-result"]
     request: RetryDelivery | BlockDelivery | ReturnDelivery | None = None
 
     @model_validator(mode="after")
@@ -1624,7 +1630,7 @@ class DeliveryBuilderInvocationSettlement(_DeliveryModel):
         if self.disposition == "normal-return":
             self._validate_normal_return()
         elif self.request is not None:
-            message = "completed Builder timeout cannot carry an inner request"
+            message = f"{self.disposition} Builder settlement cannot carry an inner request"
             raise ValueError(message)
         return self
 
@@ -1637,8 +1643,8 @@ class DeliveryBuilderInvocationSettlement(_DeliveryModel):
             message = "Builder settlement request does not match its outcome and claim"
             raise ValueError(message)
         if isinstance(request, RetryDelivery):
-            if request.failure_code == "worker-timeout":
-                message = "worker-timeout is reserved for completed Builder timeouts"
+            if request.failure_code in REQUESTLESS_WORKER_SETTLEMENT_FAILURE_CODES.values():
+                message = f"{request.failure_code} is reserved for request-less Builder settlements"
                 raise ValueError(message)
             if request.attempt_id != self.attempt_id:
                 message = "Builder retry request does not match its attempt"
@@ -4471,7 +4477,7 @@ class DeliveryRuntime:
     def settle_planning_retry(
         self, envelope: DeliveryPlanningRetrySettlement, *, retry_observed_at: datetime | str | None = None
     ) -> OutcomeAuthorityBinding:
-        """Settle one exact, normally returned or completed-timeout Planner retry invocation."""
+        """Settle one exact normally returned, completed-timeout, or ended-without-result Planner invocation."""
         if not isinstance(envelope, DeliveryPlanningRetrySettlement):
             _conflict("Planning retry settlement requires a typed completed-invocation envelope")
         try:
@@ -4502,7 +4508,7 @@ class DeliveryRuntime:
             self._validate_retry_identity(binding, request, claim)
             failure_code = request.failure_code
         else:
-            failure_code = "worker-timeout"
+            failure_code = REQUESTLESS_WORKER_SETTLEMENT_FAILURE_CODES[envelope.disposition]
 
         result = binding.model_copy(
             update={
@@ -4953,9 +4959,10 @@ class DeliveryRuntime:
     ) -> tuple[OutcomeAuthorityBinding, bool, str]:
         request = envelope.request
         paused = isinstance(request, BlockDelivery)
+        requestless_code = REQUESTLESS_WORKER_SETTLEMENT_FAILURE_CODES.get(envelope.disposition)
         failure_code = (
-            "worker-timeout"
-            if envelope.disposition == "completed-timeout"
+            requestless_code
+            if requestless_code is not None
             else "worker-blocked"
             if paused
             else "worker-returned"
@@ -4963,7 +4970,7 @@ class DeliveryRuntime:
             else request.failure_code
         )
         exhausted = not paused and episode.total_attempts >= ledger.mechanical_repairs + 1
-        if envelope.disposition == "completed-timeout" or isinstance(request, RetryDelivery):
+        if requestless_code is not None or isinstance(request, RetryDelivery):
             result = self._builder_retry_settled_binding(binding, context, envelope, exhausted=exhausted)
         elif isinstance(request, BlockDelivery):
             result = self._builder_pause_settled_binding(binding, context, request)

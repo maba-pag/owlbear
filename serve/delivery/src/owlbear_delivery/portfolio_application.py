@@ -5183,7 +5183,7 @@ class PortfolioApplication:
         host_id: str | None = None,
         session_id: str | None = None,
     ) -> OutcomeAuthorityBinding:
-        """Settle one completed Planner or Builder invocation through its exact owner receipt."""
+        """Settle one ended Planner or Builder invocation through its exact owner receipt."""
         if not isinstance(settlement, (DeliveryPlanningRetrySettlement, DeliveryBuilderInvocationSettlement)):
             self._fail("worker settlement requires its typed completed-invocation envelope")
         change_id = settlement.change_id

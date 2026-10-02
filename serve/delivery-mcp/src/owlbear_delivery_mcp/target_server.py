@@ -1055,7 +1055,7 @@ class TargetMCPAdapter:
         return self._call(params, lambda: self._application.transition_delivery(params.change_id, params.transition))
 
     async def settle_worker_invocation(self, request: SettleWorkerInvocationRequest) -> dict[str, object]:
-        """Settle one exact completed Planner, Builder, or normally returned Finalizer invocation."""
+        """Settle one exact ended Planner or Builder invocation, or a normally returned Finalizer invocation."""
         params = self._validate(SettleWorkerInvocationParams, request)
         if isinstance(params.settlement, FinalizerSettlement):
             return self._call(

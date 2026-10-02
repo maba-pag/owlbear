@@ -31,6 +31,7 @@ from owlbear_delivery.delivery_contract_discovery import (
     discover_persisted_changes,
 )
 from owlbear_delivery.delivery_runtime import (
+    REQUESTLESS_WORKER_SETTLEMENT_FAILURE_CODES,
     BlockDelivery,
     DeliveryAcceptanceAttentionReason,
     DeliveryActiveClaim,
@@ -849,8 +850,8 @@ def _builder_handoff_receipt_matches_snapshot(
     """Bind one immutable Builder settlement to its published task authority and route."""
     envelope = receipt.envelope
     request = envelope.request
-    completed_timeout = envelope.disposition == "completed-timeout" and request is None
-    if completed_timeout:
+    requestless = envelope.disposition in REQUESTLESS_WORKER_SETTLEMENT_FAILURE_CODES and request is None
+    if requestless:
         request_matches = True
         expected_route = "same-task"
     elif isinstance(request, RetryDelivery):
@@ -883,7 +884,7 @@ def _builder_handoff_receipt_matches_snapshot(
             request_matches,
             context.route == expected_route,
             receipt.handoff_context == context,
-            envelope.disposition == "normal-return" or completed_timeout,
+            envelope.disposition == "normal-return" or requestless,
             envelope.change_id == snapshot.change_id,
             envelope.outcome_id == context.outcome_id,
             envelope.task_id == context.original_task_id,
@@ -1570,8 +1571,8 @@ def _builder_handoff_settled_binding(
         if receipt.result not in expected_results:
             _bootstrap_failure("local Builder return result is not the exact successor of its remote binding")
         return receipt.result
-    completed_timeout = envelope.disposition == "completed-timeout" and envelope.request is None
-    if not isinstance(envelope.request, RetryDelivery) and not completed_timeout:
+    requestless = envelope.disposition in REQUESTLESS_WORKER_SETTLEMENT_FAILURE_CODES and envelope.request is None
+    if not isinstance(envelope.request, RetryDelivery) and not requestless:
         _bootstrap_failure("local Builder handoff route is unsupported")
     expected_results = tuple(
         DeliveryRuntime._builder_retry_settled_binding(  # noqa: SLF001

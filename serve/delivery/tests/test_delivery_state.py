@@ -41,6 +41,7 @@ from owlbear_delivery import (
     DeliveryObservationReceipt,
     DeliveryOutcome,
     DeliveryPlanCandidate,
+    DeliveryPlanningRetrySettlement,
     DeliveryPlanScope,
     DeliveryRequest,
     DeliveryRequestKind,
@@ -2686,6 +2687,7 @@ def test_default_loader_rejects_unrecorded_repeated_planner_pause_on_builder_pla
         "refused",
         "settled",
         "completed-timeout",
+        "ended-without-result",
         "deferred",
         "forged-context",
         "missing-receipt",
@@ -2804,6 +2806,7 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
             attempt_id=launch.claim.attempt_id,
             failure_code="builder-failed",
         )
+        requestless = scenario in {"completed-timeout", "ended-without-result"}
         settlement = DeliveryBuilderInvocationSettlement(
             change_id=change_id,
             outcome_id=launch.outcome_id,
@@ -2811,8 +2814,8 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
             attempt_id=launch.claim.attempt_id,
             task_id=launch.task_id,
             expected_last_reviewed_commit=launch.last_reviewed_commit,
-            disposition="completed-timeout" if scenario == "completed-timeout" else "normal-return",
-            request=None if scenario == "completed-timeout" else retry,
+            disposition=scenario if requestless else "normal-return",
+            request=None if requestless else retry,
         )
         with patch.object(application, "_clock", return_value="1970-01-02T00:00:00Z"):
             settled = application.settle_worker_invocation(
@@ -2888,7 +2891,7 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
         (fresh / ".owlbear/delivery/runtime/changes" / change_id / "frontier.json").read_bytes(), strict=False
     )
     binding = next(item for item in persisted_frontier.bindings if item.outcome_id == "OUT-001")
-    if scenario in {"settled", "completed-timeout"}:
+    if scenario in {"settled", "completed-timeout", "ended-without-result"}:
         assert binding.active_claim is None
         assert binding.builder_handoff_context == handoff_context
         resumed = reloaded.acquire_frontier_work().launch_packages[0]
@@ -3133,6 +3136,109 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
         assert len(attention.detail) <= 512
         assert git_state_before is not None
         assert git_state_before == _workspace_git_state(fresh, launch.worktree_path)
+
+
+@pytest.mark.parametrize("disposition", ["completed-timeout", "ended-without-result"])
+def test_remote_state_bootstrap_preserves_requestless_planner_settlement(tmp_path: Path, disposition: str) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    change_id = "bootstrap-planner-settlement"
+    contract, intent, design = _contract(change_id)
+    state_root = tmp_path / "state"
+    package_store = DesignPackageStore(repository / ".owlbear/delivery/packages", repository)
+    package = package_store.create(change_id, intent, design)
+    package_store.publish_contract(
+        change_id,
+        package.package_id,
+        _canonical_payload(contract.model_dump(mode="json")),
+        lambda *_content: None,
+    )
+    package = package_store.read_verified(change_id)
+    coordinator = PortfolioCoordinator(state_root)
+    manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, "main")
+    coordination = manager.ensure(change_id)
+    frontier = DeliveryFrontier(
+        bindings=(
+            OutcomeAuthorityBinding(outcome_id="OUT-001", plan_scope_id="SCOPE-001", stage=DeliveryStage.PLANNING),
+        ),
+    )
+    frontier_path = state_root / "changes" / change_id / "frontier.json"
+    frontier_path.parent.mkdir(parents=True, exist_ok=True)
+    frontier_path.write_bytes(_canonical_payload(frontier.model_dump(mode="json")))
+    runtime = DeliveryRuntime(state_root, contract, workspace_manager=manager)
+    snapshot = manager.snapshot_design_package(
+        change_id,
+        package.package_id,
+        {
+            "authority.json": package.authority_bytes,
+            "design.md": package.design_bytes,
+            "intent.md": package.intent_bytes,
+            "manifest.json": package.manifest.canonical_bytes(),
+        },
+        "bootstrap-package",
+    )
+    _git(repository, "push", "origin", f"{snapshot.snapshot_head}:refs/heads/{coordination.branch}")
+    publisher = DeliveryStatePublisher(repository, remote=str(remote), state_branch="owlbear/delivery-state")
+    publisher.publish(
+        change_id=change_id,
+        package_id=package.package_id,
+        coordination=manager.show(change_id),
+        runtime=runtime,
+        admission=_admission(runtime, manager, change_id),
+        operation_id="bootstrap-state",
+        captured_at=datetime(2026, 8, 23, tzinfo=UTC),
+    )
+    fresh = tmp_path / "fresh"
+    _git(tmp_path, "clone", str(remote), str(fresh))
+    _git(fresh, "config", "url." + str(remote) + ".insteadOf", "https://github.com/example/project.git")
+    _git(fresh, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    config = DeliveryStartupConfig(
+        schema_version=2,
+        remote="origin",
+        target_branch="main",
+        github_repository="example/project",
+        delivery_state_branch="owlbear/delivery-state",
+    )
+    application = load_delivery_application(config, workspace_root=fresh)
+    launch = application.acquire_frontier_work().launch_packages[0]
+    assert launch.claim.worker_role is DeliveryWorkerRole.PLANNER
+    settlement = DeliveryPlanningRetrySettlement(
+        change_id=change_id,
+        outcome_id=launch.outcome_id,
+        claim_id=launch.claim.claim_id,
+        attempt_id=launch.claim.attempt_id,
+        disposition=disposition,
+    )
+    with patch.object(application, "_clock", return_value="1970-01-02T00:00:00Z"):
+        settled = application.settle_worker_invocation(
+            settlement,
+            host_id=launch.claim.owner_id,
+            session_id=launch.claim.process_id,
+        )
+    assert settled.active_claim is None
+
+    reloaded = load_delivery_application(config, workspace_root=fresh)
+
+    health = reloaded.delivery_health()
+    assert health.status.value == "healthy"
+    assert not any(item.change_id == change_id for item in health.diagnostics)
+    runtime_root = fresh / ".owlbear/delivery/runtime/changes" / change_id
+    persisted = DeliveryFrontier.model_validate_json((runtime_root / "frontier.json").read_bytes(), strict=False)
+    assert persisted.bindings[0].active_claim is None
+    owner_result = json.loads(
+        (runtime_root / "retry-ledger/owner-results" / f"{launch.claim.attempt_id}.json").read_bytes()
+    )
+    assert (
+        owner_result["failure_code"]
+        == {
+            "completed-timeout": "worker-timeout",
+            "ended-without-result": "worker-ended-without-result",
+        }[disposition]
+    )
+    resumed = reloaded.acquire_frontier_work().launch_packages[0]
+    assert resumed.claim.worker_role is DeliveryWorkerRole.PLANNER
+    assert resumed.outcome_id == launch.outcome_id
+    assert resumed.claim.attempt_id != launch.claim.attempt_id
+    assert load_delivery_application(config, workspace_root=fresh).delivery_health().status.value == "healthy"
 
 
 @pytest.mark.parametrize(

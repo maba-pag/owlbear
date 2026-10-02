@@ -2832,7 +2832,11 @@ def test_planning_decisions_suspend_retry_budget_across_restart(tmp_path: Path, 
 
 @pytest.mark.parametrize(
     ("disposition", "failure_code"),
-    [("normal-return", "worker-retry"), ("completed-timeout", "worker-timeout")],
+    [
+        ("normal-return", "worker-retry"),
+        ("completed-timeout", "worker-timeout"),
+        ("ended-without-result", "worker-ended-without-result"),
+    ],
 )
 def test_settled_planner_retries_exhaust_after_three_exact_attempts(
     tmp_path: Path,
@@ -4184,6 +4188,160 @@ def test_builder_retry_history_reaches_fresh_builder_and_exhaustion_diagnosis(tm
     exhausted = next(item for item in change.unresolved_outcomes if item.outcome_id == "OUT-001")
     assert exhausted.card.readiness is not None
     assert _builder_retry_history(exhausted.card.readiness.retry_history) == expected
+
+
+def _requestless_builder_settlement(launch, disposition: str) -> DeliveryBuilderInvocationSettlement:
+    return DeliveryBuilderInvocationSettlement(
+        change_id=launch.change_id,
+        outcome_id=launch.outcome_id,
+        claim_id=launch.claim.claim_id,
+        attempt_id=launch.claim.attempt_id,
+        task_id=launch.task_id,
+        expected_last_reviewed_commit=launch.last_reviewed_commit,
+        disposition=disposition,
+    )
+
+
+def test_builder_ended_without_result_reacquires_same_task_with_preserved_work_and_history(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtime, coordinator, state_root, first, branch_head, before_workspace, _settlement = (
+        _builder_retry_handoff_setup(tmp_path, now)
+    )
+    settlement = _requestless_builder_settlement(first, "ended-without-result")
+    frontier_before = runtime.frontier_bytes()
+    ledger_before = runtime.retry_ledger().read()
+    for host_id, session_id in (
+        ("foreign-host", first.claim.process_id),
+        (first.claim.owner_id, "foreign-session"),
+    ):
+        with pytest.raises(PortfolioApplicationError, match="host and session binding"):
+            application.settle_worker_invocation(settlement, host_id=host_id, session_id=session_id)
+        assert runtime.frontier_bytes() == frontier_before
+        assert runtime.retry_ledger().read() == ledger_before
+
+    settled = _settle_builder_handoff_attempt(application, first.claim, settlement)
+
+    assert settled.active_claim is None
+    assert settled.block is None
+    assert settled.builder_handoff_context is not None
+    assert settled.builder_handoff_context.route == "same-task"
+    assert settled.builder_handoff_context.branch_head == branch_head
+    assert _workspace_content_snapshot(first.worktree_path) == before_workspace
+    assert coordinator.show("change-a").builder_handoff is not None
+    owner_result_path = state_root / "changes/change-a/retry-ledger/owner-results" / f"{first.claim.attempt_id}.json"
+    assert json.loads(owner_result_path.read_bytes())["failure_code"] == "worker-ended-without-result"
+    assert _settle_builder_handoff_attempt(application, first.claim, settlement) == settled
+    waiting = application.acquire_change_action(_continuation_request(application, "change-a"))
+    assert waiting.launch is None
+    assert waiting.reason_code == "retry-backoff"
+    late_result = _task_result(
+        "RESULT-LATE-ENDED-BUILDER",
+        "change-a",
+        runtime.authority_digest,
+        runtime.show_binding(first.outcome_id).tasks[0],
+        branch_head,
+    )
+    with pytest.raises(DeliveryRuntimeConflictError):
+        runtime.publish_result(
+            PublishDeliveryResult(outcome_id=first.outcome_id, claim_id=first.claim.claim_id, result=late_result)
+        )
+
+    now[0] = "2026-08-04T01:00:00Z"
+    resumed_result = application.acquire_change_action(_continuation_request(application, "change-a"))
+    assert resumed_result.launch is not None, resumed_result
+    resumed = resumed_result.launch
+    assert resumed.claim.task_id == first.task_id
+    assert resumed.claim.attempt_id != first.claim.attempt_id
+    assert resumed.builder_handoff_context == settled.builder_handoff_context
+    assert _workspace_content_snapshot(resumed.worktree_path) == before_workspace
+    build_context = application.show_build_context(
+        resumed.change_id, resumed.outcome_id, resumed.claim.attempt_id, resumed.claim.claim_id
+    )
+    assert build_context.launch.builder_handoff_context == settled.builder_handoff_context
+    assert _builder_retry_history(build_context.prior_attempts) == [
+        (1, "original", "failed", "worker-ended-without-result")
+    ]
+    episode = runtime.retry_ledger().read().episodes[0]
+    assert episode.total_attempts == 2
+    assert episode.reset_count == 0
+    assert episode.attempt_ids == (first.claim.attempt_id, resumed.claim.attempt_id)
+
+
+@pytest.mark.parametrize(
+    ("dispositions", "expected_codes"),
+    [
+        (
+            ("ended-without-result", "ended-without-result", "ended-without-result"),
+            ("worker-ended-without-result",) * 3,
+        ),
+        (
+            ("completed-timeout", "ended-without-result", "normal-return"),
+            ("worker-timeout", "worker-ended-without-result", "builder-failed"),
+        ),
+    ],
+    ids=["three-crashes", "mixed"],
+)
+def test_ended_without_result_builder_attempts_share_one_exhausting_budget(
+    tmp_path: Path,
+    dispositions: tuple[str, ...],
+    expected_codes: tuple[str, ...],
+) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtime, _coordinator, _state_root, launch, _head, before_workspace, _settlement = (
+        _builder_retry_handoff_setup(tmp_path, now)
+    )
+    attempt_ids = []
+    for hour, disposition in enumerate(dispositions):
+        if hour:
+            now[0] = f"2026-08-04T{hour:02}:00:00Z"
+            acquired = application.acquire_change_action(_continuation_request(application, "change-a"))
+            assert acquired.launch is not None, acquired
+            launch = acquired.launch
+        attempt_ids.append(launch.claim.attempt_id)
+        if disposition == "normal-return":
+            settlement = DeliveryBuilderInvocationSettlement(
+                change_id=launch.change_id,
+                outcome_id=launch.outcome_id,
+                claim_id=launch.claim.claim_id,
+                attempt_id=launch.claim.attempt_id,
+                task_id=launch.task_id,
+                expected_last_reviewed_commit=launch.last_reviewed_commit,
+                disposition="normal-return",
+                request=RetryDelivery(
+                    action="retry",
+                    outcome_id=launch.outcome_id,
+                    claim_id=launch.claim.claim_id,
+                    attempt_id=launch.claim.attempt_id,
+                    abandoned_commit=_git(launch.worktree_path, "rev-parse", "HEAD"),
+                    failure_code="builder-failed",
+                ),
+            )
+        else:
+            settlement = _requestless_builder_settlement(launch, disposition)
+        _settle_builder_handoff_attempt(application, launch.claim, settlement)
+        assert _workspace_content_snapshot(launch.worktree_path) == before_workspace
+
+    binding = runtime.show_binding("OUT-001")
+    assert binding.block is not None
+    assert "three-attempt limit" in binding.block.reason
+    ledger = runtime.retry_ledger().read()
+    assert len(ledger.episodes) == 1
+    episode = ledger.episodes[0]
+    assert episode.total_attempts == 3
+    assert episode.reset_count == 0
+    assert episode.attempt_ids == tuple(attempt_ids)
+    assert episode.stop_code is not None
+    assert episode.stop_code.value == "retry-exhausted"
+    now[0] = "2026-08-04T05:00:00Z"
+    stopped = application.acquire_change_action(_continuation_request(application, "change-a"))
+    assert stopped.launch is None
+    view = application.show_work_item_view("change-a", "outcome:OUT-001")
+    assert view.readiness is not None
+    assert view.readiness.reason_code == "retry-exhausted"
+    assert view.readiness.executable is False
+    assert _builder_retry_history(view.readiness.retry_history) == [
+        (index + 1, "original" if index == 0 else "repair", "failed", code) for index, code in enumerate(expected_codes)
+    ]
 
 
 def test_exhausted_builder_return_to_planning_projects_read_only_diagnostic(tmp_path: Path) -> None:

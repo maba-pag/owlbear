@@ -2010,6 +2010,44 @@ async def test_registered_planner_retry_settlement_has_exact_client_contract(tmp
     assert runtimes["change-a"].active_claims() == ()
 
 
+@pytest.mark.asyncio
+async def test_registered_settlement_accepts_ended_without_result_only_without_request(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING})
+    launch = application.acquire_actions().launch_packages[0]
+    runtime = runtimes["change-a"]
+    settlement = {
+        "change_id": "change-a",
+        "outcome_id": "OUT-001",
+        "claim_id": launch.claim.claim_id,
+        "attempt_id": launch.claim.attempt_id,
+        "disposition": "ended-without-result",
+    }
+    with_request = {
+        **settlement,
+        "request": {"action": "retry", "outcome_id": "OUT-001", "claim_id": launch.claim.claim_id},
+    }
+    owner_result = state_root / "changes/change-a/retry-ledger/owner-results" / f"{launch.claim.attempt_id}.json"
+    before = (runtime.frontier_bytes(), runtime.retry_ledger().read())
+
+    async with Client(assemble_target_server(application)) as client:
+        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+        refused = await client.call_tool("settle_worker_invocation", {"settlement": with_request})
+        assert refused.is_error
+        assert (runtime.frontier_bytes(), runtime.retry_ledger().read()) == before
+        assert runtime.show_binding("OUT-001").active_claim == launch.claim
+        assert not owner_result.exists()
+        settled = await client.call_tool("settle_worker_invocation", {"settlement": settlement})
+
+    definitions = tools["settle_worker_invocation"].input_schema["$defs"]
+    for name in ("DeliveryPlanningRetrySettlement", "DeliveryBuilderInvocationSettlement"):
+        assert "ended-without-result" in definitions[name]["properties"]["disposition"]["enum"]
+        assert "request" not in definitions[name]["required"]
+    assert definitions["FinalizerSettlement"]["properties"]["disposition"]["const"] == "normal-return"
+    assert not settled.is_error
+    assert runtime.active_claims() == ()
+    assert json.loads(owner_result.read_bytes())["failure_code"] == "worker-ended-without-result"
+
+
 async def _acquire_registered_change_action(client: Any, change_id: str, capabilities: list[str]) -> Any:
     observed = await client.call_tool("get_change", {"change_id": change_id})
     assert not observed.is_error
