@@ -1,4 +1,4 @@
-"""Verify exact Ruff version parity across repository tooling and MegaLinter metadata."""
+"""Verify exact Ruff version parity across repository tooling and MegaLinter declarations."""
 
 from __future__ import annotations
 
@@ -169,7 +169,7 @@ def check_ruff_toolchain(
     ruff_executable: str = "ruff",
     megalinter_versions_loader: Callable[[str], object] | None = None,
 ) -> None:
-    """Raise when every maintained Ruff version and MegaLinter declaration are not identical."""
+    """Raise when repository Ruff declarations or MegaLinter declarations diverge."""
     standalone_version = _read_standalone_ruff_version(root)
     pre_commit_version = _read_pre_commit_ruff_version(root)
     image = load_megalinter_image(root / ".mega-linter.yml")
@@ -198,7 +198,7 @@ def check_ruff_toolchain(
     if len(set(versions.values())) != 1:
         details = ", ".join(f"{name}={version}" for name, version in versions.items())
         _raise_value_error(f"Ruff toolchain versions diverge: {details}")
-    print(f"Ruff toolchain versions aligned at {standalone_version}.")
+    print(f"Repository Ruff toolchain versions aligned at {standalone_version}.")
 
 
 def main() -> int:

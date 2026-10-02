@@ -6,6 +6,12 @@ name: Cockpit verification
     branches:
       - dev
     paths:
+      - "**/*.json"
+      - "**/*.jsonc"
+      - "**/.editorconfig"
+      - "**/.gitignore"
+      - ".mega-linter.yml"
+      - ".pre-commit-config.yaml"
       - "serve/cockpit/web/**"
       - "serve/cockpit/README.md"
       - ".github/scripts/check_node_runtime.py"
@@ -81,7 +87,9 @@ jobs:
           python3 ../../../.github/scripts/check_node_runtime.py \
             --version-file .nvmrc \
             --engines-file package.json \
-            --expected-version "${{ matrix.node }}"
+            --expected-version "${MATRIX_NODE}"
+        env:
+          MATRIX_NODE: ${{ matrix.node }}
 
       - name: Install locked Cockpit dependencies
         run: npm ci --engine-strict
@@ -94,9 +102,14 @@ jobs:
 
       - name: Check Cockpit sources
         run: |
-          npx eslint src e2e --max-warnings 0
-          npm run lint:css
+          npm run lint:biome:ci
           npm run lint:html
+
+      - name: Verify PDS Biome plugin
+        run: npm run test:biome-pds
+
+      - name: Verify bounded PDS asset synchronization
+        run: npm run test:sync-pds
 
       - name: Build production Cockpit
         run: npm run build

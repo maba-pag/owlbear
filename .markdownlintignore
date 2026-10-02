@@ -1,14 +1,11 @@
 # Bare markdownlint-cli ignore file used by MegaLinter and manual runs.
 # markdownlint-cli2 and VS Code use .markdownlint-cli2.jsonc instead.
-.owlbear/completed
 .owlbear/delivery/packages
 .owlbear/delivery/runtime
 .owlbear/doc-index.md
-.owlbear/legacy
 .owlbear/memory
 .owlbear/py-index.md
 .owlbear/research
-.owlbear/target
 .owlbear/ts-index.md
 .venv
 **/node_modules

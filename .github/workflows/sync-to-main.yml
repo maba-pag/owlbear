@@ -87,6 +87,7 @@ jobs:
         with:
           ref: dev
           fetch-depth: 0
+          persist-credentials: true
 
       - name: Resolve scopes
         run: |
@@ -468,7 +469,7 @@ jobs:
       - name: Diff preview
         run: |
           {
-            echo "### Diff preview — scopes: ${{ env.SCOPES }}"
+            echo "### Diff preview — scopes: ${SCOPES}"
             echo ""
             if [ "$NO_CHANGES" = "true" ]; then
               echo "No changes — selected scopes are already up to date."
@@ -545,14 +546,19 @@ jobs:
 
       - name: Job summary — failure
         if: ${{ always() && failure() }}
+        env:
+          SUMMARY_ACTOR: ${{ github.actor }}
         run: |
           {
+            summary_short_sha="${SHORT_SHA:-unknown}"
+            summary_date="${DATE:-unknown}"
+            summary_scopes="${SCOPES:-unknown}"
             echo "## Sync Failed"
             echo ""
-            echo "Failed for actor **${{ github.actor }}**"
-            echo "at SHA \`${{ env.SHORT_SHA || 'unknown' }}\` on ${{ env.DATE || 'unknown' }}."
+            echo "Failed for actor **${SUMMARY_ACTOR}**"
+            echo "at SHA \`${summary_short_sha}\` on ${summary_date}."
             echo ""
-            echo "Scopes: ${{ env.SCOPES || 'unknown' }}"
+            echo "Scopes: ${summary_scopes}"
             echo ""
             echo "Check the step logs above for details."
           } >> "$GITHUB_STEP_SUMMARY"
