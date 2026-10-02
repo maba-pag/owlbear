@@ -67,7 +67,7 @@ the superseded implementation; this revision controls ordinary returned worker t
 
 ### Current handoff
 
-**Native repair checkpoint: `608ea9a0472d0b71fa5baaf6d2883ff6d6777bcc`.** This is the
+**Native repair checkpoint: `3174857f1efb882bde5d24a08ac583a4b30e5dd7`.** This is the
 committed code checkpoint for the user-approved native Orchestrator settlement revision. Planner
 retries, Builder retry/request block/Planning or Design return, crashed Planner/Builder invocations
 (`ended-without-result`), and report-backed Finalizer failures
@@ -159,13 +159,24 @@ in-place file-overwrite race and an unestablished browser gate. All were repaire
 now passes. A Sol challenge of the option 1 revision found unreadable processes treated as absent,
 writes during the process scan, session-start release escaping single-Change scope, non-interactive
 shells exempted, diagnostics accepting records Delivery rejects and this stale record; all were
-repaired. A fresh cumulative challenge of the published head is required |
+repaired. A Sol challenge of `ef9a4450` then found command-running terminal shells still exempt,
+orphaned Delivery descendants still excluded, out-of-range issue-time offsets escaping containment
+and a diagnostics/model mismatch for oversized start times; `3174857f` repairs them, also treating
+standard-input shells (`-s`) as not idle. A fresh cumulative challenge of the published head is required |
 | Required CI | All four required workflows must succeed on the same exact published head. Their exact-head results belong on PR #326; no new CI result is claimed here. Older green runs are historical |
-| PR and documentation metadata | Route exact-publication review and CI results to PR #326. This record names code checkpoint `608ea9a0472d0b71fa5baaf6d2883ff6d6777bcc`, not the future SHA of this documentation update |
+| PR and documentation metadata | Route exact-publication review and CI results to PR #326. This record names code checkpoint `3174857f1efb882bde5d24a08ac583a4b30e5dd7`, not the future SHA of this documentation update |
 | User direction | Native Orchestrator settlement is explicitly approved; no host-design approval is needed. On 2026-10-02 the user directed that crashed Planner/Builder invocations settle as ended attempts and chose A + B for unreturned dispatches, then revised it as option 1 (issuing-window evidence, user question while the window lives, leftover-process and 30-second write guards). Design-return readmission is refused before authority mutation and its correction is separate D04 work |
 | Host and activation boundary | Orchestrator settles an exact normally returned invocation, an actually ended timeout, or an invocation that ended without a valid result, each only after owned mutating jobs are settled. The engine settles an unreturned dispatch only when its recorded issuing VS Code window process is gone or the user confirms the run stopped, no leftover process uses the worktree, and nothing was written there for 30 seconds. Elapsed time alone, transport failure, an MCP-server restart, a failed process scan and recent or mid-scan worktree activity keep custody; writes deep inside ignored trees are not observed. No merge or live activation is implied |
 
-**Current caller proof for `608ea9a0`:** on the committed content, the caller ran whole
+**Current caller proof for `3174857f`:** on the committed content, the hardening agent ran
+`test_worker_stall.py` (137, then 138 after the caller's `-s` case, including real pty-shell and
+orphaning checks), `test_portfolio_application.py` (556), `test_delivery_state.py` +
+`test_delivery_runtime.py` (210), tools, Delivery MCP and Cockpit work-item tests (705) and
+`test_delivery_diagnostics.py` (114); Ruff check and format passed over `serve/delivery` and
+`serve/tools`, and scoped commit hooks passed. Frontend and browser inputs are unchanged since
+`608ea9a0`.
+
+**Prior caller proof for `608ea9a0`:** on the committed content, the caller ran whole
 `test_delivery_state.py` + `test_delivery_runtime.py` (210), whole `test_portfolio_application.py`
 (556), whole `test_worker_stall.py` (112, including real-psutil window and leftover-process checks),
 the remaining Delivery tests (666), whole Delivery MCP, tools and Cockpit package tests (597; one
