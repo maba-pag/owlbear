@@ -3084,8 +3084,8 @@ class ChangeWorkspaceManager:
 
         Every non-ignored directory and entry counts, so nested deletions are visible. Git's collapsed
         ignored entries count only by their own times: writes deeper inside an ignored directory (tool
-        caches, environments) are not observed. Raises when any observation is unreadable, unsafe or
-        exceeds its bound; callers must treat that as active.
+        caches, environments) are not observed. Raises when any observation is unreadable, unsafe,
+        exceeds its bound or changes before the walk completes; callers must treat that as active.
         """
         coordination = self._coordinator.show(change_id)
         worktree = self._canonical_worktree_path(change_id, coordination.worktree_path)
@@ -3098,15 +3098,25 @@ class ChangeWorkspaceManager:
                 "status", "--porcelain=v1", "-z", "--ignored=matching", "--untracked-files=normal", cwd=worktree
             ).stdout
         )
-        newest = _worktree_tree_activity_ns(worktree, ignored)
+        started = time.time_ns()
+        observed: dict[Path, _ActivityStamp] = {}
+        newest = _worktree_tree_activity_ns(worktree, ignored, observed)
         managed_index = self._resolve_managed_index(worktree)
-        newest = max(newest, _activity_ns(managed_index.path), _activity_ns(managed_index.administration))
         roots = (managed_index.administration, managed_index.common_directory)
-        newest = max(newest, _activity_ns(self._resolved_git_path(worktree, "HEAD", roots)))
+        head = self._resolved_git_path(worktree, "HEAD", roots)
         reference = self._resolved_git_path(worktree, f"refs/heads/{coordination.branch}", roots, missing_ok=True)
         if reference is None:
             reference = self._resolved_git_path(worktree, "packed-refs", roots)
-        newest = max(newest, _activity_ns(reference))
+        for path in (managed_index.path, managed_index.administration, head, reference):
+            observed[path] = _activity_stamp(path.lstat())
+            newest = max(newest, observed[path].times)
+        # Directory times are read before their listing, so a change in any of them invalidates the walk.
+        for path, stamp in observed.items():
+            if _activity_stamp(path.lstat()) != stamp:
+                msg = "worktree changed while its activity was observed"
+                raise PreservationRejectedError(msg)
+        if newest >= started:
+            newest = max(newest, time.time_ns())
         return datetime.fromtimestamp(newest / 1_000_000_000, tz=UTC)
 
     def _resolved_git_path(
@@ -9185,10 +9195,22 @@ def _reject_symlink_ancestors(path: Path) -> None:
             raise PreservationRejectedError(msg)
 
 
-def _activity_ns(path: Path) -> int:
-    # ctime also covers tools that restore old modification times.
-    metadata = path.lstat()
-    return max(metadata.st_mtime_ns, metadata.st_ctime_ns)
+@dataclass(frozen=True)
+class _ActivityStamp:
+    identity: tuple[int, int, int]
+    modified: int
+    changed: int
+
+    @property
+    def times(self) -> int:
+        # ctime also covers tools that restore old modification times.
+        return max(self.modified, self.changed)
+
+
+def _activity_stamp(metadata: os.stat_result) -> _ActivityStamp:
+    return _ActivityStamp(
+        (metadata.st_dev, metadata.st_ino, stat.S_IFMT(metadata.st_mode)), metadata.st_mtime_ns, metadata.st_ctime_ns
+    )
 
 
 @dataclass
@@ -9203,19 +9225,29 @@ class _ActivityWalkBudget:
             raise PreservationRejectedError(msg)
 
 
-def _worktree_tree_activity_ns(worktree: Path, ignored: frozenset[str]) -> int:
-    """Return the newest mtime/ctime in the worktree, excluding its top-level `.git` and ignored subtrees."""
+def _worktree_tree_activity_ns(worktree: Path, ignored: frozenset[str], observed: dict[Path, _ActivityStamp]) -> int:
+    """Return the newest mtime/ctime in the worktree, excluding its top-level `.git` and ignored subtrees.
+
+    Records every directory's stamp in `observed` so the caller can revalidate them after the walk.
+    """
     budget = _ActivityWalkBudget(_ACTIVITY_WALK_MAX_ENTRIES, time.monotonic() + _ACTIVITY_WALK_SECONDS)
     descriptor = os.open(worktree, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
-        return _directory_activity_ns(descriptor, budget, "", ignored)
+        return _directory_activity_ns(descriptor, budget, (worktree, ""), ignored, observed)
     finally:
         os.close(descriptor)
 
 
-def _directory_activity_ns(descriptor: int, budget: _ActivityWalkBudget, prefix: str, ignored: frozenset[str]) -> int:
-    metadata = os.fstat(descriptor)
-    newest = max(metadata.st_mtime_ns, metadata.st_ctime_ns)
+def _directory_activity_ns(
+    descriptor: int,
+    budget: _ActivityWalkBudget,
+    location: tuple[Path, str],
+    ignored: frozenset[str],
+    observed: dict[Path, _ActivityStamp],
+) -> int:
+    directory, prefix = location
+    observed[directory] = _activity_stamp(os.fstat(descriptor))
+    newest = observed[directory].times
     directories: list[str] = []
     with os.scandir(descriptor) as entries:
         for entry in entries:
@@ -9226,13 +9258,18 @@ def _directory_activity_ns(descriptor: int, budget: _ActivityWalkBudget, prefix:
                 directories.append(entry.name)
                 continue
             # An ignored directory's own times still reveal entries created or removed directly inside it.
-            entry_metadata = entry.stat(follow_symlinks=False)
-            newest = max(newest, entry_metadata.st_mtime_ns, entry_metadata.st_ctime_ns)
+            entry_stamp = _activity_stamp(entry.stat(follow_symlinks=False))
+            if entry.is_dir(follow_symlinks=False):
+                observed[directory / entry.name] = entry_stamp
+            newest = max(newest, entry_stamp.times)
     for name in directories:
         # O_NOFOLLOW fails closed if the directory was swapped for a symlink after listing.
         child = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=descriptor)
         try:
-            newest = max(newest, _directory_activity_ns(child, budget, f"{prefix}{name}/", ignored))
+            newest = max(
+                newest,
+                _directory_activity_ns(child, budget, (directory / name, f"{prefix}{name}/"), ignored, observed),
+            )
         finally:
             os.close(child)
     return newest

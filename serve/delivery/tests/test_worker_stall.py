@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import itertools
 import json
 import os
@@ -574,6 +575,93 @@ def test_release_stuck_worker_refuses_when_activity_walk_exceeds_its_bound(
     monkeypatch.undo()
     settled = application.release_stuck_worker("change-a", "OUT-001", claim.attempt_id, claim.claim_id)
     assert settled.active_claim is None
+
+
+_CONCURRENT_ACTIVITY = ("root-add", "nested-add", "nested-remove", "directory-replaced")
+
+
+def _inject_concurrent_activity(
+    monkeypatch: pytest.MonkeyPatch, worktree: Path, scenario: str, displaced: Path
+) -> list[int]:
+    """Mutate one directory each time the activity walk finishes listing it, as a live worker would."""
+    (worktree / "work" / "nested").mkdir(parents=True)
+    (worktree / "work" / "nested" / "keep.txt").write_text("kept\n", encoding="utf-8")
+    target = worktree / {"root-add": "", "directory-replaced": "work"}.get(scenario, "work/nested")
+    fired: list[int] = []
+    real_scandir = os.scandir
+
+    def mutate() -> None:
+        index = len(fired)
+        fired.append(index)
+        if scenario == "directory-replaced":
+            (worktree / "work").rename(displaced / f"work-{index}")
+            (worktree / "work" / "nested").mkdir(parents=True)
+            (worktree / "work" / "nested" / "keep.txt").write_text("kept\n", encoding="utf-8")
+        elif scenario == "nested-remove":
+            transient = target / f"transient-{index}.txt"
+            transient.write_text("transient\n", encoding="utf-8")
+            transient.unlink()
+        else:
+            (target / f"late-{index}.txt").write_text("late\n", encoding="utf-8")
+
+    @contextlib.contextmanager
+    def listing(path: int):
+        with real_scandir(path) as entries:
+            yield entries
+        mutate()
+
+    def scandir(path="."):
+        if isinstance(path, int):
+            listed, current = os.fstat(path), target.lstat()
+            if (listed.st_dev, listed.st_ino) == (current.st_dev, current.st_ino):
+                return listing(path)
+        return real_scandir(path)
+
+    monkeypatch.setattr(os, "scandir", scandir)
+    return fired
+
+
+@pytest.mark.parametrize("scenario", _CONCURRENT_ACTIVITY)
+@pytest.mark.parametrize("entry", ["release", "host-lost-sweep"])
+def test_activity_during_observation_keeps_worker_claim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, scenario: str, entry: str
+) -> None:
+    start = _real_now()
+    now = [_iso(start)]
+    application, runtimes, _coordinator, state_root, probe = _stall_portfolio(
+        tmp_path, {"change-a": DeliveryStage.PLANNING}, now
+    )
+    claim = _acquire_planning_claim(application)
+    runtime = runtimes["change-a"]
+    worktree = application._workspace_manager.show("change-a").worktree_path
+    displaced = tmp_path / "displaced"
+    displaced.mkdir()
+    # Every write is older than the quiet period by the injected clock; only its timing during the walk is live.
+    now[0] = _iso(start + timedelta(minutes=10))
+    fired = _inject_concurrent_activity(monkeypatch, worktree, scenario, displaced)
+    frontier_before = runtime.frontier_bytes()
+    ledger_before = runtime.retry_ledger().read()
+
+    if entry == "release":
+        with pytest.raises(DeliveryWorkerActiveError) as raised:
+            application.release_stuck_worker("change-a", "OUT-001", claim.attempt_id, claim.claim_id)
+        assert raised.value.code == "ERR_DELIVERY_WORKER_ACTIVE"
+    else:
+        probe.states[_HOST] = "lost"
+        application.acquire_frontier_work()
+
+    assert fired
+    assert runtime.show_binding("OUT-001").active_claim is not None
+    assert runtime.frontier_bytes() == frontier_before
+    assert runtime.retry_ledger().read() == ledger_before
+    monkeypatch.undo()
+    if entry == "release":
+        settled = application.release_stuck_worker("change-a", "OUT-001", claim.attempt_id, claim.claim_id)
+        assert settled.active_claim is None
+    else:
+        application.acquire_frontier_work()
+        assert runtime.show_binding("OUT-001").active_claim is None
+        assert _owner_failure_code(state_root, "change-a", claim.attempt_id) == "worker-host-lost"
 
 
 def test_host_lost_waits_for_deletion_inside_ignored_directory(tmp_path: Path) -> None:
