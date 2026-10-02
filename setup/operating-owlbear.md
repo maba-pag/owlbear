@@ -219,7 +219,9 @@ Worker transitions keep correction finite and typed:
 | Local implementation defect | Builder creates a bounded follow-up commit and requests fresh exact-commit review | Continue the same Build claim only after a fresh pass |
 | Planning-stage user decision or action | Planning worker returns `block` with an embedded request; the owner records a durable paused result | Only that paused reservation is settled, without counting it as a failure or erasing earlier failures. Answer the request in Cockpit before work resumes; fresh context carries the structured resolution, and exact result replay does not charge another attempt |
 | Requestless condition is satisfied | User clears the block in Cockpit | Engine recomputes eligibility |
-| Worker returns `retry` | Orchestrator settles the exact ended invocation and launch identity | Preserve prior task work, staging and commits. A fresh claim reacquires the same task after backoff. Three total failed attempts, including completed timeouts, exhaust the episode; IDs, sessions, error prose and clearing a block do not renew it |
+| Worker returns `retry` | Settle exact invocation | Preserve work; same task after backoff |
+| Planner/Builder no-result | `ended-without-result` after return + settled jobs | Preserve; same task after backoff |
+| Orchestrator/VS Code died mid-run | Hold; no settle/recover/replace | No host release; no user commands |
 | Planning-stage premise failed | Planning worker returns `return` with evidence, target and source boundary | Runtime persists typed successor context; Design reopen is currently manual through `/design` |
 | Implementation Builder requests `block` or `return` | Orchestrator settles the exact ended invocation, preserving work and completed results | Genuine request-bearing block settles the pause and gates reacquisition until answered. Planning return permits lineage-preserving replan; Design return supplies complete Designer attention, not automatic revision/admission. Raw unsupervised transitions remain refused |
 | Retry episode is exhausted | Responsible agent receives bounded read-only diagnosis with the failure history | Nonterminal blocking prevents automatic redispatch; no fabricated user request, clear-block reset or fresh allowance is offered |
@@ -228,13 +230,24 @@ Worker transitions keep correction finite and typed:
 | Claim recovery is requested | User requests recovery of the exact claim in Cockpit | The current runtime refuses with `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED`; the claim, worktree, and capacity stay held. Timeout and caller confirmation are not evidence, and this version has no successful claim-release path |
 | Earlier valid stage is required | User selects an invariant-checked backward move in Cockpit | Runtime resets only the selected outcome and its affected successors |
 
-Recovery requests are not proof. Do not infer worker closure from a timeout or caller confirmation.
-Unknown-worker recovery still refuses without supported exclusion and retains custody. Native
-ended-invocation settlement is trusted workflow authority, not OS-enforced exclusion. An actually
-completed timeout may settle; elapsed time, missing/malformed results, disconnects and possibly
-running work may not. Request answers, requestless unblock, claim-recovery requests, backward movement, and
-retained Integration attention remain user-owned Cockpit controls rather than agent MCP operations.
-Those controls cannot turn a refused Builder diagnostic into an actionable request or transition.
+Recovery requests and `confirmed_lost` are not proof. A completed timeout or Planner/Builder
+`ended-without-result` settlement requires Orchestrator to observe the dispatch return and all owned
+mutating terminals and asynchronous jobs settled; elapsed time alone does not qualify. The latter
+records the reserved `worker-ended-without-result` failure, counts as a failed attempt, and preserves
+worktree bytes, staging, commits, and refs. After backoff, a fresh same-task claim is eligible;
+Builder triages from fresh Build context and `prior_attempts`. Native settlement is trusted workflow
+authority, not OS-enforced exclusion.
+Normal retries, completed timeouts, and no-result failures share the same three-attempt episode.
+Changing IDs, sessions, error prose, or clearing a block does not renew it.
+
+An unreturned dispatch (including Orchestrator/VS Code death or restart, disconnected transport, or
+a cancelled wait), or any owned mutator/job that may still run, stays contained: do not settle, call
+`recover_claim`, or dispatch a replacement. This version has no supported host-owned exclusion path
+for that state; do not suggest user Git or process commands. Finalizer settlement remains
+report-backed; a Finalizer that ends without a report stays contained. Request answers, requestless
+unblock, claim-recovery requests, backward movement, and retained Integration attention remain
+user-owned Cockpit controls rather than agent MCP operations. Those controls cannot turn a refused
+Builder diagnostic into an actionable request or transition.
 
 Corroborated passive Builder handoff and report-backed Finalizer attention release live execution
 capacity while preserving their mutation fences. Unknown/lost worker claims and uncertain engine
@@ -295,8 +308,10 @@ of receipt-backed history.
 /ideate -> /design -> explicit admission -> /orchestrate -> /finalize-change <change-id>
 Specification: read/revise -> checkpoint -> derive -> validate -> approve/admit
 Delivery: acquire -> plan/build -> publish -> worker transition
-Correction: exact ended invocation -> native settlement -> preserved same-task retry | request answer gate | Planning/Design return
-Containment: unknown/live invocation -> custody retained; exhausted episode -> agent-owned read-only diagnosis
+Correction: returned end/no-result -> settlement -> same-task retry after backoff
+  | request answer gate | Planning/Design return
+Containment: unreturned/live invocation -> custody held; no user release command
+  | exhausted episode -> agent-owned read-only diagnosis
 Publication: finalize-change -> checkpoint -> draft PR -> finalized head -> ready PR
 Acceptance: user merges PR -> observe merged evidence -> completed lookup
 ```

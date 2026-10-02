@@ -62,8 +62,8 @@ conversation or request summary.
 
 Before routing a blocker: choose among authority-equivalent planning alternatives; use a request for
 an expressly stakeholder-selectable choice or external action; use `return` for missing,
-contradictory, or observably ambiguous Design authority; a local or transient failure may return the
-schema-valid `retry` mapping, but the runtime refusal above keeps the active claim occupied.
+contradictory, or observably ambiguous Design authority; a local or transient failure returns the
+schema-valid `retry` mapping, which Orchestrator settles as described above.
 
 When one bounded request blocks planning, create no side record. Return a
 `BlockDelivery` containing reason, unblock condition, expected evidence, locators, and one embedded

@@ -48,7 +48,7 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 | designer-challenger | GPT-6.1 Sol (copilot) | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design` | None | `PreToolUse`: deny writes except scratch |
 | planner | Claude Opus 5.5 (copilot) | `w-frontier-planning` | planner-challenger, Explore | `PreToolUse`: deny writes except scratch; terminal read-only; publishes advisory-reviewed task chains and returns worker-owned transitions |
 | planner-challenger | GPT-6.1 Sol (copilot) | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | None | `PreToolUse`: deny writes except scratch |
-| orchestrator | GPT-6 Luna (copilot) | `w-orchestration` | planner, builder, finalizer, repairer, memory-curator, Explore | Reports and acquires portfolio actions through the grouped Change listing and acquire-actions facade, inspects bounded Delivery health when acquisition supplies a hint, dispatches task claims, settles normally returned Planner retries, Builder retry/block/Planning-or-Design-return outcomes, and report-backed normal Finalizer failures through `settle_worker_invocation`, forwards only other supported task transitions unchanged, routes engine-authored Change repair proposals to Repairer, reports `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` for unsupported claim release while leaving custody retained, runs memory housekeeping on cycle 3 and every tenth completed acquisition cycle thereafter, and reports typed Integration attention; no repository write tools |
+| orchestrator | GPT-6 Luna (copilot) | `w-orchestration` | see below | Planner/Builder: `ended-without-result`. |
 | repairer | GPT-6 Luna | `h-decision-requests` | None | One exact Change view and one bounded answer/repair interaction; high-level Delivery tools only, no repository or worker authority |
 | builder | GPT-6 Luna | `w-packet-building`, `r-workspace-governance`, `h-codebase-orientation` | build-reviewer | Assigned Change worktree only; successful Build uses the claim-bound submit-result facade; normally returned retry/block/Planning-or-Design-return transitions are settled by Orchestrator, while other supported transitions are forwarded; `SessionStart`: repository context; `PostToolUse`: lint changed files |
 | build-reviewer | GPT-6.1 Sol (copilot) | `r-challenger-protocol`, `h-codebase-orientation` | None | Exact-commit task-result or finalization review with read-only Git; `PreToolUse`: deny writes except scratch; terminal read-only |
@@ -60,6 +60,11 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 | Explore (built-in) | default | None declared by OwlBear | None | VS Code built-in delegate; no OwlBear-specific model override or hook |
 
 Tool allowlists remain in agent frontmatter; they are not duplicated here.
+
+Orchestrator acquires and dispatches work, then forwards ordinary transitions and routes typed
+attention and admitted Change repair proposals. It runs periodic memory curation and has no repository
+write tools. Returned Planner/Builder no-results use `ended-without-result` only after dispatch return
+and owned mutators settle; unreturned work stays contained. Finalizer remains report-backed.
 
 ## Prompt Entry Map
 
@@ -137,13 +142,15 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 | designer-challenger | designer | Native admission lacks required repository-grounded entity challenge evidence |
 | planner | orchestrator | An acquired Planning launch cannot produce a published task chain and worker-owned transition |
 | planner-challenger | planner | A proposed Delivery task chain cannot receive independent advisory evidence |
-| builder | orchestrator | An acquired Build launch cannot produce its exact-commit result or transition; unsupported release after dispatch failure reports `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED`, leaving custody retained until a verified recovery receipt settles the owner |
+| builder | orchestrator | Settled no-result preserves same-task work; unreturned/live work stays held |
 | finalizer | orchestrator | An issued finalization launch is dispatched intact; normal failures settle only with its actual stored report and issued identities, while success is recorded without another API call; if the capability is unavailable, the orchestrator reports the native `/finalize-change <change_id>` entry instead |
 | repairer | orchestrator | A Change-specific engine-authored repair proposal cannot receive its bounded user interaction |
 | build-reviewer | builder | An exact-commit task result cannot receive advisory pass or finding evidence |
 | build-reviewer | finalizer | An exact finalization proof cannot receive advisory pass or finding evidence |
 | memory-curator | orchestrator | Scheduled memory housekeeping is unavailable; the failure is reported and does not stop independent Delivery acquisition |
 | Explore | designer, planner, orchestrator | Broad read-only orientation must be performed by the caller or omitted |
+
+Eligible exact-recovery refusals report `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED`, leaving custody retained.
 
 The agent validator enforces ND3 metadata and frontmatter-to-`<agents>` alignment; see
 `h-agent-structure` for the nesting rules.

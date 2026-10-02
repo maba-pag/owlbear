@@ -13,9 +13,11 @@ route.
 
 ## Step 0 - Validate Launch, Context, And Custody
 
-A normal Builder settlement preserves the managed worktree; a later same-task claim may therefore
-start dirty and must use fresh `builder_handoff_context` and Build context to triage the exact
-predecessor state. This is distinct from dispatch failure, which retains claim custody.
+A normal Builder settlement preserves the managed worktree. An `ended-without-result` settlement
+does too; the next same-task Builder may start with predecessor work and must triage it before edits.
+Use fresh `builder_handoff_context`, Build context, and its `prior_attempts` projection, including
+when the predecessor crashed or ended without returning a transition. An unreturned dispatch or
+unsettled owned mutator remains contained and does not permit a replacement claim.
 
 Require one serialized `DeliveryLaunchPackage` whose policy and claim roles are `builder`, whose
 task IDs match, and whose writer identity matches the claim attempt, claim, owner, and process. Call
@@ -45,8 +47,10 @@ unavailable, return `dispatch_failure` instead of inferring the result. Delegate
 available for ordinary read-only proof after custody is established.
 
 Do not infer malformed identity or edit under recovery attention. A structurally valid claim that
-cannot establish fresh Build context or custody returns this non-transition result to Orchestrator
-for fail-closed claim recovery; it does not fabricate a lifecycle decision or mutate a checkout:
+cannot establish fresh Build context or custody returns this non-transition result to Orchestrator,
+not a fabricated lifecycle decision or a local checkout mutation. Orchestrator settles a returned
+`dispatch_failure` as `ended-without-result` only after the dispatch call returned and its owned
+mutating work is settled; otherwise custody remains contained:
 
 ```yaml
 kind: dispatch_failure
@@ -60,13 +64,12 @@ reason: <recorded prerequisite failure>
 
 ### Triage An Unclean Worktree
 
-A Builder retry launch may include preserved dirty or staged work from its recorded predecessor.
-If a Builder dispatch fails or ends without a valid transition,
-Orchestrator may request exact `recover_claim`; the current runtime refuses with
-`ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED`, leaves the claim and worktree unchanged, and reports the
-missing host-owned exclusion evidence. Delivery does not preserve, clean, or release the worktree
-automatically. Do not ask the user to classify stale files or perform Git recovery. A recovery
-refusal is retained custody, not an invitation to invent a manual cleanup route.
+A same-task Builder claim may start with dirty, staged, or committed predecessor work, including
+work left by a `dispatch_failure` or a crash without a transition. An `ended-without-result` receipt
+preserves that material and records the failed attempt; fresh Build context supplies `prior_attempts`.
+The new Builder must inspect and triage this state under the rules below before editing. Orchestrator
+does not clean the worktree or ask the user to do Git recovery. A dispatch that has not returned or
+whose owned mutator may still run remains contained and does not authorize this handoff.
 
 Inspect the assigned worktree before editing with `git status --short`, `git diff`,
 `git diff --cached`, and `git ls-files --others --exclude-standard`. Compare every changed path and
@@ -91,9 +94,13 @@ launch identity.
   bytes and return an exact `RetryDelivery` with `failure_code: unsafe-worktree`. Orchestrator
   settles the normally ended attempt under the same bounded budget; repeated failure becomes
   agent-owned attention, not permission to discard the material.
-- **Unknown custody:** If current branch, HEAD or writer custody cannot be established, or recovery
-  attention identifies uncertain execution, return the claim-bound `dispatch_failure` above.
-  Orchestrator preserves the unknown execution; no replacement is authorized.
+  Keep foreign, private, or ambiguous material intact; name affected paths and attribution gaps
+  without exposing private contents.
+- **Unknown custody:** If current branch, HEAD, or writer custody cannot be established, or fresh
+  context shows the predecessor may still be active, do not edit, adopt, or discard. Return the
+  claim-bound `dispatch_failure` above; Orchestrator settles the returned attempt only after the call
+  returned and owned work settled. An unreturned dispatch or live job remains contained. A settled
+  `ended-without-result` receipt permits this same-task claim to triage, not automatic adoption.
 
 Before returning `retry`, `return`, or `block`, bind any required commit field to the exact current
 branch HEAD and preserve the launch attempt identity. A successful implementation result still

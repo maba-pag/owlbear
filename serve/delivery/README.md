@@ -31,6 +31,11 @@ The main public areas are:
 | Completed history | Receipt-backed completed Change projections plus read-only Git-backed historical package search |
 | Integration attention | Typed Integration attention and exact repair-claim recovery remain current public operations |
 
+Planner/Builder settlements cover normal outcomes, completed timeouts, and
+`ended-without-result` after the dispatch has returned and owned mutating work is settled. The latter
+counts as a failed attempt and preserves work for same-task retry after backoff; unreturned calls and
+possibly running jobs retain custody. Finalizer settlement remains report-backed.
+
 Assembly is not a live Delivery stage or public Change authority. Historical runtime captures may
 still contain reducible Assembly metadata, and legacy completed-history records retain their
 historical schema for validation. New Changes use sequential Planning and Build outcomes directly.

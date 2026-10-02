@@ -71,11 +71,15 @@ and retains a report without creating finalization proof or changing worker cust
 
 `settle_worker_invocation` accepts strict typed Planner, Builder or Finalizer settlement for an exact
 invocation that the native Orchestrator observed ending. Planner/Builder identity is supplied by the
-issued launch context and host/session envelope; Finalizer identity is in its typed settlement.
-Returned retries preserve work and charge the same bounded episode. Builder request pauses and
-Planning/Design returns preserve their evidence and gate fresh work appropriately. Report-backed
-Finalizer failure becomes passive attention, not successful proof. Unknown execution cannot be
-released through this route; neither a timer alone nor transport failure attests completion.
+issued launch context and host/session envelope; Finalizer identity remains in its report-backed
+typed settlement. In addition to normal outcomes and completed timeouts, an ended Planner/Builder
+dispatch without a valid result uses `ended-without-result` only after the dispatch returned and its
+owned mutating terminals and asynchronous jobs are settled. It records `worker-ended-without-result`,
+preserves work, and charges the same bounded episode; the same task becomes eligible after backoff.
+Builder triages preserved work from fresh Build context and `prior_attempts`. An unreturned,
+disconnected or cancelled dispatch, or possibly running owned work, remains contained; it cannot be
+settled, recovered, or replaced on caller confirmation. Report-backed Finalizer failure remains
+passive attention, not successful proof; a Finalizer that ends without a report remains contained.
 
 ## Configuration
 

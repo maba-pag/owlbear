@@ -41,12 +41,14 @@ without behavior change).
   committing. Do not infer an ownership conflict from a dirty path, file timestamp, or invocation
   boundary alone. If a concrete hunk conflicts with the task or cannot be safely attributed, name that
   path and hunk in the containment reason instead of describing the whole task-owned diff as mixed.
-- Until a verified recovery receipt releases the exact claim after an unknown or failed dispatch, do
-  not adopt its uncommitted changes into a later invocation. Retain them and report the missing
-  host-owned exclusion evidence; a timeout or caller assertion does not grant custody. A normally
-  settled same-task Builder handoff is different: with its exact settlement receipt and fresh
-  `builder_handoff_context`, the next Builder may triage and adopt compatible task work under
-  `w-packet-building`; foreign or ambiguous content stays intact.
+- Until a verified settlement or supported recovery receipt closes the exact claim, do not adopt its
+  uncommitted changes into a later invocation. A timeout, `confirmed_lost`, or returned
+  `dispatch_failure` alone does not grant custody. With an exact normal-return or
+  `ended-without-result` settlement receipt and fresh `builder_handoff_context` and Build context,
+  the next same-task Builder may triage under `w-packet-building` using `prior_attempts`; adopt only
+  compatible task work and discard only attributable, explicitly scoped disposable work. Foreign,
+  private, or ambiguous content stays intact and is named. Unknown or contained invocations still
+  forbid adoption: an unreturned dispatch or possibly running mutating job remains held.
 - Pass explicit file paths to `commit-owned`; never pass `.`, a Delivery authority/state root, or
   another broad directory. The task's maintained surfaces bound eligible implementation paths.
 - Builder calls `submit_result` only after the scoped commit exists, its path set equals the task-owned

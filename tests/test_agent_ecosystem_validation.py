@@ -913,6 +913,11 @@ def test_worker_settlement_guidance_matches_native_contract() -> None:
     packet = " ".join((_SKILLS_ROOT / "w-packet-building/SKILL.md").read_text(encoding="utf-8").split())
     planning = " ".join((_SKILLS_ROOT / "w-frontier-planning/SKILL.md").read_text(encoding="utf-8").split())
     orchestration = " ".join((_SKILLS_ROOT / "w-orchestration/SKILL.md").read_text(encoding="utf-8").split())
+    dispatch = orchestration[
+        orchestration.index("## Step 2 - Dispatch Or Recover Each Launch") : orchestration.index(
+            "## Step 3 - Route One Completed Worker Result"
+        )
+    ]
     attention = " ".join(
         (_SKILLS_ROOT / "w-delivery-attention-resolution/SKILL.md").read_text(encoding="utf-8").split()
     )
@@ -939,6 +944,30 @@ def test_worker_settlement_guidance_matches_native_contract() -> None:
     assert "settle_worker_invocation" in orchestration
     assert "DeliveryPlanningRetrySettlement" in orchestration
     assert "DeliveryBuilderInvocationSettlement" in orchestration
+    assert all(
+        phrase in content
+        for content, phrase in (
+            (
+                dispatch,
+                (
+                    "Treat `dispatch_failure` as a no-result outcome; settle it with "
+                    "`settle_worker_invocation` and `disposition: ended-without-result`"
+                ),
+            ),
+            (dispatch, "Orchestrator observes that the dispatch call returned"),
+            (dispatch, "all owned mutating terminals and asynchronous jobs are settled"),
+            (dispatch, "dispatch call that has not returned"),
+            (dispatch, "Orchestrator or VS Code death/restart mid-run"),
+            (dispatch, "disconnected transport"),
+            (dispatch, "cancelled wait"),
+            (dispatch, "any owned mutating terminal or asynchronous job that may still be running"),
+            (dispatch, "do not settle, call `recover_claim`, or dispatch a replacement"),
+            (dispatch, "`confirmed_lost` is never evidence"),
+            (orchestration, "ended-without-result"),
+            (packet, "predecessor crashed or ended without returning a transition"),
+            (packet, "`prior_attempts`"),
+        )
+    )
     assert all(
         fragment in orchestration
         for fragment in (
@@ -973,11 +1002,13 @@ def test_worker_settlement_guidance_matches_native_contract() -> None:
     assert "ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED" in wiring
     assert "leaving custody retained" in wiring
     assert "During exact-claim recovery after a crash or unstructured worker return" not in workspace_governance
-    assert (
-        "Until a verified recovery receipt releases the exact claim after an unknown or failed dispatch"
-        in workspace_governance
+    assert all(
+        phrase in workspace_governance
+        for phrase in (
+            "Unknown or contained invocations still forbid adoption",
+            "`ended-without-result` settlement receipt and fresh `builder_handoff_context` and Build context",
+        )
     )
-    assert "exact settlement receipt and fresh `builder_handoff_context`" in workspace_governance
 
 
 def test_memory_audit_rescoping_requires_corroborated_agent_names() -> None:

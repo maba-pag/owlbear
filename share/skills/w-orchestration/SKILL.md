@@ -98,14 +98,21 @@ report the engine-observed state or unknown outcome without retrying. Never call
 settlement operation or forward a Finalizer result to
 `transition_delivery`.
 
-Step 2's `recover_claim` route does not apply to a continuation dispatch. Continuation and
-finalization custody is engine-held, and `recover_claim` rejects it because caller confirmation is
-insufficient for that custody. When a continuation dispatch fails before returning a structurally
-valid result, or returns an unknown, malformed, or identity-mismatched result, stop this continuation
-session bounded: report the launch's original `change_id`, `outcome_id`, `attempt_id`, and `claim_id`
-or the issued `attempt.writer.attempt_id`, together with the exact failure diagnostics. Do not call
-`recover_claim`, do not infer that the worker terminated, do not acquire a replacement action, and do
-not dispatch a substitute worker for that same custody.
+Continuation and finalization custody is engine-held; caller confirmation cannot release it through
+`recover_claim`. For Planner or Builder, a returned dispatch error, empty or `no response` result,
+malformed or schema-invalid output, identity mismatch, or `kind: dispatch_failure` uses the
+`ended-without-result` settlement in Step 3 only after the dispatch call has returned and its owned
+mutating terminals and asynchronous jobs are settled. Use the acquired launch identities, plus the
+exact continuation `owner_id` and `process_id` as outer `host_id` and `session_id`; discard mismatched
+returned identity values. After settlement, re-read `get_change`, report the exact receipt, and do not
+dispatch a replacement in the same continuation cycle; a later fresh acquisition follows engine
+backoff.
+
+If the dispatch call has not returned (including Orchestrator or VS Code death/restart mid-run,
+disconnected transport, or a cancelled wait), or any owned mutating terminal or asynchronous job may
+still be running, retain custody: do not settle, call `recover_claim`, acquire a replacement action,
+or redispatch. `confirmed_lost` is never evidence. Finalizer's no-report/malformed-result behavior
+remains as stated above: retain custody without settlement or recovery.
 
 ### Continuation Dispositions
 
@@ -172,24 +179,30 @@ Process `launch_packages` in returned order. For worker role `planner` or `build
 agent's frontmatter owns its model. Do not substitute a role, agent, reviewer, worktree, branch, or
 source head.
 
-If Builder returns `kind: dispatch_failure`, require its change, outcome, attempt, and claim IDs to
-equal the launch and require non-empty `failed_operation` and `reason`. Retain custody and report
-the exact identities and missing host-owned exclusion evidence. Never forward this result to
-`transition_delivery` or translate it into a worker lifecycle action.
+Treat `dispatch_failure` as a no-result outcome; settle it with `settle_worker_invocation` and
+`disposition: ended-without-result`, using only the acquired launch identities. Never forward it to
+`transition_delivery` or use returned identity values. Apply the same no-result route to a returned
+Planner/Builder dispatch error, empty or `no response` result, malformed or schema-invalid output,
+or identity-mismatched result. Preserve any available failure diagnostics for the report.
 
-If Planner or Builder dispatch otherwise fails before returning a structurally valid worker result,
-retain the exact claim and request supported host-owned exclusion. A caller's `confirmed_lost`
-flag never contributes evidence. Recovery attention remains runtime-owned evidence;
-report it without interpreting Git, liveness, or custody. An acquisition failure carrying attempt
-and claim IDs uses the same route. A failure without claim IDs is reported as bounded acquisition
-attention and is not claim-recoverable by Orchestrator; it may still qualify for the Change repair
-route in Step 4 when it has an exact `change_id`. Do not report a recovery operation as unavailable
-unless its Step 1 focused search or an exact recovery call returned a recorded tool error.
+Only settle after Orchestrator observes that the dispatch call returned and all owned mutating
+terminals and asynchronous jobs are settled. A dispatch call that has not returned (including
+Orchestrator or VS Code death/restart mid-run, disconnected transport, or a cancelled wait), or any
+owned mutating terminal or asynchronous job that may still be running, remains contained: do not
+settle, call `recover_claim`, or dispatch a replacement. `confirmed_lost` is never evidence.
 
-Only a verified completed recovery receipt permits fresh acquisition; never interpret an error
-envelope as `recovered`. `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` is non-retryable: report the
-missing supported host evidence and stop with custody intact. Read-only diagnosis remains available.
-Do not inspect or classify private preservation contents or ask the user to operate Git or kill processes.
+An acquisition failure carrying attempt and claim IDs is not a worker dispatch result and uses the
+exact recovery route. Report recovery attention unchanged without interpreting Git, liveness, or
+custody. A failure without claim IDs is bounded acquisition attention and is not claim-recoverable by
+Orchestrator; it may still qualify for the Change repair route in Step 4 when it has an exact
+`change_id`. Do not report a recovery operation as unavailable unless its Step 1 focused search or
+an exact recovery call returned a recorded tool error.
+
+Only a verified completed recovery receipt or settlement receipt permits a later fresh acquisition;
+never interpret an error envelope as a completed operation. `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED`
+is non-retryable: report the missing supported host evidence and stop with custody intact.
+Read-only diagnosis remains available. Do not inspect or classify private preservation contents or
+ask the user to operate Git or kill processes.
 
 ## Step 3 - Route One Completed Worker Result
 
@@ -205,12 +218,14 @@ and require the returned binding to name the launch outcome. The Builder already
 `submit_result`, so record the submission and do not call `transition_delivery` again.
 
 Do not select, rewrite, enrich, or reconstruct action, output, result, request, reason, evidence, or
-commit fields. Route normal completed returns as follows:
+commit fields. Route normal completed returns and ended no-result outcomes as follows:
 
-| Launch role | Returned transition | Operation |
+| Launch role | Worker outcome | Operation |
 | --- | --- | --- |
 | `planner` | `retry` | `settle_worker_invocation` with `DeliveryPlanningRetrySettlement` |
 | `builder` | `retry`, `block`, or `return` to `planning` or `design` | `settle_worker_invocation` with `DeliveryBuilderInvocationSettlement` |
+| `planner` | Ended without a valid result | `settle_worker_invocation` (`ended-without-result`) |
+| `builder` | Ended without a valid result | `settle_worker_invocation` (`ended-without-result`) |
 | Any task role | Any other supported transition | `transition_delivery` with the unchanged transition |
 
 The real `settle_worker_invocation` MCP envelope has only these top-level fields:
@@ -232,13 +247,36 @@ set `disposition: normal-return`, and copy the returned transition unchanged to 
 claim is a continuation, set the optional `host_id` and `session_id` from its exact `owner_id` and
 `process_id`; never guess either value.
 
+For `ended-without-result`, use the same top-level `settlement` envelope and typed identity fields as
+completed-timeout, but set `disposition: ended-without-result` and omit `request` (or pass it as
+`null`). A Planner settlement copies `change_id`, `outcome_id`, `claim_id`, and `attempt_id` only
+from its launch. A Builder settlement also copies `task_id=launch.task_id` and
+`expected_last_reviewed_commit=launch.last_reviewed_commit`. For a continuation, copy the exact
+launch `owner_id` and `process_id` to outer `host_id` and `session_id`; never use returned identities.
+The recorded failure code is the reserved `worker-ended-without-result`; workers must not return it
+in their own `RetryDelivery`.
+
 A completed-timeout settlement uses the matching typed identity, `disposition: completed-timeout`,
 and no `request`. Orchestrator owns this completion report; the timed-out child need not return
 a typed transition. Use it only after observing that the dispatched invocation has ended because
 of timeout and its owned mutating terminals and asynchronous jobs are settled. Elapsed time,
 a still-running tool, transport failure, cancelled wait or disconnect alone does not qualify.
-Malformed non-timeout output is not a timeout outcome. Those unknown executions retain custody
-under Step 2; do not dispatch a replacement beside them.
+An `ended-without-result` settlement is required for a Planner or Builder dispatch that returned an
+error, empty or `no response` result, malformed or schema-invalid output, identity-mismatched
+result, or `kind: dispatch_failure`. Use it only after Orchestrator observes that the dispatch call
+returned and all owned mutating terminals and asynchronous jobs are settled. It counts as a failed
+attempt in the same three-attempt episode and preserves worktree bytes, staging, commits, and refs.
+Fresh acquisition may claim the same task after engine backoff; the next Builder triages preserved
+work using fresh Build context and `prior_attempts`. Three total failures exhaust the episode with
+failure history. After settlement, re-read `get_change`, report the exact receipt, and do not dispatch
+a replacement in the same cycle.
+
+An unreturned dispatch (Orchestrator or VS Code died/restarted mid-run, disconnected transport, or a
+cancelled wait), or any owned mutating terminal or asynchronous job that may still be running, remains
+contained: do not settle, call `recover_claim`, or dispatch a replacement. Elapsed time and
+`confirmed_lost` are not evidence. Malformed Planner/Builder output is not a timeout; use
+`ended-without-result` only when its observation precondition is met. Finalizer without a valid
+report remains contained under the Finalizer rule above.
 
 A normal Builder `return` to `design` is settled through the same typed envelope. Settlement clears
 the exact active claim, records its failed attempt, and retains the task/results lineage and managed
@@ -258,10 +296,11 @@ echo, relay, reconstruct, or apply a result. A failed settlement call must be re
 `get_change` before any retry; it is not a reason to send its request through `transition_delivery`
 or attempt recovery without the Step 2 evidence.
 
-An identity mismatch or malformed result is a failed dispatch result: publish no substitute and use
-the exact Step 2 recovery route for the still-active claim. A rejected `transition_delivery` call
-for worker-output schema validation is also a malformed dispatch result; retain custody and report
-the missing evidence instead of claiming recovery before session completion.
+For an ended Planner/Builder dispatch, identity mismatch or malformed/schema-invalid output uses
+`ended-without-result` under Step 2, with launch identities; publish no substitute. A dispatch that
+has not returned or whose owned work may still run remains contained. A rejected `transition_delivery`
+call for worker-output schema validation after the invocation ended and its owned work settled also
+uses this settlement; report the exact failure instead of forwarding or retrying the invalid transition.
 
 ## Step 4 - Preserve Typed Integration Attention
 

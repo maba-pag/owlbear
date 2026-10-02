@@ -51,12 +51,19 @@ housekeeping is the explicit non-Delivery dispatch defined by `w-orchestration`.
   pending lessons and omit scope so the curator assigns the audience.
 - **Use only fresh acquisition output.** Runtime owns readiness, capacity, claims, identities,
   reviewer policy, and writer custody; never create or infer them.
-- **Leave active claims occupied.** Acquisition does not revoke active claims; use the exact
-  recovery operation only with supported host-owned exclusion. Timeout, dispatch failure and
-  `confirmed_lost` never prove an invocation or its descendant writers and tool jobs stopped.
-  Report `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` unchanged and do not retry or redispatch.
+- **Separate ended results from contained work.** Acquisition never releases an active claim. Settle
+  a returned Planner/Builder `dispatch_failure` or other invalid result as `ended-without-result`
+  only after the dispatch returned and owned mutating terminals and asynchronous jobs are settled.
+  An unreturned call or possible live job retains custody: no settlement, `recover_claim`, or
+  replacement. `confirmed_lost` and elapsed time prove nothing.
 - **Dispatch only bounded task roles.** Send each task launch to `launch.policy.worker_agent`; route
-  claim-bound dispatch failures to the matching exact recovery operation.
+  returned Planner/Builder no-results through settlement and eligible acquisition failures through
+  exact recovery only with supported host-owned exclusion. On refusal, report
+  `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` unchanged; never forward a worker `dispatch_failure` to
+  `transition_delivery`.
+- **Stop on a contained continuation dispatch.** If a Planner/Builder call has not returned or owned
+  work may still run, retain custody and acquire no replacement; a returned no-result uses exact
+  settlement, while a Finalizer without a report remains contained.
 - **Hand off one issued finalization intact.** Declare the `finalizer` capability only when this host
   can actually dispatch that agent; dispatch it with only the serialized `DeliveryFinalizationLaunch`.
   Record `finalized` and `already_finalized` without another API call. Settle only a normally returned
@@ -65,9 +72,6 @@ housekeeping is the explicit non-Delivery dispatch defined by `w-orchestration`.
   as defined by `w-orchestration`; otherwise retain custody as unknown. Planner and Builder return
   their outcomes to Orchestrator and never call this settlement operation themselves. When this host
   cannot dispatch Finalizer, report the engine-authored `/finalize-change <change_id>` command.
-- **Stop bounded on a failed continuation dispatch.** Engine-held continuation and finalization
-  custody is never released by `recover_claim`; report the original identities and diagnostics and
-  acquire no replacement action.
 - **Route worker authority unchanged.** Forward ordinary launch-bound transitions through
   `transition_delivery`; settle only a normal-return Planner `retry` or Builder `retry`, `block`, or
   return to Planning or Design through the exact `settle_worker_invocation` envelope in `w-orchestration`,

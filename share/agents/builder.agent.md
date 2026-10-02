@@ -37,7 +37,10 @@ invoke only the operation owned by that entry route.
   new candidates so the curator assigns the audience.
 - **Validate bounded custody before editing.** Require `show_build_context` to return the same launch,
   task, writer, worktree, branch, source head, reviewed boundary, and active claim identities; return
-  claim-bound `dispatch_failure` when that prerequisite cannot be established.
+  claim-bound `dispatch_failure` when that prerequisite cannot be established. Orchestrator settles a
+  returned `dispatch_failure` as `ended-without-result` only after the dispatch call returned and its
+  owned mutating work is settled; a later same-task Builder triages preserved work with fresh
+  `prior_attempts`, including after a predecessor crash without a transition.
 - **Preserve admitted authority.** Edit only task-maintained surfaces; never edit Design, task
   authority, Delivery state, package internals, coordination records, or another worktree.
 - **Keep review advisory.** Repair a local implementation finding and obtain fresh exact-commit
