@@ -41,11 +41,20 @@ assertion-only lost-worker recovery.
   through `settle_worker_invocation` with `disposition: ended-without-result` and reserved failure
   code `worker-ended-without-result`, with the same semantics as a completed timeout. Both require
   Orchestrator to observe that the dispatch call returned and its owned mutating terminals and
-  asynchronous jobs are settled. An unreturned dispatch (Orchestrator or VS Code death or restart,
-  disconnect, cancelled wait), a timer expiring while execution may still be running, or possibly
-  running jobs remain unknown execution, not permission to dispatch a concurrent replacement. A
-  Finalizer that ends without a failure report remains contained because its settlement requires
-  that report. Do not promise progress while the VS Code host is unavailable.
+  asynchronous jobs are settled. **User decision 2026-10-02 (A + B):** a dispatch that never
+  returned is recovered when evidence shows the worker cannot progress on its own; Delivery calls
+  are already fenced after settlement. (A) Each claim-issuing process holds a lifetime lock under
+  `runtime/hosts/`; each claim records its issuer under `claim-issuers/`. When the issuer lock is
+  free and the worktree has been quiet for two minutes (non-ignored entries, ignored entries' own
+  times, index, HEAD/ref, Git admin directory), acquisition settles it as engine-only `host-lost`
+  (`worker-host-lost`); otherwise readiness waits with `worker-stall-wait`. (B) `release_stuck_worker`
+  (MCP, Cockpit, `/release-stuck-worker`) settles a stopped chat's worker as engine-only
+  `released-stuck` (`worker-released-stuck`) under the same quiet rule, or returns
+  `ERR_DELIVERY_WORKER_ACTIVE` without mutation. A lost or released Finalizer receives an
+  engine-authored `finalizer-ended-without-report` report with unknown checks and retries under its
+  original budget. Writes deep inside ignored trees are not observed. A timer expiring while
+  execution may still be running, or recent worktree activity, remains unknown execution. Do not
+  promise progress while the VS Code host is unavailable.
 
 The native restoration must receive independent review before and after each material implementation
 slice, with focused positive settlement/reacquisition and negative stale-identity, late-submission,
@@ -54,11 +63,14 @@ the superseded implementation; this revision controls ordinary returned worker t
 
 ### Current handoff
 
-**Native repair checkpoint: `a6dab9c14ba462d662b93b7245166871547695d1`.** This is the
+**Native repair checkpoint: `f3bac19b03f93f723029d46dec78517105465a2c`.** This is the
 committed code checkpoint for the user-approved native Orchestrator settlement revision. Planner
 retries, Builder retry/request block/Planning or Design return, crashed Planner/Builder invocations
 (`ended-without-result`), and report-backed Finalizer failures
-settle exact ended invocations through `settle_worker_invocation`. Builder handoff preserves
+settle exact ended invocations through `settle_worker_invocation`. Unreturned dispatches settle through
+engine-only `host-lost` (automatic at acquisition) or `released-stuck` (`release_stuck_worker`) once
+the issuing host is gone or the user releases the worker and the worktree has stayed quiet for two
+minutes; mid-scan changes fail closed. Builder handoff preserves
 dirty/staged/committed work and binds fresh acquisition to the same task or exact replanned lineage.
 The three-attempt episode, bounded backoff, durable receipts and default-loader restart preserve the
 original failure budget across sessions.
@@ -110,16 +122,36 @@ handoff, one three-attempt episode, restart validation) with reserved code
 returned dispatch errors, empty, malformed or identity-mismatched results and `dispatch_failure` to
 it, while unreturned or possibly running invocations and report-less Finalizers stay contained.
 
+The user's 2026-10-02 A + B decision for unreturned dispatches is implemented in
+`9019de4e..f3bac19b`: per-process host locks and immutable `claim-issuers/` records; an
+acquisition sweep that settles `host-lost` (`worker-host-lost`) or reports `worker-stall-wait`;
+`release_stuck_worker` through the application, MCP, Cockpit and `/release-stuck-worker`, returning
+`ERR_DELIVERY_WORKER_ACTIVE` without mutation while the worktree is active; engine-authored
+`finalizer-ended-without-report` Finalizer reports with unknown checks; and offline diagnosis of
+issuer records and host locks. The quiet observation walks non-ignored entries, ignored entries' own
+times, index, HEAD/ref and admin directory, revalidates every observed directory after the walk and
+fails closed on bounds or concurrent change. The same series fixed a pre-existing Builder handoff
+defect: ignored caches no longer block handoff or same-task reacquisition, while tracked, untracked,
+staged, index and HEAD drift is still refused.
+
 | Gate | Current disposition |
 | --- | --- |
 | Source and contract | Native Orchestrator settlement is user-approved. Exact clean settled target-stale attention may sync through the existing engine owner, retaining the passive-writer reservation through its merge/conflict outcome; fresh review precedes a new Finalizer under the original budget. Dirty workspaces, stale identities, unattributed material and unknown execution remain contained; sync cannot renew the three-attempt budget |
-| Independent challenge | A fresh unnamed GPT-6.1 Sol cumulative challenge of `58a819f6` found eleven material findings; two interim Sol reviews of the repairs found three more (repeated pauses/lifecycle intents at restart, exhausted Planning-return restart, diagnostic bounds). All were repaired. A fresh unnamed GPT-6.1 Sol cumulative challenge of `8ec88b7b` returned `implementation-sound` with no material findings. An interim Sol review of the crashed-worker extension found no material defect; its two documentation observations were repaired. A fresh cumulative challenge of the published head is required |
+| Independent challenge | A fresh unnamed GPT-6.1 Sol cumulative challenge of `58a819f6` found eleven material findings; two interim Sol reviews of the repairs found three more (repeated pauses/lifecycle intents at restart, exhausted Planning-return restart, diagnostic bounds). All were repaired. A fresh unnamed GPT-6.1 Sol cumulative challenge of `8ec88b7b` returned `implementation-sound` with no material findings. An interim Sol review of the crashed-worker extension found no material defect; its two documentation observations were repaired. Sol reviews of the A + B extension found a false-quiet walk, hidden Cockpit release for continuation claims, a mid-scan race, diagnostic host-lock starvation and this stale record; all were repaired. A fresh cumulative challenge of the published head is required |
 | Required CI | All four required workflows must succeed on the same exact published head. Their exact-head results belong on PR #326; no new CI result is claimed here. Older green runs are historical |
-| PR and documentation metadata | Route exact-publication review and CI results to PR #326. This record names code checkpoint `a6dab9c14ba462d662b93b7245166871547695d1`, not the future SHA of this documentation update |
-| User direction | Native Orchestrator settlement is explicitly approved; no host-design approval is needed. On 2026-10-02 the user directed that crashed Planner/Builder invocations settle as ended attempts. Design-return readmission is refused before authority mutation and its correction is separate D04 work |
-| Host and activation boundary | Only an exact normally returned invocation, an actually ended timeout, or an invocation that ended without a valid result qualifies, each only after owned mutating jobs are settled. An unreturned dispatch, elapsed time, transport failure and possibly running work do not. No merge or live activation is implied |
+| PR and documentation metadata | Route exact-publication review and CI results to PR #326. This record names code checkpoint `f3bac19b03f93f723029d46dec78517105465a2c`, not the future SHA of this documentation update |
+| User direction | Native Orchestrator settlement is explicitly approved; no host-design approval is needed. On 2026-10-02 the user directed that crashed Planner/Builder invocations settle as ended attempts and chose A + B for unreturned dispatches. Design-return readmission is refused before authority mutation and its correction is separate D04 work |
+| Host and activation boundary | Orchestrator settles an exact normally returned invocation, an actually ended timeout, or an invocation that ended without a valid result, each only after owned mutating jobs are settled. The engine settles an unreturned dispatch only when its issuing host lock is free or the user releases it, and the worktree has stayed quiet for two minutes. Elapsed time alone, transport failure and recent or mid-scan worktree activity keep custody; writes deep inside ignored trees are not observed. No merge or live activation is implied |
 
-**Current caller proof for `a6dab9c1`:** on identical working-tree content, the caller ran whole
+**Current caller proof for `f3bac19b`:** on identical working-tree content, the caller ran whole
+`test_delivery_state.py` + `test_delivery_runtime.py` (209), whole `test_portfolio_application.py` +
+`test_worker_stall.py` (599), the remaining Delivery tests (666), whole Delivery MCP and tools tests
+(583), Cockpit work-item, boundary, package-boundary, ecosystem, worktree-authority and launch tests
+(198), `WorkPortfolio.test.tsx` (122), TypeScript `noEmit`, the Cockpit build, scoped Ruff on 35
+changed Python files and `git diff --check`; all passed, and scoped commit hooks passed. Selected
+owner files, not a whole-project local suite.
+
+**Prior caller proof for `a6dab9c1`:** on identical working-tree content, the caller ran whole
 `test_delivery_state.py` + `test_delivery_runtime.py` (205), whole `test_portfolio_application.py`
 (556), the remaining Delivery tests (666), whole Delivery MCP and tools tests (559), Cockpit work-item,
 boundary, package-boundary, ecosystem and worktree-authority tests (185) and, after the final skill

@@ -748,8 +748,11 @@ without a valid result (dispatch error, empty or no response, malformed or ident
 output, or `dispatch_failure`) is settled like a completed timeout once Orchestrator observes the
 dispatch call returned and its owned mutating terminals and jobs are settled: a counted failed attempt
 with preserved work and a fresh same-task Builder that triages it. Unreturned dispatch (Orchestrator
-or VS Code death/restart, disconnect, cancelled wait) and possibly running work remain contained; a
-Finalizer that ends without a failure report also remains contained.
+or VS Code death/restart, disconnect, stopped chat) is recovered by user decision A + B: automatic
+`host-lost` settlement when the issuing process's lifetime lock is free and the worktree has been
+quiet for two minutes, and a `release_stuck_worker` action under the same quiet rule. Recent worktree
+activity keeps the claim contained; a lost or released Finalizer gets an engine-authored unknown-check
+failure report, not proof.
 
 - U1: Normal and recovery actions must be available through a Cockpit control or a complete chat prompt.
 - U2: The user never runs tests, edits source or worktree files, repairs JSON, calculates digests, or operates Git custody.
