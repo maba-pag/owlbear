@@ -6127,8 +6127,8 @@ def test_acquisition_returns_preclaim_attention_and_refreshes_snapshot_cache(tmp
     original_activate = application._activate_candidate
     reconciliation = Mock(wraps=application._reconcile_runtimes)
 
-    def activate(candidate, source):
-        launch = original_activate(candidate, source)
+    def activate(candidate, source, **kwargs):
+        launch = original_activate(candidate, source, **kwargs)
         _publish_merge_conflict_attention(
             runtimes,
             state_root,
