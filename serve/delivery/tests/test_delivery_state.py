@@ -6,6 +6,7 @@ import os
 import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import NamedTuple
 from unittest.mock import Mock, patch
 
 import pytest
@@ -34,6 +35,7 @@ from owlbear_delivery import (
     DeliveryFrontier,
     DeliveryHealthHeadRelation,
     DeliveryHealthReason,
+    DeliveryLaunchPackage,
     DeliveryMergedPullRequestLatch,
     DeliveryObservation,
     DeliveryObservationReceipt,
@@ -62,6 +64,7 @@ from owlbear_delivery import (
     DeliveryWorkerRole,
     DesignPackageStore,
     OutcomeAuthorityBinding,
+    PortfolioApplication,
     PortfolioCoordinator,
     PublishChangeBranch,
     PublishDeliveryPlan,
@@ -90,7 +93,11 @@ from owlbear_delivery.delivery_application_loader import (
     _require_local_snapshot_branch,
     load_delivery_application,
 )
-from owlbear_delivery.delivery_runtime import _DeliveryBuilderPlanPromotionReceipt
+from owlbear_delivery.delivery_runtime import (
+    _DeliveryBuilderPlanPromotionReceipt,
+    _DeliveryPlanningPauseReplay,
+    _model_content,
+)
 from owlbear_delivery.delivery_state import parse_delivery_state_snapshot
 from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
 from owlbear_delivery.git_executable import resolve_git_executable
@@ -1510,25 +1517,21 @@ def _workspace_git_state(repository: Path, worktree: Path) -> tuple[str, str, st
     )
 
 
-@pytest.mark.parametrize(
-    ("promotion_fault", "return_target"),
-    [
-        (None, DeliveryStage.PLANNING),
-        ("missing-receipt", DeliveryStage.PLANNING),
-        ("forged-receipt", DeliveryStage.PLANNING),
-        ("dropped-task", DeliveryStage.PLANNING),
-        ("dropped-history", DeliveryStage.PLANNING),
-        ("original-scope-drift", DeliveryStage.PLANNING),
-        (None, DeliveryStage.DESIGN),
-    ],
-)
-def test_builder_return_handoff_survives_default_loader_restart(  # noqa: PLR0915
-    tmp_path: Path,
-    promotion_fault: str | None,
-    return_target: DeliveryStage,
-) -> None:
+class _BuilderReturnRestartFixture(NamedTuple):
+    fresh: Path
+    remote: Path
+    config: DeliveryStartupConfig
+    application: PortfolioApplication
+    completed_task: DeliveryTaskDefinition
+    original_task: DeliveryTaskDefinition
+    historical_result: DeliveryTaskResult
+    remote_state_head: str
+    remote_snapshot_path: str
+    remote_snapshot: bytes
+
+
+def _builder_return_restart_fixture(tmp_path: Path, change_id: str) -> _BuilderReturnRestartFixture:
     repository, remote, initial = _repository(tmp_path)
-    change_id = "return-planning-promotion"
     contract, intent, design = _contract(change_id)
     state_root = tmp_path / "state"
     package_store = DesignPackageStore(repository / ".owlbear/delivery/packages", repository)
@@ -1667,7 +1670,44 @@ def test_builder_return_handoff_survives_default_loader_restart(  # noqa: PLR091
         github_repository="example/project",
         delivery_state_branch="owlbear/delivery-state",
     )
-    application = load_delivery_application(config, workspace_root=fresh)
+    return _BuilderReturnRestartFixture(
+        fresh=fresh,
+        remote=remote,
+        config=config,
+        application=load_delivery_application(config, workspace_root=fresh),
+        completed_task=completed_task,
+        original_task=original_task,
+        historical_result=historical_result,
+        remote_state_head=remote_state_head,
+        remote_snapshot_path=remote_snapshot_path,
+        remote_snapshot=remote_snapshot,
+    )
+
+
+@pytest.mark.parametrize(
+    ("promotion_fault", "return_target"),
+    [
+        (None, DeliveryStage.PLANNING),
+        ("missing-receipt", DeliveryStage.PLANNING),
+        ("forged-receipt", DeliveryStage.PLANNING),
+        ("dropped-task", DeliveryStage.PLANNING),
+        ("dropped-history", DeliveryStage.PLANNING),
+        ("original-scope-drift", DeliveryStage.PLANNING),
+        (None, DeliveryStage.DESIGN),
+    ],
+)
+def test_builder_return_handoff_survives_default_loader_restart(  # noqa: PLR0915
+    tmp_path: Path,
+    promotion_fault: str | None,
+    return_target: DeliveryStage,
+) -> None:
+    change_id = "return-planning-promotion"
+    restart = _builder_return_restart_fixture(tmp_path, change_id)
+    fresh, config, application = restart.fresh, restart.config, restart.application
+    remote, remote_state_head = restart.remote, restart.remote_state_head
+    remote_snapshot_path, remote_snapshot = restart.remote_snapshot_path, restart.remote_snapshot
+    completed_task, original_task = restart.completed_task, restart.original_task
+    historical_result = restart.historical_result
     builder_launch = application.acquire_frontier_work().launch_packages[0]
     assert builder_launch.claim.worker_role is DeliveryWorkerRole.BUILDER
     assert builder_launch.task_id == original_task.task_id
@@ -1966,6 +2006,678 @@ def test_builder_return_handoff_survives_default_loader_restart(  # noqa: PLR091
     assert acquired_episode.episode_id == builder_retry_budget[0]
     assert acquired_episode.total_attempts == builder_retry_budget[1] + 1
     assert acquired_episode.reset_count == builder_retry_budget[2] == 0
+
+
+def _settle_default_loader_planning_return(
+    restart: _BuilderReturnRestartFixture,
+    change_id: str,
+) -> OutcomeAuthorityBinding:
+    builder_launch = restart.application.acquire_frontier_work().launch_packages[0]
+    assert builder_launch.claim.worker_role is DeliveryWorkerRole.BUILDER
+    settled = restart.application.settle_worker_invocation(
+        DeliveryBuilderInvocationSettlement(
+            change_id=change_id,
+            outcome_id=builder_launch.outcome_id,
+            claim_id=builder_launch.claim.claim_id,
+            attempt_id=builder_launch.claim.attempt_id,
+            task_id=builder_launch.task_id,
+            expected_last_reviewed_commit=builder_launch.last_reviewed_commit,
+            disposition="normal-return",
+            request=ReturnDelivery(
+                action="return",
+                outcome_id=builder_launch.outcome_id,
+                claim_id=builder_launch.claim.claim_id,
+                target=DeliveryStage.PLANNING,
+                reason="Clarify the remaining implementation task.",
+                locators=(restart.original_task.task_id,),
+                preserved_commit=builder_launch.last_reviewed_commit,
+                attempt_id=builder_launch.claim.attempt_id,
+            ),
+        ),
+        host_id=builder_launch.claim.owner_id,
+        session_id=builder_launch.claim.process_id,
+    )
+    assert settled.builder_handoff_context is not None
+    assert settled.builder_handoff_context.route == "same-outcome-planner"
+    return settled
+
+
+def _planner_return_pause(
+    outcome_id: str,
+    claim_id: str,
+    *,
+    request_bearing: bool,
+    ordinal: int = 1,
+) -> BlockDelivery:
+    suffix = "" if ordinal == 1 else f"-{ordinal}"
+    request = (
+        DeliveryRequest(
+            request_id=f"planner-return-request{suffix}",
+            kind=DeliveryRequestKind.DECISION,
+            outcome_id=outcome_id,
+            summary="Choose the boundary for the returned task.",
+            options=(
+                DeliveryRequestOption(option_id="narrow", label="Narrow the task"),
+                DeliveryRequestOption(option_id="split", label="Split the task"),
+            ),
+        )
+        if request_bearing
+        else None
+    )
+    return BlockDelivery(
+        action="block",
+        outcome_id=outcome_id,
+        claim_id=claim_id,
+        block_id=f"planner-return-block{suffix}",
+        reason="The returned task boundary needs a decision.",
+        unblock_condition="The boundary decision is recorded.",
+        expected_evidence=("Boundary decision",),
+        locators=("TASK-002",),
+        request=request,
+    )
+
+
+def _answer_planner_return_pause(
+    application: PortfolioApplication,
+    change_id: str,
+    pause: BlockDelivery,
+    option_id: str = "narrow",
+) -> None:
+    if pause.request is not None:
+        application.resolve_request(
+            change_id,
+            pause.request.request_id,
+            DeliveryRequestResolution(selected_option_id=option_id, provenance="user-confirmed"),
+        )
+    else:
+        application.clear_block(
+            change_id,
+            pause.outcome_id,
+            pause.block_id,
+            "Boundary verified by operator.",
+            ("TASK-002",),
+        )
+
+
+def _healthy_restart(restart: _BuilderReturnRestartFixture) -> PortfolioApplication:
+    application = load_delivery_application(restart.config, workspace_root=restart.fresh)
+    health = application.delivery_health()
+    assert health.status.value == "healthy", health.diagnostics
+    return application
+
+
+def _acquire_planner_after_pause(application: PortfolioApplication, minutes: int) -> DeliveryLaunchPackage:
+    # A Planner block ends its attempt with a retry backoff before reacquisition.
+    eligible_at = (datetime.now(UTC) + timedelta(minutes=minutes)).isoformat()
+    application._clock = lambda: eligible_at  # noqa: SLF001
+    launch = application.acquire_frontier_work().launch_packages[0]
+    assert launch.claim.worker_role is DeliveryWorkerRole.PLANNER
+    return launch
+
+
+def _pause_second_planner_return(
+    restart: _BuilderReturnRestartFixture,
+    change_id: str,
+    *,
+    first_request_bearing: bool,
+    second_request_bearing: bool,
+) -> tuple[BlockDelivery, BlockDelivery, OutcomeAuthorityBinding]:
+    application = _healthy_restart(restart)
+    first_launch = application.acquire_frontier_work().launch_packages[0]
+    first_pause = _planner_return_pause(
+        first_launch.outcome_id,
+        first_launch.claim.claim_id,
+        request_bearing=first_request_bearing,
+    )
+    application.transition_delivery(change_id, first_pause)
+    _answer_planner_return_pause(_healthy_restart(restart), change_id, first_pause)
+    second_launch = _acquire_planner_after_pause(_healthy_restart(restart), minutes=5)
+    second_pause = _planner_return_pause(
+        second_launch.outcome_id,
+        second_launch.claim.claim_id,
+        request_bearing=second_request_bearing,
+        ordinal=2,
+    )
+    second_blocked = _healthy_restart(restart).transition_delivery(change_id, second_pause)
+    return first_pause, second_pause, second_blocked
+
+
+@pytest.mark.parametrize("request_bearing", [True, False])
+def test_planner_pause_on_builder_planning_return_survives_default_loader_restart(
+    tmp_path: Path,
+    *,
+    request_bearing: bool,
+) -> None:
+    change_id = "return-planning-pause"
+    restart = _builder_return_restart_fixture(tmp_path, change_id)
+    settled = _settle_default_loader_planning_return(restart, change_id)
+    planner_application = _healthy_restart(restart)
+    planner_launch = planner_application.acquire_frontier_work().launch_packages[0]
+    assert planner_launch.claim.worker_role is DeliveryWorkerRole.PLANNER
+    pause = _planner_return_pause(
+        planner_launch.outcome_id,
+        planner_launch.claim.claim_id,
+        request_bearing=request_bearing,
+    )
+    blocked = planner_application.transition_delivery(change_id, pause)
+    assert blocked.block is not None
+    assert blocked.return_context is None
+
+    blocked_application = _healthy_restart(restart)
+    assert blocked_application.show_operator_context(change_id, "OUT-001").block == blocked.block
+    assert blocked_application.acquire_frontier_work().launch_packages == ()
+    _answer_planner_return_pause(blocked_application, change_id, pause)
+
+    answered_application = _healthy_restart(restart)
+    answered = answered_application._runtimes[change_id].show_binding("OUT-001")  # noqa: SLF001
+    assert answered.block is not None
+    assert answered.block.resolved
+    assert answered.return_context == settled.return_context
+    assert answered.builder_handoff_context == settled.builder_handoff_context
+    # A requestless block ends the Planner attempt with a short retry backoff.
+    eligible_at = (datetime.now(UTC) + timedelta(minutes=1)).isoformat()
+    answered_application._clock = lambda: eligible_at  # noqa: SLF001
+    replan_launch = answered_application.acquire_frontier_work().launch_packages[0]
+    assert replan_launch.claim.worker_role is DeliveryWorkerRole.PLANNER
+    assert replan_launch.claim.claim_id != planner_launch.claim.claim_id
+
+    claimed_application = _healthy_restart(restart)
+    candidate = claimed_application.publish_delivery_plan(
+        change_id,
+        PublishDeliveryPlan(
+            outcome_id=replan_launch.outcome_id,
+            claim_id=replan_launch.claim.claim_id,
+            tasks=settled.tasks,
+        ),
+    )
+    candidate_application = _healthy_restart(restart)
+    advanced = candidate_application.transition_delivery(
+        change_id,
+        AdvanceDelivery(
+            action="advance",
+            outcome_id=replan_launch.outcome_id,
+            claim_id=replan_launch.claim.claim_id,
+            output=candidate.output,
+        ),
+    )
+    assert advanced.stage == DeliveryStage.IMPLEMENTATION
+    assert advanced.builder_handoff_context is not None
+    assert advanced.builder_handoff_context.route == "same-task"
+
+    promoted_application = _healthy_restart(restart)
+    builder_resume = promoted_application.acquire_frontier_work().launch_packages[0]
+    assert builder_resume.claim.worker_role is DeliveryWorkerRole.BUILDER
+    assert builder_resume.task_id == restart.original_task.task_id
+
+
+@pytest.mark.parametrize(
+    ("scenario", "expected_detail"),
+    [
+        ("missing-pause-receipt", "local Planner pause differs from its exact Planning pause receipt"),
+        ("drifted-request", "local Delivery frontier differs from its exact Builder return promotion"),
+        ("early-return-context", "local Delivery frontier differs from its exact Builder return promotion"),
+        ("forged-return-context", "local Delivery frontier differs from its exact Builder return promotion"),
+        ("unlocated-requestless-clear", "local Planner requestless clearance lacks operator evidence"),
+        ("promotion-without-pause-receipt", "local Planner pause differs from its exact Planning pause receipt"),
+    ],
+)
+def test_default_loader_rejects_unrecorded_planner_pause_on_builder_planning_return(
+    tmp_path: Path,
+    scenario: str,
+    expected_detail: str,
+) -> None:
+    change_id = "return-planning-pause-forgery"
+    restart = _builder_return_restart_fixture(tmp_path, change_id)
+    settled = _settle_default_loader_planning_return(restart, change_id)
+    application = restart.application
+    launch = application.acquire_frontier_work().launch_packages[0]
+    pause = _planner_return_pause(
+        launch.outcome_id,
+        launch.claim.claim_id,
+        request_bearing=scenario not in {"early-return-context", "unlocated-requestless-clear"},
+    )
+    application.transition_delivery(change_id, pause)
+    if scenario in {"forged-return-context", "promotion-without-pause-receipt"}:
+        _answer_planner_return_pause(application, change_id, pause)
+    if scenario == "promotion-without-pause-receipt":
+        replan = application.acquire_frontier_work().launch_packages[0]
+        candidate = application.publish_delivery_plan(
+            change_id,
+            PublishDeliveryPlan(outcome_id=replan.outcome_id, claim_id=replan.claim.claim_id, tasks=settled.tasks),
+        )
+        application.transition_delivery(
+            change_id,
+            AdvanceDelivery(
+                action="advance",
+                outcome_id=replan.outcome_id,
+                claim_id=replan.claim.claim_id,
+                output=candidate.output,
+            ),
+        )
+
+    change_root = restart.fresh / ".owlbear/delivery/runtime/changes" / change_id
+    frontier_path = change_root / "frontier.json"
+    if scenario in {"missing-pause-receipt", "promotion-without-pause-receipt"}:
+        receipts = tuple((change_root / "planning-pause-receipts" / "OUT-001").glob("*.json"))
+        assert len(receipts) == 1
+        receipts[0].unlink()
+    else:
+        frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
+        binding = frontier.bindings[0]
+        assert binding.block is not None
+        assert settled.return_context is not None
+        if scenario == "drifted-request":
+            changed = binding.model_copy(
+                update={
+                    "requests": (
+                        *binding.requests[:-1],
+                        binding.requests[-1].model_copy(update={"summary": "An unrecorded Planner question."}),
+                    )
+                }
+            )
+        elif scenario == "early-return-context":
+            changed = binding.model_copy(update={"return_context": settled.return_context})
+        elif scenario == "forged-return-context":
+            assert binding.return_context == settled.return_context
+            changed = binding.model_copy(
+                update={"return_context": settled.return_context.model_copy(update={"reason": "Forged context."})}
+            )
+        else:
+            changed = binding.model_copy(
+                update={
+                    "block": binding.block.model_copy(update={"resolution_note": "Unlocated operator note."}),
+                    "return_context": settled.return_context,
+                }
+            )
+        frontier_path.write_bytes(
+            _canonical_payload(frontier.model_copy(update={"bindings": (changed,)}).model_dump(mode="json"))
+        )
+
+    frontier_before = frontier_path.read_bytes()
+    rejected = load_delivery_application(restart.config, workspace_root=restart.fresh)
+    health = rejected.delivery_health()
+    assert health.status.value == "attention"
+    assert any(
+        diagnostic.change_id == change_id
+        and diagnostic.code == "remote-state-reconciliation-required"
+        and expected_detail in diagnostic.detail
+        for diagnostic in health.diagnostics
+    ), health.diagnostics
+    assert frontier_path.read_bytes() == frontier_before
+
+
+@pytest.mark.parametrize(
+    ("first_request_bearing", "second_request_bearing"),
+    [(True, True), (True, False), (False, True)],
+)
+def test_repeated_planner_pauses_on_builder_planning_return_survive_default_loader_restart(
+    tmp_path: Path,
+    *,
+    first_request_bearing: bool,
+    second_request_bearing: bool,
+) -> None:
+    change_id = "return-planning-repeated-pause"
+    restart = _builder_return_restart_fixture(tmp_path, change_id)
+    settled = _settle_default_loader_planning_return(restart, change_id)
+    first_pause, second_pause, second_blocked = _pause_second_planner_return(
+        restart,
+        change_id,
+        first_request_bearing=first_request_bearing,
+        second_request_bearing=second_request_bearing,
+    )
+    planner_requests = tuple(pause.request for pause in (first_pause, second_pause) if pause.request is not None)
+    assert second_blocked.return_context is None
+    assert tuple(item.request_id for item in second_blocked.requests[len(settled.requests) :]) == tuple(
+        item.request_id for item in planner_requests
+    )
+    if first_pause.request is not None:
+        assert second_blocked.requests[len(settled.requests)].resolution is not None
+
+    blocked_application = _healthy_restart(restart)
+    assert blocked_application.show_operator_context(change_id, "OUT-001").block == second_blocked.block
+    assert blocked_application.acquire_frontier_work().launch_packages == ()
+    _answer_planner_return_pause(blocked_application, change_id, second_pause, option_id="split")
+
+    answered_application = _healthy_restart(restart)
+    answered = answered_application._runtimes[change_id].show_binding("OUT-001")  # noqa: SLF001
+    assert answered.block is not None
+    assert answered.block.resolved
+    assert answered.block.block_id == second_pause.block_id
+    assert answered.return_context == settled.return_context
+    assert answered.requests[: len(settled.requests)] == settled.requests
+    assert tuple(item.request_id for item in answered.requests[len(settled.requests) :]) == tuple(
+        item.request_id for item in planner_requests
+    )
+    assert all(item.resolution is not None for item in answered.requests[len(settled.requests) :])
+    replan_launch = _acquire_planner_after_pause(answered_application, minutes=30)
+
+    claimed_application = _healthy_restart(restart)
+    candidate = claimed_application.publish_delivery_plan(
+        change_id,
+        PublishDeliveryPlan(
+            outcome_id=replan_launch.outcome_id,
+            claim_id=replan_launch.claim.claim_id,
+            tasks=settled.tasks,
+        ),
+    )
+    advanced = _healthy_restart(restart).transition_delivery(
+        change_id,
+        AdvanceDelivery(
+            action="advance",
+            outcome_id=replan_launch.outcome_id,
+            claim_id=replan_launch.claim.claim_id,
+            output=candidate.output,
+        ),
+    )
+    assert advanced.stage == DeliveryStage.IMPLEMENTATION
+    assert advanced.builder_handoff_context is not None
+    assert advanced.builder_handoff_context.route == "same-task"
+
+    builder_resume = _healthy_restart(restart).acquire_frontier_work().launch_packages[0]
+    assert builder_resume.claim.worker_role is DeliveryWorkerRole.BUILDER
+    assert builder_resume.task_id == restart.original_task.task_id
+
+
+def _assert_change_intent_restarts(
+    restart: _BuilderReturnRestartFixture,
+    change_id: str,
+    *,
+    abandon: bool,
+) -> PortfolioApplication:
+    application = _healthy_restart(restart)
+    expected = application._runtimes[change_id].show_binding("OUT-001")  # noqa: SLF001
+    application.defer_change(change_id, "Wait while the Planner pause is reviewed.")
+    deferred_application = _healthy_restart(restart)
+    assert deferred_application.acquire_frontier_work().launch_packages == ()
+    deferred_application.resume_change(change_id)
+    resumed_application = _healthy_restart(restart)
+    assert resumed_application._runtimes[change_id].show_binding("OUT-001") == expected  # noqa: SLF001
+    if not abandon:
+        return resumed_application
+    resumed_application.abandon_change(change_id, "The user abandoned this paused Planning return.")
+    abandoned_application = _healthy_restart(restart)
+    assert abandoned_application.show_completed_change(change_id).record_kind == "abandoned-change"
+    assert abandoned_application.acquire_frontier_work().launch_packages == ()
+    assert abandoned_application._runtimes[change_id].show_binding("OUT-001") == expected  # noqa: SLF001
+    return abandoned_application
+
+
+@pytest.mark.parametrize(
+    ("scenario", "request_bearing"),
+    [
+        ("paused", True),
+        ("paused", False),
+        ("answered", True),
+        ("answered", False),
+        ("historical", True),
+        ("historical", False),
+    ],
+)
+def test_change_intents_on_planner_pause_of_builder_planning_return_survive_default_loader_restart(
+    tmp_path: Path,
+    scenario: str,
+    *,
+    request_bearing: bool,
+) -> None:
+    change_id = "return-planning-pause-intent"
+    restart = _builder_return_restart_fixture(tmp_path, change_id)
+    settled = _settle_default_loader_planning_return(restart, change_id)
+    application = _healthy_restart(restart)
+    launch = application.acquire_frontier_work().launch_packages[0]
+    pause = _planner_return_pause(launch.outcome_id, launch.claim.claim_id, request_bearing=request_bearing)
+    application.transition_delivery(change_id, pause)
+    if scenario == "paused":
+        _assert_change_intent_restarts(restart, change_id, abandon=True)
+        return
+    if scenario == "historical":
+        application = _assert_change_intent_restarts(restart, change_id, abandon=False)
+    else:
+        application = _healthy_restart(restart)
+    _answer_planner_return_pause(application, change_id, pause)
+    if scenario == "answered":
+        _assert_change_intent_restarts(restart, change_id, abandon=True)
+        return
+
+    application = _assert_change_intent_restarts(restart, change_id, abandon=False)
+    second_launch = _acquire_planner_after_pause(application, minutes=5)
+    second_pause = _planner_return_pause(
+        second_launch.outcome_id,
+        second_launch.claim.claim_id,
+        request_bearing=True,
+        ordinal=2,
+    )
+    _healthy_restart(restart).transition_delivery(change_id, second_pause)
+    _assert_change_intent_restarts(restart, change_id, abandon=False)
+    _answer_planner_return_pause(_healthy_restart(restart), change_id, second_pause, option_id="split")
+    answered = _assert_change_intent_restarts(restart, change_id, abandon=True)
+    binding = answered._runtimes[change_id].show_binding("OUT-001")  # noqa: SLF001
+    assert binding.return_context == settled.return_context
+
+
+def _exhaust_default_loader_planning_return(
+    restart: _BuilderReturnRestartFixture,
+    change_id: str,
+) -> OutcomeAuthorityBinding:
+    application = restart.application
+    for minutes in (5, 10):
+        launch = application.acquire_frontier_work().launch_packages[0]
+        assert launch.claim.worker_role is DeliveryWorkerRole.BUILDER
+        application.settle_worker_invocation(
+            DeliveryBuilderInvocationSettlement(
+                change_id=change_id,
+                outcome_id=launch.outcome_id,
+                claim_id=launch.claim.claim_id,
+                attempt_id=launch.claim.attempt_id,
+                task_id=launch.task_id,
+                expected_last_reviewed_commit=launch.last_reviewed_commit,
+                disposition="normal-return",
+                request=RetryDelivery(
+                    action="retry",
+                    outcome_id=launch.outcome_id,
+                    claim_id=launch.claim.claim_id,
+                    attempt_id=launch.claim.attempt_id,
+                    abandoned_commit=launch.source_head,
+                    failure_code="builder-failed",
+                ),
+            ),
+            host_id=launch.claim.owner_id,
+            session_id=launch.claim.process_id,
+        )
+        # Each Builder retry ends with a durable backoff before reacquisition.
+        eligible_at = (datetime.now(UTC) + timedelta(minutes=minutes)).isoformat()
+        application._clock = lambda eligible_at=eligible_at: eligible_at  # noqa: SLF001
+    settled = _settle_default_loader_planning_return(restart, change_id)
+    assert settled.stage == DeliveryStage.PLANNING
+    assert settled.block is not None
+    assert settled.block.block_id.startswith("builder-planning-route-")
+    assert settled.block.request_id is None
+    assert not settled.block.resolved
+    assert settled.return_context is not None
+    return settled
+
+
+def _assert_exhausted_planning_return_readiness(application: PortfolioApplication, change_id: str) -> None:
+    readiness = application.show_work_item_view(change_id, "outcome:OUT-001").readiness
+    assert readiness is not None
+    assert readiness.reason_code == "retry-exhausted"
+    assert readiness.operation is None
+    assert not readiness.executable
+    assert application.acquire_frontier_work().launch_packages == ()
+
+
+def test_exhausted_builder_planning_return_survives_default_loader_restart(tmp_path: Path) -> None:
+    change_id = "return-planning-exhausted"
+    restart = _builder_return_restart_fixture(tmp_path, change_id)
+    settled = _exhaust_default_loader_planning_return(restart, change_id)
+
+    restarted = _healthy_restart(restart)
+    assert restarted._runtimes[change_id].show_binding("OUT-001") == settled  # noqa: SLF001
+    _assert_exhausted_planning_return_readiness(restarted, change_id)
+
+    resumed = _assert_change_intent_restarts(restart, change_id, abandon=False)
+    _assert_exhausted_planning_return_readiness(resumed, change_id)
+    abandoned = _assert_change_intent_restarts(restart, change_id, abandon=True)
+    assert abandoned._runtimes[change_id].show_binding("OUT-001") == settled  # noqa: SLF001
+
+
+@pytest.mark.parametrize(
+    ("tamper", "expected_detail"),
+    [
+        ("planner-pause-shape", "local Delivery frontier differs from its exact Builder return promotion"),
+        ("cleared-exhaustion", "local exhausted Builder return differs from its exact settlement"),
+    ],
+)
+def test_default_loader_rejects_planner_pause_over_exhausted_builder_planning_return(
+    tmp_path: Path,
+    tamper: str,
+    expected_detail: str,
+) -> None:
+    change_id = "return-planning-exhausted-forgery"
+    restart = _builder_return_restart_fixture(tmp_path, change_id)
+    settled = _exhaust_default_loader_planning_return(restart, change_id)
+    assert settled.block is not None
+    frontier_path = restart.fresh / ".owlbear/delivery/runtime/changes" / change_id / "frontier.json"
+    frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
+    binding = frontier.bindings[0]
+    changed = (
+        binding.model_copy(update={"return_context": None})
+        if tamper == "planner-pause-shape"
+        else binding.model_copy(
+            update={
+                "block": settled.block.model_copy(
+                    update={"resolution_note": "Forged operator clearance.", "resolution_locators": ("TASK-002",)}
+                )
+            }
+        )
+    )
+    frontier_path.write_bytes(
+        _canonical_payload(frontier.model_copy(update={"bindings": (changed,)}).model_dump(mode="json"))
+    )
+
+    frontier_before = frontier_path.read_bytes()
+    health = load_delivery_application(restart.config, workspace_root=restart.fresh).delivery_health()
+    assert health.status.value == "attention"
+    assert any(
+        diagnostic.change_id == change_id
+        and diagnostic.code == "remote-state-reconciliation-required"
+        and expected_detail in diagnostic.detail
+        for diagnostic in health.diagnostics
+    ), health.diagnostics
+    assert frontier_path.read_bytes() == frontier_before
+
+
+def test_default_loader_rejects_planner_pause_intent_chain_after_rolled_back_answer(tmp_path: Path) -> None:
+    change_id = "return-planning-intent-rollback"
+    restart = _builder_return_restart_fixture(tmp_path, change_id)
+    _settle_default_loader_planning_return(restart, change_id)
+    application = _healthy_restart(restart)
+    launch = application.acquire_frontier_work().launch_packages[0]
+    pause = _planner_return_pause(launch.outcome_id, launch.claim.claim_id, request_bearing=True)
+    application.transition_delivery(change_id, pause)
+    frontier_path = restart.fresh / ".owlbear/delivery/runtime/changes" / change_id / "frontier.json"
+    paused_frontier = frontier_path.read_bytes()
+    _answer_planner_return_pause(_healthy_restart(restart), change_id, pause)
+    _assert_change_intent_restarts(restart, change_id, abandon=False)
+    frontier_path.write_bytes(paused_frontier)
+
+    rejected = load_delivery_application(restart.config, workspace_root=restart.fresh)
+    health = rejected.delivery_health()
+    assert health.status.value == "attention"
+    assert any(
+        diagnostic.change_id == change_id
+        and diagnostic.code == "remote-state-reconciliation-required"
+        and "local Builder lifecycle intent is not anchored to its exact settlement or answer" in diagnostic.detail
+        for diagnostic in health.diagnostics
+    ), health.diagnostics
+    assert frontier_path.read_bytes() == paused_frontier
+
+
+@pytest.mark.parametrize(
+    ("scenario", "expected_detail"),
+    [
+        ("tampered-second-receipt", "local Planner pause differs from its exact Planning pause receipt"),
+        ("foreign-second-receipt", "local Planner pause differs from its exact Planning pause receipt"),
+        ("missing-first-receipt", "local Planner pause differs from its exact Planning pause receipt"),
+        ("reordered-requests", "local Planner pause differs from its exact Planning pause receipt"),
+        ("orphan-receipt", "local Planning pause receipt is outside its exact Planner pause sequence"),
+    ],
+)
+def test_default_loader_rejects_unrecorded_repeated_planner_pause_on_builder_planning_return(
+    tmp_path: Path,
+    scenario: str,
+    expected_detail: str,
+) -> None:
+    change_id = "return-planning-repeated-forgery"
+    restart = _builder_return_restart_fixture(tmp_path, change_id)
+    _settle_default_loader_planning_return(restart, change_id)
+    first_pause, second_pause, _ = _pause_second_planner_return(
+        restart,
+        change_id,
+        first_request_bearing=True,
+        second_request_bearing=True,
+    )
+    assert first_pause.request is not None
+    assert second_pause.request is not None
+    change_root = restart.fresh / ".owlbear/delivery/runtime/changes" / change_id
+    frontier_path = change_root / "frontier.json"
+    receipts: dict[str, Path] = {}
+    for path in (change_root / "planning-pause-receipts" / "OUT-001").glob("*.json"):
+        receipt_request = _DeliveryPlanningPauseReplay.model_validate_json(path.read_bytes(), strict=False).request
+        assert receipt_request.request is not None
+        receipts[receipt_request.request.request_id] = path
+    assert set(receipts) == {first_pause.request.request_id, second_pause.request.request_id}
+    second_path = receipts[second_pause.request.request_id]
+    second = _DeliveryPlanningPauseReplay.model_validate_json(second_path.read_bytes(), strict=False)
+    if scenario == "tampered-second-receipt":
+        payload = json.loads(second_path.read_bytes())
+        payload["result"]["requests"][-2]["resolution"]["selected_option_id"] = "split"
+        second_path.write_bytes(_canonical_payload(payload))
+    elif scenario == "foreign-second-receipt":
+        payload = json.loads(second_path.read_bytes())
+        payload["change_id"] = "another-change"
+        second_path.write_bytes(_canonical_payload(payload))
+    elif scenario == "missing-first-receipt":
+        receipts[first_pause.request.request_id].unlink()
+    elif scenario == "reordered-requests":
+        frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
+        binding = frontier.bindings[0]
+        reordered = (*binding.requests[:-2], binding.requests[-1], binding.requests[-2])
+        frontier_path.write_bytes(
+            _canonical_payload(
+                frontier.model_copy(
+                    update={"bindings": (binding.model_copy(update={"requests": reordered}),)}
+                ).model_dump(mode="json")
+            )
+        )
+    else:
+        assert second.request.request is not None
+        orphan_request = second.request.request.model_copy(update={"request_id": "planner-return-orphan"})
+        orphan_transition = second.request.model_copy(update={"request": orphan_request})
+        assert second.result.block is not None
+        orphan_result = second.result.model_copy(
+            update={
+                "block": second.result.block.model_copy(update={"request_id": "planner-return-orphan"}),
+                "requests": (*second.result.requests[:-1], orphan_request),
+            }
+        )
+        orphan_digest = hashlib.sha256(_model_content(orphan_transition)).hexdigest()
+        orphan = second.model_copy(
+            update={"request": orphan_transition, "result": orphan_result, "request_digest": orphan_digest}
+        )
+        _DeliveryPlanningPauseReplay.model_validate(orphan.model_dump(mode="json"), strict=False)
+        (second_path.parent / f"{orphan_digest}.json").write_bytes(_model_content(orphan))
+
+    frontier_before = frontier_path.read_bytes()
+    rejected = load_delivery_application(restart.config, workspace_root=restart.fresh)
+    health = rejected.delivery_health()
+    assert health.status.value == "attention"
+    assert any(
+        diagnostic.change_id == change_id
+        and diagnostic.code == "remote-state-reconciliation-required"
+        and expected_detail in diagnostic.detail
+        for diagnostic in health.diagnostics
+    ), health.diagnostics
+    assert frontier_path.read_bytes() == frontier_before
 
 
 @pytest.mark.parametrize(
