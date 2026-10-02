@@ -973,7 +973,11 @@ def test_worker_settlement_guidance_matches_native_contract() -> None:
     assert "ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED" in wiring
     assert "leaving custody retained" in wiring
     assert "During exact-claim recovery after a crash or unstructured worker return" not in workspace_governance
-    assert "Until a verified recovery receipt releases the exact claim" in workspace_governance
+    assert (
+        "Until a verified recovery receipt releases the exact claim after an unknown or failed dispatch"
+        in workspace_governance
+    )
+    assert "exact settlement receipt and fresh `builder_handoff_context`" in workspace_governance
 
 
 def test_memory_audit_rescoping_requires_corroborated_agent_names() -> None:

@@ -41,17 +41,22 @@ without behavior change).
   committing. Do not infer an ownership conflict from a dirty path, file timestamp, or invocation
   boundary alone. If a concrete hunk conflicts with the task or cannot be safely attributed, name that
   path and hunk in the containment reason instead of describing the whole task-owned diff as mixed.
-- Until a verified recovery receipt releases the exact claim, do not adopt its uncommitted changes
-  into a later invocation. Retain them and report the missing host-owned exclusion evidence; a timeout
-  or caller assertion does not grant custody.
+- Until a verified recovery receipt releases the exact claim after an unknown or failed dispatch, do
+  not adopt its uncommitted changes into a later invocation. Retain them and report the missing
+  host-owned exclusion evidence; a timeout or caller assertion does not grant custody. A normally
+  settled same-task Builder handoff is different: with its exact settlement receipt and fresh
+  `builder_handoff_context`, the next Builder may triage and adopt compatible task work under
+  `w-packet-building`; foreign or ambiguous content stays intact.
 - Pass explicit file paths to `commit-owned`; never pass `.`, a Delivery authority/state root, or
   another broad directory. The task's maintained surfaces bound eligible implementation paths.
-- Builder calls `submit_result` only after the scoped commit exists, its path set equals
-  the task-owned set, no task-owned change remains outside it, and fresh read-only review passes
-  that exact commit.
-- If the scoped commit cannot be created or verified, publish no result and report fail-closed
-  evidence for Orchestrator recovery. Retry, return, and block are invalid until the writer-owned
-  head is exact and clean.
+- Builder calls `submit_result` only after the scoped commit exists, its path set equals the task-owned
+  set, no task-owned change remains outside it, and fresh read-only review passes that exact commit.
+- If the scoped commit cannot be created or verified, publish no result. With branch, `HEAD`, writer
+  custody, and the retry's required attempt/`abandoned_commit` identity independently verified, the
+  Builder may return `retry` for normal settlement; dirty, staged, and committed work remains
+  available to the next same-task handoff. An Implementation `return` requires the exact
+  `attempt_id` and `preserved_commit` plus writer-head validation; an Implementation `block` requires
+  a bounded user request and a clean `resume_commit`.
 - A permitted local `implementation` finding repair uses another explicit scoped commit, reruns
   affected proof, and requires fresh review of the cumulative task result.
 - Never push. The user pushes manually.
