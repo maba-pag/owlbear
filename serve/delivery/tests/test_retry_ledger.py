@@ -234,6 +234,28 @@ def test_unresolved_reservation_is_contained_until_an_outcome(tmp_path: Path) ->
     assert retry.allowed
 
 
+def test_settled_failure_is_attempt_specific_after_refunded_pause(tmp_path: Path) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    key = _engine_key(action="finalize")
+    original = ledger.reserve(key, failure_class="mechanical", now=_START, attempt_id="finalizer-1")
+    ledger.record_failure(original, failure_code="finalizer-failed", now=_START)
+    retry = ledger.reserve(
+        key,
+        failure_class="mechanical",
+        now=_START + timedelta(seconds=1),
+        attempt_id="finalizer-2",
+    )
+
+    assert not ledger.episode(key).settled_failure("finalizer-1")
+
+    refunded = ledger.record_pause(retry.attempt_id, now=_START + timedelta(seconds=1))
+
+    assert refunded.last_status == "paused"
+    assert refunded.total_attempts == 1
+    assert refunded.settled_failure("finalizer-1")
+    assert not refunded.settled_failure("finalizer-2")
+
+
 def test_verified_release_preserves_budget_for_worker_episode(tmp_path: Path) -> None:
     ledger = RetryLedger(tmp_path, "change-a")
     key = RetryEpisodeKey.worker(

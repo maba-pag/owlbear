@@ -667,6 +667,10 @@ class RetryEpisodeSummary(_RecoveryModel):
             raise ValueError("retry outcome identities must be unique")
         return self
 
+    def settled_failure(self, attempt_id: str) -> bool:
+        """Return whether this exact attempt failed and no later reservation is unsettled."""
+        return digest(f"{attempt_id}:failed".encode()) in self.outcome_ids and not _pending_attempts(self)
+
 
 class RetryLedgerSummary(_RecoveryModel):
     """Versioned current retry projection guarded by expected-byte replacement."""

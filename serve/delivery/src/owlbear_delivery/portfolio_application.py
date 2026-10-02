@@ -6475,7 +6475,7 @@ class PortfolioApplication:
                         ):
                             message = "finished Finalizer attempt is bound to a different retry episode"
                             raise RetryLedgerConflictError(message)
-                        if failed_episode.last_status == "failed":
+                        if failed_episode.settled_failure(prior_finalization.writer.attempt_id):
                             retry_key = failed_episode.key
                             finalization_id = retry_key.finalization_id
         return finalization_id, resume_attempt_id, retry_key
@@ -6498,7 +6498,7 @@ class PortfolioApplication:
             or episode is None
             or episode.key.action_kind != WorkItemActionKind.FINALIZE.value
             or episode.failure_class is not RetryFailureClass.MECHANICAL
-            or episode.last_status != "failed"
+            or not episode.settled_failure(attention.attempt_id)
         ):
             message = "settled Finalizer attention has no matching failed retry episode"
             raise RetryLedgerConflictError(message)
@@ -6528,12 +6528,15 @@ class PortfolioApplication:
                     else DeliveryWorkerRole.PLANNER
                 )
                 completed = {result.task_id for result in binding.results}
+                handoff_context = binding.builder_handoff_context
                 task_lineage = (
                     next(
                         (
                             task.task_id
                             for task in binding.tasks
-                            if task.task_id not in completed and set(task.dependency_ids) <= completed
+                            if task.task_id not in completed
+                            and set(task.dependency_ids) <= completed
+                            and (handoff_context is None or task.task_id == handoff_context.original_task_id)
                         ),
                         card.work_item_id,
                     )
@@ -7949,7 +7952,7 @@ class PortfolioApplication:
                     if isinstance(source, DeliveryAcquisitionFailure):
                         failures.append(source)
                         continue
-                    launch = self._activate_candidate(candidate, source)
+                    launch = self._activate_candidate(candidate, source, isolate_retry_accounting=True)
                     if isinstance(launch, DeliveryAcquisitionFailure):
                         failures.append(launch)
                         available = max(self._execution_capacity - self._execution_occupancy(), 0)
@@ -8947,7 +8950,7 @@ class PortfolioApplication:
             current = self._selected_change_card(snapshot, cards).readiness
         except (OSError, RuntimeError, ValueError):
             current = readiness
-        if failure.code == "ERR_DELIVERY_RETRY_EXHAUSTED" and current.reason_code in {
+        if failure.code in {"ERR_DELIVERY_RETRY_EXHAUSTED", "ERR_DELIVERY_RETRY_BACKOFF"} and current.reason_code in {
             "retry-backoff",
             "retry-exhausted",
             "retry-containment",
@@ -10816,26 +10819,44 @@ class PortfolioApplication:
         *,
         expected_frontier_digest: str | None = None,
         host_identity: tuple[str, str] | None = None,
+        isolate_retry_accounting: bool = False,
     ) -> DeliveryLaunchPackage | DeliveryAcquisitionFailure:
-        self._reconcile_retry_results_fail_closed(candidate.runtime)
+        try:
+            self._reconcile_retry_results_fail_closed(candidate.runtime)
+        except (OSError, RuntimeError, ValueError) as exc:
+            if not isolate_retry_accounting:
+                raise
+            return self._retry_accounting_unavailable(candidate, exc)
         claim = self._new_claim(candidate.role, candidate.task_id)
         if host_identity is not None:
             claim = claim.model_copy(
                 update={"owner_id": host_identity[0], "process_id": host_identity[1], "continuation": True}
             )
         frontier_before = candidate.runtime.frontier_bytes()
-        reservation = self._reserve_worker_attempt(candidate, source, claim.attempt_id, claim.claim_id)
+        try:
+            reservation = self._reserve_worker_attempt(candidate, source, claim.attempt_id, claim.claim_id)
+        except (OSError, RuntimeError, ValueError) as exc:
+            if not isolate_retry_accounting:
+                raise
+            return self._retry_accounting_unavailable(candidate, exc)
         if reservation is not None and not reservation.allowed:
+            backoff = reservation.stop_code is RetryStopCode.BACKOFF
             return DeliveryAcquisitionFailure(
                 change_id=candidate.change_id,
                 outcome_id=candidate.binding.outcome_id,
                 attempt_id=claim.attempt_id,
                 claim_id=claim.claim_id,
-                code="ERR_DELIVERY_RETRY_EXHAUSTED",
-                detail="Automatic worker repair is not eligible for this semantic failure episode.",
+                code="ERR_DELIVERY_RETRY_BACKOFF" if backoff else "ERR_DELIVERY_RETRY_EXHAUSTED",
+                detail=(
+                    "Automatic worker repair is waiting for this semantic failure episode's durable backoff."
+                    if backoff
+                    else "Automatic worker repair is not eligible for this semantic failure episode."
+                ),
                 retry_condition=(
-                    "Wait for the durable retry eligibility time or record accepted progress for this exact episode; "
-                    "do not create a new allowance by renaming the task or operation."
+                    "Wait for the durable retry eligibility time; waiting does not create a new allowance."
+                    if backoff
+                    else "Wait for the durable retry eligibility time or record accepted progress for this exact "
+                    "episode; do not create a new allowance by renaming the task or operation."
                 ),
             )
         try:
@@ -10876,6 +10897,19 @@ class PortfolioApplication:
                     else "Recover the exact failed claim after reconciling writer custody."
                 ),
             )
+
+    @staticmethod
+    def _retry_accounting_unavailable(candidate: _Candidate, exc: Exception) -> DeliveryAcquisitionFailure:
+        return DeliveryAcquisitionFailure(
+            change_id=candidate.change_id,
+            outcome_id=candidate.binding.outcome_id,
+            code=getattr(exc, "code", PortfolioApplicationError.code),
+            detail="Retry accounting for this Change is unavailable; no claim or writer was published.",
+            retry_condition=(
+                "Restore readable retry-ledger state for this Change before acquiring it again; "
+                "independent Changes remain eligible."
+            ),
+        )
 
     def _activate_candidate_claim(
         self,
