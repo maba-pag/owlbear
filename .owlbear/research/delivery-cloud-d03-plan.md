@@ -151,6 +151,16 @@ unreadable processes started after the claim blocking) and a 30-second write gua
 the scan; Orchestrator asks the user once per pre-existing running claim in its entry scope; Cockpit
 shows Delivery's own refusal text; and offline diagnosis validates the new issuer content.
 
+**Live window-identity validation (2026-10-02, macOS, single VS Code window):** VS Code launched the
+workspace's `owlbear-memory` stdio server with the same `uv run python -m …` shape as
+`owlbear-delivery`. Its live chain was `python3.14` → `uv` → `Code Helper (Plugin)` (pid 98809,
+this window's extension host) → `Code` (main) → `launchd`. `WindowHostIdentity.capture()` from
+`7ffff1a5`, started at that server, recorded the extension host and reported it `alive`. That
+process holds Copilot Chat's open session store, so the agents receiving claims run inside the
+recorded process. Restarting the MCP server keeps it; reload, crash or close of the window replaces
+or ends it. The Delivery server itself was not started; its launch chain is identical by
+configuration.
+
 | Gate | Current disposition |
 | --- | --- |
 | Source and contract | Native Orchestrator settlement is user-approved. Exact clean settled target-stale attention may sync through the existing engine owner, retaining the passive-writer reservation through its merge/conflict outcome; fresh review precedes a new Finalizer under the original budget. Dirty workspaces, stale identities, unattributed material and unknown execution remain contained; sync cannot renew the three-attempt budget |
