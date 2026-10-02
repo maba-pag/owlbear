@@ -155,6 +155,24 @@ def test_standalone_svg_preserves_static_root_and_filters_viewer_css(render_modu
     assert output.count("<svg ") == 1
 
 
+def test_standalone_svg_merges_separate_font_stylesheet(render_module: ModuleType) -> None:
+    html = """<!DOCTYPE html>
+<html><head><style id="archify-fonts">
+  @font-face { font-family: "JetBrains Mono"; src: url("data:font/woff2;base64,AAAA") format("woff2"); }
+</style><style>
+  .c-grid { stroke: #eee; }
+  .toolbar { display: flex; }
+</style></head><body>
+<svg viewBox="0 0 320 240" role="img"><path class="c-grid" /></svg>
+</body></html>"""
+
+    output = render_module._standalone_svg(html, "light")  # noqa: SLF001
+
+    assert "@font-face" in output
+    assert ".c-grid" in output
+    assert ".toolbar" not in output
+
+
 def test_standalone_svg_rejects_css_without_static_rules(render_module: ModuleType) -> None:
     html = """<!DOCTYPE html>
 <html><head><style>

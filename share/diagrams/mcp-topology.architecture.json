@@ -3,6 +3,7 @@
   "diagram_type": "architecture",
   "meta": {
     "title": "OwlBear MCP Topology",
+    "output": "share/diagrams/mcp-topology.html",
     "subtitle": "Five seeded stdio servers; configuration and implementations remain authoritative.",
     "quality_profile": "showcase",
     "viewBox": [1390, 680]
