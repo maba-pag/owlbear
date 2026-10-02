@@ -923,6 +923,40 @@ def test_memory_curator_required_skill_falls_back_to_shared_root() -> None:
     assert "owlbear-memory/commit_memory_batch" in agent
 
 
+def _assert_session_start_claim_guidance(orchestration: str, orchestrate_prompt: str) -> None:
+    session_start_begin = orchestration.index("**Session-start stale-claim check.**")
+    session_start_end = orchestration.index("## Change Continuation Entry")
+    session_start = orchestration[session_start_begin:session_start_end]
+
+    assert "Select the entry route first" in orchestration[:session_start_begin]
+    assert "For `/continue-change <change_id>`, call `get_change(change_id)` and" in session_start
+    assert "inspect only that Change's running claims" in session_start
+    assert "Do not call `list_changes` or inspect sibling Changes on this route." in session_start
+    assert "For `/orchestrate`, call `list_changes` once and" in session_start
+    assert 'readiness.status == "running"' in session_start
+    assert "call `get_change(change_id)`" in session_start
+    assert "Ask once per revalidated running claim through `vscode/askQuestions`" in session_start
+    assert "role, Change ID, outcome (or Finalizer), and start time" in session_start
+    assert "A pre-existing running claim was not dispatched by this session" in orchestration
+    assert "may belong to a prior run or another live chat" in orchestration
+    assert "For `still running` or `unsure`, leave the claim" in session_start
+    assert "replacement for that claim while it remains unresolved" in session_start
+    assert "A `worker-stall-wait` readiness needs no question" in session_start
+    assert "Delivery automatically records `worker-host-lost` on a later acquisition" in session_start
+    assert "Subagents run inside the issuing VS Code window and have no separate OS process identity" in session_start
+    assert "no writes for 30 seconds" in session_start
+    assert "no live same-user process has a cwd or open file" in session_start
+    assert "MCP-server restart while the issuing window remains alive does not trigger host loss" in session_start
+    assert "vscode/askQuestions" in _frontmatter(_AGENTS_ROOT / "orchestrator.agent.md")["tools"]
+    orchestrator_agent = (_AGENTS_ROOT / "orchestrator.agent.md").read_text(encoding="utf-8")
+    assert "`/continue-change <change_id>` inspects only that Change" in orchestrator_agent
+    assert "`/orchestrate` inspects all listed Changes from one" in orchestrator_agent
+    assert "session-start stale-claim check" in orchestrate_prompt
+    assert "portfolio scope" in orchestrate_prompt
+    assert "inspect `list_changes` once" in orchestrate_prompt
+    assert "`worker-stall-wait` needs no question" in orchestrate_prompt
+
+
 def _assert_stopped_worker_release_guidance() -> None:
     orchestration = " ".join((_SKILLS_ROOT / "w-orchestration/SKILL.md").read_text(encoding="utf-8").split())
     dispatch = orchestration[
@@ -932,12 +966,15 @@ def _assert_stopped_worker_release_guidance() -> None:
     ]
     finalization = " ".join((_SKILLS_ROOT / "w-change-finalization/SKILL.md").read_text(encoding="utf-8").split())
     finalizer = " ".join((_AGENTS_ROOT / "finalizer.agent.md").read_text(encoding="utf-8").split())
-    release_prompt = (_PROMPTS_ROOT / "release-stuck-worker.prompt.md").read_text(encoding="utf-8")
+    release_prompt = " ".join((_PROMPTS_ROOT / "release-stuck-worker.prompt.md").read_text(encoding="utf-8").split())
+    orchestrate_prompt = (_PROMPTS_ROOT / "orchestrate.prompt.md").read_text(encoding="utf-8")
     operator_guide = (_REPO_ROOT / "setup/operating-owlbear.md").read_text(encoding="utf-8")
     delivery_readme = (_REPO_ROOT / "serve/delivery/README.md").read_text(encoding="utf-8")
     delivery_mcp = " ".join((_REPO_ROOT / "serve/delivery-mcp/README.md").read_text(encoding="utf-8").split())
     cockpit_readme = (_REPO_ROOT / "serve/cockpit/README.md").read_text(encoding="utf-8")
     wiring = " ".join((_REPO_ROOT / "share/WIRING.md").read_text(encoding="utf-8").split())
+
+    _assert_session_start_claim_guidance(orchestration, orchestrate_prompt)
 
     assert "`worker-host-lost` and `worker-released-stuck` are engine-only dispositions" in orchestration
     assert "never send either through `settle_worker_invocation`" in orchestration
@@ -946,7 +983,6 @@ def _assert_stopped_worker_release_guidance() -> None:
     assert "Call the tool once and report its result unchanged" in dispatch
     assert "ERR_DELIVERY_WORKER_ACTIVE" in dispatch
     assert "do not retry or dispatch a replacement in the same cycle" in dispatch
-    assert "Delivery may settle an earlier-session claim as `worker-host-lost`" in orchestration
     assert (
         "category `worker-ended`, code `finalizer-ended-without-report`, and `checks_state: unknown`"
     ) in finalization
@@ -954,13 +990,37 @@ def _assert_stopped_worker_release_guidance() -> None:
     assert "`finalizer-ended-without-report` has `checks_state: unknown` and is not proof" in finalizer
     assert "ask them to" in release_prompt
     assert "release_stuck_worker` exactly once" in release_prompt
+    assert "`reason_code` is `worker-stall-wait`, do not ask or release" in release_prompt
+    assert "no worktree writes for 30" in release_prompt
+    assert "no live same-user process with a cwd or open file" in release_prompt
+    assert "MCP server while the issuing VS Code window remains alive" in release_prompt
     assert "no same-cycle replacement" in operator_guide
-    assert "VS Code crash/restart" in operator_guide
+    assert "window-exit row" in operator_guide
+    assert "Recorded PID/start time is gone" in operator_guide
+    assert "no writes for 30 seconds" in operator_guide
+    assert "Before dispatching from either entry route" in operator_guide
     assert "ERR_DELIVERY_WORKER_ACTIVE" in operator_guide
     assert "release_stuck_worker" in delivery_readme
     assert "release_stuck_worker" in delivery_mcp
     assert "Release stuck worker" in cockpit_readme
     assert "release-stuck-worker" in wiring
+    for content in (
+        orchestration,
+        release_prompt,
+        orchestrate_prompt,
+        operator_guide,
+        delivery_readme,
+        delivery_mcp,
+        cockpit_readme,
+        wiring,
+    ):
+        normalized = content.lower()
+        assert "two minutes" not in normalized
+        assert "host lock" not in normalized
+        assert "host-lock" not in normalized
+        assert "issuer lock" not in normalized
+        assert "quiet-worktree check" not in normalized
+        assert ".owlbear/delivery/runtime/hosts/" not in normalized
 
 
 def test_worker_settlement_guidance_matches_native_contract() -> None:

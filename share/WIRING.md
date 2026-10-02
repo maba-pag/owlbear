@@ -48,7 +48,7 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 | designer-challenger | GPT-6.1 Sol (copilot) | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design` | None | `PreToolUse`: deny writes except scratch |
 | planner | Claude Opus 5.5 (copilot) | `w-frontier-planning` | planner-challenger, Explore | `PreToolUse`: deny writes except scratch; terminal read-only; publishes advisory-reviewed task chains and returns worker-owned transitions |
 | planner-challenger | GPT-6.1 Sol (copilot) | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | None | `PreToolUse`: deny writes except scratch |
-| orchestrator | GPT-6 Luna | `w-orchestration` | see below | Returned no-results settle; host-loss is engine-owned. |
+| orchestrator | GPT-6 Luna | `w-orchestration` | see below | Session-start claim check; user-confirmed stopped claims use one exact release; window loss is engine-settled after the write/process guard. |
 | repairer | GPT-6 Luna | `h-decision-requests` | None | One exact Change view and one bounded answer/repair interaction; high-level Delivery tools only, no repository or worker authority |
 | builder | GPT-6 Luna | `w-packet-building`, `r-workspace-governance`, `h-codebase-orientation` | build-reviewer | Assigned Change worktree only; successful Build uses the claim-bound submit-result facade; normally returned retry/block/Planning-or-Design-return transitions are settled by Orchestrator, while other supported transitions are forwarded; `SessionStart`: repository context; `PostToolUse`: lint changed files |
 | build-reviewer | GPT-6.1 Sol (copilot) | `r-challenger-protocol`, `h-codebase-orientation` | None | Exact-commit task-result or finalization review with read-only Git; `PreToolUse`: deny writes except scratch; terminal read-only |
@@ -62,11 +62,16 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 Tool allowlists remain in agent frontmatter; they are not duplicated here.
 
 Orchestrator acquires and dispatches work, then forwards ordinary transitions and routes typed
-attention and admitted Change repair proposals. It runs periodic memory curation and has no repository
-write tools. Returned Planner/Builder no-results use `ended-without-result` only after dispatch return
-and owned mutators settle. Delivery settles a previous-session host loss at acquisition after the
-issuer lock is free and the worktree is quiet; `worker-stall-wait` yields with its retry time. A
-user-confirmed stopped chat may use `release_stuck_worker` once. `worker-host-lost` and
+attention and admitted Change repair proposals. Before either entry route, it inspects `list_changes`
+and `get_change` for running Planner/Builder/Finalizer claims and asks once with `vscode/askQuestions`
+whether each exact prior run was stopped. Only a confirmed stop uses one exact
+`release_stuck_worker` call. A `worker-stall-wait` needs no question and yields with its retry time
+or bounded process details. Delivery records each claim's issuing VS Code window PID and process
+start time, then settles a previous-session loss on acquisition only after that window is gone, no
+worktree write occurred for 30 seconds, and the worktree/Git-admin process guard passes. An
+MCP-server restart while the window is alive does not qualify. Orchestrator runs periodic memory
+curation and has no repository write tools. Returned Planner/Builder no-results use
+`ended-without-result` only after dispatch return and owned mutators settle. `worker-host-lost` and
 `worker-released-stuck` are engine-only and never go through Orchestrator settlement. A lost or
 released Finalizer without a report receives `finalizer-ended-without-report` with unknown checks,
 not proof.
@@ -77,13 +82,13 @@ not proof.
 | --- | --- | --- |
 | `ideate` | `prompt` -> designer in discovery mode | Agent required-reading loads `w-design-session`; selects or creates one target Design session |
 | `design` | `prompt` -> designer in direct design mode | Agent required-reading loads `w-design-session`; rehydrates the same target Design session |
-| `orchestrate` | `prompt` -> orchestrator | Agent required-reading loads `w-orchestration` |
+| `orchestrate` | `prompt` -> orchestrator | Agent required-reading loads `w-orchestration`; session-start stale-claim check precedes dispatch |
 | `continue-change` | `prompt` -> orchestrator | One selected Change; acquires and dispatches at most one Change action at a time |
 | `challenge-plan_sol` | Current agent directed by `.github/prompts` | Dispatches a fresh unnamed read-only subagent with `GPT-6.1 Sol (copilot)`; caller reconciles evidence and owns the recommendation |
 | `challenge-implementation_sol` | Current agent directed by `.github/prompts` | Dispatches a fresh unnamed read-only subagent with `GPT-6.1 Sol (copilot)`; caller reconciles findings and owns the verdict |
 | `finalize-change` | `prompt` -> finalizer | Agent required-reading loads `w-change-finalization`; engine proof and exact reviewed finalization |
 | `inspect-change` | built-in `ask` mode | Read-only Change diagnosis through `get_change` and `delivery_health` only; no mutation or host repair |
-| `release-stuck-worker` | `prompt` -> orchestrator | Claim from `get_change`; confirm stop if needed; release once |
+| `release-stuck-worker` | `prompt` -> orchestrator | Claim from `get_change`; skip `worker-stall-wait`; confirm stop if needed; release once under the write/process guard |
 | `address-pr-feedback` | Current agent directed by prompt | Loads `w-address-pr-feedback`; `start` evaluates and repairs external review threads, while `resume` publishes the fresh finalized head before replying and resolving threads |
 | `resolve-target-conflict` | Current agent directed by prompt | Loads `w-target-conflict-resolution`; resolves exact target merges in the managed Change worktree and hands off to finalization |
 | `resolve-delivery-attention` | Temporary recovery/exception prompt | Loads `w-delivery-attention-resolution`; binds one exact Change or Integration attention before interactive diagnosis; retire only after Cockpit and Delivery provide tested guided routes for all prompt-only recovery capabilities |

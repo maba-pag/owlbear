@@ -33,11 +33,17 @@ The main public areas are:
 
 Planner/Builder settlements cover normal outcomes, completed timeouts, and
 `ended-without-result` after the dispatch has returned and owned mutating work is settled. Delivery
-also settles a previous-session claim as engine-only `worker-host-lost` during acquisition after its
-issuer lock is free and the worktree has been quiet for two minutes. Before then, readiness reports
-`worker-stall-wait` with `next_eligible_at`. A user who stopped a specific chat may call
-`release_stuck_worker` once; it uses the same quiet guard and returns `ERR_DELIVERY_WORKER_ACTIVE` with
-a retry time without changing custody or files when the worktree is not quiet. Neither
+records each claim's issuing VS Code window PID and process start time under
+`.owlbear/delivery/runtime/changes/<change>/claim-issuers/<attempt>.json`. A later acquisition
+settles a previous-session claim as engine-only `worker-host-lost` only after that exact window
+process is gone, no worktree writes have occurred for 30 seconds, and no live same-user process has a
+cwd or open file under the managed worktree or Git admin directory. Restarting the MCP server while
+the window remains alive does not qualify. Before the guard passes, readiness reports
+`worker-stall-wait`: `next_eligible_at` indicates the write guard; without a time, the prompt gives
+active-process names or bounded scan detail. A user who confirms that a specific chat was stopped
+may call `release_stuck_worker` once under the same guard. `ERR_DELIVERY_WORKER_ACTIVE` preserves
+custody and files and returns a retry time for the write guard or process details otherwise. Idle
+shells with no live child are ignored unless an open file is under a guarded path. Neither
 `worker-host-lost` nor `worker-released-stuck` is sent through `settle_worker_invocation`; both count
 as failed attempts in the same three-attempt episode and preserve work for same-task retry after
 backoff. A lost or released Finalizer without a report receives an engine-authored
@@ -166,9 +172,9 @@ An active Planner or Builder claim is checked lazily during the next `acquire_fr
 `claim_timeout_seconds` (3600 seconds by default) identifies elapsed claims but is not proof that a
 worker stopped. `recover_claim` remains separate and refuses with
 `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` without supported host exclusion. At the next acquisition,
-Delivery settles a previous-session claim as `worker-host-lost` only when its issuer lock is free and
-the worktree has been quiet for two minutes. Until then readiness may report `worker-stall-wait` with
-`next_eligible_at`; unsettled claims continue to consume shared capacity. The loader merges
+Delivery settles a previous-session claim only when its recorded issuing window is gone and the
+write/process guard passes. Until then readiness may report `worker-stall-wait` with a retry time or
+process details; unsettled claims continue to consume shared capacity. The loader merges
 `host.local.json` over `host.json` when the overlay exists; a timeout or caller confirmation alone
 does not clear custody.
 

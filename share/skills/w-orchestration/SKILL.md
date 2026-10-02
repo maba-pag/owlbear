@@ -12,6 +12,44 @@ policy, writer custody, transitions, provider-observed acceptance, and retained
 Integration attention. Orchestrator performs only the mechanical dispatch loop
 around that authority.
 
+Select the entry route first, then run only its session-start claim check before dispatch. A pre-existing
+running claim was not dispatched by this session and may belong to a prior run or another live chat; only
+the user can identify whether that exact run stopped.
+
+**Session-start stale-claim check.** For `/continue-change <change_id>`, call `get_change(change_id)` and
+inspect only that Change's running claims, revalidating them in the same coherent view. Do not call
+`list_changes` or inspect sibling Changes on this route. For `/orchestrate`, call `list_changes` once and
+inspect each listed Change's cards. For every Planner, Builder, or Finalizer card with
+`readiness.status == "running"`, call `get_change(change_id)` and revalidate that exact claim and its
+running readiness in the coherent view. Outcome claims are in `unresolved_outcomes[].active_claim`, with
+readiness on the outcome's card; an active Finalizer is an unfinished `finalization_attempt.writer` with
+`kind: finalize`.
+Use the outcome claim's `worker_role` and `started_at`, or the Finalizer's `claimed_at`, to label
+the question with role, Change ID, outcome (or Finalizer), and start time. Copy `change_id`,
+`outcome_id`, `attempt_id`, and `claim_id` only from that same `get_change` view; use
+`outcome_id: null` for Finalizer. If the exact claim is no longer active or running, do not ask or
+release it.
+
+Ask once per revalidated running claim through `vscode/askQuestions`: was this exact run stopped or
+closed? Offer `stopped/closed`, `still running`, and `unsure`. For `stopped/closed`, call
+`release_stuck_worker` exactly once with the copied identity and report its result unchanged. If it
+returns `ERR_DELIVERY_WORKER_ACTIVE`, preserve the returned retry time or process details and do
+not retry or dispatch a replacement in this cycle. For `still running` or `unsure`, leave the claim
+and its files unchanged and continue with other Changes. Never edit its worktree or dispatch a
+replacement for that claim while it remains unresolved. A `worker-stall-wait` readiness needs no question
+or manual settlement; report its retry time or bounded process details and let a later acquisition
+settle it when the guard passes.
+
+Subagents run inside the issuing VS Code window and have no separate OS process identity.
+Delivery automatically records `worker-host-lost` on a later acquisition only after the issuing
+VS Code window identified by its recorded PID and process start time is gone, the worktree has had
+no writes for 30 seconds, and no live same-user process has a cwd or open file beneath the managed
+worktree or Git admin directory. An MCP-server restart while the issuing window remains alive does
+not trigger host loss. The process guard ignores a terminal-attached idle shell whose only link is its
+worktree cwd and which has no live children; open files still block. While the guard is unmet, `worker-stall-wait`
+with `next_eligible_at` indicates the write guard; without a time, report the process names in the
+prompt (or its bounded scan detail) and yield.
+
 ## Change Continuation Entry
 
 `/continue-change <change_id>` is the normal entry for one named Change and uses this section instead
@@ -108,10 +146,12 @@ exact continuation `owner_id` and `process_id` as outer `host_id` and `session_i
 returned identity values. After settlement, re-read `get_change`, report the exact receipt, and do not
 dispatch a replacement in the same continuation cycle; a later fresh acquisition follows engine
 backoff.
-A dispatch that never returned in a previous session is handled by Delivery during a later acquisition.
-When Delivery reports `worker-stall-wait`, report its `next_eligible_at` and yield; do not settle,
-recover, release, or dispatch a replacement. Within the current session, an unreturned dispatch or any
-owned mutating terminal or asynchronous job that may still be running is not settled by Orchestrator.
+A dispatch that never returned in a previous session is handled by the session-start check and, when
+its issuing window is gone, by a later acquisition after Delivery's write/process guard passes. When
+Delivery reports `worker-stall-wait`, report its `next_eligible_at` when present or its bounded
+process details when absent, then yield; do not settle, recover, release, or dispatch a replacement.
+Within the current session, an unreturned dispatch or any owned mutating terminal or asynchronous
+job that may still be running is not settled by Orchestrator.
 If the user explicitly states that the specific worker chat was stopped, use the separate one-shot
 `release_stuck_worker` route in Step 2. `confirmed_lost`, elapsed time, disconnection, and a cancelled
 wait are never evidence for `settle_worker_invocation` or `recover_claim`.
@@ -168,8 +208,9 @@ this route, require its callable binding at the point of use; if it is not direc
 focused `tool_search` for that exact operation. A missing release binding does not block ordinary
 acquisition and is never a reason to use `settle_worker_invocation` or `recover_claim` instead.
 
-Call `list_changes` only for bounded portfolio reporting. Call `acquire_actions` once for the
-current cycle. Its `DeliveryAcquisitionResult` is the sole source of task launch order,
+Call `list_changes` for the session-start stale-claim check, bounded portfolio reporting, and final
+quiescence confirmation only. Call `acquire_actions` once for the current cycle. Its
+`DeliveryAcquisitionResult` is the sole source of task launch order,
 typed `integration_attention`, acquisition failures, and the optional `health_hint`. When
 `health_hint` is non-empty, immediately call `delivery_health` with `{}` and report its bounded
 diagnostics before dispatching any launch. Do not dispatch or recover a Change identified by those
@@ -183,9 +224,9 @@ Report the typed result unchanged. Do not filter for capacity, infer readiness, 
 or reserve writer custody.
 
 Delivery may settle an earlier-session claim as `worker-host-lost` during acquisition only after its
-issuing host lock is free and the worktree has been quiet for at least two minutes. A `worker-stall-wait`
-readiness is a wait, not a launch: report its `next_eligible_at` and yield without calling a settlement
-or recovery operation.
+recorded issuing window process is gone and the write/process guard above passes. A
+`worker-stall-wait` readiness is a wait, not a launch: report `next_eligible_at` when present or the
+bounded process details when absent, then yield without calling a settlement or recovery operation.
 
 ## Step 2 - Dispatch Or Recover Each Launch
 
@@ -203,8 +244,9 @@ or identity-mismatched result. Preserve any available failure diagnostics for th
 Only settle after Orchestrator observes that the dispatch call returned and all owned mutating
 terminals and asynchronous jobs are settled. A dispatch call that has not returned, or any owned
 mutating terminal or asynchronous job that may still be running, is not settled by Orchestrator. For a
-previous-session dispatch, rely on Delivery's host-lock and quiet-worktree check at acquisition; report
-`worker-stall-wait` with its retry time and yield when that check is not yet eligible.
+previous-session dispatch, rely on the session-start check and Delivery's recorded-window and
+write/process guard at acquisition; report `worker-stall-wait` with its retry time or process details
+and yield when the guard is not yet eligible.
 
 ### Release A User-Stopped Worker
 
@@ -213,9 +255,10 @@ was stopped. If that statement is ambiguous, ask which exact worker was stopped 
 `change_id`, `outcome_id`, `attempt_id`, and `claim_id` unchanged from the acquisition result or one
 fresh `get_change` view; for a Finalizer attempt, pass `outcome_id: null`. Never infer identity from
 conversation, elapsed time, or a worker's missing response. Call the tool once and report its result
-unchanged. If it returns `ERR_DELIVERY_WORKER_ACTIVE`, include the returned retry time and leave custody
-and files unchanged; do not retry or dispatch a replacement in the same cycle. This is a user decision
-consumed by Delivery's quiet-worktree check, not a process-control operation.
+unchanged. If it returns `ERR_DELIVERY_WORKER_ACTIVE`, report the returned retry time or process details
+unchanged and leave custody and files unchanged; do not retry or dispatch a replacement in the same
+cycle. This is a user decision consumed by Delivery's 30-second write and process guard, not a
+process-control operation.
 
 `worker-host-lost` and `worker-released-stuck` are engine-only dispositions; never send either through
 `settle_worker_invocation`. Each records the same failed-attempt semantics as `ended-without-result`,

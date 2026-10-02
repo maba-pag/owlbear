@@ -5,7 +5,7 @@ argument-hint: "Orchestrate Delivery work"
 user-invocable: true
 disable-model-invocation: true
 model: GPT-6 Luna (copilot)
-tools: [vscode/toolSearch, read/readFile, agent, owlbear-delivery/list_changes, owlbear-delivery/acquire_actions, owlbear-delivery/acquire_change_action, owlbear-delivery/execute_change_action, owlbear-delivery/delivery_health, owlbear-delivery/get_change, owlbear-delivery/transition_delivery, owlbear-delivery/settle_worker_invocation, owlbear-delivery/release_stuck_worker, owlbear-delivery/recover_claim, owlbear-delivery/recover_integration_repair_claim, owlbear-memory/recall_memory, owlbear-memory/save_memory]
+tools: [vscode/toolSearch, vscode/askQuestions, read/readFile, agent, owlbear-delivery/list_changes, owlbear-delivery/acquire_actions, owlbear-delivery/acquire_change_action, owlbear-delivery/execute_change_action, owlbear-delivery/delivery_health, owlbear-delivery/get_change, owlbear-delivery/transition_delivery, owlbear-delivery/settle_worker_invocation, owlbear-delivery/release_stuck_worker, owlbear-delivery/recover_claim, owlbear-delivery/recover_integration_repair_claim, owlbear-memory/recall_memory, owlbear-memory/save_memory]
 agents:
   - planner
   - builder
@@ -63,10 +63,17 @@ housekeeping is the explicit non-Delivery dispatch defined by `w-orchestration`.
   report the result unchanged. On recovery refusal, report `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED`
   unchanged. Never replace that worker in the same cycle or forward a
   `dispatch_failure` to `transition_delivery`.
-- **Stop on a contained continuation dispatch.** For an earlier-session loss, report
-  `worker-stall-wait` and `next_eligible_at` when Delivery has not met the quiet threshold. For a
-  current-session unreturned call, retain custody unless the user explicitly identifies its stopped
-  chat and Orchestrator calls `release_stuck_worker` once; never dispatch a replacement in that cycle.
+- **Respect session-start claim evidence.** Before either entry route, follow the stale-claim check in
+  `w-orchestration` after selecting the route: `/continue-change <change_id>` inspects only that Change
+  via `get_change`; `/orchestrate` inspects all listed Changes from one `list_changes` call and
+  revalidates exact running claims with `get_change`. A pre-existing running claim was not dispatched
+  by this session and may belong to a prior run or another live chat. Ask once about each exact
+  revalidated claim; only a confirmed stop permits its one-shot `release_stuck_worker` call.
+  For `worker-stall-wait`, report
+  `next_eligible_at` when present or process details when absent; do not ask, release, or dispatch a
+  replacement for that claim. For a current-session unreturned call, retain custody unless the user
+  explicitly identifies its stopped chat and Orchestrator calls `release_stuck_worker` once; never
+  dispatch a replacement in that cycle.
   A Delivery-authored `finalizer-ended-without-report` has unknown checks and is not proof.
 - **Hand off one issued finalization intact.** Declare the `finalizer` capability only when this host
   can actually dispatch that agent; dispatch it with only the serialized `DeliveryFinalizationLaunch`.

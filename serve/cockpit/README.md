@@ -154,8 +154,11 @@ retains its admission state and reports the generic `runtime_unavailable` diagno
 `recover_claim` remains an exact recovery request and does not prove worker closure; it refuses with
 `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` when supported host exclusion is unavailable. Separately,
 Cockpit's "Release stuck worker" action calls `release_stuck_worker` after the user identifies a
-stopped chat. Delivery requires two quiet minutes; `ERR_DELIVERY_WORKER_ACTIVE` includes the retry time
-and leaves custody and files unchanged. The action does not operate the process. See the
+stopped chat. Delivery requires no worktree writes for 30 seconds and no live same-user process with a
+cwd or open file under the managed worktree or Git admin directory; terminal-attached idle shells with
+no live child are ignored unless an open file matches. `ERR_DELIVERY_WORKER_ACTIVE` includes a retry time when the write
+guard is pending, or process details otherwise, and leaves custody and files unchanged. The action
+does not operate the process. See the
 [operator recovery boundary](../../setup/operating-owlbear.md#correction-and-recovery).
 
 The current frontend polls `/api/work-items` every three seconds. Each poll observes a reconciled

@@ -25,10 +25,11 @@ Delivery stores per-Change custody records under
 `.owlbear/delivery/runtime/transactions/`. The sibling `runtime/claims/` namespace contains
 acquisition, publication, and verification locks.
 
-Each Delivery MCP process holds `.owlbear/delivery/runtime/hosts/<id>.lock` for its lifetime. Claims
-record their issuer under
-`.owlbear/delivery/runtime/changes/<change>/claim-issuers/<attempt>.json` for acquisition-time
-liveness checks.
+Each claim records the issuing VS Code window's PID and process start time under
+`.owlbear/delivery/runtime/changes/<change>/claim-issuers/<attempt>.json`. Delivery checks that exact
+window identity when it next considers previous-session work; an MCP server restart while the
+window is alive does not indicate worker loss. Subagents run inside that VS Code window and have no
+separate OS process identity.
 
 ### Tools
 
@@ -87,14 +88,18 @@ identity. Normal results and completed timeouts use this route. A returned Plann
 uses `ended-without-result` only after owned mutating work settles; it records a failed attempt and
 preserves work for same-task retry after backoff.
 
-At the next acquisition, Delivery checks a previous-session claim's issuer lock and worktree. If the
-lock is free and Git-reported changed paths, index, HEAD/branch ref, and worktree root have stayed
-unchanged for two minutes, Delivery records engine-only `worker-host-lost`; before then readiness is
-`worker-stall-wait` with `next_eligible_at`.
+At the next acquisition, Delivery records engine-only `worker-host-lost` only when the recorded
+issuing window process is gone, no worktree writes have occurred for 30 seconds, and no live
+same-user process has a cwd or open file under the managed worktree or Git admin directory. An idle
+shell whose only link is its worktree cwd and which has no live child is ignored; open files still
+block. Before the guard passes, readiness is `worker-stall-wait`: `next_eligible_at` indicates a
+pending write guard, and without a time the prompt reports blocking process names or bounded scan
+detail.
 
 When the user states that a specific worker chat was stopped, `release_stuck_worker` accepts its exact
-claim identity once and applies the same quiet-worktree check. `ERR_DELIVERY_WORKER_ACTIVE` returns a
-retry time and leaves custody and files unchanged. This is a user decision, not process control.
+claim identity once and applies the same 30-second write and process guard. `ERR_DELIVERY_WORKER_ACTIVE`
+returns a retry time for the write guard or process details otherwise, leaving custody and files
+unchanged. This is a user decision, not process control.
 Elapsed time, disconnection, and `confirmed_lost` are not settlement evidence.
 
 `worker-host-lost` and `worker-released-stuck` are engine-only and never pass through

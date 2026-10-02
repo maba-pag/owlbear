@@ -191,10 +191,13 @@ with deterministic outcomes, dependencies, commitments, and proof boundaries.
 
 ### Delivery
 
-After admission, invoke `/orchestrate`. Each cycle lists current work, acquires a bounded ordered
-set of launch packages across the portfolio, dispatches only the worker named by each package, and
-forwards the worker's transition unchanged. Tasks execute sequentially in the managed Change
-worktree and their promoted commits advance the Change branch directly.
+After admission, invoke `/orchestrate`. Before dispatching from either entry route, Orchestrator lists
+Changes and revalidates existing running Planner/Builder/Finalizer claims. It asks once whether each
+exact prior run was stopped or closed; only a confirmed stop is released, while `worker-stall-wait`
+needs no question. Portfolio cycles then acquire a bounded ordered set of launch packages, dispatch
+only the worker named by each package, and forward the worker's transition unchanged. Tasks execute
+sequentially in the managed Change worktree and their promoted commits advance the Change branch
+directly.
 
 - Planning reads one typed plan context, publishes one independently reviewed task chain, and
   returns `advance`, `retry`, `return`, or `block`.
@@ -221,9 +224,9 @@ Worker transitions keep correction finite and typed:
 | Requestless condition is satisfied | User clears the block in Cockpit | Engine recomputes eligibility |
 | Worker returns `retry` | Settle exact invocation | Preserve work; same task after backoff |
 | Planner/Builder no-result | `ended-without-result` after return + settled jobs | Preserve; same task after backoff |
-| VS Code crash/restart | Free issuer lock + 2 quiet minutes | Auto `worker-host-lost`; preserve work |
-| Quiet window incomplete | `worker-stall-wait` + `next_eligible_at` | Yield; no replacement |
-| Stopped chat | Cockpit "Release stuck worker" or `/release-stuck-worker` | Quiet-gated; no same-cycle replacement |
+| Issuing VS Code window ended | Recorded PID/start time is gone; no writes for 30 seconds and no live process in the worktree or Git admin directory | Auto `worker-host-lost`; preserve work |
+| Write/process guard incomplete | `worker-stall-wait`; retry time for recent writes or process/scan details when unresolved | Yield; no question or replacement |
+| Stopped chat with live window | User confirms the exact run stopped; Cockpit "Release stuck worker" or `/release-stuck-worker` | One guarded `worker-released-stuck`; no same-cycle replacement |
 | Planning-stage premise failed | Planning worker returns `return` with evidence, target and source boundary | Runtime persists typed successor context; Design reopen is currently manual through `/design` |
 | Implementation Builder requests `block` or `return` | Orchestrator settles the exact ended invocation, preserving work and completed results | Genuine request-bearing block settles the pause and gates reacquisition until answered. Planning return permits lineage-preserving replan; Design return supplies complete Designer attention, not automatic revision/admission. Raw unsupervised transitions remain refused |
 | Retry episode is exhausted | Responsible agent receives bounded read-only diagnosis with the failure history | Nonterminal blocking prevents automatic redispatch; no fabricated user request, clear-block reset or fresh allowance is offered |
@@ -232,20 +235,30 @@ Worker transitions keep correction finite and typed:
 | `recover_claim` requested | Requires supported host exclusion | Timeout/`confirmed_lost` do not release custody |
 | Earlier valid stage is required | User selects an invariant-checked backward move in Cockpit | Runtime resets only the selected outcome and its affected successors |
 
-The VS Code crash/restart row also covers a prior-session Orchestrator restart, reload, or closed window.
+The window-exit row also covers a prior-session Orchestrator restart, reload, or closed window. If the
+issuing window process remains alive, only the user can confirm whether its earlier run was stopped;
+the Orchestrator asks once at session start and does not infer closure from an MCP-server restart.
 
 Recovery requests and `confirmed_lost` are not proof. A returned Planner/Builder no-result uses
 `settle_worker_invocation` only after Orchestrator sees the dispatch return and all owned mutating work
-settle. For a previous-session loss, the next acquisition checks the issuer's host lock and worktree.
-If the lock is free and Git-reported changed paths, index, HEAD/branch ref, and worktree root have
-stayed unchanged for two minutes, Delivery records the engine-only `worker-host-lost` disposition.
-Otherwise readiness reports `worker-stall-wait` and `next_eligible_at`; yield until that time.
+settle. For a previous-session loss, each claim records its issuing VS Code window PID and process
+start time. The next acquisition can record engine-only `worker-host-lost` only after that exact
+window process is gone, no write has occurred in the last 30 seconds, and no live same-user process
+has its cwd or an open file under the managed worktree or Git admin directory. A terminal-attached idle
+shell whose only link is its worktree cwd and which has no live child is ignored; open files still block. If the
+guard is incomplete, readiness reports `worker-stall-wait`: a `next_eligible_at` means the write
+guard is still running; without a time, the prompt reports active process names or bounded scan
+detail. Yield without settling or recovering. Restarting the MCP server while the issuing window is
+alive does not trigger automatic settlement.
 
 When the user states that a specific worker chat was stopped, use Cockpit's "Release stuck worker"
-action or `/release-stuck-worker` with the exact active claim identity. This is a user decision, not a
-process command. Delivery releases only after the worktree has been quiet for two minutes. If it is
-still active, `ERR_DELIVERY_WORKER_ACTIVE` includes the retry time and leaves custody and files
-unchanged. Call the route once; do not dispatch a replacement in the same cycle. Neither
+action or `/release-stuck-worker` with the exact active claim identity. At Orchestrator session start,
+ask once about each exact `running` claim; do not ask about `worker-stall-wait`. This is a user
+decision, not a process command. Delivery applies the same 30-second no-write and worktree/Git-admin
+process guard. If it returns `ERR_DELIVERY_WORKER_ACTIVE`, a retry time means the write guard is
+pending; otherwise report the active process or bounded observation details unchanged. Custody and
+files remain unchanged. Call the route once; do not retry or dispatch a replacement in the same
+cycle. Neither
 `worker-host-lost` nor `worker-released-stuck` goes through `settle_worker_invocation`.
 
 Both engine dispositions count as failed attempts in the same three-attempt episode and preserve
@@ -263,12 +276,12 @@ Integration attention remain user-owned Cockpit controls. Those controls cannot 
 Builder diagnostic into an actionable request or transition.
 
 Corroborated passive Builder handoff and report-backed Finalizer attention release live execution
-capacity while preserving their mutation fences. Claims awaiting quiet eligibility and uncertain
+capacity while preserving their mutation fences. Claims awaiting write/process-guard eligibility and uncertain
 engine actions still occupy slots. Once Delivery records `worker-host-lost` or `worker-released-stuck`,
 the claim is released but its failed attempt remains. If active claims occupy every slot, new
 Planner/Builder work, finalization, and engine continuation stall across the portfolio. A Change
 cannot be abandoned while an active mutation claim remains. Timeout and `confirmed_lost` are not
-proof; a stopped-chat release is a user decision guarded by Delivery's quiet-worktree check.
+proof; a stopped-chat release is a user decision guarded by Delivery's 30-second write/process check.
 
 Separately, a proven-no-launch reservation can remain pending while another claim in the same
 Change is active. It does not consume an execution slot, but a later attempt contains that
@@ -323,8 +336,8 @@ Specification: read/revise -> checkpoint -> derive -> validate -> approve/admit
 Delivery: acquire -> plan/build -> publish -> worker transition
 Correction: returned end/no-result -> settlement -> same-task retry after backoff
   | request answer gate | Planning/Design return
-Recovery: prior-session host exit -> automatic quiet check; stopped chat -> one user-directed release
-Wait: worker-stall-wait -> yield until `next_eligible_at`
+Recovery: prior-session window exit -> automatic 30-second write/process guard; live-window stopped chat -> one user-directed release
+Wait: worker-stall-wait -> yield with retry time or process details
   | exhausted episode -> agent-owned read-only diagnosis
 Publication: finalize-change -> checkpoint -> draft PR -> finalized head -> ready PR
 Acceptance: user merges PR -> observe merged evidence -> completed lookup
@@ -342,8 +355,8 @@ retain the admitted contract, frontier progress, publication and finalization id
 completion evidence. They exclude active claims, writer custody, locks, capacity ledgers, process
 identifiers, absolute paths, and transient model output. A new clone recreates ignored runtime state,
 the package cache, and open Change worktrees from those remote identities. The next acquisition
-applies the host-lock and quiet-worktree check to an unsettled prior-session claim rather than treating
-its age or missing response as proof of death.
+applies the recorded-window and write/process guard to an unsettled prior-session claim rather than
+treating its age or missing response as proof of death.
 
 For a new machine, clone the project normally, run setup so `.owlbear/delivery/config.json` names
 the configured `delivery_state_branch`, and launch Delivery or Cockpit from the project root. Do
