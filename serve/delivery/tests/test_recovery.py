@@ -1816,7 +1816,8 @@ def _assert_refused_handoff_frontier(
             "attempt_id": launch.claim.attempt_id,
             "transition": request.model_dump(mode="json"),
         }
-        after_binding["retry_diagnostic"] = before_binding["retry_diagnostic"]
+        assert "retry_diagnostic" not in before_binding
+        after_binding.pop("retry_diagnostic")
         assert after_frontier == before_frontier
         return
     before_frontier = json.loads(before)

@@ -3925,7 +3925,8 @@ def test_http_retry_diagnostic_is_blocked_and_projected(tmp_path: Path) -> None:
 
     after_payload = json.loads(runtimes["change-a"].frontier_bytes())
     assert after_payload["bindings"][0]["retry_diagnostic"] == detail["retry_diagnostic"]
-    after_payload["bindings"][0]["retry_diagnostic"] = before_payload["bindings"][0]["retry_diagnostic"]
+    assert "retry_diagnostic" not in before_payload["bindings"][0]
+    after_payload["bindings"][0].pop("retry_diagnostic")
     assert after_payload == before_payload
     assert coordinator.show("change-a") == before_coordination
     assert _workspace_mutation_snapshot(launch.worktree_path) == before_workspace

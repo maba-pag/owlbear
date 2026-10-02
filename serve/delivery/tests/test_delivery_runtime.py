@@ -2118,7 +2118,8 @@ def test_repeated_retry_exclusion_required_preserves_claim_and_budget(tmp_path: 
         "attempt_id": active_claim.attempt_id,
         "transition": request.model_dump(mode="json"),
     }
-    after_payload["bindings"][0]["retry_diagnostic"] = before_payload["bindings"][0]["retry_diagnostic"]
+    assert "retry_diagnostic" not in before_payload["bindings"][0]
+    after_payload["bindings"][0].pop("retry_diagnostic")
     assert after_payload == before_payload
     reloaded = DeliveryRuntime(tmp_path, runtime.contract)
     assert reloaded.show_binding("OUT-001").model_dump(mode="json")["retry_diagnostic"] == {
@@ -2161,7 +2162,8 @@ def test_clean_implementation_retry_exclusion_required(tmp_path: Path) -> None:
     }
     after_payload = after.model_dump(mode="json")
     before_payload = before.model_dump(mode="json")
-    after_payload["bindings"][0]["retry_diagnostic"] = before_payload["bindings"][0]["retry_diagnostic"]
+    assert "retry_diagnostic" not in before_payload["bindings"][0]
+    after_payload["bindings"][0].pop("retry_diagnostic")
     assert after_payload == before_payload
     assert coordinator.show("delivery-runtime") == custody
     assert _git(coordination.worktree_path, "rev-parse", "HEAD") == before_head == attempt_commit
@@ -2190,7 +2192,7 @@ def test_foreign_retry_claim_or_attempt_does_not_persist_diagnostic(tmp_path: Pa
             )
         )
     assert planning.frontier_bytes() == planning_before
-    assert planning.show_binding("OUT-001").model_dump(mode="json")["retry_diagnostic"] is None
+    assert planning.show_binding("OUT-001").retry_diagnostic is None
 
     builder, _coordinator, coordination, _initial, attempt_commit, _result, _tasks = _active_second_task(tmp_path)
     builder_before = builder.frontier_bytes()
@@ -2205,7 +2207,7 @@ def test_foreign_retry_claim_or_attempt_does_not_persist_diagnostic(tmp_path: Pa
             )
         )
     assert builder.frontier_bytes() == builder_before
-    assert builder.show_binding("OUT-001").model_dump(mode="json")["retry_diagnostic"] is None
+    assert builder.show_binding("OUT-001").retry_diagnostic is None
     assert _git(coordination.worktree_path, "rev-parse", "HEAD") == attempt_commit
 
 

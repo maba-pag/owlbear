@@ -5215,7 +5215,8 @@ def test_refused_builder_transition_does_not_refresh_stat_dirty_index(tmp_path: 
             "attempt_id": launch.claim.attempt_id,
             "transition": transition.model_dump(mode="json"),
         }
-        after_payload["bindings"][0]["retry_diagnostic"] = before_payload["bindings"][0]["retry_diagnostic"]
+        assert "retry_diagnostic" not in before_payload["bindings"][0]
+        after_payload["bindings"][0].pop("retry_diagnostic")
         assert after_payload == before_payload
 
 
