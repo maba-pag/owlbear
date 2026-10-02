@@ -3,22 +3,58 @@
 from __future__ import annotations
 
 import errno
+import hashlib
 import json
 import os
 import shutil
 import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import get_args
 
 import pytest
+from pydantic import BaseModel
 
 import owlbear_tools.delivery_diagnostics as diagnostics
+from owlbear_delivery import delivery_runtime
+from owlbear_delivery.change_workspace import ChangeContinuationAction
+from owlbear_delivery.delivery_admission import DeliveryAdmissionReceipt
+from owlbear_delivery.delivery_runtime import (
+    CompletedOutcomeRepairReceipt,
+    DeliveryObservation,
+    DeliveryObservationReceipt,
+    DeliveryPendingStatePublication,
+    DeliveryResultCandidate,
+    DeliveryReview,
+    DeliveryReviewReceipt,
+    DeliveryTaskDefinition,
+    DeliveryTaskResult,
+)
+from owlbear_delivery.portfolio_application import DeliveryEngineActionResult
+from owlbear_delivery.recovery import (
+    RecoveryEvidence,
+    RecoveryIntent,
+    RecoveryInvocation,
+    RecoveryReceipt,
+    RetryAttempt,
+    RetryAttemptOutcome,
+    RetryLedgerSummary,
+    RetryOwnerResult,
+    RetryRepairBinding,
+)
+from owlbear_delivery.target_contract import DeliveryContract
 from owlbear_tools.delivery_diagnostics import (
     MAX_ENTRIES,
     MAX_RECORD_BYTES,
     inspect_delivery,
     main,
 )
+
+# Private inventory tables are the drift-guard subject for owner-model alignment.
+_RECORD_VERSIONS = diagnostics._CHANGE_RECORD_VERSIONS  # noqa: SLF001
+_HISTORICAL_KINDS = diagnostics._HISTORICAL_CHANGE_KINDS  # noqa: SLF001
+_VERSIONLESS_FIELDS = diagnostics._VERSIONLESS_REQUIRED_FIELDS  # noqa: SLF001
 
 
 def _root(tmp_path: Path) -> Path:
@@ -35,17 +71,24 @@ def _root(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def _complete_root(tmp_path: Path) -> Path:
-    root = _root(tmp_path)
-    change = root / ".owlbear/delivery/runtime/changes/example"
-    change.mkdir()
+def _add_change_authority(root: Path, change_id: str) -> Path:
+    change = root / ".owlbear/delivery/runtime/changes" / change_id
+    change.mkdir(parents=True, exist_ok=True)
     (change / "frontier.json").write_bytes(b'{"schema_version":18,"bindings":[]}\n')
-    (root / ".owlbear/delivery/runtime/coordination/changes/example.json").write_bytes(
-        b'{"schema_version":1,"change_id":"example"}\n'
+    coordination = root / ".owlbear/delivery/runtime/coordination/changes" / f"{change_id}.json"
+    coordination.write_text(
+        json.dumps({"schema_version": 1, "change_id": change_id}) + "\n",
+        encoding="utf-8",
     )
-    snapshot = root / ".owlbear/delivery/state/example"
+    snapshot = root / ".owlbear/delivery/state" / change_id
     snapshot.mkdir(parents=True)
     (snapshot / "snapshot.json").write_bytes(b'{"schema_version":2,"frontier":{}}\n')
+    return change
+
+
+def _complete_root(tmp_path: Path) -> Path:
+    root = _root(tmp_path)
+    _add_change_authority(root, "example")
     return root
 
 
@@ -240,6 +283,429 @@ def test_change_scoped_records_are_recognized_and_read_only(tmp_path: Path) -> N
     assert result["bytes_inspected"] <= 8 * 1024 * 1024
     assert len(result["records"]) >= len(records)
     assert before == after
+
+
+def _canonical(model: BaseModel) -> bytes:
+    return (json.dumps(model.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+
+def _promoted_result_candidate(change_id: str) -> DeliveryResultCandidate:
+    commit = "1" * 40
+    observed_at = datetime(2026, 8, 11, 12, tzinfo=UTC)
+    task = DeliveryTaskDefinition(
+        task_id="TASK-001",
+        outcome_id="OUT-001",
+        plan_scope_id="SCOPE-001",
+        title="Diagnose runtime receipts",
+        result="A normal promoted result receipt.",
+        commitment_ids=("COM-001",),
+        dependency_ids=(),
+        required_outputs=("Result receipt",),
+        maintained_surfaces=("delivery_diagnostics.py",),
+        constraints=("Read only.",),
+        exclusions=("No repair.",),
+        acceptance_observations=("Receipt is recognized.",),
+        proof_boundaries=("delivery-diagnose",),
+    )
+    result = DeliveryTaskResult(
+        result_id="result-001",
+        change_id=change_id,
+        authority_digest="2" * 64,
+        task_id=task.task_id,
+        task_digest=task.digest,
+        completed_commit=commit,
+        observations=(
+            DeliveryObservationReceipt.create(
+                DeliveryObservation(
+                    change_id=change_id,
+                    task_or_finalization_id=task.task_id,
+                    exact_commit=commit,
+                    observation_kind="pytest",
+                    command_or_procedure="diagnostic fixture",
+                    exit_status_or_artifact_locator="exit:0",
+                    observer_or_runner_identity="pytest",
+                    observed_at=observed_at,
+                )
+            ),
+        ),
+        review=DeliveryReviewReceipt.create(
+            DeliveryReview(
+                exact_commit=commit,
+                author_id="diagnostic fixture author",
+                reviewer_id="diagnostic fixture reviewer",
+                evidence=("The fixture result is exact.",),
+                reviewed_at=observed_at,
+            )
+        ),
+    )
+    digest = hashlib.sha256(_canonical(result)).hexdigest()
+    return DeliveryResultCandidate(candidate_id=f"result-{digest}", claim_id="claim-1", digest=digest, result=result)
+
+
+def test_normal_result_promotion_receipts_are_healthy(tmp_path: Path) -> None:
+    root = _complete_root(tmp_path)
+    change = root / ".owlbear/delivery/runtime/changes/example"
+    candidate = _promoted_result_candidate("example")
+    receipt = change / "result-receipts/OUT-001" / f"{candidate.digest}.json"
+    receipt.parent.mkdir(parents=True)
+    receipt.write_bytes(_canonical(candidate))
+    pending = DeliveryPendingStatePublication.pending("3" * 64, "4" * 64)
+    (change / "state-publication.json").write_bytes(_canonical(pending))
+
+    completed = _run_cli(root, "inspect", "--project-root", os.fspath(root), "--format", "json")
+
+    assert completed.returncode == 0, completed.stdout
+    result = json.loads(completed.stdout)
+    assert result["status"] == "healthy-structure"
+    assert result["inspection_complete"] is True
+    assert result["pending_effects"] is False
+    statuses = {record["kind"]: record["status"] for record in result["records"]}
+    assert statuses["result_receipt"] == "supported"
+    assert statuses["state_publication"] == "supported"
+
+
+def _continuation_action(change_id: str, *, operation_id: str | None = None) -> ChangeContinuationAction:
+    return ChangeContinuationAction(
+        operation_id=operation_id or f"continue-{'5' * 64}",
+        change_id=change_id,
+        kind="reconcile-checkpoint",
+        contract_digest="6" * 64,
+        frontier_digest="7" * 64,
+        exact_head="8" * 40,
+        target_head="9" * 40,
+        host_id="host-1",
+        session_id="session-1",
+        acquired_at="2026-08-11T12:00:00+00:00",
+    )
+
+
+def _write_every_change_family(change: Path) -> dict[str, int]:
+    """Write one owner-shaped record per runtime family; return the expected kind counts."""
+    digest = "a" * 64
+    other = "b" * 64
+    candidate = _promoted_result_candidate(change.name)
+    action = _continuation_action(change.name)
+    engine_result = DeliveryEngineActionResult(action=action, kind="stale", reason_code="readiness-changed")
+    preservation = change / "recovery-receipts" / digest / "preservation"
+    restoration = preservation / "restoration" / digest
+    v1 = b'{"schema_version":1}\n'
+    records: dict[Path, bytes] = {
+        change / "contract.json": json.dumps({"schema_version": 2, "change_id": change.name}).encode() + b"\n",
+        change / "admission.json": v1,
+        change / "state-publication.json": _canonical(DeliveryPendingStatePublication.pending(digest, other)),
+        change / "revisions" / digest / "contract.json": b'{"schema_version":2}\n',
+        change / "revisions" / digest / "frontier.json": b'{"schema_version":17,"bindings":[]}\n',
+        change / "revisions" / digest / "admission.json": v1,
+        change / "result-receipts/OUT-001" / f"{candidate.digest}.json": _canonical(candidate),
+        change / "action-receipts" / action.operation_id / "intent.json": _canonical(action),
+        change / "action-receipts" / action.operation_id / "started.json": _canonical(action),
+        change / "action-receipts" / action.operation_id / "result.json": (
+            engine_result.model_dump_json() + "\n"
+        ).encode(),
+        change / "invocations" / f"{digest}.json": v1,
+        change / "recovery-receipts" / digest / "intent.json": v1,
+        change / "recovery-receipts" / digest / "evidence.json": v1,
+        change / "recovery-receipts" / digest / "receipt.json": v1,
+        preservation / "manifest.json": b'{"schema_version":1,"objects":[]}\n',
+        preservation / "objects" / f"{other}.raw": b"\x00opaque preserved bytes",
+        restoration / "intent.json": v1,
+        restoration / "result.json": v1,
+        restoration / "failure.json": v1,
+        restoration / "paths" / other / "intent.json": v1,
+        restoration / "paths" / other / "result.json": v1,
+        restoration / "paths" / other / "staging.json": v1,
+        change / "retry-ledger/current.json": v1,
+        change / "retry-ledger/attempts/builder-claim:attempt.1.json": v1,
+        change / "retry-ledger/outcomes" / f"{digest}.json": v1,
+        change / "retry-ledger/repair-bindings" / f"{digest}.json": v1,
+        change / "retry-ledger/owner-results/builder-claim:attempt.1.json": v1,
+        change / "planning-pause-receipts/OUT-001" / f"{digest}.json": v1,
+        change / "planning-retry-receipts/OUT-001" / f"{digest}.json": v1,
+        change / "builder-invocation-receipts" / f"{digest}.json": v1,
+        change / "builder-plan-promotion-receipts" / f"{digest}.json": v1,
+        change / "builder-request-resolution-receipts" / f"{digest}.json": v1,
+        change / "builder-handoff-change-intent-receipts" / digest / "head.json": v1,
+        change / "builder-handoff-change-intent-receipts" / digest / f"{other}.json": v1,
+    }
+    for path, content in records.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+    return {
+        "contract": 1,
+        "admission": 1,
+        "state_publication": 1,
+        "revision_record": 3,
+        "result_receipt": 1,
+        "action_intent": 1,
+        "action_started": 1,
+        "action_result": 1,
+        "recovery_invocation": 1,
+        "recovery_intent": 1,
+        "recovery_evidence": 1,
+        "recovery_receipt": 1,
+        "preservation_manifest": 1,
+        "preservation_object": 1,
+        "restoration_record": 6,
+        "retry_ledger": 1,
+        "retry_attempt": 1,
+        "retry_outcome": 1,
+        "retry_repair_binding": 1,
+        "retry_owner_result": 1,
+        "planning_pause_receipt": 1,
+        "planning_retry_receipt": 1,
+        "builder_invocation_receipt": 1,
+        "builder_plan_promotion_receipt": 1,
+        "builder_request_resolution_receipt": 1,
+        "builder_handoff_change_intent_head": 1,
+        "builder_handoff_change_intent_receipt": 1,
+    }
+
+
+def _add_action_receipt_volume(change: Path, count: int, *, payload_marker: str | None = None) -> None:
+    for index in range(count):
+        operation_id = f"continue-{index:064x}"
+        action = _continuation_action(change.name, operation_id=operation_id)
+        action_result = DeliveryEngineActionResult(action=action, kind="stale", reason_code="readiness-changed")
+        receipt = change / "action-receipts" / operation_id
+        receipt.mkdir(parents=True)
+        (receipt / "intent.json").write_bytes(_canonical(action))
+        (receipt / "started.json").write_bytes(_canonical(action))
+        result_bytes = _canonical(action_result)
+        if payload_marker is not None and index == 0:
+            result_value = json.loads(result_bytes)
+            result_value["private"] = payload_marker
+            result_bytes = (json.dumps(result_value, sort_keys=True, separators=(",", ":")) + "\n").encode()
+        (receipt / "result.json").write_bytes(result_bytes)
+
+
+def test_dense_selected_change_is_healthy_and_ignores_malformed_siblings(tmp_path: Path) -> None:
+    root = _complete_root(tmp_path)
+    change = root / ".owlbear/delivery/runtime/changes/example"
+    _write_every_change_family(change)
+    _add_action_receipt_volume(change, 22)
+    sibling = _add_change_authority(root, "sibling")
+    (sibling / "frontier.json").write_text(
+        '{"schema_version":99,"private":"SIBLING-SECRET"}\n',
+        encoding="utf-8",
+    )
+
+    entry_count = len(list(change.rglob("*")))
+    completed = _run_cli(
+        root,
+        "inspect",
+        "--project-root",
+        os.fspath(root),
+        "--change-id",
+        "example",
+        "--format",
+        "json",
+    )
+
+    assert 150 <= entry_count <= 200
+    assert completed.returncode == 0, completed.stdout
+    result = json.loads(completed.stdout)
+    assert result["status"] == "healthy-structure"
+    assert result["inspection_complete"] is True
+    assert result["change_scope"] == "selected"
+    assert result["truncated"] is False
+    assert result["diagnostic_codes"] == []
+    assert result["counts"]["frontier"] == 1
+    assert sum(record["kind"] == "retry_ledger" for record in result["records"]) == 1
+    assert "FRONTIER_UNSUPPORTED" not in result["diagnostic_codes"]
+    assert "SIBLING-SECRET" not in completed.stdout
+    assert "sibling" not in completed.stdout
+
+
+def test_portfolio_truncation_keeps_current_records_ahead_of_receipts(tmp_path: Path) -> None:
+    root = _root(tmp_path)
+    for change_id in ("change-a", "change-b", "change-c"):
+        change = _add_change_authority(root, change_id)
+        _write_every_change_family(change)
+        _add_action_receipt_volume(change, 30, payload_marker="PORTFOLIO-RECEIPT-SECRET")
+
+    completed = _run_cli(root, "inspect", "--project-root", os.fspath(root), "--format", "json")
+
+    assert completed.returncode == 1
+    result = json.loads(completed.stdout)
+    assert result["status"] == "degraded"
+    assert result["inspection_complete"] is False
+    assert result["truncated"] is True
+    assert "ENTRY_LIMIT_EXCEEDED" in result["diagnostic_codes"]
+    assert "PENDING_EFFECTS_UNKNOWN" in result["diagnostic_codes"]
+    assert result["counts"]["frontier"] == 3
+    assert sum(record["kind"] == "retry_ledger" for record in result["records"]) == 3
+    assert "rerun" in result["maintenance_prompt"].lower()
+    assert "--change-id <CHANGE_ID>" in result["maintenance_prompt"]
+    assert "Do not manually edit" in result["maintenance_prompt"]
+    assert "PORTFOLIO-RECEIPT-SECRET" not in completed.stdout
+
+    text = _run_cli(root, "inspect", "--project-root", os.fspath(root), "--format", "text")
+    assert text.returncode == 1
+    assert "--change-id <CHANGE_ID>" in text.stdout
+    assert "rerun" in text.stdout.lower()
+    assert "PORTFOLIO-RECEIPT-SECRET" not in text.stdout
+
+
+def test_many_change_current_records_obey_entry_budget(tmp_path: Path) -> None:
+    root = _root(tmp_path)
+    changes = root / ".owlbear/delivery/runtime/changes"
+    for index in range(300):
+        change = changes / f"change-{index:03}"
+        (change / "retry-ledger").mkdir(parents=True)
+        (change / "frontier.json").write_bytes(b'{"schema_version":18,"bindings":[]}\n')
+        (change / "retry-ledger/current.json").write_bytes(b'{"schema_version":1}\n')
+
+    completed = _run_cli(root, "inspect", "--project-root", os.fspath(root), "--format", "json")
+
+    assert completed.returncode == 1
+    result = json.loads(completed.stdout)
+    assert result["truncated"] is True
+    assert "ENTRY_LIMIT_EXCEEDED" in result["diagnostic_codes"]
+    assert len(result["records"]) <= MAX_ENTRIES
+    assert sum(record["kind"] in {"frontier", "retry_ledger"} for record in result["records"]) <= MAX_ENTRIES
+    assert "rerun" in result["maintenance_prompt"].lower()
+    assert "--change-id <CHANGE_ID>" in result["maintenance_prompt"]
+
+
+def test_every_runtime_change_family_is_recognized_and_healthy(tmp_path: Path) -> None:
+    root = _complete_root(tmp_path)
+    expected = _write_every_change_family(root / ".owlbear/delivery/runtime/changes/example")
+
+    completed = _run_cli(root, "inspect", "--project-root", os.fspath(root), "--format", "json")
+
+    assert completed.returncode == 0, completed.stdout
+    result = json.loads(completed.stdout)
+    assert result["status"] == "healthy-structure"
+    assert result["inspection_complete"] is True
+    assert result["pending_effects"] is False
+    assert result["diagnostic_codes"] == []
+    observed: dict[str, int] = {}
+    for record in result["records"]:
+        if record["kind"] in expected:
+            assert record["status"] in {"supported", "observed-opaque"}, record
+            observed[record["kind"]] = observed.get(record["kind"], 0) + 1
+    assert observed == expected
+    assert result["counts"]["change_records"] == sum(expected.values())
+    assert set(expected) == {*_RECORD_VERSIONS, *_HISTORICAL_KINDS, "preservation_object"}
+    assert b"opaque preserved bytes" not in completed.stdout.encode()
+
+
+def test_malformed_result_receipt_is_degraded_with_kind_code(tmp_path: Path) -> None:
+    root = _complete_root(tmp_path)
+    receipt = root / ".owlbear/delivery/runtime/changes/example/result-receipts/OUT-001" / f"{'c' * 64}.json"
+    receipt.parent.mkdir(parents=True)
+    receipt.write_text('{"candidate_id":"result-x","claim_id":"RESULT-SECRET"}\n', encoding="utf-8")
+
+    completed = _run_cli(root, "inspect", "--project-root", os.fspath(root), "--format", "json")
+
+    assert completed.returncode == 1
+    result = json.loads(completed.stdout)
+    assert result["status"] == "degraded"
+    assert "RESULT_RECEIPT_MALFORMED" in result["diagnostic_codes"]
+    assert "UNRECOGNIZED_CHANGE_ENTRY" not in result["diagnostic_codes"]
+    assert result["pending_effects"] == "unknown"
+    assert "RESULT-SECRET" not in completed.stdout
+
+
+def test_versioned_result_receipt_is_unsupported_not_accepted(tmp_path: Path) -> None:
+    root = _complete_root(tmp_path)
+    receipt = root / ".owlbear/delivery/runtime/changes/example/result-receipts/OUT-001" / f"{'c' * 64}.json"
+    receipt.parent.mkdir(parents=True)
+    receipt.write_text(
+        '{"schema_version":2,"candidate_id":"a","claim_id":"b","digest":"c","result":{}}\n', encoding="utf-8"
+    )
+
+    result = inspect_delivery(root)
+
+    assert result["status"] == "unsupported"
+    assert "RESULT_RECEIPT_UNSUPPORTED" in result["diagnostic_codes"]
+
+
+def test_change_record_versions_match_owner_models() -> None:
+    owners: dict[str, tuple[type[BaseModel], ...]] = {
+        "contract": (DeliveryContract,),
+        "admission": (DeliveryAdmissionReceipt,),
+        "state_publication": (DeliveryPendingStatePublication,),
+        "result_receipt": (DeliveryResultCandidate,),
+        "action_intent": (ChangeContinuationAction,),
+        "action_started": (ChangeContinuationAction,),
+        "action_result": (DeliveryEngineActionResult,),
+        "recovery_invocation": (RecoveryInvocation,),
+        "recovery_intent": (RecoveryIntent,),
+        "recovery_evidence": (RecoveryEvidence,),
+        "recovery_receipt": (RecoveryReceipt, CompletedOutcomeRepairReceipt),
+        "retry_ledger": (RetryLedgerSummary,),
+        "retry_attempt": (RetryAttempt,),
+        "retry_outcome": (RetryAttemptOutcome,),
+        "retry_repair_binding": (RetryRepairBinding,),
+        "retry_owner_result": (RetryOwnerResult,),
+    }
+    runtime_models = vars(delivery_runtime)
+    owners |= {
+        kind: (runtime_models[name],)
+        for kind, name in {
+            "planning_pause_receipt": "_DeliveryPlanningPauseReplay",
+            "planning_retry_receipt": "_DeliveryPlanningRetrySettlementReceipt",
+            "builder_invocation_receipt": "_DeliveryBuilderInvocationSettlementReceipt",
+            "builder_plan_promotion_receipt": "_DeliveryBuilderPlanPromotionReceipt",
+            "builder_request_resolution_receipt": "_DeliveryBuilderRequestResolutionReceipt",
+            "builder_handoff_change_intent_head": "_DeliveryBuilderHandoffChangeIntentHead",
+            "builder_handoff_change_intent_receipt": "_DeliveryBuilderHandoffChangeIntentReceipt",
+        }.items()
+    }
+    # These two families are dict payloads written by change_workspace with a fixed schema_version of 1.
+    unmodelled = {"preservation_manifest", "restoration_record"}
+    assert set(owners) | unmodelled == set(_RECORD_VERSIONS)
+    for kind, models in owners.items():
+        expected = _RECORD_VERSIONS[kind]
+        for model in models:
+            field = model.model_fields.get("schema_version")
+            if expected is None:
+                assert field is None, kind
+                required = _VERSIONLESS_FIELDS.get(kind, {})
+                assert set(required) <= {name for name, info in model.model_fields.items() if info.is_required()}
+            else:
+                assert field is not None, kind
+                assert get_args(field.annotation) == expected, kind
+
+
+def test_interrupted_change_temporaries_are_pending_opaque_not_unknown(tmp_path: Path) -> None:
+    root = _complete_root(tmp_path)
+    change = root / ".owlbear/delivery/runtime/changes/example"
+    (change / f".tmp-{'d' * 24}-frontier.json").write_text('{"private":"TMP-SECRET"}', encoding="utf-8")
+    stage_parent = change / "recovery-receipts" / ("a" * 64) / "preservation/restoration" / ("b" * 64) / "paths"
+    stage_parent = stage_parent / ("c" * 64)
+    stage_parent.mkdir(parents=True)
+    (stage_parent / "intent.json").write_bytes(b'{"schema_version":1}\n')
+    (stage_parent / f".tmp-{'e' * 24}").write_bytes(b"TMP-SECRET")
+    (stage_parent / f"stage-{'f' * 32}").symlink_to("private-link-target")
+
+    result = inspect_delivery(root)
+    encoded = json.dumps(result)
+
+    assert result["inspection_complete"] is True
+    assert result["pending_effects"] is True
+    assert result["diagnostic_codes"] == ["PENDING_TRANSACTIONS"]
+    assert result["counts"]["pending_transactions"] == 3
+    assert {record["kind"] for record in result["records"] if record["status"] == "pending-opaque"} == {
+        "change_transient",
+        "restoration_stage",
+    }
+    assert "TMP-SECRET" not in encoded
+    assert "private-link-target" not in encoded
+
+
+def test_symlinked_preservation_object_is_rejected(tmp_path: Path) -> None:
+    root = _complete_root(tmp_path)
+    objects = root / ".owlbear/delivery/runtime/changes/example/recovery-receipts" / ("a" * 64) / "preservation/objects"
+    objects.mkdir(parents=True)
+    (objects / f"{'b' * 64}.raw").symlink_to(tmp_path / "outside")
+
+    result = inspect_delivery(root)
+
+    assert "SYMLINK_REJECTED" in result["diagnostic_codes"]
+    assert result["inspection_complete"] is False
+    assert result["pending_effects"] == "unknown"
 
 
 def test_unknown_change_entry_makes_inspection_incomplete(tmp_path: Path) -> None:
@@ -758,7 +1224,7 @@ def test_missing_frontier_is_incomplete_without_unknown_pending_effects(tmp_path
     [
         ("missing-record", "CHANGE_NOT_FOUND", "verified-absent"),
         ("unreadable", "SYMLINK_REJECTED", "unknown"),
-        ("entry-limit", "ENTRY_LIMIT_EXCEEDED", "unknown"),
+        ("unrelated-records", "CHANGE_NOT_FOUND", "verified-absent"),
     ],
 )
 def test_selected_change_presence_requires_runtime_record(
