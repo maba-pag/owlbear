@@ -748,9 +748,10 @@ without a valid result (dispatch error, empty or no response, malformed or ident
 output, or `dispatch_failure`) is settled like a completed timeout once Orchestrator observes the
 dispatch call returned and its owned mutating terminals and jobs are settled: a counted failed attempt
 with preserved work and a fresh same-task Builder that triages it. Unreturned dispatch (Orchestrator
-or VS Code death/restart, disconnect, stopped chat) is recovered by user decision A + B: automatic
-`host-lost` settlement when the issuing process's lifetime lock is free and the worktree has been
-quiet for two minutes, and a `release_stuck_worker` action under the same quiet rule. Recent worktree
+or VS Code death/restart, disconnect, stopped chat) is recovered by user decision A + B, revised as
+option 1: automatic `host-lost` settlement when the recorded issuing VS Code window process is gone,
+and a user-confirmed `release_stuck_worker` action while it lives, both only when no leftover process
+uses the worktree and nothing was written there for 30 seconds. Recent worktree
 activity keeps the claim contained; a lost or released Finalizer gets an engine-authored unknown-check
 failure report, not proof.
 
