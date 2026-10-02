@@ -743,6 +743,14 @@ progress is promised. The [D03 package plan](delivery-cloud-d03-plan.md#native-o
 records the exact native contract and current proof gates; no rejected host-expansion approval is
 required for ordinary ended-invocation settlement.
 
+**Crashed-worker settlement directed 2026-10-02:** a Planner or Builder invocation that has ended
+without a valid result (dispatch error, empty or no response, malformed or identity-mismatched
+output, or `dispatch_failure`) is settled like a completed timeout once Orchestrator observes the
+dispatch call returned and its owned mutating terminals and jobs are settled: a counted failed attempt
+with preserved work and a fresh same-task Builder that triages it. Unreturned dispatch (Orchestrator
+or VS Code death/restart, disconnect, cancelled wait) and possibly running work remain contained; a
+Finalizer that ends without a failure report also remains contained.
+
 - U1: Normal and recovery actions must be available through a Cockpit control or a complete chat prompt.
 - U2: The user never runs tests, edits source or worktree files, repairs JSON, calculates digests, or operates Git custody.
 - U3: Agents prepare checks and environments. Human-only steps are meaningful decisions, permission, direct authentication/consent, and outcome confirmation.

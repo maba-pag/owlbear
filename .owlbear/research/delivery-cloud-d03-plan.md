@@ -35,10 +35,17 @@ assertion-only lost-worker recovery.
 - Use three total attempts for the same failure episode. Retries and completed timeout outcomes
   consume that budget; new sessions, operation IDs or changed error prose do not renew it. Exhaustion
   blocks automatic redispatch with an agent-owned failure history and responsible handler.
-- A completed timed-out invocation can produce a counted retry. A timer expiring while execution may
-  still be running, a disconnect, missing/malformed result or identity mismatch is unknown execution,
-  not permission to dispatch a concurrent replacement. Preserve custody until its owning workflow
-  can establish a valid settlement. Do not promise progress while the VS Code host is unavailable.
+- A completed timed-out invocation can produce a counted retry. **User decision 2026-10-02:** a
+  Planner or Builder invocation that ended without a valid result (dispatch error, empty or no
+  response, malformed, schema-invalid or identity-mismatched output, or `dispatch_failure`) settles
+  through `settle_worker_invocation` with `disposition: ended-without-result` and reserved failure
+  code `worker-ended-without-result`, with the same semantics as a completed timeout. Both require
+  Orchestrator to observe that the dispatch call returned and its owned mutating terminals and
+  asynchronous jobs are settled. An unreturned dispatch (Orchestrator or VS Code death or restart,
+  disconnect, cancelled wait), a timer expiring while execution may still be running, or possibly
+  running jobs remain unknown execution, not permission to dispatch a concurrent replacement. A
+  Finalizer that ends without a failure report remains contained because its settlement requires
+  that report. Do not promise progress while the VS Code host is unavailable.
 
 The native restoration must receive independent review before and after each material implementation
 slice, with focused positive settlement/reacquisition and negative stale-identity, late-submission,
@@ -47,9 +54,10 @@ the superseded implementation; this revision controls ordinary returned worker t
 
 ### Current handoff
 
-**Native repair checkpoint: `225cec5da7a1e28d6255346e6d37369635468572`.** This is the
+**Native repair checkpoint: `a6dab9c14ba462d662b93b7245166871547695d1`.** This is the
 committed code checkpoint for the user-approved native Orchestrator settlement revision. Planner
-retries, Builder retry/request block/Planning or Design return, and report-backed Finalizer failures
+retries, Builder retry/request block/Planning or Design return, crashed Planner/Builder invocations
+(`ended-without-result`), and report-backed Finalizer failures
 settle exact ended invocations through `settle_worker_invocation`. Builder handoff preserves
 dirty/staged/committed work and binds fresh acquisition to the same task or exact replanned lineage.
 The three-attempt episode, bounded backoff, durable receipts and default-loader restart preserve the
@@ -95,16 +103,30 @@ The `58a819f6..8ec88b7b` repair series closes the findings of a fresh cumulative
   truncation stays explicit and asks for a per-Change rerun.
 - Workspace governance, `/orchestrate`, WIRING and Cockpit component coverage match native settlement.
 
+The user's 2026-10-02 crashed-worker decision is implemented in `8cad2785..a6dab9c1`: the
+`ended-without-result` disposition shares the completed-timeout path (preserved work, same-task
+handoff, one three-attempt episode, restart validation) with reserved code
+`worker-ended-without-result`. Orchestrator, Builder, governance, operating and README guidance route
+returned dispatch errors, empty, malformed or identity-mismatched results and `dispatch_failure` to
+it, while unreturned or possibly running invocations and report-less Finalizers stay contained.
+
 | Gate | Current disposition |
 | --- | --- |
 | Source and contract | Native Orchestrator settlement is user-approved. Exact clean settled target-stale attention may sync through the existing engine owner, retaining the passive-writer reservation through its merge/conflict outcome; fresh review precedes a new Finalizer under the original budget. Dirty workspaces, stale identities, unattributed material and unknown execution remain contained; sync cannot renew the three-attempt budget |
-| Independent challenge | A fresh unnamed GPT-6.1 Sol cumulative challenge of `58a819f6` found eleven material findings; two interim Sol reviews of the repairs found three more (repeated pauses/lifecycle intents at restart, exhausted Planning-return restart, diagnostic bounds). All were repaired. A fresh unnamed GPT-6.1 Sol cumulative challenge of `8ec88b7b` returned `implementation-sound` with no material findings |
+| Independent challenge | A fresh unnamed GPT-6.1 Sol cumulative challenge of `58a819f6` found eleven material findings; two interim Sol reviews of the repairs found three more (repeated pauses/lifecycle intents at restart, exhausted Planning-return restart, diagnostic bounds). All were repaired. A fresh unnamed GPT-6.1 Sol cumulative challenge of `8ec88b7b` returned `implementation-sound` with no material findings. An interim Sol review of the crashed-worker extension found no material defect; its two documentation observations were repaired. A fresh cumulative challenge of the published head is required |
 | Required CI | All four required workflows must succeed on the same exact published head. Their exact-head results belong on PR #326; no new CI result is claimed here. Older green runs are historical |
-| PR and documentation metadata | Route exact-publication review and CI results to PR #326. This record names code checkpoint `225cec5da7a1e28d6255346e6d37369635468572` (`8ec88b7b` plus two test-only fixes: one test-double signature and an interpreter-pinned offline wheel build), not the future SHA of this documentation update |
-| User direction | Native Orchestrator settlement is explicitly approved; no host-design approval is needed. Design-return readmission is refused before authority mutation and its correction is separate D04 work |
-| Host and activation boundary | Only an exact normally returned invocation, or an actually ended timeout with owned mutation jobs settled, qualifies. Elapsed time, transport failure and possibly running work do not. No merge or live activation is implied |
+| PR and documentation metadata | Route exact-publication review and CI results to PR #326. This record names code checkpoint `a6dab9c14ba462d662b93b7245166871547695d1`, not the future SHA of this documentation update |
+| User direction | Native Orchestrator settlement is explicitly approved; no host-design approval is needed. On 2026-10-02 the user directed that crashed Planner/Builder invocations settle as ended attempts. Design-return readmission is refused before authority mutation and its correction is separate D04 work |
+| Host and activation boundary | Only an exact normally returned invocation, an actually ended timeout, or an invocation that ended without a valid result qualifies, each only after owned mutating jobs are settled. An unreturned dispatch, elapsed time, transport failure and possibly running work do not. No merge or live activation is implied |
 
-**Current caller proof for `8ec88b7b`:** on identical working-tree content immediately before the
+**Current caller proof for `a6dab9c1`:** on identical working-tree content, the caller ran whole
+`test_delivery_state.py` + `test_delivery_runtime.py` (205), whole `test_portfolio_application.py`
+(556), the remaining Delivery tests (666), whole Delivery MCP and tools tests (559), Cockpit work-item,
+boundary, package-boundary, ecosystem and worktree-authority tests (185) and, after the final skill
+fixes, ecosystem and worktree-authority tests again (74); all passed. Scoped Ruff check/format on 33
+changed Python files and `git diff --check` passed. Selected owner files, not a whole-project local suite.
+
+**Prior caller proof for `8ec88b7b`:** on identical working-tree content immediately before the
 scoped commits, the caller ran focused selections serially: `test_delivery_state.py`
 handoff/planner/loader/restart 55 passed; `test_portfolio_application.py`
 retry/exhaust/backoff/handoff/build-context/restart/batch/sibling/finalizer 114 passed;
@@ -218,8 +240,9 @@ or treat their reports as independently rerun proof. No fresh full-suite, live h
 pass is claimed.
 
 **Completion still requires:** all four required CI workflows on the same exact published head,
-with exact-head results reported on PR #326, and human review and merge. The fresh cumulative unnamed
-read-only challenge of code checkpoint `8ec88b7b` returned `implementation-sound`. The focused checks above are not a whole-owner-suite pass. Reconcile any review findings and
+with exact-head results reported on PR #326, a fresh cumulative unnamed read-only challenge of the
+crashed-worker checkpoint with its findings reconciled, and human review and merge. The earlier
+challenge of `8ec88b7b` returned `implementation-sound`. The focused checks above are not a whole-owner-suite pass. Reconcile any review findings and
 retain truthful unknown-execution limits. None grants merge, live activation or automatic Design
 revision/admission.
 
