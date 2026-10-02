@@ -48,6 +48,7 @@ SUPPORTED_VERSIONS = {
 
 _CHANGE_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _FIXED_ENTRY_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+_HOST_LOCK_NAME = re.compile(r"^[0-9a-f]{32}\.lock$")
 _INVALID_CHANGE_ID = "invalid Change ID"
 _INVALID_INVOCATION = "ERR_INVALID_INVOCATION"
 _CHANGE_RECORD_NAME_PATTERNS = {
@@ -55,6 +56,7 @@ _CHANGE_RECORD_NAME_PATTERNS = {
     "$digest.json": re.compile(r"^[0-9a-f]{64}\.json$"),
     "$digest.raw": re.compile(r"^[0-9a-f]{64}\.raw$"),
     "$attempt.json": re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}\.json$"),
+    "$claim_attempt.json": re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.json$"),
     "$outcome": re.compile(r"^OUT-[0-9]{3}$"),
     "$operation": re.compile(r"^continue-[0-9a-f]{64}$"),
     "$stage": re.compile(r"^stage-[0-9a-f]{32}$"),
@@ -87,6 +89,7 @@ _CHANGE_RECORD_LAYOUT: dict[str, object] = {
     "state-publication.json": "state_publication",
     "revisions": {"$digest": _REVISION_LAYOUT},
     "result-receipts": {"$outcome": {"$digest.json": "result_receipt"}},
+    "claim-issuers": {"$claim_attempt.json": "claim_issuer"},
     "action-receipts": {
         "$operation": {
             "intent.json": "action_intent",
@@ -162,6 +165,7 @@ _CHANGE_RECORD_VERSIONS: dict[str, tuple[int, ...] | None] = {
     "builder_request_resolution_receipt": (1,),
     "builder_handoff_change_intent_head": (1,),
     "builder_handoff_change_intent_receipt": (1,),
+    "claim_issuer": (1,),
 }
 _VERSIONLESS_REQUIRED_FIELDS: dict[str, dict[str, type]] = {
     "result_receipt": {"candidate_id": str, "claim_id": str, "digest": str, "result": dict},
@@ -213,6 +217,7 @@ _SAFE_LOCATORS = {
     "recovery_evidence": ".owlbear/delivery/runtime/changes/<redacted>/recovery-receipts/<opaque>/evidence.json",
     "recovery_receipt": ".owlbear/delivery/runtime/changes/<redacted>/recovery-receipts/<opaque>/receipt.json",
     "retry_ledger": ".owlbear/delivery/runtime/changes/<redacted>/retry-ledger/current.json",
+    "claim_issuer": ".owlbear/delivery/runtime/changes/<redacted>/claim-issuers/<opaque>.json",
     "retry_attempt": ".owlbear/delivery/runtime/changes/<redacted>/retry-ledger/attempts/<opaque>.json",
     "retry_outcome": ".owlbear/delivery/runtime/changes/<redacted>/retry-ledger/outcomes/<opaque>.json",
     "retry_repair_binding": ".owlbear/delivery/runtime/changes/<redacted>/retry-ledger/repair-bindings/<opaque>.json",
@@ -275,6 +280,7 @@ class _Inspection:
             "config": 0,
             "host": 0,
             "host_local": 0,
+            "host_locks": 0,
             "frontier": 0,
             "change_records": 0,
             "coordination": 0,
@@ -1481,6 +1487,34 @@ def _scan_logs(runtime_fd: int, inspection: _Inspection) -> None:  # noqa: C901,
         _close_directory(runtime_fd, "logs", logs_fd, logs_opened, inspection)
 
 
+def _scan_host_locks(runtime_fd: int, inspection: _Inspection) -> None:
+    hosts = _open_optional_pending_directory(runtime_fd, "hosts", inspection, "HOSTS")
+    if hosts is None:
+        return
+    hosts_fd, hosts_opened = hosts
+    try:
+        for name in _directory_names(hosts_fd, inspection):
+            if not _HOST_LOCK_NAME.fullmatch(name):
+                _unrecognized_change_entry(inspection)
+                continue
+            try:
+                info = os.stat(name, dir_fd=hosts_fd, follow_symlinks=False)
+            except OSError:
+                inspection.diagnostic("HOST_LOCK_UNREADABLE")
+                inspection.transaction_scan_unknown = True
+                continue
+            if stat.S_ISLNK(info.st_mode):
+                inspection.diagnostic("SYMLINK_REJECTED")
+                inspection.transaction_scan_unknown = True
+            elif not stat.S_ISREG(info.st_mode):
+                inspection.diagnostic("SPECIAL_FILE_REJECTED")
+                inspection.transaction_scan_unknown = True
+            else:
+                inspection.counts["host_locks"] += 1
+    finally:
+        _close_directory(runtime_fd, "hosts", hosts_fd, hosts_opened, inspection)
+
+
 def _scan_runtime(delivery_fd: int, inspection: _Inspection, *, selected: str | None) -> None:
     runtime = _open_directory(delivery_fd, "runtime", inspection, "RUNTIME", required=True)
     if runtime is None:
@@ -1497,6 +1531,7 @@ def _scan_runtime(delivery_fd: int, inspection: _Inspection, *, selected: str | 
             _scan_coordination(runtime_fd, inspection, selected=selected)
             if inventory is not None:
                 _scan_change_current_records(inventory, inspection)
+            _scan_host_locks(runtime_fd, inspection)
             _scan_snapshots(delivery_fd, inspection, selected=selected)
             if inventory is not None:
                 _scan_change_pending_transactions(inventory, inspection)

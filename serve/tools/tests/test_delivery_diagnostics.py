@@ -44,6 +44,7 @@ from owlbear_delivery.recovery import (
     RetryRepairBinding,
 )
 from owlbear_delivery.target_contract import DeliveryContract
+from owlbear_delivery.worker_stall import DeliveryClaimIssuer
 from owlbear_tools.delivery_diagnostics import (
     MAX_ENTRIES,
     MAX_RECORD_BYTES,
@@ -392,6 +393,7 @@ def _write_every_change_family(change: Path) -> dict[str, int]:
     records: dict[Path, bytes] = {
         change / "contract.json": json.dumps({"schema_version": 2, "change_id": change.name}).encode() + b"\n",
         change / "admission.json": v1,
+        change / "claim-issuers" / "builder-attempt-1.json": v1,
         change / "state-publication.json": _canonical(DeliveryPendingStatePublication.pending(digest, other)),
         change / "revisions" / digest / "contract.json": b'{"schema_version":2}\n',
         change / "revisions" / digest / "frontier.json": b'{"schema_version":17,"bindings":[]}\n',
@@ -433,6 +435,7 @@ def _write_every_change_family(change: Path) -> dict[str, int]:
     return {
         "contract": 1,
         "admission": 1,
+        "claim_issuer": 1,
         "state_publication": 1,
         "revision_record": 3,
         "result_receipt": 1,
@@ -590,6 +593,103 @@ def test_every_runtime_change_family_is_recognized_and_healthy(tmp_path: Path) -
     assert b"opaque preserved bytes" not in completed.stdout.encode()
 
 
+def test_claim_issuer_and_host_locks_are_recognized_in_global_and_selected_scope(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = _complete_root(tmp_path)
+    change = root / ".owlbear/delivery/runtime/changes/example"
+    issuer = DeliveryClaimIssuer(
+        change_id="example",
+        outcome_id="OUT-001",
+        attempt_id="builder-attempt-1",
+        claim_id="claim-1",
+        role="builder",
+        issuer_instance="a" * 32,
+        issued_at="2026-10-02T00:00:00+00:00",
+    )
+    issuer_path = change / "claim-issuers" / f"{issuer.attempt_id}.json"
+    issuer_path.parent.mkdir()
+    issuer_path.write_bytes(_canonical(issuer))
+    hosts = root / ".owlbear/delivery/runtime/hosts"
+    hosts.mkdir()
+    for instance_id in (issuer.issuer_instance, "b" * 32):
+        (hosts / f"{instance_id}.lock").write_bytes(b"")
+
+    real_open = diagnostics.os.open
+
+    def reject_host_lock_open(
+        path: str | os.PathLike[str],
+        flags: int,
+        mode: int = 0o777,
+        *,
+        dir_fd: int | None = None,
+    ) -> int:
+        if os.fspath(path).endswith(".lock"):
+            pytest.fail("host lock files must not be opened")
+        if dir_fd is None:
+            return real_open(path, flags, mode)
+        return real_open(path, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(diagnostics.os, "open", reject_host_lock_open)
+
+    for change_id in (None, "example"):
+        result = inspect_delivery(root, change_id=change_id)
+
+        assert result["status"] == "healthy-structure"
+        assert result["inspection_complete"] is True
+        assert result["counts"]["host_locks"] == 2
+        assert sum(record["kind"] == "claim_issuer" for record in result["records"]) == 1
+
+
+def test_malformed_claim_issuer_is_degraded_and_redacted(tmp_path: Path) -> None:
+    root = _complete_root(tmp_path)
+    issuer = root / ".owlbear/delivery/runtime/changes/example/claim-issuers/attempt-1.json"
+    issuer.parent.mkdir()
+    issuer.write_text('{"schema_version":1,"private":"CLAIM-ISSUER-SECRET"', encoding="utf-8")
+
+    completed = _run_cli(root, "inspect", "--project-root", os.fspath(root), "--format", "json")
+
+    assert completed.returncode == 1
+    result = json.loads(completed.stdout)
+    assert result["status"] == "degraded"
+    assert "CLAIM_ISSUER_MALFORMED" in result["diagnostic_codes"]
+    assert "CLAIM-ISSUER-SECRET" not in completed.stdout + completed.stderr
+
+
+def test_symlinked_host_lock_is_rejected(tmp_path: Path) -> None:
+    root = _complete_root(tmp_path)
+    hosts = root / ".owlbear/delivery/runtime/hosts"
+    hosts.mkdir()
+    target = tmp_path / "host-lock-target"
+    target.write_bytes(b"not inspected")
+    (hosts / f"{'c' * 32}.lock").symlink_to(target)
+
+    result = inspect_delivery(root)
+
+    assert result["status"] == "degraded"
+    assert result["inspection_complete"] is False
+    assert "SYMLINK_REJECTED" in result["diagnostic_codes"]
+    assert result["pending_effects"] == "unknown"
+    assert "host-lock-target" not in json.dumps(result)
+
+
+def test_unknown_host_entry_makes_inspection_incomplete(tmp_path: Path) -> None:
+    root = _complete_root(tmp_path)
+    hosts = root / ".owlbear/delivery/runtime/hosts"
+    hosts.mkdir()
+    (hosts / "unexpected.lock").write_text('{"private":"UNKNOWN-HOST-SECRET"}\n', encoding="utf-8")
+
+    result = inspect_delivery(root)
+    encoded = json.dumps(result)
+
+    assert result["status"] == "degraded"
+    assert result["inspection_complete"] is False
+    assert "UNRECOGNIZED_CHANGE_ENTRY" in result["diagnostic_codes"]
+    assert result["pending_effects"] == "unknown"
+    assert "UNKNOWN-HOST-SECRET" not in encoded
+
+
 def test_malformed_result_receipt_is_degraded_with_kind_code(tmp_path: Path) -> None:
     root = _complete_root(tmp_path)
     receipt = root / ".owlbear/delivery/runtime/changes/example/result-receipts/OUT-001" / f"{'c' * 64}.json"
@@ -625,6 +725,7 @@ def test_change_record_versions_match_owner_models() -> None:
     owners: dict[str, tuple[type[BaseModel], ...]] = {
         "contract": (DeliveryContract,),
         "admission": (DeliveryAdmissionReceipt,),
+        "claim_issuer": (DeliveryClaimIssuer,),
         "state_publication": (DeliveryPendingStatePublication,),
         "result_receipt": (DeliveryResultCandidate,),
         "action_intent": (ChangeContinuationAction,),
