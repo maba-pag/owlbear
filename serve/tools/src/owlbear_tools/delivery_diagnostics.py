@@ -760,22 +760,28 @@ def _change_record_sort_key(layout: dict[str, object], name: str) -> tuple[int, 
     return len(layout), name
 
 
+def _window_create_time_is_valid(create_time: object) -> bool:
+    if isinstance(create_time, bool) or not isinstance(create_time, (int, float)):
+        return False
+    try:
+        value = float(create_time)
+    except OverflowError:
+        return False
+    return math.isfinite(value) and value >= 0
+
+
 def _claim_issuer_window_is_valid(window: object) -> bool:
     if window is None:
         return True
     if not isinstance(window, dict) or set(window) != {"pid", "create_time", "name"}:
         return False
     pid = window.get("pid")
-    create_time = window.get("create_time")
     name = window.get("name")
     return (
         isinstance(pid, int)
         and not isinstance(pid, bool)
         and pid > 1
-        and isinstance(create_time, (int, float))
-        and not isinstance(create_time, bool)
-        and create_time >= 0
-        and (not isinstance(create_time, float) or math.isfinite(create_time))
+        and _window_create_time_is_valid(window.get("create_time"))
         and isinstance(name, str)
         and 1 <= len(name) <= _WINDOW_HOST_NAME_MAX_LENGTH
     )

@@ -167,6 +167,10 @@ class ProcessView(Protocol):
         """Return whether the process is attached to a controlling terminal."""
         ...
 
+    def cmdline(self) -> tuple[str, ...]:
+        """Return the argument vector for local judgement only; never report it."""
+        ...
+
 
 type ProcessSource = Callable[[], Iterable[ProcessView]]
 
@@ -184,6 +188,36 @@ class WorktreeProcessProbe(Protocol):
 
 def _contains(path: Path, roots: tuple[Path, ...]) -> bool:
     return any(path.is_relative_to(root) for root in roots)
+
+
+def _is_interactive_invocation(argv: tuple[str, ...]) -> bool:
+    """Only options follow the shell name, and none runs a command string or script."""
+    if not argv:
+        return False
+    for index, argument in enumerate(argv[1:], start=1):
+        if argument in {"-", "--"}:
+            return index == len(argv) - 1
+        if argument[:1] not in {"-", "+"}:
+            return False
+        if argument.startswith("--"):
+            if argument == "--command" or argument.startswith("--command="):
+                return False
+        elif {"c", "s"} & set(argument[1:]):  # A command string, or commands read from standard input.
+            return False
+    return True
+
+
+def _is_idle_interactive_shell(process: ProcessView) -> bool:
+    """Terminal-attached, childless, and started without a command string, script or unreadable arguments."""
+    if not process.has_terminal() or process.has_live_children():
+        return False
+    try:
+        argv = process.cmdline()
+    except ProcessVanishedError:
+        raise
+    except ProcessObservationError:
+        return False
+    return _is_interactive_invocation(argv)
 
 
 def _blocks(process: ProcessView, roots: tuple[Path, ...]) -> bool:
@@ -208,8 +242,8 @@ def _blocks(process: ProcessView, roots: tuple[Path, ...]) -> bool:
         unreadable = exc
     if unreadable is not None:
         raise unreadable
-    # Only an interactive prompt (terminal-attached, childless) whose sole link is its working directory is idle.
-    return cwd_inside and (not process.has_terminal() or process.has_live_children())
+    # Only an interactive prompt whose sole link is its working directory is idle.
+    return cwd_inside and not _is_idle_interactive_shell(process)
 
 
 def _observation_error(exc: BaseException) -> ProcessObservationError:
@@ -261,6 +295,13 @@ class _PsutilProcessView:
         except (psutil.Error, OSError) as exc:
             raise _observation_error(exc) from exc
 
+    def cmdline(self) -> tuple[str, ...]:
+        self._require_owner()
+        try:
+            return tuple(self._process.cmdline())
+        except (psutil.Error, OSError) as exc:
+            raise _observation_error(exc) from exc
+
     def has_live_children(self) -> bool:
         try:
             children = self._process.children()
@@ -277,6 +318,19 @@ class _PsutilProcessView:
         return False
 
 
+def _still_delivery_descendant(pid: int, create_time: float | None, own_pid: int) -> bool | None:
+    """Return ``None`` when the process vanished; any other doubt means it is scanned like every process."""
+    try:
+        current = psutil.Process(pid)
+        if create_time is None or current.create_time() != create_time:
+            return False
+        return any(parent.pid == own_pid for parent in current.parents())
+    except psutil.NoSuchProcess:
+        return None
+    except (psutil.Error, OSError):
+        return False
+
+
 def psutil_user_processes() -> Iterator[ProcessView]:
     """Yield every process owned, or possibly owned, by the current user except Delivery and its descendants."""
     if psutil is None:
@@ -286,14 +340,17 @@ def psutil_user_processes() -> Iterator[ProcessView]:
     try:
         processes = tuple(psutil.process_iter(("pid", "name", "uids", "create_time")))
         # Delivery's own Git subprocesses run inside worktrees; they are never a stopped worker's leftovers.
-        own_pids = {own_pid, *(child.pid for child in psutil.Process(own_pid).children(recursive=True))}
+        own_pids = {child.pid for child in psutil.Process(own_pid).children(recursive=True)}
     except (psutil.Error, OSError) as exc:
         message = "process table could not be scanned"
         raise WorktreeProcessScanError(message) from exc
     for process in processes:
         info = process.info
-        uids = info.get("uids")
-        if info.get("pid") in own_pids or (uids is not None and uids.real != own_uid):
+        pid, uids = info.get("pid"), info.get("uids")
+        if pid == own_pid or (uids is not None and uids.real != own_uid):
+            continue
+        # A descendant orphaned since the snapshot is no longer Delivery's own work.
+        if pid in own_pids and _still_delivery_descendant(pid, info.get("create_time"), own_pid) is not False:
             continue
         yield _PsutilProcessView(process, info.get("name") or "", info.get("create_time"), owner_known=uids is not None)
 
@@ -303,7 +360,11 @@ def _may_be_worker_leftover(process: ProcessView, issued_after: datetime | None)
     created = process.create_time
     if issued_after is None or created is None:
         return True
-    return created >= issued_after.timestamp() - _CREATE_TIME_TOLERANCE_SECONDS
+    try:
+        threshold = issued_after.timestamp() - _CREATE_TIME_TOLERANCE_SECONDS
+    except (OverflowError, OSError, ValueError):
+        return True
+    return created >= threshold
 
 
 class ProcessTableWorktreeProbe:

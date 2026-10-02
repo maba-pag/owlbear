@@ -382,6 +382,134 @@ def _stop_detached(process: psutil.Process, control: Path) -> None:
         process.wait(timeout=30)
 
 
+def _detached_terminal_shell(cwd: Path, control: Path, argv: tuple[str, ...]) -> psutil.Process:
+    """Run ``/bin/sh`` on its own pseudo-terminal under a holder reparented away from this process."""
+    control.mkdir()
+    holder = (
+        "import os, pathlib, pty, signal, time\n"
+        f"control = pathlib.Path({str(control)!r})\n"
+        "pid, master = pty.fork()\n"
+        "if pid == 0:\n"
+        "    try:\n"
+        f"        os.chdir({str(cwd)!r})\n"
+        f"        os.execve('/bin/sh', {argv!r}, {{'PATH': '/usr/bin:/bin', 'HOME': {str(control)!r}}})\n"
+        "    finally:\n"
+        "        os._exit(127)\n"
+        "(control / 'pid').write_text(str(pid))\n"
+        "while not (control / 'stop').exists():\n"
+        "    time.sleep(0.05)\n"
+        "os.close(master)\n"  # macOS blocks a pty process's exit until unread output drains.
+        "os.kill(pid, signal.SIGKILL)\n"
+        "os.waitpid(pid, 0)\n"
+    )
+    launcher = (
+        "import subprocess, sys\n"
+        f"subprocess.Popen((sys.executable, '-c', {holder!r}), start_new_session=True,"
+        " stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
+    )
+    subprocess.run((sys.executable, "-c", launcher), check=True, timeout=30)  # noqa: S603 - fixed inline script.
+    deadline = time.monotonic() + 30
+    while not (control / "pid").exists() or not (control / "pid").read_text():
+        assert time.monotonic() < deadline
+        time.sleep(0.05)
+    shell = psutil.Process(int((control / "pid").read_text()))
+    while tuple(shell.cmdline()) != argv:
+        assert time.monotonic() < deadline
+        time.sleep(0.05)
+    return shell
+
+
+def _stop_terminal_shell(shell: psutil.Process, holder: psutil.Process, control: Path) -> None:
+    (control / "stop").touch()
+    try:
+        shell.wait(timeout=10)
+    except psutil.NoSuchProcess:
+        pass
+    except psutil.TimeoutExpired:
+        with contextlib.suppress(psutil.NoSuchProcess):
+            holder.kill()
+        shell.kill()
+
+
+@pytest.mark.skipif(not Path("/bin/sh").exists() or sys.platform == "win32", reason="needs a POSIX pty and /bin/sh")
+@pytest.mark.parametrize(("argv", "blocks"), [(("sh", "-c", "read x"), True), (("sh", "-i"), False)])
+def test_real_terminal_shell_is_exempt_only_when_interactive(
+    tmp_path: Path, argv: tuple[str, ...], *, blocks: bool
+) -> None:
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    issued = datetime.now(UTC)
+    control = tmp_path / "control"
+    shell = _detached_terminal_shell(worktree, control, argv)
+    holder = psutil.Process(shell.ppid())
+    try:
+        assert shell.terminal() is not None
+        assert os.getpid() not in {parent.pid for parent in shell.parents()}
+        names = ProcessTableWorktreeProbe().active_processes((worktree,), issued_after=issued)
+    finally:
+        _stop_terminal_shell(shell, holder, control)
+
+    assert len(names) == (1 if blocks else 0)
+    assert all("read" not in name and "-c" not in name for name in names)
+
+
+def test_real_process_table_scans_a_delivery_descendant_orphaned_during_the_scan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    worktree = tmp_path / "worktree"
+    control = tmp_path / "control"
+    worktree.mkdir()
+    control.mkdir()
+    sleeper = (
+        "import pathlib, time\n"
+        f"control = pathlib.Path({str(control)!r})\n"
+        "while not (control / 'stop').exists():\n"
+        "    time.sleep(0.05)\n"
+    )
+    parent_script = (
+        "import pathlib, subprocess, sys, time\n"
+        f"control = pathlib.Path({str(control)!r})\n"
+        f"child = subprocess.Popen((sys.executable, '-c', {sleeper!r}), cwd={str(worktree)!r},"
+        " stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
+        "print(child.pid, flush=True)\n"
+        "while not (control / 'orphan').exists():\n"
+        "    time.sleep(0.05)\n"
+    )
+    issued = datetime.now(UTC)
+    parent = subprocess.Popen(  # noqa: S603 - fixed interpreter and inline script.
+        (sys.executable, "-c", parent_script), stdout=subprocess.PIPE, text=True
+    )
+    assert parent.stdout is not None
+    grandchild = psutil.Process(int(parent.stdout.readline()))
+    parent.stdout.close()
+    original_children = psutil.Process.children
+
+    def children(self: psutil.Process, *, recursive: bool = False) -> list[psutil.Process]:
+        found = original_children(self, recursive=recursive)
+        if recursive and self.pid == os.getpid() and parent.poll() is None:
+            assert grandchild.pid in {child.pid for child in found}
+            (control / "orphan").touch()
+            parent.wait(timeout=30)
+            deadline = time.monotonic() + 30
+            while grandchild.ppid() == parent.pid:
+                assert time.monotonic() < deadline
+                time.sleep(0.05)
+        return found
+
+    monkeypatch.setattr(psutil.Process, "children", children)
+    try:
+        names = ProcessTableWorktreeProbe().active_processes((worktree,), issued_after=issued)
+    finally:
+        monkeypatch.undo()
+        _stop_detached(grandchild, control)
+        if parent.poll() is None:
+            (control / "orphan").touch()
+            parent.wait(timeout=30)
+
+    assert parent.returncode == 0
+    assert len(names) == 1
+
+
 @dataclass(frozen=True)
 class _FakeProcess:
     name: str
@@ -391,6 +519,13 @@ class _FakeProcess:
     terminal: bool | None = True
     failure: str | None = None
     create_time: float | None = _ISSUED.timestamp() - 3600
+    argv: tuple[str, ...] | None = ()
+
+    def cmdline(self) -> tuple[str, ...]:
+        if self.argv is None:
+            message = "command line unreadable"
+            raise ProcessObservationError(message)
+        return self.argv or (self.name,)
 
     def cwd(self) -> Path | None:
         if self.failure == "vanished":
@@ -421,6 +556,18 @@ _GUARD_CASES = {
     "open-admin-file": (_FakeProcess("git", working=Path("E"), files=(Path("A/index.lock"),)), True),
     "idle-shell-cwd": (_FakeProcess("zsh", working=Path("W")), False),
     "login-shell-cwd": (_FakeProcess("-bash", working=Path("W/sub")), False),
+    "login-shell-dash-argv0": (_FakeProcess("zsh", working=Path("W"), argv=("-zsh",)), False),
+    "login-shell-option": (_FakeProcess("zsh", working=Path("W"), argv=("/bin/zsh", "-l")), False),
+    "login-shell-cluster": (_FakeProcess("zsh", working=Path("W"), argv=("zsh", "-il")), False),
+    "login-shell-long-option": (_FakeProcess("bash", working=Path("W"), argv=("bash", "--login")), False),
+    "shell-command-string": (_FakeProcess("zsh", working=Path("W"), argv=("zsh", "-c", "read x")), True),
+    "shell-login-command-cluster": (_FakeProcess("zsh", working=Path("W"), argv=("zsh", "-lc", "read x")), True),
+    "shell-long-command": (_FakeProcess("bash", working=Path("W"), argv=("bash", "--login", "--command")), True),
+    "shell-stdin-commands": (_FakeProcess("bash", working=Path("W"), argv=("bash", "-s")), True),
+    "shell-script": (_FakeProcess("bash", working=Path("W"), argv=("bash", "script.sh")), True),
+    "shell-options-then-script": (_FakeProcess("zsh", working=Path("W"), argv=("zsh", "-l", "--", "x")), True),
+    "shell-cmdline-unreadable": (_FakeProcess("zsh", working=Path("W"), argv=None), True),
+    "shell-cmdline-unreadable-elsewhere": (_FakeProcess("zsh", working=Path("E"), argv=None), False),
     "shell-with-child": (_FakeProcess("bash", working=Path("W"), children=True), True),
     "shell-with-open-file": (_FakeProcess("fish", working=Path("W"), files=(Path("W/notes.txt"),)), True),
     "shell-without-terminal": (_FakeProcess("sh", working=Path("W"), terminal=False), True),
@@ -510,6 +657,44 @@ def test_psutil_process_table_blocks_unreadable_processes_started_after_the_clai
     names = ProcessTableWorktreeProbe().active_processes((tmp_path / "worktree",), issued_after=_ISSUED)
 
     assert names == (("sandboxed",) if blocks else ())
+
+
+@pytest.mark.parametrize("case", ["descendant", "vanished", "orphaned", "pid-reused", "revalidation-denied"])
+def test_psutil_process_table_revalidates_delivery_descendants_when_filtering(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, case: str
+) -> None:
+    worktree = tmp_path / "worktree"
+    own_pid = os.getpid()
+    info = {"pid": 9_001, "name": "node", "uids": SimpleNamespace(real=os.getuid()), "create_time": _NEW}
+    row = _FakePsutilProcess(info, None, worktree)
+
+    def process(pid: int) -> SimpleNamespace:
+        if pid == own_pid:
+            descendants = [SimpleNamespace(pid=9_001)]
+            return SimpleNamespace(children=lambda *, recursive=False: descendants if recursive else [])
+        if case == "vanished":
+            raise psutil.NoSuchProcess(pid)
+        if case == "revalidation-denied":
+            raise psutil.AccessDenied(pid)
+        parent = own_pid if case == "descendant" else 1
+        created = _NEW + 60 if case == "pid-reused" else _NEW
+        return SimpleNamespace(create_time=lambda: created, parents=lambda: [SimpleNamespace(pid=parent)])
+
+    monkeypatch.setattr(psutil, "process_iter", lambda _attrs: iter((row,)))
+    monkeypatch.setattr(psutil, "Process", process)
+
+    names = ProcessTableWorktreeProbe().active_processes((worktree,), issued_after=_ISSUED)
+
+    assert names == (() if case in {"descendant", "vanished"} else ("node",))
+
+
+@pytest.mark.parametrize("issued_after", [datetime(1, 1, 1), datetime.max])  # noqa: DTZ001, DTZ901 - naive bounds.
+def test_process_guard_treats_an_unconvertible_issue_time_as_unknown(tmp_path: Path, issued_after: datetime) -> None:
+    process = _FakeProcess("worker", failure="unreadable")
+
+    names = ProcessTableWorktreeProbe(lambda: iter((process,))).active_processes((tmp_path,), issued_after=issued_after)
+
+    assert names == ("worker",)
 
 
 @pytest.mark.parametrize("failure", [OSError("denied"), WorktreeProcessScanError("unavailable")])
@@ -708,7 +893,13 @@ def test_process_scan_failure_fails_closed(tmp_path: Path, entry: str) -> None:
     assert not (state_root / "changes/change-a/retry-ledger/owner-results" / f"{claim.attempt_id}.json").exists()
 
 
-@pytest.mark.parametrize("recorded", ["earlier", "unparseable"])
+_UNCONVERTIBLE_ISSUE_TIMES = {
+    "after-calendar-end": "9999-12-31T23:59:59-01:00",
+    "before-calendar-start": "0001-01-01T00:00:00+01:00",
+}
+
+
+@pytest.mark.parametrize("recorded", ["earlier", "unparseable", *_UNCONVERTIBLE_ISSUE_TIMES])
 def test_window_loss_scan_uses_the_issuer_record_issue_time(tmp_path: Path, recorded: str) -> None:
     start = _real_now()
     now = [_iso(start)]
@@ -719,7 +910,9 @@ def test_window_loss_scan_uses_the_issuer_record_issue_time(tmp_path: Path, reco
     path = _issuer_path(state_root, "change-a", claim.attempt_id)
     record = json.loads(path.read_bytes())
     issued = start - timedelta(hours=1)
-    record["issued_at"] = _iso(issued) if recorded == "earlier" else "not-a-time"
+    record["issued_at"] = (
+        _iso(issued) if recorded == "earlier" else _UNCONVERTIBLE_ISSUE_TIMES.get(recorded, "not-a-time")
+    )
     path.write_text(json.dumps(record), encoding="utf-8")
     probe.states[_HOST] = "gone"
     probe.processes = ("node",)
@@ -731,6 +924,22 @@ def test_window_loss_scan_uses_the_issuer_record_issue_time(tmp_path: Path, reco
     assert probe.issued_after
     assert set(probe.issued_after) == {issued if recorded == "earlier" else None}
     assert runtimes["change-a"].frontier_bytes() == frontier_before
+
+
+@pytest.mark.parametrize("recorded", sorted(_UNCONVERTIBLE_ISSUE_TIMES))
+def test_release_guard_treats_an_unconvertible_issue_time_as_unknown(tmp_path: Path, recorded: str) -> None:
+    now = [_iso(_real_now())]
+    application, _runtimes, _coordinator, _state_root, probe = _stall_portfolio(
+        tmp_path, {"change-a": DeliveryStage.PLANNING}, now
+    )
+    _acquire_planning_claim(application)
+    probe.processes = ("node",)
+
+    with pytest.raises(DeliveryWorkerActiveError) as raised:
+        application._require_quiet_worktree("change-a", _UNCONVERTIBLE_ISSUE_TIMES[recorded])
+
+    assert probe.issued_after == [None]
+    assert raised.value.active_processes == ("node",)
 
 
 @pytest.mark.parametrize("entry", ["release", "window-lost-sweep"])

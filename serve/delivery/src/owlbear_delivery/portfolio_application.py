@@ -5465,8 +5465,8 @@ class PortfolioApplication:
         """Refuse settlement while leftover processes use the worktree or it changed within the quiet period."""
         try:
             issued_after: datetime | None = _timestamp(issued_at)
-        except ValueError:
-            issued_after = None  # Unknown issue time: every unreadable process blocks.
+        except (ValueError, OverflowError):
+            issued_after = None  # Unknown or unrepresentable issue time: every unreadable process blocks.
         try:
             roots = self._workspace_manager.worker_process_roots(change_id)
             before = self._workspace_manager.observe_worktree_activity(change_id)

@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import get_args
 
 import pytest
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 import owlbear_tools.delivery_diagnostics as diagnostics
 from owlbear_delivery import delivery_runtime
@@ -674,6 +674,36 @@ def test_malformed_claim_issuer_window_is_degraded_and_redacted(tmp_path: Path, 
     assert "987654321" not in encoded
     assert "WINDOW-NAME-SECRET" not in encoded
     assert "EXTRA-SECRET" not in encoded
+
+
+@pytest.mark.parametrize(
+    "create_time", [1.5, 0, 0.0, 10, 10**300, 10**400, -1, True, "1", float("inf"), float("nan")], ids=repr
+)
+def test_claim_issuer_window_create_time_matches_the_runtime_model(tmp_path: Path, create_time: object) -> None:
+    root = _complete_root(tmp_path)
+    change = root / ".owlbear/delivery/runtime/changes/example"
+    issuer = _write_claim_issuer(change, WindowHostIdentity(pid=4321, create_time=123.5, name="builder"))
+    issuer_path = change / "claim-issuers" / f"{issuer.attempt_id}.json"
+    issuer_record = issuer.model_dump(mode="json")
+    issuer_record["window"]["create_time"] = create_time
+    issuer_path.write_text(json.dumps(issuer_record) + "\n", encoding="utf-8")
+    try:
+        DeliveryClaimIssuer.model_validate_json(issuer_path.read_bytes())
+    except ValidationError:
+        runtime_accepts = False
+    else:
+        runtime_accepts = True
+    try:
+        WindowHostIdentity.model_validate(issuer_record["window"])
+    except ValidationError:
+        model_accepts = False
+    else:
+        model_accepts = True
+    assert model_accepts is runtime_accepts
+
+    result = inspect_delivery(root)
+
+    assert ("CLAIM_ISSUER_MALFORMED" not in result["diagnostic_codes"]) is runtime_accepts
 
 
 def test_retired_runtime_hosts_directory_is_not_traversed(tmp_path: Path) -> None:
