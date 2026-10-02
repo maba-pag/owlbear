@@ -59,7 +59,8 @@ without behavior change).
   Builder may return `retry` for normal settlement; dirty, staged, and committed work remains
   available to the next same-task handoff. An Implementation `return` requires the exact
   `attempt_id` and `preserved_commit` plus writer-head validation; an Implementation `block` requires
-  a bounded user request and a clean `resume_commit`.
+  a bounded user request and a `resume_commit` equal to the verified branch `HEAD`; dirty, staged,
+  and committed work stays preserved for the same-task handoff.
 - A permitted local `implementation` finding repair uses another explicit scoped commit, reruns
   affected proof, and requires fresh review of the cumulative task result.
 - Never push. The user pushes manually.

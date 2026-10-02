@@ -191,8 +191,9 @@ with deterministic outcomes, dependencies, commitments, and proof boundaries.
 
 ### Delivery
 
-After admission, invoke `/orchestrate`. Before dispatching from either entry route, Orchestrator lists
-Changes and revalidates existing running Planner/Builder/Finalizer claims. It asks once whether each
+After admission, invoke `/orchestrate`. Before dispatching, Orchestrator revalidates existing running
+Planner/Builder/Finalizer claims in its entry scope: `/continue-change` reads only its Change with
+`get_change`, while `/orchestrate` lists Changes. It asks once whether each
 exact prior run was stopped or closed; only a confirmed stop is released, while `worker-stall-wait`
 needs no question. Portfolio cycles then acquire a bounded ordered set of launch packages, dispatch
 only the worker named by each package, and forward the worker's transition unchanged. Tasks execute

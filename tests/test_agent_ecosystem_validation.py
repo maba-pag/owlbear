@@ -998,7 +998,11 @@ def _assert_stopped_worker_release_guidance() -> None:
     assert "window-exit row" in operator_guide
     assert "Recorded PID/start time is gone" in operator_guide
     assert "no writes for 30 seconds" in operator_guide
-    assert "Before dispatching from either entry route" in operator_guide
+    assert "`/continue-change` reads only its Change with\n`get_change`, while `/orchestrate` lists Changes" in (
+        operator_guide
+    )
+    assert "Before dispatching from either entry route" not in operator_guide
+    assert "Before either entry route" not in wiring
     assert "ERR_DELIVERY_WORKER_ACTIVE" in operator_guide
     assert "release_stuck_worker" in delivery_readme
     assert "release_stuck_worker" in delivery_mcp

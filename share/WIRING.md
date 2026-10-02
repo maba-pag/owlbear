@@ -62,8 +62,9 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 Tool allowlists remain in agent frontmatter; they are not duplicated here.
 
 Orchestrator acquires and dispatches work, then forwards ordinary transitions and routes typed
-attention and admitted Change repair proposals. Before either entry route, it inspects `list_changes`
-and `get_change` for running Planner/Builder/Finalizer claims and asks once with `vscode/askQuestions`
+attention and admitted Change repair proposals. Before dispatching, it inspects running
+Planner/Builder/Finalizer claims in its entry scope (`/continue-change`: only that Change through
+`get_change`; `/orchestrate`: `list_changes`, then `get_change`) and asks once with `vscode/askQuestions`
 whether each exact prior run was stopped. Only a confirmed stop uses one exact
 `release_stuck_worker` call. A `worker-stall-wait` needs no question and yields with its retry time
 or bounded process details. Delivery records each claim's issuing VS Code window PID and process
