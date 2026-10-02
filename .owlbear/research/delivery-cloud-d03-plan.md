@@ -161,6 +161,19 @@ recorded process. Restarting the MCP server keeps it; reload, crash or close of 
 or ends it. The Delivery server itself was not started; its launch chain is identical by
 configuration.
 
+**Live two-window end-to-end proof (2026-10-02):** a second VS Code window on a disposable folder got
+its own extension host (pid 63782, distinct from 98809, also holding Copilot Chat's session store).
+Its chat called a disposable `window-probe` stdio MCP server (`uv run python …`), which ran the
+production `WindowHostIdentity.capture()` at startup and recorded pid 63782. A disposable Delivery
+portfolio from `7ffff1a5` issued a Planner claim bound to that identity with the default real
+liveness and process probes. While the window was open, acquisition kept the claim, also after the
+probe MCP server was killed. Closing that window through its close button ended pid 63782 within
+seconds. A leftover process in the worktree then kept the claim in `worker-stall-wait` without a
+time; after it exited and 30 quiet seconds passed, acquisition settled `worker-host-lost`. One
+observation: a window whose opening was interrupted by a macOS permission prompt became invisible
+while its renderer and extension host stayed alive, so such a claim would wait for user-confirmed
+release rather than settle automatically.
+
 | Gate | Current disposition |
 | --- | --- |
 | Source and contract | Native Orchestrator settlement is user-approved. Exact clean settled target-stale attention may sync through the existing engine owner, retaining the passive-writer reservation through its merge/conflict outcome; fresh review precedes a new Finalizer under the original budget. Dirty workspaces, stale identities, unattributed material and unknown execution remain contained; sync cannot renew the three-attempt budget |
