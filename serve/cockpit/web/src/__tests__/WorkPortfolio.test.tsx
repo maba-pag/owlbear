@@ -5607,6 +5607,7 @@ it.each([
 it("labels every continuation readiness reason without blanking a new engine state", async () => {
   const continuationReasons: DeliveryReadinessReasonCode[] = [
     "design-attention",
+    "builder-transition-contained",
     "finalization-failed",
     "settled-attention-target-drift",
     "claim-activation-failed",
@@ -5629,15 +5630,48 @@ it("labels every continuation readiness reason without blanking a new engine sta
     continuationReasons.length,
   );
 
+  const retryCondition = "Wait until the retained attempt can be safely inspected.";
+  const containedBuilderAttention: NonNullable<WorkItemAvailableDetailResponse["item"]["recovery_attention"]> = {
+    attempt_id: "attempt-001",
+    claim_id: "claim-001",
+    reason: "The Builder block transition remains contained with custody retained.",
+    custody_retained: true,
+    retry_condition: retryCondition,
+    diagnostic_transition: {
+      action: "block",
+      outcome_id: "OUT-001",
+      claim_id: "claim-001",
+      block_id: "block-001",
+      reason: "A bounded user decision is required.",
+      unblock_condition: "The decision is recorded.",
+      expected_evidence: ["Recorded user decision"],
+      locators: ["request:REQUEST-001"],
+      request: {
+        request_id: "REQUEST-001",
+        kind: "decision",
+        outcome_id: "OUT-001",
+        summary: "Choose the next step.",
+        options: [{ option_id: "continue", label: "Continue" }],
+        resolution: null,
+      },
+      resume_commit: null,
+    },
+  };
+
   for (const reason of continuationReasons) {
     const designAttention = reason === "design-attention";
     const targetDrift = reason === "settled-attention-target-drift";
+    const builderTransitionContained = reason === "builder-transition-contained";
     const state = readiness({
-      status: designAttention || targetDrift ? "blocked" : "waiting",
+      status: designAttention || targetDrift || builderTransitionContained ? "blocked" : "waiting",
+      executable: false,
       next_actor: designAttention ? "you" : "agent",
       reason_code: reason,
     });
-    currentDetail = detail({ readiness: state });
+    currentDetail = detail({
+      readiness: state,
+      ...(builderTransitionContained ? { recovery_attention: containedBuilderAttention } : {}),
+    });
     const { unmount } = renderPage("/delivery/change-alpha/outcome%3AOUT-001");
 
     const inspector = await screen.findByTestId("work-item-detail");
@@ -5651,6 +5685,14 @@ it("labels every continuation readiness reason without blanking a new engine sta
     if (targetDrift) {
       expect(within(inspector).getByTestId("readiness-status")).toHaveTextContent("Blocked");
       expect(within(inspector).getByTestId("readiness-not-executable")).toBeInTheDocument();
+    }
+    if (builderTransitionContained) {
+      expect(within(inspector).getByText("Recovery attention")).toBeInTheDocument();
+      expect(inspector).toHaveTextContent(containedBuilderAttention.reason);
+      expect(inspector).toHaveTextContent(`Next: ${retryCondition}`);
+      expect(within(inspector).getByTestId("readiness-status")).toHaveTextContent("Blocked");
+      expect(within(inspector).getByTestId("readiness-not-executable")).toBeInTheDocument();
+      expect(within(inspector).queryByRole("button", { name: /^Copy command/ })).not.toBeInTheDocument();
     }
     unmount();
   }
