@@ -3627,6 +3627,212 @@ def test_builder_return_to_planning_preserves_history_and_retains_partial_handof
     assert episode.reset_count == 0
 
 
+def _settle_builder_return_to_planning(tmp_path: Path, *, total_attempts: int = 1):
+    runtime, coordinator, coordination, _initial, branch_head, _first_result, tasks = _active_second_task(tmp_path)
+    ledger, _key = _reserve_builder_settlement(
+        runtime,
+        "attempt-002",
+        coordination.last_reviewed_commit,
+        total_attempts=total_attempts,
+    )
+    request = ReturnDelivery(
+        action="return",
+        outcome_id="OUT-001",
+        claim_id="claim-002",
+        target=DeliveryStage.PLANNING,
+        reason="The remaining implementation task needs clearer boundaries.",
+        locators=("TASK-002",),
+        preserved_commit=branch_head,
+        attempt_id="attempt-002",
+    )
+    returned = runtime.settle_builder_invocation(_builder_settlement_envelope(runtime, coordination, request))
+    ledger.reconcile_owner_results()
+    assert returned.builder_handoff_context is not None
+    assert returned.builder_handoff_context.route == "same-outcome-planner"
+    return runtime, coordinator, coordination, returned, tasks
+
+
+def _activate_returned_planner(
+    runtime: DeliveryRuntime,
+    coordinator: PortfolioCoordinator,
+    claim_id: str,
+) -> OutcomeAuthorityBinding:
+    activation = ActivateDeliveryClaim(
+        outcome_id="OUT-001",
+        claim=DeliveryActiveClaim(
+            attempt_id=f"attempt-{claim_id}",
+            claim_id=claim_id,
+            owner_id=f"owner-{claim_id}",
+            process_id=f"process-{claim_id}",
+            started_at="2026-08-04T00:00:00Z",
+            worker_role=DeliveryWorkerRole.PLANNER,
+        ),
+    )
+    with coordinator.publication_lock("delivery-runtime") as lock:
+        return runtime.activate_claim(activation, builder_handoff_lock=lock)
+
+
+def _planner_return_block(claim_id: str, request: DeliveryRequest | None) -> BlockDelivery:
+    return BlockDelivery(
+        action="block",
+        outcome_id="OUT-001",
+        claim_id=claim_id,
+        block_id=f"planner-return-block-{claim_id}",
+        reason="The returned task boundary needs a user decision.",
+        unblock_condition="The user records the boundary decision.",
+        expected_evidence=("Boundary decision",),
+        locators=("TASK-002",),
+        request=request,
+    )
+
+
+def test_planner_pause_after_builder_return_is_answerable_and_reacquirable(tmp_path: Path) -> None:
+    runtime, coordinator, coordination, returned, tasks = _settle_builder_return_to_planning(tmp_path)
+    _activate_returned_planner(runtime, coordinator, "planner-claim-003")
+    request = DeliveryRequest(
+        request_id="planner-return-request-003",
+        kind=DeliveryRequestKind.DECISION,
+        outcome_id="OUT-001",
+        summary="Choose the boundary for the returned task.",
+        options=(
+            DeliveryRequestOption(option_id="narrow", label="Narrow the task"),
+            DeliveryRequestOption(option_id="split", label="Split the task"),
+        ),
+    )
+    block = _planner_return_block("planner-claim-003", request)
+    blocked = runtime.transition(block)
+    assert blocked.block is not None
+    assert blocked.block.request_id == request.request_id
+    assert blocked.builder_handoff_context == returned.builder_handoff_context
+    assert "OUT-001" not in runtime.claimable_outcome_ids()
+    before_git = _git_worktree_snapshot(coordination.worktree_path)
+    before_custody = coordinator.coordination_bytes("delivery-runtime")
+
+    answer = DeliveryRequestResolution(selected_option_id="narrow", provenance="user-confirmed")
+    resolved = runtime.resolve_request(request.request_id, answer)
+
+    assert resolved.resolution == answer
+    binding = runtime.show_binding("OUT-001")
+    assert binding.block is not None
+    assert binding.block.resolved
+    assert binding.return_context == returned.return_context
+    assert binding.builder_handoff_context == returned.builder_handoff_context
+    assert runtime.claimable_outcome_ids() == ("OUT-001",)
+    assert runtime.pending_state_publication() is None
+    assert coordinator.coordination_bytes("delivery-runtime") == before_custody
+    assert _git_worktree_snapshot(coordination.worktree_path) == before_git
+
+    resolved_frontier = runtime.frontier_bytes()
+    reopened = DeliveryRuntime(
+        coordinator.runtime_root,
+        runtime.contract,
+        workspace_manager=ChangeWorkspaceManager(tmp_path / "repository", tmp_path / "worktrees", coordinator, "main"),
+    )
+    assert reopened.frontier_bytes() == resolved_frontier
+    assert reopened.resolve_request(request.request_id, answer) == resolved
+    assert reopened.transition(block) == blocked
+    assert reopened.frontier_bytes() == resolved_frontier
+    assert reopened.claimable_outcome_ids() == ("OUT-001",)
+
+    _activate_returned_planner(reopened, coordinator, "planner-claim-004")
+    candidate = reopened.publish_plan(
+        PublishDeliveryPlan(outcome_id="OUT-001", claim_id="planner-claim-004", tasks=tasks)
+    )
+    advanced = reopened.transition(
+        AdvanceDelivery(
+            action="advance",
+            outcome_id="OUT-001",
+            claim_id="planner-claim-004",
+            output=candidate.output,
+        )
+    )
+    assert advanced.stage == DeliveryStage.IMPLEMENTATION
+    assert advanced.builder_handoff_context is not None
+    assert advanced.builder_handoff_context.route == "same-task"
+    assert reopened.claimable_task_ids("OUT-001") == ("TASK-002",)
+
+
+def test_requestless_planner_block_after_builder_return_is_operator_clearable(tmp_path: Path) -> None:
+    runtime, coordinator, _coordination, returned, _tasks = _settle_builder_return_to_planning(tmp_path)
+    _activate_returned_planner(runtime, coordinator, "planner-claim-003")
+    block = _planner_return_block("planner-claim-003", None)
+    runtime.transition(block)
+    assert "OUT-001" not in runtime.claimable_outcome_ids()
+
+    with pytest.raises(ValueError, match="operator note and locators"):
+        runtime.unblock("OUT-001", block.block_id, "", ())
+    cleared = runtime.unblock("OUT-001", block.block_id, "Boundary verified by operator.", ("TASK-002",))
+
+    assert cleared.block is not None
+    assert cleared.block.resolved
+    assert cleared.return_context == returned.return_context
+    assert cleared.builder_handoff_context == returned.builder_handoff_context
+    assert runtime.claimable_outcome_ids() == ("OUT-001",)
+    after = runtime.frontier_bytes()
+    assert runtime.unblock("OUT-001", block.block_id, "Boundary verified by operator.", ("TASK-002",)) == cleared
+    assert runtime.frontier_bytes() == after
+
+
+def test_planner_return_handoff_refuses_foreign_or_unrecorded_answers_without_mutation(tmp_path: Path) -> None:
+    runtime, coordinator, _coordination, _returned, _tasks = _settle_builder_return_to_planning(tmp_path)
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+    other_request = DeliveryRequest(
+        request_id="other-outcome-request",
+        kind=DeliveryRequestKind.ACTION,
+        outcome_id="OUT-003",
+        summary="Provide evidence for the unrelated outcome.",
+    )
+    forged_request = other_request.model_copy(
+        update={"request_id": "unrecorded-planner-request", "outcome_id": "OUT-001"}
+    )
+    other_block = DeliveryBlock(
+        block_id="other-outcome-request-block",
+        reason="The unrelated outcome needs user evidence.",
+        unblock_condition="The evidence is supplied.",
+        expected_evidence=("User evidence",),
+        locators=("OUT-003",),
+        request_id=other_request.request_id,
+    )
+    forged_block = other_block.model_copy(
+        update={"block_id": "unrecorded-planner-block", "request_id": forged_request.request_id}
+    )
+    requestless_block = other_block.model_copy(update={"block_id": "other-requestless-block", "request_id": None})
+    bindings = tuple(
+        binding.model_copy(update={"requests": (forged_request,), "block": forged_block})
+        if binding.outcome_id == "OUT-001"
+        else binding.model_copy(update={"requests": (other_request,), "block": other_block})
+        if binding.outcome_id == "OUT-003"
+        else binding.model_copy(update={"block": requestless_block})
+        for binding in frontier.bindings
+    )
+    path = coordinator.runtime_root / "changes/delivery-runtime/frontier.json"
+    path.write_bytes(_canonical(frontier.model_copy(update={"bindings": bindings})))
+    before = runtime.frontier_bytes()
+    answer = DeliveryRequestResolution(response_text="Use user workflow.", provenance="user-confirmed")
+
+    with pytest.raises(DeliveryRuntimeConflictError, match="outside the exact retained Builder handoff"):
+        runtime.resolve_request(other_request.request_id, answer)
+    with pytest.raises(DeliveryRuntimeConflictError, match="Builder handoff"):
+        runtime.resolve_request(forged_request.request_id, answer)
+    with pytest.raises(DeliveryRuntimeConflictError, match="requestless unblock cannot mutate"):
+        runtime.unblock("OUT-002", requestless_block.block_id, "Operator verified.", ("OUT-002",))
+    assert runtime.frontier_bytes() == before
+
+
+def test_planner_return_exhaustion_block_stays_refused_for_unblock(tmp_path: Path) -> None:
+    runtime, _coordinator, _coordination, returned, _tasks = _settle_builder_return_to_planning(
+        tmp_path,
+        total_attempts=3,
+    )
+    assert returned.block is not None
+    before = runtime.frontier_bytes()
+
+    with pytest.raises(DeliveryRuntimeConflictError, match="requestless unblock cannot mutate"):
+        runtime.unblock("OUT-001", returned.block.block_id, "Operator verified.", ("TASK-002",))
+
+    assert runtime.frontier_bytes() == before
+
+
 @pytest.mark.parametrize("settlement_kind", ["retry", "planning-return"])
 def test_third_builder_failure_persists_requestless_exhaustion_block(
     tmp_path: Path,

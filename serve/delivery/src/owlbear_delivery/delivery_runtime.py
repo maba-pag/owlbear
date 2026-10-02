@@ -5152,30 +5152,7 @@ class DeliveryRuntime:
         ):
             return None
 
-        settlement_path = self._target_root / self._builder_invocation_settlement_path(context.attempt_id)
-        settlement_directory = settlement_path.parent
-        if any(
-            path.is_symlink()
-            for path in (
-                self._target_root / "changes",
-                self._frontier_path.parent,
-                settlement_directory,
-                settlement_path,
-            )
-        ):
-            _reference("Builder invocation settlement receipt path is unsafe")
-        try:
-            settlement_content = settlement_path.read_bytes()
-        except OSError as exc:
-            _reference("Builder invocation settlement receipt is unavailable", exc)
-        try:
-            settlement_receipt = _DeliveryBuilderInvocationSettlementReceipt.model_validate_json(
-                settlement_content,
-                strict=True,
-            )
-        except (TypeError, ValueError) as exc:
-            _reference("Builder invocation settlement receipt is invalid", exc)
-
+        settlement_receipt = self._read_builder_invocation_settlement_receipt(context)
         original_block = settlement_receipt.envelope.request
         if not isinstance(original_block, BlockDelivery) or original_block.request is None:
             _conflict("Builder request resolution does not match an exact same-task pause")
@@ -5225,6 +5202,91 @@ class DeliveryRuntime:
             receipt_path.relative_to(self._target_root),
             _model_content(receipt),
         )
+
+    def _read_builder_invocation_settlement_receipt(
+        self,
+        context: DeliveryBuilderHandoffContext,
+    ) -> _DeliveryBuilderInvocationSettlementReceipt:
+        settlement_path = self._target_root / self._builder_invocation_settlement_path(context.attempt_id)
+        settlement_directory = settlement_path.parent
+        if any(
+            path.is_symlink()
+            for path in (
+                self._target_root / "changes",
+                self._frontier_path.parent,
+                settlement_directory,
+                settlement_path,
+            )
+        ):
+            _reference("Builder invocation settlement receipt path is unsafe")
+        try:
+            settlement_content = settlement_path.read_bytes()
+        except OSError as exc:
+            _reference("Builder invocation settlement receipt is unavailable", exc)
+        try:
+            receipt = _DeliveryBuilderInvocationSettlementReceipt.model_validate_json(
+                settlement_content,
+                strict=True,
+            )
+        except (TypeError, ValueError) as exc:
+            _reference("Builder invocation settlement receipt is invalid", exc)
+        return receipt
+
+    def _planner_handoff_pause_return_context(
+        self,
+        binding: OutcomeAuthorityBinding,
+    ) -> DeliveryReturnContext | None:
+        """Return the retained Planning return context for one exact Planner pause on a Builder return."""
+        context = binding.builder_handoff_context
+        block = binding.block
+        if (
+            context is None
+            or context.route != "same-outcome-planner"
+            or binding.stage != DeliveryStage.PLANNING
+            or binding.active_claim is not None
+            or block is None
+        ):
+            return None
+        settlement = self._read_builder_invocation_settlement_receipt(context)
+        returned = settlement.envelope.request
+        if not (
+            isinstance(returned, ReturnDelivery)
+            and returned.target == DeliveryStage.PLANNING
+            and settlement.handoff_context == context
+            and settlement.envelope.change_id == self._contract.change_id
+            and settlement.result.block is None
+            and settlement.result.return_context is not None
+            and settlement.result.tasks == binding.tasks
+            and settlement.result.results == binding.results
+        ):
+            return None
+        if block.request_id is not None and not self._planning_pause_receipt_matches(binding):
+            return None
+        return settlement.result.return_context
+
+    def _planning_pause_receipt_matches(self, binding: OutcomeAuthorityBinding) -> bool:
+        directory = self._target_root / self._planning_pause_replay_path(binding.outcome_id, "0" * 64).parent
+        if any(
+            path.is_symlink()
+            for path in (self._target_root / "changes", self._frontier_path.parent, directory.parent, directory)
+        ):
+            _reference("Planning pause replay receipt path is unsafe")
+        if not directory.is_dir():
+            return False
+        for path in sorted(directory.glob("*.json")):
+            if path.is_symlink():
+                _reference("Planning pause replay receipt path is unsafe")
+            try:
+                receipt = _DeliveryPlanningPauseReplay.model_validate_json(path.read_bytes(), strict=False)
+            except (OSError, TypeError, ValueError) as exc:
+                _reference("Planning pause replay receipt is invalid", exc)
+            if (
+                receipt.change_id == self._contract.change_id
+                and path.name == f"{receipt.request_digest}.json"
+                and receipt.result == binding
+            ):
+                return True
+        return False
 
     def _require_recorded_builder_handoff_change_intent(self, frontier: DeliveryFrontier) -> None:
         for binding in frontier.bindings:
@@ -5452,9 +5514,10 @@ class DeliveryRuntime:
         _require_change_mutable(frontier, "resolve_request")
         binding, request = _find_request(frontier, request_id)
         _require_no_active_change_claim(frontier, "request resolution")
-        if any(item.builder_handoff_context is not None for item in frontier.bindings) and (
+        handoff_retained = any(item.builder_handoff_context is not None for item in frontier.bindings)
+        if handoff_retained and (
             binding.builder_handoff_context is None
-            or binding.builder_handoff_context.route != "same-task"
+            or binding.builder_handoff_context.route not in {"same-task", "same-outcome-planner"}
             or binding.block is None
             or binding.block.request_id != request_id
         ):
@@ -5487,8 +5550,11 @@ class DeliveryRuntime:
             resolved,
             cleared,
         )
-        if receipt_participant is None and any(item.builder_handoff_context is not None for item in frontier.bindings):
-            _conflict("request resolution lacks the exact retained Builder handoff receipt")
+        if receipt_participant is None and handoff_retained:
+            return_context = self._planner_handoff_pause_return_context(binding)
+            if return_context is None:
+                _conflict("request resolution lacks the exact retained Builder handoff receipt")
+            updated = updated.model_copy(update={"return_context": return_context})
         self._replace(
             previous,
             _replace_binding(frontier, binding, updated),
@@ -5509,9 +5575,12 @@ class DeliveryRuntime:
             raise ValueError(message)
         frontier, previous = self._read()
         _require_change_mutable(frontier, "unblock")
-        if any(item.builder_handoff_context is not None for item in frontier.bindings):
-            _conflict("requestless unblock cannot mutate while a Builder handoff is retained")
         binding = _find_binding(frontier, outcome_id)
+        handoff_retained = any(item.builder_handoff_context is not None for item in frontier.bindings)
+        if handoff_retained and (
+            binding.builder_handoff_context is None or binding.builder_handoff_context.route != "same-outcome-planner"
+        ):
+            _conflict("requestless unblock cannot mutate while a Builder handoff is retained")
         block = binding.block
         if block is None or block.block_id != block_id or block.request_id is not None:
             _conflict("requestless block is not clearable")
@@ -5522,6 +5591,11 @@ class DeliveryRuntime:
             _conflict("requestless block is not clearable")
         cleared = block.model_copy(update={"resolution_note": operator_note, "resolution_locators": locators})
         updated = binding.model_copy(update={"block": cleared})
+        if handoff_retained:
+            return_context = self._planner_handoff_pause_return_context(binding)
+            if return_context is None:
+                _conflict("requestless unblock cannot mutate while a Builder handoff is retained")
+            updated = updated.model_copy(update={"return_context": return_context})
         self._replace(previous, _replace_binding(frontier, binding, updated))
         return updated
 
