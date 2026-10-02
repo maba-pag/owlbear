@@ -24,6 +24,7 @@ SVG_SELECTOR_RE = re.compile(
     r"(^|,)\s*(svg|:root|\[data-theme|\[data-preset|\.semantic-sigil|\.s-|\.c-|\.t-|\.a-|\.m-)"
 )
 COMMENT_RE = re.compile(r"/\*[\s\S]*?\*/")
+STYLE_RE = re.compile(r"<style\b[^>]*>([\s\S]*?)</style>")
 CLASS_ATTRIBUTE_RE = re.compile(r'\bclass="([^"]*)"')
 CLASS_SELECTOR_RE = re.compile(r"(?<![A-Za-z0-9_-])\.([A-Za-z_][A-Za-z0-9_-]*)")
 VIEWBOX_RE = re.compile(r'\bviewBox="0\s+0\s+(?P<width>[0-9]+(?:\.[0-9]+)?)\s+(?P<height>[0-9]+(?:\.[0-9]+)?)"')
@@ -154,10 +155,11 @@ def _replace_attribute(opening: str, name: str, value: str) -> str:
 
 def _standalone_svg(html: str, theme: str) -> str:
     """Convert a rendered Archify HTML document into a self-contained SVG."""
-    style = _extract_tag(html, "style")
+    stylesheets = STYLE_RE.findall(html)
+    if not stylesheets:
+        _fail("Expected at least one style element, found 0.")
     svg = _extract_tag(html, "svg")
-    style_opening_end = style.find(">")
-    filtered_css = _extract_svg_css(style[style_opening_end + 1 : -len("</style>")])
+    filtered_css = "\n".join(filter(None, (_extract_svg_css(stylesheet) for stylesheet in stylesheets)))
     if not filtered_css or "]] >".replace(" ", "") in filtered_css:
         _fail("Archify output did not contain usable static SVG CSS.")
     font_stack = (

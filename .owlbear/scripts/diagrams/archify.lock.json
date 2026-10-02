@@ -2,6 +2,6 @@
   "schema_version": 1,
   "repository": "tt-a1i/archify",
   "asset": "archify.zip",
-  "version": "v2.16.0",
-  "sha256": "4c59fa6557a2385beaaef8c7219cc414573acc9f0c30a932d5053b0b20689a46"
+  "version": "v3.0.1",
+  "sha256": "b0b23bd28db314f04ca8ab9620fe20f8c1ac6474a3546bd8fe4679508aa1b7f5"
 }
