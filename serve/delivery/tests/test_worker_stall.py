@@ -315,6 +315,14 @@ def test_real_window_liveness_tracks_process_exit(tmp_path: Path) -> None:
     assert captured is None or (captured.pid != os.getpid() and not captured.name.lower().startswith("python"))
 
 
+def _real_scan_issue_time() -> datetime:
+    """Place the claim after every real process so parallel tests' unreadable processes cannot block.
+
+    Readable cwd and open-file evidence blocks regardless of process age, so these tests still discriminate.
+    """
+    return datetime.now(UTC) + timedelta(days=1)
+
+
 @pytest.mark.parametrize("link", ["cwd", "open-admin-file"])
 def test_real_process_table_detects_a_leftover_process_until_it_exits(tmp_path: Path, link: str) -> None:
     worktree = tmp_path / "worktree"
@@ -324,7 +332,7 @@ def test_real_process_table_detects_a_leftover_process_until_it_exits(tmp_path: 
         directory.mkdir(parents=True)
     (administration / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
     probe = ProcessTableWorktreeProbe()
-    issued = datetime.now(UTC)
+    issued = _real_scan_issue_time()
     roots = (worktree, administration)
     assert probe.active_processes(roots, issued_after=issued) == ()
     opened = None if link == "cwd" else administration / "HEAD"
@@ -339,7 +347,7 @@ def test_real_process_table_detects_a_leftover_process_until_it_exits(tmp_path: 
 def test_real_process_table_ignores_delivery_own_subprocesses(tmp_path: Path) -> None:
     worktree = tmp_path / "worktree"
     worktree.mkdir()
-    issued = datetime.now(UTC)
+    issued = _real_scan_issue_time()
     process = _sleeping_python(worktree)
     try:
         assert ProcessTableWorktreeProbe().active_processes((worktree,), issued_after=issued) == ()
@@ -438,7 +446,7 @@ def test_real_terminal_shell_is_exempt_only_when_interactive(
 ) -> None:
     worktree = tmp_path / "worktree"
     worktree.mkdir()
-    issued = datetime.now(UTC)
+    issued = _real_scan_issue_time()
     control = tmp_path / "control"
     shell = _detached_terminal_shell(worktree, control, argv)
     holder = psutil.Process(shell.ppid())
@@ -475,7 +483,7 @@ def test_real_process_table_scans_a_delivery_descendant_orphaned_during_the_scan
         "while not (control / 'orphan').exists():\n"
         "    time.sleep(0.05)\n"
     )
-    issued = datetime.now(UTC)
+    issued = _real_scan_issue_time()
     parent = subprocess.Popen(  # noqa: S603 - fixed interpreter and inline script.
         (sys.executable, "-c", parent_script), stdout=subprocess.PIPE, text=True
     )

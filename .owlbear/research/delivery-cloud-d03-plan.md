@@ -167,7 +167,10 @@ established worktree cwd still skipped when a later observation was unreadable a
 time still settling after an empty scan; CI on that head also exposed a host-timezone-dependent naive
 boundary test. The next commit makes an established worktree cwd block unless every idle-shell
 condition is verified, fails closed before scanning when the issue time is unknown, and treats naive
-issue times as unknown. A fresh cumulative challenge of the published head is required |
+issue times as unknown. A fresh Sol re-check of `baf6d812` returned `implementation-sound`. CI on
+that head then showed a real-process test counting a parallel test's unreadable new process; the
+real-process tests now place the claim after every real process, relying on readable evidence. A
+fresh cumulative challenge of the published head is required |
 | Required CI | All four required workflows must succeed on the same exact published head. Their exact-head results belong on PR #326; no new CI result is claimed here. Older green runs are historical |
 | PR and documentation metadata | Route exact-publication review and CI results to PR #326. This record names code checkpoint `3174857f1efb882bde5d24a08ac583a4b30e5dd7`, not the future SHA of this documentation update |
 | User direction | Native Orchestrator settlement is explicitly approved; no host-design approval is needed. On 2026-10-02 the user directed that crashed Planner/Builder invocations settle as ended attempts and chose A + B for unreturned dispatches, then revised it as option 1 (issuing-window evidence, user question while the window lives, leftover-process and 30-second write guards). Design-return readmission is refused before authority mutation and its correction is separate D04 work |
