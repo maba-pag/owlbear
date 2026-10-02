@@ -198,8 +198,14 @@ only for a `running` claim and confirms only the exact claim it opened for (a po
 stall wait withdraws the dialog), the MCP release description defers `worker-stall-wait` to
 acquisition, operator/WIRING guidance keeps `/continue-change` to its Change, and governance no
 longer requires a clean `resume_commit` for a Builder block. The Windows process-identity finding was
-not repaired: the user is dropping Windows and pre-3.14 Python support. A
-fresh cumulative challenge of the published head is required |
+not repaired: the user is dropping Windows and pre-3.14 Python support. A fresh Sol review of
+`baf6d812`→`b4dc522b` returned `implementation-sound`. The pre-merge live-compatibility gate then
+loaded an isolated copy of live Delivery state: `dev` code was healthy without writes, but `b4dc522b`
+rewrote every live frontier with null `builder_handoff_context`/`retry_diagnostic` and rejected the
+published snapshots' identities. `7c05d377` omits those optional fields (and
+`diagnostic_transition`) while null, so pre-D03 frontier bytes and snapshot identities are unchanged;
+the gate rerun was healthy with three available Changes and no record writes. A fresh Sol review of
+`b4dc522b`→`2bd8e3e0` returned `implementation-sound` |
 | Required CI | All four required workflows must succeed on the same exact published head. Their exact-head results belong on PR #326; no new CI result is claimed here. Older green runs are historical |
 | PR and documentation metadata | Route exact-publication review and CI results to PR #326. This record names code checkpoint `3174857f1efb882bde5d24a08ac583a4b30e5dd7`, not the future SHA of this documentation update |
 | User direction | Native Orchestrator settlement is explicitly approved; no host-design approval is needed. On 2026-10-02 the user directed that crashed Planner/Builder invocations settle as ended attempts and chose A + B for unreturned dispatches, then revised it as option 1 (issuing-window evidence, user question while the window lives, leftover-process and 30-second write guards). Design-return readmission is refused before authority mutation and its correction is separate D04 work |
