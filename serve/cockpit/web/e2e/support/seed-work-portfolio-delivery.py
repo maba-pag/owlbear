@@ -9,9 +9,11 @@ import json
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
+from unittest.mock import patch
 
 from pydantic import BaseModel
 
+from owlbear_delivery import delivery_application_loader
 from owlbear_delivery.acceptance import (
     CompletionDisplayMetadata,
     CompletionEvidence,
@@ -21,7 +23,11 @@ from owlbear_delivery.acceptance import (
 )
 from owlbear_delivery.change_workspace import ChangeWorkspaceManager, PortfolioCoordinator
 from owlbear_delivery.delivery_admission import DeliveryAdmissionReceipt
-from owlbear_delivery.delivery_application_loader import DeliveryHostConfig, DeliveryStartupConfig
+from owlbear_delivery.delivery_application_loader import (
+    DeliveryHostConfig,
+    DeliveryStartupConfig,
+    load_delivery_application,
+)
 from owlbear_delivery.delivery_runtime import (
     DeliveryBlock,
     DeliveryFrontier,
@@ -39,6 +45,7 @@ from owlbear_delivery.delivery_runtime import (
     OutcomeAuthorityBinding,
 )
 from owlbear_delivery.design_package import DesignPackageStore
+from owlbear_delivery.portfolio_application import DeliveryContinuationRequest
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
     DeliveryCommitmentClass,
@@ -377,7 +384,7 @@ def _write_completion_receipt(
         destination.write_bytes(participant.content)
 
 
-def _write_config(workspace: Path) -> None:
+def _write_config(workspace: Path) -> DeliveryStartupConfig:
     config = DeliveryStartupConfig(
         schema_version=2,
         remote="origin",
@@ -387,6 +394,7 @@ def _write_config(workspace: Path) -> None:
     path = workspace / ".owlbear/delivery/config.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(config.model_dump_json(by_alias=True), encoding="utf-8")
+    return config
 
 
 def _write_host_config(workspace: Path) -> None:
@@ -420,12 +428,73 @@ def seed_delivery(workspace: Path) -> None:
     _write_config(workspace)
 
 
+STUCK_WORKER_CHANGES = {
+    "stuck-quiet-e2e": "Quiet stopped worker",
+    "stuck-active-e2e": "Active worker",
+}
+
+
+def _write_planning_change(runtime_root: Path, head: str, store: DesignPackageStore, change_id: str) -> None:
+    title = STUCK_WORKER_CHANGES[change_id]
+    contract = _contract(change_id, title, (_outcome("OUT-001", f"Plan {title}", "Plan bounded work."),))
+    frontier = DeliveryFrontier(
+        bindings=(
+            OutcomeAuthorityBinding(outcome_id="OUT-001", plan_scope_id="SCOPE-001", stage=DeliveryStage.PLANNING),
+        )
+    )
+    change_root = runtime_root / "changes" / change_id
+    change_root.mkdir(parents=True, exist_ok=True)
+    (change_root / "contract.json").write_bytes(_canonical(contract))
+    (change_root / "frontier.json").write_bytes(_canonical(frontier))
+    _write_admission(change_root, contract, frontier, head)
+    _write_design_package(store, contract)
+
+
+def seed_stuck_workers(workspace: Path) -> None:
+    """Seed Changes whose Planner continuation claims were granted and then left without a worker."""
+    runtime_root = workspace / ".owlbear/delivery/runtime"
+    head = _seed_repository(workspace)
+    store = DesignPackageStore(workspace / ".owlbear/delivery/packages", workspace)
+    for change_id in STUCK_WORKER_CHANGES:
+        _write_planning_change(runtime_root, head, store, change_id)
+    _write_host_config(workspace)
+    workspace_manager = ChangeWorkspaceManager(
+        workspace, workspace / ".owlbear/delivery/worktrees", PortfolioCoordinator(runtime_root), "main"
+    )
+    for change_id in STUCK_WORKER_CHANGES:
+        workspace_manager.ensure(change_id)
+    config = _write_config(workspace)
+    # Without a host lock no issuer record is written, so the stall sweep cannot settle these claims itself.
+    with patch.object(delivery_application_loader, "_acquire_host_instance", return_value=None):
+        application = load_delivery_application(config, workspace_root=workspace)
+    for change_id in STUCK_WORKER_CHANGES:
+        for _ in range(3):
+            acquired = application.acquire_change_action(
+                DeliveryContinuationRequest(
+                    change_id=change_id,
+                    expected_basis=application.get_change(change_id).readiness.basis,
+                    capabilities=("planner", "builder", "finalizer", "engine"),
+                    host_id="stopped-chat-host",
+                    session_id=f"stopped-chat-{change_id}",
+                )
+            )
+            if acquired.launch is not None:
+                break
+        else:
+            message = f"{change_id} did not grant a Planner claim: {acquired}"
+            raise RuntimeError(message)
+
+
 def main() -> None:
     """Parse the fixture root and seed Delivery state."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--workspace", type=Path, required=True)
+    parser.add_argument("--stuck-workers", action="store_true")
     arguments = parser.parse_args()
-    seed_delivery(arguments.workspace.resolve())
+    if arguments.stuck_workers:
+        seed_stuck_workers(arguments.workspace.resolve())
+    else:
+        seed_delivery(arguments.workspace.resolve())
 
 
 if __name__ == "__main__":
