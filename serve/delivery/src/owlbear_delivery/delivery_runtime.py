@@ -155,6 +155,11 @@ class _DeliveryModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
 
+def _omit_when_none(value: object) -> bool:
+    # Optional fields added after frontier schema 18 keep pre-existing bytes and snapshot identities.
+    return value is None
+
+
 class DeliveryChangePublicationIdentity(_DeliveryModel):
     """Provider pull-request identity retained while Change attention clears ready authority."""
 
@@ -970,7 +975,9 @@ class DeliveryRecoveryAttention(_DeliveryModel):
     writer_claim_id: str | None = None
     custody_retained: bool
     retry_condition: str = Field(min_length=1)
-    diagnostic_transition: Annotated[BlockDelivery | ReturnDelivery, Field(discriminator="action")] | None = None
+    diagnostic_transition: Annotated[BlockDelivery | ReturnDelivery, Field(discriminator="action")] | None = Field(
+        default=None, exclude_if=_omit_when_none
+    )
 
 
 class DeliveryIntegrationAttentionDisposition(StrEnum):
@@ -1047,9 +1054,9 @@ class OutcomeAuthorityBinding(_DeliveryModel):
     candidate: DeliveryPlanCandidate | None = None
     result_candidate: DeliveryResultCandidate | None = None
     return_context: DeliveryReturnContext | None = None
-    builder_handoff_context: DeliveryBuilderHandoffContext | None = None
+    builder_handoff_context: DeliveryBuilderHandoffContext | None = Field(default=None, exclude_if=_omit_when_none)
     recovery_attention: DeliveryRecoveryAttention | None = None
-    retry_diagnostic: DeliveryRetryDiagnostic | None = None
+    retry_diagnostic: DeliveryRetryDiagnostic | None = Field(default=None, exclude_if=_omit_when_none)
     block: DeliveryBlock | None = None
     requests: tuple[DeliveryRequest, ...] = ()
     retry_fingerprint: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")

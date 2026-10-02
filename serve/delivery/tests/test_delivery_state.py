@@ -815,6 +815,25 @@ def test_state_snapshot_migrates_schema_1_and_retains_predecessor_identity(tmp_p
     assert migrated.frontier.bindings[0].retry_count == 0
 
 
+def test_state_snapshot_published_before_optional_binding_fields_keeps_identity(tmp_path: Path) -> None:
+    repository, _remote, _initial = _repository(tmp_path)
+    contract, _intent, _design = _contract("pre-d03-state")
+    runtime, manager, _worktree = _runtime(tmp_path, repository, "pre-d03-state", contract)
+    published = _snapshot(runtime, manager, "pre-d03-state").model_dump(mode="json")
+    for binding in published["frontier"]["bindings"]:
+        binding.pop("builder_handoff_context", None)
+        binding.pop("retry_diagnostic", None)
+    published["snapshot_id"] = ""
+    published["snapshot_id"] = hashlib.sha256(_canonical_payload(published)).hexdigest()
+    raw = _canonical_payload(published)
+
+    parsed = parse_delivery_state_snapshot(raw)
+
+    assert parsed.snapshot_id == published["snapshot_id"]
+    assert parsed.migrated_from_snapshot_id is None
+    assert _canonical_payload(parsed.model_dump(mode="json")) == raw
+
+
 def test_state_publisher_rewrites_migrated_snapshot_to_current_schema(tmp_path: Path) -> None:
     repository, remote, _initial = _repository(tmp_path)
     contract, _intent, _design = _contract("legacy-publish")

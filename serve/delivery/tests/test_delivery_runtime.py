@@ -84,6 +84,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryBuilderHandoffContext,
     DeliveryBuilderInvocationSettlement,
     DeliveryPlanningRetrySettlement,
+    DeliveryRecoveryAttention,
     _DeliveryBuilderHandoffChangeIntentHead,
     _DeliveryBuilderHandoffChangeIntentReceipt,
     _DeliveryBuilderInvocationSettlementReceipt,
@@ -126,6 +127,38 @@ def test_parse_delivery_frontier_canonicalizes_schema_17_retry_defaults() -> Non
         canonical
         == (json.dumps(migrated.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n").encode()
     )
+
+
+def test_parse_delivery_frontier_keeps_bytes_written_before_optional_binding_fields() -> None:
+    frontier = DeliveryFrontier(bindings=(OutcomeAuthorityBinding(outcome_id="OUT-001", plan_scope_id="SCOPE-001"),))
+    payload = frontier.model_dump(mode="json")
+    payload["bindings"][0].pop("builder_handoff_context", None)
+    payload["bindings"][0].pop("retry_diagnostic", None)
+    raw = (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+    parsed, canonical = parse_delivery_frontier(raw)
+
+    assert canonical == raw
+    assert parsed.bindings[0].builder_handoff_context is None
+    assert parsed.bindings[0].retry_diagnostic is None
+
+
+def test_recovery_attention_omits_absent_diagnostic_transition() -> None:
+    attention = DeliveryRecoveryAttention(
+        attempt_id="attempt-1",
+        claim_id="claim-1",
+        reason="dirty worktree",
+        worktree_path=".owlbear/delivery/worktrees/example",
+        branch_head="a" * 40,
+        last_reviewed_commit="b" * 40,
+        custody_retained=True,
+        retry_condition="inspect the worktree",
+    )
+
+    payload = attention.model_dump(mode="json")
+
+    assert "diagnostic_transition" not in payload
+    assert DeliveryRecoveryAttention.model_validate(payload) == attention
 
 
 def test_repair_missing_request_provenance_rejects_wrong_or_multiple_defects() -> None:
