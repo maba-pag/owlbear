@@ -34,6 +34,7 @@ from owlbear_delivery.runtime_transaction import (
     TransactionManifestError,
     TransactionPathError,
 )
+from owlbear_delivery.worker_stall import DeliveryWorkerActiveError
 
 
 class DeliveryFailureCategory(StrEnum):
@@ -103,6 +104,8 @@ def classify_delivery_failure(error: Exception) -> DeliveryFailureClassification
             category=DeliveryFailureCategory.CONFLICT,
             retry_safe=error.retry_safe,
         )
+    elif isinstance(error, DeliveryWorkerActiveError):
+        classification = _classification(error, category=DeliveryFailureCategory.CONFLICT, retry_safe=True)
     elif isinstance(
         error,
         (

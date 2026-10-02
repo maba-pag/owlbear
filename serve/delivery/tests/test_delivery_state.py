@@ -2688,6 +2688,8 @@ def test_default_loader_rejects_unrecorded_repeated_planner_pause_on_builder_pla
         "settled",
         "completed-timeout",
         "ended-without-result",
+        "host-lost",
+        "released-stuck",
         "deferred",
         "forged-context",
         "missing-receipt",
@@ -2817,12 +2819,15 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
             disposition=scenario if requestless else "normal-return",
             request=None if requestless else retry,
         )
-        with patch.object(application, "_clock", return_value="1970-01-02T00:00:00Z"):
-            settled = application.settle_worker_invocation(
-                settlement,
-                host_id=launch.claim.owner_id,
-                session_id=launch.claim.process_id,
-            )
+        if scenario in {"host-lost", "released-stuck"}:
+            settled = _settle_engine_worker_ending(application, launch, scenario)
+        else:
+            with patch.object(application, "_clock", return_value="1970-01-02T00:00:00Z"):
+                settled = application.settle_worker_invocation(
+                    settlement,
+                    host_id=launch.claim.owner_id,
+                    session_id=launch.claim.process_id,
+                )
         handoff_context = settled.builder_handoff_context
         assert handoff_context is not None
     else:
@@ -2891,7 +2896,7 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
         (fresh / ".owlbear/delivery/runtime/changes" / change_id / "frontier.json").read_bytes(), strict=False
     )
     binding = next(item for item in persisted_frontier.bindings if item.outcome_id == "OUT-001")
-    if scenario in {"settled", "completed-timeout", "ended-without-result"}:
+    if scenario in {"settled", "completed-timeout", "ended-without-result", "host-lost", "released-stuck"}:
         assert binding.active_claim is None
         assert binding.builder_handoff_context == handoff_context
         resumed = reloaded.acquire_frontier_work().launch_packages[0]
@@ -3138,7 +3143,23 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
         assert git_state_before == _workspace_git_state(fresh, launch.worktree_path)
 
 
-@pytest.mark.parametrize("disposition", ["completed-timeout", "ended-without-result"])
+def _settle_engine_worker_ending(application, launch, disposition: str) -> OutcomeAuthorityBinding:
+    """Settle through the engine owner with a quiet observation; quiescence itself is proven elsewhere."""
+    quiet_activity = datetime(1970, 1, 1, tzinfo=UTC)
+    with (
+        patch.object(application, "_clock", return_value="1970-01-02T00:00:00Z"),
+        patch.object(application._workspace_manager, "observe_worktree_activity", return_value=quiet_activity),  # noqa: SLF001
+    ):
+        if disposition == "released-stuck":
+            return application.release_stuck_worker(
+                launch.change_id, launch.outcome_id, launch.claim.attempt_id, launch.claim.claim_id
+            )
+        application._host_instance.close()  # noqa: SLF001 - simulates the issuing process exiting.
+        application.acquire_frontier_work()
+    return application._runtimes[launch.change_id].show_binding(launch.outcome_id)  # noqa: SLF001
+
+
+@pytest.mark.parametrize("disposition", ["completed-timeout", "ended-without-result", "host-lost", "released-stuck"])
 def test_remote_state_bootstrap_preserves_requestless_planner_settlement(tmp_path: Path, disposition: str) -> None:
     repository, remote, _initial = _repository(tmp_path)
     change_id = "bootstrap-planner-settlement"
@@ -3201,19 +3222,22 @@ def test_remote_state_bootstrap_preserves_requestless_planner_settlement(tmp_pat
     application = load_delivery_application(config, workspace_root=fresh)
     launch = application.acquire_frontier_work().launch_packages[0]
     assert launch.claim.worker_role is DeliveryWorkerRole.PLANNER
-    settlement = DeliveryPlanningRetrySettlement(
-        change_id=change_id,
-        outcome_id=launch.outcome_id,
-        claim_id=launch.claim.claim_id,
-        attempt_id=launch.claim.attempt_id,
-        disposition=disposition,
-    )
-    with patch.object(application, "_clock", return_value="1970-01-02T00:00:00Z"):
-        settled = application.settle_worker_invocation(
-            settlement,
-            host_id=launch.claim.owner_id,
-            session_id=launch.claim.process_id,
+    if disposition in {"host-lost", "released-stuck"}:
+        settled = _settle_engine_worker_ending(application, launch, disposition)
+    else:
+        settlement = DeliveryPlanningRetrySettlement(
+            change_id=change_id,
+            outcome_id=launch.outcome_id,
+            claim_id=launch.claim.claim_id,
+            attempt_id=launch.claim.attempt_id,
+            disposition=disposition,
         )
+        with patch.object(application, "_clock", return_value="1970-01-02T00:00:00Z"):
+            settled = application.settle_worker_invocation(
+                settlement,
+                host_id=launch.claim.owner_id,
+                session_id=launch.claim.process_id,
+            )
     assert settled.active_claim is None
 
     reloaded = load_delivery_application(config, workspace_root=fresh)
@@ -3232,6 +3256,8 @@ def test_remote_state_bootstrap_preserves_requestless_planner_settlement(tmp_pat
         == {
             "completed-timeout": "worker-timeout",
             "ended-without-result": "worker-ended-without-result",
+            "host-lost": "worker-host-lost",
+            "released-stuck": "worker-released-stuck",
         }[disposition]
     )
     resumed = reloaded.acquire_frontier_work().launch_packages[0]

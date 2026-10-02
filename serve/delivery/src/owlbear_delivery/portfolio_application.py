@@ -99,6 +99,8 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryCheckpointPublicationState,
     DeliveryCheckpointTrigger,
     DeliveryCheckpointTriggerKind,
+    DeliveryEngineBuilderSettlement,
+    DeliveryEnginePlanningSettlement,
     DeliveryFinalizationInvalidationReceipt,
     DeliveryFinalizationReceipt,
     DeliveryFrontier,
@@ -125,6 +127,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryTaskResult,
     DeliveryTransition,
     DeliveryWorkerRole,
+    EngineWorkerDisposition,
     FinalizeDeliveryChange,
     OutcomeAuthorityBinding,
     PrepareCompletedOutcomeRepair,
@@ -159,16 +162,20 @@ from owlbear_delivery.draft_pull_request import (
     UpdateGeneratedPullRequestSummary,
 )
 from owlbear_delivery.finalization_reports import (
+    ENGINE_FINALIZATION_CATEGORIES,
     FinalizationAttempt,
+    FinalizationFailureCode,
     FinalizationReport,
     FinalizationReportError,
     FinalizationReportSnapshot,
     FinalizationReportStore,
+    FinalizerEngineSettlement,
     FinalizerSettlement,
     FinalizerSettlementReceipt,
     FinalizerWorkspaceObservation,
     ProofAttemptStore,
     ReportFinalizationFailure,
+    finalizer_settlement_outcome,
 )
 from owlbear_delivery.portfolio_operating import (
     DeliveryHealthDiagnostic,
@@ -259,6 +266,14 @@ from owlbear_delivery.work_items import (
     WorkItemWorktreeRecoveryView,
     resolve_publication_phase,
 )
+from owlbear_delivery.worker_stall import (
+    DEFAULT_WORKER_QUIET_PERIOD,
+    DeliveryClaimIssuer,
+    DeliveryWorkerActiveError,
+    HostLockLivenessProbe,
+    claim_issuer_path,
+    is_issuable_attempt_id,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping
@@ -280,6 +295,7 @@ if TYPE_CHECKING:
         VerifiedDesignPackage,
     )
     from owlbear_delivery.work_items import WorkItemDetail, WorkItemProjection
+    from owlbear_delivery.worker_stall import WorkerHostInstance, WorkerHostLivenessProbe
 
 
 def _timestamp(value: str) -> datetime:
@@ -1974,6 +1990,9 @@ class PortfolioApplicationDependencies:
     health_diagnostics: tuple[DeliveryHealthDiagnostic, ...] = ()
     recovery_evidence_provider: RecoveryEvidenceProvider = field(default_factory=UnavailableRecoveryEvidenceProvider)
     proof_attempt_store_factory: Callable[[str], ProofAttemptStore] | None = None
+    host_instance: WorkerHostInstance | None = None
+    host_liveness_probe: WorkerHostLivenessProbe | None = None
+    worker_quiet_period: timedelta = DEFAULT_WORKER_QUIET_PERIOD
 
 
 @dataclass(frozen=True)
@@ -1992,6 +2011,12 @@ class _Candidate:
     binding: OutcomeAuthorityBinding
     task_id: str | None
     role: DeliveryWorkerRole
+
+
+@dataclass(frozen=True)
+class _WorkerStall:
+    eligible_at: datetime | None
+    quiet: bool
 
 
 @dataclass(frozen=True)
@@ -2074,6 +2099,9 @@ class PortfolioApplication:
         self._startup_health_diagnostics = dependencies.health_diagnostics
         self._recovery_evidence_provider = dependencies.recovery_evidence_provider
         self._proof_attempt_store_factory = dependencies.proof_attempt_store_factory
+        self._host_instance = dependencies.host_instance
+        self._host_liveness_probe = dependencies.host_liveness_probe or HostLockLivenessProbe(self._target_root)
+        self._worker_quiet_period = dependencies.worker_quiet_period
         self._execution_capacity = config.execution_capacity
         self._claim_timeout = timedelta(seconds=config.claim_timeout_seconds)
         self._policies = {policy.worker_role: policy for policy in config.role_policies}
@@ -3355,6 +3383,9 @@ class PortfolioApplication:
         request: ReportFinalizationFailure,
     ) -> FinalizationReport | DeliveryReadiness:
         """Persist structural diagnostics without granting lifecycle or proof authority."""
+        if request.category in ENGINE_FINALIZATION_CATEGORIES:
+            msg = "diagnostic-conflict"
+            raise FinalizationReportError(msg)
         with locked_roots((self._checkpoint_lock_root(request.change_id),)):
             with self._coordinator.recovery_lock(request.change_id):
                 report_store = FinalizationReportStore(self._target_root, request.change_id)
@@ -3540,7 +3571,7 @@ class PortfolioApplication:
         if report is None or report_snapshot.current_report_id != settlement.report_id:
             self._raise_finalizer_settlement_conflict("Finalizer settlement requires its exact current report")
         request = report.request
-        expected_outcome = "review-failed" if request.category == "independent-review" else "proof-failed"
+        expected_outcome = finalizer_settlement_outcome(request.category)
         if (
             request.change_id != settlement.change_id
             or request.attempt_key != settlement.attempt_id
@@ -5184,8 +5215,8 @@ class PortfolioApplication:
         session_id: str | None = None,
     ) -> OutcomeAuthorityBinding:
         """Settle one ended Planner or Builder invocation through its exact owner receipt."""
-        if not isinstance(settlement, (DeliveryPlanningRetrySettlement, DeliveryBuilderInvocationSettlement)):
-            self._fail("worker settlement requires its typed completed-invocation envelope")
+        if type(settlement) not in {DeliveryPlanningRetrySettlement, DeliveryBuilderInvocationSettlement}:
+            self._fail("worker settlement requires its typed caller-reported invocation envelope")
         change_id = settlement.change_id
         runtime = self._runtime(change_id, for_mutation=True)
         with (
@@ -5207,42 +5238,344 @@ class PortfolioApplication:
                 and (host_id != claim.owner_id or session_id != claim.process_id)
             ):
                 self._fail("worker continuation settlement does not match its active host and session binding")
-            frontier_before = runtime.frontier_bytes()
-            result = (
-                runtime.settle_planning_retry(settlement, retry_observed_at=self._clock())
-                if isinstance(settlement, DeliveryPlanningRetrySettlement)
-                else runtime.settle_builder_invocation(settlement, retry_observed_at=self._clock())
+            return self._apply_worker_settlement(runtime, settlement)
+
+    def _apply_worker_settlement(
+        self,
+        runtime: DeliveryRuntime,
+        settlement: DeliveryPlanningRetrySettlement | DeliveryBuilderInvocationSettlement,
+    ) -> OutcomeAuthorityBinding:
+        """Settle through the exact runtime owner and publish its state; callers hold the Change locks."""
+        change_id = runtime.contract.change_id
+        frontier_before = runtime.frontier_bytes()
+        result = (
+            runtime.settle_planning_retry(settlement, retry_observed_at=self._clock())
+            if isinstance(settlement, DeliveryPlanningRetrySettlement)
+            else runtime.settle_builder_invocation(settlement, retry_observed_at=self._clock())
+        )
+        frontier_after = runtime.frontier_bytes()
+        settlement_digest = hashlib.sha256(_canonical_model_bytes(settlement)).hexdigest()
+        if frontier_after != frontier_before:
+            self._reconcile_retry_results_fail_closed(runtime)
+        pending = runtime.pending_state_publication()
+        if pending is not None:
+            frontier_digest = hashlib.sha256(frontier_after).hexdigest()
+            if pending.frontier_digest == frontier_digest and pending.transition_request_digest == settlement_digest:
+                if frontier_after != frontier_before and self._delivery_state_publisher is not None:
+                    settlement_kind = (
+                        "builder-invocation-settlement"
+                        if isinstance(settlement, DeliveryBuilderInvocationSettlement)
+                        else "planning-retry-settlement"
+                    )
+                    self._publish_delivery_state(
+                        change_id,
+                        runtime,
+                        _checkpoint_operation_id(
+                            settlement_kind, change_id, settlement.outcome_id, settlement.claim_id
+                        ),
+                    )
+                    failure = None
+                else:
+                    failure = self._replay_pending_state_publication(change_id, runtime)
+                if failure is not None:
+                    raise DeliveryRuntimeReconciliationError(change_id, failure.detail)
+        return result
+
+    def release_stuck_worker(
+        self,
+        change_id: str,
+        outcome_id: str | None,
+        attempt_id: str,
+        claim_id: str,
+    ) -> OutcomeAuthorityBinding | FinalizerSettlementReceipt:
+        """Settle one exact active worker whose stopped invocation left its worktree quiet.
+
+        ``outcome_id`` names a Planner or Builder claim; ``None`` names the Change's Finalizer attempt.
+        """
+        runtime = self._runtime(change_id, for_mutation=True, allow_finalizer=outcome_id is None)
+        with (
+            self._coordinator.acquisition_lock(),
+            self._selected_action_checkpoint_lock(change_id),
+        ):
+            if outcome_id is None:
+                return self._release_stuck_finalizer(runtime, attempt_id, claim_id)
+            replay = runtime.engine_worker_settlement_replay(outcome_id, attempt_id, claim_id, "released-stuck")
+            if replay is not None:
+                return replay
+            claim = runtime.require_active_claim(outcome_id, attempt_id, claim_id).active_claim
+            if claim is None or claim.worker_role not in {DeliveryWorkerRole.PLANNER, DeliveryWorkerRole.BUILDER}:
+                self._fail("stuck-worker release supports only an active Planner or Builder claim")
+            self._require_quiet_worktree(change_id)
+            return self._apply_worker_settlement(
+                runtime, self._engine_worker_envelope(runtime, outcome_id, claim, "released-stuck")
             )
-            frontier_after = runtime.frontier_bytes()
-            settlement_digest = hashlib.sha256(_canonical_model_bytes(settlement)).hexdigest()
-            if frontier_after != frontier_before:
-                self._reconcile_retry_results_fail_closed(runtime)
-            pending = runtime.pending_state_publication()
-            if pending is not None:
-                frontier_digest = hashlib.sha256(frontier_after).hexdigest()
-                if (
-                    pending.frontier_digest == frontier_digest
-                    and pending.transition_request_digest == settlement_digest
-                ):
-                    if frontier_after != frontier_before and self._delivery_state_publisher is not None:
-                        settlement_kind = (
-                            "builder-invocation-settlement"
-                            if isinstance(settlement, DeliveryBuilderInvocationSettlement)
-                            else "planning-retry-settlement"
+
+    def _release_stuck_finalizer(
+        self, runtime: DeliveryRuntime, attempt_id: str, claim_id: str
+    ) -> FinalizerSettlementReceipt:
+        change_id = runtime.contract.change_id
+        prior = self._read_finalizer_settlement_receipt(change_id, attempt_id)
+        if prior is not None:
+            settlement = prior.settlement
+            if (
+                not isinstance(settlement, FinalizerEngineSettlement)
+                or settlement.disposition != "released-stuck"
+                or settlement.claim_id != claim_id
+            ):
+                self._raise_finalizer_settlement_conflict(
+                    "Finalizer attempt is already settled with different authority"
+                )
+            return prior
+        attempt = self._active_finalizer_writer_attempt(change_id)
+        if attempt is None or attempt.writer.attempt_id != attempt_id or attempt.writer.claim_id != claim_id:
+            self._raise_finalizer_settlement_conflict(
+                "stuck-worker release does not match the active Finalizer attempt"
+            )
+        self._require_quiet_worktree(change_id)
+        return self._settle_stalled_finalizer(runtime, attempt, "released-stuck")
+
+    def _require_quiet_worktree(self, change_id: str) -> None:
+        eligible_at = self._worker_quiet_eligibility(change_id)
+        if eligible_at is None or _timestamp(self._clock()) < eligible_at:
+            raise DeliveryWorkerActiveError(eligible_at)
+
+    def _active_finalizer_writer_attempt(self, change_id: str) -> ChangeFinalizationAttempt | None:
+        coordination = self._coordinator.show(change_id)
+        attempt = coordination.finalization_attempt
+        if (
+            attempt is None
+            or attempt.finished_at is not None
+            or attempt.writer.kind != "finalize"
+            or coordination.writer != attempt.writer
+        ):
+            return None
+        return attempt
+
+    def _settle_stalled_finalizer(
+        self,
+        runtime: DeliveryRuntime,
+        attempt: ChangeFinalizationAttempt,
+        disposition: EngineWorkerDisposition,
+    ) -> FinalizerSettlementReceipt:
+        """Settle one ended Finalizer as failed attention backed by its own or an engine-authored report."""
+        change_id = runtime.contract.change_id
+        with self._coordinator.publication_lock(change_id) as lock:
+            self._coordinator.recover_pending_transactions()
+            coordination = self._coordinator.show(change_id)
+            if coordination.finalization_attempt != attempt or coordination.writer != attempt.writer:
+                self._raise_finalizer_settlement_conflict("Finalizer attempt changed before its stalled settlement")
+            report = self._stalled_finalizer_report(coordination, attempt)
+            settlement = FinalizerEngineSettlement(
+                change_id=change_id,
+                attempt_id=attempt.writer.attempt_id,
+                claim_id=attempt.writer.claim_id,
+                expected_head=attempt.exact_head,
+                expected_reviewed_base=coordination.last_reviewed_commit,
+                report_id=report.report_id,
+                disposition=disposition,
+                outcome=finalizer_settlement_outcome(report.request.category),
+                host_id=attempt.writer.actor_id,
+                session_id=attempt.writer.process_id,
+            )
+            evidence = self._finalizer_settlement_evidence(runtime, settlement, coordination, attempt)
+            return self._publish_finalizer_settlement(runtime, settlement, attempt, evidence, lock)
+
+    def _stalled_finalizer_report(
+        self, coordination: ChangeCoordination, attempt: ChangeFinalizationAttempt
+    ) -> FinalizationReport:
+        store = FinalizationReportStore(self._target_root, coordination.change_id)
+        snapshot = store.read()
+        existing = next(
+            (report for report in snapshot.reports if report.request.attempt_key == attempt.writer.attempt_id), None
+        )
+        if existing is not None:
+            return existing
+        request = ReportFinalizationFailure(
+            change_id=coordination.change_id,
+            expected_contract_digest=attempt.contract_digest,
+            expected_frontier_digest=attempt.frontier_digest,
+            expected_change_head=attempt.exact_head,
+            expected_reviewed_head=coordination.last_reviewed_commit,
+            expected_diagnostic_sequence=snapshot.sequence,
+            attempt_key=attempt.writer.attempt_id,
+            category="worker-ended",
+            code=FinalizationFailureCode.FINALIZER_ENDED_WITHOUT_REPORT,
+            checks_state="unknown",
+        )
+        return store.record(request, _timestamp(self._clock()), lambda: None)
+
+    def _engine_worker_envelope(
+        self,
+        runtime: DeliveryRuntime,
+        outcome_id: str,
+        claim: DeliveryActiveClaim,
+        disposition: EngineWorkerDisposition,
+    ) -> DeliveryEnginePlanningSettlement | DeliveryEngineBuilderSettlement:
+        change_id = runtime.contract.change_id
+        if claim.worker_role is DeliveryWorkerRole.PLANNER:
+            return DeliveryEnginePlanningSettlement(
+                change_id=change_id,
+                outcome_id=outcome_id,
+                claim_id=claim.claim_id,
+                attempt_id=claim.attempt_id,
+                disposition=disposition,
+            )
+        if claim.task_id is None:
+            self._fail("Builder worker settlement requires its exact task claim")
+        return DeliveryEngineBuilderSettlement(
+            change_id=change_id,
+            outcome_id=outcome_id,
+            claim_id=claim.claim_id,
+            attempt_id=claim.attempt_id,
+            task_id=claim.task_id,
+            expected_last_reviewed_commit=self._workspace_manager.show(change_id).last_reviewed_commit,
+            disposition=disposition,
+        )
+
+    def _worker_quiet_eligibility(self, change_id: str) -> datetime | None:
+        """Return when the Change worktree becomes quiet, or None when it cannot be observed safely."""
+        try:
+            newest = self._workspace_manager.observe_worktree_activity(change_id)
+        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError):
+            return None
+        eligible_at = newest + self._worker_quiet_period
+        if eligible_at.microsecond:
+            eligible_at = eligible_at.replace(microsecond=0) + timedelta(seconds=1)
+        return eligible_at
+
+    def _publish_claim_issuer(self, change_id: str, outcome_id: str, claim: DeliveryActiveClaim) -> None:
+        self._publish_issuer(
+            change_id, outcome_id, claim.attempt_id, claim.claim_id, claim.worker_role.value, claim.started_at
+        )
+
+    def _publish_issuer(  # noqa: PLR0913, PLR0917 - one immutable issuer record binds each issued identity.
+        self,
+        change_id: str,
+        outcome_id: str | None,
+        attempt_id: str,
+        claim_id: str,
+        role: str,
+        issued_at: str,
+    ) -> None:
+        """Bind one issued worker identity to this process's host lock before it can be dispatched."""
+        if self._host_instance is None or not is_issuable_attempt_id(attempt_id):
+            return
+        issuer = DeliveryClaimIssuer(
+            change_id=change_id,
+            outcome_id=outcome_id,
+            attempt_id=attempt_id,
+            claim_id=claim_id,
+            role=role,
+            issuer_instance=self._host_instance.instance_id,
+            issued_at=issued_at,
+        )
+        publish_record(self._target_root, claim_issuer_path(change_id, attempt_id), issuer)
+
+    def _read_claim_issuer(self, change_id: str, attempt_id: str) -> DeliveryClaimIssuer | None:
+        if not is_issuable_attempt_id(attempt_id):
+            return None
+        try:
+            content = read_record(self._target_root, claim_issuer_path(change_id, attempt_id))
+        except FileNotFoundError:
+            return None
+        return DeliveryClaimIssuer.model_validate_json(content)
+
+    def _worker_stall(self, change_id: str, outcome_id: str, claim: DeliveryActiveClaim) -> _WorkerStall | None:
+        """Return stall evidence only when the claim's recorded issuer no longer holds its host lock."""
+        if claim.worker_role not in {DeliveryWorkerRole.PLANNER, DeliveryWorkerRole.BUILDER}:
+            return None
+        return self._issuer_stall(change_id, outcome_id, claim.attempt_id, claim.claim_id, claim.worker_role.value)
+
+    def _finalizer_stall(self, change_id: str) -> tuple[ChangeFinalizationAttempt, _WorkerStall] | None:
+        attempt = self._active_finalizer_writer_attempt(change_id)
+        if attempt is None:
+            return None
+        stall = self._issuer_stall(change_id, None, attempt.writer.attempt_id, attempt.writer.claim_id, "finalizer")
+        return None if stall is None else (attempt, stall)
+
+    def _issuer_stall(
+        self,
+        change_id: str,
+        outcome_id: str | None,
+        attempt_id: str,
+        claim_id: str,
+        role: str,
+    ) -> _WorkerStall | None:
+        issuer = self._read_claim_issuer(change_id, attempt_id)
+        if issuer is None:
+            return None
+        if (issuer.change_id, issuer.outcome_id, issuer.claim_id, issuer.role) != (
+            change_id,
+            outcome_id,
+            claim_id,
+            role,
+        ):
+            self._fail("claim issuer record does not match its active worker")
+        if self._host_liveness_probe.host_state(issuer.issuer_instance) != "lost":
+            return None
+        eligible_at = self._worker_quiet_eligibility(change_id)
+        quiet = eligible_at is not None and _timestamp(self._clock()) >= eligible_at
+        return _WorkerStall(eligible_at=eligible_at, quiet=quiet)
+
+    def _observed_worker_stalls(self, snapshot: DeliveryPortfolioSnapshot) -> dict[str, _WorkerStall]:
+        stalls: dict[str, _WorkerStall] = {}
+        for binding in snapshot.frontier.bindings:
+            claim = binding.active_claim
+            if claim is None:
+                continue
+            try:
+                stall = self._worker_stall(snapshot.contract.change_id, binding.outcome_id, claim)
+            except (OSError, RuntimeError, ValueError):
+                continue
+            if stall is not None:
+                stalls[binding.outcome_id] = stall
+        return stalls
+
+    def _settle_stalled_workers(
+        self,
+        change_ids: tuple[str, ...],
+        *,
+        checkpoint_locked: bool,
+    ) -> tuple[int, tuple[DeliveryAcquisitionFailure, ...]]:
+        """Settle quiet claims whose issuing host is gone; each Change fails closed independently."""
+        settled = 0
+        failures: list[DeliveryAcquisitionFailure] = []
+        for change_id in change_ids:
+            runtime = self._runtimes.get(change_id)
+            if runtime is None:
+                continue
+            try:
+                with ExitStack() as stack:
+                    if not checkpoint_locked:
+                        stack.enter_context(self._selected_action_checkpoint_lock(change_id))
+                    for outcome_id, claim in runtime.active_claims():
+                        stall = self._worker_stall(change_id, outcome_id, claim)
+                        if stall is None or not stall.quiet:
+                            continue
+                        self._apply_worker_settlement(
+                            runtime, self._engine_worker_envelope(runtime, outcome_id, claim, "host-lost")
                         )
-                        self._publish_delivery_state(
-                            change_id,
-                            runtime,
-                            _checkpoint_operation_id(
-                                settlement_kind, change_id, settlement.outcome_id, settlement.claim_id
-                            ),
-                        )
-                        failure = None
-                    else:
-                        failure = self._replay_pending_state_publication(change_id, runtime)
-                    if failure is not None:
-                        raise DeliveryRuntimeReconciliationError(change_id, failure.detail)
-            return result
+                        settled += 1
+                    finalizer = self._finalizer_stall(change_id)
+                    if finalizer is not None and finalizer[1].quiet:
+                        self._settle_stalled_finalizer(runtime, finalizer[0], "host-lost")
+                        settled += 1
+            except DeliveryActionBusyError:
+                continue
+            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                failures.append(
+                    DeliveryAcquisitionFailure(
+                        change_id=change_id,
+                        outcome_id="OUT-000",
+                        code=getattr(exc, "code", PortfolioApplicationError.code),
+                        detail="Worker stall evidence is unavailable; active claims and worktrees are unchanged.",
+                        retry_condition=(
+                            "Restore readable claim-issuer and worktree evidence, or release a stopped worker "
+                            "explicitly once its worktree is quiet."
+                        ),
+                    )
+                )
+        return settled, tuple(failures)
 
     def list_integration_attention(self) -> tuple[DeliveryIntegrationAttentionStatus, ...]:
         """List non-retryable Integration attention in stable identity order."""
@@ -6425,6 +6758,7 @@ class PortfolioApplication:
             self._with_retry_readiness(snapshot, card, decision)
             for card, decision in zip(cards, decisions, strict=True)
         )
+        decisions = self._with_worker_stall_readiness(snapshot, cards, decisions)
         return WorkItemProjector(
             snapshot,
             decisions,
@@ -6582,6 +6916,60 @@ class PortfolioApplication:
             decision.basis.target_head,
             finalization_id,
         )
+
+    def _with_worker_stall_readiness(
+        self,
+        snapshot: DeliveryPortfolioSnapshot,
+        cards: tuple[WorkItemCardView, ...],
+        decisions: tuple[DeliveryReadiness, ...],
+    ) -> tuple[DeliveryReadiness, ...]:
+        """Replace running readiness for claims whose issuing host is gone with the exact quiet wait."""
+        stalls = self._observed_worker_stalls(snapshot)
+        try:
+            finalizer = self._finalizer_stall(snapshot.contract.change_id)
+        except (OSError, RuntimeError, ValueError):
+            finalizer = None
+        if not stalls and finalizer is None:
+            return decisions
+        frontier = snapshot.frontier
+        active = sum(binding.active_claim is not None for binding in frontier.bindings)
+        change_stalled = finalizer is not None or (len(stalls) == active and frontier.integration_repair_claim is None)
+        eligible = (finalizer[1].eligible_at,) if finalizer is not None else ()
+        eligible += tuple(stall.eligible_at for stall in stalls.values())
+        change_stall = None if None in eligible else max(eligible)
+        updated: list[DeliveryReadiness] = []
+        for card, decision in zip(cards, decisions, strict=True):
+            if card.scope is WorkItemScope.OUTCOME and card.work_item_id in stalls:
+                eligible_at = stalls[card.work_item_id].eligible_at
+            elif card.scope is WorkItemScope.CHANGE_PUBLICATION and change_stalled:
+                eligible_at = change_stall
+            else:
+                updated.append(decision)
+                continue
+            if decision.status != "running":
+                updated.append(decision)
+                continue
+            updated.append(
+                decision.model_copy(
+                    update={
+                        "status": "waiting",
+                        "reason_code": "worker-stall-wait",
+                        "executable": False,
+                        "action": None,
+                        "next_actor": WorkItemNextActor.AGENT,
+                        "next_eligible_at": (
+                            eligible_at.isoformat().replace("+00:00", "Z") if eligible_at is not None else None
+                        ),
+                        "prompt": (
+                            f"/continue-change {snapshot.contract.change_id} The process that issued the active "
+                            "worker claim has exited. Delivery settles the claim as a failed attempt during the next "
+                            "acquisition after its worktree stays unchanged until next_eligible_at; do not edit the "
+                            "worktree or dispatch a replacement before then."
+                        ),
+                    }
+                )
+            )
+        return tuple(updated)
 
     def _with_retry_readiness(  # noqa: C901, PLR0912 - maps one persisted policy to the shared readiness contract.
         self,
@@ -7939,9 +8327,12 @@ class PortfolioApplication:
             self._coordinator.recover_pending_transactions()
             self._reconcile_runtimes()
             pre_claim_snapshots = self._capture_portfolio_snapshots()
+            stalled, stall_failures = self._settle_stalled_workers(
+                tuple(sorted(self._runtimes)), checkpoint_locked=False
+            )
             recoveries, recovery_failures = self._recover_expired_claims()
-            failures = list(recovery_failures)
-            if recoveries or recovery_failures:
+            failures = [*stall_failures, *recovery_failures]
+            if stalled or recoveries or recovery_failures:
                 self._reconcile_runtimes()
             pending_publication_failures = self._replay_pending_state_publications()
             failures.extend(pending_publication_failures)
@@ -8078,6 +8469,7 @@ class PortfolioApplication:
                     reason_code="report-store-unavailable",
                     readiness=unavailable,
                 )
+            self._settle_stalled_workers((request.change_id,), checkpoint_locked=True)
         replay = self._replay_continuation_action(request, observed)
         if replay is not None:
             return replay
@@ -8857,6 +9249,14 @@ class PortfolioApplication:
                     attempt.writer.attempt_id,
                     "finalizer",
                     attempt.exact_head,
+                )
+                self._publish_issuer(
+                    request.change_id,
+                    None,
+                    attempt.writer.attempt_id,
+                    attempt.writer.claim_id,
+                    "finalizer",
+                    attempt.writer.claimed_at,
                 )
 
             self._workspace_manager.acquire(
@@ -10970,6 +11370,7 @@ class PortfolioApplication:
                 source.source_head,
                 candidate.binding.outcome_id,
             )
+            self._publish_claim_issuer(candidate.change_id, candidate.binding.outcome_id, claim)
             candidate.runtime.activate_claim(activation)
             return writer
         if candidate.role is DeliveryWorkerRole.PLANNER:
@@ -11011,6 +11412,7 @@ class PortfolioApplication:
                     source.source_head,
                     candidate.binding.outcome_id,
                 )
+                self._publish_claim_issuer(candidate.change_id, candidate.binding.outcome_id, claim)
                 candidate.runtime.activate_claim(activation, builder_handoff_lock=lock)
             return None
         if writer is None or candidate.task_id is None:
@@ -11035,6 +11437,7 @@ class PortfolioApplication:
                 source.source_head,
                 candidate.binding.outcome_id,
             )
+            self._publish_claim_issuer(candidate.change_id, candidate.binding.outcome_id, claim)
             participant = self._workspace_manager.prepare_builder_handoff_acquisition(
                 candidate.change_id,
                 writer,

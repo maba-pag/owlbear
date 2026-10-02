@@ -353,6 +353,12 @@ from owlbear_delivery.work_items import (
     WorkItemProjector,
     WorkItemStage,
 )
+from owlbear_delivery.worker_stall import (
+    DeliveryClaimIssuer,
+    DeliveryHostInstance,
+    DeliveryWorkerActiveError,
+    HostLockLivenessProbe,
+)
 
 __all__ = [
     "DELIVERY_TRANSITION_ADAPTER",
@@ -454,6 +460,7 @@ __all__ = [
     "DeliveryCheckpointSupervisor",
     "DeliveryCheckpointTrigger",
     "DeliveryCheckpointTriggerKind",
+    "DeliveryClaimIssuer",
     "DeliveryClaimRecoveryResult",
     "DeliveryClaimRecoveryStatus",
     "DeliveryCommitment",
@@ -481,6 +488,7 @@ __all__ = [
     "DeliveryHealthStatus",
     "DeliveryHealthView",
     "DeliveryHostConfig",
+    "DeliveryHostInstance",
     "DeliveryIntegrationAttention",
     "DeliveryIntegrationAttentionCode",
     "DeliveryIntegrationAttentionDisposition",
@@ -547,6 +555,7 @@ __all__ = [
     "DeliveryTaskResult",
     "DeliveryTransition",
     "DeliveryUnavailableChangeView",
+    "DeliveryWorkerActiveError",
     "DeliveryWorkerExclusionRequiredError",
     "DeliveryWorkerRole",
     "DesignCheckpointResult",
@@ -569,6 +578,7 @@ __all__ = [
     "FinalizerSettlementReceipt",
     "FindPublicationPullRequest",
     "GeneratedPullRequestSummaryReceipt",
+    "HostLockLivenessProbe",
     "IntegrationContext",
     "MarkChangePullRequestReady",
     "ObserveChangePublicationChecks",

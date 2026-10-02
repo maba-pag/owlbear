@@ -308,6 +308,7 @@ DeliveryReadinessReason = Literal[
     "acceptance-wait",
     "retry-containment",
     "retry-ledger-unavailable",
+    "worker-stall-wait",
 ]
 
 
@@ -612,6 +613,10 @@ class WorkItemProjector:
                     "release it."
                 ),
                 "retry-ledger-unavailable": "Retry authority could not be read; preserve state before continuing.",
+                "worker-stall-wait": (
+                    "The process that issued this worker claim has exited. Delivery settles the claim as a failed "
+                    "attempt once its worktree stays unchanged for the quiet period; preserve the worktree."
+                ),
             }
             self._cards = tuple(
                 card.model_copy(

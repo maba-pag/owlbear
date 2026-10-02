@@ -11,6 +11,7 @@ import secrets
 import stat
 import subprocess
 import tempfile
+import time
 from collections.abc import Callable
 from contextlib import ExitStack, contextmanager, suppress
 from contextvars import ContextVar
@@ -71,6 +72,8 @@ _CACHE_TREE_COUNT_FIELDS = 2
 _ASCII_DIGIT_MIN = 48
 _ASCII_DIGIT_MAX = 57
 _MAX_PRESERVED_PATHS = 256
+_ACTIVITY_WALK_MAX_ENTRIES = 200_000
+_ACTIVITY_WALK_SECONDS = 5.0
 _MAX_PRESERVED_PATH_LENGTH = 4096
 _MAX_PRESERVED_FILE_BYTES = 16 * 1024 * 1024
 _MAX_PRESERVED_TOTAL_BYTES = 64 * 1024 * 1024
@@ -164,7 +167,6 @@ class BuilderHandoffMetadata:
     managed_index: _ManagedIndexIdentity
     index_digest: str
     status_digest: str
-    ignored_status_digest: str
     path_metadata: tuple[tuple[str, str, tuple[int, int, int, int, int, int, int, int] | None], ...]
 
     @property
@@ -195,7 +197,6 @@ class BuilderHandoffMetadata:
                 "digest": self.index_digest,
             },
             "status_digest": self.status_digest,
-            "ignored_status_digest": self.ignored_status_digest,
             "path_metadata": [
                 [path, kind, list(identity) if identity is not None else None]
                 for path, kind, identity in self.path_metadata
@@ -469,7 +470,7 @@ class ChangeFinalizationAttention(_WorkspaceModel):
     receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     attempt_id: str = Field(min_length=1)
     report_id: str = Field(pattern=r"^[0-9a-f]{64}$")
-    outcome: Literal["proof-failed", "review-failed"]
+    outcome: Literal["proof-failed", "review-failed", "ended-without-report"]
     expected_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     expected_reviewed_base: str = Field(pattern=r"^[0-9a-f]{40}$")
     finished_at: str = Field(min_length=1)
@@ -3025,7 +3026,9 @@ class ChangeWorkspaceManager:
             or coordination.external_head_adoption_intent is not None
         ):
             _coordination_conflict("Builder handoff workspace is not under exact exclusive custody")
-        captured, head, status, paths, reason = self.capture_recovery_workspace_metadata(coordination.change_id, ())
+        captured, head, status, paths, reason = self.capture_recovery_workspace_metadata(
+            coordination.change_id, (), ignored_is_dirty=False
+        )
         if captured != coordination:
             _coordination_conflict("Change custody changed during Builder handoff metadata capture")
         if reason not in {None, "workspace-dirty"}:
@@ -3062,15 +3065,6 @@ class ChangeWorkspaceManager:
             raise PreservationFenceError(message)
         index_digest = hashlib.sha256(index_bytes).hexdigest()
         status_digest = hashlib.sha256(status).hexdigest()
-        ignored_status = self._preservation_git(
-            "status",
-            "--porcelain=v1",
-            "-z",
-            "--ignored=matching",
-            "--untracked-files=normal",
-            cwd=worktree,
-        ).stdout
-        ignored_status_digest = hashlib.sha256(ignored_status).hexdigest()
         path_metadata = tuple((path, *self._read_worktree_handoff_metadata(worktree, path)) for path in paths)
         return BuilderHandoffMetadata(
             change_id=coordination.change_id,
@@ -3082,9 +3076,62 @@ class ChangeWorkspaceManager:
             managed_index=managed_index,
             index_digest=index_digest,
             status_digest=status_digest,
-            ignored_status_digest=ignored_status_digest,
             path_metadata=path_metadata,
         )
+
+    def observe_worktree_activity(self, change_id: str) -> datetime:
+        """Return the newest change time of a registered Change worktree without refreshing Git state.
+
+        Every non-ignored directory and entry counts, so nested deletions are visible. Git's collapsed
+        ignored entries count only by their own times: writes deeper inside an ignored directory (tool
+        caches, environments) are not observed. Raises when any observation is unreadable, unsafe or
+        exceeds its bound; callers must treat that as active.
+        """
+        coordination = self._coordinator.show(change_id)
+        worktree = self._canonical_worktree_path(change_id, coordination.worktree_path)
+        registration = self._registered_worktrees_all().get(worktree.resolve())
+        if registration is None or registration.branch != coordination.branch:
+            msg = "worker worktree registration does not match its Change"
+            raise PreservationRejectedError(msg)
+        ignored = self._ignored_inventory_paths(
+            self._preservation_git(
+                "status", "--porcelain=v1", "-z", "--ignored=matching", "--untracked-files=normal", cwd=worktree
+            ).stdout
+        )
+        newest = _worktree_tree_activity_ns(worktree, ignored)
+        managed_index = self._resolve_managed_index(worktree)
+        newest = max(newest, _activity_ns(managed_index.path), _activity_ns(managed_index.administration))
+        roots = (managed_index.administration, managed_index.common_directory)
+        newest = max(newest, _activity_ns(self._resolved_git_path(worktree, "HEAD", roots)))
+        reference = self._resolved_git_path(worktree, f"refs/heads/{coordination.branch}", roots, missing_ok=True)
+        if reference is None:
+            reference = self._resolved_git_path(worktree, "packed-refs", roots)
+        newest = max(newest, _activity_ns(reference))
+        return datetime.fromtimestamp(newest / 1_000_000_000, tz=UTC)
+
+    def _resolved_git_path(
+        self,
+        worktree: Path,
+        name: str,
+        roots: tuple[Path, ...],
+        *,
+        missing_ok: bool = False,
+    ) -> Path | None:
+        path = Path(
+            self._preservation_git("rev-parse", "--path-format=absolute", "--git-path", name, cwd=worktree)
+            .stdout.decode()
+            .strip()
+        )
+        if not path.is_absolute() or ".." in path.parts or not any(_path_is_contained(root, path) for root in roots):
+            msg = "Git resolved an unexpected worktree administration path"
+            raise PreservationRejectedError(msg)
+        if path.with_name(f"{path.name}.lock").exists():
+            msg = "Git administration path is locked by an active operation"
+            raise PreservationRejectedError(msg)
+        if missing_ok and not path.exists() and not path.is_symlink():
+            return None
+        _reject_symlink_ancestors(path)
+        return path
 
     def ensure(
         self,
@@ -5122,9 +5169,12 @@ class ChangeWorkspaceManager:
         return fingerprint.hexdigest()
 
     def capture_recovery_workspace_metadata(
-        self, change_id: str, promoted_commits: tuple[str, ...]
+        self, change_id: str, promoted_commits: tuple[str, ...], *, ignored_is_dirty: bool = True
     ) -> tuple[ChangeCoordination, str, bytes, tuple[str, ...], str | None]:
-        """Capture recovery status and custody facts without reading dirty content."""
+        """Capture recovery status and custody facts without reading dirty content.
+
+        Builder handoff passes `ignored_is_dirty=False`: ignored caches stay in place, unpreserved and unfenced.
+        """
         self._require_preservation_environment()
         coordination = self._coordinator.show(change_id)
         head = self.observed_change_head(change_id)
@@ -5139,16 +5189,17 @@ class ChangeWorkspaceManager:
         ).stdout
         paths = self._dirty_paths(status)
         reason = self._captured_finalization_guard(coordination, head, promoted_commits)
-        ignored = self._run_git(
-            "status",
-            "--porcelain=v1",
-            "-z",
-            "--ignored=matching",
-            "--untracked-files=normal",
-            cwd=coordination.worktree_path,
-            environment={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
-        ).stdout
-        if self._has_ignored_inventory(ignored):
+        if ignored_is_dirty and self._has_ignored_inventory(
+            self._run_git(
+                "status",
+                "--porcelain=v1",
+                "-z",
+                "--ignored=matching",
+                "--untracked-files=normal",
+                cwd=coordination.worktree_path,
+                environment={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
+            ).stdout
+        ):
             return coordination, head, status, paths, reason or "workspace-dirty"
         if reason == "active-custody" and coordination.publication_lease is None:
             reason = self._captured_finalization_guard(
@@ -6956,12 +7007,17 @@ class ChangeWorkspaceManager:
 
     @staticmethod
     def _has_ignored_inventory(status: bytes) -> bool:
+        return bool(ChangeWorkspaceManager._ignored_inventory_paths(status))
+
+    @staticmethod
+    def _ignored_inventory_paths(status: bytes) -> frozenset[str]:
+        """Return Git's collapsed ignored paths; ignored directories keep their trailing slash."""
         if status and not status.endswith(b"\0"):
             msg = "Git returned an unterminated worktree status"
             raise PreservationRejectedError(msg)
         records = status.split(b"\0")
         index = 0
-        ignored = False
+        ignored: set[str] = set()
         while index < len(records):
             record = records[index]
             index += 1
@@ -6972,14 +7028,14 @@ class ChangeWorkspaceManager:
                 raise PreservationRejectedError(msg)
             code = record[:2].decode("ascii", errors="strict")
             if code == "!!":
-                ignored = True
+                ignored.add(os.fsdecode(record[3:]))
                 continue
             if "R" in code or "C" in code:
                 if index >= len(records) or not records[index]:
                     msg = "Git returned an incomplete rename status"
                     raise PreservationRejectedError(msg)
                 index += 1
-        return ignored
+        return frozenset(ignored)
 
     @staticmethod
     def _validate_private_paths(paths: tuple[str, ...]) -> None:
@@ -9127,6 +9183,59 @@ def _reject_symlink_ancestors(path: Path) -> None:
         if stat.S_ISLNK(metadata.st_mode):
             msg = f"Git administration path contains a symlink: {current}"
             raise PreservationRejectedError(msg)
+
+
+def _activity_ns(path: Path) -> int:
+    # ctime also covers tools that restore old modification times.
+    metadata = path.lstat()
+    return max(metadata.st_mtime_ns, metadata.st_ctime_ns)
+
+
+@dataclass
+class _ActivityWalkBudget:
+    entries: int
+    deadline: float
+
+    def consume(self) -> None:
+        self.entries -= 1
+        if self.entries < 0 or time.monotonic() >= self.deadline:
+            msg = "worktree activity walk exceeded its entry or time bound"
+            raise PreservationRejectedError(msg)
+
+
+def _worktree_tree_activity_ns(worktree: Path, ignored: frozenset[str]) -> int:
+    """Return the newest mtime/ctime in the worktree, excluding its top-level `.git` and ignored subtrees."""
+    budget = _ActivityWalkBudget(_ACTIVITY_WALK_MAX_ENTRIES, time.monotonic() + _ACTIVITY_WALK_SECONDS)
+    descriptor = os.open(worktree, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        return _directory_activity_ns(descriptor, budget, "", ignored)
+    finally:
+        os.close(descriptor)
+
+
+def _directory_activity_ns(descriptor: int, budget: _ActivityWalkBudget, prefix: str, ignored: frozenset[str]) -> int:
+    metadata = os.fstat(descriptor)
+    newest = max(metadata.st_mtime_ns, metadata.st_ctime_ns)
+    directories: list[str] = []
+    with os.scandir(descriptor) as entries:
+        for entry in entries:
+            if not prefix and entry.name == ".git":
+                continue
+            budget.consume()
+            if entry.is_dir(follow_symlinks=False) and f"{prefix}{entry.name}/" not in ignored:
+                directories.append(entry.name)
+                continue
+            # An ignored directory's own times still reveal entries created or removed directly inside it.
+            entry_metadata = entry.stat(follow_symlinks=False)
+            newest = max(newest, entry_metadata.st_mtime_ns, entry_metadata.st_ctime_ns)
+    for name in directories:
+        # O_NOFOLLOW fails closed if the directory was swapped for a symlink after listing.
+        child = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=descriptor)
+        try:
+            newest = max(newest, _directory_activity_ns(child, budget, f"{prefix}{name}/", ignored))
+        finally:
+            os.close(child)
+    return newest
 
 
 def _open_worktree_parent(worktree: Path, parts: tuple[str, ...], *, create: bool = True) -> int:

@@ -61,7 +61,11 @@ class FinalizationFailureCode(StrEnum):
     INDEPENDENT_REVIEW_FAILED = "independent-review-failed"
     INDEPENDENT_REVIEW_UNAVAILABLE = "independent-review-unavailable"
     PROOF_MUTATED_WORKTREE = "proof-mutated-worktree"
+    FINALIZER_ENDED_WITHOUT_REPORT = "finalizer-ended-without-report"
 
+
+# Engine-only: authored when a Finalizer whose host is gone or that was released left no report.
+ENGINE_FINALIZATION_CATEGORIES = frozenset({"worker-ended"})
 
 _SUMMARIES = {
     FinalizationFailureCode.WORKSPACE_DIRTY: "Verification did not run because the managed workspace is dirty.",
@@ -71,6 +75,9 @@ _SUMMARIES = {
     FinalizationFailureCode.INDEPENDENT_REVIEW_FAILED: "Independent verification review reported a finding.",
     FinalizationFailureCode.INDEPENDENT_REVIEW_UNAVAILABLE: "Independent verification review was unavailable.",
     FinalizationFailureCode.PROOF_MUTATED_WORKTREE: "The maintained proof procedure mutated the managed workspace.",
+    FinalizationFailureCode.FINALIZER_ENDED_WITHOUT_REPORT: (
+        "The Finalizer invocation ended without a report; no verification result was recorded."
+    ),
 }
 
 
@@ -88,7 +95,7 @@ class ReportFinalizationFailure(_ReportModel):
     expected_reviewed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     expected_diagnostic_sequence: int = Field(ge=0)
     attempt_key: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._-]+$")
-    category: Literal["custody-preflight", "maintained-check", "independent-review", "proof-mutation"]
+    category: Literal["custody-preflight", "maintained-check", "independent-review", "proof-mutation", "worker-ended"]
     code: FinalizationFailureCode
     checks_state: Literal["not-run", "failed", "unknown"]
     check_id: str | None = Field(default=None, min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._-]+$")
@@ -106,9 +113,18 @@ class ReportFinalizationFailure(_ReportModel):
             "maintained-check": "maintained-check-",
             "independent-review": "independent-review-",
             "proof-mutation": "proof-mutated-",
+            "worker-ended": "finalizer-ended-",
         }[self.category]
         if not self.code.value.startswith(prefix):
             msg = "failure code must match its diagnostic category"
+            raise ValueError(msg)
+        if self.category == "worker-ended" and (
+            self.checks_state != "unknown"
+            or self.check_id is not None
+            or self.exit_status is not None
+            or self.expected_workspace_fingerprint is not None
+        ):
+            msg = "ended-worker diagnostics claim no check result or workspace evidence"
             raise ValueError(msg)
         if self.category == "custody-preflight" and self.expected_workspace_fingerprint is None:
             msg = "custody diagnostics require an observed workspace fingerprint"
@@ -363,6 +379,18 @@ class FinalizerSettlement(_ReportModel):
     session_id: str = Field(min_length=1, max_length=128)
 
 
+class FinalizerEngineSettlement(FinalizerSettlement):
+    """Engine-authored end of one Finalizer invocation that can no longer progress."""
+
+    disposition: Literal["host-lost", "released-stuck"]  # type: ignore[assignment]
+    outcome: Literal["proof-failed", "review-failed", "ended-without-report"]  # type: ignore[assignment]
+
+
+def finalizer_settlement_outcome(category: str) -> str:
+    """Return the only settlement outcome a report category can support."""
+    return {"independent-review": "review-failed", "worker-ended": "ended-without-report"}.get(category, "proof-failed")
+
+
 def _encoded_finalizer_settlement_receipt(
     receipt: FinalizerSettlementReceipt,
     *,
@@ -398,7 +426,7 @@ class FinalizerSettlementReceipt(_ReportModel):
 
     schema_version: Literal[1] = 1
     receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
-    settlement: FinalizerSettlement
+    settlement: FinalizerEngineSettlement | FinalizerSettlement
     report: FinalizationReport
     finished_at: datetime
     workspace: FinalizerWorkspaceObservation
@@ -406,9 +434,13 @@ class FinalizerSettlementReceipt(_ReportModel):
     @model_validator(mode="after")
     def _validate_receipt(self) -> FinalizerSettlementReceipt:
         request = self.report.request
-        expected_outcome = "review-failed" if request.category == "independent-review" else "proof-failed"
+        expected_outcome = finalizer_settlement_outcome(request.category)
         if (
             self.finished_at.tzinfo is None
+            or (
+                request.category in ENGINE_FINALIZATION_CATEGORIES
+                and not isinstance(self.settlement, FinalizerEngineSettlement)
+            )
             or self.settlement.change_id != request.change_id
             or self.settlement.attempt_id != request.attempt_key
             or self.settlement.expected_head != request.expected_change_head

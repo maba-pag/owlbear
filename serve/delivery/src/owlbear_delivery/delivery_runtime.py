@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import inspect
 import json
+import re
 import stat
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -1579,10 +1580,19 @@ type DeliveryTransition = Annotated[
 ]
 DELIVERY_TRANSITION_ADAPTER = TypeAdapter(DeliveryTransition)
 
+# Engine-observed endings of invocations that can no longer progress; never accepted from callers.
+ENGINE_WORKER_SETTLEMENT_FAILURE_CODES: Mapping[str, str] = MappingProxyType(
+    {"host-lost": "worker-host-lost", "released-stuck": "worker-released-stuck"}
+)
 # Ended invocations without a typed inner request, keyed to their reserved retry failure codes.
 REQUESTLESS_WORKER_SETTLEMENT_FAILURE_CODES: Mapping[str, str] = MappingProxyType(
-    {"completed-timeout": "worker-timeout", "ended-without-result": "worker-ended-without-result"}
+    {
+        "completed-timeout": "worker-timeout",
+        "ended-without-result": "worker-ended-without-result",
+        **ENGINE_WORKER_SETTLEMENT_FAILURE_CODES,
+    }
 )
+type EngineWorkerDisposition = Literal["host-lost", "released-stuck"]
 
 
 class DeliveryPlanningRetrySettlement(_DeliveryModel):
@@ -1661,11 +1671,23 @@ class DeliveryBuilderInvocationSettlement(_DeliveryModel):
             raise ValueError(message)
 
 
+class DeliveryEnginePlanningSettlement(DeliveryPlanningRetrySettlement):
+    """Engine-authored end of one Planner invocation whose worker can no longer progress."""
+
+    disposition: EngineWorkerDisposition  # type: ignore[assignment]
+
+
+class DeliveryEngineBuilderSettlement(DeliveryBuilderInvocationSettlement):
+    """Engine-authored end of one Builder invocation whose worker can no longer progress."""
+
+    disposition: EngineWorkerDisposition  # type: ignore[assignment]
+
+
 class _DeliveryPlanningRetrySettlementReceipt(_DeliveryModel):
     """Immutable result for replaying one exact completed Planner retry invocation."""
 
     schema_version: Literal[1] = 1
-    envelope: DeliveryPlanningRetrySettlement
+    envelope: DeliveryEnginePlanningSettlement | DeliveryPlanningRetrySettlement
     result: OutcomeAuthorityBinding
 
     @model_validator(mode="after")
@@ -1685,7 +1707,7 @@ class _DeliveryBuilderInvocationSettlementReceipt(_DeliveryModel):
 
     schema_version: Literal[1] = 1
     settlement_id: str = Field(pattern=r"^[0-9a-f]{64}$")
-    envelope: DeliveryBuilderInvocationSettlement
+    envelope: DeliveryEngineBuilderSettlement | DeliveryBuilderInvocationSettlement
     handoff_context: DeliveryBuilderHandoffContext
     result: OutcomeAuthorityBinding
 
@@ -4478,10 +4500,11 @@ class DeliveryRuntime:
         self, envelope: DeliveryPlanningRetrySettlement, *, retry_observed_at: datetime | str | None = None
     ) -> OutcomeAuthorityBinding:
         """Settle one exact normally returned, completed-timeout, or ended-without-result Planner invocation."""
-        if not isinstance(envelope, DeliveryPlanningRetrySettlement):
+        envelope_type = type(envelope)
+        if envelope_type not in {DeliveryPlanningRetrySettlement, DeliveryEnginePlanningSettlement}:
             _conflict("Planning retry settlement requires a typed completed-invocation envelope")
         try:
-            envelope = DeliveryPlanningRetrySettlement.model_validate_json(_model_content(envelope), strict=True)
+            envelope = envelope_type.model_validate_json(_model_content(envelope), strict=True)
         except (TypeError, ValueError):
             _conflict("Planning retry settlement envelope is invalid")
         if envelope.change_id != self._contract.change_id:
@@ -4545,10 +4568,11 @@ class DeliveryRuntime:
         retry_observed_at: datetime | str | None = None,
     ) -> OutcomeAuthorityBinding:
         """Settle one exact Builder invocation without rewriting its registered worktree."""
-        if not isinstance(envelope, DeliveryBuilderInvocationSettlement):
+        envelope_type = type(envelope)
+        if envelope_type not in {DeliveryBuilderInvocationSettlement, DeliveryEngineBuilderSettlement}:
             _conflict("Builder invocation settlement requires a typed completed-invocation envelope")
         try:
-            envelope = DeliveryBuilderInvocationSettlement.model_validate_json(_model_content(envelope), strict=True)
+            envelope = envelope_type.model_validate_json(_model_content(envelope), strict=True)
         except (TypeError, ValueError):
             _conflict("Builder invocation settlement envelope is invalid")
         if envelope.change_id != self._contract.change_id:
@@ -4839,6 +4863,49 @@ class DeliveryRuntime:
             / envelope.outcome_id
             / f"{attempt_digest}.json"
         )
+
+    def engine_worker_settlement_replay(
+        self,
+        outcome_id: str,
+        attempt_id: str,
+        claim_id: str,
+        disposition: EngineWorkerDisposition,
+    ) -> OutcomeAuthorityBinding | None:
+        """Return the immutable result of one exact engine-settled worker attempt, if any."""
+        if re.fullmatch(r"OUT-[0-9]{3}", outcome_id) is None:
+            return None
+        attempt_digest = hashlib.sha256(attempt_id.encode("utf-8")).hexdigest()
+        receipts: tuple[tuple[Path, type[_DeliveryModel]], ...] = (
+            (
+                self._frontier_path.parent / "planning-retry-receipts" / outcome_id / f"{attempt_digest}.json",
+                _DeliveryPlanningRetrySettlementReceipt,
+            ),
+            (
+                self._target_root / self._builder_invocation_settlement_path(attempt_id),
+                _DeliveryBuilderInvocationSettlementReceipt,
+            ),
+        )
+        for path, receipt_type in receipts:
+            try:
+                content = path.read_bytes()
+            except FileNotFoundError:
+                continue
+            except OSError as exc:
+                _reference("worker settlement receipt is unavailable", exc)
+            try:
+                receipt = receipt_type.model_validate_json(content, strict=True)
+            except (TypeError, ValueError) as exc:
+                _reference("worker settlement receipt is invalid", exc)
+            envelope = receipt.envelope
+            if (
+                isinstance(envelope, (DeliveryEnginePlanningSettlement, DeliveryEngineBuilderSettlement))
+                and envelope.outcome_id == outcome_id
+                and envelope.claim_id == claim_id
+                and envelope.disposition == disposition
+            ):
+                return receipt.result
+            _conflict("worker attempt is already settled with different authority")
+        return None
 
     def _prepare_builder_invocation_handoff(
         self,

@@ -77,6 +77,7 @@ from owlbear_delivery.portfolio_operating import (
     DeliveryHealthResolution,
 )
 from owlbear_delivery.runtime_transaction import RuntimeTransaction, TransactionParticipant
+from owlbear_delivery.worker_stall import DeliveryHostInstance
 
 if TYPE_CHECKING:
     from owlbear_delivery.delivery_runtime import DeliveryRequest, _DeliveryBuilderHandoffChangeIntentReceipt
@@ -2315,6 +2316,15 @@ def _bounded_health_detail(detail: str, fallback: str) -> str:
     return (compact or fallback)[:240]
 
 
+def _acquire_host_instance(runtime_root: Path) -> DeliveryHostInstance | None:
+    """Own one process-lifetime claim-issuer lock; without it, host loss is never inferred."""
+    try:
+        return DeliveryHostInstance.acquire(runtime_root)
+    except OSError:
+        _logger.warning("Delivery host lock is unavailable; automatic host-loss settlement is disabled.")
+        return None
+
+
 def _compose_application(  # noqa: PLR0913, PLR0917 - composition binds independent authority owners.
     config: DeliveryStartupConfig,
     host_config: DeliveryHostConfig,
@@ -2378,6 +2388,7 @@ def _compose_application(  # noqa: PLR0913, PLR0917 - composition binds independ
             else None
         ),
         health_diagnostics=(*health_diagnostics, *runtime_diagnostics),
+        host_instance=_acquire_host_instance(paths.runtime_root),
     )
     application_config = PortfolioApplicationConfig(
         package_root=paths.package_root,
