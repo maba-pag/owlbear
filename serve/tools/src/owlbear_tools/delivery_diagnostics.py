@@ -32,6 +32,7 @@ _INCOMPLETE_DIAGNOSTIC_CODES = frozenset(
         "SYMLINK_REJECTED",
         "SPECIAL_FILE_REJECTED",
         "UNSAFE_ENTRY_NAME",
+        "UNRECOGNIZED_CHANGE_ENTRY",
     }
 )
 
@@ -48,6 +49,40 @@ _CHANGE_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _FIXED_ENTRY_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _INVALID_CHANGE_ID = "invalid Change ID"
 _INVALID_INVOCATION = "ERR_INVALID_INVOCATION"
+_CHANGE_RECORD_NAME_PATTERNS = {
+    "$digest": re.compile(r"^[0-9a-f]{64}$"),
+    "$digest.json": re.compile(r"^[0-9a-f]{64}\.json$"),
+    "$attempt.json": re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}\.json$"),
+    "$outcome": re.compile(r"^OUT-[0-9]{3}$"),
+}
+_CHANGE_RECORD_LAYOUT: dict[str, object] = {
+    "invocations": {"$digest.json": "recovery_invocation"},
+    "recovery-receipts": {
+        "$digest": {
+            "intent.json": "recovery_intent",
+            "evidence.json": "recovery_evidence",
+            "receipt.json": "recovery_receipt",
+        }
+    },
+    "retry-ledger": {
+        "current.json": "retry_ledger",
+        "attempts": {"$attempt.json": "retry_attempt"},
+        "outcomes": {"$digest.json": "retry_outcome"},
+        "repair-bindings": {"$digest.json": "retry_repair_binding"},
+        "owner-results": {"$attempt.json": "retry_owner_result"},
+    },
+    "planning-pause-receipts": {"$outcome": {"$digest.json": "planning_pause_receipt"}},
+    "planning-retry-receipts": {"$outcome": {"$digest.json": "planning_retry_receipt"}},
+    "builder-invocation-receipts": {"$digest.json": "builder_invocation_receipt"},
+    "builder-plan-promotion-receipts": {"$digest.json": "builder_plan_promotion_receipt"},
+    "builder-request-resolution-receipts": {"$digest.json": "builder_request_resolution_receipt"},
+    "builder-handoff-change-intent-receipts": {
+        "$digest": {
+            "head.json": "builder_handoff_change_intent_head",
+            "$digest.json": "builder_handoff_change_intent_receipt",
+        }
+    },
+}
 _SAFE_LOCATORS = {
     "config": ".owlbear/delivery/config.json",
     "host": ".owlbear/delivery/runtime/host.json",
@@ -64,6 +99,36 @@ _SAFE_LOCATORS = {
     ),
     "transaction_proof": ".owlbear/delivery/runtime/proof-attempts/<redacted>/transactions/<opaque>.yaml",
     "log": ".owlbear/delivery/runtime/logs/<opaque>",
+    "recovery_invocation": ".owlbear/delivery/runtime/changes/<redacted>/invocations/<opaque>.json",
+    "recovery_intent": ".owlbear/delivery/runtime/changes/<redacted>/recovery-receipts/<opaque>/intent.json",
+    "recovery_evidence": ".owlbear/delivery/runtime/changes/<redacted>/recovery-receipts/<opaque>/evidence.json",
+    "recovery_receipt": ".owlbear/delivery/runtime/changes/<redacted>/recovery-receipts/<opaque>/receipt.json",
+    "retry_ledger": ".owlbear/delivery/runtime/changes/<redacted>/retry-ledger/current.json",
+    "retry_attempt": ".owlbear/delivery/runtime/changes/<redacted>/retry-ledger/attempts/<opaque>.json",
+    "retry_outcome": ".owlbear/delivery/runtime/changes/<redacted>/retry-ledger/outcomes/<opaque>.json",
+    "retry_repair_binding": ".owlbear/delivery/runtime/changes/<redacted>/retry-ledger/repair-bindings/<opaque>.json",
+    "retry_owner_result": ".owlbear/delivery/runtime/changes/<redacted>/retry-ledger/owner-results/<opaque>.json",
+    "planning_pause_receipt": (
+        ".owlbear/delivery/runtime/changes/<redacted>/planning-pause-receipts/<outcome>/<opaque>.json"
+    ),
+    "planning_retry_receipt": (
+        ".owlbear/delivery/runtime/changes/<redacted>/planning-retry-receipts/<outcome>/<opaque>.json"
+    ),
+    "builder_invocation_receipt": (
+        ".owlbear/delivery/runtime/changes/<redacted>/builder-invocation-receipts/<opaque>.json"
+    ),
+    "builder_plan_promotion_receipt": (
+        ".owlbear/delivery/runtime/changes/<redacted>/builder-plan-promotion-receipts/<opaque>.json"
+    ),
+    "builder_request_resolution_receipt": (
+        ".owlbear/delivery/runtime/changes/<redacted>/builder-request-resolution-receipts/<opaque>.json"
+    ),
+    "builder_handoff_change_intent_head": (
+        ".owlbear/delivery/runtime/changes/<redacted>/builder-handoff-change-intent-receipts/<opaque>/head.json"
+    ),
+    "builder_handoff_change_intent_receipt": (
+        ".owlbear/delivery/runtime/changes/<redacted>/builder-handoff-change-intent-receipts/<opaque>/<opaque>.json"
+    ),
 }
 
 MAINTENANCE_PROMPT = """The offline inspection is structural evidence only. Review the bounded
@@ -96,6 +161,7 @@ class _Inspection:
             "host": 0,
             "host_local": 0,
             "frontier": 0,
+            "change_records": 0,
             "coordination": 0,
             "snapshot": 0,
             "packages": 0,
@@ -456,9 +522,11 @@ def _json_shape(
         value = json.loads(content.decode("utf-8"))
     except (UnicodeDecodeError, RecursionError, ValueError):
         inspection.diagnostic(f"{kind.upper()}_MALFORMED")
+        inspection.records[-1]["status"] = "malformed"
         return
     if not isinstance(value, dict):
         inspection.diagnostic(f"{kind.upper()}_MALFORMED")
+        inspection.records[-1]["status"] = "malformed"
         return
     schema = value.get("schema_version", expected_schema if kind == "host_local" else None)
     if isinstance(schema, bool) or not isinstance(schema, int) or schema != expected_schema:
@@ -520,6 +588,74 @@ def _inspect_file(
         inspection.incomplete = True
 
 
+def _unrecognized_change_entry(inspection: _Inspection) -> None:
+    inspection.diagnostic("UNRECOGNIZED_CHANGE_ENTRY")
+    inspection.incomplete = True
+    inspection.transaction_scan_unknown = True
+
+
+def _change_record_child(layout: dict[str, object], name: str) -> object | None:
+    for pattern, child in layout.items():
+        matcher = _CHANGE_RECORD_NAME_PATTERNS.get(pattern)
+        if pattern == name or (matcher is not None and matcher.fullmatch(name)):
+            return child
+    return None
+
+
+def _inspect_change_record_file(parent_fd: int, name: str, kind: str, inspection: _Inspection) -> None:
+    content, _ = _safe_read(parent_fd, name, inspection, kind, required=True)
+    if content is None:
+        inspection.transaction_scan_unknown = True
+        return
+    _json_shape(content, kind=kind, expected_schema=1, inspection=inspection)
+    inspection.counts["change_records"] += 1
+    if inspection.records[-1]["status"] != "supported":
+        inspection.transaction_scan_unknown = True
+
+
+def _scan_change_record_directory(parent_fd: int, layout: dict[str, object], inspection: _Inspection) -> None:
+    for name in _directory_names(parent_fd, inspection):
+        child = _change_record_child(layout, name)
+        if child is None:
+            _unrecognized_change_entry(inspection)
+        elif isinstance(child, dict):
+            opened = _open_directory(parent_fd, name, inspection, "CHANGE_RECORD", required=True)
+            if opened is None:
+                inspection.transaction_scan_unknown = True
+                continue
+            child_fd, child_opened = opened
+            try:
+                _scan_change_record_directory(child_fd, child, inspection)
+            finally:
+                _close_directory(parent_fd, name, child_fd, child_opened, inspection)
+        elif isinstance(child, str):
+            _inspect_change_record_file(parent_fd, name, child, inspection)
+        else:
+            _unrecognized_change_entry(inspection)
+
+
+def _scan_change_record_families(
+    change_fd: int,
+    change_entries: set[str],
+    inspection: _Inspection,
+) -> None:
+    for family_name, layout in _CHANGE_RECORD_LAYOUT.items():
+        if family_name not in change_entries:
+            continue
+        if not isinstance(layout, dict):
+            _unrecognized_change_entry(inspection)
+            continue
+        opened = _open_directory(change_fd, family_name, inspection, "CHANGE_RECORD", required=True)
+        if opened is None:
+            inspection.transaction_scan_unknown = True
+            continue
+        family_fd, family_opened = opened
+        try:
+            _scan_change_record_directory(family_fd, layout, inspection)
+        finally:
+            _close_directory(change_fd, family_name, family_fd, family_opened, inspection)
+
+
 def _inspect_coordination_file(parent_fd: int, name: str, inspection: _Inspection, expected_change_id: str) -> bool:
     content, _ = _safe_read(parent_fd, name, inspection, "coordination", required=True)
     if content is None:
@@ -533,6 +669,48 @@ def _inspect_coordination_file(parent_fd: int, name: str, inspection: _Inspectio
     )
     inspection.counts["coordination"] += 1
     return inspection.records[-1]["status"] == "supported"
+
+
+def _scan_change_transactions(change_fd: int, entries: set[str], inspection: _Inspection) -> None:
+    if "transactions" not in entries:
+        return
+    transaction = _open_directory(change_fd, "transactions", inspection, "TRANSACTIONS", required=True)
+    if transaction is None:
+        inspection.transaction_scan_unknown = True
+        return
+    transactions_fd, transactions_opened = transaction
+    try:
+        _scan_transaction_entries(
+            transactions_fd,
+            inspection,
+            kind="transaction_legacy",
+            strict_change=True,
+        )
+    finally:
+        _close_directory(change_fd, "transactions", transactions_fd, transactions_opened, inspection)
+
+
+def _scan_change_record_change(changes_fd: int, name: str, inspection: _Inspection) -> None:
+    child = _open_directory(changes_fd, name, inspection, "CHANGE")
+    if child is None:
+        inspection.transaction_scan_unknown = True
+        return
+    child_fd, child_opened = child
+    try:
+        entries = _directory_names(child_fd, inspection)
+        entry_set = set(entries)
+        recognized_entries = {"frontier.json", "transactions", *_CHANGE_RECORD_LAYOUT}
+        for entry in entries:
+            if entry not in recognized_entries:
+                _unrecognized_change_entry(inspection)
+        frontier_record = len(inspection.records)
+        _inspect_file(child_fd, "frontier.json", inspection, "frontier", required=True)
+        if len(inspection.records) > frontier_record and inspection.records[-1]["status"] == "supported":
+            inspection.runtime_frontier_changes.add(name)
+        _scan_change_transactions(child_fd, entry_set, inspection)
+        _scan_change_record_families(child_fd, entry_set, inspection)
+    finally:
+        _close_directory(changes_fd, name, child_fd, child_opened, inspection)
 
 
 def _scan_change_records(
@@ -554,31 +732,7 @@ def _scan_change_records(
             if selected is not None and name != selected:
                 continue
             inspection.selected_runtime_change_seen = True
-            child = _open_directory(fd, name, inspection, "CHANGE")
-            if child is None:
-                inspection.transaction_scan_unknown = True
-                continue
-            child_fd, child_opened = child
-            try:
-                frontier_record = len(inspection.records)
-                _inspect_file(child_fd, "frontier.json", inspection, "frontier", required=True)
-                if len(inspection.records) > frontier_record and inspection.records[-1]["status"] == "supported":
-                    inspection.runtime_frontier_changes.add(name)
-                transactions = _open_optional_transactions(child_fd, inspection)
-                if transactions is not None:
-                    transactions_fd, transactions_opened = transactions
-                    try:
-                        _scan_transaction_entries(transactions_fd, inspection, kind="transaction_legacy")
-                    finally:
-                        _close_directory(
-                            child_fd,
-                            "transactions",
-                            transactions_fd,
-                            transactions_opened,
-                            inspection,
-                        )
-            finally:
-                _close_directory(fd, name, child_fd, child_opened, inspection)
+            _scan_change_record_change(fd, name, inspection)
     finally:
         _close_directory(runtime_fd, "changes", fd, opened, inspection)
 
@@ -702,11 +856,44 @@ def _verify_opaque_transaction(
     return True
 
 
+def _scan_opaque_transaction_entry(
+    transactions_fd: int,
+    name: str,
+    inspection: _Inspection,
+    kind: str,
+) -> None:
+    try:
+        info = os.stat(name, dir_fd=transactions_fd, follow_symlinks=False)
+    except OSError:
+        inspection.diagnostic("TRANSACTION_UNREADABLE")
+        inspection.transaction_scan_unknown = True
+        return
+    inspection.record(kind, size_bytes=int(info.st_size), status="pending-opaque")
+    if stat.S_ISLNK(info.st_mode):
+        inspection.diagnostic("SYMLINK_REJECTED")
+        inspection.transaction_scan_unknown = True
+        return
+    if not stat.S_ISREG(info.st_mode):
+        inspection.diagnostic("SPECIAL_FILE_REJECTED")
+        inspection.transaction_scan_unknown = True
+        return
+    if not _verify_opaque_transaction(transactions_fd, name, info, inspection):
+        return
+    inspection.counts["pending_transactions"] += 1
+    if info.st_size > MAX_RECORD_BYTES:
+        inspection.diagnostic("OVERSIZED_RECORD")
+    elif info.st_size > MAX_TOTAL_BYTES - inspection.total_bytes:
+        inspection.diagnostic("TOTAL_LIMIT_EXCEEDED")
+    else:
+        inspection.total_bytes += int(info.st_size)
+
+
 def _scan_transaction_entries(
     transactions_fd: int,
     inspection: _Inspection,
     *,
     kind: str = "transaction",
+    strict_change: bool = False,
 ) -> None:
     """Inspect only opaque YAML entries in one fixed transaction directory."""
     names = _directory_names(transactions_fd, inspection)
@@ -714,31 +901,10 @@ def _scan_transaction_entries(
         inspection.transaction_scan_unknown = True
     for name in names:
         if not name.endswith(".yaml"):
+            if strict_change:
+                _unrecognized_change_entry(inspection)
             continue
-        try:
-            info = os.stat(name, dir_fd=transactions_fd, follow_symlinks=False)
-        except OSError:
-            inspection.diagnostic("TRANSACTION_UNREADABLE")
-            inspection.transaction_scan_unknown = True
-            continue
-        inspection.record(kind, size_bytes=int(info.st_size), status="pending-opaque")
-        if stat.S_ISLNK(info.st_mode):
-            inspection.diagnostic("SYMLINK_REJECTED")
-            inspection.transaction_scan_unknown = True
-            continue
-        if not stat.S_ISREG(info.st_mode):
-            inspection.diagnostic("SPECIAL_FILE_REJECTED")
-            inspection.transaction_scan_unknown = True
-            continue
-        if not _verify_opaque_transaction(transactions_fd, name, info, inspection):
-            continue
-        inspection.counts["pending_transactions"] += 1
-        if info.st_size > MAX_RECORD_BYTES:
-            inspection.diagnostic("OVERSIZED_RECORD")
-        elif info.st_size > MAX_TOTAL_BYTES - inspection.total_bytes:
-            inspection.diagnostic("TOTAL_LIMIT_EXCEEDED")
-        else:
-            inspection.total_bytes += int(info.st_size)
+        _scan_opaque_transaction_entry(transactions_fd, name, inspection, kind)
 
 
 def _open_optional_transactions(parent_fd: int, inspection: _Inspection) -> tuple[int, os.stat_result] | None:

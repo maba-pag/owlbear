@@ -55,7 +55,9 @@ def _run_cli(root: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
         "import importlib.abc,runpy,sys\n"
         "class Blocker(importlib.abc.MetaPathFinder):\n"
         " def find_spec(self,fullname,path=None,target=None):\n"
-        "  if fullname.split('.')[0] in {'owlbear','fastapi','pydantic','uvicorn'}:\n"
+        "  blocked={'owlbear','owlbear_delivery','owlbear_delivery_mcp',\n"
+        "   'owlbear_cockpit','fastapi','pydantic','uvicorn','mcp','fastmcp'}\n"
+        "  if fullname.split('.')[0] in blocked:\n"
         "   raise ImportError('blocked unavailable package')\n"
         "sys.meta_path.insert(0,Blocker())\n"
         "target=sys.argv[1]\n"
@@ -140,6 +142,122 @@ def test_valid_structure_is_bounded_and_healthy(tmp_path: Path) -> None:
     config = next(record for record in result["records"] if record["kind"] == "config")
     assert config["status"] == "supported"
     assert config["schema_version"] == 2
+
+
+def test_malformed_retry_ledger_current_is_degraded_and_redacted(tmp_path: Path) -> None:
+    root = _complete_root(tmp_path)
+    current = root / ".owlbear/delivery/runtime/changes/example/retry-ledger/current.json"
+    current.parent.mkdir(parents=True)
+    current.write_text('{"schema_version":1,"private":"LEDGER-SECRET"', encoding="utf-8")
+
+    completed = _run_cli(root, "inspect", "--project-root", os.fspath(root), "--format", "json")
+
+    assert completed.returncode == 1
+    result = json.loads(completed.stdout)
+    assert result["status"] == "degraded"
+    assert "RETRY_LEDGER_MALFORMED" in result["diagnostic_codes"]
+    assert any(
+        record["locator"] == ".owlbear/delivery/runtime/changes/<redacted>/retry-ledger/current.json"
+        for record in result["records"]
+    )
+    assert "LEDGER-SECRET" not in completed.stdout + completed.stderr
+    assert result["writes_performed"] is False
+
+
+def test_unsupported_retry_ledger_schema_is_reported_without_content(tmp_path: Path) -> None:
+    root = _complete_root(tmp_path)
+    current = root / ".owlbear/delivery/runtime/changes/example/retry-ledger/current.json"
+    current.parent.mkdir(parents=True)
+    current.write_text('{"schema_version":99,"private":"VERSION-SECRET"}\n', encoding="utf-8")
+
+    completed = _run_cli(root, "inspect", "--project-root", os.fspath(root), "--format", "json")
+
+    assert completed.returncode == 1
+    result = json.loads(completed.stdout)
+    assert result["status"] == "unsupported"
+    assert "RETRY_LEDGER_UNSUPPORTED" in result["diagnostic_codes"]
+    retry_record = next(record for record in result["records"] if record["kind"] == "retry_ledger")
+    assert retry_record["status"] == "unsupported"
+    assert "VERSION-SECRET" not in completed.stdout + completed.stderr
+
+
+def test_malformed_recovery_receipt_is_degraded_and_redacted(tmp_path: Path) -> None:
+    root = _complete_root(tmp_path)
+    receipt = root / ".owlbear/delivery/runtime/changes/example/recovery-receipts/" / ("a" * 64) / "receipt.json"
+    receipt.parent.mkdir(parents=True)
+    receipt.write_text('{"schema_version":1,"private":"RECOVERY-SECRET"', encoding="utf-8")
+
+    result = inspect_delivery(root)
+    output = json.dumps(result)
+
+    assert result["status"] == "degraded"
+    assert "RECOVERY_RECEIPT_MALFORMED" in result["diagnostic_codes"]
+    assert any(
+        record["locator"] == ".owlbear/delivery/runtime/changes/<redacted>/recovery-receipts/<opaque>/receipt.json"
+        for record in result["records"]
+    )
+    assert "RECOVERY-SECRET" not in output
+    assert result["writes_performed"] is False
+
+
+def test_change_scoped_records_are_recognized_and_read_only(tmp_path: Path) -> None:
+    root = _complete_root(tmp_path)
+    change = root / ".owlbear/delivery/runtime/changes/example"
+    digest = "a" * 64
+    records = (
+        change / "recovery-receipts" / digest / "intent.json",
+        change / "recovery-receipts" / digest / "evidence.json",
+        change / "recovery-receipts" / digest / "receipt.json",
+        change / "retry-ledger/current.json",
+        change / "retry-ledger/attempts/attempt-1.json",
+        change / "retry-ledger/outcomes" / f"{digest}.json",
+        change / "retry-ledger/repair-bindings" / f"{digest}.json",
+        change / "retry-ledger/owner-results/attempt-1.json",
+        change / "planning-pause-receipts/OUT-001" / f"{digest}.json",
+        change / "planning-retry-receipts/OUT-001" / f"{digest}.json",
+        change / "builder-invocation-receipts" / f"{digest}.json",
+        change / "builder-plan-promotion-receipts" / f"{digest}.json",
+        change / "builder-request-resolution-receipts" / f"{digest}.json",
+        change / "builder-handoff-change-intent-receipts" / digest / "head.json",
+        change / "builder-handoff-change-intent-receipts" / digest / f"{digest}.json",
+    )
+    for path in records:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text('{"schema_version":1}\n', encoding="utf-8")
+
+    def snapshot_tree() -> tuple[list[str], dict[str, bytes]]:
+        members = sorted(path.relative_to(root).as_posix() for path in root.rglob("*"))
+        contents = {path.relative_to(root).as_posix(): path.read_bytes() for path in root.rglob("*") if path.is_file()}
+        return members, contents
+
+    before = snapshot_tree()
+    result = inspect_delivery(root)
+    after = snapshot_tree()
+
+    assert result["status"] == "healthy-structure"
+    assert result["inspection_complete"] is True
+    assert result["writes_performed"] is False
+    assert result["bytes_inspected"] <= 8 * 1024 * 1024
+    assert len(result["records"]) >= len(records)
+    assert before == after
+
+
+def test_unknown_change_entry_makes_inspection_incomplete(tmp_path: Path) -> None:
+    root = _complete_root(tmp_path)
+    extra = root / ".owlbear/delivery/runtime/changes/example/unrecognized-secret.json"
+    extra.write_text('{"private":"UNRECOGNIZED-SECRET"}\n', encoding="utf-8")
+
+    completed = _run_cli(root, "inspect", "--project-root", os.fspath(root), "--format", "json")
+
+    assert completed.returncode == 1
+    result = json.loads(completed.stdout)
+    assert result["status"] == "degraded"
+    assert result["inspection_complete"] is False
+    assert "UNRECOGNIZED_CHANGE_ENTRY" in result["diagnostic_codes"]
+    assert result["pending_effects"] == "unknown"
+    assert "unrecognized-secret" not in completed.stdout
+    assert "UNRECOGNIZED-SECRET" not in completed.stdout
+    assert result["writes_performed"] is False
 
 
 @pytest.mark.parametrize("missing", ["coordination", "changes", "row"])
