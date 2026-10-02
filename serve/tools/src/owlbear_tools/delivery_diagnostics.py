@@ -291,6 +291,7 @@ class _Inspection:
         }
         self.selected_runtime_change_seen = False
         self.runtime_frontier_changes: set[str] = set()
+        self.claim_issuer_instances: set[str] = set()
         self.transaction_scan_unknown = False
         self.incomplete = False
         self.entries_seen = 0
@@ -791,6 +792,13 @@ def _change_record_shape(content: bytes, kind: str, inspection: _Inspection) -> 
         inspection.records[-1]["status"] = "unsupported"
     else:
         inspection.records[-1]["schema_version"] = schema
+        if kind == "claim_issuer":
+            issuer_instance = value.get("issuer_instance")
+            if not isinstance(issuer_instance, str) or not _HOST_LOCK_NAME.fullmatch(f"{issuer_instance}.lock"):
+                inspection.diagnostic("CLAIM_ISSUER_MALFORMED")
+                inspection.records[-1]["status"] = "malformed"
+                return
+            inspection.claim_issuer_instances.add(issuer_instance)
         inspection.records[-1]["status"] = "supported"
 
 
@@ -1515,6 +1523,42 @@ def _scan_host_locks(runtime_fd: int, inspection: _Inspection) -> None:
         _close_directory(runtime_fd, "hosts", hosts_fd, hosts_opened, inspection)
 
 
+def _scan_selected_host_locks(runtime_fd: int, inspection: _Inspection) -> None:
+    if not inspection.claim_issuer_instances:
+        return
+    hosts = _open_optional_pending_directory(runtime_fd, "hosts", inspection, "HOSTS")
+    if hosts is None:
+        if not inspection.entry_budget_exhausted:
+            inspection.diagnostic("HOST_LOCK_UNREADABLE")
+        inspection.transaction_scan_unknown = True
+        return
+    hosts_fd, hosts_opened = hosts
+    try:
+        for issuer_instance in sorted(inspection.claim_issuer_instances):
+            name = f"{issuer_instance}.lock"
+            if not _HOST_LOCK_NAME.fullmatch(name):
+                _unrecognized_change_entry(inspection)
+                continue
+            if not inspection.charge_entry(hosts_fd, name):
+                break
+            try:
+                info = os.stat(name, dir_fd=hosts_fd, follow_symlinks=False)
+            except OSError:
+                inspection.diagnostic("HOST_LOCK_UNREADABLE")
+                inspection.transaction_scan_unknown = True
+                continue
+            if stat.S_ISLNK(info.st_mode):
+                inspection.diagnostic("SYMLINK_REJECTED")
+                inspection.transaction_scan_unknown = True
+            elif not stat.S_ISREG(info.st_mode):
+                inspection.diagnostic("SPECIAL_FILE_REJECTED")
+                inspection.transaction_scan_unknown = True
+            else:
+                inspection.counts["host_locks"] += 1
+    finally:
+        _close_directory(runtime_fd, "hosts", hosts_fd, hosts_opened, inspection)
+
+
 def _scan_runtime(delivery_fd: int, inspection: _Inspection, *, selected: str | None) -> None:
     runtime = _open_directory(delivery_fd, "runtime", inspection, "RUNTIME", required=True)
     if runtime is None:
@@ -1531,7 +1575,6 @@ def _scan_runtime(delivery_fd: int, inspection: _Inspection, *, selected: str | 
             _scan_coordination(runtime_fd, inspection, selected=selected)
             if inventory is not None:
                 _scan_change_current_records(inventory, inspection)
-            _scan_host_locks(runtime_fd, inspection)
             _scan_snapshots(delivery_fd, inspection, selected=selected)
             if inventory is not None:
                 _scan_change_pending_transactions(inventory, inspection)
@@ -1540,6 +1583,10 @@ def _scan_runtime(delivery_fd: int, inspection: _Inspection, *, selected: str | 
             _scan_packages(delivery_fd, inspection, selected=selected)
             if inventory is not None:
                 _scan_change_receipts(inventory, inspection)
+            if selected is None:
+                _scan_host_locks(runtime_fd, inspection)
+            else:
+                _scan_selected_host_locks(runtime_fd, inspection)
             if selected is None:
                 _scan_logs(runtime_fd, inspection)
         finally:

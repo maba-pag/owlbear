@@ -93,6 +93,22 @@ def _complete_root(tmp_path: Path) -> Path:
     return root
 
 
+def _write_claim_issuer(change: Path, issuer_instance: str) -> DeliveryClaimIssuer:
+    issuer = DeliveryClaimIssuer(
+        change_id="example",
+        outcome_id="OUT-001",
+        attempt_id="builder-attempt-1",
+        claim_id="claim-1",
+        role="builder",
+        issuer_instance=issuer_instance,
+        issued_at="2026-10-02T00:00:00+00:00",
+    )
+    issuer_path = change / "claim-issuers" / f"{issuer.attempt_id}.json"
+    issuer_path.parent.mkdir(parents=True)
+    issuer_path.write_bytes(_canonical(issuer))
+    return issuer
+
+
 def _run_cli(root: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
     script = Path(__file__).parents[1] / "src/owlbear_tools/delivery_diagnostics.py"
     isolated_runner = (
@@ -390,10 +406,13 @@ def _write_every_change_family(change: Path) -> dict[str, int]:
     preservation = change / "recovery-receipts" / digest / "preservation"
     restoration = preservation / "restoration" / digest
     v1 = b'{"schema_version":1}\n'
+    issuer = _write_claim_issuer(change, "c" * 32)
+    hosts = change.parent.parent / "hosts"
+    hosts.mkdir(exist_ok=True)
+    (hosts / f"{issuer.issuer_instance}.lock").write_bytes(b"")
     records: dict[Path, bytes] = {
         change / "contract.json": json.dumps({"schema_version": 2, "change_id": change.name}).encode() + b"\n",
         change / "admission.json": v1,
-        change / "claim-issuers" / "builder-attempt-1.json": v1,
         change / "state-publication.json": _canonical(DeliveryPendingStatePublication.pending(digest, other)),
         change / "revisions" / digest / "contract.json": b'{"schema_version":2}\n',
         change / "revisions" / digest / "frontier.json": b'{"schema_version":17,"bindings":[]}\n',
@@ -599,18 +618,7 @@ def test_claim_issuer_and_host_locks_are_recognized_in_global_and_selected_scope
 ) -> None:
     root = _complete_root(tmp_path)
     change = root / ".owlbear/delivery/runtime/changes/example"
-    issuer = DeliveryClaimIssuer(
-        change_id="example",
-        outcome_id="OUT-001",
-        attempt_id="builder-attempt-1",
-        claim_id="claim-1",
-        role="builder",
-        issuer_instance="a" * 32,
-        issued_at="2026-10-02T00:00:00+00:00",
-    )
-    issuer_path = change / "claim-issuers" / f"{issuer.attempt_id}.json"
-    issuer_path.parent.mkdir()
-    issuer_path.write_bytes(_canonical(issuer))
+    issuer = _write_claim_issuer(change, "a" * 32)
     hosts = root / ".owlbear/delivery/runtime/hosts"
     hosts.mkdir()
     for instance_id in (issuer.issuer_instance, "b" * 32):
@@ -638,8 +646,57 @@ def test_claim_issuer_and_host_locks_are_recognized_in_global_and_selected_scope
 
         assert result["status"] == "healthy-structure"
         assert result["inspection_complete"] is True
-        assert result["counts"]["host_locks"] == 2
+        assert result["counts"]["host_locks"] == (2 if change_id is None else 1)
         assert sum(record["kind"] == "claim_issuer" for record in result["records"]) == 1
+
+
+def test_selected_change_skips_unrelated_host_lock_inventory(tmp_path: Path) -> None:
+    root = _complete_root(tmp_path)
+    issuer = root / ".owlbear/delivery/runtime/changes/example/claim-issuers/attempt-1.json"
+    issuer.parent.mkdir()
+    issuer.write_text('{"schema_version":1', encoding="utf-8")
+    hosts = root / ".owlbear/delivery/runtime/hosts"
+    hosts.mkdir()
+    for index in range(300):
+        (hosts / f"{index:032x}.lock").write_bytes(b"")
+
+    result = inspect_delivery(root, change_id="example")
+
+    assert "CLAIM_ISSUER_MALFORMED" in result["diagnostic_codes"]
+    assert result["counts"]["snapshot"] == 1
+    assert "ENTRY_LIMIT_EXCEEDED" not in result["diagnostic_codes"]
+
+
+def test_selected_change_reports_missing_referenced_host_lock(tmp_path: Path) -> None:
+    root = _complete_root(tmp_path)
+    change = root / ".owlbear/delivery/runtime/changes/example"
+    _write_claim_issuer(change, "d" * 32)
+    (root / ".owlbear/delivery/runtime/hosts").mkdir()
+
+    result = inspect_delivery(root, change_id="example")
+
+    assert "HOST_LOCK_UNREADABLE" in result["diagnostic_codes"]
+    assert result["counts"]["host_locks"] == 0
+
+
+def test_portfolio_host_lock_truncation_preserves_change_records(tmp_path: Path) -> None:
+    root = _complete_root(tmp_path)
+    change = root / ".owlbear/delivery/runtime/changes/example"
+    retry_ledger = change / "retry-ledger/current.json"
+    retry_ledger.parent.mkdir()
+    retry_ledger.write_text('{"schema_version":1', encoding="utf-8")
+    _write_claim_issuer(change, f"{0:032x}")
+    hosts = root / ".owlbear/delivery/runtime/hosts"
+    hosts.mkdir()
+    for index in range(300):
+        (hosts / f"{index:032x}.lock").write_bytes(b"")
+
+    result = inspect_delivery(root)
+
+    assert result["truncated"] is True
+    assert "ENTRY_LIMIT_EXCEEDED" in result["diagnostic_codes"]
+    assert "RETRY_LEDGER_MALFORMED" in result["diagnostic_codes"]
+    assert any(record["kind"] == "claim_issuer" for record in result["records"])
 
 
 def test_malformed_claim_issuer_is_degraded_and_redacted(tmp_path: Path) -> None:
