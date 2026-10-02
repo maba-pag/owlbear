@@ -192,7 +192,13 @@ boundary test. The next commit makes an established worktree cwd block unless ev
 condition is verified, fails closed before scanning when the issue time is unknown, and treats naive
 issue times as unknown. A fresh Sol re-check of `baf6d812` returned `implementation-sound`. CI on
 that head then showed a real-process test counting a parallel test's unreadable new process; the
-real-process tests now place the claim after every real process, relying on readable evidence. A
+real-process tests now place the claim after every real process, relying on readable evidence. The
+GitHub Copilot review of `42d19ddf` was challenged by a fresh Sol review: Cockpit now offers release
+only for a `running` claim and confirms only the exact claim it opened for (a polled replacement or
+stall wait withdraws the dialog), the MCP release description defers `worker-stall-wait` to
+acquisition, operator/WIRING guidance keeps `/continue-change` to its Change, and governance no
+longer requires a clean `resume_commit` for a Builder block. The Windows process-identity finding was
+not repaired: the user is dropping Windows and pre-3.14 Python support. A
 fresh cumulative challenge of the published head is required |
 | Required CI | All four required workflows must succeed on the same exact published head. Their exact-head results belong on PR #326; no new CI result is claimed here. Older green runs are historical |
 | PR and documentation metadata | Route exact-publication review and CI results to PR #326. This record names code checkpoint `3174857f1efb882bde5d24a08ac583a4b30e5dd7`, not the future SHA of this documentation update |
