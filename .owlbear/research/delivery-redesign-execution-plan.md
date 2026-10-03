@@ -634,7 +634,7 @@ every new item exactly one lane.
 | N08-A | — | — |
 | N08-B | — | — |
 | N08-C | — | — |
-| N09-P1 | — | — |
+| N09-P1 | merged | #351 (plan gate `plan-sound`, round 8; D9 re-split confirmation pending; U1 before N10-M) |
 | N09-A1 | — | — |
 | N09-A2 | — | — |
 | N09-P2 | — | — |
