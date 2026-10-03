@@ -597,7 +597,7 @@ every new item exactly one lane.
 | N00-C | merged | #341 |
 | N01-P | merged | #342 (plan gate `plan-sound`, round 3) |
 | N01-A | merged | #344 (code head `693b6dc3b`; Sol `implementation-sound`; LC load form pass) |
-| N01-B | — | — |
+| N01-B | merged | #346 (code head `fc4ca75b5`; Sol blocker resolved by executed exact-candidate proof; LC load form pass) |
 | N01-C | — | — |
 | N02-P | — | — |
 | N02-A | — | — |
