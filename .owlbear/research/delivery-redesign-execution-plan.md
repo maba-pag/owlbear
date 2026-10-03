@@ -352,8 +352,8 @@ no diary, no session transcripts. Evidence and history live on the PRs.
   ([N04](#n04--same-change-revision-activation-and-evidence-applicability)).
 - Claims issued by Cockpit or CLI never settle automatically. Writes deep inside ignored trees are
   not observed.
-- The user's capacity-risk acknowledgment is still pending: unknown invocations can hold all
-  execution capacity ([N00](#n00--d03-closeout-and-transition)).
+- Unknown invocations can still hold all execution capacity until settled or released. The user
+  acknowledged this at N00-M on 2026-10-03 ([N00](#n00--d03-closeout-and-transition)).
 - Deferred review findings L1 and L2 (provider observation freshness, an unmergeable PR shown as
   waiting for merge approval) go to [N05](#n05--exact-head-merge-approval-completion-and-publication-continuity).
   L5 (the target-sync lock spans fetch) goes to [N02](#n02--controller-pinning-versioned-state-and-migration-core).
@@ -1198,8 +1198,8 @@ The programme is complete when all of the following hold:
 
 **Decided at their step:**
 
-- **N00-M:** acknowledgment of D03's capacity risk (unknown invocations can hold all execution
-  capacity), merge of PR #326 and activation.
+- **N00-M (decided 2026-10-03):** the user acknowledged D03's capacity risk, merged PR #326 and
+  authorized activation.
 
 **Decided later, inside their package's P phase:**
 
