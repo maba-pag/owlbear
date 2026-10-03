@@ -3660,7 +3660,7 @@ def test_real_attention_resolution_route_fails_fast_on_held_checkpoint_lock(tmp_
     lock_root = tmp_path / "publications/checkpoints/locks/change-a"
 
     with (
-        patch("owlbear_delivery.portfolio_application._ATTENTION_RESOLUTION_LOCK_TIMEOUT_SECONDS", 0.0),
+        patch("owlbear_delivery.application_lifecycle._ATTENTION_RESOLUTION_LOCK_TIMEOUT_SECONDS", 0.0),
         locked_roots((lock_root,)),
         TestClient(assemble_target_app(application)) as client,
     ):

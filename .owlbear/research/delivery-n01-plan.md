@@ -534,7 +534,7 @@ from `owlbear_delivery` wait until N01 is merged, because they change the D9 fix
 | Phase | PR | Exact head | Proof | Challenges | Status |
 | --- | --- | --- | --- | --- | --- |
 | N01-P | #342 | — | Probes P1–P13 | Sol plan rounds: 1 revision-required (D5, §3.2), 2 revision-required (I5), 3 `plan-sound` | approved |
-| N01-A | — | — | — | — | — |
+| N01-A | — | — | On base `42144f9dc`: G3 none (N00-C changed only `except` formatting; name-based spec equals the P5 spec; counts 68/45/44/35/66/69). Mover + 3.1 Ruff steps clean and stable; node IDs +44 (structure tests only); outcomes 0 differing except `test_continuation_publishes_syncs_finalizes_and_observes_acceptance` (30 s timeout under machine load; alone 5.7–6.2 s head vs 6.1–8.1 s base); schema and members identical; moved-check residue 2 removed / 20 added, all 3.2; sizes ≤ 2,106; Ruff clean; no cycle; import time +1 %; P13 25/25 pairs on base and head (1,004 passed each); negatives: 4 old patch strings → 4 fail, facade import cycle, duplicated mixin method and moved `_observe_acceptance_once` each fail their guard; `uv run test --changed` selected the new JSON fixture as a pytest path (0 items, exit 1; `owlbear_tools.testing` defect), so its 35 test paths ran directly: 2,352 passed | — | candidate ready (uncommitted) |
 | N01-B | — | — | — | — | — |
 | N01-C | — | — | — | — | — |
 

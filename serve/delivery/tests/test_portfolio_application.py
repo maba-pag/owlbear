@@ -7170,7 +7170,7 @@ def test_resolving_change_attention_fails_fast_when_checkpoint_is_busy(tmp_path:
     )
 
     with (
-        patch("owlbear_delivery.portfolio_application._ATTENTION_RESOLUTION_LOCK_TIMEOUT_SECONDS", 0.0),
+        patch("owlbear_delivery.application_lifecycle._ATTENTION_RESOLUTION_LOCK_TIMEOUT_SECONDS", 0.0),
         locked_roots((state_root / "publications/checkpoints/locks/change-a",)),
         pytest.raises(DeliveryChangeDispositionBusyError, match="already in progress"),
     ):
@@ -7227,7 +7227,7 @@ def test_resolving_change_attention_publishes_and_replays_delivery_state(tmp_pat
     )
 
     with patch(
-        "owlbear_delivery.portfolio_application._timestamp",
+        "owlbear_delivery.application_lifecycle._timestamp",
         return_value=resolution.resolved_at,
     ):
         first = application.resolve_change_disposition("change-a", disposition.disposition_id)
@@ -9547,7 +9547,7 @@ def test_success_survives_report_retirement_failure_and_replay_reconciles(tmp_pa
     before = pointer.read_bytes()
     request = _finalization_request("change-a", coordinator.show("change-a").last_reviewed_commit)
     with patch(
-        "owlbear_delivery.portfolio_application.FinalizationReportStore.retire",
+        "owlbear_delivery.application_lifecycle.FinalizationReportStore.retire",
         side_effect=FinalizationReportError("report-store-unavailable"),
     ):
         receipt = application.finalize_change("change-a", request)
