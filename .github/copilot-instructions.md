@@ -25,19 +25,12 @@ product surface.
 
 ### Direct Delivery Redesign
 
-The user has explicitly moved the Delivery redesign programme to direct implementation on
-`dev`. For this programme, follow the active schedule in
-[the implementation plan](../.owlbear/research/change-continuation-delivery-redesign.md#0-direct-implementation-decision).
-This exception supersedes the usual Delivery admission, task, claim, worktree and result-submission
-requirements for building the redesign itself. Use the current coding session, scoped Git commits,
-focused tests and independent read-only code review; do not invoke claim-dependent Builder or
-Planner workflows. Do not create new Delivery records to implement this programme.
-
-Delivery MCP and Cockpit using this checkout stay stopped during source development. The local
-Delivery MCP registration is intentionally removed until an agent verifies the deliberate live
-activation gate. Use disposable test state; never migrate or repair live records as a development
-shortcut. Existing Change records, branches and worktrees are preserved history, not a prerequisite
-for progress. Other projects and unrelated Changes retain their normal workflow.
+The Delivery redesign programme runs in local VS Code chats under
+[the execution plan](../.owlbear/research/delivery-redesign-execution-plan.md). Start at its
+section 0; its section 1 holds the working rules: lanes, worktrees, the main-checkout freeze, live
+state protection, proof and review gates. Never use Delivery to implement Delivery. Product
+requirements stay in
+[the programme](../.owlbear/research/change-continuation-delivery-redesign.md).
 
 ## Directory Structure
 

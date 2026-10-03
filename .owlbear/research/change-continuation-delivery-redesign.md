@@ -4,13 +4,22 @@
 > **Updated:** 2026-09-29
 > **Source baseline:** `8198cdff9d373bb903ee136fc89884a5ecbc7426` on `dev`, plus the explicitly identified untracked research/packages below.
 > **Question:** Can one Change-scoped continuation session carry approved intent through implementation, recovery, verification, publication, and accepted completion without requiring the user to run tests, edit worktrees, or operate Delivery internals?
-> **Status:** Active direct-development plan. Section 0 owns execution and status; sections 1-11 and 13-14 retain product requirements, design evidence and acceptance. Proposed product APIs are not claims that those APIs have shipped.
+> **Status:** Product requirements and acceptance (sections 1-11 and 13-14). Execution, schedule and
+> status moved to [the execution plan](delivery-redesign-execution-plan.md) on 2026-10-03; section 0
+> and sections 12.2-12.8 are historical. Proposed product APIs are not claims that those APIs have
+> shipped.
 
-**Execution status:** D01 is complete at independently reviewed candidate `dcee688c654b1627cd9f8bbca5c241d02733447f`. D02 is complete and accepted at source commit `1ab5ae7e4f56201e3b01dc2a5a88fc8525352806`: exact-head assembled checks, independent code review and the actual named-agent host rehearsal passed. D03 remains active on [PR #326](https://github.com/maba-pag/owlbear/pull/326) under the explicit bounded-recovery revision in section 1.1; it is not accepted. The D03 package plan owns its implementation phases and current proof/review/CI disposition. D04-D08 and live activation have not started or been accepted by this revision. The [P00/P01 record](delivery-action-readiness-p00.md) remains historical evidence.
+**Execution status:** D01, D02 and D03 are complete; D03 merged with PR #326 as `881b500f` and is
+live. Remaining work and its status are in [the execution plan](delivery-redesign-execution-plan.md).
 
-**Reading route:** Start with section 0 for the next direct work package. Sections 1-11 explain the product and technical contracts; section 12 retains the original WP/P identifiers for traceability only; section 13 supplies proof scenarios. Do not invoke Delivery to execute this programme.
+**Reading route:** For execution, start with [the execution plan](delivery-redesign-execution-plan.md).
+Sections 1-11 explain the product and technical contracts; section 12 retains the original WP/P
+identifiers for traceability only; section 13 supplies proof scenarios. Do not invoke Delivery to
+execute this programme.
 
 ## 0. Direct Implementation Decision
+
+> Historical. Superseded by [the execution plan](delivery-redesign-execution-plan.md).
 
 ### D03 Current Checkpoint: 2026-09-29
 

@@ -1,5 +1,8 @@
 # Delivery Cloud Execution Guide
 
+> **Superseded on 2026-10-03.** Cloud sessions no longer execute this programme. Use
+> [the execution plan](delivery-redesign-execution-plan.md). This guide is historical.
+
 ## Agent Start Here
 
 Read this section and **Common Rules** in full. Then read **only the requested Action** and
