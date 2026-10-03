@@ -102,6 +102,7 @@ type MigrationErrorCode = Literal[
     "marker-committed",
     "migration-archived",
     "verification-failed",
+    "verify-tree-mismatch",
 ]
 type JournalState = Literal["backed-up", "applying", "applied", "verified", "aborting", "aborted"]
 type FailureHook = Callable[[str], None]
@@ -911,6 +912,8 @@ def verify(
 ) -> MigrationJournal:
     """Offline verifier: a write-free verification load must list every Change as available.
 
+    Before loading, the backup must be intact and the record tree must equal its manifest with each
+    proposed entry at its target digest, so an unjournaled change is refused rather than verified.
     Every verification read runs in ``read_only_state``: transaction recovery, frontier
     canonicalization and retry reconciliation are disabled, and any other record write raises
     before it changes a byte. The record-tree comparison remains a second, detecting check.
@@ -925,6 +928,8 @@ def verify(
                 code="journal-state", detail=f"verify requires an applied journal, not {journal.state}"
             )
         _require_no_pending_transactions(paths)
+        proposal, _staged = _load_proposal(paths, migration_id)
+        _require_applied_tree(paths, proposal, _verify_backup(paths, proposal, journal))
         before = record_tree_digest(paths.workspace)
         try:
             with read_only_state():
@@ -947,6 +952,21 @@ def verify(
                 code="verification-failed", detail=f"Changes are unavailable: {', '.join(sorted(unavailable))}"
             )
         return _transition(paths, journal, "verified")
+
+
+def _require_applied_tree(paths: _Paths, proposal: MigrationProposal, manifest: MigrationBackupManifest) -> None:
+    """The record tree must be the backed-up tree with exactly the proposed entries at their target digests."""
+    expected = {**manifest.tree, **{entry.locator: entry.after_sha256 for entry in proposal.entries}}
+    actual = record_tree_digest(paths.workspace, exclude_migrations=True)
+    differing = sorted(
+        locator for locator in expected.keys() | actual.keys() if expected.get(locator) != actual.get(locator)
+    )
+    if differing:
+        raise MigrationError(
+            code="verify-tree-mismatch",
+            detail=f"{len(differing)} record(s) differ from what the journaled migration produced",
+            locator=differing[0],
+        )
 
 
 def _change_ids(paths: _Paths, application: PortfolioApplication) -> list[str]:

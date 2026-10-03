@@ -591,6 +591,47 @@ def test_applied_journal_is_verified_offline_while_mcp_and_cockpit_loaders_still
     _available(repository, ("change-a", "change-b"))
 
 
+def _alter_retry_accounting(repository: Path) -> tuple[Path, bytes]:
+    path = _frontier_path(repository, "change-b")
+    payload = json.loads(path.read_bytes())
+    payload["bindings"][0].update(retry_count=2, retry_fingerprint="a" * 64)
+    return path, (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+
+def _add_host_record(repository: Path) -> tuple[Path, bytes]:
+    return repository / ".owlbear/delivery/runtime/host.json", b'{"schema_version":1,"execution_capacity":2}'
+
+
+@pytest.mark.parametrize(
+    ("alter", "locator"),
+    [(_alter_retry_accounting, "runtime/changes/change-b/frontier.json"), (_add_host_record, "runtime/host.json")],
+    ids=["altered-frontier", "added-record"],
+)
+def test_verify_refuses_an_applied_tree_changed_outside_the_journal_without_writing(
+    tmp_path: Path, alter: Callable[[Path], tuple[Path, bytes]], locator: str
+) -> None:
+    repository, proposal = _two_rewrites(tmp_path)
+    state_migration.apply(repository, proposal.migration_id)
+    path, content = alter(repository)
+    original = path.read_bytes() if path.exists() else None
+    path.write_bytes(content)
+    digests = record_tree_digest(repository)
+
+    with pytest.raises(MigrationError) as refused:
+        state_migration.verify(repository, proposal.migration_id)
+
+    assert (refused.value.code, refused.value.locator) == ("verify-tree-mismatch", locator)
+    assert record_tree_digest(repository) == digests
+    journal = _live_journal(repository, proposal.migration_id)
+    assert journal is not None
+    assert journal.state == "applied"
+    if original is None:
+        path.unlink()
+    else:
+        path.write_bytes(original)
+    assert state_migration.verify(repository, proposal.migration_id).state == "verified"
+
+
 def test_verification_mode_requires_the_exclusive_lock_and_the_named_applied_journal(tmp_path: Path) -> None:
     repository, proposal = _two_rewrites(tmp_path)
     state_migration.apply(repository, proposal.migration_id)

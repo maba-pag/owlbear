@@ -23,6 +23,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -160,10 +161,23 @@ _KERNEL_FILESYSTEMS = frozenset(
     }
 )
 _KERNEL_TREES = ("/proc", "/sys", "/dev")
-# A bind mount keeps its source filesystem type, so overlay and tmpfs are exempt only as the container
-# root and as fresh runtime tmpfs instances (``root`` ``/``) under the pseudo trees.
+# A bind mount keeps its source filesystem type and a bound tmpfs directory can show ``root`` ``/``, so
+# neither proves a fresh instance. Overlay is exempt only as the container root; tmpfs only once each at
+# the points the runtime creates itself (runc ``/dev``, ``/dev/shm`` and Docker's masked directories)
+# with an anonymous source. Any other tmpfs, under ``/run`` or elsewhere, is inspected like a bind.
 _ROOT_FILESYSTEMS = frozenset({"overlay", "fuse.fuse-overlayfs"})
-_TMPFS_TREES = (*_KERNEL_TREES, "/run")
+_RUNTIME_TMPFS_POINTS = frozenset(
+    {
+        "/dev",
+        "/dev/shm",  # noqa: S108 - a mount point compared, never a file opened.
+        "/proc/acpi",
+        "/proc/asound",
+        "/proc/scsi",
+        "/sys/firmware",
+        "/sys/devices/virtual/powercap",
+    }
+)
+_RUNTIME_TMPFS_SOURCES = frozenset({"tmpfs", "shm", "none"})
 # Docker Desktop shares a host directory as ``/run/host_mark/<top>``; ``root`` is then relative to it.
 _HOST_SHARE = "/run/host_mark"
 _HOST_ALIASES = ("/host_mnt", "/private")
@@ -206,20 +220,32 @@ def _host_path(mount: Mount) -> str:
     return _without_aliases(path)
 
 
-def _container_mount(mount: Mount) -> bool:
-    """Return whether a mount is positively the container root or a pseudo mount, by mount point and type."""
+def _container_mount(mount: Mount, *, stacked: bool) -> bool:
+    """Return whether a mount is positively the container root or a runtime-created pseudo mount."""
     if mount.mount_point == "/":
         return mount.fstype in _ROOT_FILESYSTEMS
     if mount.fstype in _KERNEL_FILESYSTEMS:
         return any(_within(mount.mount_point, tree) for tree in _KERNEL_TREES)
     return (
-        mount.fstype == "tmpfs" and mount.root == "/" and any(_within(mount.mount_point, tree) for tree in _TMPFS_TREES)
+        mount.fstype == "tmpfs"
+        and not stacked
+        and mount.root == "/"
+        and mount.mount_point in _RUNTIME_TMPFS_POINTS
+        and mount.source in _RUNTIME_TMPFS_SOURCES
     )
 
 
-def _exposes_checkout(mount: Mount, live: str) -> bool:
-    """Return whether a mount's source is the real checkout or one of its ancestors, at any mount point."""
-    return not _container_mount(mount) and _within(_without_aliases(live), _host_path(mount))
+def _exposes_checkout(mount: Mount, live: str, *, stacked: bool) -> bool:
+    """Return whether a mount may expose the real checkout or one of its ancestors, at any mount point.
+
+    ``root`` is relative to its own filesystem, whose host mount point is unknown, so any mount whose
+    host path is a trailing component sequence of the checkout or an ancestor fails closed.
+    """
+    if _container_mount(mount, stacked=stacked):
+        return False
+    exposed = Path(_host_path(mount)).parts[1:]
+    checkout = Path(_without_aliases(live)).parts[1:]
+    return any(checkout[:end][end - len(exposed) :] == exposed for end in range(len(exposed), len(checkout) + 1))
 
 
 def _source_matches(root: str, stage_source: str) -> bool:
@@ -246,10 +272,11 @@ def isolation_failures(
     outside = [mount for mount in mounts if _within(mount.mount_point, top) and not _within(mount.mount_point, live)]
     if outside:
         failures.append(f"unexpected mounts under {top}: {[mount.mount_point for mount in outside]}")
+    points = Counter(mount.mount_point for mount in mounts)
     failures.extend(
         f"the real checkout or an ancestor of it is mounted at {mount.mount_point}"
         for mount in mounts
-        if _exposes_checkout(mount, live)
+        if _exposes_checkout(mount, live, stacked=points[mount.mount_point] > 1)
     )
     if not marker_present:
         failures.append("the copy marker is absent at the live path")

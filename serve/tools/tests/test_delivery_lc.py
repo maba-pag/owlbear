@@ -101,11 +101,81 @@ def test_isolation_proof_accepts_an_ordinary_container_mount_table() -> None:
         Mount("/", "/host-work", "overlay", "overlay"),
         Mount("/Users/example/Projects/owlbear-dev", "/dev/shm", "tmpfs", "shm"),  # noqa: S108 - mount table row.
         Mount("/Users", "/run", "tmpfs", "tmpfs"),
+        Mount("/", "/run", "tmpfs", "tmpfs"),
+        Mount("/", "/dev/shm", "tmpfs", "tmpfs"),  # noqa: S108 - mount table row.
     ],
-    ids=["overlay-alias", "tmpfs-alias", "overlay-root-alias", "tmpfs-bind-at-pseudo-path", "tmpfs-bind-at-run"],
+    ids=[
+        "overlay-alias",
+        "tmpfs-alias",
+        "overlay-root-alias",
+        "tmpfs-bind-at-pseudo-path",
+        "tmpfs-bind-at-run",
+        "tmpfs-root-at-run",
+        "tmpfs-stacked-on-runtime-point",
+    ],
 )
 def test_isolation_proof_inspects_overlay_and_tmpfs_binds_like_any_other_mount(mount: Mount) -> None:
-    assert _container(mount) == [f"the real checkout or an ancestor of it is mounted at {mount.mount_point}"]
+    # A mount stacked on a runtime point leaves both instances ambiguous, so each is reported.
+    assert set(_container(mount)) == {f"the real checkout or an ancestor of it is mounted at {mount.mount_point}"}
+
+
+# An ordinary Docker Engine container on a Linux host (root filesystem /dev/sda1): overlay2 root, runc's
+# /dev and /dev/shm tmpfs, kernel mounts, Docker's /etc files and masked /proc and /sys paths, a named
+# volume, the stage copy at the live /home path and the control mount.
+_LINUX_LIVE = "/home/user/repo"
+_LINUX_MOUNTINFO = f"""\
+600 520 0:52 / / rw,relatime master:300 - overlay overlay rw,lowerdir=/var/lib/docker/overlay2/l/A
+601 600 0:55 / /proc rw,nosuid,nodev,noexec,relatime - proc proc rw
+602 600 0:56 / /dev rw,nosuid - tmpfs tmpfs rw,size=65536k,mode=755,inode64
+603 602 0:57 / /dev/pts rw,nosuid,noexec,relatime - devpts devpts rw,gid=5,mode=620,ptmxmode=666
+604 600 0:58 / /sys ro,nosuid,nodev,noexec,relatime - sysfs sysfs ro
+605 604 0:29 / /sys/fs/cgroup ro,nosuid,nodev,noexec,relatime - cgroup2 cgroup rw,nsdelegate
+606 602 0:54 / /dev/mqueue rw,nosuid,nodev,noexec,relatime - mqueue mqueue rw
+607 602 0:59 / /dev/shm rw,nosuid,nodev,noexec,relatime - tmpfs shm rw,size=65536k,inode64
+608 600 8:1 /var/lib/docker/containers/abc/resolv.conf /etc/resolv.conf rw,relatime - ext4 /dev/sda1 rw
+609 600 8:1 /var/lib/docker/containers/abc/hostname /etc/hostname rw,relatime - ext4 /dev/sda1 rw
+610 600 8:1 /var/lib/docker/containers/abc/hosts /etc/hosts rw,relatime - ext4 /dev/sda1 rw
+611 600 8:1 /var/lib/docker/volumes/n00a-uv-cache/_data /root/.cache/uv rw,relatime master:1 - ext4 /dev/sda1 rw
+612 600 8:1 /tmp/lc/root {_LINUX_LIVE} rw,relatime - ext4 /dev/sda1 rw
+613 600 8:1 /tmp/lc/control /lc rw,relatime - ext4 /dev/sda1 rw
+614 601 0:55 /bus /proc/bus ro,nosuid,nodev,noexec,relatime - proc proc rw
+615 601 0:55 /sysrq-trigger /proc/sysrq-trigger ro,nosuid,nodev,noexec,relatime - proc proc rw
+616 601 0:60 / /proc/asound ro,relatime - tmpfs tmpfs ro,inode64
+617 601 0:61 / /proc/acpi ro,relatime - tmpfs tmpfs ro,inode64
+618 601 0:56 /null /proc/kcore rw,nosuid - tmpfs tmpfs rw,size=65536k,mode=755,inode64
+619 601 0:56 /null /proc/timer_list rw,nosuid - tmpfs tmpfs rw,size=65536k,mode=755,inode64
+620 601 0:62 / /proc/scsi ro,relatime - tmpfs tmpfs ro,inode64
+621 604 0:63 / /sys/firmware ro,relatime - tmpfs tmpfs ro,inode64
+622 604 0:64 / /sys/devices/virtual/powercap ro,relatime - tmpfs tmpfs ro,inode64
+"""
+
+
+def _linux(*extra: Mount) -> list[str]:
+    mounts = [*delivery_lc.parse_mountinfo(_LINUX_MOUNTINFO), *extra]
+    return _isolated(
+        mounts=mounts,
+        live=_LINUX_LIVE,
+        stage_source="/tmp/lc/root",  # noqa: S108 - host stage path in a mount table.
+        common_dirs={"copy": f"{_LINUX_LIVE}/.git"},
+    )
+
+
+def test_isolation_proof_accepts_an_ordinary_linux_docker_mount_table() -> None:
+    assert _linux() == []
+
+
+@pytest.mark.parametrize(
+    "mount",
+    [
+        Mount("/", "/run/host-home", "tmpfs", "tmpfs"),
+        Mount("/user", "/run/user-home", "tmpfs", "tmpfs"),
+        Mount("/", "/sys/devices/virtual/powercap", "tmpfs", "home"),
+        Mount("/", "/dev/shm", "tmpfs", "shm"),  # noqa: S108 - mount table row.
+    ],
+    ids=["host-tmpfs-home-root", "host-tmpfs-home-subdirectory", "named-tmpfs-at-runtime-point", "second-shm"],
+)
+def test_isolation_proof_rejects_a_host_tmpfs_ancestor_that_looks_like_a_fresh_instance(mount: Mount) -> None:
+    assert set(_linux(mount)) == {f"the real checkout or an ancestor of it is mounted at {mount.mount_point}"}
 
 
 @pytest.mark.parametrize(
