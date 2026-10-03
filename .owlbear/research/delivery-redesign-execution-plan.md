@@ -606,7 +606,7 @@ every new item exactly one lane.
 | N02-B | — | — |
 | N02-C | — | — |
 | N02-D | — | — |
-| N03-P | — | — |
+| N03-P | merged | #349 (plan gate `plan-sound`, round 6; D11 confirmation pending; U1 before N03-A) |
 | N03-A | — | — |
 | N03-B | — | — |
 | N03-C | — | — |

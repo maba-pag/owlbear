@@ -632,7 +632,7 @@ Applied in this PR's execution-plan edits (D11).
 
 | Phase | PR | Exact head | Proof | Challenges | Status |
 | --- | --- | --- | --- | --- | --- |
-| N03-P | — | — | Probes P1–P14 | Sol round 1: revision-required (observation binding, stored-byte upcast contract, confirmation applicability, bounded exclusions context, all-carried path) → revised; Sol round 2: revision-required (snapshot consumer serialization, confirmation retention through promotion, upgraded handoff receipt contract, MCP output owners) → revised; Sol round 3: revision-required (Planner lifecycle normalization, context budget) → consolidated comparison inventory; Sol round 4: revision-required (representation-only write publication) → revised; Sol round 5: revision-required (drained acknowledgment base) → revised; Sol round 6: `plan-sound` | approved (D11 confirmation pending; U1 before N03-A) |
+| N03-P | #349 | — | Probes P1–P14 | Sol round 1: revision-required (observation binding, stored-byte upcast contract, confirmation applicability, bounded exclusions context, all-carried path) → revised; Sol round 2: revision-required (snapshot consumer serialization, confirmation retention through promotion, upgraded handoff receipt contract, MCP output owners) → revised; Sol round 3: revision-required (Planner lifecycle normalization, context budget) → consolidated comparison inventory; Sol round 4: revision-required (representation-only write publication) → revised; Sol round 5: revision-required (drained acknowledgment base) → revised; Sol round 6: `plan-sound` | approved (D11 confirmation pending; U1 before N03-A) |
 | N03-A | — | — | — | — | — |
 | N03-B | — | — | — | — | — |
 | N03-C | — | — | — | — | — |
