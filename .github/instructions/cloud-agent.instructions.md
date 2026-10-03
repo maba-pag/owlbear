@@ -55,7 +55,6 @@ or dispatch. When a user decision or human merge is next, state that next step i
 
 ## Delivery Redesign Tasks
 
-When the task explicitly names a Delivery redesign package or phase, use its package plan and the
-selected common, action and package sections of the
-[cloud guide](../../.owlbear/research/delivery-cloud-flight-handoff.md). Include that phase and guide
-path in the next request. The guide supplies this programme's execution and acceptance requirements.
+The Delivery redesign programme is no longer executed in cloud sessions. If a task names a
+redesign package or phase, report that it runs in local VS Code chats under
+[the execution plan](../../.owlbear/research/delivery-redesign-execution-plan.md) and stop.
