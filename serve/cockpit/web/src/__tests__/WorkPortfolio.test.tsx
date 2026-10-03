@@ -6347,3 +6347,79 @@ it("offers Pause on an outcome detail and disables it while the Change holds cus
   expect(inspector).toHaveTextContent("Pause is available when the current step returns.");
   expect(within(inspector).queryByText("Abandon Change")).not.toBeInTheDocument();
 });
+
+const RETAINED_CUSTODY_STATES: [DeliveryReadiness["status"], DeliveryReadiness["reason_code"]][] = [
+  ["running", "engine-action-pending"],
+  ["blocked", "engine-action-blocked"],
+  ["blocked", "engine-action-interrupted"],
+  ["blocked", "engine-action-failed"],
+  ["blocked", "engine-action-incomplete"],
+  ["blocked", "builder-transition-contained"],
+  ["blocked", "retry-transition-contained"],
+  ["blocked", "claim-custody-unreconciled"],
+  ["blocked", "finalization-failed"],
+  ["blocked", "retry-containment"],
+  ["waiting", "worker-stall-wait"],
+  ["unavailable", "coordination-unavailable"],
+];
+
+function retainedCard(status: DeliveryReadiness["status"], reason: DeliveryReadiness["reason_code"]) {
+  return card({
+    activity: { state: "idle", worker_role: null, started_at: null, task_id: null },
+    readiness: readiness({ status, reason_code: reason }),
+  });
+}
+
+async function expectPauseHeld(control: HTMLElement) {
+  const pause = within(control).getByText("Pause") as HTMLElement & { disabled: boolean };
+  expect(pause.disabled).toBe(true);
+  expect(control).toHaveTextContent("Pause is available when the current step returns.");
+  fireEvent.click(pause);
+  await waitFor(() => expect(within(control).queryByText("Confirm pause")).not.toBeInTheDocument());
+  expect(requests.some((request) => request.url.endsWith("/defer"))).toBe(false);
+}
+
+it.each(RETAINED_CUSTODY_STATES)("disables group Pause while %s %s retains custody", async (status, reason) => {
+  currentPortfolio = portfolio([group({ progress: null, items: [retainedCard(status, reason)] })]);
+  renderPage();
+
+  await expectPauseHeld(await screen.findByTestId("change-pause-change-alpha"));
+});
+
+it.each(RETAINED_CUSTODY_STATES)("disables detail Pause while %s %s retains custody", async (status, reason) => {
+  const retained = retainedCard(status, reason);
+  currentPortfolio = portfolio([group({ progress: null, items: [retained] })]);
+  currentDetail = detail({ card: retained, readiness: retained.readiness });
+  renderPage("/delivery/change-alpha/outcome%3AOUT-001");
+
+  const inspector = await screen.findByTestId("work-item-detail");
+  await expectPauseHeld(within(inspector).getByTestId("change-pause-change-alpha"));
+});
+
+it("keeps Pause available for a blocked state without retained custody", async () => {
+  currentPortfolio = portfolio([
+    group({ progress: "needs-decision", items: [retainedCard("blocked", "retry-exhausted")] }),
+  ]);
+  renderPage();
+
+  const control = await screen.findByTestId("change-pause-change-alpha");
+  const pause = within(control).getByText("Pause") as HTMLElement & { disabled: boolean };
+  expect(pause.disabled).toBe(false);
+  expect(control).not.toHaveTextContent("Pause is available when the current step returns.");
+});
+
+it("derives group Pause custody from the whole Change when a filter hides the running item", async () => {
+  const needsYou = group().items[1];
+  currentPortfolio = portfolio([group({ progress: null, items: [heldCard(), needsYou] })]);
+  renderPage();
+
+  await screen.findByTestId("work-portfolio-table");
+  const filter = screen.getByRole("button", { name: "Filter to 1 work item: Needs you" });
+  fireEvent.click(filter);
+  await waitFor(() => expect(filter).toHaveAttribute("aria-pressed", "true"));
+  const table = screen.getByTestId("work-portfolio-table");
+  expect(table).toHaveTextContent("User controls");
+  expect(table).not.toHaveTextContent("Delivery foundation");
+
+  await expectPauseHeld(screen.getByTestId("change-pause-change-alpha"));
+});

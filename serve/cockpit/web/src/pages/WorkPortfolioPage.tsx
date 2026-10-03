@@ -407,12 +407,15 @@ function SelectedDetail(props: {
 
 function PortfolioWorkspace({
   groups,
+  allGroups,
   selected,
   emptyMessage,
   onSelect,
   onChanged,
 }: {
   groups: ChangeGroupView[];
+  /** Unfiltered groups: custody belongs to the whole Change, not to the rows a filter shows. */
+  allGroups: ChangeGroupView[];
   selected: WorkItemIdentity | null;
   emptyMessage?: string;
   onSelect: (identity: WorkItemIdentity, trigger: HTMLElement) => void;
@@ -429,7 +432,9 @@ function PortfolioWorkspace({
         <ChangePauseControl
           changeId={group.change_id}
           paused={group.progress === "paused" || group.lifecycle === "deferred"}
-          stepInProgress={changeStepInProgress(group.items)}
+          stepInProgress={changeStepInProgress(
+            allGroups.find((candidate) => candidate.change_id === group.change_id)?.items ?? group.items,
+          )}
           pendingAction={intent.pendingAction(group.change_id)}
           reasonName={`change-pause-reason-${group.change_id}`}
           actionError={intent.actionError(group.change_id)}
@@ -1091,6 +1096,7 @@ export default function WorkPortfolioPage() {
                 {filteredGroups.length > 0 ? (
                   <PortfolioWorkspace
                     groups={filteredGroups}
+                    allGroups={portfolio.groups}
                     selected={selected}
                     onChanged={retry}
                     onSelect={(identity, trigger) => {
