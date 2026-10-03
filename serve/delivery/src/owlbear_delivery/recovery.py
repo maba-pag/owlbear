@@ -788,7 +788,7 @@ class RetryLedger:
         except OSError as exc:
             raise RetryLedgerCorruptError from exc
         try:
-            summary = RetryLedgerSummary.model_validate_json(content, strict=False)
+            summary = RetryLedgerSummary.model_validate_json(content, strict=True)
         except (TypeError, ValueError) as exc:
             raise RetryLedgerCorruptError from exc
         if summary.change_id != self.change_id:
@@ -1903,7 +1903,7 @@ class RetryLedger:
         except OSError as exc:
             raise RetryLedgerCorruptError from exc
         try:
-            summary = RetryLedgerSummary.model_validate_json(previous, strict=False)
+            summary = RetryLedgerSummary.model_validate_json(previous, strict=True)
         except (TypeError, ValueError) as exc:
             raise RetryLedgerCorruptError from exc
         if summary.change_id != self.change_id:

@@ -714,7 +714,7 @@ def _set_checkpoint(
     published_head: str | None = None,
 ) -> Path:
     path = state_root / f"changes/{runtime.contract.change_id}/frontier.json"
-    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=True)
     path.write_bytes(
         _canonical(frontier.model_copy(update={"published_head": published_head, "pending_checkpoint": pending}))
     )
@@ -887,7 +887,7 @@ def _portfolio(  # noqa: PLR0913 - shared fixture preserves existing controls an
         coordination = manager.ensure(change_id)
         runtime = _runtime(state_root, contract, manager, stage, coordination.last_reviewed_commit)
         runtimes[change_id] = runtime
-        frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+        frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=True)
         (state_root / "changes" / change_id / "contract.json").write_bytes(_canonical(contract))
         (state_root / "changes" / change_id / "admission.json").write_bytes(
             _canonical(_admission_receipt(contract, frontier, coordination.last_reviewed_commit))
@@ -942,7 +942,7 @@ def _seed_loader_composed_completed_change(
             stage,
             coordination.last_reviewed_commit,
         )
-        frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+        frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=True)
         change_root = runtime_root / "changes" / change_id
         (change_root / "contract.json").write_bytes(_canonical(contract))
         (change_root / "admission.json").write_bytes(
@@ -1751,7 +1751,7 @@ def test_engine_conflicting_custody_prevents_stale_release(tmp_path: Path, custo
     coordination = coordinator.show("change-a")
     _commit_local_descendant(coordination)
     if custody in {"claim", "integration-repair"}:
-        frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+        frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=True)
         role = DeliveryWorkerRole.BUILDER if custody == "claim" else DeliveryWorkerRole.INTEGRATION_REPAIRER
         claim = application._new_claim(role, None)
         if custody == "claim":
@@ -2971,7 +2971,7 @@ def test_planner_settlement_replays_its_own_failed_publication(tmp_path: Path) -
     assert pending.transition_request_digest == hashlib.sha256(_canonical(settlement)).hexdigest()
     publisher.read_snapshot_inventory.return_value = Mock(
         remote_head="a" * 40,
-        snapshots=(Mock(change_id="change-a", frontier=DeliveryFrontier.model_validate_json(frontier, strict=False)),),
+        snapshots=(Mock(change_id="change-a", frontier=DeliveryFrontier.model_validate_json(frontier, strict=True)),),
     )
     result = application.settle_worker_invocation(settlement, host_id=claim.owner_id, session_id=claim.process_id)
     assert result.active_claim is None
@@ -3083,7 +3083,7 @@ def _seed_two_task_builder(application, runtimes, coordinator, state_root):
         }
     )
     for change_id, runtime in runtimes.items():
-        frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+        frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=True)
         completed_result = _task_result(
             "RESULT-001",
             change_id,
@@ -3119,7 +3119,7 @@ def _seed_two_task_builder(application, runtimes, coordinator, state_root):
             )
         seeded = DeliveryFrontier.model_validate_json(
             _canonical(frontier.model_copy(update={"bindings": tuple(bindings)})),
-            strict=False,
+            strict=True,
         )
         path = state_root / "changes" / change_id / "frontier.json"
         path.write_bytes(_canonical(seeded))
@@ -3995,7 +3995,7 @@ def test_builder_handoff_readiness_uses_original_task_retry_episode(
     assert episode.next_eligible_at is not None
 
     frontier_path = state_root / "changes" / "change-a" / "frontier.json"
-    frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
+    frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=True)
     bindings = []
     for binding in frontier.bindings:
         if binding.outcome_id != first.outcome_id:
@@ -4739,7 +4739,7 @@ def test_planning_pause_replays_exactly_after_acknowledged_publication_and_resum
     resumed = _acquire_planning_claim(application)
     _assert_historical_planning_pause(application, request, paused, publisher)
     after_reacquire = runtime.frontier_bytes()
-    current = DeliveryFrontier.model_validate_json(after_reacquire, strict=False).bindings[0]
+    current = DeliveryFrontier.model_validate_json(after_reacquire, strict=True).bindings[0]
     assert current.active_claim == resumed
     assert current.requests[-1].resolution == answer.resolution
 
@@ -6161,7 +6161,7 @@ def test_selected_acquisition_replays_only_its_pending_publication(tmp_path: Pat
         tmp_path, {"change-a": DeliveryStage.PLANNING, "change-b": DeliveryStage.PLANNING}
     )
     previous = {
-        change_id: DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+        change_id: DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=True)
         for change_id, runtime in runtimes.items()
     }
     publisher = Mock()
@@ -6173,7 +6173,7 @@ def test_selected_acquisition_replays_only_its_pending_publication(tmp_path: Pat
     application._delivery_state_publisher = publisher
     for runtime in runtimes.values():
         content = runtime.frontier_bytes()
-        frontier = DeliveryFrontier.model_validate_json(content, strict=False)
+        frontier = DeliveryFrontier.model_validate_json(content, strict=True)
         runtime._replace_content(content, _canonical(frontier.model_copy(update={"published_head": "a" * 40})))
     sibling_content = runtimes["change-b"].frontier_bytes()
     sibling_pending = runtimes["change-b"].pending_state_publication()
@@ -11597,7 +11597,7 @@ dependencies: []
 
     delivery_root = state_root / "changes" / "admitted-change"
     persisted_frontier = DeliveryFrontier.model_validate_json(
-        (delivery_root / "frontier.json").read_bytes(), strict=False
+        (delivery_root / "frontier.json").read_bytes(), strict=True
     )
     persisted_receipt = json.loads((delivery_root / "admission.json").read_bytes())
     assert persisted_frontier == admitted.frontier
@@ -11784,7 +11784,7 @@ def test_portfolio_reader_replaces_changed_runtime_without_active_claim(tmp_path
     previous_runtime = application._runtimes["change-a"]
     contract_path = state_root / "changes/change-a/contract.json"
     frontier_path = state_root / "changes/change-a/frontier.json"
-    current_frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
+    current_frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=True)
     replacement = previous_runtime.contract.model_copy(update={"title": "Replacement authority \u00e9"})
     contract_path.write_bytes(_canonical(replacement))
     (state_root / "changes/change-a/admission.json").write_bytes(
@@ -11814,7 +11814,7 @@ def test_portfolio_reader_defers_active_runtime_replacement_and_blocks_mutation(
     previous_runtime = application._runtimes["change-a"]
     contract_path = state_root / "changes/change-a/contract.json"
     frontier_path = state_root / "changes/change-a/frontier.json"
-    current_frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
+    current_frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=True)
     replacement = previous_runtime.contract.model_copy(update={"title": "Active replacement"})
     contract_path.write_bytes(_canonical(replacement))
     (state_root / "changes/change-a/admission.json").write_bytes(
@@ -11963,7 +11963,7 @@ def test_portfolio_projects_current_pull_request_mergeability(tmp_path: Path) ->
     )
     runtimes["change-a"].record_publication_identity(publication)
     frontier_path = state_root / "changes/change-a/frontier.json"
-    frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
+    frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=True)
     frontier_path.write_bytes(
         _canonical(frontier.model_copy(update={"published_head": head, "pending_checkpoint": None}))
     )
@@ -12112,7 +12112,7 @@ def test_background_checkpoint_selection_excludes_review_required_merge(tmp_path
         triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.EXPLICIT),),
     )
     path = state_root / "changes/change-a/frontier.json"
-    frontier = DeliveryFrontier.model_validate_json(runtimes["change-a"].frontier_bytes(), strict=False)
+    frontier = DeliveryFrontier.model_validate_json(runtimes["change-a"].frontier_bytes(), strict=True)
     path.write_bytes(
         _canonical(frontier.model_copy(update={"target_sync_receipt": target_sync, "pending_checkpoint": pending}))
     )
@@ -12773,7 +12773,7 @@ def test_reconcile_derives_bounded_provider_text_from_authored_titles(tmp_path: 
     contract_path = state_root / "changes/change-a/contract.json"
     contract_path.write_bytes(_canonical(runtime.contract))
     current_frontier = DeliveryFrontier.model_validate_json(
-        (state_root / "changes/change-a/frontier.json").read_bytes(), strict=False
+        (state_root / "changes/change-a/frontier.json").read_bytes(), strict=True
     )
     (state_root / "changes/change-a/admission.json").write_bytes(
         _canonical(_admission_receipt(runtime.contract, current_frontier, head))
@@ -12859,7 +12859,7 @@ def test_reconcile_checkpoint_retains_newer_head_after_first_pr_creation(tmp_pat
     )
 
     def create_pull_request(request):
-        current = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
+        current = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=True)
         frontier_path.write_bytes(
             _canonical(
                 current.model_copy(
@@ -12907,7 +12907,7 @@ def test_reconcile_checkpoint_records_remote_head_after_local_invalidation(tmp_p
     branch_publisher = Mock()
 
     def publish_branch(request):
-        current = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
+        current = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=True)
         frontier_path.write_bytes(
             _canonical(
                 current.model_copy(
@@ -12949,7 +12949,7 @@ def test_reconcile_published_head_stops_after_concurrent_invalidation(tmp_path: 
     branch_publisher = Mock()
 
     def verify_branch(_request):
-        current = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
+        current = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=True)
         frontier_path.write_bytes(
             _canonical(
                 current.model_copy(
@@ -13388,7 +13388,7 @@ def _loader_registered_engine_action_fixture(
         )
     elif action_kind == "sync-target":
         frontier_path = runtime_root / "changes" / "change-a" / "frontier.json"
-        frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
+        frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=True)
         frontier_path.write_bytes(_canonical(frontier.model_copy(update={"finalization": None})))
         _git(
             application._coordinator.show("change-a").worktree_path,
@@ -13827,7 +13827,7 @@ def test_delivery_loader_rejects_invalid_host_capacity_before_ledger_mutation(
     [
         ('{"claim_timeout_seconds": 0}\n', "claim_timeout_seconds"),
         ('{"claim_timeout_seconds": "5"}\n', "claim_timeout_seconds"),
-        ('{"schema_version": null}\n', "schema_version"),
+        ('{"schema_version": null}\n', "state_version"),
         ('{"unknown": 3}\n', "unknown"),
     ],
 )
@@ -13905,7 +13905,8 @@ def test_delivery_loader_isolates_contract_without_workspace_coordination(tmp_pa
     assert application.list_work_items() == ()
 
 
-@pytest.mark.parametrize("admission_content", [None, b"{}\n"])
+# An admission without a schema version is refused by the format gate; an owner-invalid one stays recoverable.
+@pytest.mark.parametrize("admission_content", [None, b'{"schema_version":1}\n'])
 def test_delivery_loader_allows_recoverable_admission_partial_state(
     tmp_path: Path,
     admission_content: bytes | None,
@@ -14150,7 +14151,8 @@ def test_delivery_loader_rejects_startup_from_linked_worktree(tmp_path: Path) ->
 
     assert exc_info.value.field == "workspace_root"
     assert exc_info.value.detail == "Delivery must start from the primary Git worktree"
-    assert not (linked_worktree / ".owlbear/delivery/runtime").exists()
+    # The controller lock is taken before Git validation (N02-A I1/I5); it is the only entry left behind.
+    assert [path.name for path in (linked_worktree / ".owlbear/delivery/runtime").iterdir()] == ["controller.lock"]
 
 
 def test_delivery_loader_rejects_git_and_state_identity_before_composition(tmp_path: Path) -> None:
@@ -14163,7 +14165,7 @@ def test_delivery_loader_rejects_git_and_state_identity_before_composition(tmp_p
             workspace_root=non_repository,
         )
     assert git_error.value.field == "repository_root"
-    assert not runtime_root.exists()
+    assert [path.name for path in runtime_root.iterdir()] == ["controller.lock"]
 
     repository = _repository(tmp_path / "valid")
     state_root = repository / ".owlbear/delivery/runtime"
@@ -15116,7 +15118,7 @@ def test_snapshot_repair_rejects_remote_head_mismatch_without_clearing_health(
             Mock(
                 change_id="change-a",
                 contract=runtime.contract,
-                frontier=DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False),
+                frontier=DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=True),
             ),
         ),
     )
@@ -15150,7 +15152,7 @@ def test_out_of_band_head_recovery_preserves_commit_and_republishes_reviewed_sta
         "reviewed boundary",
     )
     frontier_path = state_root / "changes/change-a/frontier.json"
-    frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
+    frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=True)
     frontier_path.write_bytes(_canonical(frontier.model_copy(update={"published_head": remote_head})))
     out_of_band_head = _commit_local_descendant(coordination, "out-of-band.txt")
     application._startup_health_diagnostics = (
@@ -15718,7 +15720,7 @@ def test_acquisition_replays_failed_portable_state_publication_before_new_claims
         DeliveryStatePublicationError("state unavailable", retry_safe=True),
         None,
     ]
-    base_frontier = DeliveryFrontier.model_validate_json(runtimes["change-a"].frontier_bytes(), strict=False)
+    base_frontier = DeliveryFrontier.model_validate_json(runtimes["change-a"].frontier_bytes(), strict=True)
     state_publisher.read_snapshot_inventory.return_value = Mock(
         remote_head="remote-head",
         snapshots=(Mock(change_id="change-a", frontier=base_frontier),),
@@ -15776,7 +15778,7 @@ def test_acquisition_replays_pending_state_when_remote_matches_current_frontier(
                 locators=("test_portfolio_application.py",),
             ),
         )
-    advanced_snapshot = DeliveryFrontier.model_validate_json(runtimes["change-a"].frontier_bytes(), strict=False)
+    advanced_snapshot = DeliveryFrontier.model_validate_json(runtimes["change-a"].frontier_bytes(), strict=True)
     state_publisher.read_snapshot_inventory.return_value = Mock(
         remote_head="new-remote-head",
         snapshots=(Mock(change_id="change-a", frontier=advanced_snapshot),),
@@ -15796,7 +15798,7 @@ def test_acquisition_reanchors_pending_publication_after_authority_revision(tmp_
     )
     state_publisher = Mock()
     state_publisher.publish.return_value = object()
-    previous_frontier = DeliveryFrontier.model_validate_json(runtimes["change-a"].frontier_bytes(), strict=False)
+    previous_frontier = DeliveryFrontier.model_validate_json(runtimes["change-a"].frontier_bytes(), strict=True)
     previous_digest = hashlib.sha256(runtimes["change-a"].frontier_bytes()).hexdigest()
     state_publisher.read_snapshot_inventory.return_value = Mock(
         remote_head="remote-head",
@@ -15826,7 +15828,7 @@ def test_acquisition_reports_divergent_pending_publication_without_publisher(tmp
     runtime = runtimes["change-a"]
     current = runtime.frontier_bytes()
     revised = _canonical(
-        DeliveryFrontier.model_validate_json(current, strict=False).model_copy(update={"published_head": "a" * 40})
+        DeliveryFrontier.model_validate_json(current, strict=True).model_copy(update={"published_head": "a" * 40})
     )
     runtime._replace_content(current, revised, base_frontier_digest=hashlib.sha256(current).hexdigest())
     (state_root / "changes/change-a/state-publication.json").write_bytes(
@@ -15854,7 +15856,7 @@ def test_acquisition_acknowledges_pending_publication_when_remote_has_current_fr
     )
     state_publisher = Mock()
     state_publisher.publish.return_value = object()
-    previous_frontier = DeliveryFrontier.model_validate_json(runtimes["change-a"].frontier_bytes(), strict=False)
+    previous_frontier = DeliveryFrontier.model_validate_json(runtimes["change-a"].frontier_bytes(), strict=True)
     previous_digest = hashlib.sha256(runtimes["change-a"].frontier_bytes()).hexdigest()
     revised_frontier = previous_frontier.model_copy(update={"published_head": "a" * 40})
     runtimes["change-a"]._replace_content(
@@ -15862,7 +15864,7 @@ def test_acquisition_acknowledges_pending_publication_when_remote_has_current_fr
         _canonical(revised_frontier),
         base_frontier_digest=previous_digest,
     )
-    current_frontier = DeliveryFrontier.model_validate_json(runtimes["change-a"].frontier_bytes(), strict=False)
+    current_frontier = DeliveryFrontier.model_validate_json(runtimes["change-a"].frontier_bytes(), strict=True)
     state_publisher.read_snapshot_inventory.return_value = Mock(
         remote_head="remote-head",
         snapshots=(Mock(change_id="change-a", frontier=current_frontier),),
@@ -15998,7 +16000,7 @@ def _publish_merge_conflict_attention(
     )
     runtime = runtimes[change_id]
     frontier_path = state_root / "changes" / change_id / "frontier.json"
-    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=True)
     frontier_path.write_bytes(_canonical(frontier.model_copy(update={"integration_attention": attention})))
     return attention
 
@@ -16013,7 +16015,7 @@ def _activate_legacy_integration_repair(
     claim = application._new_claim(DeliveryWorkerRole.INTEGRATION_REPAIRER, None)
     runtime = runtimes[change_id]
     frontier_path = state_root / "changes" / change_id / "frontier.json"
-    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=True)
     frontier_path.write_bytes(_canonical(frontier.model_copy(update={"integration_repair_claim": claim})))
     writer = ChangeWriter(
         attempt_id=claim.attempt_id,

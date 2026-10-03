@@ -219,7 +219,7 @@ def _publish(  # noqa: PLR0913, PLR0917 - helper binds the exact publisher input
 
 
 def _admission(runtime: DeliveryRuntime, manager: ChangeWorkspaceManager, change_id: str) -> DeliveryAdmissionReceipt:
-    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=True)
     contract_bytes = (
         json.dumps(runtime.contract.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n"
     ).encode()
@@ -705,7 +705,7 @@ def test_state_publisher_round_trips_and_replays_without_primary_checkout_change
     assert snapshots[0].snapshot_id == receipt.snapshot_id
     assert snapshots[0].change_id == "state-change"
     assert snapshots[0].contract == contract
-    assert snapshots[0].frontier == DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+    assert snapshots[0].frontier == DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=True)
     assert "finalization-reports" not in _git(
         remote, "ls-tree", "-r", "--name-only", "refs/heads/owlbear/delivery-state"
     )
@@ -864,6 +864,113 @@ def test_state_publisher_rewrites_migrated_snapshot_to_current_schema(tmp_path: 
     assert current.migrated_from_snapshot_id is None
     assert current.parent_snapshot_id is not None
     assert publisher._git_blob(legacy_head, snapshot_path) == legacy_raw  # noqa: SLF001
+
+
+def test_schema_1_remote_snapshot_reads_as_pure_upcast_with_verified_stored_identity(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    contract, _intent, _design = _contract("legacy-read")
+    runtime, manager, _worktree = _runtime(tmp_path, repository, "legacy-read", contract)
+    publisher = DeliveryStatePublisher(repository, remote=str(remote), state_branch="owlbear/delivery-state")
+    first = _publish(publisher, runtime, manager, "legacy-read", "a" * 64, "legacy-read-one")
+    snapshot_path = ".owlbear/delivery/state/legacy-read/snapshot.json"
+    legacy_payload = json.loads(publisher._git_blob(first.published_head, snapshot_path))  # noqa: SLF001
+    legacy_payload.pop("migrated_from_snapshot_id")
+    legacy_payload.pop("repaired_predecessor_digest")
+    legacy_payload["schema_version"] = 1
+    legacy_payload["frontier"]["schema_version"] = 17
+    for binding in legacy_payload["frontier"]["bindings"]:
+        binding.pop("retry_count")
+        binding.pop("retry_fingerprint")
+    legacy_payload["snapshot_id"] = ""
+    stored_id = hashlib.sha256(_canonical_payload(legacy_payload)).hexdigest()
+    legacy_payload["snapshot_id"] = stored_id
+    legacy_raw = _canonical_payload(legacy_payload)
+    legacy_head = _commit_corrupt_snapshot(repository, first.published_head, "legacy-read", legacy_raw)
+    _git(repository, "push", "origin", f"{legacy_head}:refs/heads/owlbear/delivery-state", "--force")
+
+    inventory = publisher.read_snapshot_inventory()
+    tampered = json.loads(legacy_raw)
+    tampered["sequence"] += 1
+
+    assert inventory.diagnostics == ()
+    assert inventory.remote_head == legacy_head
+    snapshot = inventory.snapshots[0]
+    assert snapshot.schema_version == 2
+    assert snapshot.migrated_from_snapshot_id == stored_id
+    assert snapshot.snapshot_id != stored_id
+    assert snapshot.frontier.schema_version == 18
+    assert _git(remote, "cat-file", "-p", f"{legacy_head}:{snapshot_path}").encode() + b"\n" == legacy_raw
+    assert _git(remote, "rev-parse", "refs/heads/owlbear/delivery-state") == legacy_head
+    with pytest.raises(ValueError, match="snapshot identity is invalid"):
+        parse_delivery_state_snapshot(_canonical_payload(tampered))
+
+
+def test_newer_remote_snapshot_is_unsupported_never_restored_published_over_or_repaired(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    change_id = "newer-state"
+    contract, _intent, _design = _contract(change_id)
+    runtime, manager, _worktree = _runtime(tmp_path, repository, change_id, contract)
+    publisher = DeliveryStatePublisher(repository, remote=str(remote), state_branch="owlbear/delivery-state")
+    package_id = "a" * 64
+    first = _publish(publisher, runtime, manager, change_id, package_id, "newer-state-one")
+    snapshot_path = f".owlbear/delivery/state/{change_id}/snapshot.json"
+    newer_payload = json.loads(publisher._git_blob(first.published_head, snapshot_path))  # noqa: SLF001
+    newer_payload["schema_version"] = 3
+    newer_payload["future_field"] = {"written": "by a newer controller"}
+    newer_raw = _canonical_payload(newer_payload)
+    newer_head = _commit_corrupt_snapshot(repository, first.published_head, change_id, newer_raw)
+    _git(repository, "push", "origin", f"{newer_head}:refs/heads/owlbear/delivery-state", "--force")
+    newer_digest = hashlib.sha256(newer_raw).hexdigest()
+
+    inventory = publisher.read_snapshot_inventory()
+    diagnostic = next(item for item in inventory.diagnostics if item.change_id == change_id)
+    with pytest.raises(DeliveryStateQuarantineError) as refused:
+        _publish(publisher, runtime, manager, change_id, package_id, "newer-state-two")
+    repairs = []
+    for expected_code in ("snapshot-invalid", "snapshot-identity-invalid"):
+        with pytest.raises(DeliveryStateConflictError) as repair:
+            publisher.repair_quarantined_snapshot(
+                change_id=change_id,
+                package_id=package_id,
+                coordination=manager.show(change_id),
+                runtime=runtime,
+                admission=_admission(runtime, manager, change_id),
+                operation_id="newer-state-repair",
+                captured_at=datetime(2026, 8, 23, tzinfo=UTC),
+                expected_remote_head=newer_head,
+                expected_snapshot_digest=newer_digest,
+                expected_diagnostic_code=expected_code,  # type: ignore[arg-type]
+            )
+        repairs.append(str(repair.value))
+
+    assert inventory.snapshots == ()
+    assert diagnostic.code == "remote-state-version-unsupported"
+    assert diagnostic.raw_digest == newer_digest
+    assert "newer than this controller supports" in diagnostic.detail
+    assert refused.value.diagnostic_code == "remote-state-version-unsupported"
+    assert all("newer controller" in message for message in repairs)
+    assert _git(remote, "rev-parse", "refs/heads/owlbear/delivery-state") == newer_head
+
+    fresh = tmp_path / "fresh"
+    _git(tmp_path, "clone", str(remote), str(fresh))
+    _git(fresh, "config", "url." + str(remote) + ".insteadOf", "https://github.com/example/project.git")
+    _git(fresh, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    config = DeliveryStartupConfig(
+        schema_version=2,
+        remote="origin",
+        target_branch="main",
+        github_repository="example/project",
+        delivery_state_branch="owlbear/delivery-state",
+    )
+    application = load_delivery_application(config, workspace_root=fresh)
+    health = application.delivery_health()
+
+    assert [
+        (item.change_id, item.code, item.reason) for item in health.diagnostics if item.source == "remote-state"
+    ] == [(change_id, "remote-state-version-unsupported", DeliveryHealthReason.REMOTE_STATE_VERSION_UNSUPPORTED)]
+    assert not (fresh / ".owlbear/delivery/runtime/changes" / change_id).exists()
+    assert not (fresh / ".owlbear/delivery/packages" / change_id).exists()
+    assert _git(remote, "rev-parse", "refs/heads/owlbear/delivery-state") == newer_head
 
 
 def test_state_snapshot_accepts_terminal_completion_projection(tmp_path: Path) -> None:
@@ -1036,7 +1143,7 @@ def test_state_publisher_rejects_active_claims_and_stale_remote_head(tmp_path: P
     runtime, manager, _worktree = _runtime(tmp_path, repository, "state-reject", contract)
     publisher = DeliveryStatePublisher(repository, remote=str(remote), state_branch="owlbear/delivery-state")
     frontier_path = runtime._frontier_path  # noqa: SLF001
-    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=True)
     active = DeliveryActiveClaim(
         attempt_id="attempt",
         claim_id="claim",
@@ -1424,7 +1531,7 @@ def test_remote_state_bootstrap_reconstructs_fresh_clone(tmp_path: Path) -> None
     assert restarted_after_failure.show_operator_context(change_id, "OUT-001").block is not None
 
     frontier_path = runtime_root / "changes" / change_id / "frontier.json"
-    frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
+    frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=True)
     frontier_path.write_bytes(
         (
             json.dumps(
@@ -1453,7 +1560,7 @@ def _tamper_builder_handoff_frontier(
     scenario: str,
 ) -> None:
     frontier_path = fresh / ".owlbear/delivery/runtime/changes" / change_id / "frontier.json"
-    frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
+    frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=True)
     binding = next(item for item in frontier.bindings if item.outcome_id == outcome_id)
     if scenario == "forged-context":
         context = binding.builder_handoff_context
@@ -1936,7 +2043,7 @@ def test_builder_return_handoff_survives_default_loader_restart(  # noqa: PLR091
         payload["promotion_id"] = "0" * 64
         promotion_path.write_bytes(_canonical_payload(payload))
     elif promotion_fault in {"dropped-task", "dropped-history", "original-scope-drift"}:
-        local_frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
+        local_frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=True)
         local_binding = local_frontier.bindings[0]
         if promotion_fault == "dropped-task":
             changed_binding = local_binding.model_copy(update={"tasks": local_binding.tasks[:-1]})
@@ -2283,7 +2390,7 @@ def test_default_loader_rejects_unrecorded_planner_pause_on_builder_planning_ret
         assert len(receipts) == 1
         receipts[0].unlink()
     else:
-        frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
+        frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=True)
         binding = frontier.bindings[0]
         assert binding.block is not None
         assert settled.return_context is not None
@@ -2558,7 +2665,7 @@ def test_default_loader_rejects_planner_pause_over_exhausted_builder_planning_re
     settled = _exhaust_default_loader_planning_return(restart, change_id)
     assert settled.block is not None
     frontier_path = restart.fresh / ".owlbear/delivery/runtime/changes" / change_id / "frontier.json"
-    frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
+    frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=True)
     binding = frontier.bindings[0]
     changed = (
         binding.model_copy(update={"return_context": None})
@@ -2643,12 +2750,12 @@ def test_default_loader_rejects_unrecorded_repeated_planner_pause_on_builder_pla
     frontier_path = change_root / "frontier.json"
     receipts: dict[str, Path] = {}
     for path in (change_root / "planning-pause-receipts" / "OUT-001").glob("*.json"):
-        receipt_request = _DeliveryPlanningPauseReplay.model_validate_json(path.read_bytes(), strict=False).request
+        receipt_request = _DeliveryPlanningPauseReplay.model_validate_json(path.read_bytes(), strict=True).request
         assert receipt_request.request is not None
         receipts[receipt_request.request.request_id] = path
     assert set(receipts) == {first_pause.request.request_id, second_pause.request.request_id}
     second_path = receipts[second_pause.request.request_id]
-    second = _DeliveryPlanningPauseReplay.model_validate_json(second_path.read_bytes(), strict=False)
+    second = _DeliveryPlanningPauseReplay.model_validate_json(second_path.read_bytes(), strict=True)
     if scenario == "tampered-second-receipt":
         payload = json.loads(second_path.read_bytes())
         payload["result"]["requests"][-2]["resolution"]["selected_option_id"] = "split"
@@ -2660,7 +2767,7 @@ def test_default_loader_rejects_unrecorded_repeated_planner_pause_on_builder_pla
     elif scenario == "missing-first-receipt":
         receipts[first_pause.request.request_id].unlink()
     elif scenario == "reordered-requests":
-        frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
+        frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=True)
         binding = frontier.bindings[0]
         reordered = (*binding.requests[:-2], binding.requests[-1], binding.requests[-2])
         frontier_path.write_bytes(
@@ -2685,7 +2792,7 @@ def test_default_loader_rejects_unrecorded_repeated_planner_pause_on_builder_pla
         orphan = second.model_copy(
             update={"request": orphan_transition, "result": orphan_result, "request_digest": orphan_digest}
         )
-        _DeliveryPlanningPauseReplay.model_validate(orphan.model_dump(mode="json"), strict=False)
+        _DeliveryPlanningPauseReplay.model_validate_json(_model_content(orphan), strict=True)
         (second_path.parent / f"{orphan_digest}.json").write_bytes(_model_content(orphan))
 
     frontier_before = frontier_path.read_bytes()
@@ -2913,7 +3020,7 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
         assert health.status.value == "healthy"
         assert not any(item.change_id == change_id for item in health.diagnostics)
     persisted_frontier = DeliveryFrontier.model_validate_json(
-        (fresh / ".owlbear/delivery/runtime/changes" / change_id / "frontier.json").read_bytes(), strict=False
+        (fresh / ".owlbear/delivery/runtime/changes" / change_id / "frontier.json").read_bytes(), strict=True
     )
     binding = next(item for item in persisted_frontier.bindings if item.outcome_id == "OUT-001")
     if scenario in {"settled", "completed-timeout", "ended-without-result", "host-lost", "released-stuck"}:
@@ -3008,7 +3115,7 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
             assert restart_health.status.value == "healthy"
             restarted_frontier = DeliveryFrontier.model_validate_json(
                 (fresh / ".owlbear/delivery/runtime/changes" / change_id / "frontier.json").read_bytes(),
-                strict=False,
+                strict=True,
             )
             restarted_binding = next(item for item in restarted_frontier.bindings if item.outcome_id == "OUT-001")
             assert restarted_binding.active_claim == resumed.claim
@@ -3087,7 +3194,7 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
             )
         assert active_runtime.frontier_bytes() == frontier_before_late_publish
         if scenario == "active-candidate-wrong-claim":
-            persisted_frontier = DeliveryFrontier.model_validate_json(active_runtime.frontier_bytes(), strict=False)
+            persisted_frontier = DeliveryFrontier.model_validate_json(active_runtime.frontier_bytes(), strict=True)
             persisted_binding = next(item for item in persisted_frontier.bindings if item.outcome_id == "OUT-001")
             foreign_candidate = candidate.model_copy(update={"claim_id": launch.claim.claim_id})
             tampered_binding = persisted_binding.model_copy(
@@ -3107,7 +3214,7 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
                 )
             )
         elif scenario == "active-accepted-result-drift":
-            persisted_frontier = DeliveryFrontier.model_validate_json(active_runtime.frontier_bytes(), strict=False)
+            persisted_frontier = DeliveryFrontier.model_validate_json(active_runtime.frontier_bytes(), strict=True)
             persisted_binding = next(item for item in persisted_frontier.bindings if item.outcome_id == "OUT-001")
             tampered_binding = persisted_binding.model_copy(update={"results": (result,)})
             frontier_path = fresh / ".owlbear/delivery/runtime/changes" / change_id / "frontier.json"
@@ -3132,7 +3239,7 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
             assert restart_health.status.value == "healthy"
             restarted_frontier = DeliveryFrontier.model_validate_json(
                 (fresh / ".owlbear/delivery/runtime/changes" / change_id / "frontier.json").read_bytes(),
-                strict=False,
+                strict=True,
             )
             restarted_binding = next(item for item in restarted_frontier.bindings if item.outcome_id == "OUT-001")
             assert restarted_binding.stage == DeliveryStage.IMPLEMENTATION
@@ -3282,7 +3389,7 @@ def test_remote_state_bootstrap_preserves_requestless_planner_settlement(tmp_pat
     assert health.status.value == "healthy"
     assert not any(item.change_id == change_id for item in health.diagnostics)
     runtime_root = fresh / ".owlbear/delivery/runtime/changes" / change_id
-    persisted = DeliveryFrontier.model_validate_json((runtime_root / "frontier.json").read_bytes(), strict=False)
+    persisted = DeliveryFrontier.model_validate_json((runtime_root / "frontier.json").read_bytes(), strict=True)
     assert persisted.bindings[0].active_claim is None
     owner_result = json.loads(
         (runtime_root / "retry-ledger/owner-results" / f"{launch.claim.attempt_id}.json").read_bytes()
@@ -3499,7 +3606,7 @@ def test_loader_preserves_builder_pause_lifecycle_handoff(  # noqa: C901, PLR091
     unresolved_frontier_bytes = local_frontier_path.read_bytes()
     settlement_receipt_bytes = settlement_receipt_path.read_bytes()
     coordination_bytes = coordination_path.read_bytes()
-    unresolved_frontier = DeliveryFrontier.model_validate_json(unresolved_frontier_bytes, strict=False)
+    unresolved_frontier = DeliveryFrontier.model_validate_json(unresolved_frontier_bytes, strict=True)
     unresolved_binding = next(item for item in unresolved_frontier.bindings if item.outcome_id == "OUT-001")
     assert unresolved_binding == paused
     assert not resolution_receipt_path.exists()
@@ -3575,7 +3682,7 @@ def test_loader_preserves_builder_pause_lifecycle_handoff(  # noqa: C901, PLR091
         intent_head_path.write_bytes(_canonical_payload(intent_head))
 
     lifecycle_frontier_bytes = local_frontier_path.read_bytes()
-    lifecycle_frontier = DeliveryFrontier.model_validate_json(lifecycle_frontier_bytes, strict=False)
+    lifecycle_frontier = DeliveryFrontier.model_validate_json(lifecycle_frontier_bytes, strict=True)
     if lifecycle in {"corrupt-head", "missing-chain", "reordered-chain", "foreign-settlement"}:
         assert_lifecycle_chain_quarantined(lifecycle_frontier_bytes, read_lifecycle_intent_files())
         return
@@ -3595,7 +3702,7 @@ def test_loader_preserves_builder_pause_lifecycle_handoff(  # noqa: C901, PLR091
             datetime(2026, 8, 23, 3, tzinfo=UTC),
         )
         abandoned_frontier_bytes = local_frontier_path.read_bytes()
-        abandoned_frontier = DeliveryFrontier.model_validate_json(abandoned_frontier_bytes, strict=False)
+        abandoned_frontier = DeliveryFrontier.model_validate_json(abandoned_frontier_bytes, strict=True)
         abandoned_application = load_delivery_application(config, workspace_root=fresh)
         abandoned_health = abandoned_application.delivery_health()
         assert abandoned_health.status.value == "healthy", abandoned_health.diagnostics
@@ -3617,7 +3724,7 @@ def test_loader_preserves_builder_pause_lifecycle_handoff(  # noqa: C901, PLR091
         return
 
     deferred_application._runtimes[change_id].resume_change()  # noqa: SLF001
-    resumed_frontier = DeliveryFrontier.model_validate_json(local_frontier_path.read_bytes(), strict=False)
+    resumed_frontier = DeliveryFrontier.model_validate_json(local_frontier_path.read_bytes(), strict=True)
     assert resumed_frontier == unresolved_frontier
     resumed_application = load_delivery_application(config, workspace_root=fresh)
     resumed_health = resumed_application.delivery_health()
@@ -3722,7 +3829,7 @@ def test_loader_preserves_builder_pause_lifecycle_handoff(  # noqa: C901, PLR091
     assert resolved_request == request.model_copy(update={"resolution": answer})
     answered_frontier_bytes = local_frontier_path.read_bytes()
     resolution_receipt_bytes = resolution_receipt_path.read_bytes()
-    answered_frontier = DeliveryFrontier.model_validate_json(answered_frontier_bytes, strict=False)
+    answered_frontier = DeliveryFrontier.model_validate_json(answered_frontier_bytes, strict=True)
     answered_binding = next(item for item in answered_frontier.bindings if item.outcome_id == "OUT-001")
     assert (
         answered_binding.model_copy(update={"requests": unresolved_binding.requests, "block": unresolved_binding.block})
@@ -3802,13 +3909,13 @@ def test_loader_preserves_builder_pause_lifecycle_handoff(  # noqa: C901, PLR091
     assert resumed.builder_handoff_context == handoff_context
 
     active_frontier_bytes = local_frontier_path.read_bytes()
-    active_frontier = DeliveryFrontier.model_validate_json(active_frontier_bytes, strict=False)
+    active_frontier = DeliveryFrontier.model_validate_json(active_frontier_bytes, strict=True)
     active_binding = next(item for item in active_frontier.bindings if item.outcome_id == "OUT-001")
     assert active_binding.model_copy(update={"active_claim": None}) == answered_binding
     active_git_state = _workspace_git_state(fresh, resumed.worktree_path)
     active_restart = load_delivery_application(config, workspace_root=fresh)
     assert active_restart.delivery_health().status.value == "healthy"
-    restarted_frontier = DeliveryFrontier.model_validate_json(local_frontier_path.read_bytes(), strict=False)
+    restarted_frontier = DeliveryFrontier.model_validate_json(local_frontier_path.read_bytes(), strict=True)
     restarted_binding = next(item for item in restarted_frontier.bindings if item.outcome_id == "OUT-001")
     assert restarted_binding == active_binding
     assert restarted_binding.active_claim == resumed.claim
@@ -3949,6 +4056,90 @@ def test_delivery_state_snapshot_repair_reconciles_confirmed_block_successor(tmp
     restarted = load_delivery_application(config, workspace_root=repository)
     assert restarted.delivery_health().status.value == "healthy"
     assert restarted.show_operator_context(change_id, "OUT-001").block == local_block
+
+
+def test_loader_reconciles_a_legacy_local_frontier_with_its_legacy_remote_snapshot(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    _git(repository, "config", "url." + str(remote) + ".insteadOf", "https://github.com/example/project.git")
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    change_id = "legacy-reconcile"
+    contract, intent, design = _contract(change_id)
+    runtime_root = repository / ".owlbear/delivery/runtime"
+    package_store = DesignPackageStore(
+        repository / ".owlbear/delivery/packages", repository, transaction_root=runtime_root
+    )
+    package = package_store.create(change_id, intent, design)
+    contract_bytes = _canonical_payload(contract.model_dump(mode="json"))
+    package_store.publish_contract(change_id, package.package_id, contract_bytes, lambda *_content: None)
+    package = package_store.read_verified(change_id)
+    change_root = runtime_root / "changes" / change_id
+    change_root.mkdir(parents=True)
+    (change_root / "contract.json").write_bytes(contract_bytes)
+    manager = ChangeWorkspaceManager(
+        repository, repository / ".owlbear/delivery/worktrees", PortfolioCoordinator(runtime_root), "main", "origin"
+    )
+    coordination = manager.ensure(change_id)
+    frontier = DeliveryFrontier(bindings=(OutcomeAuthorityBinding(outcome_id="OUT-001", plan_scope_id="SCOPE-001"),))
+    frontier_path = change_root / "frontier.json"
+    frontier_path.write_bytes(_canonical_payload(frontier.model_dump(mode="json")))
+    runtime = DeliveryRuntime(runtime_root, contract, workspace_manager=manager)
+    package_snapshot = manager.snapshot_design_package(
+        change_id,
+        package.package_id,
+        {
+            "authority.json": package.authority_bytes,
+            "design.md": package.design_bytes,
+            "intent.md": package.intent_bytes,
+            "manifest.json": package.manifest.canonical_bytes(),
+        },
+        "legacy-reconcile-package",
+    )
+    _git(repository, "push", "origin", f"{package_snapshot.snapshot_head}:refs/heads/{coordination.branch}")
+    admission = _admission(runtime, manager, change_id)
+    (change_root / "admission.json").write_bytes(_canonical_payload(admission.model_dump(mode="json")))
+    publisher = DeliveryStatePublisher(repository, remote="origin", state_branch="owlbear/delivery-state")
+    published = publisher.publish(
+        change_id=change_id,
+        package_id=package.package_id,
+        coordination=manager.show(change_id),
+        runtime=runtime,
+        admission=admission,
+        operation_id="legacy-reconcile-initial",
+        captured_at=datetime(2026, 8, 23, tzinfo=UTC),
+    )
+    snapshot_path = f".owlbear/delivery/state/{change_id}/snapshot.json"
+    legacy = json.loads(publisher._git_blob(published.published_head, snapshot_path))  # noqa: SLF001
+    legacy.pop("migrated_from_snapshot_id")
+    legacy.pop("repaired_predecessor_digest")
+    legacy["schema_version"] = 1
+    legacy["frontier"]["schema_version"] = 17
+    for binding in legacy["frontier"]["bindings"]:
+        binding.pop("retry_count")
+        binding.pop("retry_fingerprint")
+    legacy["snapshot_id"] = ""
+    legacy["snapshot_id"] = hashlib.sha256(_canonical_payload(legacy)).hexdigest()
+    legacy_head = _commit_corrupt_snapshot(repository, published.published_head, change_id, _canonical_payload(legacy))
+    _git(repository, "push", "origin", f"{legacy_head}:refs/heads/owlbear/delivery-state", "--force")
+    config = DeliveryStartupConfig(
+        schema_version=2,
+        remote="origin",
+        target_branch="main",
+        github_repository="example/project",
+        delivery_state_branch="owlbear/delivery-state",
+    )
+
+    def remote_state_reasons() -> list[DeliveryHealthReason]:
+        health = load_delivery_application(config, workspace_root=repository).delivery_health()
+        return [item.reason for item in health.diagnostics if item.source == "remote-state"]
+
+    diverged = json.loads(json.dumps(legacy["frontier"]))
+    diverged["bindings"][0]["plan_scope_id"] = "SCOPE-002"
+    frontier_path.write_bytes(_canonical_payload(diverged))
+    assert remote_state_reasons() == [DeliveryHealthReason.LOCAL_FRONTIER_MISMATCH]
+
+    frontier_path.write_bytes(_canonical_payload(legacy["frontier"]))
+    assert remote_state_reasons() == []
+    assert _git(remote, "rev-parse", "refs/heads/owlbear/delivery-state") == legacy_head
 
 
 def test_target_sync_state_snapshot_is_restartable_after_branch_publication(tmp_path: Path) -> None:

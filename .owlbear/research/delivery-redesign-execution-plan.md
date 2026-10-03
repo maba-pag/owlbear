@@ -602,7 +602,7 @@ every new item exactly one lane.
 | N01-B | merged | #346 (code head `fc4ca75b5`; Sol blocker resolved by executed exact-candidate proof; LC load form pass) |
 | N01-C | merged | #347 (code head `1ba931191`; cumulative Sol `implementation-sound`; LC load form pass) |
 | N02-P | merged | #345 (plan gate `plan-sound`, round 4; amends §1.3, D9: confirmation pending; U1/U2 pending before N02-D) |
-| N02-A | — | — |
+| N02-A | merged | #348 (code head `f225ad508`; Sol `implementation-sound` round 3; LC load form pass) |
 | N02-B | — | — |
 | N02-C | — | — |
 | N02-D | — | — |

@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "operation_id": "checkpoint-summary-671d3051191c550336d6a03ea56d4726b0795f56da87de9ed4343590d154857c",
+  "change_id": "change-a",
+  "repository": "example/project",
+  "number": 7,
+  "node_id": "PR_node_7",
+  "head_branch": "owlbear/change/change-a",
+  "head_sha": "41ef2220e64276b21eaa53dc5511ec0df5892ee6",
+  "base_branch": "main",
+  "generated_summary_digest": "e0b64ac5809ac69e8d318776321c5874e675cd247da5aaef45fbf7889c5bd894"
+}

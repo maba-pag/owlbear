@@ -8,6 +8,7 @@ import logging
 import os
 import re
 import subprocess
+import weakref
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Never
@@ -55,8 +56,10 @@ from owlbear_delivery.delivery_runtime import (
     _model_content,
     _read_builder_handoff_change_intent_receipts,
     _read_builder_request_resolution_receipt,
+    parse_delivery_frontier,
 )
 from owlbear_delivery.delivery_state import (
+    REMOTE_STATE_VERSION_UNSUPPORTED,
     DeliveryStatePublicationError,
     DeliveryStatePublisher,
     DeliveryStateSnapshot,
@@ -77,8 +80,12 @@ from owlbear_delivery.portfolio_operating import (
     DeliveryHealthResolution,
 )
 from owlbear_delivery.runtime_transaction import RuntimeTransaction, TransactionParticipant
+from owlbear_delivery.state_formats import StateCapabilityError, require_capability, scan_capability
+from owlbear_delivery.storage_io import ControllerFencedError, ControllerLock, acquire_controller_lock
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from owlbear_delivery.delivery_runtime import DeliveryRequest, _DeliveryBuilderHandoffChangeIntentReceipt
     from owlbear_delivery.publication_provider import PublicationProvider
     from owlbear_delivery.target_contract import DeliveryContract
@@ -144,12 +151,29 @@ class _PlannerPauseHistory:
 class DeliveryApplicationLoadError(RuntimeError):
     """Field-aware failure raised before Delivery state owners are composed."""
 
-    __slots__ = ("detail", "field")
+    __slots__ = ("code", "detail", "field")
 
-    def __init__(self, field: str, detail: str) -> None:
+    def __init__(self, field: str, detail: str, *, code: str | None = None) -> None:
         self.field = field
         self.detail = detail
+        self.code = code
         super().__init__(detail)
+
+
+class DeliveryStateVersionError(DeliveryApplicationLoadError):
+    """Persisted Delivery state is outside the formats this controller may read or write."""
+
+    __slots__ = ("locator", "version_absent")
+
+    def __init__(self, code: str, detail: str, *, locator: str, version_absent: bool = False) -> None:
+        super().__init__("state_version", detail, code=code)
+        self.locator = locator
+        self.version_absent = version_absent
+
+
+CONTROLLER_FENCED = "controller-fenced"
+_CONFIG_LOCATOR = ".owlbear/delivery/config.json"
+_CONTROLLER_LOCKS: weakref.WeakKeyDictionary[PortfolioApplication, ControllerLock] = weakref.WeakKeyDictionary()
 
 
 _REMOTE_REF_MISSING = 2
@@ -391,7 +415,11 @@ def _bootstrap_remote_state(
             detail=item.detail,
             change_id=item.change_id,
             path=item.path,
-            reason=DeliveryHealthReason.REMOTE_STATE_RECONCILIATION,
+            reason=(
+                DeliveryHealthReason.REMOTE_STATE_VERSION_UNSUPPORTED
+                if item.code == REMOTE_STATE_VERSION_UNSUPPORTED
+                else DeliveryHealthReason.REMOTE_STATE_RECONCILIATION
+            ),
             resolution=DeliveryHealthResolution.AUTHORITY_GAP,
         )
         for item in inventory.diagnostics
@@ -549,7 +577,7 @@ def _validate_local_snapshot(
         "frontier.json": _canonical_model(snapshot.frontier),
         "admission.json": _canonical_model(snapshot.admission),
     }
-    frontier_bytes, frontier = _read_local_snapshot_frontier(relative_root / "frontier.json")
+    frontier_bytes, canonical_frontier, frontier = _read_local_snapshot_frontier(relative_root / "frontier.json")
     local_pending_publication = _read_local_pending_publication(
         relative_root / "state-publication.json",
         frontier_bytes,
@@ -587,7 +615,7 @@ def _validate_local_snapshot(
         allow_local_branch=True,
         allow_local_descendant=local_attention_successor or local_builder_handoff_successor,
     )
-    if frontier_bytes != expected["frontier.json"] and not local_recoverable_successor:
+    if canonical_frontier != expected["frontier.json"] and not local_recoverable_successor:
         _bootstrap_failure("local Delivery runtime artifact differs from its remote snapshot: frontier.json")
     _validate_local_snapshot_artifacts(relative_root, expected)
     try:
@@ -598,15 +626,16 @@ def _validate_local_snapshot(
         _bootstrap_failure("local completion evidence differs from its remote snapshot")
 
 
-def _read_local_snapshot_frontier(path: Path) -> tuple[bytes, DeliveryFrontier]:
-    """Read and validate the local frontier needed for startup reconciliation."""
+def _read_local_snapshot_frontier(path: Path) -> tuple[bytes, bytes, DeliveryFrontier]:
+    """Return stored bytes (for publication digests), registered-upcast canonical bytes and the frontier."""
     if path.is_symlink() or not path.is_file():
         _bootstrap_failure("local Delivery runtime artifact differs from its remote snapshot: frontier.json")
     try:
         content = path.read_bytes()
-        return content, DeliveryFrontier.model_validate_json(content, strict=False)
-    except (OSError, ValueError) as exc:
+        frontier, canonical = parse_delivery_frontier(content)
+    except (OSError, TypeError, ValueError) as exc:
         _bootstrap_failure("local Delivery runtime artifact differs from its remote snapshot: frontier.json", exc)
+    return content, canonical, frontier
 
 
 def _read_local_pending_publication(path: Path, frontier_bytes: bytes) -> bool:
@@ -616,7 +645,7 @@ def _read_local_pending_publication(path: Path, frontier_bytes: bytes) -> bool:
     if path.is_symlink() or not path.is_file():
         _bootstrap_failure("local Delivery publication intent cannot be reconciled")
     try:
-        intent = DeliveryPendingStatePublication.model_validate_json(path.read_bytes(), strict=False)
+        intent = DeliveryPendingStatePublication.model_validate_json(path.read_bytes(), strict=True)
     except (OSError, TypeError, ValueError) as exc:
         _bootstrap_failure("local Delivery publication intent cannot be reconciled", exc)
     return (
@@ -1261,7 +1290,7 @@ def _read_planner_handoff_pause_receipts(
         if path.is_symlink() or not path.is_file():
             _bootstrap_failure("local Planning pause receipt path is unsafe")
         try:
-            receipt = _DeliveryPlanningPauseReplay.model_validate_json(path.read_bytes(), strict=False)
+            receipt = _DeliveryPlanningPauseReplay.model_validate_json(path.read_bytes(), strict=True)
         except (OSError, TypeError, ValueError) as exc:
             _bootstrap_failure("local Planning pause receipt is invalid", exc)
         request = receipt.request.request
@@ -2432,10 +2461,93 @@ def load_delivery_application(
 ) -> PortfolioApplication:
     """Validate external identities before constructing the Delivery state owners.
 
+    The shared controller lock and the format gate run first, so fenced or unsupported state is
+    refused before any Git, remote, typed read or write. The returned application holds the lock
+    until ``close_delivery_application`` or garbage collection.
     Only a process whose agents receive its claims passes ``issuer_host``; claims issued without it are
     never settled automatically and need user-confirmed release.
     """
+    return _load_fenced_application(
+        workspace_root, lambda _path: config, publication_provider=publication_provider, issuer_host=issuer_host
+    )
+
+
+def load_configured_delivery_application(
+    workspace_root: Path,
+    read_config: Callable[[Path], DeliveryStartupConfig],
+    *,
+    publication_provider: PublicationProvider | None = None,
+    issuer_host: WindowHostIdentity | None = None,
+) -> PortfolioApplication:
+    """Load like ``load_delivery_application``, reading the startup configuration inside the fence.
+
+    ``read_config`` receives the canonical ``config.json`` path only after the shared controller lock
+    is held and the format gate (including the configuration version) has passed; a fenced start
+    never opens the configuration. Its exceptions propagate after the lock is released.
+    """
+    return _load_fenced_application(
+        workspace_root, read_config, publication_provider=publication_provider, issuer_host=issuer_host
+    )
+
+
+def _load_fenced_application(
+    workspace_root: Path,
+    read_config: Callable[[Path], DeliveryStartupConfig],
+    *,
+    publication_provider: PublicationProvider | None,
+    issuer_host: WindowHostIdentity | None,
+) -> PortfolioApplication:
     paths = _derive_paths(workspace_root)
+    controller_lock = _acquire_controller_fence(paths)
+    try:
+        _require_state_capability(paths)
+        config = read_config(paths.repository_root / _CONFIG_LOCATOR)
+        application = _load_gated_application(config, paths, publication_provider, issuer_host)
+    except BaseException:
+        controller_lock.release()
+        raise
+    _CONTROLLER_LOCKS[application] = controller_lock
+    weakref.finalize(application, controller_lock.release)
+    return application
+
+
+def close_delivery_application(application: PortfolioApplication) -> None:
+    """Release the controller lock of one loaded application; stop its checkpoint supervisor first."""
+    controller_lock = _CONTROLLER_LOCKS.pop(application, None)
+    if controller_lock is not None:
+        controller_lock.release()
+
+
+def _acquire_controller_fence(paths: _DeliveryPaths) -> ControllerLock:
+    try:
+        return acquire_controller_lock(paths.runtime_root)
+    except ControllerFencedError as exc:
+        error = DeliveryApplicationLoadError(
+            "controller_lock",
+            f"{CONTROLLER_FENCED}: Delivery state is fenced by a migration or upgrade; no state was read",
+            code=CONTROLLER_FENCED,
+        )
+        raise error from exc
+    except (OSError, ValueError) as exc:
+        error = _load_error("runtime_root", "workspace controller lock is unavailable")
+        raise error from exc
+
+
+def _require_state_capability(paths: _DeliveryPaths) -> None:
+    try:
+        require_capability(scan_capability(paths.repository_root))
+    except StateCapabilityError as exc:
+        raise DeliveryStateVersionError(
+            exc.code, exc.detail, locator=exc.locator, version_absent=exc.version_absent
+        ) from exc
+
+
+def _load_gated_application(
+    config: DeliveryStartupConfig,
+    paths: _DeliveryPaths,
+    publication_provider: PublicationProvider | None,
+    issuer_host: WindowHostIdentity | None,
+) -> PortfolioApplication:
     _validate_git_config(config, paths)
     host_config = _load_host_config(paths)
     remote_diagnostics: tuple[DeliveryHealthDiagnostic, ...] = ()

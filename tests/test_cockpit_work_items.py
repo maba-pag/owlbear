@@ -2576,7 +2576,7 @@ def test_startup_loads_shared_delivery_configuration(
     application = object()
 
     with patch(
-        "owlbear_cockpit.target_context.load_delivery_application",
+        "owlbear_cockpit.target_context.load_configured_delivery_application",
         return_value=application,
     ) as load:
         result = load_target_context(workspace_root)
@@ -2584,8 +2584,8 @@ def test_startup_loads_shared_delivery_configuration(
     assert result is application
     load.assert_called_once()
     call = load.call_args
-    assert call.args == (config,)
-    assert call.kwargs["workspace_root"] == workspace_root
+    assert call.args[0] == workspace_root
+    assert call.args[1](config_path) == config
     assert isinstance(call.kwargs["publication_provider"], GitHubCliPublicationProvider)
 
 
@@ -2604,7 +2604,7 @@ def test_startup_discovers_workspace_delivery_configuration(
     config_path.write_text(config.model_dump_json(by_alias=True), encoding="utf-8")
     application = object()
     with patch(
-        "owlbear_cockpit.target_context.load_delivery_application",
+        "owlbear_cockpit.target_context.load_configured_delivery_application",
         return_value=application,
     ) as load:
         result = load_target_context(workspace_root)
@@ -2612,8 +2612,8 @@ def test_startup_discovers_workspace_delivery_configuration(
     assert result is application
     load.assert_called_once()
     call = load.call_args
-    assert call.args == (config,)
-    assert call.kwargs["workspace_root"] == workspace_root
+    assert call.args[0] == workspace_root
+    assert call.args[1](config_path) == config
     assert isinstance(call.kwargs["publication_provider"], GitHubCliPublicationProvider)
 
 
@@ -2631,7 +2631,7 @@ def test_startup_surfaces_delivery_load_failure(tmp_path: Path) -> None:
     load_error = DeliveryApplicationLoadError("runtime_root", "legacy runtime state is unsupported")
 
     with (
-        patch("owlbear_cockpit.target_context.load_delivery_application", side_effect=load_error),
+        patch("owlbear_cockpit.target_context.load_configured_delivery_application", side_effect=load_error),
         pytest.raises(
             RuntimeError,
             match="Cockpit Delivery startup failed for runtime_root: legacy runtime state is unsupported",

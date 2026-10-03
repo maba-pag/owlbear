@@ -838,7 +838,7 @@ class _RecoveryMixin:
                 )
             )
             frontier_bytes = runtime.frontier_bytes()
-            frontier = DeliveryFrontier.model_validate_json(frontier_bytes, strict=False)
+            frontier = parse_delivery_frontier(frontier_bytes)[0]
             if not diagnostics:
                 self._fail("Delivery-state snapshot repair diagnostic is absent or incompatible")
             if not self._is_repairable_frontier_successor(snapshot.frontier, frontier):

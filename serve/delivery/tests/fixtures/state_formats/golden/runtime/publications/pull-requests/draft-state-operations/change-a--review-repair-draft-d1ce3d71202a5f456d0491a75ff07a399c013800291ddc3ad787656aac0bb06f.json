@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "operation_id": "review-repair-draft-d1ce3d71202a5f456d0491a75ff07a399c013800291ddc3ad787656aac0bb06f",
+  "change_id": "change-a",
+  "finalization_id": "d1ce3d71202a5f456d0491a75ff07a399c013800291ddc3ad787656aac0bb06f",
+  "repository": "example/project",
+  "number": 7,
+  "node_id": "PR_node_7",
+  "head_branch": "owlbear/change/change-a",
+  "head_sha": "20f2f9ea08e042c88fde678d84011238a76a75e1",
+  "base_branch": "main",
+  "draft": true
+}

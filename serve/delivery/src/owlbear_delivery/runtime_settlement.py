@@ -258,7 +258,7 @@ class _SettlementReplayMixin:
         except OSError as exc:
             _reference("Planning pause replay receipt is unavailable", exc)
         try:
-            receipt = _DeliveryPlanningPauseReplay.model_validate_json(content, strict=False)
+            receipt = _DeliveryPlanningPauseReplay.model_validate_json(content, strict=True)
         except (TypeError, ValueError) as exc:
             _reference("Planning pause replay receipt is invalid", exc)
         if (
@@ -796,7 +796,7 @@ class _SettlementReplayMixin:
             if path.is_symlink():
                 _reference("Planning pause replay receipt path is unsafe")
             try:
-                receipt = _DeliveryPlanningPauseReplay.model_validate_json(path.read_bytes(), strict=False)
+                receipt = _DeliveryPlanningPauseReplay.model_validate_json(path.read_bytes(), strict=True)
             except (OSError, TypeError, ValueError) as exc:
                 _reference("Planning pause replay receipt is invalid", exc)
             if (

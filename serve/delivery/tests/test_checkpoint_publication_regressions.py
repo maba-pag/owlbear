@@ -155,7 +155,7 @@ def test_state_publisher_rejects_unacknowledged_reviewed_change_head(tmp_path: P
     contract, _intent, _design = _contract(change_id)
     runtime, manager, _worktree = _runtime(tmp_path, repository, change_id, contract)
     frontier_path = tmp_path / "state" / "changes" / change_id / "frontier.json"
-    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=True)
     frontier_path.write_bytes(_canonical(frontier.model_copy(update={"published_head": "1" * 40})))
 
     publisher = DeliveryStatePublisher(repository, remote=str(remote), state_branch="owlbear/delivery-state")
@@ -204,7 +204,7 @@ def test_loader_accepts_retained_checkpoint_after_state_projection(tmp_path: Pat
     )
     snapshot = publisher.read_snapshot("change-a")
     assert snapshot is not None
-    local = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+    local = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=True)
     assert _is_unpublished_checkpoint_successor(snapshot.frontier, local)
     mismatched = local.pending_checkpoint.model_copy(update={"head": "0" * 40})
     assert not _is_unpublished_checkpoint_successor(
@@ -282,7 +282,7 @@ def test_checkpoint_reconcile_rejects_mismatched_heads_without_pending_queue(tmp
     exact_head = coordinator.show("change-a").last_reviewed_commit
     application.finalize_change("change-a", _finalization_request("change-a", exact_head))
     frontier_path = state_root / "changes/change-a/frontier.json"
-    frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
+    frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=True)
     frontier_path.write_bytes(
         _canonical(frontier.model_copy(update={"published_head": "2" * 40, "pending_checkpoint": None}))
     )

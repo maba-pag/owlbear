@@ -10,6 +10,7 @@ from typing import get_args
 import pytest
 
 from owlbear_delivery.finalization_reports import FinalizationFailureCode, ReportFinalizationFailure
+from owlbear_delivery.portfolio_operating import DeliveryHealthReason
 from owlbear_delivery.work_items import DeliveryReadinessReason
 
 # Mined from #924: Cockpit source import boundary.
@@ -47,6 +48,14 @@ def test_delivery_readiness_reason_typescript_parity(project_root: Path) -> None
     union = re.search(r"export type DeliveryReadinessReasonCode\s*=\s*(.*?);", source, re.DOTALL)
     assert union is not None
     assert set(re.findall(r'"([^"]+)"', union.group(1))) == set(get_args(DeliveryReadinessReason))
+
+
+def test_delivery_health_reason_typescript_parity(project_root: Path) -> None:
+    """Every core health reason, including remote-state-version-unsupported, is mirrored in Cockpit."""
+    source = (project_root / "serve/cockpit/web/src/api/workItems.ts").read_text()
+    union = re.search(r"export type DeliveryHealthReason\s*=\s*(.*?);", source, re.DOTALL)
+    assert union is not None
+    assert set(re.findall(r'"([^"]+)"', union.group(1))) == {reason.value for reason in DeliveryHealthReason}
 
 
 def test_finalization_failure_typescript_parity(project_root: Path) -> None:

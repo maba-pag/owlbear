@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "receipt_id": "c6d41c152f8ddd04c9b3363f4670f534f2d6d0601bdd8c1ca9fa5d3b11aeb652",
+  "operation_id": "supersession-operation-2",
+  "change_id": "change-a",
+  "predecessor_receipt_id": "fe0666a37eb95f6321451d49991420422261a197b5da53d33ae45da081e331bb",
+  "predecessor_branch": "owlbear/change/change-a+s1",
+  "predecessor_head": "2222222222222222222222222222222222222222",
+  "successor_receipt_id": "8a984533deb7dda2e726f251c61b7f381107c2904590d81258adc0fc5ff1d7ed",
+  "successor_branch": "owlbear/change/change-a+s2",
+  "superseding_head": "3333333333333333333333333333333333333333",
+  "repository": "example/project",
+  "successor_number": 9,
+  "successor_node_id": "PR_node_9",
+  "base_branch": "main",
+  "provider_evidence_digest": "2e746a2d2efd61be2f21ad4132e935bd515bc79f97761cc84071f24091534d22",
+  "predecessor_publication": {
+    "schema_version": 1,
+    "receipt_id": "fe0666a37eb95f6321451d49991420422261a197b5da53d33ae45da081e331bb",
+    "operation_id": "supersession-operation",
+    "change_id": "change-a",
+    "repository": "example/project",
+    "number": 8,
+    "node_id": "PR_node_8",
+    "head_branch": "owlbear/change/change-a+s1",
+    "head_sha": "2222222222222222222222222222222222222222",
+    "base_branch": "main",
+    "provider_evidence_digest": "d72b6314ab6875f09d0ab2893e977447dd000f096b9829dac27479d15464bb7b"
+  },
+  "successor_publication": {
+    "schema_version": 1,
+    "receipt_id": "8a984533deb7dda2e726f251c61b7f381107c2904590d81258adc0fc5ff1d7ed",
+    "operation_id": "supersession-operation-2",
+    "change_id": "change-a",
+    "repository": "example/project",
+    "number": 9,
+    "node_id": "PR_node_9",
+    "head_branch": "owlbear/change/change-a+s2",
+    "head_sha": "3333333333333333333333333333333333333333",
+    "base_branch": "main",
+    "provider_evidence_digest": "2e746a2d2efd61be2f21ad4132e935bd515bc79f97761cc84071f24091534d22"
+  }
+}

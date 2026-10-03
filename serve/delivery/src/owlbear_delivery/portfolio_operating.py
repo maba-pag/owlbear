@@ -111,6 +111,7 @@ class DeliveryHealthReason(StrEnum):
     UNKNOWN = "unknown"
     REMOTE_STATE_UNAVAILABLE = "remote-state-unavailable"
     REMOTE_STATE_RECONCILIATION = "remote-state-reconciliation"
+    REMOTE_STATE_VERSION_UNSUPPORTED = "remote-state-version-unsupported"
     REMOTE_CHANGE_HEAD_AHEAD = "remote-change-head-ahead"
     REMOTE_CHANGE_HEAD_MISMATCH = "remote-change-head-mismatch"
     LOCAL_CHANGE_HEAD_OUT_OF_BAND = "local-change-head-out-of-band"

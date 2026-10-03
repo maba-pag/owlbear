@@ -432,6 +432,12 @@ function healthNextStep(diagnostic: DeliveryHealthDiagnostic): string {
   const command = diagnostic.change_id
     ? `/resolve-delivery-attention ${diagnostic.change_id}`
     : "/resolve-delivery-attention";
+  if (diagnostic.reason === "remote-state-version-unsupported") {
+    return [
+      "A newer Delivery controller wrote this Change's remote state. Upgrade this controller before",
+      " resuming the Change; the snapshot is not restored, published over or repaired.",
+    ].join("");
+  }
   if (diagnostic.resolution === "retry") {
     return "Retry Delivery after checking the recorded retry-safe condition.";
   }

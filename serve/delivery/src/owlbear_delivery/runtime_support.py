@@ -111,16 +111,16 @@ def is_acceptance_waiting_observation(
 def parse_delivery_frontier(
     content: bytes,
 ) -> tuple[DeliveryFrontier, bytes]:
-    """Parse one frontier and canonicalize the immediately prior persisted schema."""
+    """Parse one frontier strictly and canonicalize the immediately prior persisted schema."""
     payload = json.loads(content)
     if not isinstance(payload, dict):
         raise TypeError
     schema_version = payload.get("schema_version")
-    if schema_version == _LEGACY_FRONTIER_SCHEMA_VERSION:
-        payload = {**payload, "schema_version": _FRONTIER_SCHEMA_VERSION}
-    elif schema_version != _FRONTIER_SCHEMA_VERSION:
+    if schema_version == _LEGACY_FRONTIER_SCHEMA_VERSION and not isinstance(schema_version, bool):
+        content = json.dumps({**payload, "schema_version": _FRONTIER_SCHEMA_VERSION}).encode()
+    elif schema_version != _FRONTIER_SCHEMA_VERSION or isinstance(schema_version, bool):
         raise ValueError
-    frontier = DeliveryFrontier.model_validate(payload, strict=False)
+    frontier = DeliveryFrontier.model_validate_json(content, strict=True)
     return frontier, _model_content(frontier)
 
 

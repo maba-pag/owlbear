@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "receipt_id": "09eea1a54a0fa8ec3676c1b34255c2788e951870d7d546ca54dc8835ed0dcb5d",
+  "operation_id": "checkpoint-summary-671d3051191c550336d6a03ea56d4726b0795f56da87de9ed4343590d154857c",
+  "change_id": "change-a",
+  "repository": "example/project",
+  "number": 7,
+  "head_sha": "41ef2220e64276b21eaa53dc5511ec0df5892ee6",
+  "body_digest": "877a804ecca076f9553838851b42067f5ae673e30eeab05ef759a57364ffacb3",
+  "provider_evidence_digest": "60ed090d68b0168fb618ccacf83536fc372a272b99431ccc00033c66a5654f11"
+}
