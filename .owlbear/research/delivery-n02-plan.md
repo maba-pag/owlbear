@@ -256,6 +256,11 @@ Agent-settled with probe evidence:
   the only mount at or under the live path; the real checkout is not mounted), the copy marker, and
   `git rev-parse --git-common-dir` of the copy and each worktree resolving inside the copy; live
   record hashes are unchanged after the run.
+- **D10 Migration `abort` removes the empty namespace** (amended by N08-P after its Sol round 6,
+  under the user's overnight authorization of 2026-10-03; explicit confirmation pending). N02-A's
+  `state_formats._walk` refuses whenever `runtime/migrations` exists, even empty, so step 5f alone
+  left a first pre-marker abort refused by N02-A although D3 requires it to load the restored
+  format 0. §3.3 step 5g removes only a real empty directory; `abort <archived id>` resumes it.
 
 User decisions ([U1–U3](#u-decisions)): U1 and U2 are **pending user confirmation**; the
 recommendations are defaults, not decisions. U1 is required before N02-D starts; U2 before the
@@ -452,10 +457,15 @@ reject in lax mode too; they are the same deliberate rejections as in run 1. No 
      corruption stop with both copies preserved;
      (e) verify every affected record against its backup digest and the record-tree hash against
      the backup manifest (excluding L-class files and `runtime/migrations/`);
-     (f) archive the journal as `aborted` beside the backup, then remove `runtime/migrations/<id>/`.
-     A crash at any step leaves the journal in place, so normal start still refuses and `abort`
-     repeats the digest-checked steps. Backup, staging, retired manifests and archived journal
-     are kept.
+     (f) archive the journal as `aborted` beside the backup, then remove `runtime/migrations/<id>/`;
+     (g) still under the exclusive lock, remove `runtime/migrations` only when it is a real
+     directory with no entry, without following links; any entry, a symlink or a non-directory is
+     preserved (D10: N02-A refuses on the namespace alone; D3 requires it to load format 0).
+     A crash before (f) completes leaves the journal in place, so normal start still refuses and
+     `abort` repeats the digest-checked steps. After (f), `abort <archived aborted migration id>`
+     reads only that archived journal and runs only (g); a repeat is a no-op, and `resume` or
+     `verify` of an archived ID refuses without a write. Backup, staging, retired manifests and
+     archived journal are kept.
   Normal start accepts no journal or only `verified` ones: propose → apply → verify → start; an
   `aborting` journal accepts only `abort`.
 - **Refusals:** immutable receipts, packages, remote snapshots and historical revisions are never
@@ -503,8 +513,15 @@ reject in lax mode too; they are the same deliberate rejections as in run 1. No 
   (`after-first-publication`, migration manifest pending), `abort` from a fresh process with a
   crash injected after each abort step and `abort` repeated, then a normal restart → every
   affected record equals its backup bytes, no migration transaction manifest is pending and the
-  restart's `recover_all` rewrites nothing, no journal remains under `runtime/migrations/`, and
-  the backup and archived `aborted` journal remain; `resume` on an `aborting` journal → refused.
+  restart's `recover_all` rewrites nothing, `runtime/migrations` is absent, and the backup and
+  archived `aborted` journal remain; `resume` on an `aborting` journal → refused. Namespace (D10),
+  first migration on format-0 state with no `runtime/migrations`: the merged N02-A release's
+  `scan_capability` (subprocess from its merge commit) after a pre-marker abort equals its
+  pre-migration result; crash after (f) → N02-A refuses, then `abort <archived id>` runs twice:
+  the first removes the namespace and N02-A's result equals the pre-migration one again, the
+  second writes nothing; `resume` or `verify` of the archived ID → refused, no write; an
+  unrelated entry, a symlink or a non-directory at `runtime/migrations`, injected after (f),
+  survives `abort <archived id>` unchanged (no-follow `lstat`) and N02-A still refuses.
 - **Inner loop:** `uv run pytest serve/delivery/tests/test_state_migration.py -q`.
 - **Closeout:** `uv run test --changed`; scoped Ruff; LC full form via `delivery-lc`.
 - **Size / risk:** L / high (first persisted format change; crash and replay logic).
