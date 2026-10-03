@@ -1217,8 +1217,11 @@ options and pro/con briefing; [N05 plan](delivery-n05-plan.md#19-user-decisions)
   approved target head and the merged base with the approved target, and reports a target advance
   or scope change as acceptance attention, never as completion attributed to the reviewed proof.
   It claims no stronger guarantee.
-- *Reason:* no GitHub merge API fences the target or the base during asynchronous merge; the
-  residual window between the final read and execution is seconds; detection reports it.
+- *Reason:* no GitHub merge API fences the target or the base during asynchronous merge. The
+  interval between the final read and GitHub's execution is not bounded by Delivery: GitHub may
+  keep a request pending or process it later, and N05 models requests that stay unsettled for long
+  periods (N05 plan §1.11 rows M6–M9). Unintended merges can occur in that interval; detection
+  reports them afterwards but cannot undo them.
 
 Read back unknown merge responses before another mutation. A successful provider call is not a completion receipt; the existing acceptance observer verifies the actual merged evidence, then records completion exactly once. A merge performed manually in GitHub must be recognized too, although the preferred journey does not require leaving Cockpit/chat.
 

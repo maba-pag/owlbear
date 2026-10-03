@@ -10,23 +10,26 @@
 > gates on `58c4d928b` + N02-A (P13); the acknowledgment base on lane-b `e6ed5bb31` (P14).
 > D11 amends the execution plan, merged under the user's overnight authorization of 2026-10-03 and
 > confirmed 2026-10-03 (listed to the user without objection). U1 decided 2026-10-03 by the user: (b).
+> PR #360 plan gate round 1 adds the confirmation boundary (D13), the Change confirmation ledger and
+> the open user decision [U2](#u2--may-cockpit-confirmations-count-as-user-only) (before N03-C).
 
 ## 1. Contract
 
 ### 1.1 Result
 
 - Every new proof observation carries a typed result whose verdict is derived, never asserted: `passed`,
-  `expected-negative`, `failed`, `missing` (with an owner) or `waived` (owner user, with a user-confirmed
-  decision scoped to the criterion version; it satisfies finalization,
-  [U1](#u1--may-a-user-waive-a-required-acceptance-criterion)(b)). Command, manual-procedure and artifact
-  evidence have distinct shapes.
+  `expected-negative`, `failed`, `missing` (with an owner) or `waived` (owner user, with an affirmative user
+  waiver captured through the confirmation boundary (D13) and bound to the criterion version; it satisfies
+  finalization, [U1](#u1--may-a-user-waive-a-required-acceptance-criterion)(b)). Command, manual-procedure and
+  artifact evidence have distinct shapes.
 - Every new observation records the acceptance criteria and criterion versions it covers, the exact commit,
   procedure, environment and target class, its time, machine-observed versus human-confirmed provenance, and a
   bounded non-sensitive locator.
 - Acceptance criteria have stable identities (`AC-NNN`) authored in the Design package and a content version.
   Identities survive revision; versions change when the statement changes.
 - `finalize_change` loads the admitted acceptance authority and fails closed unless every acceptance criterion
-  is covered by satisfying typed evidence or waived by the user (U1(b)). The finalization context gives the
+  is covered by proof or waived by an applicable user waiver (U1(b)), whether that record is carried from a
+  task result or submitted by the Finalizer. The finalization context gives the
   Finalizer and the independent reviewer the same semantic projection and diff baseline, bound by one basis
   digest the engine re-checks; the review also binds the exact ordered set of submitted observations.
 - Existing observations are never relabeled: their coverage is `unknown`. No stored receipt byte or identity
@@ -51,6 +54,7 @@
 | R11 | Every changed persisted family registers a version owner; migrations run through the N02-B core; LC full form | Execution plan §1.3; N02 plan I2, I3, D3 |
 | R12 | Trust boundary documented: digests prove content integrity, not execution authenticity | #219 scope |
 | R13 | Support baseline (Python 3.14; macOS and Ubuntu); §1.4 mandatory companions for new statuses | Execution plan §1.1, §1.4 |
+| R14 | Waivers and `human-confirmed` evidence count only through a user confirmation captured on a channel the agent's tool surface cannot satisfy; caller-asserted provenance confers nothing; a declined or negative answer confirms nothing | PR #360 plan gate round 1; U7; V16 |
 
 ### 1.3 Invariants
 
@@ -64,20 +68,27 @@
 - **I4 Derived verdict.** A command verdict is computed from exit status and expectation; it cannot contradict
   them. Manual and artifact evidence carry an explicit assessment.
 - **I5 Fail closed.** `finalize_change` writes nothing unless every criterion is covered or waived (U1(b)),
-  every request observation is typed and satisfying, the review's basis digest equals the engine's current
-  basis, and the review's `observation_ids` equal the request's observation IDs in order.
-- **I6 Applicable confirmation.** `human-confirmed` provenance and `waived` results require a confirmation
-  the engine resolves inside the same Change and outcome: a request resolved with `provenance: user-confirmed`
-  whose `applies_to` scope names every criterion version the observation covers and its exact `procedure`
-  (§1.5). Existence of some confirmed request is not enough. Nothing synthesizes one (V20). A `waived` result
-  with an applicable confirmation satisfies finalization for that criterion version and stays shown as
-  `waived` (U1(b)); agents and reviewers never waive.
+  every request observation is typed and either a proof verdict or an applicable waiver (I6), the review's
+  basis digest equals the engine's current basis, and the review's `observation_ids` equal the request's
+  observation IDs in order.
+- **I6 Applicable confirmation.** `human-confirmed` provenance and `waived` results cite a `confirmation_id`
+  that the engine resolves in the Change's confirmation ledger (§1.5): a `DeliveryUserConfirmation` captured
+  through the confirmation boundary (D13), in the same Change and outcome, whose scope names every criterion
+  version the observation covers and its exact `procedure`, and whose recorded decision is the affirmative one
+  for its use (`waive` for `waived`; the observation's assessment for `human-confirmed`). Caller-supplied
+  `provenance` never creates or substitutes for one; a declined or cancelled elicitation records nothing; a
+  `keep-required` answer waives nothing. Nothing synthesizes one (V20). A `waived` record with an applicable
+  confirmation satisfies finalization for that criterion version, from a task result or the finalization
+  request, and stays shown as `waived` (U1(b)); agents and reviewers never waive.
 - **I7 One evaluator.** One pure function computes coverage for `finalize_change`, the finalization context
   and the projection; identical inputs give identical statuses.
 - **I8 Bounded and non-sensitive.** Locators use an allowlisted `scheme:value` form, never URLs; free text is
   length-bounded; projections cap evidence per criterion. The finalization context is all-or-nothing within one
   byte budget (§1.8); obligations are never truncated.
 - **I9 Gate first.** N02 I1 and I5 unchanged; N03 adds format marker 2 and the widened versions to the registry.
+- **I10 Append-only confirmations.** Every frontier successor's `confirmations` extends its predecessor's
+  unchanged; the facade writer refuses any other write before touching bytes. `_reset_binding`, request
+  history moves and N04 revision activation leave the ledger as it is.
 
 ### 1.4 Acceptance identities
 
@@ -113,7 +124,7 @@ union discriminated by `schema_version`.
 | `environment` | `platform`: `macos`, `linux` or null; `labels`: ≤ 8, each matching `^[a-z0-9][a-z0-9.+_-]{0,63}(:[A-Za-z0-9.+_-]{1,64})?$` | Environment constraints that bound applicability |
 | `target_class` | null or `^[a-z0-9][a-z0-9-]{0,63}$` | Class of external target (`sharepoint`, `confluence`), never a hostname |
 | `provenance` | `machine-observed` or `human-confirmed` | Who established the result |
-| `confirmation` | null or `{kind: "request-resolution", request_id}` | Required for `human-confirmed` and for `waived`; resolved and scope-checked by the engine (I6). N06 adds `kind: interaction` |
+| `confirmation_id` | null or sha256 | Required for `human-confirmed` and for `waived`; resolved in the Change's confirmation ledger and checked by the engine (I6). N06 adds channel `interaction` |
 | `locator` | null or ≤ 256 chars of `scheme:value`; scheme `path`, `ci-run`, `check-run`, `request` or `report`; no whitespace, no `://`, no `..` segment | Retained non-sensitive locator |
 | `summary` | null or ≤ 240 chars | Non-authoritative note (`171 passed`) |
 | `observation_id` (receipt) | sha256 | `_receipt_digest` over all other fields; `create` copies fields by attribute (P3 finding) |
@@ -124,33 +135,45 @@ union discriminated by `schema_version`.
 | `manual-procedure` | `assessment` `passed` or `failed` | The assessment; `human-confirmed` allowed |
 | `artifact` | `assessment` `passed` or `failed`; `artifact_digest` sha256 or null; `locator` required | The assessment; `human-confirmed` allowed |
 | `missing` | `owner` `agent`, `user`, `provider` or `assisted-check`; `reason` 1–240 chars | `missing` |
-| `waived` | `owner: user`; `reason` 1–240 chars; `confirmation` required | `waived`; satisfies finalization coverage and stays shown as `waived` ([U1](#u1--may-a-user-waive-a-required-acceptance-criterion)(b)) |
+| `waived` | `owner: user`; `reason` 1–240 chars; `confirmation_id` required | `waived`; with an applicable confirmation (I6) it satisfies finalization coverage and stays shown as `waived` ([U1](#u1--may-a-user-waive-a-required-acceptance-criterion)(b)) |
 
-Satisfying verdicts: `passed`, `expected-negative`. A `waived` record in a task result also completes its
-criterion's coverage for finalization (U1(b), §1.6).
+**Proof and admissible waivers.** Proof verdicts: `passed`, `expected-negative`. A satisfying record is a
+proof verdict or a `waived` record with an applicable confirmation (I6). Both complete a criterion's coverage
+wherever they appear, in a task result or in the finalization request (U1(b), §1.6); proof is shown as
+`covered`, a waiver as `waived`. `missing` and `failed` never satisfy.
 
-**Confirmation scope.** `DeliveryRequest` gains optional `applies_to: DeliveryConfirmationScope{acceptance:
-1–32 unique DeliveryAcceptanceRef, procedure: 1–512 chars}` (`exclude_if` None). The requesting worker sets it
-on the existing request-bearing block route; the user sees it in the request and answers through `answer`.
-A confirmation applies only when its request is in the observation's Change and outcome, is resolved with
-`user-confirmed`, has a scope containing every `covers` ref and has `procedure` equal to the observation's.
-A request without scope confirms nothing. The engine checks structure, not the worker's honesty (R12).
+**Confirmation scope.** `DeliveryRequest` gains optional `applies_to: DeliveryConfirmationScope{kind:
+"waive" | "confirm-check", acceptance: 1–32 unique DeliveryAcceptanceRef, procedure: 1–512 chars}`
+(`exclude_if` None). The requesting worker sets it on the existing request-bearing block route; a scoped
+request cannot carry a `resolution` when it is created. The user answers only through the confirmation
+boundary (D13): the engine resolves the request with `provenance: user-confirmed` and the new
+`DeliveryRequestResolution.confirmation_id` (`exclude_if` None) and appends the confirmation to the ledger in
+one transaction. A request without scope confirms nothing. The engine checks structure and the channel, not
+the worker's honesty (R12).
 
-**Retention.** A resolved request with `applies_to` is a scoped confirmation. Planning and Implementation
-promotion (`_advance`) keep scoped confirmations in `binding.requests` and clear only the rest (today all are
-cleared). The evaluator, `semantics` and the projection read them from the frontier, so no other input is needed.
-`_DeliveryBuilderPlanPromotionReceipt` schema 2 expects the same retained set (schema 1 keeps `()`); loader
-successor reconstruction and recovery's block-successor check (`_is_repairable_frontier_successor`) treat
-retained confirmations as prior state. `_reset_binding` still clears them with the results they supported.
+**Confirmation ledger** (portable representation, consumed by N04 and N06). `DeliveryUserConfirmation`
+(schema 1): `change_id`, `outcome_id`, `request_id`, `scope` (the request's `applies_to`), `decision`
+(`waive` or `keep-required` for kind `waive`; `passed` or `failed` for `confirm-check`), `channel`
+(`mcp-elicitation`; N06 adds `interaction`; U2 may add a Cockpit channel), `question_digest` (sha256 of the
+exact rendered elicitation), `confirmed_at`, and `confirmation_id` (`_receipt_digest` over the rest).
+`DeliveryFrontier.confirmations` holds them for the whole Change, ≤ 256 entries (I8), `exclude_if` None,
+append-only (I10). It travels in every snapshot that embeds the frontier, so the ledger is as portable as
+the frontier. Two pure functions in `evidence.py` are the only readers: `resolve_confirmation(frontier,
+confirmation_id)` and `confirmation_applies(confirmation, observation, outcome_id)`, which returns the I6
+gap reason or None. The evaluator, `semantics`, the projection and N04 use only these.
+
+**Requests stay unchanged.** `_advance` and `_reset_binding` keep clearing requests as today; confirmation
+authority lives only in the ledger, so promotion, reset and revision cannot drop it. This replaces the
+round-2 retention of resolved requests in `binding.requests`.
 
 ### 1.6 Admissibility and coverage
 
 | Surface | Rule |
 | --- | --- |
 | `publish_result` / `submit_result` | Every observation schema 2; verdict in {passed, expected-negative, missing, waived} (a failing check blocks or retries, it is not a result); `covers` names current criteria of the admitted contract; confirmations resolve and apply (I6); existing exact-commit checks unchanged |
-| `finalize_change` request | Zero or more observations, each schema 2 and satisfying, at the exact head; review schema 2 with `review_mode: finalization`, `basis_digest` equal to the current basis and `observation_ids` equal to the request's IDs in order; coverage complete (every criterion `covered` or `waived`) |
+| `finalize_change` request | Zero or more observations, each schema 2 and satisfying (a proof verdict, or `waived` with an applicable confirmation, I6), at the exact head; review schema 2 with `review_mode: finalization`, `basis_digest` equal to the current basis and `observation_ids` equal to the request's IDs in order; coverage complete (every criterion `covered` or `waived`) |
 | Review binding | Review schema 2 adds `observation_ids` (ordered, may be empty) inside `review_id`. Coverage assignment is a pure function (I7) of the basis inputs and those receipts, whose `covers` lie inside each `observation_id`, so the review binds it. Same review with one observation replaced, added, dropped or reordered → `review-observations-mismatch`, no write |
-| Coverage evaluation | Records in order: task results in authority order (their commits are ancestry-ordered, P7), observations in result order, then the finalization request. For each current criterion, the **last** record covering it decides: satisfying → `covered`; `missing` / `waived` → that status. No typed record → `unknown` if the Change has any schema-1 observation, else `uncovered`. Finalization accepts `covered` and `waived` (U1(b)); `missing`, `uncovered` and `unknown` are gaps |
+| Coverage evaluation | Records in order: task results in authority order (their commits are ancestry-ordered, P7), observations in result order, then the finalization request. For each current criterion, the **last** record covering it decides: proof verdict → `covered`; `waived` (admitted only with an applicable confirmation) → `waived`; `missing` → `missing`. No typed record → `unknown` if the Change has any schema-1 observation, else `uncovered`. Finalization accepts `covered` and `waived` (U1(b)); `missing`, `uncovered` and `unknown` are gaps |
 | Carried evidence | A task-result observation at an ancestor commit counts for finalization (U6: no repetition without a specific uncovered or invalidated criterion). The reviewer judges its applicability to the assembled head under the shared basis (§8.4). When carried evidence covers every criterion, finalization needs no new observation; the exact-head finalization review stays required. A reviewer finding that carried evidence does not apply is the invalidation that permits a fresh exercise (R9) |
 | Basis digest | `sha256` of canonical JSON `{schema: 1, contract_digest, change_head, diff_base, result_digests, acceptance: [[id, version], …]}`; `diff_base` = latest `target_sync_receipt.target_head`, else `ChangeCoordination.publication_base_head`; null → finalization refused (`finalization-basis-unavailable`) |
 | Finalization receipt | Schema 3: zero or more observations, all schema 2; review schema 2 in finalization mode with matching `observation_ids`. Schema 2 keeps `min_length=1`. Coverage is recomputed from immutable inputs, not stored twice |
@@ -167,7 +190,8 @@ Every change below is registered in the N02 registry (`state_formats.FAMILIES`) 
 | nested `DeliveryObservationReceipt` | schema 1 / 2 union | 1 → 1 ∪ 2 | Unchanged | 12 × v1 (P1) |
 | nested `DeliveryReviewReceipt` | `DeliveryReview` | 1 → widen 1, 2 (`review_mode`, `basis_digest`, `observation_ids`, each with `exclude_if` None) | Bytes and `review_id` identical (P6) | 5 in results |
 | nested `DeliveryFinalizationReceipt` | `DeliveryFinalization` | 2 → widen 2, 3 | Unchanged | none local |
-| nested `DeliveryRequest` | `applies_to` (`exclude_if` None) | Covered by the frontier, snapshot and receipt widening | Unchanged | — |
+| nested `DeliveryRequest` | `applies_to` (`exclude_if` None); `DeliveryRequestResolution.confirmation_id` (`exclude_if` None) | Covered by the frontier, snapshot and receipt widening | Unchanged | — |
+| nested `DeliveryUserConfirmation` (new) | `DeliveryFrontier.confirmations` (`exclude_if` None) | New, schema 1; only in frontier 19, snapshot 3 and receipts 2 through their embedded frontiers | None exist; I2 rejects a ledger in an old-version instance | — |
 | `planning_*`, `builder_*` receipts embedding bindings, frontiers or requests | `_DeliveryPlanningRetrySettlementReceipt`, `_DeliveryBuilderInvocationSettlementReceipt`, `_DeliveryBuilderPlanPromotionReceipt`, `_DeliveryBuilderHandoffChangeIntentReceipt`, `_DeliveryPlanningPauseReplay` (P8), `_DeliveryBuilderRequestResolutionReceipt` (P10) | 1 → widen 1, 2 | Unchanged; embedded frontiers keep 18 | none |
 | `snapshot` (remote R) | `DeliveryStateSnapshot` | 2 → widen 2, 3; v1 keeps its read-upcast, now to 3 | v2 parse natively (no forced republish); v1 upcast as today | 2 × v2, 1 × v1 (N02 P3) |
 | `result_receipt` (R, unversioned) | `DeliveryResultCandidate` | Content may now hold schema-2 observations | Unchanged | none |
@@ -214,7 +238,7 @@ only (I2 keeps 18 free of 19 content). New fields are `exclude_if` None, so an 1
 | `_builder_handoff_lifecycle_successor_frontier` | `delivery_application_loader.py` | Baseline (from `snapshot.frontier`) vs receipt `before_frontier` and `after_frontier`; chain continuity | N |
 | `_planner_handoff_lifecycle_successor_frontier` | `delivery_application_loader.py` | Baseline (from `snapshot.frontier`) vs receipt `before_frontier` and `after_frontier`; chain continuity | N |
 | `_builder_handoff_lifecycle_baselines`, `_local_builder_return_successor_frontier`, `_builder_handoff_frontier_with_lifecycle_fields` | `delivery_application_loader.py` | Both sides from `snapshot.frontier`; lifecycle-field copy | U (outputs feed N rows) |
-| Binding comparisons: `_planner_handoff_lifecycle_rank`, `_planner_handoff_pause_history`, `_planner_handoff_receipt_pause`, `_builder_handoff_settled_binding`, `_builder_request_resolution_successor`, `_validate_local_builder_plan_promotion`, `_promoted_builder_return_successor`, `_is_repairable_frontier_successor` (`application_recovery`), `_DeliveryBuilderPlanPromotionReceipt._validate_successor` (`runtime_receipts`) | loader, `application_recovery.py`, `runtime_receipts.py` | `OutcomeAuthorityBinding` equality | U (confirmation retention, §1.5) |
+| Binding comparisons: `_planner_handoff_lifecycle_rank`, `_planner_handoff_pause_history`, `_planner_handoff_receipt_pause`, `_builder_handoff_settled_binding`, `_builder_request_resolution_successor`, `_validate_local_builder_plan_promotion`, `_promoted_builder_return_successor`, `_is_repairable_frontier_successor` (`application_recovery`), `_DeliveryBuilderPlanPromotionReceipt._validate_successor` (`runtime_receipts`) | loader, `application_recovery.py`, `runtime_receipts.py` | `OutcomeAuthorityBinding` equality | U (requests unchanged; the ledger is frontier-level, §1.5) |
 | `_DeliveryBuilderHandoffChangeIntentReceipt` digests and `_changed_frontier_fields` | `runtime_receipts.py` | Schema 1: unchanged. Schema 2: below | S digests, N delta |
 | `_require_recorded_builder_handoff_change_intent`, `_builder_handoff_change_intent_chain` | `runtime_settlement.py` | Lifecycle fields of the latest receipt vs current frontier | U |
 | `_is_delivery_replay` | `delivery_admission.py` | `parse_delivery_frontier` model vs derived frontier | W |
@@ -244,11 +268,14 @@ or publication-gate site outside this table stops for a plan revision.
 | Interface | Behavior |
 | --- | --- |
 | `owlbear_delivery.acceptance_criteria` (new leaf; imports `target_contract` only) | `acceptance_criteria(contract) -> tuple[DeliveryAcceptanceCriterion, …]`; `parse_acceptance_item(text)` returning the optional `acceptance_id` and the statement; `acceptance_version(statement)`; `DeliveryAcceptanceRef` |
-| `owlbear_delivery.evidence` (new; imports models and `acceptance_criteria`, imported by runtime and application, never by `runtime_models`) | `evaluate_acceptance_evidence(contract, frontier, request_observations=()) -> DeliveryAcceptanceCoverage`; `finalization_basis_digest(...)`; projection builder (N03-C) |
+| `owlbear_delivery.evidence` (new; imports models and `acceptance_criteria`, imported by runtime and application, never by `runtime_models`) | `evaluate_acceptance_evidence(contract, frontier, request_observations=()) -> DeliveryAcceptanceCoverage`; `resolve_confirmation`, `confirmation_applies` (§1.5); `finalization_basis_digest(...)`; projection builder (N03-C) |
 | `compile_delivery_contract` | Adds the three identity diagnostics; output bytes unchanged for valid input |
 | `DeliveryAuthorityRegistry.admit` | First admission requires authored identities |
-| `DeliveryRuntime.publish_result`, `DeliveryRuntime.finalize_change` | Enforce §1.6; on violation raise `DeliveryAcceptanceEvidenceError` (subclass of `DeliveryRuntimeConflictError`), code `ERR_DELIVERY_ACCEPTANCE_EVIDENCE`, `gaps` ≤ 64 × `{acceptance_id?, observation_id?, reason}`; reasons `uncovered`, `unknown-legacy-only`, `missing`, `failed`, `legacy-observation`, `unknown-acceptance`, `stale-acceptance-version`, `confirmation-unresolved`, `confirmation-not-applicable`, `review-basis-missing`, `review-basis-stale`, `review-observations-mismatch`, `finalization-basis-unavailable`, `finalization-context-oversized` |
-| `show_finalization_context` | Adds `semantics: DeliveryFinalizationSemantics` and `semantics_refusal: DeliveryContextRefusal` (each `exclude_if` None; exactly one set whenever the context is otherwise available). `semantics` holds: contract digest and title; outcomes with promise, commitment and dependency IDs and criteria; commitments; task results (ID, title, commit, result digest, observation IDs); per promoted task its bound authority (`task_id`, `task_digest`, `result`, `constraints`, `exclusions`, `proof_boundaries`, `acceptance_observations`); confirmations cited by task evidence with their `applies_to` (retained, §1.5); `diff_base`; `change_head`; per-criterion coverage from task evidence; `basis_digest`. Task authority is bound by the result digests, which hold `task_digest`; the Design package is not included. Size: see the context budget below |
+| `DeliveryRuntime.publish_result`, `DeliveryRuntime.finalize_change` | Enforce §1.6; on violation raise `DeliveryAcceptanceEvidenceError` (subclass of `DeliveryRuntimeConflictError`), code `ERR_DELIVERY_ACCEPTANCE_EVIDENCE`, `gaps` ≤ 64 × `{acceptance_id?, observation_id?, reason}`; reasons `uncovered`, `unknown-legacy-only`, `missing`, `failed`, `legacy-observation`, `unknown-acceptance`, `stale-acceptance-version`, `confirmation-unresolved` (no such ledger entry), `confirmation-not-applicable` (outcome, scope, procedure or decision), `review-basis-missing`, `review-basis-stale`, `review-observations-mismatch`, `finalization-basis-unavailable`, `finalization-context-oversized` |
+| `DeliveryRuntime.resolve_request`, `PortfolioApplication.answer` | For a scoped request, accept only a `DeliveryUserConfirmation` built by a boundary adapter (D13) and write the request resolution and the ledger entry in one transaction under the existing `expected_frontier_digest` CAS; a scoped request without one, a caller `resolution` on a scoped request or a full ledger raise `DeliveryConfirmationError`, code `ERR_DELIVERY_CONFIRMATION`, reasons `confirmation-required`, `declined`, `channel-unavailable`, `ledger-full`; nothing is written. Unscoped requests behave as today |
+| MCP `answer` (N03-A) | For a scoped request, the handler takes the server `Context`, refuses `channel-unavailable` unless the client declared form elicitation, sends one elicitation (D13) and builds the confirmation from an `accept` only; `decline` or `cancel` → `declined`. Caller `resolution` and `provenance` are ignored for confirmation purposes. No lock is held while the user answers |
+| Cockpit HTTP `answer_request` (N03-A) | For a scoped request: `409` `ERR_DELIVERY_CONFIRMATION` reason `channel-unavailable` with chat guidance; caller `provenance` never counts. [U2](#u2--may-cockpit-confirmations-count-as-user-only) may add a Cockpit channel in N03-C |
+| `show_finalization_context` | Adds `semantics: DeliveryFinalizationSemantics` and `semantics_refusal: DeliveryContextRefusal` (each `exclude_if` None; exactly one set whenever the context is otherwise available). `semantics` holds: contract digest and title; outcomes with promise, commitment and dependency IDs and criteria; commitments; task results (ID, title, commit, result digest, observation IDs); per promoted task its bound authority (`task_id`, `task_digest`, `result`, `constraints`, `exclusions`, `proof_boundaries`, `acceptance_observations`); ledger confirmations cited by task evidence (scope, decision, channel; §1.5); `diff_base`; `change_head`; per-criterion coverage from task evidence; `basis_digest`. Task authority is bound by the result digests, which hold `task_digest`; the Design package is not included. Size: see the context budget below |
 | `show_build_context`, `show_plan_context` | Add `acceptance: tuple[DeliveryAcceptanceCriterion, …]` for the outcome |
 | MCP | `finalize_change`, `submit_result` and the request-bearing `transition_delivery` and `settle_worker_invocation` schemas (`applies_to`) follow the core models (strict); the error maps to its code with bounded `gaps` in `TargetDiagnostic` (N03-A); `DeliveryOperatorContextResponse` copies `evidence` (N03-C); no new tool |
 | Projection (N03-C) | `DeliveryEvidenceProjection{change_id, contract_digest, frontier_digest, finalization_id, finalization_rules, criteria, unattributed, counts}`: `finalization_rules` is `typed`, `legacy` or `none`; `criteria` holds one `DeliveryAcceptanceEvidenceView` per criterion with status `covered`, `missing`, `waived`, `uncovered` or `unknown` and ≤ 16 evidence items, latest first; `unattributed` holds ≤ 64 legacy or non-covering observations plus a truncated count |
@@ -275,8 +302,16 @@ collections, so one byte budget bounds `semantics`:
 - **N04** consumes §1.4 survival rules and the evaluator. Its applicability report adds reviewed records that
   map evidence for `(id, old version)` to `(id, new version)`; the evaluator stays a pure ordered fold, so those
   records join the sequence without changing N03 rules. `_carry_forward_unresolved_binding` is untouched by N03.
-- **N06** adds `confirmation.kind = interaction` (bound to the same criterion-version and procedure scope as
-  I6) and the `interaction:` locator scheme in its own format step;
+  **Confirmation contract for N04:** revision activation carries `DeliveryFrontier.confirmations` unchanged
+  (I10). Applicability evaluation resolves a reused record's confirmation with `resolve_confirmation` by
+  `confirmation_id`, never from active requests, so a request that N04 moves to history keeps its
+  confirmation authority. `confirmation_applies` checks the exact criterion version: for `(id, old version)`
+  → `(id, new version)` a `waived` or `human-confirmed` record stays `stale-acceptance-version` until the
+  user confirms the new version through the boundary (D13); no reviewed applicability record transfers it.
+  Same ID and version: the original confirmation still applies.
+- **N06** adds channel `interaction` to `DeliveryUserConfirmation` (same scope, decision and I6 rules) and the
+  `interaction:` locator scheme in its own format step; whether a Cockpit-hosted interaction counts as
+  user-only follows [U2](#u2--may-cockpit-confirmations-count-as-user-only);
   assisted checks record `manual-procedure` or `command` results with `procedure_registration_digest` = handler
   digest, `target_class` and `environment`. `missing` with owner `assisted-check` is the gap N06 resolves.
 - **N05** may show the projection counts in **Approve merge**; it adds no evidence semantics.
@@ -285,16 +320,18 @@ collections, so one byte budget bounds `semantics`:
 ### 1.10 Existing owners to reuse
 
 `_receipt_digest` and the attribute-copy `create` pattern (`delivery_runtime.py:557-561`); `_omit_when_none`
-(`delivery_runtime.py:158`); `DeliveryRequestResolution.provenance`; `validate_finalization_head` ancestry
+(`delivery_runtime.py:158`); `DeliveryRequestResolution.provenance` (kept for unscoped answers);
+`validate_finalization_head` ancestry
 (`change_workspace.py:5033-5036`); `FinalizationReportStore` and its existing codes; the N02 registry, gate,
-`delivery-migrate` and `delivery-lc`; `Client(assemble_target_server(...))`, the Cockpit HTTP client and the
-E2E stack.
+`delivery-migrate` and `delivery-lc`; the MCP SDK's `Context.elicit` (P15); `Client(assemble_target_server(...))`,
+the Cockpit HTTP client and the E2E stack.
 
 ### 1.11 Exclusions
 
 Revision activation and applicability after revision (N04); prepared interactions and private input (N06); a
 waiver path beyond [U1](#u1--may-a-user-waive-a-required-acceptance-criterion)(b) (no agent, reviewer or
-unconfirmed waiver); claim IDs on
+unconfirmed waiver); a Cockpit confirmation channel (pending
+[U2](#u2--may-cockpit-confirmations-count-as-user-only)); claim IDs on
 `DeliveryTaskDefinition` (task digest churn for no engine use; Planner guidance cites IDs in text instead);
 evidence projection for archived completed history; execution attestation; contract schema change.
 
@@ -315,7 +352,8 @@ Agent-settled with probe evidence:
   class for a mutable family; N02 D5 lists rewrite for 17 → 18 only because the old reader already rewrote.
 - **D4 Results keep only non-failing records; finalization only satisfying ones.** Failures go to block,
   retry or `report_finalization_failure`; gaps (`missing`) and user waivers (`waived`, U1(b)) stay durable
-  and visible.
+  and visible. A satisfying record is proof or an applicable waiver (§1.5), so a Finalizer may submit an
+  exact-head waiver just as a Builder may carry one.
 - **D5 Last record wins**, in ancestry order (P7), so later evidence can close or reopen a gap
   deterministically.
 - **D6 Basis digest and observation set in the review.** The reviewer attests the semantic basis it saw and
@@ -329,8 +367,9 @@ Agent-settled with probe evidence:
   with the receipt-construction text of the skills (companion rule, execution plan §1.4); N03-B keeps the
   semantic procedures and host rehearsal; N03-C the projection. See [3.5](#35-required-execution-plan-deltas).
 - **D9 Confirmation scope on the existing request route** (P10). Requests bind no criterion or procedure
-  today, so applicability needs one optional request field, not a new confirmation channel. It changes
-  nested request shapes, which the frontier, snapshot and receipt widening already version.
+  today, so applicability needs one optional request field. It changes nested request shapes, which the
+  frontier, snapshot and receipt widening already version. The user's answer to a scoped request arrives
+  only through the D13 boundary, and its authority lives in the ledger, not in the request.
 - **D10 No new observation when carried evidence covers all** (P10). Today's request and receipt require
   one observation; requiring an exact-head check with nothing uncovered would contradict R9. Complete
   coverage plus the exact-head finalization review is the proof; maintained supporting checks stay optional.
@@ -341,6 +380,38 @@ Agent-settled with probe evidence:
 - **D12 All-or-nothing context budget** (P12). A truncated context would let the reviewer attest a basis that
   omits obligations (R5, R10). One deterministic byte budget with a typed refusal keeps the context complete or
   absent; 256 KiB is 7.5× the largest live upper bound, and finalization refuses rather than degrades.
+
+Engineering decision by the lead (PR #360 plan gate round 1):
+
+- **D13 Confirmation boundary: MCP elicitation** (P15).
+  - *Threat model.* An agent can call every Delivery MCP tool with any arguments. MCP `answer` forwards a
+    caller-supplied `resolution` with `provenance: user-confirmed` unchanged (`target_server.py:442-453`), so
+    an agent could manufacture a waiver or a human confirmation, and a scoped answer that declines a waiver
+    would still pass a provenance check. A user confirmation therefore has to arrive on a channel that the
+    agent's normal tool surface cannot satisfy. The agent also runs as the same OS user and could in
+    principle forge state files or call the Python API from a terminal. The boundary targets the agent's
+    tool surface, not a hostile local process; existing Delivery state integrity checks (receipt digests,
+    frontier CAS, snapshot identity) detect tampering only where they apply (R12).
+  - *Channel.* When MCP `answer` targets a scoped request, the Delivery MCP server sends
+    `elicitation/create` to the client inside that tool call (`Context.elicit`). VS Code renders it to the
+    user; the model neither sees a way to answer it nor supplies the response. The form shows the Change,
+    outcome, kind, each criterion ID, version and statement, and the procedure; its one required field is
+    the enum `decision` (§1.5).
+  - *Outcomes.* `accept` records one `DeliveryUserConfirmation` with channel `mcp-elicitation` and the
+    digest of the exact rendered question. `decline` or `cancel` records nothing and leaves the request open.
+    A `keep-required` or `failed` answer is recorded as the user's decision but is not affirmative for a
+    waiver or a passed check (I6). Caller `resolution` and `provenance` are ignored for confirmation purposes.
+  - *No fallback.* A client without form elicitation is refused with `channel-unavailable`; nothing falls
+    back to caller provenance.
+  - *Concurrency.* No lock is held while the user answers. The answer applies under the existing
+    `expected_frontier_digest` CAS; a changed frontier refuses, and a retry asks again.
+  - *Protocol 2026-07-28 and later.* The SDK carries elicitation results in a client-round-tripped
+    `request_state` that it does not authenticate itself (P15). N03-A accepts such an outcome only under a
+    controller-held MAC over the state and the issuing request; otherwise it asks again.
+  - *Scope.* The same boundary covers `human-confirmed` evidence, which has the same fabrication route.
+    Whether a Cockpit confirmation also counts is [U2](#u2--may-cockpit-confirmations-count-as-user-only);
+    until it is decided, Cockpit refuses scoped answers and points to the chat. The SDK notes that an
+    agent-type client may answer an elicitation itself; that VS Code always asks the user is G10.
 
 #### U1 — May a user waive a required acceptance criterion?
 
@@ -358,7 +429,38 @@ evidence text; N04-P and N06-P plan against (b).
   the projection and PR. (c) Agents or reviewers may waive.
 - **Decision: (b).** The agents had recommended (a), which keeps one route for changing what "done" means
   (U7, §8.4); the user chose an explicit, recorded and visible waiver instead. Agents and reviewers never
-  waive, so (c) stays excluded.
+  waive, so (c) stays excluded. The waiver is captured through the D13 boundary, so an agent cannot
+  manufacture it.
+
+#### U2 — May Cockpit confirmations count as user-only?
+
+Open user decision (required before N03-C starts; N03-A and N03-B do not depend on it). It applies to each
+waiver and each human-confirmed check: occasional, not every Change. N05 merge approval and retirement keep
+their decided D14 rules; U2 does not reopen them.
+
+- **Status quo:** under D13 a waiver or human-confirmed check counts only when the user answers an MCP
+  elicitation inside a chat tool call. Cockpit's answer route forwards a caller-supplied `provenance`
+  (`routes/target_work.py:133-138`); N03-A refuses it for scoped requests until this decision.
+- **Problem:** Cockpit is where the user already looks, but agents have browser automation tools that can
+  open and click Cockpit, and they run as the same OS user. A Cockpit click alone does not show that the
+  user acted.
+- **Options:**
+  - (a) Cockpit confirmations count, defended by an Origin check and a SameSite session cookie. Pro: one
+    click where the user already is; no chat round trip. Con: these stop cross-site requests and scripts
+    without the cookie, not a browser the agent drives. Risk: accepted residual that an agent deliberately
+    drives a browser tool to Cockpit and clicks.
+  - (b) Only MCP elicitation counts; Cockpit shows the pending confirmation with its scope and links to the
+    chat that asks it. Pro: one boundary that the agent's tool surface cannot satisfy; no new Cockpit
+    authority. Con: the user switches to the chat; the Change waits while no chat runs. Risk: rests on VS
+    Code rendering elicitations to the user (G10).
+  - (c) Cockpit counts only with an OS-level presence check (macOS LocalAuthentication, Touch ID or
+    password). Pro: a click needs the person at the machine. Con: no Ubuntu equivalent, so Ubuntu falls
+    back to (b); a native helper to build and maintain. Risk: the safety rule differs by platform.
+- **Recommendation: (b)** for waivers and human-confirmed evidence; confidence medium. It keeps one
+  boundary the agent cannot satisfy through its tools; (a) stays the fallback if N03-B's host rehearsal
+  shows the chat round trip is too costly.
+- **Effect:** N03-A builds the elicitation channel under every option. The answer changes only N03-C
+  (Cockpit controls) and N06 (Cockpit-hosted interactions).
 
 ## 2. Feasibility Probes
 
@@ -391,6 +493,15 @@ P13 read the same base plus N02-A (`c9d4a15b7`); P14 read lane-b `e6ed5bb31` (ci
 | P13 | Round-4 source read on lane-b `c9d4a15b7` (`58c4d928b` + N02-A): every `_replace_content`, frontier `ReplacementTransactionParticipant` and `record_pending_publication` site | Model-equality gate only in `complete_recovery` (`delivery_runtime.py:1764`); `False` only in `acknowledge_checkpoint_publication` (`:782`) and the `_read` rewrite (`:2329`); `_portable_frontier` drops a published pending checkpoint (`delivery_state.py:790-796`) | P rows of §1.7 |
 | P14 | Round-5 source read on lane-b `e6ed5bb31` | `acknowledge_checkpoint_publication` calls `_replace_content` (`delivery_runtime.py:782`), whose default base is `publication_base_digest(previous)` (`:2384`); that helper drops claim fields but keeps `pending_checkpoint` (`runtime_reads.py:78-95`). Snapshots embed `_portable_frontier` (`delivery_state.py:124`), which drops a checkpoint at `published_head` (`:790-796`). `_publish_delivery_state` acknowledges the prior marker (`portfolio_application.py:1725`) before checkpoint acknowledgment (`application_publication.py:1340`, `:170`). Replay refuses a remote digest outside {base, current} (`:1633`) | Acknowledgment-specific base (§1.7 P row) |
 
+P15 ran for the PR #360 gate on lane-c `4839b1fc8` (`origin/dev` `634a77be7`) with the lane venv
+(`env -u PYTHONPATH uv --directory <lane-c> run --no-sync`); scripts and outputs in
+`/Users/GGN7H9Q/Projects/owlbear-dev-lane-c/.owlbear/scratch/gate1/` (unversioned). SDK paths are relative to
+`.venv/lib/python3.14/site-packages/`.
+
+| ID | Executed | Result | Premise settled |
+| --- | --- | --- | --- |
+| P15 | `p_elicit.py`, `p_elicit2.py`: installed MCP SDK and Delivery adapters | `mcp` 2.3.0, no `fastmcp` (FastMCP is `MCPServer` in 2.x; `target_server.py:14` imports it). `Context.elicit(message, schema)` (`mcp/server/mcpserver/context.py:196`) → `elicit_with_validation` (`mcp/server/elicitation.py:103`) → `ServerSession.elicit_form` sends `elicitation/create` (`mcp/server/session.py:351`, `mcp/shared/peer.py:198`). `ElicitResult.action` is `accept`, `decline` or `cancel`; `decline` and `cancel` carry no data. Capability: `ClientCapabilities.elicitation`, `ServerSession.check_client_capability` (`session.py:137`); the marker path raises `MISSING_REQUIRED_CLIENT_CAPABILITY` without form elicitation (`mcp/server/mcpserver/resolve.py:678-690`). From protocol `2026-07-28` (`resolve.py:96`) elicitation rides `InputRequiredResult` with a client-round-tripped `request_state`; `_encode_state` adds no MAC (`resolve.py:664-669` and `_encode_state`). The SDK docstring warns that an agent client may answer an elicitation itself (`elicitation.py:103`). MCP `answer` forwards the caller's `resolution` unchanged (`target_server.py:442-453`); Cockpit forwards `body.provenance` (`routes/target_work.py:133-138`); `DeliveryRequestResolution.provenance` (`runtime_models.py:826`); the writer is `DeliveryRuntime.resolve_request` (`delivery_runtime.py:2198`) via `PortfolioApplication.answer` (`portfolio_application.py:1340`) | D13 is feasible in the installed SDK; capability refusal is typed; the `request_state` MAC is needed; host behavior is G10 |
+
 ## 3. Phases
 
 ### 3.1 Shared rules
@@ -404,7 +515,8 @@ P13 read the same base plus N02-A (`c9d4a15b7`); P14 read lane-b `e6ed5bb31` (ci
   second renumbers its versions and migration on rebase and reruns LC. The ready rule already serializes them
   (both edit `delivery_runtime.py`).
 - **Ownership** (execution plan §1.6). Opus keeps models, versioning, migration registration, evaluator,
-  finalize validation and challenge reconciliation. Luna may take fixture conversion to schema-2 observations,
+  finalize validation, the confirmation boundary and ledger, and challenge reconciliation. Luna may take
+  fixture conversion to schema-2 observations,
   frontend mirrors and rendering, parity assertions and skill text once Opus fixes the contract.
 - **Assembled proof** uses the default loader, `Client(assemble_target_server(...))`, the Cockpit HTTP client
   and the E2E stack on disposable portfolios with local bare remotes.
@@ -421,23 +533,25 @@ P13 read the same base plus N02-A (`c9d4a15b7`); P14 read lane-b `e6ed5bb31` (ci
   - `target_contract.py`: `DeliveryCompilationDiagnosticCode`, `_parse_outcome` (`:354`), `_validate_definitions`
   - `delivery_admission.py`: `DeliveryAuthorityRegistry.admit` (`:183`)
   - `runtime_models.py` [N01-C]: observation, result, confirmation, environment and reference models;
-    `DeliveryRequest.applies_to`, `DeliveryConfirmationScope`;
+    `DeliveryRequest.applies_to`, `DeliveryConfirmationScope`, `DeliveryRequestResolution.confirmation_id`,
+    `DeliveryUserConfirmation`, `DeliveryFrontier.confirmations`, `DeliveryConfirmationError`;
     `DeliveryReview`/`Receipt`, `DeliveryTaskResult`, `DeliveryFinalization`/`Receipt`, `DeliveryFrontier`,
     `FinalizeDeliveryChange`, `DeliveryAcceptanceEvidenceError`
   - `runtime_receipts.py` [N01-C]: the five embedding receipts of P8 and `_DeliveryBuilderRequestResolutionReceipt`
   - `delivery_runtime.py` facade: `DeliveryRuntime.publish_result`, `DeliveryRuntime.finalize_change`,
-    `_read`, `_replace`, `_replace_content` (stored-byte contract, §1.7); `complete_recovery` and
+    `DeliveryRuntime.resolve_request` (ledger append), `_read`, `_replace`, `_replace_content` (stored-byte
+    contract, §1.7; I10 guard); `complete_recovery` and
     `acknowledge_checkpoint_publication` (P rows, §1.7); `frontier_bytes` and
     `publication_base_digest` wherever N01-C placed them (`runtime_reads.py` per N01 plan §3.6);
     `parse_delivery_frontier` wherever N02-A placed it
-  - `runtime_reads.py` [N01-C]: `_advance` (confirmation retention, §1.5); `runtime_settlement.py` [N01-C]:
-    handoff intent receipt construction (§1.7)
+  - `runtime_settlement.py` [N01-C]: handoff intent receipt construction (§1.7); `portfolio_application.py`:
+    `answer` (passes the boundary confirmation; refuses scoped requests without one)
   - `delivery_state.py`: `DeliveryStateSnapshot`, `parse_delivery_state_snapshot`, snapshot version constants,
     `_same_snapshot_inputs`, `_portable_frontier`, `_snapshot_digest`
   - `delivery_application_loader.py`: snapshot restoration bytes and the S and N rows of the §1.7 inventory
   - `application_publication.py`: `_pending_publication_remote_head`, `_reconcile_pending_state_publication`
-  - `application_recovery.py`: `_is_repairable_frontier_successor` (retained confirmations),
-    `repair_stranded_frontier`; `repair_missing_request_provenance` beside `parse_delivery_frontier` (W row)
+  - `application_recovery.py`: `repair_stranded_frontier`; `repair_missing_request_provenance` beside
+    `parse_delivery_frontier` (W row)
   - `state_formats.py` [N02-A/B]: §1.7 entries and migration `format-1-to-2`
   - `application_models.py`: `DeliveryFinalizationContext.semantics`, `.semantics_refusal`,
     `DeliveryFinalizationSemantics`, `DeliveryContextRefusal`,
@@ -445,8 +559,11 @@ P13 read the same base plus N02-A (`c9d4a15b7`); P14 read lane-b `e6ed5bb31` (ci
   - `application_lifecycle.py`: `show_finalization_context`, `_finalize_change_locked` (basis re-check under
     the checkpoint lock); `application_acquisition.py`: `show_plan_context`, `show_build_context`
   - `owlbear_delivery/__init__.py`; `serve/delivery/tests/fixtures/module_surface.json`; N02 fingerprint fixture
-  - `serve/delivery-mcp/src/owlbear_delivery_mcp/target_server.py` (error code mapping, `_raise` carries `gaps`);
-    `target_models.py` (`TargetDiagnostic.gaps`, ≤ 64, `exclude_if` None)
+  - `serve/delivery-mcp/src/owlbear_delivery_mcp/target_server.py` (error code mapping, `_raise` carries `gaps`;
+    `answer` takes the server `Context` and runs the D13 elicitation for scoped requests, including the
+    `request_state` MAC); `target_models.py` (`TargetDiagnostic.gaps`, ≤ 64, `exclude_if` None)
+  - `serve/cockpit/src/owlbear_cockpit/routes/target_work.py` (`answer_request` refuses scoped requests,
+    U2 default) and `serve/cockpit/tests`
   - `serve/tools/src/owlbear_tools/delivery_diagnostics.py` (frontier 19, snapshot 3, receipts 2, marker 2)
   - tests: new `serve/delivery/tests/test_acceptance_criteria.py`, `test_evidence.py`; schema-2 fixtures in
     `test_delivery_runtime.py`, `test_portfolio_application.py`, `test_target_contract.py`,
@@ -470,11 +587,15 @@ P13 read the same base plus N02-A (`c9d4a15b7`); P14 read lane-b `e6ed5bb31` (ci
   - Finalization of a Change whose carried task evidence covers every criterion, with zero new observations
     and an exact-head finalization review with empty `observation_ids`, writes a schema-3 receipt; no
     criterion is exercised again.
-  - A `human-confirmed` manual observation whose confirmation names a resolved `user-confirmed` request in the
-    same outcome, scoped to the covered criterion version and the observation's procedure, is accepted.
-  - A task result with a `waived` record (owner user) whose confirmation is a resolved `user-confirmed`
-    request scoped to that criterion version and the record's procedure promotes; finalization with every
-    other criterion covered succeeds and the evaluator shows that criterion `waived` (U1(b)).
+  - A `human-confirmed` manual observation whose `confirmation_id` names a ledger confirmation in the same
+    outcome with decision `passed`, scoped to the covered criterion version and the observation's procedure,
+    is accepted.
+  - A task result with a `waived` record (owner user) whose `confirmation_id` names a ledger confirmation with
+    decision `waive`, scoped to that criterion version and the record's procedure, promotes; finalization with
+    every other criterion covered succeeds and the evaluator shows that criterion `waived` (U1(b)).
+  - The Finalizer submits an exact-head `waived` record with an applicable `waive` confirmation (no task
+    result covers that criterion), with a matching review: finalization writes a schema-3 receipt and the
+    evaluator shows `waived`; the same record cited by a task result gives the same status.
   - Every golden D03 record and every schema-1 observation, review, result, finalization and embedding receipt
     round-trips byte-identically with unchanged identity; a v2 snapshot parses natively; a v1 snapshot upcasts
     to 3 with `migrated_from_snapshot_id`.
@@ -495,10 +616,15 @@ P13 read the same base plus N02-A (`c9d4a15b7`); P14 read lane-b `e6ed5bb31` (ci
     frontier digest; reload through the default loader keeps the Change available; replay with the real
     local-bare-remote publisher publishes snapshot 3 once; a second replay adds no snapshot commit and leaves
     no pending marker. A stored-19 acknowledgment records no marker.
-  - Block with a request scoped to one criterion version and procedure; the user answers `user-confirmed`;
-    reacquire; submit a `human-confirmed` result citing it; promote; reload: the confirmation stays in
-    `binding.requests` and appears in `semantics`; finalization with carried evidence and no new observation
-    succeeds.
+  - Block with a request scoped to one criterion version and procedure (kind `confirm-check`); MCP `answer`
+    through `Client(assemble_target_server(...))` with a test client that declares form elicitation and
+    accepts `passed` → one ledger entry (channel `mcp-elicitation`, question digest) and the resolved request
+    with its `confirmation_id`, in one transaction; reacquire; submit a `human-confirmed` result citing it;
+    promote (requests cleared as today); reload: the ledger entry is byte-identical and appears in
+    `semantics`; finalization with carried evidence and no new observation succeeds.
+  - Ledger survival: after the confirmation above, `_reset_binding` of that outcome and a request moved out of
+    the active binding leave `confirmations` byte-identical; `resolve_confirmation` still returns the entry;
+    the frontier restored from its published snapshot carries it.
   - Defer a passive v18 handoff over a v18 snapshot, parameterized for a same-task Builder handoff and a
     same-outcome Planner handoff (Builder return to Planning, no Planner claim): the schema-2 intent receipt's
     `before_frontier_digest` equals the sha256 of the v18 file bytes and `after_frontier` is 19; reload accepts
@@ -513,11 +639,29 @@ P13 read the same base plus N02-A (`c9d4a15b7`); P14 read lane-b `e6ed5bb31` (ci
 - **Negative scenarios:**
   - Unprefixed first admission → `acceptance-identity-required`; mixed, duplicate and near-miss items → their
     compiler diagnostics.
-  - Result with a `failed` command, a schema-1 observation, an unknown `AC-` ID, a stale version, or an
-    unresolved, unanswered or non-`user-confirmed` confirmation → `ERR_DELIVERY_ACCEPTANCE_EVIDENCE` with the
-    named reason; frontier bytes unchanged.
-  - A confirmation citing a resolved `user-confirmed` request without scope, for another outcome, another
-    criterion or version, or another procedure → `confirmation-not-applicable`; frontier bytes unchanged.
+  - Result with a `failed` command, a schema-1 observation, an unknown `AC-` ID, a stale version, or a
+    `confirmation_id` absent from the ledger → `ERR_DELIVERY_ACCEPTANCE_EVIDENCE` with the named reason;
+    frontier bytes unchanged.
+  - A ledger confirmation for another outcome, another criterion or version, or another procedure, or a
+    `confirm-check` decision `failed` cited by a `passed` observation → `confirmation-not-applicable`;
+    frontier bytes unchanged.
+  - Fabricated confirmation (R14): the agent calls MCP `answer` on a scoped request with
+    `resolution.provenance: user-confirmed` and a selected option, through a client that declares no
+    elicitation → `ERR_DELIVERY_CONFIRMATION` `channel-unavailable`; through a client that declares it but
+    declines, and again cancels → `declined`. Each: no ledger entry, request unresolved, frontier bytes
+    unchanged. Cockpit HTTP `answer_request` with `provenance: user-confirmed` on a scoped request → `409`,
+    nothing written. A block request created with `applies_to` and a pre-filled `resolution` → rejected at
+    validation. `submit_result` with a `waived` or `human-confirmed` record citing a request resolved
+    through the old caller-provenance route (fixture written directly) → `confirmation-unresolved`.
+  - Forged round trip: under protocol `2026-07-28`, a retried `answer` whose `request_state` claims `accept`
+    without a valid MAC, or with a MAC for another request → asks again; no ledger entry.
+  - Declined waiver: the user answers a `waive` request with `keep-required` → the request is resolved with
+    that recorded decision; a `waived` record citing it → `confirmation-not-applicable`, both in a task
+    result and in the finalization request; finalization with that criterion otherwise uncovered →
+    refused `uncovered`; no receipt.
+  - Append-only ledger (I10): a frontier write that drops, reorders or alters a ledger entry → refused before
+    any byte write; a stored frontier whose ledger entry fails its digest → the Change is unavailable (V20);
+    the 257th confirmation → `ledger-full`, nothing written.
   - Keep a valid finalization review and replace one otherwise-valid observation (or add, drop or reorder
     one) → `review-observations-mismatch`; no receipt, no report, frontier bytes unchanged.
   - Finalization with one criterion uncovered (all task checks pass: the #222 mechanical case), one whose last
@@ -526,9 +670,10 @@ P13 read the same base plus N02-A (`c9d4a15b7`); P14 read lane-b `e6ed5bb31` (ci
     target sync or the head changed between context and finalize), no diff base, or zero observations while a
     criterion is uncovered → refused with typed gaps; no
     receipt, no retry-ledger success, no checkpoint.
-  - A `waived` record whose confirmation is unresolved, not `user-confirmed`, unscoped, or scoped to another
+  - A `waived` record whose `confirmation_id` is not in the ledger, or whose confirmation is scoped to another
     outcome, criterion, version or procedure → `confirmation-unresolved` or `confirmation-not-applicable`;
-    frontier bytes unchanged (U1(b)).
+    frontier bytes unchanged (U1(b)). The same record in a finalization request → refused with the same
+    reason; no receipt.
   - A schema-2 handoff intent receipt whose frontiers also differ in a field outside the action's set → rejected;
     a schema-1 intent receipt embedding a 19 frontier → rejected. On reload, for both the Builder and the Planner
     handoff parameter, a receipt whose normalized `before_frontier` or `after_frontier` differs from its baseline
@@ -578,7 +723,8 @@ P13 read the same base plus N02-A (`c9d4a15b7`); P14 read lane-b `e6ed5bb31` (ci
   source at `change_head` only; finding boundary for an unmet promise or a violated exclusion);
   `share/agents/finalizer.agent.md`; `share/skills/w-packet-building/SKILL.md` and
   `share/agents/builder.agent.md` (`covers` from build context, expected-negative, when to record `missing`
-  versus block; `applies_to` on a request that asks the user to confirm a check);
+  versus block; `applies_to` with kind `confirm-check` or `waive` on a request that asks the user, answered
+  only through the chat elicitation; never set `provenance: user-confirmed` to confirm anything);
   `share/skills/w-frontier-planning/SKILL.md` and `share/agents/planner-challenger.agent.md`
   (tasks cite `AC-NNN` in `acceptance_observations`; plan covers every criterion);
   `share/agents/designer-challenger.agent.md` (identity check); `serve/delivery/README.md` (evidence model and
@@ -589,9 +735,12 @@ P13 read the same base plus N02-A (`c9d4a15b7`); P14 read lane-b `e6ed5bb31` (ci
   `proof-failed` settlement; (3) a seeded assembled defect where every criterion has passing evidence but the
   promise is unmet → reviewer `finding`, `independent-review-failed` report, `review-failed` settlement;
   (4) a candidate that passes every criterion but violates one explicit task exclusion → reviewer `finding`
-  citing that exclusion; (5) all criteria covered by carried evidence → finalization with no new observation.
+  citing that exclusion; (5) all criteria covered by carried evidence → finalization with no new observation;
+  (6) in real VS Code, a scoped `answer` shows the elicitation to the user; the model's transcript holds no
+  answer control; accept records one ledger entry, decline records none (G10).
 - **Negative scenarios:** ecosystem tests fail when a skill reintroduces schema-1 construction, asserts a
-  verdict for a command, lets an agent author `waived` or `human-confirmed` without a scoped confirmation, or
+  verdict for a command, lets an agent author `waived` or `human-confirmed` without a ledger confirmation or
+  tells it to supply `provenance: user-confirmed` itself, or
   omits the basis or observation echo; the reviewer refuses a request without `semantics`; the Finalizer
   procedure continues after `finalization-context-oversized` or asks for a partial context.
 - **Inner loop:** `uv run pytest tests/test_agent_ecosystem_validation.py -q`.
@@ -601,7 +750,10 @@ P13 read the same base plus N02-A (`c9d4a15b7`); P14 read lane-b `e6ed5bb31` (ci
 
 ### 3.4 N03-C — Evidence projection
 
-- **Prerequisites:** N03-B.
+- **Prerequisites:** N03-B; [U2](#u2--may-cockpit-confirmations-count-as-user-only) answered. Under U2(b)
+  N03-C keeps N03-A's Cockpit refusal. Under U2(a) it also edits `routes/target_work.py` to record a Cockpit
+  channel confirmation behind the Origin and SameSite checks, with its negative scenarios; U2(c) first needs a
+  plan revision for the native presence helper.
 - **Editable paths:** `evidence.py` (projection); `work_items.py` (`WorkItemDetailView.evidence`,
   `WorkItemProjector`); `application_models.py` (`DeliveryChangeView.evidence`, `DeliveryOperatorContext.evidence`);
   `portfolio_application.py` (`get_change`, `:1162`); `application_readiness.py` (`show_work_item_view`,
@@ -609,7 +761,8 @@ P13 read the same base plus N02-A (`c9d4a15b7`); P14 read lane-b `e6ed5bb31` (ci
   (`DeliveryOperatorContextResponse.evidence` and its `from_context` copy);
   `serve/delivery-mcp/tests/test_target_server.py`; `serve/cockpit/src/owlbear_cockpit/target_models.py`
   and `serve/cockpit/tests`; `serve/cockpit/web/src/api/workItems.ts`; `WorkItemDetail.tsx` (technical summary;
-  a request's `applies_to` criterion and procedure shown beside its answer controls)
+  a scoped request's kind, criteria and procedure: under U2(b) read-only with a link to the chat that asks it,
+  under U2(a) or (c) beside a Cockpit confirmation control)
   with its component test; E2E seed and the work-portfolio spec; `tests/test_cockpit_boundary.py` (parity for
   status, verdict, identity source and finalization rules); `application_support.py` (`_checkpoint_summary`:
   the PR body names each `waived` criterion, U1(b)); this plan's row; execution plan status row.
@@ -649,7 +802,7 @@ Applied in this PR's execution-plan edits (D11).
 
 | Phase | PR | Exact head | Proof | Challenges | Status |
 | --- | --- | --- | --- | --- | --- |
-| N03-P | #349 | — | Probes P1–P14 | Sol round 1: revision-required (observation binding, stored-byte upcast contract, confirmation applicability, bounded exclusions context, all-carried path) → revised; Sol round 2: revision-required (snapshot consumer serialization, confirmation retention through promotion, upgraded handoff receipt contract, MCP output owners) → revised; Sol round 3: revision-required (Planner lifecycle normalization, context budget) → consolidated comparison inventory; Sol round 4: revision-required (representation-only write publication) → revised; Sol round 5: revision-required (drained acknowledgment base) → revised; Sol round 6: `plan-sound` | approved (D11 confirmed 2026-10-03; U1 decided (b) 2026-10-03) |
+| N03-P | #349 | — | Probes P1–P15 | Sol round 1: revision-required (observation binding, stored-byte upcast contract, confirmation applicability, bounded exclusions context, all-carried path) → revised; Sol round 2: revision-required (snapshot consumer serialization, confirmation retention through promotion, upgraded handoff receipt contract, MCP output owners) → revised; Sol round 3: revision-required (Planner lifecycle normalization, context budget) → consolidated comparison inventory; Sol round 4: revision-required (representation-only write publication) → revised; Sol round 5: revision-required (drained acknowledgment base) → revised; Sol round 6: `plan-sound`; user-decision revision #360: Sol round 1: revision-required (fabricated confirmation, Finalizer waiver admissibility, confirmation authority across revision) → confirmation boundary D13, ledger, U2 opened | approved (D11 confirmed 2026-10-03; U1 decided (b) 2026-10-03; U2 open before N03-C) |
 | N03-A | — | — | — | — | — |
 | N03-B | — | — | — | — | — |
 | N03-C | — | — | — | — | — |
@@ -662,8 +815,10 @@ Applied in this PR's execution-plan edits (D11).
 | G2 | Widening validators reject N03 content in every old-version instance | Prototype covered observation and review only | P3, P6 | N03-A tests | N03-A merge |
 | G3 | P8 lists every family whose fingerprint changes | Static scan; N02-A's fingerprint test is the authority | P8 | N03-A | N03-A merge |
 | G4 | A real reviewer detects an assembled-but-wrong Change from the shared basis | Semantic judgment; not provable by fixtures | Mechanical uncovered case automated in N03-A | N03-B host rehearsal | N03-B merge |
-| G5 | Human confirmation beyond request resolutions | Needs prepared interactions | `confirmation` union is extensible | N06 | Nothing in N03 |
+| G5 | Human confirmation beyond MCP elicitation | Needs prepared interactions; a Cockpit channel needs U2 | `channel` is extensible (§1.5) | N06; U2 | Nothing in N03-A or N03-B |
 | G6 | Evidence reuse after revision | Applicability is N04 | §1.4 survival rules | N04 | Nothing in N03 |
 | G7 | Live `delivery-action-readiness` can finalize | Its product merged via PR #316 (`364daf61`), but the record is unfinished: 10 schema-1 observations are `unknown`; 17 criteria need typed evidence | P1 | N10-M disposition | N10-M |
 | G8 | LC runs in CI | Needs Docker and a live copy | `delivery-lc` unit tests (N02-B) | Each phase | Nothing (recorded per phase) |
 | G9 | The unadmitted live draft `interactive-browser-tools` (23 unprefixed criteria) can be admitted | First admission now requires `AC-NNN:` prefixes, a package change the user re-approves | P4 | Its Designer session after the programme | Nothing in N03 |
+| G10 | VS Code renders Delivery's elicitation to the user and never answers it automatically or through the model | Host behavior; the SDK warns an agent client may answer itself (P15); no host run in P | P15; D13 typed refusal without the capability | N03-B host rehearsal step (6) | N03-B merge; without it waivers and human-confirmed evidence stay unavailable |
+| G11 | Whether a Cockpit confirmation counts as user-only | Open user decision | [U2](#u2--may-cockpit-confirmations-count-as-user-only) | User | N03-C start |

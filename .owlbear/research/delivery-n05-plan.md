@@ -80,7 +80,11 @@
   from the approved target head, or the merged PR's base differs from the approved target, it calls
   `capture_acceptance_attention` with `identity-mismatch` and diagnostic
   `target-advanced-during-merge:<approval_id>` or `scope-changed-during-merge:<approval_id>` (no
-  enum or frontier change), never completion.
+  enum or frontier change), never completion. Detection is a precondition of the latch and of
+  completion on every path: first settlement, `check_merge_status`, a replay over an attempt that is
+  already terminal `merged`, and restart. It reads only the merge commit, parent 1 and merged base
+  that M2 persisted on the attempt record, so every path gives the same answer; a raced series never
+  latches, completes or cleans up, and a repeated observation returns the recorded attention.
 - **I5 No inferred approval.** Only the two adapters (Cockpit HTTP after a visible confirmation,
   MCP `approve_merge` with `confirmation="user-confirmed"`) create approvals. Proposal approval,
   readiness, the engine, the supervisor and workers never approve.
@@ -412,9 +416,13 @@ execution-scope race of I10.** Consequences:
 - After the merge, Delivery compares parent 1 of the merge commit with the approved target head
   and the merged PR's base with the approved target (D9), and reports `target-advanced-during-merge`
   or `scope-changed-during-merge` as acceptance attention, never completion attributed to the proof
-  (I4). Delivery claims no stronger guarantee.
-- G2 becomes a recorded, accepted residual risk with detection evidence; A-R still runs for G1, and
-  its retarget and stack-join step shows that detection reports the mismatch (3.3).
+  (I4). Delivery claims no stronger guarantee. The interval between the final read and GitHub's
+  execution is not bounded by Delivery (a request can stay pending, 1.11 rows M6–M9); unintended
+  merges can occur in it, and detection cannot undo them.
+- G2 becomes a recorded, accepted residual risk with detection evidence; A-R runs separate
+  rules-at-execution (G1), target-advance, retarget and stack-join steps (3.3). The stack-join step
+  establishes whether the parent-1 and base comparison exposes every stacked execution; that is
+  not assumed.
 - This revises programme §10.2, recorded with the old text, revision and reason in the
   [programme](change-continuation-delivery-redesign.md#102-merge-approval-is-a-bounded-user-action)
   and approved by the user on 2026-10-03.
@@ -548,7 +556,7 @@ it (exempt from I11).
 | Row | Effect | Evidence (fresh read; first match wins) | Settlement | Fence and next step |
 | --- | --- | --- | --- | --- |
 | M1 | Merge | No submission has a release record (a group may be recorded; D16); the read does not show the PR merged (a failed read qualifies) | No possible submission: no token was written; stays `intent` | Revoke → recorded unreleased group gone or killed, then `revoked-unsent`; else send under I1 |
-| M2 | Merge | PR merged; merge evidence head = approved head (series released or not) | `merged`; from `intent` with zero requests when unreleased | Unreleased: recorded group gone or killed first. Receipt with D9 parent-1 check (zero submissions when unreleased); fence released; acceptance completes |
+| M2 | Merge | PR merged; merge evidence head = approved head (series released or not) | `merged`; from `intent` with zero requests when unreleased; merge commit, parent 1 and merged base persisted on the attempt record | Unreleased: recorded group gone or killed first. Receipt with the D9 parent-1 and base check (zero submissions when unreleased); fence released; acceptance completes only when that check passes; otherwise `identity-mismatch` acceptance attention, no latch, no completion receipt, no D10 cleanup (I4) |
 | M3 | Merge | PR merged at another head (series released or not) | `head-changed`: the `sha` fence shows no submission of the series merged it; settles the attempt, not the Change; from `intent` with zero requests when unreleased | Unreleased: recorded group gone or killed first. Fence released; `_observe_acceptance_once` refuses the head and records `identity-mismatch` acceptance attention (existing owner); no completion receipt; no D10 cleanup; worktree retained |
 | M4 | Merge | Every possible submission of the series has its own complete refusal: `400`, `403`, `405` or `422` response, or UUID result `failed` (a lone first request qualifies) | `refused` with reason | Fence released; approval ends; a new confirmation is needed |
 | M5 | Merge | As M4, with at least one response or UUID result `enqueued` | `refused/queue-required` | As M4; a later queue merge is still observed (R4) |
@@ -669,8 +677,9 @@ M7 once `merge_reads_exhausted`).
   (PR, merge evidence, each recorded UUID result) under one fence entry. It sends no request (not
   even under M8), reserves nothing in either D6 episode, resets no budget and restores no
   automatic polling. It releases the fence only when the read matches M2–M5. On M2 the same call
-  runs the acceptance observation (completion); on M3 it runs it too and returns the acceptance
-  attention recorded. Otherwise it returns the refreshed hold; a matching `pending` returns row
+  runs the acceptance observation (completion only when the I4 detection passes, else attention);
+  on M3 it runs it too and returns the acceptance attention recorded. Otherwise it returns the
+  refreshed hold; a matching `pending` returns row
   `M7`, cause `pending-provider-request`, with the fence and both D6 budgets unchanged.
 - **No background reads.** While `merge_reads_exhausted`, acquisition and
   `reconcile_awaiting_acceptance` (Cockpit's 30-second reconciliation hook) read nothing for a
@@ -678,7 +687,7 @@ M7 once `merge_reads_exhausted`).
 - **GitHub guidance** derives only from the complete M2–M5 predicates of 1.11. Both surfaces
   render it from the codes and `outstanding`, so they cannot disagree:
   - `merge-approved-head` (M2): merging the PR in GitHub at the approved head; completion is
-    then observed once (R4).
+    then observed once (R4) unless the I4 detection reports a target advance or scope change.
   - `merge-other-head-attention` (M3): merging at any other head ends the attempt
     (`head-changed`), but the content is unreviewed: acceptance attention, no completion, no
     cleanup.
@@ -747,8 +756,8 @@ outputs, unversioned). GitHub probes were read-only GETs and GraphQL queries aga
     `effect_launcher.py` (D16), `serve/delivery-github/README.md`
   - `serve/delivery-github/tests/test_github_provider.py`, `test_memory_provider.py`, new
     `test_merge_provider.py`, new `test_effect_launcher.py` (EOF falsifier; requires `gh`, a skip
-    fails the gate run), new `test_merge_rehearsal.py` (marker `api`, runs only with
-    `OWLBEAR_MERGE_REHEARSAL_REPO` set; A-R)
+    fails the gate run); `test_merge_rehearsal.py` was listed here but not created by N05-A; N05-B
+    owns it (3.3)
   - `tests/test_delivery_worktree_authority.py` (provider and forbidden-effect gates, D11);
     `tests/fixtures/delivery-authority/forbidden-fields.py`, new `forbidden-provider-merge.py`
   - this plan's N05-A progress row; the execution plan's N05-A status row
@@ -805,18 +814,36 @@ outputs, unversioned). GitHub probes were read-only GETs and GraphQL queries aga
 
 ### 3.3 A-R — Real-provider merge rehearsal (step, not a phase)
 
-- **When:** after N05-A merges; before N05-B merges. Under U2(b) the agent creates the disposable
-  private repository and the user deletes it afterwards.
-- **Procedure:** with `OWLBEAR_MERGE_REHEARSAL_REPO` set, `test_merge_rehearsal.py` creates branches
-  and draft PRs through the provider, then exercises: wrong `sha` (expect refusal, PR unmerged);
-  draft (expect `400`); exact head (expect `202` or `200`, then `merged` by UUID); repeated request
-  (no second merge); lost response (send, discard the response, read back, repeat request → same
-  UUID or `merged`); merge commit parents; `deleteBranchOnMerge` effect on later PR reads; a target
-  advanced after the final read and before the request, and a `base` retarget or stack join after
-  the final read with the same head (expect the post-merge detection, D9, to report
-  `target-advanced-during-merge` or `scope-changed-during-merge`; evidence for G2 under U3(e)).
-- **Evidence:** command, repository, PR numbers, observed statuses and messages, on the N05-B PR.
-  No other repository is mutated.
+- **When:** on the N05-B candidate head, before N05-B merges. Under U2(b) the agent creates the
+  disposable private repository and the user deletes it afterwards.
+- **Owner:** N05-B implements `serve/delivery-github/tests/test_merge_rehearsal.py` (marker `api`,
+  runs only with `OWLBEAR_MERGE_REHEARSAL_REPO` set; risky-code owner Opus, 3.1). Its detection
+  steps call N05-B's own D9 comparator on provider readback, never a test copy.
+- **Preconditions,** checked first and recorded: the repository has `deleteBranchOnMerge` enabled
+  and accepts a ruleset or branch protection with a required status check on its target; a
+  supported API or `gh` route forms a stack (P4 documents only the `stack` read fields). If
+  either is unavailable on the account, A-R stops and asks the user (for example a public
+  disposable repository); no step is skipped silently.
+- **Steps,** each a separate test with its own PRs: wrong `sha` (expect refusal, PR unmerged);
+  draft (expect `400`); exact head (expect `202` or `200`, then `merged` by UUID); repeated
+  request (no second merge); lost response (send, discard the response, read back, repeat request
+  → same UUID or `merged`); merge commit parents. Then:
+  - *Rules at execution* (G1): the required check is `success` at the final read and set to
+    `failure` before the request; expect UUID result `failed` or refusal `rules-failed`, PR unmerged.
+  - *Target advance* (G2): the target advances after the final read and before the request;
+    expect a merge with parent 1 ≠ approved target head and `target-advanced-during-merge`.
+  - *Retarget* (G2): the PR's `base` changes to a second branch after the final read, same head;
+    expect the merged base ≠ approved target and `scope-changed-during-merge`.
+  - *Stack join* (G2): after the final read a downstack PR joins the PR's stack, same head; read
+    back every PR of the stack and what landed on the target. The step records whether the
+    parent-1 and base comparison flags every content that merged; a stacked execution that neither
+    comparison exposes stops A-R and requires a plan revision adding its detection before N05-B
+    merges.
+  - *Branch-deletion readback* (G10): after each merge, once `deleteBranchOnMerge` has deleted the
+    head (and any downstack) branch, the provider still reads PR state, head SHA, base, merge
+    commit parents, stack and the recorded UUID result.
+- **Evidence:** command, repository, PR numbers, observed statuses and messages per step, on the
+  N05-B PR. No other repository is mutated.
 
 ### 3.4 N05-B — Approval, merge action, readiness and cleanup
 
@@ -831,7 +858,8 @@ outputs, unversioned). GitHub probes were read-only GETs and GraphQL queries aga
     owner, `check_merge_status` (1.13), capability, cleanup best effort and sweep;
     `retire_held_merge` under U4(b))
   - `portfolio_application.py` [A]: facade bases; `_observe_acceptance_once` settles a live
-    attempt first (1.11), records U3(e) detection attention (I4) and calls cleanup after
+    attempt first (1.11), records U3(e) detection attention (I4) before the latch on every path
+    and calls cleanup after
     completion (D10); `reconcile_awaiting_acceptance`
     reads nothing for a held, exhausted Change (1.13); `_classify_acceptance_observation`
     keeps manual-merge detection; `_runtime` advisory pre-check; checkpoint `locked_roots` uses
@@ -866,7 +894,8 @@ outputs, unversioned). GitHub probes were read-only GETs and GraphQL queries aga
     text, no control), component tests; `tests/test_cockpit_boundary.py`
   - `tests/test_delivery_worktree_authority.py` (allowlist entries for B files only)
   - tests: new `serve/delivery/tests/test_merge_approval.py`, `test_merge_continuation.py`;
-    `serve/delivery/tests/test_state_formats.py` fixtures; `serve/tools/tests/test_delivery_diagnostics.py`
+    `serve/delivery/tests/test_state_formats.py` fixtures; `serve/tools/tests/test_delivery_diagnostics.py`;
+    new `serve/delivery-github/tests/test_merge_rehearsal.py` (A-R, 3.3)
   - this plan's progress row; the execution plan's status row
 - **Positive scenarios:**
   - Awaiting-merge, `CLEAN`, checks green, proof target equal to the current target head (U3(a)) →
@@ -902,11 +931,20 @@ outputs, unversioned). GitHub probes were read-only GETs and GraphQL queries aga
     confirmation is required.
   - Stacked PR (fresh read `stack.size` 2) → `merge-blocked/stacked`, no offer; an approval
     recorded before the stack formed → no merge request under that single-PR approval.
-  - `base` retarget or stack join after the final read, same head (the fake applies it between the
-    final read and execution) → one request; the merge executes; detection reports
-    `scope-changed-during-merge` (merged base) or `target-advanced-during-merge` (parent 1) as
-    `identity-mismatch` acceptance attention (I4); no completion receipt, no cleanup, worktree
-    retained. No configured scope enforcement is required for the offer.
+  - `base` retarget after the final read, same head (the fake applies it between the final read
+    and execution) → one request; the merge executes; detection reports
+    `scope-changed-during-merge` as `identity-mismatch` acceptance attention (I4); no completion
+    receipt, no cleanup, worktree retained. No configured scope enforcement is required for the
+    offer.
+  - Stack join after the final read, same head, as a separate fixture shaped by the A-R stack-join
+    readback → one request; detection reports the mismatch A-R showed (parent 1 or base) as
+    `identity-mismatch` attention; no completion receipt, no cleanup, worktree retained.
+  - Raced M2 (I4), parameterized for target advance (parent 1) and retarget (base), each reached
+    by first settlement in the merge owner, by `check_merge_status` on a held series, by a replay
+    after a crash that left the attempt terminal `merged` before acceptance, and by restart through
+    the default loader → `identity-mismatch` attention with its diagnostic; no latch, no completion
+    receipt, no cleanup, worktree retained; a second observation returns the same attention and
+    writes nothing. Unraced control: the same paths complete exactly once.
   - Restart with the original effect reservation outstanding → the successor reserves
     `merge-readback` and reads; no second request. Failed reads exhaust `merge-readback` before
     `merged` → `check_merge_status` route remains, no episode reset, no second merge. Then three
@@ -1171,7 +1209,7 @@ plan's status table, a companion that the ready rule does not block.
 
 | Phase | PR | Exact head | Proof | Challenges | Status |
 | --- | --- | --- | --- | --- | --- |
-| N05-P | #353 | — | Probes P1–P16 | Sol round 1: revision-required (stack scope, execution-time target race in U3, pending/unknown reconciliation, renewable consent, no-repair handoff, 409 option validation) → revised; Sol round 2: revision-required (execution scope policy, successor ledger accounting, outstanding-reply reconciliation, complete repair map, fence owner/ordering) → revised; Sol round 3: revision-required (reply non-execution authority, expiry ≠ refusal, fence lock-entry contract) → consolidated settlement contract; Sol round 4: revision-required (request-series settlement, repost decision replay, guard helper scope) → revised; consistency pass (D6/§1.4/§1.5 aligned with §1.11–§1.12); Sol round 5: revision-required (EOF-safe effect entry) → revised; Sol round 6: revision-required (EOF oracle vs release record) → revised; Sol round 7: revision-required (head drift vs pending series) → revised; Sol round 8: revision-required (held-state user exit) → revised; Sol round 9: blocked (U4 non-merging retirement) + 3 fix-now → revised; U4 pending; Sol round 10: revision-required (exhausted M7 hold) → revised; Sol round 11: revision-required (M1 vs observed manual merge) → revised; Sol round 12: `plan-sound` | approved (execution-plan amendments confirmed 2026-10-03; U1–U4 decided 2026-10-03) |
+| N05-P | #353 | — | Probes P1–P16 | Sol round 1: revision-required (stack scope, execution-time target race in U3, pending/unknown reconciliation, renewable consent, no-repair handoff, 409 option validation) → revised; Sol round 2: revision-required (execution scope policy, successor ledger accounting, outstanding-reply reconciliation, complete repair map, fence owner/ordering) → revised; Sol round 3: revision-required (reply non-execution authority, expiry ≠ refusal, fence lock-entry contract) → consolidated settlement contract; Sol round 4: revision-required (request-series settlement, repost decision replay, guard helper scope) → revised; consistency pass (D6/§1.4/§1.5 aligned with §1.11–§1.12); Sol round 5: revision-required (EOF-safe effect entry) → revised; Sol round 6: revision-required (EOF oracle vs release record) → revised; Sol round 7: revision-required (head drift vs pending series) → revised; Sol round 8: revision-required (held-state user exit) → revised; Sol round 9: blocked (U4 non-merging retirement) + 3 fix-now → revised; U4 pending; Sol round 10: revision-required (exhausted M7 hold) → revised; Sol round 11: revision-required (M1 vs observed manual merge) → revised; Sol round 12: `plan-sound`; user-decision revision #360: Sol round 1: revision-required (raced M2 completion, A-R rehearsal split and ownership, unbounded execution interval) → revised | approved (execution-plan amendments confirmed 2026-10-03; U1–U4 decided 2026-10-03) |
 | N05-A | #356 | `a4951b044` | Ubuntu CI run 37147328711 exact head: 3953 passed, 3 skipped (no launcher skips); macOS focused launcher/provider/authority 149 passed; `test --changed --py` 3955 passed; real-gh recorder 409 formats captured; parser mutation fails 7 tests | Sol implementation round 1: repair-required (real-gh 409 parsing, merge-call ownership gate, typed pre-release failures) → repaired; round 2: `implementation-sound` | merged |
 | A-R | — | — | — | — | — |
 | N05-B | — | — | — | — | — |
@@ -1182,8 +1220,8 @@ plan's status table, a companion that the ready rule does not block.
 
 | ID | Claim | Why unproven | Evidence available | Owner | Blocks |
 | --- | --- | --- | --- | --- | --- |
-| G1 | GitHub's async merge behaves as documented (UUID and options on `409`, `400` drafts, rules run at execution, readback, head fence) | Provider mutations need the A-R repository (U2(b)); P phase ran read-only | P4 reference; P2 schema; fake tests (A) | A-R | N05-B merge |
-| G2 | The target, the PR's `base` or its stack cannot change between the final read and background execution | No GitHub merge API fences the base or the stack; `base` is editable without a head change; `dev` has no up-to-date rule (P1, P2, P4) | Accepted residual risk (U3(e), programme §10.2 revised 2026-10-03): post-merge parent-1 and base check (D9, I4); A-R target-advance and retarget or stack-join steps show the detection | A-R; N05-B (detection) | Nothing |
+| G1 | GitHub's async merge behaves as documented (UUID and options on `409`, `400` drafts, rules run at execution, readback, head fence) | Provider mutations need the A-R repository (U2(b)); P phase ran read-only | P4 reference; P2 schema; fake tests (A) | A-R steps of 3.3, including the separate rules-at-execution step (N05-B implements) | N05-B merge |
+| G2 | The target, the PR's `base` or its stack cannot change between the final read and background execution | No GitHub merge API fences the base or the stack; `base` is editable without a head change; `dev` has no up-to-date rule (P1, P2, P4) | Accepted residual risk (U3(e), programme §10.2 revised 2026-10-03): post-merge parent-1 and base check (D9, I4); separate A-R target-advance, retarget and stack-join steps show the detection; whether that check exposes every stacked execution is unproven until the stack-join step | A-R; N05-B (detection) | Nothing for target advance and retarget; N05-B merge if the stack-join step finds an undetected execution |
 | G3 | A chat approval reflects a real user answer | MCP cannot verify host dialogs | D14 rules; destructive annotation | N05-C; N10-H host rehearsal | N10-H evidence |
 | G4 | Merge-queue and up-to-date-required targets behave as designed | This repository has neither (P1) | Memory-provider scenarios | N05-B | Nothing |
 | G5 | Format-marker steps of N03-A and N05-B compose | Neither exists yet (P15) | N02 D3 linear chain | Second of N03-A/N05-B to merge | That phase's merge |
@@ -1191,7 +1229,7 @@ plan's status table, a companion that the ready rule does not block.
 | G7 | Marker-based reply dedupe survives edited or deleted replies | Not exercised | Read-back design (D13) | N05-D | Nothing |
 | G8 | A 15-second observation cache is fresh enough under rate limits | Not measured | P8; existing constant `application_support.py:143` | N05-B | Nothing |
 | G9 | The cleanup sweep stays cheap with many completed Changes | Not measured | Bounded supervisor `limit` | N05-B | Nothing |
-| G10 | `deleteBranchOnMerge` does not disturb completion or later reads | Only manual merges observed so far | Existing completions after manual merges; A-R step | A-R | Nothing |
+| G10 | `deleteBranchOnMerge` does not disturb completion or later reads | Only manual merges observed so far | Existing completions after manual merges; A-R branch-deletion readback step (3.3) | A-R | Nothing |
 | G11 | The per-Change checkpoint lock excludes a second merge executor and is released when its process dies (D6 premise) | Implementation of `_selected_action_checkpoint_lock` not exercised for this purpose in P | `locked_roots` uses `flock` (N02 plan, `storage_io.py:33`) | N05-B subprocess test | N05-B merge (else D6 falls back to containment) |
 | G12 | No `gh` request precedes a durable release record, and every sent request is the complete frozen body (D16; rows M1, Y1); recorded groups identify live transport after controller death (rows M8, M9; closed = every released submission's group gone) | Not exercised in P; upstream `--input -` sends stdin EOF as an empty body (v2.65.0 `api.go`, `http.go`) | `openUserFile` sends a regular file with `Content-Length` (v2.65.0); N02 plan D8 and P6 (`killpg` closes the group) | N05-A launcher EOF falsifier; N05-B and N05-D controller-death tests (macOS and Ubuntu, local HTTP recorder) | Engine merge (N05-B: else D6 falls back to containment and no merge is offered); N05-D engine replies (else replies stay manual) |
 | G13 | A complete GitHub `4xx` error or GraphQL `errors` with null `data` for a reply mutation means it did not execute (row Y3) | Provider semantics, not a documented guarantee | `_execute` already treats write timeouts as response-unknown (`github.py:859-866`) | N05-D | Nothing: without proof, row Y3 is dropped and such replies stay `unknown` |

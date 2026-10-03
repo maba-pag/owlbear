@@ -617,7 +617,7 @@ every new item exactly one lane.
 | N02-B | merged | #352 (code head `7500600c7`; Sol `implementation-sound` round 5; full LC pass) |
 | N02-C | — | — |
 | N02-D | — | — |
-| N03-P | merged | #349 (plan gate `plan-sound`, round 6; D11 confirmed 2026-10-03; U1 decided (b) by the user 2026-10-03) |
+| N03-P | merged | #349 (plan gate `plan-sound`, round 6; D11 confirmed 2026-10-03; U1 decided (b) by the user 2026-10-03; #360 adds the confirmation boundary D13 and opens U2 before N03-C) |
 | N03-A | — | — |
 | N03-B | — | — |
 | N03-C | — | — |
@@ -1046,6 +1046,8 @@ LC gate: full form from N05-B.
 - Input descriptors and sensitivity classes.
 - Binding to the candidate and its resources, and when that binding goes stale.
 - **User decision:** the retention and privacy policy for private inputs and evidence.
+- Whether a Cockpit-hosted confirmation counts as user-only follows N03 plan U2; human confirmation
+  uses the N03 confirmation ledger and boundary (N03 plan D13).
 
 **Phases:**
 
@@ -1230,6 +1232,8 @@ The programme is complete when all of the following hold:
 
 - **N02:** pinning of this repository's live controller and the upgrade UX (decided 2026-10-03:
   N02 plan U1 (a), U2 (a)).
+- **N03:** user waivers (U1, decided 2026-10-03: (b), captured through the D13 confirmation
+  boundary); whether Cockpit confirmations count as user-only (U2, open, required before N03-C).
 - **N05:** merge-method policy (U1); real merge rehearsal on a disposable repository (U2); target
   freshness and the execution-time target race (U3) (decided 2026-10-03: N05 plan U1 (a), U2 (b),
   U3 (a) + (e), U4 (b)).
