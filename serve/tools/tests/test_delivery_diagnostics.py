@@ -1131,7 +1131,7 @@ _INSPECTOR_KIND_TO_REGISTRY = {
 
 def test_inspector_version_tables_mirror_the_delivery_format_registry() -> None:
     registry = {kind.kind_id: kind for kind in state_formats.RECORD_KINDS}
-    current = {**diagnostics.SUPPORTED_VERSIONS, **_RECORD_VERSIONS}
+    current = _inspector_version_tables()
     mismatches = []
     for inspector_kind, versions in current.items():
         kind = registry[_INSPECTOR_KIND_TO_REGISTRY.get(inspector_kind, inspector_kind)]
@@ -1145,6 +1145,136 @@ def test_inspector_version_tables_mirror_the_delivery_format_registry() -> None:
 
     assert mismatches == []
     assert set(diagnostics.READABLE_LEGACY_VERSIONS) <= set(diagnostics.SUPPORTED_VERSIONS)
+
+
+def _inspector_version_tables() -> dict[str, object]:
+    return {
+        **diagnostics.SUPPORTED_VERSIONS,
+        **_RECORD_VERSIONS,
+        **diagnostics._RUNTIME_RECORD_VERSIONS,  # noqa: SLF001
+    }
+
+
+def _uninspected_registry_kinds(inspector_kinds: set[str], declared: dict[str, str]) -> list[str]:
+    """Return registry kinds neither version-inspected nor declared uninspectable with a reason."""
+    inspected = {_INSPECTOR_KIND_TO_REGISTRY.get(kind, kind) for kind in inspector_kinds}
+    return sorted(
+        kind.kind_id
+        for kind in state_formats.RECORD_KINDS
+        if kind.kind_id not in inspected and not declared.get(kind.kind_id, "").strip()
+    )
+
+
+def test_every_registered_record_kind_is_version_inspected_or_declared_uninspectable() -> None:
+    inspector_kinds = set(_inspector_version_tables())
+    declared = diagnostics.VERSION_UNINSPECTED_KINDS
+    registry_kinds = {kind.kind_id for kind in state_formats.RECORD_KINDS}
+
+    assert _uninspected_registry_kinds(inspector_kinds, declared) == []
+    assert set(declared) <= registry_kinds
+    assert not set(declared) & {_INSPECTOR_KIND_TO_REGISTRY.get(kind, kind) for kind in inspector_kinds}
+
+
+def test_coverage_guard_reports_an_omitted_family() -> None:
+    inspector_kinds = set(_inspector_version_tables()) - {"finalizer_settlement", "completion_display"}
+    declared = {**diagnostics.VERSION_UNINSPECTED_KINDS, "completion_display": " "}
+
+    assert _uninspected_registry_kinds(inspector_kinds, declared) == ["completion_display", "finalizer_settlement"]
+
+
+_GOLDEN = Path(__file__).parents[2] / "delivery/tests/fixtures/state_formats/golden"
+_GOLDEN_RUNTIME_FAMILIES = (
+    "runtime/finalization-reports",
+    "runtime/proof-attempts",
+    "runtime/finalizer-settlements",
+    "runtime/completions",
+    "runtime/publications",
+    "runtime/claims",
+    "packages",
+)
+
+
+def _copy_golden_runtime_families(root: Path) -> dict[str, str]:
+    """Copy golden non-Change families into an inspector root and return locator -> registry kind."""
+    delivery = root / ".owlbear/delivery"
+    kinds: dict[str, str] = {}
+    for family in _GOLDEN_RUNTIME_FAMILIES:
+        source = _GOLDEN / family
+        if not source.exists():
+            continue
+        shutil.copytree(source, delivery / family, dirs_exist_ok=True)
+        for path in source.rglob("*"):
+            if path.is_file():
+                locator = path.relative_to(_GOLDEN).as_posix()
+                kind = state_formats.classify_kind(locator)
+                assert kind is not None, locator
+                kinds[locator] = kind.kind_id
+    return kinds
+
+
+def test_golden_runtime_and_package_families_are_version_inspected(tmp_path: Path) -> None:
+    root = _complete_root(tmp_path)
+    golden = _copy_golden_runtime_families(root)
+
+    result = inspect_delivery(root)
+
+    expected = set(golden.values())
+    observed = {(record["kind"], record["status"]) for record in result["records"] if record["kind"] in expected}
+    assert observed == {(kind, "supported") for kind in expected}
+    assert expected >= {"finalizer_settlement", "completion_evidence", "package_manifest", "package_authority"}
+    assert result["status"] == "healthy-structure", result["diagnostic_codes"]
+    assert result["counts"]["runtime_records"] == len(golden)
+
+
+@pytest.mark.parametrize(
+    ("kind_id", "version", "status", "code"),
+    [
+        ("finalizer_settlement", 2, "newer", "FINALIZER_SETTLEMENT_UNSUPPORTED"),
+        ("completion_evidence", 2, "newer", "COMPLETION_EVIDENCE_UNSUPPORTED"),
+        ("completion_display", 0, "unsupported", "COMPLETION_DISPLAY_UNSUPPORTED"),
+        ("pull_request_summary_receipt", 2, "newer", "PULL_REQUEST_SUMMARY_RECEIPT_UNSUPPORTED"),
+        ("package_manifest", 2, "newer", "PACKAGE_MANIFEST_UNSUPPORTED"),
+        ("proof_attempt", 1, "unsupported", "PROOF_ATTEMPT_UNSUPPORTED"),
+    ],
+)
+def test_inspector_reports_unsupported_runtime_family_versions(
+    tmp_path: Path, kind_id: str, version: int, status: str, code: str
+) -> None:
+    root = _complete_root(tmp_path)
+    golden = _copy_golden_runtime_families(root)
+    locator = next(locator for locator, kind in sorted(golden.items()) if kind == kind_id)
+    path = root / ".owlbear/delivery" / locator
+    payload = json.loads(path.read_bytes())
+    payload["schema_version"] = version
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    result = inspect_delivery(root)
+
+    statuses = [record["status"] for record in result["records"] if record["kind"] == kind_id]
+    assert status in statuses
+    assert code in result["diagnostic_codes"]
+    assert result["status"] == "unsupported"
+    registry_kind = next(kind for kind in state_formats.RECORD_KINDS if kind.kind_id == kind_id)
+    registry_status = state_formats.classify_version(registry_kind, version, present=True)
+    assert registry_status == {"unsupported": "unknown-version"}.get(status, status)
+
+
+def test_selected_change_inspects_only_attributable_runtime_records(tmp_path: Path) -> None:
+    root = _complete_root(tmp_path)
+    golden = _copy_golden_runtime_families(root)
+    settlement = next(locator for locator, kind in golden.items() if kind == "finalizer_settlement")
+    moved = root / ".owlbear/delivery" / settlement.replace("/change-a/", "/example/")
+    moved.parent.mkdir(parents=True)
+    payload = json.loads((root / ".owlbear/delivery" / settlement).read_bytes())
+    moved.write_text(json.dumps({**payload, "schema_version": 2}), encoding="utf-8")
+
+    result = inspect_delivery(root, "example")
+
+    kinds = [record["kind"] for record in result["records"]]
+    assert kinds.count("finalizer_settlement") == 1
+    assert "FINALIZER_SETTLEMENT_UNSUPPORTED" in result["diagnostic_codes"]
+    assert "branch_publication" not in kinds
+    assert "completion_evidence" not in kinds
 
 
 def test_missing_root_and_invalid_change_id_have_exit_two(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -66,6 +66,8 @@ _CHANGE_RECORD_NAME_PATTERNS = {
     "$outcome": re.compile(r"^OUT-[0-9]{3}$"),
     "$operation": re.compile(r"^continue-[0-9a-f]{64}$"),
     "$stage": re.compile(r"^stage-[0-9a-f]{32}$"),
+    "$change": _CHANGE_ID,
+    "$change.json": re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*\.json$"),
 }
 # Interrupted RuntimeTransaction/write_contained temporaries: `.tmp-<24 hex>[-<destination>]`.
 _TRANSIENT_CHANGE_ENTRY = re.compile(r"^\.tmp-[0-9a-f]{24}(?:-[A-Za-z0-9][A-Za-z0-9._:-]{0,255})?$")
@@ -173,6 +175,69 @@ _CHANGE_RECORD_VERSIONS: dict[str, tuple[int, ...] | None] = {
     "builder_handoff_change_intent_receipt": (1,),
     "claim_issuer": (1,),
 }
+_PULL_REQUEST_RECORDS = {
+    "operations": "pull_request_operation",
+    "supersession-operations": "pull_request_supersession_operation",
+    "summary-operations": "pull_request_summary_operation",
+    "draft-state-operations": "pull_request_draft_state_operation",
+    "supersession-receipts": "pull_request_supersession_receipt",
+    "summary-receipts": "pull_request_summary_receipt",
+    "draft-state-receipts": "pull_request_draft_state_receipt",
+}
+# Runtime families outside Change directories, version-checked like Change records; other entries
+# (locks, transactions, temporaries) are left to their own scans or are never opened.
+_RUNTIME_RECORD_LAYOUT: dict[str, object] = {
+    "finalization-reports": {
+        "$change": {
+            "reports": {"$attempt.json": "finalization_report"},
+            "current.json": "finalization_report_pointer",
+        }
+    },
+    "proof-attempts": {"$change": {"attempts": {"$attempt.json": "proof_attempt"}}},
+    "finalizer-settlements": {"$change": {"$digest.json": "finalizer_settlement"}},
+    "completions": {"$change": {"$digest.json": "completion_evidence", "display.json": "completion_display"}},
+    "publications": {
+        "change-branches": {"operations": {"$digest.json": "branch_publication"}},
+        "pull-requests": {
+            **{name: {"$attempt.json": kind} for name, kind in _PULL_REQUEST_RECORDS.items()},
+            "receipts": {"$change.json": "pull_request_current_receipt"},
+            "publication-history": {"$change.json": "pull_request_publication_history"},
+            "check-observations": {"$change": {"$digest.json": "pull_request_check_observation"}},
+            "pull-request-observations": {"$change": {"$digest.json": "pull_request_observation"}},
+        },
+    },
+    "claims": {"acceptance-reconciliation": {"cursor.json": "acceptance_cursor"}},
+}
+_RUNTIME_RECORD_VERSIONS: dict[str, tuple[int, ...] | None] = {
+    "finalization_report": None,
+    "finalization_report_pointer": None,
+    "proof_attempt": None,
+    "finalizer_settlement": (1,),
+    "completion_evidence": (1,),
+    "completion_display": (1,),
+    "branch_publication": (1,),
+    **dict.fromkeys(_PULL_REQUEST_RECORDS.values(), (1,)),
+    "pull_request_current_receipt": (1,),
+    "pull_request_publication_history": (1,),
+    "pull_request_check_observation": (1,),
+    "pull_request_observation": (1,),
+    "acceptance_cursor": (1,),
+    "package_manifest": (1,),
+    "package_authority": (2,),
+}
+# An unadmitted Design keeps an empty authority file.
+_EMPTY_RECORD_KINDS = frozenset({"package_authority"})
+_RECORD_VERSIONS = {**_CHANGE_RECORD_VERSIONS, **_RUNTIME_RECORD_VERSIONS}
+# Registry record kinds whose versions this inspector deliberately does not check; a parity test
+# requires every other registered kind to appear in a version table.
+VERSION_UNINSPECTED_KINDS: dict[str, str] = {
+    "revision_record": "immutable history keeps any earlier owner schema; only its JSON-object shape is checked",
+    "preservation_object": "opaque preserved bytes; classified by no-follow lstat only",
+    "restoration_stage": "opaque restoration staging; classified by no-follow lstat only",
+    "package_document": "authored Markdown has no schema version",
+    "lock": "locks are transient and never opened",
+    "transaction": "pending transactions, temporaries and logs are opaque; listed by name and size only",
+}
 _VERSIONLESS_REQUIRED_FIELDS: dict[str, dict[str, type]] = {
     "result_receipt": {"candidate_id": str, "claim_id": str, "digest": str, "result": dict},
     "action_intent": {"operation_id": str, "change_id": str, "kind": str},
@@ -249,6 +314,30 @@ _SAFE_LOCATORS = {
     "builder_handoff_change_intent_receipt": (
         ".owlbear/delivery/runtime/changes/<redacted>/builder-handoff-change-intent-receipts/<opaque>/<opaque>.json"
     ),
+    "finalization_report": ".owlbear/delivery/runtime/finalization-reports/<redacted>/reports/<opaque>.json",
+    "finalization_report_pointer": ".owlbear/delivery/runtime/finalization-reports/<redacted>/current.json",
+    "proof_attempt": ".owlbear/delivery/runtime/proof-attempts/<redacted>/attempts/<opaque>.json",
+    "finalizer_settlement": ".owlbear/delivery/runtime/finalizer-settlements/<redacted>/<opaque>.json",
+    "completion_evidence": ".owlbear/delivery/runtime/completions/<redacted>/<opaque>.json",
+    "completion_display": ".owlbear/delivery/runtime/completions/<redacted>/display.json",
+    "branch_publication": ".owlbear/delivery/runtime/publications/change-branches/operations/<opaque>.json",
+    **{
+        kind: f".owlbear/delivery/runtime/publications/pull-requests/{name}/<redacted>.json"
+        for name, kind in _PULL_REQUEST_RECORDS.items()
+    },
+    "pull_request_current_receipt": ".owlbear/delivery/runtime/publications/pull-requests/receipts/<redacted>.json",
+    "pull_request_publication_history": (
+        ".owlbear/delivery/runtime/publications/pull-requests/publication-history/<redacted>.json"
+    ),
+    "pull_request_check_observation": (
+        ".owlbear/delivery/runtime/publications/pull-requests/check-observations/<redacted>/<opaque>.json"
+    ),
+    "pull_request_observation": (
+        ".owlbear/delivery/runtime/publications/pull-requests/pull-request-observations/<redacted>/<opaque>.json"
+    ),
+    "acceptance_cursor": ".owlbear/delivery/runtime/claims/acceptance-reconciliation/cursor.json",
+    "package_manifest": ".owlbear/delivery/packages/<redacted>/manifest.json",
+    "package_authority": ".owlbear/delivery/packages/<redacted>/authority.json",
 }
 
 MAINTENANCE_PROMPT = """The offline inspection is structural evidence only. Review the bounded
@@ -288,6 +377,7 @@ class _Inspection:
             "host_local": 0,
             "frontier": 0,
             "change_records": 0,
+            "runtime_records": 0,
             "coordination": 0,
             "snapshot": 0,
             "packages": 0,
@@ -823,7 +913,7 @@ def _change_record_shape(content: bytes, kind: str, inspection: _Inspection) -> 
     if kind in _HISTORICAL_CHANGE_KINDS:
         inspection.records[-1]["status"] = "supported"
         return
-    versions = _CHANGE_RECORD_VERSIONS[kind]
+    versions = _RECORD_VERSIONS[kind]
     schema = value.get("schema_version")
     if versions is None:
         if "schema_version" in value:
@@ -1435,6 +1525,85 @@ def _package_change_names(
     return [name for name in names if name not in {"transactions", ".storage.lock"}]
 
 
+def _inspect_runtime_record_file(parent_fd: int, name: str, kind: str, inspection: _Inspection) -> None:
+    content, _ = _safe_read(parent_fd, name, inspection, kind)
+    if content is None:
+        return
+    inspection.counts["runtime_records"] += 1
+    if kind in _EMPTY_RECORD_KINDS and not content:
+        inspection.records[-1]["status"] = "supported"
+        return
+    _change_record_shape(content, kind, inspection)
+
+
+def _layout_match(layout: dict[str, object], name: str) -> tuple[str, object] | None:
+    for pattern, child in layout.items():
+        matcher = _CHANGE_RECORD_NAME_PATTERNS.get(pattern)
+        if pattern == name or (matcher is not None and matcher.fullmatch(name)):
+            return pattern, child
+    return None
+
+
+def _runtime_entry_scope(pattern: str, name: str, child: object, selected: str | None) -> bool | None:
+    """Return whether an entry is inside the selected Change (``None``: not attributable, skip it)."""
+    if selected is None:
+        return False
+    if pattern in {"$change", "$change.json"}:
+        return True if name in {selected, f"{selected}.json"} else None
+    if pattern == "$attempt.json":
+        return True if name.startswith(f"{selected}--") else None
+    return False if isinstance(child, dict) else None
+
+
+def _scan_runtime_record_names(
+    parent_fd: int,
+    layout: dict[str, object],
+    inspection: _Inspection,
+    *,
+    selected: str | None,
+) -> None:
+    for name in sorted(_directory_names(parent_fd, inspection)):
+        match = _layout_match(layout, name)
+        if match is None:
+            continue
+        pattern, child = match
+        scoped = _runtime_entry_scope(pattern, name, child, selected)
+        if scoped is None:
+            continue
+        if isinstance(child, dict):
+            _scan_runtime_record_directory(parent_fd, name, child, inspection, selected=None if scoped else selected)
+        else:
+            _inspect_runtime_record_file(parent_fd, name, str(child), inspection)
+
+
+def _scan_runtime_record_directory(
+    parent_fd: int,
+    name: str,
+    layout: dict[str, object],
+    inspection: _Inspection,
+    *,
+    selected: str | None,
+) -> None:
+    opened = _open_directory(parent_fd, name, inspection, "RUNTIME_RECORD")
+    if opened is None:
+        return
+    child_fd, child_opened = opened
+    try:
+        _scan_runtime_record_names(child_fd, layout, inspection, selected=selected)
+    finally:
+        _close_directory(parent_fd, name, child_fd, child_opened, inspection)
+
+
+def _scan_runtime_records(runtime_fd: int, inspection: _Inspection, *, selected: str | None) -> None:
+    """Version-check runtime families outside Change directories, bounded by the shared entry budget."""
+    for name, layout in _RUNTIME_RECORD_LAYOUT.items():
+        if inspection.entry_budget_exhausted:
+            return
+        _scan_runtime_record_directory(  # type: ignore[arg-type]
+            runtime_fd, name, layout, inspection, selected=selected
+        )
+
+
 def _scan_package_change(
     packages_fd: int,
     name: str,
@@ -1468,6 +1637,8 @@ def _scan_package_change(
             return
         package_fd, package_opened = package
         try:
+            _inspect_runtime_record_file(package_fd, "manifest.json", "package_manifest", inspection)
+            _inspect_runtime_record_file(package_fd, "authority.json", "package_authority", inspection)
             transactions = _open_optional_transactions(package_fd, inspection)
             if transactions is not None:
                 transactions_fd, transactions_opened = transactions
@@ -1570,6 +1741,7 @@ def _scan_runtime(delivery_fd: int, inspection: _Inspection, *, selected: str | 
             _scan_packages(delivery_fd, inspection, selected=selected)
             if inventory is not None:
                 _scan_change_receipts(inventory, inspection)
+            _scan_runtime_records(runtime_fd, inspection, selected=selected)
             if selected is None:
                 _scan_logs(runtime_fd, inspection)
         finally:

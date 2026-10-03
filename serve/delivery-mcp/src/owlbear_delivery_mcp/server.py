@@ -16,6 +16,7 @@ from owlbear_delivery import (
     PortfolioApplication,
     WindowHostIdentity,
     close_delivery_application,
+    load_configured_delivery_application,
 )
 from owlbear_delivery import load_delivery_application as load_core_delivery_application
 from owlbear_delivery.state_formats import StateCapabilityError, config_capability, require_capability
@@ -104,11 +105,28 @@ def load_delivery_application(config: DeliveryStartupConfig, workspace_root: Pat
             issuer_host=WindowHostIdentity.capture(),
         )
     except DeliveryApplicationLoadError as exc:
-        if exc.code == "controller-fenced":
-            code = _CONTROLLER_FENCED
-        else:
-            code = _STATE_VERSION if exc.code is not None else _INVALID
-        raise DeliveryStartupDiagnostic(code, exc.detail, exc.field) from exc
+        raise _startup_diagnostic(exc) from exc
+
+
+def _load_workspace_application(workspace_root: Path) -> PortfolioApplication:
+    """Read and parse the configuration only inside the core controller fence and format gate."""
+    try:
+        return load_configured_delivery_application(
+            workspace_root,
+            load_delivery_config,
+            publication_provider=GitHubCliPublicationProvider(),
+            issuer_host=WindowHostIdentity.capture(),
+        )
+    except DeliveryApplicationLoadError as exc:
+        raise _startup_diagnostic(exc) from exc
+
+
+def _startup_diagnostic(exc: DeliveryApplicationLoadError) -> DeliveryStartupDiagnostic:
+    if exc.code == "controller-fenced":
+        code = _CONTROLLER_FENCED
+    else:
+        code = _STATE_VERSION if exc.code is not None else _INVALID
+    return DeliveryStartupDiagnostic(code, exc.detail, exc.field)
 
 
 def _live_application() -> PortfolioApplication:
@@ -123,8 +141,8 @@ async def app_lifespan(_server: MCPServer) -> AsyncGenerator[DeliveryAppContext]
     """Construct one explicitly configured Delivery application for this process."""
     global _live_context  # noqa: PLW0603 - process lifespan owns this binding.
     workspace_root = Path.cwd().resolve()
-    config = load_delivery_config(_delivery_config_path(workspace_root))
-    application = load_delivery_application(config, workspace_root)
+    _delivery_config_path(workspace_root)
+    application = _load_workspace_application(workspace_root)
     supervisor = DeliveryCheckpointSupervisor(application)
     supervisor.start()
     context = DeliveryAppContext(application=application)

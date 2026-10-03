@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import ast
+import builtins
 import hashlib
 import importlib
+import io
 import json
+import os
 import pkgutil
 import shutil
 import subprocess
@@ -13,7 +16,7 @@ import sys
 import types
 from datetime import datetime
 from pathlib import Path
-from typing import Literal, get_args
+from typing import Literal, Self, get_args
 
 import pytest
 from pydantic import BaseModel, ConfigDict, ValidationError
@@ -25,6 +28,7 @@ from owlbear_delivery.delivery_application_loader import (
     DeliveryStartupConfig,
     DeliveryStateVersionError,
     close_delivery_application,
+    load_configured_delivery_application,
     load_delivery_application,
 )
 from owlbear_delivery.delivery_runtime import DeliveryFrontier, parse_delivery_frontier
@@ -685,3 +689,177 @@ def test_gate_reports_unrecognized_and_unreadable_records_without_refusing(tmp_p
 # Hand-authored tracked configuration has no product writer to round-trip; the remote-only snapshot family is
 # covered by the read-upcast and newer-version tests in test_delivery_state.
 _UNCOVERED_GOLDEN_KINDS: frozenset[str] = frozenset({"config", "host", "host_local", "snapshot"})
+
+
+# ---------------------------------------------------------------------------
+# Absent and non-integer versions (sol round 1, finding 1)
+# ---------------------------------------------------------------------------
+
+
+_RETRY_SUMMARY = "runtime/changes/change-a/retry-ledger/current.json"
+_ABSENT = object()
+
+
+@pytest.mark.parametrize("version", [_ABSENT, True, "1", None, 1.0], ids=["absent", "true", "string", "null", "float"])
+def test_absent_or_non_integer_version_refuses_through_the_default_loader(tmp_path: Path, version: object) -> None:
+    repository, config = _portfolio(tmp_path)
+    payload = json.loads((_GOLDEN / _RETRY_SUMMARY).read_bytes())
+    if version is _ABSENT:
+        payload.pop("schema_version")
+    else:
+        payload["schema_version"] = version
+    locator = "runtime/changes/demo/retry-ledger/current.json"
+    _write(repository, locator, payload)
+    digests = record_tree_digest(repository)
+
+    with pytest.raises(DeliveryStateVersionError) as refusal:
+        load_delivery_application(config, workspace_root=repository)
+
+    assert refusal.value.code == "state-version-unknown"
+    assert refusal.value.locator == locator
+    assert record_tree_digest(repository) == digests
+    assert _exclusive_available(repository)
+
+
+def test_only_registered_rules_admit_an_absent_version() -> None:
+    kinds = {kind.kind_id: kind for kind in RECORD_KINDS}
+
+    assert state_formats.classify_version(kinds["host_local"], None, present=False) == "current"
+    assert state_formats.classify_version(kinds["config"], None, present=False) == "unreadable"
+    assert state_formats.classify_version(kinds["config"], version=True, present=True) == "unknown-version"
+    assert state_formats.classify_version(kinds["retry_ledger"], None, present=False) == "unknown-version"
+    assert state_formats.classify_version(kinds["finalization_report"], None, present=False) == "current"
+    assert state_formats.classify_version(kinds["finalization_report"], 1, present=True) == "unknown-version"
+
+
+def test_absent_version_is_left_to_the_owner_only_where_the_owner_requires_it() -> None:
+    requiring = {
+        kind.kind_id
+        for kind in RECORD_KINDS
+        if kind.current is not None
+        and kind.owners
+        and all(_owner(owner).model_fields["schema_version"].is_required() for owner in kind.owners)
+    }
+
+    assert {kind.kind_id for kind in RECORD_KINDS if kind.owner_requires_version} == requiring
+
+
+# ---------------------------------------------------------------------------
+# Configuration is read only inside the fence (sol round 1, finding 2)
+# ---------------------------------------------------------------------------
+
+
+_FENCED_CONFIGS = {
+    "newer": json.dumps({"schema_version": 3, "remote": "origin", "future_field": True}),
+    "malformed": '{"schema_version": 2, "remote": ',
+}
+
+
+def _spy_config_opens(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Record every open of a ``config.json`` path through the os, io and builtin open functions."""
+    opened: list[str] = []
+    for module, name in ((os, "open"), (io, "open"), (builtins, "open")):
+        original = getattr(module, name)
+
+        def spy(path: object, *args: object, _original: object = original, **kwargs: object) -> object:
+            if isinstance(path, str | os.PathLike) and os.fspath(path).endswith("config.json"):
+                opened.append(os.fspath(path))
+            return _original(path, *args, **kwargs)  # type: ignore[operator]
+
+        monkeypatch.setattr(module, name, spy)
+    return opened
+
+
+@pytest.mark.parametrize("case", sorted(_FENCED_CONFIGS))
+def test_fenced_start_never_opens_the_configuration(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, case: str) -> None:
+    repository, _config = _portfolio(tmp_path)
+    (repository / ".owlbear/delivery/config.json").write_text(_FENCED_CONFIGS[case], encoding="utf-8")
+    holder = acquire_controller_lock(repository / ".owlbear/delivery/runtime", exclusive=True)
+    digests = record_tree_digest(repository)
+    reads: list[Path] = []
+
+    def read_config(path: Path) -> DeliveryStartupConfig:
+        reads.append(path)
+        return DeliveryStartupConfig.model_validate_json(path.read_bytes())
+
+    try:
+        opened = _spy_config_opens(monkeypatch)
+        with pytest.raises(DeliveryApplicationLoadError) as fenced:
+            load_configured_delivery_application(repository, read_config)
+        monkeypatch.undo()
+    finally:
+        holder.release()
+
+    assert fenced.value.code == "controller-fenced"
+    assert opened == []
+    assert reads == []
+    assert record_tree_digest(repository) == digests
+
+
+def test_configuration_version_is_gated_before_the_reader_and_a_refused_read_releases_the_lock(
+    tmp_path: Path,
+) -> None:
+    repository, _config = _portfolio(tmp_path)
+    config_path = repository / ".owlbear/delivery/config.json"
+    reads: list[Path] = []
+
+    def read_config(path: Path) -> DeliveryStartupConfig:
+        reads.append(path)
+        return DeliveryStartupConfig.model_validate_json(path.read_bytes())
+
+    config_path.write_text(_FENCED_CONFIGS["newer"], encoding="utf-8")
+    with pytest.raises(DeliveryStateVersionError) as newer:
+        load_configured_delivery_application(repository, read_config)
+    assert reads == []
+    config_path.write_text(_FENCED_CONFIGS["malformed"], encoding="utf-8")
+    with pytest.raises(ValidationError):
+        load_configured_delivery_application(repository, read_config)
+
+    assert newer.value.code == "state-newer-than-controller"
+    assert newer.value.locator == "config.json"
+    assert reads == [config_path]
+    assert _exclusive_available(repository)
+
+
+# ---------------------------------------------------------------------------
+# Bounded enumeration (sol round 1, finding 5)
+# ---------------------------------------------------------------------------
+
+
+def test_scan_stops_enumerating_a_directory_at_the_entry_bound(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    bound = 5
+    directory = tmp_path / ".owlbear/delivery/runtime/unexpected"
+    directory.mkdir(parents=True)
+    for index in range(50):
+        (directory / f"entry-{index:02d}.json").write_text("{}", encoding="utf-8")
+    consumed = 0
+    real_scandir = os.scandir
+
+    class _CountingScandir:
+        def __init__(self, target: object) -> None:
+            self._entries = real_scandir(target)  # type: ignore[call-overload]
+
+        def __enter__(self) -> Self:
+            return self
+
+        def __exit__(self, *_exc: object) -> None:
+            self._entries.close()
+
+        def __iter__(self) -> _CountingScandir:
+            return self
+
+        def __next__(self) -> os.DirEntry[str]:
+            nonlocal consumed
+            entry = next(self._entries)
+            consumed += 1
+            return entry
+
+    monkeypatch.setattr(state_formats, "MAX_ENTRIES", bound)
+    monkeypatch.setattr(state_formats.os, "scandir", _CountingScandir)
+
+    report = scan_capability(tmp_path)
+
+    assert consumed <= bound + 1
+    assert not report.complete
+    assert [refusal.code for refusal in report.refusals] == ["state-version-unknown"]
+    assert "entry capability scan bound" in report.refusals[0].detail

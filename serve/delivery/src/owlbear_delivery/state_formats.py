@@ -13,10 +13,7 @@ import re
 import stat
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Final, Literal
-
-if TYPE_CHECKING:
-    from collections.abc import Iterator
+from typing import Final, Literal
 
 type Mutability = Literal["M", "R", "H", "O", "T", "L"]
 type CapabilityStatus = Literal[
@@ -66,6 +63,8 @@ class RecordKind:
     are covered by the workspace format marker. ``read_upcasts`` names the owner function that
     turns each accepted legacy version into the current model without rewriting stored bytes.
     ``envelope`` names the key under which a dict-backed record embeds its owner model.
+    ``owner_requires_version`` leaves an absent version to the owner's required-field error; every
+    other absent or non-integer version of a versioned record is an unknown version.
     """
 
     kind_id: str
@@ -80,6 +79,7 @@ class RecordKind:
     allow_empty: bool = False
     read: bool = True
     envelope: str | None = None
+    owner_requires_version: bool = False
 
     @property
     def read_versions(self) -> tuple[int, ...]:
@@ -109,8 +109,24 @@ _WORKSPACE = "owlbear_delivery.workspace_models"
 _REPORTS = "owlbear_delivery.finalization_reports"
 
 RECORD_KINDS: Final[tuple[RecordKind, ...]] = (
-    _kind("config", "config", r"config\.json", (f"{_LOADER}:DeliveryStartupConfig",), "T", 2),
-    _kind("host", "host", r"runtime/host\.json", (f"{_LOADER}:DeliveryHostConfig",), "T", 1),
+    _kind(
+        "config",
+        "config",
+        r"config\.json",
+        (f"{_LOADER}:DeliveryStartupConfig",),
+        "T",
+        2,
+        owner_requires_version=True,
+    ),
+    _kind(
+        "host",
+        "host",
+        r"runtime/host\.json",
+        (f"{_LOADER}:DeliveryHostConfig",),
+        "T",
+        1,
+        owner_requires_version=True,
+    ),
     _kind(
         "host_local",
         "host_local",
@@ -698,7 +714,7 @@ class StateCapabilityError(RuntimeError):
 def _record_refusal_detail(record: RecordCapability) -> str:
     kind = next((item for item in RECORD_KINDS if item.kind_id == record.kind_id), None)
     accepted = ", ".join(str(version) for version in kind.read_versions) if kind is not None else "none"
-    shown = "absent" if record.version is None else str(record.version)
+    shown = "absent or not an integer" if record.version is None else str(record.version)
     return f"{record.kind_id} schema_version {shown} is not supported (accepted: {accepted or 'unversioned'})"
 
 
@@ -720,18 +736,24 @@ def classify_kind(locator: str) -> RecordKind | None:
 def classify_version(kind: RecordKind, version: object, *, present: bool) -> CapabilityStatus:
     """Classify one raw ``schema_version`` value for a registered record kind."""
     if kind.current is None:
-        return "current" if not present else "unknown-version"
+        return "unknown-version" if present else "current"
     if not present and kind.implicit_version is not None:
-        version = kind.implicit_version
-    elif not present or isinstance(version, bool) or not isinstance(version, int):
+        return _classify_integer_version(kind, kind.implicit_version, kind.current)
+    if not present and kind.owner_requires_version:
         return "unreadable"
-    if version == kind.current:
+    if not present or isinstance(version, bool) or not isinstance(version, int):
+        return "unknown-version"
+    return _classify_integer_version(kind, version, kind.current)
+
+
+def _classify_integer_version(kind: RecordKind, version: int, current: int) -> CapabilityStatus:
+    if version == current:
         return "current"
     if version in dict(kind.read_upcasts):
         return "readable-legacy"
     if version in dict(kind.rewrites):
         return "migration-required"
-    return "newer" if version > kind.current else "unknown-version"
+    return "newer" if version > current else "unknown-version"
 
 
 def classify_record_bytes(kind: RecordKind, content: bytes) -> tuple[CapabilityStatus, int | None]:
@@ -805,17 +827,23 @@ def scan_capability(workspace_root: Path) -> CapabilityReport:
     )
 
 
-def _entries(directory_fd: int) -> Iterator[os.DirEntry[str]]:
+def _entries(directory_fd: int, scan: _Scan) -> list[os.DirEntry[str]]:
+    """Charge each entry as it is enumerated, so an oversized directory is never consumed past the bound."""
+    bounded: list[os.DirEntry[str]] = []
     with os.scandir(directory_fd) as entries:
-        yield from sorted(entries, key=lambda entry: entry.name)
+        for entry in entries:
+            if not scan.charge():
+                return []
+            bounded.append(entry)
+    return sorted(bounded, key=lambda entry: entry.name)
 
 
 def _walk(directory_fd: int, prefix: str, depth: int, scan: _Scan) -> None:
     if depth > MAX_DEPTH:
         scan.incomplete_detail = f"Delivery state exceeds the {MAX_DEPTH}-level capability scan depth"
         return
-    for entry in _entries(directory_fd):
-        if scan.incomplete_detail is not None or not scan.charge():
+    for entry in _entries(directory_fd, scan):
+        if scan.incomplete_detail is not None:
             return
         locator = f"{prefix}{entry.name}"
         if locator == MIGRATIONS_ROOT:

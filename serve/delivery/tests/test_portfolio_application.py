@@ -13827,7 +13827,7 @@ def test_delivery_loader_rejects_invalid_host_capacity_before_ledger_mutation(
     [
         ('{"claim_timeout_seconds": 0}\n', "claim_timeout_seconds"),
         ('{"claim_timeout_seconds": "5"}\n', "claim_timeout_seconds"),
-        ('{"schema_version": null}\n', "schema_version"),
+        ('{"schema_version": null}\n', "state_version"),
         ('{"unknown": 3}\n', "unknown"),
     ],
 )
@@ -13905,7 +13905,8 @@ def test_delivery_loader_isolates_contract_without_workspace_coordination(tmp_pa
     assert application.list_work_items() == ()
 
 
-@pytest.mark.parametrize("admission_content", [None, b"{}\n"])
+# An admission without a schema version is refused by the format gate; an owner-invalid one stays recoverable.
+@pytest.mark.parametrize("admission_content", [None, b'{"schema_version":1}\n'])
 def test_delivery_loader_allows_recoverable_admission_partial_state(
     tmp_path: Path,
     admission_content: bytes | None,

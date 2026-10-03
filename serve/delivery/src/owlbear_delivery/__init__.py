@@ -94,6 +94,7 @@ from owlbear_delivery.delivery_application_loader import (
     DeliveryStartupConfig,
     DeliveryStateVersionError,
     close_delivery_application,
+    load_configured_delivery_application,
     load_delivery_application,
 )
 from owlbear_delivery.delivery_runtime import (
@@ -684,6 +685,7 @@ __all__ = [
     "integration_attention_disposition",
     "is_acceptance_waiting_observation",
     "is_change_terminal",
+    "load_configured_delivery_application",
     "load_delivery_application",
     "parse_delivery_frontier",
     "parse_delivery_state_snapshot",

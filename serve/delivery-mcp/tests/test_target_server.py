@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import builtins
 import hashlib
+import io
 import json
 import logging
 import os
@@ -3526,6 +3528,52 @@ async def test_lifespan_is_fenced_by_an_exclusive_holder_and_releases_its_lock_o
     assert exc_info.value.code == "ERR_DELIVERY_CONTROLLER_FENCED"
     assert exc_info.value.field == "controller_lock"
     acquire_controller_lock(runtime_root, exclusive=True).release()
+
+
+def _spy_config_opens(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Record every open of a ``config.json`` path through the os, io and builtin open functions."""
+    opened: list[str] = []
+    for module, name in ((os, "open"), (io, "open"), (builtins, "open")):
+        original = getattr(module, name)
+
+        def spy(path: object, *args: object, _original: Any = original, **kwargs: object) -> object:
+            if isinstance(path, str | os.PathLike) and os.fspath(path).endswith("config.json"):
+                opened.append(os.fspath(path))
+            return _original(path, *args, **kwargs)
+
+        monkeypatch.setattr(module, name, spy)
+    return opened
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "content",
+    [json.dumps({**_config(), "schema_version": 3, "future_field": True}), '{"schema_version": 2, "remote": '],
+    ids=["newer", "malformed"],
+)
+async def test_lifespan_fence_wins_before_the_configuration_is_opened(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    content: str,
+) -> None:
+    repository = _repository(tmp_path)
+    path = repository / ".owlbear/delivery/config.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(content, encoding="utf-8")
+    monkeypatch.chdir(repository)
+    holder = acquire_controller_lock(repository / ".owlbear/delivery/runtime", exclusive=True)
+    try:
+        with pytest.MonkeyPatch.context() as spy_patch:
+            opened = _spy_config_opens(spy_patch)
+            with pytest.raises(DeliveryStartupDiagnostic) as exc_info:
+                async with app_lifespan(mcp):
+                    pass
+    finally:
+        holder.release()
+
+    assert exc_info.value.code == "ERR_DELIVERY_CONTROLLER_FENCED"
+    assert opened == []
+    assert path.read_text(encoding="utf-8") == content
 
 
 def test_mcp_startup_delegates_owner_construction_to_delivery(

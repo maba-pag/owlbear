@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import builtins
+import io
 import json
+import os
 import subprocess
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -78,6 +81,37 @@ def test_cockpit_is_fenced_by_an_exclusive_controller_lock_holder(tmp_path: Path
             load_target_context(repository)
     finally:
         holder.release()
+
+
+@pytest.mark.parametrize(
+    "content",
+    [json.dumps({**_CONFIG, "schema_version": 3, "future_field": True}), '{"schema_version": 2, "remote": '],
+    ids=["newer", "malformed"],
+)
+def test_cockpit_fence_wins_before_the_configuration_is_opened(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, content: str
+) -> None:
+    repository = _workspace(tmp_path)
+    (repository / ".owlbear/delivery/config.json").write_text(content, encoding="utf-8")
+    holder = acquire_controller_lock(repository / ".owlbear/delivery/runtime", exclusive=True)
+    opened: list[str] = []
+    for module, name in ((os, "open"), (io, "open"), (builtins, "open")):
+        original = getattr(module, name)
+
+        def spy(path: object, *args: object, _original: Any = original, **kwargs: object) -> object:
+            if isinstance(path, str | os.PathLike) and os.fspath(path).endswith("config.json"):
+                opened.append(os.fspath(path))
+            return _original(path, *args, **kwargs)
+
+        monkeypatch.setattr(module, name, spy)
+    try:
+        with pytest.raises(RuntimeError, match="controller_lock: controller-fenced"):
+            load_target_context(repository)
+    finally:
+        monkeypatch.undo()
+        holder.release()
+
+    assert opened == []
 
 
 @pytest.mark.asyncio

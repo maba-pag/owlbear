@@ -4058,6 +4058,90 @@ def test_delivery_state_snapshot_repair_reconciles_confirmed_block_successor(tmp
     assert restarted.show_operator_context(change_id, "OUT-001").block == local_block
 
 
+def test_loader_reconciles_a_legacy_local_frontier_with_its_legacy_remote_snapshot(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    _git(repository, "config", "url." + str(remote) + ".insteadOf", "https://github.com/example/project.git")
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    change_id = "legacy-reconcile"
+    contract, intent, design = _contract(change_id)
+    runtime_root = repository / ".owlbear/delivery/runtime"
+    package_store = DesignPackageStore(
+        repository / ".owlbear/delivery/packages", repository, transaction_root=runtime_root
+    )
+    package = package_store.create(change_id, intent, design)
+    contract_bytes = _canonical_payload(contract.model_dump(mode="json"))
+    package_store.publish_contract(change_id, package.package_id, contract_bytes, lambda *_content: None)
+    package = package_store.read_verified(change_id)
+    change_root = runtime_root / "changes" / change_id
+    change_root.mkdir(parents=True)
+    (change_root / "contract.json").write_bytes(contract_bytes)
+    manager = ChangeWorkspaceManager(
+        repository, repository / ".owlbear/delivery/worktrees", PortfolioCoordinator(runtime_root), "main", "origin"
+    )
+    coordination = manager.ensure(change_id)
+    frontier = DeliveryFrontier(bindings=(OutcomeAuthorityBinding(outcome_id="OUT-001", plan_scope_id="SCOPE-001"),))
+    frontier_path = change_root / "frontier.json"
+    frontier_path.write_bytes(_canonical_payload(frontier.model_dump(mode="json")))
+    runtime = DeliveryRuntime(runtime_root, contract, workspace_manager=manager)
+    package_snapshot = manager.snapshot_design_package(
+        change_id,
+        package.package_id,
+        {
+            "authority.json": package.authority_bytes,
+            "design.md": package.design_bytes,
+            "intent.md": package.intent_bytes,
+            "manifest.json": package.manifest.canonical_bytes(),
+        },
+        "legacy-reconcile-package",
+    )
+    _git(repository, "push", "origin", f"{package_snapshot.snapshot_head}:refs/heads/{coordination.branch}")
+    admission = _admission(runtime, manager, change_id)
+    (change_root / "admission.json").write_bytes(_canonical_payload(admission.model_dump(mode="json")))
+    publisher = DeliveryStatePublisher(repository, remote="origin", state_branch="owlbear/delivery-state")
+    published = publisher.publish(
+        change_id=change_id,
+        package_id=package.package_id,
+        coordination=manager.show(change_id),
+        runtime=runtime,
+        admission=admission,
+        operation_id="legacy-reconcile-initial",
+        captured_at=datetime(2026, 8, 23, tzinfo=UTC),
+    )
+    snapshot_path = f".owlbear/delivery/state/{change_id}/snapshot.json"
+    legacy = json.loads(publisher._git_blob(published.published_head, snapshot_path))  # noqa: SLF001
+    legacy.pop("migrated_from_snapshot_id")
+    legacy.pop("repaired_predecessor_digest")
+    legacy["schema_version"] = 1
+    legacy["frontier"]["schema_version"] = 17
+    for binding in legacy["frontier"]["bindings"]:
+        binding.pop("retry_count")
+        binding.pop("retry_fingerprint")
+    legacy["snapshot_id"] = ""
+    legacy["snapshot_id"] = hashlib.sha256(_canonical_payload(legacy)).hexdigest()
+    legacy_head = _commit_corrupt_snapshot(repository, published.published_head, change_id, _canonical_payload(legacy))
+    _git(repository, "push", "origin", f"{legacy_head}:refs/heads/owlbear/delivery-state", "--force")
+    config = DeliveryStartupConfig(
+        schema_version=2,
+        remote="origin",
+        target_branch="main",
+        github_repository="example/project",
+        delivery_state_branch="owlbear/delivery-state",
+    )
+
+    def remote_state_reasons() -> list[DeliveryHealthReason]:
+        health = load_delivery_application(config, workspace_root=repository).delivery_health()
+        return [item.reason for item in health.diagnostics if item.source == "remote-state"]
+
+    diverged = json.loads(json.dumps(legacy["frontier"]))
+    diverged["bindings"][0]["plan_scope_id"] = "SCOPE-002"
+    frontier_path.write_bytes(_canonical_payload(diverged))
+    assert remote_state_reasons() == [DeliveryHealthReason.LOCAL_FRONTIER_MISMATCH]
+
+    frontier_path.write_bytes(_canonical_payload(legacy["frontier"]))
+    assert remote_state_reasons() == []
+    assert _git(remote, "rev-parse", "refs/heads/owlbear/delivery-state") == legacy_head
+
+
 def test_target_sync_state_snapshot_is_restartable_after_branch_publication(tmp_path: Path) -> None:
     repository, remote, _initial = _repository(tmp_path)
     change_id = "state-target-sync"
