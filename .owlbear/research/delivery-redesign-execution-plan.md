@@ -414,7 +414,8 @@ no diary, no session transcripts. Evidence and history live on the PRs.
   - #215 strict frontier round-trip → N02
   - #216 fence expired claims and #221 retry convergence → covered by D03; verify and propose
     closure in N00
-  - #218 memory-curation coupling → N09
+  - #218 memory-curation coupling: fixed on `dev` by PR #308; N09-A1 records closure evidence
+    (N09 plan U1)
   - #219 typed proof verdicts and #222 whole-Change acceptance in finalization → N03
   - #220 bounded remote Git → N02
   - #225 PR-feedback continuity → N05
@@ -511,9 +512,10 @@ so implementation re-resolves paths after N01 moves code.
 | N08-A | N08-P, N02-B |
 | N08-B | N08-A |
 | N08-C | N08-B, N02-D |
-| N09-P1 (plans N09-A) | N00-B |
-| N09-A | N09-P1, N01-C |
-| N09-P2 (plans N09-B, N09-C) | N05-P, N06-P, N07-P, N08-P, N09-A |
+| N09-P1 (plans N09-A1, N09-A2) | N00-B |
+| N09-A1 | N09-P1, N01-C |
+| N09-A2 | N09-A1, N02-B |
+| N09-P2 (plans N09-B, N09-C) | N05-P, N06-P, N07-P, N08-P, N09-A2 |
 | N09-B | N09-P2, N05-D, N06-C, N07-B, N08-C |
 | N09-C | N09-B |
 | N10-P | N09-P2 |
@@ -535,7 +537,8 @@ flowchart LR
   N03 --> N06[N06 prepared interaction]
   N04 --> N07[N07 B1 runner]
   N06 --> N07
-  N01 --> N09A[N09-A presentation]
+  N01 --> N09A[N09-A1/A2 presentation + pause]
+  N02 --> N09A
   N05 --> N09B[N09-B/C cutover + docs]
   N07 --> N09B
   N08 --> N09B
@@ -576,8 +579,8 @@ phase.
 | 0 | N00-A, N00-M (main checkout), then N00-B | — | PR #326 merged; live frozen and verified; this plan approved |
 | 1 | N01-P, then N01-A | N00-C, N02-P, N09-P1, then N01-B | N01-A, N01-B merged |
 | 1b | N01-C | N05-P, then N05-A | N01-C merged |
-| 2 | N02-A … N02-D | N09-A, N03-P, N08-P | N02-B merged |
-| 3 | N03-A … N03-C | N05-B … N05-D, N08-A, N08-B | N03 merged |
+| 2 | N02-A … N02-D | N09-A1, N03-P, N08-P | N02-B merged |
+| 3 | N03-A … N03-C | N05-B … N05-D, N08-A, N08-B, N09-A2 | N03 merged |
 | 4 | N04-P … N04-D | N06-P … N06-C, N08-C | N04, N06, N08 merged |
 | 5 | N07-P … N07-B | N09-P2, N10-P | N07 merged |
 | 6 | N09-B, N09-C, N10-A, N10-H, N10-M | — | Programme complete |
@@ -603,7 +606,7 @@ every new item exactly one lane.
 | N01-C | merged | #347 (code head `1ba931191`; cumulative Sol `implementation-sound`; LC load form pass) |
 | N02-P | merged | #345 (plan gate `plan-sound`, round 4; amends §1.3, D9: confirmation pending; U1/U2 pending before N02-D) |
 | N02-A | merged | #348 (code head `f225ad508`; Sol `implementation-sound` round 3; LC load form pass) |
-| N02-B | — | — |
+| N02-B | merged | #352 (code head `7500600c7`; Sol `implementation-sound` round 5; full LC pass) |
 | N02-C | — | — |
 | N02-D | — | — |
 | N03-P | merged | #349 (plan gate `plan-sound`, round 6; D11 confirmation pending; U1 before N03-A) |
@@ -627,12 +630,13 @@ every new item exactly one lane.
 | N07-P | — | — |
 | N07-A | — | — |
 | N07-B | — | — |
-| N08-P | — | — |
+| N08-P | merged | #350 (plan gate `plan-sound`, round 7; amends N02-B abort (N02 D10); D11 confirmation pending; U1–U3 before their phases) |
 | N08-A | — | — |
 | N08-B | — | — |
 | N08-C | — | — |
-| N09-P1 | — | — |
-| N09-A | — | — |
+| N09-P1 | merged | #351 (plan gate `plan-sound`, round 8; D9 re-split confirmation pending; U1 before N10-M) |
+| N09-A1 | — | — |
+| N09-A2 | — | — |
 | N09-P2 | — | — |
 | N09-B | — | — |
 | N09-C | — | — |
@@ -1107,8 +1111,10 @@ and 11.2; R4; the Repair Delivery control from section 4.2.
 **Phases:**
 
 - N08-P.
-- N08-A: proposals and application in tools, below application composition.
-- N08-B: Cockpit degraded start and the Repair Delivery entry.
+- N08-A: proposals and application below application composition: a repair kind of N02-B's
+  migration engine in Delivery, with a tools CLI.
+- N08-B: Cockpit degraded start, the Repair Delivery entry and its Delivery core changes: per-Change
+  containment (V18) and a read-only loader preflight before startup effects.
 - N08-C: setup and distribution, maintenance route, operating docs.
 
 LC gate: full form for A.
@@ -1126,7 +1132,8 @@ LC gate: full form for A.
 - Cockpit uses the programme section 4.2 labels: **Copy continuation prompt**, and **Pause/Resume**
   as policy state.
 - Cockpit shows the section 4.3 progress descriptions, including **Waiting for chat to resume**.
-- Memory curation no longer blocks acquisition (#218).
+- Memory curation no longer blocks acquisition (#218): verified fixed on `dev` by PR #308 (N09
+  plan D10); N09-A1 records the closure evidence.
 - WIRING, operating docs, setup guide and READMEs are reconciled (P22).
 
 **Covers:** R1; WP7 steps 1–2; programme sections 4.2, 4.3 and 6 (waiting for chat); J03, J08,
@@ -1140,8 +1147,9 @@ issue #218; P22.
 
 **Phases:**
 
-- N09-P1: plans N09-A only (presentation, Pause/Resume semantics, #218).
-- N09-A: presentation, progress copy, Pause/Resume, #218.
+- N09-P1: plans N09-A1 and N09-A2 (presentation, Pause/Resume semantics, #218).
+- N09-A1: presentation, progress copy, Change-level Pause/Resume, #218 closure evidence.
+- N09-A2: Pause drains active work (coordination format change; after N02-B).
 - N09-P2: capability inventory; plans N09-B and N09-C using the approved N05–N08 plans.
 - N09-B: retirement and routing.
 - N09-C: documentation reconciliation.
