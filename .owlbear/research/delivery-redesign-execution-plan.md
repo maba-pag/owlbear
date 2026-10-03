@@ -183,14 +183,15 @@ the user present and the explicit authorization described in that package.
   records hold absolute paths into the main checkout, so copying `.owlbear/delivery` alone is not
   enough. N00-A establishes and records the isolation recipe (worktrees, Git administration, refs,
   host-local identities and the remote, for which the `url.<bare>.insteadOf` fixture technique in
-  `serve/delivery/tests/test_delivery_state.py` applies). The recipe preserves receipt bytes and
-  never rewrites them to manufacture compatibility. Take the copy while no live Delivery work runs
-  (the user confirms; the controller may stay up). Every LC run proves isolation statically before
-  loading: in the copy, every worktree `.git` file, `gitdir` file, Git config and coordination
-  record is searched for the main checkout's absolute path and none remains, and
-  `git rev-parse --git-common-dir` resolves into the copy for every copied worktree. The main
-  checkout shares its `.git` with all lane worktrees, so hashing it would fail on ordinary lane
-  commits; it is not hashed. Run the candidate's
+  `serve/delivery/tests/test_delivery_state.py` applies). The recipe preserves record and receipt
+  bytes, including their absolute paths, and never rewrites them to manufacture compatibility.
+  Take the copy while no live Delivery work runs (the user confirms; the controller may stay up).
+  Every LC run proves isolation affirmatively before loading: mount information shows the copy as
+  the only mount at or under the main checkout's absolute path and the real checkout not mounted;
+  the copy marker is present at that path; and `git rev-parse --git-common-dir` of the copy and of
+  every copied worktree resolves inside the copy. After the run, live record hashes are unchanged.
+  The main checkout shares its `.git` with all lane worktrees, so hashing it would fail on ordinary
+  lane commits; it is not hashed. Run the candidate's
   `delivery-diagnose`, then a read-only application load that lists and reads every live Change.
   It passes when every Change loads as an available Change, not as an unavailable projection,
   either directly or after a registered migration (available from N02-B) converts the copy. Record
@@ -599,7 +600,7 @@ every new item exactly one lane.
 | N01-A | merged | #344 (code head `693b6dc3b`; Sol `implementation-sound`; LC load form pass) |
 | N01-B | — | — |
 | N01-C | — | — |
-| N02-P | — | — |
+| N02-P | merged | #345 (plan gate `plan-sound`, round 4; amends §1.3, D9: confirmation pending; U1/U2 pending before N02-D) |
 | N02-A | — | — |
 | N02-B | — | — |
 | N02-C | — | — |
