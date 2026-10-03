@@ -329,6 +329,31 @@ def test_repeated_request_adopts_the_pending_request_reported_with_409(tmp_path:
     assert result.pending.matches(_request())
 
 
+@pytest.mark.parametrize("stderr", [b"gh: HTTP 409\n", b"gh: Conflict (HTTP 409)\n", b"warning\ngh: HTTP 409"])
+def test_both_gh_status_forms_identify_the_409_pending_request(tmp_path: Path, stderr: bytes) -> None:
+    provider, _, recorder = _github(effects=(_completed(_pending_payload(), returncode=1, stderr=stderr),))
+
+    result = provider.request_merge(_request(), body_path=_frozen(tmp_path), release=_released(recorder.events))
+
+    assert result.existing_request is True
+    assert result.pending is not None
+    assert result.pending.matches(_request())
+
+
+@pytest.mark.parametrize(
+    "stderr",
+    [b"HTTP 409\n", b"proxy said (HTTP 409) earlier\n", b"gh: HTTP 4090\n", b"gh: HTTP 409 trailing\n"],
+)
+def test_status_outside_a_gh_status_line_is_response_unknown(tmp_path: Path, stderr: bytes) -> None:
+    provider, _, recorder = _github(effects=(_completed(_pending_payload(), returncode=1, stderr=stderr),))
+
+    with pytest.raises(PublicationProviderError) as raised:
+        provider.request_merge(_request(), body_path=_frozen(tmp_path), release=_released(recorder.events))
+
+    assert raised.value.code is PublicationProviderFailureCode.RESPONSE_UNKNOWN
+    assert raised.value.retry_safe is False
+
+
 @pytest.mark.parametrize(
     "overrides",
     [

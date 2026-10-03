@@ -117,6 +117,9 @@ _MERGE_ROUTE = 'f"{_repository_endpoint(repository)}/pulls/{number}/merge-async"
 _MERGE_ROUTE_CALLERS = frozenset({"request_merge", "read_merge_request"})
 _EFFECT_TRANSPORT = "_rest_effect"
 _ALLOWED_PROVIDER_EFFECTS = frozenset({"request_merge"})
+_MERGE_REQUEST_OPERATION = "request_merge"
+# (repository path, qualified scope) of the only production callers; N05-B adds its engine owner.
+_MERGE_REQUEST_CALL_OWNERS: frozenset[tuple[str, str]] = frozenset()
 _FROZEN_BODY = {
     "bypass_rules": "False",
     "merge_action": "'direct_merge'",
@@ -1226,6 +1229,51 @@ def _forbidden_capability_violations(paths: tuple[Path, ...]) -> tuple[str, ...]
     )
 
 
+class _MergeRequestUseVisitor(ast.NodeVisitor):
+    def __init__(self) -> None:
+        self.scope: list[str] = []
+        self.uses: list[tuple[int, str]] = []
+
+    def _visit_scope(self, node: ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        self.scope.append(node.name)
+        self.generic_visit(node)
+        self.scope.pop()
+
+    visit_ClassDef = visit_FunctionDef = visit_AsyncFunctionDef = _visit_scope  # noqa: N815 - ast dispatch names.
+
+    def _record(self, node: ast.expr) -> None:
+        self.uses.append((node.lineno, ".".join(self.scope) or "<module>"))
+
+    def visit_Attribute(self, node: ast.Attribute) -> None:
+        if node.attr == _MERGE_REQUEST_OPERATION:
+            self._record(node)
+        self.generic_visit(node)
+
+    def visit_Call(self, node: ast.Call) -> None:
+        func = node.func
+        dynamic = len(node.args) > 1 and _literal_string(node.args[1]) == _MERGE_REQUEST_OPERATION
+        if isinstance(func, ast.Name) and (func.id == _MERGE_REQUEST_OPERATION or (func.id == "getattr" and dynamic)):
+            self._record(node)
+        self.generic_visit(node)
+
+
+def _merge_request_call_violations(
+    paths: tuple[Path, ...],
+    owners: frozenset[tuple[str, str]] = _MERGE_REQUEST_CALL_OWNERS,
+) -> tuple[str, ...]:
+    violations: list[str] = []
+    for path in paths:
+        relative = path.relative_to(_REPO_ROOT).as_posix()
+        visitor = _MergeRequestUseVisitor()
+        visitor.visit(ast.parse(path.read_text(encoding="utf-8"), filename=str(path)))
+        violations.extend(
+            f"{relative}:{line_number}:{scope}"
+            for line_number, scope in visitor.uses
+            if (relative, scope) not in owners
+        )
+    return tuple(violations)
+
+
 def _automation_governance_files() -> tuple[Path, ...]:
     delivery_roots = tuple(
         root for root in _SOURCE_ROOTS if root.parent.name in {"delivery", "delivery-mcp", "delivery-github"}
@@ -1788,6 +1836,31 @@ def test_forbidden_merge_method_fixture_is_rejected_by_the_field_gate() -> None:
 
 def test_cockpit_and_agents_expose_no_merge_control() -> None:
     assert not _forbidden_capability_violations(_production_capability_files())
+
+
+def test_merge_request_is_called_only_by_allowlisted_production_owners() -> None:
+    violations = _merge_request_call_violations(_production_python_files())
+
+    assert not violations, "Unowned merge request use:\n" + "\n".join(violations)
+    assert all((_REPO_ROOT / path).is_file() for path, _ in _MERGE_REQUEST_CALL_OWNERS)
+
+
+def test_forbidden_merge_call_fixture_is_rejected_by_the_call_ownership_gate() -> None:
+    fixture = _fixture_path("forbidden-merge-call.py")
+    relative = fixture.relative_to(_REPO_ROOT).as_posix()
+
+    violations = _merge_request_call_violations((fixture,))
+    owned = _merge_request_call_violations(
+        (fixture,), frozenset({(relative, "PortfolioApplication.approve_and_merge")})
+    )
+
+    assert violations == (
+        f"{relative}:17:PortfolioApplication.approve_and_merge",
+        f"{relative}:20:PortfolioApplication.merge_through_alias",
+        f"{relative}:24:PortfolioApplication.merge_dynamically",
+        f"{relative}:27:<module>",
+    )
+    assert owned == violations[1:]
 
 
 def test_forbidden_cockpit_and_agent_fixtures_are_rejected_by_the_capability_gate() -> None:

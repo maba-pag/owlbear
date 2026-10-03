@@ -25,12 +25,14 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from owlbear_delivery import PublicationProviderError, PublicationProviderFailureCode
 from owlbear_delivery.publication_provider import (
     PublicationMergeMethod,
+    PublicationMergeRefusalReason,
     PublicationMergeRequestStatus,
     RequestPublicationMerge,
 )
-from owlbear_delivery_github import GitHubCliPublicationProvider
+from owlbear_delivery_github import GitHubCliPublicationProvider, effect_launcher
 from owlbear_delivery_github.effect_launcher import (
     LAUNCHER_UNSENT_EXIT,
     TOKEN_SIZE,
@@ -85,10 +87,25 @@ os._exit(0)
 """
 
 
+def _pending_response(**overrides: object) -> dict[str, object]:
+    details: dict[str, object] = {
+        "message": "Merge request accepted",
+        "uuid": _UUID,
+        "merge_method": "merge",
+        "merge_action": "direct_merge",
+        "expected_head_sha": _HEAD,
+        "bypass_rules": False,
+    }
+    details.update(overrides)
+    return {"status": "pending", "details": {key: value for key, value in details.items() if value is not None}}
+
+
 @dataclass
 class _Recorder:
     requests: list[dict[str, object]] = field(default_factory=list)
     lock: threading.Lock = field(default_factory=threading.Lock)
+    status: int = 202
+    payload: object = field(default_factory=_pending_response)
 
     def snapshot(self) -> list[dict[str, object]]:
         with self.lock:
@@ -125,21 +142,10 @@ def _handler(recorder: _Recorder) -> type[BaseHTTPRequestHandler]:
                         "body": body,
                     }
                 )
-            payload = json.dumps(
-                {
-                    "status": "pending",
-                    "details": {
-                        "message": "Merge request accepted",
-                        "uuid": _UUID,
-                        "merge_method": "merge",
-                        "merge_action": "direct_merge",
-                        "expected_head_sha": _HEAD,
-                        "bypass_rules": False,
-                    },
-                }
-            ).encode()
-            self.send_response(202 if self.command != "CONNECT" else 405)
-            self.send_header("Content-Type", "application/json")
+            response = recorder.payload
+            payload = response if isinstance(response, bytes) else json.dumps(response).encode()
+            self.send_response(recorder.status if self.command != "CONNECT" else 405)
+            self.send_header("Content-Type", "text/html" if isinstance(response, bytes) else "application/json")
             self.send_header("Content-Length", str(len(payload)))
             self.end_headers()
             self.wfile.write(payload)
@@ -368,9 +374,64 @@ def test_raised_release_closes_the_pipe_and_gh_never_runs(tmp_path: Path, fake_g
         message = "release record write failed"
         raise OSError(message)
 
-    with pytest.raises(OSError, match="release record write failed"):
+    with pytest.raises(OSError, match="release record write failed") as raised:
         GitHubCliPublicationProvider().request_merge(_request(), body_path=body_path, release=release)
 
+    assert not isinstance(raised.value, PublicationProviderError)
+    assert raised.value.__cause__ is None
+    _wait_for_group_exit(groups[0])
+    assert not (fake_gh / "argv").exists()
+
+
+def test_spawn_failure_is_typed_unavailable_before_any_release(
+    tmp_path: Path,
+    fake_gh: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    body_path, _ = _frozen(tmp_path)
+    releases: list[int] = []
+    monkeypatch.setattr(sys, "executable", str(tmp_path / "missing-python"))
+
+    with pytest.raises(PublicationProviderError) as raised:
+        GitHubCliPublicationProvider().request_merge(
+            _request(),
+            body_path=body_path,
+            release=lambda group_id, _start: releases.append(group_id),
+        )
+
+    assert raised.value.code is PublicationProviderFailureCode.UNAVAILABLE
+    assert raised.value.retry_safe is True
+    assert isinstance(raised.value.__cause__, effect_launcher.EffectLaunchUnavailableError)
+    assert isinstance(raised.value.__cause__.__cause__, OSError)
+    assert releases == []
+    assert not (fake_gh / "argv").exists()
+
+
+def test_unreadable_start_time_is_typed_unavailable_and_sends_nothing(
+    tmp_path: Path,
+    fake_gh: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    body_path, _ = _frozen(tmp_path)
+    releases: list[int] = []
+    groups: list[int] = []
+
+    def unreadable(pid: int) -> None:
+        groups.append(pid)
+
+    monkeypatch.setattr(effect_launcher, "read_process_start_time", unreadable)
+
+    with pytest.raises(PublicationProviderError) as raised:
+        GitHubCliPublicationProvider().request_merge(
+            _request(),
+            body_path=body_path,
+            release=lambda group_id, _start: releases.append(group_id),
+        )
+
+    assert raised.value.code is PublicationProviderFailureCode.UNAVAILABLE
+    assert raised.value.retry_safe is True
+    assert isinstance(raised.value.__cause__, effect_launcher.EffectLaunchUnavailableError)
+    assert releases == []
     _wait_for_group_exit(groups[0])
     assert not (fake_gh / "argv").exists()
 
@@ -486,6 +547,160 @@ def test_released_provider_request_sends_exactly_the_frozen_body_once(
     assert puts[0]["body"] == body
     assert puts[0]["content_length"] == str(len(body))
     assert puts[0]["chunked"] is False
+
+
+@pytest.fixture
+def serve_real_gh(
+    tmp_path: Path,
+    recorder: tuple[_Recorder, int],
+    real_gh: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> Callable[[int, object], Path]:
+    state, port = recorder
+    for name, value in _gh_environment(tmp_path, port, real_gh).items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+
+    def serve(status: int, payload: object) -> Path:
+        state.status = status
+        state.payload = payload
+        return _frozen(tmp_path)[0]
+
+    return serve
+
+
+@pytest.mark.parametrize(
+    ("status", "payload", "stderr"),
+    [
+        (409, _pending_response(), b"gh: HTTP 409\n"),
+        (409, {"message": "Conflict"}, b"gh: Conflict (HTTP 409)\n"),
+        (405, {"message": "Pull Request is not mergeable"}, b"gh: Pull Request is not mergeable (HTTP 405)\n"),
+        (502, b"<html>bad gateway</html>", b"gh: HTTP 502\n"),
+    ],
+)
+def test_real_gh_reports_http_failures_in_both_status_forms(
+    serve_real_gh: Callable[[int, object], Path],
+    status: int,
+    payload: object,
+    stderr: bytes,
+) -> None:
+    body_path = serve_real_gh(status, payload)
+
+    completed = subprocess.run(  # noqa: S603 - real gh pointed at the local recorder only.
+        _production_arguments(body_path),
+        check=False,
+        capture_output=True,
+        stdin=subprocess.DEVNULL,
+        timeout=60,
+    )
+
+    assert completed.returncode == 1
+    assert completed.stderr == stderr
+    expected = payload if isinstance(payload, bytes) else json.dumps(payload).encode()
+    assert completed.stdout == expected
+
+
+def test_real_gh_409_adopts_the_pending_request_with_matching_options(
+    serve_real_gh: Callable[[int, object], Path],
+    recorder: tuple[_Recorder, int],
+) -> None:
+    body_path = serve_real_gh(409, _pending_response(message="A merge request is already pending"))
+
+    result = GitHubCliPublicationProvider().request_merge(_request(), body_path=body_path, release=lambda *_: None)
+
+    assert result.status is PublicationMergeRequestStatus.PENDING
+    assert result.existing_request is True
+    assert result.pending is not None
+    assert result.pending.request_id == _UUID
+    assert result.pending.matches(_request())
+    assert result.message == "A merge request is already pending"
+    assert len(_put_requests(recorder[0])) == 1
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"expected_head_sha": "b" * 40},
+        {"merge_action": "merge_queue"},
+        {"bypass_rules": True},
+        {"merge_method": "squash"},
+    ],
+)
+def test_real_gh_409_with_foreign_options_never_matches(
+    serve_real_gh: Callable[[int, object], Path],
+    overrides: dict[str, object],
+) -> None:
+    body_path = serve_real_gh(409, _pending_response(**overrides))
+
+    result = GitHubCliPublicationProvider().request_merge(_request(), body_path=body_path, release=lambda *_: None)
+
+    assert result.existing_request is True
+    assert result.pending is not None
+    assert result.pending.matches(_request()) is False
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        _pending_response(bypass_rules=None),
+        _pending_response(uuid=None),
+        {"message": "Conflict"},
+    ],
+)
+def test_real_gh_409_without_complete_options_is_response_unknown(
+    serve_real_gh: Callable[[int, object], Path],
+    payload: object,
+) -> None:
+    body_path = serve_real_gh(409, payload)
+
+    with pytest.raises(PublicationProviderError) as raised:
+        GitHubCliPublicationProvider().request_merge(_request(), body_path=body_path, release=lambda *_: None)
+
+    assert raised.value.code is PublicationProviderFailureCode.RESPONSE_UNKNOWN
+    assert raised.value.retry_safe is False
+
+
+@pytest.mark.parametrize(
+    ("status", "reason"),
+    [
+        (400, PublicationMergeRefusalReason.CLOSED_OR_DRAFT),
+        (403, PublicationMergeRefusalReason.FORBIDDEN),
+        (405, PublicationMergeRefusalReason.NOT_MERGEABLE),
+        (422, PublicationMergeRefusalReason.VALIDATION),
+    ],
+)
+def test_real_gh_complete_refusals_are_typed(
+    serve_real_gh: Callable[[int, object], Path],
+    status: int,
+    reason: PublicationMergeRefusalReason,
+) -> None:
+    body_path = serve_real_gh(status, {"message": "Refused by the recorder", "status": str(status)})
+
+    result = GitHubCliPublicationProvider().request_merge(_request(), body_path=body_path, release=lambda *_: None)
+
+    assert result.status is PublicationMergeRequestStatus.REFUSED
+    assert result.refusal is not None
+    assert result.refusal.reason is reason
+    assert result.refusal.http_status == status
+    assert result.refusal.message == "Refused by the recorder"
+
+
+@pytest.mark.parametrize(
+    ("status", "payload"),
+    [(404, {"message": "Not Found"}), (500, {"message": "Server Error"}), (502, b"<html>bad gateway</html>")],
+)
+def test_real_gh_other_statuses_are_response_unknown(
+    serve_real_gh: Callable[[int, object], Path],
+    status: int,
+    payload: object,
+) -> None:
+    body_path = serve_real_gh(status, payload)
+
+    with pytest.raises(PublicationProviderError) as raised:
+        GitHubCliPublicationProvider().request_merge(_request(), body_path=body_path, release=lambda *_: None)
+
+    assert raised.value.code is PublicationProviderFailureCode.RESPONSE_UNKNOWN
+    assert raised.value.retry_safe is False
 
 
 @pytest.mark.parametrize("scenario", ["after-spawn", "after-group"])

@@ -42,7 +42,12 @@ from owlbear_delivery.publication_provider import (
     RequestPublicationMerge,
     bounded_provider_message,
 )
-from owlbear_delivery_github.effect_launcher import FrozenBodyMismatchError, freeze_body, run_release_gated
+from owlbear_delivery_github.effect_launcher import (
+    EffectLaunchUnavailableError,
+    FrozenBodyMismatchError,
+    freeze_body,
+    run_release_gated,
+)
 
 _DEFAULT_TIMEOUT_SECONDS = 30.0
 _API_VERSION = "2026-03-10"
@@ -126,7 +131,8 @@ _MAX_OBSERVED_CHECKS = 1_000
 _MAX_BRANCH_RULES = 100
 _QUEUE_RULE_TYPE = "merge_queue"
 _STRICT_CHECKS_RULE_TYPE = "required_status_checks"
-_HTTP_STATUS_PATTERN = re.compile(r"\(HTTP (\d{3})\)")
+# gh 2.102.0 prints `gh: <message> (HTTP 409)`, or `gh: HTTP 409` when the body has no top-level message.
+_HTTP_STATUS_PATTERN = re.compile(r"^gh: (?:HTTP (\d{3})|.*\(HTTP (\d{3})\))$", re.MULTILINE)
 _HTTP_NOT_FOUND = 404
 _HTTP_CONFLICT = 409
 _MERGE_REFUSALS = {
@@ -1255,6 +1261,13 @@ class GitHubCliPublicationProvider:
         arguments = (*_rest_arguments(method, endpoint), "--input", str(body_path))
         try:
             return self._effect_runner(arguments, body_path, release, self._timeout_seconds)
+        except EffectLaunchUnavailableError as exc:
+            raise PublicationProviderError(
+                PublicationProviderFailureCode.UNAVAILABLE,
+                operation,
+                "GitHub CLI effect launcher is unavailable; nothing was sent",
+                retry_safe=True,
+            ) from exc
         except subprocess.TimeoutExpired as exc:
             self._response_unknown(operation, "GitHub CLI effect timed out", cause=exc)
 
@@ -1497,8 +1510,8 @@ def _rest_arguments(method: str, endpoint: str) -> tuple[str, ...]:
 
 
 def _http_status(stderr: bytes) -> int | None:
-    matches = _HTTP_STATUS_PATTERN.findall(stderr.decode(errors="replace"))
-    return int(matches[-1]) if matches else None
+    matches = list(_HTTP_STATUS_PATTERN.finditer(stderr.decode(errors="replace")))
+    return int(matches[-1].group(1) or matches[-1].group(2)) if matches else None
 
 
 def _json_or_none(stdout: bytes) -> _JsonValue | None:

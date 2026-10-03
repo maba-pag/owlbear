@@ -41,6 +41,10 @@ class FrozenBodyMismatchError(ValueError):
     """The frozen body file differs from the approved request; nothing was spawned or sent."""
 
 
+class EffectLaunchUnavailableError(RuntimeError):
+    """The launcher could not be spawned or identified before release; nothing was sent."""
+
+
 def freeze_body(request: RequestPublicationMerge) -> bytes:
     """Return the canonical frozen JSON body of one approved merge request."""
     # Imported lazily: the launcher half of this module must run without third-party packages.
@@ -163,12 +167,26 @@ def run_release_gated(
 ) -> subprocess.CompletedProcess[bytes]:
     """Spawn, report the group to ``release``, then write the token and wait for the effect.
 
-    A raising ``release`` or an unreadable start time closes the pipe unsent. A timeout after the
-    token kills the group and re-raises ``subprocess.TimeoutExpired``.
+    A spawn failure or an unreadable start time raises ``EffectLaunchUnavailableError`` before
+    ``release`` runs. A raising ``release`` closes the pipe unsent and propagates unchanged. A
+    timeout after the token kills the group and re-raises ``subprocess.TimeoutExpired``.
     """
-    launched = spawn_effect(gh_arguments, body_path)
     try:
-        release(launched.group_id, _require_start_time(launched.group_id))
+        launched = spawn_effect(gh_arguments, body_path)
+    except OSError as exc:
+        message = "effect launcher could not be spawned"
+        raise EffectLaunchUnavailableError(message) from exc
+    try:
+        start_time = read_process_start_time(launched.group_id)
+    except BaseException:
+        launched.abandon()
+        raise
+    if start_time is None:
+        launched.abandon()
+        message = "effect launcher start time is unreadable"
+        raise EffectLaunchUnavailableError(message)
+    try:
+        release(launched.group_id, start_time)
     except BaseException:
         launched.abandon()
         raise
@@ -176,14 +194,6 @@ def run_release_gated(
     with contextlib.suppress(BrokenPipeError):
         launched.write_token()
     return launched.finish(timeout_seconds)
-
-
-def _require_start_time(pid: int) -> str:
-    start_time = read_process_start_time(pid)
-    if start_time is None:
-        message = "effect launcher start time is unreadable"
-        raise ProcessLookupError(message)
-    return start_time
 
 
 def _validate_gh_arguments(arguments: list[str], body_path: str) -> None:
