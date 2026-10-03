@@ -726,6 +726,29 @@ def test_full_form_rollback_needs_the_previous_release_to_load_every_change(tmp_
     assert delivery_lc.previous_release_oracle({**report, "previous_load": {}}) is False
 
 
+def test_full_form_downgrade_refuses_exactly_the_records_of_a_family_version_the_previous_release_lacks(
+    tmp_path: Path,
+) -> None:
+    candidate = Path(delivery_lc.__file__).parents[3] / "delivery/src/owlbear_delivery/state_formats.py"
+    source = candidate.read_text(encoding="utf-8")
+    coordination_2 = (
+        '"M",\n        2,\n        rewrites=((1, "owlbear_delivery.state_migration:coordination_1_to_2"),),'
+    )
+    assert source.count(coordination_2) == 1
+    gate = tmp_path / "previous-gate/state_formats.py"
+    gate.parent.mkdir()
+    gate.write_text(source.replace(coordination_2, '"M",\n        1,'), encoding="utf-8")
+    live, previous = _live_with_previous_gate(tmp_path, gate)
+
+    report = delivery_lc.full_form(live, previous, previous_load=_unexpected_previous_load)
+
+    assert report["passed"] is True, json.dumps(report, indent=1)
+    assert report["previous_gate_after"]["supported_format"] == 1  # type: ignore[index]
+    assert report["previous_gate_after"]["refusals"] == [["state-newer-than-controller", _COORDINATION]]  # type: ignore[index]
+    assert report["previous_beyond"] == [_COORDINATION]
+    assert "previous_load" not in report
+
+
 def _oracle_report(supported_format: int, refusals: list[list[str]], **extra: object) -> dict[str, object]:
     return {
         "target_format": 1,
@@ -738,6 +761,15 @@ def _oracle_report(supported_format: int, refusals: list[list[str]], **extra: ob
 _NEWER = ["state-newer-than-controller", FORMAT_MARKER]
 _INCOMPLETE = ["state-migration-incomplete", "runtime/migrations/" + "a" * 64 + "/journal.json"]
 _LOADED = {"loaded": True, "changes": ["change-a"], "unavailable": []}
+_BUMPED = ["state-newer-than-controller", _COORDINATION]
+
+
+def _bumped_report(refusals: list[list[str]], **extra: object) -> dict[str, Any]:
+    """Format 1 in both releases; the candidate moved coordination to 2, the previous registry reads only 1."""
+    versions = [["config", "config.json", 2], ["coordination", _COORDINATION, 2]]
+    report: dict[str, Any] = _oracle_report(1, refusals, migrated_versions=versions, **extra)
+    report["previous_gate_after"]["read_versions"] = {"config": [2], "coordination": [1]}
+    return report
 
 
 @pytest.mark.parametrize(
@@ -752,6 +784,18 @@ _LOADED = {"loaded": True, "changes": ["change-a"], "unavailable": []}
         (_oracle_report(1, [], previous_load={**_LOADED, "changes": []}), False),
         (_oracle_report(1, [_INCOMPLETE], previous_load=_LOADED), False),
         (_oracle_report(1, [], previous_load=_LOADED), True),
+        (_bumped_report([_BUMPED], previous_gate_hashes_unchanged=True), True),
+        (
+            _bumped_report(
+                [["state-newer-than-controller", "runtime/changes/change-a/frontier.json"]],
+                previous_gate_hashes_unchanged=True,
+            ),
+            False,
+        ),
+        (_bumped_report([_BUMPED, _INCOMPLETE], previous_gate_hashes_unchanged=True), False),
+        (_bumped_report([["state-version-unknown", _COORDINATION]], previous_gate_hashes_unchanged=True), False),
+        (_bumped_report([], previous_gate_hashes_unchanged=True, previous_load=_LOADED), False),
+        (_bumped_report([_BUMPED], previous_gate_hashes_unchanged=False), False),
     ],
     ids=[
         "downgrade-incomplete-only",
@@ -763,6 +807,12 @@ _LOADED = {"loaded": True, "changes": ["change-a"], "unavailable": []}
         "rollback-changes-missing",
         "rollback-gate-refuses",
         "rollback-loads-every-change",
+        "family-bump-typed-refusal-at-bumped-records",
+        "family-bump-refusal-at-unrelated-record",
+        "family-bump-extra-refusal",
+        "family-bump-untyped-refusal",
+        "family-bump-previous-loads",
+        "family-bump-hashes-changed",
     ],
 )
 def test_previous_release_oracle_requires_d3_evidence(report: dict[str, object], *, accepted: bool) -> None:
