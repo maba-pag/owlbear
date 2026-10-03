@@ -627,7 +627,7 @@ every new item exactly one lane.
 | N07-P | — | — |
 | N07-A | — | — |
 | N07-B | — | — |
-| N08-P | — | — |
+| N08-P | merged | #350 (plan gate `plan-sound`, round 7; amends N02-B abort (N02 D10); D11 confirmation pending; U1–U3 before their phases) |
 | N08-A | — | — |
 | N08-B | — | — |
 | N08-C | — | — |
@@ -1107,8 +1107,10 @@ and 11.2; R4; the Repair Delivery control from section 4.2.
 **Phases:**
 
 - N08-P.
-- N08-A: proposals and application in tools, below application composition.
-- N08-B: Cockpit degraded start and the Repair Delivery entry.
+- N08-A: proposals and application below application composition: a repair kind of N02-B's
+  migration engine in Delivery, with a tools CLI.
+- N08-B: Cockpit degraded start, the Repair Delivery entry and its Delivery core changes: per-Change
+  containment (V18) and a read-only loader preflight before startup effects.
 - N08-C: setup and distribution, maintenance route, operating docs.
 
 LC gate: full form for A.
