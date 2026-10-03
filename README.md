@@ -53,13 +53,12 @@ The `dev` branch is the development checkout. The `main` branch is generated fro
 rolling supported consumer branch; do not edit `main` directly. OwlBear has no numbered product
 releases.
 
-Requirements: Python 3.12.14+, [uv](https://docs.astral.sh/uv/), VS Code with GitHub Copilot,
+Requirements: Python 3.14.8 (3.14 series only), [uv](https://docs.astral.sh/uv/), VS Code with GitHub Copilot,
 [GitHub CLI](https://cli.github.com/), and Git. Cockpit frontend development also needs the Node
 version pinned in
 `serve/cockpit/web/.nvmrc`.
 
-The checked-in development runtime remains Python 3.14.7; Python 3.12.14 is the compatibility
-floor.
+The checked-in development runtime is pinned to Python 3.14.8; OwlBear supports the 3.14 series only.
 
 ```shell
 git clone -b dev https://github.com/maba-pag/owlbear.git

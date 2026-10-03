@@ -16,16 +16,6 @@ export default defineConfig({
       testMatch: compatibilitySpecs,
       use: { ...devices["Desktop Chrome"] },
     },
-    {
-      name: "compatibility-firefox",
-      testMatch: compatibilitySpecs,
-      use: { ...devices["Desktop Firefox"] },
-    },
-    {
-      name: "compatibility-webkit",
-      testMatch: compatibilitySpecs,
-      use: { ...devices["Desktop Safari"] },
-    },
   ],
   webServer: {
     command: "npm run build && npm run preview",

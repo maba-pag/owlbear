@@ -161,7 +161,7 @@ def _cache_is_valid(lock: dict[str, str], cache_root: Path) -> bool:
     marker_path = directory / ".complete.json"
     try:
         marker: Any = json.loads(marker_path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+    except OSError, UnicodeDecodeError, json.JSONDecodeError:
         return False
     if not isinstance(marker, dict):
         return False

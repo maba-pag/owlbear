@@ -1,9 +1,8 @@
 import { spawnSync } from "node:child_process";
-import { checkBrowser } from "./check-playwright-browser.mjs";
+import { checkChromium } from "./check-playwright-browser.mjs";
 
 const configuredBrowsers = process.env.E2E_COMPAT_BROWSERS || "chromium";
-const browsers = configuredBrowsers.split(/[,\s]+/).filter(Boolean);
-const projects = browsers.map((browser) => `compatibility-${browser}`);
+const projects = ["compatibility-chromium"];
 const compatibilitySpecs = [
   "e2e/smoke.spec.ts",
   "e2e/pds-runtime-csp.spec.ts",
@@ -11,14 +10,12 @@ const compatibilitySpecs = [
   "e2e/memory-conflict.spec.ts",
 ];
 
-let browsersAvailable = true;
-for (const browser of browsers) {
-  if (!(await checkBrowser(browser))) {
-    browsersAvailable = false;
-  }
+if (configuredBrowsers.trim() !== "chromium") {
+  console.error("E2E_COMPAT_BROWSERS must be chromium.");
+  process.exit(1);
 }
 
-if (!browsersAvailable) {
+if (!(await checkChromium())) {
   process.exit(1);
 }
 
@@ -32,7 +29,6 @@ const result = spawnSync(
     ...(forwardedArgs.length > 0 ? forwardedArgs : compatibilitySpecs),
   ],
   {
-    shell: process.platform === "win32",
     stdio: "inherit",
   },
 );

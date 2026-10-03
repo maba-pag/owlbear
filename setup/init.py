@@ -189,7 +189,7 @@ def _load_install_manifest(path: Path) -> tuple[dict[str, object] | None, bytes 
     try:
         raw = path.read_bytes()
         manifest = json.loads(raw)
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+    except OSError, UnicodeDecodeError, json.JSONDecodeError:
         return None, None
     if (
         not isinstance(manifest, dict)
@@ -1196,7 +1196,7 @@ def _workspace_profile_association(
         return None
     try:
         state = json.loads(state_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    except OSError, json.JSONDecodeError:
         return None
     association: tuple[bool, str | None] | None = None
     if isinstance(state, dict):
@@ -1499,7 +1499,7 @@ def _hook_diff(src: Path, dest: Path) -> str:
     try:
         seed_lines = src.read_text(encoding="utf-8").splitlines(keepends=True)
         existing_lines = dest.read_text(encoding="utf-8").splitlines(keepends=True)
-    except (OSError, UnicodeDecodeError):
+    except OSError, UnicodeDecodeError:
         return ""
     diff_lines = list(
         difflib.unified_diff(
@@ -1813,6 +1813,13 @@ def uninstall(
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":  # pragma: no cover
+    if sys.platform == "win32":
+        print(
+            "Windows is unsupported. OwlBear setup supports macOS and Linux (Ubuntu).",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+
     import argparse
 
     parser = argparse.ArgumentParser(description="Initialise an OwlBear workspace in the current directory.")

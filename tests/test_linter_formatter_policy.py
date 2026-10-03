@@ -107,7 +107,6 @@ _X04_FORMATTERS = {
     "[jsonc]": "biomejs.biome",
     "[javascript][javascriptreact][typescript][typescriptreact][css]": "biomejs.biome",
     "[markdown]": "DavidAnson.vscode-markdownlint",
-    "[powershell]": "ms-vscode.powershell",
     "[python]": "charliermarsh.ruff",
     "[toml]": "tamasfe.even-better-toml",
     "[xml]": "redhat.vscode-xml",

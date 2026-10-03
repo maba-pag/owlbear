@@ -58,7 +58,7 @@ requirements stay in
 | E2E test runner | Playwright (version locked by `serve/cockpit/web/package-lock.json`) via `npm run test:e2e` — Chromium only; requires `npx playwright install chromium` once |
 | CSS/HTML lint | Biome and HTMLHint (`npm run lint:html`) |
 | Build output | `serve/cockpit/dist/` (`npm run build`); gitignored on `dev` — pre-built in `main` by sync-to-main CI |
-| Node requirement | Node 24.19.0 pinned in `serve/cockpit/web/.nvmrc`; `package.json` requires `>=24.16.0` |
+| Node requirement | Node 24.21.0 pinned in `serve/cockpit/web/.nvmrc`; `package.json` requires `>=24.21.0` |
 | Package manager | `npm` (never `uv` for this package) |
 
 All other `serve/` packages are Python — use `uv run` for those.

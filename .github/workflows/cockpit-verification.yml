@@ -51,7 +51,7 @@ jobs:
         id: runtime
         run: |
           node_upper="$(tr -d '\r\n' < serve/cockpit/web/.nvmrc)"
-          printf 'node_matrix=["24.16.0","%s"]\n' "$node_upper" >> "$GITHUB_OUTPUT"
+          printf 'node_matrix=["%s"]\n' "$node_upper" >> "$GITHUB_OUTPUT"
 
   proof:
     name: Prove Cockpit on Node ${{ matrix.node }}
@@ -127,7 +127,7 @@ jobs:
       run:
         working-directory: serve/cockpit/web
     env:
-      E2E_COMPAT_BROWSERS: ${{ github.event_name == 'workflow_dispatch' && 'chromium firefox webkit' || 'chromium' }}
+      E2E_COMPAT_BROWSERS: chromium
     steps:
       - name: Checkout requested revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1

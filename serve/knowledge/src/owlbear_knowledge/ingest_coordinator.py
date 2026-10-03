@@ -293,7 +293,7 @@ class IngestCoordinator:
         except KnowledgeOperationError as exc:
             logger.exception("Failed to process document during ingest")
             return exc.failure
-        except (RuntimeError, ValueError, LookupError, TypeError, AttributeError, KeyError):
+        except RuntimeError, ValueError, LookupError, TypeError, AttributeError, KeyError:
             logger.exception("Failed to process document during ingest")
             return None
         else:

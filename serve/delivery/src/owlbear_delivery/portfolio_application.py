@@ -2144,7 +2144,7 @@ class PortfolioApplication:
             try:
                 with locked_roots((self._checkpoint_lock_root(runtime.contract.change_id),), blocking=False):
                     self._reconcile_retry_results(runtime)
-            except (OSError, RuntimeError, ValueError):
+            except OSError, RuntimeError, ValueError:
                 _logger.warning("Retry accounting remains contained for %s", runtime.contract.change_id)
 
     def _reconcile_retry_results(self, runtime: DeliveryRuntime) -> None:
@@ -2194,7 +2194,7 @@ class PortfolioApplication:
         for result in binding.results:
             try:
                 runtime.require_result_replay(binding.outcome_id, attempt.operation_alias, result)
-            except (DeliveryRuntimeConflictError, DeliveryRuntimeReferenceError):
+            except DeliveryRuntimeConflictError, DeliveryRuntimeReferenceError:
                 continue
             repair_binding = ledger.repair_binding_for_attempt(
                 attempt.attempt_id,
@@ -2226,7 +2226,7 @@ class PortfolioApplication:
                     failure_code="owner-publication-failed-before-start",
                     now=self._clock(),
                 )
-        except (OSError, RetryLedgerConflictError, RetryLedgerCorruptError, RuntimeError, ValueError):
+        except OSError, RetryLedgerConflictError, RetryLedgerCorruptError, RuntimeError, ValueError:
             return
 
     def _contained_record_is_absent(self, relative_path: Path) -> bool:
@@ -2234,7 +2234,7 @@ class PortfolioApplication:
             read_record(self._target_root, relative_path)
         except FileNotFoundError:
             return True
-        except (OSError, RuntimeError, ValueError):
+        except OSError, RuntimeError, ValueError:
             return False
         return False
 
@@ -2257,7 +2257,7 @@ class PortfolioApplication:
             records = (intent, intent.with_name("started.json"), intent.with_name("result.json"))
             if not all(self._contained_record_is_absent(path.relative_to(self._target_root)) for path in records):
                 return
-        except (OSError, RuntimeError, ValueError):
+        except OSError, RuntimeError, ValueError:
             return
         self._record_proven_unstarted_retry_release(runtime, action.operation_id)
 
@@ -2318,7 +2318,7 @@ class PortfolioApplication:
                     or not (planner_handoff or builder_handoff)
                 ):
                     return
-        except (OSError, RuntimeError, ValueError):
+        except OSError, RuntimeError, ValueError:
             return
         self._record_proven_unstarted_retry_release(
             runtime,
@@ -2361,7 +2361,7 @@ class PortfolioApplication:
                 or (finalization is not None and finalization.operation_id == attempt.writer.attempt_id)
             ):
                 return
-        except (OSError, RuntimeError, ValueError):
+        except OSError, RuntimeError, ValueError:
             return
         self._record_proven_unstarted_retry_release(
             runtime,
@@ -4124,7 +4124,7 @@ class PortfolioApplication:
                     )
                     + "\n",
                 )
-        except (OSError, ValueError):
+        except OSError, ValueError:
             selected, next_cursor = self._rotate_acceptance_reconciliation_batch(
                 eligible,
                 limit,
@@ -5465,7 +5465,7 @@ class PortfolioApplication:
         """Refuse settlement while leftover processes use the worktree or it changed within the quiet period."""
         try:
             issued_after = _timestamp(issued_at)
-        except (ValueError, OverflowError):
+        except ValueError, OverflowError:
             # Without the claim's issue time, no process can be ruled out as its leftover.
             return _WorkerStall(eligible_at=None, quiet=False)
         try:
@@ -5476,7 +5476,7 @@ class PortfolioApplication:
                 return _WorkerStall(eligible_at=None, quiet=False, active_processes=processes)
             # A write while processes were scanned must still count against the quiet period.
             newest = max(before, self._workspace_manager.observe_worktree_activity(change_id))
-        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError):
+        except OSError, RuntimeError, subprocess.SubprocessError, ValueError:
             return _WorkerStall(eligible_at=None, quiet=False)
         eligible_at = newest + self._worker_quiet_period
         if eligible_at.microsecond:
@@ -5563,7 +5563,7 @@ class PortfolioApplication:
                 continue
             try:
                 stall = self._worker_stall(snapshot.contract.change_id, binding.outcome_id, claim)
-            except (OSError, RuntimeError, ValueError):
+            except OSError, RuntimeError, ValueError:
                 continue
             if stall is not None:
                 stalls[binding.outcome_id] = stall
@@ -6325,7 +6325,7 @@ class PortfolioApplication:
             if coordination.writer is not None or coordination.external_head_adoption_receipt is not None:
                 return None
             observed_head = self._workspace_manager.observed_change_head(change_id)
-        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError):
+        except OSError, RuntimeError, subprocess.SubprocessError, ValueError:
             return None
         if observed_head == coordination.last_reviewed_commit:
             return None
@@ -6619,7 +6619,7 @@ class PortfolioApplication:
             return view
         try:
             coordination = self._workspace_manager.show(change_id)
-        except (OSError, RuntimeError, ValueError):
+        except OSError, RuntimeError, ValueError:
             unavailable = self._unavailable_change(change_id, "coordination-unavailable")
             return view.model_copy(update={"readiness": unavailable.readiness})
         conflict = coordination.target_sync_conflict
@@ -6753,7 +6753,7 @@ class PortfolioApplication:
             return None
         try:
             coordination = self._workspace_manager.show(change_id)
-        except (OSError, RuntimeError, ValueError):
+        except OSError, RuntimeError, ValueError:
             return None
         attention = coordination.finalization_attention
         writer = coordination.writer
@@ -6965,7 +6965,7 @@ class PortfolioApplication:
         stalls = self._observed_worker_stalls(snapshot)
         try:
             finalizer = self._finalizer_stall(snapshot.contract.change_id)
-        except (OSError, RuntimeError, ValueError):
+        except OSError, RuntimeError, ValueError:
             finalizer = None
         if not stalls and finalizer is None:
             return decisions
@@ -7083,7 +7083,7 @@ class PortfolioApplication:
                 episode = None
             if episode is not None:
                 history = retry_ledger.attempt_history(episode)
-        except (OSError, RetryLedgerConflictError, RetryLedgerCorruptError, RuntimeError, ValueError):
+        except OSError, RetryLedgerConflictError, RetryLedgerCorruptError, RuntimeError, ValueError:
             unavailable = decision.model_copy(
                 update={
                     "status": "unavailable",
@@ -7188,7 +7188,7 @@ class PortfolioApplication:
     ) -> tuple[DeliveryReadinessBasis, str | None, str | None]:
         try:
             coordination = self._workspace_manager.show(snapshot.contract.change_id)
-        except (OSError, RuntimeError, ValueError):
+        except OSError, RuntimeError, ValueError:
             return basis, "coordination-unavailable", None
         if not self._coordinator.recovery_exclusions_verified(coordination):
             return basis, "coordination-unavailable", None
@@ -7246,7 +7246,7 @@ class PortfolioApplication:
         """Read one bounded contained journal without following links."""
         try:
             return read_contained(operation_fd, Path(name), limit=_MAX_CONTINUATION_JOURNAL_BYTES)
-        except (OSError, TransactionPathError):
+        except OSError, TransactionPathError:
             return b""
 
     def _continuation_journal_readiness(  # noqa: C901, PLR0911, PLR0912 - each journal state fails closed distinctly.
@@ -7267,7 +7267,7 @@ class PortfolioApplication:
                     return "engine-action-blocked", None
                 try:
                     original = ChangeContinuationAction.model_validate_json(intent)
-                except (TypeError, ValueError):
+                except TypeError, ValueError:
                     return "engine-action-blocked", None
                 if original != action.model_copy(update={"finished_at": None}):
                     return "engine-action-blocked", None
@@ -7295,7 +7295,7 @@ class PortfolioApplication:
                     return "engine-action-blocked", None
                 try:
                     recorded = DeliveryEngineActionResult.model_validate_json(result)
-                except (TypeError, ValueError):
+                except TypeError, ValueError:
                     return "engine-action-blocked", None
                 if (
                     recorded.action != original
@@ -7334,7 +7334,7 @@ class PortfolioApplication:
                         "before resume; do not retry or release custody."
                     )
                 return recorded.reason_code, guidance
-        except (OSError, TransactionPathError, ValueError):
+        except OSError, TransactionPathError, ValueError:
             return "engine-action-blocked", None
         finally:
             os.close(root_fd)
@@ -7463,7 +7463,7 @@ class PortfolioApplication:
                 reason = "review-repair"
         except FinalizationReportError:
             return basis, "report-store-unavailable"
-        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError):
+        except OSError, RuntimeError, subprocess.SubprocessError, ValueError:
             return basis, "workspace-inspection-failed"
         return basis, reason
 
@@ -7743,7 +7743,7 @@ class PortfolioApplication:
         projection = self._retained_change_worktree_view(retained)
         try:
             completion = runtime.completion_receipt()
-        except (OSError, ValueError, DeliveryRuntimeConflictError):
+        except OSError, ValueError, DeliveryRuntimeConflictError:
             completion = None
         return WorkItemWorktreeCleanupView(
             eligible=projection.cleanup_eligible,
@@ -7941,7 +7941,7 @@ class PortfolioApplication:
     def _runtime_has_active_work(runtime: DeliveryRuntime) -> bool:
         try:
             return bool(runtime.active_claims()) or runtime.integration_repair_claim() is not None
-        except (OSError, RuntimeError, ValueError):
+        except OSError, RuntimeError, ValueError:
             return True
 
     @staticmethod
@@ -7961,7 +7961,7 @@ class PortfolioApplication:
         for change_id, runtime in sorted(self._runtimes.items()):
             try:
                 snapshot = self._delivery_snapshot(runtime)
-            except (OSError, RuntimeError, ValueError):
+            except OSError, RuntimeError, ValueError:
                 snapshot = self._runtime_snapshots.get(change_id)
                 if snapshot is None:
                     continue
@@ -7986,7 +7986,7 @@ class PortfolioApplication:
         for change_id, runtime in self._runtimes.items():
             try:
                 active_count = len(runtime.active_claims())
-            except (OSError, RuntimeError, ValueError):
+            except OSError, RuntimeError, ValueError:
                 active_count = self._persisted_claim_occupancy(change_id)
             occupancy[change_id] = max(occupancy.get(change_id, 0), active_count)
         try:
@@ -8014,7 +8014,7 @@ class PortfolioApplication:
         if writer.kind == "finalization-attention":
             try:
                 receipt = self._read_finalizer_settlement_receipt(coordination.change_id, writer.attempt_id)
-            except (OSError, RuntimeError, ValueError):
+            except OSError, RuntimeError, ValueError:
                 return True
             return not self._finalizer_attention_matches_receipt(coordination, receipt)
         if writer.kind != "handoff" or coordination.builder_handoff is None:
@@ -8070,7 +8070,7 @@ class PortfolioApplication:
             return None
         try:
             binding = self._settled_builder_handoff_binding(coordination, runtime)
-        except (OSError, RuntimeError, ValueError):
+        except OSError, RuntimeError, ValueError:
             return None
         context = binding.builder_handoff_context if binding is not None else None
         if (
@@ -8130,7 +8130,7 @@ class PortfolioApplication:
             return cached[2]
         try:
             observation = publisher.observe_pull_request(ObserveChangePublicationPullRequest(change_id=change_id))
-        except (OSError, PublicationProviderError, RuntimeError, subprocess.SubprocessError, ValueError):
+        except OSError, PublicationProviderError, RuntimeError, subprocess.SubprocessError, ValueError:
             observation = None
         if isinstance(observation, PublicationPullRequestObservationReceipt):
             snapshot = observation.snapshot
@@ -8163,12 +8163,12 @@ class PortfolioApplication:
         if runtime is not None:
             try:
                 lifecycle = runtime.change_stage()
-            except (OSError, ValueError, DeliveryRuntimeConflictError):
+            except OSError, ValueError, DeliveryRuntimeConflictError:
                 completion_state_inconsistent = True
             if not completion_state_inconsistent:
                 try:
                     completion = runtime.completion_receipt()
-                except (OSError, ValueError, DeliveryRuntimeConflictError):
+                except OSError, ValueError, DeliveryRuntimeConflictError:
                     completion_state_inconsistent = True
         reason = self._retained_cleanup_block_reason(
             retained,
@@ -8476,7 +8476,7 @@ class PortfolioApplication:
                     ),
                 ),
             )
-        except (DeliveryActionBusyError, DeliveryWorkerExclusionRequiredError):
+        except DeliveryActionBusyError, DeliveryWorkerExclusionRequiredError:
             return DeliveryContinuationResult(
                 change_id=request.change_id,
                 kind="busy",
@@ -8769,7 +8769,7 @@ class PortfolioApplication:
                 runtime, action.operation_id, action.operation_id, action.kind, action.exact_head
             )
             self._coordinator.acquire_continuation_action(action)
-        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError):
+        except OSError, RuntimeError, subprocess.SubprocessError, ValueError:
             self._release_unpublished_engine_action(runtime, action)
             raise
         return DeliveryContinuationResult(
@@ -9007,7 +9007,7 @@ class PortfolioApplication:
             )
             receipt = self._read_finalizer_settlement_receipt(action.change_id, attempt.writer.attempt_id)
             retry_attempt = runtime.retry_ledger(clock=self._clock).episode_for_attempt(attempt.writer.attempt_id)
-        except (FinalizationReportError, OSError, RuntimeError, ValueError):
+        except FinalizationReportError, OSError, RuntimeError, ValueError:
             return False
         if report is None or receipt is None or retry_attempt is None:
             return False
@@ -9339,7 +9339,7 @@ class PortfolioApplication:
                 reason_code=reason,
                 readiness=current,
             )
-        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError):
+        except OSError, RuntimeError, subprocess.SubprocessError, ValueError:
             self._release_unpublished_finalizer(
                 runtime,
                 attempt,
@@ -9395,7 +9395,7 @@ class PortfolioApplication:
             snapshot = self._delivery_snapshot(candidate.runtime)
             cards = self._read_projector(snapshot).group_view().items
             current = self._selected_change_card(snapshot, cards).readiness
-        except (OSError, RuntimeError, ValueError):
+        except OSError, RuntimeError, ValueError:
             current = readiness
         if failure.code in {"ERR_DELIVERY_RETRY_EXHAUSTED", "ERR_DELIVERY_RETRY_BACKOFF"} and current.reason_code in {
             "retry-backoff",
@@ -10008,7 +10008,7 @@ class PortfolioApplication:
             try:
                 if self._coordinator.find_registered(change_id) is None:
                     coordination_status = "missing"
-            except (OSError, RuntimeError, ValueError):
+            except OSError, RuntimeError, ValueError:
                 coordination_status = "unreadable"
         return DeliveryUnavailableChangeView(
             change_id=change_id,
@@ -10040,7 +10040,7 @@ class PortfolioApplication:
         runtime = self._runtime(change_id)
         try:
             coordination = self._workspace_manager.show(change_id)
-        except (OSError, RuntimeError, ValueError):
+        except OSError, RuntimeError, ValueError:
             return self._unavailable_change(change_id, "coordination-unavailable")
         snapshot = self._delivery_snapshot(runtime)
         proposal = self._repair_proposal(snapshot)
@@ -10952,7 +10952,7 @@ class PortfolioApplication:
                     or runtime.change_stage() != DeliveryChangeStage.BUILDING
                     or self._writer_occupies_execution_slot(coordination, runtime)
                 )
-            except (OSError, RuntimeError, ValueError):
+            except OSError, RuntimeError, ValueError:
                 continue
             if pending_publication is not None or occupied:
                 continue
@@ -11324,7 +11324,7 @@ class PortfolioApplication:
             )
         try:
             builder_writer = self._activate_candidate_claim(candidate, claim, source, expected_frontier_digest)
-        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError):
+        except OSError, RuntimeError, subprocess.SubprocessError, ValueError:
             self._release_unpublished_worker_claim(candidate, claim, frontier_before, source.coordination)
             raise
         try:

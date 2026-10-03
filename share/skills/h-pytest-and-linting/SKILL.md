@@ -156,13 +156,3 @@ When analyzing `uv run megalint` or CI results, start with the structured report
 `megalinter-reports/mega-linter-report.json`. Use `megalinter-reports/linters_logs/` for raw
 per-linter output and `megalinter-reports/megalinter-report.sarif` for code-scanning findings;
 console output is primarily progress and diagnostic context.
-
-### Windows-Only Notes
-
-These are observed OwlBear workspace workarounds for Windows with PowerShell:
-
-- **Startup instability.** If scoped runs show plugin errors, set `$env:PYTEST_DISABLE_PLUGIN_AUTOLOAD='1'` then add `-p pytest_asyncio.plugin -p xdist -n 0`. Or selectively disable logfire: `-p no:logfire -p no:pytest_logfire`.
-
-- **WMI + logfire hang.** CPython 3.12+ `platform.uname()` calls WMI which can hang indefinitely. `conftest.py` has a workaround. If pytest still hangs: `Get-Process python*,pytest* | Stop-Process -Force`.
-
-- **PowerShell piping.** PS 5.1 wraps stderr in ErrorRecord objects. All pipe combinations corrupt output.

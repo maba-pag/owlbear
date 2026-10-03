@@ -104,7 +104,7 @@ class WindowHostIdentity(BaseModel):
                 current = lookup(current.parent_pid)
                 if current is not None and not _is_launcher(current.name):
                     return cls(pid=current.pid, create_time=current.create_time, name=current.name[:256])
-        except (ProcessObservationError, ValueError):
+        except ProcessObservationError, ValueError:
             pass
         _logger.warning("Delivery issuer window is unidentifiable; stale claims need user-confirmed release.")
         return None
@@ -326,7 +326,7 @@ class _PsutilProcessView:
                     return True
             except psutil.NoSuchProcess:
                 continue
-            except (psutil.Error, OSError):
+            except psutil.Error, OSError:
                 return True
         return False
 
@@ -340,7 +340,7 @@ def _still_delivery_descendant(pid: int, create_time: float | None, own_pid: int
         return any(parent.pid == own_pid for parent in current.parents())
     except psutil.NoSuchProcess:
         return None
-    except (psutil.Error, OSError):
+    except psutil.Error, OSError:
         return False
 
 
@@ -376,7 +376,7 @@ def _may_be_worker_leftover(process: ProcessView, issued_after: datetime | None)
         return True
     try:
         threshold = issued_after.timestamp() - _CREATE_TIME_TOLERANCE_SECONDS
-    except (OverflowError, OSError, ValueError):
+    except OverflowError, OSError, ValueError:
         return True
     return created >= threshold
 

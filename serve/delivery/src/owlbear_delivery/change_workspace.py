@@ -2240,7 +2240,7 @@ class PortfolioCoordinator:
                 continue
             try:
                 coordination = ChangeCoordination.model_validate_json(path.read_bytes())
-            except (OSError, ValidationError):
+            except OSError, ValidationError:
                 _coordination_conflict(f"change coordination record is invalid: {path}")
             if path.stem != coordination.change_id:
                 _coordination_conflict(f"change coordination record identity is invalid: {path}")
@@ -5729,7 +5729,7 @@ class ChangeWorkspaceManager:
         try:
             yield operation_id
             self._write_restoration_record(receipt, operation_id, "result.json", record)
-        except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
+        except OSError, ValueError, RuntimeError, subprocess.SubprocessError:
             with suppress(OSError, ValueError, RuntimeError, subprocess.SubprocessError):
                 self._write_restoration_record(
                     receipt, operation_id, "failure.json", {"code": "restoration-interrupted"}
@@ -8875,7 +8875,7 @@ class ChangeWorkspaceManager:
     ) -> set[ChangeWorktreeAttentionCode]:
         try:
             actual_head = self._resolve("HEAD", cwd=expected_path)
-        except (OSError, subprocess.SubprocessError, ValueError):
+        except OSError, subprocess.SubprocessError, ValueError:
             return {ChangeWorktreeAttentionCode.UNEXPECTED_FILESYSTEM_STATE}
         return {ChangeWorktreeAttentionCode.WORKTREE_HEAD_MISMATCH} if actual_head != branch_head else set()
 
@@ -8888,7 +8888,7 @@ class ChangeWorkspaceManager:
                 "--untracked-files=all",
                 cwd=expected_path,
             )
-        except (OSError, subprocess.SubprocessError, ValueError):
+        except OSError, subprocess.SubprocessError, ValueError:
             return {ChangeWorktreeAttentionCode.UNEXPECTED_FILESYSTEM_STATE}
         return {ChangeWorktreeAttentionCode.WORKTREE_DIRTY} if status else set()
 

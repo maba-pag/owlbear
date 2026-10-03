@@ -33,11 +33,10 @@ consumer template at `seed/.github/copilot-instructions.md`. The former describe
 the latter is a placeholder that `init.py` adapts for a project using OwlBear.
 
 Dependency verification checks the declared Python compatibility floor and current `.python-version`
-on pull requests. Manual dispatch additionally exercises the intervening Python 3.13 line. Cockpit
-verification follows the Node support floor and the current `serve/cockpit/web/.nvmrc` pin; its
-pull-request browser gate is Chromium-only, while manual dispatch retains the full browser matrix.
-Dependency workflow contract tests own workflow-shape validation; the agent-ecosystem workflow
-focuses on agent, hook, and knowledge surfaces.
+Dependency verification runs Python proofs only on the `.python-version` pin. Cockpit verification
+uses the pinned `serve/cockpit/web/.nvmrc` Node version and runs its Chromium compatibility gate on
+both pull requests and manual dispatch. Dependency workflow contract tests own workflow-shape validation;
+the agent-ecosystem workflow focuses on agent, hook, and knowledge surfaces.
 
 ## Cache comparisons
 
@@ -56,9 +55,9 @@ The skipped gate is named `Cache probe (no dependency proof)` during probes, not
   versions before comparing attempts. A missing or evicted cache is not a warm result.
 3. Compare total preparation costs, including post-job cache saves. For uv, include setup, Python
   installation, workspace installation, and post-setup durations. Current and pruned policies
-  intentionally share a key between the Python floor and pinned-runtime legs, preserving matrix
-  contention; inspect reservation warnings as well as hit flags. The disabled policy has no remote
-  cache traffic. Compare both per-job totals and the slowest matrix leg, not upload time alone.
+  The uv comparison uses three runners for the pinned Python runtime and can upload several GB of cache
+  data. Inspect reservation warnings as well as hit flags. The disabled policy has no remote cache
+  traffic. Compare per-job totals, not upload time alone.
 4. For pre-commit, compare cache restore/save, actionlint, and remaining-hook preparation durations.
   Both policies execute the pinned actionlint hook; `install-hooks` prepares other environments
   without running their checks. A warm hit must avoid repeated environment installation. This
