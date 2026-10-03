@@ -156,6 +156,7 @@ from owlbear_delivery import (
     WorkspaceRecoverySnapshot,
     classify_publication_check,
     load_delivery_application,
+    remote_git,
 )
 from owlbear_delivery.change_workspace import (
     ChangeContinuationAction,
@@ -7071,6 +7072,44 @@ def test_provider_demotion_failure_prevents_target_sync_branch_movement(tmp_path
 
     assert _git(repository, "rev-parse", branch) == exact_head
     assert runtime.ready_receipt() is not None
+
+
+def test_hung_target_fetch_is_bounded_and_releases_checkpoint_target_sync_and_publication_locks(
+    tmp_path: Path,
+    ext_remote,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    application, runtime, _provider, _state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    repository = application._workspace_manager.repository
+    remote = tmp_path / "hung-target-remote.git"
+    subprocess.run(("git", "init", "--bare", "-b", "main", str(remote)), check=True, capture_output=True)  # noqa: S603, S607
+    _git(repository, "remote", "add", "origin", str(remote))
+    _git(repository, "push", "origin", "refs/heads/main:refs/heads/main")
+    target_head = _advance_remote_target(tmp_path, remote)
+    transport = ext_remote(remote)
+    transport.use(repository)
+    transport.modes("upload-pack", "hang")
+    monkeypatch.setattr(remote_git, "READ_TIMEOUT_SECONDS", 1.0)
+    branch = application._workspace_manager.show("change-a").branch
+
+    started = time.monotonic()
+    with pytest.raises(PortfolioApplicationError, match="target synchronization could not be completed") as raised:
+        application.sync_change_with_target("change-a", target_head, "sync-hung-fetch")
+
+    assert time.monotonic() - started < 10
+    assert isinstance(raised.value.__cause__, remote_git.RemoteGitTimeout)
+    transport.assert_exited("upload-pack")
+    assert _git(repository, "rev-parse", branch) == exact_head
+    assert runtime.ready_receipt() is not None
+    lock_roots = (
+        application._checkpoint_lock_root("change-a"),
+        application._workspace_manager.runtime_root / "coordination" / "target-sync-lock",
+    )
+    with (
+        locked_roots(lock_roots, blocking=False),
+        application._workspace_manager._coordinator.publication_lock("change-a", blocking=False),
+    ):
+        pass
 
 
 def test_application_captures_target_sync_conflict_as_publication_attention(tmp_path: Path) -> None:

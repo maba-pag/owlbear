@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 from collections.abc import Callable
 from itertools import pairwise
 from typing import TYPE_CHECKING, Literal, Never
 
+from owlbear_delivery.remote_git import run_remote_git
 from owlbear_delivery.storage_io import locked_roots
 from owlbear_delivery.workspace_models import (
     _COMMIT_PATTERN,
@@ -43,6 +45,9 @@ from owlbear_delivery.workspace_models import (
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
+
+_TARGET_SYNC_REF_PREFIX = "refs/owlbear/target-sync/"
+_ZERO_OID = "0" * 40
 
 
 class _TargetSyncMixin:
@@ -319,7 +324,39 @@ class _TargetSyncMixin:
         request: SyncChangeWithTarget,
         before_head_change: Callable[[], None] | None = None,
     ) -> ChangeTargetSyncReceipt:
-        """Fetch one exact target head and merge it only in the managed Change worktree."""
+        """Fetch one exact target head and merge it only in the managed Change worktree.
+
+        The fetch runs outside every lock into a private per-operation ref, so an unreachable remote
+        cannot stall other Changes; the locks cover only the local merge, receipt and shared-ref CAS.
+        """
+        with self._coordinator.publication_lock(request.change_id):
+            coordination = self._coordinator.show(request.change_id)
+            previous_receipt = self._replay_target_sync_receipt(request, coordination)
+            if previous_receipt is not None:
+                return previous_receipt
+            self._require_target_sync_start(request, coordination)
+        source_ref, target_ref, _target_branch = self._target_refs()
+        shared_before = self._resolve(target_ref, missing_ok=True)
+        fetched_head, private_ref = self._fetch_target(source_ref, request)
+        try:
+            if fetched_head != request.expected_target:
+                # The engine observes the next target only through the shared ref, so a stale fetch still
+                # fast-forwards it, but only by the locked CAS.
+                with locked_roots((self._coordinator.runtime_root / "coordination" / "target-sync-lock",)):
+                    self._advance_shared_target_ref(target_ref, shared_before, fetched_head)
+                message = "target changed while it was fetched"
+                raise ChangeTargetSyncStaleError(message)
+            return self._merge_fetched_target(request, before_head_change, fetched_head, (target_ref, shared_before))
+        finally:
+            self._run_git("update-ref", "-d", private_ref, fetched_head, check=False)
+
+    def _merge_fetched_target(
+        self,
+        request: SyncChangeWithTarget,
+        before_head_change: Callable[[], None] | None,
+        target_head: str,
+        shared_target: tuple[str, str | None],
+    ) -> ChangeTargetSyncReceipt:
         with (
             locked_roots((self._coordinator.runtime_root / "coordination" / "target-sync-lock",)),
             self._coordinator.publication_lock(request.change_id) as lock,
@@ -356,8 +393,7 @@ class _TargetSyncMixin:
                 cwd=coordination.worktree_path,
             ):
                 _workspace_failure("target synchronization requires a clean Change worktree")
-            source_ref, _target_ref, target_branch = self._target_refs()
-            target_head = self._fetch_target(source_ref, target_branch, request.expected_target)
+            self._advance_shared_target_ref(*shared_target, target_head)
             branch_head = self._resolve(coordination.branch)
             self._require_worktree(
                 request.change_id,
@@ -647,14 +683,10 @@ class _TargetSyncMixin:
         remote_ref = f"refs/remotes/{self._remote}/{branch}"
         self._git("check-ref-format", source_ref)
         self._git("check-ref-format", remote_ref)
-        result = self._run_git(
-            "fetch",
-            "--no-tags",
-            "--no-write-fetch-head",
-            "--refmap=",
-            self._remote,
-            f"{source_ref}:{remote_ref}",
-            check=False,
+        result = run_remote_git(
+            self._repository,
+            ("fetch", "--no-tags", "--no-write-fetch-head", "--refmap=", self._remote, f"{source_ref}:{remote_ref}"),
+            kind="read",
         )
         if result.returncode != 0:
             _workspace_failure("remote Change branch could not be fetched into its remote-tracking ref")
@@ -933,26 +965,30 @@ class _TargetSyncMixin:
         self._git("check-ref-format", source_ref)
         return source_ref, target_ref, target_branch
 
-    def _fetch_target(self, source_ref: str, target_branch: str, expected_target: str) -> str:
-        remote_target_ref = f"refs/remotes/{self._remote}/{target_branch}"
-        result = self._run_git(
-            "fetch",
-            "--no-tags",
-            "--no-write-fetch-head",
-            "--refmap=",
-            self._remote,
-            f"{source_ref}:{remote_target_ref}",
-            check=False,
+    def _fetch_target(self, source_ref: str, request: SyncChangeWithTarget) -> tuple[str, str]:
+        # Hashing keeps legal IDs such as ``sync..1`` ref-safe and separates Changes that reuse one ID.
+        key = hashlib.sha256(f"{request.change_id}\0{request.operation_id}".encode()).hexdigest()
+        private_ref = f"{_TARGET_SYNC_REF_PREFIX}{key}"
+        self._git("check-ref-format", private_ref)
+        result = run_remote_git(
+            self._repository,
+            ("fetch", "--no-tags", "--no-write-fetch-head", "--refmap=", self._remote, f"+{source_ref}:{private_ref}"),
+            kind="read",
         )
         if result.returncode != 0:
-            _workspace_failure("configured target could not be fetched into its remote-tracking ref")
-        target_head = self._resolve(remote_target_ref, missing_ok=True)
-        if target_head is None:
-            _workspace_failure("fetched target remote-tracking ref is unavailable")
-        if target_head != expected_target:
-            message = "target changed while it was fetched"
-            raise ChangeTargetSyncStaleError(message)
-        return target_head
+            _workspace_failure("configured target could not be fetched into its private target-sync ref")
+        fetched_head = self._resolve(private_ref, missing_ok=True)
+        if fetched_head is None:
+            _workspace_failure("fetched private target-sync ref is unavailable")
+        return fetched_head, private_ref
+
+    def _advance_shared_target_ref(self, target_ref: str, observed: str | None, target_head: str) -> None:
+        """Fast-forward the shared remote-tracking ref only if nobody moved it since it was observed."""
+        if observed == target_head:
+            return
+        if observed is not None and not self._is_ancestor(observed, target_head, cwd=self._repository):
+            return
+        self._run_git("update-ref", target_ref, target_head, observed or _ZERO_OID, check=False)
 
     def _unmerged_paths(self, worktree: Path) -> tuple[str, ...]:
         result = self._run_git(
