@@ -80,6 +80,9 @@ from owlbear_delivery import (
 )
 from owlbear_delivery.change_workspace import ChangeTargetSyncReceipt
 from owlbear_delivery.delivery_application_loader import (
+    DeliveryStateVersionError,
+)
+from owlbear_delivery.delivery_application_loader import (
     load_delivery_application as load_core_delivery_application,
 )
 from owlbear_delivery.delivery_contract_discovery import contract_fingerprint
@@ -3499,6 +3502,30 @@ async def test_lifespan_refuses_newer_state_with_typed_detail_and_releases_the_l
     assert exc_info.value.field == "state_version"
     assert exc_info.value.detail.startswith("state-newer-than-controller")
     assert "runtime/changes/change-a/frontier.json" in exc_info.value.detail
+    acquire_controller_lock(repository / ".owlbear/delivery/runtime", exclusive=True).release()
+
+
+@pytest.mark.asyncio
+async def test_lifespan_translates_the_gate_refusal_of_a_version_less_config_to_unconfigured(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = _repository(tmp_path)
+    path = repository / ".owlbear/delivery/config.json"
+    path.parent.mkdir(parents=True)
+    content = _config()
+    del content["schema_version"]
+    _write_config(path, content)
+    monkeypatch.chdir(repository)
+
+    with pytest.raises(DeliveryStartupDiagnostic) as exc_info:
+        async with app_lifespan(mcp):
+            pass
+
+    assert exc_info.value.code == "ERR_DELIVERY_STARTUP_UNCONFIGURED"
+    assert exc_info.value.field == "schema_version"
+    assert isinstance(exc_info.value.__cause__, DeliveryStateVersionError)
+    assert exc_info.value.__cause__.code == "state-version-unknown"
     acquire_controller_lock(repository / ".owlbear/delivery/runtime", exclusive=True).release()
 
 

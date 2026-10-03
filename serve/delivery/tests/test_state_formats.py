@@ -22,6 +22,7 @@ import pytest
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 import owlbear_delivery
+from owlbear_delivery import delivery_application_loader as loader_module
 from owlbear_delivery import state_formats
 from owlbear_delivery.delivery_application_loader import (
     DeliveryApplicationLoadError,
@@ -725,23 +726,87 @@ def test_only_registered_rules_admit_an_absent_version() -> None:
     kinds = {kind.kind_id: kind for kind in RECORD_KINDS}
 
     assert state_formats.classify_version(kinds["host_local"], None, present=False) == "current"
-    assert state_formats.classify_version(kinds["config"], None, present=False) == "unreadable"
+    assert state_formats.classify_version(kinds["config"], None, present=False) == "unknown-version"
+    assert state_formats.classify_version(kinds["host"], None, present=False) == "unknown-version"
     assert state_formats.classify_version(kinds["config"], version=True, present=True) == "unknown-version"
     assert state_formats.classify_version(kinds["retry_ledger"], None, present=False) == "unknown-version"
     assert state_formats.classify_version(kinds["finalization_report"], None, present=False) == "current"
     assert state_formats.classify_version(kinds["finalization_report"], 1, present=True) == "unknown-version"
 
 
-def test_absent_version_is_left_to_the_owner_only_where_the_owner_requires_it() -> None:
-    requiring = {
-        kind.kind_id
-        for kind in RECORD_KINDS
-        if kind.current is not None
-        and kind.owners
-        and all(_owner(owner).model_fields["schema_version"].is_required() for owner in kind.owners)
-    }
+_STARTUP_STAGES = ("_validate_git_config", "_load_host_config", "_bootstrap_remote_state", "_compose_application")
 
-    assert {kind.kind_id for kind in RECORD_KINDS if kind.owner_requires_version} == requiring
+
+def _spy_startup(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Record every post-gate startup stage and every subprocess (Git) the loader starts."""
+    calls: list[str] = []
+    for name in _STARTUP_STAGES:
+        original = getattr(loader_module, name)
+
+        def spy(*args: object, _name: str = name, _original: object = original, **kwargs: object) -> object:
+            calls.append(_name)
+            return _original(*args, **kwargs)  # type: ignore[operator]
+
+        monkeypatch.setattr(loader_module, name, spy)
+    original_popen = subprocess.Popen
+
+    class _RecordingPopen(original_popen):  # type: ignore[misc,valid-type]
+        def __init__(self, args: object, *rest: object, **kwargs: object) -> None:
+            calls.append(f"subprocess:{args!r}")
+            super().__init__(args, *rest, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(subprocess, "Popen", _RecordingPopen)
+    return calls
+
+
+def test_supplied_config_cannot_bypass_a_version_less_disk_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository, config = _portfolio(tmp_path)
+    config_path = repository / ".owlbear/delivery/config.json"
+    disk = json.loads(config_path.read_bytes())
+    disk.pop("schema_version")
+    config_path.write_text(json.dumps(disk), encoding="utf-8")
+    digests = record_tree_digest(repository)
+    calls = _spy_startup(monkeypatch)
+
+    with pytest.raises(DeliveryStateVersionError) as refusal:
+        load_delivery_application(config, workspace_root=repository)
+    monkeypatch.undo()
+
+    assert refusal.value.code == "state-version-unknown"
+    assert refusal.value.locator == "config.json"
+    assert refusal.value.version_absent is True
+    assert "schema_version absent" in refusal.value.detail
+    assert calls == []
+    assert record_tree_digest(repository) == digests
+    assert _exclusive_available(repository)
+
+
+def test_version_less_host_config_is_refused_by_the_gate_before_git_validation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository, config = _portfolio(tmp_path)
+    _write(repository, "runtime/host.json", {"execution_capacity": 1})
+    digests = record_tree_digest(repository)
+    calls = _spy_startup(monkeypatch)
+
+    with pytest.raises(DeliveryStateVersionError) as refusal:
+        load_delivery_application(config, workspace_root=repository)
+    monkeypatch.undo()
+
+    assert refusal.value.code == "state-version-unknown"
+    assert refusal.value.locator == "runtime/host.json"
+    assert refusal.value.version_absent is True
+    assert calls == []
+    assert record_tree_digest(repository) == digests
+    assert _exclusive_available(repository)
+
+
+def test_non_integer_config_version_is_not_reported_as_absent() -> None:
+    report = state_formats.config_capability(b'{"schema_version": "2"}')
+
+    assert [(refusal.code, refusal.version_absent) for refusal in report.refusals] == [("state-version-unknown", False)]
 
 
 # ---------------------------------------------------------------------------

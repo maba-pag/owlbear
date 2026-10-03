@@ -163,11 +163,12 @@ class DeliveryApplicationLoadError(RuntimeError):
 class DeliveryStateVersionError(DeliveryApplicationLoadError):
     """Persisted Delivery state is outside the formats this controller may read or write."""
 
-    __slots__ = ("locator",)
+    __slots__ = ("locator", "version_absent")
 
-    def __init__(self, code: str, detail: str, *, locator: str) -> None:
+    def __init__(self, code: str, detail: str, *, locator: str, version_absent: bool = False) -> None:
         super().__init__("state_version", detail, code=code)
         self.locator = locator
+        self.version_absent = version_absent
 
 
 CONTROLLER_FENCED = "controller-fenced"
@@ -2536,7 +2537,9 @@ def _require_state_capability(paths: _DeliveryPaths) -> None:
     try:
         require_capability(scan_capability(paths.repository_root))
     except StateCapabilityError as exc:
-        raise DeliveryStateVersionError(exc.code, exc.detail, locator=exc.locator) from exc
+        raise DeliveryStateVersionError(
+            exc.code, exc.detail, locator=exc.locator, version_absent=exc.version_absent
+        ) from exc
 
 
 def _load_gated_application(

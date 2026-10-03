@@ -63,8 +63,7 @@ class RecordKind:
     are covered by the workspace format marker. ``read_upcasts`` names the owner function that
     turns each accepted legacy version into the current model without rewriting stored bytes.
     ``envelope`` names the key under which a dict-backed record embeds its owner model.
-    ``owner_requires_version`` leaves an absent version to the owner's required-field error; every
-    other absent or non-integer version of a versioned record is an unknown version.
+    Without ``implicit_version``, an absent or non-integer version of a versioned record is unknown.
     """
 
     kind_id: str
@@ -79,7 +78,6 @@ class RecordKind:
     allow_empty: bool = False
     read: bool = True
     envelope: str | None = None
-    owner_requires_version: bool = False
 
     @property
     def read_versions(self) -> tuple[int, ...]:
@@ -116,7 +114,6 @@ RECORD_KINDS: Final[tuple[RecordKind, ...]] = (
         (f"{_LOADER}:DeliveryStartupConfig",),
         "T",
         2,
-        owner_requires_version=True,
     ),
     _kind(
         "host",
@@ -125,7 +122,6 @@ RECORD_KINDS: Final[tuple[RecordKind, ...]] = (
         (f"{_LOADER}:DeliveryHostConfig",),
         "T",
         1,
-        owner_requires_version=True,
     ),
     _kind(
         "host_local",
@@ -637,6 +633,7 @@ class RecordCapability:
     locator: str
     status: CapabilityStatus
     version: int | None = None
+    version_absent: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -646,6 +643,7 @@ class CapabilityRefusal:
     code: RefusalCode
     locator: str
     detail: str
+    version_absent: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -692,6 +690,7 @@ class CapabilityReport:
                 _REFUSAL_BY_STATUS[record.status],
                 record.locator,
                 _record_refusal_detail(record),
+                version_absent=record.version_absent,
             )
             for record in self.records
             if record.status in _REFUSAL_BY_STATUS
@@ -702,11 +701,12 @@ class CapabilityReport:
 class StateCapabilityError(RuntimeError):
     """Persisted Delivery state is outside this controller's supported formats."""
 
-    __slots__ = ("code", "detail", "locator")
+    __slots__ = ("code", "detail", "locator", "version_absent")
 
     def __init__(self, refusal: CapabilityRefusal) -> None:
         self.code: RefusalCode = refusal.code
         self.locator = refusal.locator
+        self.version_absent = refusal.version_absent
         self.detail = f"{refusal.code}: {refusal.detail} ({DELIVERY_STATE_ROOT}/{refusal.locator})"
         super().__init__(self.detail)
 
@@ -714,7 +714,7 @@ class StateCapabilityError(RuntimeError):
 def _record_refusal_detail(record: RecordCapability) -> str:
     kind = next((item for item in RECORD_KINDS if item.kind_id == record.kind_id), None)
     accepted = ", ".join(str(version) for version in kind.read_versions) if kind is not None else "none"
-    shown = "absent or not an integer" if record.version is None else str(record.version)
+    shown = "absent" if record.version_absent else "not an integer" if record.version is None else str(record.version)
     return f"{record.kind_id} schema_version {shown} is not supported (accepted: {accepted or 'unversioned'})"
 
 
@@ -739,8 +739,6 @@ def classify_version(kind: RecordKind, version: object, *, present: bool) -> Cap
         return "unknown-version" if present else "current"
     if not present and kind.implicit_version is not None:
         return _classify_integer_version(kind, kind.implicit_version, kind.current)
-    if not present and kind.owner_requires_version:
-        return "unreadable"
     if not present or isinstance(version, bool) or not isinstance(version, int):
         return "unknown-version"
     return _classify_integer_version(kind, version, kind.current)
@@ -756,23 +754,24 @@ def _classify_integer_version(kind: RecordKind, version: int, current: int) -> C
     return "newer" if version > current else "unknown-version"
 
 
-def classify_record_bytes(kind: RecordKind, content: bytes) -> tuple[CapabilityStatus, int | None]:
+def classify_record(kind: RecordKind, locator: str, content: bytes) -> RecordCapability:
     """Classify raw record bytes by their top-level ``schema_version`` only."""
     if kind.allow_empty and not content:
-        return "current", None
+        return RecordCapability(kind.kind_id, locator, "current")
     try:
         payload = json.loads(content)
     except UnicodeDecodeError, RecursionError, ValueError:
-        return "unreadable", None
+        return RecordCapability(kind.kind_id, locator, "unreadable")
     if not isinstance(payload, dict):
-        return "unreadable", None
+        return RecordCapability(kind.kind_id, locator, "unreadable")
     present = "schema_version" in payload
     version = payload.get("schema_version")
     status = classify_version(kind, version, present=present)
     reported = version if isinstance(version, int) and not isinstance(version, bool) else None
-    if not present and kind.implicit_version is not None:
-        reported = kind.implicit_version
-    return status, reported
+    absent = not present and kind.current is not None
+    if absent and kind.implicit_version is not None:
+        reported, absent = kind.implicit_version, False
+    return RecordCapability(kind.kind_id, locator, status, reported, version_absent=absent)
 
 
 def config_capability(content: bytes) -> CapabilityReport:
@@ -780,8 +779,7 @@ def config_capability(content: bytes) -> CapabilityReport:
     kind = classify_kind("config.json")
     if kind is None:  # pragma: no cover - the registry always names the configuration record.
         raise AssertionError
-    status, version = classify_record_bytes(kind, content)
-    return CapabilityReport(records=(RecordCapability(kind.kind_id, "config.json", status, version),))
+    return CapabilityReport(records=(classify_record(kind, "config.json", content),))
 
 
 @dataclass
@@ -871,8 +869,7 @@ def _classify_entry(directory_fd: int, entry: os.DirEntry[str], locator: str, de
             status: CapabilityStatus = "unknown-version" if scan.incomplete_detail else "unreadable"
             scan.records.append(RecordCapability(kind.kind_id, locator, status))
             return
-        status, version = classify_record_bytes(kind, content)
-        scan.records.append(RecordCapability(kind.kind_id, locator, status, version))
+        scan.records.append(classify_record(kind, locator, content))
 
 
 def _passive_status(kind: RecordKind) -> CapabilityStatus:
@@ -985,7 +982,7 @@ __all__ = [
     "RecordKind",
     "StateCapabilityError",
     "classify_kind",
-    "classify_record_bytes",
+    "classify_record",
     "classify_version",
     "config_capability",
     "record_tree_digest",
