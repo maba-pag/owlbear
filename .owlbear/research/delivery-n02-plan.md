@@ -3,7 +3,7 @@
 > **Package:** N02 of the [execution plan](delivery-redesign-execution-plan.md#n02--controller-pinning-versioned-state-and-migration-core).
 > **Planned on:** `origin/dev` `42144f9dc` (N00-C merged; Python 3.14.8; uv-locked Pydantic 2.13).
 > Live controller observed read-only: main checkout on `delivery-live` at `881b500fe` (D03).
-> **Status:** plan gate `plan-sound` in round 4 of fresh GPT-6.1 Sol challenges (2026-10-04). Awaiting the
+> **Status:** plan gate `plan-sound` in round 4 of fresh GPT-6.1 Sol challenges (2026-10-03). Awaiting the
 > user's approval of D9 (execution plan §1.1) before merge; U1 and U2 are pending until N02-D.
 > Product code is unchanged by this phase.
 
