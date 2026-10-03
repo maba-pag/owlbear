@@ -228,7 +228,8 @@ the user present and the explicit authorization described in that package.
   Fakes sit only below provider or host owners.
 - **Mandatory companions** (from D03): every new readiness reason, action or status ships in the
   same phase with its `serve/cockpit/web/src/api/workItems.ts` mirror, its rendering in
-  `WorkItemDetail.tsx` / `WorkPortfolioPage.tsx` with a component test, and the backend/frontend
+  `workItemPresentation.ts` and `WorkItemDetail.tsx` / `WorkPortfolioPage.tsx` with a component
+  test, and the backend/frontend
   parity assertion in `tests/test_cockpit_boundary.py`. Every new frontier-writing operation joins
   the central mutability policy and its `tests/test_delivery_worktree_authority.py` coverage.
 - **Record proof on the PR:** commands, counts, exact head. Distinguish your own runs from
@@ -523,6 +524,9 @@ so implementation re-resolves paths after N01 moves code.
 | N10-H | N10-A |
 | N10-M | N10-H; user authorization at the step |
 
+Format-marker order (N05-P): N03-A and N05-B each add an N02 format step. The second to merge
+renumbers its migration onto the first and reruns the LC full form. This adds no prerequisite.
+
 Package-level view (derived from the table):
 
 ```mermaid
@@ -584,6 +588,10 @@ phase.
 | 4 | N04-P … N04-D | N06-P … N06-C, N08-C | N04, N06, N08 merged |
 | 5 | N07-P … N07-B | N09-P2, N10-P | N07 merged |
 | 6 | N09-B, N09-C, N10-A, N10-H, N10-M | — | Programme complete |
+
+Stage 3 note (N05-P): N03 and N05-B…D list shared core modules (`application_readiness.py`,
+`application_acquisition.py`, `work_items.py`, `workspace_models.py`), so the ready rule runs them
+sequentially where their editable paths overlap, despite the lane split.
 
 ### 4.4 Status
 
@@ -966,8 +974,9 @@ LC gate: full form.
   head, target, proof and required-check summary, and the merge method. The continuation chat
   offers the same bounded approval.
 - The approval binds the exact head and target. Before the merge, the provider re-reads PR state,
-  head, target, protections and checks. A head change invalidates the approval. A target change
-  requires sync, revalidation and fresh review where the proof depends on it.
+  head, target, rules, mergeability and checks. A head change invalidates the approval. A target
+  change requires sync, revalidation and fresh review where the proof depends on it. No GitHub
+  merge API fences the target; enforced rules or the user's N05 U3 decision govern that race.
 - An unknown merge response is read back before any retry. There is never a duplicate or
   unapproved merge.
 - Completion is observed exactly once, including merges done manually in GitHub.
@@ -975,7 +984,8 @@ LC gate: full form.
   are preserved.
 - Waits are distinct: checks running, provider outage, pending user approval.
 - L1: fresh observations are fenced into the readiness basis. L2: a known-unmergeable PR shows its
-  real reason instead of `merge-approval-required`.
+  real reason instead of `merge-approval-required`, which N05-B adds as a readiness reason (today
+  it is only an engine-result reason).
 - Governance states that engine/provider publication is system work and that agents never push
   arbitrarily.
 - PR-feedback repair has a durable handoff and replay-safe replies (#225).
@@ -998,7 +1008,8 @@ part), V12, V19; L1, L2; #225.
 **Phases:**
 
 - N05-P.
-- N05-A: provider merge and readback adapter with fakes. Its editable paths must be disjoint from
+- N05-A: provider merge and readback adapter with fakes; revises the forbidden-effect gates that
+  assert Delivery never merges into an allowlist. Its editable paths must be disjoint from
   every N01 phase so that it can run during N01.
 - N05-B: approval identity and invalidation, engine merge action, readiness L1/L2, distinct waits,
   exactly-once completion, automatic cleanup.
@@ -1217,7 +1228,8 @@ The programme is complete when all of the following hold:
 **Decided later, inside their package's P phase:**
 
 - **N02:** pinning of this repository's live controller and the upgrade UX.
-- **N05:** real merge rehearsal on a disposable repository; merge-method policy.
+- **N05:** merge-method policy (U1); real merge rehearsal on a disposable repository (U2); target
+  freshness and the execution-time target race (U3).
 - **N06:** retention and privacy policy for private inputs.
 - **N07:** treatment of earlier B1 evidence.
 - **N10-M:** abandoning the `frontier-serialization-contract` live Change; the disposition of the
