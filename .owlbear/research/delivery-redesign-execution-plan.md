@@ -627,7 +627,7 @@ every new item exactly one lane.
 | N07-P | — | — |
 | N07-A | — | — |
 | N07-B | — | — |
-| N08-P | — | — |
+| N08-P | merged | #350 (plan gate `plan-sound`, round 7; amends N02-B abort (N02 D10); D11 confirmation pending; U1–U3 before their phases) |
 | N08-A | — | — |
 | N08-B | — | — |
 | N08-C | — | — |
