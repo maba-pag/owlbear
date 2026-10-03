@@ -15,8 +15,10 @@ from owlbear_delivery import (
     DeliveryStartupConfig,
     PortfolioApplication,
     WindowHostIdentity,
+    close_delivery_application,
 )
 from owlbear_delivery import load_delivery_application as load_core_delivery_application
+from owlbear_delivery.state_formats import StateCapabilityError, config_capability, require_capability
 from owlbear_delivery_github import GitHubCliPublicationProvider
 from owlbear_delivery_mcp.target_models import (
     DeliveryStartupDiagnostic,
@@ -33,6 +35,8 @@ if TYPE_CHECKING:
 _DELIVERY_CONFIG_PATH = Path(".owlbear/delivery/config.json")
 _UNCONFIGURED = "ERR_DELIVERY_STARTUP_UNCONFIGURED"
 _INVALID = "ERR_DELIVERY_STARTUP_INVALID"
+_STATE_VERSION = "ERR_DELIVERY_STATE_VERSION"
+_CONTROLLER_FENCED = "ERR_DELIVERY_CONTROLLER_FENCED"
 _REQUIRED_TOP_LEVEL_FIELDS = {"schema_version", "remote", "target_branch", "github_repository"}
 _live_context: DeliveryAppContext | None = None
 
@@ -58,6 +62,10 @@ def load_delivery_config(path: Path) -> DeliveryStartupConfig:
             "Delivery startup configuration cannot be read",
             str(_DELIVERY_CONFIG_PATH),
         ) from exc
+    try:
+        require_capability(config_capability(content))
+    except StateCapabilityError as exc:
+        raise DeliveryStartupDiagnostic(_STATE_VERSION, exc.detail, "state_version") from exc
     try:
         return DeliveryStartupConfig.model_validate_json(content)
     except ValidationError as exc:
@@ -96,7 +104,11 @@ def load_delivery_application(config: DeliveryStartupConfig, workspace_root: Pat
             issuer_host=WindowHostIdentity.capture(),
         )
     except DeliveryApplicationLoadError as exc:
-        raise DeliveryStartupDiagnostic(_INVALID, exc.detail, exc.field) from exc
+        if exc.code == "controller-fenced":
+            code = _CONTROLLER_FENCED
+        else:
+            code = _STATE_VERSION if exc.code is not None else _INVALID
+        raise DeliveryStartupDiagnostic(code, exc.detail, exc.field) from exc
 
 
 def _live_application() -> PortfolioApplication:
@@ -122,6 +134,8 @@ async def app_lifespan(_server: MCPServer) -> AsyncGenerator[DeliveryAppContext]
     finally:
         supervisor.stop()
         _live_context = None
+        if not supervisor.running:
+            close_delivery_application(application)
 
 
 mcp = MCPServer("owlbear-delivery", lifespan=app_lifespan)

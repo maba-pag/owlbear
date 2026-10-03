@@ -35,6 +35,13 @@ max_line_length = unset
 [.owlbear/delivery/packages/**]
 max_line_length = unset
 
+# Golden Delivery records and schema fingerprints are byte-exact generated test fixtures
+[serve/delivery/tests/fixtures/state_formats/golden/**]
+max_line_length = unset
+
+[serve/delivery/tests/fixtures/state_formats.json]
+max_line_length = unset
+
 # Generated Porsche Design System assets — minified vendor output
 [serve/cockpit/web/public/porsche-design-system/**]
 end_of_line = unset

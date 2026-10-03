@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "change_id": "change-a",
+  "observed_at": "2026-10-03T08:37:41.647441Z",
+  "snapshot": {
+    "repository": "example/project",
+    "number": 7,
+    "node_id": "PR_node_7",
+    "head_branch": "owlbear/change/change-a",
+    "head_sha": "81be9149289d2319dd05f828649d1b92a23a412e",
+    "base_branch": "main",
+    "title": "Delivery change-a",
+    "body": "<!-- owlbear-change:change-a -->\n\n<!-- owlbear-generated:start -->\n> **OwlBear-managed pull request:**\n> Do not manually change this PR's draft/ready state or push to its branch.\n> Use Delivery controls so provider state and Delivery evidence stay synchronized.\n\n## Goal\n\n> Delivery change-a\n\n## Intent\n\n> Deliver the promised Outcomes below.\n\n## Promised Outcomes\n\n- [x] **Acquire work** (`OUT-001`; complete)\n  Promised result: Return one bounded launch package.\n\n## Delivery Status\n\nAs of reviewed checkpoint `81be9149289d2319dd05f828649d1b92a23a412e`:\n\n- Outcomes complete: 1 of 1\n- Checkpoint includes: finalization recorded\n- Delivery finalization: recorded for this checkpoint\n- Independent exact-commit review: passed for this checkpoint\n\n## Review And Merge\n\n- To evaluate and address reviewer feedback, run `/address-pr-feedback change-a`.\n- When satisfied with the review, merge this pull request in GitHub; Delivery records acceptance afterward.\n<!-- owlbear-generated:end -->\n",
+    "draft": false,
+    "state": "closed",
+    "merged": true,
+    "merge_commit_sha": "81be9149289d2319dd05f828649d1b92a23a412e",
+    "merged_at": "2026-08-03T00:00:00Z",
+    "merged_by_login": null
+  },
+  "provider_evidence_digest": "7787444f41ccc9d6375263a7b093badd67d3402cfe47057ee070a70ff8893285",
+  "mergeable": null,
+  "merge_state_status": null,
+  "observation_id": "409e162ba10868c0c2f6889bdb5c61f6e0549ccbd766ddf1051ad91f01104b75"
+}

@@ -17,7 +17,7 @@ import pytest
 from pydantic import BaseModel, ValidationError
 
 import owlbear_tools.delivery_diagnostics as diagnostics
-from owlbear_delivery import delivery_runtime
+from owlbear_delivery import delivery_runtime, state_formats
 from owlbear_delivery.change_workspace import ChangeContinuationAction
 from owlbear_delivery.delivery_admission import DeliveryAdmissionReceipt
 from owlbear_delivery.delivery_runtime import (
@@ -237,7 +237,7 @@ def test_unsupported_retry_ledger_schema_is_reported_without_content(tmp_path: P
     assert result["status"] == "unsupported"
     assert "RETRY_LEDGER_UNSUPPORTED" in result["diagnostic_codes"]
     retry_record = next(record for record in result["records"] if record["kind"] == "retry_ledger")
-    assert retry_record["status"] == "unsupported"
+    assert retry_record["status"] == "newer"
     assert "VERSION-SECRET" not in completed.stdout + completed.stderr
 
 
@@ -1051,6 +1051,100 @@ def test_malformed_and_unsupported_records_are_bounded(tmp_path: Path, relative:
     assert result["status"] in {"degraded", "unsupported"}
     assert code in result["diagnostic_codes"]
     assert "safe/project" not in json.dumps(result)
+
+
+@pytest.mark.parametrize(
+    ("relative", "content", "status", "code"),
+    [
+        (
+            ".owlbear/delivery/runtime/changes/example/frontier.json",
+            '{"schema_version":17,"bindings":[]}',
+            "readable-legacy",
+            None,
+        ),
+        (
+            ".owlbear/delivery/state/example/snapshot.json",
+            '{"schema_version":1,"frontier":{}}',
+            "readable-legacy",
+            None,
+        ),
+        (
+            ".owlbear/delivery/runtime/changes/example/frontier.json",
+            '{"schema_version":19,"bindings":[]}',
+            "newer",
+            "FRONTIER_UNSUPPORTED",
+        ),
+        (
+            ".owlbear/delivery/runtime/changes/example/frontier.json",
+            '{"schema_version":16,"bindings":[]}',
+            "unsupported",
+            "FRONTIER_UNSUPPORTED",
+        ),
+        (
+            ".owlbear/delivery/runtime/coordination/changes/example.json",
+            '{"schema_version":2,"change_id":"example"}',
+            "newer",
+            "COORDINATION_UNSUPPORTED",
+        ),
+        (
+            ".owlbear/delivery/runtime/changes/example/claim-issuers/attempt-1.json",
+            '{"schema_version":2,"window":null}',
+            "newer",
+            "CLAIM_ISSUER_UNSUPPORTED",
+        ),
+    ],
+)
+def test_inspector_classifies_readable_legacy_and_newer_versions_like_the_registry(
+    tmp_path: Path, relative: str, content: str, status: str, code: str | None
+) -> None:
+    root = _complete_root(tmp_path)
+    path = root / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    kind = state_formats.classify_kind(relative.removeprefix(".owlbear/delivery/"))
+    assert kind is not None
+
+    result = inspect_delivery(root)
+    payload = json.loads(content)
+    registry_status = state_formats.classify_version(kind, payload["schema_version"], present=True)
+
+    statuses = [record["status"] for record in result["records"] if record["kind"] == kind.kind_id]
+    assert status in statuses
+    assert registry_status == {"unsupported": "unknown-version"}.get(status, status)
+    if code is None:
+        assert not any(item.endswith("_UNSUPPORTED") for item in result["diagnostic_codes"])
+    else:
+        assert code in result["diagnostic_codes"]
+        assert result["status"] == "unsupported"
+
+
+# Inspector record kinds mirror registry record kinds; action receipts share one registry row.
+_INSPECTOR_KIND_TO_REGISTRY = {
+    "action_intent": "action_receipt",
+    "action_started": "action_receipt",
+    "action_result": "action_receipt",
+    "recovery_intent": "recovery_record",
+    "recovery_evidence": "recovery_record",
+    "recovery_receipt": "recovery_record",
+}
+
+
+def test_inspector_version_tables_mirror_the_delivery_format_registry() -> None:
+    registry = {kind.kind_id: kind for kind in state_formats.RECORD_KINDS}
+    current = {**diagnostics.SUPPORTED_VERSIONS, **_RECORD_VERSIONS}
+    mismatches = []
+    for inspector_kind, versions in current.items():
+        kind = registry[_INSPECTOR_KIND_TO_REGISTRY.get(inspector_kind, inspector_kind)]
+        if isinstance(versions, int):
+            legacy = diagnostics.READABLE_LEGACY_VERSIONS.get(inspector_kind, ())
+            observed = (*legacy, versions)
+        else:
+            observed = versions or ()
+        if tuple(observed) != kind.read_versions:
+            mismatches.append((inspector_kind, observed, kind.read_versions))
+
+    assert mismatches == []
+    assert set(diagnostics.READABLE_LEGACY_VERSIONS) <= set(diagnostics.SUPPORTED_VERSIONS)
 
 
 def test_missing_root_and_invalid_change_id_have_exit_two(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -221,7 +221,7 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
             return None
         try:
             intent = DeliveryPendingStatePublication.model_validate_json(
-                self._pending_publication_path.read_bytes(), strict=False
+                self._pending_publication_path.read_bytes(), strict=True
             )
         except OSError, TypeError, ValueError:
             _reference("Delivery state publication intent is invalid")
@@ -232,7 +232,7 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
         if not self._pending_publication_path.is_file():
             return
         current_content = self._pending_publication_path.read_bytes()
-        current = DeliveryPendingStatePublication.model_validate_json(current_content, strict=False)
+        current = DeliveryPendingStatePublication.model_validate_json(current_content, strict=True)
         if current.status != "pending" or current.frontier_digest != frontier_digest:
             return
         replacement = _model_content(current.acknowledge())
@@ -253,7 +253,7 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
         if not self._pending_publication_path.is_file():
             return
         current_content = self._pending_publication_path.read_bytes()
-        current = DeliveryPendingStatePublication.model_validate_json(current_content, strict=False)
+        current = DeliveryPendingStatePublication.model_validate_json(current_content, strict=True)
         frontier_content = self.frontier_bytes()
         frontier_digest = hashlib.sha256(frontier_content).hexdigest()
         if current.status != "pending" or current.frontier_digest == frontier_digest:

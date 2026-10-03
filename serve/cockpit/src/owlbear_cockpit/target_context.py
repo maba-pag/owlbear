@@ -11,6 +11,7 @@ from owlbear_delivery.delivery_application_loader import (
     DeliveryStartupConfig,
     load_delivery_application,
 )
+from owlbear_delivery.state_formats import StateCapabilityError, config_capability, require_capability
 from owlbear_delivery_github import GitHubCliPublicationProvider
 
 if TYPE_CHECKING:
@@ -23,12 +24,17 @@ def load_target_context(workspace_root: Path) -> PortfolioApplication:
     """Load one validated Delivery application from the canonical workspace root."""
     try:
         config_path = workspace_root / ".owlbear/delivery/config.json"
-        config = DeliveryStartupConfig.model_validate_json(config_path.read_bytes())
+        content = config_path.read_bytes()
+        require_capability(config_capability(content))
+        config = DeliveryStartupConfig.model_validate_json(content)
         return load_delivery_application(
             config,
             workspace_root=workspace_root,
             publication_provider=GitHubCliPublicationProvider(),
         )
+    except StateCapabilityError as exc:
+        message = f"Cockpit Delivery startup failed for state_version: {exc.detail}"
+        raise RuntimeError(message) from exc
     except DeliveryApplicationLoadError as exc:
         message = f"Cockpit Delivery startup failed for {exc.field}: {exc.detail}"
         raise RuntimeError(message) from exc

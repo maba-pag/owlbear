@@ -125,7 +125,6 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryAcceptanceWaitingError,
     DeliveryActiveClaim,
     DeliveryChangeStage,
-    DeliveryFrontier,
     DeliveryMergedPullRequestLatch,
     DeliveryPlanCandidate,
     DeliveryRecoveryAttention,
@@ -141,6 +140,7 @@ from owlbear_delivery.delivery_runtime import (
     PublishDeliveryPlan,
     PublishDeliveryResult,
     is_acceptance_waiting_observation,
+    parse_delivery_frontier,
 )
 from owlbear_delivery.design_package import DesignPackageResult
 from owlbear_delivery.draft_pull_request import (
@@ -937,9 +937,7 @@ class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _Publication
             if self._change_branch_publisher is not None and self._draft_pull_request_publisher is not None:
                 self._reconcile_change_checkpoint(request.change_id, runtime)
             self._reconcile_runtimes()
-            return result.model_copy(
-                update={"frontier": DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)}
-            )
+            return result.model_copy(update={"frontier": parse_delivery_frontier(runtime.frontier_bytes())[0]})
 
     def admit_change(self, request: DeliveryAdmissionRequest) -> DeliveryAdmissionResult:
         """Admit one exact approved Design version as executable Delivery authority."""

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "receipt_id": "b546970acaa8ed4051cffaf5e00b6e86725a7c7185a3b4edc448be32d1c9ada6",
+  "operation_id": "review-repair-draft-d1ce3d71202a5f456d0491a75ff07a399c013800291ddc3ad787656aac0bb06f",
+  "change_id": "change-a",
+  "finalization_id": "d1ce3d71202a5f456d0491a75ff07a399c013800291ddc3ad787656aac0bb06f",
+  "repository": "example/project",
+  "number": 7,
+  "node_id": "PR_node_7",
+  "head_sha": "20f2f9ea08e042c88fde678d84011238a76a75e1",
+  "draft": true,
+  "observed_at": "2026-10-03T08:42:23.165600Z",
+  "provider_evidence_digest": "1a125b925c566fc73d90f6618f8f47270833f52da65d6209fdb9a3b873e51e84"
+}

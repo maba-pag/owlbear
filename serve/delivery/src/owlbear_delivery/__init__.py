@@ -92,6 +92,8 @@ from owlbear_delivery.delivery_application_loader import (
     DeliveryApplicationLoadError,
     DeliveryHostConfig,
     DeliveryStartupConfig,
+    DeliveryStateVersionError,
+    close_delivery_application,
     load_delivery_application,
 )
 from owlbear_delivery.delivery_runtime import (
@@ -549,6 +551,7 @@ __all__ = [
     "DeliveryStateSnapshotDiagnostic",
     "DeliveryStateSnapshotInventory",
     "DeliveryStateSnapshotRepairReceipt",
+    "DeliveryStateVersionError",
     "DeliveryStrandedFrontierRepairReceipt",
     "DeliveryTargetSyncRepairReceipt",
     "DeliveryTaskDefinition",
@@ -674,6 +677,7 @@ __all__ = [
     "WorktreePreservationReceipt",
     "WriterIdentity",
     "classify_publication_check",
+    "close_delivery_application",
     "compile_delivery_contract",
     "derive_change_stage",
     "failed_required_publication_checks",

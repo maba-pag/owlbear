@@ -19,6 +19,7 @@ from owlbear_delivery.delivery_admission import DeliveryAdmissionReceipt
 from owlbear_delivery.delivery_runtime import DeliveryFrontier, parse_delivery_frontier
 from owlbear_delivery.git_executable import resolve_git_executable
 from owlbear_delivery.identities import ChangeId, Digest
+from owlbear_delivery.runtime_models import _FRONTIER_SCHEMA_VERSION
 from owlbear_delivery.target_contract import DeliveryContract
 
 if TYPE_CHECKING:
@@ -63,6 +64,13 @@ class DeliveryStateResponseUnknownError(DeliveryStatePublicationError):
     """A state push completed without verifiable remote confirmation."""
 
     code = "ERR_DELIVERY_STATE_RESPONSE_UNKNOWN"
+
+
+class DeliveryStateSnapshotVersionError(ValueError):
+    """A remote snapshot was written by a newer controller; it is never read, restored or replaced."""
+
+
+REMOTE_STATE_VERSION_UNSUPPORTED = "remote-state-version-unsupported"
 
 
 class _StateModel(BaseModel):
@@ -313,6 +321,9 @@ class DeliveryStatePublisher:
             _raise_state_conflict("Delivery-state branch changed before snapshot publication")
         try:
             current = self._read_snapshot(remote_head, change_id) if remote_head is not None else None
+        except DeliveryStateSnapshotVersionError as exc:
+            message = f"remote Delivery snapshot is unsupported by this controller and was not replaced: {exc}"
+            raise DeliveryStateQuarantineError(message, diagnostic_code=REMOTE_STATE_VERSION_UNSUPPORTED) from exc
         except (TypeError, ValueError, ValidationError) as exc:
             message = f"remote Delivery snapshot is quarantined; use repair-only publication: {exc}"
             raise DeliveryStateQuarantineError(
@@ -477,13 +488,7 @@ class DeliveryStatePublisher:
             _raise_state_conflict("quarantined remote Delivery snapshot is absent")
         if hashlib.sha256(raw).hexdigest() != expected_snapshot_digest:
             _raise_state_conflict("quarantined remote Delivery snapshot bytes changed before repair")
-        try:
-            parse_delivery_state_snapshot(raw)
-        except (TypeError, ValueError, ValidationError) as exc:
-            if _snapshot_validation_code(exc) != expected_diagnostic_code:
-                _raise_state_conflict("quarantined remote Delivery snapshot diagnostic changed before repair")
-        else:
-            _raise_state_conflict("remote Delivery snapshot is valid and cannot use quarantine repair")
+        _require_quarantine_diagnostic(raw, expected_diagnostic_code)
         try:
             payload = json.loads(raw)
         except TypeError, ValueError:
@@ -678,6 +683,19 @@ class DeliveryStatePublisher:
             raise error from exc
 
 
+def _require_quarantine_diagnostic(raw: bytes, expected_diagnostic_code: str) -> None:
+    """Allow repair only of a known invalid snapshot; never of a valid or newer-controller one."""
+    try:
+        parse_delivery_state_snapshot(raw)
+    except DeliveryStateSnapshotVersionError:
+        _raise_state_conflict("remote Delivery snapshot was written by a newer controller and cannot be repaired")
+    except (TypeError, ValueError, ValidationError) as exc:
+        if _snapshot_validation_code(exc) != expected_diagnostic_code:
+            _raise_state_conflict("quarantined remote Delivery snapshot diagnostic changed before repair")
+    else:
+        _raise_state_conflict("remote Delivery snapshot is valid and cannot use quarantine repair")
+
+
 def _same_snapshot_inputs(
     current: DeliveryStateSnapshot,
     package_id: str,
@@ -771,7 +789,7 @@ def _same_snapshot_authority(
 
 def _portable_frontier(runtime: DeliveryRuntime) -> DeliveryFrontier:
     """Project a frontier after the exact checkpoint already published remotely."""
-    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=True)
     pending = frontier.pending_checkpoint
     if pending is not None and pending.head == frontier.published_head:
         return frontier.model_copy(update={"pending_checkpoint": None})
@@ -793,12 +811,16 @@ def _snapshot_path_change_id(path: str) -> str | None:
 
 
 def _snapshot_validation_code(error: Exception) -> str:
+    if isinstance(error, DeliveryStateSnapshotVersionError):
+        return REMOTE_STATE_VERSION_UNSUPPORTED
     if "snapshot identity is invalid" in str(error):
         return "snapshot-identity-invalid"
     return "snapshot-invalid"
 
 
 def _snapshot_validation_detail(error: Exception) -> str:
+    if isinstance(error, DeliveryStateSnapshotVersionError):
+        return str(error)[:240]
     if isinstance(error, ValidationError):
         errors = error.errors(include_url=False, include_context=False, include_input=False)
         if errors:
@@ -832,13 +854,33 @@ def _snapshot_digest(snapshot: DeliveryStateSnapshot) -> str:
     return hashlib.sha256(_canonical_bytes(snapshot.model_copy(update={"snapshot_id": ""}))).hexdigest()
 
 
+def _require_supported_snapshot_versions(payload: dict[str, object]) -> None:
+    """Refuse snapshots or embedded frontiers written by a newer controller before any typed read."""
+    frontier = payload.get("frontier")
+    for name, version, supported in (
+        ("snapshot", payload.get("schema_version"), _SNAPSHOT_SCHEMA_VERSION),
+        (
+            "snapshot frontier",
+            frontier.get("schema_version") if isinstance(frontier, dict) else None,
+            _FRONTIER_SCHEMA_VERSION,
+        ),
+    ):
+        if isinstance(version, int) and not isinstance(version, bool) and version > supported:
+            message = (
+                f"Remote Delivery {name} schema_version {version} is newer than this controller supports "
+                f"({supported}); upgrade the controller before using this Change."
+            )
+            raise DeliveryStateSnapshotVersionError(message)
+
+
 def parse_delivery_state_snapshot(content: bytes) -> DeliveryStateSnapshot:
-    """Parse one current snapshot or migrate one valid schema-1 snapshot."""
+    """Parse one current snapshot strictly or upcast one valid schema-1 snapshot without rewriting it."""
     payload = json.loads(content)
     if not isinstance(payload, dict):
         raise TypeError
+    _require_supported_snapshot_versions(payload)
     schema_version = payload.get("schema_version")
-    if schema_version == _LEGACY_SNAPSHOT_SCHEMA_VERSION:
+    if schema_version == _LEGACY_SNAPSHOT_SCHEMA_VERSION and not isinstance(schema_version, bool):
         legacy_snapshot_id = payload.get("snapshot_id")
         if not isinstance(legacy_snapshot_id, str):
             _raise_state_value_error("Delivery-state snapshot identity is invalid")
@@ -859,9 +901,10 @@ def parse_delivery_state_snapshot(content: bytes) -> DeliveryStateSnapshot:
             "repaired_predecessor_digest": None,
         }
         payload["snapshot_id"] = hashlib.sha256(_canonical_payload(payload)).hexdigest()
-    elif schema_version != _SNAPSHOT_SCHEMA_VERSION:
+        return DeliveryStateSnapshot.model_validate_json(_canonical_payload(payload), strict=True)
+    if schema_version != _SNAPSHOT_SCHEMA_VERSION or isinstance(schema_version, bool):
         raise ValueError
-    return DeliveryStateSnapshot.model_validate(payload, strict=False)
+    return DeliveryStateSnapshot.model_validate_json(content, strict=True)
 
 
 def _publication_digest(receipt: DeliveryStatePublicationReceipt) -> str:
@@ -881,6 +924,7 @@ def _raise_state_value_error(detail: str) -> NoReturn:
 
 
 __all__ = [
+    "REMOTE_STATE_VERSION_UNSUPPORTED",
     "DeliveryStateConflictError",
     "DeliveryStatePublicationError",
     "DeliveryStatePublicationReceipt",
@@ -890,6 +934,7 @@ __all__ = [
     "DeliveryStateSnapshot",
     "DeliveryStateSnapshotDiagnostic",
     "DeliveryStateSnapshotInventory",
+    "DeliveryStateSnapshotVersionError",
     "parse_delivery_state_snapshot",
 ]
 

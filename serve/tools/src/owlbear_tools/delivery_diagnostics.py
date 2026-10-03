@@ -46,6 +46,11 @@ SUPPORTED_VERSIONS = {
     "host": 1,
     "host_local": 1,
 }
+# Mirror of the Delivery format registry's registered read-upcasts; a parity test pins both.
+READABLE_LEGACY_VERSIONS: dict[str, tuple[int, ...]] = {
+    "frontier": (17,),
+    "snapshot": (1,),
+}
 
 _CHANGE_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _FIXED_ENTRY_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -679,9 +684,8 @@ def _json_shape(
         inspection.records[-1]["status"] = "malformed"
         return
     schema = value.get("schema_version", expected_schema if kind == "host_local" else None)
-    if isinstance(schema, bool) or not isinstance(schema, int) or schema != expected_schema:
-        inspection.diagnostic(f"{kind.upper()}_UNSUPPORTED")
-        inspection.records[-1]["status"] = "unsupported"
+    supported_status = _accepted_version_status(schema, kind, expected_schema, inspection)
+    if supported_status is None:
         return
     if kind == "config":
         if any(
@@ -691,8 +695,8 @@ def _json_shape(
             inspection.diagnostic("CONFIG_MALFORMED")
             inspection.records[-1]["status"] = "malformed"
         else:
-            inspection.records[-1]["schema_version"] = expected_schema
-            inspection.records[-1]["status"] = "supported"
+            inspection.records[-1]["schema_version"] = schema
+            inspection.records[-1]["status"] = supported_status
     elif kind == "frontier" and not isinstance(value.get("bindings"), list):
         inspection.diagnostic("FRONTIER_MALFORMED")
         inspection.records[-1]["status"] = "malformed"
@@ -718,8 +722,28 @@ def _json_shape(
         inspection.diagnostic(f"{kind.upper()}_MALFORMED")
         inspection.records[-1]["status"] = "malformed"
     else:
-        inspection.records[-1]["schema_version"] = expected_schema
-        inspection.records[-1]["status"] = "supported"
+        inspection.records[-1]["schema_version"] = schema
+        inspection.records[-1]["status"] = supported_status
+
+
+def _version_status(schema: int, current: int) -> str:
+    """Classify an unaccepted integer version as a downgrade (``newer``) or an unknown older one."""
+    return "newer" if schema > current else "unsupported"
+
+
+def _accepted_version_status(schema: object, kind: str, expected_schema: int, inspection: _Inspection) -> str | None:
+    """Return the accepted record status, or record the unsupported version and return ``None``."""
+    if isinstance(schema, bool) or not isinstance(schema, int):
+        status = "unsupported"
+    elif schema == expected_schema:
+        return "supported"
+    elif schema in READABLE_LEGACY_VERSIONS.get(kind, ()):
+        return "readable-legacy"
+    else:
+        status = _version_status(schema, expected_schema)
+    inspection.diagnostic(f"{kind.upper()}_UNSUPPORTED")
+    inspection.records[-1]["status"] = status
+    return None
 
 
 def _inspect_file(
@@ -815,7 +839,11 @@ def _change_record_shape(content: bytes, kind: str, inspection: _Inspection) -> 
             inspection.records[-1]["status"] = "supported"
     elif isinstance(schema, bool) or not isinstance(schema, int) or schema not in versions:
         inspection.diagnostic(f"{kind.upper()}_UNSUPPORTED")
-        inspection.records[-1]["status"] = "unsupported"
+        inspection.records[-1]["status"] = (
+            _version_status(schema, max(versions))
+            if isinstance(schema, int) and not isinstance(schema, bool)
+            else "unsupported"
+        )
     else:
         inspection.records[-1]["schema_version"] = schema
         if kind == "claim_issuer" and ("window" not in value or not _claim_issuer_window_is_valid(value["window"])):

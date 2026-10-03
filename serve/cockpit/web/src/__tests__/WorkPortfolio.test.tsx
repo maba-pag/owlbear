@@ -1200,6 +1200,49 @@ it("shows actionable head evidence for a quarantined Change status", async () =>
   expect(health).toHaveTextContent("ancestor");
 });
 
+it("tells the operator to upgrade when a newer controller wrote a remote snapshot", async () => {
+  const basePortfolio = portfolio([], {
+    status: "attention",
+    diagnostics: [
+      {
+        source: "remote-state",
+        code: "remote-state-version-unsupported",
+        detail: "Remote Delivery snapshot schema_version 3 is newer than this controller supports (2).",
+        change_id: "newer-change",
+        path: ".owlbear/delivery/state/newer-change/snapshot.json",
+        retry_safe: false,
+        reason: "remote-state-version-unsupported",
+        resolution: "authority-gap",
+        expected_head: null,
+        observed_head: null,
+        observed_local_head: null,
+        head_relation: null,
+      },
+    ],
+  });
+  currentPortfolio = {
+    ...basePortfolio,
+    operating: {
+      ...basePortfolio.operating,
+      statuses: [
+        changeStatus("newer-change", {
+          actionable_runtime: false,
+          diagnostic_code: "remote-state-version-unsupported",
+          diagnostic_detail: "Remote Delivery snapshot was written by a newer controller.",
+        }),
+      ],
+    },
+  };
+
+  renderPage();
+
+  const health = await screen.findByTestId("delivery-issues-section");
+  expect(health).toHaveTextContent("remote-state / remote-state-version-unsupported");
+  expect(health).toHaveTextContent("A newer Delivery controller wrote this Change's remote state.");
+  expect(health).toHaveTextContent("Upgrade this controller before resuming the Change");
+  expect(health).not.toHaveTextContent("/resolve-delivery-attention newer-change");
+});
+
 it("presents Change-grouped Outcomes by work, progress, and status", async () => {
   renderPage();
 

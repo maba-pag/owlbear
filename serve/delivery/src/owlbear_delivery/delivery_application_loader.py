@@ -8,6 +8,7 @@ import logging
 import os
 import re
 import subprocess
+import weakref
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Never
@@ -57,6 +58,7 @@ from owlbear_delivery.delivery_runtime import (
     _read_builder_request_resolution_receipt,
 )
 from owlbear_delivery.delivery_state import (
+    REMOTE_STATE_VERSION_UNSUPPORTED,
     DeliveryStatePublicationError,
     DeliveryStatePublisher,
     DeliveryStateSnapshot,
@@ -77,6 +79,8 @@ from owlbear_delivery.portfolio_operating import (
     DeliveryHealthResolution,
 )
 from owlbear_delivery.runtime_transaction import RuntimeTransaction, TransactionParticipant
+from owlbear_delivery.state_formats import StateCapabilityError, require_capability, scan_capability
+from owlbear_delivery.storage_io import ControllerFencedError, ControllerLock, acquire_controller_lock
 
 if TYPE_CHECKING:
     from owlbear_delivery.delivery_runtime import DeliveryRequest, _DeliveryBuilderHandoffChangeIntentReceipt
@@ -144,12 +148,27 @@ class _PlannerPauseHistory:
 class DeliveryApplicationLoadError(RuntimeError):
     """Field-aware failure raised before Delivery state owners are composed."""
 
-    __slots__ = ("detail", "field")
+    __slots__ = ("code", "detail", "field")
 
-    def __init__(self, field: str, detail: str) -> None:
+    def __init__(self, field: str, detail: str, *, code: str | None = None) -> None:
         self.field = field
         self.detail = detail
+        self.code = code
         super().__init__(detail)
+
+
+class DeliveryStateVersionError(DeliveryApplicationLoadError):
+    """Persisted Delivery state is outside the formats this controller may read or write."""
+
+    __slots__ = ("locator",)
+
+    def __init__(self, code: str, detail: str, *, locator: str) -> None:
+        super().__init__("state_version", detail, code=code)
+        self.locator = locator
+
+
+CONTROLLER_FENCED = "controller-fenced"
+_CONTROLLER_LOCKS: weakref.WeakKeyDictionary[PortfolioApplication, ControllerLock] = weakref.WeakKeyDictionary()
 
 
 _REMOTE_REF_MISSING = 2
@@ -391,7 +410,11 @@ def _bootstrap_remote_state(
             detail=item.detail,
             change_id=item.change_id,
             path=item.path,
-            reason=DeliveryHealthReason.REMOTE_STATE_RECONCILIATION,
+            reason=(
+                DeliveryHealthReason.REMOTE_STATE_VERSION_UNSUPPORTED
+                if item.code == REMOTE_STATE_VERSION_UNSUPPORTED
+                else DeliveryHealthReason.REMOTE_STATE_RECONCILIATION
+            ),
             resolution=DeliveryHealthResolution.AUTHORITY_GAP,
         )
         for item in inventory.diagnostics
@@ -604,7 +627,7 @@ def _read_local_snapshot_frontier(path: Path) -> tuple[bytes, DeliveryFrontier]:
         _bootstrap_failure("local Delivery runtime artifact differs from its remote snapshot: frontier.json")
     try:
         content = path.read_bytes()
-        return content, DeliveryFrontier.model_validate_json(content, strict=False)
+        return content, DeliveryFrontier.model_validate_json(content, strict=True)
     except (OSError, ValueError) as exc:
         _bootstrap_failure("local Delivery runtime artifact differs from its remote snapshot: frontier.json", exc)
 
@@ -616,7 +639,7 @@ def _read_local_pending_publication(path: Path, frontier_bytes: bytes) -> bool:
     if path.is_symlink() or not path.is_file():
         _bootstrap_failure("local Delivery publication intent cannot be reconciled")
     try:
-        intent = DeliveryPendingStatePublication.model_validate_json(path.read_bytes(), strict=False)
+        intent = DeliveryPendingStatePublication.model_validate_json(path.read_bytes(), strict=True)
     except (OSError, TypeError, ValueError) as exc:
         _bootstrap_failure("local Delivery publication intent cannot be reconciled", exc)
     return (
@@ -1261,7 +1284,7 @@ def _read_planner_handoff_pause_receipts(
         if path.is_symlink() or not path.is_file():
             _bootstrap_failure("local Planning pause receipt path is unsafe")
         try:
-            receipt = _DeliveryPlanningPauseReplay.model_validate_json(path.read_bytes(), strict=False)
+            receipt = _DeliveryPlanningPauseReplay.model_validate_json(path.read_bytes(), strict=True)
         except (OSError, TypeError, ValueError) as exc:
             _bootstrap_failure("local Planning pause receipt is invalid", exc)
         request = receipt.request.request
@@ -2432,10 +2455,60 @@ def load_delivery_application(
 ) -> PortfolioApplication:
     """Validate external identities before constructing the Delivery state owners.
 
+    The shared controller lock and the format gate run first, so fenced or unsupported state is
+    refused before any Git, remote, typed read or write. The returned application holds the lock
+    until ``close_delivery_application`` or garbage collection.
     Only a process whose agents receive its claims passes ``issuer_host``; claims issued without it are
     never settled automatically and need user-confirmed release.
     """
     paths = _derive_paths(workspace_root)
+    controller_lock = _acquire_controller_fence(paths)
+    try:
+        _require_state_capability(paths)
+        application = _load_gated_application(config, paths, publication_provider, issuer_host)
+    except BaseException:
+        controller_lock.release()
+        raise
+    _CONTROLLER_LOCKS[application] = controller_lock
+    weakref.finalize(application, controller_lock.release)
+    return application
+
+
+def close_delivery_application(application: PortfolioApplication) -> None:
+    """Release the controller lock of one loaded application; stop its checkpoint supervisor first."""
+    controller_lock = _CONTROLLER_LOCKS.pop(application, None)
+    if controller_lock is not None:
+        controller_lock.release()
+
+
+def _acquire_controller_fence(paths: _DeliveryPaths) -> ControllerLock:
+    try:
+        return acquire_controller_lock(paths.runtime_root)
+    except ControllerFencedError as exc:
+        error = DeliveryApplicationLoadError(
+            "controller_lock",
+            f"{CONTROLLER_FENCED}: Delivery state is fenced by a migration or upgrade; no state was read",
+            code=CONTROLLER_FENCED,
+        )
+        raise error from exc
+    except (OSError, ValueError) as exc:
+        error = _load_error("runtime_root", "workspace controller lock is unavailable")
+        raise error from exc
+
+
+def _require_state_capability(paths: _DeliveryPaths) -> None:
+    try:
+        require_capability(scan_capability(paths.repository_root))
+    except StateCapabilityError as exc:
+        raise DeliveryStateVersionError(exc.code, exc.detail, locator=exc.locator) from exc
+
+
+def _load_gated_application(
+    config: DeliveryStartupConfig,
+    paths: _DeliveryPaths,
+    publication_provider: PublicationProvider | None,
+    issuer_host: WindowHostIdentity | None,
+) -> PortfolioApplication:
     _validate_git_config(config, paths)
     host_config = _load_host_config(paths)
     remote_diagnostics: tuple[DeliveryHealthDiagnostic, ...] = ()

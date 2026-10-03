@@ -290,6 +290,7 @@ export type DeliveryHealthReason =
   | "unknown"
   | "remote-state-unavailable"
   | "remote-state-reconciliation"
+  | "remote-state-version-unsupported"
   | "remote-change-head-ahead"
   | "remote-change-head-mismatch"
   | "local-change-head-out-of-band"

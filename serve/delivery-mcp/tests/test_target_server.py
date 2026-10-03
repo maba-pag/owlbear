@@ -92,6 +92,7 @@ from owlbear_delivery.delivery_runtime import (
 from owlbear_delivery.finalization_reports import FinalizationFailureCode, FinalizationReportStore
 from owlbear_delivery.portfolio_operating import DeliveryHealthStatus, DeliveryHealthView
 from owlbear_delivery.recovery import DeliveryWorkerExclusionRequiredError
+from owlbear_delivery.storage_io import ControllerFencedError, acquire_controller_lock
 from owlbear_delivery.work_items import WorkItemNextActor
 from owlbear_delivery_github import GitHubCliPublicationProvider
 from owlbear_delivery_mcp.server import (
@@ -3341,7 +3342,6 @@ async def test_missing_canonical_config_fails_before_state_creation(
 @pytest.mark.parametrize(
     ("mutation", "field"),
     [
-        (lambda content, _tmp: content.update(schema_version=1), "schema_version"),
         (lambda content, _tmp: content.update(remote=""), "remote"),
         (lambda content, _tmp: content.update(target_branch=""), "target_branch"),
         (lambda content, _tmp: content.update(github_repository="invalid"), "github_repository"),
@@ -3454,6 +3454,78 @@ async def test_complete_config_constructs_application_before_lifespan_yield(
 
     with pytest.raises(RuntimeError, match="outside server lifespan"):
         live_server._live_application()  # noqa: SLF001
+
+
+@pytest.mark.parametrize(
+    ("version", "refusal"),
+    [(3, "state-newer-than-controller"), (1, "state-version-unknown")],
+)
+def test_unsupported_config_version_is_refused_before_typed_parse(tmp_path: Path, version: int, refusal: str) -> None:
+    content = {**_config(), "schema_version": version, "future_field": True}
+    path = tmp_path / "delivery.json"
+    _write_config(path, content)
+
+    with pytest.raises(DeliveryStartupDiagnostic) as exc_info:
+        load_delivery_config(path)
+
+    assert exc_info.value.code == "ERR_DELIVERY_STATE_VERSION"
+    assert exc_info.value.field == "state_version"
+    assert exc_info.value.detail.startswith(refusal)
+    assert exc_info.value.__cause__ is not None
+    assert not isinstance(exc_info.value.__cause__, ValidationError)
+
+
+@pytest.mark.asyncio
+async def test_lifespan_refuses_newer_state_with_typed_detail_and_releases_the_lock(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = _repository(tmp_path)
+    path = repository / ".owlbear/delivery/config.json"
+    path.parent.mkdir(parents=True)
+    _write_config(path, _config())
+    frontier = repository / ".owlbear/delivery/runtime/changes/change-a/frontier.json"
+    frontier.parent.mkdir(parents=True)
+    frontier.write_text('{"schema_version": 19, "bindings": []}', encoding="utf-8")
+    monkeypatch.chdir(repository)
+
+    with pytest.raises(DeliveryStartupDiagnostic) as exc_info:
+        async with app_lifespan(mcp):
+            pass
+
+    assert exc_info.value.code == "ERR_DELIVERY_STATE_VERSION"
+    assert exc_info.value.field == "state_version"
+    assert exc_info.value.detail.startswith("state-newer-than-controller")
+    assert "runtime/changes/change-a/frontier.json" in exc_info.value.detail
+    acquire_controller_lock(repository / ".owlbear/delivery/runtime", exclusive=True).release()
+
+
+@pytest.mark.asyncio
+async def test_lifespan_is_fenced_by_an_exclusive_holder_and_releases_its_lock_on_exit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = _repository(tmp_path)
+    path = repository / ".owlbear/delivery/config.json"
+    path.parent.mkdir(parents=True)
+    _write_config(path, _config())
+    runtime_root = repository / ".owlbear/delivery/runtime"
+    monkeypatch.chdir(repository)
+    holder = acquire_controller_lock(runtime_root, exclusive=True)
+    try:
+        with pytest.raises(DeliveryStartupDiagnostic) as exc_info:
+            async with app_lifespan(mcp):
+                pass
+    finally:
+        holder.release()
+
+    async with app_lifespan(mcp):
+        with pytest.raises(ControllerFencedError):
+            acquire_controller_lock(runtime_root, exclusive=True)
+
+    assert exc_info.value.code == "ERR_DELIVERY_CONTROLLER_FENCED"
+    assert exc_info.value.field == "controller_lock"
+    acquire_controller_lock(runtime_root, exclusive=True).release()
 
 
 def test_mcp_startup_delegates_owner_construction_to_delivery(

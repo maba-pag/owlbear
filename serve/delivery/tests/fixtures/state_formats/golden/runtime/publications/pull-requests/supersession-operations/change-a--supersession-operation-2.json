@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "operation_id": "supersession-operation-2",
+  "change_id": "change-a",
+  "repository": "example/project",
+  "expected_predecessor_receipt_id": "fe0666a37eb95f6321451d49991420422261a197b5da53d33ae45da081e331bb",
+  "predecessor_branch": "owlbear/change/change-a+s1",
+  "predecessor_head": "2222222222222222222222222222222222222222",
+  "successor_branch": "owlbear/change/change-a+s2",
+  "superseding_head": "3333333333333333333333333333333333333333",
+  "base_branch": "main",
+  "title": "Change A corrected",
+  "body": "<!-- owlbear-change:change-a -->\n\n<!-- owlbear-generated:start -->\nCorrected reviewed checkpoint.\n<!-- owlbear-generated:end -->\n"
+}

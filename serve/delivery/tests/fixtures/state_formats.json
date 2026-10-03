@@ -1,0 +1,297 @@
+{
+  "acceptance_cursor": {
+    "fingerprints": {
+      "owlbear_delivery.application_models:_AcceptanceReconciliationCursor": "00244f6d7066bbff60c006bee3f47d00c35342015be83c585e16b3ab7cd73db0"
+    },
+    "version": 1
+  },
+  "action_receipt": {
+    "fingerprints": {
+      "owlbear_delivery.application_models:DeliveryEngineActionResult": "bb5a67ce3b2019b593cbefd88fc82c0f465c4ddf7dfce9dcbf17156759cef853",
+      "owlbear_delivery.workspace_models:ChangeContinuationAction": "1b03f357d668ec8c566d0055a1b74cc63f9dc2803d6624ced9d27965f4cddc53"
+    },
+    "version": null
+  },
+  "admission": {
+    "fingerprints": {
+      "owlbear_delivery.delivery_admission:DeliveryAdmissionReceipt": "6b5c90bbdbe844f52a6c4f85dd6bac731adc8aa0c2454678114eeb9594ea6ea5"
+    },
+    "version": 1
+  },
+  "branch_publication": {
+    "fingerprints": {
+      "owlbear_delivery.change_publication:_PublicationOperation": "b1474441f8930f34727e02a9afb4160017588aa5bcc691d83c78893b96f4d575",
+      "owlbear_delivery.change_publication:_SupersessionOperation": "76240ebbba2301353f3a3f41785dfe8ab74d615313daa380365ece60d6d335aa"
+    },
+    "version": 1
+  },
+  "builder_handoff_change_intent_head": {
+    "fingerprints": {
+      "owlbear_delivery.runtime_receipts:_DeliveryBuilderHandoffChangeIntentHead": "1951e294167d9c11027b5b7e2f57d736dac95ef7243b9a5e9e46cfafd80ab4f4"
+    },
+    "version": 1
+  },
+  "builder_handoff_change_intent_receipt": {
+    "fingerprints": {
+      "owlbear_delivery.runtime_receipts:_DeliveryBuilderHandoffChangeIntentReceipt": "d1341e2a8f2993ad0aa8ab1a507b47f2c188e9cf08f2da7724761e37425744fa"
+    },
+    "version": 1
+  },
+  "builder_invocation_receipt": {
+    "fingerprints": {
+      "owlbear_delivery.runtime_receipts:_DeliveryBuilderInvocationSettlementReceipt": "63d11464393c6950e5ce642e1e47c48fc1b9c818446ef3524eb8bce7a68b8658"
+    },
+    "version": 1
+  },
+  "builder_plan_promotion_receipt": {
+    "fingerprints": {
+      "owlbear_delivery.runtime_receipts:_DeliveryBuilderPlanPromotionReceipt": "c0b496d284917b32c1398fc60a81b66cedccc9ab8c283edeebeb25d24b31b5ff"
+    },
+    "version": 1
+  },
+  "builder_request_resolution_receipt": {
+    "fingerprints": {
+      "owlbear_delivery.runtime_receipts:_DeliveryBuilderRequestResolutionReceipt": "5fda1eeea58904709ebfd0f45e8d3fc15103ec2a1c6ef8157a678a493dff25b4"
+    },
+    "version": 1
+  },
+  "claim_issuer": {
+    "fingerprints": {
+      "owlbear_delivery.worker_stall:DeliveryClaimIssuer": "53eb4e7da108448f8098dac1e96ef8a73ef8f0fb55e44726fd1643be82115e5d"
+    },
+    "version": 1
+  },
+  "completion_display": {
+    "fingerprints": {
+      "owlbear_delivery.acceptance:CompletionDisplayMetadata": "27656d06fc67d54ab20b0312cae82599bc11062829f40c2e7b84e519987f4253"
+    },
+    "version": 1
+  },
+  "completion_evidence": {
+    "fingerprints": {
+      "owlbear_delivery.acceptance:CompletionReceipt": "43978377b8e8483a0b636feb6f7288458caae7d85d9f6935df30a3368d19d8c2"
+    },
+    "version": 1
+  },
+  "config": {
+    "fingerprints": {
+      "owlbear_delivery.delivery_application_loader:DeliveryStartupConfig": "f76e7f4730bd76a75d274896aa9fde4d0d05cb8074e62ded456aac2a19f2b77d"
+    },
+    "version": 2
+  },
+  "contract": {
+    "fingerprints": {
+      "owlbear_delivery.target_contract:DeliveryContract": "6e62cbb262709543a4961b83aded559da9fcf10bb478d265865fa6dd1c3954e3"
+    },
+    "version": 2
+  },
+  "coordination": {
+    "fingerprints": {
+      "owlbear_delivery.workspace_models:ChangeCoordination": "207dc25eb813f6c7ab506a6bb398d030448c027e5eff3bc8ae10ee432355b04d"
+    },
+    "version": 1
+  },
+  "finalization_report": {
+    "fingerprints": {
+      "owlbear_delivery.finalization_reports:FinalizationReport": "e4f3df61078de95cdbe72f0ce9e5906034766926a26b10b2b4da8df596ddb869"
+    },
+    "version": null
+  },
+  "finalization_report_pointer": {
+    "fingerprints": {
+      "owlbear_delivery.finalization_reports:_CurrentReport": "867a0ede762afbb637f76f58f39c105a39923a73b6dcddfe0c5141240afb995b"
+    },
+    "version": null
+  },
+  "finalizer_settlement": {
+    "fingerprints": {
+      "owlbear_delivery.finalization_reports:FinalizerSettlementReceipt": "bb996e78a206c525851b8132d88229a8ed6aed70f00d8e175578470e36977fdc"
+    },
+    "version": 1
+  },
+  "frontier": {
+    "fingerprints": {
+      "owlbear_delivery.runtime_models:DeliveryFrontier": "114f8e1a85fe8fd456373031f87f42f96482f3975fc26eb5227e70457b889c87"
+    },
+    "version": 18
+  },
+  "host": {
+    "fingerprints": {
+      "owlbear_delivery.delivery_application_loader:DeliveryHostConfig": "3bbcbfeb55e00c2a952ad12597af1934b4f10f3637941ba6b772915ad50e0607"
+    },
+    "version": 1
+  },
+  "host_local": {
+    "fingerprints": {
+      "owlbear_delivery.delivery_application_loader:_DeliveryHostConfigOverrides": "85da55bb8390d4af18747f71b183576b1c24decb2152af366a54dcec00d2947f"
+    },
+    "version": 1
+  },
+  "package_authority": {
+    "fingerprints": {
+      "owlbear_delivery.target_contract:DeliveryContract": "6e62cbb262709543a4961b83aded559da9fcf10bb478d265865fa6dd1c3954e3"
+    },
+    "version": 2
+  },
+  "package_manifest": {
+    "fingerprints": {
+      "owlbear_delivery.design_package:DesignPackageManifest": "ee15646a305f8c714e28e7ff18ebd6ce3dfffdf727786e603a52f9557547eaa4"
+    },
+    "version": 1
+  },
+  "planning_pause_receipt": {
+    "fingerprints": {
+      "owlbear_delivery.runtime_receipts:_DeliveryPlanningPauseReplay": "6f32608466e53dc6ba84617d8685a5bdfbbc93860ecddcffe56b6a8ee12bdf15"
+    },
+    "version": 1
+  },
+  "planning_retry_receipt": {
+    "fingerprints": {
+      "owlbear_delivery.runtime_receipts:_DeliveryPlanningRetrySettlementReceipt": "c7e2392d375c8cadb813d031be2356cb71b84918e3c1bf38c0dc53ff54402bb9"
+    },
+    "version": 1
+  },
+  "preservation_manifest": {
+    "fingerprints": {
+      "owlbear_delivery.workspace_models:WorktreePreservationReceipt": "5ca0418f49fd7fcb87b3c1b08b7ffd13badacd7173fe40a69f0c1c73b7e90c44"
+    },
+    "version": 1
+  },
+  "proof_attempt": {
+    "fingerprints": {
+      "owlbear_delivery.finalization_reports:ProofAttempt": "29730e9fff27ffac96b9b45b5f45e8153cb9da39b27043b4c52ebaafaf598b92"
+    },
+    "version": null
+  },
+  "pull_request_check_observation": {
+    "fingerprints": {
+      "owlbear_delivery.draft_pull_request:PublicationCheckObservationReceipt": "a85d204da88268737289115111fe113b463acf566575a2dfb4a21de96625243c"
+    },
+    "version": 1
+  },
+  "pull_request_current_receipt": {
+    "fingerprints": {
+      "owlbear_delivery.draft_pull_request:DraftPullRequestPublicationReceipt": "8795ee9db3322864991b6a8e42808f7050165df38b90d46fd73ee2cc29ce976a"
+    },
+    "version": 1
+  },
+  "pull_request_draft_state_operation": {
+    "fingerprints": {
+      "owlbear_delivery.draft_pull_request:_DraftStateOperation": "bca60e62655bff511d150e44931bbcd8badc1a09d404928677b27f2beff6d6da"
+    },
+    "version": 1
+  },
+  "pull_request_draft_state_receipt": {
+    "fingerprints": {
+      "owlbear_delivery.draft_pull_request:PullRequestDraftReceipt": "548d0b427610da945cbe9791bea12a6eeff36dec1446b2f18f313113b27ecd40",
+      "owlbear_delivery.draft_pull_request:PullRequestReadyReceipt": "871f7f610f3a161649ef12e390a4c5e3f7389ea7f7c6cded9d28a6b4dfb7bd69",
+      "owlbear_delivery.draft_pull_request:_PullRequestDraftStateReceipt": "bbe6601f5cbb23a796e0df3cc5e64cbe6186c00ba249027a52368606c834a8d7"
+    },
+    "version": 1
+  },
+  "pull_request_observation": {
+    "fingerprints": {
+      "owlbear_delivery.draft_pull_request:PublicationPullRequestObservationReceipt": "aa89f50346317d85a4485fc17653f64d69e29df53101eb7036cab53dcbee3ae5"
+    },
+    "version": 1
+  },
+  "pull_request_operation": {
+    "fingerprints": {
+      "owlbear_delivery.draft_pull_request:_DraftPullRequestOperation": "821d7d81833df31d36aa7e8ce34d10914e425f589fb138b093ded20143bed2ce"
+    },
+    "version": 1
+  },
+  "pull_request_publication_history": {
+    "fingerprints": {
+      "owlbear_delivery.draft_pull_request:DraftPullRequestPublicationHistory": "4453e6cbc20853f027375b0e1ea6fea6a29181dcb41de73839095cf14d0130e0"
+    },
+    "version": 1
+  },
+  "pull_request_summary_operation": {
+    "fingerprints": {
+      "owlbear_delivery.draft_pull_request:_GeneratedSummaryOperation": "e27914420e8957f7bf197420eae2b29a3992dcdfc593b5fb0f222fdc8ed49470"
+    },
+    "version": 1
+  },
+  "pull_request_summary_receipt": {
+    "fingerprints": {
+      "owlbear_delivery.draft_pull_request:GeneratedPullRequestSummaryReceipt": "4f9bb70b29ccbec470f2ebbfe22eacdff9f7d452954702734726338f5fb052a8"
+    },
+    "version": 1
+  },
+  "pull_request_supersession_operation": {
+    "fingerprints": {
+      "owlbear_delivery.draft_pull_request:_DraftPullRequestSupersessionOperation": "140164a40a328211c5c0c198bfaa53444a81386a36bb6e90975a77039bfdc34f"
+    },
+    "version": 1
+  },
+  "pull_request_supersession_receipt": {
+    "fingerprints": {
+      "owlbear_delivery.draft_pull_request:DraftPullRequestSupersessionReceipt": "cbf88410dcfa4c28fdb1552ac0dbabde5c401618a9b038514fc958cfff29fcf3"
+    },
+    "version": 1
+  },
+  "recovery_invocation": {
+    "fingerprints": {
+      "owlbear_delivery.recovery:RecoveryInvocation": "bef621ed00e01ca177dd24f2669c6b2ef3cc850da578d5d8a0f55d70375e63fd"
+    },
+    "version": 1
+  },
+  "recovery_record": {
+    "fingerprints": {
+      "owlbear_delivery.recovery:RecoveryEvidence": "21236f65ebce088379c223e67d502e539383fcc80356e3ba425eaa2f540b270e",
+      "owlbear_delivery.recovery:RecoveryIntent": "71ad08e61e3fa5d66defbe1d6dffc5cfed9ff76bf5b9bba6dd2518930708b045",
+      "owlbear_delivery.recovery:RecoveryReceipt": "673f5e0d96fa8712ea9bca8f1ae7fdf7f052bc3f21a3362d9214a43cfcc70c3a",
+      "owlbear_delivery.runtime_models:CompletedOutcomeRepairReceipt": "2a454c81e309ef2f925376291eaa89e91329c77db0f792e8a934dd71a19642cc"
+    },
+    "version": 1
+  },
+  "result_receipt": {
+    "fingerprints": {
+      "owlbear_delivery.runtime_models:DeliveryResultCandidate": "b46a60da2ae536751ec75598c1c627e8aa38d205cc72fd579b9a278aacec5df0"
+    },
+    "version": null
+  },
+  "retry_attempt": {
+    "fingerprints": {
+      "owlbear_delivery.recovery:RetryAttempt": "f036af3eb69798f149a7130b62c57a206ad36fb9158b75d0e67e9f867129c8ed"
+    },
+    "version": 1
+  },
+  "retry_ledger": {
+    "fingerprints": {
+      "owlbear_delivery.recovery:RetryLedgerSummary": "9d34b4a440b558a3e9f2a68368f4f20db4d6d8a9f0f2bdbe9130a135a044bf93"
+    },
+    "version": 1
+  },
+  "retry_outcome": {
+    "fingerprints": {
+      "owlbear_delivery.recovery:RetryAttemptOutcome": "46fa6e446d667b43e8db9a8d410a6610d677f0ea878247845cb926f1441c5430"
+    },
+    "version": 1
+  },
+  "retry_owner_result": {
+    "fingerprints": {
+      "owlbear_delivery.recovery:RetryOwnerResult": "0754ce8d570430e145a2e65f4a0630a9670961cef559b154cdd65a1491805c27"
+    },
+    "version": 1
+  },
+  "retry_repair_binding": {
+    "fingerprints": {
+      "owlbear_delivery.recovery:RetryRepairBinding": "7d07a037e3d06fb5256ac4cf6b7de04196d88f7aac75a7534fc7e1f643cefbee"
+    },
+    "version": 1
+  },
+  "snapshot": {
+    "fingerprints": {
+      "owlbear_delivery.delivery_state:DeliveryStateSnapshot": "80cbd9d74ccf92ad2e98fd1b465dcf1a28fe1e12e1e35c1c4e9db7aff8b9f915"
+    },
+    "version": 2
+  },
+  "state_publication": {
+    "fingerprints": {
+      "owlbear_delivery.runtime_models:DeliveryPendingStatePublication": "232074b2ff14e4a8168eef688f2e2eedc32fc669ea337d13940586a041915d3b"
+    },
+    "version": 1
+  }
+}

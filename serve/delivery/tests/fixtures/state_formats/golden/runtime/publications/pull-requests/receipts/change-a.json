@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "receipt_id": "9cbcba7869180a01b12f9bae19d414eaeafe5767c99758bb091013f84d6f380c",
+  "operation_id": "checkpoint-pull-request-85c9977e69a2dfdda0cadeeed54e1ff6aea959cc8806c8f59d20a1e32e3c483e",
+  "change_id": "change-a",
+  "repository": "example/project",
+  "number": 7,
+  "node_id": "PR_node_7",
+  "head_branch": "owlbear/change/change-a",
+  "head_sha": "572f11eb7ba53564418141b87be0bac7e2174da8",
+  "base_branch": "main",
+  "provider_evidence_digest": "96def7031ced7c71bf7b39782b3e4cc0722bfb3a1c9a81d0f5d4f34625e48be5"
+}
