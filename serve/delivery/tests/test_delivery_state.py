@@ -74,6 +74,7 @@ from owlbear_delivery import (
     ReturnDelivery,
     SyncChangeWithTarget,
     WindowHostIdentity,
+    state_migration,
 )
 from owlbear_delivery.acceptance import (
     CompletionDisplayMetadata,
@@ -85,6 +86,7 @@ from owlbear_delivery.change_workspace import ChangeWorkspaceManager
 from owlbear_delivery.delivery_application_loader import (
     DeliveryApplicationLoadError,
     DeliveryStartupConfig,
+    DeliveryStateVersionError,
     _can_defer_remote_state_reconciliation,
     _DeferredRemoteStateReconciliationError,
     _fetch_snapshot_change_head,
@@ -103,6 +105,7 @@ from owlbear_delivery.delivery_runtime import (
 from owlbear_delivery.delivery_state import parse_delivery_state_snapshot
 from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
 from owlbear_delivery.git_executable import resolve_git_executable
+from owlbear_delivery.state_formats import format_marker_bytes
 from owlbear_delivery.target_contract import DeliverySourceBinding
 
 _GIT = resolve_git_executable()
@@ -4041,6 +4044,7 @@ def test_delivery_state_snapshot_repair_reconciles_confirmed_block_successor(tmp
     frontier_path.write_bytes(
         (json.dumps(local_frontier.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n").encode()
     )
+    (runtime_root / "format.json").write_bytes(format_marker_bytes())
 
     degraded = load_delivery_application(config, workspace_root=repository)
     assert degraded.delivery_health().status.value == "attention"
@@ -4056,6 +4060,28 @@ def test_delivery_state_snapshot_repair_reconciles_confirmed_block_successor(tmp
     restarted = load_delivery_application(config, workspace_root=repository)
     assert restarted.delivery_health().status.value == "healthy"
     assert restarted.show_operator_context(change_id, "OUT-001").block == local_block
+
+
+def _migrate_local_legacy_frontier(
+    repository: Path, config: DeliveryStartupConfig, change_id: str, legacy_frontier: bytes
+) -> bytes:
+    """Write a legacy local frontier, see it refused, then run the fenced migration and return the result."""
+    frontier_path = repository / ".owlbear/delivery/runtime/changes" / change_id / "frontier.json"
+    frontier_path.write_bytes(legacy_frontier)
+    with pytest.raises(DeliveryStateVersionError) as refusal:
+        load_delivery_application(config, workspace_root=repository)
+    assert refusal.value.code == "state-migration-required"
+    (repository / ".owlbear/delivery/config.json").write_text(config.model_dump_json(), encoding="utf-8")
+    proposal = state_migration.propose(repository)
+    assert [entry.locator for entry in proposal.entries] == [
+        f"runtime/changes/{change_id}/frontier.json",
+        "runtime/format.json",
+    ]
+    state_migration.apply(repository, proposal.migration_id)
+    state_migration.verify(repository, proposal.migration_id)
+    migrated = frontier_path.read_bytes()
+    assert json.loads(migrated)["schema_version"] == 18
+    return migrated
 
 
 def test_loader_reconciles_a_legacy_local_frontier_with_its_legacy_remote_snapshot(tmp_path: Path) -> None:
@@ -4132,12 +4158,16 @@ def test_loader_reconciles_a_legacy_local_frontier_with_its_legacy_remote_snapsh
         health = load_delivery_application(config, workspace_root=repository).delivery_health()
         return [item.reason for item in health.diagnostics if item.source == "remote-state"]
 
-    diverged = json.loads(json.dumps(legacy["frontier"]))
+    # A local schema-17 frontier needs the registered fenced rewrite before any controller reads it (N02-B).
+    migrated = _migrate_local_legacy_frontier(repository, config, change_id, _canonical_payload(legacy["frontier"]))
+    assert remote_state_reasons() == []
+
+    diverged = json.loads(migrated)
     diverged["bindings"][0]["plan_scope_id"] = "SCOPE-002"
     frontier_path.write_bytes(_canonical_payload(diverged))
     assert remote_state_reasons() == [DeliveryHealthReason.LOCAL_FRONTIER_MISMATCH]
 
-    frontier_path.write_bytes(_canonical_payload(legacy["frontier"]))
+    frontier_path.write_bytes(migrated)
     assert remote_state_reasons() == []
     assert _git(remote, "rev-parse", "refs/heads/owlbear/delivery-state") == legacy_head
 

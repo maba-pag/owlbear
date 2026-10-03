@@ -127,6 +127,12 @@
     },
     "version": 1
   },
+  "migration_journal": {
+    "fingerprints": {
+      "owlbear_delivery.state_migration:MigrationJournal": "b6bc53683078044a187e9b474220af1edf117d161bc01444dfa9b312ab91b2bf"
+    },
+    "version": 1
+  },
   "package_authority": {
     "fingerprints": {
       "owlbear_delivery.target_contract:DeliveryContract": "6e62cbb262709543a4961b83aded559da9fcf10bb478d265865fa6dd1c3954e3"

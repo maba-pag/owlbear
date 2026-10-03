@@ -97,6 +97,7 @@ from owlbear_delivery.delivery_runtime import (
 from owlbear_delivery.finalization_reports import FinalizationFailureCode, FinalizationReportStore
 from owlbear_delivery.portfolio_operating import DeliveryHealthStatus, DeliveryHealthView
 from owlbear_delivery.recovery import DeliveryWorkerExclusionRequiredError
+from owlbear_delivery.state_formats import format_marker_bytes
 from owlbear_delivery.storage_io import ControllerFencedError, acquire_controller_lock
 from owlbear_delivery.work_items import WorkItemNextActor
 from owlbear_delivery_github import GitHubCliPublicationProvider
@@ -1900,6 +1901,7 @@ def _write_delivery_state(runtime_root: Path, repository: Path) -> None:
         ).model_dump_json(),
         encoding="utf-8",
     )
+    runtime_root.joinpath("format.json").write_bytes(format_marker_bytes())
 
 
 @pytest.mark.asyncio
@@ -3554,6 +3556,32 @@ async def test_lifespan_is_fenced_by_an_exclusive_holder_and_releases_its_lock_o
 
     assert exc_info.value.code == "ERR_DELIVERY_CONTROLLER_FENCED"
     assert exc_info.value.field == "controller_lock"
+    acquire_controller_lock(runtime_root, exclusive=True).release()
+
+
+@pytest.mark.asyncio
+async def test_lifespan_refuses_an_applied_but_unverified_migration_journal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = _repository(tmp_path)
+    path = repository / ".owlbear/delivery/config.json"
+    path.parent.mkdir(parents=True)
+    _write_config(path, _config())
+    runtime_root = repository / ".owlbear/delivery/runtime"
+    migration_id = "c" * 64
+    journal = runtime_root / "migrations" / migration_id / "journal.json"
+    journal.parent.mkdir(parents=True)
+    journal.write_text(json.dumps({"schema_version": 1, "migration_id": migration_id, "state": "applied"}), "utf-8")
+    runtime_root.joinpath("format.json").write_bytes(format_marker_bytes())
+    monkeypatch.chdir(repository)
+
+    with pytest.raises(DeliveryStartupDiagnostic) as exc_info:
+        async with app_lifespan(mcp):
+            pass
+
+    assert exc_info.value.code == "ERR_DELIVERY_STATE_VERSION"
+    assert exc_info.value.detail.startswith("state-migration-incomplete")
     acquire_controller_lock(runtime_root, exclusive=True).release()
 
 

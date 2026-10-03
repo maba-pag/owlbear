@@ -44,6 +44,7 @@ from owlbear_delivery.delivery_runtime import (
 )
 from owlbear_delivery.design_package import DesignPackageStore
 from owlbear_delivery.portfolio_application import DeliveryContinuationRequest
+from owlbear_delivery.state_formats import format_marker_bytes
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
     DeliveryCommitmentClass,
@@ -400,6 +401,8 @@ def _write_host_config(workspace: Path, execution_capacity: int = 2) -> None:
     path = workspace / ".owlbear/delivery/runtime/host.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(config.model_dump_json(), encoding="utf-8")
+    # Records seeded through their owners are current-format state (N02-B format marker).
+    path.with_name("format.json").write_bytes(format_marker_bytes())
 
 
 def seed_delivery(workspace: Path) -> None:

@@ -20,6 +20,9 @@ delivery/runtime/*
 delivery/worktrees/
 worktrees/
 
+# Delivery migration staging, backups and archived journals (outside authoritative state)
+delivery-migrations/
+
 # Lock files (transient runtime artifacts)
 .storage.lock
 kanban/activity.jsonl

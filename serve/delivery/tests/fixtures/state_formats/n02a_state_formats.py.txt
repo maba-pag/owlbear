@@ -38,13 +38,8 @@ type RefusalCode = Literal[
 DELIVERY_STATE_ROOT: Final = ".owlbear/delivery"
 FORMAT_MARKER: Final = "runtime/format.json"
 MIGRATIONS_ROOT: Final = "runtime/migrations"
-MIGRATION_JOURNAL: Final = "journal.json"
 CONTROLLER_LOCK: Final = "runtime/controller.lock"
-SUPPORTED_FORMAT: Final = 1
-JOURNAL_SCHEMA_VERSION: Final = 1
-JOURNAL_STATES: Final = frozenset({"backed-up", "applying", "applied", "verified", "aborting"})
-# Runtime entries a fresh (never-written) workspace may hold besides locks and transients.
-_FRESH_RUNTIME_LOCATORS: Final = frozenset({"runtime/host.json", "runtime/host.local.json", FORMAT_MARKER})
+SUPPORTED_FORMAT: Final = 0
 MAX_ENTRIES: Final = 200_000
 MAX_DEPTH: Final = 24
 MAX_RECORD_BYTES: Final = 64 << 20
@@ -152,7 +147,7 @@ RECORD_KINDS: Final[tuple[RecordKind, ...]] = (
         (f"{_RUNTIME_MODELS}:DeliveryFrontier",),
         "M",
         18,
-        rewrites=((17, "owlbear_delivery.state_migration:frontier_17_to_18"),),
+        read_upcasts=((17, "owlbear_delivery.runtime_support:parse_delivery_frontier"),),
     ),
     _kind(
         "contract", "contract", rf"{_CH}/contract\.json", ("owlbear_delivery.target_contract:DeliveryContract",), "R", 2
@@ -526,16 +521,6 @@ RECORD_KINDS: Final[tuple[RecordKind, ...]] = (
         2,
         read_upcasts=((1, "owlbear_delivery.delivery_state:parse_delivery_state_snapshot"),),
     ),
-    _kind("format_marker", "format_marker", r"runtime/format\.json", (), "M", None, read=False),
-    _kind(
-        "migration_journal",
-        "migration_journal",
-        rf"runtime/migrations/{_D}/journal\.json",
-        ("owlbear_delivery.state_migration:MigrationJournal",),
-        "M",
-        JOURNAL_SCHEMA_VERSION,
-        read=False,
-    ),
     _kind(
         "lock",
         "locks",
@@ -627,7 +612,6 @@ _REFUSAL_BY_STATUS: Final[dict[str, RefusalCode]] = {
 _COMPILED: Final = tuple((kind, re.compile(kind.pattern)) for kind in RECORD_KINDS)
 _SKIP_DIRECTORIES: Final = frozenset({"worktrees"})
 _DIRECTORY_FLAGS: Final = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
-_JOURNAL_TEMPORARY: Final = re.compile(r"\.tmp-[0-9a-f]{24}")
 _FILE_FLAGS: Final = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
 
 
@@ -663,65 +647,36 @@ class CapabilityRefusal:
 
 
 @dataclass(frozen=True, slots=True)
-class MigrationJournalState:
-    """Raw state of one ``runtime/migrations`` entry; ``state`` is ``invalid`` when it is not a journal."""
-
-    locator: str
-    migration_id: str | None
-    state: str
-    schema_version: int | None = None
-
-    @property
-    def refusal(self) -> CapabilityRefusal | None:
-        """Return why this journal blocks a normal start, or ``None`` for a verified journal."""
-        if self.state == "verified":
-            return None
-        if self.schema_version is not None and self.schema_version > JOURNAL_SCHEMA_VERSION:
-            detail = f"Delivery migration journal schema_version {self.schema_version} is newer than this controller"
-            return CapabilityRefusal("state-newer-than-controller", self.locator, detail)
-        return CapabilityRefusal(
-            "state-migration-incomplete",
-            self.locator,
-            f"Delivery migration journal is {self.state}; only the migration tool may continue or abort it",
-        )
-
-
-@dataclass(frozen=True, slots=True)
 class CapabilityReport:
-    """Bounded, write-free classification of one workspace's Delivery records.
-
-    ``format_absent`` with a ``current`` format status marks a fresh workspace (no runtime record yet),
-    which a controller stamps with the supported format before its first write.
-    """
+    """Bounded, write-free classification of one workspace's Delivery records."""
 
     records: tuple[RecordCapability, ...] = ()
     format: int = SUPPORTED_FORMAT
     format_status: CapabilityStatus = "current"
-    format_absent: bool = False
-    journals: tuple[MigrationJournalState, ...] = ()
+    migration_journals: tuple[str, ...] = ()
     complete: bool = True
     incomplete_detail: str | None = None
 
     @property
-    def migration_journals(self) -> tuple[str, ...]:
-        """Return the locators of journals that block a normal start."""
-        return tuple(journal.locator for journal in self.journals if journal.refusal is not None)
-
-    @property
     def refusals(self) -> tuple[CapabilityRefusal, ...]:
-        """Return every refusal in deterministic priority order; migration-required comes last."""
-        refusals = [refusal for journal in self.journals if (refusal := journal.refusal) is not None]
-        detail = (
-            f"Delivery state format {self.format} requires the registered migration to format {SUPPORTED_FORMAT}"
-            if self.format_status == "migration-required"
-            else f"Delivery state format {self.format} is not supported by this controller "
-            f"(supported: {SUPPORTED_FORMAT})"
-        )
-        format_refusal = CapabilityRefusal(
-            _REFUSAL_BY_STATUS.get(self.format_status, "state-version-unknown"), FORMAT_MARKER, detail
-        )
-        if self.format_status not in {"current", "migration-required"}:
-            refusals.append(format_refusal)
+        """Return every refusal in deterministic priority order."""
+        refusals = [
+            CapabilityRefusal(
+                "state-migration-incomplete",
+                locator,
+                "a Delivery migration journal exists; only the migration tool may continue it",
+            )
+            for locator in self.migration_journals
+        ]
+        if self.format_status != "current":
+            refusals.append(
+                CapabilityRefusal(
+                    _REFUSAL_BY_STATUS.get(self.format_status, "state-version-unknown"),
+                    FORMAT_MARKER,
+                    f"Delivery state format {self.format} is not supported by this controller "
+                    f"(supported: {SUPPORTED_FORMAT})",
+                )
+            )
         if not self.complete:
             refusals.append(
                 CapabilityRefusal(
@@ -730,7 +685,7 @@ class CapabilityReport:
                     self.incomplete_detail or "Delivery state could not be classified completely",
                 )
             )
-        record_refusals = [
+        refusals.extend(
             CapabilityRefusal(
                 _REFUSAL_BY_STATUS[record.status],
                 record.locator,
@@ -739,11 +694,7 @@ class CapabilityReport:
             )
             for record in self.records
             if record.status in _REFUSAL_BY_STATUS
-        ]
-        refusals.extend(refusal for refusal in record_refusals if refusal.code != "state-migration-required")
-        if self.format_status == "migration-required" and self.complete:
-            refusals.append(format_refusal)
-        refusals.extend(refusal for refusal in record_refusals if refusal.code == "state-migration-required")
+        )
         return tuple(refusals)
 
 
@@ -834,14 +785,12 @@ def config_capability(content: bytes) -> CapabilityReport:
 @dataclass
 class _Scan:
     records: list[RecordCapability] = field(default_factory=list)
-    journals: list[MigrationJournalState] = field(default_factory=list)
+    journals: list[str] = field(default_factory=list)
     entries: int = 0
     total_bytes: int = 0
     incomplete_detail: str | None = None
-    format: int | None = None
+    format: int = SUPPORTED_FORMAT
     format_status: CapabilityStatus = "current"
-    marker_present: bool = False
-    runtime_records: bool = False
 
     def charge(self) -> bool:
         self.entries += 1
@@ -851,18 +800,14 @@ class _Scan:
         return True
 
 
-def scan_capability(workspace_root: Path, *, verification_journal: str | None = None) -> CapabilityReport:
-    """Classify every registered record under the workspace's Delivery root without writing.
-
-    ``verification_journal`` is the offline migration verifier's mode only: the named ``applied``
-    journal is then accepted like a verified one. Normal controllers never pass it.
-    """
+def scan_capability(workspace_root: Path) -> CapabilityReport:
+    """Classify every registered record under the workspace's Delivery root without writing."""
     scan = _Scan()
     root = workspace_root / DELIVERY_STATE_ROOT
     try:
         root_fd = os.open(root, _DIRECTORY_FLAGS)
     except FileNotFoundError:
-        return CapabilityReport(format=0, format_absent=True)
+        return CapabilityReport()
     except OSError as exc:
         detail = "Delivery state root is a symlink" if exc.errno == errno.ELOOP else "Delivery state root is unreadable"
         return CapabilityReport(complete=False, incomplete_detail=detail)
@@ -870,23 +815,11 @@ def scan_capability(workspace_root: Path, *, verification_journal: str | None = 
         _walk(root_fd, "", 0, scan)
     finally:
         os.close(root_fd)
-    journals = tuple(
-        MigrationJournalState(journal.locator, journal.migration_id, "verified", journal.schema_version)
-        if verification_journal is not None
-        and journal.migration_id == verification_journal
-        and journal.state == "applied"
-        else journal
-        for journal in sorted(scan.journals, key=lambda journal: journal.locator)
-    )
-    format_value, format_status = scan.format, scan.format_status
-    if format_status == "current" and (format_value is None or format_value < SUPPORTED_FORMAT):
-        format_status = "migration-required" if scan.runtime_records else "current"
     return CapabilityReport(
         records=tuple(sorted(scan.records, key=lambda record: record.locator)),
-        format=0 if format_value is None else format_value,
-        format_status=format_status,
-        format_absent=not scan.marker_present,
-        journals=journals,
+        format=scan.format,
+        format_status=scan.format_status,
+        migration_journals=tuple(sorted(scan.journals)),
         complete=scan.incomplete_detail is None,
         incomplete_detail=scan.incomplete_detail,
     )
@@ -912,27 +845,15 @@ def _walk(directory_fd: int, prefix: str, depth: int, scan: _Scan) -> None:
             return
         locator = f"{prefix}{entry.name}"
         if locator == MIGRATIONS_ROOT:
-            _scan_migrations(directory_fd, entry, scan)
+            scan.journals.append(locator)
         elif prefix or entry.name not in _SKIP_DIRECTORIES:
             _classify_entry(directory_fd, entry, locator, depth, scan)
 
 
-def _counts_as_runtime_record(locator: str, kind: RecordKind | None) -> bool:
-    return (
-        locator.startswith("runtime/")
-        and locator not in _FRESH_RUNTIME_LOCATORS
-        and (kind is None or kind.mutability != "L")
-    )
-
-
 def _classify_entry(directory_fd: int, entry: os.DirEntry[str], locator: str, depth: int, scan: _Scan) -> None:
     kind = classify_kind(locator)
-    is_directory = entry.is_dir(follow_symlinks=False)
-    if not is_directory and _counts_as_runtime_record(locator, kind):
-        scan.runtime_records = True
-    if is_directory:
+    if entry.is_dir(follow_symlinks=False):
         if kind is not None and not kind.read:
-            scan.runtime_records = scan.runtime_records or _counts_as_runtime_record(locator, kind)
             scan.records.append(RecordCapability(kind.kind_id, locator, _passive_status(kind)))
         else:
             _walk_child(directory_fd, entry.name, locator, depth, scan)
@@ -949,53 +870,6 @@ def _classify_entry(directory_fd: int, entry: os.DirEntry[str], locator: str, de
             scan.records.append(RecordCapability(kind.kind_id, locator, status))
             return
         scan.records.append(classify_record(kind, locator, content))
-
-
-def _scan_migrations(parent_fd: int, entry: os.DirEntry[str], scan: _Scan) -> None:
-    """Read each migration journal raw; any other entry in the namespace is an invalid journal."""
-    if not entry.is_dir(follow_symlinks=False):
-        scan.journals.append(MigrationJournalState(MIGRATIONS_ROOT, None, "invalid"))
-        return
-    try:
-        namespace_fd = os.open(entry.name, _DIRECTORY_FLAGS, dir_fd=parent_fd)
-    except OSError:
-        scan.journals.append(MigrationJournalState(MIGRATIONS_ROOT, None, "invalid"))
-        return
-    try:
-        for child in _entries(namespace_fd, scan):
-            locator = f"{MIGRATIONS_ROOT}/{child.name}"
-            if re.fullmatch(_D, child.name) is None or not child.is_dir(follow_symlinks=False):
-                scan.journals.append(MigrationJournalState(locator, None, "invalid"))
-            else:
-                scan.journals.append(_read_journal(namespace_fd, child.name, scan))
-    finally:
-        os.close(namespace_fd)
-
-
-def _read_journal(namespace_fd: int, migration_id: str, scan: _Scan) -> MigrationJournalState:
-    locator = f"{MIGRATIONS_ROOT}/{migration_id}/{MIGRATION_JOURNAL}"
-    try:
-        directory_fd = os.open(migration_id, _DIRECTORY_FLAGS, dir_fd=namespace_fd)
-    except OSError:
-        return MigrationJournalState(locator, migration_id, "invalid")
-    try:
-        # An interrupted atomic journal write may leave its contained temporary beside the journal.
-        names = [child.name for child in _entries(directory_fd, scan) if not _JOURNAL_TEMPORARY.fullmatch(child.name)]
-        content = _read_record(directory_fd, MIGRATION_JOURNAL, scan) if names == [MIGRATION_JOURNAL] else None
-    finally:
-        os.close(directory_fd)
-    try:
-        payload = json.loads(content) if content is not None else None
-    except UnicodeDecodeError, RecursionError, ValueError:
-        payload = None
-    if not isinstance(payload, dict):
-        return MigrationJournalState(locator, migration_id, "invalid")
-    version, state = payload.get("schema_version"), payload.get("state")
-    if isinstance(version, bool) or not isinstance(version, int):
-        return MigrationJournalState(locator, migration_id, "invalid")
-    if version != JOURNAL_SCHEMA_VERSION or state not in JOURNAL_STATES or payload.get("migration_id") != migration_id:
-        return MigrationJournalState(locator, migration_id, "invalid", version)
-    return MigrationJournalState(locator, migration_id, str(state), version)
 
 
 def _passive_status(kind: RecordKind) -> CapabilityStatus:
@@ -1045,7 +919,6 @@ def _read_record(parent_fd: int, name: str, scan: _Scan) -> bytes | None:
 
 
 def _read_format_marker(parent_fd: int, name: str, scan: _Scan) -> None:
-    scan.marker_present = True
     content = _read_record(parent_fd, name, scan)
     payload: object = None
     if content is not None:
@@ -1060,19 +933,12 @@ def _read_format_marker(parent_fd: int, name: str, scan: _Scan) -> None:
     scan.format = value
     if value > SUPPORTED_FORMAT:
         scan.format_status = "newer"
+    elif value < SUPPORTED_FORMAT:  # pragma: no cover - format 0 is the lowest format.
+        scan.format_status = "unknown-version"
 
 
-def format_marker_bytes(format_value: int = SUPPORTED_FORMAT) -> bytes:
-    """Return the canonical ``runtime/format.json`` bytes for one workspace format."""
-    return json.dumps({"format": format_value}, sort_keys=True, separators=(",", ":")).encode() + b"\n"
-
-
-def record_tree_digest(workspace_root: Path, *, exclude_migrations: bool = False) -> dict[str, str]:
-    """Return SHA-256 digests of every non-transient Delivery record file, for no-write proofs.
-
-    Symlinks (to files or directories) are recorded by target, never followed. ``exclude_migrations``
-    omits the ``runtime/migrations`` namespace, as migration backup manifests do.
-    """
+def record_tree_digest(workspace_root: Path) -> dict[str, str]:
+    """Return SHA-256 digests of every non-transient Delivery record file, for no-write proofs."""
     import hashlib  # noqa: PLC0415 - proof helper only.
 
     root = workspace_root / DELIVERY_STATE_ROOT
@@ -1084,11 +950,7 @@ def record_tree_digest(workspace_root: Path, *, exclude_migrations: bool = False
         prefix = "" if relative_directory == "." else f"{relative_directory.replace(os.sep, '/')}/"
         if not prefix:
             directory_names[:] = [name for name in directory_names if name not in _SKIP_DIRECTORIES]
-        skipped = {"migrations"} if exclude_migrations and prefix == "runtime/" else set()
-        directory_names[:] = [name for name in directory_names if name not in skipped]
-        base = Path(directory)
-        linked = [name for name in directory_names if (base / name).is_symlink()]
-        for name in (*(name for name in file_names if name not in skipped), *linked):
+        for name in file_names:
             locator = f"{prefix}{name}"
             kind = classify_kind(locator)
             if kind is not None and kind.mutability == "L":
@@ -1107,10 +969,7 @@ __all__ = [
     "DELIVERY_STATE_ROOT",
     "FAMILIES",
     "FORMAT_MARKER",
-    "JOURNAL_SCHEMA_VERSION",
-    "JOURNAL_STATES",
     "MIGRATIONS_ROOT",
-    "MIGRATION_JOURNAL",
     "NESTED_MODELS",
     "NON_PERSISTED_MODELS",
     "RECORD_KINDS",
@@ -1119,7 +978,6 @@ __all__ = [
     "SUPPORTED_FORMAT",
     "CapabilityRefusal",
     "CapabilityReport",
-    "MigrationJournalState",
     "RecordCapability",
     "RecordKind",
     "StateCapabilityError",
@@ -1127,7 +985,6 @@ __all__ = [
     "classify_record",
     "classify_version",
     "config_capability",
-    "format_marker_bytes",
     "record_tree_digest",
     "require_capability",
     "scan_capability",

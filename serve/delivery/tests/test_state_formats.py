@@ -106,6 +106,11 @@ def _write(root: Path, locator: str, payload: object) -> None:
     path.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
 
 
+def _mark_format(root: Path) -> None:
+    """Record the supported workspace format, as a migrated or controller-stamped workspace has."""
+    _write(root, "runtime/format.json", {"format": state_formats.SUPPORTED_FORMAT})
+
+
 def _tree_listing(repository: Path) -> list[str]:
     root = repository / ".owlbear/delivery"
     return sorted(str(path.relative_to(root)) for path in root.rglob("*"))
@@ -403,11 +408,16 @@ def test_golden_d03_record_round_trips_byte_identically_through_its_strict_owner
 def test_gate_classifies_every_golden_family_as_supported_without_writing(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     shutil.copytree(_GOLDEN, workspace / ".owlbear/delivery")
+    unmarked = scan_capability(workspace)
+    _mark_format(workspace)
     digests = record_tree_digest(workspace)
     listing = _tree_listing(workspace)
 
     report = scan_capability(workspace)
 
+    assert [(refusal.code, refusal.locator) for refusal in unmarked.refusals] == [
+        ("state-migration-required", "runtime/format.json")
+    ]
     assert {record.status for record in report.records} <= _ACCEPTED
     assert {record.kind_id for record in report.records} == {
         classify_kind(locator).kind_id  # type: ignore[union-attr]
@@ -424,7 +434,7 @@ def _golden_frontier() -> tuple[str, bytes]:
     )
 
 
-def test_schema_17_frontier_is_readable_legacy_and_reads_through_the_one_parser(tmp_path: Path) -> None:
+def test_schema_17_frontier_requires_its_registered_rewrite_and_reads_through_the_one_parser(tmp_path: Path) -> None:
     locator, raw = _golden_frontier()
     legacy = json.loads(raw)
     legacy["schema_version"] = 17
@@ -433,11 +443,13 @@ def test_schema_17_frontier_is_readable_legacy_and_reads_through_the_one_parser(
         binding.pop("retry_fingerprint", None)
     legacy_raw = json.dumps(legacy, sort_keys=True, separators=(",", ":")).encode()
     _write(tmp_path, locator, legacy)
+    _mark_format(tmp_path)
 
     report = scan_capability(tmp_path)
     frontier, canonical = parse_delivery_frontier(legacy_raw)
 
-    assert [(record.status, record.version) for record in report.records] == [("readable-legacy", 17)]
+    assert [(record.status, record.version) for record in report.records] == [("migration-required", 17)]
+    assert [(refusal.code, refusal.locator) for refusal in report.refusals] == [("state-migration-required", locator)]
     assert frontier.schema_version == 18
     assert all(binding.retry_count == 0 for binding in frontier.bindings)
     assert parse_delivery_frontier(canonical)[1] == canonical
@@ -524,7 +536,7 @@ _NEWER_STATE = {
         },
     ),
     "claim-issuer-2": ("runtime/changes/demo/claim-issuers/attempt-1.json", {"schema_version": 2, "window": None}),
-    "format-1": ("runtime/format.json", {"format": 1}),
+    "format-2": ("runtime/format.json", {"format": 2}),
 }
 
 
@@ -556,6 +568,7 @@ def test_loader_gate_runs_before_git_configuration_validation(tmp_path: Path) ->
     with pytest.raises(DeliveryStateVersionError) as refusal:
         load_delivery_application(config, workspace_root=repository)
     _write(repository, "runtime/changes/demo/frontier.json", {"schema_version": 18, "bindings": []})
+    _mark_format(repository)
     with pytest.raises(DeliveryApplicationLoadError) as git_failure:
         load_delivery_application(config, workspace_root=repository)
 
@@ -671,6 +684,7 @@ def test_controller_lock_is_not_a_record_and_shared_mode_is_reentrant(tmp_path: 
 
 
 def test_gate_reports_unrecognized_and_unreadable_records_without_refusing(tmp_path: Path) -> None:
+    _mark_format(tmp_path)
     _write(tmp_path, "runtime/unexpected/thing.json", {"schema_version": 99})
     path = tmp_path / ".owlbear/delivery/runtime/changes/demo/frontier.json"
     path.parent.mkdir(parents=True)

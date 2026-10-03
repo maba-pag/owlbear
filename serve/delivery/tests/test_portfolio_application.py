@@ -210,6 +210,7 @@ from owlbear_delivery.recovery import (
     digest,
 )
 from owlbear_delivery.runtime_transaction import ReplacementTransactionParticipant, RuntimeTransaction
+from owlbear_delivery.state_formats import format_marker_bytes
 from owlbear_delivery.storage_io import locked_roots
 from owlbear_delivery_github import GitHubCliPublicationProvider
 
@@ -745,6 +746,12 @@ def _startup_config() -> DeliveryStartupConfig:
     )
 
 
+def _mark_current_format(runtime_root: Path) -> None:
+    """Record the supported format for runtime records seeded directly through their owners."""
+    runtime_root.mkdir(parents=True, exist_ok=True)
+    (runtime_root / "format.json").write_bytes(format_marker_bytes())
+
+
 def _repository(tmp_path: Path) -> Path:
     repository = tmp_path / "repository"
     repository.mkdir(parents=True)
@@ -920,11 +927,16 @@ def _portfolio(  # noqa: PLR0913 - shared fixture preserves existing controls an
 def _seed_loader_composed_completed_change(
     tmp_path: Path,
     change_stages: tuple[tuple[str, DeliveryStage], ...] = (("change-a", DeliveryStage.COMPLETED),),
+    *,
+    marked: bool = True,
 ) -> tuple[Path, Path]:
+    """Seed loader-visible state through its owners; ``marked=False`` leaves it in the D03 format 0."""
     repository = _repository(tmp_path)
     runtime_root = repository / ".owlbear/delivery/runtime"
     package_root = repository / ".owlbear/delivery/packages"
     worktree_root = repository / ".owlbear/delivery/worktrees"
+    if marked:
+        _mark_current_format(runtime_root)
     coordinator = PortfolioCoordinator(runtime_root)
     manager = ChangeWorkspaceManager(repository, worktree_root, coordinator, "main", "origin")
     store = DesignPackageStore(package_root, repository, transaction_root=runtime_root)
@@ -13864,6 +13876,7 @@ def test_delivery_loader_ignores_legacy_capacity_ledger(tmp_path: Path) -> None:
         DeliveryHostConfig(schema_version=1, execution_capacity=1).model_dump_json(),
         encoding="utf-8",
     )
+    _mark_current_format(runtime_root)
 
     application = load_delivery_application(_startup_config(), workspace_root=repository)
 
@@ -13899,6 +13912,7 @@ def test_delivery_loader_isolates_contract_without_workspace_coordination(tmp_pa
     change_root.mkdir(parents=True)
     (change_root / "contract.json").write_bytes(_canonical(contract))
     (change_root / "frontier.json").write_bytes(_canonical(frontier))
+    _mark_current_format(runtime_root)
 
     application = load_delivery_application(_startup_config(), workspace_root=repository)
 
@@ -13928,6 +13942,7 @@ def test_delivery_loader_allows_recoverable_admission_partial_state(
     (change_root / "frontier.json").write_bytes(_canonical(frontier))
     if admission_content is not None:
         (change_root / "admission.json").write_bytes(admission_content)
+    _mark_current_format(runtime_root)
 
     application = load_delivery_application(_startup_config(), workspace_root=repository)
 
@@ -14173,6 +14188,7 @@ def test_delivery_loader_rejects_git_and_state_identity_before_composition(tmp_p
     change_root.mkdir(parents=True)
     contract = _contract("change-b", b"intent\n", b"design\n")
     (change_root / "contract.json").write_bytes(_canonical(contract))
+    _mark_current_format(state_root)
     application = load_delivery_application(
         _startup_config(),
         workspace_root=repository,
@@ -14193,6 +14209,7 @@ def test_delivery_loader_rejects_git_and_state_identity_before_composition(tmp_p
     valid_contract = _contract("change-a", b"intent\n", b"design\n")
     (runtime_change / "contract.json").write_bytes(_canonical(valid_contract))
     (runtime_change / "frontier.json").write_bytes(b"not-json\n")
+    _mark_current_format(runtime_root)
     application = load_delivery_application(
         _startup_config(),
         workspace_root=runtime_repository,
