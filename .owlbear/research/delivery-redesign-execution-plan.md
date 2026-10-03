@@ -594,9 +594,9 @@ every new item exactly one lane.
 | N00-A | merged | #326 (head `4ef678fe`; Sol `implementation-sound`; LC repair `7c05d377`; CI green) |
 | N00-M | done | #326 merged as `881b500f`; main checkout on `delivery-live`; health clean; 3 Changes available; 114 live records unchanged vs. backup `~/owlbear-backups/n00m-20261003-015344` |
 | N00-B | merged | #340 |
-| N00-C | — | — |
+| N00-C | merged | #341 |
 | N01-P | merged | #342 (plan gate `plan-sound`, round 3) |
-| N01-A | — | — |
+| N01-A | merged | #344 (code head `693b6dc3b`; Sol `implementation-sound`; LC load form pass) |
 | N01-B | — | — |
 | N01-C | — | — |
 | N02-P | — | — |
