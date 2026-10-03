@@ -13,7 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from owlbear_delivery.git_executable import resolve_git_executable
 from owlbear_delivery.recovery import (
@@ -47,10 +47,13 @@ from owlbear_delivery.workspace_models import (  # noqa: F401
     ChangeCoordination,
     ChangeDesignPackageSnapshotIntent,
     ChangeDesignPackageSnapshotReceipt,
+    ChangeDirectOperation,
     ChangeExternalHeadAdoptionReceipt,
     ChangeExternalHeadPromotionReceipt,
     ChangeFinalizationAttempt,
     ChangeFinalizationAttention,
+    ChangePauseRequest,
+    ChangePauseRequestedError,
     ChangeTargetSyncAbortReceipt,
     ChangeTargetSyncConflictError,
     ChangeTargetSyncConflictState,
@@ -174,12 +177,30 @@ class ChangeWorkspaceManager(_WorktreeStateMixin, _PreservationMixin, _SnapshotM
         change_id: str,
         *,
         expected_finalization_attention: ChangeFinalizationAttention | None = None,
+        operation: str | None = None,
+        mutation_class: Literal["completion", "owner-drain", "pause-gated"] = "pause-gated",
     ) -> ReplacementTransactionParticipant:
-        """Join current workspace custody to the caller's runtime transaction."""
+        """Join current workspace custody and Pause policy to the caller's runtime transaction."""
         return self._coordinator.prepare_runtime_custody_guard(
             change_id,
             expected_finalization_attention=expected_finalization_attention,
+            operation=operation,
+            mutation_class=mutation_class,
         )
+
+    def record_pause_request(self, request: ChangePauseRequest, expected_frontier_digest: str) -> ChangePauseRequest:
+        """Record one custody-neutral Pause request (K1)."""
+        return self._coordinator.record_pause_request(request, expected_frontier_digest)
+
+    def clear_pause_request(self, change_id: str, expected_frontier_digest: str) -> ChangePauseRequest | None:
+        """Clear one Pause request through the same frontier-bound admission (K1)."""
+        return self._coordinator.clear_pause_request(change_id, expected_frontier_digest)
+
+    def prepare_pause_request_clear(
+        self, change_id: str, request: ChangePauseRequest
+    ) -> ReplacementTransactionParticipant:
+        """Join one request's removal to its conversion, completion or abandonment transaction."""
+        return self._coordinator.prepare_pause_request_clear(change_id, request)
 
     def prepare_recovery_release(
         self, intent: RecoveryIntent, receipt: RecoveryReceipt

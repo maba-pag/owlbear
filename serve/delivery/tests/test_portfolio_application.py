@@ -1231,16 +1231,19 @@ def test_public_mutation_distinguishes_engine_custody_from_coordination_damage(
         path.unlink()
     elif damage == "malformed":
         path.write_bytes(b"{")
-    error = DeliveryActionBusyError if damage is None else DeliveryRuntimeReconciliationError
-    with pytest.raises(error):
-        application.set_change_intent(
-            DeliveryChangeIntent(
-                change_id="change-a",
-                kind=DeliveryChangeIntentKind.DEFER,
-                expected_frontier_digest=hashlib.sha256(before).hexdigest(),
-                reason="pause",
-            )
-        )
+    intent = DeliveryChangeIntent(
+        change_id="change-a",
+        kind=DeliveryChangeIntentKind.DEFER,
+        expected_frontier_digest=hashlib.sha256(before).hexdigest(),
+        reason="pause",
+    )
+    if damage is None:
+        # N09-A2: Pause under engine custody records a draining request instead of being refused.
+        result = application.set_change_intent(intent)
+        assert result.receipt == application._coordinator.pause_request("change-a")
+    else:
+        with pytest.raises(DeliveryRuntimeReconciliationError):
+            application.set_change_intent(intent)
     assert runtime.frontier_bytes() == before
     if damage is None:
         assert application._coordinator.show("change-a").continuation_action == action
@@ -5691,15 +5694,25 @@ def test_continuation_failure_retains_custody_and_blocks_success_and_mutations(t
         application.finalize_change(
             "change-a", _finalization_request("change-a", attempt.exact_head, attempt.writer.attempt_id)
         )
-    with pytest.raises(DeliveryActionBusyError):
-        application.set_change_intent(
-            DeliveryChangeIntent(
-                change_id="change-a",
-                kind=DeliveryChangeIntentKind.DEFER,
-                expected_frontier_digest=attempt.frontier_digest,
-                reason="pause",
-            )
+    # N09-A2: Pause under retained finalizer custody records a draining request instead of being refused.
+    paused = application.set_change_intent(
+        DeliveryChangeIntent(
+            change_id="change-a",
+            kind=DeliveryChangeIntentKind.DEFER,
+            expected_frontier_digest=attempt.frontier_digest,
+            reason="pause",
         )
+    )
+    assert paused.receipt == coordinator.pause_request("change-a")
+    assert runtimes["change-a"].change_deferral() is None
+    application.set_change_intent(
+        DeliveryChangeIntent(
+            change_id="change-a",
+            kind=DeliveryChangeIntentKind.RESUME,
+            expected_frontier_digest=attempt.frontier_digest,
+        )
+    )
+    assert coordinator.pause_request("change-a") is None
     reopened, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes)
     view = reopened.get_change("change-a")
     assert view.readiness.status == "blocked"

@@ -44,6 +44,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
+    from owlbear_delivery.workspace_models import ChangeDirectOperation
+
 
 class _TargetSyncMixin:
     """Target synchronization, external-head adoption and promotion, and publication-baseline recovery."""
@@ -318,8 +320,13 @@ class _TargetSyncMixin:
         self,
         request: SyncChangeWithTarget,
         before_head_change: Callable[[], None] | None = None,
+        direct_operation: ChangeDirectOperation | None = None,
     ) -> ChangeTargetSyncReceipt:
-        """Fetch one exact target head and merge it only in the managed Change worktree."""
+        """Fetch one exact target head and merge it only in the managed Change worktree.
+
+        ``direct_operation`` is the direct entry's K2 marker, committed under K3 after the
+        replay and start checks and before any write or fetch.
+        """
         with (
             locked_roots((self._coordinator.runtime_root / "coordination" / "target-sync-lock",)),
             self._coordinator.publication_lock(request.change_id) as lock,
@@ -329,6 +336,9 @@ class _TargetSyncMixin:
             if previous_receipt is not None:
                 return previous_receipt
             attention_sync = self._require_target_sync_start(request, coordination)
+            if direct_operation is not None:
+                self._coordinator.start_direct_operation(direct_operation)
+                coordination = self._coordinator.show(request.change_id)
             branch_head = self._resolve(coordination.branch)
             self._require_worktree(
                 request.change_id,

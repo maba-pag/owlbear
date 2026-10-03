@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import ast
+import inspect
 import re
 import shlex
 from pathlib import Path
 from typing import NamedTuple
+
+from owlbear_delivery import ChangeWorkspaceManager, PortfolioCoordinator
 
 _REPO_ROOT = Path(__file__).parent.parent
 _SOURCE_ROOTS = tuple(sorted(path for path in (_REPO_ROOT / "serve").glob("*/src") if path.is_dir()))
@@ -1668,3 +1671,221 @@ def test_forbidden_git_admin_fixture_is_rejected_by_the_artifact_gate() -> None:
     violations = _git_admin_path_violations((_fixture_path("forbidden-git-admin.py"),))
 
     assert {int(violation.rsplit(":", maxsplit=1)[1]) for violation in violations} == {5, 9, 13, 17, 21, 25}
+
+
+# N09-A2 step 1 inventory (plan §1.11 K3/K7, §3.3): every public coordinator and workspace-manager
+# entry has exactly one Pause class, so a new custody or effect entry cannot appear unclassified.
+_DELIVERY_SOURCE = _REPO_ROOT / "serve/delivery/src/owlbear_delivery"
+_COORDINATOR_PAUSE_CLASSES: dict[str, frozenset[str]] = {
+    "pause-gated": frozenset(
+        {
+            "acquire",
+            "acquire_continuation_action",
+            "start_continuation_action",
+            "reserve_publication",
+            "start_direct_operation",
+            "start_pause_fenced",
+            "prepare_pause_fence",
+            "prepare_runtime_custody_guard",
+            "update",
+            "require_pause_permits",
+        }
+    ),
+    "completion": frozenset(
+        {
+            "finish_continuation_action",
+            "finish_direct_operation",
+            "release",
+            "release_publication",
+            "prepare_finalization_attention",
+            "prepare_finalization_completion",
+            "prepare_finalization_repair_release",
+            "prepare_recovery_release",
+            "record_recovery_intent",
+            "prepare_reviewed_boundary",
+            "prepare_pause_request_clear",
+            "record_verified_exclusion",
+            "forget_verified_exclusion",
+            "register",
+            "recover_pending_transactions",
+        }
+    ),
+    "pause-policy": frozenset({"record_pause_request", "clear_pause_request"}),
+    "token": frozenset({"drain_authority", "drain_permits", "current_drain_authority", "continuation_execution"}),
+    "lock": frozenset({"acquisition_lock", "publication_lock", "recovery_lock"}),
+    "read": frozenset(
+        {
+            "continuation_action_started",
+            "continuation_record_path",
+            "continuation_start_recorded",
+            "coordination_bytes",
+            "direct_operation_path",
+            "direct_operation_state",
+            "executing_continuation",
+            "find_registered",
+            "list_registered",
+            "pause_request",
+            "recovery_authority_digest",
+            "recovery_coordination_bytes",
+            "recovery_exclusions_verified",
+            "recovery_verification_recorded",
+            "require_continuation_access",
+            "require_no_pending_recovery",
+            "show",
+        }
+    ),
+}
+_MANAGER_PAUSE_CLASSES: dict[str, frozenset[str]] = {
+    "coordinator-fenced": frozenset(
+        {
+            "acquire",
+            "prepare_builder_handoff_acquisition",
+            "snapshot_design_package",
+            "sync_with_target",
+            "prepare_runtime_custody_guard",
+        }
+    ),
+    "application-gated": frozenset(
+        {
+            "adopt_external_head",
+            "promote_external_head",
+            "abort_target_sync_conflict",
+            "resolve_target_sync_conflict",
+            "recover_out_of_band_head",
+            "recover_publication_baseline",
+            "recover",
+        }
+    ),
+    "owner-completion": frozenset(
+        {
+            "capture_finalization_workspace",
+            "capture_preservation",
+            "capture_raw_preservation",
+            "capture_recovery_workspace",
+            "capture_recovery_workspace_metadata",
+            "cleanup",
+            "complete_reviewed",
+            "ensure",
+            "prepare_builder_handoff",
+            "prepare_finalization_boundary",
+            "prepare_finalization_repair_release",
+            "prepare_pause_request_clear",
+            "prepare_recovery_release",
+            "quarantine_dirty_worktree",
+            "record_reviewed",
+            "refresh_integration_target",
+            "release_writer_at_head",
+            "restart",
+            "restore_preservation",
+            "restore_raw_preservation",
+        }
+    ),
+    "pause-policy": frozenset({"record_pause_request", "clear_pause_request"}),
+    "read": frozenset(
+        {
+            "baseline_scope_kinds",
+            "inspect_retained",
+            "integration_context",
+            "list_retained",
+            "observe_worktree_activity",
+            "observed_change_head",
+            "observed_target_head",
+            "recovery_snapshot",
+            "repository_automation_paths",
+            "require_preservation_environment",
+            "reviewed_source_head",
+            "show",
+            "source_head",
+            "validate_finalization_head",
+            "validate_recovery",
+            "validate_writer_head",
+            "verify_dirty_worktree_quarantine",
+            "verify_preservation",
+            "worker_process_roots",
+        }
+    ),
+}
+_APPLICATION_PAUSE_GATED_ENTRIES = frozenset(
+    {
+        "adopt_external_head",
+        "adopt_external_head_after_acceptance_attention",
+        "promote_external_head",
+        "abort_target_sync_conflict",
+        "resolve_target_sync_conflict",
+        "prepare_review_repair",
+        "reconcile_finalization_head",
+        "recover_out_of_band_head",
+        "repair_target_sync_publication",
+        "recover_publication_baseline",
+        "recover_change_worktree",
+    }
+)
+
+
+def _public_methods(owner: type) -> frozenset[str]:
+    return frozenset(
+        name for name, member in inspect.getmembers(owner) if not name.startswith("_") and inspect.isfunction(member)
+    )
+
+
+def _classified(classes: dict[str, frozenset[str]]) -> frozenset[str]:
+    names = [name for members in classes.values() for name in members]
+    assert len(names) == len(set(names)), "a method has more than one Pause class"
+    return frozenset(names)
+
+
+def test_every_coordinator_entry_has_one_pause_class() -> None:
+    methods = _public_methods(PortfolioCoordinator)
+
+    assert methods == _classified(_COORDINATOR_PAUSE_CLASSES)
+
+
+def test_every_workspace_manager_entry_has_one_pause_class() -> None:
+    methods = _public_methods(ChangeWorkspaceManager)
+
+    assert methods == _classified(_MANAGER_PAUSE_CLASSES)
+
+
+def test_operator_new_work_entries_start_pause_fenced_inside_their_checkpoint_lock() -> None:
+    """K3: each operator entry commits its Pause-fenced start under its checkpoint lock, before any effect."""
+    gated: set[str] = set()
+    for name in ("application_publication.py", "application_recovery.py", "application_lifecycle.py"):
+        tree = ast.parse((_DELIVERY_SOURCE / name).read_text(encoding="utf-8"), filename=name)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            for statement in (item for item in ast.walk(node) if isinstance(item, ast.With)):
+                entered = [
+                    item.context_expr.func.attr
+                    if isinstance(item.context_expr.func, ast.Attribute)
+                    else getattr(item.context_expr.func, "id", None)
+                    for item in statement.items
+                    if isinstance(item.context_expr, ast.Call)
+                ]
+                if "_operator_start" in entered:
+                    assert "locked_roots" in entered[: entered.index("_operator_start")], node.name
+                    gated.add(node.name)
+
+    assert gated == _APPLICATION_PAUSE_GATED_ENTRIES
+
+
+def test_every_frontier_writer_declares_its_pause_class() -> None:
+    """K7: a frontier write without its own declaration would inherit a stale or default class."""
+    undeclared: list[str] = []
+    for path in sorted(_DELIVERY_SOURCE.glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.FunctionDef) or node.name in {"_read", "_replace", "_replace_content"}:
+                continue
+            called = {
+                call.func.attr if isinstance(call.func, ast.Attribute) else getattr(call.func, "id", None)
+                for call in ast.walk(node)
+                if isinstance(call, ast.Call)
+            }
+            if called & {"_replace", "_replace_content"} and not called & {
+                "_require_change_mutable",
+                "_declare_mutation",
+            }:
+                undeclared.append(f"{path.name}:{node.name}")
+
+    assert undeclared == []

@@ -345,7 +345,7 @@ def test_full_form_fails_when_the_migrated_load_rewrites_a_record(
 
     assert report["unmigrated"]["records_changed"] == {}  # type: ignore[index]
     assert report["migrated"]["records_changed"] == {"load": [_FRONTIER]}  # type: ignore[index]
-    assert report["changed_records"] == [FORMAT_MARKER]
+    assert sorted(report["changed_records"]) == sorted([FORMAT_MARKER, _COORDINATION])  # type: ignore[arg-type]
     assert (live / ".owlbear/delivery" / _FRONTIER).read_bytes() != pretty
     assert report["passed"] is False
 
@@ -653,6 +653,7 @@ def test_module_is_stdlib_only_at_import_for_the_container_isolation_proof(tmp_p
 def _live_with_previous_gate(tmp_path: Path, gate_source: Path) -> tuple[Path, str]:
     """A live copy whose origin is a local bare remote and a previous-release commit carrying ``gate_source``."""
     live = _live(tmp_path)
+    _downgrade_coordination(live)
     remote = tmp_path / "remote.git"
     _git(tmp_path, "init", "--bare", "-b", "main", str(remote))
     _git(live, "config", f"url.{remote}.insteadOf", "https://github.com/example/project.git")
@@ -667,6 +668,18 @@ def _live_with_previous_gate(tmp_path: Path, gate_source: Path) -> tuple[Path, s
     return live, previous
 
 
+_COORDINATION = "runtime/coordination/changes/change-a.json"
+
+
+def _downgrade_coordination(live: Path) -> None:
+    """Write the coordination record as live holds it before N09-A2: schema 1, no Pause request."""
+    path = live / ".owlbear/delivery" / _COORDINATION
+    payload = json.loads(path.read_bytes())
+    payload.pop("pause_request", None)
+    payload["schema_version"] = 1
+    path.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+
+
 def _unexpected_previous_load(_live: Path, _previous: str) -> dict[str, object]:
     raise AssertionError
 
@@ -678,11 +691,16 @@ def test_full_form_migrates_the_copy_and_meets_the_rollback_downgrade_oracle(tmp
 
     assert report["passed"] is True, json.dumps(report, indent=1)
     assert report["unmigrated"]["load"]["code"] == "state-migration-required"  # type: ignore[index]
-    assert report["unmigrated"]["inspector"]["diagnostic_codes"] == ["FORMAT_MIGRATION_REQUIRED"]  # type: ignore[index]
+    assert report["unmigrated"]["inspector"]["diagnostic_codes"] == [  # type: ignore[index]
+        "COORDINATION_MIGRATION_REQUIRED",
+        "FORMAT_MIGRATION_REQUIRED",
+    ]
     assert report["migrated"]["inspector"]["status"] == "healthy-structure"  # type: ignore[index]
     assert report["migrated"]["inspector"]["diagnostic_codes"] == []  # type: ignore[index]
-    assert report["changed_records"] == [FORMAT_MARKER]
-    assert [entry["locator"] for entry in report["proposal"]["entries"]] == [FORMAT_MARKER]  # type: ignore[index]
+    assert sorted(report["changed_records"]) == sorted([FORMAT_MARKER, _COORDINATION])  # type: ignore[arg-type]
+    assert sorted(entry["locator"] for entry in report["proposal"]["entries"]) == sorted(  # type: ignore[index]
+        [FORMAT_MARKER, _COORDINATION]
+    )
     assert report["previous_gate_before"]["refusals"] == []  # type: ignore[index]
     assert ["state-newer-than-controller", FORMAT_MARKER] in report["previous_gate_after"]["refusals"]  # type: ignore[index]
     assert "previous_load" not in report

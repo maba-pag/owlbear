@@ -128,6 +128,7 @@ from owlbear_delivery.worker_stall import (
     claim_issuer_path,
     is_issuable_attempt_id,
 )
+from owlbear_delivery.workspace_models import recovery_authority_digest
 
 
 class _RecoveryMixin:
@@ -399,30 +400,39 @@ class _RecoveryMixin:
     ) -> OutcomeAuthorityBinding:
         """Apply one validated mechanical transition through its exact runtime."""
         runtime = self._runtime(change_id, for_mutation=True)
-        with locked_roots((self._checkpoint_lock_root(change_id),)):
-            self._import_legacy_worker_budgets(runtime)
-            previous = runtime.frontier_bytes()
-            binding = runtime.transition(request, retry_observed_at=self._clock())
-            if (
-                isinstance(request, BlockDelivery)
-                and request.request is not None
-                and runtime.frontier_bytes() == previous
-            ):
-                pending = runtime.pending_state_publication()
-                request_digest = hashlib.sha256(_canonical_model_bytes(request)).hexdigest()
-                if pending is None or pending.transition_request_digest != request_digest:
-                    return binding
-            if request.action == "advance":
-                self._record_worker_retry_success(runtime, request.outcome_id, request.claim_id)
-            elif request.action in {"block", "return"}:
-                with suppress(OSError, RuntimeError, ValueError):
-                    runtime.retry_ledger(clock=self._clock).reconcile_owner_results()
-            self._publish_delivery_state(
-                change_id,
-                runtime,
-                _checkpoint_operation_id("transition", change_id, request.outcome_id, request.claim_id),
-            )
+        with (
+            locked_roots((self._checkpoint_lock_root(change_id),)),
+            self._worker_drain_authority(runtime, request.outcome_id, request.claim_id),
+        ):
+            binding = self._transition_delivery_locked(change_id, runtime, request)
+            self._try_convert_pause_request(change_id, runtime)
             return binding
+
+    def _transition_delivery_locked(
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+        request: DeliveryTransition,
+    ) -> OutcomeAuthorityBinding:
+        self._import_legacy_worker_budgets(runtime)
+        previous = runtime.frontier_bytes()
+        binding = runtime.transition(request, retry_observed_at=self._clock())
+        if isinstance(request, BlockDelivery) and request.request is not None and runtime.frontier_bytes() == previous:
+            pending = runtime.pending_state_publication()
+            request_digest = hashlib.sha256(_canonical_model_bytes(request)).hexdigest()
+            if pending is None or pending.transition_request_digest != request_digest:
+                return binding
+        if request.action == "advance":
+            self._record_worker_retry_success(runtime, request.outcome_id, request.claim_id)
+        elif request.action in {"block", "return"}:
+            with suppress(OSError, RuntimeError, ValueError):
+                runtime.retry_ledger(clock=self._clock).reconcile_owner_results()
+        self._publish_delivery_state(
+            change_id,
+            runtime,
+            _checkpoint_operation_id("transition", change_id, request.outcome_id, request.claim_id),
+        )
+        return binding
 
     def settle_worker_invocation(
         self,
@@ -455,7 +465,10 @@ class _RecoveryMixin:
                 and (host_id != claim.owner_id or session_id != claim.process_id)
             ):
                 self._fail("worker continuation settlement does not match its active host and session binding")
-            return self._apply_worker_settlement(runtime, settlement)
+            with self._worker_drain_authority(runtime, settlement.outcome_id, settlement.claim_id):
+                binding = self._retry_pause_field_conflict(lambda: self._apply_worker_settlement(runtime, settlement))
+            self._try_convert_pause_request(change_id, runtime)
+            return binding
 
     def _apply_worker_settlement(
         self,
@@ -515,7 +528,9 @@ class _RecoveryMixin:
             self._selected_action_checkpoint_lock(change_id),
         ):
             if outcome_id is None:
-                return self._release_stuck_finalizer(runtime, attempt_id, claim_id)
+                released = self._release_stuck_finalizer(runtime, attempt_id, claim_id)
+                self._try_convert_pause_request(change_id, runtime)
+                return released
             replay = runtime.engine_worker_settlement_replay(outcome_id, attempt_id, claim_id, "released-stuck")
             if replay is not None:
                 return replay
@@ -523,9 +538,12 @@ class _RecoveryMixin:
             if claim is None or claim.worker_role not in {DeliveryWorkerRole.PLANNER, DeliveryWorkerRole.BUILDER}:
                 self._fail("stuck-worker release supports only an active Planner or Builder claim")
             self._require_quiet_worktree(change_id, claim.started_at)
-            return self._apply_worker_settlement(
-                runtime, self._engine_worker_envelope(runtime, outcome_id, claim, "released-stuck")
-            )
+            with self._worker_drain_authority(runtime, outcome_id, claim_id):
+                binding = self._apply_worker_settlement(
+                    runtime, self._engine_worker_envelope(runtime, outcome_id, claim, "released-stuck")
+                )
+            self._try_convert_pause_request(change_id, runtime)
+            return binding
 
     def _release_stuck_finalizer(
         self, runtime: DeliveryRuntime, attempt_id: str, claim_id: str
@@ -778,14 +796,16 @@ class _RecoveryMixin:
                         stall = self._worker_stall(change_id, outcome_id, claim)
                         if stall is None or not stall.quiet:
                             continue
-                        self._apply_worker_settlement(
-                            runtime, self._engine_worker_envelope(runtime, outcome_id, claim, "host-lost")
-                        )
+                        with self._worker_drain_authority(runtime, outcome_id, claim.claim_id):
+                            self._apply_worker_settlement(
+                                runtime, self._engine_worker_envelope(runtime, outcome_id, claim, "host-lost")
+                            )
                         settled += 1
                     finalizer = self._finalizer_stall(change_id)
                     if finalizer is not None and finalizer[1].quiet:
                         self._settle_stalled_finalizer(runtime, finalizer[0], "host-lost")
                         settled += 1
+                    self._try_convert_pause_request(change_id, runtime)
             except DeliveryActionBusyError:
                 continue
             except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
@@ -1072,7 +1092,16 @@ class _RecoveryMixin:
         ):
             self._fail("out-of-band head recovery requires configured checkpoint publishers")
         self._reconcile_runtimes()
-        with locked_roots((self._checkpoint_lock_root(change_id),)):
+        with (
+            locked_roots((self._checkpoint_lock_root(change_id),)),
+            self._operator_start(
+                change_id,
+                f"out-of-band-recovery:{operation_id}",
+                "queue_explicit_checkpoint",
+                "capture_change_disposition",
+                publishes_checkpoint=True,
+            ),
+        ):
             runtime = self._runtimes.get(change_id)
             if runtime is None:
                 self._fail("out-of-band head recovery requires an available Change runtime")
@@ -1145,7 +1174,10 @@ class _RecoveryMixin:
         if self._change_branch_publisher is None or self._delivery_state_publisher is None:
             self._fail("target-sync publication repair requires configured publishers")
         self._reconcile_runtimes()
-        with locked_roots((self._checkpoint_lock_root(change_id),)):
+        with (
+            locked_roots((self._checkpoint_lock_root(change_id),)),
+            self._operator_start(change_id, f"target-sync-repair:{operation_id}", publishes_checkpoint=True),
+        ):
             runtime = self._target_sync_repair_runtime(
                 change_id,
                 expected_remote_head,
@@ -1864,7 +1896,11 @@ class _RecoveryMixin:
         return RecoveryIntent(
             invocation=invocation,
             frontier_digest=digest(runtime.frontier_bytes()),
-            coordination_digest=digest(self._coordinator.recovery_coordination_bytes(change_id, owner_id)),
+            coordination_digest=recovery_authority_digest(
+                ChangeCoordination.model_validate_json(
+                    self._coordinator.recovery_coordination_bytes(change_id, owner_id)
+                )
+            ),
             exact_head=head,
             target_head=request.target_head,
             workspace_fingerprint=fingerprint,
@@ -1994,6 +2030,7 @@ class _RecoveryMixin:
             self._runtime(change_id).complete_recovery(intent, receipt)
             self._record_retry_release(self._runtime(change_id), attempt_id=intent.invocation.request.attempt_id)
             self._coordinator.record_verified_exclusion(recovery_id)
+            self._try_convert_pause_request(change_id)
             return receipt
 
     def _require_legacy_recovery_clean(self, change_id: str) -> None:

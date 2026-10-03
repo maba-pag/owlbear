@@ -12,6 +12,7 @@ from owlbear_delivery.change_publication import ChangeBranchSupersessionReceipt
 from owlbear_delivery.change_workspace import (
     ChangeExternalHeadAdoptionReceipt,
     ChangeExternalHeadPromotionReceipt,
+    ChangePauseRequest,
     ChangeTargetSyncAbortReceipt,
     ChangeTargetSyncReceipt,
     ChangeWorktreeAttentionCode,
@@ -729,7 +730,7 @@ class SetChangeIntentResponse(_TargetProtocolModel):
     change_id: ChangeId
     kind: DeliveryChangeIntentKind
     frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
-    receipt: DeliveryChangeDeferral | DeliveryChangeAbandonment
+    receipt: DeliveryChangeDeferral | DeliveryChangeAbandonment | ChangePauseRequest
 
     @classmethod
     def from_result(cls, result: DeliveryChangeIntentResult) -> SetChangeIntentResponse:

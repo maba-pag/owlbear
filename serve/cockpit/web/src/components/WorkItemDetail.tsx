@@ -327,6 +327,8 @@ function ChangeDispositionSection(props: WorkItemDetailProps) {
 export interface ChangePauseControlProps {
   changeId: string;
   paused: boolean;
+  /** A recorded Pause request still draining the started step; Resume clears it. */
+  pauseRequested?: boolean;
   /** Delivery's reason Pause would be refused, or null when the defer intent is accepted. */
   unavailableMessage: string | null;
   pendingAction: string | null;
@@ -350,17 +352,24 @@ export function ChangePauseControl(props: ChangePauseControlProps) {
   };
   return (
     <div className="grid min-w-0 gap-static-xs" data-testid={`change-pause-${props.changeId}`}>
-      {props.paused ? (
-        <PButton
-          className="w-fit"
-          type="button"
-          compact
-          variant="secondary"
-          disabled={busy}
-          onClick={() => void props.onResume()}
-        >
-          {props.pendingAction === "change-resume" ? "Resuming..." : "Resume"}
-        </PButton>
+      {props.paused || props.pauseRequested ? (
+        <div className="flex flex-wrap items-center gap-static-xs">
+          {props.pauseRequested && !props.paused ? (
+            <PTag compact data-testid={`pause-requested-${props.changeId}`}>
+              Pause requested
+            </PTag>
+          ) : null}
+          <PButton
+            className="w-fit"
+            type="button"
+            compact
+            variant="secondary"
+            disabled={busy}
+            onClick={() => void props.onResume()}
+          >
+            {props.pendingAction === "change-resume" ? "Resuming..." : "Resume"}
+          </PButton>
+        </div>
       ) : open && props.unavailableMessage === null ? (
         <div className="flex flex-wrap items-end gap-static-xs">
           <PInputText
@@ -412,6 +421,7 @@ function ChangePauseSection(props: WorkItemDetailProps) {
       <ChangePauseControl
         changeId={item.card.change_id}
         paused={item.change_progress === "paused" || phase === "deferred"}
+        pauseRequested={item.pause_unavailable_reason === "pause-requested"}
         unavailableMessage={changePauseUnavailableMessage(item)}
         pendingAction={props.pendingAction}
         reasonName="change-pause-reason"

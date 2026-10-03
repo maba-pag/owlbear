@@ -21,6 +21,7 @@ from owlbear_delivery.application_acquisition import (
     _AcquisitionMixin,
 )
 from owlbear_delivery.application_lifecycle import (
+    _ACCEPTANCE_DRAIN_MUTATIONS,
     _LifecycleMixin,
 )
 
@@ -109,7 +110,10 @@ from owlbear_delivery.application_support import (  # noqa: F401
 )
 from owlbear_delivery.change_workspace import (
     ChangeExternalHeadPromotionReceipt,
+    ChangePauseRequest,
+    ChangePauseRequestedError,
     ChangeWriter,
+    CoordinationConflictError,
     WorkspaceRecoverySnapshot,
 )
 from owlbear_delivery.delivery_admission import DeliveryAdmissionConflictError, DeliveryAdmissionReceipt
@@ -124,6 +128,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryAcceptanceAttentionReason,
     DeliveryAcceptanceWaitingError,
     DeliveryActiveClaim,
+    DeliveryChangeDeferral,
     DeliveryChangeStage,
     DeliveryMergedPullRequestLatch,
     DeliveryPlanCandidate,
@@ -183,6 +188,7 @@ from owlbear_delivery.worker_stall import (
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+    from contextlib import AbstractContextManager
     from pathlib import Path
 
     from owlbear_delivery.completed_history import (
@@ -411,7 +417,7 @@ class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _Publication
         """Select only live awaiting-merge Changes without competing custody."""
         return runtime.change_stage() == DeliveryChangeStage.AWAITING_MERGE and not runtime.active_claims()
 
-    def _reconcile_awaiting_acceptance_change(
+    def _reconcile_awaiting_acceptance_change(  # noqa: C901, PLR0911 - one outcome per reconciliation exit.
         self,
         change_id: str,
     ) -> DeliveryAcceptanceReconciliationOutcome:
@@ -420,6 +426,9 @@ class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _Publication
             with locked_roots((self._checkpoint_lock_root(change_id),), blocking=False):
                 if not self._is_acceptance_reconciliation_eligible(runtime):
                     return self._reconciliation_skipped_outcome(change_id, "Change is no longer awaiting merge.")
+                if self._coordinator.pause_request(change_id) is not None:
+                    self._try_convert_pause_request(change_id, runtime)
+                    return self._reconciliation_skipped_outcome(change_id, "Change pause requested.")
                 reservation = self._reserve_acceptance_observation(runtime, explicit=False)
                 if not reservation.allowed:
                     return DeliveryAcceptanceReconciliationOutcome(
@@ -429,7 +438,10 @@ class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _Publication
                         detail="Acceptance observation is waiting for its durable retry policy.",
                     )
                 try:
-                    outcome = self._reconcile_awaiting_acceptance_locked(change_id, runtime, reservation.attempt_id)
+                    with self._owner_drain_authority(
+                        change_id, f"acceptance:{reservation.attempt_id}", *_ACCEPTANCE_DRAIN_MUTATIONS
+                    ):
+                        outcome = self._reconcile_awaiting_acceptance_locked(change_id, runtime, reservation.attempt_id)
                 except PublicationProviderError as exc:
                     runtime.retry_ledger(clock=self._clock).record_failure(
                         reservation, failure_code=exc.code.value, now=self._clock()
@@ -451,6 +463,7 @@ class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _Publication
                     ledger.record_accepted_progress(reservation, now=self._clock())
                 else:
                     ledger.record_failure(reservation, failure_code="acceptance-wait", now=self._clock())
+                    self._try_convert_pause_request(change_id, runtime)
         except BlockingIOError:
             return DeliveryAcceptanceReconciliationOutcome(
                 change_id=change_id,
@@ -462,6 +475,7 @@ class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _Publication
             return self._provider_unavailable_outcome(change_id, exc)
         except (
             DeliveryRuntimeConflictError,
+            ChangePauseRequestedError,
             RetryLedgerConflictError,
             RetryLedgerCorruptError,
             OSError,
@@ -653,14 +667,20 @@ class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _Publication
             reservation = self._reserve_acceptance_observation(runtime, explicit=True)
             if not reservation.allowed:
                 raise DeliveryAcceptanceWaitingError(reservation.reason_code)
-            try:
-                receipt = self._observe_acceptance_once(change_id, runtime, attempt_id=reservation.attempt_id)
-            except (DeliveryAcceptanceWaitingError, PublicationProviderError, PortfolioApplicationError) as exc:
-                runtime.retry_ledger(clock=self._clock).record_failure(
-                    reservation, failure_code=getattr(exc, "code", "acceptance-wait"), now=self._clock()
-                )
-                raise
-            runtime.retry_ledger(clock=self._clock).record_accepted_progress(reservation, now=self._clock())
+            with self._owner_drain_authority(
+                change_id,
+                f"acceptance:{reservation.attempt_id}",
+                *_ACCEPTANCE_DRAIN_MUTATIONS,
+            ):
+                try:
+                    receipt = self._observe_acceptance_once(change_id, runtime, attempt_id=reservation.attempt_id)
+                except (DeliveryAcceptanceWaitingError, PublicationProviderError, PortfolioApplicationError) as exc:
+                    runtime.retry_ledger(clock=self._clock).record_failure(
+                        reservation, failure_code=getattr(exc, "code", "acceptance-wait"), now=self._clock()
+                    )
+                    self._try_convert_pause_request(change_id, runtime)
+                    raise
+                runtime.retry_ledger(clock=self._clock).record_accepted_progress(reservation, now=self._clock())
             return receipt
 
     def _reserve_acceptance_observation(self, runtime: DeliveryRuntime, *, explicit: bool) -> RetryReservation:
@@ -671,8 +691,9 @@ class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _Publication
         if finalization is None or runtime.ready_receipt() is None:
             message = "acceptance observation requires awaiting-merge authority"
             raise PortfolioApplicationError(message)
+        change_id = runtime.contract.change_id
         key = RetryEpisodeKey.engine(
-            runtime.contract.change_id,
+            change_id,
             "observe-acceptance",
             finalization.exact_head,
             self._workspace_manager.observed_target_head(),
@@ -680,12 +701,17 @@ class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _Publication
         )
         ledger = runtime.retry_ledger(clock=self._clock)
         episode = ledger.episode(key)
-        return ledger.reserve(
-            key,
-            failure_class=RetryFailureClass.ACCEPTANCE,
-            now=self._clock(),
-            automatic=not (explicit and episode is not None and episode.stop_code is RetryStopCode.ACCEPTANCE_WAIT),
-        )
+        try:
+            return ledger.reserve(
+                key,
+                failure_class=RetryFailureClass.ACCEPTANCE,
+                now=self._clock(),
+                automatic=not (explicit and episode is not None and episode.stop_code is RetryStopCode.ACCEPTANCE_WAIT),
+                fence=self._coordinator.prepare_pause_fence(change_id, "provider", "observe-acceptance"),
+            )
+        except RetryLedgerConflictError:
+            self._coordinator.require_pause_permits(change_id, "provider", "observe-acceptance")
+            raise
 
     def _observe_acceptance_once(
         self,
@@ -772,11 +798,16 @@ class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _Publication
                 completed_at=_timestamp(self._clock()),
             )
         )
-        completed = runtime.complete_change(
-            receipt,
-            additional_participants=runtime.retry_ledger(clock=self._clock).owner_result_participants(
-                attempt_id, accepted=True, now=receipt.completed_at
-            ),
+        completed = self._retry_pause_field_conflict(
+            lambda: runtime.complete_change(
+                receipt,
+                additional_participants=(
+                    *runtime.retry_ledger(clock=self._clock).owner_result_participants(
+                        attempt_id, accepted=True, now=receipt.completed_at
+                    ),
+                    self._pause_completion_participant(change_id),
+                ),
+            )
         )
         self._publish_delivery_state(change_id, runtime, f"acceptance-{receipt.completion_id}")
         return completed
@@ -1207,26 +1238,26 @@ class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _Publication
             repair=DeliveryRepairResult(change_id=change_id, proposal=proposal) if proposal is not None else None,
             unresolved_outcomes=unresolved_outcomes,
             readiness=detail.readiness,
+            pause_requested=coordination.pause_request is not None,
         )
 
     def set_change_intent(self, intent: DeliveryChangeIntent) -> DeliveryChangeIntentResult:
         """Apply one version-bound user lifecycle intent through the owning runtime."""
+        if intent.kind is DeliveryChangeIntentKind.DEFER:
+            return self._admit_pause(intent)
+        if (
+            intent.kind is DeliveryChangeIntentKind.RESUME
+            and self._coordinator.find_registered(intent.change_id) is not None
+            and self._coordinator.pause_request(intent.change_id) is not None
+        ):
+            return self._admit_pause(intent)
         with self._coordinator.acquisition_lock():
             runtime = self._runtime(intent.change_id, for_mutation=True)
             with locked_roots((self._checkpoint_lock_root(intent.change_id),)):
                 attention = self._workspace_manager.show(intent.change_id).finalization_attention
                 current_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
                 if current_digest != intent.expected_frontier_digest:
-                    if intent.kind is DeliveryChangeIntentKind.DEFER:
-                        receipt = runtime.change_deferral()
-                        if receipt is not None and receipt.reason == intent.reason:
-                            return DeliveryChangeIntentResult(
-                                change_id=intent.change_id,
-                                kind=intent.kind,
-                                frontier_digest=current_digest,
-                                receipt=receipt,
-                            )
-                    elif intent.kind is DeliveryChangeIntentKind.ABANDON:
+                    if intent.kind is DeliveryChangeIntentKind.ABANDON:
                         receipt = runtime.change_abandonment()
                         if receipt is not None and receipt.reason == intent.reason:
                             return DeliveryChangeIntentResult(
@@ -1236,15 +1267,7 @@ class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _Publication
                                 receipt=receipt,
                             )
                     self._fail("Change intent frontier changed")
-                if intent.kind is DeliveryChangeIntentKind.DEFER:
-                    if intent.reason is None:
-                        self._fail("defer intent requires a reason")
-                    receipt = runtime.defer_change(
-                        intent.reason,
-                        _timestamp(self._clock()),
-                        expected_finalization_attention=attention,
-                    )
-                elif intent.kind is DeliveryChangeIntentKind.RESUME:
+                if intent.kind is DeliveryChangeIntentKind.RESUME:
                     receipt = runtime.resume_change(expected_finalization_attention=attention)
                 else:
                     if intent.reason is None:
@@ -1253,6 +1276,7 @@ class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _Publication
                         intent.reason,
                         _timestamp(self._clock()),
                         expected_finalization_attention=attention,
+                        pause_request_clear=self._pause_request_clear(intent.change_id),
                     )
                 self._publish_delivery_state(
                     intent.change_id,
@@ -1266,76 +1290,144 @@ class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _Publication
                     receipt=receipt,
                 )
 
+    def _admit_pause(self, intent: DeliveryChangeIntent) -> DeliveryChangeIntentResult:
+        """§1.11 K1: record or clear a Pause request without any Change lock, then try to convert."""
+        runtime = self._runtime(intent.change_id)
+        try:
+            self._workspace_manager.show(intent.change_id)
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise DeliveryRuntimeReconciliationError(intent.change_id, str(exc)) from exc
+        current_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
+        if runtime.change_abandonment() is not None or runtime.completion_receipt() is not None:
+            self._fail("terminal Delivery Change cannot be paused or resumed")
+        if intent.kind is DeliveryChangeIntentKind.RESUME:
+            return self._clear_unconverted_pause(intent, current_digest)
+        if intent.reason is None:
+            self._fail("defer intent requires a reason")
+        deferral = runtime.change_deferral()
+        if deferral is not None:
+            if deferral.reason != intent.reason:
+                if current_digest != intent.expected_frontier_digest:
+                    self._fail("Change intent frontier changed")
+                self._fail("Delivery Change is already paused with another reason")
+            return DeliveryChangeIntentResult(
+                change_id=intent.change_id, kind=intent.kind, frontier_digest=current_digest, receipt=deferral
+            )
+        request = ChangePauseRequest.create(
+            change_id=intent.change_id,
+            reason=intent.reason,
+            requested_at=_timestamp(self._clock()).isoformat(),
+        )
+        existing = self._coordinator.pause_request(intent.change_id)
+        if existing is None and current_digest != intent.expected_frontier_digest:
+            self._fail("Change intent frontier changed")
+        try:
+            recorded = self._workspace_manager.record_pause_request(request, intent.expected_frontier_digest)
+        except CoordinationConflictError as exc:
+            self._fail(str(exc), exc)
+        converted = self._convert_pause_request_unlocked(intent.change_id)
+        receipt: DeliveryChangeDeferral | ChangePauseRequest = converted if converted is not None else recorded
+        return DeliveryChangeIntentResult(
+            change_id=intent.change_id,
+            kind=intent.kind,
+            frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+            receipt=receipt,
+        )
+
+    def _clear_unconverted_pause(self, intent: DeliveryChangeIntent, current_digest: str) -> DeliveryChangeIntentResult:
+        """K1 Resume of a draining request: clear it through its frontier-bound transaction."""
+        try:
+            cleared = self._workspace_manager.clear_pause_request(intent.change_id, intent.expected_frontier_digest)
+        except CoordinationConflictError as exc:
+            self._fail(str(exc), exc)
+        if cleared is None:
+            self._fail("Delivery Change is not paused")
+        return DeliveryChangeIntentResult(
+            change_id=intent.change_id, kind=intent.kind, frontier_digest=current_digest, receipt=cleared
+        )
+
     def submit_result(self, submission: DeliveryResultSubmission) -> DeliveryResultSubmissionResult:
         """Publish and promote one exact Builder result as one claim-bound operation."""
         with self._coordinator.acquisition_lock():
             runtime = self._runtime(submission.change_id, for_mutation=True)
-            with locked_roots((self._checkpoint_lock_root(submission.change_id),)):
-                self._import_legacy_worker_budgets(runtime)
-                binding = runtime.show_binding(submission.outcome_id)
-                existing = next(
-                    (item for item in binding.results if item.task_id == submission.result.task_id),
-                    None,
-                )
-                if existing is not None:
-                    if existing != submission.result or (
-                        binding.active_claim is not None and binding.active_claim.task_id == submission.result.task_id
-                    ):
-                        self._fail("submitted result conflicts with current Outcome authority")
-                    runtime.require_result_replay(submission.outcome_id, submission.claim_id, submission.result)
-                    self._record_worker_retry_success(runtime, submission.outcome_id, submission.claim_id)
-                    if runtime.pending_state_publication() is not None:
-                        self._publish_delivery_state(
-                            submission.change_id,
-                            runtime,
-                            _checkpoint_operation_id(
-                                "submit-result",
-                                submission.change_id,
-                                submission.outcome_id,
-                                submission.result.result_id,
-                            ),
-                        )
-                    return DeliveryResultSubmissionResult(
-                        change_id=submission.change_id,
-                        outcome_id=submission.outcome_id,
-                        claim_id=submission.claim_id,
-                        result_id=submission.result.result_id,
-                        binding=binding,
-                    )
-                candidate = runtime.publish_result(
-                    PublishDeliveryResult(
-                        outcome_id=submission.outcome_id,
-                        claim_id=submission.claim_id,
-                        result=submission.result,
-                    )
-                )
-                binding = runtime.transition(
-                    AdvanceDelivery(
-                        action="advance",
-                        outcome_id=submission.outcome_id,
-                        claim_id=submission.claim_id,
-                        output=candidate.output,
-                    ),
-                    retry_observed_at=self._clock(),
-                )
-                self._record_worker_retry_success(runtime, submission.outcome_id, submission.claim_id)
-                self._publish_delivery_state(
-                    submission.change_id,
-                    runtime,
-                    _checkpoint_operation_id(
-                        "submit-result",
-                        submission.change_id,
-                        submission.outcome_id,
-                        submission.result.result_id,
-                    ),
-                )
-                return DeliveryResultSubmissionResult(
-                    change_id=submission.change_id,
-                    outcome_id=submission.outcome_id,
-                    claim_id=submission.claim_id,
-                    result_id=submission.result.result_id,
-                    binding=binding,
-                )
+            with (
+                locked_roots((self._checkpoint_lock_root(submission.change_id),)),
+                self._worker_drain_authority(runtime, submission.outcome_id, submission.claim_id),
+            ):
+                result = self._submit_result_locked(runtime, submission)
+                self._try_convert_pause_request(submission.change_id, runtime)
+                return result
+
+    def _worker_drain_authority(
+        self, runtime: DeliveryRuntime, outcome_id: str, claim_id: str
+    ) -> AbstractContextManager[object]:
+        """K2 claim/settlement owner token: live claim, or a replay bound to its pending publication."""
+        change_id = runtime.contract.change_id
+        claim = runtime.show_binding(outcome_id).active_claim
+        pending = runtime.pending_state_publication()
+        bound = (
+            pending.transition_request_digest
+            if (claim is None or claim.claim_id != claim_id) and pending is not None
+            else None
+        )
+        return self._owner_drain_authority(change_id, f"claim:{claim_id}", bound=bound, publishes_checkpoint=True)
+
+    def _submit_result_locked(
+        self, runtime: DeliveryRuntime, submission: DeliveryResultSubmission
+    ) -> DeliveryResultSubmissionResult:
+        self._import_legacy_worker_budgets(runtime)
+        binding = runtime.show_binding(submission.outcome_id)
+        operation_id = _checkpoint_operation_id(
+            "submit-result",
+            submission.change_id,
+            submission.outcome_id,
+            submission.result.result_id,
+        )
+        existing = next(
+            (item for item in binding.results if item.task_id == submission.result.task_id),
+            None,
+        )
+        if existing is not None:
+            if existing != submission.result or (
+                binding.active_claim is not None and binding.active_claim.task_id == submission.result.task_id
+            ):
+                self._fail("submitted result conflicts with current Outcome authority")
+            runtime.require_result_replay(submission.outcome_id, submission.claim_id, submission.result)
+            self._record_worker_retry_success(runtime, submission.outcome_id, submission.claim_id)
+            if runtime.pending_state_publication() is not None:
+                self._publish_delivery_state(submission.change_id, runtime, operation_id)
+            return DeliveryResultSubmissionResult(
+                change_id=submission.change_id,
+                outcome_id=submission.outcome_id,
+                claim_id=submission.claim_id,
+                result_id=submission.result.result_id,
+                binding=binding,
+            )
+        candidate = runtime.publish_result(
+            PublishDeliveryResult(
+                outcome_id=submission.outcome_id,
+                claim_id=submission.claim_id,
+                result=submission.result,
+            )
+        )
+        binding = runtime.transition(
+            AdvanceDelivery(
+                action="advance",
+                outcome_id=submission.outcome_id,
+                claim_id=submission.claim_id,
+                output=candidate.output,
+            ),
+            retry_observed_at=self._clock(),
+        )
+        self._record_worker_retry_success(runtime, submission.outcome_id, submission.claim_id)
+        self._publish_delivery_state(submission.change_id, runtime, operation_id)
+        return DeliveryResultSubmissionResult(
+            change_id=submission.change_id,
+            outcome_id=submission.outcome_id,
+            claim_id=submission.claim_id,
+            result_id=submission.result.result_id,
+            binding=binding,
+        )
 
     def answer(self, answer: DeliveryAnswer) -> DeliveryAnswerResult:  # noqa: C901, PLR0911
         """Apply one version-bound request answer or requestless block evidence."""
@@ -1703,6 +1795,7 @@ class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _Publication
             binding.builder_handoff_context is not None for binding in runtime.bindings()
         ):
             return None
+        self._require_publication_drain(change_id, runtime)
         checkpoint = runtime.checkpoint_publication_state()
         pending = checkpoint.pending_checkpoint
         if pending is not None and pending.head is not None and checkpoint.published_head != pending.head:

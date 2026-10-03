@@ -305,7 +305,10 @@ def test_every_registered_rewrite_resolves_to_a_migration_function() -> None:
     names = {name for kind in RECORD_KINDS for _version, name in kind.rewrites}
 
     assert names == set(state_migration.REWRITES)
-    assert names == {"owlbear_delivery.state_migration:frontier_17_to_18"}
+    assert names == {
+        "owlbear_delivery.state_migration:frontier_17_to_18",
+        "owlbear_delivery.state_migration:coordination_1_to_2",
+    }
 
 
 def test_frontier_invalid_at_its_declared_version_is_corruption_and_never_synthesized(tmp_path: Path) -> None:
@@ -734,7 +737,11 @@ def test_n02a_refuses_the_migrated_format_1_workspace_with_unchanged_hashes(tmp_
         == _N02A_GATE_BLOB
     )
     repository, proposal = _two_rewrites(tmp_path)
-    assert _n02a_refusals(repository) == []
+    # N09-A2: the older release already refuses coordination version 2 with its typed version diagnostic.
+    assert _n02a_refusals(repository) == [
+        ["state-newer-than-controller", f"runtime/coordination/changes/{change_id}.json"]
+        for change_id in ("change-a", "change-b")
+    ]
     state_migration.apply(repository, proposal.migration_id)
     state_migration.verify(repository, proposal.migration_id)
     digests = record_tree_digest(repository)
