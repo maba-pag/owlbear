@@ -858,22 +858,6 @@ class _LifecycleMixin:
                 operation_id,
             )
 
-    def defer_change(self, change_id: str, reason: str) -> DeliveryChangeDeferral:
-        """Retain one nonterminal Change and pause its claimable frontier."""
-        runtime = self._runtime(change_id, for_mutation=True)
-        with locked_roots((self._checkpoint_lock_root(change_id),)):
-            deferral = runtime.defer_change(reason, _timestamp(self._clock()))
-            self._publish_delivery_state(change_id, runtime, f"deferral-{deferral.deferral_id}")
-            return deferral
-
-    def resume_change(self, change_id: str) -> DeliveryChangeDeferral:
-        """Resume one exact deferred Change from its retained prior state."""
-        runtime = self._runtime(change_id, for_mutation=True)
-        with locked_roots((self._checkpoint_lock_root(change_id),)):
-            deferral = runtime.resume_change()
-            self._publish_delivery_state(change_id, runtime, f"resume-{deferral.deferral_id}")
-            return deferral
-
     def abandon_change(self, change_id: str, reason: str) -> DeliveryChangeAbandonment:
         """Record one terminal user abandonment without mutating the user checkout."""
         runtime = self._runtime(change_id, for_mutation=True)
@@ -1039,7 +1023,7 @@ class _LifecycleMixin:
         if authority is None:
             raise ChangePauseRequestedError
         bound = authority.permits.get("state")
-        if bound:
+        if bound is not None:
             intent = runtime.pending_state_publication()
             if intent is None or (
                 intent.transition_request_digest not in bound and intent.base_frontier_digest not in bound

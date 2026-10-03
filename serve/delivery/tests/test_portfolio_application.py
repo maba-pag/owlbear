@@ -848,6 +848,17 @@ def _publish_external_change_head(
     return adopted
 
 
+def _change_intent(
+    application, change_id: str, kind: DeliveryChangeIntentKind, reason: str | None = None, digest: str | None = None
+):
+    """Apply one Pause or Resume through the single public intent path, bound to the current frontier."""
+    if digest is None:
+        digest = hashlib.sha256(application._runtimes[change_id].frontier_bytes()).hexdigest()
+    return application.set_change_intent(
+        DeliveryChangeIntent(change_id=change_id, kind=kind, expected_frontier_digest=digest, reason=reason)
+    ).receipt
+
+
 def _portfolio(  # noqa: PLR0913 - shared fixture preserves existing controls and independent-outcome setup.
     tmp_path: Path,
     stages: dict[str, DeliveryStage],
@@ -7134,7 +7145,7 @@ def test_target_sync_rejects_terminal_or_deferred_change_before_workspace_mutati
         {"change-a": DeliveryStage.IMPLEMENTATION},
     )
     if lifecycle is DeliveryChangeStage.DEFERRED:
-        application.defer_change("change-a", "Wait before target synchronization")
+        _change_intent(application, "change-a", DeliveryChangeIntentKind.DEFER, "Wait before target synchronization")
     else:
         application.abandon_change("change-a", "Stop before target synchronization")
     before = coordinator.show("change-a")
@@ -7552,7 +7563,7 @@ def test_target_sync_conflict_exit_rejects_deferred_change_before_workspace_muta
         datetime.now(UTC),
         ("target synchronization merge conflict",),
     )
-    application.defer_change("change-a", "Wait before resolving the preserved merge")
+    _change_intent(application, "change-a", DeliveryChangeIntentKind.DEFER, "Wait before resolving the preserved merge")
 
     with (
         patch.object(application._workspace_manager, operation) as workspace_exit,
@@ -11247,11 +11258,11 @@ def test_change_lifecycle_dispositions_delegate_through_application_lock(tmp_pat
     state_publisher = Mock()
     application._delivery_state_publisher = state_publisher
 
-    deferral = application.defer_change("change-a", "Wait for user review")
+    deferral = _change_intent(application, "change-a", DeliveryChangeIntentKind.DEFER, "Wait for user review")
     assert runtime.change_deferral() == deferral
     assert runtime.change_stage() == DeliveryChangeStage.DEFERRED
 
-    assert application.resume_change("change-a") == deferral
+    assert _change_intent(application, "change-a", DeliveryChangeIntentKind.RESUME) == deferral
     assert runtime.change_stage() == DeliveryChangeStage.BUILDING
 
     abandonment = application.abandon_change("change-a", "User stopped the Change")
@@ -11853,7 +11864,13 @@ def test_portfolio_reader_defers_active_runtime_replacement_and_blocks_mutation(
     assert view.health.status.value == "attention"
     assert any(diagnostic.change_id == "change-a" for diagnostic in view.health.diagnostics)
     with pytest.raises(DeliveryRuntimeReconciliationError) as exc_info:
-        application.defer_change("change-a", "runtime replacement requires reconciliation")
+        _change_intent(
+            application,
+            "change-a",
+            DeliveryChangeIntentKind.DEFER,
+            "runtime replacement requires reconciliation",
+            digest="0" * 64,
+        )
     assert exc_info.value.code == "ERR_DELIVERY_RUNTIME_RECONCILIATION"
     assert exc_info.value.retry_safe is True
 
@@ -11893,7 +11910,9 @@ def test_portfolio_reader_retains_prior_runtime_and_blocks_mutation_for_unavaila
     assert application._discovered_changes["change-a"].diagnostic_code == "runtime_unavailable"
     assert any(diagnostic.change_id == "change-a" for diagnostic in view.health.diagnostics)
     with pytest.raises(DeliveryRuntimeReconciliationError) as exc_info:
-        application.defer_change("change-a", "runtime entry requires retry")
+        _change_intent(
+            application, "change-a", DeliveryChangeIntentKind.DEFER, "runtime entry requires retry", digest="0" * 64
+        )
     assert exc_info.value.retry_safe is True
     assert _file_bytes(state_root) == before
 
@@ -11948,7 +11967,7 @@ def test_portfolio_keeps_deferred_change_visible_without_orchestration_queue(tmp
         tmp_path,
         {"change-a": DeliveryStage.PLANNING},
     )
-    application.defer_change("change-a", "wait for user review")
+    _change_intent(application, "change-a", DeliveryChangeIntentKind.DEFER, "wait for user review")
 
     view = application.portfolio_read_view()
 

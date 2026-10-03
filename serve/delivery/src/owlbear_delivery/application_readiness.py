@@ -834,6 +834,8 @@ class _ReadinessViewsMixin:
         )
         decisions = self._with_worker_stall_readiness(snapshot, cards, decisions)
         pause_requested, pause_drained = self._pause_request_state(snapshot)
+        if pause_requested:
+            decisions = self._with_pause_request_readiness(snapshot, cards, decisions)
         decisions, card_guidance = self._with_progress(
             snapshot, cards, decisions, readiness_guidance, pause_drained=pause_drained
         )
@@ -861,6 +863,31 @@ class _ReadinessViewsMixin:
         except OSError, RuntimeError, ValueError:
             drained = False
         return True, drained
+
+    def _with_pause_request_readiness(
+        self,
+        snapshot: DeliveryPortfolioSnapshot,
+        cards: tuple[WorkItemCardView, ...],
+        decisions: tuple[DeliveryReadiness, ...],
+    ) -> tuple[DeliveryReadiness, ...]:
+        """§1.5/I7: a request refuses every new start, so no new-work action stays executable.
+
+        Retained-owner, containment and recovery readiness is not executable and keeps its guidance.
+        """
+        return tuple(
+            decision.model_copy(
+                update={
+                    "status": "blocked",
+                    "reason_code": "change-paused",
+                    "executable": False,
+                    "action": None,
+                    "prompt": self._readiness_prompt(snapshot, card, "change-paused", executable=False),
+                }
+            )
+            if decision.executable
+            else decision
+            for card, decision in zip(cards, decisions, strict=True)
+        )
 
     def _pause_unavailable_reason(self, snapshot: DeliveryPortfolioSnapshot) -> ChangePauseUnavailableReason | None:
         """A2: Pause admits under any custody (§1.11 K1); only inactive, unreadable or already-requested refuse."""

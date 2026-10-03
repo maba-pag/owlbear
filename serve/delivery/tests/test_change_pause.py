@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
@@ -16,6 +17,7 @@ from serve.delivery.tests.test_change_workspace import _preservation_workspace
 from serve.delivery.tests.test_portfolio_application import (
     _acquire_planning_claim,
     _attach_engine_publication,
+    _attach_local_target,
     _awaiting_acceptance_fixture,
     _continuation_request,
     _engine_action,
@@ -27,15 +29,18 @@ from serve.delivery.tests.test_portfolio_application import (
     _portfolio,
     _reopen_portfolio,
     _set_checkpoint,
+    _task,
     _task_result,
 )
 from serve.delivery.tests.test_recovery import _host
 from serve.delivery.tests.test_worker_stall import _HOST, _iso, _real_now, _stall_portfolio
 
 from owlbear_delivery import (
+    AdvanceDelivery,
     ChangePauseRequest,
     ChangePauseRequestedError,
     DeliveryAdmissionReceipt,
+    DeliveryBuilderInvocationSettlement,
     DeliveryChangeIntent,
     DeliveryChangeIntentKind,
     DeliveryCheckpointTrigger,
@@ -48,6 +53,7 @@ from owlbear_delivery import (
     FinalizerSettlementReceipt,
     MarkChangePullRequestReady,
     PortfolioApplicationError,
+    PublishDeliveryPlan,
 )
 from owlbear_delivery.application_publication import _direct_operation
 from owlbear_delivery.application_support import _checkpoint_operation_id
@@ -122,15 +128,15 @@ def _paused(application, change_id: str = "change-a") -> bool:
     return runtime.change_deferral() is not None and application._coordinator.pause_request(change_id) is None
 
 
-def _builder_submission(application, launch) -> DeliveryResultSubmission:
+def _builder_submission(application, launch, result_id: str = "pause-builder-result") -> DeliveryResultSubmission:
     runtime = application._runtimes["change-a"]
-    _git(launch.worktree_path, "commit", "--allow-empty", "-m", "complete task")
+    _git(launch.worktree_path, "commit", "--allow-empty", "-m", f"complete {result_id}")
     return DeliveryResultSubmission(
         change_id="change-a",
         outcome_id=launch.outcome_id,
         claim_id=launch.claim.claim_id,
         result=_task_result(
-            "pause-builder-result",
+            result_id,
             "change-a",
             runtime.authority_digest,
             runtime.show_binding(launch.outcome_id).tasks[0],
@@ -1157,3 +1163,572 @@ def test_k4_v1_preservation_receipt_verifies_after_migration_and_pause(tmp_path:
     )
 
     assert manager.verify_preservation(change_id, preservation.preservation_id) == preservation
+
+
+# Round-1 repair 1 (K2 submit_result replay, F8/F9): an old result replay never adopts a later pending intent.
+def _acquire_builder_after_engine_actions(application):
+    """Run engine-selected publication actions until the next Builder launch is acquired."""
+    for _attempt in range(4):
+        acquired = application.acquire_change_action(_continuation_request(application))
+        if acquired.launch is not None:
+            return acquired.launch
+        assert acquired.engine_action is not None, acquired
+        _execute_engine(application, acquired.engine_action)
+    pytest.fail("no Builder launch was acquired")
+
+
+def test_f8_old_builder_result_replay_never_publishes_a_later_pending_intent(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(
+        tmp_path, {"change-a": DeliveryStage.IMPLEMENTATION}, include_independent=True
+    )
+    provider, remote = _attach_engine_publication(application, tmp_path)
+    first_launch = application.acquire_change_action(_continuation_request(application)).launch
+    first = _builder_submission(application, first_launch)
+    application.submit_result(first)
+    assert runtimes["change-a"].pending_state_publication() is None
+    first_head = _remote_branch(remote)
+    assert first_head == first.result.completed_commit
+    second_launch = _acquire_builder_after_engine_actions(application)
+    assert second_launch.outcome_id != first_launch.outcome_id
+    second = _builder_submission(application, second_launch, "pause-builder-result-2")
+    with patch.object(application._change_branch_publisher, "publish", side_effect=_Crash), pytest.raises(_Crash):
+        application.submit_result(second)
+    pending = runtimes["change-a"].pending_state_publication()
+    assert pending is not None
+    assert pending.transition_request_digest is not None
+
+    reopened, coordinator, _manager = _reopen_portfolio(tmp_path, state_root, runtimes)
+    _attach_publishers(reopened, tmp_path, provider)
+    _pause_held(reopened)
+    with pytest.raises(ChangePauseRequestedError):
+        reopened.submit_result(first)
+
+    assert _remote_branch(remote) == first_head
+    assert reopened._runtimes["change-a"].pending_state_publication() == pending
+    assert coordinator.pause_request("change-a") is not None
+    reopened.submit_result(second)
+    assert _remote_branch(remote) == second.result.completed_commit
+    assert _paused(reopened)
+
+
+# Round-1 repair 1 (F9): a replay token whose own authority yields no digest permits no state publication.
+def test_f9_replay_token_without_its_own_digest_permits_no_publication(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING})
+    runtime = runtimes["change-a"]
+    runtime.queue_explicit_checkpoint(coordinator.show("change-a").last_reviewed_commit)
+    pending = runtime.pending_state_publication()
+    assert pending is not None
+    assert pending.transition_request_digest is None
+    _pause_held(application)
+
+    with (
+        application._worker_drain_authority(runtime, "OUT-001", "claim-ended"),
+        pytest.raises(ChangePauseRequestedError),
+    ):
+        application._require_publication_drain("change-a", runtime)
+
+    assert runtime.pending_state_publication() == pending
+
+
+# Round-1 repair 2 (K2 release replay, §3.3): a crashed release publishes, acknowledges and converts on replay.
+def test_release_stuck_worker_replay_after_crash_publishes_then_converts(tmp_path: Path) -> None:
+    start = _real_now()
+    now = [_iso(start)]
+    application, runtimes, _coordinator, state_root, _probe = _stall_portfolio(
+        tmp_path, {"change-a": DeliveryStage.PLANNING}, now
+    )
+    provider, remote = _attach_engine_publication(application, tmp_path)
+    _seed_remote_snapshot(application)
+    claim = _acquire_planning_claim(application)
+    now[0] = _iso(start + timedelta(minutes=10))
+    with (
+        patch.object(application._delivery_state_publisher, "publish", side_effect=_Crash),
+        pytest.raises(_Crash),
+    ):
+        application.release_stuck_worker("change-a", "OUT-001", claim.attempt_id, claim.claim_id)
+    assert runtimes["change-a"].active_claims() == ()
+    pending = runtimes["change-a"].pending_state_publication()
+    assert pending is not None
+
+    reopened, coordinator, _manager = _reopen_portfolio(tmp_path, state_root, runtimes, clock=lambda: now[0])
+    _attach_publishers(reopened, tmp_path, provider)
+    _pause_held(reopened)
+    settled = reopened.release_stuck_worker("change-a", "OUT-001", claim.attempt_id, claim.claim_id)
+
+    assert settled.active_claim is None
+    assert reopened._runtimes["change-a"].pending_state_publication() is None
+    assert _git(remote, "for-each-ref", "--format=%(refname)", "refs/heads/owlbear/delivery-state")
+    assert coordinator.pause_request("change-a") is None
+    assert _paused(reopened)
+
+
+# Round-1 repair 3 (K1 single admission path): Pause and Resume have no public entry beside the intent.
+def test_pause_and_resume_admit_only_through_the_change_intent(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path, {"change-a": DeliveryStage.IMPLEMENTATION}, include_independent=True
+    )
+    assert not hasattr(application, "defer_change")
+    assert not hasattr(application, "resume_change")
+    application.acquire_change_action(_continuation_request(application))
+
+    paused = _pause(application)
+
+    assert isinstance(paused.receipt, ChangePauseRequest)
+    assert runtimes["change-a"].change_deferral() is None
+    assert _resume(application).receipt == paused.receipt
+    assert coordinator.pause_request("change-a") is None
+
+
+# Round-1 repair 4 (§1.5, I7): under lock contention the projection offers no new work that acquisition refuses.
+def test_unconverted_request_projects_no_executable_new_work(tmp_path: Path) -> None:
+    application, _runtimes, coordinator, _state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING})
+    assert application.show_work_item_view("change-a", "outcome:OUT-001").card.readiness.executable
+
+    with coordinator.acquisition_lock():
+        assert isinstance(_pause(application).receipt, ChangePauseRequest)
+        readiness = application.show_work_item_view("change-a", "outcome:OUT-001").card.readiness
+        view = application.get_change("change-a")
+
+    assert (readiness.status, readiness.reason_code, readiness.progress) == ("blocked", "change-paused", "paused")
+    assert not readiness.executable
+    assert readiness.action is None
+    assert view.readiness.executable is False
+    assert view.pause_requested is True
+    acquired = application.acquire_change_action(_continuation_request(application))
+    assert acquired.launch is None
+    assert acquired.kind != "acquired"
+    fresh = application.acquire_change_action(_continuation_request(application))
+    assert (fresh.kind, fresh.reason_code, fresh.launch) == ("waiting", "change-paused", None)
+    assert _paused(application)
+
+
+# Round-1 repair 4: with custody held, sibling new work is non-executable; the retained owner keeps its readiness.
+def test_request_under_custody_blocks_sibling_new_work_and_keeps_owner_readiness(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path, {"change-a": DeliveryStage.IMPLEMENTATION}, include_independent=True
+    )
+    launch = application.acquire_change_action(_continuation_request(application)).launch
+    sibling = "OUT-002" if launch.outcome_id == "OUT-001" else "OUT-001"
+    assert application.show_work_item_view("change-a", f"outcome:{sibling}").card.readiness.executable
+
+    assert isinstance(_pause(application).receipt, ChangePauseRequest)
+
+    owner = application.show_work_item_view("change-a", f"outcome:{launch.outcome_id}").card.readiness
+    other = application.show_work_item_view("change-a", f"outcome:{sibling}").card.readiness
+    assert (owner.status, owner.reason_code) == ("running", "active-custody")
+    assert (other.status, other.reason_code, other.executable) == ("blocked", "change-paused", False)
+    acquired = application.acquire_change_action(_continuation_request(application))
+    assert (acquired.kind, acquired.reason_code, acquired.launch) == ("waiting", "change-paused", None)
+
+
+def _pause_with_owner_in_window(application, start_owner):
+    """K8 F1: run Pause with ``start_owner`` interleaved after its Validate and before its Record commit."""
+    coordinator = application._coordinator
+    commit = coordinator._commit
+    started: list[bool] = []
+
+    def interleave(name, participants):
+        if name.startswith("pause-request-") and not started:
+            started.append(True)
+            start_owner()
+        return commit(name, participants)
+
+    with patch.object(coordinator, "_commit", side_effect=interleave):
+        result = _pause(application)
+    assert started
+    return result
+
+
+def _owner_thread(call, results: list[object], errors: list[BaseException]) -> threading.Thread:
+    """Run one production owner call on its own thread so it can hold custody across Pause."""
+
+    def run() -> None:
+        try:
+            results.append(call())
+        except BaseException as exc:  # noqa: BLE001 - surfaced by the assembled test's assertion
+            errors.append(exc)
+
+    return threading.Thread(target=run, daemon=True)
+
+
+def _explicit_checkpoint(tmp_path: Path):
+    application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
+    head = coordinator.show("change-a").last_reviewed_commit
+    _set_checkpoint(
+        runtimes["change-a"],
+        state_root,
+        DeliveryPendingCheckpoint(
+            head=head, triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.EXPLICIT),)
+        ),
+    )
+    _provider, remote = _attach_engine_publication(application, tmp_path)
+    _seed_remote_snapshot(application)
+    return application, runtimes["change-a"], coordinator, head, remote
+
+
+# F1 (engine action): acquired inside Pause's window; Pause retries its original digest; the start is cancelled.
+def test_f1_engine_action_acquired_inside_pause_window_is_cancelled_then_converts(tmp_path: Path) -> None:
+    application, runtime, provider, _state, _head, _state_root = _awaiting_acceptance_fixture(
+        tmp_path, mark_ready=False
+    )
+    actions: list[object] = []
+
+    result = _pause_with_owner_in_window(application, lambda: actions.append(_engine_action(application)))
+
+    assert isinstance(result.receipt, ChangePauseRequest)
+    assert application._coordinator.show("change-a").continuation_action == actions[0]
+    provider.reset_mock()
+    executed = _execute_engine(application, actions[0])
+    assert (executed.kind, executed.reason_code) == ("stale", "readiness-changed")
+    provider.set_pull_request_draft_state.assert_not_called()
+    assert runtime.ready_receipt() is None
+    assert _paused(application)
+
+
+# F1 (Finalizer writer): taken inside Pause's window; the attempt finalizes, releases and converts.
+def test_f1_finalizer_taken_inside_pause_window_drains_then_converts(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
+    attempts: list[object] = []
+
+    result = _pause_with_owner_in_window(
+        application,
+        lambda: attempts.append(
+            application.acquire_change_action(_continuation_request(application)).finalization.attempt
+        ),
+    )
+
+    assert isinstance(result.receipt, ChangePauseRequest)
+    attempt = attempts[0]
+    assert coordinator.show("change-a").writer == attempt.writer
+    receipt = application.finalize_change(
+        "change-a", _finalization_request("change-a", attempt.exact_head, attempt.writer.attempt_id)
+    )
+    assert runtimes["change-a"].finalization() == receipt
+    assert _paused(application)
+
+
+# F1 (standalone publication): a lease reserved inside Pause's window is held; Pause persists before release.
+def test_f1_standalone_lease_reserved_inside_pause_window_drains_then_converts(tmp_path: Path) -> None:
+    application, runtimes, _state_root, _provider, remote = _first_task_checkpoint(tmp_path)
+    runtime = runtimes["change-a"]
+    coordinator = application._coordinator
+    entered, release = threading.Event(), threading.Event()
+    at_reservation, reserve_now = threading.Event(), threading.Event()
+    reserve = coordinator.reserve_publication
+
+    def reserve_then_hold(*args, **kwargs):
+        at_reservation.set()
+        assert reserve_now.wait(60)
+        lease = reserve(*args, **kwargs)
+        entered.set()
+        assert release.wait(60)
+        return lease
+
+    results: list[object] = []
+    errors: list[BaseException] = []
+    owner = _owner_thread(lambda: application.reconcile_change_checkpoint("change-a"), results, errors)
+
+    def reserve_inside_window() -> None:
+        reserve_now.set()
+        assert entered.wait(60)
+
+    with patch.object(coordinator, "reserve_publication", side_effect=reserve_then_hold):
+        owner.start()
+        assert at_reservation.wait(60)
+        result = _pause_with_owner_in_window(application, reserve_inside_window)
+        assert isinstance(result.receipt, ChangePauseRequest)
+        assert coordinator.show("change-a").publication_lease is not None
+        assert runtime.change_deferral() is None
+        release.set()
+        owner.join(120)
+
+    assert errors == []
+    assert results[0].reconciled
+    assert coordinator.show("change-a").publication_lease is None
+    assert _paused(application)
+    _assert_snapshot_heads_agree(application, remote)
+
+
+# F1 (direct mark-ready): its marker commits inside Pause's window and it holds inside the provider call.
+def test_f1_direct_mark_ready_started_inside_pause_window_drains_then_converts(tmp_path: Path) -> None:
+    application, runtime, provider, _state, exact_head, _state_root = _awaiting_acceptance_fixture(
+        tmp_path, mark_ready=False
+    )
+    request = MarkChangePullRequestReady(
+        change_id="change-a",
+        operation_id="ready-in-window",
+        finalization_id=runtime.finalization().finalization_id,
+        exact_head=exact_head,
+    )
+    direct = _direct_operation("change-a", "mark-ready", request.operation_id, request.finalization_id, exact_head)
+    entered, release = threading.Event(), threading.Event()
+    draft = provider.set_pull_request_draft_state.side_effect
+
+    def hold_inside_provider(draft_request):
+        entered.set()
+        assert release.wait(60)
+        return draft(draft_request)
+
+    provider.set_pull_request_draft_state.side_effect = hold_inside_provider
+    results: list[object] = []
+    errors: list[BaseException] = []
+    owner = _owner_thread(lambda: application.mark_change_ready("change-a", request), results, errors)
+
+    def start_owner() -> None:
+        owner.start()
+        assert entered.wait(60)
+        assert application._coordinator.direct_operation_state(direct) == "started"
+
+    result = _pause_with_owner_in_window(application, start_owner)
+    assert isinstance(result.receipt, ChangePauseRequest)
+    assert runtime.change_deferral() is None
+    release.set()
+    owner.join(120)
+
+    assert errors == []
+    assert results[0].head_sha == exact_head
+    assert application._coordinator.direct_operation_state(direct) == "finished"
+    assert _paused(application)
+
+
+# F5: Pause lands after _engine_action_preflight and before start_continuation_action.
+def test_f5_pause_between_preflight_and_start_cancels_without_effect(tmp_path: Path) -> None:
+    application, runtime, provider, _state, _head, _state_root = _awaiting_acceptance_fixture(
+        tmp_path, mark_ready=False
+    )
+    action = _engine_action(application)
+    provider.reset_mock()
+    preflight = type(application)._engine_action_preflight
+    recorded: list[object] = []
+
+    def preflight_then_pause(self, retained, owner_runtime):
+        outcome = preflight(self, retained, owner_runtime)
+        assert outcome is None
+        recorded.append(_pause(application).receipt)
+        return outcome
+
+    with patch.object(type(application), "_engine_action_preflight", preflight_then_pause):
+        result = _execute_engine(application, action)
+
+    assert isinstance(recorded[0], ChangePauseRequest)
+    assert (result.kind, result.reason_code) == ("stale", "readiness-changed")
+    assert not application._coordinator.continuation_start_recorded(action)
+    assert application._coordinator.show("change-a").continuation_action.finished_at is not None
+    provider.set_pull_request_draft_state.assert_not_called()
+    assert runtime.ready_receipt() is None
+    assert _paused(application)
+
+
+# F6 exceptional unwind: a bulk reconciliation's push fails under a waiting Pause; failure is recorded first.
+def test_f6_bulk_reconciliation_failure_is_recorded_inside_the_lock_before_conversion(tmp_path: Path) -> None:
+    application, runtime, _coordinator, _head, remote = _explicit_checkpoint(tmp_path)
+    recorded: list[object] = []
+
+    def pause_then_fail(_request):
+        recorded.append(_pause(application).receipt)
+        message = "injected push failure"
+        raise OSError(message)
+
+    with patch.object(application._change_branch_publisher, "publish", side_effect=pause_then_fail):
+        results = application.reconcile_pending_checkpoints()
+
+    assert isinstance(recorded[0], ChangePauseRequest)
+    assert [result.reconciled for result in results] == [False]
+    pending = runtime.checkpoint_publication_state().pending_checkpoint
+    assert pending is not None
+    assert pending.last_error_code is not None
+    assert _remote_branch(remote) is None
+    assert _paused(application)
+
+
+# F6 crash replay (direct mark-ready): crash inside the provider call, restart, Pause, identical replay.
+def test_f6_direct_mark_ready_crashed_at_its_hold_replays_after_restart_then_converts(tmp_path: Path) -> None:
+    application, runtime, provider, _state, exact_head, state_root = _awaiting_acceptance_fixture(
+        tmp_path, mark_ready=False
+    )
+    request = MarkChangePullRequestReady(
+        change_id="change-a",
+        operation_id="ready-crash",
+        finalization_id=runtime.finalization().finalization_id,
+        exact_head=exact_head,
+    )
+    direct = _direct_operation("change-a", "mark-ready", request.operation_id, request.finalization_id, exact_head)
+    draft = provider.set_pull_request_draft_state.side_effect
+    crashed: list[bool] = []
+
+    def crash_once(draft_request):
+        if not crashed:
+            crashed.append(True)
+            raise _Crash
+        return draft(draft_request)
+
+    provider.set_pull_request_draft_state.side_effect = crash_once
+    with pytest.raises(_Crash):
+        application.mark_change_ready("change-a", request)
+    assert application._coordinator.direct_operation_state(direct) == "started"
+
+    reopened, coordinator, _manager = _reopen_portfolio(tmp_path, state_root, {"change-a": runtime})
+    reopened._draft_pull_request_publisher = DraftPullRequestPublisher(
+        provider, repository="example/project", target_branch="main", state_root=tmp_path / "pull-requests"
+    )
+    _pause_held(reopened)
+    ready = reopened.mark_change_ready("change-a", request)
+
+    assert ready.head_sha == exact_head
+    assert coordinator.direct_operation_state(direct) == "finished"
+    assert reopened._runtimes["change-a"].ready_receipt() is not None
+    assert _paused(reopened)
+
+
+# F6 crash replay (direct sync): crash after the merge, before record_target_sync; restart, Pause, replay.
+def test_f6_direct_sync_crashed_before_recording_replays_after_restart_then_converts(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.IMPLEMENTATION})
+    target = _target_remote(application, tmp_path)
+    with patch.object(DeliveryRuntime, "record_target_sync", side_effect=_Crash), pytest.raises(_Crash):
+        application.sync_change_with_target("change-a", target, "sync-crash")
+    direct = _direct_operation("change-a", "sync-target", "sync-crash", target)
+    assert coordinator.direct_operation_state(direct) == "started"
+    assert runtimes["change-a"].target_sync_receipt() is None
+
+    reopened, reopened_coordinator, _manager = _reopen_portfolio(tmp_path, state_root, runtimes)
+    _pause_held(reopened)
+    receipt = reopened.sync_change_with_target("change-a", target, "sync-crash")
+
+    assert reopened._runtimes["change-a"].target_sync_receipt() == receipt
+    assert reopened_coordinator.direct_operation_state(direct) == "finished"
+    assert reopened_coordinator.show("change-a").last_reviewed_commit == receipt.merged_head
+    assert _paused(reopened)
+
+
+# F7 (ready-readback): a retained read-back journal completes with its original evidence under Pause or Resume.
+@pytest.mark.parametrize("ending", ["pause", "resume"])
+def test_f7_ready_readback_recovery_completes_under_pause(tmp_path: Path, ending: str) -> None:
+    application, runtime, provider, _state, _head, _state_root = _awaiting_acceptance_fixture(
+        tmp_path, mark_ready=False
+    )
+    _attach_local_target(application, tmp_path)
+    application._delivery_state_publisher = DeliveryStatePublisher(
+        application._workspace_manager.repository, remote="origin", state_branch="owlbear/delivery-state"
+    )
+    application._publish_delivery_state("change-a", runtime, "baseline-before-ready")
+    host = _host(application)
+    action = _engine_action(application)
+    invoke = application._invoke_engine_owner
+
+    def lose_result(retained):
+        invoke(retained)
+        raise KeyboardInterrupt
+
+    with patch.object(application, "_invoke_engine_owner", side_effect=lose_result), pytest.raises(KeyboardInterrupt):
+        _execute_engine(application, action)
+    intent = application._propose_recovery("change-a")
+    _pause_held(application)
+    if ending == "resume":
+        _resume(application)
+
+    receipt = application._complete_recovery("change-a", intent.recovery_id, host.seal(intent, "closed"))
+
+    assert receipt.owner_effect == "ready-receipt-readback"
+    assert provider.set_pull_request_draft_state.call_count == 1
+    assert application._coordinator.recovery_verification_recorded(intent.recovery_id)
+    if ending == "resume":
+        assert application._coordinator.pause_request("change-a") is None
+        assert runtime.change_deferral() is None
+    else:
+        assert _paused(application)
+
+
+# F8 (Builder settlement replay): crash after the settlement receipt commits, before its publication step.
+def test_f8_builder_settlement_replay_publishes_then_converts(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.IMPLEMENTATION})
+    provider, _remote = _attach_engine_publication(application, tmp_path)
+    _seed_remote_snapshot(application)
+    launch = application.acquire_change_action(_continuation_request(application)).launch
+    claim = launch.claim
+    settlement = DeliveryBuilderInvocationSettlement(
+        change_id="change-a",
+        outcome_id=launch.outcome_id,
+        claim_id=claim.claim_id,
+        attempt_id=claim.attempt_id,
+        task_id=claim.task_id,
+        expected_last_reviewed_commit=coordinator.show("change-a").last_reviewed_commit,
+        disposition="ended-without-result",
+    )
+    hosted = {"host_id": claim.owner_id, "session_id": claim.process_id}
+    with (
+        patch.object(type(application), "_reconcile_retry_results_fail_closed", side_effect=_Crash),
+        pytest.raises(_Crash),
+    ):
+        application.settle_worker_invocation(settlement, **hosted)
+    pending = runtimes["change-a"].pending_state_publication()
+    assert runtimes["change-a"].active_claims() == ()
+
+    reopened, reopened_coordinator, _manager = _reopen_portfolio(tmp_path, state_root, runtimes)
+    _attach_publishers(reopened, tmp_path, provider)
+    _pause_held(reopened)
+    changed = settlement.model_copy(update={"disposition": "completed-timeout"})
+    with pytest.raises((PortfolioApplicationError, RuntimeError)):
+        reopened.settle_worker_invocation(changed, **hosted)
+    assert reopened._runtimes["change-a"].pending_state_publication() == pending
+    assert reopened._runtimes["change-a"].change_deferral() is None
+    apply_settlement = type(reopened)._apply_worker_settlement
+    inside: list[bool] = []
+
+    def settle_inside_replay(self, owner_runtime, envelope):
+        _assert_foreign_starts_refused(reopened_coordinator)
+        inside.append(True)
+        return apply_settlement(self, owner_runtime, envelope)
+
+    with patch.object(type(reopened), "_apply_worker_settlement", settle_inside_replay):
+        reopened.settle_worker_invocation(settlement, **hosted)
+
+    assert inside == [True]
+    assert reopened._runtimes["change-a"].active_claims() == ()
+    assert _paused(reopened)
+
+
+# F8 (Planner advance replay): a successful advance crashed before state publication replays its exact request.
+def test_f8_planner_advance_replay_publishes_then_converts(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING})
+    provider, remote = _attach_engine_publication(application, tmp_path)
+    _seed_remote_snapshot(application)
+    launch = application.acquire_change_action(_continuation_request(application)).launch
+    candidate = application.publish_delivery_plan(
+        "change-a", PublishDeliveryPlan(outcome_id=launch.outcome_id, claim_id=launch.claim.claim_id, tasks=(_task(),))
+    )
+    advance = AdvanceDelivery(
+        action="advance", outcome_id=launch.outcome_id, claim_id=launch.claim.claim_id, output=candidate.output
+    )
+    with (
+        patch.object(application._delivery_state_publisher, "publish", side_effect=_Crash),
+        pytest.raises(_Crash),
+    ):
+        application.transition_delivery("change-a", advance)
+    pending = runtimes["change-a"].pending_state_publication()
+    assert pending is not None
+    assert runtimes["change-a"].active_claims() == ()
+
+    reopened, reopened_coordinator, _manager = _reopen_portfolio(tmp_path, state_root, runtimes)
+    _attach_publishers(reopened, tmp_path, provider)
+    _pause_held(reopened)
+    changed = advance.model_copy(update={"claim_id": "claim-not-this-owner"})
+    with pytest.raises((PortfolioApplicationError, RuntimeError)):
+        reopened.transition_delivery("change-a", changed)
+    assert reopened._runtimes["change-a"].pending_state_publication() == pending
+    publisher = reopened._delivery_state_publisher
+    publish = publisher.publish
+    inside: list[bool] = []
+
+    def publish_inside_replay(**kwargs):
+        if reopened_coordinator.pause_request("change-a") is not None:
+            _assert_foreign_starts_refused(reopened_coordinator)
+            inside.append(True)
+        return publish(**kwargs)
+
+    with patch.object(publisher, "publish", side_effect=publish_inside_replay):
+        reopened.transition_delivery("change-a", advance)
+
+    assert inside == [True]
+    assert reopened._runtimes["change-a"].pending_state_publication() is None
+    assert _git(remote, "for-each-ref", "--format=%(refname)", "refs/heads/owlbear/delivery-state")
+    assert _paused(reopened)

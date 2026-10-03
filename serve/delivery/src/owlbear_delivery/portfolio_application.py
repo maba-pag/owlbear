@@ -7,7 +7,7 @@ import json
 import subprocess
 import time
 import uuid
-from contextlib import suppress
+from contextlib import contextmanager, suppress
 from datetime import UTC, datetime, timedelta
 from threading import Lock
 from typing import TYPE_CHECKING, Literal, Never
@@ -102,6 +102,7 @@ from owlbear_delivery.application_support import (  # noqa: F401
     _ACCEPTANCE_RECONCILIATION_CURSOR_FILE,
     _MAX_ACCEPTANCE_RECONCILIATION_CHANGES,
     _PUBLICATION_OBSERVATION_CACHE_SECONDS,
+    _canonical_model_bytes,
     _checkpoint_operation_id,
     _health_detail,
     _logger,
@@ -187,8 +188,7 @@ from owlbear_delivery.worker_stall import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-    from contextlib import AbstractContextManager
+    from collections.abc import Iterator, Mapping
     from pathlib import Path
 
     from owlbear_delivery.completed_history import (
@@ -205,6 +205,7 @@ if TYPE_CHECKING:
         DesignCheckpointResult,
         VerifiedDesignPackage,
     )
+    from owlbear_delivery.workspace_coordination import DrainAuthority
 
 
 class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _PublicationMixin, _LifecycleMixin, _RecoveryMixin):
@@ -1292,7 +1293,7 @@ class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _Publication
 
     def _admit_pause(self, intent: DeliveryChangeIntent) -> DeliveryChangeIntentResult:
         """§1.11 K1: record or clear a Pause request without any Change lock, then try to convert."""
-        runtime = self._runtime(intent.change_id)
+        runtime = self._pause_runtime(intent.change_id)
         try:
             self._workspace_manager.show(intent.change_id)
         except (OSError, RuntimeError, ValueError) as exc:
@@ -1334,6 +1335,14 @@ class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _Publication
             receipt=receipt,
         )
 
+    def _pause_runtime(self, change_id: str) -> DeliveryRuntime:
+        """K1 Validate reads without the mutation guard, but never admits Pause on an unreconciled runtime."""
+        runtime = self._runtime(change_id)
+        detail = self._runtime_reconciliation_errors.get(change_id)
+        if detail is not None:
+            raise DeliveryRuntimeReconciliationError(change_id, detail)
+        return runtime
+
     def _clear_unconverted_pause(self, intent: DeliveryChangeIntent, current_digest: str) -> DeliveryChangeIntentResult:
         """K1 Resume of a draining request: clear it through its frontier-bound transaction."""
         try:
@@ -1352,25 +1361,56 @@ class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _Publication
             runtime = self._runtime(submission.change_id, for_mutation=True)
             with (
                 locked_roots((self._checkpoint_lock_root(submission.change_id),)),
-                self._worker_drain_authority(runtime, submission.outcome_id, submission.claim_id),
+                self._worker_drain_authority(
+                    runtime,
+                    submission.outcome_id,
+                    submission.claim_id,
+                    replay_digest=self._result_replay_transition_digest(runtime, submission),
+                ),
             ):
                 result = self._submit_result_locked(runtime, submission)
                 self._try_convert_pause_request(submission.change_id, runtime)
                 return result
 
+    @contextmanager
     def _worker_drain_authority(
-        self, runtime: DeliveryRuntime, outcome_id: str, claim_id: str
-    ) -> AbstractContextManager[object]:
-        """K2 claim/settlement owner token: live claim, or a replay bound to its pending publication."""
+        self, runtime: DeliveryRuntime, outcome_id: str, claim_id: str, *, replay_digest: str | None = None
+    ) -> Iterator[DrainAuthority]:
+        """K2 claim/settlement owner token: a live claim, or a replay bound only to its own request digest.
+
+        ``replay_digest`` is derived from the replaying owner's own durable authority, never from the pending
+        intent; without it a replay token permits no state publication.
+        """
         change_id = runtime.contract.change_id
         claim = runtime.show_binding(outcome_id).active_claim
-        pending = runtime.pending_state_publication()
-        bound = (
-            pending.transition_request_digest
-            if (claim is None or claim.claim_id != claim_id) and pending is not None
-            else None
+        live = claim is not None and claim.claim_id == claim_id
+        with self._owner_drain_authority(
+            change_id,
+            f"claim:{claim_id}",
+            bound=None if live else replay_digest,
+            publishes_checkpoint=True,
+        ) as authority:
+            if not live:
+                authority.permits.setdefault("state", set())
+            yield authority
+
+    @staticmethod
+    def _result_replay_transition_digest(runtime: DeliveryRuntime, submission: DeliveryResultSubmission) -> str | None:
+        """K2 ``submit_result`` replay: digest of the internal advance rebuilt from the immutable result receipt."""
+        binding = runtime.show_binding(submission.outcome_id)
+        claim = binding.active_claim
+        if claim is not None and claim.claim_id == submission.claim_id:
+            return None
+        if not any(item == submission.result for item in binding.results):
+            return None
+        receipt = runtime.require_result_replay(submission.outcome_id, submission.claim_id, submission.result)
+        advance = AdvanceDelivery(
+            action="advance",
+            outcome_id=submission.outcome_id,
+            claim_id=submission.claim_id,
+            output=receipt.output,
         )
-        return self._owner_drain_authority(change_id, f"claim:{claim_id}", bound=bound, publishes_checkpoint=True)
+        return hashlib.sha256(_canonical_model_bytes(advance)).hexdigest()
 
     def _submit_result_locked(
         self, runtime: DeliveryRuntime, submission: DeliveryResultSubmission

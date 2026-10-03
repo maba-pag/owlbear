@@ -402,7 +402,12 @@ class _RecoveryMixin:
         runtime = self._runtime(change_id, for_mutation=True)
         with (
             locked_roots((self._checkpoint_lock_root(change_id),)),
-            self._worker_drain_authority(runtime, request.outcome_id, request.claim_id),
+            self._worker_drain_authority(
+                runtime,
+                request.outcome_id,
+                request.claim_id,
+                replay_digest=hashlib.sha256(_canonical_model_bytes(request)).hexdigest(),
+            ),
         ):
             binding = self._transition_delivery_locked(change_id, runtime, request)
             self._try_convert_pause_request(change_id, runtime)
@@ -465,7 +470,12 @@ class _RecoveryMixin:
                 and (host_id != claim.owner_id or session_id != claim.process_id)
             ):
                 self._fail("worker continuation settlement does not match its active host and session binding")
-            with self._worker_drain_authority(runtime, settlement.outcome_id, settlement.claim_id):
+            with self._worker_drain_authority(
+                runtime,
+                settlement.outcome_id,
+                settlement.claim_id,
+                replay_digest=hashlib.sha256(_canonical_model_bytes(settlement)).hexdigest(),
+            ):
                 binding = self._retry_pause_field_conflict(lambda: self._apply_worker_settlement(runtime, settlement))
             self._try_convert_pause_request(change_id, runtime)
             return binding
@@ -533,15 +543,29 @@ class _RecoveryMixin:
                 return released
             replay = runtime.engine_worker_settlement_replay(outcome_id, attempt_id, claim_id, "released-stuck")
             if replay is not None:
-                return replay
+                result, envelope = replay
+                # K2 release replay: finish the receipt's own pending publication before converting.
+                with self._worker_drain_authority(
+                    runtime,
+                    outcome_id,
+                    claim_id,
+                    replay_digest=hashlib.sha256(_canonical_model_bytes(envelope)).hexdigest(),
+                ):
+                    self._apply_worker_settlement(runtime, envelope)
+                self._try_convert_pause_request(change_id, runtime)
+                return result
             claim = runtime.require_active_claim(outcome_id, attempt_id, claim_id).active_claim
             if claim is None or claim.worker_role not in {DeliveryWorkerRole.PLANNER, DeliveryWorkerRole.BUILDER}:
                 self._fail("stuck-worker release supports only an active Planner or Builder claim")
             self._require_quiet_worktree(change_id, claim.started_at)
-            with self._worker_drain_authority(runtime, outcome_id, claim_id):
-                binding = self._apply_worker_settlement(
-                    runtime, self._engine_worker_envelope(runtime, outcome_id, claim, "released-stuck")
-                )
+            envelope = self._engine_worker_envelope(runtime, outcome_id, claim, "released-stuck")
+            with self._worker_drain_authority(
+                runtime,
+                outcome_id,
+                claim_id,
+                replay_digest=hashlib.sha256(_canonical_model_bytes(envelope)).hexdigest(),
+            ):
+                binding = self._apply_worker_settlement(runtime, envelope)
             self._try_convert_pause_request(change_id, runtime)
             return binding
 

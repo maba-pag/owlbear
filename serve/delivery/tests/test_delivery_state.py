@@ -2554,6 +2554,20 @@ def test_repeated_planner_pauses_on_builder_planning_return_survive_default_load
     assert builder_resume.task_id == restart.original_task.task_id
 
 
+def _change_intent(
+    application: PortfolioApplication, change_id: str, kind: DeliveryChangeIntentKind, reason: str | None = None
+) -> object:
+    runtime = application._runtimes[change_id]  # noqa: SLF001
+    return application.set_change_intent(
+        DeliveryChangeIntent(
+            change_id=change_id,
+            kind=kind,
+            expected_frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+            reason=reason,
+        )
+    ).receipt
+
+
 def _assert_change_intent_restarts(
     restart: _BuilderReturnRestartFixture,
     change_id: str,
@@ -2562,10 +2576,10 @@ def _assert_change_intent_restarts(
 ) -> PortfolioApplication:
     application = _healthy_restart(restart)
     expected = application._runtimes[change_id].show_binding("OUT-001")  # noqa: SLF001
-    application.defer_change(change_id, "Wait while the Planner pause is reviewed.")
+    _change_intent(application, change_id, DeliveryChangeIntentKind.DEFER, "Wait while the Planner pause is reviewed.")
     deferred_application = _healthy_restart(restart)
     assert deferred_application.acquire_frontier_work().launch_packages == ()
-    deferred_application.resume_change(change_id)
+    _change_intent(deferred_application, change_id, DeliveryChangeIntentKind.RESUME)
     resumed_application = _healthy_restart(restart)
     assert resumed_application._runtimes[change_id].show_binding("OUT-001") == expected  # noqa: SLF001
     if not abandon:
