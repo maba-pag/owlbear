@@ -4,6 +4,7 @@ import {
   abortWorkItemTargetSync,
   adoptExternalHeadAfterAcceptanceAttention,
   answerWorkItemRequest,
+  type ChangeGroupView,
   type CompletedChangePage,
   type CompletedChangeRecord,
   cleanupAbandonedWorkItemChange,
@@ -813,7 +814,7 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
       mutate(
         "change-defer",
         () => deferWorkItemChange(identity.changeId, reason, currentDetail().item.snapshot_version),
-        "Change deferred.",
+        "Change paused.",
       ),
     resumeChange: () =>
       mutate(
@@ -857,4 +858,39 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
 
 export function workItemIdentity(item: WorkItemCardView): string {
   return `${item.change_id}:${item.item_key}`;
+}
+
+/** Change-level Pause and Resume for portfolio groups, using the existing defer and resume intents. */
+export function useChangeIntent(onChanged: () => void) {
+  const [pending, setPending] = useState<{ changeId: string; action: "change-defer" | "change-resume" } | null>(null);
+  const [failure, setFailure] = useState<{ changeId: string; error: Error } | null>(null);
+
+  async function run(
+    changeId: string,
+    action: "change-defer" | "change-resume",
+    operation: () => Promise<unknown>,
+  ): Promise<Error | null> {
+    setPending({ changeId, action });
+    setFailure(null);
+    try {
+      await operation();
+      onChanged();
+      return null;
+    } catch (caught: unknown) {
+      const error = caught instanceof Error ? caught : new Error("Delivery control failed");
+      setFailure({ changeId, error });
+      return error;
+    } finally {
+      setPending(null);
+    }
+  }
+
+  return {
+    pendingAction: (changeId: string) => (pending?.changeId === changeId ? pending.action : null),
+    actionError: (changeId: string) => (failure?.changeId === changeId ? failure.error : null),
+    pause: (group: ChangeGroupView, reason: string) =>
+      run(group.change_id, "change-defer", () => deferWorkItemChange(group.change_id, reason, group.snapshot_version)),
+    resume: (group: ChangeGroupView) =>
+      run(group.change_id, "change-resume", () => resumeWorkItemChange(group.change_id, group.snapshot_version)),
+  };
 }
