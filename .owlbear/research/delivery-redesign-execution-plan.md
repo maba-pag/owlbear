@@ -600,7 +600,7 @@ every new item exactly one lane.
 | N01-A | merged | #344 (code head `693b6dc3b`; Sol `implementation-sound`; LC load form pass) |
 | N01-B | — | — |
 | N01-C | — | — |
-| N02-P | — | — |
+| N02-P | merged | #345 (plan gate `plan-sound`, round 4; amends §1.3, D9: confirmation pending; U1/U2 pending before N02-D) |
 | N02-A | — | — |
 | N02-B | — | — |
 | N02-C | — | — |

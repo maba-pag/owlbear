@@ -3,8 +3,9 @@
 > **Package:** N02 of the [execution plan](delivery-redesign-execution-plan.md#n02--controller-pinning-versioned-state-and-migration-core).
 > **Planned on:** `origin/dev` `42144f9dc` (N00-C merged; Python 3.14.8; uv-locked Pydantic 2.13).
 > Live controller observed read-only: main checkout on `delivery-live` at `881b500fe` (D03).
-> **Status:** plan gate `plan-sound` in round 4 of fresh GPT-6.1 Sol challenges (2026-10-03). Awaiting the
-> user's approval of D9 (execution plan §1.1) before merge; U1 and U2 are pending until N02-D.
+> **Status:** approved: plan gate `plan-sound` in round 4 of fresh GPT-6.1 Sol challenges (2026-10-03).
+> D9 merged under the user's overnight authorization of 2026-10-03 ("do whatever is necessary to keep
+> work going … merging"); the user may reverse it. U1 and U2 are pending until N02-D.
 > Product code is unchanged by this phase.
 
 ## 1. Contract
@@ -614,7 +615,7 @@ reject in lax mode too; they are the same deliberate rejections as in run 1. No 
 
 | Phase | PR | Exact head | Proof | Challenges | Status |
 | --- | --- | --- | --- | --- | --- |
-| N02-P | — | — | Probes P1–P8 | Sol plan round 1: revision-required (findings 1–8) → revised; Sol round 2: revision-required (abort contract, rollback vs downgrade oracle, §1.3 delta) → revised; amends execution plan §1.3 (D9); Sol round 3: revision-required (D7 private-ref key) → revised; Sol round 4: `plan-sound` | awaiting user approval of D9 |
+| N02-P | — | — | Probes P1–P8 | Sol plan round 1: revision-required (findings 1–8) → revised; Sol round 2: revision-required (abort contract, rollback vs downgrade oracle, §1.3 delta) → revised; amends execution plan §1.3 (D9); Sol round 3: revision-required (D7 private-ref key) → revised; Sol round 4: `plan-sound` | approved (D9 under overnight authorization; explicit confirmation pending) |
 | N02-A | — | — | — | — | — |
 | N02-B | — | — | — | — | — |
 | N02-C | — | — | — | — | — |
