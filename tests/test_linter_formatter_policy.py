@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import re
 import shutil
@@ -675,3 +676,22 @@ def test_frontend_typecheck_trigger_covers_project_inputs() -> None:
 
     for path, expected in _P06_SCOPE_SAMPLES:
         assert bool(typecheck_pattern.search(path)) is expected, path
+
+
+def test_scripts_run_outside_the_pinned_python_keep_python_312_syntax() -> None:
+    workflow_scripts = {
+        match
+        for workflow in (_ROOT / ".github" / "workflows").glob("*.yml")
+        for match in re.findall(r"python3 (?:\.\./)*([\w./-]+\.py)", workflow.read_text(encoding="utf-8"))
+    }
+    hooks = {
+        path.relative_to(_ROOT).as_posix()
+        for pattern in (".owlbear/hooks/*.py", "seed/.owlbear/hooks/*.py")
+        for path in _ROOT.glob(pattern)
+    }
+    assert workflow_scripts
+    assert hooks
+
+    for relative in sorted(workflow_scripts | hooks):
+        source = (_ROOT / relative).read_text(encoding="utf-8")
+        ast.parse(source, filename=relative, feature_version=(3, 12))
