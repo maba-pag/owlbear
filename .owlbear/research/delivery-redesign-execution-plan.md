@@ -626,7 +626,7 @@ every new item exactly one lane.
 | N04-B | — | — |
 | N04-C | — | — |
 | N04-D | — | — |
-| N05-P | — | — |
+| N05-P | merged | #353 (plan gate `plan-sound`, round 12; amendments confirmation pending; U1, U3, U4 before N05-B; U2 before A-R) |
 | N05-A | — | — |
 | N05-B | — | — |
 | N05-C | — | — |
