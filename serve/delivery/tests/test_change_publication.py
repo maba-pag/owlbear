@@ -443,10 +443,78 @@ def test_target_sync_rejects_a_private_head_that_differs_from_the_expected_targe
         )
 
     assert observed == {"private": advanced, "shared": initial}
-    assert _head(repository, "refs/remotes/origin/main") == advanced
+    assert _head(repository, "refs/remotes/origin/main") == initial
+    assert manager.observed_target_head() == advanced
     assert _private_target_refs(repository) == {}
     assert coordinator.show("sync-stale-private") == before
     assert _head(worktree) == reviewed
+
+    receipt = manager.sync_with_target(
+        SyncChangeWithTarget(change_id="sync-stale-private", expected_target=advanced, operation_id="sync-stale-2")
+    )
+
+    assert receipt.target_head == advanced
+    assert _head(repository, "refs/remotes/origin/main") == advanced
+    assert manager.observed_target_head() == advanced
+    assert _target_observation_refs(repository) == {}
+
+
+def _target_observation_refs(repository: Path) -> dict[str, str]:
+    output = _git(
+        repository, "for-each-ref", "--format=%(refname) %(objectname)", "refs/owlbear/target-observation"
+    ).stdout
+    return dict(line.split(" ", 1) for line in output.splitlines())
+
+
+def test_target_observation_yields_to_a_later_shared_ref_move(tmp_path: Path) -> None:
+    repository, remote, initial = _repository(tmp_path)
+    _coordinator, manager = _change_workspace(tmp_path, repository)
+    _reviewed_change(manager, "sync-observation")
+    advanced = _advance_remote_target(tmp_path, remote)
+    with pytest.raises(ChangeTargetSyncStaleError):
+        manager.sync_with_target(
+            SyncChangeWithTarget(change_id="sync-observation", expected_target=initial, operation_id="sync-obs-1")
+        )
+    assert manager.observed_target_head() == advanced
+
+    operator_head = _advance_remote_target(
+        tmp_path, remote, product="operator\n", repository_name="operator-repository"
+    )
+    _git(repository, "fetch", "origin", "+refs/heads/main:refs/remotes/origin/main")
+
+    assert manager.observed_target_head() == operator_head
+
+
+def test_exact_sync_after_a_remote_rewind_rewinds_the_engine_target(tmp_path: Path) -> None:
+    repository, remote, initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    worktree, _reviewed = _reviewed_change(manager, "sync-rewind")
+    abandoned = _advance_remote_target(tmp_path, remote)
+    _git(repository, "fetch", "origin", "+refs/heads/main:refs/remotes/origin/main")
+    _git(remote, "update-ref", "refs/heads/main", initial)
+    replacement = _advance_remote_target(
+        tmp_path, remote, product="reviewed\n", repository_name="replacement-repository"
+    )
+    assert replacement != abandoned
+    assert manager.observed_target_head() == abandoned
+
+    with pytest.raises(ChangeTargetSyncStaleError):
+        manager.sync_with_target(
+            SyncChangeWithTarget(change_id="sync-rewind", expected_target=abandoned, operation_id="sync-rewind-1")
+        )
+    assert _head(repository, "refs/remotes/origin/main") == abandoned
+    assert manager.observed_target_head() == replacement
+
+    receipt = manager.sync_with_target(
+        SyncChangeWithTarget(change_id="sync-rewind", expected_target=replacement, operation_id="sync-rewind-2")
+    )
+
+    assert receipt.target_head == replacement
+    assert _head(worktree) == receipt.merged_head
+    assert coordinator.show("sync-rewind").target_head == replacement
+    assert _head(repository, "refs/remotes/origin/main") == replacement
+    assert manager.observed_target_head() == replacement
+    assert _target_observation_refs(repository) == {}
 
 
 def test_stale_shared_ref_cas_keeps_the_concurrent_value_and_an_exact_receipt(tmp_path: Path) -> None:

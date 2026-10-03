@@ -165,9 +165,18 @@ class ChangeWorkspaceManager(_WorktreeStateMixin, _PreservationMixin, _SnapshotM
         return f"refs/remotes/{self._remote}/{self._integration_target}"
 
     def observed_target_head(self) -> str:
-        """Read the current engine target ref without fetching or changing it."""
+        """Read the engine target without fetching or changing it.
+
+        A stale target sync records the newer remote head it fetched; while the shared remote-tracking ref
+        still holds the value that observation superseded, the engine selects the observed head.
+        """
         self._require_preservation_environment()
-        return self._resolve(self._target_ref())
+        shared = self._resolve(self._target_ref())
+        head_ref, base_ref = self._target_observation_refs()
+        observation = self._resolve(head_ref, missing_ok=True)
+        if observation is not None and self._resolve(base_ref, missing_ok=True) == shared:
+            return observation
+        return shared
 
     def prepare_runtime_custody_guard(
         self,

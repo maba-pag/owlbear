@@ -5,8 +5,10 @@ from __future__ import annotations
 import contextlib
 import os
 import re
+import shlex
 import signal
 import subprocess
+from pathlib import PurePath
 from typing import TYPE_CHECKING, Literal
 
 from owlbear_delivery.git_executable import resolve_git_executable
@@ -21,11 +23,13 @@ WriteReadback = Literal["applied", "not-applied", "conflict"]
 READ_TIMEOUT_SECONDS = 120.0
 WRITE_TIMEOUT_SECONDS = 120.0
 REAP_TIMEOUT_SECONDS = 5.0
+CONFIG_TIMEOUT_SECONDS = 10.0
 _LS_REMOTE_MISSING = 2
 _LS_REMOTE_FIELDS = 2
 _COMMIT_PATTERN = re.compile(r"[0-9a-f]{40}")
 _REPOSITORY_VARIABLES = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE")
 _BATCH_SSH_COMMAND = "ssh -o BatchMode=yes"
+_BATCH_SSH_OPTION = " -o BatchMode=yes"
 
 
 class RemoteGitError(RuntimeError):
@@ -68,8 +72,18 @@ class RemoteGitWriteUnknown(RemoteGitError):  # noqa: N818 - interface name fixe
         self.timed_out = timed_out
 
 
-def remote_git_environment(base: Mapping[str, str] | None = None) -> dict[str, str]:
-    """Return an environment in which Git and its transports can never prompt."""
+def remote_git_environment(
+    base: Mapping[str, str] | None = None,
+    *,
+    configured_ssh_command: str | None = None,
+) -> dict[str, str]:
+    """Return an environment in which Git and its transports can never prompt.
+
+    Git prefers ``GIT_SSH_COMMAND`` to ``core.sshCommand`` (``configured_ssh_command``) to ``GIT_SSH``, and
+    the user's choice keeps its identity, port and proxy options. Only a configured command whose program
+    is ``ssh`` also gets ``BatchMode=yes``; an unknown wrapper's arguments are left alone. Every transport
+    still runs without a controlling terminal (``run_remote_git``) and without askpass, so none can prompt.
+    """
     environment = dict(os.environ if base is None else base)
     for name in _REPOSITORY_VARIABLES:
         environment.pop(name, None)
@@ -83,9 +97,45 @@ def remote_git_environment(base: Mapping[str, str] | None = None) -> dict[str, s
             "SSH_ASKPASS_REQUIRE": "never",
         }
     )
-    if "GIT_SSH_COMMAND" not in environment and "GIT_SSH" not in environment:
+    if "GIT_SSH_COMMAND" in environment:
+        return environment
+    if configured_ssh_command is not None:
+        if _runs_ssh(configured_ssh_command):
+            environment["GIT_SSH_COMMAND"] = configured_ssh_command + _BATCH_SSH_OPTION
+        return environment
+    if "GIT_SSH" not in environment:
         environment["GIT_SSH_COMMAND"] = _BATCH_SSH_COMMAND
     return environment
+
+
+def _runs_ssh(command: str) -> bool:
+    try:
+        words = shlex.split(command)
+    except ValueError:
+        return False
+    return bool(words) and PurePath(words[0]).name == "ssh"
+
+
+def _configured_ssh_command(repository: Path, base: Mapping[str, str]) -> str | None:
+    """Read ``core.sshCommand`` from every config scope Git would apply to this repository."""
+    environment = {name: value for name, value in base.items() if name not in _REPOSITORY_VARIABLES}
+    try:
+        result = subprocess.run(  # noqa: S603 - fixed Git executable and code-owned argument vector.
+            (resolve_git_executable(), "-C", str(repository), "config", "--get", "core.sshCommand"),
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            env=environment,
+            timeout=CONFIG_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        error = RemoteGitFailed("Git SSH configuration could not be read", retry_safe=True)
+        raise error from exc
+    except OSError as exc:
+        error = RemoteGitFailed("Git is unavailable for remote access", retry_safe=False)
+        raise error from exc
+    command = result.stdout.decode(errors="replace").strip() if result.returncode == 0 else ""
+    return command or None
 
 
 def run_remote_git(
@@ -102,6 +152,8 @@ def run_remote_git(
     a timeout or failure raises ``RemoteGitWriteUnknown`` so the caller reads the remote back first.
     """
     bound = timeout if timeout is not None else (READ_TIMEOUT_SECONDS if kind == "read" else WRITE_TIMEOUT_SECONDS)
+    base = os.environ if environment is None else environment
+    configured = None if "GIT_SSH_COMMAND" in base else _configured_ssh_command(repository, base)
     command = (resolve_git_executable(), "-C", str(repository), *arguments)
     try:
         process = subprocess.Popen(  # noqa: S603 - fixed Git executable and code-owned argument vectors.
@@ -109,7 +161,7 @@ def run_remote_git(
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            env=remote_git_environment(environment),
+            env=remote_git_environment(base, configured_ssh_command=configured),
             start_new_session=True,
         )
     except OSError as exc:

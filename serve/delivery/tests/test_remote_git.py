@@ -100,6 +100,57 @@ def test_environment_keeps_a_user_ssh_command(variable: str) -> None:
     assert environment.get("GIT_SSH_COMMAND", "custom-ssh") == "custom-ssh"
 
 
+@pytest.mark.parametrize(
+    ("base", "configured", "expected"),
+    [
+        ({}, "/opt/bin/ssh -i key -p 2222", "/opt/bin/ssh -i key -p 2222 -o BatchMode=yes"),
+        ({"GIT_SSH": "custom-ssh"}, "ssh -F config", "ssh -F config -o BatchMode=yes"),
+        ({}, "corp-ssh-wrapper --profile ci", None),
+        ({"GIT_SSH_COMMAND": "user-ssh"}, "ssh -i key", "user-ssh"),
+    ],
+)
+def test_environment_follows_git_ssh_command_precedence(
+    base: dict[str, str], configured: str, expected: str | None
+) -> None:
+    environment = remote_git_environment(base, configured_ssh_command=configured)
+
+    assert environment.get("GIT_SSH_COMMAND") == expected
+
+
+def _ssh_isolated_environment(tmp_path: Path) -> dict[str, str]:
+    environment = {key: value for key, value in os.environ.items() if key not in {"GIT_SSH", "GIT_SSH_COMMAND"}}
+    global_config = tmp_path / "global.gitconfig"
+    global_config.touch()
+    return {**environment, "GIT_CONFIG_GLOBAL": str(global_config), "GIT_CONFIG_NOSYSTEM": "1"}
+
+
+@pytest.mark.parametrize("program", ["ssh", "ssh-wrapper"])
+def test_configured_ssh_command_keeps_its_options_and_never_prompts(tmp_path: Path, program: str) -> None:
+    repository, _bare, _base = _repository(tmp_path)
+    bin_directory = tmp_path / "bin"
+    bin_directory.mkdir()
+    record = tmp_path / "ssh.log"
+    tty_probe = 'if ( : < /dev/tty ) 2>/dev/null; then echo HAS_TTY >> "{record}"; fi\nexit 255\n'
+    command = _recording_script(bin_directory / program, record, tty_probe.format(record=record))
+    _git(repository, "config", "core.sshCommand", f"{command} -i {tmp_path / 'id_ci'} -o ProxyCommand=none")
+    _git(repository, "remote", "set-url", "origin", "ssh://git@example.invalid/repo.git")
+
+    started = time.monotonic()
+    result = run_remote_git(
+        repository, ("ls-remote", "origin"), kind="read", timeout=20, environment=_ssh_isolated_environment(tmp_path)
+    )
+    elapsed = time.monotonic() - started
+    arguments = record.read_text(encoding="utf-8").splitlines()
+
+    assert result.returncode != 0
+    assert elapsed < _SLACK
+    assert str(tmp_path / "id_ci") in arguments
+    assert "ProxyCommand=none" in arguments
+    assert "example.invalid" in " ".join(arguments)
+    assert ("BatchMode=yes" in arguments) is (program == "ssh")
+    assert "HAS_TTY" not in arguments
+
+
 def test_hung_read_raises_typed_timeout_within_bound_and_kills_the_transport(
     tmp_path: Path,
     ext_remote: Callable[[Path], Any],
@@ -249,7 +300,7 @@ def test_ssh_remote_runs_in_batch_mode_unless_the_user_chose_a_command(tmp_path:
     record = tmp_path / "ssh.log"
     fake_ssh = _recording_script(bin_directory / "ssh", record, "exit 255\n")
     _git(repository, "remote", "set-url", "origin", "ssh://git@example.invalid/repo.git")
-    environment = {key: value for key, value in os.environ.items() if key not in {"GIT_SSH", "GIT_SSH_COMMAND"}}
+    environment = _ssh_isolated_environment(tmp_path)
     environment["PATH"] = f"{bin_directory}{os.pathsep}{environment.get('PATH', '')}"
 
     default = run_remote_git(repository, ("ls-remote", "origin"), kind="read", timeout=20, environment=environment)

@@ -47,6 +47,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 _TARGET_SYNC_REF_PREFIX = "refs/owlbear/target-sync/"
+_TARGET_OBSERVATION_REF_PREFIX = "refs/owlbear/target-observation/"
 _ZERO_OID = "0" * 40
 
 
@@ -340,10 +341,8 @@ class _TargetSyncMixin:
         fetched_head, private_ref = self._fetch_target(source_ref, request)
         try:
             if fetched_head != request.expected_target:
-                # The engine observes the next target only through the shared ref, so a stale fetch still
-                # fast-forwards it, but only by the locked CAS.
-                with locked_roots((self._coordinator.runtime_root / "coordination" / "target-sync-lock",)):
-                    self._advance_shared_target_ref(target_ref, shared_before, fetched_head)
+                if shared_before is not None:
+                    self._record_target_observation(shared_before, fetched_head)
                 message = "target changed while it was fetched"
                 raise ChangeTargetSyncStaleError(message)
             return self._merge_fetched_target(request, before_head_change, fetched_head, (target_ref, shared_before))
@@ -982,13 +981,34 @@ class _TargetSyncMixin:
             _workspace_failure("fetched private target-sync ref is unavailable")
         return fetched_head, private_ref
 
+    def _target_observation_refs(self) -> tuple[str, str]:
+        name = self._target_ref().removeprefix("refs/remotes/")
+        return f"{_TARGET_OBSERVATION_REF_PREFIX}head/{name}", f"{_TARGET_OBSERVATION_REF_PREFIX}base/{name}"
+
+    def _record_target_observation(self, shared: str, fetched_head: str) -> None:
+        """Record a newer remote head for the engine while the shared remote-tracking ref stays unchanged.
+
+        The observation applies only while the shared ref still holds ``shared``, so any later move of
+        the shared ref, including an operator fetch, supersedes it.
+        """
+        head_ref, base_ref = self._target_observation_refs()
+        transaction = f"update {head_ref} {fetched_head}\nupdate {base_ref} {shared}\n"
+        self._git("update-ref", "--stdin", input_bytes=transaction.encode())
+
     def _advance_shared_target_ref(self, target_ref: str, observed: str | None, target_head: str) -> None:
-        """Fast-forward the shared remote-tracking ref only if nobody moved it since it was observed."""
-        if observed == target_head:
-            return
-        if observed is not None and not self._is_ancestor(observed, target_head, cwd=self._repository):
-            return
-        self._run_git("update-ref", target_ref, target_head, observed or _ZERO_OID, check=False)
+        """Move the shared remote-tracking ref to the exact fetched head unless it moved since it was observed.
+
+        The CAS ignores ancestry, so an exact sync after a remote rewind also rewinds the engine target.
+        """
+        if observed != target_head:
+            self._run_git("update-ref", target_ref, target_head, observed or _ZERO_OID, check=False)
+        head_ref, base_ref = self._target_observation_refs()
+        self._run_git(
+            "update-ref",
+            "--stdin",
+            input_bytes=f"delete {head_ref} {target_head}\ndelete {base_ref}\n".encode(),
+            check=False,
+        )
 
     def _unmerged_paths(self, worktree: Path) -> tuple[str, ...]:
         result = self._run_git(
