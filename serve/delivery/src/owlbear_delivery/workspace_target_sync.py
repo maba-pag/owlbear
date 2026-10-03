@@ -6,7 +6,7 @@ import hashlib
 import os
 from collections.abc import Callable
 from itertools import pairwise
-from typing import TYPE_CHECKING, Literal, Never
+from typing import TYPE_CHECKING, Literal, NamedTuple, Never
 
 from owlbear_delivery.remote_git import run_remote_git
 from owlbear_delivery.storage_io import locked_roots
@@ -43,13 +43,21 @@ from owlbear_delivery.workspace_models import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping
+    from contextlib import AbstractContextManager
     from pathlib import Path
 
 _TARGET_SYNC_REF_PREFIX = "refs/owlbear/target-sync/"
 _TARGET_OBSERVATION_REF_PREFIX = "refs/owlbear/target-observation/"
-_TARGET_OBSERVATION_MARKER = "owlbear: target observation "
 _ZERO_OID = "0" * 40
+
+
+class _TargetFetchStart(NamedTuple):
+    """Shared target ref value and target observations read before one target fetch began."""
+
+    target_ref: str
+    shared: str | None
+    observations: Mapping[str, str]
 
 
 class _TargetSyncMixin:
@@ -329,7 +337,8 @@ class _TargetSyncMixin:
         """Fetch one exact target head and merge it only in the managed Change worktree.
 
         The fetch runs outside every lock into a private per-operation ref, so an unreachable remote
-        cannot stall other Changes; the locks cover only the local merge, receipt and shared-ref CAS.
+        cannot stall other Changes; the locks cover only the local merge, receipt, shared-ref CAS and
+        target observation writes.
         """
         with self._coordinator.publication_lock(request.change_id):
             coordination = self._coordinator.show(request.change_id)
@@ -338,27 +347,29 @@ class _TargetSyncMixin:
                 return previous_receipt
             self._require_target_sync_start(request, coordination)
         source_ref, target_ref, _target_branch = self._target_refs()
-        shared_before = self._resolve(target_ref, missing_ok=True)
+        start = _TargetFetchStart(target_ref, self._resolve(target_ref, missing_ok=True), self._target_observations())
         fetched_head, private_ref = self._fetch_target(source_ref, request)
         try:
             if fetched_head != request.expected_target:
-                if shared_before is not None:
-                    self._record_target_observation(shared_before, fetched_head)
+                self._record_target_observation(start, fetched_head)
                 message = "target changed while it was fetched"
                 raise ChangeTargetSyncStaleError(message)
-            return self._merge_fetched_target(request, before_head_change, fetched_head, (target_ref, shared_before))
+            return self._merge_fetched_target(request, before_head_change, fetched_head, start)
         finally:
             self._run_git("update-ref", "-d", private_ref, fetched_head, check=False)
+
+    def _target_sync_lock(self) -> AbstractContextManager[None]:
+        return locked_roots((self._coordinator.runtime_root / "coordination" / "target-sync-lock",))
 
     def _merge_fetched_target(
         self,
         request: SyncChangeWithTarget,
         before_head_change: Callable[[], None] | None,
         target_head: str,
-        shared_target: tuple[str, str | None],
+        start: _TargetFetchStart,
     ) -> ChangeTargetSyncReceipt:
         with (
-            locked_roots((self._coordinator.runtime_root / "coordination" / "target-sync-lock",)),
+            self._target_sync_lock(),
             self._coordinator.publication_lock(request.change_id) as lock,
         ):
             coordination = self._coordinator.show(request.change_id)
@@ -393,7 +404,7 @@ class _TargetSyncMixin:
                 cwd=coordination.worktree_path,
             ):
                 _workspace_failure("target synchronization requires a clean Change worktree")
-            self._advance_shared_target_ref(*shared_target, target_head)
+            self._advance_shared_target_ref(start, target_head)
             branch_head = self._resolve(coordination.branch)
             self._require_worktree(
                 request.change_id,
@@ -982,54 +993,72 @@ class _TargetSyncMixin:
             _workspace_failure("fetched private target-sync ref is unavailable")
         return fetched_head, private_ref
 
-    def _target_observation_ref(self) -> str:
-        return f"{_TARGET_OBSERVATION_REF_PREFIX}{self._target_ref().removeprefix('refs/remotes/')}"
+    def _target_observation_ref(self, base: str) -> str:
+        # Hashing the target ref keeps the per-base refs free of directory/file conflicts.
+        key = hashlib.sha256(self._target_ref().encode()).hexdigest()
+        return f"{_TARGET_OBSERVATION_REF_PREFIX}{key}/{base}"
 
-    def _record_target_observation(self, shared: str, fetched_head: str) -> None:
-        """Record a newer remote head for the engine while the shared remote-tracking ref keeps its value.
+    def _target_observations(self) -> dict[str, str]:
+        prefix = self._target_observation_ref("").removesuffix("/")
+        listing = self._git("for-each-ref", "--format=%(refname) %(objectname)", prefix)
+        return dict(line.split(" ", 1) for line in listing.splitlines())
 
-        The observation is a private head ref plus a marker entry appended to the shared ref's reflog
-        (``git reflog write``, value unchanged). Once that reflog exists Git appends an entry for every
-        later move of the shared ref, whatever ``core.logAllRefUpdates`` says, so the marker stops being
-        the newest entry at the first move and never becomes newest again: an operator move from A to C
-        and back to A supersedes the observation for good, across restarts. A failed step (including a Git
-        without ``reflog write``) never validates the new head, and the engine then keeps the shared ref.
+    def _update_refs(self, commands: list[str]) -> bool:
+        """Apply ``update-ref --stdin`` commands as one all-or-nothing transaction."""
+        transaction = "".join(f"{command}\n" for command in commands).encode()
+        return self._run_git("update-ref", "--stdin", input_bytes=transaction, check=False).returncode == 0
+
+    def _record_target_observation(self, start: _TargetFetchStart, fetched_head: str) -> None:
+        """Record what a stale fetch saw for the engine; the shared remote-tracking ref keeps its value.
+
+        The observation is the ref ``<prefix>/<hash(target ref)>/<shared value at fetch start>`` naming the
+        fetched head; it applies only while the shared ref holds that value. Under the target-sync lock one
+        transaction verifies the shared ref and replaces exactly the observations read at fetch start. An
+        observation or shared-ref write after this fetch began wins (first writer among overlapping
+        fetches); a failure with no such write raises instead of losing the newer head.
         """
-        target_ref = self._target_ref()
-        if self._run_git("update-ref", self._target_observation_ref(), fetched_head, check=False).returncode:
+        if start.shared is None:
             return
-        marker = f"{_TARGET_OBSERVATION_MARKER}{fetched_head}"
-        self._run_git("reflog", "write", target_ref, shared, shared, marker, check=False)
+        with self._target_sync_lock():
+            if (
+                self._resolve(start.target_ref, missing_ok=True) != start.shared
+                or self._target_observations() != start.observations
+            ):
+                return
+            name = self._target_observation_ref(start.shared)
+            commands = [f"verify {start.target_ref} {start.shared}"]
+            commands += [f"delete {ref} {oid}" for ref, oid in start.observations.items() if ref != name]
+            if fetched_head != start.shared:
+                commands.append(f"update {name} {fetched_head} {start.observations.get(name, _ZERO_OID)}")
+            elif name in start.observations:
+                commands.append(f"delete {name} {start.observations[name]}")
+            if self._update_refs(commands) or self._resolve(start.target_ref, missing_ok=True) != start.shared:
+                return
+            _workspace_failure("newer target head could not be recorded")
 
-    def _valid_target_observation(self, shared: str) -> str | None:
-        """Return the recorded observation only while its marker is the newest entry for ``shared``."""
-        observation = self._resolve(self._target_observation_ref(), missing_ok=True)
-        if observation is None:
-            return None
-        newest = self._run_git(
-            "log",
-            "--walk-reflogs",
-            "--max-count=1",
-            "--no-show-signature",
-            "--format=%H%x00%gs",
-            self._target_ref(),
-            "--",
-            check=False,
-        )
-        expected = f"{shared}\0{_TARGET_OBSERVATION_MARKER}{observation}"
-        if newest.returncode == 0 and newest.stdout.decode(errors="replace").rstrip("\n") == expected:
-            return observation
-        return None
-
-    def _advance_shared_target_ref(self, target_ref: str, observed: str | None, target_head: str) -> None:
-        """Move the shared remote-tracking ref to the exact fetched head unless it moved since it was observed.
+    def _advance_shared_target_ref(self, start: _TargetFetchStart, target_head: str) -> None:
+        """Move the shared remote-tracking ref to the exact fetched head unless it moved since the fetch began.
 
         The CAS ignores ancestry, so an exact sync after a remote rewind also rewinds the engine target.
+        Observations read at fetch start are older than this exact result and are deleted; one recorded
+        after the fetch began moves with the shared ref, so this sync never discards it. Runs under the
+        target-sync lock.
         """
-        if observed != target_head:
-            self._run_git("update-ref", target_ref, target_head, observed or _ZERO_OID, check=False)
-        # The exact fetch is newer than any recorded observation, even when the shared ref did not move.
-        self._run_git("update-ref", "-d", self._target_observation_ref(), check=False)
+        current = self._target_observations()
+        if start.shared != target_head:
+            commands = [f"update {start.target_ref} {target_head} {start.shared or _ZERO_OID}"]
+            if start.shared is not None:
+                carried = self._target_observation_ref(start.shared)
+                later = current.get(carried)
+                moved = self._target_observation_ref(target_head)
+                if later is not None and start.observations.get(carried) != later and moved not in current:
+                    commands.append(f"delete {carried} {later}")
+                    if later != target_head:
+                        commands.append(f"create {moved} {later}")
+            self._update_refs(commands)
+        older = [f"delete {ref} {oid}" for ref, oid in start.observations.items() if current.get(ref) == oid]
+        if older:
+            self._update_refs(older)
 
     def _unmerged_paths(self, worktree: Path) -> tuple[str, ...]:
         result = self._run_git(

@@ -245,6 +245,26 @@ Agent-settled with probe evidence:
   `expected_target`, and take the existing portfolio and per-Change locks only for the local merge,
   receipt and a compare-and-swap `update-ref` of the shared remote-tracking ref. The portfolio lock
   no longer spans network I/O.
+  **Stale-target observation, amended after Sol round 3, §1.5 contract review (2026-10-04, under the
+  overnight authorization; confirmation pending).** Rounds 1–3 each found material defects in the
+  observation mechanism, so its contract was re-derived instead of repaired again. A stale fetch never
+  moves `refs/remotes/<remote>/<target>`. The engine learns the fetched head from one advisory ref
+  `refs/owlbear/target-observation/<sha256(target ref)>/<base>` naming it, where `<base>` is the shared
+  ref's value when that fetch began; the engine target is that head while the shared ref equals `<base>`,
+  otherwise the shared ref. Each observation write and each engine move of the shared ref runs under the
+  existing target-sync lock as one `update-ref --stdin` transaction, compare-and-swapped on the shared
+  value and the observation set read before the fetch. A stale result replaces exactly those
+  observations, or is dropped when either changed (among overlapping fetches the first writer wins; a
+  fetch that starts after a recording may replace it). An exact sync deletes only those observations,
+  which are older than its result, and carries an observation recorded after its fetch began to the new
+  shared value. A transaction that fails without such a change raises, so progress is never silently
+  lost. Only `update-ref --stdin`, `for-each-ref` and `rev-parse` are used (all present in Git 2.43, the
+  Ubuntu 24.04 package); no reflog. Rejected: the reflog marker (`git reflog write` is absent in Git
+  2.43, and its head ref and marker were two unlocked writes); re-fetching at the point of use
+  (readiness and custody reads would do network I/O and could change between two reads of one
+  decision). Accepted residual: an external return of the shared ref to the exact base (A→C→A) revives
+  the observation. It is a hint, never authority: only an exact fetch merges, and the next fetch starts
+  after the recording and replaces it, so the cost is one stale round.
 - **D8 Bounded runner kills the process group** (P6): `subprocess.run(timeout=…)` returns on time
   but leaves the transport helper running; the runner starts Git in a new session and kills the
   group on timeout.
