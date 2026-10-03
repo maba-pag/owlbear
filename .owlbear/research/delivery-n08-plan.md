@@ -6,8 +6,8 @@
 > 3.14.8; uv 0.12.22). Live state observed read-only: main checkout on `delivery-live`.
 > **Builds on:** the approved [N02 plan](delivery-n02-plan.md) (lock, gate, migration engine, `delivery-lc`,
 > pinning). N08 symbols for N02 modules are the N02 plan's names; implementation re-resolves them on `dev`.
-> **Status:** approved: plan gate `plan-sound` in round 7 of fresh GPT-6.1 Sol challenges (2026-10-03). U1–U3 are pending user confirmation. Product code
-> is unchanged by this phase.
+> **Status:** approved: plan gate `plan-sound` in round 7 of fresh GPT-6.1 Sol challenges (2026-10-03). U1–U3
+> were decided on 2026-10-03: (a) each. Product code is unchanged by this phase.
 
 ## 1. Contract
 
@@ -249,7 +249,8 @@ Agent-settled with probe evidence:
 - **D11 This P revision amends execution plan §5 N08** (phase descriptions only; no sequence, prerequisite or
   re-split change): N08-A is a repair kind of N02-B's engine in Delivery with a tools CLI; N08-B also edits Delivery
   core (V18 per-Change containment and the loader effect boundary). Merged under the user's overnight
-  authorization of 2026-10-03; explicit confirmation pending. After Sol round 6 it also amends the approved
+  authorization of 2026-10-03; confirmed 2026-10-03 (listed to the user without objection). After Sol round 6
+  it also amends the approved
   N02 plan §3.3 (step 5g: migration `abort` removes the empty namespace; N02 D10) under the same authorization.
 - **D12 Gated controllers identify themselves.** After it acquires the shared lock and before the gate, N08-B's
   shared-lock helper publishes `runtime/controller-processes/<pid>.json` (pid, `psutil` create time, cmdline
@@ -268,40 +269,41 @@ Agent-settled with probe evidence:
   Engineering decision (Sol round 4: a reasonable default, not a user question): an unsafe record keeps startup
   available without exemption; the cost is that offline repair waits until that controller stops.
 
-User decisions ([U1–U3](#u-decisions)) are **pending user confirmation**; recommendations are defaults, not
-decisions. N08-A needs U1; N08-B needs none; N08-C needs U2, U3 and N02's U1 and U2 as recommended there (any other
+User decisions ([U1–U3](#u-decisions)) were decided on 2026-10-03 as engineering decisions with one defensible
+answer, listed to the user without objection: (a) each. N08-A needs U1; N08-B needs none; N08-C needs U2,
+U3 and N02's U1 and U2 as recommended there (any other
 N02 answer re-plans N08-C, whose launchers and prompt assume N02 D1 and `/upgrade-delivery`).
 
 #### U decisions
 
-**U1 — Offline repair confirmation policy** (pending user confirmation — required before N08-A starts).
+**U1 — Offline repair confirmation policy** (decided 2026-10-03: (a) — required before N08-A starts).
 Status quo: D03 offline repair is read-only; each online repair tool requires `confirmed_repair: true`. Problem:
 offline writes run while the controller is down, so the policy decides which writes an agent may apply inside
 `/repair-delivery`. Options: (a) engine-replay operations (C03, delegated `delivery-migrate resume/verify`) are
 applied by the agent after it shows the proposal; operations that replace user-owned or tracked bytes (C01, C02)
 need an explicit per-proposal confirmation through `vscode_askQuestions` naming paths, consequence and backup;
 (b) every offline write needs per-proposal confirmation; (c) the agent applies every catalogued operation without
-confirmation. **Recommended: (a).** It matches programme §1.1 (engine-owned effects with exact identity reconcile
+confirmation. **Decision: (a).** It matches programme §1.1 (engine-owned effects with exact identity reconcile
 automatically) and keeps every loss of user bytes behind a decision. Stopping the controllers is a user step in
 every option.
 
-**U2 — Consumer controller distribution** (pending user confirmation — required before N08-C starts).
+**U2 — Consumer controller distribution** (decided 2026-10-03: (a) — required before N08-C starts).
 Status quo: consumers run `uv --project <OwlBear clone>` for every MCP server (`seed/.vscode/mcp.json:6`) and
 `git pull` changes live code; `init.py` keeps any existing server entry (`setup/init.py:406`). Problem: P21 requires
 pinning parity, which changes what setup installs and rewrites. Options: (a) `init.py` installs a controller-only
 release (~50 MB, D7) from the clone's `HEAD` on first run with a visible notice, points `owlbear-delivery` at the
 launcher, and on rerun replaces only an unmodified OwlBear-installed entry (recognized by its manifest claim);
 upgrades only through `/upgrade-delivery`; (b) pinning is opt-in (`--pin-controller`), unpinned by default;
-(c) a shared user-level store `~/.owlbear/controllers/` deduplicated across projects. **Recommended: (a).**
+(c) a shared user-level store `~/.owlbear/controllers/` deduplicated across projects. **Decision: (a).**
 Parity is the requirement and the measured size removes the reason for (c), whose cross-project pruning is new risk.
 
-**U3 — Platform-defect maintenance releases** (pending user confirmation — required before N08-C starts).
+**U3 — Platform-defect maintenance releases** (decided 2026-10-03: (a) — required before N08-C starts).
 Status quo: no route; a broken controller blocks Delivery until someone edits code. Problem: §11.2 needs a reviewed
 fix and an approved upgrade, and the release source is a permission question. Options: (a) this repository: the fix
 is a normal reviewed PR to `dev`, and the controller upgrades to the merged commit; pinning a reviewed but unmerged
 commit is an emergency that needs the user's explicit approval at that step; consumers: only commits of their
 OwlBear clone, local patches unsupported, the route reports the defect upstream; (b) consumers may pin a locally
-patched, locally reviewed commit; (c) merged commits only, no emergency path. **Recommended: (a).**
+patched, locally reviewed commit; (c) merged commits only, no emergency path. **Decision: (a).**
 
 ## 2. Feasibility Probes
 
@@ -661,7 +663,7 @@ Premises found false or incomplete on `ef622c354`:
 
 | Phase | PR | Exact head | Proof | Challenges | Status |
 | --- | --- | --- | --- | --- | --- |
-| N08-P | #350 | — | Probes P1–P10 | Sol round 1: revision-required (replay custody binding, legacy exclusion for all writers, repair-specific verification, read-only degraded boundary, CLI import fallback) → revised; Sol round 2: revision-required (contained recovery boundary, exact-journal verification context, gated vs legacy exclusion) → revised; Sol round 3: revision-required (retained verified history, stale process record) → consolidated journal-state table; Sol round 4: revision-required (empty migrations namespace cleanup) → revised; Sol round 5: revision-required (abort namespace cleanup) → revised; Sol round 6: revision-required (migration abort namespace; amends N02-B §3.3) → revised; Sol round 7: `plan-sound` | approved (D11 confirmation pending; U1–U3 before their phases) |
+| N08-P | #350 | — | Probes P1–P10 | Sol round 1: revision-required (replay custody binding, legacy exclusion for all writers, repair-specific verification, read-only degraded boundary, CLI import fallback) → revised; Sol round 2: revision-required (contained recovery boundary, exact-journal verification context, gated vs legacy exclusion) → revised; Sol round 3: revision-required (retained verified history, stale process record) → consolidated journal-state table; Sol round 4: revision-required (empty migrations namespace cleanup) → revised; Sol round 5: revision-required (abort namespace cleanup) → revised; Sol round 6: revision-required (migration abort namespace; amends N02-B §3.3) → revised; Sol round 7: `plan-sound` | approved (D11 confirmed 2026-10-03; U1–U3 decided (a) 2026-10-03) |
 | N08-A | — | — | — | — | — |
 | N08-B | — | — | — | — | — |
 | N08-C | — | — | — | — | — |

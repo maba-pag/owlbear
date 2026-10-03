@@ -1204,6 +1204,22 @@ Recommended new Cockpit/prompt action: show repository, PR title/number, exact r
 
 The provider adapter re-reads open/merged state, source head, target, and protections immediately before mutation. Changed source head invalidates approval. A changed target requires synchronization/revalidation if the proof contract depended on it. Where the provider cannot atomically fence the target, rely on enforced branch protections/merge queue and verified provider semantics; do not claim a stronger atomic guarantee than it offers. Capability feasibility must be researched before implementation of the mutation.
 
+**Requirement revision, 2026-10-03 (approved by the user in chat after a full status-quo, problem,
+options and pro/con briefing; [N05 plan](delivery-n05-plan.md#19-user-decisions) U3).**
+
+- *Old text:* "Where the provider cannot atomically fence the target, rely on enforced branch
+  protections/merge queue and verified provider semantics; do not claim a stronger atomic
+  guarantee than it offers."
+- *Revision:* where no provider API fences the target or the PR's base during asynchronous merge
+  execution, engine merge does not require enforced branch protections or a merge queue. The
+  pre-mutation re-read still refuses anything other than the approved single PR, exact head and
+  approved target. After the merge, Delivery compares the merge commit's first parent with the
+  approved target head and the merged base with the approved target, and reports a target advance
+  or scope change as acceptance attention, never as completion attributed to the reviewed proof.
+  It claims no stronger guarantee.
+- *Reason:* no GitHub merge API fences the target or the base during asynchronous merge; the
+  residual window between the final read and execution is seconds; detection reports it.
+
 Read back unknown merge responses before another mutation. A successful provider call is not a completion receipt; the existing acceptance observer verifies the actual merged evidence, then records completion exactly once. A merge performed manually in GitHub must be recognized too, although the preferred journey does not require leaving Cockpit/chat.
 
 There is a current instruction conflict to resolve deliberately: governance says the user pushes manually while Delivery already owns publication. The cutover must specify that authorized engine/provider publication is system work and agents do not run arbitrary pushes. Do not leave contradictory instructions for the implementing model.

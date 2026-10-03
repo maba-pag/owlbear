@@ -318,13 +318,14 @@ Agent-settled with probe evidence:
   so A2 adds the prerequisite N02-B (allowed: a package plan may add prerequisites, execution plan
   §4.2). See [1.10](#110-execution-plan-delta). This re-split amends the execution plan's package
   cut, which §1.1 reserves to the user: merged under the user's overnight authorization of
-  2026-10-03; explicit confirmation pending.
+  2026-10-03; confirmed 2026-10-03 (listed to the user without objection).
 - **D10 #218 needs no product change.** PR #308 ("Fixes #218", merged 2026-09-07) made curation
   failures non-blocking in `w-orchestration` Step 5 (`share/skills/w-orchestration/SKILL.md:402-420`)
   and Step 6 (`:422`), with ecosystem assertions (`tests/test_agent_ecosystem_validation.py:763-778`,
   `:1181-1186`). The continuation route (`SKILL.md:53-188`) dispatches no curator at all, so it cannot
   block. Whether periodic curation keeps a cadence once `/orchestrate` retires is a capability-inventory
-  row for N09-P2, not N09-A work. The issue is still open ([U1](#u-decisions)).
+  row for N09-P2, not N09-A work. The issue is still open; the agent closes it with evidence
+  ([U1](#u-decisions) (b)).
 - **D11 Portfolio guidance stays, minus false claims.** The `/orchestrate` portfolio command and
   guidance kinds remain until N09-B. A1 only replaces the untruthful "An orchestration session is
   already working" (`PortfolioOperatingSummary.tsx:37`) with "N Work Items hold active custody; each
@@ -333,14 +334,16 @@ Agent-settled with probe evidence:
 
 #### U decisions
 
-**U1 — Close #218 with evidence** (pending user confirmation; required before N10-M's programme
+**U1 — Close #218 with evidence** (decided 2026-10-03: (b); required before N10-M's programme
 closure; nothing in N09-A depends on it). Status quo: #218 is open although PR #308, which says
 "Fixes #218", merged into `dev` on 2026-09-07 and its behavior is on `origin/dev` (P1). Problem:
 programme completion requires #218 closed with evidence (execution plan §6), and commenting on or
 closing an issue is an external action that needs the user. Options: (a) the N09-A1 PR description
 carries a drafted closure comment (PR #308, skill lines, test names, the N09-A1 rerun) and the user
 posts it and closes the issue; (b) the user authorizes the agent to post and close; (c) leave it
-open until N10-M. **Recommended: (a).**
+open until N10-M. **Decision (2026-10-03): (b)**, an engineering decision listed to the user without
+objection: the agent posts the evidence comment (PR #308, skill lines, test names, the N09-A1 rerun)
+and closes #218.
 
 No other genuine user decision was found. Pause semantics are settled by programme §4.2; D1–D11 are
 engineering choices inside that contract.
@@ -852,7 +855,7 @@ Not run in P (machine load): Vitest, Cockpit build, E2E, any multi-file suite (G
 
 | Phase | PR | Exact head | Proof | Challenges | Status |
 | --- | --- | --- | --- | --- | --- |
-| N09-P1 | #351 | — | Probes P1–P18 | Sol round 1: revision-required (drain exceptions, custody-neutral pause admission, pause/start atomicity + coordinator inventory, Change progress selection, liveness evidence) → revised; Sol round 2: revision-required (short pause fence, frontier-bound CAS, completion-call drain authority, eligibility-based C4) → revised; Sol round 3: revision-required (recovery authority vs pause policy, settled-owner replay authority, unified admission) → consolidated A2 custody contract; Sol round 4: revision-required (direct/standalone owner rows, owner-specific replay bindings) → revised; consistency pass (§1.6/§3.3/formats aligned with §1.11); Sol round 5: revision-required (pre-lease snapshot drain authority) → revised; Sol round 6: revision-required (anchored pre-lease snapshot handoff) → revised; Sol round 7: revision-required (fast-path handoff lease) → revised; Sol round 8: `plan-sound` | approved (D9 re-split confirmation pending; U1 before N10-M) |
+| N09-P1 | #351 | — | Probes P1–P18 | Sol round 1: revision-required (drain exceptions, custody-neutral pause admission, pause/start atomicity + coordinator inventory, Change progress selection, liveness evidence) → revised; Sol round 2: revision-required (short pause fence, frontier-bound CAS, completion-call drain authority, eligibility-based C4) → revised; Sol round 3: revision-required (recovery authority vs pause policy, settled-owner replay authority, unified admission) → consolidated A2 custody contract; Sol round 4: revision-required (direct/standalone owner rows, owner-specific replay bindings) → revised; consistency pass (§1.6/§3.3/formats aligned with §1.11); Sol round 5: revision-required (pre-lease snapshot drain authority) → revised; Sol round 6: revision-required (anchored pre-lease snapshot handoff) → revised; Sol round 7: revision-required (fast-path handoff lease) → revised; Sol round 8: `plan-sound` | approved (D9 re-split confirmed 2026-10-03; U1 decided (b) 2026-10-03) |
 | N09-A1 | #354 | `3573866ac` | First check `test_undispatched_builder_claim_with_live_issuer_shows_neutral_custody` fails on base (`progress` missing), passes after; `test_delivery_progress.py` 66 passed; `test_work_items.py` + MCP progress test 26 passed; HTTP progress/pause 2 passed; Vitest WorkPortfolio + CockpitShell + CopyCommand targeted pass; `npm run build` pass; `test:e2e:work` 26 passed; Ruff and Biome clean on touched files; `test --changed --base origin/dev`: pytest 2552 passed, 1 failed (HTTP wire snapshot lacked `progress`; fixed; `test_cockpit_work_items.py` + `test_cockpit_boundary.py` rerun 122 passed), Vitest 25 files / 345 passed; P1 housekeeping rerun 1 passed. Repair: 26 new Pause cases (12 retained-custody reasons × group/detail, non-custody blocked control, filtered mixed group) — 23 fail on `e3fc1d482` sources, all pass after; WorkPortfolio.test.tsx 165 passed; `npm run build` pass; Biome clean on 3 touched files; `test:e2e:work` 26 passed; `test --changed --base origin/dev --web` Vitest 25 files / 371 passed. Repair 2 (Pause availability derived by Delivery from the defer intent's own refusal predicates, `pause_available`/`pause_unavailable_reason` on group and detail): 10 assembled fixtures assert projection == defer acceptance, read-only (masked Finalizer and every retained claim/engine-action state refused; passive Finalizer attention, reservation-only retry containment and quiescent Change accepted) plus unreadable coordination and unverified recovery; `test_delivery_progress.py` + `test_work_items.py` + `test_cockpit_boundary.py` + `test_cockpit_work_items.py` 226 passed, 1 failed (projector fixture lacked a second binding; fixed, rerun passed); `test_target_server.py` 126 passed; Vitest WorkPortfolio + CopyCommand + AcceptanceReconciliation 166 passed; `npm run build` pass; Biome and Ruff clean on touched files; `test:e2e:work` 26 passed; `test --changed --base origin/dev`: pytest 2566 passed, 1 failed (runtime writer-inventory invariant counted the read-only probe; frontier guards moved to a module-level mirror; invariant + progress rerun 117 passed), rerun EXIT=0, pytest 2567 passed, Vitest 25 files / 360 passed | Sol implementation round 1: repair-required (retained-custody Pause predicate, filtered custody) → repaired; Sol implementation round 2: repair-required (server-derived Pause availability) → repaired; Sol implementation round 3 `implementation-sound` | merged |
 | N09-A2 | — | — | — | — | — |
 
@@ -864,7 +867,7 @@ Not run in P (machine load): Vitest, Cockpit build, E2E, any multi-file suite (G
 | G2 | The copied `/continue-change <id> …` prompt binds the right Change in Copilot Chat now and after the Local agent's removal | Input binding is model inference; prompt files are deprecated for Agent Host (P8); no host run in P | D02 named-host rehearsal; VS Code docs 2026-09-30 | N09-P2 (skill migration in the capability inventory); N10-H | N09-P2 |
 | G3 | Some evidence boundary establishes current dispatch, so **Working**, **Checking** and **Repairing** can be emitted | Issuer evidence precedes activation and the launch package, and the probe checks process existence only (P13); a new heartbeat was rejected | None today; the keys stay reserved (D2) | N09-P2 capability inventory records whether any later package supplies such evidence | Nothing in N09-A |
 | G4 | Every custody acquisition, effect start and provider entry passes a pause-gated entry serialized with its start | P9 and P13 are source reads, not an inventory | Named coordinator, manager and application chokepoints; 16 `_require_no_active_change_claim` call sites | N09-A2 step 1 inventory test | N09-A2 merge |
-| G5 | #218 is closed with evidence | Needs a user-posted comment (U1) | PR #308, P1 test run | User | N10-M programme closure |
+| G5 | #218 is closed with evidence | The agent has not yet posted the evidence comment (U1 (b)) | PR #308, P1 test run | Agent (U1 (b)) | N10-M programme closure |
 | G6 | Frontend, build and E2E behave as planned | Not run in P (machine load); only Python probes ran | Source reads P3, P4, P12 | N09-A1 closeout | N09-A1 merge |
 | G7 | A2's migration on live state | Live has no deferral or claim (P7), so LC exercises only the version rewrite; the new direct-marker family has no live records | P7 | N09-A2 LC full form plus disposable custody fixtures | N09-A2 merge |
 | G8 | `ready-to-merge` stays correct once exact-head merge approval exists | N05 not planned yet (in progress in another lane) | Programme §4.2, §10.2 | N05-P / the N05 phase that adds **Approve merge** updates M10 | Nothing in N09-A |

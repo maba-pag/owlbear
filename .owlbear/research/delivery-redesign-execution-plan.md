@@ -612,12 +612,12 @@ every new item exactly one lane.
 | N01-A | merged | #344 (code head `693b6dc3b`; Sol `implementation-sound`; LC load form pass) |
 | N01-B | merged | #346 (code head `fc4ca75b5`; Sol blocker resolved by executed exact-candidate proof; LC load form pass) |
 | N01-C | merged | #347 (code head `1ba931191`; cumulative Sol `implementation-sound`; LC load form pass) |
-| N02-P | merged | #345 (plan gate `plan-sound`, round 4; amends §1.3, D9: confirmation pending; U1/U2 pending before N02-D) |
+| N02-P | merged | #345 (plan gate `plan-sound`, round 4; amends §1.3, D9: confirmed 2026-10-03; U1 (a), U2 (a), U3 default decided 2026-10-03) |
 | N02-A | merged | #348 (code head `f225ad508`; Sol `implementation-sound` round 3; LC load form pass) |
 | N02-B | merged | #352 (code head `7500600c7`; Sol `implementation-sound` round 5; full LC pass) |
 | N02-C | — | — |
 | N02-D | — | — |
-| N03-P | merged | #349 (plan gate `plan-sound`, round 6; D11 confirmation pending; U1 before N03-A) |
+| N03-P | merged | #349 (plan gate `plan-sound`, round 6; D11 confirmed 2026-10-03; U1 decided (b) by the user 2026-10-03) |
 | N03-A | — | — |
 | N03-B | — | — |
 | N03-C | — | — |
@@ -626,7 +626,7 @@ every new item exactly one lane.
 | N04-B | — | — |
 | N04-C | — | — |
 | N04-D | — | — |
-| N05-P | merged | #353 (plan gate `plan-sound`, round 12; amendments confirmation pending; U1, U3, U4 before N05-B; U2 before A-R) |
+| N05-P | merged | #353 (plan gate `plan-sound`, round 12; amendments F1–F8 confirmed 2026-10-03; U1 (a), U2 (b), U3 (a) + (e) by the user, U4 (b) decided 2026-10-03; U3 (e) revises programme §10.2) |
 | N05-A | merged | #356 (code head `a4951b044`; Sol `implementation-sound` round 2; Ubuntu CI exact head) |
 | N05-B | — | — |
 | N05-C | — | — |
@@ -638,11 +638,11 @@ every new item exactly one lane.
 | N07-P | — | — |
 | N07-A | — | — |
 | N07-B | — | — |
-| N08-P | merged | #350 (plan gate `plan-sound`, round 7; amends N02-B abort (N02 D10); D11 confirmation pending; U1–U3 before their phases) |
+| N08-P | merged | #350 (plan gate `plan-sound`, round 7; amends N02-B abort (N02 D10); D11 confirmed 2026-10-03; U1–U3 decided (a) 2026-10-03) |
 | N08-A | — | — |
 | N08-B | — | — |
 | N08-C | — | — |
-| N09-P1 | merged | #351 (plan gate `plan-sound`, round 8; D9 re-split confirmation pending; U1 before N10-M) |
+| N09-P1 | merged | #351 (plan gate `plan-sound`, round 8; D9 re-split confirmed 2026-10-03; U1 decided (b) 2026-10-03) |
 | N09-A1 | merged | #354 (code head `3573866ac`; Sol `implementation-sound` round 3) |
 | N09-A2 | — | — |
 | N09-P2 | — | — |
@@ -976,7 +976,8 @@ LC gate: full form.
 - The approval binds the exact head and target. Before the merge, the provider re-reads PR state,
   head, target, rules, mergeability and checks. A head change invalidates the approval. A target
   change requires sync, revalidation and fresh review where the proof depends on it. No GitHub
-  merge API fences the target; enforced rules or the user's N05 U3 decision govern that race.
+  merge API fences the target; under the user's N05 U3 decision (2026-10-03) Delivery detects and
+  reports that race as acceptance attention (programme §10.2 as revised).
 - An unknown merge response is read back before any retry. There is never a duplicate or
   unapproved merge.
 - Completion is observed exactly once, including merges done manually in GitHub.
@@ -1227,9 +1228,11 @@ The programme is complete when all of the following hold:
 
 **Decided later, inside their package's P phase:**
 
-- **N02:** pinning of this repository's live controller and the upgrade UX.
+- **N02:** pinning of this repository's live controller and the upgrade UX (decided 2026-10-03:
+  N02 plan U1 (a), U2 (a)).
 - **N05:** merge-method policy (U1); real merge rehearsal on a disposable repository (U2); target
-  freshness and the execution-time target race (U3).
+  freshness and the execution-time target race (U3) (decided 2026-10-03: N05 plan U1 (a), U2 (b),
+  U3 (a) + (e), U4 (b)).
 - **N06:** retention and privacy policy for private inputs.
 - **N07:** treatment of earlier B1 evidence.
 - **N10-M:** abandoning the `frontier-serialization-contract` live Change; the disposition of the

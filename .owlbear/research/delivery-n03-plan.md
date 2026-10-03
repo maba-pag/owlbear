@@ -8,25 +8,27 @@
 > Product code is unchanged by this phase.
 > The §1.7 comparison inventory was re-scanned on post-N01 `origin/dev` `58c4d928b` (P11) and its publication
 > gates on `58c4d928b` + N02-A (P13); the acknowledgment base on lane-b `e6ed5bb31` (P14).
-> D11 amends the execution plan, merged under the user's overnight authorization of 2026-10-03; explicit
-> confirmation pending. U1 stays pending before N03-A.
+> D11 amends the execution plan, merged under the user's overnight authorization of 2026-10-03 and
+> confirmed 2026-10-03 (listed to the user without objection). U1 decided 2026-10-03 by the user: (b).
 
 ## 1. Contract
 
 ### 1.1 Result
 
 - Every new proof observation carries a typed result whose verdict is derived, never asserted: `passed`,
-  `expected-negative`, `failed`, `missing` (with an owner) or `waived` (with an owner and a user-confirmed
-  decision). Command, manual-procedure and artifact evidence have distinct shapes.
+  `expected-negative`, `failed`, `missing` (with an owner) or `waived` (owner user, with a user-confirmed
+  decision scoped to the criterion version; it satisfies finalization,
+  [U1](#u1--may-a-user-waive-a-required-acceptance-criterion)(b)). Command, manual-procedure and artifact
+  evidence have distinct shapes.
 - Every new observation records the acceptance criteria and criterion versions it covers, the exact commit,
   procedure, environment and target class, its time, machine-observed versus human-confirmed provenance, and a
   bounded non-sensitive locator.
 - Acceptance criteria have stable identities (`AC-NNN`) authored in the Design package and a content version.
   Identities survive revision; versions change when the statement changes.
 - `finalize_change` loads the admitted acceptance authority and fails closed unless every acceptance criterion
-  is covered by satisfying typed evidence. The finalization context gives the Finalizer and the independent
-  reviewer the same semantic projection and diff baseline, bound by one basis digest the engine re-checks;
-  the review also binds the exact ordered set of submitted observations.
+  is covered by satisfying typed evidence or waived by the user (U1(b)). The finalization context gives the
+  Finalizer and the independent reviewer the same semantic projection and diff baseline, bound by one basis
+  digest the engine re-checks; the review also binds the exact ordered set of submitted observations.
 - Existing observations are never relabeled: their coverage is `unknown`. No stored receipt byte or identity
   changes.
 - One evidence projection (acceptance criterion → evidence → status) is readable through `get_change`, MCP, HTTP
@@ -61,13 +63,15 @@
   for nothing and make otherwise uncovered criteria `unknown`, not `uncovered`.
 - **I4 Derived verdict.** A command verdict is computed from exit status and expectation; it cannot contradict
   them. Manual and artifact evidence carry an explicit assessment.
-- **I5 Fail closed.** `finalize_change` writes nothing unless every criterion is covered, every request
-  observation is typed and satisfying, the review's basis digest equals the engine's current basis, and the
-  review's `observation_ids` equal the request's observation IDs in order.
+- **I5 Fail closed.** `finalize_change` writes nothing unless every criterion is covered or waived (U1(b)),
+  every request observation is typed and satisfying, the review's basis digest equals the engine's current
+  basis, and the review's `observation_ids` equal the request's observation IDs in order.
 - **I6 Applicable confirmation.** `human-confirmed` provenance and `waived` results require a confirmation
   the engine resolves inside the same Change and outcome: a request resolved with `provenance: user-confirmed`
   whose `applies_to` scope names every criterion version the observation covers and its exact `procedure`
-  (§1.5). Existence of some confirmed request is not enough. Nothing synthesizes one (V20).
+  (§1.5). Existence of some confirmed request is not enough. Nothing synthesizes one (V20). A `waived` result
+  with an applicable confirmation satisfies finalization for that criterion version and stays shown as
+  `waived` (U1(b)); agents and reviewers never waive.
 - **I7 One evaluator.** One pure function computes coverage for `finalize_change`, the finalization context
   and the projection; identical inputs give identical statuses.
 - **I8 Bounded and non-sensitive.** Locators use an allowlisted `scheme:value` form, never URLs; free text is
@@ -120,9 +124,10 @@ union discriminated by `schema_version`.
 | `manual-procedure` | `assessment` `passed` or `failed` | The assessment; `human-confirmed` allowed |
 | `artifact` | `assessment` `passed` or `failed`; `artifact_digest` sha256 or null; `locator` required | The assessment; `human-confirmed` allowed |
 | `missing` | `owner` `agent`, `user`, `provider` or `assisted-check`; `reason` 1–240 chars | `missing` |
-| `waived` | `owner: user`; `reason` 1–240 chars; `confirmation` required | `waived` (non-satisfying unless [U1](#u1--may-a-user-waive-a-required-acceptance-criterion) decides otherwise) |
+| `waived` | `owner: user`; `reason` 1–240 chars; `confirmation` required | `waived`; satisfies finalization coverage and stays shown as `waived` ([U1](#u1--may-a-user-waive-a-required-acceptance-criterion)(b)) |
 
-Satisfying verdicts: `passed`, `expected-negative`.
+Satisfying verdicts: `passed`, `expected-negative`. A `waived` record in a task result also completes its
+criterion's coverage for finalization (U1(b), §1.6).
 
 **Confirmation scope.** `DeliveryRequest` gains optional `applies_to: DeliveryConfirmationScope{acceptance:
 1–32 unique DeliveryAcceptanceRef, procedure: 1–512 chars}` (`exclude_if` None). The requesting worker sets it
@@ -143,9 +148,9 @@ retained confirmations as prior state. `_reset_binding` still clears them with t
 | Surface | Rule |
 | --- | --- |
 | `publish_result` / `submit_result` | Every observation schema 2; verdict in {passed, expected-negative, missing, waived} (a failing check blocks or retries, it is not a result); `covers` names current criteria of the admitted contract; confirmations resolve and apply (I6); existing exact-commit checks unchanged |
-| `finalize_change` request | Zero or more observations, each schema 2 and satisfying, at the exact head; review schema 2 with `review_mode: finalization`, `basis_digest` equal to the current basis and `observation_ids` equal to the request's IDs in order; coverage complete |
+| `finalize_change` request | Zero or more observations, each schema 2 and satisfying, at the exact head; review schema 2 with `review_mode: finalization`, `basis_digest` equal to the current basis and `observation_ids` equal to the request's IDs in order; coverage complete (every criterion `covered` or `waived`) |
 | Review binding | Review schema 2 adds `observation_ids` (ordered, may be empty) inside `review_id`. Coverage assignment is a pure function (I7) of the basis inputs and those receipts, whose `covers` lie inside each `observation_id`, so the review binds it. Same review with one observation replaced, added, dropped or reordered → `review-observations-mismatch`, no write |
-| Coverage evaluation | Records in order: task results in authority order (their commits are ancestry-ordered, P7), observations in result order, then the finalization request. For each current criterion, the **last** record covering it decides: satisfying → `covered`; `missing` / `waived` → that status. No typed record → `unknown` if the Change has any schema-1 observation, else `uncovered` |
+| Coverage evaluation | Records in order: task results in authority order (their commits are ancestry-ordered, P7), observations in result order, then the finalization request. For each current criterion, the **last** record covering it decides: satisfying → `covered`; `missing` / `waived` → that status. No typed record → `unknown` if the Change has any schema-1 observation, else `uncovered`. Finalization accepts `covered` and `waived` (U1(b)); `missing`, `uncovered` and `unknown` are gaps |
 | Carried evidence | A task-result observation at an ancestor commit counts for finalization (U6: no repetition without a specific uncovered or invalidated criterion). The reviewer judges its applicability to the assembled head under the shared basis (§8.4). When carried evidence covers every criterion, finalization needs no new observation; the exact-head finalization review stays required. A reviewer finding that carried evidence does not apply is the invalidation that permits a fresh exercise (R9) |
 | Basis digest | `sha256` of canonical JSON `{schema: 1, contract_digest, change_head, diff_base, result_digests, acceptance: [[id, version], …]}`; `diff_base` = latest `target_sync_receipt.target_head`, else `ChangeCoordination.publication_base_head`; null → finalization refused (`finalization-basis-unavailable`) |
 | Finalization receipt | Schema 3: zero or more observations, all schema 2; review schema 2 in finalization mode with matching `observation_ids`. Schema 2 keeps `min_length=1`. Coverage is recomputed from immutable inputs, not stored twice |
@@ -242,7 +247,7 @@ or publication-gate site outside this table stops for a plan revision.
 | `owlbear_delivery.evidence` (new; imports models and `acceptance_criteria`, imported by runtime and application, never by `runtime_models`) | `evaluate_acceptance_evidence(contract, frontier, request_observations=()) -> DeliveryAcceptanceCoverage`; `finalization_basis_digest(...)`; projection builder (N03-C) |
 | `compile_delivery_contract` | Adds the three identity diagnostics; output bytes unchanged for valid input |
 | `DeliveryAuthorityRegistry.admit` | First admission requires authored identities |
-| `DeliveryRuntime.publish_result`, `DeliveryRuntime.finalize_change` | Enforce §1.6; on violation raise `DeliveryAcceptanceEvidenceError` (subclass of `DeliveryRuntimeConflictError`), code `ERR_DELIVERY_ACCEPTANCE_EVIDENCE`, `gaps` ≤ 64 × `{acceptance_id?, observation_id?, reason}`; reasons `uncovered`, `unknown-legacy-only`, `missing`, `waived`, `failed`, `legacy-observation`, `unknown-acceptance`, `stale-acceptance-version`, `confirmation-unresolved`, `confirmation-not-applicable`, `review-basis-missing`, `review-basis-stale`, `review-observations-mismatch`, `finalization-basis-unavailable`, `finalization-context-oversized` |
+| `DeliveryRuntime.publish_result`, `DeliveryRuntime.finalize_change` | Enforce §1.6; on violation raise `DeliveryAcceptanceEvidenceError` (subclass of `DeliveryRuntimeConflictError`), code `ERR_DELIVERY_ACCEPTANCE_EVIDENCE`, `gaps` ≤ 64 × `{acceptance_id?, observation_id?, reason}`; reasons `uncovered`, `unknown-legacy-only`, `missing`, `failed`, `legacy-observation`, `unknown-acceptance`, `stale-acceptance-version`, `confirmation-unresolved`, `confirmation-not-applicable`, `review-basis-missing`, `review-basis-stale`, `review-observations-mismatch`, `finalization-basis-unavailable`, `finalization-context-oversized` |
 | `show_finalization_context` | Adds `semantics: DeliveryFinalizationSemantics` and `semantics_refusal: DeliveryContextRefusal` (each `exclude_if` None; exactly one set whenever the context is otherwise available). `semantics` holds: contract digest and title; outcomes with promise, commitment and dependency IDs and criteria; commitments; task results (ID, title, commit, result digest, observation IDs); per promoted task its bound authority (`task_id`, `task_digest`, `result`, `constraints`, `exclusions`, `proof_boundaries`, `acceptance_observations`); confirmations cited by task evidence with their `applies_to` (retained, §1.5); `diff_base`; `change_head`; per-criterion coverage from task evidence; `basis_digest`. Task authority is bound by the result digests, which hold `task_digest`; the Design package is not included. Size: see the context budget below |
 | `show_build_context`, `show_plan_context` | Add `acceptance: tuple[DeliveryAcceptanceCriterion, …]` for the outcome |
 | MCP | `finalize_change`, `submit_result` and the request-bearing `transition_delivery` and `settle_worker_invocation` schemas (`applies_to`) follow the core models (strict); the error maps to its code with bounded `gaps` in `TargetDiagnostic` (N03-A); `DeliveryOperatorContextResponse` copies `evidence` (N03-C); no new tool |
@@ -288,7 +293,8 @@ E2E stack.
 ### 1.11 Exclusions
 
 Revision activation and applicability after revision (N04); prepared interactions and private input (N06); a
-waiver path beyond [U1](#u1--may-a-user-waive-a-required-acceptance-criterion); claim IDs on
+waiver path beyond [U1](#u1--may-a-user-waive-a-required-acceptance-criterion)(b) (no agent, reviewer or
+unconfirmed waiver); claim IDs on
 `DeliveryTaskDefinition` (task digest churn for no engine use; Planner guidance cites IDs in text instead);
 evidence projection for archived completed history; execution attestation; contract schema change.
 
@@ -308,7 +314,8 @@ Agent-settled with probe evidence:
   upgrade carry. Widening keeps every stored digest valid. This deliberately uses N02's `readable-legacy`
   class for a mutable family; N02 D5 lists rewrite for 17 → 18 only because the old reader already rewrote.
 - **D4 Results keep only non-failing records; finalization only satisfying ones.** Failures go to block,
-  retry or `report_finalization_failure`; gaps (`missing`, `waived`) stay durable and visible.
+  retry or `report_finalization_failure`; gaps (`missing`) and user waivers (`waived`, U1(b)) stay durable
+  and visible.
 - **D5 Last record wins**, in ancestry order (P7), so later evidence can close or reopen a gap
   deterministically.
 - **D6 Basis digest and observation set in the review.** The reviewer attests the semantic basis it saw and
@@ -329,16 +336,17 @@ Agent-settled with probe evidence:
   coverage plus the exact-head finalization review is the proof; maintained supporting checks stay optional.
 - **D11 Execution-plan amendment.** This P revision amends execution plan §4.1, §5 N03 (phases, size, LC,
   frontier note), §2.6 and §7 ([3.5](#35-required-execution-plan-deltas)): changes that §1.1 reserves for
-  user approval. Merged under the user's overnight authorization of 2026-10-03; explicit confirmation
-  pending.
+  user approval. Merged under the user's overnight authorization of 2026-10-03; confirmed 2026-10-03
+  (listed to the user without objection).
 - **D12 All-or-nothing context budget** (P12). A truncated context would let the reviewer attest a basis that
   omits obligations (R5, R10). One deterministic byte budget with a typed refusal keeps the context complete or
   absent; 256 KiB is 7.5× the largest live upper bound, and finalization refuses rather than degrades.
 
 #### U1 — May a user waive a required acceptance criterion?
 
-Pending user confirmation — required before N03-A starts. Nothing earlier depends on it; N04-P and N06-P can
-plan against the recommended default, because the answer changes one validator rule and one projection label.
+Decided 2026-10-03: (b), by the user in chat after a full status-quo, problem, options and pro/con briefing
+(required before N03-A starts). The answer changes one validator rule, one projection label and the PR
+evidence text; N04-P and N06-P plan against (b).
 
 - **Status quo:** `finalize_change` accepts any observation strings. The programme forbids agent waivers
   (§5.1 role table) and silent waivers (V16), and routes changed requirements to explicit agreement (§8.4).
@@ -348,8 +356,9 @@ plan against the recommended default, because the answer changes one validator r
   criterion is a requirement change (N04 **Change requirements**). (b) A `waived` record with a resolved
   user-confirmed request bound to that criterion and version satisfies finalization and is shown as waived in
   the projection and PR. (c) Agents or reviewers may waive.
-- **Recommendation: (a).** It keeps U7 and §8.4 intact and keeps one route for changing what "done" means.
-  (c) contradicts the programme and is listed only for completeness.
+- **Decision: (b).** The agents had recommended (a), which keeps one route for changing what "done" means
+  (U7, §8.4); the user chose an explicit, recorded and visible waiver instead. Agents and reviewers never
+  waive, so (c) stays excluded.
 
 ## 2. Feasibility Probes
 
@@ -405,7 +414,8 @@ P13 read the same base plus N02-A (`c9d4a15b7`); P14 read lane-b `e6ed5bb31` (ci
 
 ### 3.2 N03-A — Evidence model, identities and finalization validation
 
-- **Prerequisites:** N03-P, N02-B; [U1](#u1--may-a-user-waive-a-required-acceptance-criterion) answered.
+- **Prerequisites:** N03-P, N02-B; [U1](#u1--may-a-user-waive-a-required-acceptance-criterion) answered
+  ((b), 2026-10-03).
 - **Editable paths:**
   - new `serve/delivery/src/owlbear_delivery/acceptance_criteria.py`, `evidence.py`
   - `target_contract.py`: `DeliveryCompilationDiagnosticCode`, `_parse_outcome` (`:354`), `_validate_definitions`
@@ -462,6 +472,9 @@ P13 read the same base plus N02-A (`c9d4a15b7`); P14 read lane-b `e6ed5bb31` (ci
     criterion is exercised again.
   - A `human-confirmed` manual observation whose confirmation names a resolved `user-confirmed` request in the
     same outcome, scoped to the covered criterion version and the observation's procedure, is accepted.
+  - A task result with a `waived` record (owner user) whose confirmation is a resolved `user-confirmed`
+    request scoped to that criterion version and the record's procedure promotes; finalization with every
+    other criterion covered succeeds and the evaluator shows that criterion `waived` (U1(b)).
   - Every golden D03 record and every schema-1 observation, review, result, finalization and embedding receipt
     round-trips byte-identically with unchanged identity; a v2 snapshot parses natively; a v1 snapshot upcasts
     to 3 with `migrated_from_snapshot_id`.
@@ -513,7 +526,9 @@ P13 read the same base plus N02-A (`c9d4a15b7`); P14 read lane-b `e6ed5bb31` (ci
     target sync or the head changed between context and finalize), no diff base, or zero observations while a
     criterion is uncovered → refused with typed gaps; no
     receipt, no retry-ledger success, no checkpoint.
-  - `waived` behaves as U1 decides; under (a) it never satisfies.
+  - A `waived` record whose confirmation is unresolved, not `user-confirmed`, unscoped, or scoped to another
+    outcome, criterion, version or procedure → `confirmation-unresolved` or `confirmation-not-applicable`;
+    frontier bytes unchanged (U1(b)).
   - A schema-2 handoff intent receipt whose frontiers also differ in a field outside the action's set → rejected;
     a schema-1 intent receipt embedding a 19 frontier → rejected. On reload, for both the Builder and the Planner
     handoff parameter, a receipt whose normalized `before_frontier` or `after_frontier` differs from its baseline
@@ -596,10 +611,12 @@ P13 read the same base plus N02-A (`c9d4a15b7`); P14 read lane-b `e6ed5bb31` (ci
   and `serve/cockpit/tests`; `serve/cockpit/web/src/api/workItems.ts`; `WorkItemDetail.tsx` (technical summary;
   a request's `applies_to` criterion and procedure shown beside its answer controls)
   with its component test; E2E seed and the work-portfolio spec; `tests/test_cockpit_boundary.py` (parity for
-  status, verdict, identity source and finalization rules); this plan's row; execution plan status row.
+  status, verdict, identity source and finalization rules); `application_support.py` (`_checkpoint_summary`:
+  the PR body names each `waived` criterion, U1(b)); this plan's row; execution plan status row.
 - **Positive scenarios:** one disposable Change shows the same statuses through `get_change`, MCP `get_change`,
   registered MCP `show_operator_context` (`evidence`), HTTP detail and the Cockpit summary (covered, missing with
-  owner, uncovered); a legacy Change shows `unknown` and its schema-1 observations as unattributed; a finalized
+  owner, waived, uncovered), and the PR body names the waived criterion (U1(b)); a legacy Change shows
+  `unknown` and its schema-1 observations as unattributed; a finalized
   Change derives statuses from its schema-3 receipt; outcome items show only their criteria.
 - **Negative scenarios:** an unavailable Change keeps its existing unavailable view; more than 16 records per
   criterion truncate with a count; locators render as text, never as links; a projection read leaves the tree
@@ -632,7 +649,7 @@ Applied in this PR's execution-plan edits (D11).
 
 | Phase | PR | Exact head | Proof | Challenges | Status |
 | --- | --- | --- | --- | --- | --- |
-| N03-P | #349 | — | Probes P1–P14 | Sol round 1: revision-required (observation binding, stored-byte upcast contract, confirmation applicability, bounded exclusions context, all-carried path) → revised; Sol round 2: revision-required (snapshot consumer serialization, confirmation retention through promotion, upgraded handoff receipt contract, MCP output owners) → revised; Sol round 3: revision-required (Planner lifecycle normalization, context budget) → consolidated comparison inventory; Sol round 4: revision-required (representation-only write publication) → revised; Sol round 5: revision-required (drained acknowledgment base) → revised; Sol round 6: `plan-sound` | approved (D11 confirmation pending; U1 before N03-A) |
+| N03-P | #349 | — | Probes P1–P14 | Sol round 1: revision-required (observation binding, stored-byte upcast contract, confirmation applicability, bounded exclusions context, all-carried path) → revised; Sol round 2: revision-required (snapshot consumer serialization, confirmation retention through promotion, upgraded handoff receipt contract, MCP output owners) → revised; Sol round 3: revision-required (Planner lifecycle normalization, context budget) → consolidated comparison inventory; Sol round 4: revision-required (representation-only write publication) → revised; Sol round 5: revision-required (drained acknowledgment base) → revised; Sol round 6: `plan-sound` | approved (D11 confirmed 2026-10-03; U1 decided (b) 2026-10-03) |
 | N03-A | — | — | — | — | — |
 | N03-B | — | — | — | — | — |
 | N03-C | — | — | — | — | — |
