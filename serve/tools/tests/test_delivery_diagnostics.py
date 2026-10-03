@@ -69,6 +69,7 @@ def _root(tmp_path: Path) -> Path:
         '{"schema_version":2,"remote":"origin","target_branch":"dev","github_repository":"safe/project"}\n',
         encoding="utf-8",
     )
+    (delivery / "runtime/format.json").write_text('{"format":1}\n', encoding="utf-8")
     return tmp_path
 
 
@@ -1059,8 +1060,8 @@ def test_malformed_and_unsupported_records_are_bounded(tmp_path: Path, relative:
         (
             ".owlbear/delivery/runtime/changes/example/frontier.json",
             '{"schema_version":17,"bindings":[]}',
-            "readable-legacy",
-            None,
+            "migration-required",
+            "FRONTIER_MIGRATION_REQUIRED",
         ),
         (
             ".owlbear/delivery/state/example/snapshot.json",
@@ -1115,7 +1116,7 @@ def test_inspector_classifies_readable_legacy_and_newer_versions_like_the_regist
         assert not any(item.endswith("_UNSUPPORTED") for item in result["diagnostic_codes"])
     else:
         assert code in result["diagnostic_codes"]
-        assert result["status"] == "unsupported"
+        assert result["status"] == ("degraded" if status == "migration-required" else "unsupported")
 
 
 # Inspector record kinds mirror registry record kinds; action receipts share one registry row.
@@ -1145,6 +1146,13 @@ def test_inspector_version_tables_mirror_the_delivery_format_registry() -> None:
 
     assert mismatches == []
     assert set(diagnostics.READABLE_LEGACY_VERSIONS) <= set(diagnostics.SUPPORTED_VERSIONS)
+    assert {
+        kind_id: tuple(version for version, _rewrite in registry[kind_id].rewrites)
+        for kind_id in registry
+        if registry[kind_id].rewrites
+    } == diagnostics.MIGRATION_REQUIRED_VERSIONS
+    assert diagnostics.SUPPORTED_FORMAT == state_formats.SUPPORTED_FORMAT
+    assert diagnostics.MIGRATION_JOURNAL_STATES == state_formats.JOURNAL_STATES
 
 
 def _inspector_version_tables() -> dict[str, object]:
@@ -1180,6 +1188,52 @@ def test_coverage_guard_reports_an_omitted_family() -> None:
     declared = {**diagnostics.VERSION_UNINSPECTED_KINDS, "completion_display": " "}
 
     assert _uninspected_registry_kinds(inspector_kinds, declared) == ["completion_display", "finalizer_settlement"]
+
+
+_JOURNAL_ID = "a" * 64
+
+
+def _write_journal(root: Path, state: str, *, schema_version: int = 1) -> None:
+    journal = root / ".owlbear/delivery/runtime/migrations" / _JOURNAL_ID / "journal.json"
+    journal.parent.mkdir(parents=True)
+    payload = {"schema_version": schema_version, "migration_id": _JOURNAL_ID, "state": state}
+    journal.write_text(json.dumps(payload), encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("case", "codes", "gate_codes"),
+    [
+        ("fresh", [], []),
+        ("format-0-with-records", ["FORMAT_MIGRATION_REQUIRED"], ["state-migration-required"]),
+        ("format-2", ["FORMAT_UNSUPPORTED"], ["state-newer-than-controller"]),
+        ("journal-applied", ["MIGRATION_INCOMPLETE"], ["state-migration-incomplete"]),
+        ("journal-verified", [], []),
+        ("journal-newer", ["MIGRATION_JOURNAL_UNSUPPORTED"], ["state-newer-than-controller"]),
+        ("namespace-file", ["MIGRATION_JOURNAL_MALFORMED"], ["state-migration-incomplete"]),
+    ],
+)
+def test_inspector_mirrors_the_gate_format_and_journal_classification(
+    tmp_path: Path, case: str, codes: list[str], gate_codes: list[str]
+) -> None:
+    root = _root(tmp_path) if case == "fresh" else _complete_root(tmp_path)
+    runtime = root / ".owlbear/delivery/runtime"
+    if case in {"fresh", "format-0-with-records"}:
+        (runtime / "format.json").unlink()
+    elif case == "format-2":
+        (runtime / "format.json").write_text('{"format":2}\n', encoding="utf-8")
+    elif case == "namespace-file":
+        (runtime / "migrations").write_text("not a directory\n", encoding="utf-8")
+    elif case.startswith("journal-"):
+        state = {"journal-applied": "applied", "journal-verified": "verified"}.get(case, "applied")
+        _write_journal(root, state, schema_version=2 if case == "journal-newer" else 1)
+
+    result = inspect_delivery(root)
+    gate = [refusal.code for refusal in state_formats.scan_capability(root).refusals]
+
+    assert [code for code in result["diagnostic_codes"] if code.startswith(("FORMAT_", "MIGRATION_"))] == codes
+    assert gate == gate_codes
+    assert result["format"]["supported"] == state_formats.SUPPORTED_FORMAT
+    assert result["writes_performed"] is False
 
 
 _GOLDEN = Path(__file__).parents[2] / "delivery/tests/fixtures/state_formats/golden"

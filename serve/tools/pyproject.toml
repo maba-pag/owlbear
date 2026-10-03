@@ -21,6 +21,8 @@ packages = ["src/owlbear_tools"]
 
 [project.scripts]
 commit-owned = "owlbear_tools.commit_owned:main"
+delivery-lc = "owlbear_tools.delivery_lc:main"
+delivery-migrate = "owlbear_tools.delivery_migration:main"
 doc-index = "owlbear_tools.doc_index:main"
 indexes = "owlbear_tools.indexes:main"
 py-index = "owlbear_tools.py_index:main"

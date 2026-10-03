@@ -48,9 +48,17 @@ SUPPORTED_VERSIONS = {
 }
 # Mirror of the Delivery format registry's registered read-upcasts; a parity test pins both.
 READABLE_LEGACY_VERSIONS: dict[str, tuple[int, ...]] = {
-    "frontier": (17,),
     "snapshot": (1,),
 }
+# Mirror of the registry's fenced rewrites: these versions load only after ``delivery-migrate``.
+MIGRATION_REQUIRED_VERSIONS: dict[str, tuple[int, ...]] = {
+    "frontier": (17,),
+}
+# Mirror of the registry's workspace format (``runtime/format.json``) and migration journal states.
+SUPPORTED_FORMAT = 1
+MIGRATION_JOURNAL_STATES = frozenset({"backed-up", "applying", "applied", "verified", "aborting"})
+_MIGRATION_ID = re.compile(r"^[0-9a-f]{64}$")
+_JOURNAL_TEMPORARY = re.compile(r"^\.tmp-[0-9a-f]{24}$")
 
 _CHANGE_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _FIXED_ENTRY_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -224,6 +232,7 @@ _RUNTIME_RECORD_VERSIONS: dict[str, tuple[int, ...] | None] = {
     "acceptance_cursor": (1,),
     "package_manifest": (1,),
     "package_authority": (2,),
+    "migration_journal": (1,),
 }
 # An unadmitted Design keeps an empty authority file.
 _EMPTY_RECORD_KINDS = frozenset({"package_authority"})
@@ -237,6 +246,7 @@ VERSION_UNINSPECTED_KINDS: dict[str, str] = {
     "package_document": "authored Markdown has no schema version",
     "lock": "locks are transient and never opened",
     "transaction": "pending transactions, temporaries and logs are opaque; listed by name and size only",
+    "format_marker": "the workspace format is checked against SUPPORTED_FORMAT, not a schema_version",
 }
 _VERSIONLESS_REQUIRED_FIELDS: dict[str, dict[str, type]] = {
     "result_receipt": {"candidate_id": str, "claim_id": str, "digest": str, "result": dict},
@@ -338,6 +348,9 @@ _SAFE_LOCATORS = {
     "acceptance_cursor": ".owlbear/delivery/runtime/claims/acceptance-reconciliation/cursor.json",
     "package_manifest": ".owlbear/delivery/packages/<redacted>/manifest.json",
     "package_authority": ".owlbear/delivery/packages/<redacted>/authority.json",
+    "format_marker": ".owlbear/delivery/runtime/format.json",
+    "migration_namespace": ".owlbear/delivery/runtime/migrations",
+    "migration_journal": ".owlbear/delivery/runtime/migrations/<opaque>/journal.json",
 }
 
 MAINTENANCE_PROMPT = """The offline inspection is structural evidence only. Review the bounded
@@ -385,6 +398,8 @@ class _Inspection:
             "logs": 0,
         }
         self.selected_runtime_change_seen = False
+        self.format_marker_present = False
+        self.observed_format: int | None = None
         self.runtime_frontier_changes: set[str] = set()
         self.transaction_scan_unknown = False
         self.incomplete = False
@@ -481,6 +496,10 @@ class _Inspection:
                 "owlbear_tools": "unknown",
             },
             "counts": dict(self.counts),
+            "format": {
+                "supported": SUPPORTED_FORMAT,
+                "observed": self.observed_format if self.format_marker_present else 0,
+            },
             "bytes_inspected": self.total_bytes,
             "diagnostic_codes": sorted(self.diagnostics),
             "pending_effects": "unknown" if self.transaction_scan_unknown else self.counts["pending_transactions"] > 0,
@@ -829,6 +848,11 @@ def _accepted_version_status(schema: object, kind: str, expected_schema: int, in
         return "supported"
     elif schema in READABLE_LEGACY_VERSIONS.get(kind, ()):
         return "readable-legacy"
+    elif schema in MIGRATION_REQUIRED_VERSIONS.get(kind, ()):
+        inspection.diagnostic(f"{kind.upper()}_MIGRATION_REQUIRED")
+        inspection.records[-1]["status"] = "migration-required"
+        inspection.records[-1]["schema_version"] = schema
+        return None
     else:
         status = _version_status(schema, expected_schema)
     inspection.diagnostic(f"{kind.upper()}_UNSUPPORTED")
@@ -1717,6 +1741,101 @@ def _scan_logs(runtime_fd: int, inspection: _Inspection) -> None:  # noqa: C901,
         _close_directory(runtime_fd, "logs", logs_fd, logs_opened, inspection)
 
 
+def _inspect_format_marker(runtime_fd: int, inspection: _Inspection) -> None:
+    """Classify ``runtime/format.json`` like the registry gate; absence means format 0."""
+    content, _ = _safe_read(runtime_fd, "format.json", inspection, "format_marker")
+    if content is None:
+        return
+    inspection.format_marker_present = True
+    try:
+        value = json.loads(content.decode("utf-8"))
+    except UnicodeDecodeError, RecursionError, ValueError:
+        value = None
+    observed = value.get("format") if isinstance(value, dict) else None
+    if isinstance(observed, bool) or not isinstance(observed, int) or observed < 0:
+        inspection.diagnostic("FORMAT_UNSUPPORTED")
+        inspection.records[-1]["status"] = "unsupported"
+        return
+    inspection.observed_format = observed
+    inspection.records[-1]["format"] = observed
+    if observed > SUPPORTED_FORMAT:
+        inspection.diagnostic("FORMAT_UNSUPPORTED")
+        inspection.records[-1]["status"] = "newer"
+    else:
+        inspection.records[-1]["status"] = "supported"
+
+
+def _require_format_for_runtime_records(inspection: _Inspection) -> None:
+    """Mirror the gate: format 0 is accepted only while no runtime record exists yet."""
+    if inspection.format_marker_present and inspection.observed_format != 0:
+        return
+    if any(inspection.counts[key] for key in ("frontier", "change_records", "coordination", "runtime_records")):
+        inspection.diagnostic("FORMAT_MIGRATION_REQUIRED")
+
+
+def _scan_migration_journals(runtime_fd: int, inspection: _Inspection) -> None:
+    """Mirror the gate's raw journal read: only ``verified`` journals let a controller start."""
+    try:
+        metadata = os.stat("migrations", dir_fd=runtime_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return
+    except OSError:
+        inspection.diagnostic("MIGRATION_JOURNAL_UNREADABLE")
+        return
+    if not stat.S_ISDIR(metadata.st_mode):
+        inspection.record("migration_namespace", status="malformed")
+        inspection.diagnostic("MIGRATION_JOURNAL_MALFORMED")
+        return
+    opened = _open_directory(runtime_fd, "migrations", inspection, "MIGRATION_JOURNAL")
+    if opened is None:
+        return
+    namespace_fd, namespace_opened = opened
+    try:
+        for name in sorted(_directory_names(namespace_fd, inspection)):
+            _inspect_migration_journal(namespace_fd, name, inspection)
+    finally:
+        _close_directory(runtime_fd, "migrations", namespace_fd, namespace_opened, inspection)
+
+
+def _inspect_migration_journal(namespace_fd: int, name: str, inspection: _Inspection) -> None:
+    opened = _open_directory(namespace_fd, name, inspection, "MIGRATION_JOURNAL") if _MIGRATION_ID.match(name) else None
+    if opened is None:
+        inspection.record("migration_namespace", status="malformed")
+        inspection.diagnostic("MIGRATION_JOURNAL_MALFORMED")
+        return
+    directory_fd, directory_opened = opened
+    try:
+        names = [name for name in _directory_names(directory_fd, inspection) if not _JOURNAL_TEMPORARY.match(name)]
+        content = _safe_read(directory_fd, "journal.json", inspection, "migration_journal")[0]
+    finally:
+        _close_directory(namespace_fd, name, directory_fd, directory_opened, inspection)
+    try:
+        value = json.loads(content.decode("utf-8")) if content is not None else None
+    except UnicodeDecodeError, RecursionError, ValueError:
+        value = None
+    schema = value.get("schema_version") if isinstance(value, dict) else None
+    if names != ["journal.json"] or not isinstance(value, dict) or isinstance(schema, bool):
+        if content is None:
+            inspection.record("migration_journal", status="malformed")
+        else:
+            inspection.records[-1]["status"] = "malformed"
+        inspection.diagnostic("MIGRATION_JOURNAL_MALFORMED")
+        return
+    if schema != _RUNTIME_RECORD_VERSIONS["migration_journal"][-1]:  # type: ignore[index]
+        inspection.records[-1]["status"] = _version_status(schema, 1) if isinstance(schema, int) else "unsupported"
+        inspection.diagnostic("MIGRATION_JOURNAL_UNSUPPORTED")
+        return
+    state = value.get("state")
+    if state not in MIGRATION_JOURNAL_STATES or value.get("migration_id") != name:
+        inspection.records[-1]["status"] = "malformed"
+        inspection.diagnostic("MIGRATION_JOURNAL_MALFORMED")
+        return
+    inspection.records[-1]["schema_version"] = schema
+    inspection.records[-1]["status"] = "supported" if state == "verified" else str(state)
+    if state != "verified":
+        inspection.diagnostic("MIGRATION_INCOMPLETE")
+
+
 def _scan_runtime(delivery_fd: int, inspection: _Inspection, *, selected: str | None) -> None:
     runtime = _open_directory(delivery_fd, "runtime", inspection, "RUNTIME", required=True)
     if runtime is None:
@@ -1728,6 +1847,8 @@ def _scan_runtime(delivery_fd: int, inspection: _Inspection, *, selected: str | 
     try:
         _inspect_file(runtime_fd, "host.json", inspection, "host")
         _inspect_file(runtime_fd, "host.local.json", inspection, "host_local")
+        _inspect_format_marker(runtime_fd, inspection)
+        _scan_migration_journals(runtime_fd, inspection)
         inventory = _scan_change_records(runtime_fd, inspection, selected=selected)
         try:
             _scan_coordination(runtime_fd, inspection, selected=selected)
@@ -1744,6 +1865,7 @@ def _scan_runtime(delivery_fd: int, inspection: _Inspection, *, selected: str | 
             _scan_runtime_records(runtime_fd, inspection, selected=selected)
             if selected is None:
                 _scan_logs(runtime_fd, inspection)
+            _require_format_for_runtime_records(inspection)
         finally:
             if inventory is not None:
                 _close_directory(

@@ -1,0 +1,263 @@
+{
+  "bind_volume": {
+    "CreatedAt": "2026-10-03T17:11:11+02:00",
+    "Driver": "local",
+    "Labels": null,
+    "Mountpoint": "/var/lib/docker/volumes/n02b-prov-bind/_data",
+    "Name": "n02b-prov-bind",
+    "Options": {
+      "device": "/private/tmp/n02b-prov/fake-live/.owlbear/delivery",
+      "o": "bind",
+      "type": "none"
+    },
+    "Scope": "local"
+  },
+  "container": {
+    "AppArmorProfile": "",
+    "Args": [
+      "/lc/inside.sh",
+      "/Users/example/Projects/owlbear-dev",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "load"
+    ],
+    "Config": {
+      "AttachStderr": true,
+      "AttachStdin": false,
+      "AttachStdout": true,
+      "Cmd": [
+        "sh",
+        "/lc/inside.sh",
+        "/Users/example/Projects/owlbear-dev",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "load"
+      ],
+      "Domainname": "",
+      "Entrypoint": null,
+      "Env": ["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"],
+      "Hostname": "bc1c4b22fdcc",
+      "Image": "ubuntu:24.04",
+      "Labels": {
+        "org.opencontainers.image.version": "24.04"
+      },
+      "OpenStdin": false,
+      "StdinOnce": false,
+      "Tty": false,
+      "User": "",
+      "Volumes": null,
+      "WorkingDir": ""
+    },
+    "Created": "2026-10-03T15:11:11.317399194Z",
+    "Driver": "overlayfs",
+    "ExecIDs": null,
+    "HostConfig": {
+      "AutoRemove": false,
+      "Binds": [
+        "/private/tmp/n02b-prov/stage/root:/Users/example/Projects/owlbear-dev",
+        "/private/tmp/n02b-prov/stage/control:/lc",
+        "n02b-prov-uv-cache:/root/.cache/uv"
+      ],
+      "BlkioDeviceReadBps": [],
+      "BlkioDeviceReadIOps": [],
+      "BlkioDeviceWriteBps": [],
+      "BlkioDeviceWriteIOps": [],
+      "BlkioWeight": 0,
+      "BlkioWeightDevice": [],
+      "CapAdd": null,
+      "CapDrop": null,
+      "Cgroup": "",
+      "CgroupParent": "",
+      "CgroupnsMode": "private",
+      "ConsoleSize": [0, 0],
+      "ContainerIDFile": "",
+      "CpuCount": 0,
+      "CpuPercent": 0,
+      "CpuPeriod": 0,
+      "CpuQuota": 0,
+      "CpuRealtimePeriod": 0,
+      "CpuRealtimeRuntime": 0,
+      "CpuShares": 0,
+      "CpusetCpus": "",
+      "CpusetMems": "",
+      "DeviceCgroupRules": null,
+      "DeviceRequests": null,
+      "Devices": [],
+      "Dns": null,
+      "DnsOptions": [],
+      "DnsSearch": [],
+      "ExtraHosts": null,
+      "GroupAdd": null,
+      "IOMaximumBandwidth": 0,
+      "IOMaximumIOps": 0,
+      "IpcMode": "private",
+      "Isolation": "",
+      "Links": null,
+      "LogConfig": {
+        "Config": {
+          "max-file": "5",
+          "max-size": "20m"
+        },
+        "Type": "json-file"
+      },
+      "MaskedPaths": [
+        "/proc/acpi",
+        "/proc/asound",
+        "/proc/interrupts",
+        "/proc/kcore",
+        "/proc/keys",
+        "/proc/latency_stats",
+        "/proc/sched_debug",
+        "/proc/scsi",
+        "/proc/timer_list",
+        "/proc/timer_stats",
+        "/sys/devices/virtual/powercap",
+        "/sys/firmware"
+      ],
+      "Memory": 0,
+      "MemoryReservation": 0,
+      "MemorySwap": 0,
+      "MemorySwappiness": null,
+      "NanoCpus": 0,
+      "NetworkMode": "bridge",
+      "OomKillDisable": false,
+      "OomScoreAdj": 0,
+      "PidMode": "",
+      "PidsLimit": null,
+      "PortBindings": {},
+      "Privileged": false,
+      "PublishAllPorts": false,
+      "ReadonlyPaths": ["/proc/bus", "/proc/fs", "/proc/irq", "/proc/sys", "/proc/sysrq-trigger"],
+      "ReadonlyRootfs": false,
+      "RestartPolicy": {
+        "MaximumRetryCount": 0,
+        "Name": "no"
+      },
+      "Runtime": "runc",
+      "SecurityOpt": null,
+      "ShmSize": 8409579520,
+      "UTSMode": "",
+      "Ulimits": [],
+      "UsernsMode": "",
+      "VolumeDriver": "",
+      "VolumesFrom": null
+    },
+    "HostnamePath": "",
+    "HostsPath": "",
+    "Id": "bc1c4b22fdccfc0cd6f7b9d3a7a7ff408d6d5930f4a239c5b56d44d2fab373ad",
+    "Image": "sha256:a853f94d226358a79c740cfc7bce0c289748f3fe3488d921d038ccd752c61b60",
+    "ImageManifestDescriptor": {
+      "annotations": {
+        "com.docker.official-images.bashbrew.arch": "arm64v8",
+        "org.opencontainers.image.base.name": "scratch",
+        "org.opencontainers.image.created": "2026-09-17T00:00:00Z",
+        "org.opencontainers.image.revision": "fe5a7375d10f02ff8c3934ec83c88fe06e29cebf",
+        "org.opencontainers.image.source": "https://git.launchpad.net/cloud-images/+oci/ubuntu-base",
+        "org.opencontainers.image.url": "https://hub.docker.com/_/ubuntu",
+        "org.opencontainers.image.version": "24.04"
+      },
+      "digest": "sha256:08571ca13e00ca07a2a84eab83a959b4242e22cceb16486a11bef1428c9e93a7",
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "platform": {
+        "architecture": "arm64",
+        "os": "linux",
+        "variant": "v8"
+      },
+      "size": 424
+    },
+    "LogPath": "",
+    "MountLabel": "",
+    "Mounts": [
+      {
+        "Destination": "/Users/example/Projects/owlbear-dev",
+        "Mode": "",
+        "Propagation": "rprivate",
+        "RW": true,
+        "Source": "/private/tmp/n02b-prov/stage/root",
+        "Type": "bind"
+      },
+      {
+        "Destination": "/lc",
+        "Mode": "",
+        "Propagation": "rprivate",
+        "RW": true,
+        "Source": "/private/tmp/n02b-prov/stage/control",
+        "Type": "bind"
+      },
+      {
+        "Destination": "/root/.cache/uv",
+        "Driver": "local",
+        "Mode": "z",
+        "Name": "n02b-prov-uv-cache",
+        "Propagation": "",
+        "RW": true,
+        "Source": "/var/lib/docker/volumes/n02b-prov-uv-cache/_data",
+        "Type": "volume"
+      }
+    ],
+    "Name": "/kind_jang",
+    "NetworkSettings": {
+      "Networks": {
+        "bridge": {
+          "Aliases": null,
+          "DNSNames": null,
+          "DriverOpts": null,
+          "EndpointID": "",
+          "Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "GwPriority": 0,
+          "IPAMConfig": null,
+          "IPAddress": "",
+          "IPPrefixLen": 0,
+          "IPv6Gateway": "",
+          "Links": null,
+          "MacAddress": "",
+          "NetworkID": ""
+        }
+      },
+      "Ports": {},
+      "SandboxID": "",
+      "SandboxKey": ""
+    },
+    "Path": "sh",
+    "Platform": "linux",
+    "ProcessLabel": "",
+    "ResolvConfPath": "",
+    "RestartCount": 0,
+    "State": {
+      "Dead": false,
+      "Error": "",
+      "ExitCode": 0,
+      "FinishedAt": "0001-01-01T00:00:00Z",
+      "OOMKilled": false,
+      "Paused": false,
+      "Pid": 0,
+      "Restarting": false,
+      "Running": false,
+      "StartedAt": "0001-01-01T00:00:00Z",
+      "Status": "created"
+    },
+    "Storage": {
+      "RootFS": {
+        "Snapshot": {
+          "Name": "overlayfs"
+        }
+      }
+    }
+  },
+  "probe": {
+    "bind_volume_device": "/private/tmp/n02b-prov/fake-live/.owlbear/delivery",
+    "docker_server": "29.4.0 linux (Docker Desktop, macOS host)",
+    "live": "/Users/example/Projects/owlbear-dev",
+    "stage": "/private/tmp/n02b-prov/stage",
+    "uv_cache_volume": "n02b-prov-uv-cache"
+  },
+  "volume": {
+    "CreatedAt": "2026-10-03T17:11:11+02:00",
+    "Driver": "local",
+    "Labels": null,
+    "Mountpoint": "/var/lib/docker/volumes/n02b-prov-uv-cache/_data",
+    "Name": "n02b-prov-uv-cache",
+    "Options": null,
+    "Scope": "local"
+  }
+}

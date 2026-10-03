@@ -79,9 +79,27 @@ from owlbear_delivery.portfolio_operating import (
     DeliveryHealthReason,
     DeliveryHealthResolution,
 )
-from owlbear_delivery.runtime_transaction import RuntimeTransaction, TransactionParticipant
-from owlbear_delivery.state_formats import StateCapabilityError, require_capability, scan_capability
-from owlbear_delivery.storage_io import ControllerFencedError, ControllerLock, acquire_controller_lock
+from owlbear_delivery.runtime_transaction import (
+    RuntimeTransaction,
+    TransactionParticipant,
+    read_contained,
+    write_contained,
+)
+from owlbear_delivery.state_formats import (
+    FORMAT_MARKER,
+    MIGRATIONS_ROOT,
+    SUPPORTED_FORMAT,
+    StateCapabilityError,
+    format_marker_bytes,
+    require_capability,
+    scan_capability,
+)
+from owlbear_delivery.storage_io import (
+    ControllerFencedError,
+    ControllerLock,
+    acquire_controller_lock,
+    read_only_state,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -2500,9 +2518,9 @@ def _load_fenced_application(
     paths = _derive_paths(workspace_root)
     controller_lock = _acquire_controller_fence(paths)
     try:
-        _require_state_capability(paths)
+        fresh = _require_state_capability(paths)
         config = read_config(paths.repository_root / _CONFIG_LOCATOR)
-        application = _load_gated_application(config, paths, publication_provider, issuer_host)
+        application = _load_gated_application(config, paths, publication_provider, issuer_host, stamp_format=fresh)
     except BaseException:
         controller_lock.release()
         raise
@@ -2533,13 +2551,104 @@ def _acquire_controller_fence(paths: _DeliveryPaths) -> ControllerLock:
         raise error from exc
 
 
-def _require_state_capability(paths: _DeliveryPaths) -> None:
+def _require_state_capability(paths: _DeliveryPaths) -> bool:
+    """Refuse unsupported state; return whether the workspace is fresh and needs the format stamp."""
     try:
-        require_capability(scan_capability(paths.repository_root))
+        report = scan_capability(paths.repository_root)
+        require_capability(report)
     except StateCapabilityError as exc:
         raise DeliveryStateVersionError(
             exc.code, exc.detail, locator=exc.locator, version_absent=exc.version_absent
         ) from exc
+    return report.format_absent and report.format_status == "current"
+
+
+def _stamp_fresh_workspace_format(paths: _DeliveryPaths) -> None:
+    """Record the supported format on a workspace without runtime records, before any other write."""
+    content = format_marker_bytes()
+    relative = Path(FORMAT_MARKER).relative_to("runtime")
+    try:
+        root_fd = os.open(paths.runtime_root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            try:
+                write_contained(root_fd, relative, content)
+            except FileExistsError:
+                if read_contained(root_fd, relative, limit=len(content)) != content:
+                    raise
+        finally:
+            os.close(root_fd)
+    except (OSError, RuntimeError, ValueError) as exc:
+        error = _load_error("runtime_root", "Delivery state format marker could not be recorded")
+        raise error from exc
+
+
+def load_verification_application(
+    workspace_root: Path,
+    read_config: Callable[[Path], DeliveryStartupConfig],
+    *,
+    migration_id: str,
+    controller_lock: ControllerLock,
+) -> PortfolioApplication:
+    """Compose the offline migration verifier's read-only application; never used by MCP or Cockpit.
+
+    The caller must hold the exclusive controller lock. The gate accepts exactly the named ``applied``
+    journal at the supported format; remote bootstrap, the publication provider and the format stamp
+    are skipped. Composition runs in ``read_only_state``, which disables transaction recovery, frontier
+    canonicalization and retry reconciliation; callers must keep every query on the result in that scope.
+    """
+    if not (controller_lock.exclusive and controller_lock.held):
+        field, detail = "controller_lock", "migration verification requires the held exclusive controller lock"
+        raise DeliveryApplicationLoadError(field, detail, code=CONTROLLER_FENCED)
+    paths = _derive_paths(workspace_root)
+    report = scan_capability(paths.repository_root, verification_journal=migration_id)
+    try:
+        require_capability(report)
+    except StateCapabilityError as exc:
+        raise DeliveryStateVersionError(
+            exc.code, exc.detail, locator=exc.locator, version_absent=exc.version_absent
+        ) from exc
+    incomplete = "state-migration-incomplete"
+    if report.format_absent or report.format != SUPPORTED_FORMAT:
+        detail = f"{incomplete}: verification requires format {SUPPORTED_FORMAT}"
+        raise DeliveryStateVersionError(incomplete, detail, locator=FORMAT_MARKER)
+    if not any(journal.migration_id == migration_id for journal in report.journals):
+        detail = f"{incomplete}: the named migration journal is absent"
+        raise DeliveryStateVersionError(incomplete, detail, locator=MIGRATIONS_ROOT)
+    config = read_config(paths.repository_root / _CONFIG_LOCATOR)
+    return _compose_read_only_application(config, paths)
+
+
+def load_read_only_application(
+    workspace_root: Path,
+    read_config: Callable[[Path], DeliveryStartupConfig],
+) -> PortfolioApplication:
+    """Compose an offline read-only application for compatibility checks; never used by MCP or Cockpit.
+
+    Like ``load_configured_delivery_application`` it holds the shared controller lock and applies the
+    normal format gate first; like the verification load it skips remote bootstrap, the publication
+    provider and the format stamp, and composes in ``read_only_state``. Callers must keep every query on
+    the result in that scope and release it with ``close_delivery_application``.
+    """
+    paths = _derive_paths(workspace_root)
+    controller_lock = _acquire_controller_fence(paths)
+    try:
+        _require_state_capability(paths)
+        config = read_config(paths.repository_root / _CONFIG_LOCATOR)
+        application = _compose_read_only_application(config, paths)
+    except BaseException:
+        controller_lock.release()
+        raise
+    _CONTROLLER_LOCKS[application] = controller_lock
+    weakref.finalize(application, controller_lock.release)
+    return application
+
+
+def _compose_read_only_application(config: DeliveryStartupConfig, paths: _DeliveryPaths) -> PortfolioApplication:
+    _validate_git_config(config, paths)
+    with read_only_state():
+        host_config = _load_host_config(paths)
+        contracts, diagnostics = _load_contracts(paths.runtime_root)
+        return _compose_application(config, host_config, paths, contracts, None, diagnostics)
 
 
 def _load_gated_application(
@@ -2547,9 +2656,13 @@ def _load_gated_application(
     paths: _DeliveryPaths,
     publication_provider: PublicationProvider | None,
     issuer_host: WindowHostIdentity | None,
+    *,
+    stamp_format: bool = False,
 ) -> PortfolioApplication:
     _validate_git_config(config, paths)
     host_config = _load_host_config(paths)
+    if stamp_format:
+        _stamp_fresh_workspace_format(paths)
     remote_diagnostics: tuple[DeliveryHealthDiagnostic, ...] = ()
     if "delivery_state_branch" in config.model_fields_set:
         remote_diagnostics = _bootstrap_remote_state(config, paths)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -156,6 +157,7 @@ from owlbear_delivery.runtime_transaction import (
     RuntimeTransaction,
     TransactionParticipant,
 )
+from owlbear_delivery.storage_io import state_is_read_only
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -2325,13 +2327,16 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
             content = self._frontier_path.read_bytes()
             frontier, canonical = parse_delivery_frontier(content)
             self._validate_frontier(frontier)
-            if canonical != content:
+            stored_current = json.loads(content).get("schema_version") == frontier.schema_version
+            if canonical != content and stored_current and not state_is_read_only():
                 self._replace_content(content, canonical, record_pending_publication=False)
         except (OSError, TypeError, ValueError) as exc:
             message = f"Delivery frontier is missing or invalid: {self._contract.change_id}"
             raise DeliveryRuntimeReferenceError(message) from exc
-        else:
-            return frontier, canonical
+        if not stored_current:
+            message = f"Delivery frontier needs its registered fenced migration: {self._contract.change_id}"
+            raise DeliveryRuntimeReferenceError(message)
+        return frontier, canonical
 
     def _replace(
         self,

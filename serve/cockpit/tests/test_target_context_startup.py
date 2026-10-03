@@ -83,6 +83,22 @@ def test_cockpit_is_fenced_by_an_exclusive_controller_lock_holder(tmp_path: Path
         holder.release()
 
 
+@pytest.mark.parametrize("state", ["backed-up", "applying", "applied", "aborting"])
+def test_cockpit_refuses_a_migration_journal_that_is_not_verified(tmp_path: Path, state: str) -> None:
+    repository = _workspace(tmp_path)
+    migration_id = "b" * 64
+    journal = repository / ".owlbear/delivery/runtime/migrations" / migration_id / "journal.json"
+    journal.parent.mkdir(parents=True)
+    journal.write_text(json.dumps({"schema_version": 1, "migration_id": migration_id, "state": state}), "utf-8")
+    (repository / ".owlbear/delivery/runtime/format.json").write_text('{"format":1}\n', encoding="utf-8")
+    digests = record_tree_digest(repository)
+
+    with pytest.raises(RuntimeError, match="state_version: state-migration-incomplete"):
+        load_target_context(repository)
+
+    assert record_tree_digest(repository) == digests
+
+
 @pytest.mark.parametrize(
     "content",
     [json.dumps({**_CONFIG, "schema_version": 3, "future_field": True}), '{"schema_version": 2, "remote": '],

@@ -163,7 +163,7 @@ from owlbear_delivery.recovery import (
     RetryStopCode,
     is_canonical_admitted_path,
 )
-from owlbear_delivery.storage_io import atomic_write, locked_roots
+from owlbear_delivery.storage_io import atomic_write, locked_roots, state_is_read_only
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
     DeliveryCompilationResult,
@@ -251,7 +251,7 @@ class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _Publication
             if hooks
             else lambda: datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
         )
-        for runtime in self._runtimes.values():
+        for runtime in () if state_is_read_only() else self._runtimes.values():
             try:
                 with locked_roots((self._checkpoint_lock_root(runtime.contract.change_id),), blocking=False):
                     self._reconcile_retry_results(runtime)
