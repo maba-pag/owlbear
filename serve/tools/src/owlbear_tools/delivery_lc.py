@@ -2,8 +2,8 @@
 
 ``prepare`` copies the live checkout's ``.git`` and ``.owlbear/delivery`` into a stage and hashes the
 live records. ``run`` starts a container whose only bind mount at (or under) the live absolute path
-is the stage copy, proves that isolation, then runs the candidate's load or full form against the
-copy. ``compare`` proves the live records unchanged. Record and receipt bytes, including absolute
+is the stage copy, proves that isolation, then runs the candidate's inspector, gate and load or full form
+against the copy. ``compare`` proves the live records unchanged. Record and receipt bytes, including absolute
 main-checkout paths, are never rewritten: inside the container those paths resolve into the copy.
 
 The module is stdlib-only at import, so the container can run its isolation proof before any
@@ -16,19 +16,26 @@ import argparse
 import contextlib
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 COPY_MARKER = ".lc-copy-marker"
 CONTROL_MOUNT = "/lc"
+CA_BUNDLE = "ca-bundle.crt"
 DEFAULT_IMAGE = "ubuntu:24.04"
+_FORMAT_MARKER = "runtime/format.json"
 _RECORD_ROOTS = ("config.json", "runtime", "packages")
 _COPY_EXCLUDES = (".venv", "node_modules", "dist", "__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache")
 _PREVIOUS_GATE = "serve/delivery/src/owlbear_delivery/state_formats.py"
@@ -49,6 +56,9 @@ _INSIDE = """#!/bin/sh
 set -eu
 LIVE="$1"; CANDIDATE="$2"; FORM="$3"; PREVIOUS="$4"
 apt-get update -qq >/dev/null && apt-get install -y -qq git curl ca-certificates >/dev/null
+# Trust the system store (plus an optional extra CA from --ca-bundle) for curl, uv and Python TLS.
+if [ -f /lc/ca-bundle.crt ]; then cat /lc/ca-bundle.crt >> /etc/ssl/certs/ca-certificates.crt; fi
+export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt UV_NATIVE_TLS=1
 curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 export PATH="$HOME/.local/bin:$PATH"
 git config --global --add safe.directory '*'
@@ -117,10 +127,44 @@ def compare(live: Path, stage: Path) -> dict[str, object]:
 
 @dataclass(frozen=True, slots=True)
 class Mount:
-    """One ``/proc/self/mountinfo`` row: the mounted source ``root`` and its ``mount_point``."""
+    """One ``/proc/self/mountinfo`` row: source ``root``, ``mount_point``, filesystem type and mount source."""
 
     root: str
     mount_point: str
+    fstype: str = ""
+    source: str = ""
+
+
+# Kernel and container pseudo filesystems: their ``root`` is never a host directory.
+_VIRTUAL_FILESYSTEMS = frozenset(
+    {
+        "autofs",
+        "binfmt_misc",
+        "bpf",
+        "cgroup",
+        "cgroup2",
+        "configfs",
+        "debugfs",
+        "devpts",
+        "devtmpfs",
+        "efivarfs",
+        "fusectl",
+        "hugetlbfs",
+        "mqueue",
+        "nsfs",
+        "overlay",
+        "proc",
+        "pstore",
+        "securityfs",
+        "shm",
+        "sysfs",
+        "tmpfs",
+        "tracefs",
+    }
+)
+# Docker Desktop shares a host directory as ``/run/host_mark/<top>``; ``root`` is then relative to it.
+_HOST_SHARE = "/run/host_mark"
+_HOST_ALIASES = ("/host_mnt", "/private")
 
 
 def _unescape(field: str) -> str:
@@ -128,17 +172,43 @@ def _unescape(field: str) -> str:
 
 
 def parse_mountinfo(text: str) -> list[Mount]:
-    """Parse mountinfo rows into (root, mount point) pairs."""
+    """Parse mountinfo rows into root, mount point, filesystem type and mount source."""
     mounts = []
     for line in text.splitlines():
         fields = line.split()
-        if len(fields) >= 5:  # noqa: PLR2004 - mountinfo: id, parent, device, root, mount point.
-            mounts.append(Mount(_unescape(fields[3]), _unescape(fields[4])))
+        if len(fields) < 5:  # noqa: PLR2004 - mountinfo: id, parent, device, root, mount point.
+            continue
+        tail = fields[fields.index("-", 5) + 1 :] if "-" in fields[5:] else []
+        fstype, source = [*tail, "", ""][:2]
+        mounts.append(Mount(_unescape(fields[3]), _unescape(fields[4]), fstype, _unescape(source)))
     return mounts
 
 
 def _within(path: str, root: str) -> bool:
     return path == root or path.startswith(root.rstrip("/") + "/")
+
+
+def _without_aliases(path: str) -> str:
+    for alias in _HOST_ALIASES:
+        if _within(path, alias):
+            path = path.removeprefix(alias) or "/"
+    return path
+
+
+def _host_path(mount: Mount) -> str:
+    """Return the host directory a mount exposes, joining a Docker Desktop share and removing host aliases."""
+    path = mount.root
+    if mount.source.startswith(f"{_HOST_SHARE}/"):
+        share = mount.source.removeprefix(_HOST_SHARE).rstrip("/")
+        path = share if mount.root == "/" else f"{share}{mount.root}"
+    return _without_aliases(path)
+
+
+def _exposes_checkout(mount: Mount, live: str) -> bool:
+    """Return whether a mount's source is the real checkout or one of its ancestors, at any mount point."""
+    if mount.mount_point == "/" or mount.fstype in _VIRTUAL_FILESYSTEMS:
+        return False
+    return _within(_without_aliases(live), _host_path(mount))
 
 
 def _source_matches(root: str, stage_source: str) -> bool:
@@ -159,14 +229,17 @@ def isolation_failures(
     at_live = [mount for mount in mounts if _within(mount.mount_point, live)]
     if len(at_live) != 1 or at_live[0].mount_point != live:
         failures.append(f"expected exactly one mount at the live path, found {len(at_live)}")
-    elif not _source_matches(at_live[0].root, stage_source):
+    elif not _source_matches(_host_path(at_live[0]), stage_source):
         failures.append("the mount at the live path is not the stage copy")
     top = "/" + live.strip("/").split("/", 1)[0]
     outside = [mount for mount in mounts if _within(mount.mount_point, top) and not _within(mount.mount_point, live)]
     if outside:
         failures.append(f"unexpected mounts under {top}: {[mount.mount_point for mount in outside]}")
-    if any(mount.root in {live, f"/host_mnt{live}"} for mount in mounts):
-        failures.append("the real checkout is mounted")
+    failures.extend(
+        f"the real checkout or an ancestor of it is mounted at {mount.mount_point}"
+        for mount in mounts
+        if _exposes_checkout(mount, live)
+    )
     if not marker_present:
         failures.append("the copy marker is absent at the live path")
     expected = f"{live.rstrip('/')}/.git"
@@ -231,12 +304,18 @@ def run(  # noqa: PLR0913 - mirrors docker_command.
     *,
     image: str = DEFAULT_IMAGE,
     uv_cache_volume: str | None = None,
+    ca_bundle: Path | None = None,
     dry_run: bool = False,
 ) -> dict[str, object]:
-    """Write the container script and run the candidate's LC form against the stage copy."""
+    """Write the container script and run the candidate's LC form against the stage copy.
+
+    ``ca_bundle`` (PEM) is appended to the container trust store, for networks that intercept TLS.
+    """
     control = stage / "control"
     (control / "inside.sh").write_text(_INSIDE, encoding="utf-8")
     shutil.copyfile(__file__, control / "delivery_lc.py")
+    if ca_bundle is not None:
+        shutil.copyfile(ca_bundle, control / CA_BUNDLE)
     command = docker_command(stage, live, candidate, form, previous, image=image, uv_cache_volume=uv_cache_volume)
     if dry_run:
         return {"command": command}
@@ -289,6 +368,57 @@ def _gate(live: Path) -> list[list[str]]:
     return [[refusal.code, refusal.locator] for refusal in scan_capability(live).refusals]
 
 
+def _inspect(live: Path) -> dict[str, object]:
+    """Run the candidate ``delivery-diagnose inspect`` against the copy and keep its bounded summary."""
+    module = (sys.executable, "-m", "owlbear_tools.delivery_diagnostics")
+    completed = subprocess.run(  # noqa: S603 - fixed interpreter, module and argument vector.
+        (*module, "inspect", "--project-root", str(live), "--format", "json"),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    try:
+        result = json.loads(completed.stdout)
+    except ValueError:
+        return {"exit": completed.returncode, "status": "unavailable", "diagnostic_codes": ["INSPECTOR_OUTPUT_INVALID"]}
+    return {
+        "exit": completed.returncode,
+        "status": result.get("status"),
+        "inspection_complete": result.get("inspection_complete"),
+        "diagnostic_codes": result.get("diagnostic_codes", []),
+        "format": result.get("format"),
+    }
+
+
+_MIGRATION_DIAGNOSTIC = re.compile(r"[A-Z_]+_MIGRATION_REQUIRED")
+
+
+def inspector_agrees(inspection: dict[str, Any], gate: list[list[str]], load: dict[str, Any]) -> bool:
+    """Return whether the inspector's verdict matches the gate and the load (plan section 3.3).
+
+    A loaded copy with no gate refusal must inspect as complete ``healthy-structure`` with no
+    diagnostic; a copy refused only for migration must show only migration-required diagnostics,
+    the format one exactly when the gate refuses the marker; any other refusal must not inspect healthy.
+    """
+    codes = list(inspection.get("diagnostic_codes") or [])
+    if not gate:
+        return bool(
+            load.get("loaded")
+            and not load.get("unavailable")
+            and inspection.get("status") == "healthy-structure"
+            and inspection.get("inspection_complete") is True
+            and not codes
+        )
+    if all(code == "state-migration-required" for code, _locator in gate):
+        format_refused = ["state-migration-required", _FORMAT_MARKER] in gate
+        return bool(
+            codes
+            and all(_MIGRATION_DIAGNOSTIC.fullmatch(code) for code in codes)
+            and ("FORMAT_MIGRATION_REQUIRED" in codes) == format_refused
+        )
+    return inspection.get("status") != "healthy-structure"
+
+
 def _previous_gate(live: Path, previous: str, root: Path) -> dict[str, object]:
     """Run the previous release's stdlib gate from its commit against ``root`` (D3 oracle)."""
     source = subprocess.run(  # noqa: S603 - fixed Git argument vector.
@@ -308,6 +438,63 @@ def _previous_gate(live: Path, previous: str, root: Path) -> dict[str, object]:
     return json.loads(completed.stdout)
 
 
+def _previous_load(live: Path, previous: str) -> dict[str, object]:
+    """Install the previous release from its commit and load every Change of ``live`` with it (rollback)."""
+    environment = {key: value for key, value in os.environ.items() if key not in {"VIRTUAL_ENV", "PYTHONPATH"}}
+    with tempfile.TemporaryDirectory() as directory:
+        archive, tree = Path(directory) / "previous.tar", Path(directory) / "previous"
+        subprocess.run(  # noqa: S603 - fixed Git argument vector.
+            ("git", "-C", str(live), "archive", "--format=tar", "-o", str(archive), previous),  # noqa: S607
+            check=True,
+            capture_output=True,
+        )
+        with tarfile.open(archive) as handle:
+            handle.extractall(tree, filter="data")
+        synced = subprocess.run(
+            ("uv", "sync", "--locked", "--quiet"),  # noqa: S607 - uv from PATH in the container.
+            cwd=tree,
+            env=environment,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if synced.returncode != 0:
+            return {"loaded": False, "code": "previous-release-unavailable", "detail": synced.stderr[-2000:]}
+        completed = subprocess.run(  # noqa: S603 - the previous release's interpreter runs this module's loader.
+            (str(tree / ".venv/bin/python"), "-I", __file__, "load-changes", "--live", str(live)),
+            env=environment,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    try:
+        return json.loads(completed.stdout)
+    except ValueError:
+        return {"loaded": False, "code": "previous-load-failed", "detail": completed.stderr[-2000:]}
+
+
+def previous_release_oracle(report: dict[str, Any]) -> bool:
+    """D3 on the migrated copy: a release supporting its format loads every Change, otherwise refuses it.
+
+    Supported rollback needs no gate refusal and a load by that release listing the candidate's Changes,
+    all available. Unsupported downgrade needs the typed newer-format refusal at ``runtime/format.json``
+    and unchanged record hashes; any other refusal (for example only an incomplete journal) is not enough.
+    """
+    previous = report["previous_gate_after"]
+    if previous["supported_format"] >= report["target_format"]:
+        load = report.get("previous_load") or {}
+        return bool(
+            previous["refusals"] == []
+            and load.get("loaded") is True
+            and load.get("changes") == report["migrated"]["load"].get("changes")
+            and not load.get("unavailable")
+        )
+    return bool(
+        ["state-newer-than-controller", _FORMAT_MARKER] in previous["refusals"]
+        and report.get("previous_gate_hashes_unchanged") is True
+    )
+
+
 def _synthetic_newer(live: Path) -> list[list[str]]:
     """Refusal of a copy whose marker names a format newer than the candidate supports."""
     from owlbear_delivery.state_formats import SUPPORTED_FORMAT, format_marker_bytes  # noqa: PLC0415
@@ -325,24 +512,31 @@ def _synthetic_newer(live: Path) -> list[list[str]]:
 
 
 def load_form(live: Path) -> dict[str, object]:
-    """Gate report and read-only application load of the unmodified copy."""
+    """Gate report, candidate inspector and read-only application load of the unmodified copy."""
     before = record_hashes(live)
-    report = {"form": "load", "gate": _gate(live), "load": _load_every_change(live)}
+    report: dict[str, Any] = {"form": "load", "inspector": _inspect(live), "gate": _gate(live)}
+    report["load"] = _load_every_change(live)
     report["records_changed"] = sorted(k for k, v in record_hashes(live).items() if before.get(k) != v)
     load = report["load"]
-    report["passed"] = bool(isinstance(load, dict) and load.get("loaded") and not load.get("unavailable"))
+    report["inspector_agrees"] = inspector_agrees(report["inspector"], report["gate"], load)
+    report["passed"] = bool(load.get("loaded") and not load.get("unavailable") and report["inspector_agrees"])
     return report
 
 
-def full_form(live: Path, previous: str) -> dict[str, object]:
+def full_form(
+    live: Path,
+    previous: str,
+    *,
+    previous_load: Callable[[Path, str], dict[str, object]] = _previous_load,
+) -> dict[str, object]:
     """Load form plus typed refusal of the unmigrated copy, migration, D3 oracle and newer-format refusal."""
     from owlbear_delivery import state_migration  # noqa: PLC0415
-    from owlbear_delivery.state_formats import record_tree_digest  # noqa: PLC0415
+    from owlbear_delivery.state_formats import SUPPORTED_FORMAT, record_tree_digest  # noqa: PLC0415
 
-    report: dict[str, Any] = {"form": "full", "previous": previous}
+    report: dict[str, Any] = {"form": "full", "previous": previous, "target_format": SUPPORTED_FORMAT}
     pre = record_tree_digest(live)
     report["previous_gate_before"] = _previous_gate(live, previous, live)
-    report["unmigrated"] = {"gate": _gate(live), "load": _load_every_change(live)}
+    report["unmigrated"] = {"inspector": _inspect(live), "gate": _gate(live), "load": _load_every_change(live)}
     report["unmigrated_hashes_unchanged"] = record_tree_digest(live) == pre
     try:
         proposal = state_migration.propose(live)
@@ -358,30 +552,32 @@ def full_form(live: Path, previous: str) -> dict[str, object]:
         return report
     post = record_tree_digest(live, exclude_migrations=True)
     report["changed_records"] = sorted(k for k in set(pre) | set(post) if pre.get(k) != post.get(k))
-    report["migrated"] = {"gate": _gate(live), "load": _load_every_change(live)}
+    report["migrated"] = {"inspector": _inspect(live), "gate": _gate(live), "load": _load_every_change(live)}
     migrated_hashes = record_tree_digest(live)
     report["previous_gate_after"] = _previous_gate(live, previous, live)
     report["previous_gate_hashes_unchanged"] = record_tree_digest(live) == migrated_hashes
     report["synthetic_newer"] = _synthetic_newer(live)
+    if report["previous_gate_after"]["supported_format"] >= SUPPORTED_FORMAT:
+        # Last: a normal load by the rollback release may write to the copy.
+        report["previous_load"] = previous_load(live, previous)
     report["passed"] = _full_form_passed(report, {entry["locator"] for entry in report["proposal"]["entries"]})
     return report
 
 
 def _full_form_passed(report: dict[str, Any], proposed: set[str]) -> bool:
     unmigrated, migrated = report["unmigrated"], report["migrated"]
-    load, previous = migrated["load"], report["previous_gate_after"]
-    previous_accepts = previous["supported_format"] >= 1
-    oracle = (previous["refusals"] == []) if previous_accepts else bool(previous["refusals"])
+    load = migrated["load"]
     return bool(
         unmigrated["load"].get("code", "").startswith("state-")
         and report["unmigrated_hashes_unchanged"]
+        and inspector_agrees(unmigrated["inspector"], unmigrated["gate"], unmigrated["load"])
         and report.get("verify") == "verified"
         and set(report["changed_records"]) == proposed
         and migrated["gate"] == []
         and load.get("loaded")
         and not load.get("unavailable")
-        and oracle
-        and report["previous_gate_hashes_unchanged"]
+        and inspector_agrees(migrated["inspector"], migrated["gate"], load)
+        and previous_release_oracle(report)
         and any(code == "state-newer-than-controller" for code, _locator in report["synthetic_newer"])
     )
 
@@ -415,6 +611,7 @@ def _parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--previous", default="")
     run_parser.add_argument("--image", default=DEFAULT_IMAGE)
     run_parser.add_argument("--uv-cache-volume", default=None)
+    run_parser.add_argument("--ca-bundle", type=Path, default=None)
     run_parser.add_argument("--dry-run", action="store_true")
     compare_parser = commands.add_parser("compare")
     compare_parser.add_argument("--stage", type=Path, required=True)
@@ -428,6 +625,8 @@ def _parser() -> argparse.ArgumentParser:
     inside_parser.add_argument("--form", choices=("load", "full"), required=True)
     inside_parser.add_argument("--previous", default="")
     inside_parser.add_argument("--report", type=Path, required=True)
+    load_parser = commands.add_parser("load-changes")
+    load_parser.add_argument("--live", type=Path, required=True)
     return parser
 
 
@@ -449,10 +648,14 @@ def _execute(args: argparse.Namespace) -> tuple[int, dict[str, object]]:
             args.previous,
             image=args.image,
             uv_cache_volume=args.uv_cache_volume,
+            ca_bundle=args.ca_bundle,
             dry_run=args.dry_run,
         )
         passed = args.dry_run or (result["exit"] == 0 and result["report"].get("passed") is True)
         return (0 if passed else 1), result
+    if args.command == "load-changes":
+        result = _load_every_change(live)
+        return (0 if result.get("loaded") else 1), result
     if args.command == "prove-isolation":
         result = prove_isolation(live, args.stage_source)
     else:

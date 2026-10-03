@@ -114,7 +114,7 @@ from owlbear_delivery.runtime_transaction import (
     RuntimeTransaction,
     TransactionParticipant,
 )
-from owlbear_delivery.storage_io import locked_roots
+from owlbear_delivery.storage_io import locked_roots, state_is_read_only
 from owlbear_delivery.work_items import (
     DeliveryPortfolioSnapshot,
     DeliveryReadiness,
@@ -135,6 +135,8 @@ class _RecoveryMixin:
 
     def _reconcile_retry_results(self, runtime: DeliveryRuntime) -> None:
         """Replay accounting only from owner receipts; absent evidence keeps reservations."""
+        if state_is_read_only():
+            return
         self._import_legacy_worker_budgets(runtime)
         ledger = runtime.retry_ledger(clock=self._clock)
         ledger.reconcile_owner_results()

@@ -11,6 +11,7 @@ import fcntl
 import os
 import stat
 import tempfile
+from contextvars import ContextVar
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -20,6 +21,35 @@ if TYPE_CHECKING:
 
 _DIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 _LOCK_FLAGS = os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW
+_READ_ONLY: ContextVar[bool] = ContextVar("owlbear_delivery_read_only_state", default=False)
+
+
+class ReadOnlyStateError(RuntimeError):
+    """A Delivery record write was attempted inside a read-only state scope."""
+
+    code = "ERR_DELIVERY_STATE_READ_ONLY"
+
+
+@contextlib.contextmanager
+def read_only_state() -> Iterator[None]:
+    """Refuse every transaction and atomic record write in this context, before any byte changes."""
+    token = _READ_ONLY.set(True)
+    try:
+        yield
+    finally:
+        _READ_ONLY.reset(token)
+
+
+def state_is_read_only() -> bool:
+    """Return whether the current context forbids Delivery record writes."""
+    return _READ_ONLY.get()
+
+
+def refuse_read_only_write() -> None:
+    """Raise ``ReadOnlyStateError`` inside a read-only scope."""
+    if _READ_ONLY.get():
+        msg = "Delivery state is read-only in this context"
+        raise ReadOnlyStateError(msg)
 
 
 def _open_lock(root_fd: int, *, blocking: bool, shared: bool = False, name: str = ".storage.lock") -> int:
@@ -133,6 +163,7 @@ def atomic_write(target: Path, content: str) -> None:
     Raises:
         OSError: Any I/O failure; the temp file is cleaned up before raising.
     """
+    refuse_read_only_write()
     fd, tmp_path = tempfile.mkstemp(
         dir=target.parent,
         prefix=".tmp-",

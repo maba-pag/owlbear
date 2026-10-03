@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -43,7 +44,7 @@ from owlbear_delivery.finalization_reports import (
     ReportFinalizationFailure,
 )
 from owlbear_delivery.git_executable import resolve_git_executable
-from owlbear_delivery.runtime_transaction import RuntimeTransaction
+from owlbear_delivery.runtime_transaction import RuntimeTransaction, TransactionParticipant, write_contained
 from owlbear_delivery.state_formats import (
     FORMAT_MARKER,
     RECORD_KINDS,
@@ -52,10 +53,18 @@ from owlbear_delivery.state_formats import (
     scan_capability,
 )
 from owlbear_delivery.state_migration import MigrationError, MigrationJournal
-from owlbear_delivery.storage_io import acquire_controller_lock
+from owlbear_delivery.storage_io import (
+    ReadOnlyStateError,
+    acquire_controller_lock,
+    atomic_write,
+    read_only_state,
+    state_is_read_only,
+)
 from owlbear_delivery.target_contract import DeliveryContract
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from owlbear_delivery import PortfolioApplication
 
 _FIXTURES = Path(__file__).with_name("fixtures") / "state_formats"
@@ -336,6 +345,154 @@ def test_runtime_refuses_a_schema_17_frontier_without_rewriting_it(tmp_path: Pat
         DeliveryRuntime(runtime_root, contract)
 
     assert _frontier_path(repository, "change-a").read_bytes() == legacy
+
+
+def _malformed_config(_original: bytes) -> bytes:
+    return b'{"schema_version":2}'
+
+
+def _malformed_admission(original: bytes) -> bytes:
+    payload = json.loads(original)
+    return json.dumps({"schema_version": payload["schema_version"]}, separators=(",", ":")).encode()
+
+
+def _malformed_frontier(original: bytes) -> bytes:
+    payload = json.loads(original)
+    payload["bindings"] = "not-a-binding-list"
+    return json.dumps(payload, separators=(",", ":")).encode()
+
+
+@pytest.mark.parametrize(
+    ("locator", "malform"),
+    [
+        ("config.json", _malformed_config),
+        ("runtime/changes/change-a/admission.json", _malformed_admission),
+        ("runtime/changes/change-b/frontier.json", _malformed_frontier),
+    ],
+    ids=["config", "admission", "frontier"],
+)
+def test_malformed_unchanged_record_at_its_current_version_refuses_propose_and_apply_without_writing(
+    tmp_path: Path, locator: str, malform: Callable[[bytes], bytes]
+) -> None:
+    repository = _seed(tmp_path)
+    _write_config(repository)
+    path = repository / ".owlbear/delivery" / locator
+    original = path.read_bytes()
+    path.write_bytes(malform(original))
+    assert {record.status for record in scan_capability(repository).records if record.locator == locator} == {"current"}
+    digests = record_tree_digest(repository)
+
+    with pytest.raises(MigrationError) as at_propose:
+        state_migration.propose(repository)
+
+    assert (at_propose.value.code, at_propose.value.locator) == ("record-corrupt", locator)
+    assert record_tree_digest(repository) == digests
+    assert not (repository / ".owlbear/delivery-migrations").exists()
+    path.write_bytes(original)
+    proposal = state_migration.propose(repository)
+    path.write_bytes(malform(original))
+    digests = record_tree_digest(repository)
+    with pytest.raises(MigrationError) as at_apply:
+        state_migration.apply(repository, proposal.migration_id)
+    assert (at_apply.value.code, at_apply.value.locator) == ("record-corrupt", locator)
+    assert record_tree_digest(repository) == digests
+    assert not (_migration_dir(repository, proposal.migration_id) / "backup").exists()
+    assert _live_journal(repository, proposal.migration_id) is None
+
+
+@pytest.mark.parametrize("shape", ["noncanonical-current-frontier", "legacy-retry-accounting"])
+def test_verify_reads_without_canonicalizing_reconciling_or_recovering_records(tmp_path: Path, shape: str) -> None:
+    repository = _seed(tmp_path)
+    _write_config(repository)
+    frontier = _frontier_path(repository, "change-b")
+    payload = json.loads(frontier.read_bytes())
+    if shape == "legacy-retry-accounting":
+        payload["bindings"][0].update(retry_count=2, retry_fingerprint="a" * 64)
+    frontier.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    raw = frontier.read_bytes()
+    proposal = state_migration.propose(repository)
+    assert [entry.locator for entry in proposal.entries] == [FORMAT_MARKER]
+    state_migration.apply(repository, proposal.migration_id)
+    applied = record_tree_digest(repository)
+    listing = _listing(repository / ".owlbear/delivery/runtime/changes")
+
+    assert state_migration.verify(repository, proposal.migration_id).state == "verified"
+
+    assert frontier.read_bytes() == raw
+    verified = record_tree_digest(repository)
+    changed = {locator for locator in set(applied) | set(verified) if applied.get(locator) != verified.get(locator)}
+    assert changed == {f"runtime/migrations/{proposal.migration_id}/journal.json"}
+    assert _listing(repository / ".owlbear/delivery/runtime/changes") == listing
+
+
+def test_read_only_scope_refuses_every_record_write_primitive_before_any_byte_changes(tmp_path: Path) -> None:
+    root = tmp_path / "runtime"
+    root.mkdir()
+    participant = TransactionParticipant(root, Path("record.json"), b"{}\n")
+
+    with read_only_state():
+        assert state_is_read_only()
+        with pytest.raises(ReadOnlyStateError):
+            RuntimeTransaction(root, "read-only", (participant,)).commit()
+        root_fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            with pytest.raises(ReadOnlyStateError):
+                write_contained(root_fd, Path("record.json"), b"{}\n")
+        finally:
+            os.close(root_fd)
+        with pytest.raises(ReadOnlyStateError):
+            atomic_write(root / "note.md", "text")
+
+    assert not state_is_read_only()
+    assert sorted(path.name for path in root.iterdir()) == []
+
+
+def test_stage_and_backup_publications_fsync_their_parent_before_journal_or_record_writes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository = _seed(tmp_path)
+    _write_config(repository)
+    _make_schema_17(repository, "change-a")
+    events: list[tuple[str, object, tuple[str, ...]]] = []
+    fsync, journal, commit = (
+        state_migration._fsync_directory,  # noqa: SLF001 - the durability barrier under test.
+        state_migration._write_live_journal,  # noqa: SLF001 - the journal write it must precede.
+        RuntimeTransaction.commit,
+    )
+
+    def recorded_fsync(directory: Path) -> None:
+        events.append(("fsync", directory.resolve(), tuple(sorted(path.name for path in directory.iterdir()))))
+        fsync(directory)
+
+    def recorded_journal(paths: object, written: MigrationJournal) -> None:
+        events.append(("journal", written.state, ()))
+        journal(paths, written)  # type: ignore[arg-type]
+
+    def recorded_commit(transaction: RuntimeTransaction, **kwargs: object) -> None:
+        events.append(("commit", None, ()))
+        commit(transaction, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(state_migration, "_fsync_directory", recorded_fsync)
+    monkeypatch.setattr(state_migration, "_write_live_journal", recorded_journal)
+    monkeypatch.setattr(RuntimeTransaction, "commit", recorded_commit)
+    owlbear = (repository / ".owlbear").resolve()
+
+    proposal = state_migration.propose(repository)
+
+    state_root = owlbear / "delivery-migrations"
+    migration = state_root / proposal.migration_id
+    assert ("fsync", owlbear) in [(kind, path) for kind, path, names in events if "delivery-migrations" in names]
+    assert ("fsync", state_root) in [(kind, path) for kind, path, names in events if proposal.migration_id in names]
+    events.clear()
+    state_migration.apply(repository, proposal.migration_id, batch_size=1)
+    published = next(
+        index
+        for index, (kind, path, names) in enumerate(events)
+        if (kind, path) == ("fsync", migration) and "backup" in names
+    )
+    first_journal = next(index for index, (kind, _path, _names) in enumerate(events) if kind == "journal")
+    first_commit = next(index for index, (kind, _path, _names) in enumerate(events) if kind == "commit")
+    assert published < first_journal < first_commit
 
 
 # ---------------------------------------------------------------------------

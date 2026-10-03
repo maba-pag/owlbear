@@ -12,6 +12,7 @@ from __future__ import annotations
 import contextlib
 import errno
 import hashlib
+import importlib
 import importlib.metadata
 import json
 import os
@@ -33,6 +34,7 @@ from owlbear_delivery.delivery_application_loader import (
     DeliveryStartupConfig,
     load_verification_application,
 )
+from owlbear_delivery.delivery_state import parse_delivery_state_snapshot
 from owlbear_delivery.runtime_support import parse_delivery_frontier
 from owlbear_delivery.runtime_transaction import (
     ContainedWriteLimits,
@@ -52,12 +54,19 @@ from owlbear_delivery.state_formats import (
     MIGRATIONS_ROOT,
     SUPPORTED_FORMAT,
     CapabilityReport,
+    RecordKind,
     classify_kind,
     format_marker_bytes,
     record_tree_digest,
     scan_capability,
 )
-from owlbear_delivery.storage_io import ControllerFencedError, ControllerLock, acquire_controller_lock
+from owlbear_delivery.storage_io import (
+    ControllerFencedError,
+    ControllerLock,
+    ReadOnlyStateError,
+    acquire_controller_lock,
+    read_only_state,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -194,6 +203,11 @@ REWRITES: dict[str, Callable[[bytes], bytes]] = {
 _TARGET_PARSERS: dict[str, Callable[[bytes], bytes]] = {
     "frontier": lambda content: parse_delivery_frontier(content)[1],
 }
+# Owners whose strict read is a parser function rather than one model (frontier strict JSON, snapshot upcast).
+_OWNER_PARSERS: dict[str, Callable[[bytes], object]] = {
+    "frontier": parse_delivery_frontier,
+    "snapshot": parse_delivery_state_snapshot,
+}
 
 
 def controller_release() -> str:
@@ -279,7 +293,7 @@ def _read_file(root: Path, relative: str | Path) -> bytes | None:
 
 def _write_file(root: Path, relative: str | Path, content: bytes) -> None:
     """Atomically replace or create one contained file (no link is followed), then fsync."""
-    root.mkdir(parents=True, exist_ok=True)
+    _ensure_directory(root)
     with _open_directory(root) as root_fd:
         current = read_contained(root_fd, Path(relative), limit=MAX_RECORD_BYTES) if _exists(root, relative) else None
         write_contained(root_fd, Path(relative), content, expected=current, limits=_LIMITS)
@@ -291,6 +305,24 @@ def _exists(root: Path, relative: str | Path) -> bool:
     except FileNotFoundError:
         return False
     return True
+
+
+def _ensure_directory(path: Path) -> None:
+    """Create each missing directory and fsync its parent, so the new entry survives a crash."""
+    missing: list[Path] = []
+    while not path.exists():
+        missing.append(path)
+        path = path.parent
+    for directory in reversed(missing):
+        with contextlib.suppress(FileExistsError):
+            directory.mkdir(mode=0o700)
+        _fsync_directory(directory.parent)
+
+
+def _publish_directory(temporary: Path, destination: Path) -> None:
+    """Rename a fully written directory into place and fsync the parent before any later write."""
+    temporary.rename(destination)
+    _fsync_directory(destination.parent)
 
 
 def _record_digest(paths: _Paths, locator: str) -> str | None:
@@ -308,6 +340,7 @@ def propose(workspace_root: Path) -> MigrationProposal:
     paths = _Paths.of(workspace_root)
     report = scan_capability(paths.workspace)
     _require_migratable(report)
+    _validate_baseline_records(paths, report)
     entries: list[MigrationEntry] = []
     staged: dict[str, bytes] = {}
     for record in report.records:
@@ -352,7 +385,68 @@ def _require_migratable(report: CapabilityReport) -> None:
     for record in report.records:
         if record.status in _REFUSING_STATUSES:
             code = "record-corrupt" if record.status == "unreadable" else "state-unsupported"
-            raise MigrationError(code, f"record is {record.status}", locator=record.locator)
+            raise MigrationError(code=code, detail=f"record is {record.status}", locator=record.locator)
+
+
+def _resolve_owner(name: str) -> Callable[..., object]:
+    module, attribute = name.split(":")
+    return getattr(importlib.import_module(module), attribute)
+
+
+def _owner_parse(kind: RecordKind, status: str, content: bytes) -> None:
+    """Strictly parse one record with its registered owner, at its declared version; never write."""
+    if kind.allow_empty and not content:
+        return
+    special = _OWNER_PARSERS.get(kind.kind_id)
+    if special is not None:
+        special(content)
+        return
+    if status == "readable-legacy":
+        version = json.loads(content).get("schema_version")
+        _resolve_owner(dict(kind.read_upcasts)[version])(content)
+        return
+    if kind.envelope is not None:
+        payload = json.loads(content)
+        if not isinstance(payload, dict) or kind.envelope not in payload:
+            msg = f"record has no {kind.envelope} envelope"
+            raise ValueError(msg)
+        content = json.dumps(payload[kind.envelope]).encode()
+    errors: list[ValidationError] = []
+    for owner in kind.owners:
+        model = _resolve_owner(owner)
+        try:
+            model.model_validate_json(content, strict=True)  # type: ignore[attr-defined]
+        except ValidationError as exc:
+            errors.append(exc)
+        else:
+            return
+    raise errors[0]
+
+
+def _validate_baseline_records(paths: _Paths, report: CapabilityReport) -> None:
+    """Owner-parse every readable registered record the migration keeps, before any stage or write.
+
+    Records needing a rewrite are validated by their rewrite; historical (H), opaque (O), transient (L)
+    and unread kinds, and kinds without an owner model, stay outside this check as in the registry.
+    """
+    for record in report.records:
+        kind = classify_kind(record.locator) if record.kind_id is not None else None
+        if kind is None or not kind.read or not kind.owners or kind.mutability in {"H", "O", "L"}:
+            continue
+        if record.status not in {"current", "readable-legacy"}:
+            continue
+        content = _read_file(paths.delivery, record.locator)
+        if content is None:
+            detail = "record disappeared while validating"
+            raise MigrationError(code="proposal-stale", detail=detail, locator=record.locator)
+        try:
+            _owner_parse(kind, record.status, content)
+        except (KeyError, TypeError, ValueError) as exc:
+            raise MigrationError(
+                code="record-corrupt",
+                detail="record does not parse with its owner at its declared version",
+                locator=record.locator,
+            ) from exc
 
 
 def _rewrite_entry(
@@ -414,14 +508,14 @@ def _write_stage(paths: _Paths, proposal: MigrationProposal, staged: dict[str, b
         if _read_journal(directory / MIGRATION_JOURNAL) is not None:
             raise MigrationError(code="migration-archived", detail=_ARCHIVED_DETAIL)
         return
-    paths.state.mkdir(parents=True, exist_ok=True)
+    _ensure_directory(paths.state)
     temporary = paths.state / f".tmp-{secrets.token_hex(12)}"
     temporary.mkdir(mode=0o700)
     try:
         for locator, content in staged.items():
             _write_file(temporary / "stage", locator, content)
         _write_file(temporary, "proposal.json", _canonical(proposal))
-        temporary.rename(directory)
+        _publish_directory(temporary, directory)
     finally:
         if temporary.exists():
             shutil.rmtree(temporary)
@@ -499,6 +593,7 @@ def apply(
         report = scan_capability(paths.workspace)
         _require_migratable(report)
         _require_proposal_current(paths, proposal, report)
+        _validate_baseline_records(paths, report)
         manifest_digest = _write_backup(paths, proposal)
         _fail(failure, "before-journal")
         journal = MigrationJournal(
@@ -553,6 +648,14 @@ def _require_proposal_current(paths: _Paths, proposal: MigrationProposal, report
             )
 
 
+def _require_no_pending_transactions(paths: _Paths) -> None:
+    pending = _pending_transaction_manifests(paths)
+    if pending:
+        raise MigrationError(
+            code="transactions-pending", detail="a RuntimeTransaction manifest is pending", locator=pending[0]
+        )
+
+
 def _pending_transaction_manifests(paths: _Paths) -> list[str]:
     pending: list[str] = []
     for directory, directory_names, file_names in os.walk(paths.delivery):
@@ -583,7 +686,7 @@ def _write_backup(paths: _Paths, proposal: MigrationProposal) -> str:
             _verify_backup_records(backup, manifest)
             return _sha256(content)
         # Without a journal an earlier backup is not authoritative; keep it aside rather than reuse or delete it.
-        backup.rename(directory / f"backup-superseded-{secrets.token_hex(6)}")
+        _publish_directory(backup, directory / f"backup-superseded-{secrets.token_hex(6)}")
     temporary = directory / f".tmp-backup-{secrets.token_hex(12)}"
     try:
         for locator, digest in records.items():
@@ -592,7 +695,7 @@ def _write_backup(paths: _Paths, proposal: MigrationProposal) -> str:
                 raise MigrationError(code="proposal-stale", detail="record changed during backup", locator=locator)
             _write_file(temporary / "records", locator, before)
         _write_file(temporary, "manifest.json", content)
-        temporary.rename(backup)
+        _publish_directory(temporary, backup)
     finally:
         if temporary.exists():
             shutil.rmtree(temporary)
@@ -806,7 +909,12 @@ def verify(
     *,
     read_config: Callable[[Path], DeliveryStartupConfig] = _read_startup_config,
 ) -> MigrationJournal:
-    """Offline verifier: a write-free verification load must list every Change as available."""
+    """Offline verifier: a write-free verification load must list every Change as available.
+
+    Every verification read runs in ``read_only_state``: transaction recovery, frontier
+    canonicalization and retry reconciliation are disabled, and any other record write raises
+    before it changes a byte. The record-tree comparison remains a second, detecting check.
+    """
     paths = _Paths.of(workspace_root)
     with _exclusive(paths) as lock:
         journal = _require_live_journal(paths, migration_id)
@@ -816,18 +924,22 @@ def verify(
             raise MigrationError(
                 code="journal-state", detail=f"verify requires an applied journal, not {journal.state}"
             )
+        _require_no_pending_transactions(paths)
         before = record_tree_digest(paths.workspace)
         try:
-            application = load_verification_application(
-                paths.workspace, read_config, migration_id=migration_id, controller_lock=lock
-            )
-            unavailable = [
-                change_id
-                for change_id in _change_ids(paths, application)
-                if isinstance(application.get_change(change_id), DeliveryUnavailableChangeView)
-            ]
+            with read_only_state():
+                application = load_verification_application(
+                    paths.workspace, read_config, migration_id=migration_id, controller_lock=lock
+                )
+                unavailable = [
+                    change_id
+                    for change_id in _change_ids(paths, application)
+                    if isinstance(application.get_change(change_id), DeliveryUnavailableChangeView)
+                ]
         except DeliveryApplicationLoadError as exc:
             raise MigrationError(code="verification-failed", detail=f"verification load refused: {exc.detail}") from exc
+        except ReadOnlyStateError as exc:
+            raise MigrationError(code="verification-failed", detail="the verification load attempted a write") from exc
         if record_tree_digest(paths.workspace) != before:
             raise MigrationError(code="verification-failed", detail="the verification load changed Delivery records")
         if unavailable:

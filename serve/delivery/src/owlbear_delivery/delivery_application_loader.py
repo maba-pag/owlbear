@@ -94,7 +94,12 @@ from owlbear_delivery.state_formats import (
     require_capability,
     scan_capability,
 )
-from owlbear_delivery.storage_io import ControllerFencedError, ControllerLock, acquire_controller_lock
+from owlbear_delivery.storage_io import (
+    ControllerFencedError,
+    ControllerLock,
+    acquire_controller_lock,
+    read_only_state,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -2588,7 +2593,8 @@ def load_verification_application(
 
     The caller must hold the exclusive controller lock. The gate accepts exactly the named ``applied``
     journal at the supported format; remote bootstrap, the publication provider and the format stamp
-    are skipped, so the load itself performs no remote Git and no intended write.
+    are skipped. Composition runs in ``read_only_state``, which disables transaction recovery, frontier
+    canonicalization and retry reconciliation; callers must keep every query on the result in that scope.
     """
     if not (controller_lock.exclusive and controller_lock.held):
         field, detail = "controller_lock", "migration verification requires the held exclusive controller lock"
@@ -2610,9 +2616,10 @@ def load_verification_application(
         raise DeliveryStateVersionError(incomplete, detail, locator=MIGRATIONS_ROOT)
     config = read_config(paths.repository_root / _CONFIG_LOCATOR)
     _validate_git_config(config, paths)
-    host_config = _load_host_config(paths)
-    contracts, diagnostics = _load_contracts(paths.runtime_root)
-    return _compose_application(config, host_config, paths, contracts, None, diagnostics)
+    with read_only_state():
+        host_config = _load_host_config(paths)
+        contracts, diagnostics = _load_contracts(paths.runtime_root)
+        return _compose_application(config, host_config, paths, contracts, None, diagnostics)
 
 
 def _load_gated_application(

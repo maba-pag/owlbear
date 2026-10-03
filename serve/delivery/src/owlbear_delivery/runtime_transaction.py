@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Never
 
 import yaml
 
-from owlbear_delivery.storage_io import locked_roots
+from owlbear_delivery.storage_io import locked_roots, refuse_read_only_write, state_is_read_only
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -146,6 +146,7 @@ class RuntimeTransaction:
 
     def commit(self, *, failure: Callable[[str], None] | None = None) -> None:
         """Stage, record, and publish all participants exactly once."""
+        refuse_read_only_write()
         with locked_roots(self._locked_roots()):
             self._prepare_manifest()
             if failure:
@@ -157,6 +158,10 @@ class RuntimeTransaction:
 
     def recover(self) -> None:
         """Deterministically complete a previously staged transaction."""
+        if state_is_read_only():
+            if self._manifest_path.exists():
+                refuse_read_only_write()
+            return
         with locked_roots(self._locked_roots()):
             if self._manifest_path.exists():
                 self._publish(None)
@@ -164,6 +169,7 @@ class RuntimeTransaction:
 
     def abort(self) -> None:
         """Restore prepared participant bytes after a handled publication failure."""
+        refuse_read_only_write()
         with locked_roots(self._locked_roots()):
             if not self._manifest_path.exists():
                 return
@@ -178,6 +184,7 @@ class RuntimeTransaction:
 
     def commit_contained(self, root_fd: int, *, failure: Callable[[str], None] | None = None) -> None:
         """Publish report participants under a caller-held descriptor-backed lock."""
+        refuse_read_only_write()
         self._require_contained_root(root_fd)
         manifest = self._contained_manifest()
         path = Path("transactions") / f"{self._transaction_id}.yaml"
@@ -264,6 +271,8 @@ class RuntimeTransaction:
         names = tuple(sorted(names))
         if len(names) > _MAX_CONTAINED_MANIFESTS:
             raise TransactionManifestError
+        if names:
+            refuse_read_only_write()
         for name in names:
             transaction = cls._contained_manifest_transaction(root, root_fd, name)
             cls._publish_contained(transaction, root_fd, None)
@@ -530,6 +539,7 @@ def write_contained(
     limits: ContainedWriteLimits | None = None,
 ) -> None:
     """Atomically publish exact bytes without following directory or file links."""
+    refuse_read_only_write()
     write_limits = limits if limits is not None else ContainedWriteLimits()
     with _contained_parent(root_fd, path, create=True) as parent_fd:
         current = read_contained(parent_fd, Path(path.name), limit=max(len(content), len(expected or b"")))

@@ -157,6 +157,7 @@ from owlbear_delivery.runtime_transaction import (
     RuntimeTransaction,
     TransactionParticipant,
 )
+from owlbear_delivery.storage_io import state_is_read_only
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -2327,7 +2328,7 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
             frontier, canonical = parse_delivery_frontier(content)
             self._validate_frontier(frontier)
             stored_current = json.loads(content).get("schema_version") == frontier.schema_version
-            if canonical != content and stored_current:
+            if canonical != content and stored_current and not state_is_read_only():
                 self._replace_content(content, canonical, record_pending_publication=False)
         except (OSError, TypeError, ValueError) as exc:
             message = f"Delivery frontier is missing or invalid: {self._contract.change_id}"
