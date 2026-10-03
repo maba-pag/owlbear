@@ -2615,6 +2615,35 @@ def load_verification_application(
         detail = f"{incomplete}: the named migration journal is absent"
         raise DeliveryStateVersionError(incomplete, detail, locator=MIGRATIONS_ROOT)
     config = read_config(paths.repository_root / _CONFIG_LOCATOR)
+    return _compose_read_only_application(config, paths)
+
+
+def load_read_only_application(
+    workspace_root: Path,
+    read_config: Callable[[Path], DeliveryStartupConfig],
+) -> PortfolioApplication:
+    """Compose an offline read-only application for compatibility checks; never used by MCP or Cockpit.
+
+    Like ``load_configured_delivery_application`` it holds the shared controller lock and applies the
+    normal format gate first; like the verification load it skips remote bootstrap, the publication
+    provider and the format stamp, and composes in ``read_only_state``. Callers must keep every query on
+    the result in that scope and release it with ``close_delivery_application``.
+    """
+    paths = _derive_paths(workspace_root)
+    controller_lock = _acquire_controller_fence(paths)
+    try:
+        _require_state_capability(paths)
+        config = read_config(paths.repository_root / _CONFIG_LOCATOR)
+        application = _compose_read_only_application(config, paths)
+    except BaseException:
+        controller_lock.release()
+        raise
+    _CONTROLLER_LOCKS[application] = controller_lock
+    weakref.finalize(application, controller_lock.release)
+    return application
+
+
+def _compose_read_only_application(config: DeliveryStartupConfig, paths: _DeliveryPaths) -> PortfolioApplication:
     _validate_git_config(config, paths)
     with read_only_state():
         host_config = _load_host_config(paths)

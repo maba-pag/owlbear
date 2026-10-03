@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 from serve.delivery.tests.test_portfolio_application import (
@@ -18,6 +19,9 @@ from owlbear_delivery.git_executable import resolve_git_executable
 from owlbear_delivery.state_formats import FORMAT_MARKER
 from owlbear_tools import delivery_lc
 from owlbear_tools.delivery_lc import Mount, isolation_failures
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 _GIT = resolve_git_executable()
 _LIVE = "/Users/example/Projects/owlbear-dev"
@@ -54,6 +58,54 @@ def test_isolation_proof_accepts_only_the_stage_copy_at_the_live_path() -> None:
     assert _isolated(mounts=[Mount("/host_mnt/private/tmp/lc/root", _LIVE)]) == []
     shared = Mount("/example/stage/root", _LIVE, "fakeowner", "/run/host_mark/Users")
     assert _isolated(mounts=[shared], stage_source="/Users/example/stage/root") == []
+
+
+# An ordinary Docker Desktop container: overlay root, kernel and runtime pseudo mounts, Docker's
+# /etc files, masked /proc paths, the uv cache volume, the stage at the live path and the control mount.
+_CONTAINER_MOUNTINFO = f"""\
+1090 931 0:233 / / rw,relatime master:400 - overlay overlay rw,lowerdir=/var/lib/docker/overlay2/l/A
+1091 1090 0:236 / /proc rw,nosuid,nodev,noexec,relatime - proc proc rw
+1092 1090 0:237 / /dev rw,nosuid - tmpfs tmpfs rw,size=65536k,mode=755
+1093 1092 0:238 / /dev/pts rw,nosuid,noexec,relatime - devpts devpts rw,gid=5,mode=620,ptmxmode=666
+1094 1090 0:239 / /sys ro,nosuid,nodev,noexec,relatime - sysfs sysfs ro
+1095 1094 0:30 / /sys/fs/cgroup ro,nosuid,nodev,noexec,relatime - cgroup2 cgroup rw
+1096 1092 0:235 / /dev/mqueue rw,nosuid,nodev,noexec,relatime - mqueue mqueue rw
+1097 1092 0:240 / /dev/shm rw,nosuid,nodev,noexec,relatime - tmpfs shm rw,size=65536k
+1098 1090 0:58 /tmp/lc/root {_LIVE} rw,nosuid,nodev,relatime - fakeowner /run/host_mark/private rw
+1099 1090 0:58 /tmp/lc/control /lc rw,nosuid,nodev,relatime - fakeowner /run/host_mark/private rw
+1100 1090 254:1 /docker/volumes/n00a-uv-cache/_data /root/.cache/uv rw,relatime - ext4 /dev/vda1 rw
+1101 1090 254:1 /docker/containers/abc/resolv.conf /etc/resolv.conf rw,relatime - ext4 /dev/vda1 rw
+1102 1090 254:1 /docker/containers/abc/hostname /etc/hostname rw,relatime - ext4 /dev/vda1 rw
+1103 1090 254:1 /docker/containers/abc/hosts /etc/hosts rw,relatime - ext4 /dev/vda1 rw
+1104 1091 0:236 /bus /proc/bus ro,nosuid,nodev,noexec,relatime - proc proc rw
+1105 1091 0:241 / /proc/acpi ro,relatime - tmpfs tmpfs ro
+1106 1091 0:237 /null /proc/kcore rw,nosuid - tmpfs tmpfs rw,size=65536k,mode=755
+1107 1094 0:242 / /sys/firmware ro,relatime - tmpfs tmpfs ro
+"""
+
+
+def _container(*extra: Mount) -> list[str]:
+    mounts = [*delivery_lc.parse_mountinfo(_CONTAINER_MOUNTINFO), *extra]
+    return _isolated(mounts=mounts, stage_source="/private/tmp/lc/root")
+
+
+def test_isolation_proof_accepts_an_ordinary_container_mount_table() -> None:
+    assert _container() == []
+
+
+@pytest.mark.parametrize(
+    "mount",
+    [
+        Mount("/Users/example", "/host-work", "overlay", "overlay"),
+        Mount("/Users", "/host-work", "tmpfs", "tmpfs"),
+        Mount("/", "/host-work", "overlay", "overlay"),
+        Mount("/Users/example/Projects/owlbear-dev", "/dev/shm", "tmpfs", "shm"),  # noqa: S108 - mount table row.
+        Mount("/Users", "/run", "tmpfs", "tmpfs"),
+    ],
+    ids=["overlay-alias", "tmpfs-alias", "overlay-root-alias", "tmpfs-bind-at-pseudo-path", "tmpfs-bind-at-run"],
+)
+def test_isolation_proof_inspects_overlay_and_tmpfs_binds_like_any_other_mount(mount: Mount) -> None:
+    assert _container(mount) == [f"the real checkout or an ancestor of it is mounted at {mount.mount_point}"]
 
 
 @pytest.mark.parametrize(
@@ -102,10 +154,101 @@ def test_mountinfo_parser_decodes_escaped_paths_and_keeps_the_mount_source() -> 
     ]
 
 
-def _live(tmp_path: Path) -> Path:
-    repository, _runtime_root = _seed_loader_composed_completed_change(tmp_path, marked=False)
+def _live(tmp_path: Path, *, marked: bool = False) -> Path:
+    repository, _runtime_root = _seed_loader_composed_completed_change(tmp_path, marked=marked)
     (repository / ".owlbear/delivery/config.json").write_text(_startup_config().model_dump_json(), encoding="utf-8")
     return repository
+
+
+_FRONTIER = "runtime/changes/change-a/frontier.json"
+
+
+def _pretty_frontier(live: Path) -> bytes:
+    frontier = live / ".owlbear/delivery" / _FRONTIER
+    frontier.write_text(json.dumps(json.loads(frontier.read_bytes()), indent=2), encoding="utf-8")
+    return frontier.read_bytes()
+
+
+def test_load_form_reads_without_canonicalizing_and_fails_when_a_load_rewrites_a_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    live = _live(tmp_path, marked=True)
+    pretty = _pretty_frontier(live)
+
+    report = delivery_lc.load_form(live)
+
+    assert report["passed"] is True, json.dumps(report, indent=1)
+    assert report["records_changed"] == {}
+    assert (live / ".owlbear/delivery" / _FRONTIER).read_bytes() == pretty
+    # The normal composition canonicalizes the frontier; the guard fails the form on that write.
+    monkeypatch.setattr(delivery_lc, "_read_only_load", delivery_lc._load_every_change)  # noqa: SLF001
+
+    rewritten = delivery_lc.load_form(live)
+
+    assert rewritten["load"]["loaded"] is True  # type: ignore[index]
+    assert (live / ".owlbear/delivery" / _FRONTIER).read_bytes() != pretty
+    assert rewritten["records_changed"] == {"load": [_FRONTIER]}
+    assert rewritten["passed"] is False
+
+
+def _add(delivery: Path) -> None:
+    (delivery / "runtime/stray.json").write_bytes(b"{}\n")
+
+
+def _delete(delivery: Path) -> None:
+    (delivery / "runtime/changes/change-a/admission.json").unlink()
+
+
+def _lock_files(delivery: Path) -> None:
+    (delivery / "runtime/controller.lock").write_bytes(b"")
+    (delivery / "runtime/changes/change-a/.storage.lock").write_bytes(b"")
+    (delivery / "runtime/claims").mkdir(exist_ok=True)
+    (delivery / "runtime/claims/lc-probe").write_bytes(b"claim\n")
+
+
+@pytest.mark.parametrize(
+    ("mutate", "changed"),
+    [
+        (_add, {"load": ["runtime/stray.json"]}),
+        (_delete, {"load": ["runtime/changes/change-a/admission.json"]}),
+        (_lock_files, {}),
+    ],
+    ids=["addition", "deletion", "lock-files-ignored"],
+)
+def test_load_form_fails_on_any_record_addition_or_deletion_but_ignores_lock_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutate: Callable[[Path], None], changed: dict[str, list[str]]
+) -> None:
+    live = _live(tmp_path, marked=True)
+    read_only_load = delivery_lc._read_only_load  # noqa: SLF001
+
+    def mutating_load(path: Path) -> dict[str, object]:
+        result = read_only_load(path)
+        mutate(path / ".owlbear/delivery")
+        return result
+
+    monkeypatch.setattr(delivery_lc, "_read_only_load", mutating_load)
+
+    report = delivery_lc.load_form(live)
+
+    assert report["load"]["loaded"] is True  # type: ignore[index]
+    assert report["records_changed"] == changed
+    assert report["passed"] is (not changed)
+
+
+def test_full_form_fails_when_the_migrated_load_rewrites_a_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    live, previous = _live_with_previous_gate(tmp_path, _N02A_GATE)
+    pretty = _pretty_frontier(live)
+    monkeypatch.setattr(delivery_lc, "_read_only_load", delivery_lc._load_every_change)  # noqa: SLF001
+
+    report = delivery_lc.full_form(live, previous, previous_load=_unexpected_previous_load)
+
+    assert report["unmigrated"]["records_changed"] == {}  # type: ignore[index]
+    assert report["migrated"]["records_changed"] == {"load": [_FRONTIER]}  # type: ignore[index]
+    assert report["changed_records"] == [FORMAT_MARKER]
+    assert (live / ".owlbear/delivery" / _FRONTIER).read_bytes() != pretty
+    assert report["passed"] is False
 
 
 def test_prepare_copies_git_and_delivery_state_and_compare_detects_live_changes(tmp_path: Path) -> None:

@@ -135,8 +135,8 @@ class Mount:
     source: str = ""
 
 
-# Kernel and container pseudo filesystems: their ``root`` is never a host directory.
-_VIRTUAL_FILESYSTEMS = frozenset(
+# Kernel pseudo filesystems: their ``root`` is never a host directory; accepted only under the kernel trees.
+_KERNEL_FILESYSTEMS = frozenset(
     {
         "autofs",
         "binfmt_misc",
@@ -152,16 +152,18 @@ _VIRTUAL_FILESYSTEMS = frozenset(
         "hugetlbfs",
         "mqueue",
         "nsfs",
-        "overlay",
         "proc",
         "pstore",
         "securityfs",
-        "shm",
         "sysfs",
-        "tmpfs",
         "tracefs",
     }
 )
+_KERNEL_TREES = ("/proc", "/sys", "/dev")
+# A bind mount keeps its source filesystem type, so overlay and tmpfs are exempt only as the container
+# root and as fresh runtime tmpfs instances (``root`` ``/``) under the pseudo trees.
+_ROOT_FILESYSTEMS = frozenset({"overlay", "fuse.fuse-overlayfs"})
+_TMPFS_TREES = (*_KERNEL_TREES, "/run")
 # Docker Desktop shares a host directory as ``/run/host_mark/<top>``; ``root`` is then relative to it.
 _HOST_SHARE = "/run/host_mark"
 _HOST_ALIASES = ("/host_mnt", "/private")
@@ -204,11 +206,20 @@ def _host_path(mount: Mount) -> str:
     return _without_aliases(path)
 
 
+def _container_mount(mount: Mount) -> bool:
+    """Return whether a mount is positively the container root or a pseudo mount, by mount point and type."""
+    if mount.mount_point == "/":
+        return mount.fstype in _ROOT_FILESYSTEMS
+    if mount.fstype in _KERNEL_FILESYSTEMS:
+        return any(_within(mount.mount_point, tree) for tree in _KERNEL_TREES)
+    return (
+        mount.fstype == "tmpfs" and mount.root == "/" and any(_within(mount.mount_point, tree) for tree in _TMPFS_TREES)
+    )
+
+
 def _exposes_checkout(mount: Mount, live: str) -> bool:
     """Return whether a mount's source is the real checkout or one of its ancestors, at any mount point."""
-    if mount.mount_point == "/" or mount.fstype in _VIRTUAL_FILESYSTEMS:
-        return False
-    return _within(_without_aliases(live), _host_path(mount))
+    return not _container_mount(mount) and _within(_without_aliases(live), _host_path(mount))
 
 
 def _source_matches(root: str, stage_source: str) -> bool:
@@ -338,6 +349,7 @@ def _read_config(path: Path) -> object:
 
 
 def _load_every_change(live: Path) -> dict[str, object]:
+    """Normal composition (it may write); only the previous release's rollback load uses it."""
     from owlbear_delivery import close_delivery_application  # noqa: PLC0415
     from owlbear_delivery.application_models import DeliveryUnavailableChangeView  # noqa: PLC0415
     from owlbear_delivery.delivery_application_loader import (  # noqa: PLC0415
@@ -360,6 +372,58 @@ def _load_every_change(live: Path) -> dict[str, object]:
         return {"loaded": True, "changes": change_ids, "unavailable": unavailable}
     finally:
         close_delivery_application(application)
+
+
+def _read_only_load(live: Path) -> dict[str, object]:
+    """Candidate load of every Change through the offline read-only composition."""
+    from owlbear_delivery import close_delivery_application  # noqa: PLC0415
+    from owlbear_delivery.application_models import DeliveryUnavailableChangeView  # noqa: PLC0415
+    from owlbear_delivery.delivery_application_loader import (  # noqa: PLC0415
+        DeliveryApplicationLoadError,
+        load_read_only_application,
+    )
+    from owlbear_delivery.storage_io import ReadOnlyStateError, read_only_state  # noqa: PLC0415
+
+    changes = live / ".owlbear/delivery/runtime/changes"
+    change_ids = sorted(path.name for path in changes.iterdir() if path.is_dir()) if changes.is_dir() else []
+    try:
+        with read_only_state():
+            application = load_read_only_application(live, _read_config)  # type: ignore[arg-type]
+            try:
+                unavailable = [
+                    change_id
+                    for change_id in change_ids
+                    if isinstance(application.get_change(change_id), DeliveryUnavailableChangeView)
+                ]
+            finally:
+                close_delivery_application(application)
+    except DeliveryApplicationLoadError as exc:
+        return {"loaded": False, "field": exc.field, "code": exc.code, "detail": exc.detail}
+    except ReadOnlyStateError:
+        return {"loaded": False, "code": "read-only-write-attempted", "detail": "the load attempted a record write"}
+    return {"loaded": True, "changes": change_ids, "unavailable": unavailable}
+
+
+def _changed(before: dict[str, str], after: dict[str, str]) -> list[str]:
+    return sorted(locator for locator in set(before) | set(after) if before.get(locator) != after.get(locator))
+
+
+def _read_phase(live: Path) -> dict[str, Any]:
+    """Inspector, gate and read-only load, each bracketed by a complete record-tree comparison.
+
+    ``records_changed`` names every record (excluding L-class locks and transients) that any of the
+    three reads added, removed or rewrote; a compatibility read that changes one fails its form.
+    """
+    from owlbear_delivery.state_formats import record_tree_digest  # noqa: PLC0415
+
+    phase: dict[str, Any] = {}
+    changed: dict[str, list[str]] = {}
+    for name, read in (("inspector", _inspect), ("gate", _gate), ("load", _read_only_load)):
+        before = record_tree_digest(live)
+        phase[name] = read(live)
+        changed[name] = _changed(before, record_tree_digest(live))
+    phase["records_changed"] = {name: locators for name, locators in changed.items() if locators}
+    return phase
 
 
 def _gate(live: Path) -> list[list[str]]:
@@ -513,13 +577,15 @@ def _synthetic_newer(live: Path) -> list[list[str]]:
 
 def load_form(live: Path) -> dict[str, object]:
     """Gate report, candidate inspector and read-only application load of the unmodified copy."""
-    before = record_hashes(live)
-    report: dict[str, Any] = {"form": "load", "inspector": _inspect(live), "gate": _gate(live)}
-    report["load"] = _load_every_change(live)
-    report["records_changed"] = sorted(k for k, v in record_hashes(live).items() if before.get(k) != v)
+    report: dict[str, Any] = {"form": "load", **_read_phase(live)}
     load = report["load"]
     report["inspector_agrees"] = inspector_agrees(report["inspector"], report["gate"], load)
-    report["passed"] = bool(load.get("loaded") and not load.get("unavailable") and report["inspector_agrees"])
+    report["passed"] = bool(
+        load.get("loaded")
+        and not load.get("unavailable")
+        and report["inspector_agrees"]
+        and not report["records_changed"]
+    )
     return report
 
 
@@ -536,7 +602,7 @@ def full_form(
     report: dict[str, Any] = {"form": "full", "previous": previous, "target_format": SUPPORTED_FORMAT}
     pre = record_tree_digest(live)
     report["previous_gate_before"] = _previous_gate(live, previous, live)
-    report["unmigrated"] = {"inspector": _inspect(live), "gate": _gate(live), "load": _load_every_change(live)}
+    report["unmigrated"] = _read_phase(live)
     report["unmigrated_hashes_unchanged"] = record_tree_digest(live) == pre
     try:
         proposal = state_migration.propose(live)
@@ -552,7 +618,7 @@ def full_form(
         return report
     post = record_tree_digest(live, exclude_migrations=True)
     report["changed_records"] = sorted(k for k in set(pre) | set(post) if pre.get(k) != post.get(k))
-    report["migrated"] = {"inspector": _inspect(live), "gate": _gate(live), "load": _load_every_change(live)}
+    report["migrated"] = _read_phase(live)
     migrated_hashes = record_tree_digest(live)
     report["previous_gate_after"] = _previous_gate(live, previous, live)
     report["previous_gate_hashes_unchanged"] = record_tree_digest(live) == migrated_hashes
@@ -570,6 +636,8 @@ def _full_form_passed(report: dict[str, Any], proposed: set[str]) -> bool:
     return bool(
         unmigrated["load"].get("code", "").startswith("state-")
         and report["unmigrated_hashes_unchanged"]
+        and not unmigrated["records_changed"]
+        and not migrated["records_changed"]
         and inspector_agrees(unmigrated["inspector"], unmigrated["gate"], unmigrated["load"])
         and report.get("verify") == "verified"
         and set(report["changed_records"]) == proposed
