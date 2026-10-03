@@ -7,7 +7,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from serve.delivery.tests.test_portfolio_application import (
@@ -27,6 +27,10 @@ _GIT = resolve_git_executable()
 _LIVE = "/Users/example/Projects/owlbear-dev"
 _STAGE = "/private/tmp/lc/root"
 _N02A_GATE = Path(__file__).parents[2] / "delivery/tests/fixtures/state_formats/n02a_state_formats.py.txt"
+_LAUNCH_POINTS = frozenset({_LIVE, "/lc", "/root/.cache/uv"})
+_EXPOSED = "the real checkout, an ancestor or a descendant of it is mounted at "
+# A real `docker inspect` of a container created by `docker_command` on a dummy stage (Docker Desktop 29.4.0).
+_PROBE = json.loads((Path(__file__).parent / "fixtures/delivery_lc/docker_create_inspect.json").read_text())
 
 
 def _git(repository: Path, *arguments: str) -> str:
@@ -49,6 +53,7 @@ def _isolated(**overrides: object) -> list[str]:
         "stage_source": _STAGE,
         "marker_present": True,
         "common_dirs": {"copy": f"{_LIVE}/.git", "change-a": f"{_LIVE}/.git"},
+        "launch_points": _LAUNCH_POINTS,
     }
     return isolation_failures(**{**arguments, **overrides})  # type: ignore[arg-type]
 
@@ -84,13 +89,37 @@ _CONTAINER_MOUNTINFO = f"""\
 """
 
 
-def _container(*extra: Mount) -> list[str]:
+def _container(*extra: Mount, **overrides: object) -> list[str]:
     mounts = [*delivery_lc.parse_mountinfo(_CONTAINER_MOUNTINFO), *extra]
-    return _isolated(mounts=mounts, stage_source="/private/tmp/lc/root")
+    return _isolated(mounts=mounts, stage_source="/private/tmp/lc/root", **overrides)
 
 
 def test_isolation_proof_accepts_an_ordinary_container_mount_table() -> None:
     assert _container() == []
+
+
+def test_runtime_tmpfs_is_exempt_only_with_validated_launch_provenance_showing_no_mount_there() -> None:
+    runtime_tmpfs = ["/dev", "/dev/shm", "/proc/acpi", "/sys/firmware"]  # noqa: S108 - mount points.
+    shm = runtime_tmpfs[1]
+
+    assert _container(launch_points=None) == [
+        "no validated host-side launch provenance",
+        *(f"{_EXPOSED}{point}" for point in runtime_tmpfs),
+    ]
+    assert _container(launch_points=_LAUNCH_POINTS | {shm}) == [f"{_EXPOSED}{shm}"]
+
+
+@pytest.mark.parametrize(
+    "mount",
+    [
+        Mount("/Users/example/Projects/owlbear-dev/.owlbear/delivery", "/mnt/cache", "ext4", "/dev/vda1"),
+        Mount("/example/Projects/owlbear-dev/.owlbear", "/mnt/cache", "fakeowner", "/run/host_mark/Users"),
+        Mount("/owlbear-dev/.git", "/mnt/cache", "ext4", "/dev/vda1"),
+    ],
+    ids=["delivery-descendant", "docker-desktop-share-descendant", "unknown-prefix-descendant"],
+)
+def test_isolation_proof_rejects_a_checkout_descendant_mounted_anywhere(mount: Mount) -> None:
+    assert _container(mount) == [f"{_EXPOSED}/mnt/cache"]
 
 
 @pytest.mark.parametrize(
@@ -116,7 +145,7 @@ def test_isolation_proof_accepts_an_ordinary_container_mount_table() -> None:
 )
 def test_isolation_proof_inspects_overlay_and_tmpfs_binds_like_any_other_mount(mount: Mount) -> None:
     # A mount stacked on a runtime point leaves both instances ambiguous, so each is reported.
-    assert set(_container(mount)) == {f"the real checkout or an ancestor of it is mounted at {mount.mount_point}"}
+    assert set(_container(mount)) == {f"{_EXPOSED}{mount.mount_point}"}
 
 
 # An ordinary Docker Engine container on a Linux host (root filesystem /dev/sda1): overlay2 root, runc's
@@ -175,7 +204,7 @@ def test_isolation_proof_accepts_an_ordinary_linux_docker_mount_table() -> None:
     ids=["host-tmpfs-home-root", "host-tmpfs-home-subdirectory", "named-tmpfs-at-runtime-point", "second-shm"],
 )
 def test_isolation_proof_rejects_a_host_tmpfs_ancestor_that_looks_like_a_fresh_instance(mount: Mount) -> None:
-    assert set(_linux(mount)) == {f"the real checkout or an ancestor of it is mounted at {mount.mount_point}"}
+    assert set(_linux(mount)) == {f"{_EXPOSED}{mount.mount_point}"}
 
 
 @pytest.mark.parametrize(
@@ -191,7 +220,7 @@ def test_isolation_proof_rejects_a_host_tmpfs_ancestor_that_looks_like_a_fresh_i
 def test_isolation_proof_rejects_the_checkout_or_an_ancestor_mounted_at_any_other_path(mount: Mount) -> None:
     failures = _isolated(mounts=[Mount("/", "/", "overlay", "overlay"), Mount(_STAGE, _LIVE), mount])
 
-    assert failures == [f"the real checkout or an ancestor of it is mounted at {mount.mount_point}"]
+    assert failures == [f"{_EXPOSED}{mount.mount_point}"]
 
 
 @pytest.mark.parametrize(
@@ -356,6 +385,8 @@ def test_container_command_binds_only_the_stage_copy_at_the_live_path(tmp_path: 
     result = delivery_lc.run(stage, live, "a" * 40, "full", "b" * 40, uv_cache_volume="n00a-uv-cache", dry_run=True)
 
     command = result["command"]
+    assert command[:2] == ["docker", "create"]  # type: ignore[index]
+    assert "--rm" not in command  # type: ignore[operator]
     mounts = [command[index + 1] for index, item in enumerate(command) if item == "-v"]  # type: ignore[union-attr]
     assert mounts == [
         f"{(stage / 'root').resolve()}:{_LIVE}",
@@ -374,6 +405,225 @@ def test_container_command_binds_only_the_stage_copy_at_the_live_path(tmp_path: 
     bundle.write_text("-----BEGIN CERTIFICATE-----\n", encoding="utf-8")
     delivery_lc.run(stage, live, "a" * 40, "load", "", ca_bundle=bundle, dry_run=True)
     assert (stage / "control" / delivery_lc.CA_BUNDLE).read_bytes() == bundle.read_bytes()
+    assert "--launch /lc/launch.json" in inside
+
+
+_PROBE_STAGE = Path(_PROBE["probe"]["stage"])
+_PROBE_LIVE = Path(_PROBE["probe"]["live"])
+_PROBE_CACHE = _PROBE["probe"]["uv_cache_volume"]
+
+
+def _probe(mutate: Callable[[dict[str, Any]], object] | None = None) -> dict[str, Any]:
+    container = json.loads(json.dumps(_PROBE["container"]))
+    if mutate is not None:
+        mutate(container)
+    return container
+
+
+def _launch(container: dict[str, Any], volume: dict[str, Any] | None = None, **overrides: Any) -> dict[str, Any]:
+    arguments = {"stage": _PROBE_STAGE, "live": _PROBE_LIVE, "uv_cache_volume": _PROBE_CACHE, **overrides}
+    return delivery_lc.launch_report(container, volume or _PROBE["volume"], **arguments)
+
+
+def test_launch_provenance_accepts_the_recorded_docker_create_inspect() -> None:
+    report = _launch(_probe())
+
+    assert report["failures"] == []
+    assert report["validated"] is True
+    assert report["mount_points"] == sorted([str(_PROBE_LIVE), "/lc", "/root/.cache/uv"])
+    assert report["host_config"]["Binds"] == _PROBE["container"]["HostConfig"]["Binds"]
+    assert report["volume"] == _PROBE["volume"]
+
+
+def _host(key: str, value: object) -> Callable[[dict[str, Any]], object]:
+    return lambda container: container["HostConfig"].__setitem__(key, value)
+
+
+_HOME_SHM = {"Type": "bind", "Source": "/home", "Destination": "/dev/shm", "RW": True}  # noqa: S108
+
+
+def _home_bound_at_shm(container: dict[str, Any]) -> None:
+    container["HostConfig"]["Binds"].append("/home:/dev/shm")
+    container["Mounts"].append(_HOME_SHM)
+
+
+def _anonymous_volume(container: dict[str, Any]) -> None:
+    container["Mounts"].append({"Type": "volume", "Name": "f" * 64, "Destination": "/data", "Driver": "local"})
+
+
+def _foreign_cache_driver(container: dict[str, Any]) -> None:
+    container["Mounts"][2]["Driver"] = "sshfs"
+
+
+def _live_checkout_as_stage(container: dict[str, Any]) -> None:
+    container["Mounts"][0]["Source"] = str(_PROBE_LIVE)
+
+
+@pytest.mark.parametrize(
+    ("mutate", "reason"),
+    [
+        (_home_bound_at_shm, "HostConfig.Binds"),
+        (_host("Tmpfs", {"/dev/shm": ""}), "HostConfig.Tmpfs"),  # noqa: S108 - inspect field.
+        (_host("Mounts", [{"Type": "tmpfs", "Target": "/dev/shm"}]), "HostConfig.Mounts"),  # noqa: S108
+        (_host("Privileged", True), "privileged"),  # noqa: FBT003 - inspect field value.
+        (_host("CapAdd", ["SYS_ADMIN"]), "HostConfig.CapAdd"),
+        (_host("VolumesFrom", ["other"]), "HostConfig.VolumesFrom"),
+        (_host("Devices", [{"PathOnHost": "/dev/sda"}]), "HostConfig.Devices"),
+        (_host("PidMode", "host"), "HostConfig.PidMode"),
+        (_host("IpcMode", "host"), "HostConfig.IpcMode"),
+        (_anonymous_volume, "mounts at /data"),
+        (_foreign_cache_driver, "mounts at /root/.cache/uv"),
+        (_live_checkout_as_stage, f"mounts at {_PROBE_LIVE}"),
+    ],
+    ids=[
+        "host-home-bound-at-shm",
+        "tmpfs",
+        "mount-api",
+        "privileged",
+        "capability",
+        "volumes-from",
+        "device",
+        "host-pid",
+        "host-ipc",
+        "anonymous-volume",
+        "foreign-cache-driver",
+        "live-checkout-at-live-path",
+    ],
+)
+def test_launch_provenance_rejects_any_other_host_access(
+    mutate: Callable[[dict[str, Any]], object], reason: str
+) -> None:
+    report = _launch(_probe(mutate))
+
+    assert report["validated"] is False
+    assert any(reason in failure for failure in report["failures"]), report["failures"]
+
+
+def test_launch_provenance_rejects_a_stage_inside_the_checkout() -> None:
+    report = _launch(_probe(), live=_PROBE_STAGE.parent)
+
+    assert report["validated"] is False
+    assert any("overlaps the real checkout" in failure for failure in report["failures"])
+
+
+_BIND_VOLUME = _PROBE["bind_volume"]
+_BIND_DEVICE = _BIND_VOLUME["Options"]["device"]
+
+
+@pytest.mark.parametrize(
+    ("volume", "live", "refused"),
+    [
+        (_PROBE["volume"], str(_PROBE_LIVE), None),
+        (_BIND_VOLUME, "/Users/example/Projects/owlbear-dev", None),
+        (_BIND_VOLUME, str(Path(_BIND_DEVICE).parents[1]), "overlapping the real checkout"),
+        (_BIND_VOLUME, f"{_BIND_DEVICE}/inner", "overlapping the real checkout"),
+        (_BIND_VOLUME, _BIND_DEVICE.removeprefix("/private"), "overlapping the real checkout"),
+        ({**_PROBE["volume"], "Driver": "rclone"}, str(_PROBE_LIVE), "not local"),
+        ({**_PROBE["volume"], "Options": {"type": "nfs", "device": ":/x"}}, str(_PROBE_LIVE), "unsupported"),
+        ({**_BIND_VOLUME, "Name": "other"}, str(_PROBE_LIVE), "not an inspected named volume"),
+    ],
+    ids=[
+        "plain-named-volume",
+        "bind-elsewhere",
+        "bind-to-live-descendant",
+        "bind-to-live-ancestor",
+        "bind-to-live-alias",
+        "foreign-driver",
+        "nfs-options",
+        "other-volume",
+    ],
+)
+def test_uv_cache_volume_must_be_local_and_clear_of_the_checkout(
+    volume: dict[str, Any], live: str, refused: str | None
+) -> None:
+    expected_name = _BIND_VOLUME["Name"] if volume["Name"] == "other" else volume["Name"]
+
+    failures = delivery_lc.volume_failures(volume, name=expected_name, live=live)
+
+    assert (failures == []) if refused is None else any(refused in failure for failure in failures), failures
+
+
+@pytest.mark.parametrize(
+    "cache",
+    ["/Users/example/Projects/owlbear-dev/.owlbear/delivery", "./cache", "cache/uv", "~", "c"],
+)
+def test_path_like_uv_cache_is_refused_before_any_docker_call(tmp_path: Path, cache: str) -> None:
+    stage = tmp_path / "stage"
+    (stage / "control").mkdir(parents=True)
+
+    with pytest.raises(ValueError, match="must name a Docker volume"):
+        delivery_lc.run(stage, Path(_LIVE), "a" * 40, "load", "", uv_cache_volume=cache, dry_run=True)
+    arguments = ["run", "--stage", str(stage), "--live", _LIVE, "--candidate", "a" * 40, "--form", "load"]
+    assert delivery_lc.main([*arguments, "--uv-cache-volume", cache, "--dry-run"]) == 2
+
+
+class _FakeDocker:
+    """Stands in for the Docker CLI with the recorded inspect output rebased onto a temporary stage."""
+
+    def __init__(self, stage: Path, container: dict[str, Any], volume: dict[str, Any]) -> None:
+        rebased = json.dumps(container).replace(str(_PROBE_STAGE), str(stage.resolve()))
+        self.container, self.volume = json.loads(rebased), volume
+        self.calls: list[tuple[str, ...]] = []
+
+    def __call__(self, *arguments: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+        del check
+        self.calls.append(arguments)
+        outputs = {"create": "cid\n", "inspect": json.dumps([self.container])}
+        stdout = json.dumps([self.volume]) if arguments[:2] == ("volume", "inspect") else outputs.get(arguments[0], "")
+        return subprocess.CompletedProcess(arguments, 0, stdout=stdout, stderr="")
+
+
+def _run_with(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, container: dict[str, Any], volume: dict[str, Any]
+) -> tuple[dict[str, Any], _FakeDocker, list[str]]:
+    stage = tmp_path / "stage"
+    (stage / "control").mkdir(parents=True)
+    docker, started = _FakeDocker(stage, container, volume), []
+
+    def start(container_id: str, _log: Path) -> int:
+        started.append(container_id)
+        (stage / "control/report.json").write_text('{"passed": true}', encoding="utf-8")
+        return 0
+
+    monkeypatch.setattr(delivery_lc, "_docker", docker)
+    monkeypatch.setattr(delivery_lc, "_start", start)
+    result = delivery_lc.run(stage, _PROBE_LIVE, "a" * 40, "load", "", uv_cache_volume=_PROBE_CACHE)
+    return result, docker, started
+
+
+def test_run_starts_only_a_container_whose_inspect_provenance_validates(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    result, docker, started = _run_with(monkeypatch, tmp_path, _probe(), _PROBE["volume"])
+
+    assert (result["exit"], result["report"], started) == (0, {"passed": True}, ["cid"])
+    assert docker.calls[0] == ("volume", "create", _PROBE_CACHE)
+    assert docker.calls[-1] == ("rm", "-f", "cid")
+    recorded = json.loads((tmp_path / "stage/control/launch.json").read_text(encoding="utf-8"))
+    assert recorded == result["launch"]
+    assert recorded["validated"] is True
+
+
+def test_run_never_starts_a_container_with_an_extra_mount(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    result, docker, started = _run_with(monkeypatch, tmp_path, _probe(_home_bound_at_shm), _PROBE["volume"])
+
+    assert (result["exit"], started) == (None, [])
+    assert result["launch"]["validated"] is False
+    assert docker.calls[-1] == ("rm", "-f", "cid")
+    assert json.loads((tmp_path / "stage/control/launch.json").read_text(encoding="utf-8"))["validated"] is False
+
+
+def test_run_refuses_a_cache_volume_bound_into_the_checkout_before_creating_a_container(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    delivery = {**_BIND_VOLUME, "Name": _PROBE_CACHE, "Options": {**_BIND_VOLUME["Options"]}}
+    delivery["Options"]["device"] = f"{_PROBE_LIVE}/.owlbear/delivery"
+
+    result, docker, started = _run_with(monkeypatch, tmp_path, _probe(), delivery)
+
+    assert (result["exit"], started) == (None, [])
+    assert "overlapping the real checkout" in result["launch"]["failures"][0]
+    assert [call[0] for call in docker.calls] == ["volume", "volume"]
 
 
 def test_module_is_stdlib_only_at_import_for_the_container_isolation_proof(tmp_path: Path) -> None:

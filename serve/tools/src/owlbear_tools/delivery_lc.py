@@ -1,9 +1,10 @@
 """``delivery-lc``: live-compatibility gate on an isolated copy of live Delivery state.
 
 ``prepare`` copies the live checkout's ``.git`` and ``.owlbear/delivery`` into a stage and hashes the
-live records. ``run`` starts a container whose only bind mount at (or under) the live absolute path
-is the stage copy, proves that isolation, then runs the candidate's inspector, gate and load or full form
-against the copy. ``compare`` proves the live records unchanged. Record and receipt bytes, including absolute
+live records. ``run`` creates a container whose only bind mount at (or under) the live absolute path
+is the stage copy, validates its ``docker inspect`` launch provenance before starting it, proves that
+isolation again inside, then runs the candidate's inspector, gate and load or full form against the copy.
+``compare`` proves the live records unchanged. Record and receipt bytes, including absolute
 main-checkout paths, are never rewritten: inside the container those paths resolve into the copy.
 
 The module is stdlib-only at import, so the container can run its isolation proof before any
@@ -34,6 +35,8 @@ if TYPE_CHECKING:
 
 COPY_MARKER = ".lc-copy-marker"
 CONTROL_MOUNT = "/lc"
+UV_CACHE_MOUNT = "/root/.cache/uv"
+LAUNCH_REPORT = "launch.json"
 CA_BUNDLE = "ca-bundle.crt"
 DEFAULT_IMAGE = "ubuntu:24.04"
 _FORMAT_MARKER = "runtime/format.json"
@@ -65,7 +68,7 @@ export PATH="$HOME/.local/bin:$PATH"
 git config --global --add safe.directory '*'
 git config --global user.email lc@example.invalid && git config --global user.name lc
 uv run --no-project --python 3.14 python /lc/delivery_lc.py prove-isolation --live "$LIVE" \\
-  --stage-source "$(cat /lc/stage-source)" --report /lc/isolation.json
+  --stage-source "$(cat /lc/stage-source)" --launch /lc/launch.json --report /lc/isolation.json
 ORIGIN_URL="$(git -C "$LIVE" remote get-url origin)"
 git init -q --bare /remote.git
 git -C "$LIVE" push -q /remote.git 'refs/remotes/origin/*:refs/heads/*'
@@ -162,9 +165,10 @@ _KERNEL_FILESYSTEMS = frozenset(
 )
 _KERNEL_TREES = ("/proc", "/sys", "/dev")
 # A bind mount keeps its source filesystem type and a bound tmpfs directory can show ``root`` ``/``, so
-# neither proves a fresh instance. Overlay is exempt only as the container root; tmpfs only once each at
-# the points the runtime creates itself (runc ``/dev``, ``/dev/shm`` and Docker's masked directories)
-# with an anonymous source. Any other tmpfs, under ``/run`` or elsewhere, is inspected like a bind.
+# neither proves a fresh instance in mountinfo. Overlay is exempt only as the container root; tmpfs only
+# once each at the points the runtime creates itself (runc ``/dev``, ``/dev/shm`` and Docker's masked
+# directories) with an anonymous source, and only when the validated host-side launch provenance shows no
+# user-specified mount there. Any other tmpfs, under ``/run`` or elsewhere, is inspected like a bind.
 _ROOT_FILESYSTEMS = frozenset({"overlay", "fuse.fuse-overlayfs"})
 _RUNTIME_TMPFS_POINTS = frozenset(
     {
@@ -220,7 +224,7 @@ def _host_path(mount: Mount) -> str:
     return _without_aliases(path)
 
 
-def _container_mount(mount: Mount, *, stacked: bool) -> bool:
+def _container_mount(mount: Mount, *, stacked: bool, launch_points: frozenset[str] | None) -> bool:
     """Return whether a mount is positively the container root or a runtime-created pseudo mount."""
     if mount.mount_point == "/":
         return mount.fstype in _ROOT_FILESYSTEMS
@@ -228,6 +232,8 @@ def _container_mount(mount: Mount, *, stacked: bool) -> bool:
         return any(_within(mount.mount_point, tree) for tree in _KERNEL_TREES)
     return (
         mount.fstype == "tmpfs"
+        and launch_points is not None
+        and mount.mount_point not in launch_points
         and not stacked
         and mount.root == "/"
         and mount.mount_point in _RUNTIME_TMPFS_POINTS
@@ -235,17 +241,20 @@ def _container_mount(mount: Mount, *, stacked: bool) -> bool:
     )
 
 
-def _exposes_checkout(mount: Mount, live: str, *, stacked: bool) -> bool:
-    """Return whether a mount may expose the real checkout or one of its ancestors, at any mount point.
+def _exposes_checkout(mount: Mount, live: str, *, stacked: bool, launch_points: frozenset[str] | None) -> bool:
+    """Return whether a mount may expose the real checkout, an ancestor or a descendant, at any mount point.
 
     ``root`` is relative to its own filesystem, whose host mount point is unknown, so any mount whose
-    host path is a trailing component sequence of the checkout or an ancestor fails closed.
+    host path is a component run of the checkout (an ancestor) or starts with a trailing run of it (a
+    descendant) fails closed.
     """
-    if _container_mount(mount, stacked=stacked):
+    if _container_mount(mount, stacked=stacked, launch_points=launch_points):
         return False
     exposed = Path(_host_path(mount)).parts[1:]
     checkout = Path(_without_aliases(live)).parts[1:]
-    return any(checkout[:end][end - len(exposed) :] == exposed for end in range(len(exposed), len(checkout) + 1))
+    ancestor = any(checkout[end - len(exposed) : end] == exposed for end in range(len(exposed), len(checkout) + 1))
+    descendant = any(exposed[:size] == checkout[-size:] for size in range(1, min(len(exposed), len(checkout)) + 1))
+    return ancestor or descendant
 
 
 def _source_matches(root: str, stage_source: str) -> bool:
@@ -253,16 +262,21 @@ def _source_matches(root: str, stage_source: str) -> bool:
     return any(root == source or root.endswith(source) for source in candidates)
 
 
-def isolation_failures(
+def isolation_failures(  # noqa: PLR0913 - each isolation input is an explicit keyword.
     mounts: list[Mount],
     *,
     live: str,
     stage_source: str,
     marker_present: bool,
     common_dirs: dict[str, str],
+    launch_points: frozenset[str] | None,
 ) -> list[str]:
-    """Return why the container is not isolated (D9); an empty list proves isolation."""
-    failures = []
+    """Return why the container is not isolated (D9); an empty list proves isolation.
+
+    ``launch_points`` are the mount destinations of the validated host-side launch provenance; without
+    them no runtime tmpfs is exempt and the proof fails.
+    """
+    failures = [] if launch_points is not None else ["no validated host-side launch provenance"]
     at_live = [mount for mount in mounts if _within(mount.mount_point, live)]
     if len(at_live) != 1 or at_live[0].mount_point != live:
         failures.append(f"expected exactly one mount at the live path, found {len(at_live)}")
@@ -274,9 +288,9 @@ def isolation_failures(
         failures.append(f"unexpected mounts under {top}: {[mount.mount_point for mount in outside]}")
     points = Counter(mount.mount_point for mount in mounts)
     failures.extend(
-        f"the real checkout or an ancestor of it is mounted at {mount.mount_point}"
+        f"the real checkout, an ancestor or a descendant of it is mounted at {mount.mount_point}"
         for mount in mounts
-        if _exposes_checkout(mount, live, stacked=points[mount.mount_point] > 1)
+        if _exposes_checkout(mount, live, stacked=points[mount.mount_point] > 1, launch_points=launch_points)
     )
     if not marker_present:
         failures.append("the copy marker is absent at the live path")
@@ -299,18 +313,20 @@ def _git_common_dir(path: Path) -> str:
     return completed.stdout.strip() if completed.returncode == 0 else f"<git failed: {completed.returncode}>"
 
 
-def prove_isolation(live: Path, stage_source: str) -> dict[str, object]:
+def prove_isolation(live: Path, stage_source: str, launch: Path) -> dict[str, object]:
     """Inside the container: prove the stage is the only mount at the live path before any load."""
     worktrees = live / ".owlbear/delivery/worktrees"
     common_dirs = {"copy": _git_common_dir(live)}
     if worktrees.is_dir():
         common_dirs.update({child.name: _git_common_dir(child) for child in sorted(worktrees.iterdir())})
+    provenance = json.loads(launch.read_text(encoding="utf-8")) if launch.is_file() else {}
     failures = isolation_failures(
         parse_mountinfo(Path("/proc/self/mountinfo").read_text(encoding="utf-8")),
         live=str(live),
         stage_source=stage_source,
         marker_present=(live / COPY_MARKER).is_file(),
         common_dirs=common_dirs,
+        launch_points=frozenset(provenance["mount_points"]) if provenance.get("validated") is True else None,
     )
     return {"isolated": not failures, "failures": failures, "common_dirs": common_dirs}
 
@@ -325,12 +341,178 @@ def docker_command(  # noqa: PLR0913 - one container invocation binds each isola
     image: str = DEFAULT_IMAGE,
     uv_cache_volume: str | None = None,
 ) -> list[str]:
-    """Return the container command: the stage copy at the live path and control files at ``/lc`` only."""
-    command = ["docker", "run", "--rm", "-v", f"{(stage / 'root').resolve()}:{live}"]
+    """Return the ``docker create`` command: the stage copy at the live path and control files at ``/lc`` only.
+
+    The uv cache must be a Docker named volume; a path would become a host bind.
+    """
+    if uv_cache_volume is not None and not _VOLUME_NAME.fullmatch(uv_cache_volume):
+        msg = f"--uv-cache-volume must name a Docker volume, not a path: {uv_cache_volume!r}"
+        raise ValueError(msg)
+    command = ["docker", "create", "-v", f"{(stage / 'root').resolve()}:{live}"]
     command += ["-v", f"{(stage / 'control').resolve()}:{CONTROL_MOUNT}"]
     if uv_cache_volume:
-        command += ["-v", f"{uv_cache_volume}:/root/.cache/uv"]
+        command += ["-v", f"{uv_cache_volume}:{UV_CACHE_MOUNT}"]
     return [*command, image, "sh", f"{CONTROL_MOUNT}/inside.sh", str(live), candidate, form, previous]
+
+
+# ---------------------------------------------------------------------------
+# Host-side launch provenance (trusted ``docker inspect`` of the created container)
+# ---------------------------------------------------------------------------
+
+_VOLUME_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]+")
+_EMPTY_HOST_CONFIG = ("CapAdd", "DeviceRequests", "Devices", "Mounts", "Tmpfs", "VolumesFrom")
+_NAMESPACE_MODES = {"PidMode": frozenset({""}), "IpcMode": frozenset({"", "private", "shareable"})}
+_RECORDED_HOST_CONFIG = ("Binds", "Privileged", "PidMode", "IpcMode", *_EMPTY_HOST_CONFIG)
+
+
+def _overlaps(path: str, live: str) -> bool:
+    """Return whether a host path is the checkout, an ancestor or a descendant of it."""
+    path, checkout = _without_aliases(path), _without_aliases(live)
+    return _within(path, checkout) or _within(checkout, path)
+
+
+def volume_failures(volume: dict[str, Any] | None, *, name: str, live: str) -> list[str]:
+    """Return why ``docker volume inspect`` does not show a local named uv cache clear of the checkout."""
+    if not volume or volume.get("Name") != name:
+        return [f"the uv cache volume {name!r} is not an inspected named volume"]
+    failures = []
+    if volume.get("Driver") != "local":
+        failures.append(f"the uv cache volume driver is {volume.get('Driver')!r}, not local")
+    options = volume.get("Options") or {}
+    device = str(options.get("device", ""))
+    bind = options.get("type") == "none" or "bind" in str(options.get("o", "")).split(",")
+    if options and not (bind and set(options) <= {"type", "o", "device"} and device.startswith("/")):
+        failures.append(f"the uv cache volume has unsupported options: {options}")
+    elif options and any(_overlaps(path, live) for path in (device, os.path.realpath(device))):
+        failures.append(f"the uv cache volume is bound to {device}, overlapping the real checkout")
+    return failures
+
+
+def _host_config_failures(host: dict[str, Any]) -> list[str]:
+    failures = ["the container is privileged"] if host.get("Privileged") else []
+    failures.extend(f"HostConfig.{key} is not empty: {host[key]}" for key in _EMPTY_HOST_CONFIG if host.get(key))
+    failures.extend(
+        f"HostConfig.{key} shares a namespace: {host.get(key)!r}"
+        for key, allowed in _NAMESPACE_MODES.items()
+        if (host.get(key) or "") not in allowed
+    )
+    return failures
+
+
+def _mount_failures(mounts: list[dict[str, Any]], expected: dict[str, tuple[str, str]]) -> list[str]:
+    """Compare ``.Mounts`` with the expected destination -> (type, source or volume name) map exactly."""
+    actual: dict[str, list[tuple[str, str]]] = {}
+    for mount in mounts:
+        kind = str(mount.get("Type"))
+        if kind == "volume":
+            identity = str(mount.get("Name")) if mount.get("Driver") == "local" else f"driver:{mount.get('Driver')}"
+        else:
+            identity = _without_aliases(str(mount.get("Source")))
+        actual.setdefault(str(mount.get("Destination")), []).append((kind, identity))
+    wanted = {
+        point: [(kind, _without_aliases(source) if kind == "bind" else source)]
+        for point, (kind, source) in expected.items()
+    }
+    return [
+        f"mounts at {point} are {actual.get(point, [])}, expected {wanted.get(point, [])}"
+        for point in sorted(set(actual) | set(wanted))
+        if actual.get(point) != wanted.get(point)
+    ]
+
+
+def launch_failures(container: dict[str, Any], *, stage: Path, live: Path, uv_cache_volume: str | None) -> list[str]:
+    """Return why a created container's inspect output is not exactly the LC launch (D9, host side).
+
+    Allowed: the stage root bound at the live path, the control directory at ``/lc`` and the optional
+    uv cache named volume; nothing else mounted, no device, tmpfs, shared volumes, privilege or capability.
+    """
+    root, control, checkout = str((stage / "root").resolve()), str((stage / "control").resolve()), str(live)
+    failures = [
+        f"the stage path {path} overlaps the real checkout" for path in (root, control) if _overlaps(path, checkout)
+    ]
+    host = container.get("HostConfig") or {}
+    failures += _host_config_failures(host)
+    binds = [f"{root}:{checkout}", f"{control}:{CONTROL_MOUNT}"]
+    expected = {checkout: ("bind", root), CONTROL_MOUNT: ("bind", control)}
+    if uv_cache_volume:
+        binds.append(f"{uv_cache_volume}:{UV_CACHE_MOUNT}")
+        expected[UV_CACHE_MOUNT] = ("volume", uv_cache_volume)
+    if sorted(host.get("Binds") or []) != sorted(binds):
+        failures.append(f"HostConfig.Binds is {host.get('Binds')}, expected {binds}")
+    return failures + _mount_failures(container.get("Mounts") or [], expected)
+
+
+def launch_report(
+    container: dict[str, Any],
+    volume: dict[str, Any] | None,
+    *,
+    stage: Path,
+    live: Path,
+    uv_cache_volume: str | None,
+) -> dict[str, Any]:
+    """Validate and record the provenance-relevant subset of ``docker inspect`` (and the cache volume)."""
+    failures = launch_failures(container, stage=stage, live=live, uv_cache_volume=uv_cache_volume)
+    if uv_cache_volume:
+        failures += volume_failures(volume, name=uv_cache_volume, live=str(live))
+    host = container.get("HostConfig") or {}
+    mounts = container.get("Mounts") or []
+    return {
+        "validated": not failures,
+        "failures": failures,
+        "container": container.get("Id"),
+        "mount_points": sorted(str(mount.get("Destination")) for mount in mounts),
+        "mounts": mounts,
+        "host_config": {key: host.get(key) for key in _RECORDED_HOST_CONFIG},
+        "volume": volume,
+    }
+
+
+def _docker(*arguments: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(("docker", *arguments), check=check, capture_output=True, text=True)  # noqa: S603, S607
+
+
+def _inspected(*arguments: str) -> dict[str, Any]:
+    return json.loads(_docker(*arguments).stdout)[0]
+
+
+def _start(container: str, log: Path) -> int:
+    with log.open("wb") as handle:
+        completed = subprocess.run(  # noqa: S603 - fixed Docker argument vector.
+            ("docker", "start", "-a", container),  # noqa: S607
+            check=False,
+            stdout=handle,
+            stderr=subprocess.STDOUT,
+        )
+    return completed.returncode
+
+
+def _launch(
+    command: list[str], control: Path, *, stage: Path, live: Path, uv_cache_volume: str | None
+) -> dict[str, Any]:
+    """Create the container, validate its inspect provenance, then start it attached; always remove it."""
+    volume = None
+    if uv_cache_volume:
+        _docker("volume", "create", uv_cache_volume)
+        volume = _inspected("volume", "inspect", uv_cache_volume)
+        refused = volume_failures(volume, name=uv_cache_volume, live=str(live))
+        if refused:
+            return {"exit": None, "report": {}, "launch": {"validated": False, "failures": refused, "volume": volume}}
+    container = _docker(*command[1:]).stdout.strip()
+    try:
+        if uv_cache_volume:
+            volume = _inspected("volume", "inspect", uv_cache_volume)
+        launch = launch_report(
+            _inspected("inspect", container), volume, stage=stage, live=live, uv_cache_volume=uv_cache_volume
+        )
+        (control / LAUNCH_REPORT).write_text(json.dumps(launch, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        if not launch["validated"]:
+            return {"exit": None, "report": {}, "launch": launch}
+        code = _start(container, control / "run.log")
+    finally:
+        _docker("rm", "-f", container, check=False)
+    report = control / "report.json"
+    result = json.loads(report.read_text(encoding="utf-8")) if report.is_file() else {}
+    return {"exit": code, "report": result, "launch": launch, "log": str(control / "run.log")}
 
 
 def run(  # noqa: PLR0913 - mirrors docker_command.
@@ -345,23 +527,20 @@ def run(  # noqa: PLR0913 - mirrors docker_command.
     ca_bundle: Path | None = None,
     dry_run: bool = False,
 ) -> dict[str, object]:
-    """Write the container script and run the candidate's LC form against the stage copy.
+    """Write the container script, validate the created container's launch provenance and run the LC form.
 
     ``ca_bundle`` (PEM) is appended to the container trust store, for networks that intercept TLS.
     """
     control = stage / "control"
+    command = docker_command(stage, live, candidate, form, previous, image=image, uv_cache_volume=uv_cache_volume)
     (control / "inside.sh").write_text(_INSIDE, encoding="utf-8")
     shutil.copyfile(__file__, control / "delivery_lc.py")
+    (control / LAUNCH_REPORT).unlink(missing_ok=True)
     if ca_bundle is not None:
         shutil.copyfile(ca_bundle, control / CA_BUNDLE)
-    command = docker_command(stage, live, candidate, form, previous, image=image, uv_cache_volume=uv_cache_volume)
     if dry_run:
         return {"command": command}
-    with (control / "run.log").open("wb") as log:
-        completed = subprocess.run(command, check=False, stdout=log, stderr=subprocess.STDOUT)  # noqa: S603
-    report = control / "report.json"
-    result = json.loads(report.read_text(encoding="utf-8")) if report.is_file() else {}
-    return {"exit": completed.returncode, "report": result, "log": str(control / "run.log")}
+    return _launch(command, control, stage=stage, live=live, uv_cache_volume=uv_cache_volume)
 
 
 # ---------------------------------------------------------------------------
@@ -714,6 +893,7 @@ def _parser() -> argparse.ArgumentParser:
     proof_parser = commands.add_parser("prove-isolation")
     proof_parser.add_argument("--live", type=Path, required=True)
     proof_parser.add_argument("--stage-source", required=True)
+    proof_parser.add_argument("--launch", type=Path, required=True)
     proof_parser.add_argument("--report", type=Path, required=True)
     inside_parser = commands.add_parser("inside")
     inside_parser.add_argument("--live", type=Path, required=True)
@@ -725,16 +905,10 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _execute(args: argparse.Namespace) -> tuple[int, dict[str, object]]:
-    live = getattr(args, "live", None) or _primary_worktree()
-    if args.command == "prepare":
-        return 0, prepare(live, args.stage)
-    if args.command == "compare":
-        result = compare(live, args.stage)
-        return (0 if result["live_unchanged"] else 1), result
-    if args.command == "run":
-        if args.form == "full" and not args.previous:
-            return 2, {"error": "the full form needs --previous (the merged predecessor phase head)"}
+def _run_command(args: argparse.Namespace, live: Path) -> tuple[int, dict[str, object]]:
+    if args.form == "full" and not args.previous:
+        return 2, {"error": "the full form needs --previous (the merged predecessor phase head)"}
+    try:
         result: dict[str, Any] = run(
             args.stage,
             live.resolve(),
@@ -746,13 +920,26 @@ def _execute(args: argparse.Namespace) -> tuple[int, dict[str, object]]:
             ca_bundle=args.ca_bundle,
             dry_run=args.dry_run,
         )
-        passed = args.dry_run or (result["exit"] == 0 and result["report"].get("passed") is True)
-        return (0 if passed else 1), result
+    except ValueError as exc:
+        return 2, {"error": str(exc)}
+    passed = args.dry_run or (result["exit"] == 0 and result["report"].get("passed") is True)
+    return (0 if passed else 1), result
+
+
+def _execute(args: argparse.Namespace) -> tuple[int, dict[str, object]]:
+    live = getattr(args, "live", None) or _primary_worktree()
+    if args.command == "prepare":
+        return 0, prepare(live, args.stage)
+    if args.command == "compare":
+        result = compare(live, args.stage)
+        return (0 if result["live_unchanged"] else 1), result
+    if args.command == "run":
+        return _run_command(args, live)
     if args.command == "load-changes":
         result = _load_every_change(live)
         return (0 if result.get("loaded") else 1), result
     if args.command == "prove-isolation":
-        result = prove_isolation(live, args.stage_source)
+        result = prove_isolation(live, args.stage_source, args.launch)
     else:
         result = full_form(live, args.previous) if args.form == "full" else load_form(live)
     args.report.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
