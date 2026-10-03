@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from owlbear_delivery.acceptance import (
     CompletionDisplayMetadata,
@@ -177,6 +177,27 @@ if TYPE_CHECKING:
     from owlbear_delivery.target_contract import DeliveryContract
 
 
+def _deferral_lifecycle_refusal(
+    frontier: DeliveryFrontier,
+) -> Literal["change-inactive", "step-in-progress"] | None:
+    """Read-only mirror of ``defer_change``'s lifecycle and claim guards, in the same order."""
+    if frontier.change_deferral is not None:
+        return "change-inactive"
+    try:
+        _require_change_mutable(frontier, "defer_change")
+    except DeliveryRuntimeConflictError:
+        return "change-inactive"
+    if frontier.change_abandonment is not None or is_change_terminal(frontier):
+        return "change-inactive"
+    try:
+        _require_no_active_change_claim(frontier, "Change deferral")
+    except DeliveryRuntimeConflictError:
+        return "step-in-progress"
+    if derive_change_stage(frontier) in {DeliveryChangeStage.DEFERRED, DeliveryChangeStage.ABANDONED}:
+        return "change-inactive"
+    return None
+
+
 class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
     """Apply worker instructions and operator correction to one Delivery frontier."""
 
@@ -300,6 +321,21 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
     def change_abandonment(self) -> DeliveryChangeAbandonment | None:
         """Return the terminal user-requested Change abandonment, if any."""
         return self._read()[0].change_abandonment
+
+    def deferral_refusal(
+        self, frontier: DeliveryFrontier
+    ) -> Literal["change-inactive", "step-in-progress", "state-unavailable"] | None:
+        """Evaluate ``defer_change``'s frontier refusals read-only; None means it would record a deferral."""
+        refusal = _deferral_lifecycle_refusal(frontier)
+        if refusal is not None:
+            return refusal
+        try:
+            for binding in frontier.bindings:
+                if binding.builder_handoff_context is not None:
+                    self._builder_handoff_change_intent_chain(frontier, binding.builder_handoff_context, "defer")
+        except DeliveryRuntimeConflictError, OSError, ValueError:
+            return "state-unavailable"
+        return None
 
     def defer_change(
         self,

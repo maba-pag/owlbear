@@ -195,11 +195,17 @@ async def test_registered_change_reads_carry_progress_and_change_activity(tmp_pa
     assert ready["detail"]["card"]["work_item_id"] == "OUT-001"
     assert ready["detail"]["card"]["readiness"]["progress"] == "completed"
     assert ready["detail"]["change_progress"] == "waiting-for-chat"
+    assert (ready["detail"]["pause_available"], ready["detail"]["pause_unavailable_reason"]) == (True, None)
     assert held["detail"]["change_progress"] == "needs-decision"
+    assert (held["detail"]["pause_available"], held["detail"]["pause_unavailable_reason"]) == (
+        False,
+        "step-in-progress",
+    )
     held_card = next(item for item in held["unresolved_outcomes"] if item["outcome_id"] == "OUT-002")["card"]
     assert (held_card["readiness"]["progress"], held_card["next_step"]) == ("needs-decision", "Claimed by Builder")
     (group,) = listed["groups"]
     assert group["progress"] == "needs-decision"
+    assert (group["pause_available"], group["pause_unavailable_reason"]) == (False, "step-in-progress")
 
 
 @pytest.mark.asyncio

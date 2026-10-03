@@ -26,7 +26,6 @@ import type {
   PortfolioChangeLifecycleStatus,
   PortfolioChangeStage,
   PortfolioGuidance,
-  WorkItemCardView,
   WorkItemNeed,
 } from "../api/workItems";
 import CompletedHistoryWorkspace from "../components/CompletedHistoryWorkspace";
@@ -39,7 +38,7 @@ import WorkPortfolioTable from "../components/WorkPortfolioTable";
 import { WorkspaceHeader } from "../components/WorkspaceHeader";
 import { WorkspaceViewCount } from "../components/WorkspaceViewHeader";
 import {
-  changeStepInProgress,
+  changePauseUnavailableMessage,
   READINESS_CHECKS_LABELS,
   READINESS_REASON_LABELS,
 } from "../components/workItemPresentation";
@@ -320,12 +319,10 @@ function SelectedDesignDetail({ changeId, onClose }: { changeId: string; onClose
 
 function SelectedWorkItemDetail({
   identity,
-  changeItems,
   onChanged,
   onClose,
 }: {
   identity: WorkItemIdentity;
-  changeItems?: WorkItemCardView[];
   onChanged: () => void;
   onClose: () => void;
 }) {
@@ -356,7 +353,6 @@ function SelectedWorkItemDetail({
         ) : null}
         <WorkItemDetail
           detail={selectedDetail.detail.data}
-          changeItems={changeItems}
           pendingAction={selectedDetail.pendingAction}
           actionError={selectedDetail.actionError}
           actionResult={selectedDetail.actionResult}
@@ -393,12 +389,7 @@ function SelectedWorkItemDetail({
   return <EmptyDetail error={selectedDetail.detail.error} retry={selectedDetail.retry} onClose={onClose} />;
 }
 
-function SelectedDetail(props: {
-  identity: WorkItemIdentity;
-  changeItems?: WorkItemCardView[];
-  onChanged: () => void;
-  onClose: () => void;
-}) {
+function SelectedDetail(props: { identity: WorkItemIdentity; onChanged: () => void; onClose: () => void }) {
   if (props.identity.itemKey === "design") {
     return <SelectedDesignDetail changeId={props.identity.changeId} onClose={props.onClose} />;
   }
@@ -407,15 +398,12 @@ function SelectedDetail(props: {
 
 function PortfolioWorkspace({
   groups,
-  allGroups,
   selected,
   emptyMessage,
   onSelect,
   onChanged,
 }: {
   groups: ChangeGroupView[];
-  /** Unfiltered groups: custody belongs to the whole Change, not to the rows a filter shows. */
-  allGroups: ChangeGroupView[];
   selected: WorkItemIdentity | null;
   emptyMessage?: string;
   onSelect: (identity: WorkItemIdentity, trigger: HTMLElement) => void;
@@ -432,9 +420,7 @@ function PortfolioWorkspace({
         <ChangePauseControl
           changeId={group.change_id}
           paused={group.progress === "paused" || group.lifecycle === "deferred"}
-          stepInProgress={changeStepInProgress(
-            allGroups.find((candidate) => candidate.change_id === group.change_id)?.items ?? group.items,
-          )}
+          unavailableMessage={changePauseUnavailableMessage(group)}
           pendingAction={intent.pendingAction(group.change_id)}
           reasonName={`change-pause-reason-${group.change_id}`}
           actionError={intent.actionError(group.change_id)}
@@ -1096,7 +1082,6 @@ export default function WorkPortfolioPage() {
                 {filteredGroups.length > 0 ? (
                   <PortfolioWorkspace
                     groups={filteredGroups}
-                    allGroups={portfolio.groups}
                     selected={selected}
                     onChanged={retry}
                     onSelect={(identity, trigger) => {
@@ -1145,13 +1130,7 @@ export default function WorkPortfolioPage() {
       >
         <div className="min-w-0 max-w-full p-static-lg">
           {selected ? (
-            <SelectedDetail
-              key={selectedIdentity}
-              identity={selected}
-              changeItems={portfolio.groups.find((group) => group.change_id === selected.changeId)?.items}
-              onChanged={retry}
-              onClose={closeInspector}
-            />
+            <SelectedDetail key={selectedIdentity} identity={selected} onChanged={retry} onClose={closeInspector} />
           ) : null}
         </div>
       </PFlyout>

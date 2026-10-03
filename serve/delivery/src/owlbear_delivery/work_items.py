@@ -328,6 +328,20 @@ DeliveryProgress = Literal[
 
 DeliveryIssuerState = Literal["alive", "gone", "unknown"]
 
+ChangePauseUnavailableReason = Literal[
+    "finalizer-custody",
+    "step-in-progress",
+    "recovery-required",
+    "state-unavailable",
+    "change-inactive",
+]
+
+
+def _require_pause_consistency(available: bool, reason: ChangePauseUnavailableReason | None) -> None:  # noqa: FBT001
+    if available != (reason is None):
+        message = "Pause availability requires exactly one unavailable reason when Pause is refused"
+        raise ValueError(message)
+
 
 class DeliveryReadiness(_ProjectionModel):
     """Application-owned eligibility for one supported action at a captured basis."""
@@ -404,6 +418,13 @@ class ChangeGroupView(_ProjectionModel):
     outcome_completed: int = Field(ge=0)
     items: tuple[WorkItemCardView, ...]
     progress: DeliveryProgress | None = None
+    pause_available: bool = False
+    pause_unavailable_reason: ChangePauseUnavailableReason | None = "state-unavailable"
+
+    @model_validator(mode="after")
+    def _validate_pause(self) -> ChangeGroupView:
+        _require_pause_consistency(self.pause_available, self.pause_unavailable_reason)
+        return self
 
 
 class WorkItemClaimView(_ProjectionModel):
@@ -553,6 +574,13 @@ class WorkItemDetailView(_ProjectionModel):
     publication: WorkItemPublicationView | None = None
     readiness: DeliveryReadiness | None = None
     change_progress: DeliveryProgress | None = None
+    pause_available: bool = False
+    pause_unavailable_reason: ChangePauseUnavailableReason | None = "state-unavailable"
+
+    @model_validator(mode="after")
+    def _validate_pause(self) -> WorkItemDetailView:
+        _require_pause_consistency(self.pause_available, self.pause_unavailable_reason)
+        return self
 
 
 _DECISION_REASONS = frozenset(
@@ -630,9 +658,11 @@ class WorkItemProjector:
         *,
         readiness_guidance: tuple[str | None, ...] = (),
         change_progress: DeliveryProgress | None = None,
+        pause_unavailable_reason: ChangePauseUnavailableReason | None = "state-unavailable",
     ) -> None:
         self._snapshot = snapshot
         self._change_progress = change_progress
+        self._pause_unavailable_reason = pause_unavailable_reason
         self._outcomes = {item.outcome_id: item for item in snapshot.contract.outcomes}
         self._bindings = {item.outcome_id: item for item in snapshot.frontier.bindings}
         self._cards = self._project_cards()
@@ -797,6 +827,8 @@ class WorkItemProjector:
             outcome_completed=completed,
             items=self._cards,
             progress=self._change_progress,
+            pause_available=self._pause_unavailable_reason is None,
+            pause_unavailable_reason=self._pause_unavailable_reason,
         )
 
     def publication_phase(self) -> WorkItemPublicationPhase:
@@ -816,6 +848,8 @@ class WorkItemProjector:
                 publication=self._publication_view(),
                 readiness=card.readiness,
                 change_progress=self._change_progress,
+                pause_available=self._pause_unavailable_reason is None,
+                pause_unavailable_reason=self._pause_unavailable_reason,
             )
         outcome_id = card.work_item_id
         outcome = self._outcomes[outcome_id]
@@ -840,6 +874,8 @@ class WorkItemProjector:
             retry_diagnostic=binding.retry_diagnostic,
             readiness=card.readiness,
             change_progress=self._change_progress,
+            pause_available=self._pause_unavailable_reason is None,
+            pause_unavailable_reason=self._pause_unavailable_reason,
         )
 
     def _project_cards(self) -> tuple[WorkItemCardView, ...]:

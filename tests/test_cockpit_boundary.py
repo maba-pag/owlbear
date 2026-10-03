@@ -11,7 +11,7 @@ import pytest
 
 from owlbear_delivery.finalization_reports import FinalizationFailureCode, ReportFinalizationFailure
 from owlbear_delivery.portfolio_operating import DeliveryHealthReason
-from owlbear_delivery.work_items import DeliveryProgress, DeliveryReadinessReason
+from owlbear_delivery.work_items import ChangePauseUnavailableReason, DeliveryProgress, DeliveryReadinessReason
 
 # Mined from #924: Cockpit source import boundary.
 # Mined from #1390: Cockpit excludes Delivery lifecycle and finalization routes.
@@ -60,6 +60,19 @@ def test_delivery_progress_typescript_parity(project_root: Path) -> None:
     labels = re.search(r"DELIVERY_PROGRESS_LABELS[^=]*=\s*\{(.*?)\};", presentation, re.DOTALL)
     assert labels is not None
     assert set(re.findall(r'^\s*"?([a-z-]+)"?:', labels.group(1), re.MULTILINE)) == set(get_args(DeliveryProgress))
+
+
+def test_change_pause_unavailable_reason_typescript_parity(project_root: Path) -> None:
+    """Every Delivery Pause refusal reason has a Cockpit mirror and copy."""
+    api = (project_root / "serve/cockpit/web/src/api/workItems.ts").read_text()
+    union = re.search(r"export type ChangePauseUnavailableReason\s*=\s*(.*?);", api, re.DOTALL)
+    assert union is not None
+    assert set(re.findall(r'"([^"]+)"', union.group(1))) == set(get_args(ChangePauseUnavailableReason))
+    presentation = (project_root / "serve/cockpit/web/src/components/workItemPresentation.ts").read_text()
+    copy = re.search(r"PAUSE_UNAVAILABLE_COPY[^=]*=\s*\{(.*?)\};", presentation, re.DOTALL)
+    assert copy is not None
+    keys = set(re.findall(r'^\s*"?([a-z-]+)"?:', copy.group(1), re.MULTILINE))
+    assert keys == set(get_args(ChangePauseUnavailableReason))
 
 
 def test_delivery_health_reason_typescript_parity(project_root: Path) -> None:

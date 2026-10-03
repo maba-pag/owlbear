@@ -1,4 +1,5 @@
 import type {
+  ChangePauseUnavailableReason,
   DeliveryProgress,
   DeliveryReadinessChecksState,
   DeliveryReadinessReasonCode,
@@ -152,33 +153,25 @@ export function isContinuationPrompt(prompt: string | null | undefined, changeId
 
 export const CONTINUATION_PROMPT_HELP = "Run it in Copilot Chat. Copying does not start an agent.";
 
-/**
- * Readiness reasons that report retained claim, Finalizer, continuation-action or recovery custody;
- * Delivery's defer guards refuse Pause for each (`_require_no_active_change_claim`,
- * `require_continuation_access`, `prepare_runtime_custody_guard`).
- */
-const RETAINED_CUSTODY_REASONS: ReadonlySet<DeliveryReadinessReasonCode> = new Set<DeliveryReadinessReasonCode>([
-  "active-custody",
-  "builder-transition-contained",
-  "retry-transition-contained",
-  "claim-custody-unreconciled",
-  "worker-stall-wait",
-  "finalization-failed",
-  "coordination-unavailable",
-  "engine-action-pending",
-  "engine-action-blocked",
-  "engine-action-interrupted",
-  "engine-action-failed",
-  "engine-action-incomplete",
-  "retry-containment",
-]);
+/** Copy for Delivery's own reason that the defer intent would refuse Pause. */
+export const PAUSE_UNAVAILABLE_COPY: Record<ChangePauseUnavailableReason, string> = {
+  "finalizer-custody": "A Finalizer attempt holds this Change.",
+  "step-in-progress": "A step is in progress; Pause is available when it returns.",
+  "recovery-required": "An interrupted step must be recovered first.",
+  "state-unavailable": "Delivery cannot confirm this Change is idle, so Pause is unavailable.",
+  "change-inactive": "This Change cannot be paused.",
+};
 
-/** A current step holds Change custody until it returns; Delivery refuses Pause meanwhile. */
-export function changeStepInProgress(items: WorkItemCardView[]): boolean {
-  return items.some((item) => {
-    const readiness = item.readiness;
-    return readiness ? readiness.status === "running" || RETAINED_CUSTODY_REASONS.has(readiness.reason_code) : false;
-  });
+/**
+ * Pause availability comes only from Delivery's Change-level projection, never from card readiness;
+ * a view without the field fails closed.
+ */
+export function changePauseUnavailableMessage(view: {
+  pause_available?: boolean;
+  pause_unavailable_reason?: ChangePauseUnavailableReason | null;
+}): string | null {
+  if (view.pause_available === true) return null;
+  return PAUSE_UNAVAILABLE_COPY[view.pause_unavailable_reason ?? "state-unavailable"];
 }
 
 export interface WorkItemStatusPresentation {

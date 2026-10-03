@@ -96,6 +96,7 @@ from owlbear_delivery.publication_provider import (
 )
 from owlbear_delivery.recovery import (
     DeliveryRetryAttemptView,
+    DeliveryWorkerExclusionRequiredError,
     RetryEpisodeKey,
     RetryEpisodeSummary,
     RetryFailureClass,
@@ -112,6 +113,7 @@ from owlbear_delivery.runtime_transaction import (
 from owlbear_delivery.storage_io import locked_roots
 from owlbear_delivery.work_items import (
     ChangeGroupView,
+    ChangePauseUnavailableReason,
     DeliveryIssuerState,
     DeliveryPortfolioSnapshot,
     DeliveryProgress,
@@ -838,7 +840,43 @@ class _ReadinessViewsMixin:
             decisions,
             readiness_guidance=card_guidance,
             change_progress=self._change_activity_progress(snapshot, cards, decisions),
+            pause_unavailable_reason=self._pause_unavailable_reason(snapshot),
         )
+
+    def _pause_unavailable_reason(  # noqa: PLR0911 - one return per defer refusal predicate.
+        self, snapshot: DeliveryPortfolioSnapshot
+    ) -> ChangePauseUnavailableReason | None:
+        """Evaluate the defer intent's own refusal predicates read-only, independent of readiness overlays."""
+        change_id = snapshot.contract.change_id
+        runtime = self._runtimes.get(change_id)
+        frontier_refusal = runtime.deferral_refusal(snapshot.frontier) if runtime is not None else None
+        if frontier_refusal == "change-inactive":
+            return frontier_refusal
+        if runtime is None or change_id in self._runtime_reconciliation_errors:
+            return "state-unavailable"
+        try:
+            coordination = self._workspace_manager.show(change_id)
+            self._coordinator.require_no_pending_recovery(change_id)
+        except DeliveryWorkerExclusionRequiredError:
+            return "recovery-required"
+        except OSError, RuntimeError, ValueError:
+            return "state-unavailable"
+        action = coordination.continuation_action
+        if action is not None and action.finished_at is None:
+            return "step-in-progress"
+        if coordination.writer is not None and coordination.writer.kind == "finalize":
+            return "finalizer-custody"
+        if frontier_refusal is not None:
+            return frontier_refusal
+        try:
+            self._workspace_manager.prepare_runtime_custody_guard(
+                change_id, expected_finalization_attention=coordination.finalization_attention
+            )
+        except DeliveryWorkerExclusionRequiredError:
+            return "recovery-required"
+        except OSError, RuntimeError, ValueError:
+            return "state-unavailable"
+        return None
 
     def _with_progress(
         self,

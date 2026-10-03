@@ -20,7 +20,6 @@ import {
   type PublicationChecksObservationResponse,
   WorkItemApiError,
   type WorkItemAvailableDetailResponse,
-  type WorkItemCardView,
   type WorkItemDetailResponse,
   type WorkItemPublicationPhase,
   type WorkItemStage,
@@ -30,7 +29,7 @@ import CopyCommand from "./CopyCommand";
 import { SectionCard, StatusChip } from "./DeliveryPrimitives";
 import {
   CONTINUATION_PROMPT_HELP,
-  changeStepInProgress,
+  changePauseUnavailableMessage,
   DELIVERY_PROGRESS_LABELS,
   isContinuationPrompt,
   NEXT_ACTOR_LABELS,
@@ -71,8 +70,6 @@ function ConfirmationContent({ children, onClose }: { children: ReactNode; onClo
 
 interface WorkItemDetailProps {
   detail: WorkItemAvailableDetailResponse;
-  /** Current cards of the same Change, used only to tell whether a step holds custody. */
-  changeItems?: WorkItemCardView[];
   pendingAction: string | null;
   actionError: Error | null;
   actionResult: string | null;
@@ -330,7 +327,8 @@ function ChangeDispositionSection(props: WorkItemDetailProps) {
 export interface ChangePauseControlProps {
   changeId: string;
   paused: boolean;
-  stepInProgress: boolean;
+  /** Delivery's reason Pause would be refused, or null when the defer intent is accepted. */
+  unavailableMessage: string | null;
   pendingAction: string | null;
   reasonName: string;
   actionError?: Error | null;
@@ -363,7 +361,7 @@ export function ChangePauseControl(props: ChangePauseControlProps) {
         >
           {props.pendingAction === "change-resume" ? "Resuming..." : "Resume"}
         </PButton>
-      ) : open && !props.stepInProgress ? (
+      ) : open && props.unavailableMessage === null ? (
         <div className="flex flex-wrap items-end gap-static-xs">
           <PInputText
             compact
@@ -387,13 +385,13 @@ export function ChangePauseControl(props: ChangePauseControlProps) {
             type="button"
             compact
             variant="secondary"
-            disabled={busy || props.stepInProgress}
+            disabled={busy || props.unavailableMessage !== null}
             onClick={() => setOpen(true)}
           >
             Pause
           </PButton>
-          {props.stepInProgress ? (
-            <span className="text-xs text-contrast-medium">Pause is available when the current step returns.</span>
+          {props.unavailableMessage !== null ? (
+            <span className="text-xs text-contrast-medium">{props.unavailableMessage}</span>
           ) : null}
         </div>
       )}
@@ -406,16 +404,15 @@ function ChangePauseSection(props: WorkItemDetailProps) {
   const item = props.detail.item;
   const phase = item.publication?.phase;
   if (item.change_progress === "completed" || phase === "abandoned") return null;
-  const card = { ...item.card, readiness: item.card.readiness ?? item.readiness };
   return (
     <section aria-labelledby="change-pause-heading" className="grid gap-static-xs">
       <PHeading id="change-pause-heading" tag="h3" size="sm">
         Change
       </PHeading>
       <ChangePauseControl
-        changeId={card.change_id}
+        changeId={item.card.change_id}
         paused={item.change_progress === "paused" || phase === "deferred"}
-        stepInProgress={changeStepInProgress(props.changeItems ?? [card])}
+        unavailableMessage={changePauseUnavailableMessage(item)}
         pendingAction={props.pendingAction}
         reasonName="change-pause-reason"
         onPause={props.onDeferChange}

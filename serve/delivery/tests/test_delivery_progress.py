@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import itertools
 from datetime import UTC, datetime
 from pathlib import Path
@@ -19,6 +20,8 @@ from serve.delivery.tests.test_portfolio_application import (
     _engine_action,
     _execute_engine,
     _exhaust_builder_retry_with_distinct_codes,
+    _failure_request,
+    _finalizer_settlement,
     _planning_decision_block,
     _policies,
     _portfolio,
@@ -42,6 +45,7 @@ from owlbear_delivery import (
     PortfolioApplicationDependencies,
     PortfolioApplicationHooks,
 )
+from owlbear_delivery.finalization_reports import FinalizationReportStore
 from owlbear_delivery.publication_provider import PublicationProviderError, PublicationProviderFailureCode
 from owlbear_delivery.recovery import DeliveryWorkerExclusionRequiredError, RetryLedger
 from owlbear_delivery.work_items import (
@@ -683,3 +687,199 @@ def test_reserved_progress_keys_are_never_emitted() -> None:
         emitted.add(derive_delivery_progress(readiness, card, frontier, issuer_state=issuer, at_capacity=capacity))
     assert not emitted & _RESERVED
     assert emitted - {None} <= set(get_args(DeliveryProgress)) - _RESERVED
+
+
+# Server-derived Pause availability (F1/F2): each fixture's projection must equal defer acceptance.
+
+
+class _Crash(BaseException):
+    """Process death between two owner steps; no handler in the owner may observe it."""
+
+
+def _quiescent_planning(tmp_path: Path):
+    application, _runtimes, _coordinator, state_root, _probe = _progress_portfolio(
+        tmp_path, {"change-a": DeliveryStage.PLANNING}, [_iso(_real_now())]
+    )
+    return application, state_root, None
+
+
+def _planner_claim(tmp_path: Path):
+    application, _runtimes, _coordinator, state_root, probe = _progress_portfolio(
+        tmp_path, {"change-a": DeliveryStage.PLANNING}, [_iso(_real_now())]
+    )
+    _acquire_planning_claim(application)
+    probe.states[_HOST] = "alive"
+    assert _card(application, "outcome:OUT-001").readiness.reason_code == "active-custody"
+    return application, state_root, "step-in-progress"
+
+
+def _stalled_worker(tmp_path: Path):
+    application, _runtimes, _coordinator, state_root, probe = _progress_portfolio(
+        tmp_path, {"change-a": DeliveryStage.PLANNING}, [_iso(_real_now())]
+    )
+    _acquire_planning_claim(application)
+    probe.states[_HOST] = "gone"
+    probe.processes = ("node",)
+    assert _card(application, "outcome:OUT-001").readiness.reason_code == "worker-stall-wait"
+    return application, state_root, "step-in-progress"
+
+
+def _contained_builder_transition(tmp_path: Path):
+    application, _runtimes, _coordinator, state_root, _launch, transition = builder_transition_case(tmp_path, "block")
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
+        application.transition_delivery("change-a", transition)
+    assert _card(application, "outcome:OUT-001").readiness.reason_code == "builder-transition-contained"
+    return application, state_root, "step-in-progress"
+
+
+def _active_finalizer(tmp_path: Path):
+    application, _runtimes, _coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
+    acquired = application.acquire_change_action(_continuation_request(application))
+    assert acquired.finalization is not None, acquired
+    return application, state_root, "finalizer-custody"
+
+
+def _masked_finalizer(tmp_path: Path):
+    """F1: a reported Finalizer failure with an unreadable retry ledger still holds active custody."""
+    application, _runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
+    acquired = application.acquire_change_action(_continuation_request(application))
+    assert acquired.finalization is not None, acquired
+    attempt = acquired.finalization.attempt
+    application.report_finalization_failure(_failure_request(application, attempt_key=attempt.writer.attempt_id))
+    summary = RetryLedger(state_root, "change-a").summary_path
+    summary.parent.mkdir(parents=True, exist_ok=True)
+    summary.write_bytes(b"{")
+    assert _card(application, "publication").readiness.reason_code == "retry-ledger-unavailable"
+    assert coordinator.show("change-a").writer.kind == "finalize"
+    return application, state_root, "finalizer-custody"
+
+
+def _passive_finalizer_attention(tmp_path: Path):
+    """F2: settled Finalizer attention is passive custody that the defer intent explicitly accepts."""
+    now = ["2026-08-04T00:00:00Z"]
+    application, _runtimes, coordinator, state_root = _portfolio(
+        tmp_path, {"change-a": DeliveryStage.COMPLETED}, clock=lambda: now[0]
+    )
+    acquired = application.acquire_change_action(_continuation_request(application))
+    assert acquired.finalization is not None, acquired
+    attempt = acquired.finalization.attempt
+    report = application.report_finalization_failure(
+        _failure_request(application, attempt_key=attempt.writer.attempt_id)
+    )
+    application.settle_finalizer_invocation(_finalizer_settlement(application, attempt, report))
+    FinalizationReportStore(state_root, "change-a").retire(attempt.exact_head, attempt.contract_digest)
+    now[0] = "2026-08-04T00:00:01Z"
+    assert coordinator.show("change-a").writer.kind == "finalization-attention"
+    assert _card(application, "publication").readiness.reason_code == "finalization-failed"
+    return application, state_root, None
+
+
+def _reservation_only_retry_containment(tmp_path: Path):
+    """F2: a crash after the retry reservation but before continuation custody leaves no custody."""
+    application, _runtime, _provider, _state, _head, state_root = _awaiting_acceptance_fixture(
+        tmp_path, mark_ready=False
+    )
+    assert application.acquire_change_action(_continuation_request(application)).kind == "reconciled"
+    with (
+        patch.object(application, "_register_recovery_invocation", side_effect=_Crash),
+        pytest.raises(_Crash),
+    ):
+        application.acquire_change_action(_continuation_request(application))
+    assert RetryLedger(state_root, "change-a").read().episodes[0].last_status == "reserved"
+    assert application._workspace_manager.show("change-a").continuation_action is None
+    assert _card(application, "publication").readiness.reason_code == "retry-containment"
+    return application, state_root, None
+
+
+def _pending_engine_action(tmp_path: Path):
+    application, _runtime, _provider, _state, _head, state_root = _awaiting_acceptance_fixture(
+        tmp_path, mark_ready=False
+    )
+    _engine_action(application)
+    assert application.get_change("change-a").readiness.reason_code == "engine-action-pending"
+    return application, state_root, "step-in-progress"
+
+
+def _interrupted_engine_action(tmp_path: Path):
+    application, _runtime, _provider, _state, _head, state_root = _awaiting_acceptance_fixture(
+        tmp_path, mark_ready=False
+    )
+    action = _engine_action(application)
+    with application._coordinator.continuation_execution(action):
+        application._coordinator.start_continuation_action(action)
+    assert _execute_engine(application, action).reason_code == "engine-action-interrupted"
+    assert application.get_change("change-a").readiness.reason_code == "engine-action-interrupted"
+    return application, state_root, "step-in-progress"
+
+
+_PAUSE_FIXTURES = {
+    "quiescent-planning": _quiescent_planning,
+    "planner-claim": _planner_claim,
+    "stalled-worker": _stalled_worker,
+    "contained-builder-transition": _contained_builder_transition,
+    "active-finalizer": _active_finalizer,
+    "masked-finalizer": _masked_finalizer,
+    "passive-finalizer-attention": _passive_finalizer_attention,
+    "reservation-only-retry-containment": _reservation_only_retry_containment,
+    "pending-engine-action": _pending_engine_action,
+    "interrupted-engine-action": _interrupted_engine_action,
+}
+
+
+def _pause_views(application: PortfolioApplication) -> set[tuple[bool, str | None]]:
+    group = _group(application)
+    views = [group, application.get_change("change-a").detail]
+    views.extend(application.show_work_item_view("change-a", item.item_key) for item in group.items)
+    return {(view.pause_available, view.pause_unavailable_reason) for view in views}
+
+
+def _defer_accepted(application: PortfolioApplication) -> bool:
+    runtime = application._runtimes["change-a"]
+    before = runtime.frontier_bytes()
+    try:
+        application.set_change_intent(
+            DeliveryChangeIntent(
+                change_id="change-a",
+                kind=DeliveryChangeIntentKind.DEFER,
+                expected_frontier_digest=hashlib.sha256(before).hexdigest(),
+                reason="Pause availability probe",
+            )
+        )
+    except RuntimeError, OSError:
+        assert runtime.frontier_bytes() == before
+        assert runtime.change_deferral() is None
+        return False
+    assert runtime.change_deferral() is not None
+    return True
+
+
+@pytest.mark.parametrize("fixture", sorted(_PAUSE_FIXTURES))
+def test_pause_availability_equals_defer_acceptance(tmp_path: Path, fixture: str) -> None:
+    application, state_root, expected = _PAUSE_FIXTURES[fixture](tmp_path)
+    before = _record_tree(state_root)
+
+    observed = _pause_views(application)
+
+    assert _record_tree(state_root) == before
+    assert observed == {(expected is None, expected)}
+    assert _defer_accepted(application) is (expected is None)
+    if expected is None:
+        assert _pause_views(application) == {(False, "change-inactive")}
+
+
+def test_unreadable_coordination_refuses_pause_like_defer(tmp_path: Path) -> None:
+    application, *_rest = _quiescent_planning(tmp_path)
+    snapshot = application._delivery_snapshot(application._runtimes["change-a"])
+    with patch.object(application._workspace_manager, "show", side_effect=OSError("coordination unreadable")):
+        assert application._pause_unavailable_reason(snapshot) == "state-unavailable"
+        assert not _defer_accepted(application)
+
+
+def test_unverified_recovery_exclusion_refuses_pause_like_defer(tmp_path: Path) -> None:
+    application, *_rest = _quiescent_planning(tmp_path)
+    snapshot = application._delivery_snapshot(application._runtimes["change-a"])
+    with patch.object(
+        application._coordinator, "require_no_pending_recovery", side_effect=DeliveryWorkerExclusionRequiredError
+    ):
+        assert application._pause_unavailable_reason(snapshot) == "recovery-required"
+        assert not _defer_accepted(application)

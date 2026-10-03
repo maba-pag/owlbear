@@ -1069,10 +1069,20 @@ def test_http_portfolio_and_detail_carry_progress_without_writing_records(tmp_pa
     assert groups["change-a"]["items"][0]["readiness"]["progress"] is None
     assert groups["change-a"]["items"][0]["next_step"] == "Claimed by Planner"
     assert groups["change-b"]["progress"] == "waiting-for-change"
+    assert (groups["change-a"]["pause_available"], groups["change-a"]["pause_unavailable_reason"]) == (
+        False,
+        "step-in-progress",
+    )
+    assert (groups["change-b"]["pause_available"], groups["change-b"]["pause_unavailable_reason"]) == (True, None)
+    assert (held.json()["item"]["pause_available"], held.json()["item"]["pause_unavailable_reason"]) == (
+        False,
+        "step-in-progress",
+    )
     assert held.json()["item"]["change_progress"] is None
     assert held.json()["item"]["card"]["readiness"]["status"] == "running"
     waiting_item = waiting.json()["item"]
     assert waiting_item["change_progress"] == "waiting-for-change"
+    assert (waiting_item["pause_available"], waiting_item["pause_unavailable_reason"]) == (True, None)
     assert waiting_item["card"]["readiness"]["action"]["label"] == "Copy continuation prompt"
     assert waiting_item["card"]["readiness"]["prompt"].startswith("/continue-change change-b ")
     assert _record_tree(state_root) == before

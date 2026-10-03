@@ -115,6 +115,13 @@ export type DeliveryProgress =
   | "completed"
   | "paused"
   | "waiting-for-chat";
+/** Delivery's own reason that the defer intent would refuse Pause; Cockpit only maps keys to copy. */
+export type ChangePauseUnavailableReason =
+  | "finalizer-custody"
+  | "step-in-progress"
+  | "recovery-required"
+  | "state-unavailable"
+  | "change-inactive";
 export type FinalizationFailureCode =
   | "workspace-dirty"
   | "workspace-preflight-failed"
@@ -224,6 +231,8 @@ export interface ChangeGroupView {
   outcome_completed: number;
   items: WorkItemCardView[];
   progress?: DeliveryProgress | null;
+  pause_available?: boolean;
+  pause_unavailable_reason?: ChangePauseUnavailableReason | null;
 }
 
 export interface NeedsCounts {
@@ -700,6 +709,8 @@ export interface WorkItemDetailView {
   publication: WorkItemPublicationView | null;
   readiness?: DeliveryReadiness | null;
   change_progress?: DeliveryProgress | null;
+  pause_available?: boolean;
+  pause_unavailable_reason?: ChangePauseUnavailableReason | null;
 }
 
 export interface WorkItemAvailableDetailResponse {
