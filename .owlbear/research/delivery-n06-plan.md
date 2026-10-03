@@ -563,7 +563,7 @@ Premises found false or incomplete on `ac3bf23f9`:
 
 | Phase | PR | Exact head | Proof | Challenges | Status |
 | --- | --- | --- | --- | --- | --- |
-| N06-P | — | — | Probes P1–P9 | — | draft |
+| N06-P | #359 | — | Probes P1–P9 | — | in review |
 | N06-A | — | — | — | — | — |
 | N06-B | — | — | — | — | — |
 | N06-C | — | — | — | — | — |
