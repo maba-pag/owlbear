@@ -2585,7 +2585,7 @@ def test_nonterminal_recovery_capture_failure_keeps_bytes_and_replays(tmp_path: 
             raise OSError(msg)
 
     with (
-        patch("owlbear_delivery.change_workspace.write_contained", side_effect=interrupted_write),
+        patch("owlbear_delivery.workspace_preservation.write_contained", side_effect=interrupted_write),
         pytest.raises(OSError, match="injected"),
     ):
         manager.capture_preservation(coordination.change_id, intent.recovery_id)
