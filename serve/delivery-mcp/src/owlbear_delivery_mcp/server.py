@@ -14,6 +14,7 @@ from owlbear_delivery import (
     DeliveryCheckpointSupervisor,
     DeliveryStartupConfig,
     PortfolioApplication,
+    WindowHostIdentity,
 )
 from owlbear_delivery import load_delivery_application as load_core_delivery_application
 from owlbear_delivery_github import GitHubCliPublicationProvider
@@ -86,12 +87,13 @@ def _is_missing_required(error: dict[str, object], field: str) -> bool:
 
 
 def load_delivery_application(config: DeliveryStartupConfig, workspace_root: Path) -> PortfolioApplication:
-    """Delegate canonical workspace owner construction to Delivery."""
+    """Delegate canonical workspace owner construction to Delivery, binding claims to this VS Code window."""
     try:
         return load_core_delivery_application(
             config,
             workspace_root=workspace_root,
             publication_provider=GitHubCliPublicationProvider(),
+            issuer_host=WindowHostIdentity.capture(),
         )
     except DeliveryApplicationLoadError as exc:
         raise DeliveryStartupDiagnostic(_INVALID, exc.detail, exc.field) from exc

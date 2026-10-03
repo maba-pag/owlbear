@@ -398,9 +398,17 @@ class ClearBlockBody(_TargetHTTPModel):
 
 
 class ConfirmLostClaimBody(_TargetHTTPModel):
-    """Explicit confirmation for removal of one exact failed claim."""
+    """Legacy recovery request; confirmation does not prove worker exclusion."""
 
     confirmed_lost: Literal[True]
+    attempt_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
+
+
+class ReleaseStuckWorkerBody(_TargetHTTPModel):
+    """Exact active worker identity; a null outcome names the Change's Finalizer attempt."""
+
+    outcome_id: str | None = Field(default=None, pattern=r"^OUT-[0-9]{3}$")
     attempt_id: str = Field(min_length=1)
     claim_id: str = Field(min_length=1)
 
@@ -686,6 +694,7 @@ __all__ = [
     "PublicationCheckView",
     "PublicationChecksObservationResponse",
     "RecoverChangeWorktreeBody",
+    "ReleaseStuckWorkerBody",
     "ResolveChangeAttentionBody",
     "ResumeChangeBody",
     "TargetSyncAbortResponse",

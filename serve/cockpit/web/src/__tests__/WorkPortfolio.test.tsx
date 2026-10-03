@@ -298,6 +298,7 @@ function detail(overrides: Partial<WorkItemAvailableDetailResponse["item"]> = {}
       return_context: null,
       operator_moves: [],
       recovery_attention: null,
+      retry_diagnostic: null,
       ...overrides,
       publication: publication || null,
     },
@@ -446,6 +447,7 @@ let pendingPublicationChecksRelease: (() => void) | null;
 let moveBackwardUpdatesDetailStage: WorkItemCardView["stage"];
 let moveBackwardFailure: boolean;
 let mutationFailurePath: string | null;
+let releaseStuckWorkerActive: "write" | "processes" | "unobservable" | null;
 let designFailure: boolean;
 let acceptanceObservationFailure: boolean;
 let acceptanceReconciliationProviderUnavailable: boolean;
@@ -631,7 +633,47 @@ function installFetch() {
         currentDetail = detail({ ...currentDetail.item, block: null });
         return response({});
       }
-      if (method === "POST" && url.endsWith("/claims/recover")) {
+      if (method === "POST" && url.endsWith("/workers/release-stuck")) {
+        if (releaseStuckWorkerActive === "write") {
+          return response(
+            {
+              code: "ERR_DELIVERY_WORKER_ACTIVE",
+              detail:
+                "Custody, files and retry accounting are unchanged. The worker's worktree changed recently, so the " +
+                "worker may still be active. Retry at or after 2026-10-02T12:00:30Z.",
+              authority: "delivery",
+              retry_safe: true,
+              retry_after: "2026-10-02T12:00:30Z",
+            },
+            409,
+          );
+        }
+        if (releaseStuckWorkerActive === "processes") {
+          return response(
+            {
+              code: "ERR_DELIVERY_WORKER_ACTIVE",
+              detail:
+                "Custody, files and retry accounting are unchanged. 1 process (node) is still active in the " +
+                "worker's worktree, so the worker may still be running. Retry after they exit.",
+              authority: "delivery",
+              retry_safe: true,
+            },
+            409,
+          );
+        }
+        if (releaseStuckWorkerActive === "unobservable") {
+          return response(
+            {
+              code: "ERR_DELIVERY_WORKER_ACTIVE",
+              detail:
+                "Custody, files and retry accounting are unchanged. The worker's worktree or its processes could " +
+                "not be observed safely, so the worker may still be active.",
+              authority: "delivery",
+              retry_safe: true,
+            },
+            409,
+          );
+        }
         currentDetail = detail({ ...currentDetail.item, active_claim: null });
         return response({});
       }
@@ -845,6 +887,7 @@ beforeEach(() => {
   moveBackwardUpdatesDetailStage = null;
   moveBackwardFailure = false;
   mutationFailurePath = null;
+  releaseStuckWorkerActive = null;
   designFailure = false;
   acceptanceObservationFailure = false;
   acceptanceReconciliationProviderUnavailable = false;
@@ -1512,6 +1555,59 @@ it("opens routed semantic detail with acceptance and bounded task evidence", asy
   expect(requests.some(({ url }) => url === "/api/changes/change-alpha/work-items/outcome%3AOUT-001")).toBe(true);
 });
 
+it("shows a refused retry as a blocked non-executable current exception", async () => {
+  currentDetail = detail({
+    active_claim: {
+      attempt_id: "attempt-retry",
+      claim_id: "claim-retry",
+      owner_id: "planner-001",
+      process_id: "process-retry",
+      continuation: false,
+      started_at: "2026-09-30T12:00:00Z",
+      worker_role: "planner",
+      task_id: null,
+    },
+    retry_diagnostic: {
+      code: "ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED",
+      attempt_id: "attempt-retry",
+      transition: {
+        action: "retry",
+        outcome_id: "OUT-001",
+        claim_id: "claim-retry",
+        abandoned_commit: null,
+        attempt_id: null,
+        failure_code: "planner-failed",
+      },
+    },
+    readiness: readiness({
+      status: "blocked",
+      next_actor: "none",
+      reason_code: "retry-transition-contained",
+      prompt:
+        "/repair-delivery Inspect only Change change-alpha using the bounded offline inspector. " +
+        "Make no MCP calls; do not retry.",
+    }),
+  });
+  renderPage("/delivery/change-alpha/outcome%3AOUT-001");
+
+  const inspector = await screen.findByTestId("work-item-detail");
+  const readinessView = within(inspector).getByTestId("delivery-readiness");
+  expect(within(readinessView).getByTestId("readiness-status")).toHaveTextContent("Blocked");
+  expect(within(readinessView).getByText("Next: Nobody")).toBeInTheDocument();
+  expect(within(readinessView).getByTestId("readiness-not-executable")).toBeInTheDocument();
+  expect(
+    within(readinessView).getByText(
+      "The worker retry was refused; its claim remains held until host worker-exclusion is verified.",
+    ),
+  ).toBeInTheDocument();
+  expect(within(readinessView).getByTestId("readiness-prompt")).toHaveTextContent("Make no MCP calls");
+  expect(inspector).toHaveTextContent("Retry refused");
+  expect(inspector).toHaveTextContent(
+    "ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED: planner-failed for attempt attempt-retry " +
+      "and claim claim-retry remains active because host worker-exclusion evidence is missing.",
+  );
+});
+
 it("answers a decision request and refetches its resolved state", async () => {
   currentDetail = detail({
     requests: [
@@ -1727,27 +1823,47 @@ it("keeps block evidence available when clearing the block fails", async () => {
   await waitFor(() => expect(clear.disabled).toBe(false));
 });
 
-it("keeps claim recovery and backward movement explicit and confirmable", async () => {
+const runningBuilderClaim = {
+  attempt_id: "attempt-one",
+  claim_id: "claim-one",
+  owner_id: "host-one",
+  process_id: "session-one",
+  continuation: false,
+  started_at: "2026-08-08T10:00:00Z",
+  worker_role: "builder" as const,
+  task_id: "TASK-001",
+};
+
+it("releases a stuck worker after an explicit confirmation and keeps backward movement confirmable", async () => {
   currentDetail = detail({
     card: card({ stage: "implementation" }),
-    active_claim: {
-      attempt_id: "attempt-one",
-      claim_id: "claim-one",
-      owner_id: "host-one",
-      process_id: "session-one",
-      continuation: false,
-      started_at: "2026-08-08T10:00:00Z",
-      worker_role: "builder",
-      task_id: "TASK-001",
-    },
+    active_claim: runningBuilderClaim,
+    readiness: readiness({ status: "running", reason_code: "active-custody" }),
   });
   const { container } = renderPage("/delivery/change-alpha/outcome%3AOUT-001");
-  await screen.findByText("Recover confirmed-lost claim");
-  fireEvent.click(screen.getByText("Recover confirmed-lost claim"));
-  fireEvent.click(screen.getByText("Confirm lost and recover"));
-  await waitFor(() =>
-    expect(requests.some(({ url, method }) => method === "POST" && url.endsWith("/claims/recover"))).toBe(true),
+  await screen.findByText("Release stuck worker");
+  fireEvent.click(screen.getByText("Release stuck worker"));
+  const dialog = screen.getByRole("alertdialog");
+  expect(dialog).toHaveTextContent("Use this only for a worker whose chat was stopped or whose VS Code window closed.");
+  expect(dialog).toHaveTextContent("counts toward this work's retry budget");
+  expect(dialog).toHaveTextContent("The worktree, including uncommitted work, is preserved for the next attempt.");
+  expect(dialog).toHaveTextContent(
+    "changes nothing while any process still uses the worktree or if it changed in the last 30 seconds.",
   );
+  expect(dialog.textContent ?? "").not.toMatch(/two minutes/i);
+  expect(dialog.textContent ?? "").not.toMatch(/\bstops?\b|\bkill|\bterminal\b|\brun the\b|\bcommand\b/i);
+  fireEvent.click(within(dialog).getByText("Confirm release"));
+  await waitFor(() =>
+    expect(requests).toContainEqual({
+      url: "/api/changes/change-alpha/workers/release-stuck",
+      method: "POST",
+      body: { outcome_id: "OUT-001", attempt_id: "attempt-one", claim_id: "claim-one" },
+    }),
+  );
+  expect(
+    await screen.findByText("Stuck worker released. The attempt was recorded as failed; its work is preserved."),
+  ).toBeInTheDocument();
+  expect(requests.some(({ url }) => url.endsWith("/claims/recover"))).toBe(false);
 
   fireEvent.click(screen.getByText("Administrative actions"));
   const [stage, reason] = await waitFor(() => {
@@ -1779,42 +1895,113 @@ it("keeps claim recovery and backward movement explicit and confirmable", async 
   expect(await screen.findByText("Moved backward. Reset: OUT-002.")).toBeInTheDocument();
 });
 
-it("keeps claim recovery confirmation open when recovery fails", async () => {
+it.each([
+  ["write", "the worker may still be active. Nothing was changed."],
+  ["processes", "1 process (node) is still active in the worker's worktree"],
+  ["unobservable", "could not be observed safely"],
+] as const)("keeps the release confirmation open when a %s guard refuses the release", async (guard, message) => {
   currentDetail = detail({
     card: card({ stage: "implementation" }),
-    active_claim: {
-      attempt_id: "attempt-one",
-      claim_id: "claim-one",
-      owner_id: "host-one",
-      process_id: "session-one",
-      continuation: false,
-      started_at: "2026-08-08T10:00:00Z",
-      worker_role: "builder",
-      task_id: "TASK-001",
-    },
+    active_claim: runningBuilderClaim,
+    readiness: readiness({ status: "running", reason_code: "active-custody" }),
   });
-  mutationFailurePath = "/claims/recover";
+  releaseStuckWorkerActive = guard;
   renderPage("/delivery/change-alpha/outcome%3AOUT-001");
-  await screen.findByText("Recover confirmed-lost claim");
-  fireEvent.click(screen.getByText("Recover confirmed-lost claim"));
-  fireEvent.click(screen.getByText("Confirm lost and recover"));
+  await screen.findByText("Release stuck worker");
+  fireEvent.click(screen.getByText("Release stuck worker"));
+  fireEvent.click(screen.getByText("Confirm release"));
 
   await waitFor(() =>
     expect(requests).toContainEqual({
-      url: "/api/changes/change-alpha/outcomes/OUT-001/claims/recover",
+      url: "/api/changes/change-alpha/workers/release-stuck",
       method: "POST",
-      body: {
-        attempt_id: "attempt-one",
-        claim_id: "claim-one",
-        confirmed_lost: true,
-      },
+      body: { outcome_id: "OUT-001", attempt_id: "attempt-one", claim_id: "claim-one" },
     }),
   );
   const dialog = screen.getByRole("alertdialog");
-  expect(within(dialog).getByRole("alert")).toHaveTextContent(
-    "The Delivery operation was rejected while the confirmation was open.",
+  const feedback = await within(dialog).findByRole("status");
+  expect(feedback).toHaveTextContent("ERR_DELIVERY_WORKER_ACTIVE");
+  expect(feedback).toHaveTextContent(message);
+  if (guard === "write") {
+    const retryAfter = within(feedback).getByTestId("worker-active-retry-after");
+    expect(retryAfter).toHaveTextContent("2026-10-02T12:00:30Z");
+    expect(retryAfter).toHaveAttribute("datetime", "2026-10-02T12:00:30Z");
+  } else {
+    expect(within(feedback).queryByTestId("worker-active-retry-after")).not.toBeInTheDocument();
+    expect(feedback).not.toHaveTextContent("Retry at or after");
+  }
+  expect(within(dialog).getByText("Release stuck worker")).toBeInTheDocument();
+  expect(screen.getByTestId("work-item-detail")).toHaveTextContent("attempt-one");
+});
+
+it("explains a stall wait without an eligible time while processes still use the worktree", async () => {
+  const prompt = "/continue-change change-alpha 1 process (node) is still active in its worktree.";
+  currentDetail = detail({
+    card: card({ stage: "implementation" }),
+    active_claim: runningBuilderClaim,
+    readiness: readiness({ status: "waiting", reason_code: "worker-stall-wait", next_eligible_at: null, prompt }),
+  });
+  renderPage("/delivery/change-alpha/outcome%3AOUT-001");
+
+  const inspector = await screen.findByTestId("work-item-detail");
+  expect(within(inspector).getByTestId("readiness-prompt")).toHaveTextContent(prompt);
+  expect(within(inspector).getByTestId("worker-stall-no-eligible-time")).toHaveTextContent(
+    "processes still use this worker's worktree",
   );
-  expect(within(dialog).getByText("Confirm lost claim")).toBeInTheDocument();
+  expect(inspector).not.toHaveTextContent("Next eligible at");
+  expect(within(inspector).queryByText("Release stuck worker")).not.toBeInTheDocument();
+});
+
+it.each([
+  ["another claim", { attempt_id: "attempt-two", claim_id: "claim-two" }, "running"],
+  ["a stall wait", {}, "worker-stall-wait"],
+] as const)("withdraws an open release confirmation when polling shows %s", async (_case, identity, next) => {
+  vi.useFakeTimers();
+  try {
+    currentDetail = detail({
+      card: card({ stage: "implementation" }),
+      active_claim: runningBuilderClaim,
+      readiness: readiness({ status: "running", reason_code: "active-custody" }),
+    });
+    renderPage("/delivery/change-alpha/outcome%3AOUT-001");
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    fireEvent.click(screen.getByText("Release stuck worker"));
+    expect(screen.getByRole("alertdialog")).toHaveTextContent("attempt-one");
+
+    currentDetail = detail({
+      card: card({ stage: "implementation" }),
+      active_claim: { ...runningBuilderClaim, ...identity },
+      readiness:
+        next === "running"
+          ? readiness({ status: "running", reason_code: "active-custody" })
+          : readiness({ status: "waiting", reason_code: "worker-stall-wait" }),
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000);
+    });
+
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(screen.queryByText("Confirm release")).not.toBeInTheDocument();
+    expect(requests.some(({ url }) => url.endsWith("/workers/release-stuck"))).toBe(false);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("offers stuck-worker release only for running claims", async () => {
+  currentDetail = detail({
+    card: card({ stage: "implementation" }),
+    active_claim: runningBuilderClaim,
+    readiness: readiness({ status: "blocked", next_actor: "none", reason_code: "retry-transition-contained" }),
+  });
+  renderPage("/delivery/change-alpha/outcome%3AOUT-001");
+
+  const inspector = await screen.findByTestId("work-item-detail");
+  expect(inspector).toHaveTextContent("Active claim");
+  expect(within(inspector).queryByText("Release stuck worker")).not.toBeInTheDocument();
 });
 
 it("clears a backward target that becomes invalid after a successful move", async () => {
@@ -4957,6 +5144,9 @@ it("shows the applicable finalization attempt retained by readiness", async () =
             checks_state: "not-run",
             check_id: null,
             exit_status: null,
+            procedure_id: null,
+            proof_fingerprint_before: null,
+            proof_fingerprint_after: null,
             paths: [],
           },
         },
@@ -4996,6 +5186,9 @@ it("reports the historical applicability of a finalization attempt from an earli
             checks_state: "failed",
             check_id: "uv run test",
             exit_status: 1,
+            procedure_id: null,
+            proof_fingerprint_before: null,
+            proof_fingerprint_after: null,
             paths: ["serve/delivery"],
           },
         },
@@ -5010,6 +5203,49 @@ it("reports the historical applicability of a finalization attempt from an earli
   expect(within(attempt).getByTestId("readiness-attempt-applicability")).toHaveTextContent("Historical");
   expect(attempt).toHaveTextContent("Maintained checks failed on an earlier candidate.");
   expect(attempt).toHaveTextContent("Failed");
+});
+
+it("renders proof-mutation finalization evidence", async () => {
+  currentDetail = detail({
+    readiness: readiness({
+      status: "blocked",
+      reason_code: "finalization-failed",
+      checks_state: "failed",
+      last_attempt: {
+        applicability: "current",
+        report: {
+          report_id: "b".repeat(64),
+          sequence: 4,
+          observed_at: "2026-08-13T09:00:00Z",
+          summary: "The maintained proof procedure mutated the managed workspace.",
+          producer: "finalization-diagnostic",
+          request: {
+            change_id: "change-alpha",
+            attempt_key: "attempt-4",
+            category: "proof-mutation",
+            code: "proof-mutated-worktree",
+            checks_state: "failed",
+            check_id: null,
+            exit_status: 0,
+            procedure_id: "proof-procedure",
+            proof_fingerprint_before: "c".repeat(64),
+            proof_fingerprint_after: "d".repeat(64),
+            paths: ["serve/delivery/src/owlbear_delivery"],
+          },
+        },
+      },
+    }),
+  });
+  renderPage();
+  const table = await screen.findByTestId("work-portfolio-table");
+  fireEvent.click(within(table).getAllByRole("link", { name: /Delivery foundation/ })[0]);
+
+  const attempt = within(await screen.findByTestId("work-item-detail")).getByTestId("readiness-last-attempt");
+  expect(attempt).toHaveTextContent("proof-mutation");
+  expect(attempt).toHaveTextContent("proof-mutated-worktree");
+  expect(attempt).toHaveTextContent("proof-procedure");
+  expect(attempt).toHaveTextContent("c".repeat(64));
+  expect(attempt).toHaveTextContent("d".repeat(64));
 });
 
 it("reports engine readiness rather than the publication phase for a dirty candidate", async () => {
@@ -5401,6 +5637,7 @@ it("offers the finalize command only while engine readiness is executable", asyn
       executable: true,
       reason_code: "ready",
       action: executableAction,
+      prompt: "/continue-change change-alpha reread get_change and pass its readiness basis unchanged.",
     }),
   });
   renderPage("/delivery/change-alpha/publication");
@@ -5411,6 +5648,12 @@ it("offers the finalize command only while engine readiness is executable", asyn
     }),
   ).toBeInTheDocument();
   expect(within(executableInspector).queryByTestId("readiness-not-executable")).not.toBeInTheDocument();
+  const prompt = within(executableInspector).getByTestId("readiness-prompt");
+  expect(prompt.tagName).toBe("PRE");
+  expect(prompt).toHaveTextContent(
+    "/continue-change change-alpha reread get_change and pass its readiness basis unchanged.",
+  );
+  expect(prompt.querySelector("a, button")).toBeNull();
 
   currentDetail = detail({
     card: publicationCardForChecks({
@@ -5443,7 +5686,11 @@ it("offers the finalize command only while engine readiness is executable", asyn
 });
 
 it("offers read-only inspection for an unavailable Change without controls", async () => {
-  currentUnavailableDetail = unavailableChange("change-alpha", "Portfolio redesign");
+  const unavailable = unavailableChange("change-alpha", "Portfolio redesign");
+  currentUnavailableDetail = {
+    ...unavailable,
+    readiness: { ...unavailable.readiness, prompt: "/repair-delivery Diagnose Change change-alpha read-only." },
+  };
   renderPage("/delivery/change-alpha/outcome:OUT-001");
 
   const inspector = await screen.findByTestId("work-item-detail");
@@ -5454,31 +5701,110 @@ it("offers read-only inspection for an unavailable Change without controls", asy
   expect(within(inspector).getByTestId("unavailable-change-diagnostics")).toHaveTextContent("runtime-unavailable");
   expect(within(inspector).getByTestId("readiness-status")).toHaveTextContent("Unavailable");
   expect(within(inspector).getByTestId("readiness-checks-state")).toHaveTextContent("Unknown");
+  const prompt = within(inspector).getByTestId("readiness-prompt");
+  expect(prompt.tagName).toBe("PRE");
+  expect(prompt).toHaveTextContent("/repair-delivery Diagnose Change change-alpha read-only.");
+  expect(prompt.querySelector("a, button")).toBeNull();
   expect(within(inspector).queryByRole("button")).not.toBeInTheDocument();
+});
+
+it.each([
+  ["continuation text", "/continue-change change-alpha reread readiness before continuing."],
+  ["diagnostic text containing markup", '/repair-delivery Diagnose <a href="/mutate">this Change</a> read-only.'],
+  ["absent prompt", undefined],
+  ["null prompt", null],
+] as const)("renders readiness prompts inertly or omits them: %s", async (_label, prompt) => {
+  const promptState = prompt === undefined ? {} : { prompt };
+  currentDetail = detail({
+    readiness: readiness({
+      status: "blocked",
+      reason_code: "engine-action-blocked",
+      ...promptState,
+    }),
+  });
+  renderPage("/delivery/change-alpha/outcome:OUT-001");
+
+  const inspector = await screen.findByTestId("work-item-detail");
+  const renderedPrompt = within(inspector).queryByTestId("readiness-prompt");
+  if (typeof prompt === "string") {
+    const promptElement = requirePresent(renderedPrompt);
+    expect(promptElement.tagName).toBe("PRE");
+    expect(promptElement).toHaveTextContent(prompt);
+    expect(promptElement.querySelector("a, button, img, script")).toBeNull();
+  } else {
+    expect(renderedPrompt).not.toBeInTheDocument();
+  }
 });
 
 it("labels every continuation readiness reason without blanking a new engine state", async () => {
   const continuationReasons: DeliveryReadinessReasonCode[] = [
+    "design-attention",
+    "builder-transition-contained",
     "finalization-failed",
+    "settled-attention-target-drift",
     "claim-activation-failed",
     "coordination-unavailable",
     "execution-occupancy-unavailable",
     "engine-action-pending",
     "engine-action-blocked",
+    "engine-action-interrupted",
+    "engine-action-failed",
+    "engine-action-incomplete",
     "target-sync-required",
     "claim-custody-unreconciled",
+    "retry-backoff",
+    "retry-exhausted",
+    "acceptance-wait",
+    "retry-containment",
+    "retry-ledger-unavailable",
+    "worker-stall-wait",
   ];
   expect(new Set(continuationReasons.map((reason) => READINESS_REASON_LABELS[reason])).size).toBe(
     continuationReasons.length,
   );
 
+  const retryCondition = "Wait until the retained attempt can be safely inspected.";
+  const containedBuilderAttention: NonNullable<WorkItemAvailableDetailResponse["item"]["recovery_attention"]> = {
+    attempt_id: "attempt-001",
+    claim_id: "claim-001",
+    reason: "The Builder block transition remains contained with custody retained.",
+    custody_retained: true,
+    retry_condition: retryCondition,
+    diagnostic_transition: {
+      action: "block",
+      outcome_id: "OUT-001",
+      claim_id: "claim-001",
+      block_id: "block-001",
+      reason: "A bounded user decision is required.",
+      unblock_condition: "The decision is recorded.",
+      expected_evidence: ["Recorded user decision"],
+      locators: ["request:REQUEST-001"],
+      request: {
+        request_id: "REQUEST-001",
+        kind: "decision",
+        outcome_id: "OUT-001",
+        summary: "Choose the next step.",
+        options: [{ option_id: "continue", label: "Continue" }],
+        resolution: null,
+      },
+      resume_commit: null,
+    },
+  };
+
   for (const reason of continuationReasons) {
+    const designAttention = reason === "design-attention";
+    const targetDrift = reason === "settled-attention-target-drift";
+    const builderTransitionContained = reason === "builder-transition-contained";
     const state = readiness({
-      status: "waiting",
-      next_actor: "agent",
+      status: designAttention || targetDrift || builderTransitionContained ? "blocked" : "waiting",
+      executable: false,
+      next_actor: designAttention ? "you" : "agent",
       reason_code: reason,
     });
-    currentDetail = detail({ readiness: state });
+    currentDetail = detail({
+      readiness: state,
+      ...(builderTransitionContained ? { recovery_attention: containedBuilderAttention } : {}),
+    });
     const { unmount } = renderPage("/delivery/change-alpha/outcome%3AOUT-001");
 
     const inspector = await screen.findByTestId("work-item-detail");
@@ -5486,11 +5812,101 @@ it("labels every continuation readiness reason without blanking a new engine sta
     expect(rendered).toHaveTextContent(READINESS_REASON_LABELS[reason]);
     expect(rendered?.textContent?.trim()).not.toBe("");
     expect(rendered).not.toHaveTextContent(READINESS_REASON_LABELS.ready);
+    if (designAttention) {
+      expect(inspector.querySelector('[data-readiness-actor="you"]')).toHaveTextContent("Next: You");
+    }
+    if (targetDrift) {
+      expect(within(inspector).getByTestId("readiness-status")).toHaveTextContent("Blocked");
+      expect(within(inspector).getByTestId("readiness-not-executable")).toBeInTheDocument();
+    }
+    if (builderTransitionContained) {
+      expect(within(inspector).getByText("Recovery attention")).toBeInTheDocument();
+      expect(inspector).toHaveTextContent(containedBuilderAttention.reason);
+      expect(inspector).toHaveTextContent(`Next: ${retryCondition}`);
+      expect(within(inspector).getByTestId("readiness-status")).toHaveTextContent("Blocked");
+      expect(within(inspector).getByTestId("readiness-not-executable")).toBeInTheDocument();
+      expect(within(inspector).queryByRole("button", { name: /^Copy command/ })).not.toBeInTheDocument();
+    }
     unmount();
   }
+}, 60_000);
+
+it("renders durable retry readiness metadata", async () => {
+  currentDetail = detail({
+    readiness: readiness({
+      status: "waiting",
+      reason_code: "retry-backoff",
+      attempts: 2,
+      next_eligible_at: "2026-08-04T00:00:02Z",
+      stop_reason: null,
+    }),
+  });
+  renderPage("/delivery/change-alpha/outcome%3AOUT-001");
+
+  const inspector = await screen.findByTestId("work-item-detail");
+  expect(inspector).toHaveTextContent("Automatic attempts");
+  expect(inspector).toHaveTextContent("2");
+  expect(inspector).toHaveTextContent("Next eligible at");
+  expect(inspector).toHaveTextContent("2026-08-04T00:00:02Z");
 });
 
-it("reports engine continuation custody as provenance without offering caller-confirmed recovery", async () => {
+it.each([
+  ["retry-exhausted", "Automatic retries are exhausted; Delivery offers no action to reset this budget."],
+  [
+    "retry-containment",
+    "A prior attempt has no authoritative outcome. Preserve custody; no caller action can retry or release it.",
+  ],
+] as const)("shows no expected actor or prompt for %s", async (reason, explanation) => {
+  currentDetail = detail({
+    readiness: readiness({
+      status: "blocked",
+      reason_code: reason,
+      next_actor: "none",
+      prompt: null,
+      stop_reason: reason,
+    }),
+  });
+  renderPage("/delivery/change-alpha/outcome%3AOUT-001");
+
+  const inspector = await screen.findByTestId("work-item-detail");
+  expect(inspector.querySelector('[data-readiness-actor="none"]')).toHaveTextContent("Next: Nobody");
+  expect(inspector.querySelector(`[data-readiness-reason="${reason}"]`)).toHaveTextContent(explanation);
+  expect(screen.queryByTestId("readiness-prompt")).not.toBeInTheDocument();
+});
+
+it("renders the bounded attempt history of an exhausted retry episode", async () => {
+  currentDetail = detail({
+    readiness: readiness({
+      status: "blocked",
+      reason_code: "retry-exhausted",
+      next_actor: "agent",
+      attempts: 3,
+      stop_reason: "retry-exhausted",
+      retry_history: [
+        {
+          ordinal: 1,
+          kind: "original",
+          status: "failed",
+          failure_code: "builder-failed",
+          observed_at: "2026-08-04T00:00:00Z",
+        },
+        { ordinal: 2, kind: "repair", status: "failed", failure_code: "worker-timeout", observed_at: null },
+        { ordinal: 3, kind: "repair", status: "failed", failure_code: null, observed_at: "2026-08-04T02:00:00Z" },
+      ],
+    }),
+  });
+  renderPage("/delivery/change-alpha/outcome%3AOUT-001");
+
+  const history = await screen.findByTestId("readiness-retry-history");
+  expect(history).toHaveTextContent("Attempt history");
+  const entries = within(history).getAllByRole("listitem");
+  expect(entries).toHaveLength(3);
+  expect(entries[0]).toHaveTextContent("1. original failed builder-failed at 2026-08-04T00:00:00Z");
+  expect(entries[1]).toHaveTextContent("2. repair failed worker-timeout");
+  expect(entries[2]).toHaveTextContent("3. repair failed at 2026-08-04T02:00:00Z");
+});
+
+it("offers release for a running continuation worker with its exact claim identity", async () => {
   currentDetail = detail({
     card: card({ stage: "implementation" }),
     active_claim: {
@@ -5503,19 +5919,49 @@ it("reports engine continuation custody as provenance without offering caller-co
       worker_role: "builder",
       task_id: null,
     },
+    readiness: readiness({ status: "running", reason_code: "active-custody" }),
   });
   renderPage("/delivery/change-alpha/outcome%3AOUT-001");
 
   const inspector = await screen.findByTestId("work-item-detail");
   expect(within(inspector).getByTestId("claim-continuation-custody")).toHaveTextContent(
-    "Caller-confirmed recovery is not supported for it.",
+    "Delivery holds this custody as an engine continuation.",
   );
   expect(inspector).toHaveTextContent("Engine continuation");
   expect(inspector).toHaveTextContent("cockpit-host");
   expect(inspector).toHaveTextContent("cockpit-session");
   expect(inspector).toHaveTextContent("not evidence that the worker is still running");
-  expect(within(inspector).queryByText("Recover confirmed-lost claim")).not.toBeInTheDocument();
-  expect(requests.filter((request) => request.method !== "GET")).toEqual([]);
+  fireEvent.click(within(inspector).getByText("Release stuck worker"));
+  fireEvent.click(screen.getByText("Confirm release"));
+
+  await waitFor(() =>
+    expect(requests).toContainEqual({
+      url: "/api/changes/change-alpha/workers/release-stuck",
+      method: "POST",
+      body: { outcome_id: "OUT-001", attempt_id: "attempt-continuation", claim_id: "claim-continuation" },
+    }),
+  );
+});
+
+it("does not offer stuck-worker release when a claim is missing its identifiers", async () => {
+  currentDetail = detail({
+    card: card({ stage: "implementation" }),
+    active_claim: {
+      attempt_id: "",
+      claim_id: "",
+      owner_id: "cockpit-host",
+      process_id: "cockpit-session",
+      continuation: true,
+      started_at: "2026-09-13T10:00:00Z",
+      worker_role: "builder",
+      task_id: null,
+    },
+    readiness: readiness({ status: "running", reason_code: "active-custody" }),
+  });
+  renderPage("/delivery/change-alpha/outcome%3AOUT-001");
+
+  const inspector = await screen.findByTestId("work-item-detail");
+  expect(within(inspector).queryByText("Release stuck worker")).not.toBeInTheDocument();
 });
 
 it("exposes the coordination status behind an unreadable Change record", async () => {
@@ -5605,6 +6051,7 @@ it("counts listed unavailable Changes in portfolio accounting and filters", asyn
 it("keeps the inspector on a Change that becomes unavailable and restores it when available again", async () => {
   renderPage("/delivery/change-alpha/outcome:OUT-001");
   expect(await screen.findByTestId("work-item-detail")).toHaveTextContent("Delivery foundation");
+  await screen.findByTestId("work-portfolio-table");
 
   currentPortfolio = {
     ...portfolio([]),
@@ -5637,7 +6084,9 @@ it("keeps the inspector on a Change that becomes unavailable and restores it whe
   const restoredInspector = screen.getByTestId("work-item-detail");
   expect(restoredInspector).toHaveTextContent("Make Delivery supervision coherent.");
   expect(within(restoredInspector).queryByTestId("unavailable-change-diagnostics")).not.toBeInTheDocument();
-  expect(screen.getByTestId("work-portfolio-table")).toHaveTextContent("Delivery foundation");
+  await waitFor(() => expect(screen.getByTestId("work-portfolio-table")).toHaveTextContent("Delivery foundation"), {
+    timeout: 6000,
+  });
   expect(screen.getByTestId("test-location")).toHaveTextContent("/delivery/change-alpha/outcome:OUT-001");
   expect(requests.filter((request) => request.method !== "GET")).toEqual([]);
 });

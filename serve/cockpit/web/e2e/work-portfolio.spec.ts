@@ -1050,3 +1050,145 @@ test.describe("assembled Delivery portfolio", () => {
     });
   });
 });
+
+const STUCK_WORKER_ORIGIN = "http://127.0.0.1:4176";
+const WORKER_QUIET_PERIOD_MS = 30_000;
+
+type ClaimDetail = {
+  item: {
+    active_claim: { attempt_id: string; claim_id: string; started_at: string; continuation: boolean } | null;
+    card: {
+      readiness: {
+        status: string;
+        reason_code: string;
+        retry_history?: Array<{ status: string; failure_code: string | null }>;
+      } | null;
+    };
+  };
+};
+
+async function stuckWorkerDetail(page: Page, changeId: string): Promise<ClaimDetail> {
+  const response = await page.request.get(
+    `${STUCK_WORKER_ORIGIN}/api/changes/${changeId}/work-items/${encodeURIComponent("outcome:OUT-001")}`,
+  );
+  expect(response.status()).toBe(200);
+  return (await response.json()) as ClaimDetail;
+}
+
+async function openReleaseConfirmation(page: Page, changeId: string, title: string): Promise<Locator> {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`${STUCK_WORKER_ORIGIN}/delivery/${changeId}/${encodeURIComponent("outcome:OUT-001")}`);
+  const detail = page.getByTestId("work-item-detail");
+  await expect(detail.getByRole("heading", { name: `Plan ${title}`, exact: true })).toBeVisible();
+  await expect(detail.getByRole("heading", { name: "Active claim" })).toBeVisible();
+  await expect(detail.getByTestId("claim-continuation-custody")).toBeVisible();
+  await detail.getByRole("button", { name: "Release stuck worker" }).click();
+  const modal = page.locator("p-modal").filter({ hasText: "Use this only for a worker whose chat was stopped" });
+  await expect(modal).toBeVisible();
+  await expect
+    .poll(() => modal.evaluate((element) => element.shadowRoot?.querySelector("dialog")?.open ?? false))
+    .toBe(true);
+  const confirm = modal.getByRole("button", { name: "Confirm release" });
+  await confirm.focus();
+  await expect(confirm).toBeFocused();
+  return modal;
+}
+
+test.describe("assembled stuck-worker release", () => {
+  test.describe.configure({ mode: "serial" });
+
+  test("refuses release while the worker's worktree is still changing", async ({ page }) => {
+    const before = await stuckWorkerDetail(page, "stuck-active-e2e");
+    const claim = requirePresent(before.item.active_claim);
+    const modal = await openReleaseConfirmation(page, "stuck-active-e2e", "Active worker");
+    await expect(modal).toContainText(claim.attempt_id);
+
+    const releaseResponse = page.waitForResponse(
+      (response) => response.request().method() === "POST" && response.url().endsWith("/workers/release-stuck"),
+    );
+    await modal.getByRole("button", { name: "Confirm release" }).click();
+    expect((await releaseResponse).status()).toBe(409);
+
+    const feedback = modal.getByRole("status").filter({ hasText: "ERR_DELIVERY_WORKER_ACTIVE" });
+    await expect(feedback).toContainText("the worker may still be active. Nothing was changed.");
+    const retryAfter = requirePresent(await feedback.getByTestId("worker-active-retry-after").getAttribute("datetime"));
+    expect(new Date(retryAfter).getTime()).toBeGreaterThan(Date.now());
+    expect(new Date(retryAfter).getTime()).toBeLessThanOrEqual(Date.now() + WORKER_QUIET_PERIOD_MS + 5_000);
+    await expect(modal).toBeVisible();
+
+    const after = await stuckWorkerDetail(page, "stuck-active-e2e");
+    expect(after.item.active_claim).toEqual(claim);
+    expect(after.item.card.readiness).toEqual(before.item.card.readiness);
+    await modal.getByRole("button", { name: "Cancel" }).click();
+    await expect(modal).not.toBeVisible();
+    await expect(page.getByTestId("work-item-detail").getByRole("heading", { name: "Active claim" })).toBeVisible();
+  });
+
+  test("refuses release while a leftover process still uses the worker's worktree", async ({ page }) => {
+    test.setTimeout(WORKER_QUIET_PERIOD_MS + 90_000);
+    const before = await stuckWorkerDetail(page, "stuck-busy-e2e");
+    const claim = requirePresent(before.item.active_claim);
+    // Outlast the write guard so only the live process can explain the refusal.
+    const quietAt = new Date(claim.started_at).getTime() + WORKER_QUIET_PERIOD_MS + 5_000;
+    await page.waitForTimeout(Math.max(quietAt - Date.now(), 0));
+    const modal = await openReleaseConfirmation(page, "stuck-busy-e2e", "Busy worker");
+
+    const releaseResponse = page.waitForResponse(
+      (response) => response.request().method() === "POST" && response.url().endsWith("/workers/release-stuck"),
+    );
+    await modal.getByRole("button", { name: "Confirm release" }).click();
+    const response = await releaseResponse;
+    expect(response.status()).toBe(409);
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body.code).toBe("ERR_DELIVERY_WORKER_ACTIVE");
+    expect(body).not.toHaveProperty("retry_after");
+    expect(body.detail).toContain("still active in the worker's worktree");
+
+    const feedback = modal.getByRole("status").filter({ hasText: "ERR_DELIVERY_WORKER_ACTIVE" });
+    await expect(feedback).toContainText("(node) is still active in the worker's worktree");
+    await expect(feedback).toContainText("Custody, files and retry accounting are unchanged.");
+    await expect(feedback.getByTestId("worker-active-retry-after")).toHaveCount(0);
+
+    const after = await stuckWorkerDetail(page, "stuck-busy-e2e");
+    expect(after.item.active_claim).toEqual(claim);
+    expect(after.item.card.readiness).toEqual(before.item.card.readiness);
+    await modal.getByRole("button", { name: "Cancel" }).click();
+    await expect(modal).not.toBeVisible();
+  });
+
+  test("releases a stopped worker once its worktree is quiet", async ({ page }) => {
+    test.setTimeout(WORKER_QUIET_PERIOD_MS + 90_000);
+    const before = await stuckWorkerDetail(page, "stuck-quiet-e2e");
+    const claim = requirePresent(before.item.active_claim);
+    expect(claim.continuation).toBe(true);
+    expect(before.item.card.readiness?.status).toBe("running");
+    // Fixture seeding is the worktree's last write; ctime cannot be backdated, so wait out the real quiet period.
+    const quietAt = new Date(claim.started_at).getTime() + WORKER_QUIET_PERIOD_MS + 10_000;
+    await page.waitForTimeout(Math.max(quietAt - Date.now(), 0));
+
+    const modal = await openReleaseConfirmation(page, "stuck-quiet-e2e", "Quiet stopped worker");
+    await expect(modal).toContainText(claim.claim_id);
+    const releaseResponse = page.waitForResponse(
+      (response) => response.request().method() === "POST" && response.url().endsWith("/workers/release-stuck"),
+    );
+    await modal.getByRole("button", { name: "Confirm release" }).click();
+    expect((await releaseResponse).status()).toBe(200);
+
+    const detail = page.getByTestId("work-item-detail");
+    await expect(modal).not.toBeVisible();
+    await expect(
+      detail.getByText("Stuck worker released. The attempt was recorded as failed; its work is preserved."),
+    ).toBeVisible();
+    await expect(detail.getByRole("heading", { name: "Active claim" })).toHaveCount(0);
+    await expect(detail.getByRole("button", { name: "Release stuck worker" })).toHaveCount(0);
+    await expect(detail.getByTestId("readiness-status")).not.toHaveText("Running");
+    await expect(detail.getByTestId("readiness-retry-history")).toContainText("original failed worker-released-stuck");
+
+    const after = await stuckWorkerDetail(page, "stuck-quiet-e2e");
+    expect(after.item.active_claim).toBeNull();
+    expect(after.item.card.readiness?.status).not.toBe("running");
+    expect(after.item.card.readiness?.retry_history).toEqual([
+      expect.objectContaining({ status: "failed", failure_code: "worker-released-stuck" }),
+    ]);
+  });
+});

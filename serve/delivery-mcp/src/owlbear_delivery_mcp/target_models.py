@@ -23,7 +23,9 @@ from owlbear_delivery.delivery_application_loader import DeliveryStartupConfig
 from owlbear_delivery.delivery_runtime import (
     AdministrativeDeliveryMovePreview,
     AdministrativeDeliveryMoveResult,
+    BlockDelivery,
     DeliveryBlock,
+    DeliveryBuilderInvocationSettlement,
     DeliveryChangeAbandonment,
     DeliveryChangeDeferral,
     DeliveryChangeDispositionResolution,
@@ -34,8 +36,10 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryOperatorMove,
     DeliveryOutputReference,
     DeliveryPlanCandidate,
+    DeliveryPlanningRetrySettlement,
     DeliveryRequest,
     DeliveryRequestResolution,
+    DeliveryRetryDiagnostic,
     DeliveryReturnContext,
     DeliveryStage,
     DeliveryTaskDefinition,
@@ -45,10 +49,12 @@ from owlbear_delivery.delivery_runtime import (
     FinalizeDeliveryChange,
     OutcomeAuthorityBinding,
     PublishDeliveryPlan,
+    ReturnDelivery,
 )
 from owlbear_delivery.design_package import DesignPackageManifest, DesignPackageResult
 from owlbear_delivery.draft_pull_request import DraftPullRequestSupersessionReceipt, MarkChangePullRequestReady
 from owlbear_delivery.finalization_reports import (
+    FinalizerSettlement,
     ReportFinalizationFailure,
 )
 from owlbear_delivery.identities import ChangeId
@@ -330,9 +336,17 @@ class ClaimContextParams(ChangeParams):
 
 
 class RecoverClaimParams(ClaimContextParams):
-    """Validate explicit lost-worker confirmation for claim recovery."""
+    """Retain the legacy request shape; confirmation supplies no exclusion evidence."""
 
     confirmed_lost: Literal[True]
+
+
+class ReleaseStuckWorkerParams(ChangeParams):
+    """Validate one exact active worker release; a null outcome names the Change's Finalizer attempt."""
+
+    outcome_id: str | None = Field(default=None, pattern=r"^OUT-[0-9]{3}$")
+    attempt_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
 
 
 class RepairClaimContextParams(ChangeParams):
@@ -569,6 +583,7 @@ class DeliveryOperatorClaimResponse(_TargetProtocolModel):
     started_at: str = Field(min_length=1)
     worker_role: DeliveryWorkerRole
     task_id: str | None = None
+    owner_id: str | None = None
 
 
 class DeliveryOperatorRecoveryAttentionResponse(_TargetProtocolModel):
@@ -579,6 +594,7 @@ class DeliveryOperatorRecoveryAttentionResponse(_TargetProtocolModel):
     reason: str = Field(min_length=1)
     custody_retained: bool
     retry_condition: str = Field(min_length=1)
+    diagnostic_transition: Annotated[BlockDelivery | ReturnDelivery, Field(discriminator="action")] | None = None
 
 
 class DeliveryOperatorIntegrationAttentionResponse(_TargetProtocolModel):
@@ -601,6 +617,7 @@ class DeliveryOperatorContextResponse(_TargetProtocolModel):
     active_claim: DeliveryOperatorClaimResponse | None = None
     return_context: DeliveryReturnContext | None = None
     recovery_attention: DeliveryOperatorRecoveryAttentionResponse | None = None
+    retry_diagnostic: DeliveryRetryDiagnostic | None = None
     integration_attention: DeliveryOperatorIntegrationAttentionResponse | None = None
 
     @classmethod
@@ -622,11 +639,13 @@ class DeliveryOperatorContextResponse(_TargetProtocolModel):
                     started_at=active_claim.started_at,
                     worker_role=active_claim.worker_role,
                     task_id=active_claim.task_id,
+                    owner_id=active_claim.owner_id,
                 )
                 if active_claim is not None
                 else None
             ),
             return_context=context.return_context,
+            retry_diagnostic=context.retry_diagnostic,
             recovery_attention=(
                 DeliveryOperatorRecoveryAttentionResponse(
                     attempt_id=recovery_attention.attempt_id,
@@ -634,6 +653,7 @@ class DeliveryOperatorContextResponse(_TargetProtocolModel):
                     reason=recovery_attention.reason,
                     custody_retained=recovery_attention.custody_retained,
                     retry_condition=recovery_attention.retry_condition,
+                    diagnostic_transition=recovery_attention.diagnostic_transition,
                 )
                 if recovery_attention is not None
                 else None
@@ -1037,6 +1057,23 @@ class TransitionDeliveryParams(ChangeParams):
     transition: DeliveryTransition
 
 
+class SettleWorkerInvocationParams(_TargetProtocolModel):
+    """Validate one typed Planner, Builder, or Finalizer invocation settlement."""
+
+    settlement: FinalizerSettlement | DeliveryPlanningRetrySettlement | DeliveryBuilderInvocationSettlement
+    host_id: str | None = Field(default=None, min_length=1)
+    session_id: str | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_finalizer_identity_location(self) -> SettleWorkerInvocationParams:
+        if isinstance(self.settlement, FinalizerSettlement) and any(
+            value is not None for value in (self.host_id, self.session_id)
+        ):
+            message = "Finalizer host and session identities belong in the settlement"
+            raise ValueError(message)
+        return self
+
+
 class CompletedPageParams(_TargetProtocolModel):
     """Validate one bounded completed-history page request."""
 
@@ -1124,6 +1161,10 @@ type ClaimContextRequest = Annotated[
 type RecoverClaimRequest = Annotated[
     RecoverClaimParams,
     BeforeValidator(partial(_parse_json_model, RecoverClaimParams)),
+]
+type ReleaseStuckWorkerRequest = Annotated[
+    ReleaseStuckWorkerParams,
+    BeforeValidator(partial(_parse_json_model, ReleaseStuckWorkerParams)),
 ]
 type CompletedPageRequest = Annotated[
     CompletedPageParams,
@@ -1218,6 +1259,10 @@ type TransitionDeliveryRequest = Annotated[
     TransitionDeliveryParams,
     BeforeValidator(partial(_parse_json_model, TransitionDeliveryParams)),
 ]
+type SettleWorkerInvocationRequest = Annotated[
+    SettleWorkerInvocationParams,
+    BeforeValidator(partial(_parse_json_model, SettleWorkerInvocationParams)),
+]
 type WorkItemRequest = Annotated[WorkItemParams, BeforeValidator(partial(_parse_json_model, WorkItemParams))]
 type WorkItemViewRequest = Annotated[
     WorkItemViewParams,
@@ -1298,6 +1343,8 @@ __all__ = [
     "RecoverOutOfBandHeadRequest",
     "RecoverPublicationBaselineParams",
     "RecoverPublicationBaselineRequest",
+    "ReleaseStuckWorkerParams",
+    "ReleaseStuckWorkerRequest",
     "RepairChangeParams",
     "RepairChangeRequest",
     "RepairClaimContextParams",
@@ -1317,6 +1364,8 @@ __all__ = [
     "SetChangeIntentParams",
     "SetChangeIntentRequest",
     "SetChangeIntentResponse",
+    "SettleWorkerInvocationParams",
+    "SettleWorkerInvocationRequest",
     "ShowCompletedParams",
     "ShowCompletedRequest",
     "StrandedFrontierRepairResponse",

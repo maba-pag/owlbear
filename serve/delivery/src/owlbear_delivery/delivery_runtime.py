@@ -3,10 +3,17 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
+import re
+import stat
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING, Annotated, Literal
+from itertools import pairwise
+from pathlib import Path
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Annotated, Literal, TypedDict, Unpack, cast
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
@@ -21,11 +28,26 @@ from owlbear_delivery.change_workspace import (
     ChangeDesignPackageSnapshotReceipt,
     ChangeExternalHeadAdoptionReceipt,
     ChangeExternalHeadPromotionReceipt,
+    ChangeFinalizationAttention,
     ChangeTargetSyncReceipt,
+    ChangeWriter,
+    PublicationLock,
 )
 from owlbear_delivery.draft_pull_request import (
     PublicationPullRequestObservationReceipt,
     PullRequestReadyReceipt,
+)
+from owlbear_delivery.recovery import (
+    DeliveryWorkerExclusionRequiredError,
+    RecoveryIntent,
+    RecoveryReceipt,
+    RetryEpisodeSummary,
+    RetryFailureClass,
+    RetryLedger,
+    digest,
+    encoded,
+    journal_path,
+    read_record,
 )
 from owlbear_delivery.runtime_transaction import (
     ReplacementTransactionParticipant,
@@ -34,13 +56,24 @@ from owlbear_delivery.runtime_transaction import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
     from pathlib import Path
 
-    from owlbear_delivery.change_workspace import ChangeWorkspaceManager
+    from owlbear_delivery.change_workspace import (
+        ChangeWorkspaceManager,
+        PreparedBuilderHandoff,
+    )
     from owlbear_delivery.target_contract import DeliveryContract
 
 
 _MAX_WORKER_RETRIES = 3
+_MAX_COMPLETED_REPAIR_RECEIPTS = 256
+_MAX_BUILDER_HANDOFF_CHANGE_INTENTS = 32
+_MAX_BUILDER_HANDOFF_CHANGE_INTENT_RECEIPTS = _MAX_BUILDER_HANDOFF_CHANGE_INTENTS + 1
+_BUILDER_HANDOFF_CHANGE_INTENT_FRONTIER_FIELDS = frozenset(
+    {"change_deferral", "change_abandonment", "pending_checkpoint"}
+)
+_SHA256_HEX_LENGTH = 64
 
 
 class DeliveryStage(StrEnum):
@@ -122,11 +155,16 @@ class _DeliveryModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
 
+def _omit_when_none(value: object) -> bool:
+    # Optional fields added after frontier schema 18 keep pre-existing bytes and snapshot identities.
+    return value is None
+
+
 class DeliveryChangePublicationIdentity(_DeliveryModel):
     """Provider pull-request identity retained while Change attention clears ready authority."""
 
     schema_version: Literal[1] = 1
-    change_id: str = Field(min_length=1)
+    change_id: str = Field(min_length=1, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
     repository: str = Field(min_length=3, pattern=r"^[^\s/]+/[^\s/]+$")
     number: int = Field(gt=0)
     node_id: str = Field(min_length=1)
@@ -890,6 +928,40 @@ class DeliveryReturnContext(_DeliveryModel):
     source_boundary: str | None = None
 
 
+class RetryDelivery(_DeliveryModel):
+    """End a claim and leave its outcome in the same stage."""
+
+    action: Literal["retry"]
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    claim_id: str = Field(min_length=1)
+    abandoned_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    attempt_id: str | None = None
+    failure_code: str = Field(default="worker-retry", pattern=r"^[a-z0-9][a-z0-9._-]{0,63}$")
+
+
+class DeliveryRetryDiagnostic(_DeliveryModel):
+    """Exact refused retry request bound to the active worker attempt."""
+
+    code: Literal["ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED"] = "ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED"
+    attempt_id: str = Field(min_length=1)
+    transition: RetryDelivery
+
+
+class DeliveryBuilderHandoffContext(_DeliveryModel):
+    """Exact Builder settlement authority retained for an owning handoff route."""
+
+    settlement_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    original_task_id: str = Field(min_length=1, max_length=256)
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    attempt_id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+    last_reviewed_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    branch_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    metadata_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    route: Literal["same-task", "same-outcome-planner", "same-outcome-design"]
+    original_task_commitment_ids: tuple[str, ...] = ()
+    original_task_maintained_surfaces: tuple[str, ...] = ()
+
+
 class DeliveryRecoveryAttention(_DeliveryModel):
     """Operator-consumed evidence for one Build claim that cannot be removed safely."""
 
@@ -903,6 +975,9 @@ class DeliveryRecoveryAttention(_DeliveryModel):
     writer_claim_id: str | None = None
     custody_retained: bool
     retry_condition: str = Field(min_length=1)
+    diagnostic_transition: Annotated[BlockDelivery | ReturnDelivery, Field(discriminator="action")] | None = Field(
+        default=None, exclude_if=_omit_when_none
+    )
 
 
 class DeliveryIntegrationAttentionDisposition(StrEnum):
@@ -979,7 +1054,9 @@ class OutcomeAuthorityBinding(_DeliveryModel):
     candidate: DeliveryPlanCandidate | None = None
     result_candidate: DeliveryResultCandidate | None = None
     return_context: DeliveryReturnContext | None = None
+    builder_handoff_context: DeliveryBuilderHandoffContext | None = Field(default=None, exclude_if=_omit_when_none)
     recovery_attention: DeliveryRecoveryAttention | None = None
+    retry_diagnostic: DeliveryRetryDiagnostic | None = Field(default=None, exclude_if=_omit_when_none)
     block: DeliveryBlock | None = None
     requests: tuple[DeliveryRequest, ...] = ()
     retry_fingerprint: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
@@ -992,6 +1069,7 @@ class OutcomeAuthorityBinding(_DeliveryModel):
             raise ValueError(message)
         self._validate_active_claim()
         self._validate_recovery_attention()
+        self._validate_retry_diagnostic()
         request_ids = tuple(request.request_id for request in self.requests)
         if len(request_ids) != len(set(request_ids)):
             message = "Delivery request identities must be unique per outcome"
@@ -1004,7 +1082,49 @@ class OutcomeAuthorityBinding(_DeliveryModel):
         if not {result.task_id for result in self.results} <= set(task_ids):
             message = "Delivery results must bind promoted task authority"
             raise ValueError(message)
+        self._validate_builder_handoff()
         return self
+
+    def _validate_builder_handoff(self) -> None:
+        handoff = self.builder_handoff_context
+        if handoff is None:
+            return
+        if handoff.outcome_id != self.outcome_id or handoff.original_task_id not in self.task_ids:
+            message = "Builder handoff context must bind retained task authority for its outcome"
+            raise ValueError(message)
+        expected_stage = (
+            DeliveryStage.PLANNING
+            if handoff.route == "same-outcome-planner"
+            else DeliveryStage.DESIGN
+            if handoff.route == "same-outcome-design"
+            else DeliveryStage.IMPLEMENTATION
+        )
+        if self.stage != expected_stage:
+            message = (
+                "Planning Builder handoff context requires Planning stage"
+                if handoff.route == "same-outcome-planner"
+                else "Design Builder handoff context requires Design stage"
+                if handoff.route == "same-outcome-design"
+                else "same-task Builder handoff context requires Implementation stage"
+            )
+            raise ValueError(message)
+        original_task = next(task for task in self.tasks if task.task_id == handoff.original_task_id)
+        if (
+            handoff.route in {"same-outcome-planner", "same-outcome-design"}
+            or handoff.original_task_maintained_surfaces
+        ) and (
+            original_task.commitment_ids != handoff.original_task_commitment_ids
+            or original_task.maintained_surfaces != handoff.original_task_maintained_surfaces
+        ):
+            message = "Builder handoff context must retain its original task lineage"
+            raise ValueError(message)
+        if (
+            self.active_claim is not None
+            and handoff.route == "same-task"
+            and self.active_claim.task_id != handoff.original_task_id
+        ):
+            message = "active claim cannot consume a different Builder handoff task"
+            raise ValueError(message)
 
     def _validate_active_claim(self) -> None:
         if self.active_claim is None:
@@ -1033,6 +1153,41 @@ class OutcomeAuthorityBinding(_DeliveryModel):
             or self.recovery_attention.claim_id != self.active_claim.claim_id
         ):
             message = "recovery attention must bind the current active claim"
+            raise ValueError(message)
+        diagnostic = self.recovery_attention.diagnostic_transition
+        if diagnostic is not None and (
+            self.stage != DeliveryStage.IMPLEMENTATION
+            or diagnostic.outcome_id != self.outcome_id
+            or diagnostic.claim_id != self.active_claim.claim_id
+            or (isinstance(diagnostic, ReturnDelivery) and diagnostic.attempt_id != self.active_claim.attempt_id)
+            or (
+                isinstance(diagnostic, BlockDelivery)
+                and (diagnostic.request is None or diagnostic.request.outcome_id != self.outcome_id)
+            )
+        ):
+            message = "diagnostic transition must bind the current active Builder claim and outcome"
+            raise ValueError(message)
+
+    def _validate_retry_diagnostic(self) -> None:
+        diagnostic = self.retry_diagnostic
+        if diagnostic is None:
+            return
+        claim = self.active_claim
+        request = diagnostic.transition
+        if (
+            claim is None
+            or diagnostic.attempt_id != claim.attempt_id
+            or request.outcome_id != self.outcome_id
+            or request.claim_id != claim.claim_id
+        ):
+            message = "retry diagnostic must bind the current active claim and outcome"
+            raise ValueError(message)
+        if self.stage == DeliveryStage.PLANNING:
+            if request.attempt_id is not None or request.abandoned_commit is not None:
+                message = "Planning retry diagnostic cannot contain Implementation identity"
+                raise ValueError(message)
+        elif request.attempt_id != claim.attempt_id or request.abandoned_commit is None:
+            message = "Implementation retry diagnostic must bind its attempt and abandoned commit"
             raise ValueError(message)
 
     @property
@@ -1235,6 +1390,109 @@ class ActivateDeliveryClaim(_DeliveryModel):
         return self.claim.task_id
 
 
+class PrepareCompletedOutcomeRepair(_DeliveryModel):
+    """Engine-owned request to append one bounded repair task to a completed outcome."""
+
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    owning_task_id: str = Field(min_length=1)
+    episode_id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._-]+$")
+    attempt_id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._-]+$")
+    defect_code: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._-]+$")
+    finding_boundary: Literal["implementation", "proof-procedure"]
+    original_action_id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._-]+$")
+    preservation_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+@dataclass(frozen=True, slots=True)
+class _CompletedOutcomeRepairLineage:
+    previous_task_ids: tuple[str, ...]
+    previous_result_ids: tuple[str, ...]
+
+
+class _CompletedOutcomeRepairCreateFields(TypedDict, total=False):
+    change_id: str
+    request: PrepareCompletedOutcomeRepair
+    repair_task_id: str
+    previous_task_ids: tuple[str, ...]
+    previous_result_ids: tuple[str, ...]
+    finished_at: str
+
+
+_COMPLETED_OUTCOME_REPAIR_CREATE_SIGNATURE = inspect.Signature(
+    tuple(
+        inspect.Parameter(name, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+        for name in _CompletedOutcomeRepairCreateFields.__annotations__
+    )
+)
+
+
+class CompletedOutcomeRepairReceipt(_DeliveryModel):
+    """Immutable evidence joining a proof repair, its lineage, and custody release."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    change_id: str = Field(min_length=1, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    owning_task_id: str = Field(min_length=1)
+    repair_task_id: str = Field(min_length=1)
+    episode_id: str = Field(min_length=1, max_length=128)
+    attempt_id: str = Field(min_length=1, max_length=128)
+    defect_code: str = Field(min_length=1, max_length=128)
+    finding_boundary: Literal["implementation", "proof-procedure"]
+    original_action_id: str = Field(min_length=1, max_length=128)
+    preservation_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    previous_task_ids: tuple[str, ...]
+    previous_result_ids: tuple[str, ...]
+    custody: Literal["failed-finalizer-released"] = "failed-finalizer-released"
+    finished_at: str = Field(min_length=1, max_length=64)
+
+    @classmethod
+    def create(
+        cls,
+        *args: object,
+        **kwargs: Unpack[_CompletedOutcomeRepairCreateFields],
+    ) -> CompletedOutcomeRepairReceipt:
+        """Create a receipt while preserving legacy calls; reflection sees the variadic implementation."""
+        fields = cast(
+            "_CompletedOutcomeRepairCreateFields",
+            _COMPLETED_OUTCOME_REPAIR_CREATE_SIGNATURE.bind(*args, **kwargs).arguments,
+        )
+        values = {
+            "change_id": fields["change_id"],
+            "outcome_id": fields["request"].outcome_id,
+            "owning_task_id": fields["request"].owning_task_id,
+            "repair_task_id": fields["repair_task_id"],
+            "episode_id": fields["request"].episode_id,
+            "attempt_id": fields["request"].attempt_id,
+            "defect_code": fields["request"].defect_code,
+            "finding_boundary": fields["request"].finding_boundary,
+            "original_action_id": fields["request"].original_action_id,
+            "preservation_id": fields["request"].preservation_id,
+            "expected_frontier_digest": fields["request"].expected_frontier_digest,
+            "previous_task_ids": fields["previous_task_ids"],
+            "previous_result_ids": fields["previous_result_ids"],
+            "finished_at": fields["finished_at"],
+        }
+        candidate = cls.model_construct(receipt_id="0" * 64, **values)
+        payload = candidate.model_dump(mode="json", exclude={"receipt_id"})
+        receipt_id = hashlib.sha256(
+            (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
+        ).hexdigest()
+        return cls(receipt_id=receipt_id, **values)
+
+    @model_validator(mode="after")
+    def _validate_identity(self) -> CompletedOutcomeRepairReceipt:
+        payload = self.model_dump(mode="json", exclude={"receipt_id"})
+        expected = hashlib.sha256(
+            (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
+        ).hexdigest()
+        if self.receipt_id != expected:
+            _reference("completed-outcome repair receipt identity is invalid")
+        return self
+
+
 class PublishDeliveryOutput(_DeliveryModel):
     """Publish one claim-scoped candidate output without moving stage."""
 
@@ -1294,17 +1552,6 @@ class AdvanceDelivery(_DeliveryModel):
     output: DeliveryOutputReference
 
 
-class RetryDelivery(_DeliveryModel):
-    """End a claim and leave its outcome in the same stage."""
-
-    action: Literal["retry"]
-    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
-    claim_id: str = Field(min_length=1)
-    abandoned_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
-    attempt_id: str | None = None
-    failure_code: str = Field(default="worker-retry", pattern=r"^[a-z0-9][a-z0-9._-]{0,63}$")
-
-
 class ReturnDelivery(_DeliveryModel):
     """Return one claim to an allowed earlier stage with successor context."""
 
@@ -1339,6 +1586,563 @@ type DeliveryTransition = Annotated[
     Field(discriminator="action"),
 ]
 DELIVERY_TRANSITION_ADAPTER = TypeAdapter(DeliveryTransition)
+
+# Engine-observed endings of invocations that can no longer progress; never accepted from callers.
+ENGINE_WORKER_SETTLEMENT_FAILURE_CODES: Mapping[str, str] = MappingProxyType(
+    {"host-lost": "worker-host-lost", "released-stuck": "worker-released-stuck"}
+)
+# Ended invocations without a typed inner request, keyed to their reserved retry failure codes.
+REQUESTLESS_WORKER_SETTLEMENT_FAILURE_CODES: Mapping[str, str] = MappingProxyType(
+    {
+        "completed-timeout": "worker-timeout",
+        "ended-without-result": "worker-ended-without-result",
+        **ENGINE_WORKER_SETTLEMENT_FAILURE_CODES,
+    }
+)
+type EngineWorkerDisposition = Literal["host-lost", "released-stuck"]
+
+
+class DeliveryPlanningRetrySettlement(_DeliveryModel):
+    """Trusted Orchestrator report for one ended Planner retry invocation."""
+
+    change_id: str = Field(min_length=1, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    claim_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    disposition: Literal["normal-return", "completed-timeout", "ended-without-result"]
+    request: RetryDelivery | None = None
+
+    @model_validator(mode="after")
+    def _validate_completed_invocation(self) -> DeliveryPlanningRetrySettlement:
+        if self.disposition == "normal-return":
+            if self.request is None:
+                message = "normal Planner retry settlement requires its unchanged RetryDelivery"
+                raise ValueError(message)
+            if self.request.outcome_id != self.outcome_id or self.request.claim_id != self.claim_id:
+                message = "Planner retry request does not match its settlement identity"
+                raise ValueError(message)
+            if self.request.failure_code in REQUESTLESS_WORKER_SETTLEMENT_FAILURE_CODES.values():
+                message = f"{self.request.failure_code} is reserved for request-less Planner settlements"
+                raise ValueError(message)
+        elif self.request is not None:
+            message = f"{self.disposition} Planner settlement cannot carry an inner request"
+            raise ValueError(message)
+        return self
+
+
+class DeliveryBuilderInvocationSettlement(_DeliveryModel):
+    """Trusted Orchestrator report for one ended Builder invocation."""
+
+    change_id: str = Field(min_length=1, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    claim_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+    task_id: str = Field(min_length=1, max_length=256)
+    expected_last_reviewed_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    disposition: Literal["normal-return", "completed-timeout", "ended-without-result"]
+    request: RetryDelivery | BlockDelivery | ReturnDelivery | None = None
+
+    @model_validator(mode="after")
+    def _validate_completed_invocation(self) -> DeliveryBuilderInvocationSettlement:
+        if self.disposition == "normal-return":
+            self._validate_normal_return()
+        elif self.request is not None:
+            message = f"{self.disposition} Builder settlement cannot carry an inner request"
+            raise ValueError(message)
+        return self
+
+    def _validate_normal_return(self) -> None:
+        request = self.request
+        if request is None:
+            message = "normal Builder settlement requires its unchanged RetryDelivery, BlockDelivery, or ReturnDelivery"
+            raise ValueError(message)
+        if request.outcome_id != self.outcome_id or request.claim_id != self.claim_id:
+            message = "Builder settlement request does not match its outcome and claim"
+            raise ValueError(message)
+        if isinstance(request, RetryDelivery):
+            if request.failure_code in REQUESTLESS_WORKER_SETTLEMENT_FAILURE_CODES.values():
+                message = f"{request.failure_code} is reserved for request-less Builder settlements"
+                raise ValueError(message)
+            if request.attempt_id != self.attempt_id:
+                message = "Builder retry request does not match its attempt"
+                raise ValueError(message)
+        elif isinstance(request, BlockDelivery):
+            if request.request is None or request.request.resolution is not None:
+                message = "Builder block settlement requires an unanswered bounded user request"
+                raise ValueError(message)
+            if request.request.outcome_id != self.outcome_id:
+                message = "Builder block request does not match its outcome"
+                raise ValueError(message)
+        elif request.attempt_id != self.attempt_id:
+            message = "Builder return request does not match its attempt"
+            raise ValueError(message)
+
+
+class DeliveryEnginePlanningSettlement(DeliveryPlanningRetrySettlement):
+    """Engine-authored end of one Planner invocation whose worker can no longer progress."""
+
+    disposition: EngineWorkerDisposition  # type: ignore[assignment]
+
+
+class DeliveryEngineBuilderSettlement(DeliveryBuilderInvocationSettlement):
+    """Engine-authored end of one Builder invocation whose worker can no longer progress."""
+
+    disposition: EngineWorkerDisposition  # type: ignore[assignment]
+
+
+class _DeliveryPlanningRetrySettlementReceipt(_DeliveryModel):
+    """Immutable result for replaying one exact completed Planner retry invocation."""
+
+    schema_version: Literal[1] = 1
+    envelope: DeliveryEnginePlanningSettlement | DeliveryPlanningRetrySettlement
+    result: OutcomeAuthorityBinding
+
+    @model_validator(mode="after")
+    def _validate_receipt(self) -> _DeliveryPlanningRetrySettlementReceipt:
+        if (
+            self.result.outcome_id != self.envelope.outcome_id
+            or self.result.stage != DeliveryStage.PLANNING
+            or self.result.active_claim is not None
+        ):
+            message = "Planning retry settlement receipt result does not match its completed claim"
+            raise ValueError(message)
+        return self
+
+
+class _DeliveryBuilderInvocationSettlementReceipt(_DeliveryModel):
+    """Immutable result for replaying one exact completed Builder invocation."""
+
+    schema_version: Literal[1] = 1
+    settlement_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    envelope: DeliveryEngineBuilderSettlement | DeliveryBuilderInvocationSettlement
+    handoff_context: DeliveryBuilderHandoffContext
+    result: OutcomeAuthorityBinding
+
+    @model_validator(mode="after")
+    def _validate_receipt(self) -> _DeliveryBuilderInvocationSettlementReceipt:
+        context = self.handoff_context
+        if (
+            self.settlement_id != hashlib.sha256(_model_content(self.envelope)).hexdigest()
+            or context.settlement_id != self.settlement_id
+            or context.outcome_id != self.envelope.outcome_id
+            or context.original_task_id != self.envelope.task_id
+            or context.attempt_id != self.envelope.attempt_id
+            or context.last_reviewed_commit != self.envelope.expected_last_reviewed_commit
+            or self.result.outcome_id != self.envelope.outcome_id
+            or self.result.active_claim is not None
+            or self.result.builder_handoff_context != context
+        ):
+            message = "Builder invocation settlement receipt does not match its exact handoff"
+            raise ValueError(message)
+        expected_stage = (
+            DeliveryStage.PLANNING
+            if context.route == "same-outcome-planner"
+            else DeliveryStage.DESIGN
+            if context.route == "same-outcome-design"
+            else DeliveryStage.IMPLEMENTATION
+        )
+        if self.result.stage != expected_stage:
+            message = "Builder invocation settlement receipt has an incompatible route stage"
+            raise ValueError(message)
+        return self
+
+
+class _DeliveryBuilderPlanPromotionReceipt(_DeliveryModel):
+    """Immutable proof that one retained Builder return was promoted through Planning."""
+
+    schema_version: Literal[1] = 1
+    promotion_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    change_id: str = Field(min_length=1, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    settlement_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    planner_claim: DeliveryActiveClaim
+    source_binding: OutcomeAuthorityBinding
+    candidate: DeliveryPlanCandidate
+    result_binding: OutcomeAuthorityBinding
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        change_id: str,
+        source_binding: OutcomeAuthorityBinding,
+        result_binding: OutcomeAuthorityBinding,
+    ) -> _DeliveryBuilderPlanPromotionReceipt:
+        """Create one exact receipt from the published Planner candidate and its successor."""
+        context = source_binding.builder_handoff_context
+        planner_claim = source_binding.active_claim
+        candidate = source_binding.candidate
+        if context is None or planner_claim is None or candidate is None:
+            message = "Builder return promotion requires its exact Planning handoff, claim, and candidate"
+            raise ValueError(message)
+        values = {
+            "change_id": change_id,
+            "outcome_id": context.outcome_id,
+            "settlement_id": context.settlement_id,
+            "planner_claim": planner_claim,
+            "source_binding": source_binding,
+            "candidate": candidate,
+            "result_binding": result_binding,
+        }
+        receipt = cls.model_construct(promotion_id="0" * 64, schema_version=1, **values)
+        return cls(promotion_id=_receipt_digest(receipt, "promotion_id"), **values)
+
+    @model_validator(mode="after")
+    def _validate_receipt(self) -> _DeliveryBuilderPlanPromotionReceipt:
+        self._validate_identity()
+        self._validate_task_lineage()
+        self._validate_successor()
+        if self.promotion_id != _receipt_digest(self, "promotion_id"):
+            message = "Builder plan promotion receipt identity is invalid"
+            raise ValueError(message)
+        return self
+
+    def _validate_identity(self) -> None:
+        source = self.source_binding
+        context = source.builder_handoff_context
+        candidate = self.candidate
+        task_chain_digest = hashlib.sha256(b"".join(_model_content(task) for task in candidate.tasks)).hexdigest()
+        if (
+            context is None
+            or context.route != "same-outcome-planner"
+            or context.outcome_id != self.outcome_id
+            or context.settlement_id != self.settlement_id
+            or source.outcome_id != self.outcome_id
+            or source.stage != DeliveryStage.PLANNING
+            or source.active_claim != self.planner_claim
+            or self.planner_claim.worker_role != DeliveryWorkerRole.PLANNER
+            or self.planner_claim.task_id is not None
+            or source.result_candidate is not None
+            or source.candidate != candidate
+            or candidate.claim_id != self.planner_claim.claim_id
+            or candidate.digest != task_chain_digest
+            or candidate.candidate_id != f"plan-{task_chain_digest}"
+            or source.output != candidate.output
+        ):
+            message = "Builder plan promotion receipt does not bind its exact Planner candidate"
+            raise ValueError(message)
+
+    def _validate_task_lineage(self) -> None:
+        source = self.source_binding
+        context = source.builder_handoff_context
+        candidate_tasks = {task.task_id: task for task in self.candidate.tasks}
+        source_tasks = {task.task_id: task for task in source.tasks}
+        completed_task_ids = {result.task_id for result in source.results}
+        original_task = candidate_tasks.get(context.original_task_id)
+        if (
+            len(candidate_tasks) != len(self.candidate.tasks)
+            or any(
+                task.outcome_id != self.outcome_id or task.plan_scope_id != source.plan_scope_id
+                for task in self.candidate.tasks
+            )
+            or any(
+                task_id not in candidate_tasks or candidate_tasks[task_id] != source_tasks.get(task_id)
+                for task_id in completed_task_ids
+            )
+            or original_task is None
+            or context.original_task_id in completed_task_ids
+            or original_task.commitment_ids != context.original_task_commitment_ids
+            or original_task.maintained_surfaces != context.original_task_maintained_surfaces
+            or not set(original_task.dependency_ids) <= completed_task_ids
+        ):
+            message = "Builder plan promotion receipt changes completed or original task lineage"
+            raise ValueError(message)
+
+    def _validate_successor(self) -> None:
+        context = self.source_binding.builder_handoff_context
+        expected = self.source_binding.model_copy(
+            update={
+                "stage": DeliveryStage.IMPLEMENTATION,
+                "tasks": self.candidate.tasks,
+                "active_claim": None,
+                "output": None,
+                "candidate": None,
+                "return_context": None,
+                "builder_handoff_context": context.model_copy(update={"route": "same-task"}),
+                "recovery_attention": None,
+                "retry_diagnostic": None,
+                "block": None,
+                "requests": (),
+                "retry_fingerprint": None,
+                "retry_count": 0,
+            }
+        )
+        if self.result_binding != expected or self.result_binding.results != self.source_binding.results:
+            message = "Builder plan promotion receipt does not bind its exact same-task successor"
+            raise ValueError(message)
+
+
+class _DeliveryBuilderRequestResolutionReceipt(_DeliveryModel):
+    """Immutable user answer bound to one exact local Builder pause."""
+
+    schema_version: Literal[1] = 1
+    change_id: str = Field(min_length=1, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    request_id: str = Field(min_length=1)
+    settlement_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    builder_handoff_context: DeliveryBuilderHandoffContext
+    resolved_request: DeliveryRequest
+    updated_block: DeliveryBlock
+
+    @model_validator(mode="after")
+    def _validate_receipt(self) -> _DeliveryBuilderRequestResolutionReceipt:
+        context = self.builder_handoff_context
+        resolution = self.resolved_request.resolution
+        expected_note = None if resolution is None else resolution.response_text or resolution.selected_option_id
+        if (
+            context.route != "same-task"
+            or context.outcome_id != self.outcome_id
+            or context.settlement_id != self.settlement_id
+            or self.resolved_request.request_id != self.request_id
+            or self.resolved_request.outcome_id != self.outcome_id
+            or resolution is None
+            or (
+                self.resolved_request.kind is DeliveryRequestKind.DECISION
+                and (
+                    resolution.selected_option_id is None
+                    or resolution.selected_option_id
+                    not in {option.option_id for option in self.resolved_request.options}
+                )
+            )
+            or self.updated_block.request_id != self.request_id
+            or not self.updated_block.resolved
+            or self.updated_block.resolution_note != expected_note
+            or self.updated_block.resolution_locators != (self.request_id,)
+        ):
+            message = "Builder request resolution receipt does not match its exact handoff"
+            raise ValueError(message)
+        return self
+
+
+class _DeliveryBuilderHandoffChangeIntentReceipt(_DeliveryModel):
+    """Immutable proof of one supported lifecycle intent during a retained Builder handoff."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    action: Literal["defer", "resume", "abandon"]
+    change_id: str = Field(min_length=1, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    settlement_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    builder_handoff_context: DeliveryBuilderHandoffContext
+    sequence: int = Field(ge=1, le=_MAX_BUILDER_HANDOFF_CHANGE_INTENT_RECEIPTS)
+    previous_receipt_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    before_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    after_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    before_frontier: DeliveryFrontier
+    after_frontier: DeliveryFrontier
+    deferral: DeliveryChangeDeferral | None = None
+    abandonment: DeliveryChangeAbandonment | None = None
+
+    @classmethod
+    def create(  # noqa: PLR0913 - the receipt binds the exact typed transition and its frontier boundary.
+        cls,
+        *,
+        action: Literal["defer", "resume", "abandon"],
+        change_id: str,
+        outcome_id: str,
+        context: DeliveryBuilderHandoffContext,
+        sequence: int,
+        previous_receipt_id: str | None,
+        before_frontier: DeliveryFrontier,
+        after_frontier: DeliveryFrontier,
+        deferral: DeliveryChangeDeferral | None,
+        abandonment: DeliveryChangeAbandonment | None,
+    ) -> _DeliveryBuilderHandoffChangeIntentReceipt:
+        """Create one receipt from exact before/after typed frontier state."""
+        values = {
+            "action": action,
+            "change_id": change_id,
+            "outcome_id": outcome_id,
+            "settlement_id": context.settlement_id,
+            "builder_handoff_context": context,
+            "sequence": sequence,
+            "previous_receipt_id": previous_receipt_id,
+            "before_frontier_digest": hashlib.sha256(_model_content(before_frontier)).hexdigest(),
+            "after_frontier_digest": hashlib.sha256(_model_content(after_frontier)).hexdigest(),
+            "before_frontier": before_frontier,
+            "after_frontier": after_frontier,
+            "deferral": deferral,
+            "abandonment": abandonment,
+        }
+        candidate = cls.model_construct(receipt_id="0" * 64, schema_version=1, **values)
+        return cls(receipt_id=_receipt_digest(candidate, "receipt_id"), **values)
+
+    @model_validator(mode="after")
+    def _validate_receipt(self) -> _DeliveryBuilderHandoffChangeIntentReceipt:
+        self._validate_identity()
+        self._validate_bound_frontiers()
+        self._validate_action(self._changed_frontier_fields())
+        if self.receipt_id != _receipt_digest(self, "receipt_id"):
+            message = "Builder handoff change-intent receipt identity is invalid"
+            raise ValueError(message)
+        return self
+
+    def _validate_identity(self) -> None:
+        if (
+            self.settlement_id != self.builder_handoff_context.settlement_id
+            or self.outcome_id != self.builder_handoff_context.outcome_id
+            or (self.sequence == 1) != (self.previous_receipt_id is None)
+            or self.before_frontier_digest != hashlib.sha256(_model_content(self.before_frontier)).hexdigest()
+            or self.after_frontier_digest != hashlib.sha256(_model_content(self.after_frontier)).hexdigest()
+        ):
+            message = "Builder handoff change-intent receipt identity is invalid"
+            raise ValueError(message)
+
+    def _validate_bound_frontiers(self) -> None:
+        for frontier in (self.before_frontier, self.after_frontier):
+            if any(binding.active_claim is not None for binding in frontier.bindings):
+                message = "Builder handoff change-intent receipt cannot overlap an active claim"
+                raise ValueError(message)
+            if frontier.integration_repair_claim is not None:
+                message = "Builder handoff change-intent receipt cannot overlap an active Integration claim"
+                raise ValueError(message)
+            matches = [binding for binding in frontier.bindings if binding.outcome_id == self.outcome_id]
+            if len(matches) != 1 or matches[0].builder_handoff_context != self.builder_handoff_context:
+                message = "Builder handoff change-intent receipt does not bind its retained context"
+                raise ValueError(message)
+
+    def _changed_frontier_fields(self) -> set[str]:
+        return {
+            field_name
+            for field_name in DeliveryFrontier.model_fields
+            if getattr(self.before_frontier, field_name) != getattr(self.after_frontier, field_name)
+        }
+
+    def _validate_action(self, changed_fields: set[str]) -> None:
+        if not changed_fields <= _BUILDER_HANDOFF_CHANGE_INTENT_FRONTIER_FIELDS:
+            message = "Builder handoff change-intent receipt changes unsupported frontier fields"
+            raise ValueError(message)
+        if self.action == "defer":
+            self._validate_deferral(changed_fields)
+        elif self.action == "resume":
+            self._validate_resume(changed_fields)
+        else:
+            self._validate_abandonment(changed_fields)
+
+    def _validate_deferral(self, changed_fields: set[str]) -> None:
+        deferral = self.after_frontier.change_deferral
+        if (
+            self.before_frontier.change_deferral is not None
+            or self.before_frontier.change_abandonment is not None
+            or deferral is None
+            or self.deferral != deferral
+            or self.abandonment is not None
+            or deferral.change_id != self.change_id
+            or deferral.prior_stage != derive_change_stage(self.before_frontier)
+            or changed_fields != {"change_deferral"}
+        ):
+            message = "Builder handoff deferral receipt does not match its exact typed transition"
+            raise ValueError(message)
+
+    def _validate_resume(self, changed_fields: set[str]) -> None:
+        deferral = self.before_frontier.change_deferral
+        if (
+            deferral is None
+            or self.before_frontier.change_abandonment is not None
+            or self.after_frontier.change_deferral is not None
+            or self.after_frontier.change_abandonment is not None
+            or self.deferral != deferral
+            or self.abandonment is not None
+            or deferral.change_id != self.change_id
+            or changed_fields != {"change_deferral"}
+        ):
+            message = "Builder handoff resume receipt does not remove its exact typed deferral"
+            raise ValueError(message)
+
+    def _validate_abandonment(self, changed_fields: set[str]) -> None:
+        abandonment = self.after_frontier.change_abandonment
+        expected_changed_fields = {"change_abandonment"}
+        if self.before_frontier.change_deferral is not None:
+            expected_changed_fields.add("change_deferral")
+        if self.before_frontier.pending_checkpoint is not None:
+            expected_changed_fields.add("pending_checkpoint")
+        if (
+            self.before_frontier.change_abandonment is not None
+            or self.before_frontier.change_completion is not None
+            or abandonment is None
+            or self.abandonment != abandonment
+            or self.deferral != self.before_frontier.change_deferral
+            or self.after_frontier.change_deferral is not None
+            or self.after_frontier.pending_checkpoint is not None
+            or abandonment.change_id != self.change_id
+            or abandonment.prior_stage != derive_change_stage(self.before_frontier)
+            or changed_fields != expected_changed_fields
+        ):
+            message = "Builder handoff abandonment receipt does not match its exact typed transition"
+            raise ValueError(message)
+
+
+class _DeliveryBuilderHandoffChangeIntentHead(_DeliveryModel):
+    """CAS-updated reference to the latest immutable handoff intent receipt."""
+
+    schema_version: Literal[1] = 1
+    change_id: str = Field(min_length=1, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    settlement_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    builder_handoff_context: DeliveryBuilderHandoffContext
+    latest_receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    sequence: int = Field(ge=1, le=_MAX_BUILDER_HANDOFF_CHANGE_INTENT_RECEIPTS)
+
+    @model_validator(mode="after")
+    def _validate_head(self) -> _DeliveryBuilderHandoffChangeIntentHead:
+        if (
+            self.settlement_id != self.builder_handoff_context.settlement_id
+            or self.outcome_id != self.builder_handoff_context.outcome_id
+        ):
+            message = "Builder handoff change-intent head identity is invalid"
+            raise ValueError(message)
+        return self
+
+
+@dataclass(frozen=True)
+class _BuilderHandoffChangeIntentMutation:
+    before: DeliveryFrontier
+    after: DeliveryFrontier
+    action: Literal["defer", "resume", "abandon"]
+    deferral: DeliveryChangeDeferral | None
+    abandonment: DeliveryChangeAbandonment | None
+
+
+class _DeliveryPlanningPauseReplay(_DeliveryModel):
+    """Immutable result for replaying one exact request-bearing Planning pause."""
+
+    schema_version: Literal[1] = 1
+    change_id: str = Field(min_length=1, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    claim_id: str = Field(min_length=1)
+    request_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    request: BlockDelivery
+    result: OutcomeAuthorityBinding
+
+    @model_validator(mode="after")
+    def _validate_replay(self) -> _DeliveryPlanningPauseReplay:
+        delivery_request = self.request.request
+        block = self.result.block
+        if delivery_request is None:
+            message = "Planning pause replay requires its original bounded request"
+            raise ValueError(message)
+        if (
+            self.request_digest != hashlib.sha256(_model_content(self.request)).hexdigest()
+            or self.request.outcome_id != self.outcome_id
+            or self.request.claim_id != self.claim_id
+            or delivery_request.outcome_id != self.outcome_id
+            or self.result.outcome_id != self.outcome_id
+            or self.result.stage != DeliveryStage.PLANNING
+            or self.result.active_claim is not None
+            or block is None
+            or block.block_id != self.request.block_id
+            or block.reason != self.request.reason
+            or block.unblock_condition != self.request.unblock_condition
+            or block.expected_evidence != self.request.expected_evidence
+            or block.locators != self.request.locators
+            or block.request_id != delivery_request.request_id
+            or block.resume_commit != self.request.resume_commit
+            or not self.result.requests
+            or self.result.requests[-1] != delivery_request
+        ):
+            message = "Planning pause replay receipt does not bind its original transition"
+            raise ValueError(message)
+        return self
 
 
 class AdministrativeDeliveryMove(_DeliveryModel):
@@ -1438,15 +2242,20 @@ _NORMAL_CHANGE_MUTATIONS = frozenset(
         "complete_change",
         "finalize_change",
         "prepare_review_repair",
+        "prepare_completed_outcome_repair",
         "reconcile_finalization_head",
         "remove_integration_repair_claim",
         "remove_active_claim",
+        "complete_recovery",
         "publish_recovery_attention",
         "activate_claim",
         "publish_output",
         "publish_plan",
         "publish_result",
         "transition",
+        "settle_planning_retry",
+        "settle_builder_invocation",
+        "_retry",
         "resolve_request",
         "unblock",
         "administrative_move",
@@ -1511,6 +2320,10 @@ class DeliveryRuntime:
         """Return the canonical admitted contract digest bound into task results."""
         return self._authority_digest
 
+    def retry_ledger(self, *, clock: Callable[[], datetime | str] | None = None) -> RetryLedger:
+        """Return the Change-scoped durable retry authority."""
+        return RetryLedger(self._target_root, self._contract.change_id, clock=clock)
+
     @property
     def contract(self) -> DeliveryContract:
         """Return immutable admitted authority for scoped context projection."""
@@ -1543,6 +2356,7 @@ class DeliveryRuntime:
                     "candidate": None,
                     "result_candidate": None,
                     "recovery_attention": None,
+                    "retry_diagnostic": None,
                 }
             )
             for binding in frontier.bindings
@@ -1624,10 +2438,17 @@ class DeliveryRuntime:
         """Return the terminal user-requested Change abandonment, if any."""
         return self._read()[0].change_abandonment
 
-    def defer_change(self, reason: str, deferred_at: datetime) -> DeliveryChangeDeferral:
+    def defer_change(
+        self,
+        reason: str,
+        deferred_at: datetime,
+        *,
+        expected_finalization_attention: ChangeFinalizationAttention | None = None,
+    ) -> DeliveryChangeDeferral:
         """Pause one nonterminal Change while retaining its exact frontier and worktree."""
         frontier, previous = self._read()
         if frontier.change_deferral is not None:
+            self._require_recorded_builder_handoff_change_intent(frontier)
             return frontier.change_deferral
         _require_change_mutable(frontier, "defer_change")
         if frontier.change_abandonment is not None or is_change_terminal(frontier):
@@ -1642,10 +2463,27 @@ class DeliveryRuntime:
             deferred_at=deferred_at,
             reason=reason,
         )
-        self._replace(previous, frontier.model_copy(update={"change_deferral": deferral}))
+        replacement = frontier.model_copy(update={"change_deferral": deferral})
+        participants = self._builder_handoff_change_intent_participants(
+            frontier,
+            replacement,
+            "defer",
+            deferral=deferral,
+        )
+        participants = self._change_intent_custody_participants(participants, expected_finalization_attention)
+        self._replace(
+            previous,
+            replacement,
+            additional_participants=participants,
+            include_custody_guard=False,
+        )
         return deferral
 
-    def resume_change(self) -> DeliveryChangeDeferral:
+    def resume_change(
+        self,
+        *,
+        expected_finalization_attention: ChangeFinalizationAttention | None = None,
+    ) -> DeliveryChangeDeferral:
         """Resume one exact deferred Change and return its preserved prior-state receipt."""
         frontier, previous = self._read()
         if frontier.change_abandonment is not None or is_change_terminal(frontier):
@@ -1655,13 +2493,33 @@ class DeliveryRuntime:
         if deferral is None:
             _conflict("Delivery Change is not deferred")
         _require_no_active_change_claim(frontier, "Change resume")
-        self._replace(previous, frontier.model_copy(update={"change_deferral": None}))
+        replacement = frontier.model_copy(update={"change_deferral": None})
+        participants = self._builder_handoff_change_intent_participants(
+            frontier,
+            replacement,
+            "resume",
+            deferral=deferral,
+        )
+        participants = self._change_intent_custody_participants(participants, expected_finalization_attention)
+        self._replace(
+            previous,
+            replacement,
+            additional_participants=participants,
+            include_custody_guard=False,
+        )
         return deferral
 
-    def abandon_change(self, reason: str, abandoned_at: datetime) -> DeliveryChangeAbandonment:
+    def abandon_change(
+        self,
+        reason: str,
+        abandoned_at: datetime,
+        *,
+        expected_finalization_attention: ChangeFinalizationAttention | None = None,
+    ) -> DeliveryChangeAbandonment:
         """Terminate one uncompleted Change without discarding its retained authority."""
         frontier, previous = self._read()
         if frontier.change_abandonment is not None:
+            self._require_recorded_builder_handoff_change_intent(frontier)
             return frontier.change_abandonment
         if frontier.change_completion is not None:
             _conflict("completed Delivery Change cannot be abandoned")
@@ -1676,21 +2534,32 @@ class DeliveryRuntime:
             abandoned_at=abandoned_at,
             reason=reason,
         )
+        replacement = frontier.model_copy(
+            update={
+                "change_abandonment": abandonment,
+                "change_deferral": None,
+                "change_disposition": None,
+                "change_disposition_publication": None,
+                "pending_checkpoint": None,
+                "ready": None,
+                "merged_pull_request_latch": None,
+                "integration_attention": None,
+                "integration_repair_claim": None,
+            }
+        )
+        participants = self._builder_handoff_change_intent_participants(
+            frontier,
+            replacement,
+            "abandon",
+            deferral=frontier.change_deferral,
+            abandonment=abandonment,
+        )
+        participants = self._change_intent_custody_participants(participants, expected_finalization_attention)
         self._replace(
             previous,
-            frontier.model_copy(
-                update={
-                    "change_abandonment": abandonment,
-                    "change_deferral": None,
-                    "change_disposition": None,
-                    "change_disposition_publication": None,
-                    "pending_checkpoint": None,
-                    "ready": None,
-                    "merged_pull_request_latch": None,
-                    "integration_attention": None,
-                    "integration_repair_claim": None,
-                }
-            ),
+            replacement,
+            additional_participants=participants,
+            include_custody_guard=False,
         )
         return abandonment
 
@@ -2371,7 +3240,9 @@ class DeliveryRuntime:
         self._replace(previous, frontier.model_copy(update={"merged_pull_request_latch": candidate}))
         return candidate
 
-    def complete_change(self, receipt: CompletionReceipt) -> CompletionReceipt:
+    def complete_change(
+        self, receipt: CompletionReceipt, *, additional_participants: tuple[TransactionParticipant, ...] = ()
+    ) -> CompletionReceipt:
         """Atomically publish one terminal receipt and its minimal frontier projection."""
         frontier, previous = self._read()
         store = CompletionReceiptStore(self._target_root)
@@ -2435,12 +3306,22 @@ class DeliveryRuntime:
             self.publication_base_digest(previous),
         )
         transaction_id = hashlib.sha256(
-            completion_participant.content + display_participant.content + previous + replacement
+            completion_participant.content
+            + display_participant.content
+            + previous
+            + replacement
+            + b"".join(participant.content for participant in additional_participants)
         ).hexdigest()
         RuntimeTransaction(
             self._target_root,
             f"delivery-completion-{transaction_id}",
-            (completion_participant, display_participant, frontier_participant, pending_participant),
+            (
+                completion_participant,
+                display_participant,
+                frontier_participant,
+                pending_participant,
+                *additional_participants,
+            ),
         ).commit()
         return receipt
 
@@ -2534,6 +3415,7 @@ class DeliveryRuntime:
                 frontier_participant,
                 self._pending_publication_participant(replacement, self.publication_base_digest(previous)),
                 *additional_participants,
+                *self.retry_ledger().owner_result_participants(request.operation_id, accepted=True, now=finalized_at),
             ),
         ).commit()
         return receipt
@@ -2618,6 +3500,190 @@ class DeliveryRuntime:
         )
         self._replace(previous, updated)
         return invalidation
+
+    def prepare_completed_outcome_repair(
+        self,
+        request: PrepareCompletedOutcomeRepair,
+    ) -> OutcomeAuthorityBinding:
+        """Append one derived Builder repair task without erasing prior evidence."""
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "prepare_completed_outcome_repair", allow_attention=True)
+        if frontier.finalization is not None or frontier.ready is not None:
+            _conflict("completed-outcome repair requires no successful finalization authority")
+        if frontier.merged_pull_request_latch is not None:
+            _conflict("merged Change cannot be reopened for completed-outcome repair")
+        if self._workspace_manager is None:
+            _conflict("completed-outcome repair requires finalizer custody authority")
+        binding = _find_binding(frontier, request.outcome_id)
+        source = next((task for task in binding.tasks if task.task_id == request.owning_task_id), None)
+        if source is None:
+            _reference("completed-outcome repair task ownership is absent")
+        repair_id = _completed_outcome_repair_id(self._contract.change_id, request, source.digest)
+        repair_task_id = f"repair-{repair_id}"
+        existing = next((task for task in binding.tasks if task.task_id == repair_task_id), None)
+        persisted, lineage = self._completed_outcome_repair_history(
+            binding,
+            existing,
+            repair_id,
+            repair_task_id,
+        )
+        finished_at = persisted.finished_at if persisted is not None else datetime.now(UTC).isoformat()
+        receipt = CompletedOutcomeRepairReceipt.create(
+            self._contract.change_id,
+            request,
+            repair_task_id,
+            lineage.previous_task_ids,
+            lineage.previous_result_ids,
+            finished_at,
+        )
+        repair_binding = self.retry_ledger().repair_binding_participant(
+            original_attempt_id=request.original_action_id,
+            repair_attempt_id=request.attempt_id,
+            repair_task_id=repair_task_id,
+            outcome_id=request.outcome_id,
+            now=finished_at,
+            allow_settled=existing is not None,
+        )
+        repair = self._completed_outcome_repair_task(source, request, repair_task_id, lineage.previous_task_ids)
+        if self._completed_outcome_repair_replay(existing, persisted, repair, receipt):
+            return binding
+        if binding.stage != DeliveryStage.COMPLETED:
+            _conflict("completed-outcome repair requires one completed owning outcome")
+        if len(binding.results) != len(binding.tasks) or {result.task_id for result in binding.results} != set(
+            binding.task_ids
+        ):
+            _conflict("completed-outcome repair requires all prior task results")
+        if hashlib.sha256(previous).hexdigest() != request.expected_frontier_digest:
+            _conflict("completed-outcome repair frontier changed")
+        updated_binding = binding.model_copy(
+            update={
+                "stage": DeliveryStage.IMPLEMENTATION,
+                "tasks": (*binding.tasks, repair),
+                "active_claim": None,
+                "output": None,
+                "candidate": None,
+                "result_candidate": None,
+                "recovery_attention": None,
+                "return_context": None,
+                "block": None,
+                "retry_fingerprint": None,
+                "retry_count": 0,
+            }
+        )
+        additional_participants: tuple[TransactionParticipant | ReplacementTransactionParticipant, ...] = (
+            TransactionParticipant(
+                self._target_root,
+                journal_path(self._contract.change_id, repair_id, "receipt"),
+                encoded(receipt),
+            ),
+            repair_binding,
+        )
+        custody = self._workspace_manager.prepare_finalization_repair_release(
+            self._contract.change_id,
+            request.original_action_id,
+            finished_at,
+        )
+        additional_participants = (*additional_participants, custody)
+        replacement = _replace_binding(frontier, binding, updated_binding)
+        # The exact finalizer release is one of the participants below, so the
+        # ordinary no-active-finalizer guard must not be added here.
+        self._replace_content(
+            previous,
+            _model_content(replacement),
+            additional_participants=additional_participants,
+        )
+        return updated_binding
+
+    def _completed_outcome_repair_history(
+        self,
+        binding: OutcomeAuthorityBinding,
+        existing: DeliveryTaskDefinition | None,
+        repair_id: str,
+        repair_task_id: str,
+    ) -> tuple[CompletedOutcomeRepairReceipt | None, _CompletedOutcomeRepairLineage]:
+        if existing is not None:
+            try:
+                persisted = CompletedOutcomeRepairReceipt.model_validate_json(
+                    read_record(self._target_root, journal_path(self._contract.change_id, repair_id, "receipt"))
+                )
+            except (OSError, TypeError, ValueError) as exc:
+                _reference("completed-outcome repair receipt is missing or invalid", exc)
+            lineage = _CompletedOutcomeRepairLineage(
+                persisted.previous_task_ids,
+                persisted.previous_result_ids,
+            )
+            if (
+                tuple(task.task_id for task in binding.tasks if task.task_id != repair_task_id)
+                != lineage.previous_task_ids
+                or tuple(result.result_id for result in binding.results if result.task_id in lineage.previous_task_ids)
+                != lineage.previous_result_ids
+            ):
+                _conflict("completed-outcome repair receipt no longer matches its retained lineage")
+            return persisted, lineage
+        lineage = _CompletedOutcomeRepairLineage(
+            binding.task_ids,
+            tuple(result.result_id for result in binding.results),
+        )
+        return None, lineage
+
+    @staticmethod
+    def _completed_outcome_repair_task(
+        source: DeliveryTaskDefinition,
+        request: PrepareCompletedOutcomeRepair,
+        repair_task_id: str,
+        previous_task_ids: tuple[str, ...],
+    ) -> DeliveryTaskDefinition:
+        return DeliveryTaskDefinition(
+            task_id=repair_task_id,
+            outcome_id=source.outcome_id,
+            plan_scope_id=source.plan_scope_id,
+            title=f"Repair reproduced {request.defect_code}",
+            result=(
+                f"Correct the reproduced {request.finding_boundary} defect {request.defect_code}; "
+                f"resume original action {request.original_action_id} only after the repair proof passes."
+            ),
+            commitment_ids=source.commitment_ids,
+            dependency_ids=previous_task_ids,
+            required_outputs=source.required_outputs,
+            maintained_surfaces=source.maintained_surfaces,
+            constraints=(
+                *source.constraints,
+                f"Use preserved workspace evidence {request.preservation_id}.",
+            ),
+            exclusions=source.exclusions,
+            acceptance_observations=source.acceptance_observations,
+            proof_boundaries=(
+                *source.proof_boundaries,
+                f"Repair episode {request.episode_id} attempt {request.attempt_id} must be independently reproven.",
+            ),
+        )
+
+    @staticmethod
+    def _completed_outcome_repair_replay(
+        existing: DeliveryTaskDefinition | None,
+        persisted: CompletedOutcomeRepairReceipt | None,
+        repair: DeliveryTaskDefinition,
+        receipt: CompletedOutcomeRepairReceipt,
+    ) -> bool:
+        if existing is None:
+            return False
+        if existing != repair:
+            _conflict("completed-outcome repair publication conflicts with its episode identity")
+        if persisted is None:
+            _reference("completed-outcome repair receipt is missing or invalid")
+        if persisted != receipt:
+            _conflict("completed-outcome repair receipt conflicts with its episode identity")
+        return True
+
+    def has_completed_outcome_repair(self, request: PrepareCompletedOutcomeRepair) -> bool:
+        """Return whether the exact engine-derived repair task is already present."""
+        frontier, _previous = self._read()
+        binding = _find_binding(frontier, request.outcome_id)
+        source = next((task for task in binding.tasks if task.task_id == request.owning_task_id), None)
+        if source is None:
+            return False
+        repair_id = _completed_outcome_repair_id(self._contract.change_id, request, source.digest)
+        return any(task.task_id == f"repair-{repair_id}" for task in binding.tasks)
 
     def record_target_sync(
         self,
@@ -2934,14 +4000,13 @@ class DeliveryRuntime:
         return claim
 
     def remove_integration_repair_claim(self, attempt_id: str, claim_id: str) -> DeliveryActiveClaim:
-        """Remove one exact failed Integration repair claim without clearing attention."""
-        frontier, previous = self._read()
+        """Validate identity but refuse unsupported Integration custody release."""
+        frontier, _previous = self._read()
         _require_change_mutable(frontier, "remove_integration_repair_claim")
         claim = frontier.integration_repair_claim
         if claim is None or claim.attempt_id != attempt_id or claim.claim_id != claim_id:
             _conflict("claim removal does not match the active Integration repair identity")
-        self._replace(previous, frontier.model_copy(update={"integration_repair_claim": None}))
-        return claim
+        raise DeliveryWorkerExclusionRequiredError
 
     def require_active_claim(
         self,
@@ -2962,24 +4027,59 @@ class DeliveryRuntime:
         attempt_id: str,
         claim_id: str,
     ) -> OutcomeAuthorityBinding:
-        """Remove one exact failed claim without changing its canonical stage authority."""
-        frontier, previous = self._read()
+        """Validate identity but refuse unsupported failed-claim custody release."""
+        frontier, _previous = self._read()
         _require_change_mutable(frontier, "remove_active_claim")
         binding = _find_binding(frontier, outcome_id)
         claim = binding.active_claim
         if claim is None or claim.attempt_id != attempt_id or claim.claim_id != claim_id:
             _conflict("claim removal does not match the active execution identity")
-        recovered = binding.model_copy(
-            update={
-                "active_claim": None,
-                "output": None,
-                "candidate": None,
-                "result_candidate": None,
-                "recovery_attention": None,
-            }
+        raise DeliveryWorkerExclusionRequiredError
+
+    def complete_recovery(self, intent: RecoveryIntent, receipt: RecoveryReceipt) -> None:
+        """Atomically publish a verified recovery receipt and retire only its exact owner."""
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "complete_recovery")
+        request = intent.invocation.request
+        if request.change_id != self._contract.change_id or digest(previous) != intent.frontier_digest:
+            raise DeliveryWorkerExclusionRequiredError
+        replacement = frontier
+        if intent.kind == "clean-claim":
+            binding = self.require_active_claim(request.outcome_id, request.attempt_id, request.owner_id)
+            if (
+                binding.output is not None
+                or binding.result_candidate is not None
+                or binding.candidate is not None
+                or binding.builder_handoff_context is not None
+            ):
+                raise DeliveryWorkerExclusionRequiredError
+            replacement = _replace_binding(
+                frontier,
+                binding,
+                binding.model_copy(update={"active_claim": None, "recovery_attention": None, "retry_diagnostic": None}),
+            )
+        elif any(binding.active_claim is not None for binding in frontier.bindings):
+            raise DeliveryWorkerExclusionRequiredError
+        if frontier.integration_repair_claim is not None:
+            raise DeliveryWorkerExclusionRequiredError
+        custody = self._require_workspace().prepare_recovery_release(intent, receipt)
+        participants = (
+            TransactionParticipant(
+                self._target_root, journal_path(request.change_id, intent.recovery_id, "receipt"), encoded(receipt)
+            ),
+            custody,
         )
-        self._replace(previous, _replace_binding(frontier, binding, recovered))
-        return recovered
+        # The exact custody replacement and completed receipt replace the ordinary no-change
+        # guard. They cannot be split from this centrally admitted frontier mutation.
+        portable = not any(binding.active_claim is not None for binding in replacement.bindings)
+        portable = portable and not any(binding.builder_handoff_context is not None for binding in replacement.bindings)
+        portable = portable and replacement.integration_repair_claim is None
+        self._replace_content(
+            previous,
+            _model_content(replacement),
+            record_pending_publication=replacement != frontier and portable,
+            additional_participants=participants,
+        )
 
     def publish_recovery_attention(
         self,
@@ -3011,12 +4111,22 @@ class DeliveryRuntime:
             return ()
         completed = {binding.outcome_id for binding in frontier.bindings if binding.stage == DeliveryStage.COMPLETED}
         dependencies = {outcome.outcome_id: set(outcome.dependency_ids) for outcome in self._contract.outcomes}
+        planner_handoff_ids = {
+            binding.outcome_id
+            for binding in frontier.bindings
+            if binding.builder_handoff_context is not None
+            and binding.builder_handoff_context.route == "same-outcome-planner"
+        }
+        if len(planner_handoff_ids) > 1:
+            return ()
+        planner_handoff_id = next(iter(planner_handoff_ids), None)
         return tuple(
             binding.outcome_id
             for binding in frontier.bindings
             if binding.stage not in {DeliveryStage.DESIGN, DeliveryStage.COMPLETED}
             and binding.active_claim_id is None
             and (binding.block is None or binding.block.resolved)
+            and (planner_handoff_id is None or binding.outcome_id == planner_handoff_id)
             and dependencies[binding.outcome_id] <= completed
         )
 
@@ -3028,17 +4138,27 @@ class DeliveryRuntime:
         if binding.stage != DeliveryStage.IMPLEMENTATION or binding.active_claim_id is not None:
             return ()
         completed = {result.task_id for result in binding.results}
-        return tuple(
+        claimable = tuple(
             task.task_id
             for task in binding.tasks
             if task.task_id not in completed and set(task.dependency_ids) <= completed
         )
+        handoff = binding.builder_handoff_context
+        if handoff is None:
+            return claimable
+        return tuple(task_id for task_id in claimable if task_id == handoff.original_task_id)
 
     def change_stage(self) -> DeliveryChangeStage:
         """Derive change lifecycle from canonical outcome state."""
         return derive_change_stage(self._read()[0])
 
-    def activate_claim(self, request: ActivateDeliveryClaim) -> OutcomeAuthorityBinding:
+    def activate_claim(
+        self,
+        request: ActivateDeliveryClaim,
+        *,
+        builder_handoff_participant: ReplacementTransactionParticipant | None = None,
+        builder_handoff_lock: PublicationLock | None = None,
+    ) -> OutcomeAuthorityBinding:
         """Bind one fresh claim to a currently claimable outcome."""
         frontier, previous = self._read()
         if (
@@ -3066,16 +4186,129 @@ class DeliveryRuntime:
                 _conflict("implementation task is not claimable")
         elif request.task_id is not None:
             _conflict("only Implementation claims name a task")
+        handoff_participant = self._validate_builder_handoff_activation(
+            request,
+            binding,
+            builder_handoff_participant,
+            builder_handoff_lock,
+        )
         claimed = binding.model_copy(
             update={
                 "active_claim": request.claim,
                 "output": None,
                 "result_candidate": None,
                 "recovery_attention": None,
+                "retry_diagnostic": None,
             }
         )
-        self._replace(previous, _replace_binding(frontier, binding, claimed))
+        self._replace(
+            previous,
+            _replace_binding(frontier, binding, claimed),
+            additional_participants=(handoff_participant,) if handoff_participant is not None else (),
+            include_custody_guard=handoff_participant is None,
+        )
         return claimed
+
+    def _validate_builder_handoff_activation(
+        self,
+        request: ActivateDeliveryClaim,
+        binding: OutcomeAuthorityBinding,
+        participant: ReplacementTransactionParticipant | None,
+        lock: PublicationLock | None,
+    ) -> ReplacementTransactionParticipant | None:
+        context = binding.builder_handoff_context
+        if context is None:
+            if participant is not None or lock is not None:
+                _conflict("Builder handoff activation has no retained same-task authority")
+            return None
+        if context.route == "same-outcome-planner":
+            return self._validate_planner_handoff_activation(request, binding, participant, lock, context)
+        if (
+            binding.stage != DeliveryStage.IMPLEMENTATION
+            or context.route != "same-task"
+            or context.outcome_id != request.outcome_id
+            or context.original_task_id != request.task_id
+        ):
+            _conflict("Builder handoff activation requires its exact retained same-task authority")
+        if participant is None or lock is None:
+            _conflict("Builder handoff activation requires jointly prepared workspace consumption")
+        if self._workspace_manager is None or type(lock) is not PublicationLock:
+            _conflict("Builder handoff activation requires its active workspace publication lock")
+        if type(participant) is not ReplacementTransactionParticipant:
+            _conflict("Builder handoff activation requires a prepared workspace replacement")
+
+        change_id = self._contract.change_id
+        handoff = self._workspace_manager.show(change_id).builder_handoff
+        if handoff is None or (
+            handoff.change_id != change_id
+            or handoff.settlement_id != context.settlement_id
+            or handoff.original_task_id != context.original_task_id
+            or handoff.original_writer.attempt_id != context.attempt_id
+            or handoff.last_reviewed_commit != context.last_reviewed_commit
+            or handoff.branch_head != context.branch_head
+            or handoff.metadata_fingerprint != context.metadata_fingerprint
+        ):
+            _conflict("Builder handoff activation requires its exact retained workspace custody")
+
+        claim = request.claim
+        writer = ChangeWriter(
+            attempt_id=claim.attempt_id,
+            claim_id=claim.claim_id,
+            actor_id=claim.owner_id,
+            process_id=claim.process_id,
+            claimed_at=claim.started_at,
+            job_id=1,
+            kind="build",
+        )
+        prepared = self._workspace_manager.prepare_builder_handoff_acquisition(
+            change_id,
+            writer,
+            handoff,
+            lock,
+            task_id=context.original_task_id,
+        )
+        if (
+            participant.root != prepared.root
+            or participant.relative_path != prepared.relative_path
+            or participant.expected_content != prepared.expected_content
+            or participant.replacement_content != prepared.replacement_content
+        ):
+            _conflict("Builder handoff activation participant does not match the exact prepared workspace consumption")
+        return prepared
+
+    def _validate_planner_handoff_activation(
+        self,
+        request: ActivateDeliveryClaim,
+        binding: OutcomeAuthorityBinding,
+        participant: ReplacementTransactionParticipant | None,
+        lock: PublicationLock | None,
+        context: DeliveryBuilderHandoffContext,
+    ) -> None:
+        if (
+            binding.stage != DeliveryStage.PLANNING
+            or binding.return_context is None
+            or binding.return_context.target != DeliveryStage.PLANNING
+            or context.outcome_id != request.outcome_id
+            or request.task_id is not None
+            or request.claim.worker_role != DeliveryWorkerRole.PLANNER
+            or participant is not None
+        ):
+            _conflict("Planner handoff activation requires its exact task-less Planning claim")
+        manager = self._workspace_manager
+        if manager is None or type(lock) is not PublicationLock:
+            _conflict("Planner handoff activation requires its exact passive workspace custody fence")
+        coordination = manager.show(self._contract.change_id)
+        handoff = coordination.builder_handoff
+        if handoff is None or (
+            handoff.settlement_id != context.settlement_id
+            or handoff.original_task_id != context.original_task_id
+            or handoff.original_writer.attempt_id != context.attempt_id
+            or handoff.last_reviewed_commit != context.last_reviewed_commit
+            or handoff.branch_head != context.branch_head
+            or handoff.metadata_fingerprint != context.metadata_fingerprint
+            or coordination.writer != handoff.original_writer.model_copy(update={"kind": "handoff"})
+        ):
+            _conflict("Planner handoff activation requires its exact retained workspace custody")
 
     def publish_output(self, request: PublishDeliveryOutput) -> DeliveryOutputReference:
         """Persist one exact active-claim output without changing stage."""
@@ -3155,28 +4388,38 @@ class DeliveryRuntime:
         self._replace(previous, _replace_binding(frontier, binding, updated))
         return candidate
 
-    def transition(self, request: DeliveryTransition) -> OutcomeAuthorityBinding:
-        """Apply one worker-owned mechanical transition instruction."""
-        frontier, previous = self._read()
-        _require_change_mutable(frontier, "transition")
-        binding = _find_binding(frontier, request.outcome_id)
-        request_digest = hashlib.sha256(_model_content(request)).hexdigest()
-        pending_publication = self.pending_state_publication()
-        if (
+    @staticmethod
+    def _pending_transition_matches(
+        pending_publication: DeliveryPendingStatePublication | None,
+        previous: bytes,
+        request_digest: str,
+    ) -> bool:
+        return (
             pending_publication is not None
             and pending_publication.frontier_digest == hashlib.sha256(previous).hexdigest()
             and pending_publication.transition_request_digest == request_digest
-        ):
+        )
+
+    def transition(
+        self, request: DeliveryTransition, *, retry_observed_at: datetime | str | None = None
+    ) -> OutcomeAuthorityBinding:
+        """Apply one worker-owned mechanical transition instruction."""
+        frontier, previous = self._read()
+        request_digest = hashlib.sha256(_model_content(request)).hexdigest()
+        replay_result = self._planning_pause_replay_result(request, request_digest)
+        if replay_result is not None:
+            return replay_result
+        _require_change_mutable(frontier, "transition")
+        binding = _find_binding(frontier, request.outcome_id)
+        pending_publication = self.pending_state_publication()
+        if self._pending_transition_matches(pending_publication, previous, request_digest):
             return binding
         _require_claim(binding, request.claim_id)
-        if isinstance(request, AdvanceDelivery):
-            updated = self._advance(binding, request)
-        elif isinstance(request, RetryDelivery):
-            updated = self._retry(binding, request)
-        elif isinstance(request, ReturnDelivery):
-            updated = self._return(binding, request)
-        else:
-            updated = self._block(binding, request)
+        if self._workspace_manager is not None:
+            self._workspace_manager.prepare_runtime_custody_guard(self._contract.change_id)
+        updated = self._transitioned_binding(binding, request)
+        if isinstance(request, AdvanceDelivery) and binding.builder_handoff_context is not None:
+            updated = self._advanced_builder_handoff(binding, updated)
         replacement = _replace_binding(frontier, binding, updated)
         result_participants = ()
         if isinstance(request, AdvanceDelivery) and binding.stage == DeliveryStage.IMPLEMENTATION:
@@ -3191,10 +4434,351 @@ class DeliveryRuntime:
                     _model_content(candidate),
                 ),
             )
+        if (
+            isinstance(request, AdvanceDelivery)
+            and binding.stage == DeliveryStage.PLANNING
+            and binding.builder_handoff_context is not None
+            and binding.builder_handoff_context.route == "same-outcome-planner"
+        ):
+            promotion_receipt = _DeliveryBuilderPlanPromotionReceipt.create(
+                change_id=self._contract.change_id,
+                source_binding=binding,
+                result_binding=updated,
+            )
+            result_participants = (
+                *result_participants,
+                self._builder_plan_promotion_receipt_participant(promotion_receipt),
+            )
+        if isinstance(request, (AdvanceDelivery, BlockDelivery, ReturnDelivery)) and binding.active_claim is not None:
+            paused = (
+                isinstance(request, BlockDelivery)
+                and binding.stage == DeliveryStage.PLANNING
+                and request.request is not None
+            )
+            result_participants = (
+                *result_participants,
+                *self.retry_ledger().owner_result_participants(
+                    binding.active_claim.attempt_id,
+                    accepted=isinstance(request, AdvanceDelivery),
+                    accepted_progress=not paused,
+                    paused=paused,
+                    now=retry_observed_at or datetime.now(UTC),
+                    failure_code="worker-returned" if isinstance(request, ReturnDelivery) else "worker-blocked",
+                ),
+            )
+        result_participants = (
+            *result_participants,
+            *self._planning_pause_replay_participants(request, binding, updated, request_digest),
+        )
+        if isinstance(request, AdvanceDelivery):
+            result_participants = (
+                *result_participants,
+                *self._repair_owner_result_participants(
+                    binding,
+                    retry_observed_at=retry_observed_at or datetime.now(UTC),
+                ),
+            )
         self._replace(
             previous, replacement, transition_request_digest=request_digest, additional_participants=result_participants
         )
         return _find_binding(replacement, request.outcome_id)
+
+    @staticmethod
+    def _advanced_builder_handoff(
+        binding: OutcomeAuthorityBinding,
+        updated: OutcomeAuthorityBinding,
+    ) -> OutcomeAuthorityBinding:
+        context = binding.builder_handoff_context
+        if context is None:
+            return updated
+        if binding.stage == DeliveryStage.PLANNING and context.route == "same-outcome-planner":
+            if binding.candidate is None or updated.tasks != binding.candidate.tasks:
+                _conflict("Planning handoff advance requires its exact published task-chain candidate")
+            return updated.model_copy(
+                update={"builder_handoff_context": context.model_copy(update={"route": "same-task"})}
+            )
+        if binding.stage == DeliveryStage.IMPLEMENTATION and context.route == "same-task":
+            if binding.active_task_id != context.original_task_id:
+                _conflict("Builder handoff can only be consumed by advancing its original task")
+            return updated.model_copy(update={"builder_handoff_context": None})
+        return _conflict("Builder handoff advance does not match its owning stage and route")
+
+    def settle_planning_retry(
+        self, envelope: DeliveryPlanningRetrySettlement, *, retry_observed_at: datetime | str | None = None
+    ) -> OutcomeAuthorityBinding:
+        """Settle one exact normally returned, completed-timeout, or ended-without-result Planner invocation."""
+        envelope_type = type(envelope)
+        if envelope_type not in {DeliveryPlanningRetrySettlement, DeliveryEnginePlanningSettlement}:
+            _conflict("Planning retry settlement requires a typed completed-invocation envelope")
+        try:
+            envelope = envelope_type.model_validate_json(_model_content(envelope), strict=True)
+        except (TypeError, ValueError):
+            _conflict("Planning retry settlement envelope is invalid")
+        if envelope.change_id != self._contract.change_id:
+            _conflict("Planning retry settlement belongs to another Change")
+
+        frontier, previous = self._read()
+        replay_result = self._planning_retry_settlement_replay_result(envelope)
+        if replay_result is not None:
+            return replay_result
+        _require_change_mutable(frontier, "settle_planning_retry")
+        binding = _find_binding(frontier, envelope.outcome_id)
+        claim = binding.active_claim
+        if binding.stage != DeliveryStage.PLANNING or claim is None:
+            _conflict("Planning retry settlement requires an active Planner claim")
+        if claim.claim_id != envelope.claim_id or claim.attempt_id != envelope.attempt_id:
+            _conflict("Planning retry settlement does not match the active claim and attempt")
+        if claim.worker_role != DeliveryWorkerRole.PLANNER or claim.task_id is not None:
+            _conflict("Planning retry settlement cannot accept a Builder task")
+
+        if envelope.disposition == "normal-return":
+            request = envelope.request
+            if request is None:
+                _conflict("normal Planner retry settlement requires its unchanged RetryDelivery")
+            self._validate_retry_identity(binding, request, claim)
+            failure_code = request.failure_code
+        else:
+            failure_code = REQUESTLESS_WORKER_SETTLEMENT_FAILURE_CODES[envelope.disposition]
+
+        result = binding.model_copy(
+            update={
+                "active_claim": None,
+                "output": None,
+                "candidate": None,
+                "recovery_attention": None,
+                "retry_diagnostic": None,
+            }
+        )
+        receipt = _DeliveryPlanningRetrySettlementReceipt(envelope=envelope, result=result)
+        participants = (
+            *self.retry_ledger().owner_result_participants(
+                claim.attempt_id,
+                accepted=False,
+                accepted_progress=True,
+                failure_code=failure_code,
+                now=retry_observed_at or datetime.now(UTC),
+            ),
+            self._planning_retry_settlement_participant(receipt),
+        )
+        self._replace(
+            previous,
+            _replace_binding(frontier, binding, result),
+            transition_request_digest=hashlib.sha256(_model_content(envelope)).hexdigest(),
+            additional_participants=participants,
+        )
+        return result
+
+    def settle_builder_invocation(
+        self,
+        envelope: DeliveryBuilderInvocationSettlement,
+        *,
+        retry_observed_at: datetime | str | None = None,
+    ) -> OutcomeAuthorityBinding:
+        """Settle one exact Builder invocation without rewriting its registered worktree."""
+        envelope_type = type(envelope)
+        if envelope_type not in {DeliveryBuilderInvocationSettlement, DeliveryEngineBuilderSettlement}:
+            _conflict("Builder invocation settlement requires a typed completed-invocation envelope")
+        try:
+            envelope = envelope_type.model_validate_json(_model_content(envelope), strict=True)
+        except (TypeError, ValueError):
+            _conflict("Builder invocation settlement envelope is invalid")
+        if envelope.change_id != self._contract.change_id:
+            _conflict("Builder invocation settlement belongs to another Change")
+        manager = self._require_workspace()
+        with manager._coordinator.publication_lock(envelope.change_id) as lock:  # noqa: SLF001
+            frontier, previous = self._read()
+            replay_result = self._builder_invocation_settlement_replay_result(envelope)
+            if replay_result is not None:
+                return replay_result
+            _require_change_mutable(frontier, "settle_builder_invocation")
+            binding = _find_binding(frontier, envelope.outcome_id)
+            claim, prepared = self._prepare_builder_invocation_handoff(binding, envelope, manager, lock)
+            ledger, episode = self._builder_invocation_retry_episode(envelope)
+            settlement_id = hashlib.sha256(_model_content(envelope)).hexdigest()
+            original_task = next((task for task in binding.tasks if task.task_id == envelope.task_id), None)
+            if original_task is None:
+                _reference("Builder invocation settlement task authority is absent")
+            context = DeliveryBuilderHandoffContext(
+                settlement_id=settlement_id,
+                original_task_id=envelope.task_id,
+                outcome_id=envelope.outcome_id,
+                attempt_id=envelope.attempt_id,
+                last_reviewed_commit=envelope.expected_last_reviewed_commit,
+                branch_head=prepared.metadata.branch_head,
+                metadata_fingerprint=prepared.metadata.fingerprint,
+                route=(
+                    "same-outcome-design"
+                    if isinstance(envelope.request, ReturnDelivery) and envelope.request.target == DeliveryStage.DESIGN
+                    else "same-outcome-planner"
+                    if isinstance(envelope.request, ReturnDelivery)
+                    else "same-task"
+                ),
+                original_task_commitment_ids=original_task.commitment_ids,
+                original_task_maintained_surfaces=original_task.maintained_surfaces,
+            )
+            result, paused, failure_code = self._builder_invocation_settled_binding(
+                binding, envelope, context, episode, ledger
+            )
+            receipt = _DeliveryBuilderInvocationSettlementReceipt(
+                settlement_id=settlement_id,
+                envelope=envelope,
+                handoff_context=context,
+                result=result,
+            )
+            participants = (
+                *ledger.owner_result_participants(
+                    claim.attempt_id,
+                    accepted=False,
+                    accepted_progress=not paused,
+                    paused=paused,
+                    failure_code=failure_code,
+                    now=retry_observed_at or datetime.now(UTC),
+                ),
+                self._builder_invocation_settlement_participant(receipt),
+                prepared.participant,
+            )
+            replacement = _replace_binding(frontier, binding, result)
+            portable = not any(item.active_claim is not None for item in replacement.bindings)
+            portable = portable and not any(item.builder_handoff_context is not None for item in replacement.bindings)
+            portable = portable and replacement.integration_repair_claim is None
+            self._replace_content(
+                previous,
+                _model_content(replacement),
+                record_pending_publication=portable,
+                transition_request_digest=settlement_id,
+                additional_participants=participants,
+            )
+            return result
+
+    def _transitioned_binding(
+        self,
+        binding: OutcomeAuthorityBinding,
+        request: DeliveryTransition,
+    ) -> OutcomeAuthorityBinding:
+        if isinstance(request, AdvanceDelivery):
+            return self._advance(binding, request)
+        if isinstance(request, RetryDelivery):
+            return self._retry(binding, request)
+        if isinstance(request, ReturnDelivery):
+            return self._return(binding, request)
+        return self._block(binding, request)
+
+    def _repair_owner_result_participants(
+        self,
+        binding: OutcomeAuthorityBinding,
+        *,
+        retry_observed_at: datetime | str,
+    ) -> tuple[TransactionParticipant, ...]:
+        """Publish exact completed-repair accounting only with its accepted task result."""
+        if binding.stage != DeliveryStage.IMPLEMENTATION or binding.active_claim is None:
+            return ()
+        task_id = binding.active_claim.task_id
+        candidate = binding.result_candidate
+        if task_id is None or candidate is None or candidate.result.task_id != task_id:
+            return ()
+        ledger = self.retry_ledger()
+        bindings = tuple(
+            item
+            for item in ledger.repair_bindings()
+            if item.outcome_id == binding.outcome_id and item.repair_task_id == task_id
+        )
+        if not bindings:
+            return ()
+        if len(bindings) != 1:
+            msg = "completed-outcome repair has multiple retry bindings"
+            raise DeliveryRuntimeConflictError(msg)
+        repair_binding = bindings[0]
+        receipt = self._completed_outcome_repair_receipt(binding.outcome_id, task_id)
+        if (
+            receipt is None
+            or receipt.episode_id != repair_binding.episode_id
+            or receipt.attempt_id != repair_binding.repair_attempt_id
+            or receipt.outcome_id != repair_binding.outcome_id
+            or receipt.repair_task_id != repair_binding.repair_task_id
+        ):
+            msg = "completed-outcome repair receipt identity is unavailable"
+            raise DeliveryRuntimeReferenceError(msg)
+        return ledger.owner_result_participants(
+            receipt.attempt_id,
+            accepted=True,
+            accepted_progress=False,
+            repair_outcome_id=receipt.outcome_id,
+            repair_task_id=receipt.repair_task_id,
+            completed_commit=candidate.result.completed_commit,
+            now=retry_observed_at,
+        )
+
+    def _completed_outcome_repair_receipt(
+        self,
+        outcome_id: str,
+        repair_task_id: str,
+    ) -> CompletedOutcomeRepairReceipt | None:
+        """Find one validated repair receipt without deriving authority from a task name."""
+        base = self._target_root / "changes" / self._contract.change_id / "recovery-receipts"
+        try:
+            entries = tuple(sorted(base.iterdir(), key=lambda item: item.name))
+        except FileNotFoundError:
+            return None
+        except OSError as exc:
+            msg = "completed-outcome repair receipt inventory is unavailable"
+            raise DeliveryRuntimeReferenceError(msg) from exc
+        if len(entries) > _MAX_COMPLETED_REPAIR_RECEIPTS:
+            msg = "completed-outcome repair receipt inventory exceeds its bound"
+            raise DeliveryRuntimeReferenceError(msg)
+        matches: list[CompletedOutcomeRepairReceipt] = []
+        for entry in entries:
+            receipt = self._completed_outcome_repair_receipt_entry(entry, outcome_id, repair_task_id)
+            if receipt is not None:
+                matches.append(receipt)
+        if len(matches) > 1:
+            msg = "completed-outcome repair has multiple matching receipts"
+            raise DeliveryRuntimeConflictError(msg)
+        return matches[0] if matches else None
+
+    def _completed_outcome_repair_receipt_entry(
+        self,
+        entry: Path,
+        outcome_id: str,
+        repair_task_id: str,
+    ) -> CompletedOutcomeRepairReceipt | None:
+        try:
+            entry_mode = entry.lstat().st_mode
+        except OSError:
+            entry_mode = None
+        if entry_mode is None or not stat.S_ISDIR(entry_mode):
+            return None
+        if len(entry.name) != _SHA256_HEX_LENGTH or any(
+            character not in "0123456789abcdef" for character in entry.name
+        ):
+            return None
+        try:
+            content = read_record(
+                self._target_root,
+                journal_path(self._contract.change_id, entry.name, "receipt"),
+            )
+        except FileNotFoundError:
+            return None
+        except (OSError, DeliveryWorkerExclusionRequiredError) as exc:
+            msg = "completed-outcome repair receipt is unavailable"
+            raise DeliveryRuntimeReferenceError(msg) from exc
+        try:
+            receipt = CompletedOutcomeRepairReceipt.model_validate_json(content)
+        except (TypeError, ValueError) as exc:
+            try:
+                payload = json.loads(content)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                payload = None
+            if isinstance(payload, dict) and "repair_task_id" in payload:
+                msg = "completed-outcome repair receipt is malformed"
+                raise DeliveryRuntimeReferenceError(msg) from exc
+            return None
+        if (
+            receipt.change_id == self._contract.change_id
+            and receipt.outcome_id == outcome_id
+            and receipt.repair_task_id == repair_task_id
+        ):
+            return receipt
+        return None
 
     def require_result_replay(self, outcome_id: str, claim_id: str, result: DeliveryTaskResult) -> None:
         """Require immutable original claim provenance before replaying a promoted result."""
@@ -3220,6 +4804,787 @@ class DeliveryRuntime:
             / f"{digest}.json"
         )
 
+    def _planning_pause_replay_result(
+        self,
+        request: DeliveryTransition,
+        request_digest: str,
+    ) -> OutcomeAuthorityBinding | None:
+        if not isinstance(request, BlockDelivery) or request.request is None:
+            return None
+        relative_path = self._planning_pause_replay_path(request.outcome_id, request_digest)
+        path = self._target_root / relative_path
+        try:
+            content = path.read_bytes()
+        except FileNotFoundError:
+            return None
+        except OSError as exc:
+            _reference("Planning pause replay receipt is unavailable", exc)
+        try:
+            receipt = _DeliveryPlanningPauseReplay.model_validate_json(content, strict=False)
+        except (TypeError, ValueError) as exc:
+            _reference("Planning pause replay receipt is invalid", exc)
+        if (
+            receipt.change_id != self._contract.change_id
+            or receipt.outcome_id != request.outcome_id
+            or receipt.claim_id != request.claim_id
+            or receipt.request_digest != request_digest
+            or receipt.request != request
+        ):
+            _reference("Planning pause replay receipt does not match its original request")
+        return receipt.result
+
+    def _planning_retry_settlement_replay_result(
+        self,
+        envelope: DeliveryPlanningRetrySettlement,
+    ) -> OutcomeAuthorityBinding | None:
+        path = self._target_root / self._planning_retry_settlement_path(envelope)
+        try:
+            content = path.read_bytes()
+        except FileNotFoundError:
+            return None
+        except OSError as exc:
+            _reference("Planning retry settlement receipt is unavailable", exc)
+        try:
+            receipt = _DeliveryPlanningRetrySettlementReceipt.model_validate_json(content, strict=True)
+        except (TypeError, ValueError) as exc:
+            _reference("Planning retry settlement receipt is invalid", exc)
+        if receipt.envelope != envelope:
+            _conflict("Planning retry settlement conflicts with the immutable attempt receipt")
+        return receipt.result
+
+    def _planning_retry_settlement_participant(
+        self,
+        receipt: _DeliveryPlanningRetrySettlementReceipt,
+    ) -> TransactionParticipant:
+        return TransactionParticipant(
+            self._target_root,
+            self._planning_retry_settlement_path(receipt.envelope),
+            _model_content(receipt),
+        )
+
+    def _planning_retry_settlement_path(self, envelope: DeliveryPlanningRetrySettlement) -> Path:
+        attempt_digest = hashlib.sha256(envelope.attempt_id.encode("utf-8")).hexdigest()
+        return (
+            self._frontier_path.parent.relative_to(self._target_root)
+            / "planning-retry-receipts"
+            / envelope.outcome_id
+            / f"{attempt_digest}.json"
+        )
+
+    def engine_worker_settlement_replay(
+        self,
+        outcome_id: str,
+        attempt_id: str,
+        claim_id: str,
+        disposition: EngineWorkerDisposition,
+    ) -> OutcomeAuthorityBinding | None:
+        """Return the immutable result of one exact engine-settled worker attempt, if any."""
+        if re.fullmatch(r"OUT-[0-9]{3}", outcome_id) is None:
+            return None
+        attempt_digest = hashlib.sha256(attempt_id.encode("utf-8")).hexdigest()
+        receipts: tuple[tuple[Path, type[_DeliveryModel]], ...] = (
+            (
+                self._frontier_path.parent / "planning-retry-receipts" / outcome_id / f"{attempt_digest}.json",
+                _DeliveryPlanningRetrySettlementReceipt,
+            ),
+            (
+                self._target_root / self._builder_invocation_settlement_path(attempt_id),
+                _DeliveryBuilderInvocationSettlementReceipt,
+            ),
+        )
+        for path, receipt_type in receipts:
+            try:
+                content = path.read_bytes()
+            except FileNotFoundError:
+                continue
+            except OSError as exc:
+                _reference("worker settlement receipt is unavailable", exc)
+            try:
+                receipt = receipt_type.model_validate_json(content, strict=True)
+            except (TypeError, ValueError) as exc:
+                _reference("worker settlement receipt is invalid", exc)
+            envelope = receipt.envelope
+            if (
+                isinstance(envelope, (DeliveryEnginePlanningSettlement, DeliveryEngineBuilderSettlement))
+                and envelope.outcome_id == outcome_id
+                and envelope.claim_id == claim_id
+                and envelope.disposition == disposition
+            ):
+                return receipt.result
+            _conflict("worker attempt is already settled with different authority")
+        return None
+
+    def _prepare_builder_invocation_handoff(
+        self,
+        binding: OutcomeAuthorityBinding,
+        envelope: DeliveryBuilderInvocationSettlement,
+        manager: ChangeWorkspaceManager,
+        lock: PublicationLock,
+    ) -> tuple[DeliveryActiveClaim, PreparedBuilderHandoff]:
+        claim = binding.active_claim
+        if (
+            binding.stage != DeliveryStage.IMPLEMENTATION
+            or claim is None
+            or claim.worker_role != DeliveryWorkerRole.BUILDER
+            or claim.claim_id != envelope.claim_id
+            or claim.attempt_id != envelope.attempt_id
+            or claim.task_id != envelope.task_id
+            or not any(task.task_id == envelope.task_id for task in binding.tasks)
+        ):
+            _conflict("Builder invocation settlement does not match the active task claim")
+        coordination = manager.show(envelope.change_id)
+        writer = coordination.writer
+        if (
+            writer is None
+            or writer.kind != "build"
+            or writer.claim_id != claim.claim_id
+            or writer.attempt_id != claim.attempt_id
+            or coordination.last_reviewed_commit != envelope.expected_last_reviewed_commit
+        ):
+            _conflict("Builder invocation settlement does not match exact Change workspace custody")
+        settlement_id = hashlib.sha256(_model_content(envelope)).hexdigest()
+        prepared = manager.prepare_builder_handoff(
+            envelope.change_id,
+            writer,
+            settlement_id,
+            envelope.task_id,
+            lock,
+        )
+        metadata = prepared.metadata
+        if (
+            metadata.change_id != envelope.change_id
+            or metadata.branch != coordination.branch
+            or metadata.worktree_path != coordination.worktree_path
+            or metadata.last_reviewed_commit != envelope.expected_last_reviewed_commit
+            or metadata.registration.path != metadata.worktree_path
+            or metadata.registration.branch != metadata.branch
+            or metadata.registration.head != metadata.branch_head
+        ):
+            _conflict("Builder handoff metadata does not match its registered branch and reviewed boundary")
+        request = envelope.request
+        if isinstance(request, RetryDelivery) and request.abandoned_commit != metadata.branch_head:
+            _conflict("Builder retry commit does not match the registered branch head")
+        if isinstance(request, BlockDelivery) and request.resume_commit != metadata.branch_head:
+            _conflict("Builder block commit does not match the registered branch head")
+        if isinstance(request, ReturnDelivery) and request.preserved_commit != metadata.branch_head:
+            _conflict("Builder return commit does not match the registered branch head")
+        self._validate_builder_result_candidate(binding, claim, envelope.task_id)
+        return claim, prepared
+
+    @staticmethod
+    def _validate_builder_result_candidate(
+        binding: OutcomeAuthorityBinding,
+        claim: DeliveryActiveClaim,
+        task_id: str,
+    ) -> None:
+        candidate = binding.result_candidate
+        if candidate is None:
+            return
+        if candidate.claim_id != claim.claim_id or candidate.result.task_id != task_id:
+            _conflict("published Builder result candidate does not match its active task claim")
+        accepted = next((result for result in binding.results if result.task_id == candidate.result.task_id), None)
+        if accepted is not None and accepted != candidate.result:
+            _conflict("published Builder result candidate conflicts with its accepted result")
+
+    def _builder_invocation_retry_episode(
+        self,
+        envelope: DeliveryBuilderInvocationSettlement,
+    ) -> tuple[RetryLedger, RetryEpisodeSummary]:
+        ledger = self.retry_ledger()
+        episode = ledger.episode_for_attempt(envelope.attempt_id)
+        if episode is None:
+            _conflict("Builder invocation settlement requires its exact reserved retry episode")
+        key = episode.key
+        reviewed_head_matches = key.exact_head == envelope.expected_last_reviewed_commit or any(
+            alias.alias_kind == "commit" and alias.value == envelope.expected_last_reviewed_commit
+            for alias in episode.aliases
+        )
+        if (
+            episode.failure_class != RetryFailureClass.MECHANICAL
+            or key.change_id != envelope.change_id
+            or key.action_kind != "builder-claim"
+            or not reviewed_head_matches
+            or key.contract_digest != self._authority_digest
+            or key.outcome_id != envelope.outcome_id
+            or key.task_lineage != envelope.task_id
+            or key.procedure_class != DeliveryWorkerRole.BUILDER.value
+            or envelope.attempt_id not in episode.attempt_ids
+        ):
+            _conflict("Builder invocation settlement retry episode does not match its exact task authority")
+        owner_result_path = (
+            self._target_root
+            / "changes"
+            / envelope.change_id
+            / "retry-ledger"
+            / "owner-results"
+            / f"{envelope.attempt_id}.json"
+        )
+        if owner_result_path.exists():
+            _conflict("Builder invocation settlement already has an owner result without its exact receipt")
+        return ledger, episode
+
+    def _builder_invocation_settled_binding(
+        self,
+        binding: OutcomeAuthorityBinding,
+        envelope: DeliveryBuilderInvocationSettlement,
+        context: DeliveryBuilderHandoffContext,
+        episode: RetryEpisodeSummary,
+        ledger: RetryLedger,
+    ) -> tuple[OutcomeAuthorityBinding, bool, str]:
+        request = envelope.request
+        paused = isinstance(request, BlockDelivery)
+        requestless_code = REQUESTLESS_WORKER_SETTLEMENT_FAILURE_CODES.get(envelope.disposition)
+        failure_code = (
+            requestless_code
+            if requestless_code is not None
+            else "worker-blocked"
+            if paused
+            else "worker-returned"
+            if isinstance(request, ReturnDelivery)
+            else request.failure_code
+        )
+        exhausted = not paused and episode.total_attempts >= ledger.mechanical_repairs + 1
+        if requestless_code is not None or isinstance(request, RetryDelivery):
+            result = self._builder_retry_settled_binding(binding, context, envelope, exhausted=exhausted)
+        elif isinstance(request, BlockDelivery):
+            result = self._builder_pause_settled_binding(binding, context, request)
+        elif isinstance(request, ReturnDelivery):
+            result = self._builder_return_settled_binding(binding, context, request, exhausted=exhausted)
+        else:
+            _conflict("Builder invocation settlement has no supported completed disposition")
+        return result, paused, failure_code
+
+    @staticmethod
+    def _builder_retry_settled_binding(
+        binding: OutcomeAuthorityBinding,
+        context: DeliveryBuilderHandoffContext,
+        envelope: DeliveryBuilderInvocationSettlement,
+        *,
+        exhausted: bool,
+    ) -> OutcomeAuthorityBinding:
+        updates = {
+            "active_claim": None,
+            "output": None,
+            "candidate": None,
+            "result_candidate": None,
+            "return_context": None,
+            "builder_handoff_context": context,
+            "recovery_attention": None,
+            "retry_diagnostic": None,
+            "block": None,
+        }
+        if exhausted:
+            updates["block"] = DeliveryBlock(
+                block_id=f"builder-attempt-limit-{context.settlement_id}",
+                reason="The Builder retry episode reached its three-attempt limit.",
+                unblock_condition="Use a supported operator disposition without resetting this retry episode.",
+                expected_evidence=("An exact operator disposition for the retained Builder task.",),
+                locators=(envelope.task_id,),
+            )
+        return binding.model_copy(update=updates)
+
+    @staticmethod
+    def _builder_pause_settled_binding(
+        binding: OutcomeAuthorityBinding,
+        context: DeliveryBuilderHandoffContext,
+        request: BlockDelivery,
+    ) -> OutcomeAuthorityBinding:
+        delivery_request = request.request
+        if delivery_request is None or any(
+            existing.request_id == delivery_request.request_id for existing in binding.requests
+        ):
+            _conflict("Builder pause request is absent or already active")
+        block = DeliveryBlock(
+            block_id=request.block_id,
+            reason=request.reason,
+            unblock_condition=request.unblock_condition,
+            expected_evidence=request.expected_evidence,
+            locators=request.locators,
+            request_id=delivery_request.request_id,
+            resume_commit=request.resume_commit,
+        )
+        return binding.model_copy(
+            update={
+                "active_claim": None,
+                "builder_handoff_context": context,
+                "output": None,
+                "candidate": None,
+                "result_candidate": None,
+                "recovery_attention": None,
+                "retry_diagnostic": None,
+                "return_context": None,
+                "block": block,
+                "requests": (*binding.requests, delivery_request),
+            }
+        )
+
+    @staticmethod
+    def _builder_return_settled_binding(
+        binding: OutcomeAuthorityBinding,
+        context: DeliveryBuilderHandoffContext,
+        request: ReturnDelivery,
+        *,
+        exhausted: bool,
+    ) -> OutcomeAuthorityBinding:
+        if request.target not in {DeliveryStage.PLANNING, DeliveryStage.DESIGN}:
+            _conflict("Builder return target has no supported workspace owner route")
+        block = (
+            DeliveryBlock(
+                block_id=f"builder-{request.target.value}-route-{context.settlement_id}",
+                reason="The Builder retry episode reached its three-attempt limit.",
+                unblock_condition="The retry episode is eligible to continue.",
+                expected_evidence=("A retry episode below its attempt limit.",),
+                locators=request.locators,
+            )
+            if exhausted
+            else None
+        )
+        return binding.model_copy(
+            update={
+                "stage": request.target,
+                "active_claim": None,
+                "output": None,
+                "candidate": None,
+                "result_candidate": None,
+                "builder_handoff_context": context,
+                "recovery_attention": None,
+                "retry_diagnostic": None,
+                "return_context": DeliveryReturnContext(
+                    target=request.target,
+                    reason=request.reason,
+                    locators=request.locators,
+                    preserved_commit=request.preserved_commit,
+                    completed_boundary=context.last_reviewed_commit,
+                ),
+                "block": block,
+            }
+        )
+
+    def _builder_invocation_settlement_replay_result(
+        self,
+        envelope: DeliveryBuilderInvocationSettlement,
+    ) -> OutcomeAuthorityBinding | None:
+        path = self._target_root / self._builder_invocation_settlement_path(envelope.attempt_id)
+        try:
+            content = path.read_bytes()
+        except FileNotFoundError:
+            return None
+        except OSError as exc:
+            _reference("Builder invocation settlement receipt is unavailable", exc)
+        try:
+            receipt = _DeliveryBuilderInvocationSettlementReceipt.model_validate_json(content, strict=True)
+        except (TypeError, ValueError) as exc:
+            _reference("Builder invocation settlement receipt is invalid", exc)
+        if receipt.envelope != envelope:
+            _conflict("Builder invocation settlement conflicts with the immutable attempt receipt")
+        return receipt.result
+
+    def _builder_invocation_settlement_participant(
+        self,
+        receipt: _DeliveryBuilderInvocationSettlementReceipt,
+    ) -> TransactionParticipant:
+        return TransactionParticipant(
+            self._target_root,
+            self._builder_invocation_settlement_path(receipt.envelope.attempt_id),
+            _model_content(receipt),
+        )
+
+    def _builder_plan_promotion_receipt_participant(
+        self,
+        receipt: _DeliveryBuilderPlanPromotionReceipt,
+    ) -> TransactionParticipant:
+        return TransactionParticipant(
+            self._target_root,
+            self._builder_plan_promotion_receipt_path(receipt.settlement_id),
+            _model_content(receipt),
+        )
+
+    def _builder_plan_promotion_receipt_path(self, settlement_id: str) -> Path:
+        return (
+            self._frontier_path.parent.relative_to(self._target_root)
+            / "builder-plan-promotion-receipts"
+            / f"{settlement_id}.json"
+        )
+
+    def _builder_invocation_settlement_path(self, attempt_id: str) -> Path:
+        attempt_digest = hashlib.sha256(attempt_id.encode("utf-8")).hexdigest()
+        return (
+            self._frontier_path.parent.relative_to(self._target_root)
+            / "builder-invocation-receipts"
+            / f"{attempt_digest}.json"
+        )
+
+    def _builder_request_resolution_receipt_participant(
+        self,
+        binding: OutcomeAuthorityBinding,
+        request: DeliveryRequest,
+        resolved_request: DeliveryRequest,
+        updated_block: DeliveryBlock,
+    ) -> TransactionParticipant | None:
+        context = binding.builder_handoff_context
+        block = binding.block
+        if context is None or context.route != "same-task":
+            return None
+        if (
+            binding.stage != DeliveryStage.IMPLEMENTATION
+            or context.original_task_id not in binding.task_ids
+            or block is None
+            or block.request_id != request.request_id
+        ):
+            return None
+
+        settlement_receipt = self._read_builder_invocation_settlement_receipt(context)
+        original_block = settlement_receipt.envelope.request
+        if not isinstance(original_block, BlockDelivery) or original_block.request is None:
+            _conflict("Builder request resolution does not match an exact same-task pause")
+        expected_block = DeliveryBlock(
+            block_id=original_block.block_id,
+            reason=original_block.reason,
+            unblock_condition=original_block.unblock_condition,
+            expected_evidence=original_block.expected_evidence,
+            locators=original_block.locators,
+            request_id=original_block.request.request_id,
+            resume_commit=original_block.resume_commit,
+        )
+        if not (
+            settlement_receipt.handoff_context == context
+            and settlement_receipt.result == binding
+            and settlement_receipt.envelope.change_id == self._contract.change_id
+            and settlement_receipt.envelope.outcome_id == binding.outcome_id
+            and settlement_receipt.envelope.task_id == context.original_task_id
+            and original_block.request == request
+            and expected_block == block
+            and request.outcome_id == binding.outcome_id
+        ):
+            _conflict("Builder request resolution does not match its exact same-task pause")
+
+        receipt = _DeliveryBuilderRequestResolutionReceipt(
+            change_id=self._contract.change_id,
+            outcome_id=binding.outcome_id,
+            request_id=request.request_id,
+            settlement_id=context.settlement_id,
+            builder_handoff_context=context,
+            resolved_request=resolved_request,
+            updated_block=updated_block,
+        )
+        receipt_path = _builder_request_resolution_receipt_path(
+            self._target_root,
+            self._contract.change_id,
+            context,
+        )
+        receipt_directory = receipt_path.parent
+        if any(
+            path.is_symlink()
+            for path in (self._target_root / "changes", self._frontier_path.parent, receipt_directory, receipt_path)
+        ):
+            _reference("Builder request resolution receipt path is unsafe")
+        return TransactionParticipant(
+            self._target_root,
+            receipt_path.relative_to(self._target_root),
+            _model_content(receipt),
+        )
+
+    def _read_builder_invocation_settlement_receipt(
+        self,
+        context: DeliveryBuilderHandoffContext,
+    ) -> _DeliveryBuilderInvocationSettlementReceipt:
+        settlement_path = self._target_root / self._builder_invocation_settlement_path(context.attempt_id)
+        settlement_directory = settlement_path.parent
+        if any(
+            path.is_symlink()
+            for path in (
+                self._target_root / "changes",
+                self._frontier_path.parent,
+                settlement_directory,
+                settlement_path,
+            )
+        ):
+            _reference("Builder invocation settlement receipt path is unsafe")
+        try:
+            settlement_content = settlement_path.read_bytes()
+        except OSError as exc:
+            _reference("Builder invocation settlement receipt is unavailable", exc)
+        try:
+            receipt = _DeliveryBuilderInvocationSettlementReceipt.model_validate_json(
+                settlement_content,
+                strict=True,
+            )
+        except (TypeError, ValueError) as exc:
+            _reference("Builder invocation settlement receipt is invalid", exc)
+        return receipt
+
+    def _planner_handoff_pause_return_context(
+        self,
+        binding: OutcomeAuthorityBinding,
+    ) -> DeliveryReturnContext | None:
+        """Return the retained Planning return context for one exact Planner pause on a Builder return."""
+        context = binding.builder_handoff_context
+        block = binding.block
+        if (
+            context is None
+            or context.route != "same-outcome-planner"
+            or binding.stage != DeliveryStage.PLANNING
+            or binding.active_claim is not None
+            or block is None
+        ):
+            return None
+        settlement = self._read_builder_invocation_settlement_receipt(context)
+        returned = settlement.envelope.request
+        if not (
+            isinstance(returned, ReturnDelivery)
+            and returned.target == DeliveryStage.PLANNING
+            and settlement.handoff_context == context
+            and settlement.envelope.change_id == self._contract.change_id
+            and settlement.result.block is None
+            and settlement.result.return_context is not None
+            and settlement.result.tasks == binding.tasks
+            and settlement.result.results == binding.results
+        ):
+            return None
+        if block.request_id is not None and not self._planning_pause_receipt_matches(binding):
+            return None
+        return settlement.result.return_context
+
+    def _planning_pause_receipt_matches(self, binding: OutcomeAuthorityBinding) -> bool:
+        directory = self._target_root / self._planning_pause_replay_path(binding.outcome_id, "0" * 64).parent
+        if any(
+            path.is_symlink()
+            for path in (self._target_root / "changes", self._frontier_path.parent, directory.parent, directory)
+        ):
+            _reference("Planning pause replay receipt path is unsafe")
+        if not directory.is_dir():
+            return False
+        for path in sorted(directory.glob("*.json")):
+            if path.is_symlink():
+                _reference("Planning pause replay receipt path is unsafe")
+            try:
+                receipt = _DeliveryPlanningPauseReplay.model_validate_json(path.read_bytes(), strict=False)
+            except (OSError, TypeError, ValueError) as exc:
+                _reference("Planning pause replay receipt is invalid", exc)
+            if (
+                receipt.change_id == self._contract.change_id
+                and path.name == f"{receipt.request_digest}.json"
+                and receipt.result == binding
+            ):
+                return True
+        return False
+
+    def _require_recorded_builder_handoff_change_intent(self, frontier: DeliveryFrontier) -> None:
+        for binding in frontier.bindings:
+            context = binding.builder_handoff_context
+            if context is None:
+                continue
+            receipts = _read_builder_handoff_change_intent_receipts(
+                self._target_root,
+                self._contract.change_id,
+                context,
+            )
+            if not receipts or (
+                receipts[-1].after_frontier.change_deferral != frontier.change_deferral
+                or receipts[-1].after_frontier.change_abandonment != frontier.change_abandonment
+            ):
+                _conflict("retained Builder handoff lifecycle intent has no matching receipt")
+
+    def _builder_handoff_change_intent_participants(
+        self,
+        before: DeliveryFrontier,
+        after: DeliveryFrontier,
+        action: Literal["defer", "resume", "abandon"],
+        *,
+        deferral: DeliveryChangeDeferral | None = None,
+        abandonment: DeliveryChangeAbandonment | None = None,
+    ) -> tuple[TransactionParticipant | ReplacementTransactionParticipant, ...]:
+        handoffs = tuple(binding for binding in before.bindings if binding.builder_handoff_context is not None)
+        if not handoffs:
+            return ()
+        if (
+            any(binding.active_claim is not None for binding in before.bindings)
+            or before.integration_repair_claim is not None
+        ):
+            _conflict("Builder handoff lifecycle intent cannot overlap an active mutation claim")
+
+        mutation = _BuilderHandoffChangeIntentMutation(before, after, action, deferral, abandonment)
+        participants: list[TransactionParticipant | ReplacementTransactionParticipant] = []
+        for binding in handoffs:
+            context = binding.builder_handoff_context
+            if context is None:
+                continue
+            receipts = self._builder_handoff_change_intent_chain(before, context, action)
+            receipt, head = self._new_builder_handoff_change_intent_receipt(
+                binding,
+                mutation,
+                receipts,
+            )
+            participants.extend(self._builder_handoff_change_intent_storage(receipt, head, context, receipts))
+        return tuple(participants)
+
+    def _builder_handoff_change_intent_chain(
+        self,
+        before: DeliveryFrontier,
+        context: DeliveryBuilderHandoffContext,
+        action: Literal["defer", "resume", "abandon"],
+    ) -> tuple[_DeliveryBuilderHandoffChangeIntentReceipt, ...]:
+        receipts = _read_builder_handoff_change_intent_receipts(self._target_root, self._contract.change_id, context)
+        if receipts:
+            latest = receipts[-1].after_frontier
+            if (
+                latest.change_deferral != before.change_deferral
+                or latest.change_abandonment != before.change_abandonment
+            ):
+                _conflict("Builder handoff lifecycle flags do not match the recorded receipt chain")
+        elif before.change_deferral is not None or before.change_abandonment is not None:
+            _conflict("Builder handoff lifecycle flags are missing their receipt chain")
+        if len(receipts) > _MAX_BUILDER_HANDOFF_CHANGE_INTENTS or (
+            len(receipts) == _MAX_BUILDER_HANDOFF_CHANGE_INTENTS and action != "abandon"
+        ):
+            _conflict("Builder handoff change-intent receipt chain is exhausted")
+        return receipts
+
+    def _new_builder_handoff_change_intent_receipt(
+        self,
+        binding: OutcomeAuthorityBinding,
+        mutation: _BuilderHandoffChangeIntentMutation,
+        receipts: tuple[_DeliveryBuilderHandoffChangeIntentReceipt, ...],
+    ) -> tuple[_DeliveryBuilderHandoffChangeIntentReceipt, _DeliveryBuilderHandoffChangeIntentHead]:
+        context = binding.builder_handoff_context
+        if context is None:
+            _conflict("Builder handoff change-intent receipt requires retained context")
+        try:
+            receipt = _DeliveryBuilderHandoffChangeIntentReceipt.create(
+                action=mutation.action,
+                change_id=self._contract.change_id,
+                outcome_id=binding.outcome_id,
+                context=context,
+                sequence=len(receipts) + 1,
+                previous_receipt_id=receipts[-1].receipt_id if receipts else None,
+                before_frontier=mutation.before,
+                after_frontier=mutation.after,
+                deferral=mutation.deferral,
+                abandonment=mutation.abandonment,
+            )
+            head = _DeliveryBuilderHandoffChangeIntentHead(
+                change_id=self._contract.change_id,
+                outcome_id=binding.outcome_id,
+                settlement_id=context.settlement_id,
+                builder_handoff_context=context,
+                latest_receipt_id=receipt.receipt_id,
+                sequence=receipt.sequence,
+            )
+        except (TypeError, ValueError):
+            _conflict("Builder handoff lifecycle intent cannot prove an exact supported frontier delta")
+        return receipt, head
+
+    def _builder_handoff_change_intent_storage(
+        self,
+        receipt: _DeliveryBuilderHandoffChangeIntentReceipt,
+        head: _DeliveryBuilderHandoffChangeIntentHead,
+        context: DeliveryBuilderHandoffContext,
+        receipts: tuple[_DeliveryBuilderHandoffChangeIntentReceipt, ...],
+    ) -> tuple[TransactionParticipant | ReplacementTransactionParticipant, ...]:
+        directory = _builder_handoff_change_intent_directory(self._target_root, self._contract.change_id, context)
+        receipt_path = directory / f"{receipt.receipt_id}.json"
+        head_path = _builder_handoff_change_intent_head_path(self._target_root, self._contract.change_id, context)
+        if any(
+            path.is_symlink()
+            for path in (
+                self._target_root / "changes",
+                self._frontier_path.parent,
+                directory,
+                receipt_path,
+                head_path,
+            )
+        ):
+            _reference("Builder handoff change-intent receipt path is unsafe")
+        if receipt_path.exists():
+            _reference("Builder handoff change-intent receipt path already exists")
+        return (
+            TransactionParticipant(
+                self._target_root,
+                receipt_path.relative_to(self._target_root),
+                _model_content(receipt),
+            ),
+            self._builder_handoff_change_intent_head_participant(head_path, head, context, receipts),
+        )
+
+    def _builder_handoff_change_intent_head_participant(
+        self,
+        head_path: Path,
+        head: _DeliveryBuilderHandoffChangeIntentHead,
+        context: DeliveryBuilderHandoffContext,
+        receipts: tuple[_DeliveryBuilderHandoffChangeIntentReceipt, ...],
+    ) -> TransactionParticipant | ReplacementTransactionParticipant:
+        head_content = _model_content(head)
+        if not head_path.exists():
+            if receipts:
+                _reference("Builder handoff change-intent head is unavailable")
+            return TransactionParticipant(
+                self._target_root,
+                head_path.relative_to(self._target_root),
+                head_content,
+            )
+        try:
+            previous_head_content = head_path.read_bytes()
+            previous_head = _DeliveryBuilderHandoffChangeIntentHead.model_validate_json(
+                previous_head_content,
+                strict=True,
+            )
+        except (OSError, TypeError, ValueError) as exc:
+            _reference("Builder handoff change-intent head is invalid", exc)
+        if not receipts or (
+            previous_head_content != _model_content(previous_head)
+            or previous_head.change_id != self._contract.change_id
+            or previous_head.outcome_id != head.outcome_id
+            or previous_head.builder_handoff_context != context
+            or previous_head.latest_receipt_id != receipts[-1].receipt_id
+            or previous_head.sequence != len(receipts)
+        ):
+            _reference("Builder handoff change-intent head does not match its receipt chain")
+        return ReplacementTransactionParticipant(
+            self._target_root,
+            head_path.relative_to(self._target_root),
+            previous_head_content,
+            head_content,
+        )
+
+    def _planning_pause_replay_participant(
+        self,
+        request: BlockDelivery,
+        result: OutcomeAuthorityBinding,
+        request_digest: str,
+    ) -> TransactionParticipant:
+        receipt = _DeliveryPlanningPauseReplay(
+            change_id=self._contract.change_id,
+            outcome_id=request.outcome_id,
+            claim_id=request.claim_id,
+            request_digest=request_digest,
+            request=request,
+            result=result,
+        )
+        return TransactionParticipant(
+            self._target_root,
+            self._planning_pause_replay_path(request.outcome_id, request_digest),
+            _model_content(receipt),
+        )
+
+    def _planning_pause_replay_participants(
+        self,
+        request: DeliveryTransition,
+        binding: OutcomeAuthorityBinding,
+        result: OutcomeAuthorityBinding,
+        request_digest: str,
+    ) -> tuple[TransactionParticipant, ...]:
+        if not isinstance(request, BlockDelivery) or binding.stage != DeliveryStage.PLANNING or request.request is None:
+            return ()
+        return (self._planning_pause_replay_participant(request, result, request_digest),)
+
+    def _planning_pause_replay_path(self, outcome_id: str, request_digest: str) -> Path:
+        return (
+            self._frontier_path.parent.relative_to(self._target_root)
+            / "planning-pause-receipts"
+            / outcome_id
+            / f"{request_digest}.json"
+        )
+
     def resolve_request(
         self,
         request_id: str,
@@ -3230,6 +5595,14 @@ class DeliveryRuntime:
         _require_change_mutable(frontier, "resolve_request")
         binding, request = _find_request(frontier, request_id)
         _require_no_active_change_claim(frontier, "request resolution")
+        handoff_retained = any(item.builder_handoff_context is not None for item in frontier.bindings)
+        if handoff_retained and (
+            binding.builder_handoff_context is None
+            or binding.builder_handoff_context.route not in {"same-task", "same-outcome-planner"}
+            or binding.block is None
+            or binding.block.request_id != request_id
+        ):
+            _conflict("request resolution cannot mutate outside the exact retained Builder handoff")
         if request.kind is DeliveryRequestKind.DECISION and resolution.selected_option_id is None:
             _reference("Decision requests require a selected option")
         if request.resolution is not None:
@@ -3252,7 +5625,22 @@ class DeliveryRuntime:
             }
         )
         updated = binding.model_copy(update={"requests": requests, "block": cleared})
-        self._replace(previous, _replace_binding(frontier, binding, updated))
+        receipt_participant = self._builder_request_resolution_receipt_participant(
+            binding,
+            request,
+            resolved,
+            cleared,
+        )
+        if receipt_participant is None and handoff_retained:
+            return_context = self._planner_handoff_pause_return_context(binding)
+            if return_context is None:
+                _conflict("request resolution lacks the exact retained Builder handoff receipt")
+            updated = updated.model_copy(update={"return_context": return_context})
+        self._replace(
+            previous,
+            _replace_binding(frontier, binding, updated),
+            additional_participants=(receipt_participant,) if receipt_participant is not None else (),
+        )
         return resolved
 
     def unblock(
@@ -3269,6 +5657,11 @@ class DeliveryRuntime:
         frontier, previous = self._read()
         _require_change_mutable(frontier, "unblock")
         binding = _find_binding(frontier, outcome_id)
+        handoff_retained = any(item.builder_handoff_context is not None for item in frontier.bindings)
+        if handoff_retained and (
+            binding.builder_handoff_context is None or binding.builder_handoff_context.route != "same-outcome-planner"
+        ):
+            _conflict("requestless unblock cannot mutate while a Builder handoff is retained")
         block = binding.block
         if block is None or block.block_id != block_id or block.request_id is not None:
             _conflict("requestless block is not clearable")
@@ -3278,7 +5671,12 @@ class DeliveryRuntime:
                 return binding
             _conflict("requestless block is not clearable")
         cleared = block.model_copy(update={"resolution_note": operator_note, "resolution_locators": locators})
-        updated = binding.model_copy(update={"block": cleared, "retry_fingerprint": None, "retry_count": 0})
+        updated = binding.model_copy(update={"block": cleared})
+        if handoff_retained:
+            return_context = self._planner_handoff_pause_return_context(binding)
+            if return_context is None:
+                _conflict("requestless unblock cannot mutate while a Builder handoff is retained")
+            updated = updated.model_copy(update={"return_context": return_context})
         self._replace(previous, _replace_binding(frontier, binding, updated))
         return updated
 
@@ -3295,6 +5693,7 @@ class DeliveryRuntime:
         if hashlib.sha256(previous).hexdigest() != request.expected_version:
             _conflict("administrative movement preview is stale")
         ordered = _administrative_move_closure(self._contract, frontier, request.outcome_id, request.target)
+        self._require_no_handoff_in_administrative_closure(frontier, ordered)
         invalidated = set(ordered)
         updated_bindings = tuple(
             _reset_binding(item, request.target if item.outcome_id == request.outcome_id else DeliveryStage.PLANNING)
@@ -3332,12 +5731,22 @@ class DeliveryRuntime:
     ) -> AdministrativeDeliveryMovePreview:
         """Return the exact invalidation closure without mutating authority."""
         frontier, content = self._read()
+        ordered = _administrative_move_closure(self._contract, frontier, outcome_id, target)
+        self._require_no_handoff_in_administrative_closure(frontier, ordered)
         return AdministrativeDeliveryMovePreview(
             outcome_id=outcome_id,
             target=target,
             snapshot_version=hashlib.sha256(content).hexdigest(),
-            invalidated_outcome_ids=_administrative_move_closure(self._contract, frontier, outcome_id, target),
+            invalidated_outcome_ids=ordered,
         )
+
+    @staticmethod
+    def _require_no_handoff_in_administrative_closure(frontier: DeliveryFrontier, outcome_ids: tuple[str, ...]) -> None:
+        if any(
+            binding.builder_handoff_context is not None and binding.outcome_id in outcome_ids
+            for binding in frontier.bindings
+        ):
+            _conflict("administrative movement cannot orphan a preserved Builder handoff")
 
     def _advance(
         self,
@@ -3359,6 +5768,7 @@ class DeliveryRuntime:
                     "candidate": None,
                     "return_context": None,
                     "recovery_attention": None,
+                    "retry_diagnostic": None,
                     "block": None,
                     "requests": (),
                     "retry_fingerprint": None,
@@ -3389,6 +5799,7 @@ class DeliveryRuntime:
                     "result_candidate": None,
                     "return_context": None,
                     "recovery_attention": None,
+                    "retry_diagnostic": None,
                     "block": None,
                     "requests": (),
                     "retry_fingerprint": None,
@@ -3405,25 +5816,32 @@ class DeliveryRuntime:
         claim = binding.active_claim
         if claim is None:
             _conflict("retry requires an active claim")
-        retry_fingerprint = _retry_fingerprint(
-            self._contract.change_id,
-            binding.outcome_id,
-            claim.worker_role,
-            request.failure_code,
-        )
-        retry_count = binding.retry_count + 1 if binding.retry_fingerprint == retry_fingerprint else 1
-        retry_block = None
-        if retry_count >= _MAX_WORKER_RETRIES:
-            retry_block = DeliveryBlock(
-                block_id=f"retry-budget-{retry_fingerprint[:24]}",
-                reason="Repeated identical worker failures exhausted the automatic retry budget.",
-                unblock_condition="Provide evidence that the failure cause has changed or been repaired.",
-                expected_evidence=(f"retry-fingerprint:{retry_fingerprint}",),
-                locators=(f"outcome:{binding.outcome_id}",),
-            )
+        self._validate_retry_identity(binding, request, claim)
+        diagnostic = DeliveryRetryDiagnostic(attempt_id=claim.attempt_id, transition=request)
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "_retry")
+        current = _find_binding(frontier, binding.outcome_id)
+        if current != binding:
+            _conflict("active claim changed before retry diagnostic persistence")
+        if current.retry_diagnostic is not None:
+            if current.retry_diagnostic == diagnostic:
+                raise DeliveryWorkerExclusionRequiredError
+            _conflict("active claim already has a different refused retry diagnostic")
+        updated = current.model_copy(update={"retry_diagnostic": diagnostic})
+        self._replace(previous, _replace_binding(frontier, current, updated))
+        raise DeliveryWorkerExclusionRequiredError
+
+    def _validate_retry_identity(
+        self,
+        binding: OutcomeAuthorityBinding,
+        request: RetryDelivery,
+        claim: DeliveryActiveClaim,
+    ) -> None:
         if binding.stage == DeliveryStage.IMPLEMENTATION:
             if request.abandoned_commit is None or request.attempt_id is None:
                 _conflict("Implementation retry requires attempt and abandoned-commit identity")
+            if request.attempt_id != claim.attempt_id:
+                _conflict("Implementation retry attempt does not match the active claim")
             manager = self._require_workspace()
             coordination = manager.show(self._contract.change_id)
             if coordination.writer is not None:
@@ -3434,26 +5852,8 @@ class DeliveryRuntime:
                 )
                 if coordination.writer.attempt_id != request.attempt_id:
                     _conflict("Implementation retry attempt does not own writer custody")
-            manager.restart(
-                self._contract.change_id,
-                request.attempt_id,
-                request.abandoned_commit,
-            )
         elif request.abandoned_commit is not None or request.attempt_id is not None:
             _conflict("only Implementation retry accepts attempt commit identity")
-        return binding.model_copy(
-            update={
-                "active_claim": None,
-                "output": None,
-                "candidate": None,
-                "result_candidate": None,
-                "return_context": None,
-                "recovery_attention": None,
-                "block": retry_block,
-                "retry_fingerprint": retry_fingerprint,
-                "retry_count": retry_count,
-            }
-        )
 
     def _require_workspace(self) -> ChangeWorkspaceManager:
         if self._workspace_manager is None:
@@ -3468,6 +5868,7 @@ class DeliveryRuntime:
         task_ids = tuple(task.task_id for task in tasks)
         if len(task_ids) != len(set(task_ids)):
             _conflict("Delivery task identities must be unique")
+        self._validate_planner_return_plan(binding, tasks)
         outcome = next(item for item in self._contract.outcomes if item.outcome_id == binding.outcome_id)
         contract_commitments = set(outcome.commitment_ids)
         for task in tasks:
@@ -3487,6 +5888,33 @@ class DeliveryRuntime:
         if not ready or visited != set(task_ids):
             _conflict("Delivery task graph must be acyclic with at least one ready task")
 
+    @staticmethod
+    def _validate_planner_return_plan(
+        binding: OutcomeAuthorityBinding,
+        tasks: tuple[DeliveryTaskDefinition, ...],
+    ) -> None:
+        handoff = binding.builder_handoff_context
+        if handoff is None or handoff.route != "same-outcome-planner":
+            return
+        tasks_by_id = {task.task_id: task for task in tasks}
+        completed_task_ids = {result.task_id for result in binding.results}
+        if any(
+            task.task_id not in tasks_by_id or _model_content(tasks_by_id[task.task_id]) != _model_content(task)
+            for task in binding.tasks
+            if task.task_id in completed_task_ids
+        ):
+            _conflict("Planning return must preserve completed task definitions and results")
+        original_task = tasks_by_id.get(handoff.original_task_id)
+        if (
+            original_task is None
+            or original_task.task_id in completed_task_ids
+            or original_task.commitment_ids != handoff.original_task_commitment_ids
+            or original_task.maintained_surfaces != handoff.original_task_maintained_surfaces
+        ):
+            _conflict("Planning return must preserve the original task's maintained surfaces and commitments")
+        if not set(original_task.dependency_ids) <= completed_task_ids:
+            _conflict("Planning return must leave its original task claimable after advance")
+
     def _return(
         self,
         binding: OutcomeAuthorityBinding,
@@ -3497,6 +5925,7 @@ class DeliveryRuntime:
         if binding.stage == DeliveryStage.IMPLEMENTATION:
             if request.preserved_commit is None or request.attempt_id is None:
                 _conflict("Implementation return requires attempt and preserved-commit identity")
+            self._require_builder_transition_exclusion(binding, request)
             manager = self._require_workspace()
             coordination = manager.show(self._contract.change_id)
             if coordination.writer is not None:
@@ -3537,9 +5966,8 @@ class DeliveryRuntime:
                     "result_candidate": None,
                     "return_context": context,
                     "recovery_attention": None,
+                    "retry_diagnostic": None,
                     "block": None,
-                    "retry_fingerprint": None,
-                    "retry_count": 0,
                 }
             )
         if binding.stage == DeliveryStage.PLANNING and request.source_boundary is None:
@@ -3551,7 +5979,7 @@ class DeliveryRuntime:
             source_boundary=request.source_boundary,
         )
         returned = _reset_binding(binding, request.target)
-        return returned.model_copy(update={"return_context": context})
+        return returned.model_copy(update={"return_context": context, "retry_diagnostic": None})
 
     def _block(
         self,
@@ -3565,6 +5993,7 @@ class DeliveryRuntime:
                 _conflict("Implementation block requires a bounded user request")
             if request.resume_commit is None:
                 _conflict("Implementation block requires a clean resume commit")
+            self._require_builder_transition_exclusion(binding, request)
             claim = binding.active_claim
             if claim is None:
                 _conflict("Implementation block requires an active claim")
@@ -3593,12 +6022,51 @@ class DeliveryRuntime:
                 "result_candidate": None,
                 "return_context": None,
                 "recovery_attention": None,
+                "retry_diagnostic": None,
                 "block": block,
                 "requests": requests,
-                "retry_fingerprint": None,
-                "retry_count": 0,
             }
         )
+
+    def _require_builder_transition_exclusion(
+        self, binding: OutcomeAuthorityBinding, request: BlockDelivery | ReturnDelivery
+    ) -> None:
+        claim = binding.active_claim
+        if claim is None or claim.claim_id != request.claim_id:
+            _conflict("diagnostic transition does not match the active Builder claim")
+        if isinstance(request, ReturnDelivery) and request.attempt_id != claim.attempt_id:
+            _conflict("diagnostic return does not match the active Builder attempt")
+        snapshot = self._require_workspace().recovery_snapshot(self._contract.change_id, claim.attempt_id)
+        if (
+            snapshot.writer is None
+            or snapshot.writer.claim_id != claim.claim_id
+            or snapshot.writer.attempt_id != claim.attempt_id
+        ):
+            _conflict("diagnostic transition does not match Builder writer custody")
+        submitted_commit = request.resume_commit if isinstance(request, BlockDelivery) else request.preserved_commit
+        if submitted_commit != snapshot.branch_head:
+            raise DeliveryWorkerExclusionRequiredError
+        self.publish_recovery_attention(
+            binding.outcome_id,
+            DeliveryRecoveryAttention(
+                attempt_id=claim.attempt_id,
+                claim_id=claim.claim_id,
+                reason=request.reason,
+                worktree_path=str(snapshot.worktree_path),
+                branch_head=snapshot.branch_head,
+                worktree_head=snapshot.worktree_head,
+                last_reviewed_commit=snapshot.last_reviewed_commit,
+                writer_claim_id=snapshot.writer.claim_id,
+                custody_retained=True,
+                retry_condition=(
+                    "Diagnostic only: the current Builder retains custody. Host worker-exclusion evidence is missing; "
+                    "no transition or restart is authorized. Resume requires verified exclusion through a supported "
+                    "host recovery path, whose availability is not established by this diagnostic."
+                ),
+                diagnostic_transition=request,
+            ),
+        )
+        raise DeliveryWorkerExclusionRequiredError
 
     def _read(self) -> tuple[DeliveryFrontier, bytes]:
         RuntimeTransaction.recover_all(self._target_root)
@@ -3614,6 +6082,19 @@ class DeliveryRuntime:
         else:
             return frontier, canonical
 
+    def _change_intent_custody_participants(
+        self,
+        participants: tuple[TransactionParticipant | ReplacementTransactionParticipant, ...],
+        expected_finalization_attention: ChangeFinalizationAttention | None,
+    ) -> tuple[TransactionParticipant | ReplacementTransactionParticipant, ...]:
+        if self._workspace_manager is None:
+            return participants
+        guard = self._workspace_manager.prepare_runtime_custody_guard(
+            self._contract.change_id,
+            expected_finalization_attention=expected_finalization_attention,
+        )
+        return (*participants, guard)
+
     def _replace(
         self,
         previous: bytes,
@@ -3621,11 +6102,13 @@ class DeliveryRuntime:
         *,
         transition_request_digest: str | None = None,
         additional_participants: tuple[TransactionParticipant | ReplacementTransactionParticipant, ...] = (),
+        include_custody_guard: bool = True,
     ) -> None:
-        if self._workspace_manager is not None:
+        if self._workspace_manager is not None and include_custody_guard:
             guard = self._workspace_manager.prepare_runtime_custody_guard(self._contract.change_id)
             additional_participants = (*additional_participants, guard)
         portable = not any(binding.active_claim is not None for binding in frontier.bindings)
+        portable = portable and not any(binding.builder_handoff_context is not None for binding in frontier.bindings)
         portable = portable and frontier.integration_repair_claim is None
         self._replace_content(
             previous,
@@ -3842,6 +6325,182 @@ def _find_request(frontier: DeliveryFrontier, request_id: str) -> tuple[OutcomeA
     return matches[0]
 
 
+def _builder_request_resolution_receipt_path(
+    runtime_root: Path,
+    change_id: str,
+    builder_handoff_context: DeliveryBuilderHandoffContext,
+) -> Path:
+    return (
+        runtime_root
+        / "changes"
+        / change_id
+        / "builder-request-resolution-receipts"
+        / f"{builder_handoff_context.settlement_id}.json"
+    )
+
+
+def _builder_handoff_change_intent_directory(
+    runtime_root: Path,
+    change_id: str,
+    builder_handoff_context: DeliveryBuilderHandoffContext,
+) -> Path:
+    return (
+        runtime_root
+        / "changes"
+        / change_id
+        / "builder-handoff-change-intent-receipts"
+        / builder_handoff_context.settlement_id
+    )
+
+
+def _builder_handoff_change_intent_head_path(
+    runtime_root: Path,
+    change_id: str,
+    builder_handoff_context: DeliveryBuilderHandoffContext,
+) -> Path:
+    return _builder_handoff_change_intent_directory(runtime_root, change_id, builder_handoff_context) / "head.json"
+
+
+def _read_builder_handoff_change_intent_receipts(
+    runtime_root: Path,
+    change_id: str,
+    builder_handoff_context: DeliveryBuilderHandoffContext,
+) -> tuple[_DeliveryBuilderHandoffChangeIntentReceipt, ...]:
+    """Read only the bounded receipt chain addressed by one known Builder handoff."""
+    root = runtime_root.resolve()
+    directory = _builder_handoff_change_intent_directory(root, change_id, builder_handoff_context)
+    head = _read_builder_handoff_change_intent_head(root, change_id, builder_handoff_context)
+    if head is None:
+        return ()
+
+    reverse_chain: list[_DeliveryBuilderHandoffChangeIntentReceipt] = []
+    receipt_id: str | None = head.latest_receipt_id
+    for sequence in range(head.sequence, 0, -1):
+        if receipt_id is None:
+            _reference("Builder handoff change-intent receipt chain is incomplete")
+        receipt = _read_builder_handoff_change_intent_receipt(
+            directory,
+            change_id,
+            builder_handoff_context,
+            receipt_id,
+        )
+        if receipt.sequence != sequence:
+            _reference("Builder handoff change-intent receipt chain is invalid")
+        reverse_chain.append(receipt)
+        receipt_id = receipt.previous_receipt_id
+        if sequence > 1 and receipt_id is None:
+            _reference("Builder handoff change-intent receipt chain is incomplete")
+    if receipt_id is not None:
+        _reference("Builder handoff change-intent receipt chain has an unknown predecessor")
+
+    chain = tuple(reversed(reverse_chain))
+    _validate_builder_handoff_change_intent_chain(chain, head)
+    return chain
+
+
+def _read_builder_handoff_change_intent_head(
+    runtime_root: Path,
+    change_id: str,
+    builder_handoff_context: DeliveryBuilderHandoffContext,
+) -> _DeliveryBuilderHandoffChangeIntentHead | None:
+    head_path = _builder_handoff_change_intent_head_path(runtime_root, change_id, builder_handoff_context)
+    change_root = runtime_root / "changes" / change_id
+    if any(path.is_symlink() for path in (runtime_root / "changes", change_root, head_path.parent, head_path)):
+        _reference("Builder handoff change-intent receipt path is unsafe")
+    try:
+        content = head_path.read_bytes()
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        _reference("Builder handoff change-intent head is unavailable", exc)
+    try:
+        head = _DeliveryBuilderHandoffChangeIntentHead.model_validate_json(content, strict=True)
+    except (TypeError, ValueError) as exc:
+        _reference("Builder handoff change-intent head is invalid", exc)
+    if (
+        content != _model_content(head)
+        or head.change_id != change_id
+        or head.builder_handoff_context != builder_handoff_context
+    ):
+        _reference("Builder handoff change-intent head does not match its known settlement")
+    return head
+
+
+def _read_builder_handoff_change_intent_receipt(
+    directory: Path,
+    change_id: str,
+    builder_handoff_context: DeliveryBuilderHandoffContext,
+    receipt_id: str,
+) -> _DeliveryBuilderHandoffChangeIntentReceipt:
+    receipt_path = directory / f"{receipt_id}.json"
+    if receipt_path.is_symlink():
+        _reference("Builder handoff change-intent receipt path is unsafe")
+    try:
+        content = receipt_path.read_bytes()
+    except OSError as exc:
+        _reference("Builder handoff change-intent receipt is unavailable", exc)
+    try:
+        receipt = _DeliveryBuilderHandoffChangeIntentReceipt.model_validate_json(content, strict=True)
+    except (TypeError, ValueError) as exc:
+        _reference("Builder handoff change-intent receipt is invalid", exc)
+    if (
+        content != _model_content(receipt)
+        or receipt.receipt_id != receipt_id
+        or receipt.change_id != change_id
+        or receipt.builder_handoff_context != builder_handoff_context
+    ):
+        _reference("Builder handoff change-intent receipt chain is invalid")
+    return receipt
+
+
+def _validate_builder_handoff_change_intent_chain(
+    chain: tuple[_DeliveryBuilderHandoffChangeIntentReceipt, ...],
+    head: _DeliveryBuilderHandoffChangeIntentHead,
+) -> None:
+    if not chain or (
+        chain[-1].receipt_id != head.latest_receipt_id
+        or chain[-1].sequence != head.sequence
+        or chain[-1].outcome_id != head.outcome_id
+    ):
+        _reference("Builder handoff change-intent head does not identify the end of its receipt chain")
+    if len(chain) > _MAX_BUILDER_HANDOFF_CHANGE_INTENTS and (
+        len(chain) != _MAX_BUILDER_HANDOFF_CHANGE_INTENT_RECEIPTS or chain[-1].action != "abandon"
+    ):
+        _reference("Builder handoff change-intent receipt chain exceeds its supported limit")
+    for previous, current in pairwise(chain):
+        if current.previous_receipt_id != previous.receipt_id or current.sequence != previous.sequence + 1:
+            _reference("Builder handoff change-intent receipt chain is invalid")
+
+
+def _read_builder_request_resolution_receipt(
+    runtime_root: Path,
+    change_id: str,
+    request_id: str,
+    builder_handoff_context: DeliveryBuilderHandoffContext,
+) -> _DeliveryBuilderRequestResolutionReceipt:
+    """Read one exact local Builder answer without constructing a DeliveryRuntime."""
+    receipt_path = _builder_request_resolution_receipt_path(runtime_root, change_id, builder_handoff_context)
+    change_root = runtime_root / "changes" / change_id
+    receipt_directory = receipt_path.parent
+    if any(path.is_symlink() for path in (runtime_root / "changes", change_root, receipt_directory, receipt_path)):
+        _reference("Builder request resolution receipt path is unsafe")
+    try:
+        content = receipt_path.read_bytes()
+    except OSError as exc:
+        _reference("Builder request resolution receipt is unavailable", exc)
+    try:
+        receipt = _DeliveryBuilderRequestResolutionReceipt.model_validate_json(content, strict=True)
+    except (TypeError, ValueError) as exc:
+        _reference("Builder request resolution receipt is invalid", exc)
+    if (
+        receipt.change_id != change_id
+        or receipt.request_id != request_id
+        or receipt.builder_handoff_context != builder_handoff_context
+    ):
+        _reference("Builder request resolution receipt does not match its exact handoff")
+    return receipt
+
+
 def _replace_binding(
     frontier: DeliveryFrontier,
     previous: OutcomeAuthorityBinding,
@@ -3989,8 +6648,6 @@ def _reset_binding(binding: OutcomeAuthorityBinding, stage: DeliveryStage) -> Ou
             "recovery_attention": None,
             "block": None,
             "requests": (),
-            "retry_fingerprint": None,
-            "retry_count": 0,
         }
     )
 
@@ -4062,6 +6719,20 @@ def _attention_conflict(message: str) -> None:
     raise DeliveryChangeDispositionConflictError(message)
 
 
+def _completed_outcome_repair_id(
+    change_id: str,
+    request: PrepareCompletedOutcomeRepair,
+    source_digest: str,
+) -> str:
+    """Derive one stable repair identity from admitted lineage and evidence."""
+    material = (
+        f"{change_id}\0{request.outcome_id}\0{request.owning_task_id}\0{source_digest}\0"
+        f"{request.episode_id}\0{request.attempt_id}\0{request.defect_code}\0{request.finding_boundary}\0"
+        f"{request.original_action_id}\0{request.preservation_id}\0{request.expected_frontier_digest}"
+    )
+    return hashlib.sha256(material.encode()).hexdigest()
+
+
 def _target_sync_operation_id(disposition: DeliveryChangeDisposition) -> str | None:
     prefix = "target-sync-operation:"
     for diagnostic in disposition.diagnostics:
@@ -4097,6 +6768,12 @@ def _reference(message: str, cause: Exception | None = None) -> None:
     raise DeliveryRuntimeReferenceError(message) from cause
 
 
+# Forward references resolve only now; incomplete models fail bare serialization in adapters.
+DeliveryRecoveryAttention.model_rebuild()
+OutcomeAuthorityBinding.model_rebuild()
+DeliveryFrontier.model_rebuild()
+
+
 __all__ = [
     "DELIVERY_TRANSITION_ADAPTER",
     "ActivateDeliveryClaim",
@@ -4104,9 +6781,11 @@ __all__ = [
     "AdministrativeDeliveryMoveResult",
     "AdvanceDelivery",
     "BlockDelivery",
+    "CompletedOutcomeRepairReceipt",
     "DeliveryAcceptanceAttentionReason",
     "DeliveryAcceptanceWaitingError",
     "DeliveryBlock",
+    "DeliveryBuilderInvocationSettlement",
     "DeliveryChangeAbandonment",
     "DeliveryChangeCompletion",
     "DeliveryChangeDeferral",
@@ -4136,6 +6815,7 @@ __all__ = [
     "DeliveryOutputReference",
     "DeliveryPendingCheckpoint",
     "DeliveryPendingStatePublication",
+    "DeliveryPlanningRetrySettlement",
     "DeliveryRequest",
     "DeliveryRequestKind",
     "DeliveryRequestOption",
@@ -4152,6 +6832,7 @@ __all__ = [
     "DeliveryTaskResult",
     "FinalizeDeliveryChange",
     "OutcomeAuthorityBinding",
+    "PrepareCompletedOutcomeRepair",
     "PublishDeliveryOutput",
     "PublishDeliveryPlan",
     "PublishDeliveryResult",

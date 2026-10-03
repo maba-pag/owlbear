@@ -25,6 +25,12 @@ Delivery stores per-Change custody records under
 `.owlbear/delivery/runtime/transactions/`. The sibling `runtime/claims/` namespace contains
 acquisition, publication, and verification locks.
 
+Each claim records the issuing VS Code window's PID and process start time under
+`.owlbear/delivery/runtime/changes/<change>/claim-issuers/<attempt>.json`. Delivery checks that exact
+window identity when it next considers previous-session work; an MCP server restart while the
+window is alive does not indicate worker loss. Subagents run inside that VS Code window and have no
+separate OS process identity.
+
 ### Tools
 
 The server exposes these operation groups:
@@ -33,14 +39,23 @@ The server exposes these operation groups:
 | --- | --- |
 | Design | `create_design_session`, `put_design`, `read_design_session`, `revise_design_session`, `publish_design_checkpoint`, `derive_delivery_contract`, `admit_change` |
 | Portfolio | `list_work_items`, `list_changes`, `get_change`, `answer`, `set_change_intent`, `delivery_health`, `propose_quarantined_delivery_state_snapshot_repair`, `repair_stranded_frontier`, `repair_quarantined_delivery_state_snapshot`, `repair`, `repair_delivery_state_snapshot`, `recover_out_of_band_head`, `repair_target_sync_publication`, `list_retained_change_worktrees`, `show_work_item`, `show_work_item_view`, `show_operator_context`, `preview_administrative_move`, `administrative_move`, `acquire_actions`, `acquire_change_action`, `execute_change_action`, `show_plan_context`, `show_build_context`, `show_finalization_context`, `report_finalization_failure` |
-| Delivery | `publish_delivery_plan`, `submit_result`, `finalize_change`, `mark_change_ready`, `prepare_review_repair`, `reconcile_finalization_head`, `reconcile_change_checkpoint`, `sync_change_with_target`, `adopt_external_head`, `promote_external_head`, `abort_target_sync_conflict`, `resolve_target_sync_conflict`, `observe_acceptance`, `cleanup_abandoned_change_worktree`, `cleanup_abandoned_change_worktree_after_target_sync_discard`, `cleanup_completed_change_worktree`, `recover_change_worktree`, `recover_publication_baseline`, `transition_delivery`, `recover_claim` |
+| Delivery | `publish_delivery_plan`, `submit_result`, `finalize_change`, `mark_change_ready` |
+| Delivery | `prepare_review_repair`, `reconcile_finalization_head`, `reconcile_change_checkpoint` |
+| Delivery | `sync_change_with_target`, `adopt_external_head`, `promote_external_head`, `abort_target_sync_conflict` |
+| Delivery | `resolve_target_sync_conflict`, `observe_acceptance`, `cleanup_abandoned_change_worktree` |
+| Delivery | `cleanup_abandoned_change_worktree_after_target_sync_discard`, `cleanup_completed_change_worktree` |
+| Delivery | `recover_change_worktree`, `recover_publication_baseline`, `transition_delivery` |
+| Delivery | `settle_worker_invocation`, `release_stuck_worker`, `recover_claim` |
 | Publication | `observe_change_publication_checks`, `supersede_publication` |
 | Integration attention | `show_integration_attention`, `recover_integration_repair_claim` |
 | Completed changes | `list_completed_changes`, `search_completed_changes`, `show_completed_change` |
 
 The server exposes no Assembly stage or new Integration repair admission, candidate, or authority
-creation operation. These operations expose and recover current typed Integration attention; current
-work uses sequential Change outcomes and user-owned pull-request acceptance.
+creation operation. It exposes typed Integration attention and accepts exact recovery requests, but
+the current runtime refuses `recover_integration_repair_claim` with
+`ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` and retains custody. No successful Integration claim-release
+path is available in this version. Current work uses sequential Change outcomes and user-owned
+pull-request acceptance.
 
 Delivery startup isolates malformed or identity-mismatched per-Change state as bounded attention so
 valid Changes can continue to operate. Quarantined Changes are omitted from acquisition and dispatch
@@ -65,6 +80,34 @@ a detailed view key such as `publication` when a workflow needs richer publicati
 `get_change` and `show_finalization_context` preserve the core readiness decision, including tagged
 unavailable results. `report_finalization_failure` accepts only bounded structural diagnostic fields
 and retains a report without creating finalization proof or changing worker custody.
+
+`settle_worker_invocation` accepts strict typed Planner, Builder or Finalizer settlement for an exact
+invocation that the native Orchestrator observed ending. Planner/Builder identity comes from the
+issued launch context and host/session envelope; Finalizer settlement uses its report-backed typed
+identity. Normal results and completed timeouts use this route. A returned Planner/Builder no-result
+uses `ended-without-result` only after owned mutating work settles; it records a failed attempt and
+preserves work for same-task retry after backoff.
+
+At the next acquisition, Delivery records engine-only `worker-host-lost` only when the recorded
+issuing window process is gone, no worktree writes have occurred for 30 seconds, and no live
+same-user process has a cwd or open file under the managed worktree or Git admin directory. An idle
+shell whose only link is its worktree cwd and which has no live child is ignored; open files still
+block. Before the guard passes, readiness is `worker-stall-wait`: `next_eligible_at` indicates a
+pending write guard, and without a time the prompt reports blocking process names or bounded scan
+detail.
+
+When the user states that a specific worker chat was stopped, `release_stuck_worker` accepts its exact
+claim identity once and applies the same 30-second write and process guard. `ERR_DELIVERY_WORKER_ACTIVE`
+returns a retry time for the write guard or process details otherwise, leaving custody and files
+unchanged. This is a user decision, not process control.
+Elapsed time, disconnection, and `confirmed_lost` are not settlement evidence.
+
+`worker-host-lost` and `worker-released-stuck` are engine-only and never pass through
+`settle_worker_invocation`. Both count in the same three-attempt episode and preserve work, staging,
+commits, and refs. A fresh Builder triages from Build context and `prior_attempts`; Planner retries.
+A lost or released Finalizer without a report gets a `worker-ended` report with code
+`finalizer-ended-without-report` and `checks_state: unknown`. It is not proof; a fresh Finalizer needs
+new exact-head evidence and review under the original budget.
 
 ## Configuration
 

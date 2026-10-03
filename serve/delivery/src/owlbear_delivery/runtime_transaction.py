@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import os
+import re
 import secrets
 import stat
 from dataclasses import dataclass
@@ -21,6 +22,19 @@ if TYPE_CHECKING:
 _MAX_CONTAINED_MANIFEST_BYTES = 131_072
 _MAX_CONTAINED_MANIFESTS = 256
 _MAX_CONTAINED_PARTICIPANTS = 2
+_MAX_CONTAINED_TEMPORARIES = 256
+_MAX_CONTAINED_TEMPORARY_BYTES = _MAX_CONTAINED_MANIFEST_BYTES * _MAX_CONTAINED_TEMPORARIES
+_CONTAINED_TEMPORARY_PATTERN = re.compile(r"^\.tmp-[0-9a-f]{24}$")
+_CONTAINED_TEMPORARY_MODE = stat.S_IRUSR | stat.S_IWUSR
+_CONTAINED_TEMPORARY_PUBLISHED_LINK_COUNT = 2
+
+
+@dataclass(frozen=True)
+class ContainedWriteLimits:
+    """Resource bounds for one contained atomic write."""
+
+    max_content_bytes: int = _MAX_CONTAINED_MANIFEST_BYTES
+    max_temporary_bytes: int = _MAX_CONTAINED_TEMPORARY_BYTES
 
 
 class TransactionConflictError(RuntimeError):
@@ -239,32 +253,43 @@ class RuntimeTransaction:
                 contained_directory(root_fd, Path("transactions")) as directory_fd,
                 os.scandir(directory_fd) as entries,
             ):
-                names = tuple(sorted(entry.name for entry in entries))
+                _contained_temporary_usage(directory_fd, additional_bytes=0)
+                names = []
+                for entry in entries:
+                    if _CONTAINED_TEMPORARY_PATTERN.fullmatch(entry.name):
+                        continue
+                    names.append(entry.name)
         except FileNotFoundError:
             return
+        names = tuple(sorted(names))
         if len(names) > _MAX_CONTAINED_MANIFESTS:
             raise TransactionManifestError
         for name in names:
-            if not name.endswith(".yaml"):
-                raise TransactionManifestError
-            content = read_contained(root_fd, Path("transactions") / name, limit=_MAX_CONTAINED_MANIFEST_BYTES)
-            try:
-                manifest = yaml.safe_load(content)
-            except yaml.YAMLError as exc:
-                raise TransactionManifestError from exc
-            if not isinstance(manifest, dict) or manifest.get("schema_version") not in (1, 2):
-                raise TransactionManifestError
-            entries = manifest.get("participants")
-            if not isinstance(entries, list) or not entries or len(entries) > _MAX_CONTAINED_PARTICIPANTS:
-                raise TransactionManifestError
-            participants = tuple(_participant_from_manifest(entry, (root,)) for entry in entries)
-            transaction = cls(root, Path(name).stem, participants)
-            if transaction._contained_manifest() != manifest:
-                raise TransactionManifestError
-            transaction._publish_contained(root_fd, None)
+            transaction = cls._contained_manifest_transaction(root, root_fd, name)
+            cls._publish_contained(transaction, root_fd, None)
             with contained_directory(root_fd, Path("transactions")) as directory_fd:
                 os.unlink(name, dir_fd=directory_fd)
                 os.fsync(directory_fd)
+
+    @classmethod
+    def _contained_manifest_transaction(cls, root: Path, root_fd: int, name: str) -> RuntimeTransaction:
+        if not name.endswith(".yaml"):
+            raise TransactionManifestError
+        content = read_contained(root_fd, Path("transactions") / name, limit=_MAX_CONTAINED_MANIFEST_BYTES)
+        try:
+            manifest = yaml.safe_load(content)
+        except yaml.YAMLError as exc:
+            raise TransactionManifestError from exc
+        if not isinstance(manifest, dict) or manifest.get("schema_version") not in (1, 2):
+            raise TransactionManifestError
+        entries = manifest.get("participants")
+        if not isinstance(entries, list) or not entries or len(entries) > _MAX_CONTAINED_PARTICIPANTS:
+            raise TransactionManifestError
+        participants = tuple(_participant_from_manifest(entry, (root,)) for entry in entries)
+        transaction = cls(root, Path(name).stem, participants)
+        if transaction._contained_manifest() != manifest:
+            raise TransactionManifestError
+        return transaction
 
     @classmethod
     def recover_all(cls, manifest_root: Path, *, roots: tuple[Path, ...] | None = None) -> None:
@@ -444,14 +469,80 @@ def read_contained(root_fd: int, path: Path, *, limit: int) -> bytes | None:
         return content
 
 
-def write_contained(root_fd: int, path: Path, content: bytes, *, expected: bytes | None = None) -> None:
+def _contained_temporary_usage(
+    directory_fd: int,
+    *,
+    additional_bytes: int,
+    max_content_bytes: int = _MAX_CONTAINED_MANIFEST_BYTES,
+    max_temporary_bytes: int = _MAX_CONTAINED_TEMPORARY_BYTES,
+) -> tuple[int, int]:
+    if additional_bytes < 0 or additional_bytes > max_content_bytes:
+        raise TransactionManifestError
+    temporary_count = 0
+    temporary_bytes = 0
+    try:
+        with os.scandir(directory_fd) as scanned:
+            entries = tuple(scanned)
+        published_identities = set()
+        metadata_by_name = {}
+        for entry in entries:
+            try:
+                metadata = entry.stat(follow_symlinks=False)
+            except OSError as exc:
+                raise TransactionManifestError from exc
+            metadata_by_name[entry.name] = metadata
+            if _CONTAINED_TEMPORARY_PATTERN.fullmatch(entry.name) is None and stat.S_ISREG(metadata.st_mode):
+                published_identities.add((metadata.st_dev, metadata.st_ino))
+        for entry in entries:
+            if _CONTAINED_TEMPORARY_PATTERN.fullmatch(entry.name) is None:
+                continue
+            metadata = metadata_by_name[entry.name]
+            linked_to_published = (
+                metadata.st_nlink == _CONTAINED_TEMPORARY_PUBLISHED_LINK_COUNT
+                and (metadata.st_dev, metadata.st_ino) in published_identities
+            )
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or (metadata.st_nlink != 1 and not linked_to_published)
+                or stat.S_IMODE(metadata.st_mode) != _CONTAINED_TEMPORARY_MODE
+                or metadata.st_size < 0
+                or metadata.st_size > max_content_bytes
+            ):
+                raise TransactionManifestError
+            temporary_count += 1
+            temporary_bytes += metadata.st_size
+    except OSError as exc:
+        raise TransactionManifestError from exc
+    if (
+        temporary_count + (1 if additional_bytes else 0) > _MAX_CONTAINED_TEMPORARIES
+        or temporary_bytes + additional_bytes > max_temporary_bytes
+    ):
+        raise TransactionManifestError
+    return temporary_count, temporary_bytes
+
+
+def write_contained(
+    root_fd: int,
+    path: Path,
+    content: bytes,
+    *,
+    expected: bytes | None = None,
+    limits: ContainedWriteLimits | None = None,
+) -> None:
     """Atomically publish exact bytes without following directory or file links."""
+    write_limits = limits if limits is not None else ContainedWriteLimits()
     with _contained_parent(root_fd, path, create=True) as parent_fd:
         current = read_contained(parent_fd, Path(path.name), limit=max(len(content), len(expected or b"")))
         if current == content:
             return
         if current != expected:
             raise TransactionConflictError
+        _contained_temporary_usage(
+            parent_fd,
+            additional_bytes=len(content),
+            max_content_bytes=write_limits.max_content_bytes,
+            max_temporary_bytes=write_limits.max_temporary_bytes,
+        )
         temporary = f".tmp-{secrets.token_hex(12)}"
         descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=parent_fd)
         try:

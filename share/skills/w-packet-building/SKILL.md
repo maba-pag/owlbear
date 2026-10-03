@@ -8,9 +8,17 @@ user-invocable: false
 
 Own one mechanically acquired Builder launch in its assigned change worktree. Implement the supplied
 task, obtain independent exact-commit evidence, publish only a passing compact result, and return one
-worker-owned transition for orchestration to forward unchanged.
+worker-owned transition unchanged for Orchestrator to settle or forward through the native Delivery
+route.
 
 ## Step 0 - Validate Launch, Context, And Custody
+
+A normal Builder settlement preserves the managed worktree. An `ended-without-result` settlement
+does too. `worker-host-lost` and `worker-released-stuck` settlements do too; after any settled
+predecessor, the next same-task Builder must triage its work before edits. Use fresh
+`builder_handoff_context`, Build context, and its `prior_attempts` projection, including when the
+predecessor crashed or its chat was stopped without returning a transition. An unsettled dispatch or
+owned mutator that may still run remains contained and does not permit a replacement claim.
 
 Require one serialized `DeliveryLaunchPackage` whose policy and claim roles are `builder`, whose
 task IDs match, and whose writer identity matches the claim attempt, claim, owner, and process. Call
@@ -30,8 +38,8 @@ Before edits, enter only `launch.worktree_path` and require:
 - writer custody still matches the active claim;
 - the worktree state has been triaged under the rules below; the final candidate must leave the entire
   managed worktree clean;
-- any predecessor results, resolved requests, return context, and recovery attention come only from
-  this fresh Build context.
+- any predecessor results, prior attempts, resolved requests, return context, and recovery attention
+  come only from this fresh Build context.
 
 The branch, `HEAD`, ancestry, writer custody, and worktree-cleanliness observations must come from the
 Builder's own direct tool calls in the assigned worktree. A delegated execution report or caller prose
@@ -40,8 +48,10 @@ unavailable, return `dispatch_failure` instead of inferring the result. Delegate
 available for ordinary read-only proof after custody is established.
 
 Do not infer malformed identity or edit under recovery attention. A structurally valid claim that
-cannot establish fresh Build context or custody returns this non-transition result to Orchestrator
-for fail-closed claim recovery; it does not fabricate a lifecycle decision or mutate a checkout:
+cannot establish fresh Build context or custody returns this non-transition result to Orchestrator,
+not a fabricated lifecycle decision or a local checkout mutation. Orchestrator settles a returned
+`dispatch_failure` as `ended-without-result` only after the dispatch call returned and its owned
+mutating work is settled; otherwise custody remains contained:
 
 ```yaml
 kind: dispatch_failure
@@ -55,11 +65,13 @@ reason: <recorded prerequisite failure>
 
 ### Triage An Unclean Worktree
 
-The normal Builder launch is clean. If a Builder dispatch fails or ends without a valid transition,
-Orchestrator calls exact `recover_claim`; Delivery preserves and cleans a dirty worktree
-automatically. Do not ask the user to classify stale files or perform Git recovery. A recovery
-attention is a machine-owned preservation or custody failure, not an invitation to invent a manual
-cleanup route.
+A same-task Builder claim may start with dirty, staged, or committed predecessor work, including
+work left by a `dispatch_failure`, a crash, or a settled `worker-host-lost` or
+`worker-released-stuck` attempt. Each settled no-result receipt preserves that material and records
+the failed attempt; fresh Build context supplies `prior_attempts`. The new Builder must inspect and
+triage this state under the rules below before editing. Orchestrator does not clean the worktree or
+ask the user to do Git recovery. A dispatch that has not returned or whose owned mutator may still
+run remains contained and does not authorize this handoff.
 
 Inspect the assigned worktree before editing with `git status --short`, `git diff`,
 `git diff --cached`, and `git ls-files --others --exclude-standard`. Compare every changed path and
@@ -69,31 +81,42 @@ launch identity.
 - **Reuse:** When every change is compatible with this exact task, keep it, validate it, and include
   it in the eventual explicit scoped commit. Do not infer ownership from file timestamps or from the
   fact that another session ended.
-- **Preserve for handoff:** When changes are useful but incomplete for this invocation, preserve them
-  with a task-scoped WIP commit using explicit owned paths, then return `retry` with that exact clean
-  commit as `abandoned_commit`. The WIP commit is recoverable predecessor evidence; it is not a
-  successful task result and does not release the claim by itself.
+- **Preserve for handoff:** Keep useful incomplete changes for the same task's next claim. A
+  task-scoped WIP commit with explicit owned paths is optional when it improves predecessor clarity;
+  it is not a successful task result and does not release the claim by itself.
 - **Reset:** When changes are clearly disposable artifacts from this exact task and every tracked or
   untracked path is within the task boundary, the Builder may discard them. Prefer a reversible
   `git stash push -u -m <claim-id> -- <explicit paths>` before removal. For disposable untracked
   artifacts, preview removal with `git clean -nd -- <explicit paths>`, then remove only the reviewed
   paths with `git clean -f -- <explicit paths>`. Never use broad `git clean -fd`, reset another branch,
   or remove paths outside the task boundary.
-- **Escalate:** If any path is foreign or ambiguous, staged state exists outside the task boundary,
-  branch/HEAD/custody is not exact, recovery attention is present, or the current HEAD contains an
-  unreviewed commit whose provenance is unclear, do not reset or adopt it. Return the claim-bound
-  `dispatch_failure` above for exact recovery.
+- **Preserve and retry:** If paths are foreign or ambiguous, staged state exists outside the task
+  boundary, or an unreviewed commit's provenance is unclear, do not reset or adopt that material.
+  When the current branch, HEAD and writer custody are independently established, preserve all
+  bytes and return an exact `RetryDelivery` with `failure_code: unsafe-worktree`. Orchestrator
+  settles the normally ended attempt under the same bounded budget; repeated failure becomes
+  agent-owned attention, not permission to discard the material.
+  Keep foreign, private, or ambiguous material intact; name affected paths and attribution gaps
+  without exposing private contents.
+- **Unknown custody:** If current branch, HEAD, or writer custody cannot be established, or fresh
+  context shows the predecessor may still be active, do not edit, adopt, or discard. Return the
+  claim-bound `dispatch_failure` above; Orchestrator settles the returned attempt only after the call
+  returned and owned work settled. An unreturned dispatch or live job remains contained. A settled
+  `ended-without-result` receipt permits this same-task claim to triage, not automatic adoption.
 
-Before returning `retry`, `return`, or `block`, the Builder must leave the managed worktree clean and
-make any required commit identity equal the current exact HEAD. A dirty worktree cannot produce one of
-those transitions: resolve it through reuse, a WIP handoff, or an explicit scoped reset first. Use
-`dispatch_failure` only when that triage cannot be completed safely, not as a substitute for ordinary
-task failure handling.
+Before returning `retry`, `return`, or `block`, bind any required commit field to the exact current
+branch HEAD and preserve the launch attempt identity. A successful implementation result still
+requires a clean owned state and exact candidate commit. A normally returned local tool or context
+failure may use a counted retry only while current branch, HEAD and writer custody are established.
+Uncertain identity or an unavailable global host remains `dispatch_failure`. Before any ordinary
+return, finish or stop and join owned mutating terminals and asynchronous jobs; do not leave a
+background writer beside the successor. If that completion cannot be established, report unknown
+execution rather than a settled retry.
 
 This authority covers working-tree artifacts. A committed predecessor head is immutable evidence: the
 Builder may inspect and reuse a compatible exact-task commit, but does not silently erase committed
-history. A Git commit also does not release the Delivery claim or writer custody; the normal published
-result and transition still close the work.
+history. A Git commit alone does not release the Delivery claim or writer custody; the normal
+published result or a supported settlement closes the worker invocation.
 
 ## Step 1 - Fix The Task Boundary
 
@@ -111,8 +134,9 @@ at the supplied task boundary.
 If context contains a request or a request may be needed, load `h-decision-requests` before consuming
 or constructing it. Choose among authority-equivalent implementation alternatives; use a request
 for an expressly stakeholder-selectable choice or external action; use `return` for missing,
-contradictory, or observably ambiguous earlier authority; use `retry` for local failure and
-`dispatch_failure` for context, custody, or tool failure.
+contradictory, or observably ambiguous earlier authority; use `retry` for a local implementation
+failure that cannot be repaired in this invocation, and `dispatch_failure` for context, custody, or
+tool failure.
 
 ## Step 2 - Implement And Commit
 
@@ -164,8 +188,8 @@ touching the reviewed head, classify the concrete finding against the admitted t
 | Finding classification | Builder action |
 | --- | --- |
 | Fix now: implementation defect inside the task boundary | Repair one finding at a time, preserve the rejected commit, rerun affected proof, and obtain fresh exact-commit review. |
-| Return to authority: missing, contradictory, or observably ambiguous Planning or Design | Publish nothing and return with the owning locator, clean preserved commit, and the required source boundary. |
-| Block for user-owned input: one bounded decision, action, or manual validation is required | Publish nothing and use `BlockDelivery` with a bounded request and clean resume commit. |
+| Return to authority: missing, contradictory, or observably ambiguous Planning or Design | Publish nothing and return with the owning locator, exact current branch HEAD, and required source boundary; do not clean or reset the worktree before normal settlement. |
+| Block for user-owned input: one bounded decision, action, or manual validation is required | Publish nothing and use `BlockDelivery` with a bounded request and the exact current branch HEAD. |
 | No repair: style preference or unsupported concern without a concrete defect | Do not expand the task or silently alter code; the review evidence does not satisfy the challenger contract until it names a concrete boundary and evidence. |
 
 Only the first classification creates a repair commit. A deferred or out-of-scope concern is routed
@@ -195,15 +219,10 @@ action: retry
 outcome_id: <context outcome ID>
 claim_id: <launch claim ID>
 attempt_id: <launch attempt ID>
-abandoned_commit: <exact clean current head>
+abandoned_commit: <exact current branch HEAD>
 ```
 
 Use `retry` for an implementation failure that cannot be repaired in this invocation.
-
-`retry` abandons the current attempt and resets the managed worktree to the reviewed boundary through
-Delivery. It is valid only after the Builder has supplied a clean exact `abandoned_commit`; it does not
-preserve uncommitted work. Preserve useful incomplete work with the WIP handoff in Step 0 before
-returning `retry`.
 
 ```yaml
 action: return
@@ -213,7 +232,7 @@ target: planning | design
 reason: <missing or contradictory earlier authority>
 locators: [<owning authority locator>]
 attempt_id: <launch attempt ID>
-preserved_commit: <exact clean current head>
+preserved_commit: <exact current branch HEAD>
 ```
 
 Use `return` only for a Planning or Design authority defect.
@@ -227,7 +246,7 @@ reason: <user-owned blocker>
 unblock_condition: <observable resolution>
 expected_evidence: [<required evidence>]
 locators: [<relevant authority locator>]
-resume_commit: <exact clean current head>
+resume_commit: <exact current branch HEAD>
 request:
   request_id: <stable request identity>
   kind: decision | action
@@ -241,13 +260,18 @@ required `unblock_condition` and `expected_evidence` fields. Every Build block i
 `request`; a missing tool, unavailable context, custody mismatch, or other pre-execution failure is
 `dispatch_failure`, not `block`.
 
+For a normal Builder return, Orchestrator uses `settle_worker_invocation` for `retry`, `block`, or
+`return` to Planning or Design; it validates exact workspace custody and persists any bounded request
+or return context. A Design return creates only a passive handoff and human-owned `/design` attention;
+it does not approve or admit a revision. Do not use a raw `transition_delivery` fallback.
+
 On a passing Build result, call `submit_result` with the unchanged `change_id`, `outcome_id`,
 `claim_id`, and exact `DeliveryTaskResult`. Require the returned `kind: submitted` result to preserve
 those identities and the exact `result_id`; return that result directly. The operation publishes and
 promotes the result, so do not also construct or return an `advance` transition. On a finding or safe
 local failure, return the selected `DeliveryTransition` (`retry`, `return`, or `block`) unchanged.
-For either route, do not call `transition_delivery` or `recover_claim`; orchestration validates the
-launch identity and applies only worker transitions. Do not call job, receipt, request, or other
+Orchestrator routes the result under `w-orchestration`. Builder does not call `transition_delivery`,
+`settle_worker_invocation`, or `recover_claim`; it does not call job, receipt, request, or other
 lifecycle operations.
 
 ## Memory assessment policy

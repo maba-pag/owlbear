@@ -105,18 +105,35 @@ author evidence for a different commit.
 
 ## Step 2a - Retain A Trusted Failure
 
-When a trusted current context reaches a failed custody preflight, maintained check, or independent
-review, call `report_finalization_failure` with only its registered structural fields: the current
+When a trusted current context reaches a failed custody preflight, maintained check, independent
+review, or a maintained proof procedure that changed the managed worktree, call
+`report_finalization_failure` with only its registered structural fields: the current
 contract and frontier digests, candidate and reviewed heads, observed diagnostic sequence, stable
 attempt key, category, registered code, checks state, and any category-allowed workspace fingerprint
-or dirty paths. Under an issued attempt the stable attempt key is exactly `attempt.writer.attempt_id`;
+or dirty paths. For `category: proof-mutation`, use only the registered
+`proof-mutated-worktree` code, the maintained `procedure_id`, distinct
+`proof_fingerprint_before`/`proof_fingerprint_after` values, and the changed relative paths; do not
+report a zero exit as a pass. Under an issued attempt the stable attempt key is exactly `attempt.writer.attempt_id`;
 any other value is rejected as a diagnostic conflict. Do not include commands, logs, URLs, summaries,
-exit details, observer identities, or repair instructions. Preserve the returned report identity and
-checks state in the bounded failure result; a report is diagnostic history, not proof, a custody
-repair, a claim transition, or a successful finalization. A recorded report for an issued attempt key
-retains that attempt's custody: the same attempt cannot then finalize, and supported recovery is not
-part of this workflow. If context is untrusted or the report store rejects the basis, return the
-bounded failure without inventing a report identity or calling `finalize_change`.
+exit details, observer identities, or repair instructions. When `report_finalization_failure` returns
+a stored `FinalizationReport`, copy its actual `report_id`, `request.code`, and
+`request.checks_state` unchanged into the bounded failure result. Under an issued launch, also copy
+`operation_id` exactly from `attempt.writer.attempt_id`; never mint or derive either identity. A
+report is diagnostic history, not proof, a custody repair, a claim transition, successful
+finalization, or evidence that the Finalizer process and its descendants have stopped. A recorded
+report for an issued attempt key retains that attempt's custody: the same attempt cannot then
+finalize, and supported recovery is not part of this workflow. If the reporter returns a
+`DeliveryReadiness`, fails, or cannot access the report store, there is no stored report identity,
+code, or checks state to return: omit those fields and never synthesize them. The issued
+`operation_id` may still be returned; without the actual `report_id`, Orchestrator cannot settle and
+must retain custody as unknown. If context is untrusted or the report store rejects the basis, return
+the bounded failure without inventing a report identity or calling `finalize_change`.
+
+When Delivery settles a lost or user-released Finalizer attempt that produced no report, it may author
+category `worker-ended`, code `finalizer-ended-without-report`, and `checks_state: unknown`. This
+records that no result arrived; it is not an observation, proof, or finalization receipt. A later
+Finalizer attempt requires fresh exact-head checks and independent review and does not reset the
+Change's original attempt budget.
 
 ## Step 3 - Obtain Independent Exact-Commit Review
 
@@ -209,6 +226,10 @@ kind: proof_failed
 change_id: <change_id>
 failed_operation: <preflight or maintained check>
 reason: <non-empty bounded reason>
+operation_id: <exact attempt.writer.attempt_id; only under an issued launch>
+report_id: <actual stored FinalizationReport.report_id; only when one was returned>
+code: <actual stored FinalizationReport.request.code; only when one was returned>
+checks_state: <actual stored FinalizationReport.request.checks_state; only when one was returned>
 ```
 
 For an independent review failure, return:
@@ -218,6 +239,10 @@ kind: review_failed
 change_id: <change_id>
 exact_head: <exact reviewed head>
 reason: <non-empty bounded reason>
+operation_id: <exact attempt.writer.attempt_id; only under an issued launch>
+report_id: <actual stored FinalizationReport.report_id; only when one was returned>
+code: <actual stored FinalizationReport.request.code; only when one was returned>
+checks_state: <actual stored FinalizationReport.request.checks_state; only when one was returned>
 ```
 
 For unavailable or invalid Delivery context, return:

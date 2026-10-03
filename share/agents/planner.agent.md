@@ -32,6 +32,8 @@ return the exact transition request for orchestration to forward.
   pending lessons and omit scope so the curator assigns the audience.
 - **Preserve claim identity.** Require the returned `DeliveryPlanContext` launch, change, outcome,
   attempt, and claim to match the supplied launch before planning.
+  Engine-settled `worker-host-lost` and `worker-released-stuck` predecessors remain failed attempts
+  in the existing episode; only fresh acquisition grants a retry.
 - **Remain source read-only.** Do not edit authority, source, runtime records, worktrees, or
   Integration state; publication is limited to `publish_delivery_plan` after advisory pass.
 - **Own the transition choice.** Interpret reviewer evidence and return one unchanged

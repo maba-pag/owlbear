@@ -78,7 +78,7 @@ _REMOVE_WORKTREE_CALLERS = frozenset(
         ("ChangeWorkspaceManager", "recover"),
     }
 )
-_COMPLETION_CALLERS = frozenset({("PortfolioApplication", "observe_acceptance")})
+_COMPLETION_CALLERS = frozenset({("PortfolioApplication", "_observe_acceptance_once")})
 _DISPOSITION_CAPTURE_EXEMPTIONS = frozenset({"capture_change_disposition", "resolve_change_disposition"})
 _GITHUB_PROVIDER_SOURCE = _REPO_ROOT / "serve/delivery-github/src/owlbear_delivery_github/github.py"
 _FORBIDDEN_PROVIDER_TERMS = re.compile(

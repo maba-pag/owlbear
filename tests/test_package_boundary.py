@@ -65,3 +65,10 @@ def test_serve_package_imports_follow_allowlist(project_root: Path) -> None:
                 if imported_namespace != package_name and imported_namespace not in allowed
             )
     assert violations == []
+
+
+def test_delivery_diagnostics_is_a_stdlib_bootstrap(project_root: Path) -> None:
+    """Offline diagnosis must import without Delivery/MCP/Cockpit composition."""
+    source = project_root / "serve/tools/src/owlbear_tools/delivery_diagnostics.py"
+    imported = _imported_namespaces(source)
+    assert imported == ()

@@ -24,12 +24,30 @@ The main public areas are:
 | --- | --- |
 | Authored Specification | `DesignPackageStore` create, verified read, compare-and-swap revision, and checkpoint |
 | Compilation and admission | Deterministic contract derivation, validation, package binding, and atomic runtime admission |
-| Operational Delivery | `DeliveryRuntime` and `PortfolioApplication` outcome stages, frontier acquisition, typed role contexts, publication, worker transitions, requests, and exact-claim recovery |
+| Operational Delivery | Acquisition, typed contexts, transitions, host-loss settlement, and stopped-worker release |
 | Work projection | Portfolio work items with dependency readiness, typed attention, requests, blocks, task progress, and bounded Delivery health diagnostics |
 | Coordination | Per-Change writer custody under `runtime/coordination/changes`, one shared execution budget, warm worktrees, and reviewed source boundaries |
 | Publication and acceptance | Change-branch checkpoints, draft pull-request reconciliation, review-repair preparation, finalization, acceptance observation, and publication supersession |
 | Completed history | Receipt-backed completed Change projections plus read-only Git-backed historical package search |
 | Integration attention | Typed Integration attention and exact repair-claim recovery remain current public operations |
+
+Planner/Builder settlements cover normal outcomes, completed timeouts, and
+`ended-without-result` after the dispatch has returned and owned mutating work is settled. Delivery
+records each claim's issuing VS Code window PID and process start time under
+`.owlbear/delivery/runtime/changes/<change>/claim-issuers/<attempt>.json`. A later acquisition
+settles a previous-session claim as engine-only `worker-host-lost` only after that exact window
+process is gone, no worktree writes have occurred for 30 seconds, and no live same-user process has a
+cwd or open file under the managed worktree or Git admin directory. Restarting the MCP server while
+the window remains alive does not qualify. Before the guard passes, readiness reports
+`worker-stall-wait`: `next_eligible_at` indicates the write guard; without a time, the prompt gives
+active-process names or bounded scan detail. A user who confirms that a specific chat was stopped
+may call `release_stuck_worker` once under the same guard. `ERR_DELIVERY_WORKER_ACTIVE` preserves
+custody and files and returns a retry time for the write guard or process details otherwise. Idle
+shells with no live child are ignored unless an open file is under a guarded path. Neither
+`worker-host-lost` nor `worker-released-stuck` is sent through `settle_worker_invocation`; both count
+as failed attempts in the same three-attempt episode and preserve work for same-task retry after
+backoff. A lost or released Finalizer without a report receives an engine-authored
+`finalizer-ended-without-report` diagnostic with unknown checks, not proof.
 
 Assembly is not a live Delivery stage or public Change authority. Historical runtime captures may
 still contain reducible Assembly metadata, and legacy completed-history records retain their
@@ -150,12 +168,22 @@ tracked baseline:
 {"execution_capacity": 2, "claim_timeout_seconds": 1800}
 ```
 
-An active Planner or Builder claim is eligible for recovery after the configured
-`claim_timeout_seconds` (3600 seconds by default), measured from its persisted `started_at` value.
-The loader merges `host.local.json` over `host.json` when the overlay exists. Recovery runs lazily at
-the next `acquire_frontier_work()` call. Clean matching Builder custody is restarted and released
-through the normal recovery path; dirty or mismatched worktrees remain retained with recovery
-attention and continue to consume capacity.
+An active Planner or Builder claim is checked lazily during the next `acquire_frontier_work()` call;
+`claim_timeout_seconds` (3600 seconds by default) identifies elapsed claims but is not proof that a
+worker stopped. `recover_claim` remains separate and refuses with
+`ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` without supported host exclusion. At the next acquisition,
+Delivery settles a previous-session claim only when its recorded issuing window is gone and the
+write/process guard passes. Until then readiness may report `worker-stall-wait` with a retry time or
+process details; unsettled claims continue to consume shared capacity. The loader merges
+`host.local.json` over `host.json` when the overlay exists; a timeout or caller confirmation alone
+does not clear custody.
+
+Native Orchestrator settlement is separate from unknown-worker recovery. An exact normally returned
+invocation, or an actually ended timeout with owned mutation jobs settled, can release its execution
+reservation through `settle_worker_invocation`. Builder handoff preserves the same task's work and
+remains mutation-fenced; corroborated passive handoff and Finalizer attention do not count as live
+execution. A timer expiring, disconnect or missing result does not qualify. See the
+[operating guide](../../setup/operating-owlbear.md#correction-and-recovery) for retry and pause behavior.
 
 `setup/init.py` creates the tracked project policy and seeds `host.json` with the defaults above. It
 does not create `host.local.json`; create that ignored file only when this host needs overrides. The

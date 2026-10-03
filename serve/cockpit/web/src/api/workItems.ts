@@ -66,13 +66,20 @@ export type DeliveryReadinessStatus = "ready" | "running" | "waiting" | "blocked
 export type DeliveryReadinessChecksState = "not-run" | "failed" | "passed" | "unknown";
 export type DeliveryReadinessReasonCode =
   | "ready"
+  | "design-attention"
   | "active-custody"
+  | "builder-transition-contained"
+  | "retry-transition-contained"
   | "finalization-failed"
+  | "settled-attention-target-drift"
   | "claim-activation-failed"
   | "coordination-unavailable"
   | "execution-occupancy-unavailable"
   | "engine-action-pending"
   | "engine-action-blocked"
+  | "engine-action-interrupted"
+  | "engine-action-failed"
+  | "engine-action-incomplete"
   | "target-sync-required"
   | "claim-custody-unreconciled"
   | "runtime-unavailable"
@@ -87,15 +94,28 @@ export type DeliveryReadinessReasonCode =
   | "review-repair"
   | "publication-wait"
   | "checkpoint-pending"
-  | "report-store-unavailable";
+  | "report-store-unavailable"
+  | "retry-backoff"
+  | "retry-exhausted"
+  | "acceptance-wait"
+  | "retry-containment"
+  | "retry-ledger-unavailable"
+  | "worker-stall-wait";
 export type FinalizationFailureCode =
   | "workspace-dirty"
   | "workspace-preflight-failed"
   | "maintained-check-failed"
   | "maintained-check-unavailable"
   | "independent-review-failed"
-  | "independent-review-unavailable";
-export type FinalizationFailureCategory = "custody-preflight" | "maintained-check" | "independent-review";
+  | "independent-review-unavailable"
+  | "proof-mutated-worktree"
+  | "finalizer-ended-without-report";
+export type FinalizationFailureCategory =
+  | "custody-preflight"
+  | "maintained-check"
+  | "independent-review"
+  | "proof-mutation"
+  | "worker-ended";
 
 export interface DeliveryReadinessBasis {
   contract_digest: string | null;
@@ -123,6 +143,9 @@ export interface FinalizationReport {
     checks_state: "not-run" | "failed" | "unknown";
     check_id: string | null;
     exit_status: number | null;
+    procedure_id: string | null;
+    proof_fingerprint_before: string | null;
+    proof_fingerprint_after: string | null;
     paths: string[];
   };
 }
@@ -130,6 +153,15 @@ export interface FinalizationReport {
 export interface FinalizationAttempt {
   report: FinalizationReport;
   applicability: "current" | "historical";
+}
+
+/** Bounded metadata for one durable retry attempt; never failure prose or paths. */
+export interface DeliveryRetryAttempt {
+  ordinal: number;
+  kind: "original" | "repair" | "observation";
+  status: "pending" | "failed" | "waiting" | "succeeded" | "contained" | "paused";
+  failure_code: string | null;
+  observed_at: string | null;
 }
 
 /** Engine-computed eligibility for one supported action at a captured basis. */
@@ -143,6 +175,11 @@ export interface DeliveryReadiness {
   basis: DeliveryReadinessBasis;
   action: WorkItemAction | null;
   last_attempt: FinalizationAttempt | null;
+  attempts?: number;
+  next_eligible_at?: string | null;
+  stop_reason?: string | null;
+  retry_history?: DeliveryRetryAttempt[];
+  prompt?: string | null;
 }
 
 export interface WorkItemCardView {
@@ -561,6 +598,44 @@ export interface PublicationSupersessionResponse {
   successor_publication_id: string;
 }
 
+export type BuilderTransitionDiagnostic =
+  | {
+      action: "block";
+      outcome_id: string;
+      claim_id: string;
+      block_id: string;
+      reason: string;
+      unblock_condition: string;
+      expected_evidence: string[];
+      locators: string[];
+      request: DeliveryRequest | null;
+      resume_commit: string | null;
+    }
+  | {
+      action: "return";
+      outcome_id: string;
+      claim_id: string;
+      target: WorkItemStage;
+      reason: string;
+      locators: string[];
+      preserved_commit: string | null;
+      attempt_id: string | null;
+      source_boundary: string | null;
+    };
+
+export interface WorkItemRetryDiagnostic {
+  code: "ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED";
+  attempt_id: string;
+  transition: {
+    action: "retry";
+    outcome_id: string;
+    claim_id: string;
+    abandoned_commit: string | null;
+    attempt_id: string | null;
+    failure_code: string;
+  };
+}
+
 export interface WorkItemDetailView {
   snapshot_version: string;
   change_title: string;
@@ -602,7 +677,9 @@ export interface WorkItemDetailView {
     reason: string;
     custody_retained: boolean;
     retry_condition: string;
+    diagnostic_transition?: BuilderTransitionDiagnostic | null;
   } | null;
+  retry_diagnostic: WorkItemRetryDiagnostic | null;
   publication: WorkItemPublicationView | null;
   readiness?: DeliveryReadiness | null;
 }
@@ -718,14 +795,23 @@ export class WorkItemApiError extends Error {
   readonly code: string;
   readonly authority: string | null;
   readonly retrySafe: boolean;
+  readonly retryAfter: string | null;
 
-  constructor(status: number, code: string, detail: string, authority: string | null, retrySafe: boolean) {
+  constructor(
+    status: number,
+    code: string,
+    detail: string,
+    authority: string | null,
+    retrySafe: boolean,
+    retryAfter: string | null = null,
+  ) {
     super(detail);
     this.name = "WorkItemApiError";
     this.status = status;
     this.code = code;
     this.authority = authority;
     this.retrySafe = retrySafe;
+    this.retryAfter = retryAfter;
   }
 }
 
@@ -743,6 +829,7 @@ async function workItemRequest<T>(url: string, options: WorkItemRequestOptions):
     typeof nested.detail === "string" ? nested.detail : `Delivery request failed with status ${response.status}`,
     typeof nested.authority === "string" ? nested.authority : null,
     nested.retry_safe === true,
+    typeof nested.retry_after === "string" ? nested.retry_after : null,
   );
 }
 
@@ -851,16 +938,17 @@ export function clearWorkItemBlock(
   });
 }
 
-export function recoverWorkItemClaim(
+/** A null outcome names the Change's Finalizer attempt; recent worktree activity is refused unchanged. */
+export function releaseStuckWorker(
   changeId: string,
-  outcomeId: string,
+  outcomeId: string | null,
   attemptId: string,
   claimId: string,
 ): Promise<unknown> {
   return controlRequest(
-    `/api/changes/${encodeURIComponent(changeId)}/outcomes/${encodeURIComponent(outcomeId)}/claims/recover`,
-    "ERR_WORK_ITEM_CLAIM_RECOVERY",
-    { confirmed_lost: true, attempt_id: attemptId, claim_id: claimId },
+    `/api/changes/${encodeURIComponent(changeId)}/workers/release-stuck`,
+    "ERR_WORK_ITEM_RELEASE_STUCK_WORKER",
+    { outcome_id: outcomeId, attempt_id: attemptId, claim_id: claimId },
   );
 }
 

@@ -35,20 +35,32 @@ without behavior change).
   output with those inputs in the same scoped commit. Keep the output in the task's explicit
   `maintained_surfaces` and `required_outputs`; do not create a later lock-only or index-only task
   when an earlier task cannot be proved without the generated file.
-- During exact-claim recovery after a crash or unstructured worker return, treat uncommitted changes
-  within the task-maintained surfaces as candidate work from the interrupted claim. Inspect the
-  complete diff, validate it against the task, and explicitly adopt it before committing. Do not
-  infer an ownership conflict from a dirty path, file timestamp, or invocation boundary alone. If a
-  concrete hunk conflicts with the task or cannot be safely attributed, name that path and hunk in the
-  containment reason instead of describing the whole task-owned diff as mixed.
+- After claim-scoped recovery returns a verified successful receipt and releases custody, treat
+  uncommitted changes within the task-maintained surfaces as candidate work from the interrupted
+  claim. Inspect the complete diff, validate it against the task, and explicitly adopt it before
+  committing. Do not infer an ownership conflict from a dirty path, file timestamp, or invocation
+  boundary alone. If a concrete hunk conflicts with the task or cannot be safely attributed, name that
+  path and hunk in the containment reason instead of describing the whole task-owned diff as mixed.
+- Until a verified settlement or supported recovery receipt closes the exact claim, do not adopt its
+  uncommitted changes into a later invocation. A timeout, `confirmed_lost`, or returned
+  `dispatch_failure` alone does not grant custody. With an exact normal-return or
+  `ended-without-result`, `worker-host-lost`, or `worker-released-stuck` settlement receipt and fresh
+  `builder_handoff_context` and Build context,
+  the next same-task Builder may triage under `w-packet-building` using `prior_attempts`; adopt only
+  compatible task work and discard only attributable, explicitly scoped disposable work. Foreign,
+  private, or ambiguous content stays intact and is named. Unknown or contained invocations still
+  forbid adoption: an unreturned dispatch or possibly running mutating job remains held.
 - Pass explicit file paths to `commit-owned`; never pass `.`, a Delivery authority/state root, or
   another broad directory. The task's maintained surfaces bound eligible implementation paths.
-- Builder calls `submit_result` only after the scoped commit exists, its path set equals
-  the task-owned set, no task-owned change remains outside it, and fresh read-only review passes
-  that exact commit.
-- If the scoped commit cannot be created or verified, publish no result and report fail-closed
-  evidence for Orchestrator recovery. Retry, return, and block are invalid until the writer-owned
-  head is exact and clean.
+- Builder calls `submit_result` only after the scoped commit exists, its path set equals the task-owned
+  set, no task-owned change remains outside it, and fresh read-only review passes that exact commit.
+- If the scoped commit cannot be created or verified, publish no result. With branch, `HEAD`, writer
+  custody, and the retry's required attempt/`abandoned_commit` identity independently verified, the
+  Builder may return `retry` for normal settlement; dirty, staged, and committed work remains
+  available to the next same-task handoff. An Implementation `return` requires the exact
+  `attempt_id` and `preserved_commit` plus writer-head validation; an Implementation `block` requires
+  a bounded user request and a `resume_commit` equal to the verified branch `HEAD`; dirty, staged,
+  and committed work stays preserved for the same-task handoff.
 - A permitted local `implementation` finding repair uses another explicit scoped commit, reruns
   affected proof, and requires fresh review of the cumulative task result.
 - Never push. The user pushes manually.

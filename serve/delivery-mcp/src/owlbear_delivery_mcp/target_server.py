@@ -13,6 +13,7 @@ from typing import Annotated, Never, cast, get_args, get_origin, get_type_hints
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
+from mcp.server.mcpserver.utilities.func_metadata import FuncMetadata
 from mcp.types import ToolAnnotations
 from pydantic import BaseModel, BeforeValidator, ConfigDict, TypeAdapter, ValidationError, create_model
 
@@ -35,7 +36,7 @@ from owlbear_delivery.delivery_runtime import (
 from owlbear_delivery.design_package import DesignPackageResult
 from owlbear_delivery.diagnostics import classify_delivery_failure
 from owlbear_delivery.draft_pull_request import MarkChangePullRequestReady
-from owlbear_delivery.finalization_reports import FinalizationReport, ReportFinalizationFailure
+from owlbear_delivery.finalization_reports import FinalizationReport, FinalizerSettlement, ReportFinalizationFailure
 from owlbear_delivery.portfolio_application import (
     DeliveryAnswer,
     DeliveryAnswerResult,
@@ -132,6 +133,8 @@ from owlbear_delivery_mcp.target_models import (
     RecoverOutOfBandHeadRequest,
     RecoverPublicationBaselineParams,
     RecoverPublicationBaselineRequest,
+    ReleaseStuckWorkerParams,
+    ReleaseStuckWorkerRequest,
     RepairChangeParams,
     RepairChangeRequest,
     RepairClaimContextParams,
@@ -153,6 +156,8 @@ from owlbear_delivery_mcp.target_models import (
     SetChangeIntentParams,
     SetChangeIntentRequest,
     SetChangeIntentResponse,
+    SettleWorkerInvocationParams,
+    SettleWorkerInvocationRequest,
     ShowCompletedParams,
     ShowCompletedRequest,
     StrandedFrontierRepairResponse,
@@ -237,6 +242,8 @@ DELIVERY_OPERATION_NAMES = (
     "recover_change_worktree",
     "recover_publication_baseline",
     "transition_delivery",
+    "settle_worker_invocation",
+    "release_stuck_worker",
     "recover_claim",
     "recover_integration_repair_claim",
     "show_integration_attention",
@@ -949,7 +956,7 @@ class TargetMCPAdapter:
         )
 
     async def observe_acceptance(self, request: ChangeRequest) -> dict[str, object]:
-        """Complete one Change from engine-derived merged pull-request evidence."""
+        """Explicitly observe acceptance once; exhaustion permits one later read, not a budget reset."""
         params = self._validate(ChangeParams, request)
         return await asyncio.to_thread(
             self._call,
@@ -1050,8 +1057,45 @@ class TargetMCPAdapter:
         params = self._validate(TransitionDeliveryParams, request)
         return self._call(params, lambda: self._application.transition_delivery(params.change_id, params.transition))
 
+    async def settle_worker_invocation(self, request: SettleWorkerInvocationRequest) -> dict[str, object]:
+        """Settle one exact ended Planner or Builder invocation, or a normally returned Finalizer invocation."""
+        params = self._validate(SettleWorkerInvocationParams, request)
+        if isinstance(params.settlement, FinalizerSettlement):
+            return self._call(
+                params,
+                lambda: self._application.settle_finalizer_invocation(params.settlement),
+            )
+        return self._call(
+            params,
+            lambda: self._application.settle_worker_invocation(
+                params.settlement,
+                host_id=params.host_id,
+                session_id=params.session_id,
+            ),
+        )
+
+    async def release_stuck_worker(self, request: ReleaseStuckWorkerRequest) -> dict[str, object]:
+        """Settle one user-confirmed stopped worker as a failed attempt once nothing still uses its worktree.
+
+        Use only while the claim's readiness is ``running``; Delivery settles a ``worker-stall-wait`` claim itself.
+        Omit ``outcome_id`` to release the Change's Finalizer attempt. A live process using the worktree, or a
+        worktree write in the last 30 seconds, fails with ``ERR_DELIVERY_WORKER_ACTIVE`` and changes nothing;
+        ``retry_after`` is given only for the write case. Replaying a completed release returns its result.
+        """
+        params = self._validate(ReleaseStuckWorkerParams, request)
+        return await asyncio.to_thread(
+            self._call,
+            params,
+            lambda: self._application.release_stuck_worker(
+                params.change_id,
+                params.outcome_id,
+                params.attempt_id,
+                params.claim_id,
+            ),
+        )
+
     async def recover_claim(self, request: RecoverClaimRequest) -> dict[str, object]:
-        """Recover one exact failed Delivery claim."""
+        """Request exact recovery; caller confirmation cannot establish worker exclusion."""
         params = self._validate(RecoverClaimParams, request)
         return self._call(
             params,
@@ -1068,7 +1112,7 @@ class TargetMCPAdapter:
         self,
         request: RepairClaimContextRequest,
     ) -> dict[str, object]:
-        """Recover one exact failed Integration repair claim."""
+        """Request legacy Integration recovery without treating identity as exclusion evidence."""
         params = self._validate(RepairClaimContextParams, request)
         return self._call(
             params,
@@ -1226,19 +1270,56 @@ def register_target_tools(server: MCPServer, adapter: TargetMCPAdapter) -> None:
 
 
 def _install_strict_argument_model(server: MCPServer, name: str) -> None:
-    """Replace MCP's permissive argument model with an extra-forbid variant."""
+    """Install strict arguments and bounded diagnostics at MCP's validation boundary."""
     tool_manager = getattr(server, "_tool_manager", None)
     tool = tool_manager.get_tool(name) if tool_manager is not None else None
     if tool is None:
         message = f"Delivery MCP operation {name} was not registered"
         raise RuntimeError(message)
+    metadata = tool.fn_metadata
     argument_model = create_model(
         f"Strict{name.title().replace('_', '')}Arguments",
-        __base__=tool.fn_metadata.arg_model,
+        __base__=metadata.arg_model,
         __config__=ConfigDict(extra="forbid"),
     )
-    tool.fn_metadata.arg_model = argument_model
+    tool.fn_metadata = _TargetToolMetadata(
+        arg_model=argument_model,
+        output_schema=metadata.output_schema,
+        output_model=metadata.output_model,
+        wrap_output=metadata.wrap_output,
+    )
     tool.parameters = argument_model.model_json_schema(by_alias=True)
+
+
+class _TargetArgumentValidationError(ValidationError):
+    """Carry a value-free diagnostic through MCP's expected validation-error path."""
+
+    def __str__(self) -> str:
+        return TargetDiagnostic(
+            code="ERR_TARGET_PARAM_VALIDATION",
+            detail="Invalid tool arguments. Check the tool input schema.",
+            current_authority_identity="portfolio",
+            retry_safe=False,
+        ).model_dump_json()
+
+
+class _TargetToolMetadata(FuncMetadata):
+    """Sanitize input validation without altering MCP's result conversion."""
+
+    def validate_arguments(self, arguments_to_validate: dict[str, object]) -> dict[str, object]:
+        try:
+            return super().validate_arguments(arguments_to_validate)
+        except ValidationError:
+            title = "Tool arguments"
+            raise _TargetArgumentValidationError.from_exception_data(title, []) from None
+
+
+def _validate_flat_model[ModelT: BaseModel](model: type[ModelT], payload: dict[str, object]) -> ModelT:
+    try:
+        return model.model_validate(payload)
+    except ValidationError:
+        diagnostic = _TargetArgumentValidationError.from_exception_data("Tool arguments", [])
+        raise ToolError(str(diagnostic)) from None
 
 
 def _flatten_tool(adapter: TargetMCPAdapter, name: str) -> Callable[..., object]:
@@ -1285,7 +1366,7 @@ def _flatten_tool(adapter: TargetMCPAdapter, name: str) -> Callable[..., object]
         )
 
     async def flat_tool(**payload: object) -> object:
-        params = request_annotation.model_validate(payload)
+        params = _validate_flat_model(request_annotation, payload)
         return await method(params)
 
     flat_tool.__name__ = name

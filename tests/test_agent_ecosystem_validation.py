@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import re
 import sys
 import types
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -22,6 +24,23 @@ _AGENT_VALIDATOR_PATH = _REPO_ROOT / ".owlbear/scripts/validate_agents.py"
 _SKILL_VALIDATOR_PATH = _REPO_ROOT / ".owlbear/scripts/validate_skills.py"
 _PROMPT_VALIDATOR_PATH = _REPO_ROOT / ".owlbear/scripts/validate_prompts.py"
 _AGENT_WORKFLOW_PATH = _REPO_ROOT / ".github/workflows/agent-ecosystem.yml"
+
+
+def test_recovery_workflows_require_host_exclusion_not_caller_confirmation() -> None:
+    paths = (
+        _SKILLS_ROOT / "w-orchestration/SKILL.md",
+        _AGENTS_ROOT / "orchestrator.agent.md",
+        _AGENTS_ROOT / "repairer.agent.md",
+    )
+    for path in paths:
+        content = path.read_text()
+        assert "ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED" in content
+        assert "host-owned" in content
+        assert "confirmed_lost=true" not in content
+    workflow = paths[0].read_text()
+    assert "descendant writers and outstanding tool jobs" in workflow
+    assert "Read-only diagnosis remains available" in workflow
+
 
 _EXPECTED_AGENTS = {
     "build-reviewer",
@@ -93,6 +112,8 @@ _TARGET_ROLE_TOOLS = {
         "delivery_health",
         "get_change",
         "transition_delivery",
+        "settle_worker_invocation",
+        "release_stuck_worker",
         "recover_claim",
         "recover_integration_repair_claim",
     },
@@ -445,6 +466,25 @@ def test_prompt_validator_accepts_current_prompt_roots() -> None:
     assert all(_PROMPT_VALIDATOR.validate_prompt(path) == [] for path in prompt_files)
 
 
+def test_repair_delivery_prompt_is_an_ordinary_read_only_entry() -> None:
+    path = _PROMPTS_ROOT / "repair-delivery.prompt.md"
+    prompt = path.read_text(encoding="utf-8")
+    metadata = _frontmatter(path)
+    assert metadata["agent"] == "agent"
+    assert metadata["tools"] == ["execute/runInTerminal"]
+    assert "mode" not in metadata
+    assert "delivery-diagnose inspect" in prompt
+    assert "PYTHONDONTWRITEBYTECODE=1" in prompt
+    assert "python -B serve/tools/src/owlbear_tools/delivery_diagnostics.py inspect" in prompt
+    assert "terminal is unavailable" in prompt
+    assert "do not substitute another tool" in prompt
+    assert "automation-permission bypass" in prompt
+    assert "process commands" in prompt
+    assert "D07's supported route" in prompt
+    assert "automatic fix" in prompt
+    assert "manual repair" in prompt
+
+
 def test_inspect_change_prompt_uses_effective_read_only_allowlist() -> None:
     path = _PROMPTS_ROOT / "inspect-change.prompt.md"
     metadata = _frontmatter(path)
@@ -457,6 +497,19 @@ def test_inspect_change_prompt_uses_effective_read_only_allowlist() -> None:
     content = path.read_text(encoding="utf-8")
     assert "cannot enforce this read-only surface" in content
     assert "raw Git" in content
+
+
+def test_release_stuck_worker_prompt_has_minimal_allowlist() -> None:
+    path = _PROMPTS_ROOT / "release-stuck-worker.prompt.md"
+    assert path.is_file()
+    metadata = _frontmatter(path)
+
+    assert metadata["agent"] == "orchestrator"
+    assert metadata["tools"] == [
+        "owlbear-delivery/get_change",
+        "owlbear-delivery/release_stuck_worker",
+    ]
+    assert _PROMPT_VALIDATOR.validate_prompt(path) == []
 
 
 def test_prompt_validator_rejects_inspect_change_allowlist_drift(tmp_path: Path) -> None:
@@ -564,15 +617,54 @@ def test_target_conflict_skill_separates_precommit_and_postcommit_checks() -> No
     assert "/finalize-change <change-id>" in content
 
 
+def _assert_finalizer_settlement_schema(finalizer_settlement: dict[str, Any]) -> None:
+    assert {
+        "change_id",
+        "attempt_id",
+        "claim_id",
+        "expected_head",
+        "expected_reviewed_base",
+        "report_id",
+        "disposition",
+        "outcome",
+        "host_id",
+        "session_id",
+    } <= set(finalizer_settlement["required"])
+    assert finalizer_settlement["additionalProperties"] is False
+    assert {"release", "elapsed_time", "confirmed_lost"}.isdisjoint(finalizer_settlement["properties"])
+
+
+def _assert_worker_settlement_schemas(
+    planning_settlement: dict[str, Any],
+    builder_settlement: dict[str, Any],
+) -> None:
+    assert {
+        "change_id",
+        "outcome_id",
+        "claim_id",
+        "attempt_id",
+        "disposition",
+    } <= set(planning_settlement["required"])
+    assert {
+        "change_id",
+        "outcome_id",
+        "claim_id",
+        "attempt_id",
+        "task_id",
+        "expected_last_reviewed_commit",
+        "disposition",
+    } <= set(builder_settlement["required"])
+
+
 @pytest.mark.asyncio
 async def test_orchestration_transition_envelope_matches_registered_field() -> None:
-    """Orchestrator guidance must use the live transition_delivery envelope field."""
+    """Orchestrator guidance must match the live transition and settlement envelopes."""
     from mcp import Client  # noqa: PLC0415
 
     from owlbear_delivery_mcp.target_server import assemble_target_server  # noqa: PLC0415
 
     content = (_SKILLS_ROOT / "w-orchestration/SKILL.md").read_text(encoding="utf-8")
-    step_start = content.index("## Step 3 - Forward One Worker Transition")
+    step_start = content.index("## Step 3 - Route One Completed Worker Result")
     step_end = content.index("## Step 4 - Preserve Typed Integration Attention")
     step = content[step_start:step_end]
 
@@ -606,11 +698,28 @@ async def test_orchestration_transition_envelope_matches_registered_field() -> N
     async with Client(server) as client:
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
         transition_schema = tools["transition_delivery"].input_schema
+        settlement_schema = tools["settle_worker_invocation"].input_schema
         transition_fields = tuple(field for field in transition_schema["properties"] if field != "change_id")
         assert len(transition_fields) == 1
         transition_field = transition_fields[0]
         assert transition_field != "request"
         assert transition_field in transition_schema["required"]
+        assert set(settlement_schema["properties"]) == {"settlement", "host_id", "session_id"}
+        assert settlement_schema["additionalProperties"] is False
+        settlement_variants = settlement_schema["properties"]["settlement"]["anyOf"]
+        settlement_refs = {item["$ref"].rsplit("/", 1)[-1] for item in settlement_variants}
+        assert settlement_refs == {
+            "DeliveryPlanningRetrySettlement",
+            "DeliveryBuilderInvocationSettlement",
+            "FinalizerSettlement",
+        }
+        assert set(settlement_schema["required"]) == {"settlement"}
+        definitions = settlement_schema["$defs"]
+        planning_settlement = definitions["DeliveryPlanningRetrySettlement"]
+        builder_settlement = definitions["DeliveryBuilderInvocationSettlement"]
+        finalizer_settlement = definitions["FinalizerSettlement"]
+        _assert_worker_settlement_schemas(planning_settlement, builder_settlement)
+        _assert_finalizer_settlement_schema(finalizer_settlement)
 
         for change_id, transition in (
             ("planner-change", planner_transition),
@@ -633,10 +742,22 @@ async def test_orchestration_transition_envelope_matches_registered_field() -> N
     ]
     assert f"transition as `{transition_field}` byte-for-structure unchanged" in step
     assert "transition as `request` byte-for-structure unchanged" not in step
+    assert "MCP envelope has only these top-level fields" in step
+    assert "`settlement` is required" in step
+    assert "`host_id` and `session_id`" in step
     assert rejected.is_error
     rejected_text = "\n".join(getattr(item, "text", "") for item in rejected.content)
-    assert "transition" in rejected_text
-    assert "request" in rejected_text
+    prefix, marker, content = rejected_text.partition("{")
+    assert prefix == "Error executing tool transition_delivery: "
+    assert marker, rejected_text
+    assert json.loads(marker + content) == {
+        "code": "ERR_TARGET_PARAM_VALIDATION",
+        "detail": "Invalid tool arguments. Check the tool input schema.",
+        "current_authority_identity": "portfolio",
+        "retry_safe": False,
+    }
+    for value in ("planner-change", "advance", "OUT-001", "planner-claim", "planner-output", "planning", "a" * 64):
+        assert value not in rejected_text
 
 
 def test_orchestration_housekeeping_failure_does_not_stop_acquisition() -> None:
@@ -800,6 +921,224 @@ def test_memory_curator_required_skill_falls_back_to_shared_root() -> None:
     assert skill.is_file()
     assert "owlbear-memory/list_memories" in agent
     assert "owlbear-memory/commit_memory_batch" in agent
+
+
+def _assert_session_start_claim_guidance(orchestration: str, orchestrate_prompt: str) -> None:
+    session_start_begin = orchestration.index("**Session-start stale-claim check.**")
+    session_start_end = orchestration.index("## Change Continuation Entry")
+    session_start = orchestration[session_start_begin:session_start_end]
+
+    assert "Select the entry route first" in orchestration[:session_start_begin]
+    assert "For `/continue-change <change_id>`, call `get_change(change_id)` and" in session_start
+    assert "inspect only that Change's running claims" in session_start
+    assert "Do not call `list_changes` or inspect sibling Changes on this route." in session_start
+    assert "For `/orchestrate`, call `list_changes` once and" in session_start
+    assert 'readiness.status == "running"' in session_start
+    assert "call `get_change(change_id)`" in session_start
+    assert "Ask once per revalidated running claim through `vscode/askQuestions`" in session_start
+    assert "role, Change ID, outcome (or Finalizer), and start time" in session_start
+    assert "A pre-existing running claim was not dispatched by this session" in orchestration
+    assert "may belong to a prior run or another live chat" in orchestration
+    assert "For `still running` or `unsure`, leave the claim" in session_start
+    assert "replacement for that claim while it remains unresolved" in session_start
+    assert "A `worker-stall-wait` readiness needs no question" in session_start
+    assert "Delivery automatically records `worker-host-lost` on a later acquisition" in session_start
+    assert "Subagents run inside the issuing VS Code window and have no separate OS process identity" in session_start
+    assert "no writes for 30 seconds" in session_start
+    assert "no live same-user process has a cwd or open file" in session_start
+    assert "MCP-server restart while the issuing window remains alive does not trigger host loss" in session_start
+    assert "vscode/askQuestions" in _frontmatter(_AGENTS_ROOT / "orchestrator.agent.md")["tools"]
+    orchestrator_agent = (_AGENTS_ROOT / "orchestrator.agent.md").read_text(encoding="utf-8")
+    assert "`/continue-change <change_id>` inspects only that Change" in orchestrator_agent
+    assert "`/orchestrate` inspects all listed Changes from one" in orchestrator_agent
+    assert "session-start stale-claim check" in orchestrate_prompt
+    assert "portfolio scope" in orchestrate_prompt
+    assert "inspect `list_changes` once" in orchestrate_prompt
+    assert "`worker-stall-wait` needs no question" in orchestrate_prompt
+
+
+def _assert_stopped_worker_release_guidance() -> None:
+    orchestration = " ".join((_SKILLS_ROOT / "w-orchestration/SKILL.md").read_text(encoding="utf-8").split())
+    dispatch = orchestration[
+        orchestration.index("## Step 2 - Dispatch Or Recover Each Launch") : orchestration.index(
+            "## Step 3 - Route One Completed Worker Result"
+        )
+    ]
+    finalization = " ".join((_SKILLS_ROOT / "w-change-finalization/SKILL.md").read_text(encoding="utf-8").split())
+    finalizer = " ".join((_AGENTS_ROOT / "finalizer.agent.md").read_text(encoding="utf-8").split())
+    release_prompt = " ".join((_PROMPTS_ROOT / "release-stuck-worker.prompt.md").read_text(encoding="utf-8").split())
+    orchestrate_prompt = (_PROMPTS_ROOT / "orchestrate.prompt.md").read_text(encoding="utf-8")
+    operator_guide = (_REPO_ROOT / "setup/operating-owlbear.md").read_text(encoding="utf-8")
+    delivery_readme = (_REPO_ROOT / "serve/delivery/README.md").read_text(encoding="utf-8")
+    delivery_mcp = " ".join((_REPO_ROOT / "serve/delivery-mcp/README.md").read_text(encoding="utf-8").split())
+    cockpit_readme = (_REPO_ROOT / "serve/cockpit/README.md").read_text(encoding="utf-8")
+    wiring = " ".join((_REPO_ROOT / "share/WIRING.md").read_text(encoding="utf-8").split())
+
+    _assert_session_start_claim_guidance(orchestration, orchestrate_prompt)
+
+    assert "`worker-host-lost` and `worker-released-stuck` are engine-only dispositions" in orchestration
+    assert "never send either through `settle_worker_invocation`" in orchestration
+    assert "`worker-stall-wait`" in orchestration
+    assert "`release_stuck_worker` only when the user explicitly states" in dispatch
+    assert "Call the tool once and report its result unchanged" in dispatch
+    assert "ERR_DELIVERY_WORKER_ACTIVE" in dispatch
+    assert "do not retry or dispatch a replacement in the same cycle" in dispatch
+    assert (
+        "category `worker-ended`, code `finalizer-ended-without-report`, and `checks_state: unknown`"
+    ) in finalization
+    assert "not an observation, proof, or finalization receipt" in finalization
+    assert "`finalizer-ended-without-report` has `checks_state: unknown` and is not proof" in finalizer
+    assert "ask them to" in release_prompt
+    assert "release_stuck_worker` exactly once" in release_prompt
+    assert "`reason_code` is `worker-stall-wait`, do not ask or release" in release_prompt
+    assert "no worktree writes for 30" in release_prompt
+    assert "no live same-user process with a cwd or open file" in release_prompt
+    assert "MCP server while the issuing VS Code window remains alive" in release_prompt
+    assert "no same-cycle replacement" in operator_guide
+    assert "window-exit row" in operator_guide
+    assert "Recorded PID/start time is gone" in operator_guide
+    assert "no writes for 30 seconds" in operator_guide
+    assert "`/continue-change` reads only its Change with\n`get_change`, while `/orchestrate` lists Changes" in (
+        operator_guide
+    )
+    assert "Before dispatching from either entry route" not in operator_guide
+    assert "Before either entry route" not in wiring
+    assert "ERR_DELIVERY_WORKER_ACTIVE" in operator_guide
+    assert "release_stuck_worker" in delivery_readme
+    assert "release_stuck_worker" in delivery_mcp
+    assert "Release stuck worker" in cockpit_readme
+    assert "release-stuck-worker" in wiring
+    for content in (
+        orchestration,
+        release_prompt,
+        orchestrate_prompt,
+        operator_guide,
+        delivery_readme,
+        delivery_mcp,
+        cockpit_readme,
+        wiring,
+    ):
+        normalized = content.lower()
+        assert "two minutes" not in normalized
+        assert "host lock" not in normalized
+        assert "host-lock" not in normalized
+        assert "issuer lock" not in normalized
+        assert "quiet-worktree check" not in normalized
+        assert ".owlbear/delivery/runtime/hosts/" not in normalized
+
+
+def test_worker_settlement_guidance_matches_native_contract() -> None:
+    packet = " ".join((_SKILLS_ROOT / "w-packet-building/SKILL.md").read_text(encoding="utf-8").split())
+    planning = " ".join((_SKILLS_ROOT / "w-frontier-planning/SKILL.md").read_text(encoding="utf-8").split())
+    orchestration = " ".join((_SKILLS_ROOT / "w-orchestration/SKILL.md").read_text(encoding="utf-8").split())
+    dispatch = orchestration[
+        orchestration.index("## Step 2 - Dispatch Or Recover Each Launch") : orchestration.index(
+            "## Step 3 - Route One Completed Worker Result"
+        )
+    ]
+    _assert_stopped_worker_release_guidance()
+
+    attention = " ".join(
+        (_SKILLS_ROOT / "w-delivery-attention-resolution/SKILL.md").read_text(encoding="utf-8").split()
+    )
+    orchestrate_prompt = (_PROMPTS_ROOT / "orchestrate.prompt.md").read_text(encoding="utf-8")
+    operator_guide = (_REPO_ROOT / "setup/operating-owlbear.md").read_text(encoding="utf-8")
+    delivery_readme = (_REPO_ROOT / "serve/delivery/README.md").read_text(encoding="utf-8")
+    delivery_mcp_readme = " ".join((_REPO_ROOT / "serve/delivery-mcp/README.md").read_text(encoding="utf-8").split())
+    cockpit_readme = (_REPO_ROOT / "serve/cockpit/README.md").read_text(encoding="utf-8")
+    wiring = " ".join((_REPO_ROOT / "share/WIRING.md").read_text(encoding="utf-8").split())
+    workspace_governance = " ".join(
+        (_SKILLS_ROOT / "r-workspace-governance/SKILL.md").read_text(encoding="utf-8").split()
+    )
+
+    assert "dispatch_failure" in packet
+    assert "RetryDelivery" in planning
+    assert "resets the managed worktree to the reviewed boundary" not in packet
+    assert "settle_worker_invocation" in packet
+    assert "settle_worker_invocation" in planning
+    assert "A normal Builder settlement preserves the managed worktree" in packet
+    assert "do not clean or reset the worktree before normal settlement" in packet
+    assert "does not approve or admit a revision" in packet
+    assert "normal Planner return" in planning
+    assert "`retry` abandons the current attempt" not in packet
+    assert "DeliveryPlanningRetrySettlement" in orchestration
+    assert "DeliveryBuilderInvocationSettlement" in orchestration
+    assert all(
+        phrase in content
+        for content, phrase in (
+            (
+                dispatch,
+                (
+                    "Treat `dispatch_failure` as a no-result outcome; settle it with "
+                    "`settle_worker_invocation` and `disposition: ended-without-result`"
+                ),
+            ),
+            (dispatch, "Orchestrator observes that the dispatch call returned"),
+            (dispatch, "all owned mutating terminals and asynchronous jobs are settled"),
+            (dispatch, "A dispatch call that has not returned"),
+            (dispatch, "any owned mutating terminal or asynchronous job that may still be running"),
+            (dispatch, "is not settled by Orchestrator"),
+            (dispatch, "`release_stuck_worker` only when the user explicitly states"),
+            (dispatch, "Call the tool once and report its result unchanged"),
+            (dispatch, "`ERR_DELIVERY_WORKER_ACTIVE`"),
+            (dispatch, "do not retry or dispatch a replacement in the same cycle"),
+            (orchestration, "ended-without-result"),
+            (orchestration, "A dispatch that never returned in a previous session"),
+            (orchestration, "`worker-stall-wait`"),
+            (orchestration, "`worker-host-lost` and `worker-released-stuck` are engine-only dispositions"),
+            (orchestration, "never send either through `settle_worker_invocation`"),
+            (orchestration, "After a `release_stuck_worker` result, report it and stop the current cycle"),
+            (orchestration, "`confirmed_lost`, elapsed time, disconnection, and a cancelled wait are never evidence"),
+            (packet, "predecessor crashed or its chat was stopped without returning a transition"),
+            (packet, "`worker-host-lost` and `worker-released-stuck` settlements do too"),
+            (planning, "Delivery-settled `worker-host-lost` and `worker-released-stuck` predecessors"),
+            (packet, "`prior_attempts`"),
+        )
+    )
+    assert all(
+        fragment in orchestration
+        for fragment in (
+            "FinalizerSettlement",
+            "`report_id` returned by `report_finalization_failure`",
+            "attempt.writer.actor_id",
+            "attempt.writer.process_id",
+            "context.reviewed_change_head",
+            "preserve the report's code and `checks_state` (`not-run`, `failed`, or `unknown`)",
+            "without presenting the report as proof or as evidence that the Finalizer process is closed",
+        )
+    )
+    assert "A normal Builder `return` to `design` is settled through the same typed envelope" in orchestration
+    assert "complete engine-authored `readiness.prompt` unchanged" in orchestration
+    assert "expected_last_reviewed_commit=launch.last_reviewed_commit" in orchestration
+    assert "make the Design route claimable by Planner or Builder" in orchestration
+    assert "Runtime clears the claim" not in operator_guide
+    assert "eligible for recovery after the configured" not in delivery_readme
+    assert "confirmed-dead claim recovery" not in operator_guide
+    assert "Clean matching Builder custody is restarted and released" not in delivery_readme
+    assert "If active claims occupy every slot" in operator_guide
+    assert "unsettled claims continue to consume shared capacity" in delivery_readme
+    assert "expose and recover current typed Integration attention" not in delivery_mcp_readme
+    assert "ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED" in delivery_mcp_readme
+    assert "recover confirmed-dead claims or worktrees" not in cockpit_readme
+    assert "preserves and cleans a dirty worktree automatically" not in packet
+    assert "releases stale custody" not in attention
+    assert "quarantine evidence" not in attention
+    assert "recover exact failed launches" not in orchestrate_prompt
+    assert "recovers exact failed claims" not in wiring
+    assert "dispatch failure instead triggers the matching exact claim recovery" not in wiring
+    assert "ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED" in wiring
+    assert "and retain custody" in wiring
+    assert "During exact-claim recovery after a crash or unstructured worker return" not in workspace_governance
+    assert all(
+        phrase in workspace_governance
+        for phrase in (
+            "Unknown or contained invocations still forbid adoption",
+            (
+                "`ended-without-result`, `worker-host-lost`, or `worker-released-stuck` settlement receipt and fresh "
+                "`builder_handoff_context` and Build context"
+            ),
+        )
+    )
 
 
 def test_memory_audit_rescoping_requires_corroborated_agent_names() -> None:

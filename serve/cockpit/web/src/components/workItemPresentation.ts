@@ -27,13 +27,23 @@ export const READINESS_STATUS_LABELS: Record<DeliveryReadinessStatus, string> = 
 
 export const READINESS_REASON_LABELS: Record<DeliveryReadinessReasonCode, string> = {
   ready: "Delivery reports this operation is eligible now.",
+  "design-attention": "The returned Design needs human review before re-admission.",
   "active-custody": "An active operation retains Change custody.",
+  "builder-transition-contained":
+    "The Builder transition was refused; custody is retained and host worker-exclusion evidence is missing.",
+  "retry-transition-contained":
+    "The worker retry was refused; its claim remains held until host worker-exclusion is verified.",
   "finalization-failed": "A recorded finalization diagnostic retains that attempt.",
+  "settled-attention-target-drift":
+    "The target changed after failed verification. Inspection only; sync, retry, and reset remain blocked.",
   "claim-activation-failed": "Delivery could not activate custody for the selected action.",
   "coordination-unavailable": "This Change has no readable coordination record.",
   "execution-occupancy-unavailable": "Delivery could not read current execution occupancy.",
-  "engine-action-pending": "An engine-owned action is acquired and not yet finished.",
-  "engine-action-blocked": "A retained engine action is blocked and keeps its custody.",
+  "engine-action-pending": "A retained engine action is acquired but has not started.",
+  "engine-action-blocked": "A retained engine action journal is unverifiable; custody remains retained.",
+  "engine-action-interrupted": "A retained engine action started without an authoritative result.",
+  "engine-action-failed": "A retained engine action has a recorded failure.",
+  "engine-action-incomplete": "A retained engine action has a recorded incomplete result.",
   "target-sync-required": "The Change must be synchronized with its integration target first.",
   "claim-custody-unreconciled": "Claim custody has not been reconciled with the workspace.",
   "runtime-unavailable": "Delivery could not compose this Change runtime.",
@@ -49,6 +59,15 @@ export const READINESS_REASON_LABELS: Record<DeliveryReadinessReasonCode, string
   "publication-wait": "Publication is waiting on an external result.",
   "checkpoint-pending": "A durable checkpoint is still pending.",
   "report-store-unavailable": "Finalization diagnostics could not be read.",
+  "retry-backoff": "Automatic recovery is waiting for its next eligible time.",
+  "retry-exhausted": "Automatic retries are exhausted; Delivery offers no action to reset this budget.",
+  "acceptance-wait": "Acceptance is unchanged; observe later without repeating the effect.",
+  "retry-containment":
+    "A prior attempt has no authoritative outcome. Preserve custody; no caller action can retry or release it.",
+  "retry-ledger-unavailable": "Retry authority could not be read safely.",
+  "worker-stall-wait":
+    "The VS Code window that ran this worker closed. Delivery records a failed attempt once no process uses " +
+    "the worktree and it has stayed unchanged for 30 seconds.",
 };
 
 /** Truthful check labels: absence of a run is never reported as a pass. */

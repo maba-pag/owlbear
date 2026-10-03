@@ -11,6 +11,8 @@ from typing import Any
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import BaseModel, ConfigDict
+from serve.delivery.tests.test_portfolio_application import _reopen_portfolio, builder_transition_case
+from serve.delivery.tests.test_recovery import completed_recovery_case, recovery_case
 
 from owlbear_delivery import (
     DeliveryAdmissionConflictError,
@@ -58,6 +60,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryObservationReceipt,
     DeliveryOperatorMove,
     DeliveryPlanCandidate,
+    DeliveryPlanningRetrySettlement,
     DeliveryRequest,
     DeliveryRequestKind,
     DeliveryRequestResolution,
@@ -70,6 +73,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryTaskResult,
     FinalizeDeliveryChange,
     OutcomeAuthorityBinding,
+    RetryDelivery,
 )
 from owlbear_delivery.delivery_state import DeliveryStatePublicationError
 from owlbear_delivery.design_package import DesignPackageConflictError, DesignPackageManifest, DesignPackageResult
@@ -78,7 +82,7 @@ from owlbear_delivery.draft_pull_request import (
     DraftPullRequestSupersessionReceipt,
     MarkChangePullRequestReady,
 )
-from owlbear_delivery.finalization_reports import FinalizationFailureCode
+from owlbear_delivery.finalization_reports import FinalizationFailureCode, ReportFinalizationFailure
 from owlbear_delivery.portfolio_application import (
     DeliveryAcquisitionFailure,
     DeliveryActionSelection,
@@ -110,7 +114,9 @@ from owlbear_delivery.portfolio_operating import (
     DeliveryHealthView,
 )
 from owlbear_delivery.publication_provider import PublicationProviderError, PublicationProviderFailureCode
+from owlbear_delivery.recovery import DeliveryWorkerExclusionRequiredError
 from owlbear_delivery.work_items import WorkItemNextActor
+from owlbear_delivery.worker_stall import DeliveryWorkerActiveError
 from owlbear_delivery_mcp.target_models import ReportFinalizationFailureParams
 from owlbear_delivery_mcp.target_server import (
     DELIVERY_OPERATION_ANNOTATIONS,
@@ -290,6 +296,84 @@ def _external_head_promotion_receipt() -> ChangeExternalHeadPromotionReceipt:
         promoted_head=adoption.adopted_head,
         provenance="explicit",
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["planner", "builder", "integration", "proposal"])
+async def test_real_core_recovery_exclusion_required(tmp_path: Path, kind: str) -> None:
+    application, operation, request, unchanged = recovery_case(tmp_path, kind)
+    with pytest.raises(ToolError) as error:
+        await getattr(TargetMCPAdapter(application), operation)(request)
+    diagnostic = json.loads(str(error.value))
+    assert diagnostic["code"] == DeliveryWorkerExclusionRequiredError.code
+    assert diagnostic["retry_safe"] is False
+    assert diagnostic["current_authority_identity"] == "change-a"
+    assert "Custody and files are unchanged" in diagnostic["detail"]
+    unchanged()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("action", ["block", "return", "retry"])
+async def test_builder_transition_diagnostics_survive_mcp_refusal_and_restart(tmp_path: Path, action: str) -> None:
+    application, runtimes, coordinator, state_root, launch, transition = builder_transition_case(tmp_path, action)
+    if action == "retry":
+        transition = RetryDelivery(
+            action="retry",
+            outcome_id=launch.outcome_id,
+            claim_id=launch.claim.claim_id,
+            abandoned_commit=launch.last_reviewed_commit,
+            attempt_id=launch.claim.attempt_id,
+            failure_code="builder-failed",
+        )
+    before_coordination = coordinator.show(CHANGE)
+    payload = {"change_id": CHANGE, "transition": transition.model_dump(mode="json")}
+    with pytest.raises(ToolError) as error:
+        await TargetMCPAdapter(application).transition_delivery(payload)
+    diagnostic = json.loads(str(error.value))
+    assert diagnostic["code"] == DeliveryWorkerExclusionRequiredError.code
+    assert diagnostic["retry_safe"] is False
+    retained = runtimes[CHANGE].frontier_bytes()
+    reopened, reopened_coordinator, _manager = _reopen_portfolio(tmp_path, state_root, runtimes)
+    adapter = TargetMCPAdapter(reopened)
+    with pytest.raises(ToolError):
+        await adapter.transition_delivery(payload)
+    context = await adapter.show_operator_context({"change_id": CHANGE, "outcome_id": "OUT-001"})
+    if action == "retry":
+        assert context.retry_diagnostic.model_dump(mode="json") == {
+            "code": "ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED",
+            "attempt_id": launch.claim.attempt_id,
+            "transition": transition.model_dump(mode="json"),
+        }
+        assert context.recovery_attention is None
+    else:
+        assert context.recovery_attention.diagnostic_transition == transition
+    assert context.active_claim.owner_id == launch.claim.owner_id
+    assert context.block is None
+    assert context.requests == ()
+    change = await adapter.get_change({"change_id": CHANGE})
+    assert change["readiness"]["status"] == "blocked"
+    expected_reason = "retry-transition-contained" if action == "retry" else "builder-transition-contained"
+    assert change["readiness"]["reason_code"] == expected_reason
+    assert change["readiness"]["action"] is None
+    if action == "retry":
+        assert change["readiness"]["next_actor"] == "none"
+    assert "read-only" in change["readiness"]["prompt"]
+    if action == "retry":
+        assert "delivery-diagnose inspect --change-id change-a" in change["readiness"]["prompt"]
+        assert "Make no MCP calls" in change["readiness"]["prompt"]
+        assert "do not retry" in change["readiness"]["prompt"]
+    assert runtimes[CHANGE].frontier_bytes() == retained
+    assert reopened_coordinator.show(CHANGE) == before_coordination
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["claim", "proposal"])
+async def test_verified_completed_recovery_replay(tmp_path: Path, kind: str) -> None:
+    application, operation, request, unchanged = completed_recovery_case(tmp_path, kind)
+    result = await getattr(TargetMCPAdapter(application), operation)(request)
+    recovered = result["recovery"] if kind == "proposal" else result
+    assert recovered["status"] == "recovered"
+    unchanged()
 
 
 class _Result(BaseModel):
@@ -1044,7 +1128,25 @@ def _requests() -> dict[str, dict[str, object]]:
                 },
             },
         },
+        "settle_worker_invocation": {
+            "settlement": {
+                "change_id": CHANGE,
+                "outcome_id": "OUT-001",
+                "claim_id": "claim",
+                "attempt_id": "attempt",
+                "disposition": "normal-return",
+                "request": {
+                    "action": "retry",
+                    "outcome_id": "OUT-001",
+                    "claim_id": "claim",
+                    "failure_code": "worker-retry",
+                },
+            },
+            "host_id": "host",
+            "session_id": "session",
+        },
         "recover_claim": {**claim, "confirmed_lost": True},
+        "release_stuck_worker": claim,
         "recover_integration_repair_claim": repair_claim,
         "show_integration_attention": change,
         "list_completed_changes": {"limit": 25},
@@ -1159,9 +1261,27 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
         "cleanup_completed_change_worktree": (CHANGE, DIGEST),
         "resolve_change_disposition": (CHANGE, DIGEST),
         "prepare_review_repair": (CHANGE,),
+        "release_stuck_worker": (CHANGE, "OUT-001", "attempt", "claim"),
+        "settle_worker_invocation": (
+            DeliveryPlanningRetrySettlement(
+                change_id=CHANGE,
+                outcome_id="OUT-001",
+                claim_id="claim",
+                attempt_id="attempt",
+                disposition="normal-return",
+                request=RetryDelivery(
+                    action="retry",
+                    outcome_id="OUT-001",
+                    claim_id="claim",
+                    failure_code="worker-retry",
+                ),
+            ),
+        ),
     }
     if operation_name in call_args:
         assert application.calls[0][1] == call_args[operation_name]
+    if operation_name == "settle_worker_invocation":
+        assert application.calls[0][2] == {"host_id": "host", "session_id": "session"}
     if operation_name == "submit_result":
         submission = application.calls[0][1][0]
         assert isinstance(submission, DeliveryResultSubmission)
@@ -1433,6 +1553,63 @@ async def test_publication_baseline_recovery_requires_literal_confirmation_befor
     assert application.calls == []
 
 
+@pytest.mark.asyncio
+async def test_release_stuck_worker_forwards_absent_outcome_as_finalizer_release() -> None:
+    application = _RecordingApplication()
+    adapter = TargetMCPAdapter(application)  # type: ignore[arg-type]
+
+    await adapter.release_stuck_worker({"change_id": CHANGE, "attempt_id": "final-attempt", "claim_id": "final"})
+    await adapter.release_stuck_worker(
+        {"change_id": CHANGE, "outcome_id": None, "attempt_id": "final-attempt", "claim_id": "final"}
+    )
+
+    assert application.calls == [
+        ("release_stuck_worker", (CHANGE, None, "final-attempt", "final"), {}),
+        ("release_stuck_worker", (CHANGE, None, "final-attempt", "final"), {}),
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "request_update",
+    [
+        {"outcome_id": "OUT-1"},
+        {"attempt_id": ""},
+        {"claim_id": None},
+        {"confirmed_lost": True},
+        {"elapsed_time": 600},
+    ],
+)
+async def test_release_stuck_worker_rejects_invalid_or_extra_parameters(request_update: dict[str, object]) -> None:
+    application = _RecordingApplication()
+    adapter = TargetMCPAdapter(application)  # type: ignore[arg-type]
+
+    with pytest.raises(ToolError) as exc_info:
+        await adapter.release_stuck_worker({**_requests()["release_stuck_worker"], **request_update})
+
+    diagnostic = json.loads(str(exc_info.value))
+    assert diagnostic["code"] == "ERR_TARGET_PARAM_VALIDATION"
+    assert diagnostic["retry_safe"] is False
+    assert application.calls == []
+
+
+@pytest.mark.asyncio
+async def test_release_stuck_worker_active_worktree_maps_to_retryable_conflict_with_retry_time() -> None:
+    retry_after = datetime(2026, 10, 2, 12, 2, tzinfo=UTC)
+    application = _RecordingApplication({"release_stuck_worker": DeliveryWorkerActiveError(retry_after)})
+    adapter = TargetMCPAdapter(application)  # type: ignore[arg-type]
+
+    with pytest.raises(ToolError) as exc_info:
+        await adapter.release_stuck_worker(_requests()["release_stuck_worker"])
+
+    diagnostic = json.loads(str(exc_info.value))
+    assert diagnostic["code"] == "ERR_DELIVERY_WORKER_ACTIVE"
+    assert diagnostic["retry_safe"] is True
+    assert diagnostic["current_authority_identity"] == CHANGE
+    assert "2026-10-02T12:02:00Z" in diagnostic["detail"]
+    assert "unchanged" in diagnostic["detail"]
+
+
 def test_report_finalization_failure_request_reuses_core_structural_validation() -> None:
     request = ReportFinalizationFailureParams(
         change_id=CHANGE,
@@ -1455,6 +1632,31 @@ def test_report_finalization_failure_request_reuses_core_structural_validation()
             **request.model_dump(exclude={"paths"}),
             paths=("product.txt",),
         )
+
+
+@pytest.mark.asyncio
+async def test_registered_report_finalization_failure_preserves_proof_mutation_evidence() -> None:
+    application = _RecordingApplication()
+    adapter = TargetMCPAdapter(application)  # type: ignore[arg-type]
+    request = {
+        **_requests()["report_finalization_failure"],
+        "category": "proof-mutation",
+        "code": "proof-mutated-worktree",
+        "procedure_id": "proof-procedure",
+        "proof_fingerprint_before": DIGEST,
+        "proof_fingerprint_after": "d" * 64,
+    }
+
+    result = await adapter.report_finalization_failure(request)
+
+    assert result["reason_code"] == "runtime-unavailable"
+    submitted = application.calls[0][1][0]
+    assert isinstance(submitted, ReportFinalizationFailure)
+    assert submitted.category == "proof-mutation"
+    assert submitted.code is FinalizationFailureCode.PROOF_MUTATED_WORKTREE
+    assert submitted.procedure_id == "proof-procedure"
+    assert submitted.proof_fingerprint_before == DIGEST
+    assert submitted.proof_fingerprint_after == "d" * 64
 
 
 def test_delivery_operation_names_annotations_and_prohibited_methods_are_exact() -> None:

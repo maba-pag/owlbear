@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import hashlib
 from enum import StrEnum
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from owlbear_delivery.delivery_runtime import (
+    BlockDelivery,
     DeliveryAcceptanceAttentionReason,
     DeliveryBlock,
     DeliveryChangeDisposition,
@@ -17,14 +18,17 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryOperatorMove,
     DeliveryRecoveryAttention,
     DeliveryRequest,
+    DeliveryRetryDiagnostic,
     DeliveryReturnContext,
     DeliveryStage,
     DeliveryWorkerRole,
     OutcomeAuthorityBinding,
+    ReturnDelivery,
     parse_delivery_frontier,
 )
 from owlbear_delivery.draft_pull_request import PublicationPullRequestObservationReceipt
 from owlbear_delivery.finalization_reports import FinalizationAttempt
+from owlbear_delivery.recovery import MAX_RETRY_HISTORY_ATTEMPTS, DeliveryRetryAttemptView
 from owlbear_delivery.target_contract import DeliveryCommitment, DeliveryContract, DeliveryOutcome
 
 
@@ -270,13 +274,19 @@ class DeliveryReadinessBasis(_ProjectionModel):
 
 DeliveryReadinessReason = Literal[
     "ready",
+    "design-attention",
     "active-custody",
+    "builder-transition-contained",
+    "retry-transition-contained",
     "finalization-failed",
     "claim-activation-failed",
     "coordination-unavailable",
     "execution-occupancy-unavailable",
     "engine-action-pending",
     "engine-action-blocked",
+    "engine-action-interrupted",
+    "engine-action-failed",
+    "engine-action-incomplete",
     "target-sync-required",
     "claim-custody-unreconciled",
     "runtime-unavailable",
@@ -288,10 +298,17 @@ DeliveryReadinessReason = Literal[
     "workspace-inspection-failed",
     "workspace-dirty",
     "workspace-preflight-failed",
+    "settled-attention-target-drift",
     "review-repair",
     "publication-wait",
     "checkpoint-pending",
     "report-store-unavailable",
+    "retry-backoff",
+    "retry-exhausted",
+    "acceptance-wait",
+    "retry-containment",
+    "retry-ledger-unavailable",
+    "worker-stall-wait",
 ]
 
 
@@ -307,6 +324,11 @@ class DeliveryReadiness(_ProjectionModel):
     basis: DeliveryReadinessBasis
     action: WorkItemAction | None = None
     last_attempt: FinalizationAttempt | None = None
+    attempts: int = Field(default=0, ge=0)
+    next_eligible_at: str | None = None
+    stop_reason: str | None = None
+    retry_history: tuple[DeliveryRetryAttemptView, ...] = Field(default=(), max_length=MAX_RETRY_HISTORY_ATTEMPTS)
+    prompt: str | None = None
 
     @model_validator(mode="after")
     def _validate_action(self) -> DeliveryReadiness:
@@ -386,6 +408,7 @@ class WorkItemRecoveryView(_ProjectionModel):
     reason: str = Field(min_length=1)
     custody_retained: bool
     retry_condition: str = Field(min_length=1)
+    diagnostic_transition: Annotated[BlockDelivery | ReturnDelivery, Field(discriminator="action")] | None = None
 
 
 class WorkItemDependencyView(_ProjectionModel):
@@ -507,6 +530,7 @@ class WorkItemDetailView(_ProjectionModel):
     return_context: DeliveryReturnContext | None = None
     operator_moves: tuple[DeliveryOperatorMove, ...] = ()
     recovery_attention: WorkItemRecoveryView | None = None
+    retry_diagnostic: DeliveryRetryDiagnostic | None = None
     publication: WorkItemPublicationView | None = None
     readiness: DeliveryReadiness | None = None
 
@@ -518,39 +542,137 @@ class WorkItemProjector:
         self,
         snapshot: DeliveryPortfolioSnapshot,
         readiness: tuple[DeliveryReadiness, ...] = (),
+        *,
+        readiness_guidance: tuple[str | None, ...] = (),
     ) -> None:
         self._snapshot = snapshot
         self._outcomes = {item.outcome_id: item for item in snapshot.contract.outcomes}
         self._bindings = {item.outcome_id: item for item in snapshot.frontier.bindings}
         self._cards = self._project_cards()
         if readiness:
+            guidance = readiness_guidance or (None,) * len(readiness)
+            retained_reasons = {
+                "engine-action-pending",
+                "engine-action-interrupted",
+                "engine-action-failed",
+                "engine-action-incomplete",
+                "engine-action-blocked",
+                "retry-exhausted",
+                "retry-containment",
+                "settled-attention-target-drift",
+            }
+            readiness_fallbacks = {
+                "workspace-dirty": "Managed workspace preflight is blocked by local changes.",
+                "workspace-inspection-failed": "Managed workspace readiness could not be observed.",
+                "workspace-preflight-failed": "Managed workspace preflight did not pass.",
+                "settled-attention-target-drift": (
+                    "Settled Finalizer attention targets an earlier base; preserve its report, receipt, and retry "
+                    "history pending owner direction."
+                ),
+                "active-custody": "An active operation retains Change custody.",
+                "engine-action-pending": (
+                    "The Delivery engine owner retains an unstarted exact operation; no failure or closure "
+                    "evidence exists. Resume the exact operation only through its owner."
+                ),
+                "engine-action-interrupted": (
+                    "The Delivery engine owner has no exact authoritative result/readback. Preserve custody and "
+                    "journals; verified host/worker closure and settlement of all descendant writers and jobs is "
+                    "required before resume; do not retry or infer termination."
+                ),
+                "engine-action-failed": (
+                    "The Delivery engine owner has a recorded failure; its exact authoritative result/readback is "
+                    "retained. Preserve custody and journals; the engine owner must resolve this condition before "
+                    "resume; do not retry or release custody."
+                ),
+                "engine-action-incomplete": (
+                    "The Delivery checkpoint owner must resolve the recorded checkpoint condition before the exact "
+                    "operation can resume; preserve custody and journals; do not retry."
+                ),
+                "engine-action-blocked": (
+                    "The original intent/start/result journals cannot be verified. The Delivery engine owner must "
+                    "establish matching authoritative records and custody before resume; do not reconstruct or retry."
+                ),
+                "coordination-unavailable": "Change custody cannot be read; preserve state for diagnosis.",
+                "claim-custody-unreconciled": (
+                    "The exact Build claim has unreconciled writer custody. Preserve it; automatic recovery is "
+                    "unavailable while host/worker evidence is missing. Resume awaits verified closure that excludes "
+                    "all descendants and tool jobs and records settlement."
+                ),
+                "finalization-failed": (
+                    "Finalization failed with custody retained. The authoritative result for this operation is "
+                    "unavailable; automatic recovery is unavailable while host/worker evidence is missing. Resume "
+                    "awaits verified closure evidence for this invocation that excludes all descendants and tool "
+                    "jobs and records settlement. Diagnostic retirement cannot release custody or authorize retry."
+                ),
+                "review-repair": "Review repair requires a new Change commit before verification.",
+                "retry-backoff": "Automatic recovery is waiting for its next eligible time.",
+                "retry-exhausted": "Automatic retries are exhausted; Delivery offers no action to reset this budget.",
+                "acceptance-wait": "Acceptance remains unchanged; observe later without repeating the effect.",
+                "retry-containment": (
+                    "A prior attempt has no authoritative outcome. Preserve custody; no caller action can retry or "
+                    "release it."
+                ),
+                "retry-ledger-unavailable": "Retry authority could not be read; preserve state before continuing.",
+                "worker-stall-wait": (
+                    "The VS Code window that issued this worker claim has closed. Delivery settles the claim as "
+                    "a failed attempt once no process uses its worktree and it stays unchanged for the quiet "
+                    "period; preserve the worktree."
+                ),
+            }
             self._cards = tuple(
                 card.model_copy(
                     update={
                         "readiness": decision,
-                        "action": decision.action or WorkItemAction(),
+                        "action": (
+                            decision.action
+                            if decision.action is not None
+                            else card.action
+                            if decision.reason_code == "design-attention"
+                            and card.action.kind is WorkItemActionKind.RESUME_DESIGN
+                            else WorkItemAction()
+                        ),
                         "next_actor": decision.next_actor,
-                        "next_step": {
-                            "workspace-dirty": "Managed workspace preflight is blocked by local changes.",
-                            "workspace-inspection-failed": "Managed workspace readiness could not be observed.",
-                            "workspace-preflight-failed": "Managed workspace preflight did not pass.",
-                            "active-custody": "An active operation retains Change custody.",
-                            "coordination-unavailable": "Change custody cannot be read; preserve state for diagnosis.",
-                            "claim-custody-unreconciled": (
-                                "The exact Build claim has unreconciled writer custody. Preserve it; "
-                                "D03 closed-worker recovery is required before replacement."
-                            ),
-                            "finalization-failed": (
-                                "Finalization failed with custody retained. D03 closed-worker recovery is required; "
-                                "diagnostic retirement cannot release custody or authorize retry."
-                            ),
-                            "review-repair": "Review repair requires a new Change commit before verification.",
-                        }.get(decision.reason_code, card.next_step),
+                        "needs": WorkItemNeed.NONE if decision.reason_code in retained_reasons else card.needs,
+                        "needs_headline": (
+                            guidance_item or readiness_fallbacks.get(decision.reason_code, card.needs_headline)
+                            if decision.reason_code in retained_reasons
+                            else card.needs_headline
+                        ),
+                        "next_step": self._readiness_next_step(
+                            card,
+                            decision,
+                            guidance_item,
+                            readiness_fallbacks.get(decision.reason_code, card.next_step),
+                        ),
                     }
                 )
-                for card, decision in zip(self._cards, readiness, strict=True)
+                for card, decision, guidance_item in zip(self._cards, readiness, guidance, strict=True)
             )
         self._items = {card.work_item_id: self._compatibility_projection(card) for card in self._cards}
+
+    @staticmethod
+    def _readiness_next_step(
+        card: WorkItemCardView,
+        readiness: DeliveryReadiness,
+        guidance: str | None,
+        fallback: str,
+    ) -> str:
+        if guidance is not None:
+            return guidance
+        if readiness.reason_code == "retry-exhausted":
+            owner = (
+                "Builder"
+                if card.scope is WorkItemScope.OUTCOME and card.stage is WorkItemStage.IMPLEMENTATION
+                else "Planner"
+                if card.scope is WorkItemScope.OUTCOME
+                else "Delivery"
+            )
+            return (
+                f"{owner} retry budget is exhausted after {readiness.attempts} attempts. Orchestrator can inspect "
+                f"this Change read-only with /inspect-change {card.change_id}; any new attempt requires approved "
+                "current authority."
+            )
+        return fallback
 
     def list_items(self) -> tuple[WorkItemProjection, ...]:
         """Return MCP-compatible projections in snapshot order."""
@@ -626,6 +748,7 @@ class WorkItemProjector:
             return_context=binding.return_context,
             operator_moves=self._snapshot.frontier.operator_moves,
             recovery_attention=self._recovery_view(binding.recovery_attention),
+            retry_diagnostic=binding.retry_diagnostic,
             readiness=card.readiness,
         )
 
@@ -684,15 +807,22 @@ class WorkItemProjector:
         binding: OutcomeAuthorityBinding,
     ) -> tuple[WorkItemNeed, str | None]:
         if binding.stage == DeliveryStage.DESIGN:
-            return WorkItemNeed.YOU, "Re-admission required"
+            return WorkItemNeed.YOU, "Designer attention required before re-admission"
+        if binding.retry_diagnostic is not None:
+            return WorkItemNeed.NONE, "Retry refused; host worker-exclusion evidence required"
         pending_request = next((item for item in binding.requests if item.resolution is None), None)
-        if pending_request is not None:
-            headline = "Decision required" if pending_request.kind.value == "decision" else "Action required"
+        if pending_request is not None or (binding.block is not None and not binding.block.resolved):
+            if pending_request is not None:
+                headline = "Decision required" if pending_request.kind.value == "decision" else "Action required"
+            else:
+                headline = "Block requires evidence"
             return WorkItemNeed.YOU, headline
-        if binding.block is not None and not binding.block.resolved:
-            return WorkItemNeed.YOU, "Block requires evidence"
         if binding.recovery_attention is not None:
-            return WorkItemNeed.YOU, "Claim recovery required"
+            return (
+                (WorkItemNeed.NONE, "Builder transition contained; host exclusion required")
+                if binding.recovery_attention.diagnostic_transition is not None
+                else (WorkItemNeed.YOU, "Claim recovery required")
+            )
         incomplete = tuple(
             identity for identity in outcome.dependency_ids if self._bindings[identity].stage != DeliveryStage.COMPLETED
         )
@@ -706,6 +836,21 @@ class WorkItemProjector:
         needs: WorkItemNeed,
         headline: str | None,
     ) -> tuple[WorkItemNextActor, str]:
+        retry = binding.retry_diagnostic
+        attention = binding.recovery_attention
+        if retry is not None:
+            claim = binding.active_claim
+            owner = claim.owner_id if claim is not None else retry.transition.claim_id
+            next_step = f"Retry {retry.transition.failure_code} refused; claim owner {owner} remains active"
+        elif attention is not None and attention.diagnostic_transition is not None:
+            claim = binding.active_claim
+            owner = claim.owner_id if claim is not None else attention.claim_id
+            next_step = f"Builder owner {owner}: {attention.reason} {attention.retry_condition}"
+        else:
+            next_step = None
+        if next_step is not None:
+            actor = WorkItemNextActor.NONE if retry is not None else WorkItemNextActor.AGENT
+            return actor, next_step
         if needs == WorkItemNeed.YOU:
             return WorkItemNextActor.YOU, headline or "Your attention is required"
         if needs == WorkItemNeed.DEPENDENCY:
@@ -719,6 +864,10 @@ class WorkItemProjector:
     @staticmethod
     def _outcome_activity(binding: OutcomeAuthorityBinding, needs: WorkItemNeed) -> WorkItemActivity:
         claim = binding.active_claim
+        if binding.retry_diagnostic is not None:
+            return WorkItemActivity(state=WorkItemActivityState.IDLE)
+        if binding.recovery_attention is not None and binding.recovery_attention.diagnostic_transition is not None:
+            return WorkItemActivity(state=WorkItemActivityState.IDLE)
         if claim is not None:
             return WorkItemActivity(
                 state=WorkItemActivityState.WORKING,
@@ -732,6 +881,10 @@ class WorkItemProjector:
 
     @staticmethod
     def _outcome_action(binding: OutcomeAuthorityBinding, change_id: str) -> WorkItemAction:
+        if binding.retry_diagnostic is not None or (
+            binding.recovery_attention is not None and binding.recovery_attention.diagnostic_transition is not None
+        ):
+            return WorkItemAction()
         if binding.stage == DeliveryStage.DESIGN:
             return WorkItemAction(
                 kind=WorkItemActionKind.RESUME_DESIGN,
@@ -1238,7 +1391,20 @@ class WorkItemProjector:
             dependency_ids=outcome.dependency_ids if outcome is not None else (),
             task_count=len(binding.tasks) if binding is not None else 0,
             reviewed_task_count=len(binding.results) if binding is not None else 0,
-            next_action=card.action.label or card.needs_headline or card.progress.label,
+            next_action=(
+                card.next_step
+                if card.readiness is not None
+                and card.readiness.reason_code
+                in {
+                    "builder-transition-contained",
+                    "engine-action-pending",
+                    "engine-action-interrupted",
+                    "engine-action-failed",
+                    "engine-action-incomplete",
+                    "engine-action-blocked",
+                }
+                else card.action.label or card.needs_headline or card.progress.label
+            ),
         )
 
     def _dependency_view(self, outcome_id: str) -> WorkItemDependencyView:
@@ -1274,6 +1440,7 @@ class WorkItemProjector:
             reason=attention.reason,
             custody_retained=attention.custody_retained,
             retry_condition=attention.retry_condition,
+            diagnostic_transition=attention.diagnostic_transition,
         )
 
     @staticmethod

@@ -394,7 +394,7 @@ def test_design_return_exposes_resume_command_and_suppresses_preserved_request_a
 
     card = projector.group_view().items[0]
 
-    assert card.needs_headline == "Re-admission required"
+    assert card.needs_headline == "Designer attention required before re-admission"
     assert card.action.kind == WorkItemActionKind.RESUME_DESIGN
     assert card.action.command == "/design portfolio-change"
 
@@ -450,9 +450,9 @@ def test_request_and_requestless_block_share_need_but_keep_distinct_actions() ->
         .items
     )
 
-    assert [(card.needs, card.action.kind) for card in cards] == [
-        (WorkItemNeed.YOU, WorkItemActionKind.ANSWER_REQUEST),
-        (WorkItemNeed.YOU, WorkItemActionKind.CLEAR_BLOCK),
+    assert [(card.needs, card.next_actor, card.action.kind) for card in cards] == [
+        (WorkItemNeed.YOU, WorkItemNextActor.YOU, WorkItemActionKind.ANSWER_REQUEST),
+        (WorkItemNeed.YOU, WorkItemNextActor.YOU, WorkItemActionKind.CLEAR_BLOCK),
     ]
 
 

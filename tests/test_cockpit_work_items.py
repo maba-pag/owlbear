@@ -3,15 +3,44 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+from serve.delivery.tests.test_portfolio_application import (
+    _assert_checkpoint_branch_operation,
+    _assert_loader_observation_only,
+    _assert_loader_retry_recording,
+    _canonical,
+    _engine_action,
+    _failure_request,
+    _git,
+    _loader_activation_state_snapshot,
+    _loader_composed_engine_fixture,
+    _loader_engine_state_snapshot,
+    _loader_registered_engine_action_fixture,
+    _make_provider_readback_unavailable,
+    _portfolio,
+    _seed_loader_composed_completed_change,
+    _startup_config,
+    _workspace_mutation_snapshot,
+    acceptance_budget_case,
+    builder_transition_case,
+)
+from serve.delivery.tests.test_recovery import (
+    absent_host_process_case,
+    completed_recovery_restart_case,
+    recovery_case,
+    recovery_journal_snapshot,
+)
 
 from owlbear_cockpit.deps import get_target_context
 from owlbear_cockpit.routes.target_work import assemble_target_app
@@ -35,6 +64,7 @@ from owlbear_delivery import (
     DeliveryReadiness,
     DeliveryReadinessBasis,
     DeliveryRuntime,
+    DeliveryStage,
     DeliveryUnavailableChangeView,
     ExecuteDeliveryChangeAction,
     PortfolioApplication,
@@ -42,6 +72,7 @@ from owlbear_delivery import (
     PublicationCheckKind,
     PublicationProviderError,
     PublicationProviderFailureCode,
+    RetryDelivery,
 )
 from owlbear_delivery.acceptance import CompletionPullRequestIdentity, CompletionReceiptConflictError
 from owlbear_delivery.change_workspace import (
@@ -55,13 +86,20 @@ from owlbear_delivery.completed_history import (
     CompletedChangePage,
     ReceiptCompletedChangeRecord,
 )
-from owlbear_delivery.delivery_application_loader import DeliveryApplicationLoadError, DeliveryStartupConfig
+from owlbear_delivery.delivery_application_loader import (
+    DeliveryApplicationLoadError,
+    DeliveryStartupConfig,
+)
+from owlbear_delivery.delivery_application_loader import (
+    load_delivery_application as load_core_delivery_application,
+)
 from owlbear_delivery.delivery_runtime import (
     DeliveryAcceptanceWaitingError,
     DeliveryChangeDispositionBusyError,
     DeliveryChangeDispositionConflictError,
     DeliveryChangeStage,
 )
+from owlbear_delivery.finalization_reports import FinalizationFailureCode
 from owlbear_delivery.portfolio_operating import (
     DeliveryHealthDiagnostic,
     DeliveryHealthStatus,
@@ -74,6 +112,7 @@ from owlbear_delivery.portfolio_operating import (
     PortfolioWorkReference,
     PortfolioWorkScope,
 )
+from owlbear_delivery.recovery import DeliveryWorkerExclusionRequiredError
 from owlbear_delivery.storage_io import locked_roots
 from owlbear_delivery.work_items import (
     ChangeGroupView,
@@ -94,6 +133,7 @@ from owlbear_delivery.work_items import (
     WorkItemStage,
     WorkItemTargetSyncView,
 )
+from owlbear_delivery.worker_stall import DeliveryWorkerActiveError
 from owlbear_delivery_github import GitHubCliPublicationProvider
 
 
@@ -414,6 +454,13 @@ class _DeliveryApplicationFake:
         self.calls.append(("recover", args))
         assert confirmed_lost
         return {"status": "recovered", "attempt_id": args[2], "claim_id": args[3]}
+
+    def release_stuck_worker(self, *args: object) -> dict[str, object]:
+        self.calls.append(("release-stuck", args))
+        failure = self.failures.get("release_stuck_worker")
+        if failure is not None:
+            raise failure
+        return {"change_id": args[0], "attempt_id": args[2], "claim_id": args[3]}
 
     def administrative_move(self, *args: object) -> dict[str, object]:
         self.calls.append(("move", args))
@@ -743,6 +790,1767 @@ class _DeliveryApplicationFake:
         return records[1] if args[1] == "1" * 64 else records[0]
 
 
+@pytest.mark.parametrize("kind", ["planner", "builder"])
+def test_real_core_claim_recovery_exclusion_required(tmp_path: Path, kind: str) -> None:
+    application, _operation, request, unchanged = recovery_case(tmp_path, kind)
+    body = {key: value for key, value in request.items() if key not in {"change_id", "outcome_id"}}
+    with TestClient(assemble_target_app(application)) as client:
+        response = client.post("/api/changes/change-a/outcomes/OUT-001/claims/recover", json=body)
+    assert response.status_code == 409
+    diagnostic = response.json()
+    assert diagnostic["code"] == DeliveryWorkerExclusionRequiredError.code
+    assert diagnostic["retry_safe"] is False
+    assert "Custody and files are unchanged" in diagnostic["detail"]
+    unchanged()
+
+
+@pytest.mark.parametrize("action", ["block", "return"])
+def test_http_builder_transition_diagnostic_is_blocked_without_active_request(tmp_path: Path, action: str) -> None:
+    application, runtimes, coordinator, _state_root, launch, transition = builder_transition_case(tmp_path, action)
+    before_workspace = _workspace_mutation_snapshot(launch.worktree_path)
+    before_coordination = coordinator.show("change-a")
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
+        application.transition_delivery("change-a", transition)
+    retained = runtimes["change-a"].frontier_bytes()
+    with TestClient(assemble_target_app(application)) as client:
+        detail_response = client.get("/api/changes/change-a/work-items/outcome:OUT-001")
+        change_response = client.get("/api/work-items")
+    assert detail_response.status_code == change_response.status_code == 200
+    detail = detail_response.json()["item"]
+    change = change_response.json()["groups"][0]["items"][0]
+    assert detail["recovery_attention"]["diagnostic_transition"] == transition.model_dump(mode="json")
+    assert detail["requests"] == []
+    assert detail["block"] is None
+    assert detail["return_context"] is None
+    assert detail["card"]["needs"] == "none"
+    assert detail["card"]["action"]["kind"] == "none"
+    assert launch.claim.owner_id in detail["card"]["next_step"]
+    for readiness in (change["readiness"], detail["readiness"]):
+        assert readiness["status"] == "blocked"
+        assert readiness["reason_code"] == "builder-transition-contained"
+        assert readiness["executable"] is False
+        assert readiness["action"] is None
+        assert "read-only" in readiness["prompt"]
+    prompt = detail["readiness"]["prompt"]
+    assert change["readiness"]["prompt"] == prompt
+    assert prompt.startswith("/repair-delivery Inspect only Change change-a")
+    assert "`delivery-diagnose inspect --change-id change-a`" in prompt
+    assert "preserve custody, stage, worktree, inspected files, and retry budget" in prompt
+    assert "do not answer, unblock, restart, release, edit, repair, or dispatch a replacement" in prompt
+    for unsupported_tool in ("get_change", "show_operator_context", "acquire_change_action", "transition_delivery"):
+        assert unsupported_tool not in prompt
+    assert runtimes["change-a"].frontier_bytes() == retained
+    assert coordinator.show("change-a") == before_coordination
+    assert _workspace_mutation_snapshot(launch.worktree_path) == before_workspace
+
+
+@pytest.mark.parametrize("exhausted", [False, True])
+def test_http_explicit_acceptance_is_one_bounded_read(tmp_path: Path, *, exhausted: bool) -> None:
+    application, provider, ledger, restart = acceptance_budget_case(tmp_path, exhausted=exhausted)
+    calls = provider.read_pull_request.call_count
+    with TestClient(assemble_target_app(application)) as client:
+        for _ in range(2):
+            assert (
+                client.post("/api/work-items/acceptance/reconcile", json={"change_ids": ["change-a"]}).status_code
+                == 200
+            )
+        assert provider.read_pull_request.call_count == calls
+        first = client.post("/api/changes/change-a/acceptance/observe")
+    with TestClient(assemble_target_app(restart())) as client:
+        assert client.post("/api/work-items/acceptance/reconcile", json={"change_ids": ["change-a"]}).status_code == 200
+        second = client.post("/api/changes/change-a/acceptance/observe")
+    assert first.status_code == second.status_code == 409
+    assert first.json()["code"] == "ERR_DELIVERY_ACCEPTANCE_WAITING"
+    assert second.json()["detail"] == ("acceptance-wait" if exhausted else "retry-backoff")
+    assert provider.read_pull_request.call_count == calls + int(exhausted)
+    episode = ledger.read().episodes[0]
+    assert (episode.total_attempts, episode.explicit_observations, episode.reset_count) == (
+        (3, 1, 0) if exhausted else (1, 0, 0)
+    )
+
+
+def test_http_verified_completed_recovery_replay(tmp_path: Path) -> None:
+    application, _operation, request, unchanged, host = completed_recovery_restart_case(tmp_path, "claim")
+    body = {key: value for key, value in request.items() if key not in {"change_id", "outcome_id"}}
+    journals = recovery_journal_snapshot(application, "change-a")
+    verifications = host.verifications
+    with TestClient(assemble_target_app(application)) as client:
+        first_read = client.get("/api/changes/change-a/work-items/outcome:OUT-001")
+        repeated_read = client.get("/api/changes/change-a/work-items/outcome:OUT-001")
+        assert first_read.status_code == repeated_read.status_code == 200
+        assert first_read.json() == repeated_read.json()
+        assert recovery_journal_snapshot(application, "change-a") == journals
+        assert host.verifications == verifications
+        first_replay = client.post("/api/changes/change-a/outcomes/OUT-001/claims/recover", json=body)
+        second_replay = client.post("/api/changes/change-a/outcomes/OUT-001/claims/recover", json=body)
+    assert first_replay.status_code == second_replay.status_code == 200
+    assert first_replay.json() == second_replay.json()
+    assert first_replay.json()["status"] == "recovered"
+    assert host.verifications == verifications + 2
+    assert recovery_journal_snapshot(application, "change-a") == journals
+    unchanged()
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("preservation_paths", ["../../outside"]),
+        ("commands", ["terminate-worker"]),
+        ("budget", {"attempts": 999}),
+        ("effect_receipt", {"verified": True}),
+        ("stop_assertion", {"all_descendants_stopped": True}),
+    ],
+)
+def test_http_recovery_rejects_caller_authored_evidence_fields_before_mutation(
+    tmp_path: Path,
+    field: str,
+    value: object,
+) -> None:
+    application, _operation, request, unchanged = recovery_case(tmp_path, "builder")
+    body = {key: value for key, value in request.items() if key not in {"change_id", "outcome_id"}}
+    body[field] = value
+    with TestClient(assemble_target_app(application)) as client:
+        response = client.post("/api/changes/change-a/outcomes/OUT-001/claims/recover", json=body)
+    assert response.status_code == 422
+    assert response.json()["code"] == "ERR_DELIVERY_HTTP_VALIDATION"
+    assert response.json()["detail"] == "Delivery request input is malformed"
+    unchanged()
+
+
+def test_http_recovery_rejects_stale_claim_identity_before_mutation(tmp_path: Path) -> None:
+    application, _operation, request, unchanged = recovery_case(tmp_path, "builder")
+    body = {key: value for key, value in request.items() if key not in {"change_id", "outcome_id"}}
+    body["attempt_id"] = "stale-attempt"
+    with TestClient(assemble_target_app(application)) as client:
+        response = client.post("/api/changes/change-a/outcomes/OUT-001/claims/recover", json=body)
+    assert response.status_code == 409
+    unchanged()
+
+
+def _stall_iso(value: datetime) -> str:
+    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
+
+
+def _stall_planning_case(tmp_path: Path):
+    start = datetime.now(UTC).replace(microsecond=0)
+    now = [_stall_iso(start)]
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path, {"change-a": DeliveryStage.PLANNING}, clock=lambda: now[0]
+    )
+    launch = application.acquire_actions().launch_packages[0]
+    body = {"outcome_id": "OUT-001", "attempt_id": launch.claim.attempt_id, "claim_id": launch.claim.claim_id}
+    owner_result = state_root / "changes/change-a/retry-ledger/owner-results" / f"{launch.claim.attempt_id}.json"
+    return application, runtimes["change-a"], coordinator, launch, body, owner_result, start, now
+
+
+def test_http_release_stuck_worker_settles_quiet_planner_and_replays(tmp_path: Path) -> None:
+    application, runtime, _coordinator, _launch, body, owner_result, start, now = _stall_planning_case(tmp_path)
+    now[0] = _stall_iso(start + timedelta(minutes=10))
+
+    with TestClient(assemble_target_app(application)) as client:
+        released = client.post("/api/changes/change-a/workers/release-stuck", json=body)
+        frontier = runtime.frontier_bytes()
+        replayed = client.post("/api/changes/change-a/workers/release-stuck", json=body)
+
+    assert released.status_code == replayed.status_code == 200
+    assert released.json() == runtime.show_binding("OUT-001").model_dump(mode="json")
+    assert released.json()["active_claim"] is None
+    assert replayed.json() == released.json()
+    assert runtime.frontier_bytes() == frontier
+    assert json.loads(owner_result.read_bytes())["failure_code"] == "worker-released-stuck"
+
+
+def test_http_release_stuck_worker_reports_recent_activity_as_retryable_conflict(tmp_path: Path) -> None:
+    application, runtime, coordinator, launch, body, owner_result, start, now = _stall_planning_case(tmp_path)
+    worktree = launch.worktree_path
+    touched = start + timedelta(minutes=5)
+    activity = worktree / "planner-notes.txt"
+    activity.write_text("recent\n", encoding="utf-8")
+    os.utime(activity, (touched.timestamp(), touched.timestamp()))
+    now[0] = _stall_iso(touched + timedelta(seconds=10))
+    before = (runtime.frontier_bytes(), runtime.retry_ledger().read(), coordinator.show("change-a"))
+
+    with TestClient(assemble_target_app(application)) as client:
+        response = client.post("/api/changes/change-a/workers/release-stuck", json=body)
+
+    retry_after = _stall_iso(touched + timedelta(seconds=30))
+    assert response.status_code == 409
+    diagnostic = response.json()
+    assert diagnostic["code"] == "ERR_DELIVERY_WORKER_ACTIVE"
+    assert diagnostic["authority"] == "delivery"
+    assert diagnostic["retry_safe"] is True
+    assert diagnostic["retry_after"] == retry_after
+    assert retry_after in diagnostic["detail"]
+    assert (runtime.frontier_bytes(), runtime.retry_ledger().read(), coordinator.show("change-a")) == before
+    assert runtime.show_binding("OUT-001").active_claim == launch.claim
+    assert not owner_result.exists()
+
+
+class _BusyWorktreeProbe:
+    def __init__(self) -> None:
+        self.roots: list[tuple[Path, ...]] = []
+
+    def active_processes(self, roots: tuple[Path, ...], *, issued_after: datetime | None) -> tuple[str, ...]:  # noqa: ARG002
+        self.roots.append(roots)
+        return ("node",)
+
+
+def test_http_release_stuck_worker_reports_live_worktree_process_without_retry_time(tmp_path: Path) -> None:
+    application, runtime, coordinator, launch, body, owner_result, start, now = _stall_planning_case(tmp_path)
+    probe = _BusyWorktreeProbe()
+    application._worktree_process_probe = probe  # noqa: SLF001 - inject the host process table like core tests.
+    now[0] = _stall_iso(start + timedelta(minutes=10))
+    before = (runtime.frontier_bytes(), runtime.retry_ledger().read(), coordinator.show("change-a"))
+
+    with TestClient(assemble_target_app(application)) as client:
+        response = client.post("/api/changes/change-a/workers/release-stuck", json=body)
+
+    assert response.status_code == 409
+    diagnostic = response.json()
+    assert set(diagnostic) == {"code", "detail", "authority", "retry_safe"}
+    assert diagnostic["code"] == "ERR_DELIVERY_WORKER_ACTIVE"
+    assert "1 process (node) is still active in the worker's worktree" in diagnostic["detail"]
+    assert launch.worktree_path.resolve() in {root.resolve() for root in probe.roots[0]}
+    assert (runtime.frontier_bytes(), runtime.retry_ledger().read(), coordinator.show("change-a")) == before
+    assert runtime.show_binding("OUT-001").active_claim == launch.claim
+    assert not owner_result.exists()
+
+
+@pytest.mark.parametrize(
+    "update",
+    [{"outcome_id": "OUT-1"}, {"attempt_id": ""}, {"confirmed_lost": True}, {"stop_assertion": {"stopped": True}}],
+)
+def test_http_release_stuck_worker_rejects_malformed_identity_before_mutation(
+    tmp_path: Path, update: dict[str, object]
+) -> None:
+    application, runtime, _coordinator, launch, body, owner_result, start, now = _stall_planning_case(tmp_path)
+    now[0] = _stall_iso(start + timedelta(minutes=10))
+    frontier = runtime.frontier_bytes()
+
+    with TestClient(assemble_target_app(application)) as client:
+        response = client.post("/api/changes/change-a/workers/release-stuck", json={**body, **update})
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "code": "ERR_DELIVERY_HTTP_VALIDATION",
+        "detail": "Delivery request input is malformed",
+        "authority": "delivery",
+        "retry_safe": False,
+    }
+    assert runtime.frontier_bytes() == frontier
+    assert runtime.show_binding("OUT-001").active_claim == launch.claim
+    assert not owner_result.exists()
+
+
+_FRESH_COCKPIT_SERIALIZATION_SCRIPT = """
+import inspect
+import json
+
+from fastapi.testclient import TestClient
+from pydantic import BaseModel
+
+import owlbear_cockpit.main  # noqa: F401
+import owlbear_delivery
+from owlbear_cockpit.routes.target_work import assemble_target_app
+from owlbear_delivery import OutcomeAuthorityBinding
+
+incomplete = sorted(
+    name
+    for name in owlbear_delivery.__all__
+    if inspect.isclass(model := getattr(owlbear_delivery, name))
+    and issubclass(model, BaseModel)
+    and not model.__pydantic_complete__
+)
+binding = OutcomeAuthorityBinding.model_construct(outcome_id="OUT-001", plan_scope_id="SCOPE-001")
+
+
+class _Application:
+    def release_stuck_worker(self, *_args):
+        return binding
+
+
+client = TestClient(assemble_target_app(_Application()), raise_server_exceptions=False)
+response = client.post(
+    "/api/changes/change-a/workers/release-stuck",
+    json={"outcome_id": "OUT-001", "attempt_id": "attempt", "claim_id": "claim"},
+)
+print(json.dumps({"incomplete": incomplete, "status": response.status_code, "body": response.text}))
+"""
+
+
+def test_fresh_cockpit_process_serializes_bare_delivery_models() -> None:
+    result = subprocess.run(  # noqa: S603
+        (sys.executable, "-c", _FRESH_COCKPIT_SERIALIZATION_SCRIPT),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    observed = json.loads(result.stdout.strip().splitlines()[-1])
+    assert observed["incomplete"] == []
+    assert observed["status"] == 200, observed["body"]
+    assert json.loads(observed["body"])["outcome_id"] == "OUT-001"
+
+
+def test_http_release_stuck_worker_forwards_finalizer_release_without_outcome() -> None:
+    client, application = _client()
+
+    response = client.post(
+        "/api/changes/change-a/workers/release-stuck",
+        json={"attempt_id": "final-attempt", "claim_id": "final-claim"},
+    )
+
+    assert response.status_code == 200
+    assert application.calls == [("release-stuck", ("change-a", None, "final-attempt", "final-claim"))]
+
+
+def test_http_release_stuck_worker_without_retry_time_omits_retry_after() -> None:
+    client, _application = _client({"release_stuck_worker": DeliveryWorkerActiveError(None)})
+
+    response = client.post(
+        "/api/changes/change-a/workers/release-stuck",
+        json={"outcome_id": "OUT-001", "attempt_id": "attempt", "claim_id": "claim"},
+    )
+
+    assert response.status_code == 409
+    assert set(response.json()) == {"code", "detail", "authority", "retry_safe"}
+    assert response.json()["code"] == "ERR_DELIVERY_WORKER_ACTIVE"
+
+
+def test_http_absent_host_still_writing_descendant_stays_contained_across_restarts(tmp_path: Path) -> None:
+    application, host, _worker, launch, restart, snapshot, signal = absent_host_process_case(tmp_path)
+
+    def assert_contained(candidate) -> tuple[object, ...]:
+        before = snapshot(candidate)
+        with TestClient(assemble_target_app(candidate)) as client:
+            first = client.get("/api/changes/change-a/work-items/outcome:OUT-001")
+            repeated = client.get("/api/changes/change-a/work-items/outcome:OUT-001")
+            assert first.status_code == repeated.status_code == 200
+            assert first.json() == repeated.json()
+            readiness = first.json()["item"]["readiness"]
+            assert readiness["executable"] is False
+            portfolio = client.get("/api/work-items")
+            assert portfolio.status_code == 200
+            claim_refusal = client.post(
+                "/api/changes/change-a/outcomes/OUT-001/claims/recover",
+                json={
+                    "attempt_id": launch.claim.attempt_id,
+                    "claim_id": launch.claim.claim_id,
+                    "confirmed_lost": True,
+                },
+            )
+            assert claim_refusal.status_code == 409
+            assert claim_refusal.json()["code"] == DeliveryWorkerExclusionRequiredError.code
+            assert claim_refusal.json()["retry_safe"] is False
+            assert "Custody and files are unchanged" in claim_refusal.json()["detail"]
+            assert "Timeout and caller confirmation are not evidence" in claim_refusal.json()["detail"]
+            acquired = client.post(
+                "/api/changes/change-a/continuation/acquire",
+                json={
+                    "expected_basis": readiness["basis"],
+                    "capabilities": ["builder"],
+                    "host_id": "synthetic-host",
+                    "session_id": "absent-host-recovery",
+                },
+            )
+            assert acquired.status_code == 200
+            assert acquired.json()["kind"] == "unsupported"
+            assert acquired.json()["reason_code"] == "repair-required"
+            assert acquired.json()["readiness"]["reason_code"] == "active-custody"
+            assert acquired.json()["engine_action"] is None
+        assert host.verifications == 0
+        assert launch.claim.claim_id not in host.closed
+        assert snapshot(candidate) == before
+        return before
+
+    try:
+        first_snapshot = assert_contained(application)
+        signal("write-next", b"late old write after restart\n")
+        after_signaled_write = snapshot(application)
+        assert after_signaled_write[:3] == first_snapshot[:3]
+        assert after_signaled_write[3] != first_snapshot[3]
+        assert after_signaled_write[4:] == first_snapshot[4:]
+        restarted = restart()
+        assert snapshot(restarted) == after_signaled_write
+        assert_contained(restarted)
+    finally:
+        host.close(launch.claim.claim_id)
+
+
+def test_http_default_loader_replays_engine_action_after_restart(tmp_path: Path) -> None:
+    repository, _runtime_root, remote, provider, application, _head_a, _head_b = _loader_composed_engine_fixture(
+        tmp_path
+    )
+    basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
+    with TestClient(assemble_target_app(application)) as client:
+        acquired = client.post(
+            "/api/changes/change-a/continuation/acquire",
+            json={
+                "expected_basis": basis,
+                "capabilities": ["engine"],
+                "host_id": "synthetic-host",
+                "session_id": "synthetic-session",
+            },
+        )
+        assert acquired.status_code == 200
+        action = acquired.json()["engine_action"]
+        executed = client.post(
+            "/api/changes/change-a/continuation/execute",
+            json={"operation_id": action["operation_id"]},
+        )
+        replayed = client.post(
+            "/api/changes/change-a/continuation/execute",
+            json={"operation_id": action["operation_id"]},
+        )
+
+    runtime = application._runtimes["change-a"]  # noqa: SLF001
+    workspace_before_restart = _workspace_mutation_snapshot(
+        application._coordinator.show("change-a").worktree_path  # noqa: SLF001
+    )
+    frontier_before_restart = runtime.frontier_bytes()
+    ledger_before_restart = runtime.retry_ledger().read()
+    remote_refs_before_restart = _remote_refs(remote)
+
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    _git(repository, "config", f"url.{remote}.insteadOf", "https://github.com/example/project.git")
+    reloaded = load_core_delivery_application(
+        _startup_config(),
+        workspace_root=repository,
+        publication_provider=provider,
+    )
+    with TestClient(assemble_target_app(reloaded)) as client:
+        restarted = client.post(
+            "/api/changes/change-a/continuation/execute",
+            json={"operation_id": action["operation_id"]},
+        )
+
+    assert action["kind"] == "mark-ready"
+    assert executed.status_code == replayed.status_code == restarted.status_code == 200
+    assert executed.json()["kind"] == "completed"
+    assert executed.json() == replayed.json() == restarted.json()
+    assert provider.draft_state_calls == 1
+    assert reloaded._runtimes["change-a"].frontier_bytes() == frontier_before_restart  # noqa: SLF001
+    assert reloaded._runtimes["change-a"].retry_ledger().read() == ledger_before_restart  # noqa: SLF001
+    assert (
+        _workspace_mutation_snapshot(
+            reloaded._coordinator.show("change-a").worktree_path  # noqa: SLF001
+        )
+        == workspace_before_restart
+    )
+    assert _remote_refs(remote) == remote_refs_before_restart
+
+
+def test_http_default_loader_contains_unknown_result_after_restart(tmp_path: Path) -> None:
+    repository, _runtime_root, remote, provider, application, _head_a, _head_b = _loader_composed_engine_fixture(
+        tmp_path
+    )
+    basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
+    with TestClient(assemble_target_app(application)) as client:
+        acquired = client.post(
+            "/api/changes/change-a/continuation/acquire",
+            json={
+                "expected_basis": basis,
+                "capabilities": ["engine"],
+                "host_id": "synthetic-host",
+                "session_id": "synthetic-session",
+            },
+        )
+    assert acquired.status_code == 200
+    action = acquired.json()["engine_action"]
+    assert action["kind"] == "mark-ready"
+
+    provider.lose_draft_state_response = False
+    original_finish = application._coordinator.finish_continuation_action  # noqa: SLF001
+    failure_message = "injected result publication crash"
+
+    def crash_at_result_publication(
+        action_record: ChangeContinuationAction,
+        result: DeliveryEngineActionResult,
+        finished_at: object,
+        *,
+        release: bool,
+    ) -> None:
+        if action_record.operation_id == action["operation_id"]:
+            raise RuntimeError(failure_message)
+        original_finish(action_record, result, finished_at, release=release)
+
+    with (
+        patch.object(
+            application._coordinator,  # noqa: SLF001
+            "finish_continuation_action",
+            crash_at_result_publication,
+        ),
+        TestClient(assemble_target_app(application)) as client,
+        pytest.raises(RuntimeError, match=failure_message),
+    ):
+        client.post(
+            "/api/changes/change-a/continuation/execute",
+            json={"operation_id": action["operation_id"]},
+        )
+
+    runtime = application._runtimes["change-a"]  # noqa: SLF001
+    workspace_before_containment = _workspace_mutation_snapshot(
+        application._coordinator.show("change-a").worktree_path  # noqa: SLF001
+    )
+    frontier_before_containment = runtime.frontier_bytes()
+    ledger_before_containment = runtime.retry_ledger().read()
+    coordination_before_containment = (
+        application._coordinator.runtime_root  # noqa: SLF001
+        / "coordination/changes/change-a.json"
+    ).read_bytes()
+    remote_refs_before_containment = _remote_refs(remote)
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    _git(repository, "config", f"url.{remote}.insteadOf", "https://github.com/example/project.git")
+    reloaded = load_core_delivery_application(
+        _startup_config(),
+        workspace_root=repository,
+        publication_provider=provider,
+    )
+    with TestClient(assemble_target_app(reloaded)) as client:
+        contained = client.post(
+            "/api/changes/change-a/continuation/execute",
+            json={"operation_id": action["operation_id"]},
+        )
+
+    assert contained.status_code == 200
+    assert contained.json()["kind"] == "blocked"
+    assert contained.json()["reason_code"] == "engine-action-interrupted"
+    assert provider.draft_state_calls == 1
+    assert reloaded._runtimes["change-a"].frontier_bytes() == frontier_before_containment  # noqa: SLF001
+    assert reloaded._runtimes["change-a"].retry_ledger().read() == ledger_before_containment  # noqa: SLF001
+    assert (
+        _workspace_mutation_snapshot(
+            reloaded._coordinator.show("change-a").worktree_path  # noqa: SLF001
+        )
+        == workspace_before_containment
+    )
+    assert (
+        reloaded._coordinator.runtime_root  # noqa: SLF001
+        / "coordination/changes/change-a.json"
+    ).read_bytes() == coordination_before_containment
+    retained = reloaded._coordinator.show("change-a").continuation_action  # noqa: SLF001
+    assert retained is not None
+    assert retained.operation_id == action["operation_id"]
+    assert retained.finished_at is None
+    assert _remote_refs(remote) == remote_refs_before_containment
+
+
+@pytest.mark.parametrize(
+    "journal_state",
+    ["invalid-intent", "mismatched-intent", "invalid-result", "mismatched-result"],
+)
+def test_http_default_loader_contains_malformed_engine_journals_without_effects(
+    tmp_path: Path,
+    journal_state: str,
+) -> None:
+    repository, _runtime_root, remote, provider, application, _head_a, _head_b = _loader_composed_engine_fixture(
+        tmp_path
+    )
+    action = _engine_action(application, "change-a")
+    intent_path = application._coordinator.continuation_record_path(  # noqa: SLF001
+        "change-a", action.operation_id
+    )
+    result_path = intent_path.with_name("result.json")
+    if journal_state == "invalid-intent":
+        intent_path.write_bytes(b"{")
+    elif journal_state == "mismatched-intent":
+        intent_path.write_bytes(_canonical(action.model_copy(update={"session_id": "foreign-session"})))
+    elif journal_state == "invalid-result":
+        result_path.mkdir()
+    else:
+        foreign_action = action.model_copy(update={"session_id": "foreign-session"})
+        foreign_result = application._engine_action_failure(  # noqa: SLF001
+            foreign_action,
+            "engine-action-failed",
+            "foreign operation result",
+        )
+        result_path.write_bytes(_canonical(foreign_result))
+
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    _git(repository, "config", f"url.{remote}.insteadOf", "https://github.com/example/project.git")
+    reloaded = load_core_delivery_application(
+        _startup_config(),
+        workspace_root=repository,
+        publication_provider=provider,
+    )
+    provider.read_pull_request = Mock(wraps=provider.read_pull_request)
+    provider.observe_checks = Mock(wraps=provider.observe_checks)
+    before = _loader_engine_state_snapshot(
+        reloaded,
+        runtime_root=reloaded._coordinator.runtime_root,  # noqa: SLF001
+        remote_refs=_remote_refs(remote),
+        provider=provider,
+        change_id="change-a",
+        operation_id=action.operation_id,
+    )
+    with TestClient(assemble_target_app(reloaded)) as client:
+        detail = client.get("/api/changes/change-a/work-items/outcome:OUT-001")
+        repeated = client.get("/api/changes/change-a/work-items/outcome:OUT-001")
+        portfolio = client.get("/api/work-items")
+        assert detail.status_code == repeated.status_code == portfolio.status_code == 200
+        assert detail.json() == repeated.json()
+        readiness = detail.json()["item"]["readiness"]
+        listed_readiness = next(
+            item["readiness"]
+            for group in portfolio.json()["groups"]
+            for item in group["items"]
+            if item["change_id"] == "change-a" and item["scope"] == "outcome"
+        )
+        assert listed_readiness == readiness
+        assert readiness["reason_code"] == "engine-action-blocked"
+        assert readiness["executable"] is False
+        assert readiness["action"] is None
+        assert readiness["prompt"].startswith("/repair-delivery")
+        acquired = client.post(
+            "/api/changes/change-a/continuation/acquire",
+            json={
+                "expected_basis": readiness["basis"],
+                "capabilities": ["engine"],
+                "host_id": "synthetic-host",
+                "session_id": "must-not-retry",
+            },
+        )
+    assert acquired.status_code == 200
+    assert acquired.json()["engine_action"] is None
+    after = _loader_engine_state_snapshot(
+        reloaded,
+        runtime_root=reloaded._coordinator.runtime_root,  # noqa: SLF001
+        remote_refs=_remote_refs(remote),
+        provider=provider,
+        change_id="change-a",
+        operation_id=action.operation_id,
+    )
+    _assert_loader_observation_only(before, after)
+    assert provider.draft_state_calls == 0
+    if journal_state == "invalid-result":
+        assert not tuple(result_path.iterdir())
+    assert result_path.is_dir() is (journal_state == "invalid-result")
+
+
+def test_http_default_loader_contains_unavailable_provider_readback_without_repeating_effects(
+    tmp_path: Path,
+) -> None:
+    repository, runtime_root, remote, provider, application, _head_a, _head_b = _loader_composed_engine_fixture(
+        tmp_path
+    )
+    basis = application.get_change("change-b").readiness.basis.model_dump(mode="json")
+    with TestClient(assemble_target_app(application)) as client:
+        acquired = client.post(
+            "/api/changes/change-b/continuation/acquire",
+            json={
+                "expected_basis": basis,
+                "capabilities": ["engine"],
+                "host_id": "synthetic-host",
+                "session_id": "readback-session",
+            },
+        )
+    assert acquired.status_code == 200
+    action = acquired.json()["engine_action"]
+    assert action["kind"] == "mark-ready"
+    _make_provider_readback_unavailable(provider, 8)
+    provider.read_pull_request = Mock(wraps=provider.read_pull_request)
+    provider.observe_checks = Mock(wraps=provider.observe_checks)
+    with TestClient(assemble_target_app(application)) as client:
+        failed = client.post(
+            "/api/changes/change-b/continuation/execute",
+            json={"operation_id": action["operation_id"]},
+        )
+    assert failed.status_code == 200
+    assert failed.json()["kind"] == "blocked"
+    assert failed.json()["reason_code"] == "engine-action-failed"
+    assert "provider readback unavailable" in failed.json()["failure"]["detail"]
+    assert "release custody" in failed.json()["failure"]["retry_condition"]
+    assert provider.draft_state_calls == 1
+
+    before_restart = _loader_engine_state_snapshot(
+        application,
+        runtime_root=runtime_root,
+        remote_refs=_remote_refs(remote),
+        provider=provider,
+        change_id="change-b",
+        operation_id=action["operation_id"],
+    )
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    _git(repository, "config", f"url.{remote}.insteadOf", "https://github.com/example/project.git")
+    reloaded = load_core_delivery_application(
+        _startup_config(),
+        workspace_root=repository,
+        publication_provider=provider,
+    )
+    after_restart = _loader_engine_state_snapshot(
+        reloaded,
+        runtime_root=reloaded._coordinator.runtime_root,  # noqa: SLF001
+        remote_refs=_remote_refs(remote),
+        provider=provider,
+        change_id="change-b",
+        operation_id=action["operation_id"],
+    )
+    _assert_loader_observation_only(before_restart, after_restart)
+    with TestClient(assemble_target_app(reloaded)) as client:
+        first = client.get("/api/changes/change-b/work-items/outcome:OUT-001")
+        repeated = client.get("/api/changes/change-b/work-items/outcome:OUT-001")
+        listed = client.get("/api/work-items")
+        replayed = client.post(
+            "/api/changes/change-b/continuation/execute",
+            json={"operation_id": action["operation_id"]},
+        )
+    assert first.status_code == repeated.status_code == listed.status_code == replayed.status_code == 200
+    assert first.json() == repeated.json()
+    readiness = first.json()["item"]["readiness"]
+    assert readiness["reason_code"] == "engine-action-failed"
+    assert readiness["prompt"].startswith("/repair-delivery")
+    assert replayed.json() == failed.json()
+    after_reads = _loader_engine_state_snapshot(
+        reloaded,
+        runtime_root=reloaded._coordinator.runtime_root,  # noqa: SLF001
+        remote_refs=_remote_refs(remote),
+        provider=provider,
+        change_id="change-b",
+        operation_id=action["operation_id"],
+    )
+    _assert_loader_observation_only(after_restart, after_reads)
+    assert provider.draft_state_calls == 1
+
+
+@pytest.mark.parametrize("action_kind", ["reconcile-checkpoint", "sync-target", "observe-acceptance"])
+def test_http_loader_replays_and_contains_interrupted_engine_rows(  # noqa: PLR0915
+    tmp_path: Path,
+    action_kind: str,
+) -> None:
+    """Every non-mark-ready owner row preserves exact effects across the HTTP boundary."""
+    repository, runtime_root, remote, provider, application = _loader_registered_engine_action_fixture(
+        tmp_path,
+        action_kind,  # type: ignore[arg-type]
+    )
+    basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
+    if action_kind == "observe-acceptance":
+        with TestClient(assemble_target_app(application)) as client:
+            prepared = client.post(
+                "/api/changes/change-a/continuation/acquire",
+                json={
+                    "expected_basis": basis,
+                    "capabilities": ["planner", "builder", "finalizer", "engine"],
+                    "host_id": "synthetic-host",
+                    "session_id": "preparation-session",
+                },
+            )
+            assert prepared.status_code == 200
+            prepared_action = ChangeContinuationAction.model_validate(prepared.json()["engine_action"])
+            assert prepared_action.kind == "mark-ready"
+            prepared_result = client.post(
+                "/api/changes/change-a/continuation/execute",
+                json={"operation_id": prepared_action.operation_id},
+            )
+        assert prepared_result.status_code == 200
+        assert prepared_result.json()["kind"] == "completed", prepared_result.json()
+        provider.pull_requests[0] = provider.pull_requests[0].model_copy(
+            update={
+                "state": "closed",
+                "merged": True,
+                "merge_commit_sha": prepared_action.exact_head,
+                "merged_at": datetime(2026, 8, 4, tzinfo=UTC),
+            }
+        )
+        basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
+    runtime = application._runtimes["change-a"]  # noqa: SLF001
+    sibling_frontier = application._runtimes["change-c"].frontier_bytes()  # noqa: SLF001
+    sibling_publication = application._runtimes["change-c"].checkpoint_publication_state()  # noqa: SLF001
+    with TestClient(assemble_target_app(application)) as client:
+        acquired = client.post(
+            "/api/changes/change-a/continuation/acquire",
+            json={
+                "expected_basis": basis,
+                "capabilities": ["planner", "builder", "finalizer", "engine"],
+                "host_id": "synthetic-host",
+                "session_id": "synthetic-session",
+            },
+        )
+        assert acquired.status_code == 200
+        action = ChangeContinuationAction.model_validate(acquired.json()["engine_action"])
+        assert action.kind == action_kind
+        before_owner_execution = _loader_engine_state_snapshot(
+            application,
+            runtime_root=runtime_root,
+            remote_refs=_remote_refs(remote),
+            provider=provider,
+            change_id="change-a",
+            operation_id=action.operation_id,
+        )
+        executed = client.post(
+            "/api/changes/change-a/continuation/execute",
+            json={"operation_id": action.operation_id},
+        )
+        before_immediate_replay = _loader_engine_state_snapshot(
+            application,
+            runtime_root=runtime_root,
+            remote_refs=_remote_refs(remote),
+            provider=provider,
+            change_id="change-a",
+            operation_id=action.operation_id,
+        )
+        replayed = client.post(
+            "/api/changes/change-a/continuation/execute",
+            json={"operation_id": action.operation_id},
+        )
+    after_immediate_replay = _loader_engine_state_snapshot(
+        application,
+        runtime_root=runtime_root,
+        remote_refs=_remote_refs(remote),
+        provider=provider,
+        change_id="change-a",
+        operation_id=action.operation_id,
+    )
+    assert executed.status_code == replayed.status_code == 200
+    assert executed.json() == replayed.json()
+    assert executed.json()["kind"] == "completed"
+    assert after_immediate_replay == before_immediate_replay
+    assert after_immediate_replay["provider_mutations"] == before_immediate_replay["provider_mutations"]
+    assert after_immediate_replay["provider_reads"] == before_immediate_replay["provider_reads"]
+    engine_result = executed.json()
+    operation_journal = before_immediate_replay["continuation_operation_journal"]
+    assert operation_journal["intent"]
+    assert operation_journal["started"]
+    assert operation_journal["result"]
+    completed_record = json.loads(operation_journal["result"])
+    assert completed_record["kind"] == "completed"
+    assert completed_record["action"]["operation_id"] == action.operation_id
+    if action_kind in {"reconcile-checkpoint", "sync-target"}:
+        published_head = (
+            action.exact_head if action_kind == "reconcile-checkpoint" else engine_result["target_sync"]["merged_head"]
+        )
+        _assert_checkpoint_branch_operation(
+            before_owner_execution,
+            before_immediate_replay,
+            change_id=action.change_id,
+            published_head=published_head,
+            expected_remote_head=before_owner_execution["checkpoint_publication"].published_head,
+        )
+    else:
+        assert any(
+            path.startswith(f"{action.change_id}/") and path != f"{action.change_id}/display.json" and content
+            for path, content in before_immediate_replay["completion_journal"]
+        )
+    assert engine_result["action"]["operation_id"] == action.operation_id
+    assert engine_result["action"]["kind"] == action.kind
+    if action_kind == "reconcile-checkpoint":
+        checkpoint = engine_result["checkpoint"]
+        assert checkpoint["change_id"] == action.change_id
+        assert checkpoint["attempted_head"] == action.exact_head
+        assert checkpoint["reconciled"] is True
+    elif action_kind == "sync-target":
+        target_sync = engine_result["target_sync"]
+        assert target_sync["change_id"] == action.change_id
+        assert target_sync["expected_target"] == action.target_head
+        assert target_sync["target_head"] == action.target_head
+        assert target_sync["merged_head"]
+    else:
+        acceptance = engine_result["acceptance"]
+        assert acceptance["completion_id"]
+        assert acceptance["acceptance_observation_id"]
+    effects_after_completion = (
+        provider.create_calls,
+        provider.update_calls,
+        provider.draft_state_calls,
+    )
+    frontier_after_completion = runtime.frontier_bytes()
+    retry_after_completion = runtime.retry_ledger().read()
+    workspace_after_completion = _workspace_mutation_snapshot(
+        application._coordinator.show("change-a").worktree_path  # noqa: SLF001
+    )
+    remote_after_completion = _remote_refs(remote)
+
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    _git(repository, "config", f"url.{remote}.insteadOf", "https://github.com/example/project.git")
+    reloaded = load_core_delivery_application(
+        _startup_config(),
+        workspace_root=repository,
+        publication_provider=provider,
+    )
+    after_loader_before_replay = _loader_engine_state_snapshot(
+        reloaded,
+        runtime_root=runtime_root,
+        remote_refs=_remote_refs(remote),
+        provider=provider,
+        change_id="change-a",
+        operation_id=action.operation_id,
+    )
+    assert after_loader_before_replay == after_immediate_replay
+    with TestClient(assemble_target_app(reloaded)) as client:
+        restarted = client.post(
+            "/api/changes/change-a/continuation/execute",
+            json={"operation_id": action.operation_id},
+        )
+    after_loader_replay = _loader_engine_state_snapshot(
+        reloaded,
+        runtime_root=runtime_root,
+        remote_refs=_remote_refs(remote),
+        provider=provider,
+        change_id="change-a",
+        operation_id=action.operation_id,
+    )
+    assert restarted.status_code == 200
+    assert restarted.json() == executed.json()
+    assert after_loader_replay == after_loader_before_replay
+    retained = reloaded.get_change("change-a").continuation_action
+    assert retained is not None
+    assert retained.model_copy(update={"finished_at": None}) == action
+    assert (
+        provider.create_calls,
+        provider.update_calls,
+        provider.draft_state_calls,
+    ) == effects_after_completion
+    assert reloaded._runtimes["change-a"].frontier_bytes() == frontier_after_completion  # noqa: SLF001
+    assert reloaded._runtimes["change-a"].retry_ledger().read() == retry_after_completion  # noqa: SLF001
+    assert (
+        _workspace_mutation_snapshot(
+            reloaded._coordinator.show("change-a").worktree_path  # noqa: SLF001
+        )
+        == workspace_after_completion
+    )
+    assert _remote_refs(remote) == remote_after_completion
+    assert reloaded._runtimes["change-c"].frontier_bytes() == sibling_frontier  # noqa: SLF001
+    assert reloaded._runtimes["change-c"].checkpoint_publication_state() == sibling_publication  # noqa: SLF001
+    if action_kind != "observe-acceptance":
+        next_basis = reloaded.get_change("change-a").readiness.basis.model_dump(mode="json")
+        with TestClient(assemble_target_app(reloaded)) as client:
+            next_acquired = client.post(
+                "/api/changes/change-a/continuation/acquire",
+                json={
+                    "expected_basis": next_basis,
+                    "capabilities": ["planner", "builder", "finalizer", "engine"],
+                    "host_id": "synthetic-host",
+                    "session_id": "fresh-session",
+                },
+            )
+        assert next_acquired.status_code == 200
+        assert next_acquired.json()["kind"] == "acquired"
+        next_engine_action = next_acquired.json()["engine_action"]
+        if next_engine_action is not None:
+            next_action = ChangeContinuationAction.model_validate(next_engine_action)
+            assert next_action.change_id == action.change_id
+            assert next_action.operation_id != action.operation_id
+        else:
+            next_finalization = next_acquired.json()["finalization"]
+            next_launch = next_acquired.json()["launch"]
+            assert next_finalization is not None or next_launch is not None
+            next_owner_id = (
+                next_finalization["attempt"]["writer"]["attempt_id"]
+                if next_finalization is not None
+                else next_launch["claim"]["attempt_id"]
+            )
+            assert next_owner_id != action.operation_id
+
+    sibling = reloaded.get_change("change-c")
+    with TestClient(assemble_target_app(reloaded)) as client:
+        subsequent = client.post(
+            "/api/changes/change-c/continuation/acquire",
+            json={
+                "expected_basis": sibling.readiness.basis.model_dump(mode="json"),
+                "capabilities": ["planner", "builder", "finalizer", "engine"],
+                "host_id": "synthetic-host",
+                "session_id": "synthetic-session",
+            },
+        )
+    assert subsequent.status_code == 200
+    assert subsequent.json()["kind"] == "acquired"
+
+
+@pytest.mark.parametrize("action_kind", ["reconcile-checkpoint", "sync-target", "observe-acceptance"])
+def test_http_loader_contains_unknown_custody_without_repeating_effects(  # noqa: PLR0915
+    tmp_path: Path,
+    action_kind: str,
+) -> None:
+    """A result-publication interruption remains blocked and retains its exact action."""
+    repository, runtime_root, remote, provider, application = _loader_registered_engine_action_fixture(
+        tmp_path,
+        action_kind,  # type: ignore[arg-type]
+    )
+    basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
+    if action_kind == "observe-acceptance":
+        with TestClient(assemble_target_app(application)) as client:
+            prepared = client.post(
+                "/api/changes/change-a/continuation/acquire",
+                json={
+                    "expected_basis": basis,
+                    "capabilities": ["planner", "builder", "finalizer", "engine"],
+                    "host_id": "synthetic-host",
+                    "session_id": "preparation-session",
+                },
+            )
+            assert prepared.status_code == 200
+            prepared_action = ChangeContinuationAction.model_validate(prepared.json()["engine_action"])
+            assert prepared_action.kind == "mark-ready"
+            prepared_result = client.post(
+                "/api/changes/change-a/continuation/execute",
+                json={"operation_id": prepared_action.operation_id},
+            )
+        assert prepared_result.status_code == 200
+        assert prepared_result.json()["kind"] == "completed"
+        provider.pull_requests[0] = provider.pull_requests[0].model_copy(
+            update={
+                "state": "closed",
+                "merged": True,
+                "merge_commit_sha": prepared_action.exact_head,
+                "merged_at": datetime(2026, 8, 4, tzinfo=UTC),
+            }
+        )
+        basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
+    sibling_frontier = application._runtimes["change-c"].frontier_bytes()  # noqa: SLF001
+    sibling_publication = application._runtimes["change-c"].checkpoint_publication_state()  # noqa: SLF001
+    with TestClient(assemble_target_app(application)) as client:
+        acquired = client.post(
+            "/api/changes/change-a/continuation/acquire",
+            json={
+                "expected_basis": basis,
+                "capabilities": ["planner", "builder", "finalizer", "engine"],
+                "host_id": "synthetic-host",
+                "session_id": "synthetic-session",
+            },
+        )
+    assert acquired.status_code == 200
+    action = ChangeContinuationAction.model_validate(acquired.json()["engine_action"])
+    assert action.kind == action_kind
+    original_finish = application._coordinator.finish_continuation_action  # noqa: SLF001
+    failure_message = "HTTP result publication interruption"
+    provider.read_pull_request = Mock(wraps=provider.read_pull_request)
+    provider.observe_checks = Mock(wraps=provider.observe_checks)
+    before_owner_execution = _loader_engine_state_snapshot(
+        application,
+        runtime_root=runtime_root,
+        remote_refs=_remote_refs(remote),
+        provider=provider,
+        change_id="change-a",
+        operation_id=action.operation_id,
+    )
+
+    def interrupt_finish(action_record, result, finished_at, *, release):
+        if action_record.operation_id == action.operation_id:
+            raise RuntimeError(failure_message)
+        return original_finish(action_record, result, finished_at, release=release)
+
+    with (
+        patch.object(
+            application._coordinator,  # noqa: SLF001
+            "finish_continuation_action",
+            interrupt_finish,
+        ),
+        TestClient(assemble_target_app(application)) as client,
+        pytest.raises(RuntimeError, match="HTTP result publication interruption"),
+    ):
+        client.post(
+            "/api/changes/change-a/continuation/execute",
+            json={"operation_id": action.operation_id},
+        )
+    before_reload = _loader_engine_state_snapshot(
+        application,
+        runtime_root=runtime_root,
+        remote_refs=_remote_refs(remote),
+        provider=provider,
+        change_id="change-a",
+        operation_id=action.operation_id,
+    )
+    operation_journal_before_reload = before_reload["continuation_operation_journal"]
+    assert operation_journal_before_reload["intent"]
+    assert operation_journal_before_reload["started"]
+    assert operation_journal_before_reload["result"] is None
+    assert any(action.operation_id in episode.attempt_ids for episode in before_reload["retry_ledger"].episodes)
+    if action_kind in {"reconcile-checkpoint", "sync-target"}:
+        if action_kind == "reconcile-checkpoint":
+            published_head = action.exact_head
+        else:
+            target_sync = application._runtimes["change-a"].target_sync_receipt()  # noqa: SLF001
+            assert target_sync is not None
+            published_head = target_sync.merged_head
+        _assert_checkpoint_branch_operation(
+            before_owner_execution,
+            before_reload,
+            change_id=action.change_id,
+            published_head=published_head,
+            expected_remote_head=before_owner_execution["checkpoint_publication"].published_head,
+        )
+    else:
+        assert any(
+            path.startswith(f"{action.change_id}/") and path != f"{action.change_id}/display.json" and content
+            for path, content in before_reload["completion_journal"]
+        )
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    _git(repository, "config", f"url.{remote}.insteadOf", "https://github.com/example/project.git")
+    reloaded = load_core_delivery_application(
+        _startup_config(),
+        workspace_root=repository,
+        publication_provider=provider,
+    )
+    after_loader = _loader_engine_state_snapshot(
+        reloaded,
+        runtime_root=runtime_root,
+        remote_refs=_remote_refs(remote),
+        provider=provider,
+        change_id="change-a",
+        operation_id=action.operation_id,
+    )
+    expected_after_loader = dict(before_reload)
+    if action_kind == "observe-acceptance":
+        _assert_loader_retry_recording(
+            before_reload,
+            after_loader,
+            action_id=action.operation_id,
+            accepted_progress=True,
+        )
+        expected_after_loader["retry_ledger"] = after_loader["retry_ledger"]
+        expected_after_loader["retry_journal"] = after_loader["retry_journal"]
+    else:
+        _assert_loader_retry_recording(
+            before_reload,
+            after_loader,
+            action_id=action.operation_id,
+            accepted_progress=False,
+        )
+    assert after_loader == expected_after_loader
+    with TestClient(assemble_target_app(reloaded)) as client:
+        before_containment = _loader_engine_state_snapshot(
+            reloaded,
+            runtime_root=runtime_root,
+            remote_refs=_remote_refs(remote),
+            provider=provider,
+            change_id="change-a",
+            operation_id=action.operation_id,
+        )
+        _assert_loader_observation_only(after_loader, before_containment)
+        contained = client.post(
+            "/api/changes/change-a/continuation/execute",
+            json={"operation_id": action.operation_id},
+        )
+        assert contained.status_code == 200
+        assert contained.json()["kind"] == "blocked"
+        assert contained.json()["reason_code"] == "engine-action-interrupted"
+        after_containment = _loader_engine_state_snapshot(
+            reloaded,
+            runtime_root=runtime_root,
+            remote_refs=_remote_refs(remote),
+            provider=provider,
+            change_id="change-a",
+            operation_id=action.operation_id,
+        )
+        contained_replay = client.post(
+            "/api/changes/change-a/continuation/execute",
+            json={"operation_id": action.operation_id},
+        )
+        after_replay_execution = _loader_engine_state_snapshot(
+            reloaded,
+            runtime_root=runtime_root,
+            remote_refs=_remote_refs(remote),
+            provider=provider,
+            change_id="change-a",
+            operation_id=action.operation_id,
+        )
+        guidance = client.get("/api/work-items")
+        listed = client.get("/api/work-items")
+        shown = client.get("/api/changes/change-a/work-items/publication")
+        repeated_guidance = client.get("/api/work-items")
+        repeated_listed = client.get("/api/work-items")
+        repeated_shown = client.get("/api/changes/change-a/work-items/publication")
+    assert contained_replay.status_code == 200
+    assert contained_replay.json() == contained.json()
+    operation_journal_after_containment = after_containment["continuation_operation_journal"]
+    assert operation_journal_after_containment["intent"] == operation_journal_before_reload["intent"]
+    assert operation_journal_after_containment["started"] == operation_journal_before_reload["started"]
+    assert operation_journal_after_containment["result"]
+    containment_record = json.loads(operation_journal_after_containment["result"])
+    assert containment_record["kind"] == "blocked"
+    assert containment_record["reason_code"] == "engine-action-interrupted"
+    assert containment_record["action"]["operation_id"] == action.operation_id
+    expected_containment = dict(before_containment)
+    expected_containment["continuation_operation_journal"] = operation_journal_after_containment
+    assert after_containment == expected_containment
+    assert after_containment["retry_ledger"] == before_containment["retry_ledger"]
+    assert after_replay_execution == after_containment
+    assert guidance.status_code == listed.status_code == shown.status_code == 200
+    assert guidance.json()["groups"]
+    assert listed.json()["totals"]
+    assert shown.json()["item"]["acceptance"] == []
+    assert shown.json()["item"]["card"]["change_id"] == "change-a"
+    assert shown.json()["item"]["readiness"]["basis"]["continuation_id"] == action.operation_id
+    readiness = shown.json()["item"]["readiness"]
+    assert readiness["reason_code"] == "engine-action-interrupted"
+    assert readiness["status"] == "blocked"
+    assert readiness["checks_state"] == reloaded.get_change("change-a").readiness.checks_state
+    assert readiness["executable"] is False
+    assert readiness["action"] is None
+    assert readiness["prompt"] == (
+        "/continue-change change-a only after the Delivery engine owner verifies host/worker closure and settles "
+        "all descendant writers and jobs; preserve custody and journals, and do not retry or infer termination."
+    )
+    next_step = shown.json()["item"]["card"]["next_step"]
+    assert "Delivery engine owner" in next_step
+    assert "Preserve custody and journals" in next_step
+    assert "all descendant writers and jobs" in next_step
+    assert "do not retry" in next_step
+    assert shown.json()["item"]["card"]["next_actor"] == "agent"
+    assert guidance.json() == repeated_guidance.json()
+    assert listed.json() == repeated_listed.json()
+    assert shown.json() == repeated_shown.json()
+    assert reloaded.get_change("change-a").continuation_action == action
+    assert reloaded.get_change("change-a").continuation_action.finished_at is None
+    assert reloaded._runtimes["change-c"].frontier_bytes() == sibling_frontier  # noqa: SLF001
+    assert reloaded._runtimes["change-c"].checkpoint_publication_state() == sibling_publication  # noqa: SLF001
+    after_read_only_views = _loader_engine_state_snapshot(
+        reloaded,
+        runtime_root=runtime_root,
+        remote_refs=_remote_refs(remote),
+        provider=provider,
+        change_id="change-a",
+        operation_id=action.operation_id,
+    )
+    _assert_loader_observation_only(after_containment, after_read_only_views)
+
+
+@pytest.mark.parametrize("writer_recorded", [False, True])
+def test_http_default_loader_contains_failed_claim_activation(  # noqa: PLR0915 - verify persisted activation and independent restart progress.
+    tmp_path: Path,
+    *,
+    writer_recorded: bool,
+) -> None:
+    repository, _runtime_root = _seed_loader_composed_completed_change(
+        tmp_path,
+        (("change-a", DeliveryStage.IMPLEMENTATION), ("change-b", DeliveryStage.IMPLEMENTATION)),
+    )
+    application = load_core_delivery_application(_startup_config(), workspace_root=repository)
+    coordinator = application._coordinator  # noqa: SLF001
+    acquire = coordinator.acquire
+
+    def fail(change_id: str, writer: object, **kwargs: object) -> None:
+        if writer_recorded:
+            acquire(change_id, writer, **kwargs)
+        failure_message = "injected writer persistence failure"
+        raise OSError(failure_message)
+
+    basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
+    with (
+        patch.object(coordinator, "acquire", fail),
+        TestClient(assemble_target_app(application)) as client,
+    ):
+        result = client.post(
+            "/api/changes/change-a/continuation/acquire",
+            json={
+                "expected_basis": basis,
+                "capabilities": ["builder"],
+                "host_id": "synthetic-host",
+                "session_id": "synthetic-session",
+            },
+        )
+    assert result.status_code == 200
+    payload = result.json()
+    assert payload["kind"] == "unavailable"
+    assert payload["reason_code"] == "claim-activation-failed"
+    assert payload["launch"] is None
+    assert payload["readiness"]["prompt"].startswith("/repair-delivery")
+    assert "read-only" in payload["readiness"]["prompt"]
+    assert payload["failure"]["claim_id"]
+    assert payload["failure"]["attempt_id"]
+    assert (coordinator.show("change-a").writer is not None) is writer_recorded
+    failed_claim = application._runtimes["change-a"].show_binding("OUT-001").active_claim  # noqa: SLF001
+    failed_episode = application._runtimes["change-a"].retry_ledger().read().episodes[0]  # noqa: SLF001
+    assert failed_claim is not None
+    assert (failed_claim.claim_id, failed_claim.attempt_id) == (
+        payload["failure"]["claim_id"],
+        payload["failure"]["attempt_id"],
+    )
+    assert failed_episode.attempt_ids == (failed_claim.attempt_id,)
+    before_reload = _loader_activation_state_snapshot(application)
+    reloaded = load_core_delivery_application(_startup_config(), workspace_root=repository)
+    assert _loader_activation_state_snapshot(reloaded) == before_reload
+    reloaded_coordinator = reloaded._coordinator  # noqa: SLF001
+    reloaded_runtime = reloaded._runtimes["change-a"]  # noqa: SLF001
+    assert reloaded_runtime.show_binding("OUT-001").active_claim == failed_claim
+    assert reloaded_runtime.retry_ledger().read().episodes == (failed_episode,)
+    assert (reloaded_coordinator.show("change-a").writer is not None) is writer_recorded
+    coordination_path = reloaded_coordinator.runtime_root / "coordination/changes/change-a.json"
+    coordination_before = coordination_path.read_bytes()
+    with TestClient(assemble_target_app(reloaded)) as client:
+        first_read = client.get("/api/work-items")
+        second_read = client.get("/api/work-items")
+        assert first_read.status_code == second_read.status_code == 200
+        assert second_read.json() == first_read.json()
+        first_readiness = next(
+            item["readiness"]
+            for group in first_read.json()["groups"]
+            for item in group["items"]
+            if item["change_id"] == "change-a" and item["scope"] == "outcome"
+        )
+        assert first_readiness["executable"] is False
+        assert first_readiness["prompt"].startswith("/repair-delivery")
+        assert "dispatch a replacement" in first_readiness["prompt"]
+        blocked = client.post(
+            "/api/changes/change-a/continuation/acquire",
+            json={
+                "expected_basis": first_readiness["basis"],
+                "capabilities": ["builder"],
+                "host_id": "synthetic-host",
+                "session_id": "retry-after-restart",
+            },
+        )
+    after_refusal = _loader_activation_state_snapshot(reloaded)
+    assert after_refusal == before_reload
+    with TestClient(assemble_target_app(reloaded)) as client:
+        sibling_read = client.get("/api/work-items")
+        assert sibling_read.status_code == 200
+        sibling_readiness = next(
+            item["readiness"]
+            for group in sibling_read.json()["groups"]
+            for item in group["items"]
+            if item["change_id"] == "change-b" and item["scope"] == "outcome"
+        )
+        sibling_result = client.post(
+            "/api/changes/change-b/continuation/acquire",
+            json={
+                "expected_basis": sibling_readiness["basis"],
+                "capabilities": ["builder"],
+                "host_id": "synthetic-host",
+                "session_id": "sibling-after-restart",
+            },
+        )
+    assert blocked.status_code == 200
+    assert blocked.json()["launch"] is None
+    assert blocked.json()["reason_code"] == ("active-custody" if writer_recorded else "claim-custody-unreconciled")
+    assert coordination_path.read_bytes() == coordination_before
+    assert reloaded_runtime.show_binding("OUT-001").active_claim == failed_claim
+    assert reloaded_runtime.retry_ledger().read().episodes == (failed_episode,)
+    assert sibling_result.status_code == 200
+    assert sibling_result.json()["kind"] == "acquired"
+    assert sibling_result.json()["launch"] is not None
+    assert reloaded._runtimes["change-b"].show_binding("OUT-001").active_claim is not None  # noqa: SLF001
+    after_sibling_progress = _loader_activation_state_snapshot(reloaded)
+    before_changes = before_reload["changes"]
+    after_changes = after_sibling_progress["changes"]
+    assert after_changes["change-a"] == before_changes["change-a"]
+    assert after_changes["change-b"]["frontier"] != before_changes["change-b"]["frontier"]
+    assert after_changes["change-b"]["workspace"] == before_changes["change-b"]["workspace"]
+    assert after_sibling_progress["repository_refs"] == before_reload["repository_refs"]
+
+
+def test_http_finalizer_handoff_contains_failure_before_checks(tmp_path: Path) -> None:
+    _repository, _runtime_root, _remote, _provider, application = _loader_registered_engine_action_fixture(
+        tmp_path, "sync-target"
+    )
+    basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
+    with TestClient(assemble_target_app(application)) as client:
+        synchronized = client.post(
+            "/api/changes/change-a/continuation/acquire",
+            json={
+                "expected_basis": basis,
+                "capabilities": ["engine"],
+                "host_id": "synthetic-host",
+                "session_id": "sync-session",
+            },
+        )
+        assert synchronized.status_code == 200
+        sync_action = synchronized.json()["engine_action"]
+        assert sync_action is not None
+        assert sync_action["kind"] == "sync-target"
+        executed_sync = client.post(
+            "/api/changes/change-a/continuation/execute",
+            json={"operation_id": sync_action["operation_id"]},
+        )
+        assert executed_sync.status_code == 200
+        assert executed_sync.json()["kind"] == "completed"
+
+        detail = client.get("/api/changes/change-a/work-items/publication")
+        assert detail.status_code == 200
+        finalizer_basis = detail.json()["item"]["readiness"]["basis"]
+        acquired = client.post(
+            "/api/changes/change-a/continuation/acquire",
+            json={
+                "expected_basis": finalizer_basis,
+                "capabilities": ["finalizer"],
+                "host_id": "synthetic-host",
+                "session_id": "finalizer-session",
+            },
+        )
+        assert acquired.status_code == 200
+        finalization = acquired.json()["finalization"]
+        assert finalization is not None
+        (
+            application._coordinator.show("change-a").worktree_path / "product.txt"  # noqa: SLF001
+        ).write_text("dirty before checks\n", encoding="utf-8")
+        finalization_basis = application.show_finalization_context("change-a").readiness.basis
+        failure = _failure_request(
+            application,
+            attempt_key=finalization["attempt"]["writer"]["attempt_id"],
+            category="custody-preflight",
+            code=FinalizationFailureCode.WORKSPACE_DIRTY,
+            checks_state="not-run",
+            expected_workspace_fingerprint=finalization_basis.workspace_fingerprint,
+            paths=("product.txt",),
+        )
+        retry_now = datetime.now(UTC).isoformat()
+        application._clock = lambda: retry_now  # noqa: SLF001
+        report = application.report_finalization_failure(failure)
+
+        current = client.get("/api/changes/change-a/work-items/publication")
+        assert current.status_code == 200
+        current_readiness = current.json()["item"]["readiness"]
+        stopped = client.post(
+            "/api/changes/change-a/continuation/acquire",
+            json={
+                "expected_basis": current_readiness["basis"],
+                "capabilities": ["finalizer"],
+                "host_id": "synthetic-host",
+                "session_id": "finalizer-session-2",
+            },
+        )
+    assert stopped.status_code == 200
+    assert stopped.json()["kind"] == "busy"
+    assert stopped.json()["reason_code"] == "active-custody"
+    assert stopped.json()["finalization"] is None
+    assert stopped.json()["readiness"]["checks_state"] == "not-run"
+    assert application.get_change("change-a").readiness.last_attempt.report == report
+    assert application._coordinator.show("change-a").writer is not None  # noqa: SLF001
+
+
+def test_http_finalizer_handoff_refusal_survives_restart_without_mutation(  # noqa: PLR0915 - restart safety proof.
+    tmp_path: Path,
+) -> None:
+    repository, runtime_root, remote, provider, application = _loader_registered_engine_action_fixture(
+        tmp_path, "sync-target"
+    )
+    basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
+    with TestClient(assemble_target_app(application)) as client:
+        acquired_sync = client.post(
+            "/api/changes/change-a/continuation/acquire",
+            json={
+                "expected_basis": basis,
+                "capabilities": ["engine"],
+                "host_id": "synthetic-host",
+                "session_id": "sync-session",
+            },
+        )
+        assert acquired_sync.status_code == 200
+        sync_action = acquired_sync.json()["engine_action"]
+        assert sync_action is not None
+        assert sync_action["kind"] == "sync-target"
+        executed_sync = client.post(
+            "/api/changes/change-a/continuation/execute",
+            json={"operation_id": sync_action["operation_id"]},
+        )
+        assert executed_sync.status_code == 200
+        publication = client.get("/api/changes/change-a/work-items/publication")
+        assert publication.status_code == 200
+        finalizer_basis = publication.json()["item"]["readiness"]["basis"]
+        acquired_finalizer = client.post(
+            "/api/changes/change-a/continuation/acquire",
+            json={
+                "expected_basis": finalizer_basis,
+                "capabilities": ["finalizer"],
+                "host_id": "synthetic-host",
+                "session_id": "finalizer-session",
+            },
+        )
+        assert acquired_finalizer.status_code == 200
+        finalization = acquired_finalizer.json()["finalization"]
+        assert finalization is not None
+        worktree = application._coordinator.show("change-a").worktree_path  # noqa: SLF001
+        (worktree / "product.txt").write_text("dirty before checks\n", encoding="utf-8")
+        finalization_basis = application.show_finalization_context("change-a").readiness.basis
+        failure = _failure_request(
+            application,
+            attempt_key=finalization["attempt"]["writer"]["attempt_id"],
+            category="custody-preflight",
+            code=FinalizationFailureCode.WORKSPACE_DIRTY,
+            checks_state="not-run",
+            expected_workspace_fingerprint=finalization_basis.workspace_fingerprint,
+            paths=("product.txt",),
+        )
+        retry_now = datetime.now(UTC).isoformat()
+        application._clock = lambda: retry_now  # noqa: SLF001
+        report = application.report_finalization_failure(failure)
+
+    report_root = runtime_root / "finalization-reports/change-a"
+
+    def report_files() -> tuple[tuple[str, bytes], ...]:
+        return tuple(
+            (path.relative_to(report_root).as_posix(), path.read_bytes())
+            for path in sorted(report_root.rglob("*.json"))
+            if path.is_file()
+        )
+
+    assert report_files()
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    _git(repository, "config", f"url.{remote}.insteadOf", "https://github.com/example/project.git")
+
+    def state_snapshot(candidate: PortfolioApplication) -> dict[str, object]:
+        candidate_coordinator = candidate._coordinator  # noqa: SLF001
+        candidate_runtime = candidate._runtimes["change-a"]  # noqa: SLF001
+        return {
+            "coordination": (candidate_coordinator.runtime_root / "coordination/changes/change-a.json").read_bytes(),
+            "frontier": candidate_runtime.frontier_bytes(),
+            "retry_ledger": candidate_runtime.retry_ledger().read(),
+            "workspace": _workspace_mutation_snapshot(candidate_coordinator.show("change-a").worktree_path),
+            "remote_refs": _remote_refs(remote),
+            "writer": candidate_coordinator.show("change-a").writer,
+            "report_files": report_files(),
+            "provider_mutations": (provider.create_calls, provider.update_calls, provider.draft_state_calls),
+        }
+
+    before_reload = state_snapshot(application)
+    reloaded = load_core_delivery_application(
+        _startup_config(),
+        workspace_root=repository,
+        publication_provider=provider,
+    )
+    reloaded._clock = lambda: retry_now  # noqa: SLF001
+    after_reload = state_snapshot(reloaded)
+    assert after_reload == before_reload
+    with TestClient(assemble_target_app(reloaded)) as client:
+        detail = client.get("/api/changes/change-a/work-items/publication")
+        repeated = client.get("/api/changes/change-a/work-items/publication")
+        assert detail.status_code == repeated.status_code == 200
+        assert detail.json() == repeated.json()
+        readiness = detail.json()["item"]["readiness"]
+        assert readiness["checks_state"] == "not-run"
+        assert readiness["last_attempt"]["report"] == report.model_dump(mode="json")
+        refused = client.post(
+            "/api/changes/change-a/continuation/acquire",
+            json={
+                "expected_basis": readiness["basis"],
+                "capabilities": ["finalizer"],
+                "host_id": "synthetic-host",
+                "session_id": "finalizer-after-restart",
+            },
+        )
+    assert refused.status_code == 200
+    assert refused.json()["kind"] == "busy", refused.json()
+    assert refused.json()["reason_code"] == "active-custody"
+    assert refused.json()["finalization"] is None
+    assert refused.json()["readiness"]["checks_state"] == "not-run"
+    assert state_snapshot(reloaded) == after_reload
+
+
+def test_http_default_loader_rejects_stale_basis_without_acquisition(tmp_path: Path) -> None:
+    _repository, _runtime_root, _remote, provider, application, _head_a, _head_b = _loader_composed_engine_fixture(
+        tmp_path
+    )
+    basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
+    with TestClient(assemble_target_app(application)) as client:
+        result = client.post(
+            "/api/changes/change-a/continuation/acquire",
+            json={
+                "expected_basis": {**basis, "frontier_digest": "0" * 64},
+                "capabilities": ["engine"],
+                "host_id": "synthetic-host",
+                "session_id": "synthetic-session",
+            },
+        )
+    assert result.status_code == 200
+    assert result.json()["kind"] == "stale"
+    assert result.json()["reason_code"] == "readiness-changed"
+    assert result.json()["launch"] is None
+    assert provider.draft_state_calls == 0
+
+
+@pytest.mark.parametrize("coordination_state", ["malformed", "missing"])
+def test_http_default_loader_reports_unavailable_custody(tmp_path: Path, coordination_state: str) -> None:  # noqa: PLR0915
+    repository, _runtime_root, remote, provider, application, _head_a, _head_b = _loader_composed_engine_fixture(
+        tmp_path
+    )
+    coordination = application._coordinator.runtime_root / "coordination/changes/change-a.json"  # noqa: SLF001
+    malformed_marker = b"PRIVATE-MALFORMED-COORDINATION-CONTENT"
+    if coordination_state == "malformed":
+        coordination.write_bytes(malformed_marker)
+    else:
+        coordination.unlink()
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    _git(repository, "config", f"url.{remote}.insteadOf", "https://github.com/example/project.git")
+    reloaded = load_core_delivery_application(
+        _startup_config(),
+        workspace_root=repository,
+        publication_provider=provider,
+    )
+    coordination_before = coordination.read_bytes() if coordination.exists() else None
+    remote_refs_before = _remote_refs(remote)
+    with TestClient(assemble_target_app(reloaded)) as client:
+        result = client.post(
+            "/api/changes/change-a/continuation/acquire",
+            json={
+                "expected_basis": {"contract_digest": "a" * 64, "frontier_digest": "b" * 64},
+                "capabilities": ["engine"],
+                "host_id": "synthetic-host",
+                "session_id": "synthetic-session",
+            },
+        )
+        repeated = client.post(
+            "/api/changes/change-a/continuation/acquire",
+            json={
+                "expected_basis": {"contract_digest": "a" * 64, "frontier_digest": "b" * 64},
+                "capabilities": ["engine"],
+                "host_id": "synthetic-host",
+                "session_id": "repeated-read",
+            },
+        )
+        portfolio = client.get("/api/work-items")
+        repeated_portfolio = client.get("/api/work-items")
+        detail = client.get("/api/changes/change-a/work-items/publication")
+    assert result.status_code == 200
+    assert repeated.status_code == 200
+    assert result.json() == repeated.json()
+    assert result.json()["kind"] == "unavailable"
+    assert result.json()["reason_code"] == "coordination-unavailable"
+    assert result.json()["engine_action"] is None
+    assert portfolio.status_code == repeated_portfolio.status_code == 200
+    assert portfolio.json() == repeated_portfolio.json()
+    assert detail.status_code == 200
+    readiness = detail.json()["item"]["readiness"]
+    assert readiness["status"] == "unavailable"
+    assert readiness["checks_state"] == "unknown"
+    assert readiness["prompt"] == (
+        "Do not release, retry, or redispatch Change change-a: canonical Delivery authority is unavailable "
+        "(coordination-unavailable); checks are unknown. Preserve existing custody and journals. Use "
+        "/repair-delivery Diagnose Change change-a read-only; preserve existing custody and journals. This does "
+        "not repair authority or prove host/worker closure; the responsible owner must resolve the condition "
+        "separately before Delivery rereads it."
+    )
+    assert (coordination.read_bytes() if coordination.exists() else None) == coordination_before
+    assert _remote_refs(remote) == remote_refs_before
+    assert provider.draft_state_calls == 0
+
+    def tree_snapshot(root: Path) -> tuple[tuple[str, str, bytes | str | None], ...]:
+        entries = []
+        for path in (root, *sorted(root.rglob("*"))):
+            relative = path.relative_to(root.parent).as_posix()
+            if path.is_symlink():
+                entries.append((relative, "symlink", path.readlink().as_posix()))
+            elif path.is_dir():
+                entries.append((relative, "directory", None))
+            elif path.is_file():
+                entries.append((relative, "file", path.read_bytes()))
+            else:
+                entries.append((relative, "other", None))
+        return tuple(entries)
+
+    repository_before_cli = tree_snapshot(repository)
+    diagnostics_cli = subprocess.run(  # noqa: S603
+        (
+            sys.executable,
+            "-B",
+            str(Path(__file__).resolve().parents[1] / "serve/tools/src/owlbear_tools/delivery_diagnostics.py"),
+            "inspect",
+            "--project-root",
+            str(repository),
+            "--change-id",
+            "change-a",
+            "--format",
+            "json",
+        ),
+        cwd=repository,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert diagnostics_cli.returncode == 1
+    diagnostics = json.loads(diagnostics_cli.stdout)
+    assert diagnostics["status"] == "degraded"
+    assert diagnostics["change_scope"] == "selected"
+    expected_coordination_diagnostic = (
+        "COORDINATION_MALFORMED" if coordination_state == "malformed" else "COORDINATION_MISSING"
+    )
+    assert expected_coordination_diagnostic in diagnostics["diagnostic_codes"]
+    if coordination_state == "missing":
+        assert diagnostics["inspection_complete"] is False
+        assert "PENDING_EFFECTS_UNKNOWN" in diagnostics["diagnostic_codes"]
+        assert diagnostics["pending_effects"] == "unknown"
+    assert diagnostics["writes_performed"] is False
+    if coordination_state == "malformed":
+        assert malformed_marker.decode() not in diagnostics_cli.stdout + diagnostics_cli.stderr
+    assert tree_snapshot(repository) == repository_before_cli
+    assert _remote_refs(remote) == remote_refs_before
+    assert provider.draft_state_calls == 0
+
+
+def test_http_and_offline_diagnostics_bound_an_unknown_change_without_mutation(tmp_path: Path) -> None:
+    repository, _runtime_root, remote, provider, _application, _head_a, _head_b = _loader_composed_engine_fixture(
+        tmp_path
+    )
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    _git(repository, "config", f"url.{remote}.insteadOf", "https://github.com/example/project.git")
+    reloaded = load_core_delivery_application(
+        _startup_config(),
+        workspace_root=repository,
+        publication_provider=provider,
+    )
+
+    def tree_snapshot(root: Path) -> tuple[tuple[str, str, bytes | str | None], ...]:
+        entries = []
+        for path in (root, *sorted(root.rglob("*"))):
+            relative = path.relative_to(root.parent).as_posix()
+            if path.is_symlink():
+                entries.append((relative, "symlink", path.readlink().as_posix()))
+            elif path.is_dir():
+                entries.append((relative, "directory", None))
+            elif path.is_file():
+                entries.append((relative, "file", path.read_bytes()))
+            else:
+                entries.append((relative, "other", None))
+        return tuple(entries)
+
+    repository_before = tree_snapshot(repository)
+    remote_refs_before = _remote_refs(remote)
+    provider_calls_before = provider.draft_state_calls
+    with TestClient(assemble_target_app(reloaded)) as client:
+        first = client.get("/api/changes/change-missing/work-items/publication")
+        repeated = client.get("/api/changes/change-missing/work-items/publication")
+    assert first.status_code == repeated.status_code == 409
+    assert first.json() == repeated.json()
+    assert first.json()["code"] == "ERR_DELIVERY_PORTFOLIO"
+    diagnostics_cli = subprocess.run(  # noqa: S603
+        (
+            sys.executable,
+            "-B",
+            str(Path(__file__).resolve().parents[1] / "serve/tools/src/owlbear_tools/delivery_diagnostics.py"),
+            "inspect",
+            "--project-root",
+            str(repository),
+            "--change-id",
+            "change-missing",
+            "--format",
+            "json",
+        ),
+        cwd=repository,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert diagnostics_cli.returncode == 1
+    diagnostics = json.loads(diagnostics_cli.stdout)
+    assert diagnostics["status"] == "degraded"
+    assert diagnostics["change_scope"] == "selected"
+    assert "CHANGE_NOT_FOUND" not in diagnostics["diagnostic_codes"]
+    assert "CONFIG_MISSING" in diagnostics["diagnostic_codes"]
+    assert diagnostics["pending_effects"] is False
+    assert diagnostics["inspection_complete"] is False
+    assert diagnostics["writes_performed"] is False
+    assert repository_before == tree_snapshot(repository)
+    assert _remote_refs(remote) == remote_refs_before
+    assert provider.draft_state_calls == provider_calls_before
+
+
+def _remote_refs(repository: Path) -> str:
+    result = subprocess.run(  # noqa: S603
+        (  # noqa: S607
+            "git",
+            "-c",
+            "safe.bareRepository=all",
+            "-C",
+            str(repository),
+            "for-each-ref",
+            "--format=%(refname) %(objectname)",
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    return f"{result.returncode}\n{result.stdout}\n{result.stderr}"
+
+
 def _client(
     failures: dict[str, Exception] | None = None,
     health: DeliveryHealthView | None = None,
@@ -952,6 +2760,11 @@ def test_list_and_detail_preserve_known_unavailable_change_projection() -> None:
                 },
                 "action": None,
                 "last_attempt": None,
+                "attempts": 0,
+                "next_eligible_at": None,
+                "stop_reason": None,
+                "retry_history": [],
+                "prompt": None,
             },
         },
     ]
@@ -1130,6 +2943,10 @@ def test_continuation_execution_forwards_only_the_retained_operation() -> None:
         {"operation_id": CONTINUATION_ID, "change_id": "change-b"},
         {"operation_id": CONTINUATION_ID, "confirmed_lost": True},
         {"operation_id": CONTINUATION_ID, "kind": "completed"},
+        {"operation_id": CONTINUATION_ID, "commands": ["git status"]},
+        {"operation_id": CONTINUATION_ID, "budget": 1},
+        {"operation_id": CONTINUATION_ID, "receipt": {"success": True}},
+        {"operation_id": CONTINUATION_ID, "stop_assertion": True},
         {"operation_id": "sync-change-a"},
         {},
     ],
@@ -2051,3 +3868,65 @@ def test_completed_history_routes_publish_versioned_discriminated_schema() -> No
             "abandoned-change": "#/components/schemas/AbandonedChangeRecord",
         },
     }
+
+
+def test_http_retry_diagnostic_is_blocked_and_projected(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root, launch, _transition = builder_transition_case(tmp_path, "block")
+    transition = RetryDelivery(
+        action="retry",
+        outcome_id=launch.outcome_id,
+        claim_id=launch.claim.claim_id,
+        abandoned_commit=_git(launch.worktree_path, "rev-parse", "HEAD"),
+        attempt_id=launch.claim.attempt_id,
+        failure_code="builder-failed",
+    )
+    before_frontier = runtimes["change-a"].frontier_bytes()
+    before_payload = json.loads(before_frontier)
+    before_coordination = coordinator.show("change-a")
+    before_workspace = _workspace_mutation_snapshot(launch.worktree_path)
+
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
+        application.transition_delivery("change-a", transition)
+
+    with TestClient(assemble_target_app(application)) as client:
+        detail_response = client.get("/api/changes/change-a/work-items/outcome:OUT-001")
+        change_response = client.get("/api/work-items")
+    assert detail_response.status_code == change_response.status_code == 200
+    detail = detail_response.json()["item"]
+    change = change_response.json()["groups"][0]["items"][0]
+    assert detail["retry_diagnostic"] == {
+        "code": "ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED",
+        "attempt_id": launch.claim.attempt_id,
+        "transition": transition.model_dump(mode="json"),
+    }
+    assert detail["recovery_attention"] is None
+    assert detail["active_claim"]["attempt_id"] == launch.claim.attempt_id
+    assert detail["card"]["needs"] == "none"
+    assert detail["card"]["next_actor"] == "none"
+    assert detail["card"]["activity"]["state"] == "idle"
+    assert detail["card"]["action"]["kind"] == "none"
+    assert launch.claim.owner_id in detail["card"]["next_step"]
+    prompt = detail["readiness"]["prompt"]
+    for readiness in (change["readiness"], detail["readiness"]):
+        assert readiness["status"] == "blocked"
+        assert readiness["reason_code"] == "retry-transition-contained"
+        assert readiness["executable"] is False
+        assert readiness["next_actor"] == "none"
+        assert readiness["operation"] is None
+        assert readiness["action"] is None
+        assert readiness["prompt"] == prompt
+    assert prompt.startswith("/repair-delivery Inspect only Change change-a")
+    assert "`delivery-diagnose inspect --change-id change-a`" in prompt
+    assert "Make no MCP calls" in prompt
+    assert "do not retry" in prompt
+    assert "retry budget" in prompt
+    for unsupported_tool in ("get_change", "show_operator_context", "acquire_change_action", "transition_delivery"):
+        assert unsupported_tool not in prompt
+
+    after_payload = json.loads(runtimes["change-a"].frontier_bytes())
+    assert after_payload["bindings"][0]["retry_diagnostic"] == detail["retry_diagnostic"]
+    assert "retry_diagnostic" not in before_payload["bindings"][0]
+    after_payload["bindings"][0].pop("retry_diagnostic")
+    assert after_payload == before_payload
+    assert coordinator.show("change-a") == before_coordination
+    assert _workspace_mutation_snapshot(launch.worktree_path) == before_workspace

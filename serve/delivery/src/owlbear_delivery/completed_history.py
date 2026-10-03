@@ -318,7 +318,7 @@ class CompletedHistoryCatalog:
             self._malformed("abandoned-history coordination is invalid", change_id, cause=exc)
         conflict = coordination.target_sync_conflict
         return (
-            coordination.worktree_cleanup is None,
+            coordination.worktree_cleanup is None and coordination.writer is None,
             conflict is not None,
             conflict.target_head if conflict is not None else None,
             conflict.operation_id if conflict is not None else None,

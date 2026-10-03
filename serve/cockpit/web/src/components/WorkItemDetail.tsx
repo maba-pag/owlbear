@@ -70,7 +70,7 @@ interface WorkItemDetailProps {
   actionResult: string | null;
   onAnswerRequest: (requestId: string, resolution: DeliveryRequestResolution) => Promise<Error | null>;
   onClearBlock: (blockId: string, note: string, locators: string[]) => Promise<Error | null>;
-  onRecoverClaim: (attemptId: string, claimId: string) => Promise<Error | null>;
+  onReleaseStuckWorker: (attemptId: string, claimId: string) => Promise<Error | null>;
   onPreviewBackward: (target: WorkItemStage) => Promise<BackwardMovePreview | null>;
   onMoveBackward: (target: WorkItemStage, reason: string, snapshotVersion: string) => Promise<Error | null>;
   onReconcilePublication: () => Promise<Error | null>;
@@ -387,15 +387,29 @@ function elapsedAge(startedAt: string): string {
   return `${Math.max(Math.floor(elapsed / 60_000), 0)}m`;
 }
 
-function ClaimSection({ detail, pendingAction, actionError, onRecoverClaim }: WorkItemDetailProps) {
+function ClaimSection({ detail, pendingAction, actionError, onReleaseStuckWorker }: WorkItemDetailProps) {
   const claim = detail.item.active_claim;
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmTarget, setConfirmTarget] = useState<{ attemptId: string; claimId: string } | null>(null);
   const [actionFailed, setActionFailed] = useState(false);
   if (!claim) return null;
-  const recover = async () => {
-    const error = await onRecoverClaim(claim.attempt_id, claim.claim_id);
+  const readiness = detail.item.card.readiness ?? detail.item.readiness;
+  // A stall wait belongs to Delivery's automatic window-loss settlement, not to a user release.
+  const releasable =
+    (claim.worker_role === "planner" || claim.worker_role === "builder") &&
+    Boolean(claim.attempt_id && claim.claim_id) &&
+    readiness?.status === "running";
+  // Polling may replace the claim; the dialog only ever confirms the claim it was opened for.
+  const confirmOpen =
+    releasable &&
+    confirmTarget !== null &&
+    confirmTarget.attemptId === claim.attempt_id &&
+    confirmTarget.claimId === claim.claim_id;
+  const closeConfirmation = () => setConfirmTarget(null);
+  const release = async () => {
+    if (!confirmTarget) return;
+    const error = await onReleaseStuckWorker(confirmTarget.attemptId, confirmTarget.claimId);
     setActionFailed(error !== null);
-    if (!error) setConfirmOpen(false);
+    if (!error) closeConfirmation();
   };
   return (
     <section aria-labelledby="work-claim-heading">
@@ -436,9 +450,10 @@ function ClaimSection({ detail, pendingAction, actionError, onRecoverClaim }: Wo
       </p>
       {claim.continuation ? (
         <p className="mt-static-md text-sm leading-relaxed" data-testid="claim-continuation-custody">
-          Delivery holds this custody as an engine continuation. Caller-confirmed recovery is not supported for it.
+          Delivery holds this custody as an engine continuation.
         </p>
-      ) : (
+      ) : null}
+      {releasable ? (
         <PButton
           className="mt-static-md"
           type="button"
@@ -447,12 +462,12 @@ function ClaimSection({ detail, pendingAction, actionError, onRecoverClaim }: Wo
           disabled={pendingAction !== null}
           onClick={() => {
             setActionFailed(false);
-            setConfirmOpen(true);
+            setConfirmTarget({ attemptId: claim.attempt_id, claimId: claim.claim_id });
           }}
         >
-          Recover confirmed-lost claim
+          Release stuck worker
         </PButton>
-      )}
+      ) : null}
       {confirmOpen ? (
         <PModal
           open
@@ -460,29 +475,34 @@ function ClaimSection({ detail, pendingAction, actionError, onRecoverClaim }: Wo
           aria-modal="true"
           dismissButton={false}
           disableBackdropClick
-          onDismiss={() => setConfirmOpen(false)}
-          aria={{ role: "alertdialog", "aria-label": "Confirm lost claim" }}
+          onDismiss={closeConfirmation}
+          aria={{ role: "alertdialog", "aria-label": "Release stuck worker" }}
         >
-          <ConfirmationContent onClose={() => setConfirmOpen(false)}>
+          <ConfirmationContent onClose={closeConfirmation}>
             <PHeading tag="h2" size="lg">
-              Confirm lost claim
+              Release stuck worker
             </PHeading>
             <p className="text-sm">
-              Confirm the worker has stopped and this exact claim is lost. No process-status inference is used.
+              Use this only for a worker whose chat was stopped or whose VS Code window closed. Delivery records the
+              attempt as failed, and it counts toward this work's retry budget.
+            </p>
+            <p className="text-sm">
+              The worktree, including uncommitted work, is preserved for the next attempt. Delivery refuses the release
+              and changes nothing while any process still uses the worktree or if it changed in the last 30 seconds.
             </p>
             <dl className="grid gap-static-xs break-all text-sm">
               <dt>Attempt</dt>
-              <dd>{claim.attempt_id}</dd>
+              <dd>{confirmTarget?.attemptId}</dd>
               <dt>Claim</dt>
-              <dd>{claim.claim_id}</dd>
+              <dd>{confirmTarget?.claimId}</dd>
             </dl>
             {actionFailed && actionError ? <ActionFeedback error={actionError} result={null} /> : null}
             <div className="flex flex-wrap justify-end gap-static-xs">
-              <PButton type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>
+              <PButton type="button" variant="secondary" onClick={closeConfirmation}>
                 Cancel
               </PButton>
-              <PButton type="button" disabled={pendingAction !== null} onClick={() => void recover()}>
-                {pendingAction === "recover" ? "Recovering..." : "Confirm lost and recover"}
+              <PButton type="button" disabled={pendingAction !== null} onClick={() => void release()}>
+                {pendingAction === "release-stuck" ? "Releasing..." : "Confirm release"}
               </PButton>
             </div>
           </ConfirmationContent>
@@ -493,8 +513,8 @@ function ClaimSection({ detail, pendingAction, actionError, onRecoverClaim }: Wo
 }
 
 function ExceptionalStateSection({ detail }: Pick<WorkItemDetailProps, "detail">) {
-  const { return_context: returned, recovery_attention: recovery } = detail.item;
-  if (!returned && !recovery) return null;
+  const { return_context: returned, recovery_attention: recovery, retry_diagnostic: retry } = detail.item;
+  if (!returned && !recovery && !retry) return null;
   return (
     <section aria-labelledby="work-attention-heading">
       <PHeading id="work-attention-heading" tag="h3" size="md">
@@ -512,6 +532,16 @@ function ExceptionalStateSection({ detail }: Pick<WorkItemDetailProps, "detail">
         ) : null}
         {recovery ? (
           <AttentionItem label="Recovery attention" reason={recovery.reason} retry={recovery.retry_condition} />
+        ) : null}
+        {retry ? (
+          <AttentionItem
+            label="Retry refused"
+            reason={
+              `${retry.code}: ${retry.transition.failure_code} for attempt ${retry.attempt_id} ` +
+              `and claim ${retry.transition.claim_id} remains active because host worker-exclusion evidence is missing.`
+            }
+            retry="Do not retry or release until supported host exclusion is verified."
+          />
         ) : null}
       </div>
     </section>
@@ -835,6 +865,9 @@ function ReadinessAttempt({ attempt }: { attempt: NonNullable<DeliveryReadiness[
         </dd>
         <dt className="text-contrast-medium">Checks</dt>
         <dd>{READINESS_CHECKS_LABELS[attempt.report.request.checks_state]}</dd>
+        <IdentityRow label="Procedure" value={attempt.report.request.procedure_id} />
+        <IdentityRow label="Proof fingerprint before" value={attempt.report.request.proof_fingerprint_before} />
+        <IdentityRow label="Proof fingerprint after" value={attempt.report.request.proof_fingerprint_after} />
         <IdentityRow label="Report" value={attempt.report.report_id} />
         <IdentityRow label="Observed at" value={attempt.report.observed_at} />
       </dl>
@@ -863,15 +896,51 @@ function ReadinessSection({ readiness }: { readiness: DeliveryReadiness | null |
       <p className="mt-static-xs text-sm leading-relaxed" data-readiness-reason={readiness.reason_code}>
         {READINESS_REASON_LABELS[readiness.reason_code]}
       </p>
+      {readiness.prompt ? (
+        <pre
+          className="mt-static-xs whitespace-pre-wrap break-words rounded-md bg-contrast-low p-static-xs text-xs"
+          data-testid="readiness-prompt"
+        >
+          <code>{readiness.prompt}</code>
+        </pre>
+      ) : null}
       {!readiness.executable ? (
         <p className="mt-static-xs text-xs text-contrast-medium" data-testid="readiness-not-executable">
           Delivery offers no runnable operation for this Work Item right now.
         </p>
       ) : null}
+      {readiness.reason_code === "worker-stall-wait" && !readiness.next_eligible_at ? (
+        <p className="mt-static-xs text-xs text-contrast-medium" data-testid="worker-stall-no-eligible-time">
+          No eligible time yet: processes still use this worker's worktree, or it cannot be observed safely. The
+          readiness prompt names any such processes.
+        </p>
+      ) : null}
       <dl className="mt-static-xs grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md text-xs">
+        <IdentityRow label="Automatic attempts" value={readiness.attempts ?? null} />
+        <IdentityRow label="Next eligible at" value={readiness.next_eligible_at ?? null} />
+        <IdentityRow label="Stop reason" value={readiness.stop_reason ?? null} />
         <ReadinessBasisRows basis={readiness.basis} />
       </dl>
       {readiness.last_attempt ? <ReadinessAttempt attempt={readiness.last_attempt} /> : null}
+      {readiness.retry_history?.length ? (
+        <div className="mt-static-sm border-t border-contrast-low pt-static-sm" data-testid="readiness-retry-history">
+          <strong className="text-sm">Attempt history</strong>
+          <ol className="mt-static-xs text-xs">
+            {readiness.retry_history.map((attempt) => (
+              <li key={attempt.ordinal}>
+                {attempt.ordinal}. {attempt.kind} {attempt.status}
+                {attempt.failure_code ? (
+                  <>
+                    {" "}
+                    <code>{attempt.failure_code}</code>
+                  </>
+                ) : null}
+                {attempt.observed_at ? ` at ${attempt.observed_at}` : null}
+              </li>
+            ))}
+          </ol>
+        </div>
+      ) : null}
     </SectionCard>
   );
 }
@@ -1922,7 +1991,9 @@ function PublicationSection(props: WorkItemDetailProps) {
 function ActionFeedback({ error, result }: { error: Error | null; result: string | null }) {
   if (error) {
     const code = error instanceof WorkItemApiError ? error.code : "ERR_DELIVERY_CONTROL";
-    const waiting = code === "ERR_DELIVERY_ACCEPTANCE_WAITING";
+    const retryAfter = error instanceof WorkItemApiError ? error.retryAfter : null;
+    const workerActive = code === "ERR_DELIVERY_WORKER_ACTIVE";
+    const waiting = code === "ERR_DELIVERY_ACCEPTANCE_WAITING" || workerActive;
     return (
       <p
         className={[
@@ -1933,7 +2004,21 @@ function ActionFeedback({ error, result }: { error: Error | null; result: string
         role={waiting ? "status" : "alert"}
       >
         <PIcon name={waiting ? "warning" : "error"} size="sm" aria-hidden="true" />
-        <strong>{code}</strong>: {error.message}
+        <span>
+          <strong>{code}</strong>:{" "}
+          {workerActive && retryAfter ? (
+            <>
+              The worktree changed recently, so the worker may still be active. Nothing was changed. Try again at or
+              after{" "}
+              <time dateTime={retryAfter} data-testid="worker-active-retry-after">
+                {retryAfter}
+              </time>
+              .
+            </>
+          ) : (
+            error.message
+          )}
+        </span>
       </p>
     );
   }

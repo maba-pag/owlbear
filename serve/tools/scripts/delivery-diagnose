@@ -1,0 +1,3 @@
+#!/bin/sh
+# Disable bytecode before Python processes the installed environment's site hooks.
+exec "$(dirname "$0")/python" -I -B -m owlbear_tools.delivery_diagnostics "$@"
