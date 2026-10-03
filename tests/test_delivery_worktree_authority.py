@@ -81,15 +81,51 @@ _REMOVE_WORKTREE_CALLERS = frozenset(
 _COMPLETION_CALLERS = frozenset({("PortfolioApplication", "_observe_acceptance_once")})
 _DISPOSITION_CAPTURE_EXEMPTIONS = frozenset({"capture_change_disposition", "resolve_change_disposition"})
 _GITHUB_PROVIDER_SOURCE = _REPO_ROOT / "serve/delivery-github/src/owlbear_delivery_github/github.py"
+_PUBLICATION_PROVIDER_SOURCE = _REPO_ROOT / "serve/delivery/src/owlbear_delivery/publication_provider.py"
 _FORBIDDEN_PROVIDER_TERMS = re.compile(
-    r"(?:/merge\b|auto.?merge|update.?branch|enablePullRequestAutoMerge)", re.IGNORECASE
+    r"(?:/merge(?!-async\b)\b|auto.?merge|update.?branch|enablePullRequestAutoMerge|enqueuePullRequest|merge.?queue)",
+    re.IGNORECASE,
 )
 _FORBIDDEN_FIELD_PATTERN = re.compile(r"(?<![A-Za-z0-9])(?:merge_method|mergeMethod)(?![A-Za-z0-9])")
+_MERGE_METHOD_FILES = frozenset(
+    {
+        "serve/delivery/src/owlbear_delivery/publication_provider.py",
+        "serve/delivery-github/src/owlbear_delivery_github/github.py",
+        "serve/delivery-github/src/owlbear_delivery_github/memory.py",
+    }
+)
+_MERGE_METHOD_PROTECTED_MODELS = re.compile(r"(?:Acceptance|Latch|Completion|Observation|Evidence|PullRequest$)")
 _FORBIDDEN_CAPABILITY_PATTERNS = (
     re.compile(r"(?:['\"`]|/api/)[^\s'\"`]*?/merge(?:\b|/)", re.IGNORECASE),
     re.compile(r"(?:auto.?merge|enablePullRequestAutoMerge)", re.IGNORECASE),
     re.compile(r"(?:merge[_]?pull[_]?request|update[_]?pull[_]?request[_]?branch)", re.IGNORECASE),
+    re.compile(r"(?:update.?branch|enqueue.?pull.?request|merge.?queue)", re.IGNORECASE),
+    re.compile(r"bypass.?rules['\"]?\s*[:=]\s*(?:true|1)\b", re.IGNORECASE),
+    re.compile(r"merge.?action['\"]?\s*[:=]\s*['\"](?!direct_merge['\"])", re.IGNORECASE),
 )
+_ALLOWED_CAPABILITY_LINES = frozenset(
+    {
+        (
+            "serve/delivery-github/src/owlbear_delivery_github/github.py",
+            'return f"{_repository_endpoint(repository)}/pulls/{number}/merge-async"',
+        ),
+        ("serve/delivery-github/src/owlbear_delivery_github/github.py", '_QUEUE_RULE_TYPE = "merge_queue"'),
+    }
+)
+_MERGE_ROUTE_FUNCTION = "_merge_async_endpoint"
+_MERGE_ROUTE = 'f"{_repository_endpoint(repository)}/pulls/{number}/merge-async"'
+_MERGE_ROUTE_CALLERS = frozenset({"request_merge", "read_merge_request"})
+_EFFECT_TRANSPORT = "_rest_effect"
+_ALLOWED_PROVIDER_EFFECTS = frozenset({"request_merge"})
+_MERGE_REQUEST_OPERATION = "request_merge"
+# (repository path, qualified scope) of the only production callers; N05-B adds its engine owner.
+_MERGE_REQUEST_CALL_OWNERS: frozenset[tuple[str, str]] = frozenset()
+_FROZEN_BODY = {
+    "bypass_rules": "False",
+    "merge_action": "'direct_merge'",
+    "merge_method": "request.merge_method.value",
+    "sha": "request.expected_head_sha",
+}
 _AUTOMATION_GOVERNANCE_PATTERN = re.compile(
     r"(?ix)(?<![A-Za-z0-9])(?:"
     r"(?:workflow|automation)[ _-]*(?:approval|blocking|block|risk(?:[ _-]*class(?:ifier)?)?)"
@@ -111,12 +147,22 @@ _ALLOWED_PROVIDER_REST_CALLS = {
     "find_pull_request": ("GET", 'f"{_repository_endpoint(request.repository)}/pulls?{query}"'),
     "create_draft_pull_request": ("POST", 'f"{_repository_endpoint(request.repository)}/pulls"'),
     "update_pull_request": ("PATCH", 'f"{_repository_endpoint(request.repository)}/pulls/{request.number}"'),
+    "read_branch_head": ("GET", 'f"{_repository_endpoint(repository)}/branches/{_branch_path(branch)}"'),
+    "_read_repository_merge_settings": ("GET", "_repository_endpoint(repository)"),
+    "_read_branch_rules": (
+        "GET",
+        'f"{_repository_endpoint(repository)}/rules/branches/{_branch_path(branch)}?per_page=100"',
+    ),
+    "read_merge_evidence": ("GET", 'f"{_repository_endpoint(repository)}/pulls/{number}"'),
+    "read_merge_request": ("GET", "f\"{_merge_async_endpoint(repository,number)}/{quote(request_id,safe='')}\""),
+    "request_merge": ("PUT", "_merge_async_endpoint(request.repository,request.number)"),
 }
 _ALLOWED_PROVIDER_GRAPHQL_CALLS = frozenset(
     {
         ("_graphql", "set_pull_request_draft_state", "mutation"),
         ("_graphql_query", "_observe_check_page", "_OBSERVE_CHECKS_QUERY"),
         ("_graphql_query", "_read_merged_evidence", "_READ_MERGED_PULL_REQUEST_QUERY"),
+        ("_graphql_query", "_read_merge_commit", "_READ_MERGE_COMMIT_QUERY"),
     }
 )
 _ALLOWED_PROVIDER_DOCUMENTS = frozenset(
@@ -125,6 +171,7 @@ _ALLOWED_PROVIDER_DOCUMENTS = frozenset(
         "_DRAFT_MUTATION",
         "_OBSERVE_CHECKS_QUERY",
         "_READ_MERGED_PULL_REQUEST_QUERY",
+        "_READ_MERGE_COMMIT_QUERY",
     }
 )
 _SUBPROCESS_APIS = frozenset({"Popen", "check_call", "check_output", "run"})
@@ -408,7 +455,7 @@ class _ProviderCallVisitor(ast.NodeVisitor):
     def __init__(self, path: Path) -> None:
         self.path = path
         self.functions: list[str] = []
-        self.rest_calls: list[tuple[str, str | None, str | None]] = []
+        self.rest_calls: list[tuple[str, str | None, str | None, str]] = []
         self.graphql_calls: list[tuple[str, str, str | None]] = []
 
     def _visit_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
@@ -423,12 +470,13 @@ class _ProviderCallVisitor(ast.NodeVisitor):
         self._visit_function(node)
 
     def visit_Call(self, node: ast.Call) -> None:
-        if isinstance(node.func, ast.Attribute) and node.func.attr in {"_rest", "_graphql", "_graphql_query"}:
+        transports = {"_rest", "_rest_or_absent", _EFFECT_TRANSPORT, "_graphql", "_graphql_query"}
+        if isinstance(node.func, ast.Attribute) and node.func.attr in transports:
             function = self.functions[-1] if self.functions else "<module>"
-            if node.func.attr == "_rest":
+            if node.func.attr.startswith("_rest"):
                 method = _literal_string(node.args[1]) if len(node.args) > 1 else None
                 endpoint = ast.get_source_segment(self._source, node.args[2]) if len(node.args) > 2 else None
-                self.rest_calls.append((function, method, endpoint))
+                self.rest_calls.append((function, method, endpoint, node.func.attr))
             else:
                 query = self._query_name(node.args[1]) if len(node.args) > 1 else None
                 self.graphql_calls.append((node.func.attr, function, query))
@@ -452,8 +500,10 @@ def _provider_rest_violations(path: Path) -> tuple[str, ...]:
     visitor.scan()
     violations: list[str] = []
     seen: dict[str, int] = {}
-    for function, method, endpoint in visitor.rest_calls:
+    for function, method, endpoint, transport in visitor.rest_calls:
         seen[function] = seen.get(function, 0) + 1
+        if (transport == _EFFECT_TRANSPORT) != (function in _ALLOWED_PROVIDER_EFFECTS):
+            violations.append(f"merge effect transport mismatch in {function}: {transport}")
         expected = _ALLOWED_PROVIDER_REST_CALLS.get(function)
         if expected is None:
             violations.append(f"unexpected REST operation in {function}")
@@ -1081,9 +1131,92 @@ def _merge_method_violations(paths: tuple[Path, ...]) -> tuple[str, ...]:
     return tuple(
         f"{path.relative_to(_REPO_ROOT)}:{line_number}"
         for path in paths
+        if path.relative_to(_REPO_ROOT).as_posix() not in _MERGE_METHOD_FILES
         for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1)
         if _FORBIDDEN_FIELD_PATTERN.search(line)
     )
+
+
+def _merge_method_model_violations(paths: tuple[Path, ...]) -> tuple[str, ...]:
+    violations: list[str] = []
+    for path in paths:
+        if path.suffix != ".py":
+            continue
+        module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(module):
+            if not isinstance(node, ast.ClassDef) or not _MERGE_METHOD_PROTECTED_MODELS.search(node.name):
+                continue
+            violations.extend(
+                f"{path.relative_to(_REPO_ROOT)}:{node.name}.{statement.target.id}"
+                for statement in node.body
+                if isinstance(statement, ast.AnnAssign)
+                and isinstance(statement.target, ast.Name)
+                and _FORBIDDEN_FIELD_PATTERN.fullmatch(statement.target.id)
+            )
+    return tuple(violations)
+
+
+def _merge_route_violations(path: Path) -> tuple[str, ...]:
+    source = path.read_text(encoding="utf-8")
+    module = ast.parse(source, filename=str(path))
+    violations: list[str] = []
+    in_functions: set[int] = set()
+    for function in (node for node in ast.walk(module) if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)):
+        route_literals = [
+            node
+            for node in ast.walk(function)
+            if isinstance(node, ast.Constant) and isinstance(node.value, str) and "/merge" in node.value.casefold()
+        ]
+        in_functions.update(id(node) for node in route_literals)
+        if route_literals and function.name != _MERGE_ROUTE_FUNCTION:
+            violations.append(f"merge route literal outside {_MERGE_ROUTE_FUNCTION}: {function.name}")
+        if function.name == _MERGE_ROUTE_FUNCTION:
+            returns = [node for node in ast.walk(function) if isinstance(node, ast.Return)]
+            segments = ["".join((ast.get_source_segment(source, node.value) or "").split()) for node in returns]
+            if segments != [_MERGE_ROUTE]:
+                violations.append(f"{_MERGE_ROUTE_FUNCTION} returns an unexpected route: {segments}")
+        route_callers = [
+            node
+            for node in ast.walk(function)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == _MERGE_ROUTE_FUNCTION
+        ]
+        if route_callers and function.name not in _MERGE_ROUTE_CALLERS:
+            violations.append(f"merge route used outside allowlisted provider functions: {function.name}")
+        if function.name == _EFFECT_TRANSPORT and any(
+            isinstance(node, ast.Constant) and node.value == "-" for node in ast.walk(function)
+        ):
+            violations.append(f"{_EFFECT_TRANSPORT} reads a request body from stdin")
+    violations.extend(
+        f"merge route literal at module level, line {node.lineno}"
+        for node in ast.walk(module)
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and "/merge" in node.value.casefold()
+        and id(node) not in in_functions
+    )
+    return tuple(violations)
+
+
+def _frozen_body_violations(path: Path) -> tuple[str, ...]:
+    source = path.read_text(encoding="utf-8")
+    module = ast.parse(source, filename=str(path))
+    builders = [
+        node for node in ast.walk(module) if isinstance(node, ast.FunctionDef) and node.name == "merge_request_body"
+    ]
+    if len(builders) != 1:
+        return ("expected exactly one merge_request_body builder",)
+    bodies = [node for node in ast.walk(builders[0]) if isinstance(node, ast.Dict)]
+    if len(bodies) != 1:
+        return ("merge_request_body must build exactly one literal body",)
+    fields = {
+        _literal_string(key) if key is not None else None: ast.unparse(value)
+        for key, value in zip(bodies[0].keys, bodies[0].values, strict=True)
+    }
+    return tuple(
+        f"merge body field {name} must be {expected}, found {fields.get(name)}"
+        for name, expected in _FROZEN_BODY.items()
+        if fields.get(name) != expected
+    ) + tuple(f"unexpected merge body field {name}" for name in fields if name not in _FROZEN_BODY)
 
 
 def _forbidden_capability_violations(paths: tuple[Path, ...]) -> tuple[str, ...]:
@@ -1092,7 +1225,53 @@ def _forbidden_capability_violations(paths: tuple[Path, ...]) -> tuple[str, ...]
         for path in paths
         for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1)
         if any(pattern.search(line) for pattern in _FORBIDDEN_CAPABILITY_PATTERNS)
+        and (path.relative_to(_REPO_ROOT).as_posix(), line.strip()) not in _ALLOWED_CAPABILITY_LINES
     )
+
+
+class _MergeRequestUseVisitor(ast.NodeVisitor):
+    def __init__(self) -> None:
+        self.scope: list[str] = []
+        self.uses: list[tuple[int, str]] = []
+
+    def _visit_scope(self, node: ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        self.scope.append(node.name)
+        self.generic_visit(node)
+        self.scope.pop()
+
+    visit_ClassDef = visit_FunctionDef = visit_AsyncFunctionDef = _visit_scope  # noqa: N815 - ast dispatch names.
+
+    def _record(self, node: ast.expr) -> None:
+        self.uses.append((node.lineno, ".".join(self.scope) or "<module>"))
+
+    def visit_Attribute(self, node: ast.Attribute) -> None:
+        if node.attr == _MERGE_REQUEST_OPERATION:
+            self._record(node)
+        self.generic_visit(node)
+
+    def visit_Call(self, node: ast.Call) -> None:
+        func = node.func
+        dynamic = len(node.args) > 1 and _literal_string(node.args[1]) == _MERGE_REQUEST_OPERATION
+        if isinstance(func, ast.Name) and (func.id == _MERGE_REQUEST_OPERATION or (func.id == "getattr" and dynamic)):
+            self._record(node)
+        self.generic_visit(node)
+
+
+def _merge_request_call_violations(
+    paths: tuple[Path, ...],
+    owners: frozenset[tuple[str, str]] = _MERGE_REQUEST_CALL_OWNERS,
+) -> tuple[str, ...]:
+    violations: list[str] = []
+    for path in paths:
+        relative = path.relative_to(_REPO_ROOT).as_posix()
+        visitor = _MergeRequestUseVisitor()
+        visitor.visit(ast.parse(path.read_text(encoding="utf-8"), filename=str(path)))
+        violations.extend(
+            f"{relative}:{line_number}:{scope}"
+            for line_number, scope in visitor.uses
+            if (relative, scope) not in owners
+        )
+    return tuple(violations)
 
 
 def _automation_governance_files() -> tuple[Path, ...]:
@@ -1414,12 +1593,18 @@ def test_retained_inventory_path_is_structurally_read_only() -> None:
     )
 
 
-def test_github_provider_exposes_only_fixed_non_merge_operations() -> None:
+def test_github_provider_exposes_only_fixed_allowlisted_operations() -> None:
     rest_violations = _provider_rest_violations(_GITHUB_PROVIDER_SOURCE)
     graphql_violations = _provider_graphql_violations(_GITHUB_PROVIDER_SOURCE)
+    route_violations = _merge_route_violations(_GITHUB_PROVIDER_SOURCE)
 
     assert not rest_violations, "Unexpected GitHub REST provider operation:\n" + "\n".join(rest_violations)
     assert not graphql_violations, "Unexpected GitHub GraphQL provider operation:\n" + "\n".join(graphql_violations)
+    assert not route_violations, "Unexpected GitHub merge route:\n" + "\n".join(route_violations)
+
+
+def test_frozen_merge_body_is_direct_and_never_bypasses_rules() -> None:
+    assert not _frozen_body_violations(_PUBLICATION_PROVIDER_SOURCE)
 
 
 def test_forbidden_provider_fixture_is_rejected_by_the_provider_gate() -> None:
@@ -1427,6 +1612,31 @@ def test_forbidden_provider_fixture_is_rejected_by_the_provider_gate() -> None:
 
     assert _provider_rest_violations(fixture)
     assert _provider_graphql_violations(fixture)
+
+
+def test_forbidden_provider_merge_fixture_is_rejected_by_every_merge_gate() -> None:
+    fixture = _fixture_path("forbidden-provider-merge.py")
+
+    rest = _provider_rest_violations(fixture)
+    graphql = _provider_graphql_violations(fixture)
+    routes = _merge_route_violations(fixture)
+    body = _frozen_body_violations(fixture)
+    capability = {
+        int(violation.rsplit(":", maxsplit=1)[1]) for violation in _forbidden_capability_violations((fixture,))
+    }
+
+    assert "unexpected REST operation in merge_anywhere" in rest
+    assert "merge effect transport mismatch in merge_anywhere: _rest_effect" in rest
+    assert "merge effect transport mismatch in request_merge: _rest" in rest
+    assert "unexpected REST operation in update_branch" in rest
+    assert "unexpected GraphQL document _ENQUEUE_MUTATION" in graphql
+    assert "forbidden GraphQL document content in _ENQUEUE_MUTATION" in graphql
+    assert "merge route literal outside _merge_async_endpoint: request_merge" in routes
+    assert "merge route used outside allowlisted provider functions: merge_anywhere" in routes
+    assert any(violation.startswith("_merge_async_endpoint returns an unexpected route") for violation in routes)
+    assert "merge body field bypass_rules must be False, found True" in body
+    assert "merge body field merge_action must be 'direct_merge', found 'merge_queue'" in body
+    assert capability == {2, 8, 9, 16, 25, 27, 28}
 
 
 def test_delivery_fetch_vectors_are_remote_tracking_only() -> None:
@@ -1604,16 +1814,53 @@ def test_delivery_models_have_no_merge_method_field() -> None:
     paths = _production_capability_files()
 
     assert not _merge_method_violations(paths)
+    assert not _merge_method_model_violations(_production_python_files())
+
+
+def test_merge_method_allowlist_names_only_existing_provider_files() -> None:
+    assert all((_REPO_ROOT / path).is_file() for path in _MERGE_METHOD_FILES)
 
 
 def test_forbidden_merge_method_fixture_is_rejected_by_the_field_gate() -> None:
-    violations = _merge_method_violations((_fixture_path("forbidden-fields.py"),))
+    fixture = _fixture_path("forbidden-fields.py")
+    violations = _merge_method_violations((fixture,))
 
-    assert {int(violation.rsplit(":", maxsplit=1)[1]) for violation in violations} == {3, 4}
+    assert {int(violation.rsplit(":", maxsplit=1)[1]) for violation in violations} == {3, 4, 12, 16, 20, 24}
+    assert {violation.rsplit(":", maxsplit=1)[1] for violation in _merge_method_model_violations((fixture,))} == {
+        "CompletionEvidence.merge_method",
+        "MergedPullRequestLatch.merge_method",
+        "AcceptanceObservation.mergeMethod",
+        "PublicationPullRequest.merge_method",
+    }
 
 
 def test_cockpit_and_agents_expose_no_merge_control() -> None:
     assert not _forbidden_capability_violations(_production_capability_files())
+
+
+def test_merge_request_is_called_only_by_allowlisted_production_owners() -> None:
+    violations = _merge_request_call_violations(_production_python_files())
+
+    assert not violations, "Unowned merge request use:\n" + "\n".join(violations)
+    assert all((_REPO_ROOT / path).is_file() for path, _ in _MERGE_REQUEST_CALL_OWNERS)
+
+
+def test_forbidden_merge_call_fixture_is_rejected_by_the_call_ownership_gate() -> None:
+    fixture = _fixture_path("forbidden-merge-call.py")
+    relative = fixture.relative_to(_REPO_ROOT).as_posix()
+
+    violations = _merge_request_call_violations((fixture,))
+    owned = _merge_request_call_violations(
+        (fixture,), frozenset({(relative, "PortfolioApplication.approve_and_merge")})
+    )
+
+    assert violations == (
+        f"{relative}:17:PortfolioApplication.approve_and_merge",
+        f"{relative}:20:PortfolioApplication.merge_through_alias",
+        f"{relative}:24:PortfolioApplication.merge_dynamically",
+        f"{relative}:27:<module>",
+    )
+    assert owned == violations[1:]
 
 
 def test_forbidden_cockpit_and_agent_fixtures_are_rejected_by_the_capability_gate() -> None:
