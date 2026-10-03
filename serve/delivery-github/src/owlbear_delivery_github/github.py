@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import datetime
+from pathlib import Path
 from typing import NoReturn, cast
 from urllib.parse import quote, urlencode
 
@@ -26,6 +28,21 @@ from owlbear_delivery import (
     SetPublicationPullRequestDraftState,
     UpdatePublicationPullRequest,
 )
+from owlbear_delivery.publication_provider import (
+    PendingMergeRequest,
+    PublicationBranchHead,
+    PublicationMergeEvidence,
+    PublicationMergeMethod,
+    PublicationMergeRefusal,
+    PublicationMergeRefusalReason,
+    PublicationMergeRequestResult,
+    PublicationMergeRequestStatus,
+    PublicationMergeSettings,
+    PublicationMergeStack,
+    RequestPublicationMerge,
+    bounded_provider_message,
+)
+from owlbear_delivery_github.effect_launcher import FrozenBodyMismatchError, freeze_body, run_release_gated
 
 _DEFAULT_TIMEOUT_SECONDS = 30.0
 _API_VERSION = "2026-03-10"
@@ -90,7 +107,34 @@ _OBSERVE_CHECKS_QUERY = """query ObservePublicationChecks(
         }
     }
 }"""
+_READ_MERGE_COMMIT_QUERY = """query ReadMergeCommit(
+    $owner: String!, $name: String!, $number: Int!
+) {
+    repository(owner: $owner, name: $name) {
+        nameWithOwner
+        pullRequest(number: $number) {
+            number
+            headRefOid
+            baseRefName
+            merged
+            mergedAt
+            mergeCommit { oid parents(first: 2) { totalCount nodes { oid } } }
+        }
+    }
+}"""
 _MAX_OBSERVED_CHECKS = 1_000
+_MAX_BRANCH_RULES = 100
+_QUEUE_RULE_TYPE = "merge_queue"
+_STRICT_CHECKS_RULE_TYPE = "required_status_checks"
+_HTTP_STATUS_PATTERN = re.compile(r"\(HTTP (\d{3})\)")
+_HTTP_NOT_FOUND = 404
+_HTTP_CONFLICT = 409
+_MERGE_REFUSALS = {
+    400: PublicationMergeRefusalReason.CLOSED_OR_DRAFT,
+    403: PublicationMergeRefusalReason.FORBIDDEN,
+    405: PublicationMergeRefusalReason.NOT_MERGEABLE,
+    422: PublicationMergeRefusalReason.VALIDATION,
+}
 
 
 @dataclass
@@ -102,6 +146,10 @@ class _CheckObservationState:
 
 
 _CommandRunner = Callable[[tuple[str, ...], bytes | None, float], subprocess.CompletedProcess[bytes]]
+_EffectRunner = Callable[
+    [tuple[str, ...], Path, Callable[[int, str], None], float],
+    subprocess.CompletedProcess[bytes],
+]
 type _JsonValue = bool | int | float | str | list[_JsonValue] | dict[str, _JsonValue] | None
 type _JsonObject = dict[str, _JsonValue]
 
@@ -201,6 +249,98 @@ class _PullListItem(_GitHubModel):
     number: int = Field(gt=0)
 
 
+class _PullStack(_GitHubModel):
+    base: _PullRef
+    size: int = Field(ge=1)
+    position: int = Field(ge=1)
+
+
+class _RepositoryPermissions(_GitHubModel):
+    push: bool
+
+
+class _RepositoryMergeSettingsResponse(_GitHubModel):
+    full_name: str
+    allow_merge_commit: bool | None = None
+    allow_squash_merge: bool | None = None
+    allow_rebase_merge: bool | None = None
+    permissions: _RepositoryPermissions | None = None
+
+
+class _BranchCommit(_GitHubModel):
+    sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+
+class _BranchResponse(_GitHubModel):
+    name: str = Field(min_length=1)
+    commit: _BranchCommit
+
+
+class _BranchRule(_GitHubModel):
+    type: str = Field(min_length=1)
+    parameters: dict[str, object] | None = None
+
+
+class _MergeAsyncResponse(_GitHubModel):
+    status: str = Field(min_length=1)
+    details: dict[str, object] | None = None
+
+
+class _PendingMergeDetails(_GitHubModel):
+    uuid: str = Field(min_length=1, max_length=128)
+    merge_method: str = Field(min_length=1, max_length=32)
+    merge_action: str = Field(min_length=1, max_length=32)
+    expected_head_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+    bypass_rules: bool
+
+
+class _MergedDetails(_GitHubModel):
+    sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+
+class _MergeCommitParent(_MergedGitHubModel):
+    oid: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+
+class _MergeCommitParents(_MergedGitHubModel):
+    total_count: int = Field(ge=0, alias="totalCount")
+    nodes: list[_MergeCommitParent]
+
+
+class _MergeCommitResponse(_MergedGitHubModel):
+    oid: str = Field(pattern=r"^[0-9a-f]{40}$")
+    parents: _MergeCommitParents
+
+
+class _MergeCommitPullRequestResponse(_MergedGitHubModel):
+    number: int = Field(gt=0)
+    head_ref_oid: str = Field(pattern=r"^[0-9a-f]{40}$", alias="headRefOid")
+    base_ref_name: str = Field(min_length=1, alias="baseRefName")
+    merged: bool
+    merged_at: str | None = Field(alias="mergedAt")
+    merge_commit: _MergeCommitResponse | None = Field(alias="mergeCommit")
+
+
+class _MergeCommitRepositoryResponse(_MergedGitHubModel):
+    name_with_owner: str = Field(min_length=3, alias="nameWithOwner")
+    pull_request: _MergeCommitPullRequestResponse | None = Field(alias="pullRequest")
+
+
+class _MergeCommitQueryData(_MergedGitHubModel):
+    repository: _MergeCommitRepositoryResponse | None
+
+
+class _MergeCommitQueryResponse(_MergedGitHubModel):
+    data: _MergeCommitQueryData
+
+
+@dataclass(frozen=True)
+class _MergeCommitEvidence:
+    merge_commit_sha: str
+    parents: tuple[str, ...]
+    merged_at: datetime
+
+
 class _DraftStateResponse(_GitHubModel):
     id: str = Field(min_length=1)
     is_draft: bool = Field(alias="isDraft")
@@ -276,6 +416,7 @@ class _StatusContextResponse(_GitHubModel):
 
 
 _PULL_LIST = TypeAdapter(list[_PullListItem])
+_BRANCH_RULES = TypeAdapter(list[_BranchRule])
 
 
 def _subprocess_runner(
@@ -300,12 +441,14 @@ class GitHubCliPublicationProvider:
         *,
         timeout_seconds: float = _DEFAULT_TIMEOUT_SECONDS,
         runner: _CommandRunner = _subprocess_runner,
+        effect_runner: _EffectRunner = run_release_gated,
     ) -> None:
         if timeout_seconds <= 0:
             message = "GitHub CLI timeout must be positive"
             raise ValueError(message)
         self._timeout_seconds = timeout_seconds
         self._runner = runner
+        self._effect_runner = effect_runner
 
     def read_repository(self, repository: str) -> PublicationRepository:
         """Read and verify one exact GitHub repository identity."""
@@ -498,6 +641,278 @@ class GitHubCliPublicationProvider:
                 retry_safe=False,
                 cause=exc,
             )
+
+    def read_merge_settings(self, repository: str, branch: str) -> PublicationMergeSettings:
+        """Read merge methods, push permission and target rules; GitHub never enforces execution scope."""
+        operation = "read_merge_settings"
+        settings = self._read_repository_merge_settings(repository, operation)
+        rules = self._read_branch_rules(repository, branch, operation)
+        allowed = (
+            (PublicationMergeMethod.MERGE, settings.allow_merge_commit),
+            (PublicationMergeMethod.SQUASH, settings.allow_squash_merge),
+            (PublicationMergeMethod.REBASE, settings.allow_rebase_merge),
+        )
+        rule_types = tuple(sorted({rule.type for rule in rules}))
+        strict = any(
+            rule.type == _STRICT_CHECKS_RULE_TYPE
+            and rule.parameters is not None
+            and rule.parameters.get("strict_required_status_checks_policy") is True
+            for rule in rules
+        )
+        return PublicationMergeSettings(
+            repository=settings.full_name,
+            branch=branch,
+            allowed_methods=tuple(method for method, enabled in allowed if enabled is True),
+            viewer_can_push=settings.permissions is not None and settings.permissions.push,
+            rule_types=rule_types,
+            queue_required=_QUEUE_RULE_TYPE in rule_types,
+            strict_up_to_date_required=strict,
+            execution_scope_enforced=False,
+        )
+
+    def read_branch_head(self, repository: str, branch: str) -> PublicationBranchHead:
+        """Read the current head commit of one exact branch."""
+        operation = "read_branch_head"
+        payload = self._rest(operation, "GET", f"{_repository_endpoint(repository)}/branches/{_branch_path(branch)}")
+        response = self._validate(_BranchResponse, payload, operation, retry_safe=True)
+        if response.name != branch:
+            self._invalid_response(operation, "GitHub returned another branch identity", retry_safe=True)
+        return PublicationBranchHead(repository=repository, branch=branch, head_sha=response.commit.sha)
+
+    def request_merge(
+        self,
+        request: RequestPublicationMerge,
+        *,
+        body_path: Path,
+        release: Callable[[int, str], None],
+    ) -> PublicationMergeRequestResult:
+        """Send the frozen direct-merge body through the release-gated launcher; never via stdin."""
+        operation = "request_merge"
+        if body_path.read_bytes() != freeze_body(request):
+            message = "frozen merge body differs from the approved request"
+            raise FrozenBodyMismatchError(message)
+        completed = self._rest_effect(
+            operation,
+            "PUT",
+            _merge_async_endpoint(request.repository, request.number),
+            body_path=body_path,
+            release=release,
+        )
+        payload = _json_or_none(completed.stdout)
+        if completed.returncode == 0:
+            return self._merge_result(payload, operation, write=True)
+        status = _http_status(completed.stderr)
+        if status == _HTTP_CONFLICT:
+            return self._merge_result(payload, operation, write=True, existing_request=True)
+        reason = _MERGE_REFUSALS.get(status) if status is not None else None
+        if reason is None:
+            self._response_unknown(operation, "GitHub merge request outcome is unknown")
+        message = payload.get("message") if isinstance(payload, dict) else None
+        return PublicationMergeRequestResult(
+            status=PublicationMergeRequestStatus.REFUSED,
+            refusal=PublicationMergeRefusal(
+                reason=reason,
+                http_status=status,
+                message=bounded_provider_message(message if isinstance(message, str) else None),
+            ),
+        )
+
+    def read_merge_request(self, repository: str, number: int, request_id: str) -> PublicationMergeRequestResult:
+        """Read one merge request result; an expired or unknown identity is unavailable, never refused."""
+        operation = "read_merge_request"
+        payload = self._rest_or_absent(
+            operation,
+            "GET",
+            f"{_merge_async_endpoint(repository, number)}/{quote(request_id, safe='')}",
+        )
+        if payload is None:
+            return PublicationMergeRequestResult(status=PublicationMergeRequestStatus.UNAVAILABLE)
+        result = self._merge_result(payload, operation, write=False)
+        if result.pending is not None and result.pending.request_id != request_id:
+            self._invalid_response(operation, "GitHub returned another merge request identity", retry_safe=True)
+        return result
+
+    def read_merge_evidence(self, repository: str, number: int) -> PublicationMergeEvidence:
+        """Read head, base, stack and, once merged, the merge commit with its parents."""
+        operation = "read_merge_evidence"
+        payload = self._rest(operation, "GET", f"{_repository_endpoint(repository)}/pulls/{number}")
+        pull_request = self._pull_request(repository, payload, operation, retry_safe=True)
+        if pull_request.number != number:
+            self._invalid_response(operation, "GitHub returned another pull request identity", retry_safe=True)
+        stack = self._stack(payload, operation)
+        commit = self._read_merge_commit(repository, number, pull_request, operation) if pull_request.merged else None
+        try:
+            return PublicationMergeEvidence(
+                repository=repository,
+                number=number,
+                node_id=pull_request.node_id,
+                state=pull_request.state,
+                draft=pull_request.draft,
+                merged=pull_request.merged,
+                head_sha=pull_request.head_sha,
+                base_branch=pull_request.base_branch,
+                stack=stack,
+                merge_commit_sha=commit.merge_commit_sha if commit is not None else None,
+                merge_commit_parents=commit.parents if commit is not None else (),
+                merged_at=commit.merged_at if commit is not None else None,
+            )
+        except ValidationError as exc:
+            self._invalid_response(operation, "GitHub returned invalid merge evidence", retry_safe=True, cause=exc)
+
+    def _read_repository_merge_settings(self, repository: str, operation: str) -> _RepositoryMergeSettingsResponse:
+        payload = self._rest(operation, "GET", _repository_endpoint(repository))
+        response = self._validate(_RepositoryMergeSettingsResponse, payload, operation, retry_safe=True)
+        if response.full_name.casefold() != repository.casefold():
+            self._invalid_response(operation, "GitHub returned another repository identity", retry_safe=True)
+        return response
+
+    def _read_branch_rules(self, repository: str, branch: str, operation: str) -> tuple[_BranchRule, ...]:
+        payload = self._rest(
+            operation,
+            "GET",
+            f"{_repository_endpoint(repository)}/rules/branches/{_branch_path(branch)}?per_page=100",
+        )
+        try:
+            rules = _BRANCH_RULES.validate_python(payload)
+        except ValidationError as exc:
+            self._invalid_response(operation, "GitHub returned invalid branch rules", retry_safe=True, cause=exc)
+        if len(rules) >= _MAX_BRANCH_RULES:
+            self._invalid_response(operation, "GitHub branch rules exceed the bounded page", retry_safe=False)
+        return tuple(rules)
+
+    def _read_merge_commit(
+        self,
+        repository: str,
+        number: int,
+        pull_request: _PullRequestRead,
+        operation: str,
+    ) -> _MergeCommitEvidence:
+        owner, name = repository.split("/", maxsplit=1)
+        payload = self._graphql_query(
+            operation,
+            {
+                "query": _READ_MERGE_COMMIT_QUERY,
+                "operationName": "ReadMergeCommit",
+                "variables": {"owner": owner, "name": name, "number": number},
+            },
+        )
+        response = self._validate(_MergeCommitQueryResponse, payload, operation, retry_safe=True)
+        merged = response.data.repository.pull_request if response.data.repository is not None else None
+        if response.data.repository is None or merged is None:
+            raise PublicationProviderError(
+                PublicationProviderFailureCode.NOT_FOUND,
+                operation,
+                "publication pull request was not found",
+                retry_safe=False,
+            )
+        if (
+            response.data.repository.name_with_owner.casefold() != repository.casefold()
+            or merged.number != number
+            or merged.head_ref_oid != pull_request.head_sha
+            or merged.base_ref_name != pull_request.base_branch
+            or not merged.merged
+        ):
+            self._invalid_response(operation, "GitHub returned inconsistent merge evidence", retry_safe=True)
+        commit = merged.merge_commit
+        merged_at = self._timestamp(merged.merged_at, operation)
+        if commit is None or merged_at is None or commit.parents.total_count != len(commit.parents.nodes):
+            self._invalid_response(operation, "GitHub omitted complete merge commit evidence", retry_safe=True)
+        if pull_request.merge_commit_sha is not None and pull_request.merge_commit_sha != commit.oid:
+            self._invalid_response(operation, "GitHub returned conflicting pull request merge commits", retry_safe=True)
+        return _MergeCommitEvidence(
+            merge_commit_sha=commit.oid,
+            parents=tuple(parent.oid for parent in commit.parents.nodes),
+            merged_at=merged_at,
+        )
+
+    def _stack(self, payload: _JsonValue, operation: str) -> PublicationMergeStack | None:
+        stack = payload.get("stack") if isinstance(payload, dict) else None
+        if stack is None:
+            return None
+        response = self._validate(_PullStack, stack, operation, retry_safe=True)
+        return PublicationMergeStack(
+            size=response.size,
+            position=response.position,
+            base_branch=response.base.ref,
+            base_sha=response.base.sha,
+        )
+
+    def _merge_result(
+        self,
+        payload: _JsonValue,
+        operation: str,
+        *,
+        write: bool,
+        existing_request: bool = False,
+    ) -> PublicationMergeRequestResult:
+        response = self._merge_payload(_MergeAsyncResponse, payload, operation, write=write)
+        details = response.details or {}
+        message = details.get("message")
+        bounded = bounded_provider_message(message if isinstance(message, str) else None)
+        status = response.status
+        if existing_request and status != "pending":
+            self._response_unknown(operation, "GitHub reported a conflicting merge request without its options")
+        if status == "pending":
+            pending = self._merge_payload(_PendingMergeDetails, details, operation, write=write)
+            return PublicationMergeRequestResult(
+                status=PublicationMergeRequestStatus.PENDING,
+                pending=PendingMergeRequest(
+                    request_id=pending.uuid,
+                    expected_head_sha=pending.expected_head_sha,
+                    merge_method=pending.merge_method,
+                    merge_action=pending.merge_action,
+                    bypass_rules=pending.bypass_rules,
+                ),
+                existing_request=existing_request,
+                message=bounded,
+            )
+        if status == "merged":
+            merged = self._merge_payload(_MergedDetails, details, operation, write=write)
+            return PublicationMergeRequestResult(
+                status=PublicationMergeRequestStatus.MERGED,
+                merge_commit_sha=merged.sha,
+                message=bounded,
+            )
+        reason = {
+            "enqueued": PublicationMergeRefusalReason.QUEUE_REQUIRED,
+            "failed": PublicationMergeRefusalReason.RULES_FAILED,
+        }.get(status)
+        if reason is None:
+            self._merge_payload_failure(operation, "GitHub returned an unknown merge request status", write=write)
+        return PublicationMergeRequestResult(
+            status=PublicationMergeRequestStatus.REFUSED,
+            refusal=PublicationMergeRefusal(reason=reason, message=bounded),
+        )
+
+    def _merge_payload[Model: _GitHubModel](
+        self,
+        model: type[Model],
+        payload: object,
+        operation: str,
+        *,
+        write: bool,
+    ) -> Model:
+        try:
+            return model.model_validate(payload)
+        except ValidationError as exc:
+            self._merge_payload_failure(
+                operation,
+                "GitHub returned an incomplete merge request result",
+                write=write,
+                cause=exc,
+            )
+
+    def _merge_payload_failure(
+        self,
+        operation: str,
+        detail: str,
+        *,
+        write: bool,
+        cause: Exception | None = None,
+    ) -> NoReturn:
+        if write:
+            self._response_unknown(operation, detail, cause=cause)
+        self._invalid_response(operation, detail, retry_safe=True, cause=cause)
 
     def _record_check_page(
         self,
@@ -812,20 +1227,36 @@ class GitHubCliPublicationProvider:
         body: _JsonObject | None = None,
         write: bool = False,
     ) -> _JsonValue:
-        arguments = (
-            "gh",
-            "api",
-            "--method",
-            method,
-            "--header",
-            "Accept: application/vnd.github+json",
-            "--header",
-            f"X-GitHub-Api-Version: {_API_VERSION}",
-            endpoint,
-        )
+        arguments = _rest_arguments(method, endpoint)
         if body is not None:
             arguments = (*arguments, "--input", "-")
         return self._execute(operation, arguments, body, write=write)
+
+    def _rest_or_absent(self, operation: str, method: str, endpoint: str) -> _JsonValue | None:
+        completed = self._run(operation, _rest_arguments(method, endpoint), None, write=False)
+        if completed.returncode != 0:
+            if _http_status(completed.stderr) == _HTTP_NOT_FOUND:
+                return None
+            self._raise_command_failure(operation, completed.stderr.decode(errors="replace"), write=False)
+        payload = _json_or_none(completed.stdout)
+        if payload is None:
+            self._invalid_response(operation, "GitHub CLI returned invalid JSON", retry_safe=True)
+        return payload
+
+    def _rest_effect(
+        self,
+        operation: str,
+        method: str,
+        endpoint: str,
+        *,
+        body_path: Path,
+        release: Callable[[int, str], None],
+    ) -> subprocess.CompletedProcess[bytes]:
+        arguments = (*_rest_arguments(method, endpoint), "--input", str(body_path))
+        try:
+            return self._effect_runner(arguments, body_path, release, self._timeout_seconds)
+        except subprocess.TimeoutExpired as exc:
+            self._response_unknown(operation, "GitHub CLI effect timed out", cause=exc)
 
     def _graphql(self, operation: str, body: _JsonObject) -> _JsonValue:
         arguments = ("gh", "api", "graphql", "--method", "POST", "--input", "-")
@@ -847,23 +1278,7 @@ class GitHubCliPublicationProvider:
         write: bool,
     ) -> _JsonValue:
         input_bytes = None if body is None else json.dumps(body, sort_keys=True, separators=(",", ":")).encode()
-        try:
-            completed = self._runner(arguments, input_bytes, self._timeout_seconds)
-        except FileNotFoundError as exc:
-            raise PublicationProviderError(
-                PublicationProviderFailureCode.UNAVAILABLE,
-                operation,
-                "GitHub CLI executable is unavailable",
-                retry_safe=False,
-            ) from exc
-        except subprocess.TimeoutExpired as exc:
-            code = PublicationProviderFailureCode.RESPONSE_UNKNOWN if write else PublicationProviderFailureCode.TIMEOUT
-            raise PublicationProviderError(
-                code,
-                operation,
-                "GitHub CLI operation timed out",
-                retry_safe=not write,
-            ) from exc
+        completed = self._run(operation, arguments, input_bytes, write=write)
         if completed.returncode != 0:
             self._raise_command_failure(operation, completed.stderr.decode(errors="replace"), write=write)
         try:
@@ -878,6 +1293,32 @@ class GitHubCliPublicationProvider:
                 code,
                 operation,
                 "GitHub CLI returned invalid JSON",
+                retry_safe=not write,
+            ) from exc
+
+    def _run(
+        self,
+        operation: str,
+        arguments: tuple[str, ...],
+        input_bytes: bytes | None,
+        *,
+        write: bool,
+    ) -> subprocess.CompletedProcess[bytes]:
+        try:
+            return self._runner(arguments, input_bytes, self._timeout_seconds)
+        except FileNotFoundError as exc:
+            raise PublicationProviderError(
+                PublicationProviderFailureCode.UNAVAILABLE,
+                operation,
+                "GitHub CLI executable is unavailable",
+                retry_safe=False,
+            ) from exc
+        except subprocess.TimeoutExpired as exc:
+            code = PublicationProviderFailureCode.RESPONSE_UNKNOWN if write else PublicationProviderFailureCode.TIMEOUT
+            raise PublicationProviderError(
+                code,
+                operation,
+                "GitHub CLI operation timed out",
                 retry_safe=not write,
             ) from exc
 
@@ -1030,7 +1471,51 @@ class GitHubCliPublicationProvider:
             retry_safe=False,
         )
 
+    @staticmethod
+    def _response_unknown(operation: str, detail: str, *, cause: Exception | None = None) -> NoReturn:
+        error = PublicationProviderError(
+            PublicationProviderFailureCode.RESPONSE_UNKNOWN,
+            operation,
+            detail,
+            retry_safe=False,
+        )
+        raise error from cause
+
+
+def _rest_arguments(method: str, endpoint: str) -> tuple[str, ...]:
+    return (
+        "gh",
+        "api",
+        "--method",
+        method,
+        "--header",
+        "Accept: application/vnd.github+json",
+        "--header",
+        f"X-GitHub-Api-Version: {_API_VERSION}",
+        endpoint,
+    )
+
+
+def _http_status(stderr: bytes) -> int | None:
+    matches = _HTTP_STATUS_PATTERN.findall(stderr.decode(errors="replace"))
+    return int(matches[-1]) if matches else None
+
+
+def _json_or_none(stdout: bytes) -> _JsonValue | None:
+    try:
+        return cast("_JsonValue", json.loads(stdout))
+    except UnicodeDecodeError, json.JSONDecodeError:
+        return None
+
 
 def _repository_endpoint(repository: str) -> str:
     owner, name = repository.split("/", maxsplit=1)
     return f"repos/{quote(owner, safe='')}/{quote(name, safe='')}"
+
+
+def _branch_path(branch: str) -> str:
+    return quote(branch, safe="")
+
+
+def _merge_async_endpoint(repository: str, number: int) -> str:
+    return f"{_repository_endpoint(repository)}/pulls/{number}/merge-async"

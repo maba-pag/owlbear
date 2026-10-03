@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import json
+import re
 from datetime import datetime
 from enum import StrEnum
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
 
 
 class _ProviderModel(BaseModel):
@@ -254,4 +260,217 @@ class PublicationProvider(Protocol):
 
     def observe_checks(self, request: ObservePublicationChecks) -> PublicationCheckSnapshot:
         """Observe checks for one exact pull-request head without requesting provider work."""
+        ...
+
+
+_MAX_PROVIDER_MESSAGE_LENGTH = 500
+_DIRECT_MERGE_ACTION = "direct_merge"
+
+
+def bounded_provider_message(message: str | None) -> str | None:
+    """Return a single-line provider message bounded for persisted diagnostics."""
+    if message is None:
+        return None
+    collapsed = " ".join(message.split())
+    return collapsed[:_MAX_PROVIDER_MESSAGE_LENGTH] or None
+
+
+class PublicationMergeMethod(StrEnum):
+    """Merge methods a merge request may name; no queue or rule-bypass option exists."""
+
+    MERGE = "merge"
+    SQUASH = "squash"
+    REBASE = "rebase"
+
+
+class RequestPublicationMerge(_ProviderModel):
+    """Fixed inputs for one exact-head direct merge request."""
+
+    repository: str = Field(min_length=3, pattern=r"^[^\s/]+/[^\s/]+$")
+    number: int = Field(gt=0)
+    node_id: str = Field(min_length=1)
+    expected_head_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+    merge_method: PublicationMergeMethod
+
+
+def merge_request_body(request: RequestPublicationMerge) -> bytes:
+    """Return the canonical frozen JSON body of one direct, non-bypassing merge request."""
+    body = {
+        "bypass_rules": False,
+        "merge_action": "direct_merge",
+        "merge_method": request.merge_method.value,
+        "sha": request.expected_head_sha,
+    }
+    return json.dumps(body, sort_keys=True, separators=(",", ":")).encode()
+
+
+class PendingMergeRequest(_ProviderModel):
+    """Provider-reported pending merge request and the options the provider reported for it."""
+
+    request_id: str = Field(min_length=1, max_length=128)
+    expected_head_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+    merge_method: str = Field(min_length=1, max_length=32)
+    merge_action: str = Field(min_length=1, max_length=32)
+    bypass_rules: bool
+
+    def matches(self, request: RequestPublicationMerge) -> bool:
+        """Return whether the reported options equal one approved direct merge request."""
+        return (
+            self.expected_head_sha == request.expected_head_sha
+            and self.merge_method == request.merge_method.value
+            and self.merge_action == _DIRECT_MERGE_ACTION
+            and self.bypass_rules is False
+        )
+
+
+class PublicationMergeRefusalReason(StrEnum):
+    """Complete provider refusals of one merge submission."""
+
+    HEAD_CHANGED = "head-changed"
+    NOT_MERGEABLE = "not-mergeable"
+    CLOSED_OR_DRAFT = "closed-or-draft"
+    RULES_FAILED = "rules-failed"
+    FORBIDDEN = "forbidden"
+    QUEUE_REQUIRED = "queue-required"
+    VALIDATION = "validation"
+
+
+class PublicationMergeRefusal(_ProviderModel):
+    """One complete provider refusal with its bounded provider message."""
+
+    reason: PublicationMergeRefusalReason
+    http_status: int | None = Field(default=None, ge=100, le=599)
+    message: str | None = Field(default=None, max_length=_MAX_PROVIDER_MESSAGE_LENGTH)
+
+
+class PublicationMergeRequestStatus(StrEnum):
+    """Outcome categories of one merge submission or its readback."""
+
+    PENDING = "pending"
+    MERGED = "merged"
+    REFUSED = "refused"
+    UNAVAILABLE = "unavailable"
+
+
+class PublicationMergeRequestResult(_ProviderModel):
+    """Result of one merge submission or one request-identity readback."""
+
+    status: PublicationMergeRequestStatus
+    pending: PendingMergeRequest | None = None
+    existing_request: bool = False
+    merge_commit_sha: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    refusal: PublicationMergeRefusal | None = None
+    message: str | None = Field(default=None, max_length=_MAX_PROVIDER_MESSAGE_LENGTH)
+
+    @model_validator(mode="after")
+    def _validate_status_fields(self) -> PublicationMergeRequestResult:
+        status = self.status
+        if (self.pending is not None) != (status is PublicationMergeRequestStatus.PENDING):
+            message = "only pending merge results carry a pending request"
+            raise ValueError(message)
+        if self.existing_request and status is not PublicationMergeRequestStatus.PENDING:
+            message = "only pending merge results can report an existing request"
+            raise ValueError(message)
+        if (self.merge_commit_sha is not None) != (status is PublicationMergeRequestStatus.MERGED):
+            message = "only merged results carry exactly one merge commit"
+            raise ValueError(message)
+        if (self.refusal is not None) != (status is PublicationMergeRequestStatus.REFUSED):
+            message = "only refused merge results carry a refusal"
+            raise ValueError(message)
+        return self
+
+
+class PublicationMergeStack(_ProviderModel):
+    """Provider-reported stack membership of one pull request."""
+
+    size: int = Field(ge=1)
+    position: int = Field(ge=1)
+    base_branch: str = Field(min_length=1)
+    base_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+
+class PublicationMergeEvidence(_ProviderModel):
+    """Fresh merge-relevant facts of one pull request, including post-merge commit parents."""
+
+    repository: str = Field(min_length=3, pattern=r"^[^\s/]+/[^\s/]+$")
+    number: int = Field(gt=0)
+    node_id: str = Field(min_length=1)
+    state: str = Field(pattern=r"^(open|closed)$")
+    draft: bool
+    merged: bool
+    head_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+    base_branch: str = Field(min_length=1)
+    stack: PublicationMergeStack | None = None
+    merge_commit_sha: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    merge_commit_parents: tuple[str, ...] = Field(default=(), max_length=2)
+    merged_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def _validate_merge_evidence(self) -> PublicationMergeEvidence:
+        if any(re.fullmatch(r"[0-9a-f]{40}", parent) is None for parent in self.merge_commit_parents):
+            message = "merge commit parents must be commit identities"
+            raise ValueError(message)
+        if not self.merged:
+            if self.merge_commit_sha is not None or self.merge_commit_parents or self.merged_at is not None:
+                message = "unmerged pull requests carry no merge evidence"
+                raise ValueError(message)
+            return self
+        if self.state != "closed" or self.merge_commit_sha is None or not self.merge_commit_parents:
+            message = "merged pull requests require closed state, one merge commit and its parents"
+            raise ValueError(message)
+        if self.merged_at is None or self.merged_at.tzinfo is None:
+            message = "merged pull requests require one timezone-aware merge timestamp"
+            raise ValueError(message)
+        return self
+
+
+class PublicationBranchHead(_ProviderModel):
+    """Provider-observed head commit of one branch."""
+
+    repository: str = Field(min_length=3, pattern=r"^[^\s/]+/[^\s/]+$")
+    branch: str = Field(min_length=1)
+    head_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+
+class PublicationMergeSettings(_ProviderModel):
+    """Provider facts that decide whether Delivery may send a merge for one target branch."""
+
+    repository: str = Field(min_length=3, pattern=r"^[^\s/]+/[^\s/]+$")
+    branch: str = Field(min_length=1)
+    allowed_methods: tuple[PublicationMergeMethod, ...] = Field(max_length=3)
+    viewer_can_push: bool
+    rule_types: tuple[str, ...] = Field(max_length=100)
+    queue_required: bool
+    strict_up_to_date_required: bool
+    execution_scope_enforced: bool
+
+
+@runtime_checkable
+class PublicationMergeProvider(Protocol):
+    """Merge transport beside ``PublicationProvider``; readback never sends a request."""
+
+    def read_merge_settings(self, repository: str, branch: str) -> PublicationMergeSettings:
+        """Read repository merge settings, viewer permission and target-branch rules."""
+        ...
+
+    def read_branch_head(self, repository: str, branch: str) -> PublicationBranchHead:
+        """Read the current head of one branch."""
+        ...
+
+    def request_merge(
+        self,
+        request: RequestPublicationMerge,
+        *,
+        body_path: Path,
+        release: Callable[[int, str], None],
+    ) -> PublicationMergeRequestResult:
+        """Send one frozen merge body after ``release`` records the spawned process group."""
+        ...
+
+    def read_merge_request(self, repository: str, number: int, request_id: str) -> PublicationMergeRequestResult:
+        """Read the provider result for one merge request identity without sending a request."""
+        ...
+
+    def read_merge_evidence(self, repository: str, number: int) -> PublicationMergeEvidence:
+        """Read fresh merge, head, base, stack and merge-commit facts for one pull request."""
         ...
