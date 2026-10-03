@@ -5,7 +5,7 @@ import tailwindcss from "@tailwindcss/vite";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
-const BROWSER_TARGET = ["chrome123", "edge123", "firefox120", "safari17.5", "ios17.5"];
+const BROWSER_TARGET = ["chrome123", "edge123"];
 
 function cspPlugin() {
   const policy = [

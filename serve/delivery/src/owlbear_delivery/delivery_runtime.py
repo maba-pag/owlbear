@@ -2341,7 +2341,7 @@ class DeliveryRuntime:
             intent = DeliveryPendingStatePublication.model_validate_json(
                 self._pending_publication_path.read_bytes(), strict=False
             )
-        except (OSError, TypeError, ValueError):
+        except OSError, TypeError, ValueError:
             _reference("Delivery state publication intent is invalid")
         return intent if intent.status == "pending" else None
 
@@ -4512,7 +4512,7 @@ class DeliveryRuntime:
             _conflict("Planning retry settlement requires a typed completed-invocation envelope")
         try:
             envelope = envelope_type.model_validate_json(_model_content(envelope), strict=True)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             _conflict("Planning retry settlement envelope is invalid")
         if envelope.change_id != self._contract.change_id:
             _conflict("Planning retry settlement belongs to another Change")
@@ -4580,7 +4580,7 @@ class DeliveryRuntime:
             _conflict("Builder invocation settlement requires a typed completed-invocation envelope")
         try:
             envelope = envelope_type.model_validate_json(_model_content(envelope), strict=True)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             _conflict("Builder invocation settlement envelope is invalid")
         if envelope.change_id != self._contract.change_id:
             _conflict("Builder invocation settlement belongs to another Change")
@@ -4766,7 +4766,7 @@ class DeliveryRuntime:
         except (TypeError, ValueError) as exc:
             try:
                 payload = json.loads(content)
-            except (TypeError, ValueError, json.JSONDecodeError):
+            except TypeError, ValueError, json.JSONDecodeError:
                 payload = None
             if isinstance(payload, dict) and "repair_task_id" in payload:
                 msg = "completed-outcome repair receipt is malformed"
@@ -5470,7 +5470,7 @@ class DeliveryRuntime:
                 latest_receipt_id=receipt.receipt_id,
                 sequence=receipt.sequence,
             )
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             _conflict("Builder handoff lifecycle intent cannot prove an exact supported frontier delta")
         return receipt, head
 

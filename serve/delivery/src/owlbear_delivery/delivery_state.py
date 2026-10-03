@@ -390,7 +390,7 @@ class DeliveryStatePublisher:
             try:
                 raw = self._git_blob(remote_head, path)
                 snapshot = parse_delivery_state_snapshot(raw)
-            except (OSError, RuntimeError, subprocess.SubprocessError):
+            except OSError, RuntimeError, subprocess.SubprocessError:
                 diagnostics.append(
                     DeliveryStateSnapshotDiagnostic(
                         change_id=change_id,
@@ -455,7 +455,7 @@ class DeliveryStatePublisher:
         if remote_head != expected_remote_head:
             try:
                 replayed = self._read_snapshot(remote_head, change_id) if remote_head is not None else None
-            except (TypeError, ValueError, ValidationError):
+            except TypeError, ValueError, ValidationError:
                 replayed = None
             if (
                 replayed is not None
@@ -486,7 +486,7 @@ class DeliveryStatePublisher:
             _raise_state_conflict("remote Delivery snapshot is valid and cannot use quarantine repair")
         try:
             payload = json.loads(raw)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             payload = {}
         sequence = payload.get("sequence") if isinstance(payload, dict) else None
         next_sequence = (

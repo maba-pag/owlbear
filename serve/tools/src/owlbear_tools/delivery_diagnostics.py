@@ -670,7 +670,7 @@ def _json_shape(
 ) -> None:
     try:
         value = json.loads(content.decode("utf-8"))
-    except (UnicodeDecodeError, RecursionError, ValueError):
+    except UnicodeDecodeError, RecursionError, ValueError:
         inspection.diagnostic(f"{kind.upper()}_MALFORMED")
         inspection.records[-1]["status"] = "malformed"
         return
@@ -790,7 +790,7 @@ def _claim_issuer_window_is_valid(window: object) -> bool:
 def _change_record_shape(content: bytes, kind: str, inspection: _Inspection) -> None:
     try:
         value = json.loads(content.decode("utf-8"))
-    except (UnicodeDecodeError, RecursionError, ValueError):
+    except UnicodeDecodeError, RecursionError, ValueError:
         value = None
     if not isinstance(value, dict):
         inspection.diagnostic(f"{kind.upper()}_MALFORMED")
@@ -1667,7 +1667,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         args = parser.parse_args(argv)
         result = inspect_delivery(args.project_root, args.change_id)
-    except (ValueError, _InvocationError):
+    except ValueError, _InvocationError:
         print(_INVALID_INVOCATION)  # noqa: T201
         raise SystemExit(2) from None
     if args.format == "json":

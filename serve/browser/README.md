@@ -40,9 +40,9 @@ async with PlaywrightLauncher() as launcher:
 | `AcquisitionSuccess` / `AcquisitionFailure` | Typed success and failure result variants |
 | `AcquisitionStatus` | Status enum carried by each acquisition result |
 | `extract_content(html, url)` | Convert rendered HTML to normalized Markdown through the shared web-content package |
-| `find_sso_extension()` | Locate an explicitly configured or platform-discovered extension directory |
+| `find_sso_extension()` | Locate an explicitly configured extension directory |
 | `AuthenticationRequired` | Authentication exception used by interactive page-control callers; structured acquisition reports an `AcquisitionFailure` instead |
-| `SSOExtensionNotFoundError` | Raised when an explicitly requested or discovered extension cannot be found |
+| `SSOExtensionNotFoundError` | Raised when the explicit extension path is missing or invalid |
 
 ## Configuration
 
@@ -52,10 +52,9 @@ async with PlaywrightLauncher() as launcher:
 | `headless` constructor argument | `false` | A visible context permits manual authentication; headless acquisition cannot provide an interactive login step |
 | `SSO_EXTENSION_PATH` environment variable | unset | Explicit path to an extension directory loaded into the Chromium context |
 
-When `SSO_EXTENSION_PATH` is unset, discovery checks a Windows-style Chrome extension location.
-On macOS and other platforms, do not infer managed SSO support from that fallback. An extension
-path being found or loaded proves only configuration, not successful tenant authentication,
-Conditional Access, MFA, or device compliance.
+The launcher does not search platform-specific profile locations. Set `SSO_EXTENSION_PATH` to an
+approved extension directory when it is needed. Finding or loading an extension proves only
+configuration, not successful tenant authentication, Conditional Access, MFA, or device compliance.
 
 ## Acquisition Contract
 

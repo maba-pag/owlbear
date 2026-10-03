@@ -49,7 +49,7 @@ def read_entry(path: Path) -> MemoryEntry | None:
         if path.is_symlink() or not path.is_file():
             return None
         return read_entry_strict(path)
-    except (OSError, ValueError):
+    except OSError, ValueError:
         return None
 
 

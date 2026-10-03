@@ -59,14 +59,14 @@ Probably not a fit when:
 
 | Requirement | Why |
 | --- | --- |
-| **Python 3.12.14+** | Runs the OwlBear tool servers. The checkout defaults to Python 3.14.7. |
+| **Python 3.14.8 or later in the 3.14 series** | Runs the OwlBear tool servers. |
+| **macOS or Linux (Ubuntu)** | Supported operating systems. |
 | [uv](https://docs.astral.sh/uv/) | Installs dependencies and launches the tool servers |
 | VS Code + GitHub Copilot extension | The editor and the agents |
 | [GitHub CLI](https://cli.github.com/) | Opens and updates pull requests |
 | Git, and a project with a GitHub `origin` | The change is published to that repository |
 
-Run `gh auth login` once, and check `gh auth status` before your first change. On Windows, the
-OwlBear checkout and your project must be on the same drive.
+Run `gh auth login` once, and check `gh auth status` before your first change. Windows is unsupported.
 
 Expect agent-scale Copilot usage. A single change runs many chat requests across design, planning,
 building, and review.
@@ -111,8 +111,7 @@ uv run --project ../owlbear python ../owlbear/setup/init.py \
   --github-repository OWNER/PROJECT
 ```
 
-Windows PowerShell uses the same steps with backslash paths. The
-[setup guide](setup/setup-guide.md#quick-start) has the copy-paste variant and every option.
+See the [setup guide](setup/setup-guide.md#quick-start) for the copy-paste variant and every option.
 
 ## Verify
 

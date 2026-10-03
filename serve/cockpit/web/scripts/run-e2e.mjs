@@ -11,7 +11,6 @@ if (!(await checkChromium())) {
 }
 
 const result = spawnSync("playwright", ["test", ...playwrightArgs], {
-  shell: process.platform === "win32",
   stdio: "inherit",
 });
 

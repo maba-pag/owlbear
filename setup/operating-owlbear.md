@@ -385,12 +385,6 @@ so it reads this project's `.owlbear/delivery/config.json`, Delivery state, and 
    uv run --project ../owlbear cockpit
    ```
 
-   Windows PowerShell:
-
-   ```powershell
-   uv run --project ..\owlbear cockpit
-   ```
-
     Expected outcome: Cockpit opens `http://127.0.0.1:8420` and shows this project's
     target workspace. Use `COCKPIT_NO_OPEN=1` to suppress browser auto-open.
 

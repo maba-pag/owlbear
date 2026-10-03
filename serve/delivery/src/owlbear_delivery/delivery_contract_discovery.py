@@ -200,7 +200,7 @@ def _parse_contract(
         )
     try:
         contract = DeliveryContract.model_validate_json(content)
-    except (TypeError, ValueError, ValidationError):
+    except TypeError, ValueError, ValidationError:
         return None, _error(DeliveryDiscoveryErrorCode.CONTRACT_INVALID, "Persisted Change contract is invalid")
     if contract.change_id != change_id:
         return contract, _error(
@@ -228,7 +228,7 @@ def _parse_frontier(
         )
     try:
         frontier = parse_delivery_frontier(content)[0]
-    except (TypeError, ValueError, ValidationError):
+    except TypeError, ValueError, ValidationError:
         return (
             None,
             None,
@@ -255,7 +255,7 @@ def _parse_admission(
         )
     try:
         admission = DeliveryAdmissionReceipt.model_validate_json(content)
-    except (TypeError, ValueError, ValidationError):
+    except TypeError, ValueError, ValidationError:
         return None, _error(
             DeliveryDiscoveryErrorCode.ADMISSION_INVALID,
             "Persisted Delivery admission evidence is invalid",
@@ -288,7 +288,7 @@ def _cross_validate(
     if contract is not None and frontier is not None:
         try:
             _validate_delivery_frontier(contract, frontier)
-        except (DeliveryAdmissionConflictError, TypeError, ValueError):
+        except DeliveryAdmissionConflictError, TypeError, ValueError:
             errors.append(
                 _error(
                     DeliveryDiscoveryErrorCode.FRONTIER_BINDING_INVALID,

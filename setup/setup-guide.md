@@ -12,21 +12,16 @@ Before running setup, ensure the following are installed on your machine:
 
 | Requirement | Why | How to get it |
 | --- | --- | --- |
-| Python 3.12.14+ | OwlBear runtime; the checkout defaults to Python 3.14.7 | [python.org](https://www.python.org/downloads/) |
+| Python 3.14.8 | OwlBear runtime; OwlBear supports the 3.14 series only | [python.org](https://www.python.org/downloads/) |
+| macOS or Linux (Ubuntu) | Supported operating systems | — |
 | [uv](https://docs.astral.sh/uv/) | Package manager and MCP server launcher | [Installation guide](https://docs.astral.sh/uv/getting-started/installation/) |
 | VS Code | IDE | [code.visualstudio.com](https://code.visualstudio.com/) |
 | GitHub Copilot extension | Chat and agents | VS Code Extensions marketplace |
 | [GitHub CLI](https://cli.github.com/) | GitHub publication and pull-request operations | [Installation guide](https://cli.github.com/manual/installation) |
 | Git | Clone and version control | [git-scm.com](https://git-scm.com/) |
 
-> **Windows limitation:** owlbear and your project must be on the **same drive**.
-> `init.py` uses relative paths, and `os.path.relpath` raises `ValueError` when
-> resolving paths across different Windows drive letters (e.g., `C:\` vs `D:\`).
-
-<!-- separate blockquotes -->
-
-> **macOS and Linux:** Python, uv, VS Code, and Git work natively on both platforms. Browser-backed
-> commands still require the separate Chromium download described below.
+> OwlBear supports macOS and Linux (Ubuntu). Windows is unsupported. Browser-backed commands still
+> require the separate Chromium download described below.
 
 Chromium is optional for setup. Install it later when you use the Browser MCP or run Cockpit's
 browser-backed tests; see [Verify the installation](#verify-the-installation) and the
@@ -50,8 +45,8 @@ cd my-project
 ```
 
 **Expected result:** the OwlBear checkout and the project are siblings, for example
-`~/work/owlbear` and `~/work/my-project`. On Windows they are on the same drive. The OwlBear clone
-is on `main`, its default branch and the supported consumer surface.
+`~/work/owlbear` and `~/work/my-project`. The OwlBear clone is on `main`, its default branch and the
+supported consumer surface.
 
 ### 2. Run setup from the project root
 
@@ -250,7 +245,6 @@ detailed correction, publication, acceptance, or recovery procedure.
 | Delivery reports that local state differs from a remote snapshot | Local runtime, package, or Change coordination no longer matches the last published checkpoint | Preserve the local checkout and remote branches, inspect the typed Change attention in Cockpit, and resolve the exact divergence before acquisition |
 | `uv run cockpit` says the command is missing | Command was run from the consumer project without `--project` | Use `uv run --project ../owlbear cockpit` from the project root |
 | Cockpit shows the wrong workspace or cannot find `.owlbear/delivery/config.json` | Cockpit was launched from the wrong working directory | Run from the project root or add `--directory /path/to/project` |
-| `ValueError` on setup | Cross-drive path resolution | Place owlbear and your project on the same Windows drive |
 | Hook file not refreshed on rerun | Existing local `.owlbear/hooks/` file differs from seed | Re-run `init.py --replace-hooks` to overwrite, or choose `replace` when prompted interactively |
 | Agent name conflict | Same-name agent in both owlbear and project locations | Give project agents unique names; see [Adding local agents](operating-owlbear.md#adding-local-agents) |
 

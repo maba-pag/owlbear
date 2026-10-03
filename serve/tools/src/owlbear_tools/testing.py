@@ -90,7 +90,7 @@ def _root_tests() -> list[Path]:
 def _imported_namespaces(path: Path) -> frozenset[str]:
     try:
         tree = ast.parse(path.read_text(encoding="utf-8"))
-    except (OSError, SyntaxError):
+    except OSError, SyntaxError:
         return frozenset()
     namespaces: set[str] = set()
     for node in ast.walk(tree):

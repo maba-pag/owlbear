@@ -9,10 +9,27 @@ from owlbear_browser import (
     AcquisitionSuccess,
     Diagnostics,
     content_hash,
+    find_sso_extension,
     normalize_links,
     redact_url,
 )
+from owlbear_browser._errors import SSOExtensionNotFoundError
 from owlbear_browser.contract import redact_diagnostics
+
+
+def test_sso_extension_requires_an_explicit_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SSO_EXTENSION_PATH", raising=False)
+
+    with pytest.raises(SSOExtensionNotFoundError, match="SSO_EXTENSION_PATH must be set"):
+        find_sso_extension()
+
+
+def test_sso_extension_uses_the_explicit_path(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    extension_path = tmp_path / "extension"
+    extension_path.mkdir()
+    monkeypatch.setenv("SSO_EXTENSION_PATH", str(extension_path))
+
+    assert find_sso_extension() == extension_path
 
 
 def test_request_accepts_private_http_url_and_rejects_prohibited_inputs() -> None:

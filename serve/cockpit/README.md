@@ -62,20 +62,20 @@ repository.
 
 | Attribute | Value |
 | --- | --- |
-| Node development pin | `24.19.0` (`web/.nvmrc`) |
-| Node support/build floor | `>=24.16.0` (`web/package.json`) |
+| Node development pin | `24.21.0` (`web/.nvmrc`) |
+| Node engine floor | `>=24.21.0` (`web/package.json`) |
 | Stack | React `^19.2.7`, Vite `^8.1.5`, TypeScript `^6.0.3`, React Router `^8.2.0`, Porsche Design System React `^4.5.0`, React Compiler (`babel-plugin-react-compiler` `^1.0.0`), Tailwind CSS `^4.3.3` (`@tailwindcss/vite` + `tailwindcss`) |
 | Test runner | Vitest `^4.1.10` (`npm test`) |
 | E2E runner | Playwright `^1.61.1` (`npm run test:e2e`) |
-| Browser output target | Chrome/Edge `123`, Firefox `120`, Safari/iOS `17.5` (native `light-dark()` floor) |
+| Browser output target | Chrome/Edge `123` (native `light-dark()` floor) |
 | CSS/HTML lint | Biome `2.5.11`, HTMLHint `^1.9.2` (`npm run lint:html`) |
 | Build output | `serve/cockpit/dist/` via `npm run build` |
 
 The Node development pin is the reproducible local toolchain; the support/build floor is the
-oldest Cockpit runtime exercised in CI. Vite compiles JavaScript and CSS for the listed browser
-target but does not polyfill missing Web APIs. The browser floor includes native `light-dark()`
-support; TypeScript's `ES2020` target is a type-checking configuration here because the project
-uses `noEmit`.
+Node is pinned to `24.21.0` for local development and CI, and the package engine floor matches it.
+Vite targets Chrome and Edge `123` and does not polyfill missing Web APIs. The target includes
+native `light-dark()` support; TypeScript's `ES2020` target is a type-checking configuration here
+because the project uses `noEmit`.
 
 ## Frontend Quality
 
@@ -123,17 +123,9 @@ npm run test:e2e:compat
 ```
 
 The compatibility gate uses a separate Playwright configuration and runs only the shell and PDS
-smoke scenarios against the Playwright-pinned Chromium engine. To run the full cross-engine matrix
-locally, install all three engines and use the explicit full-suite command:
-
-```shell
-npx playwright install chromium firefox webkit
-npm run test:e2e:compat:all
-```
-
-The full matrix does not execute the exact minimum browser versions in the output-target table.
-On Ubuntu CI, manual workflow dispatch runs the full matrix with `--with-deps`; pull-request CI
-uses the Chromium-only gate. The maintained fast and assembled suites remain Chromium-only.
+smoke scenarios against the Playwright-pinned Chromium engine. Pull-request CI and manual dispatch
+both install and test Chromium only. Chrome and Edge are the supported browser families; consumers
+use the prebuilt bundle and do not run these developer-only tests.
 
 ## Delivery Evidence
 

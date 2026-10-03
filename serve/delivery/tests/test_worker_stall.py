@@ -439,7 +439,7 @@ def _stop_terminal_shell(shell: psutil.Process, holder: psutil.Process, control:
         shell.kill()
 
 
-@pytest.mark.skipif(not Path("/bin/sh").exists() or sys.platform == "win32", reason="needs a POSIX pty and /bin/sh")
+@pytest.mark.skipif(not Path("/bin/sh").exists(), reason="needs a POSIX pty and /bin/sh")
 @pytest.mark.parametrize(("argv", "blocks"), [(("sh", "-c", "read x"), True), (("sh", "-i"), False)])
 def test_real_terminal_shell_is_exempt_only_when_interactive(
     tmp_path: Path, argv: tuple[str, ...], *, blocks: bool

@@ -26,7 +26,6 @@ __all__ = [
 ]
 
 _SSO_EXT_ID = "ppnbnpeolgkicgegkbkbjmhlideopiji"
-_EXT_REL = Path("Google") / "Chrome" / "User Data" / "Default" / "Extensions" / _SSO_EXT_ID
 
 
 def _prefer_cleanup_error(
@@ -49,18 +48,17 @@ class AuthenticationCapabilities:
 
 
 def find_sso_extension() -> Path:
-    """Locate the Microsoft SSO extension path.
+    """Locate an explicitly configured Microsoft SSO extension path.
 
-    Checks ``SSO_EXTENSION_PATH`` env var first (must point to an existing
-    directory).  Falls back to the versioned subfolder under
-    ``%LOCALAPPDATA%/Google/Chrome/User Data/Default/Extensions/{_SSO_EXT_ID}``.
+    ``SSO_EXTENSION_PATH`` must point to an existing directory. The launcher
+    does not search platform-specific profile locations.
 
     Returns:
         Path to the versioned extension directory.
 
     Raises:
-        SSOExtensionNotFoundError: When the extension cannot be found or the
-            env-var path does not exist.
+        SSOExtensionNotFoundError: When the environment variable is unset or
+            its path does not exist.
     """
     override = os.environ.get("SSO_EXTENSION_PATH")
     if override is not None:
@@ -70,18 +68,8 @@ def find_sso_extension() -> Path:
             raise SSOExtensionNotFoundError(msg)
         return p
 
-    local_appdata = os.environ.get("LOCALAPPDATA", "")
-    ext_root = Path(local_appdata) / _EXT_REL
-    if not ext_root.exists():
-        msg = f"SSO extension directory not found: {ext_root}"
-        raise SSOExtensionNotFoundError(msg)
-
-    version_dirs = [d for d in ext_root.iterdir() if d.is_dir()]
-    if not version_dirs:
-        msg = f"No version subfolders found in SSO extension directory: {ext_root}"
-        raise SSOExtensionNotFoundError(msg)
-
-    return version_dirs[0]
+    msg = "SSO_EXTENSION_PATH must be set to an approved extension directory."
+    raise SSOExtensionNotFoundError(msg)
 
 
 def build_playwright_args(sso_ext_path: Path) -> list[str]:

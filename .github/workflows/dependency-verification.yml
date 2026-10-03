@@ -71,15 +71,9 @@ jobs:
 
       - name: Resolve pinned Python runtimes
         id: runtime
-        env:
-          EVENT_NAME: ${{ github.event_name }}
         run: |
           python_upper="$(tr -d '\r\n' < .python-version)"
-          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            printf 'python_matrix=["3.12.14","3.13","%s"]\n' "$python_upper" >> "$GITHUB_OUTPUT"
-          else
-            printf 'python_matrix=["3.12.14","%s"]\n' "$python_upper" >> "$GITHUB_OUTPUT"
-          fi
+          printf 'python_matrix=["%s"]\n' "$python_upper" >> "$GITHUB_OUTPUT"
 
   classify:
     name: Classify dependency surfaces
@@ -234,20 +228,17 @@ jobs:
           MATRIX_PYTHON: ${{ matrix.python }}
 
       - name: Prove workspace lock regeneration
-        if: matrix.python == '3.12.14'
         run: uv run --python "${MATRIX_PYTHON}" python .github/scripts/check_uv_workspace_lock.py
         env:
           MATRIX_PYTHON: ${{ matrix.python }}
 
       - name: Compile Python sources
-        if: github.event_name == 'workflow_dispatch' || matrix.python == '3.12.14'
         run: |
           uv run --python "${MATRIX_PYTHON}" python -m compileall -q serve setup tests .owlbear/hooks seed
         env:
           MATRIX_PYTHON: ${{ matrix.python }}
 
       - name: Check Python sources
-        if: github.event_name == 'workflow_dispatch' || matrix.python == '3.12.14'
         run: |
           uv run --python "${MATRIX_PYTHON}" ruff check .
           uv run --python "${MATRIX_PYTHON}" ruff format --check .
@@ -255,7 +246,6 @@ jobs:
           MATRIX_PYTHON: ${{ matrix.python }}
 
       - name: Run Python behavior tests
-        if: github.event_name == 'workflow_dispatch' || matrix.python == '3.12.14'
         run: |
           uv run --python "${MATRIX_PYTHON}" pytest tests serve \
             -m "not api and not e2e and not browser and not cockpit and not model"
@@ -435,7 +425,7 @@ jobs:
       fail-fast: false
       matrix:
         policy: [current, pruned, disabled]
-        python: ["3.12.14", pinned]
+        python: [pinned]
     env:
       UV_PROJECT_ENVIRONMENT: .venv-probe
     steps:

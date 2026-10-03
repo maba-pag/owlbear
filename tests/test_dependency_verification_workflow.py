@@ -341,8 +341,7 @@ def test_dependency_proofs_install_committed_state_and_run_behavior_checks() -> 
 
     assert resolve["outputs"] == {"python_matrix": "${{ steps.runtime.outputs.python_matrix }}"}
     assert "python_upper=\"$(tr -d '\\r\\n' < .python-version)\"" in text
-    assert 'python_matrix=["3.12.14","3.13","%s"]' in text
-    assert 'python_matrix=["3.12.14","%s"]' in text
+    assert 'python_matrix=["%s"]' in text
     assert proof_python["strategy"] == {
         "fail-fast": False,
         "matrix": {"python": "${{ fromJSON(needs.resolve_runtimes.outputs.python_matrix) }}"},
@@ -399,11 +398,9 @@ def test_dependency_workflow_avoids_duplicate_pr_python_proof() -> None:
     proof_python = _job(workflow, "proof-python")
     python_steps = {step["name"]: step for step in proof_python["steps"]}
 
-    assert python_steps["Prove workspace lock regeneration"]["if"] == "matrix.python == '3.12.14'"
+    assert "if" not in python_steps["Prove workspace lock regeneration"]
     for step_name in ("Compile Python sources", "Check Python sources", "Run Python behavior tests"):
-        assert python_steps[step_name]["if"] == (
-            "github.event_name == 'workflow_dispatch' || matrix.python == '3.12.14'"
-        )
+        assert "if" not in python_steps[step_name]
 
 
 def test_dependency_workflow_proves_ruff_toolchain_parity() -> None:
@@ -723,7 +720,7 @@ def test_cache_probes_are_opt_in_and_isolated_from_required_proofs() -> None:
     uv_probe = _job(workflow, "cache-probe-uv")
     assert uv_probe["strategy"]["matrix"] == {
         "policy": ["current", "pruned", "disabled"],
-        "python": ["3.12.14", "pinned"],
+        "python": ["pinned"],
     }
     uv_cache = next(step["with"] for step in uv_probe["steps"] if step.get("id") == "uv")
     assert uv_cache["enable-cache"] == "${{ matrix.policy != 'disabled' }}"
@@ -1049,11 +1046,28 @@ def test_node_runtime_checker_accepts_the_checked_in_contract() -> None:
     assert result.returncode == 0, result.stderr
 
 
-def test_node_runtime_checker_rejects_a_lower_runtime(tmp_path: Path) -> None:
+def test_node_runtime_checker_accepts_an_aligned_pin_and_floor(tmp_path: Path) -> None:
     version_file = tmp_path / ".nvmrc"
     engines_file = tmp_path / "package.json"
-    version_file.write_text("24.15.0\n", encoding="utf-8")
-    engines_file.write_text(json.dumps({"engines": {"node": ">=24.16.0"}}), encoding="utf-8")
+    version_file.write_text("24.21.0\n", encoding="utf-8")
+    engines_file.write_text(json.dumps({"engines": {"node": ">=24.21.0"}}), encoding="utf-8")
+
+    result = _run_script(
+        RUNTIME_SCRIPT,
+        "--version-file",
+        str(version_file),
+        "--engines-file",
+        str(engines_file),
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_node_runtime_checker_rejects_a_raised_pin_with_a_stale_floor(tmp_path: Path) -> None:
+    version_file = tmp_path / ".nvmrc"
+    engines_file = tmp_path / "package.json"
+    version_file.write_text("25.0.0\n", encoding="utf-8")
+    engines_file.write_text(json.dumps({"engines": {"node": ">=24.21.0"}}), encoding="utf-8")
 
     result = _run_script(
         RUNTIME_SCRIPT,
@@ -1064,15 +1078,33 @@ def test_node_runtime_checker_rejects_a_lower_runtime(tmp_path: Path) -> None:
     )
 
     assert result.returncode != 0
-    assert "below" in result.stderr
+    assert "does not match" in result.stderr
+
+
+def test_node_runtime_checker_rejects_a_lower_runtime(tmp_path: Path) -> None:
+    version_file = tmp_path / ".nvmrc"
+    engines_file = tmp_path / "package.json"
+    version_file.write_text("24.20.0\n", encoding="utf-8")
+    engines_file.write_text(json.dumps({"engines": {"node": ">=24.21.0"}}), encoding="utf-8")
+
+    result = _run_script(
+        RUNTIME_SCRIPT,
+        "--version-file",
+        str(version_file),
+        "--engines-file",
+        str(engines_file),
+    )
+
+    assert result.returncode != 0
+    assert "does not match" in result.stderr
 
 
 def test_node_runtime_checker_accepts_the_expected_installed_runtime(tmp_path: Path) -> None:
-    node = _fake_node(tmp_path, "24.16.0")
+    node = _fake_node(tmp_path, "24.21.0")
     version_file = tmp_path / ".nvmrc"
     engines_file = tmp_path / "package.json"
-    version_file.write_text("24.19.0\n", encoding="utf-8")
-    engines_file.write_text(json.dumps({"engines": {"node": ">=24.16.0"}}), encoding="utf-8")
+    version_file.write_text("24.21.0\n", encoding="utf-8")
+    engines_file.write_text(json.dumps({"engines": {"node": ">=24.21.0"}}), encoding="utf-8")
 
     result = _run_script(
         RUNTIME_SCRIPT,
@@ -1081,7 +1113,7 @@ def test_node_runtime_checker_accepts_the_expected_installed_runtime(tmp_path: P
         "--engines-file",
         str(engines_file),
         "--expected-version",
-        "24.16.0",
+        "24.21.0",
         "--node-executable",
         str(node),
     )
@@ -1090,11 +1122,11 @@ def test_node_runtime_checker_accepts_the_expected_installed_runtime(tmp_path: P
 
 
 def test_node_runtime_checker_rejects_an_unexpected_installed_runtime(tmp_path: Path) -> None:
-    node = _fake_node(tmp_path, "24.15.0")
+    node = _fake_node(tmp_path, "24.20.0")
     version_file = tmp_path / ".nvmrc"
     engines_file = tmp_path / "package.json"
-    version_file.write_text("24.19.0\n", encoding="utf-8")
-    engines_file.write_text(json.dumps({"engines": {"node": ">=24.16.0"}}), encoding="utf-8")
+    version_file.write_text("24.21.0\n", encoding="utf-8")
+    engines_file.write_text(json.dumps({"engines": {"node": ">=24.21.0"}}), encoding="utf-8")
 
     result = _run_script(
         RUNTIME_SCRIPT,
@@ -1103,7 +1135,7 @@ def test_node_runtime_checker_rejects_an_unexpected_installed_runtime(tmp_path: 
         "--engines-file",
         str(engines_file),
         "--expected-version",
-        "24.16.0",
+        "24.21.0",
         "--node-executable",
         str(node),
     )
@@ -1140,6 +1172,7 @@ def test_cockpit_workflow_proves_node_floor_and_browser_engines() -> None:
     assert resolve["outputs"] == {"node_matrix": "${{ steps.runtime.outputs.node_matrix }}"}
     assert proof["needs"] == "resolve_runtimes"
     assert "node_upper=\"$(tr -d '\\r\\n' < serve/cockpit/web/.nvmrc)\"" in text
+    assert 'node_matrix=["%s"]' in text
     assert "npm ci --engine-strict" in text
     assert "npm run build" in text
     assert browser["needs"] == "proof"
@@ -1155,15 +1188,17 @@ def test_cockpit_workflow_proves_node_floor_and_browser_engines() -> None:
     assert "workflow_dispatch:" in text
     assert "ref: ${{ github.event.pull_request.head.sha || github.sha }}" in text
     assert browser["env"] == {
-        "E2E_COMPAT_BROWSERS": (
-            "${{ github.event_name == 'workflow_dispatch' && 'chromium firefox webkit' || 'chromium' }}"
-        )
+        "E2E_COMPAT_BROWSERS": "chromium",
     }
     assert 'npx playwright install --with-deps "$E2E_COMPAT_BROWSERS"' in text
     assert "npm run test:e2e:compat" in text
     assert package["scripts"]["test:e2e:compat:all"] == (
-        "cross-env E2E_COMPAT_BROWSERS=chromium,firefox,webkit node scripts/run-e2e-compat.mjs"
+        "cross-env E2E_COMPAT_BROWSERS=chromium node scripts/run-e2e-compat.mjs"
     )
+    compatibility = (ROOT / "serve/cockpit/web/playwright.compat.config.ts").read_text(encoding="utf-8")
+    assert re.findall(r'name:\s*[\'"]([^\'"]+)[\'"]', compatibility) == ["compatibility-chromium"]
+    vite = (ROOT / "serve/cockpit/web/vite.config.ts").read_text(encoding="utf-8")
+    assert 'const BROWSER_TARGET = ["chrome123", "edge123"]' in vite
 
 
 def test_cockpit_compatibility_retains_failure_diagnostics() -> None:

@@ -12,9 +12,6 @@
   "[markdown]": {
     "editor.defaultFormatter": "DavidAnson.vscode-markdownlint"
   },
-  "[powershell]": {
-    "editor.defaultFormatter": "ms-vscode.powershell"
-  },
   "[python]": {
     "editor.defaultFormatter": "charliermarsh.ruff"
   },
@@ -31,9 +28,7 @@
     "linux-arm64": "serve/cockpit/web/node_modules/@biomejs/cli-linux-arm64/biome",
     "linux-arm64-musl": "serve/cockpit/web/node_modules/@biomejs/cli-linux-arm64-musl/biome",
     "linux-x64": "serve/cockpit/web/node_modules/@biomejs/cli-linux-x64/biome",
-    "linux-x64-musl": "serve/cockpit/web/node_modules/@biomejs/cli-linux-x64-musl/biome",
-    "win32-arm64": "serve/cockpit/web/node_modules/@biomejs/cli-win32-arm64/biome.exe",
-    "win32-x64": "serve/cockpit/web/node_modules/@biomejs/cli-win32-x64/biome.exe"
+    "linux-x64-musl": "serve/cockpit/web/node_modules/@biomejs/cli-linux-x64-musl/biome"
   },
   "biome.requireConfiguration": true,
   "chat.agent.maxRequests": 99999,
@@ -63,7 +58,6 @@
   "chat.tools.compressOutput.enabled": true,
   "chat.tools.terminal.autoApprove": {
     "npm test": true,
-    "Test-Path": true,
     "uv run coverage": true,
     "uv run format": true,
     "uv run help": true,
@@ -104,7 +98,6 @@
   },
   "git.autorefresh": false,
   // NOTE: User-local absolute path — update to your owlbear install location.
-  // On Windows this might be e.g. "C:\\Users\\you\\Projects\\owlbear".
   "github.copilot.chat.additionalReadAccessPaths": ["/Users/markus/Projects/owlbear"],
   "github.copilot.chat.agent.autoFix": true,
   "github.copilot.chat.anthropic.contextEditing.mode": "clear-tooluse",
@@ -168,14 +161,7 @@
   "task.problemMatchers.neverPrompt": true,
   "telemetry.editStats.enabled": false,
   "telemetry.feedback.enabled": false,
-  "terminal.integrated.defaultProfile.windows": "pwsh",
   "terminal.integrated.enableFileLinks": "off",
-  "terminal.integrated.profiles.windows": {
-    "pwsh": {
-      "icon": "terminal-powershell",
-      "path": "pwsh"
-    }
-  },
   "terminal.integrated.wordSeparators": "",
   "workbench.settings.alwaysShowAdvancedSettings": true
 }

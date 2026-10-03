@@ -19,7 +19,6 @@ for (const suite of suites) {
   console.log(`\nRunning E2E project: ${suite.name}`);
   const result = spawnSync("playwright", ["test", `--project=${suite.name}`, ...forwardedArgs], {
     env: { ...process.env, CI: "1", ...suite.environment },
-    shell: process.platform === "win32",
     stdio: "inherit",
   });
 

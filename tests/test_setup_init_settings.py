@@ -7,6 +7,8 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import runpy
+import sys
 import types
 from collections.abc import Callable
 from pathlib import Path
@@ -18,6 +20,25 @@ from owlbear_delivery import DeliveryStartupConfig
 
 _REPO_ROOT = Path(__file__).parent.parent
 _INIT_PATH = _REPO_ROOT / "setup" / "init.py"
+
+
+def test_init_refuses_windows_before_changing_the_target(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    with (
+        patch.object(sys, "platform", "win32"),
+        patch.object(sys, "argv", [str(_INIT_PATH)]),
+        pytest.raises(SystemExit) as exit_info,
+    ):
+        runpy.run_path(str(_INIT_PATH), run_name="__main__")
+
+    assert exit_info.value.code == 1
+    assert "Windows is unsupported" in capsys.readouterr().err
+    assert list(tmp_path.iterdir()) == []
 
 
 def _load_init_module() -> types.ModuleType:
@@ -88,23 +109,6 @@ def test_init_writes_settings_without_hook_locations_and_with_local_hints(
     assert data["github.copilot.chat.additionalReadAccessPaths"] == [
         str(_REPO_ROOT.resolve()),
     ]
-
-
-def test_settings_template_escapes_windows_paths(tmp_path: Path, init_module: types.ModuleType) -> None:
-    settings_path = tmp_path / "settings.json"
-
-    init_module._write_settings(
-        _REPO_ROOT / "seed/.vscode/settings.json",
-        settings_path,
-        {
-            "owlbear_rel_path": "../owlbear",
-            "owlbear_abs_path": r"C:\Dev\owlbear",
-            "target_abs_path": r"C:\Dev\project",
-        },
-    )
-
-    settings = json.loads(settings_path.read_text(encoding="utf-8"))
-    assert settings["github.copilot.chat.additionalReadAccessPaths"] == [r"C:\Dev\owlbear"]
 
 
 def test_init_warns_when_existing_mcp_json_is_malformed(tmp_path: Path, init_module: types.ModuleType) -> None:

@@ -131,7 +131,7 @@ async def check_url_allowed(  # noqa: C901
             continue
         try:
             ip = str(sockaddr[0])
-        except (IndexError, TypeError):
+        except IndexError, TypeError:
             continue
         has_ip_address = True
         if _is_blocked_ip(ip):
