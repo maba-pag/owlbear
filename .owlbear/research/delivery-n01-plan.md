@@ -533,7 +533,7 @@ from `owlbear_delivery` wait until N01 is merged, because they change the D9 fix
 
 | Phase | PR | Exact head | Proof | Challenges | Status |
 | --- | --- | --- | --- | --- | --- |
-| N01-P | this PR | — | Probes P1–P13 | Sol plan rounds: 1 revision-required (D5, §3.2), 2 revision-required (I5), 3 `plan-sound` | approved |
+| N01-P | #342 | — | Probes P1–P13 | Sol plan rounds: 1 revision-required (D5, §3.2), 2 revision-required (I5), 3 `plan-sound` | approved |
 | N01-A | — | — | — | — | — |
 | N01-B | — | — | — | — | — |
 | N01-C | — | — | — | — | — |
