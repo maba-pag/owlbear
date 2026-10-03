@@ -402,7 +402,8 @@ no diary, no session transcripts. Evidence and history live on the PRs.
 ### 2.6 Live state and open items
 
 - **Live Delivery** (main checkout, `.owlbear/delivery/runtime/changes`):
-  - `delivery-action-readiness`: product merged via PR #316.
+  - `delivery-action-readiness`: product merged via PR #316 (merge commit `364daf61`). The live record is
+    unfinished (Implementation, 4 of 5 results, schema-1 evidence, not finalized); N10-M disposes of it.
   - `frontier-serialization-contract`: issue #215, open PR #314. This is a Delivery fix, so under
     the no-dogfooding rule it is absorbed into N02.
   - `macos-managed-browser-authentication`: B1, open PR #312, TASK-004 managed-Mac pilot pending.
@@ -459,7 +460,7 @@ N10 reruns it as regression.
 | N00 | D03 closeout and transition | S / medium |
 | N01 | Behavior-preserving split of the large Delivery modules | L / medium |
 | N02 | Controller pinning, versioned state and migration core | L / high |
-| N03 | Evidence model and finalization assurance | M / high |
+| N03 | Evidence model and finalization assurance | L / high |
 | N04 | Same-Change revision activation and evidence applicability | XL / high |
 | N05 | Exact-head merge approval, completion and publication continuity | L / high |
 | N06 | Prepared interaction core and private local input | L / high |
@@ -605,7 +606,7 @@ every new item exactly one lane.
 | N02-B | — | — |
 | N02-C | — | — |
 | N02-D | — | — |
-| N03-P | — | — |
+| N03-P | merged | #349 (plan gate `plan-sound`, round 6; D11 confirmation pending; U1 before N03-A) |
 | N03-A | — | — |
 | N03-B | — | — |
 | N03-C | — | — |
@@ -893,12 +894,15 @@ assurance.
 
 - N03-P.
 - N03-A: typed observations, coverage metadata, acceptance identities, finalization validation,
-  registered migration, strict MCP models.
-- N03-B: finalization semantic context and procedures: `w-change-finalization`, the
-  `build-reviewer` finalization mode, `w-packet-building` proof guidance.
+  registered migration, strict MCP models; the finalization semantic context (including bounded task
+  authority), basis digest, review binding of the observation set and receipt-construction skill text.
+  Existing frontiers stay `readable-legacy` 18 until their next normal mutation writes 19; no frontier
+  rewrite migration.
+- N03-B: finalization procedures and proof guidance: `w-change-finalization`, the `build-reviewer`
+  finalization mode, `w-packet-building`; host rehearsal.
 - N03-C: evidence projection through `get_change`, operator views, MCP, HTTP and Cockpit.
 
-LC gate: full form.
+LC gate: full form for N03-A and N03-C; not applicable to N03-B. Amended by N03-P (its D11).
 
 ### N04 — Same-Change revision activation and evidence applicability
 
@@ -1208,4 +1212,5 @@ The programme is complete when all of the following hold:
 - **N05:** real merge rehearsal on a disposable repository; merge-method policy.
 - **N06:** retention and privacy policy for private inputs.
 - **N07:** treatment of earlier B1 evidence.
-- **N10-M:** abandoning the `frontier-serialization-contract` live Change.
+- **N10-M:** abandoning the `frontier-serialization-contract` live Change; the disposition of the
+  unfinished live record `delivery-action-readiness` (product merged via PR #316).
