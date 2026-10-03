@@ -485,6 +485,102 @@ def test_target_observation_yields_to_a_later_shared_ref_move(tmp_path: Path) ->
     assert manager.observed_target_head() == operator_head
 
 
+@pytest.mark.parametrize("log_all_ref_updates", ["true", "false"])
+@pytest.mark.parametrize("operator_move", ["fetch", "update-ref"])
+def test_superseded_target_observation_never_revives_after_a_shared_ref_aba(
+    tmp_path: Path, log_all_ref_updates: str, operator_move: str
+) -> None:
+    repository, remote, initial = _repository(tmp_path)
+    _git(repository, "config", "core.logAllRefUpdates", log_all_ref_updates)
+    _coordinator, manager = _change_workspace(tmp_path, repository)
+    _reviewed_change(manager, "sync-aba")
+    stale_head = _advance_remote_target(tmp_path, remote)
+    with pytest.raises(ChangeTargetSyncStaleError):
+        manager.sync_with_target(
+            SyncChangeWithTarget(change_id="sync-aba", expected_target=initial, operation_id="sync-aba-1")
+        )
+    assert manager.observed_target_head() == stale_head
+
+    operator_head = _advance_remote_target(tmp_path, remote, product="operator\n", repository_name="operator")
+    if operator_move == "fetch":
+        _git(repository, "fetch", "origin", "+refs/heads/main:refs/remotes/origin/main")
+    else:
+        # Download the objects only; the operator then moves the shared ref by hand.
+        _git(repository, "fetch", "--refmap=", "--no-write-fetch-head", "origin", "refs/heads/main")
+        _git(repository, "update-ref", "refs/remotes/origin/main", operator_head, initial)
+    assert manager.observed_target_head() == operator_head
+    _git(remote, "update-ref", "refs/heads/main", initial)
+    if operator_move == "fetch":
+        _git(repository, "fetch", "origin", "+refs/heads/main:refs/remotes/origin/main")
+    else:
+        _git(repository, "update-ref", "refs/remotes/origin/main", initial, operator_head)
+
+    assert _head(repository, "refs/remotes/origin/main") == initial
+    assert manager.observed_target_head() == initial
+    _restarted_coordinator, restarted = _change_workspace(tmp_path, repository)
+    assert restarted.observed_target_head() == initial
+
+
+def test_target_observation_replacement_and_cleanup_never_select_a_superseded_head(tmp_path: Path) -> None:
+    repository, remote, initial = _repository(tmp_path)
+    _coordinator, manager = _change_workspace(tmp_path, repository)
+    worktree, _reviewed = _reviewed_change(manager, "sync-replace")
+    first = _advance_remote_target(tmp_path, remote)
+    with pytest.raises(ChangeTargetSyncStaleError):
+        manager.sync_with_target(
+            SyncChangeWithTarget(change_id="sync-replace", expected_target=initial, operation_id="sync-replace-1")
+        )
+    second = _advance_remote_target(tmp_path, remote, product="second\n", repository_name="second")
+    with pytest.raises(ChangeTargetSyncStaleError):
+        manager.sync_with_target(
+            SyncChangeWithTarget(change_id="sync-replace", expected_target=first, operation_id="sync-replace-2")
+        )
+    assert manager.observed_target_head() == second
+
+    # A recording interrupted between its head ref and its reflog marker selects nothing.
+    _git(repository, "update-ref", "refs/owlbear/target-observation/origin/main", first)
+    assert manager.observed_target_head() == initial
+    _git(repository, "update-ref", "refs/owlbear/target-observation/origin/main", second)
+    assert manager.observed_target_head() == second
+
+    # An exact sync that leaves the shared ref in place still consumes the older observation.
+    _git(remote, "update-ref", "refs/heads/main", initial)
+    receipt = manager.sync_with_target(
+        SyncChangeWithTarget(change_id="sync-replace", expected_target=initial, operation_id="sync-replace-3")
+    )
+    assert receipt.target_head == initial
+    assert _head(worktree) == receipt.merged_head
+    assert _head(repository, "refs/remotes/origin/main") == initial
+    assert _target_observation_refs(repository) == {}
+    assert manager.observed_target_head() == initial
+
+
+def test_target_observation_recorded_over_a_concurrent_shared_ref_move_is_never_selected(tmp_path: Path) -> None:
+    repository, remote, initial = _repository(tmp_path)
+    _coordinator, manager = _change_workspace(tmp_path, repository)
+    _worktree, reviewed = _reviewed_change(manager, "sync-race")
+    advanced = _advance_remote_target(tmp_path, remote)
+    real_runner = workspace_target_sync.run_remote_git
+
+    def fetch_then_move_shared_ref(*arguments: Any, **options: Any) -> subprocess.CompletedProcess[bytes]:
+        result = real_runner(*arguments, **options)
+        _git(repository, "update-ref", "refs/remotes/origin/main", reviewed, initial)
+        return result
+
+    with (
+        patch.object(workspace_target_sync, "run_remote_git", side_effect=fetch_then_move_shared_ref),
+        pytest.raises(ChangeTargetSyncStaleError),
+    ):
+        manager.sync_with_target(
+            SyncChangeWithTarget(change_id="sync-race", expected_target=initial, operation_id="sync-race-1")
+        )
+
+    assert _target_observation_refs(repository) == {"refs/owlbear/target-observation/origin/main": advanced}
+    assert manager.observed_target_head() == reviewed
+    _git(repository, "update-ref", "refs/remotes/origin/main", initial, reviewed)
+    assert manager.observed_target_head() == initial
+
+
 def test_exact_sync_after_a_remote_rewind_rewinds_the_engine_target(tmp_path: Path) -> None:
     repository, remote, initial = _repository(tmp_path)
     coordinator, manager = _change_workspace(tmp_path, repository)

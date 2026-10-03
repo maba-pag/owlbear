@@ -48,6 +48,7 @@ if TYPE_CHECKING:
 
 _TARGET_SYNC_REF_PREFIX = "refs/owlbear/target-sync/"
 _TARGET_OBSERVATION_REF_PREFIX = "refs/owlbear/target-observation/"
+_TARGET_OBSERVATION_MARKER = "owlbear: target observation "
 _ZERO_OID = "0" * 40
 
 
@@ -981,19 +982,44 @@ class _TargetSyncMixin:
             _workspace_failure("fetched private target-sync ref is unavailable")
         return fetched_head, private_ref
 
-    def _target_observation_refs(self) -> tuple[str, str]:
-        name = self._target_ref().removeprefix("refs/remotes/")
-        return f"{_TARGET_OBSERVATION_REF_PREFIX}head/{name}", f"{_TARGET_OBSERVATION_REF_PREFIX}base/{name}"
+    def _target_observation_ref(self) -> str:
+        return f"{_TARGET_OBSERVATION_REF_PREFIX}{self._target_ref().removeprefix('refs/remotes/')}"
 
     def _record_target_observation(self, shared: str, fetched_head: str) -> None:
-        """Record a newer remote head for the engine while the shared remote-tracking ref stays unchanged.
+        """Record a newer remote head for the engine while the shared remote-tracking ref keeps its value.
 
-        The observation applies only while the shared ref still holds ``shared``, so any later move of
-        the shared ref, including an operator fetch, supersedes it.
+        The observation is a private head ref plus a marker entry appended to the shared ref's reflog
+        (``git reflog write``, value unchanged). Once that reflog exists Git appends an entry for every
+        later move of the shared ref, whatever ``core.logAllRefUpdates`` says, so the marker stops being
+        the newest entry at the first move and never becomes newest again: an operator move from A to C
+        and back to A supersedes the observation for good, across restarts. A failed step (including a Git
+        without ``reflog write``) never validates the new head, and the engine then keeps the shared ref.
         """
-        head_ref, base_ref = self._target_observation_refs()
-        transaction = f"update {head_ref} {fetched_head}\nupdate {base_ref} {shared}\n"
-        self._git("update-ref", "--stdin", input_bytes=transaction.encode())
+        target_ref = self._target_ref()
+        if self._run_git("update-ref", self._target_observation_ref(), fetched_head, check=False).returncode:
+            return
+        marker = f"{_TARGET_OBSERVATION_MARKER}{fetched_head}"
+        self._run_git("reflog", "write", target_ref, shared, shared, marker, check=False)
+
+    def _valid_target_observation(self, shared: str) -> str | None:
+        """Return the recorded observation only while its marker is the newest entry for ``shared``."""
+        observation = self._resolve(self._target_observation_ref(), missing_ok=True)
+        if observation is None:
+            return None
+        newest = self._run_git(
+            "log",
+            "--walk-reflogs",
+            "--max-count=1",
+            "--no-show-signature",
+            "--format=%H%x00%gs",
+            self._target_ref(),
+            "--",
+            check=False,
+        )
+        expected = f"{shared}\0{_TARGET_OBSERVATION_MARKER}{observation}"
+        if newest.returncode == 0 and newest.stdout.decode(errors="replace").rstrip("\n") == expected:
+            return observation
+        return None
 
     def _advance_shared_target_ref(self, target_ref: str, observed: str | None, target_head: str) -> None:
         """Move the shared remote-tracking ref to the exact fetched head unless it moved since it was observed.
@@ -1002,13 +1028,8 @@ class _TargetSyncMixin:
         """
         if observed != target_head:
             self._run_git("update-ref", target_ref, target_head, observed or _ZERO_OID, check=False)
-        head_ref, base_ref = self._target_observation_refs()
-        self._run_git(
-            "update-ref",
-            "--stdin",
-            input_bytes=f"delete {head_ref} {target_head}\ndelete {base_ref}\n".encode(),
-            check=False,
-        )
+        # The exact fetch is newer than any recorded observation, even when the shared ref did not move.
+        self._run_git("update-ref", "-d", self._target_observation_ref(), check=False)
 
     def _unmerged_paths(self, worktree: Path) -> tuple[str, ...]:
         result = self._run_git(

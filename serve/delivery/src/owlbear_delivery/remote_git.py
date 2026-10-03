@@ -28,8 +28,11 @@ _LS_REMOTE_MISSING = 2
 _LS_REMOTE_FIELDS = 2
 _COMMIT_PATTERN = re.compile(r"[0-9a-f]{40}")
 _REPOSITORY_VARIABLES = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE")
-_BATCH_SSH_COMMAND = "ssh -o BatchMode=yes"
-_BATCH_SSH_OPTION = " -o BatchMode=yes"
+_BATCH_SSH_OPTION = "-o BatchMode=yes"
+_BATCH_SSH_COMMAND = f"ssh {_BATCH_SSH_OPTION}"
+_CONFIG_UNSET = 1
+# Git global options that take their value as the next argument.
+_GLOBAL_OPTIONS_WITH_VALUE = frozenset({"-c", "-C", "--config-env", "--git-dir", "--work-tree", "--namespace"})
 
 
 class RemoteGitError(RuntimeError):
@@ -79,10 +82,12 @@ def remote_git_environment(
 ) -> dict[str, str]:
     """Return an environment in which Git and its transports can never prompt.
 
-    Git prefers ``GIT_SSH_COMMAND`` to ``core.sshCommand`` (``configured_ssh_command``) to ``GIT_SSH``, and
-    the user's choice keeps its identity, port and proxy options. Only a configured command whose program
-    is ``ssh`` also gets ``BatchMode=yes``; an unknown wrapper's arguments are left alone. Every transport
-    still runs without a controlling terminal (``run_remote_git``) and without askpass, so none can prompt.
+    Git prefers ``GIT_SSH_COMMAND`` to ``core.sshCommand`` (``configured_ssh_command``, from every scope
+    including the operation's own ``-c``) to ``GIT_SSH``, and the user's choice keeps its identity, port and
+    proxy options. Only a configured command whose program is ``ssh`` also gets ``BatchMode=yes``, inserted
+    straight after the program because OpenSSH keeps the first value it obtains; an unknown wrapper's
+    arguments are left alone. Every transport still runs without a controlling terminal
+    (``run_remote_git``) and without askpass, so none can prompt.
     """
     environment = dict(os.environ if base is None else base)
     for name in _REPOSITORY_VARIABLES:
@@ -100,28 +105,53 @@ def remote_git_environment(
     if "GIT_SSH_COMMAND" in environment:
         return environment
     if configured_ssh_command is not None:
-        if _runs_ssh(configured_ssh_command):
-            environment["GIT_SSH_COMMAND"] = configured_ssh_command + _BATCH_SSH_OPTION
+        batch_command = _with_batch_mode(configured_ssh_command)
+        if batch_command is not None:
+            environment["GIT_SSH_COMMAND"] = batch_command
         return environment
     if "GIT_SSH" not in environment:
         environment["GIT_SSH_COMMAND"] = _BATCH_SSH_COMMAND
     return environment
 
 
-def _runs_ssh(command: str) -> bool:
+def _with_batch_mode(command: str) -> str | None:
+    """Insert ``BatchMode=yes`` after a direct ``ssh`` program, keeping the rest of the shell text verbatim."""
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=False)
+    lexer.whitespace_split = True
+    lexer.commenters = ""
     try:
-        words = shlex.split(command)
+        program = lexer.get_token()
     except ValueError:
-        return False
-    return bool(words) and PurePath(words[0]).name == "ssh"
+        return None
+    if program is None or PurePath(program).name != "ssh":
+        return None
+    end = lexer.instream.tell()
+    rest = command[end:]
+    return f"{command[:end].rstrip()} {_BATCH_SSH_OPTION}" + (f" {rest}" if rest else "")
 
 
-def _configured_ssh_command(repository: Path, base: Mapping[str, str]) -> str | None:
-    """Read ``core.sshCommand`` from every config scope Git would apply to this repository."""
+def _global_options(arguments: Sequence[str]) -> tuple[str, ...]:
+    """Return the Git global options before the subcommand, which scope configuration like the operation."""
+    index = 0
+    while index < len(arguments) and arguments[index].startswith("-"):
+        index += 2 if arguments[index] in _GLOBAL_OPTIONS_WITH_VALUE else 1
+    return tuple(arguments[:index])
+
+
+def _configured_ssh_command(repository: Path, base: Mapping[str, str], global_options: Sequence[str]) -> str | None:
+    """Read ``core.sshCommand`` as the operation's own Git would, including its ``-c`` options."""
     environment = {name: value for name, value in base.items() if name not in _REPOSITORY_VARIABLES}
     try:
         result = subprocess.run(  # noqa: S603 - fixed Git executable and code-owned argument vector.
-            (resolve_git_executable(), "-C", str(repository), "config", "--get", "core.sshCommand"),
+            (
+                resolve_git_executable(),
+                "-C",
+                str(repository),
+                *global_options,
+                "config",
+                "--get",
+                "core.sshCommand",
+            ),
             stdin=subprocess.DEVNULL,
             capture_output=True,
             env=environment,
@@ -134,8 +164,13 @@ def _configured_ssh_command(repository: Path, base: Mapping[str, str]) -> str | 
     except OSError as exc:
         error = RemoteGitFailed("Git is unavailable for remote access", retry_safe=False)
         raise error from exc
-    command = result.stdout.decode(errors="replace").strip() if result.returncode == 0 else ""
-    return command or None
+    if result.returncode == _CONFIG_UNSET:
+        return None
+    if result.returncode != 0:
+        error = RemoteGitFailed("Git SSH configuration could not be read", retry_safe=False, result=result)
+        raise error
+    # A set but empty or valueless command is still Git's own choice; Git reports it when it connects.
+    return result.stdout.decode(errors="replace").rstrip("\n")
 
 
 def run_remote_git(
@@ -153,7 +188,9 @@ def run_remote_git(
     """
     bound = timeout if timeout is not None else (READ_TIMEOUT_SECONDS if kind == "read" else WRITE_TIMEOUT_SECONDS)
     base = os.environ if environment is None else environment
-    configured = None if "GIT_SSH_COMMAND" in base else _configured_ssh_command(repository, base)
+    configured = (
+        None if "GIT_SSH_COMMAND" in base else _configured_ssh_command(repository, base, _global_options(arguments))
+    )
     command = (resolve_git_executable(), "-C", str(repository), *arguments)
     try:
         process = subprocess.Popen(  # noqa: S603 - fixed Git executable and code-owned argument vectors.

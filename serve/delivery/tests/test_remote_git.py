@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import contextlib
 import os
+import shlex
+import shutil
 import signal
 import subprocess
 import threading
@@ -103,9 +105,17 @@ def test_environment_keeps_a_user_ssh_command(variable: str) -> None:
 @pytest.mark.parametrize(
     ("base", "configured", "expected"),
     [
-        ({}, "/opt/bin/ssh -i key -p 2222", "/opt/bin/ssh -i key -p 2222 -o BatchMode=yes"),
-        ({"GIT_SSH": "custom-ssh"}, "ssh -F config", "ssh -F config -o BatchMode=yes"),
+        ({}, "/opt/bin/ssh -i key -p 2222", "/opt/bin/ssh -o BatchMode=yes -i key -p 2222"),
+        ({"GIT_SSH": "custom-ssh"}, "ssh -F config", "ssh -o BatchMode=yes -F config"),
+        ({}, "ssh -o BatchMode=no", "ssh -o BatchMode=yes -o BatchMode=no"),
+        (
+            {},
+            "'/opt/my tools/ssh' -i \"k e y\" -o ProxyCommand='nc %h %p'",
+            "'/opt/my tools/ssh' -o BatchMode=yes -i \"k e y\" -o ProxyCommand='nc %h %p'",
+        ),
+        ({}, "$HOME/bin/ssh -i ~/.ssh/key", "$HOME/bin/ssh -o BatchMode=yes -i ~/.ssh/key"),
         ({}, "corp-ssh-wrapper --profile ci", None),
+        ({}, "", None),
         ({"GIT_SSH_COMMAND": "user-ssh"}, "ssh -i key", "user-ssh"),
     ],
 )
@@ -149,6 +159,100 @@ def test_configured_ssh_command_keeps_its_options_and_never_prompts(tmp_path: Pa
     assert "example.invalid" in " ".join(arguments)
     assert ("BatchMode=yes" in arguments) is (program == "ssh")
     assert "HAS_TTY" not in arguments
+
+
+_SCOPES = ("repository", "global", "system", "environment", "command-line", "config-env", "config-env-separate")
+
+
+@pytest.mark.parametrize("scope", _SCOPES)
+def test_ssh_command_from_every_config_scope_runs_with_batch_mode_first(tmp_path: Path, scope: str) -> None:
+    repository, _bare, _base = _repository(tmp_path)
+    bin_directory = tmp_path / "my bin"
+    bin_directory.mkdir()
+    record = tmp_path / "ssh.log"
+    decoy_record = tmp_path / "decoy.log"
+    chosen = _recording_script(bin_directory / "ssh", record, "exit 255\n")
+    decoy = _recording_script(tmp_path / "ssh", decoy_record, "exit 255\n")
+    configured = f"{shlex.quote(str(chosen))} -i 'key with space' -o ProxyCommand=none"
+    _git(repository, "remote", "set-url", "origin", "ssh://git@example.invalid/repo.git")
+    environment = _ssh_isolated_environment(tmp_path)
+    arguments: tuple[str, ...] = ("ls-remote", "origin")
+    if scope in {"environment", "command-line", "config-env", "config-env-separate"}:
+        # These scopes outrank the repository, so a repository command must not run.
+        _git(repository, "config", "core.sshCommand", str(decoy))
+    if scope == "repository":
+        _git(repository, "config", "core.sshCommand", configured)
+    elif scope in {"global", "system"}:
+        config_file = tmp_path / f"{scope}.gitconfig"
+        _git(tmp_path, "config", "--file", str(config_file), "core.sshCommand", configured)
+        if scope == "system":
+            environment.pop("GIT_CONFIG_NOSYSTEM")
+        environment[f"GIT_CONFIG_{scope.upper()}"] = str(config_file)
+    elif scope == "environment":
+        environment |= {
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "core.sshCommand",
+            "GIT_CONFIG_VALUE_0": configured,
+        }
+    elif scope == "command-line":
+        arguments = ("-c", f"core.sshCommand={configured}", *arguments)
+    else:
+        environment["OWLBEAR_TEST_SSH"] = configured
+        option = ("--config-env=core.sshCommand=OWLBEAR_TEST_SSH",)
+        if scope == "config-env-separate":
+            option = ("--config-env", "core.sshCommand=OWLBEAR_TEST_SSH")
+        arguments = (*option, *arguments)
+
+    result = run_remote_git(repository, arguments, kind="read", timeout=20, environment=environment)
+    recorded = record.read_text(encoding="utf-8").splitlines()
+
+    assert result.returncode != 0
+    assert recorded[:2] == ["-o", "BatchMode=yes"]
+    assert recorded[2:6] == ["-i", "key with space", "-o", "ProxyCommand=none"]
+    assert not decoy_record.exists()
+
+
+def test_valueless_command_line_ssh_command_is_left_to_git(tmp_path: Path) -> None:
+    repository, _bare, _base = _repository(tmp_path)
+    decoy_record = tmp_path / "decoy.log"
+    decoy = _recording_script(tmp_path / "ssh", decoy_record, "exit 255\n")
+    _git(repository, "config", "core.sshCommand", str(decoy))
+    _git(repository, "remote", "set-url", "origin", "ssh://git@example.invalid/repo.git")
+    environment = _ssh_isolated_environment(tmp_path)
+
+    result = run_remote_git(
+        repository, ("-c", "core.sshCommand", "ls-remote", "origin"), kind="read", timeout=20, environment=environment
+    )
+
+    assert result.returncode != 0
+    assert b"missing value for 'core.sshcommand'" in result.stderr
+    assert not decoy_record.exists()
+
+
+@pytest.mark.skipif(shutil.which("ssh") is None, reason="OpenSSH client is unavailable")
+@pytest.mark.parametrize("source", ["configured", "user-environment"])
+def test_openssh_resolves_batch_mode_yes_even_when_configured_off(tmp_path: Path, source: str) -> None:
+    repository, _bare, _base = _repository(tmp_path)
+    bin_directory = tmp_path / "bin"
+    bin_directory.mkdir()
+    record = tmp_path / "ssh.log"
+    resolved = tmp_path / "ssh-G.out"
+    # ``ssh -G`` prints the effective client configuration and exits without any connection.
+    body = f'"{shutil.which("ssh")}" -F /dev/null -G "$@" > "{resolved}" 2>&1\nexit 255\n'
+    fake = _recording_script(bin_directory / "ssh", record, body)
+    _git(repository, "remote", "set-url", "origin", "ssh://git@example.invalid/repo.git")
+    environment = _ssh_isolated_environment(tmp_path)
+    if source == "configured":
+        _git(repository, "config", "core.sshCommand", f"{fake} -o BatchMode=no")
+    else:
+        environment["GIT_SSH_COMMAND"] = f"{fake} -o BatchMode=no"
+
+    result = run_remote_git(repository, ("ls-remote", "origin"), kind="read", timeout=20, environment=environment)
+    effective = resolved.read_text(encoding="utf-8").splitlines()
+
+    assert result.returncode != 0
+    assert ("batchmode yes" in effective) is (source == "configured")
+    assert ("batchmode no" in effective) is (source == "user-environment")
 
 
 def test_hung_read_raises_typed_timeout_within_bound_and_kills_the_transport(
