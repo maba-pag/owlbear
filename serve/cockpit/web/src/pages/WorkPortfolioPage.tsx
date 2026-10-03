@@ -26,6 +26,7 @@ import type {
   PortfolioChangeLifecycleStatus,
   PortfolioChangeStage,
   PortfolioGuidance,
+  WorkItemCardView,
   WorkItemNeed,
 } from "../api/workItems";
 import CompletedHistoryWorkspace from "../components/CompletedHistoryWorkspace";
@@ -33,13 +34,18 @@ import DesignWorkDetail from "../components/DesignWorkDetail";
 import DesignWorkSection from "../components/DesignWorkSection";
 import { designCommand, designWorkTitle } from "../components/designWorkPresentation";
 import PortfolioOperatingSummary, { PortfolioHeaderSummary } from "../components/PortfolioOperatingSummary";
-import WorkItemDetail from "../components/WorkItemDetail";
+import WorkItemDetail, { ChangePauseControl } from "../components/WorkItemDetail";
 import WorkPortfolioTable from "../components/WorkPortfolioTable";
 import { WorkspaceHeader } from "../components/WorkspaceHeader";
 import { WorkspaceViewCount } from "../components/WorkspaceViewHeader";
-import { READINESS_CHECKS_LABELS, READINESS_REASON_LABELS } from "../components/workItemPresentation";
+import {
+  changeStepInProgress,
+  READINESS_CHECKS_LABELS,
+  READINESS_REASON_LABELS,
+} from "../components/workItemPresentation";
 import {
   useAcceptanceReconciliation,
+  useChangeIntent,
   useDesignWorkDetail,
   useWorkItemDetail,
   useWorkPortfolio,
@@ -314,10 +320,12 @@ function SelectedDesignDetail({ changeId, onClose }: { changeId: string; onClose
 
 function SelectedWorkItemDetail({
   identity,
+  changeItems,
   onChanged,
   onClose,
 }: {
   identity: WorkItemIdentity;
+  changeItems?: WorkItemCardView[];
   onChanged: () => void;
   onClose: () => void;
 }) {
@@ -348,6 +356,7 @@ function SelectedWorkItemDetail({
         ) : null}
         <WorkItemDetail
           detail={selectedDetail.detail.data}
+          changeItems={changeItems}
           pendingAction={selectedDetail.pendingAction}
           actionError={selectedDetail.actionError}
           actionResult={selectedDetail.actionResult}
@@ -384,7 +393,12 @@ function SelectedWorkItemDetail({
   return <EmptyDetail error={selectedDetail.detail.error} retry={selectedDetail.retry} onClose={onClose} />;
 }
 
-function SelectedDetail(props: { identity: WorkItemIdentity; onChanged: () => void; onClose: () => void }) {
+function SelectedDetail(props: {
+  identity: WorkItemIdentity;
+  changeItems?: WorkItemCardView[];
+  onChanged: () => void;
+  onClose: () => void;
+}) {
   if (props.identity.itemKey === "design") {
     return <SelectedDesignDetail changeId={props.identity.changeId} onClose={props.onClose} />;
   }
@@ -396,13 +410,35 @@ function PortfolioWorkspace({
   selected,
   emptyMessage,
   onSelect,
+  onChanged,
 }: {
   groups: ChangeGroupView[];
   selected: WorkItemIdentity | null;
   emptyMessage?: string;
   onSelect: (identity: WorkItemIdentity, trigger: HTMLElement) => void;
+  onChanged: () => void;
 }) {
-  return <WorkPortfolioTable groups={groups} selected={selected} emptyMessage={emptyMessage} onSelect={onSelect} />;
+  const intent = useChangeIntent(onChanged);
+  return (
+    <WorkPortfolioTable
+      groups={groups}
+      selected={selected}
+      emptyMessage={emptyMessage}
+      onSelect={onSelect}
+      renderGroupControls={(group) => (
+        <ChangePauseControl
+          changeId={group.change_id}
+          paused={group.progress === "paused" || group.lifecycle === "deferred"}
+          stepInProgress={changeStepInProgress(group.items)}
+          pendingAction={intent.pendingAction(group.change_id)}
+          reasonName={`change-pause-reason-${group.change_id}`}
+          actionError={intent.actionError(group.change_id)}
+          onPause={(reason) => intent.pause(group, reason)}
+          onResume={() => intent.resume(group)}
+        />
+      )}
+    />
+  );
 }
 
 function EmptyPortfolioState({ filtered }: { filtered: boolean }) {
@@ -1056,6 +1092,7 @@ export default function WorkPortfolioPage() {
                   <PortfolioWorkspace
                     groups={filteredGroups}
                     selected={selected}
+                    onChanged={retry}
                     onSelect={(identity, trigger) => {
                       lastTrigger.current = trigger;
                       lastTriggerIdentity.current = `${identity.changeId}:${identity.itemKey}`;
@@ -1102,7 +1139,13 @@ export default function WorkPortfolioPage() {
       >
         <div className="min-w-0 max-w-full p-static-lg">
           {selected ? (
-            <SelectedDetail key={selectedIdentity} identity={selected} onChanged={retry} onClose={closeInspector} />
+            <SelectedDetail
+              key={selectedIdentity}
+              identity={selected}
+              changeItems={portfolio.groups.find((group) => group.change_id === selected.changeId)?.items}
+              onChanged={retry}
+              onClose={closeInspector}
+            />
           ) : null}
         </div>
       </PFlyout>

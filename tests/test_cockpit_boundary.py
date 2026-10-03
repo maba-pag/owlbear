@@ -11,7 +11,7 @@ import pytest
 
 from owlbear_delivery.finalization_reports import FinalizationFailureCode, ReportFinalizationFailure
 from owlbear_delivery.portfolio_operating import DeliveryHealthReason
-from owlbear_delivery.work_items import DeliveryReadinessReason
+from owlbear_delivery.work_items import DeliveryProgress, DeliveryReadinessReason
 
 # Mined from #924: Cockpit source import boundary.
 # Mined from #1390: Cockpit excludes Delivery lifecycle and finalization routes.
@@ -48,6 +48,18 @@ def test_delivery_readiness_reason_typescript_parity(project_root: Path) -> None
     union = re.search(r"export type DeliveryReadinessReasonCode\s*=\s*(.*?);", source, re.DOTALL)
     assert union is not None
     assert set(re.findall(r'"([^"]+)"', union.group(1))) == set(get_args(DeliveryReadinessReason))
+
+
+def test_delivery_progress_typescript_parity(project_root: Path) -> None:
+    """Every engine progress key, including reserved ones, has a Cockpit mirror and label."""
+    api = (project_root / "serve/cockpit/web/src/api/workItems.ts").read_text()
+    union = re.search(r"export type DeliveryProgress\s*=\s*(.*?);", api, re.DOTALL)
+    assert union is not None
+    assert set(re.findall(r'"([^"]+)"', union.group(1))) == set(get_args(DeliveryProgress))
+    presentation = (project_root / "serve/cockpit/web/src/components/workItemPresentation.ts").read_text()
+    labels = re.search(r"DELIVERY_PROGRESS_LABELS[^=]*=\s*\{(.*?)\};", presentation, re.DOTALL)
+    assert labels is not None
+    assert set(re.findall(r'^\s*"?([a-z-]+)"?:', labels.group(1), re.MULTILINE)) == set(get_args(DeliveryProgress))
 
 
 def test_delivery_health_reason_typescript_parity(project_root: Path) -> None:

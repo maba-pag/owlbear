@@ -1250,7 +1250,8 @@ it("presents Change-grouped Outcomes by work, progress, and status", async () =>
   expect(table).toHaveTextContent("Portfolio redesign");
   expect(table).toHaveTextContent("Work");
   expect(table).toHaveTextContent("State");
-  expect(table).toHaveTextContent("Working");
+  expect(table).toHaveTextContent("Claimed");
+  expect(table).not.toHaveTextContent("Working");
   expect(table).toHaveTextContent("Builder");
   expect(table).toHaveTextContent("Decision required");
   expect(table).toHaveTextContent("Answer request");
@@ -1260,7 +1261,8 @@ it("presents Change-grouped Outcomes by work, progress, and status", async () =>
   expect(await screen.findByLabelText("Delivery portfolio status")).toHaveTextContent("1Running");
   const guidance = screen.getByLabelText("Delivery guidance");
   expect(guidance).toHaveTextContent("Review 1 item that needs you");
-  expect(guidance).toHaveTextContent("An orchestration session is already working");
+  expect(guidance).toHaveTextContent("1 Work Item holds active custody; each Change shows its progress.");
+  expect(guidance).not.toHaveTextContent("already working");
   expect(within(guidance).getByTestId("portfolio-commands")).toHaveTextContent("/orchestrate");
   expect(within(guidance).getByRole("button", { name: "Copy command /orchestrate" })).toBeInTheDocument();
   expect(guidance).not.toHaveTextContent("Start /orchestrate");
@@ -3345,24 +3347,19 @@ it("posts reasoned Change dispositions and resumes a deferred Change", async () 
   ]);
   const initialRender = renderPage("/delivery/change-alpha/publication");
   const inspector = await screen.findByTestId("work-item-detail");
-  const reason = await waitFor(() => {
-    const element = namedPdsHost(inspector, "p-input-text", "change-disposition-reason");
+  expect(within(inspector).queryByText("Defer Change")).not.toBeInTheDocument();
+  fireEvent.click(within(inspector).getByText("Pause"));
+  const pauseReason = await waitFor(() => {
+    const element = namedPdsHost(inspector, "p-input-text", "change-pause-reason");
     expect(element).not.toBeNull();
     return requirePresent(element);
   });
-  inputValue(reason, "Wait for user review");
-  fireEvent.change(
-    reason,
-    new CustomEvent("change", {
-      detail: { value: "Wait for user review" },
-      bubbles: true,
-    }),
-  );
-  const defer = within(inspector).getByText("Defer Change") as HTMLElement & {
+  inputValue(pauseReason, "Wait for user review");
+  const pause = within(inspector).getByText("Confirm pause") as HTMLElement & {
     disabled: boolean;
   };
-  await waitFor(() => expect(defer.disabled).toBe(false));
-  fireEvent.click(defer);
+  await waitFor(() => expect(pause.disabled).toBe(false));
+  fireEvent.click(pause);
   await waitFor(() =>
     expect(requests).toContainEqual({
       url: "/api/changes/change-alpha/defer",
@@ -3373,6 +3370,11 @@ it("posts reasoned Change dispositions and resumes a deferred Change", async () 
       },
     }),
   );
+  const reason = await waitFor(() => {
+    const element = namedPdsHost(inspector, "p-input-text", "change-disposition-reason");
+    expect(element).not.toBeNull();
+    return requirePresent(element);
+  });
 
   inputValue(reason, "User stopped the Change");
   fireEvent.change(
@@ -6157,4 +6159,191 @@ it("does not duplicate an unavailable Change already carried by an operating sta
   expect(issues.querySelectorAll('[data-delivery-unavailable="unavailable-change"]')).toHaveLength(0);
   expect(issues.querySelectorAll('[data-delivery-status="unavailable-change"]')).toHaveLength(1);
   expect(issues).toHaveTextContent("1 Change unavailable to Delivery.");
+});
+
+const CONTINUATION_PROMPT =
+  "/continue-change change-alpha reread get_change and pass its readiness basis unchanged to acquire_change_action; " +
+  "declare only capabilities this session can dispatch and execute only the acquired operation.";
+
+function continuationCard(overrides: Partial<WorkItemCardView> = {}): WorkItemCardView {
+  return card({
+    next_step: "Run the continuation prompt in Copilot Chat",
+    activity: { state: "ready", worker_role: null, started_at: null, task_id: null },
+    action: { kind: "start-orchestration", label: "Copy continuation prompt", command: null },
+    readiness: readiness({
+      status: "ready",
+      operation: "start-orchestration",
+      executable: true,
+      reason_code: "ready",
+      action: { kind: "start-orchestration", label: "Copy continuation prompt", command: null },
+      prompt: CONTINUATION_PROMPT,
+      progress: "waiting-for-chat",
+    }),
+    ...overrides,
+  });
+}
+
+function heldCard(progress: DeliveryReadiness["progress"] = null): WorkItemCardView {
+  return card({
+    next_step: "Claimed by Builder",
+    readiness: readiness({ status: "running", reason_code: "active-custody", progress }),
+  });
+}
+
+it("copies the engine continuation prompt from a row without navigating or starting an agent", async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+  currentPortfolio = portfolio([group({ progress: "waiting-for-chat", items: [continuationCard()] })]);
+  renderPage();
+
+  const table = await screen.findByTestId("work-portfolio-table");
+  const row = within(table).getAllByText("Delivery foundation")[0].closest("[data-work-item]") as HTMLElement;
+  expect(within(row).getByText("Waiting for chat to resume", { selector: "[data-status-tone]" })).toBeVisible();
+  expect(within(table).getByTestId("change-progress-change-alpha")).toHaveTextContent("Waiting for chat to resume");
+  const copy = within(row).getByRole("button", { name: "Copy continuation prompt" });
+  expect(copy).toHaveAccessibleDescription("Run it in Copilot Chat. Copying does not start an agent.");
+  expect(within(table).queryByRole("link", { name: "Copy continuation prompt" })).not.toBeInTheDocument();
+  const toast = document.querySelector("p-toast") as HTMLElement & { addMessage: (message: unknown) => void };
+  const addMessage = vi.spyOn(toast, "addMessage");
+
+  fireEvent.click(copy);
+
+  await waitFor(() => expect(writeText).toHaveBeenCalledWith(CONTINUATION_PROMPT));
+  expect(addMessage).toHaveBeenCalledWith({ text: "Copied continuation prompt", state: "success" });
+  expect(screen.getByTestId("test-location")).toHaveTextContent("/delivery");
+  expect(document.body).not.toHaveTextContent(/\bStart\b/);
+  expect(document.body).not.toHaveTextContent(/agent (started|launched)/i);
+});
+
+it.each([
+  ["/repair-delivery Diagnose Change change-alpha read-only; preserve existing custody and journals."],
+  ["/inspect-change change-alpha Diagnose the exhausted retry episode read-only."],
+  ["/design change-alpha Resume the existing Design session."],
+  ["/continue-change change-beta reread get_change and pass its readiness basis unchanged."],
+  ["/continue-change change-alphabet reread get_change and pass its readiness basis unchanged."],
+])("never labels %s as this Change's continuation prompt", async (prompt) => {
+  const other = continuationCard({
+    readiness: readiness({ status: "blocked", reason_code: "retry-exhausted", prompt, progress: "needs-decision" }),
+  });
+  currentPortfolio = portfolio([group({ items: [other] })]);
+  currentDetail = detail({ card: other, readiness: other.readiness });
+  renderPage("/delivery/change-alpha/outcome%3AOUT-001");
+
+  const inspector = await screen.findByTestId("work-item-detail");
+  expect(within(inspector).getByTestId("readiness-prompt")).toHaveTextContent(prompt);
+  expect(screen.queryByRole("button", { name: "Copy continuation prompt" })).not.toBeInTheDocument();
+});
+
+it("shows the continuation copy, progress and Change activity in detail", async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+  const ready = continuationCard();
+  currentPortfolio = portfolio([group({ progress: "waiting-for-chat", items: [ready] })]);
+  currentDetail = detail({ card: ready, readiness: ready.readiness, change_progress: "waiting-for-chat" });
+  renderPage("/delivery/change-alpha/outcome%3AOUT-001");
+
+  const inspector = await screen.findByTestId("work-item-detail");
+  expect(within(inspector).getByTestId("readiness-progress")).toHaveTextContent("Waiting for chat to resume");
+  expect(within(inspector).getByTestId("change-progress")).toHaveTextContent("Waiting for chat to resume");
+  fireEvent.click(within(inspector).getByRole("button", { name: "Copy continuation prompt" }));
+  await waitFor(() => expect(writeText).toHaveBeenCalledWith(CONTINUATION_PROMPT));
+});
+
+it("renders held custody neutrally and unknown issuer evidence as a decision", async () => {
+  const completedFirst = card({
+    item_key: "outcome:OUT-002",
+    work_item_id: "OUT-002",
+    title: "Completed outcome",
+    stage: "completed",
+    activity: { state: "idle", worker_role: null, started_at: null, task_id: null },
+    readiness: readiness({ status: "complete", reason_code: "change-terminal", progress: "completed" }),
+  });
+  currentPortfolio = portfolio([group({ progress: null, items: [completedFirst, heldCard()] })]);
+  const { unmount } = renderPage();
+
+  let table = await screen.findByTestId("work-portfolio-table");
+  const heldRow = within(table).getAllByText("Delivery foundation")[0].closest("[data-work-item]") as HTMLElement;
+  expect(within(heldRow).getByText("Running", { selector: "[data-status-tone]" })).toBeInTheDocument();
+  expect(heldRow).toHaveTextContent("Claimed by Builder");
+  expect(table).not.toHaveTextContent(/Working|Checking|Repairing/);
+  expect(within(table).queryByTestId("change-progress-change-alpha")).not.toBeInTheDocument();
+  unmount();
+
+  currentPortfolio = portfolio([
+    group({ progress: "needs-decision", items: [completedFirst, heldCard("needs-decision")] }),
+  ]);
+  renderPage();
+  table = await screen.findByTestId("work-portfolio-table");
+  expect(within(table).getByTestId("change-progress-change-alpha")).toHaveTextContent("Needs your decision");
+  expect(within(table).getByText("Needs your decision", { selector: "td [data-status-tone]" })).toBeInTheDocument();
+});
+
+it("offers Pause on every unfinished Change and disables it while a step holds custody", async () => {
+  currentPortfolio = portfolio([
+    group({ items: [heldCard()] }),
+    group({
+      change_id: "change-beta",
+      title: "Quiescent change",
+      progress: "waiting-for-chat",
+      items: [continuationCard({ change_id: "change-beta" })],
+    }),
+  ]);
+  renderPage();
+
+  const held = await screen.findByTestId("change-pause-change-alpha");
+  const heldPause = within(held).getByText("Pause") as HTMLElement & { disabled: boolean };
+  expect(heldPause.disabled).toBe(true);
+  expect(held).toHaveTextContent("Pause is available when the current step returns.");
+
+  const quiescent = screen.getByTestId("change-pause-change-beta");
+  fireEvent.click(within(quiescent).getByText("Pause"));
+  const reason = await waitFor(() =>
+    requirePresent(namedPdsHost(quiescent, "p-input-text", "change-pause-reason-change-beta")),
+  );
+  inputValue(reason, "Hold for review");
+  const confirm = within(quiescent).getByText("Confirm pause") as HTMLElement & { disabled: boolean };
+  await waitFor(() => expect(confirm.disabled).toBe(false));
+  fireEvent.click(confirm);
+  await waitFor(() =>
+    expect(requests).toContainEqual({
+      url: "/api/changes/change-beta/defer",
+      method: "POST",
+      body: { reason: "Hold for review", expected_frontier_digest: "a".repeat(64) },
+    }),
+  );
+  expect(requests.some((request) => request.url === "/api/changes/change-alpha/defer")).toBe(false);
+});
+
+it("resumes a paused Change from its group header", async () => {
+  const paused = card({
+    readiness: readiness({ status: "blocked", reason_code: "change-paused", progress: "paused" }),
+    activity: { state: "idle", worker_role: null, started_at: null, task_id: null },
+  });
+  currentPortfolio = portfolio([group({ lifecycle: "deferred", progress: "paused", items: [paused] })]);
+  renderPage();
+
+  const control = await screen.findByTestId("change-pause-change-alpha");
+  expect(screen.getByTestId("change-progress-change-alpha")).toHaveTextContent("Paused");
+  expect(within(control).queryByText("Pause")).not.toBeInTheDocument();
+  fireEvent.click(within(control).getByText("Resume"));
+  await waitFor(() =>
+    expect(requests).toContainEqual({
+      url: "/api/changes/change-alpha/resume",
+      method: "POST",
+      body: { expected_frontier_digest: "a".repeat(64) },
+    }),
+  );
+});
+
+it("offers Pause on an outcome detail and disables it while the Change holds custody", async () => {
+  const held = heldCard();
+  currentPortfolio = portfolio([group({ items: [held] })]);
+  currentDetail = detail({ card: held, readiness: held.readiness });
+  renderPage("/delivery/change-alpha/outcome%3AOUT-001");
+
+  const inspector = await screen.findByTestId("work-item-detail");
+  const pause = within(inspector).getByText("Pause") as HTMLElement & { disabled: boolean };
+  expect(pause.disabled).toBe(true);
+  expect(inspector).toHaveTextContent("Pause is available when the current step returns.");
+  expect(within(inspector).queryByText("Abandon Change")).not.toBeInTheDocument();
 });

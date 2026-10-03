@@ -1,15 +1,25 @@
 import { PLinkPure } from "@porsche-design-system/components-react";
+import type { ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
 import type { ChangeGroupView, WorkItemCardView } from "../api/workItems";
 import { type WorkItemIdentity, workItemIdentity } from "../hooks/useWorkItems";
+import CopyCommand from "./CopyCommand";
 import { StatusChip, WorkRow } from "./DeliveryPrimitives";
-import { PROGRESS_STAGE_LABELS, workItemStatus } from "./workItemPresentation";
+import {
+  CONTINUATION_PROMPT_HELP,
+  DELIVERY_PROGRESS_LABELS,
+  isContinuationPrompt,
+  PROGRESS_STAGE_LABELS,
+  progressTone,
+  workItemStatus,
+} from "./workItemPresentation";
 
 interface WorkPortfolioTableProps {
   groups: ChangeGroupView[];
   selected: WorkItemIdentity | null;
   emptyMessage?: string;
   onSelect: (identity: WorkItemIdentity, trigger: HTMLElement) => void;
+  renderGroupControls?: (group: ChangeGroupView) => ReactNode;
 }
 
 type GroupTableProps = Pick<WorkPortfolioTableProps, "selected" | "onSelect"> & { group: ChangeGroupView };
@@ -119,6 +129,8 @@ function ProgressState({ item }: { item: WorkItemCardView }) {
 
 function CurrentState({ item, onSelect }: { item: WorkItemCardView; onSelect: WorkPortfolioTableProps["onSelect"] }) {
   const state = workItemStatus(item);
+  const prompt = item.readiness?.prompt;
+  const continuation = item.action.kind === "start-orchestration" && isContinuationPrompt(prompt, item.change_id);
   return (
     <span>
       <StatusChip label={state.label} tone={state.tone} />
@@ -126,7 +138,15 @@ function CurrentState({ item, onSelect }: { item: WorkItemCardView; onSelect: Wo
       {item.activity.task_id ? (
         <span className="mt-0.5 block text-xs text-contrast-medium">Task {item.activity.task_id}</span>
       ) : null}
-      {item.action.kind !== "none" && !item.action.command ? (
+      {continuation ? (
+        <CopyCommand
+          className="mt-static-xs"
+          command={prompt}
+          label="Copy continuation prompt"
+          helper={CONTINUATION_PROMPT_HELP}
+        />
+      ) : null}
+      {item.action.kind !== "none" && item.action.kind !== "start-orchestration" && !item.action.command ? (
         <span className="mt-0.5 block">
           <ActionLink item={item} onSelect={onSelect} />
         </span>
@@ -265,7 +285,13 @@ function PublicationGate({ group, selected, onSelect }: GroupTableProps) {
   );
 }
 
-export default function WorkPortfolioTable({ groups, selected, emptyMessage, onSelect }: WorkPortfolioTableProps) {
+export default function WorkPortfolioTable({
+  groups,
+  selected,
+  emptyMessage,
+  onSelect,
+  renderGroupControls,
+}: WorkPortfolioTableProps) {
   if (groups.length === 0)
     return <p className="py-static-lg text-sm text-contrast-medium">{emptyMessage ?? "No current Delivery work."}</p>;
   return (
@@ -287,6 +313,14 @@ export default function WorkPortfolioTable({ groups, selected, emptyMessage, onS
               </strong>{" "}
               outcomes <span aria-hidden="true">·</span> {group.lifecycle.replace(/-/g, " ")}
             </span>
+            {group.progress ? (
+              <StatusChip
+                label={DELIVERY_PROGRESS_LABELS[group.progress]}
+                tone={progressTone(group.progress)}
+                testId={`change-progress-${group.change_id}`}
+              />
+            ) : null}
+            {renderGroupControls ? renderGroupControls(group) : null}
           </div>
           <DesktopTable group={group} selected={selected} onSelect={onSelect} />
           <CompactRows group={group} selected={selected} onSelect={onSelect} />

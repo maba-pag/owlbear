@@ -112,7 +112,9 @@ from owlbear_delivery.runtime_transaction import (
 from owlbear_delivery.storage_io import locked_roots
 from owlbear_delivery.work_items import (
     ChangeGroupView,
+    DeliveryIssuerState,
     DeliveryPortfolioSnapshot,
+    DeliveryProgress,
     DeliveryReadiness,
     DeliveryReadinessBasis,
     WorkItemAction,
@@ -128,6 +130,7 @@ from owlbear_delivery.work_items import (
     WorkItemTargetSyncConflictView,
     WorkItemWorktreeCleanupView,
     WorkItemWorktreeRecoveryView,
+    derive_delivery_progress,
 )
 
 if TYPE_CHECKING:
@@ -829,11 +832,172 @@ class _ReadinessViewsMixin:
             for card, decision in zip(cards, decisions, strict=True)
         )
         decisions = self._with_worker_stall_readiness(snapshot, cards, decisions)
+        decisions, card_guidance = self._with_progress(snapshot, cards, decisions, readiness_guidance)
         return WorkItemProjector(
             snapshot,
             decisions,
-            readiness_guidance=tuple(readiness_guidance for _card in cards),
+            readiness_guidance=card_guidance,
+            change_progress=self._change_activity_progress(snapshot, cards, decisions),
         )
+
+    def _with_progress(
+        self,
+        snapshot: DeliveryPortfolioSnapshot,
+        cards: tuple[WorkItemCardView, ...],
+        decisions: tuple[DeliveryReadiness, ...],
+        guidance: str | None,
+    ) -> tuple[tuple[DeliveryReadiness, ...], tuple[str | None, ...]]:
+        """Project progress from final readiness plus read-only issuer and occupancy evidence."""
+        at_capacity: bool | None = None
+        updated: list[DeliveryReadiness] = []
+        card_guidance: list[str | None] = []
+        for card, decision in zip(cards, decisions, strict=True):
+            issuer_state: DeliveryIssuerState | None = None
+            custody: str | None = None
+            if decision.status == "running" and decision.reason_code == "active-custody":
+                issuer_state, custody = self._custody_evidence(snapshot, card)
+            capacity = False
+            if (
+                decision.reason_code == "ready"
+                and decision.executable
+                and decision.next_actor is WorkItemNextActor.AGENT
+            ):
+                if at_capacity is None:
+                    at_capacity = self._other_changes_fill_capacity(snapshot.contract.change_id)
+                capacity = at_capacity
+            progress = derive_delivery_progress(
+                decision, card, snapshot.frontier, issuer_state=issuer_state, at_capacity=capacity
+            )
+            updated.append(decision.model_copy(update={"progress": progress}))
+            card_guidance.append(custody if custody is not None else guidance)
+        return tuple(updated), tuple(card_guidance)
+
+    def _custody_evidence(
+        self, snapshot: DeliveryPortfolioSnapshot, card: WorkItemCardView
+    ) -> tuple[DeliveryIssuerState | None, str | None]:
+        """Return issuer evidence and neutral custody copy for a held Planner, Builder or Finalizer step."""
+        change_id = snapshot.contract.change_id
+        claims = tuple(
+            (binding.outcome_id, binding.active_claim)
+            for binding in snapshot.frontier.bindings
+            if binding.active_claim is not None
+            and (card.scope is WorkItemScope.CHANGE_PUBLICATION or binding.outcome_id == card.work_item_id)
+        )
+        if claims:
+            states = {
+                self._claim_issuer_state(
+                    change_id, outcome_id, claim.attempt_id, claim.claim_id, claim.worker_role.value
+                )
+                for outcome_id, claim in claims
+            }
+            roles = ", ".join(dict.fromkeys(claim.worker_role.value.capitalize() for _outcome, claim in claims))
+            state: DeliveryIssuerState = "unknown" if "unknown" in states else "alive" if "alive" in states else "gone"
+            return state, f"Claimed by {roles}"
+        if card.scope is not WorkItemScope.CHANGE_PUBLICATION or snapshot.frontier.integration_repair_claim is not None:
+            return None, None
+        try:
+            attempt = self._active_finalizer_writer_attempt(change_id)
+        except OSError, RuntimeError, ValueError:
+            return None, None
+        if attempt is None:
+            return None, None
+        writer = attempt.writer
+        state = self._claim_issuer_state(change_id, None, writer.attempt_id, writer.claim_id, "finalizer")
+        return state, "Finalizer attempt held"
+
+    def _claim_issuer_state(
+        self, change_id: str, outcome_id: str | None, attempt_id: str, claim_id: str, role: str
+    ) -> DeliveryIssuerState:
+        """Read the recorded issuing window; any missing, mismatched or unreadable evidence is unknown."""
+        try:
+            issuer = self._read_claim_issuer(change_id, attempt_id)
+        except OSError, RuntimeError, ValueError:
+            return "unknown"
+        if (
+            issuer is None
+            or issuer.window is None
+            or (issuer.change_id, issuer.outcome_id, issuer.claim_id, issuer.role)
+            != (change_id, outcome_id, claim_id, role)
+        ):
+            return "unknown"
+        return self._window_liveness_probe.window_state(issuer.window)
+
+    def _other_changes_fill_capacity(self, change_id: str) -> bool:
+        """Report capacity held by other Changes; unreadable occupancy never claims a capacity wait."""
+        try:
+            occupancy = self._execution_occupancy_by_change()
+        except DeliveryRuntimeConflictError, OSError, RuntimeError, ValueError:
+            return False
+        return sum(count for owner, count in occupancy.items() if owner != change_id) >= self._execution_capacity
+
+    def _change_activity_progress(
+        self,
+        snapshot: DeliveryPortfolioSnapshot,
+        cards: tuple[WorkItemCardView, ...],
+        decisions: tuple[DeliveryReadiness, ...],
+    ) -> DeliveryProgress | None:
+        frontier = snapshot.frontier
+        if frontier.change_completion is not None:
+            return "completed"
+        if frontier.change_abandonment is not None:
+            return None
+        if frontier.change_deferral is not None:
+            return "paused"
+        current = tuple(
+            card.model_copy(update={"readiness": decision}) for card, decision in zip(cards, decisions, strict=True)
+        )
+        activity = self._change_activity_card(snapshot, current)
+        return activity.readiness.progress if activity is not None and activity.readiness is not None else None
+
+    def _change_activity_card(
+        self, snapshot: DeliveryPortfolioSnapshot, cards: tuple[WorkItemCardView, ...]
+    ) -> WorkItemCardView | None:
+        """Choose the card carrying Change activity: containment, current ownership, next eligible, publication."""
+        if not cards:
+            return None
+        if (
+            any(card.readiness and card.readiness.reason_code == "builder-transition-contained" for card in cards)
+            or self._repair_proposal(snapshot) is not None
+        ):
+            return self._selected_change_card(snapshot, cards)
+        owned = next(
+            (
+                card
+                for card in cards
+                if card.readiness is not None
+                and (
+                    card.readiness.status == "running"
+                    or card.readiness.reason_code in {"engine-action-pending", "worker-stall-wait"}
+                )
+            ),
+            None,
+        )
+        if owned is not None:
+            return owned
+        runtime = self._runtimes.get(snapshot.contract.change_id)
+        try:
+            claimable = set(runtime.claimable_outcome_ids()) if runtime is not None else set()
+        except OSError, RuntimeError, ValueError:
+            claimable = set()
+        outcome_cards = {card.work_item_id: card for card in cards if card.scope is WorkItemScope.OUTCOME}
+        ranked = sorted(
+            (self._snapshot_dependency_depth(snapshot, outcome.outcome_id), index, outcome.outcome_id)
+            for index, outcome in enumerate(snapshot.contract.outcomes)
+            if outcome.outcome_id in claimable and outcome.outcome_id in outcome_cards
+        )
+        if ranked:
+            return outcome_cards[ranked[0][2]]
+        unfinished = next(
+            (
+                card
+                for card in outcome_cards.values()
+                if card.readiness is not None and card.readiness.status != "complete"
+            ),
+            None,
+        )
+        if unfinished is not None:
+            return unfinished
+        return next((card for card in cards if card.scope is WorkItemScope.CHANGE_PUBLICATION), None)
 
     def _derive_finalization_retry_identity(  # noqa: PLR0913 - identity inputs mirror both read and acquire fences.
         self,
@@ -1539,7 +1703,7 @@ class _ReadinessViewsMixin:
             and card.activity.state is WorkItemActivityState.READY
             and card.action.kind is WorkItemActionKind.NONE
         ):
-            return WorkItemAction(kind=WorkItemActionKind.START_ORCHESTRATION, label="Start Orchestration")
+            return WorkItemAction(kind=WorkItemActionKind.START_ORCHESTRATION, label="Copy continuation prompt")
         return card.action
 
     @staticmethod
@@ -1838,6 +2002,10 @@ class _ReadinessViewsMixin:
 
     def _execution_occupancy(self) -> int:
         """Count the largest observed active outcome claim set once per Change."""
+        return sum(self._execution_occupancy_by_change().values())
+
+    def _execution_occupancy_by_change(self) -> dict[str, int]:
+        """Return the largest observed execution occupancy of each Change."""
         occupancy: dict[str, int] = {}
         for change_id, observation in self._discovered_changes.items():
             frontier = observation.frontier
@@ -1862,7 +2030,7 @@ class _ReadinessViewsMixin:
                 coordination.continuation_action is not None and coordination.continuation_action.finished_at is None
             ):
                 occupancy[coordination.change_id] = max(occupancy.get(coordination.change_id, 0), 1)
-        return sum(occupancy.values())
+        return occupancy
 
     def _writer_occupies_execution_slot(
         self,

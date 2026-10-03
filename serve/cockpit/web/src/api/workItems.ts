@@ -101,6 +101,20 @@ export type DeliveryReadinessReasonCode =
   | "retry-containment"
   | "retry-ledger-unavailable"
   | "worker-stall-wait";
+/** Engine-projected programme progress; Cockpit only maps keys to labels. */
+export type DeliveryProgress =
+  | "preparing"
+  | "working"
+  | "checking"
+  | "repairing"
+  | "needs-decision"
+  | "needs-sign-in"
+  | "waiting-for-service"
+  | "waiting-for-change"
+  | "ready-to-merge"
+  | "completed"
+  | "paused"
+  | "waiting-for-chat";
 export type FinalizationFailureCode =
   | "workspace-dirty"
   | "workspace-preflight-failed"
@@ -180,6 +194,7 @@ export interface DeliveryReadiness {
   stop_reason?: string | null;
   retry_history?: DeliveryRetryAttempt[];
   prompt?: string | null;
+  progress?: DeliveryProgress | null;
 }
 
 export interface WorkItemCardView {
@@ -208,6 +223,7 @@ export interface ChangeGroupView {
   outcome_total: number;
   outcome_completed: number;
   items: WorkItemCardView[];
+  progress?: DeliveryProgress | null;
 }
 
 export interface NeedsCounts {
@@ -683,6 +699,7 @@ export interface WorkItemDetailView {
   retry_diagnostic: WorkItemRetryDiagnostic | null;
   publication: WorkItemPublicationView | null;
   readiness?: DeliveryReadiness | null;
+  change_progress?: DeliveryProgress | null;
 }
 
 export interface WorkItemAvailableDetailResponse {

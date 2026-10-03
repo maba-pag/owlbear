@@ -311,6 +311,23 @@ DeliveryReadinessReason = Literal[
     "worker-stall-wait",
 ]
 
+DeliveryProgress = Literal[
+    "preparing",
+    "working",
+    "checking",
+    "repairing",
+    "needs-decision",
+    "needs-sign-in",
+    "waiting-for-service",
+    "waiting-for-change",
+    "ready-to-merge",
+    "completed",
+    "paused",
+    "waiting-for-chat",
+]
+
+DeliveryIssuerState = Literal["alive", "gone", "unknown"]
+
 
 class DeliveryReadiness(_ProjectionModel):
     """Application-owned eligibility for one supported action at a captured basis."""
@@ -329,6 +346,7 @@ class DeliveryReadiness(_ProjectionModel):
     stop_reason: str | None = None
     retry_history: tuple[DeliveryRetryAttemptView, ...] = Field(default=(), max_length=MAX_RETRY_HISTORY_ATTEMPTS)
     prompt: str | None = None
+    progress: DeliveryProgress | None = None
 
     @model_validator(mode="after")
     def _validate_action(self) -> DeliveryReadiness:
@@ -385,6 +403,7 @@ class ChangeGroupView(_ProjectionModel):
     outcome_total: int = Field(ge=1)
     outcome_completed: int = Field(ge=0)
     items: tuple[WorkItemCardView, ...]
+    progress: DeliveryProgress | None = None
 
 
 class WorkItemClaimView(_ProjectionModel):
@@ -533,6 +552,72 @@ class WorkItemDetailView(_ProjectionModel):
     retry_diagnostic: DeliveryRetryDiagnostic | None = None
     publication: WorkItemPublicationView | None = None
     readiness: DeliveryReadiness | None = None
+    change_progress: DeliveryProgress | None = None
+
+
+_DECISION_REASONS = frozenset(
+    {"request-action", "design-attention", "retry-exhausted", "settled-attention-target-drift"}
+)
+_SERVICE_RETRY_OPERATIONS = frozenset(
+    {WorkItemActionKind.SYNC_TARGET, WorkItemActionKind.MARK_READY, WorkItemActionKind.OBSERVE_ACCEPTANCE}
+)
+
+
+def derive_delivery_progress(  # noqa: C901, PLR0911 - one branch per ordered mapping row.
+    readiness: DeliveryReadiness,
+    card: WorkItemCardView,
+    frontier: DeliveryFrontier,
+    *,
+    issuer_state: DeliveryIssuerState | None = None,
+    at_capacity: bool = False,
+) -> DeliveryProgress | None:
+    """Map one final readiness and supplied evidence to its programme progress; None keeps D01 rendering.
+
+    ``issuer_state`` is the claim-issuing window evidence for a running Planner, Builder or Finalizer
+    custody, or None when no such custody applies. ``at_capacity`` reports that other Changes fill the
+    execution capacity. Active-work keys are never emitted: no input proves a current dispatch.
+    """
+    reason = readiness.reason_code
+    if frontier.change_completion is not None:
+        return "completed"
+    if frontier.change_abandonment is not None:
+        return None
+    if readiness.status == "complete":
+        return "completed"
+    if frontier.change_deferral is not None:
+        return "paused"
+    if reason in {"worker-stall-wait", "engine-action-pending"}:
+        return "waiting-for-chat"
+    if readiness.status == "running":
+        if issuer_state is None or issuer_state == "alive":
+            return None
+        return "waiting-for-chat" if issuer_state == "gone" else "needs-decision"
+    awaiting_merge = (
+        card.publication_phase is WorkItemPublicationPhase.AWAITING_MERGE
+        and frontier.change_disposition is None
+        and card.action.kind is WorkItemActionKind.OBSERVE_ACCEPTANCE
+        and card.action.command is None
+    )
+    if reason in _DECISION_REASONS and not (awaiting_merge and reason == "request-action"):
+        return "needs-decision"
+    if awaiting_merge or reason == "acceptance-wait":
+        return "ready-to-merge"
+    if (
+        reason == "publication-wait"
+        or (reason == "checkpoint-pending" and not readiness.executable)
+        or (reason == "retry-backoff" and readiness.operation in _SERVICE_RETRY_OPERATIONS)
+    ):
+        return "waiting-for-service"
+    if (
+        reason == "ready"
+        and readiness.status == "ready"
+        and readiness.executable
+        and readiness.next_actor is WorkItemNextActor.AGENT
+    ):
+        return "waiting-for-change" if at_capacity else "waiting-for-chat"
+    if reason in {"retry-backoff", "review-repair", "target-sync-required"}:
+        return "waiting-for-chat"
+    return None
 
 
 class WorkItemProjector:
@@ -544,8 +629,10 @@ class WorkItemProjector:
         readiness: tuple[DeliveryReadiness, ...] = (),
         *,
         readiness_guidance: tuple[str | None, ...] = (),
+        change_progress: DeliveryProgress | None = None,
     ) -> None:
         self._snapshot = snapshot
+        self._change_progress = change_progress
         self._outcomes = {item.outcome_id: item for item in snapshot.contract.outcomes}
         self._bindings = {item.outcome_id: item for item in snapshot.frontier.bindings}
         self._cards = self._project_cards()
@@ -709,6 +796,7 @@ class WorkItemProjector:
             outcome_total=len(self._snapshot.contract.outcomes),
             outcome_completed=completed,
             items=self._cards,
+            progress=self._change_progress,
         )
 
     def publication_phase(self) -> WorkItemPublicationPhase:
@@ -727,6 +815,7 @@ class WorkItemProjector:
                 operator_moves=self._snapshot.frontier.operator_moves,
                 publication=self._publication_view(),
                 readiness=card.readiness,
+                change_progress=self._change_progress,
             )
         outcome_id = card.work_item_id
         outcome = self._outcomes[outcome_id]
@@ -750,6 +839,7 @@ class WorkItemProjector:
             recovery_attention=self._recovery_view(binding.recovery_attention),
             retry_diagnostic=binding.retry_diagnostic,
             readiness=card.readiness,
+            change_progress=self._change_progress,
         )
 
     def _project_cards(self) -> tuple[WorkItemCardView, ...]:
@@ -856,10 +946,10 @@ class WorkItemProjector:
         if needs == WorkItemNeed.DEPENDENCY:
             return WorkItemNextActor.DEPENDENCY, headline or "Waiting on another Outcome"
         if binding.active_claim is not None:
-            return WorkItemNextActor.AGENT, "Work in progress"
+            return WorkItemNextActor.AGENT, f"Claimed by {binding.active_claim.worker_role.value.capitalize()}"
         if binding.stage == DeliveryStage.COMPLETED:
             return WorkItemNextActor.NONE, "Complete — no action needed"
-        return WorkItemNextActor.AGENT, "Ready for Orchestration"
+        return WorkItemNextActor.AGENT, "Run the continuation prompt in Copilot Chat"
 
     @staticmethod
     def _outcome_activity(binding: OutcomeAuthorityBinding, needs: WorkItemNeed) -> WorkItemActivity:
