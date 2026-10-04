@@ -7,17 +7,22 @@
 > main checkout on `delivery-live` (D03). Rebased on `origin/dev` `634a77be7`: it adds only N05-A
 > (`delivery-github`, `publication_provider.py`, forbidden-effect gates), so no locator here moved; P3–P8 rerun
 > there with identical outcomes.
-> **Status:** draft for the plan gate; revised after Sol plan gate round 1 ([§6](#6-round-dispositions)).
+> **Status:** draft for the plan gate; revised after Sol plan gate rounds 1 and 2 ([§6](#6-round-dispositions)).
 > Product code is unchanged by this phase. U1–U3 are recorded engineering decisions of 2026-10-03
 > ([1.13](#113-decisions)).
-> Dependencies: **N03 (as amended by #360)**: the [N03 plan](delivery-n03-plan.md) with PR #360 (lane C
-> `9c06c97cd`): evidence model, user-only confirmation through MCP elicitation (N03 D13, R14, I6) and the
-> Change-wide append-only confirmation ledger `DeliveryFrontier.confirmations` read only through
-> `resolve_confirmation` / `confirmation_applies` (N03 §1.5, I10, §1.9 N04 contract); its U1 was answered (b)
-> by the user on 2026-10-03. The [N02 plan](delivery-n02-plan.md) (registry, gate, migration core; its U1 and
-> U2 were answered (a): pinned live controller, `/upgrade-delivery`). The [N09 plan](delivery-n09-plan.md) §1.11
-> (A2 custody contract, which N04 extends), checked against its implementation in PR #357 (lane A
-> `feadd6777`: K3 fences, drain tokens and the start-site inventory in `tests/test_delivery_worktree_authority.py`).
+> Dependencies (re-pinned in round 2): **N03 (as amended by #360)**: the [N03 plan](delivery-n03-plan.md) with
+> PR #360 (lane C `86289635f`): evidence model; user-only confirmation through MCP elicitation (N03 D13, R14,
+> I6) declared once as a server-injected `Resolve` parameter with a legacy route (`elicitation/create`) and a
+> modern route (`InputRequiredResult`) behind the SDK's default `RequestStateBoundary`; the Change-wide
+> append-only ledger `DeliveryFrontier.confirmations` read only through `resolve_confirmation` /
+> `confirmation_applies` (N03 §1.5, I10, §1.9 N04 contract); schema-2 request-resolution receipts that bind a
+> ledger append for restart replay (N03 §1.7 L row). Its U1 was answered (b) on 2026-10-03; its U2 (does a
+> Cockpit click count) is open before N03-C ([G17](#5-verification-gaps)). The [N02 plan](delivery-n02-plan.md)
+> (registry, gate, migration core; its U1 and U2 were answered (a): pinned live controller,
+> `/upgrade-delivery`). The [N09 plan](delivery-n09-plan.md) §1.11 (A2 custody contract, which N04 extends),
+> checked against PR #357 (lane A `9a7fff990`: K3 fences, drain tokens and the start-site inventory in
+> `tests/test_delivery_worktree_authority.py`; `repair_quarantined_delivery_state_snapshot` is now an
+> operator start fenced by `_operator_start(change, "quarantine-repair:<op>")` and no entry is Pause-exempt).
 
 ## 1. Contract
 
@@ -39,7 +44,8 @@
   release. Acquisition is blocked from intent to release, except the activation's own identity-bound steps. A
   crash at any boundary restarts to the old approved state (before the intent) or rolls forward to the exact new
   state, with no duplicate child commit; a fresh host restores either state or a visible pending state that
-  preserves an unpublished remote child without adopting or overwriting it.
+  preserves an unpublished remote child without adopting or overwriting it until a fully fenced replacement
+  or a user-approved, fenced resolution of that exact child.
 - An applicability report classifies every obligation affected by the revision as reusable, partial,
   invalidated or unknown, with an independent reviewer's justification. Its records are portable frontier
   authority that the N03 evaluator consumes. It replaces the blanket request of
@@ -85,10 +91,11 @@
   discard the candidate. After the intent the operation only rolls forward; it never silently falls back
   (programme §8.3 step 5). Sole exception: A1b observes the bound pull request merged before any Git effect of
   the activation; the journal then ends `superseded-by-merge` and the acceptance owner completes the Change.
-- **I4 One deterministic child commit.** An activation creates at most one managed-branch commit: the direct
-  child of the intent's expected head, touching only `.owlbear/delivery/packages/<change>/`, with an
-  operation-bound message and the intent's fixed author, committer and dates, so its SHA is recorded in the
-  intent before any Git write (§1.6 A3).
+- **I4 One deterministic child commit.** An activation or snapshot creates at most one managed-branch commit:
+  the direct child of the intent's expected head, touching only `.owlbear/delivery/packages/<change>/`, with an
+  operation-bound message and fixed author, committer and dates. Its SHA, tree and dates live in one durable
+  carrier, `ChangeDesignPackageSnapshotIntent` schema 2, written with the child object pinned by a ref before any
+  branch, index or worktree write; replay uses that object and never recomputes or re-signs (§1.6, D28, D32).
 - **I5 Acquisition fence.** From the hold, no new custody or effect start except draining owners and the exact
   identity-bound exceptions of §1.5; from the intent to the release, only the activation owner's own steps.
 - **I6 Immutable history.** No stored observation, review, result, finalization, snapshot or receipt changes
@@ -102,11 +109,13 @@
 - **I11 Confirmation authority only from the ledger.** A reused `waived` or `human-confirmed` record counts only
   through N03 (as amended by #360) `resolve_confirmation` and `confirmation_applies`. Activation, reassessment
   and applicability records never append, alter or reorder `DeliveryFrontier.confirmations` (N03 I10) and never
-  derive authority from requests, request history or caller provenance.
+  derive authority from requests, request history or caller provenance. The only N04 ledger writer is
+  `confirm_revision_criterion` through N03's D13 boundary (§1.7, D27); it appends, never alters.
 - **I12 Complete preservation before cleanup.** Retained Design-return work is captured as three verified
-  components (HEAD commits, the real index, the filesystem state including modes, symlinks and untracked
-  files; ignored files inventoried and left in place) and re-verified against the live worktree before any
-  cleanup byte changes.
+  components (HEAD commits, the real index, the filesystem state from a bounded walk including full modes,
+  symlinks, untracked files and empty directories; ignored entries inventoried and left in place) and
+  re-verified against the live worktree before any cleanup byte changes. No ignored entry may collide with a
+  path the cleanup writes; a collision refuses before the intent (D25).
 
 ### 1.4 Authority layout
 
@@ -116,12 +125,14 @@
 | Active package history | `refs/owlbear/packages/<change>` | `DesignPackageStore.checkpoint` | Git | no |
 | Candidate package (admitted Changes only) | `runtime/package-candidates/<change>/{authority.json,design.md,intent.md,manifest.json}`; `authority.json` always empty | second `DesignPackageStore` instance | M | no (host-local, like unadmitted drafts) |
 | Candidate history | `refs/owlbear/package-candidates/<change>` | `DesignPackageStore.checkpoint` with a ref namespace | Git | no |
-| Revision hold | `ChangeCoordination.revision_hold` (A1); bound activation operation added at A1 of the operation (A2) | `PortfolioCoordinator` | M | no |
-| Activation journal | `runtime/changes/<change>/revision-activations/<operation_id>/{intent,local,result}.json` | activation owner (A2) | R | no |
-| Design-return preservation | `runtime/changes/<change>/revision-activations/<operation_id>/preservation/{manifest.json,blobs/<sha256>}` (owner-private, D03 store rules); refs `refs/owlbear/preserved/<change>/<operation_id>/{head,index}` | activation owner (A2) | R | no |
-| Generation history | `runtime/changes/<change>/revisions/generations/<operation_id>/{contract,frontier,admission}.json` (the replaced authority, H) and `generation.json` (R) | activation owner (A2) via `DeliveryAuthorityRegistry` participants | H, R | no |
+| Revision hold | `ChangeCoordination.revision_hold` (A1); bound activation operation and `purpose` added at A1 of the operation (A2b) | `PortfolioCoordinator` | M | no |
+| Activation journal | `runtime/changes/<change>/revision-activations/<operation_id>/{intent,demotion,local,result}.json` | activation owner (A2b) | R | no |
+| Design-return preservation | `runtime/changes/<change>/revision-activations/<operation_id>/preservation/{manifest.json,blobs/<sha256>}` (owner-private, D03 store rules); refs `refs/owlbear/preserved/<change>/<operation_id>/{head,index}` | activation owner (A2b) | R | no |
+| Generation history | `runtime/changes/<change>/revisions/generations/<operation_id>/{contract,frontier,admission}.json` (the replaced authority, H) and `generation.json` (R) | activation owner (A2b) via `DeliveryAuthorityRegistry` participants | H, R | no |
 | Legacy history | `runtime/changes/<change>/revisions/<64-hex>/` (existing; contract- or frontier-digest named) | none (read only) | H | no |
-| Remote activation pin (fresh host) | `refs/owlbear/remote-activations/<change>/<operation_id>`; `ChangeCoordination.remote_activation_pending` | loader restore (A2) | Git, M | no |
+| Remote activation pin (fresh host) | `refs/owlbear/remote-activations/<change>/<operation_id>`; `ChangeCoordination.remote_activation_pending` | loader restore (A2b) | Git, M | no |
+| Snapshot child pin | `refs/owlbear/snapshot-children/<change>/<operation_id>` (pre-intent; deleted after the receipt) | snapshot owner (A2a) | Git | no |
+| Revision confirmation receipts | `runtime/changes/<change>/revision-confirmations/<confirmation_id>.json` | `confirm_revision_criterion` (B) | R | no (the ledger entry is portable) |
 | Applicability records | frontier binding `applicability` (B) | runtime | M (nested) | yes (snapshot) |
 
 - **Unadmitted Changes** keep today's in-place `create_design_session` / `revise_design_session` / `put_design`.
@@ -129,10 +140,11 @@
   (`_approved_package_id` pattern). The activated package adds the compiled contract as `authority.json`.
 - **Operation identity.** `operation_id = "revision-" + sha256(canonical JSON {kind, change_id,
   base_package_id, candidate_package_id, contract_digest, predecessor: {reviewed_head, frontier_digest},
-  history_ref})[:40]`, valid under the existing operation-ID pattern. `kind` is `revision`, `snapshot-reconcile`
-  or `reassess`; the predecessor generation is the exact authority being replaced, named by the request's
-  `expected_head` and `expected_frontier_digest` (both portable, both fixed from intent to release);
-  `history_ref` is `null` except for `reassess` (§1.7). An identical request therefore recomputes the same ID at
+  history_ref, adopt_child})[:40]`, valid under the existing operation-ID pattern. `kind` is `revision`,
+  `snapshot-reconcile`, `reassess` or `remote-child` (§1.6 per-kind contract); the predecessor generation is the
+  exact authority being replaced, named by the request's `expected_head` and `expected_frontier_digest` (both
+  portable, both fixed from intent to release); `history_ref` is `null` except for `reassess` (§1.7) and
+  `adopt_child` is `null` except for `remote-child`. An identical request therefore recomputes the same ID at
   every replay; snapshot-reconcile and reassess of the same package never collide, and returning to an earlier
   package (A → B → A → C) never reuses an earlier operation (D19).
 - **Approval record.** The intent stores `approval {approved_package_id, contract_digest, impact_digest,
@@ -180,16 +192,20 @@ its K2 token does (a Pause after the intent makes the activation a K2 owner, N09
 
 | ID | Exception | Exact identity check (in the start's own transaction) | Phase |
 | --- | --- | --- | --- |
-| E1 | Activation intent | The replacement adds `design_package_snapshot_intent` whose `operation_id` equals `revision_hold.activation_operation_id` written by the same A1 transaction, whose `expected_head` equals the journal intent's expected head and whose `package_id` equals the intent's activated package ID | A2 |
-| E2 | Activation owner steps | Process-local `revision-activation` drain token rebuilt at call start from the journal `intent.json` (operation ID, intent digest) whose ID equals `revision_hold.activation_operation_id`; permits only that operation's A1b draft operation `revision-draft-<operation_id>`, A3 ref update, A4 participants, A5 reservation for `_checkpoint_operation_id("branch", change, expected child)`, state publication `revision-<operation_id>`, and A6 | A2 |
-| E3 | Reconciliation actions | `acquire_continuation_action` / `start_continuation_action` with kind `reconcile-revision-activation` and `revision_operation_id` equal to the hold's bound operation, or kind `reconcile-revision-snapshot` whose recomputed `snapshot-reconcile` operation ID equals `revision_operation_id` while no other activation is bound; every other kind refused | A2 |
+| E1 | Activation intent | The replacement adds `design_package_snapshot_intent` (schema 2, D28) whose `operation_id` equals `revision_hold.activation_operation_id` written by the same A1 transaction, whose `expected_head` equals the journal intent's expected head and whose `package_id` equals the intent's activated package ID | A2b |
+| E2 | Activation owner steps | Process-local `revision-activation` drain token rebuilt at call start from the journal `intent.json` (operation ID, intent digest) whose ID equals `revision_hold.activation_operation_id`; permits only that operation's A1b draft operation `revision-draft-<operation_id>-<observed head>`, A3 ref update, A4 participants, A5 reservation for `_checkpoint_operation_id("branch", change, expected child)`, state publication `revision-<operation_id>`, and A6 | A2b |
+| E3 | Reconciliation actions | `acquire_continuation_action` / `start_continuation_action` with kind `reconcile-revision-activation` and `revision_operation_id` equal to the hold's bound operation, or kind `reconcile-revision-snapshot` whose recomputed `snapshot-reconcile` operation ID equals `revision_operation_id` while no other activation is bound; every other kind refused | A2b |
 | E4 | Retained same-task successor | Coordinator `acquire` and `prepare_builder_handoff_acquisition` for a Builder writer whose outcome, task and attempt lineage equal the passive `builder_handoff` (route `same-task`); a new task, a Planner claim, a Finalizer attempt or a different task refused | A1 |
-| E5 | Hold policy writes | `open_revision_hold`, `clear_revision_hold`, candidate revise and discard (K1-style admission; no start) | A1 |
+| E5 | Hold policy writes | `open_revision_hold` (purpose `revision` with a candidate, or `reassess` without one, B), `clear_revision_hold`, candidate revise and discard, and the `confirm_revision_criterion` ledger append (§1.7, B); each a K1-style admission or a declared frontier write, no start | A1, B |
+| E6 | Remote-child resolution | `activate_revision` kind `remote-child` whose `adopt_child` equals `remote_activation_pending.child` while the marker is `pending`; its A1 sets the marker `resolving` with this operation's ID; afterwards only E2 for that ID | A2b |
+| E7 | Divergence containment under the marker | The D03 dirty-worktree containment route named for `revision-workspace-unclean`, for this Change only while the marker records a worktree or index divergence (§1.6 Fresh-host restore); it preserves before it cleans | A2b |
+| E8 | Quarantined snapshot repair | `repair_quarantined_delivery_state_snapshot` while no activation is bound (it republishes validated local authority and starts no custody); with a bound activation only once `local.json` exists and the republished bytes equal its digests | A1, A2b |
 
-Every other N09-A2 start site stays refused under the hold. The inventory, from PR #357 (`feadd6777`), is
-classified in `tests/test_delivery_worktree_authority.py` by a new `_HOLD_CLASSES` map beside
-`_COORDINATOR_PAUSE_CLASSES`, `_MANAGER_PAUSE_CLASSES` and `_APPLICATION_PAUSE_GATED_ENTRIES`; an entry that is
-pause-gated but has no hold class fails the test:
+Every other N09-A2 start site stays refused under the hold and under `remote_activation_pending`. The
+inventory, from PR #357 (`9a7fff990`), is classified in `tests/test_delivery_worktree_authority.py` by a new
+`_HOLD_CLASSES` map beside `_COORDINATOR_PAUSE_CLASSES`, `_MANAGER_PAUSE_CLASSES` and
+`_APPLICATION_PAUSE_GATED_ENTRIES`; an entry that is pause-gated but has no hold class fails the test. The
+marker admits only E6, E7 and E8; the test classifies each site for both policies:
 
 | N09-A2 start site | Hold class |
 | --- | --- |
@@ -198,7 +214,8 @@ pause-gated but has no hold class fails the test:
 | `update` (intent-creating snapshot replacement, `_validate_update`), manager `snapshot_design_package` | refused, except E1 (and E2 for the receipt completion) |
 | `reserve_publication` | refused, except E2 and existing K2 tokens |
 | `start_direct_operation` (`sync-target`, `mark-ready`), manager `sync_with_target` | refused |
-| `start_pause_fenced` operator starts: `adopt_external_head`, `adopt_external_head_after_acceptance_attention`, `promote_external_head`, `abort_target_sync_conflict`, `resolve_target_sync_conflict`, `prepare_review_repair`, `reconcile_finalization_head`, `recover_out_of_band_head`, `repair_target_sync_publication`, `recover_publication_baseline`, `recover_change_worktree` | refused (`recover_change_worktree` and `recover_out_of_band_head` stay D03 containment routes: they run after Discard, or after the activation releases) |
+| `start_pause_fenced` operator starts: `adopt_external_head`, `adopt_external_head_after_acceptance_attention`, `promote_external_head`, `abort_target_sync_conflict`, `resolve_target_sync_conflict`, `prepare_review_repair`, `reconcile_finalization_head`, `recover_out_of_band_head`, `repair_target_sync_publication`, `recover_publication_baseline`, `recover_change_worktree` | refused (`recover_change_worktree` and `recover_out_of_band_head` stay D03 containment routes: they run after Discard, or after the activation releases; E7 under the marker) |
+| `repair_quarantined_delivery_state_snapshot` (operator start `quarantine-repair:<op>`, Pause-gated since `9a7fff990`) | refused, except E8 |
 | `prepare_pause_fence` (`observe-acceptance` provider fence; `complete_change`) | refused before A1; after A1 only the A1b merged-PR path (I3) reaches completion |
 | `prepare_runtime_custody_guard` pause-gated class (K7) | refused, except E2 participants; completion class unchanged |
 | Finalization repair release (`delivery_runtime.py` request check) and checkpoint publication refusal (`application_publication.py`) | refused, except E2 |
@@ -207,14 +224,14 @@ pause-gated but has no hold class fails the test:
 
 | Step | Durable effect | Crash after this step → restart |
 | --- | --- | --- |
-| A0 Validate | None. Under the acquisition and checkpoint locks: hold present for this base; §1.5 preconditions; candidate verified and compiles to `contract_digest`; base package equals active; frontier digest equals expected; branch head equals `last_reviewed_commit`, worktree clean (except U3 handoff, whose preservation inventory must fit the bounds); approval and (from B) applicability review bound. Computes the expected child (A3) by writing only Git objects | Old approved state; nothing to replay (unreachable objects only) |
-| A1 Intent | One transaction: journal `intent.json` (kind, all §1.4 identities, predecessor generation, expected frontier, branch head, expected child SHA and tree, commit dates, approval, review ID, handoff disposition, ready-demotion binding: finalization ID, head, PR identity) and coordination with `revision_hold.activation_operation_id` and a `design_package_snapshot_intent` for this operation, parent = reviewed head (E1) | Old authority plus intent: readiness `revision-activation-pending`; acquisition refused; replay continues |
-| A1b Demote (ready only) | Provider `return_to_draft` with operation `revision-draft-<operation_id>` under the E2 token, inside the activation's held checkpoint lock (no lock re-entry, no frontier write, no state publication); the provider's draft-state operation record is replay evidence | Ready frontier, draft PR, intent: fenced by `revision-activation-pending`; replay observes draft and continues. PR observed merged before any Git effect → journal `result.json` `superseded-by-merge`, hold cleared, acceptance owner completes (I3) |
-| A2 Preserve (U3 (b) only) | `preserve_design_return_workspace` (§ Design-return preservation): HEAD ref, index ref and raw index, filesystem manifest and blobs; verified against the live worktree; then cleanup to the reviewed head and post-cleanup verification | Replay recognizes the stored manifest and refs, re-verifies, and never captures twice; a partial cleanup completes only on a worktree that matches the capture or the reviewed head path by path |
-| A3 Child commit | `update-ref refs/heads/<branch> <expected child> <expected head>`, then the worktree moves to the child for the four package paths (§ Deterministic child commit) | Replay classifies the ref and each package path's index and file state as intent-bound (parent or child bytes only) and completes; any other dirt → contained `revision-workspace-unclean`, nothing written |
+| A0 Validate | No authority, branch, index or worktree write. Under the acquisition and checkpoint locks: the per-kind preconditions (table below); §1.5 preconditions; candidate verified and compiles to `contract_digest`; base package equals active; frontier digest equals expected; branch head equals `last_reviewed_commit`, worktree clean (except a U3 (b) handoff, whose bounded walk, collision check and bounds must pass, D25, D30); approval and (from B) applicability review and selected confirmations bound (§1.7). Builds and pins the child object (§ Deterministic child commit; D32) | Old approved state; a pin without an intent is reused or replaced by the next A0 (D32); nothing else to replay |
+| A1 Intent | One transaction: journal `intent.json` (kind, all §1.4 identities, predecessor generation, expected frontier, branch head, the schema-2 snapshot intent ID, which carries child SHA, tree, dates and pin (D28), approval, review ID, selected confirmations, handoff disposition, ready-demotion binding: finalization ID, finalized head, PR identity and the permitted observed heads) and coordination with `revision_hold.activation_operation_id` and that `design_package_snapshot_intent`, parent = reviewed head (E1) | Old authority plus intent: readiness `revision-activation-pending`; acquisition refused; replay continues |
+| A1b Demote (ready only) | Provider observation of the bound PR. Open, unmerged, not draft, head in the permitted set (the finalized head; for `remote-child` also T): `return_to_draft` with `exact_head` = the observed head and operation `revision-draft-<operation_id>-<observed head>` under the E2 token, inside the held checkpoint lock (no lock re-entry, no frontier write, no state publication). Already draft at a permitted head: no provider write. Then journal `demotion.json` (observed head, draft receipt ID or `already-draft`) in its own write, before A3 (D26) | Before `demotion.json`: replay observes again; the provider returns the stored receipt for the same operation, or a new observed head gets its own operation. After it: replay never calls the provider (the PR head may already be the child). PR merged before any Git effect → journal `result.json` `superseded-by-merge`, hold cleared, acceptance owner completes (I3); for `remote-child` a merged PR refuses at A0 (`change-attention`) |
+| A2 Preserve (U3 (b) only) | `preserve_design_return_workspace` (§ Design-return preservation): walk and collision check re-run on the live worktree, HEAD ref, index ref and raw index, filesystem manifest and blobs; verified against the live worktree; then cleanup to the reviewed head and post-cleanup verification | Replay recognizes the stored manifest and refs, re-verifies, and never captures twice; a partial cleanup completes only on a worktree that matches the capture or the reviewed head path by path |
+| A3 Child commit | `update-ref refs/heads/<branch> <expected child> <expected head>` with the pinned object (T for `remote-child`), then the worktree moves to the child for the four package paths (§ Deterministic child commit) | Replay classifies the ref and each package path's index and file state as intent-bound (parent or child bytes only) and completes; any other dirt → contained `revision-workspace-unclean`, nothing written |
 | A4 Local commit | One `RuntimeTransaction` across the package and runtime roots: active package files; contract, frontier (confirmations ledger carried byte-identical, N03 I10), admission; generation record `revisions/generations/<operation_id>/`; coordination (snapshot receipt, `last_reviewed_commit` = child, intent cleared, consumed passive custody); pending checkpoint (admitted-design trigger at the child) and pending state publication on the base digest; `ready` and `finalization` cleared with a `head-drift` invalidation when present; journal `local.json` with the digest of every written artifact | Any runtime-root recoverer completes the transaction (A1 fix); the loader accepts the journal-bound local successor; publication replays |
 | A5 Publish | Existing owners: checkpoint branch push, state snapshot, draft PR summary; bounded remote Git with unknown-write readback (N02-C) | Branch pushed, state not: same host replays the state; a fresh host follows § Fresh-host restore. Remote outage: stays pending with its reason |
-| A6 Release | One transaction: journal `result.json`, `revision_hold` cleared, publication acknowledged, then candidate slot removed by idempotent cleanup | Released; the Change continues under the new authority |
+| A6 Release | One transaction: journal `result.json`, `revision_hold` cleared (and `remote_activation_pending` for `remote-child`), publication acknowledged; then idempotent cleanup of the candidate slot and the snapshot child pin | Released; the Change continues under the new authority |
 
 - **Who runs it.** The Designer calls `activate_revision` after approval. After any interruption the identical
   call, or the continuation engine action `reconcile-revision-activation` (D02 action framework, selected first
@@ -229,32 +246,77 @@ pause-gated but has no hold class fails the test:
   recognized pending-publication successor of them); then `_validate_local_snapshot` accepts and publication
   replays. Without a matching journal the existing mismatch and `remote-change-head-ahead` handling stands.
 
-**Deterministic child commit (A3; D17).** The existing owner writes package files into the worktree, stages
-them and runs `git commit` (`workspace_snapshots.py:241-255`); its rollback runs only for an `Exception`
-(`:257`), not a process death, and its replay requires a clean worktree (`:238`, `:294`), so a crash between the
-write and the commit can never resume. N04-A2 replaces
-`_commit_design_package_snapshot` for every caller (activation, legacy reconcile and the first-checkpoint
-snapshot) with:
+**Per-kind contract (D31).** Every kind uses the journal, operation identity, replay rules and loader
+successor above; the table fixes what each kind requires, writes and owns. "n/a" steps are skipped and never
+replayed. The ordinary first-checkpoint snapshot is not an activation: it uses only the A2a plumbing.
 
-1. Before the intent (A0): `git hash-object -w` the four package files; a temporary `GIT_INDEX_FILE` reads the
-   parent tree and `update-index --cacheinfo` sets the four paths; `write-tree`; `commit-tree --no-gpg-sign`
-   with parent = expected head, author and committer `OwlBear <owlbear@localhost>`, both dates fixed to the
-   intent's `created_at`, message `chore: activate Design revision (<change>, <operation_id>)`
-   (`chore: snapshot admitted Design package (…)` for the existing callers). No hooks run. The intent records the
-   resulting child SHA and tree; recomputation at replay is byte-identical.
-2. A3: `update-ref` with the expected old value (CAS), then for the worktree (whose HEAD follows the branch):
-   `git checkout <child> -- <four paths>` updates index and files for those paths only.
-3. Replay classifier, per package path: index entry and file bytes each equal either the parent's or the
+| Aspect | `revision` | `reassess` | `snapshot-reconcile` | `remote-child` | First-checkpoint snapshot |
+| --- | --- | --- | --- | --- | --- |
+| Started by | Designer `activate_revision` after approval | Designer `activate_revision` after approval | Engine action `reconcile-revision-snapshot` (selected at readiness `revision-snapshot-stale`) | Designer `activate_revision` after approval, on a fresh host with a `pending` marker | Admitted-design checkpoint trigger (existing owner, `snapshot_design_package`) |
+| Hold before A0 | Candidate hold (`purpose: revision`) | `open_revision_hold(purpose: reassess)`, no candidate (E5) | None; A0 and A1 run under the acquisition lock and A1 writes a `purpose: reconcile` hold | The marker acts as the hold (§1.5 E6) | None (K3 snapshot start, N09-A2) |
+| Custody during the operation | Journal plus E2 token | Journal plus E2 token | Its D02 continuation start marker (E3) plus the journal and E2 token; finishing the action releases the marker after A6 | Journal plus E2 token; marker `resolving` | Coordination snapshot intent (schema 2) |
+| Base / candidate / contract | Active / candidate / candidate's compiled | Active / active / active | Active / active / active | Restored active / T's package / T's compiled | — / active / active |
+| Approval; applicability review | Required; required (B) | Required; required against `history_ref` | None (no semantic change) | Required; fresh review required (B) | None |
+| Extra request fields | — | `history_ref` | — | `adopt_child` = marker child | — |
+| Preconditions beyond §1.5 | Candidate present | Not finalized or ready; no handoff of any route (`revision-custody-retained`) | No journal; branch snapshot package ≠ active package; active `authority.json` = runtime contract digest | Marker `pending`; T verified (§ Fresh-host restore); T's tree and parent equal the computed child's; no handoff (none survives a restore) | Branch at `last_reviewed_commit` |
+| A1b | Ready only | n/a (refused while finalized or ready) | Ready only | Ready only; permitted heads: finalized head and T | n/a |
+| A2 | U3 (b) handoff only | n/a | n/a (refused with any handoff) | n/a | n/a |
+| A3 | New child via the schema-2 intent | n/a (no head move) | New child of the same active package | No new commit: CAS `update-ref` to T, path-limited checkout | New child via the schema-2 intent |
+| A4 writes | Package, contract, frontier, admission, generation, coordination receipt, checkpoint and state queue, `head-drift` when finalized | Frontier (binding reset plus records), generation, state queue | Coordination receipt, generation, checkpoint queue, `head-drift` when finalized | As `revision` | Coordination receipt and `last_reviewed_commit` (existing owner) |
+| A5 | Branch push, then state | State only | Branch push, then state | State only; the branch push is a verified no-op (remote already T) | Existing checkpoint publication |
+| Loader successor (remote branch) | Base head or expected child | Base head only | Base head or expected child | T only | Existing replay |
+| Restart owner | Identical call or `reconcile-revision-activation` | Same | `reconcile-revision-snapshot` only | Same as `revision` | Checkpoint supervisor's snapshot replay |
+
+**Deterministic child commit (A2a; D17, D28, D32).** The existing owner writes package files into the
+worktree, stages them and runs `git commit` (`workspace_snapshots.py:241-255`); its rollback runs only for an
+`Exception` (`:257`), not a process death, and its replay requires a clean worktree (`:238`, `:294`), so a crash
+between the write and the commit can never resume. Its durable intent, `ChangeDesignPackageSnapshotIntent`
+schema 1 (`workspace_models.py:1055` on `dev`, `:1103` at `9a7fff990`), holds only operation, Change, package, branch,
+worktree and expected head: no dates, tree or child SHA, so no caller can replay deterministically. N04-A2a
+replaces `_commit_design_package_snapshot` for every caller (first-checkpoint snapshot and, from A2b,
+activation and legacy reconcile):
+
+1. **Carrier.** `ChangeDesignPackageSnapshotIntent` schema 2 (widen 1, 2) adds `blob_ids` (the four package
+   blobs), `child_tree`, `child_commit`, `commit_time` (integer UTC seconds, fixed when the intent is first
+   written), `message`, `signed` and `pin_ref`; author and committer are the constant `OwlBear
+   <owlbear@localhost>`. `intent_id` covers every field. It is the only carrier: an activation journal names
+   its `intent_id` and never repeats the child identity.
+2. **Build and pin (before the intent).** `git hash-object -w` the four files; a temporary `GIT_INDEX_FILE`
+   reads the parent tree and `update-index --cacheinfo` sets the four paths; `write-tree`; `commit-tree` with
+   parent = expected head, the constant identity, both dates = `commit_time`, message `chore: snapshot admitted
+   Design package (<change>, <operation_id>)` (`chore: activate Design revision (…)` for activations). The
+   object is pinned at `pin_ref` = `refs/owlbear/snapshot-children/<change>/<operation_id>` with
+   `update-ref <pin> <child> ""` (create-only), then the intent is written. No hook runs (D32).
+3. **Signing (D32).** The repository's own `commit.gpgsign` decides, as for today's `git commit`. Unsigned:
+   `--no-gpg-sign`. Signed: one `commit-tree -S`; a signing failure refuses `snapshot-signing-failed` before
+   the intent. Either way the pinned object is the authority: replay reads it, never recomputes or re-signs; a
+   missing pinned object after the intent is contained `snapshot-child-lost` (no write). A pin without an
+   intent (crash between pin and intent) is reused by the next A0 when its parent, tree, identity and message
+   match (its `commit_time` is read back from the object); otherwise the next A0 deletes it (no authority) and
+   pins anew.
+4. **Move (A3).** `update-ref` with the expected old value (CAS), then for the worktree (whose HEAD follows the
+   branch): `git checkout <child> -- <four paths>` updates index and files for those paths only.
+5. **Replay classifier**, per package path: index entry and file bytes each equal either the parent's or the
    child's blob; branch at the expected head or the expected child; every other path clean
    (`status --porcelain=v1 -z --untracked-files=all` lists only package paths). Then it finishes the remaining
    sub-steps. A package path with other bytes, any other dirty or untracked path, or a branch elsewhere →
    contained `revision-workspace-unclean` with the exact paths; nothing is written or deleted.
+6. **Receipt and cleanup.** The coordination update storing the receipt clears the intent; the pin is deleted
+   afterwards by idempotent cleanup (a leftover pin whose operation has a receipt is deleted at the next call).
+7. **Existing schema-1 intents** (a pre-N04 crash) are treated at the next snapshot call under the publication
+   lock: branch at a direct child with the legacy message and the package bytes → the existing legacy replay
+   completes the receipt (the commit is already durable on the branch); branch at the expected head with a
+   clean worktree → the intent is replaced by a schema-2 intent of the same operation in one coordination
+   update, then step 2 runs; branch at the expected head with only package paths dirty, each index entry and
+   file equal to the parent's or the target bytes → those paths are restored to the parent, then replaced as
+   before; anything else → contained `revision-workspace-unclean` with the paths.
 
-**Design-return preservation (A2, U3 (b); D16).** `quarantine_dirty_worktree` is not reused: it builds one tree
+**Design-return preservation (A2b, U3 (b); D16, D25, D30).** `quarantine_dirty_worktree` is not reused: it
+builds one tree
 from the filesystem through a temporary index (`workspace_snapshots.py:652-670`), so staged content that differs
 from the file is lost; `reset --hard` then discards the real index (`:451-452`); ignored files are neither
 inventoried nor verified, and Git trees keep only the executable bit. D03's raw preservation
-(`workspace_preservation.py:284`) refuses staged content (`:328-330`) and is bound to a recovery journal. N04-A2 adds
+(`workspace_preservation.py:284`) refuses staged content (`:328-330`) and is bound to a recovery journal. N04-A2b adds
 `preserve_design_return_workspace(change_id, operation_id)` in `workspace_preservation.py`, reusing D03's
 private store, index resolution, split-index refusal, path validation and bounds (`_MAX_PRESERVED_*`):
 
@@ -262,12 +324,32 @@ private store, index resolution, split-index refusal, path validation and bounds
 | --- | --- | --- |
 | HEAD | Branch head (retained unreviewed commits) pinned at `refs/owlbear/preserved/<change>/<operation_id>/head` | Branch head and worktree HEAD equal it; reviewed head is an ancestor |
 | Index | Raw index bytes (owner-private), entry records (path, mode, stage, object ID) and a tree written from a copy of the real index, committed under the head and pinned at `…/index` so staged blobs stay reachable; unmerged entries, split index, sparse or skip-worktree entries and gitlinks refused before the intent (A0) | Raw index digest and entry records equal the live index |
-| Filesystem | Every path from `status --porcelain=v1 -z --untracked-files=all` plus tracked paths differing from the index: type (file, symlink, empty directory), full permission bits (`lstat`), size, sha256, symlink target (never followed; symlinked ancestors refused); bytes in `blobs/<sha256>` | Manifest recomputed from the live worktree equals the stored one |
-| Ignored | `status --ignored=matching` inventory (path, type, mode, size, sha256), left in place | Inventory equal before cleanup and after it |
+| Filesystem | Bounded walk (below): every untracked or modified file with bytes, every symlink (target), every directory with no entries (untracked ones included, which `git status` omits), and every tracked clean file whose permission bits differ from Git's canonical 0644/0755 for its index mode (mode exception: path, `lstat` mode, index object ID; no bytes). Each entry: type, full permission bits, size, sha256 where bytes exist; bytes in `blobs/<sha256>` | Walk manifest recomputed from the live worktree equals the stored one |
+| Ignored | Each ignored file (path, type, mode, size, sha256) and each ignored directory as one undescended entry (path, mode), left in place; every entry passes the collision check | Inventory and collision check equal before cleanup; inventory equal after it |
+
+**Bounded walk (D30).** `os.scandir` from the worktree root with `lstat`; symlinks are recorded, never
+followed, and symlinked ancestors are refused; the `.git` entry is skipped; entries Git reports as ignored by
+`status --porcelain=v1 -z --ignored=matching --untracked-files=all` are recorded but not descended. Two bounds,
+both checked in A0 before the intent: visited entries ≤ `_MAX_DESIGN_RETURN_WALK_ENTRIES` (fixed at A2b start
+from the largest supported fixture, G16) and recorded entries and bytes within D03's `_MAX_PRESERVED_PATHS`,
+`_MAX_PRESERVED_FILE_BYTES` and `_MAX_PRESERVED_TOTAL_BYTES`. A nested repository (a directory holding `.git`)
+is refused. Clean tracked files with canonical modes are reproduced from the head and index refs; restore
+applies each recorded mode explicitly, so the restoring process's umask cannot change the result.
+
+**Collision check (D25).** `reset --hard <reviewed head>` writes every path tracked at the reviewed head R and
+replaces a file by a directory or the reverse, so it can overwrite or delete an ignored entry whose bytes the
+inventory does not hold (for example, a file tracked at R, deleted by a retained commit and later recreated as
+an ignored local file). Let P(R) be `ls-tree -r -z --name-only R`. An ignored entry at path p collides when
+p ∈ P(R), p is an ancestor directory of some r ∈ P(R), or some r ∈ P(R) is an ancestor of p. A0 computes
+the check from the walk and refuses `revision-preservation-collision` with the paths before the intent; nothing
+is captured, moved or cleaned. A2 repeats it on the live worktree before cleanup; a new collision fails
+verification and nothing is cleaned. Untracked (not ignored) entries need no check: their bytes are captured
+and verified before cleanup.
 
 Cleanup is `reset --hard <reviewed head>` and `clean -fd` (never `-x`). Post-cleanup verification: worktree at
-the reviewed head, index equal to its tree, no untracked path, ignored inventory unchanged. Bounds exceeded or a
-refused entry kind is detected in A0 and refuses `revision-preservation-unsupported` before the intent. The
+the reviewed head, index equal to its tree, no untracked path, ignored inventory unchanged; it is a
+consistency check, not the guard (the collision check is). Bounds exceeded or a refused entry kind is
+detected in A0 and refuses `revision-preservation-unsupported` before the intent. The
 receipt `DesignReturnPreservationReceipt` (in `local.json` and the revised Planner context) names the refs and
 manifest digest. A test-only `restore_design_return_preservation` into a scratch worktree reproduces HEAD,
 `git ls-files -s` entries and the filesystem manifest exactly (merge-blocking falsifiers, §3.3).
@@ -275,25 +357,45 @@ manifest digest. A test-only `restore_design_return_preservation` into a scratch
 **Fresh-host restore (A5; D18).** On a fresh host, a crash after the branch push and before the state push
 leaves the remote branch one commit ahead of the snapshot's `change_head`. Today's loader then raises
 `_DeferredRemoteStateReconciliationError` (`delivery_application_loader.py:734-751`, `:2211-2221`) and does not
-restore the Change: it is invisible and has no route. N04-A2 adds a verified restore policy:
+restore the Change: it is invisible and has no route. N04-A2b adds a verified restore policy:
 
 1. **Classify.** The remote tip T is a *verified activation child* iff its only parent is `change_head`, its
    diff touches only the four package paths, its message matches the activation message pattern with an
    operation ID, and its package verifies (`DesignPackageStore` manifest and authority checks) while the package
    at `change_head` equals the snapshot's `package_id`. Anything else keeps today's diagnostic.
 2. **Restore old, preserve T.** Restore the snapshot's approved state at `change_head` (package, local branch
-   and worktree at `change_head`), pin T at `refs/owlbear/remote-activations/<change>/<operation_id>` (local only),
-   and record `ChangeCoordination.remote_activation_pending {operation_id, child, parent, restored_frontier_digest}`
-   in the restore transaction. Readiness `revision-remote-activation-pending`; every start is refused (hold
-   semantics with no exceptions). The remote branch is never pushed to, reset or force-updated from this host,
-   and T is never treated as reviewed authority.
-3. **Resolve.** (i) The origin host publishes its state: at the next startup the remote snapshot's
-   `change_head` equals T; if local runtime bytes still equal `restored_frontier_digest` with no custody and no
-   pending publication, the loader restores the new snapshot over the old one in one transaction and clears the
-   marker. (ii) The origin host is lost: `/design <change>` offers T's package as the candidate; after user
-   approval and full A0 validation (including a fresh applicability review), this host's activation adopts T as
-   its child iff T's parent and tree equal the computed child (message aside), so A5 pushes nothing new. (iii) Any
-   other revision is refused `revision-remote-activation-pending` until (i) or (ii) (G12).
+   and worktree at `change_head`), pin T at `refs/owlbear/remote-activations/<change>/<operation_id>` (local
+   only), and record in the restore transaction `ChangeCoordination.remote_activation_pending {operation_id,
+   child, parent, state: pending, resolution_operation_id: null, restored}`. `restored` fences everything the
+   restore wrote: package ID, contract, admission and frontier digests, the coordination digest computed with
+   the marker omitted, branch head, raw index digest and the bounded-walk manifest digest of the clean worktree
+   (D30), each measured after the restore. Readiness `revision-remote-activation-pending`; every start is
+   refused except E6, E7 and E8 (§1.5). The remote branch is never pushed to, reset or force-updated from this
+   host, and T is never treated as reviewed authority.
+3. **Resolve.**
+   - (i) **Origin publishes (D29).** At a later startup the remote snapshot's `change_head` equals T. The loader
+     replaces the old state with the new snapshot only if every `restored` value still matches (package,
+     contract, admission, frontier, coordination without the marker, branch, index and walk manifest), no
+     custody, candidate, hold or pending publication exists and the marker is `pending`. The replacement is
+     one runtime transaction plus the A3 sub-steps (CAS `update-ref` to T, path-limited checkout) with the A3
+     classifier on restart; it clears the marker. A mismatch replaces nothing. A differing index or worktree is
+     contained: readiness stays `revision-remote-activation-pending` with detail
+     `remote-activation-local-divergence` and the exact paths, and the user resolves it through E7, after
+     which the next startup re-evaluates. A differing package, contract, admission or coordination cannot come
+     from any Delivery writer while the marker refuses them, so it is treated as out-of-band state: the
+     existing bootstrap integrity diagnostic makes the Change unavailable, nothing is overwritten (V20).
+   - (ii) **Origin lost (D26).** `/design <change>` offers T's package as the candidate (the candidate slot is
+     written under E6 only with bytes equal to T's package). After user approval, a fresh applicability review
+     and full A0 validation, `activate_revision` kind `remote-child` with `adopt_child` = T runs under E6: its
+     A1 sets the marker `resolving` with its operation ID in the intent transaction; T's parent and tree must
+     equal the computed child's (message and dates aside; else `remote-child-mismatch` before the intent), so
+     A3 moves the local branch to T and A5 pushes no
+     branch. For a formerly ready Change the restored state is ready at `change_head` while the provider's PR
+     head is T (the origin's A1b preceded its push): A1b observes the PR and accepts T as a permitted head;
+     already draft → no provider write; ready at T (re-marked externally) → `return_to_draft` with
+     `exact_head` = T; merged → refused at A0 `change-attention`. A4 clears `ready` and `finalization` with
+     `head-drift` (change_head → T); A6 clears the marker.
+   - (iii) Any other revision is refused `revision-remote-activation-pending` until (i) or (ii) (G12).
 
 **Generation history (D20).** Today `revisions/<contract digest>/` is written with create participants
 (`delivery_admission.py:425-429`); a second departure from the same contract writes different frontier bytes to
@@ -320,7 +422,10 @@ frontier, history frontier for reassessment, N03 evaluator. Per candidate criter
 `unchanged` (same ID and version), `revised` (same ID, new version), `new`, `legacy-version-match` (legacy IDs
 match only by version), `legacy-unmatched`; prior N03 status under the base; the observations, results and
 applicability records that established it. Also retired criteria, `_invalidated_outcomes`, affected blocks and
-requests, custody and handoff impact. `impact_digest` = sha256 of its canonical JSON.
+requests, custody and handoff impact, and per reused human step the confirmation it needs. `impact_digest` =
+sha256 of its canonical JSON computed with the frontier's `confirmations` ledger omitted (cited receipts still
+name their own confirmation IDs), so capturing a candidate-scoped confirmation after the review does not stale
+the review; A0 checks every selected confirmation against the live ledger.
 
 **Reviewer** (`build-reviewer`, mode `applicability`): given the impact view, the contract delta, the cited
 receipts and the code diff since each cited commit over the task's maintained surfaces. It returns
@@ -339,30 +444,68 @@ criteria without prior evidence need none (they are `uncovered`). `reviewer_id !
 
 **Records.** Activation writes `DeliveryApplicabilityRecord{record_id, operation_id, acceptance (new ref),
 disposition, sources (≤ 8 embedded receipts, schema 1 or 2, unchanged, plus their source acceptance refs),
-confirmation_ids (≤ 8, ledger IDs, D23), rationale (≤ 480), missing_scope, changed_assumption, search_note,
-review_id, reviewer_id}` onto the binding of each invalidated outcome. The N03 fold processes a binding's
-applicability records before its task results, so later evidence closes or reopens gaps (N03 D5).
+confirmations (≤ 8 selections {source_observation_id, confirmation_id}, D23, D27), rationale (≤ 480),
+missing_scope, changed_assumption, search_note, review_id, reviewer_id}` onto the binding of each invalidated
+outcome. The N03 fold processes a binding's applicability records before its task results, so later evidence
+closes or reopens gaps (N03 D5).
 
 **Confirmation authority (D23; N03 (as amended by #360) §1.5, I6, I10, §1.9).** Portable authority for a
 reused human step or waiver is the Change-wide append-only ledger `DeliveryFrontier.confirmations`, which
 travels in every snapshot and which `_reset_binding`, request-history moves and activation leave unchanged. It is
-never a request, a request in `revisions/` history or a caller provenance value. For each `reusable` record:
+never a request, a request in `revisions/` history or a caller provenance value. For each `reusable` record,
+every cited source that needs a human step has exactly one selection; the source receipt stays embedded
+unchanged with its original `confirmation_id`:
 
-- A cited schema-2 `waived` or `human-confirmed` receipt contributes its own `confirmation_id`; a cited legacy
-  (schema-1) human-procedure receipt under U1 (a) needs a `confirm-check` confirmation captured through the N03
-  D13 boundary for the candidate criterion version and the receipt's `command_or_procedure` text.
-- The engine resolves each ID with `resolve_confirmation(frontier, id)` and checks it with
+- **Same ID and version** (`unchanged`): the selection is the source's own `confirmation_id`.
+- **`revised`, `new` or legacy-matched criterion, or a legacy (schema-1) human-procedure receipt under U1 (a):**
+  the source's original confirmation is `stale-acceptance-version` for the candidate (N03 §1.9; the impact view
+  shows it as such), so the selection must name a candidate-scoped confirmation captured by
+  `confirm_revision_criterion` (below). No selection, or a selection of the original →
+  `applicability-confirmation-version-changed`.
+- The engine resolves each selection with `resolve_confirmation(frontier, id)` and checks it with
   `confirmation_applies` on a `DeliveryConfirmationUse{change_id, outcome_id, acceptance refs, procedure,
   required decision}` (N04-B generalizes N03's observation argument to this view; the observation path becomes
   one caller; G13): same Change; the record's outcome; scope containing the exact candidate `(acceptance_id,
-  acceptance_version)`; the exact procedure; the affirmative decision for the use (`waive`, or `passed`).
-- For a `revised`, `new` or legacy-matched criterion an old confirmation is `stale-acceptance-version` (N03
-  §1.9): the review is refused `applicability-confirmation-version-changed` until the user confirms the new
-  version through the boundary. Same ID and version: the original confirmation applies.
+  acceptance_version)`; procedure equal to the source receipt's `command_or_procedure`; the affirmative
+  decision for the source (`waive` for a waiver, `passed` for a human-confirmed or legacy human receipt).
 - The check runs three times with identical inputs and results: at A0 (before the intent), in the evaluator
   fold after the reset moved requests to history, and after a fresh-host restore from the published snapshot.
   An ID absent from the ledger is `confirmation-unresolved`. A B1-style request resolved through the old
   caller-provenance route confers nothing (N03 R14).
+
+**Candidate-scoped confirmation capture (D27).** N03's boundary answers only an existing scoped request of the
+active frontier through MCP `answer`, and a candidate criterion version is not in the active contract, so N04-B
+adds one capture tool that reuses N03-A's D13 machinery unchanged:
+`confirm_revision_criterion(change_id, expected_candidate_package_id, expected_frontier_digest, outcome_id,
+scope: DeliveryConfirmationScope, source_observation_id | None)`.
+
+- **Boundary.** One server-injected `confirmation: Annotated[DeliveryConfirmationOutcome,
+  Resolve(revision_confirmation_question)]`, registered by N03-A's `_flatten_tool` change and absent from the
+  input schema; channel check first (`channel-unavailable`); legacy and modern routes; the default
+  `RequestStateBoundary` binds the method, tool and the digest of all six arguments; `decline` or `cancel` →
+  `declined`, nothing written; no lock is held while the user answers. Cockpit has no capture route and
+  refuses `channel-unavailable` until N03 U2 decides (G17).
+- **Question.** Rendered only while a `purpose: revision` hold exists, the candidate ID and frontier digest
+  equal the expected values and every scope ref is a criterion of `outcome_id` in the candidate's compiled
+  contract at that exact version. It shows the Change, outcome, each candidate criterion ID, version and
+  statement, the procedure, and for a reuse the source receipt's verdict, exact commit and procedure text
+  (`scope.procedure` must equal it).
+- **Request and receipt.** The engine synthesizes `DeliveryRequest{request_id: "REQ-REVISION-" +
+  sha256(canonical {change_id, candidate_package_id, outcome_id, scope, source_observation_id})[:24], kind:
+  decision, outcome_id, summary, applies_to: scope}`. It is never placed in a binding (it is not active work
+  and names candidate versions). On `accept`, one transaction under the `expected_frontier_digest` CAS, through
+  the declared facade writer `append_revision_confirmation` (`_NORMAL_CHANGE_MUTATIONS`, K7; E5 under the
+  hold): the frontier successor equals its predecessor plus one ledger entry built as N03 §1.5 builds it
+  (`request_id`, `scope`, `decision`, `channel: mcp-elicitation`, `question_digest`) and nothing else, and
+  `RevisionConfirmationReceipt` v1 `{change_id, candidate_package_id, outcome_id, request (resolved:
+  provenance user-confirmed, confirmation_id), confirmation, predecessor_frontier_digest,
+  successor_frontier_digest, receipt_id}`.
+- **Replay.** The ledger append is published by the normal pending state publication. While a retained handoff
+  suppresses publication (P9), the receipt is replay authority: N04-B adds it to N03's L row as a ledger-suffix
+  source; an entry no receipt binds, a bound entry missing locally, a byte difference or a broken predecessor
+  chain fails bootstrap exactly as in N03 (V20).
+- **Selection, not creation.** Activation and reassessment still never append (I11): the confirmation exists in
+  the ledger before A0, and the record's selection names it.
 
 The impact view shows each prior `waived` status and each cited confirmation, so the approval names every waiver
 the revision ends.
@@ -370,8 +513,8 @@ the revision ends.
 **Finalization basis (D24).** N03's basis digest (`{schema: 1, contract_digest, change_head, diff_base,
 result_digests, acceptance}`) does not cover applicability records or their confirmations, yet both decide
 coverage. When any binding carries applicability records, N04-B computes basis schema 2: schema 1 plus
-`applicability` (record IDs in fold order) and `confirmations` (the ledger IDs those records cite, in fold
-order, each with its decision). Without records the basis stays schema 1 byte-identical. `semantics` adds the
+`applicability` (record IDs in fold order) and `confirmations` (each record's selections in fold order, each
+with its decision). Without records the basis stays schema 1 byte-identical. `semantics` adds the
 records and cited confirmations within N03's all-or-nothing budget. A review bound to the old basis is refused
 `review-basis-stale` whenever applicability changes, including at the same head (reassessment moves no head).
 
@@ -408,18 +551,20 @@ step; any intervening merge (N05-B, N08) is absorbed by the renumber rule.
 | Family | Change | Phase | Old records |
 | --- | --- | --- | --- |
 | `coordination` | v2 → v3 (widen 2, 3): `revision_hold` (omitted when `None`); K4 digest excludes it | A1 | Unchanged; first write emits v3 |
-| `coordination` | v3 → v4 (widen 2–4): `revision_hold.activation_operation_id`; `remote_activation_pending`; nested `continuation_action: ChangeContinuationAction` kind widened with `reconcile-revision-activation`, `reconcile-revision-snapshot` and optional `revision_operation_id` (required for those kinds, `exclude_if` None); a v2 or v3 instance holding any of these is rejected; K4 digest excludes the new fields | A2 | Unchanged; first write emits v4 |
-| `action_receipt` (R, unversioned: `intent.json`, `started.json` = `ChangeContinuationAction` content; `result.json` = `DeliveryEngineActionResult`) | Same nested widening; existing receipt bytes, `continuation_start_recorded` byte equality and operation IDs unchanged (new fields absent); result kinds and reason codes reused (re-checked at A2 start; a needed new value is an A2 schema change under this row) | A2 | Unchanged; covered by A2's marker step (a predecessor refuses the marker before parsing) |
+| `coordination` | v3 → v4 (widen 2–4): nested `design_package_snapshot_intent` schema 2 (widen 1, 2; §1.6 carrier, D28); a v2 or v3 instance holding a schema-2 intent is rejected; schema-1 intents stay valid and are treated by §1.6 step 7 | A2a | Unchanged; first write emits v4; a pending schema-1 intent is replaced only by the snapshot owner |
+| `coordination` | v4 → v5 (widen 2–5): `revision_hold.activation_operation_id` and `purpose`; `remote_activation_pending` (with `state`, `resolution_operation_id`, `restored`); nested `continuation_action: ChangeContinuationAction` kind widened with `reconcile-revision-activation`, `reconcile-revision-snapshot` and optional `revision_operation_id` (required for those kinds, `exclude_if` None); an older instance holding any of these is rejected; K4 digest excludes the new fields | A2b | Unchanged; first write emits v5 |
+| `action_receipt` (R, unversioned: `intent.json`, `started.json` = `ChangeContinuationAction` content; `result.json` = `DeliveryEngineActionResult`) | Same nested widening; existing receipt bytes, `continuation_start_recorded` byte equality and operation IDs unchanged (new fields absent); result kinds and reason codes reused (re-checked at A2b start; a needed new value is an A2b schema change under this row) | A2b | Unchanged; covered by A2b's marker step (a predecessor refuses the marker before parsing) |
 | `package_candidate` (new) | `runtime/package-candidates/<c>/manifest.json` (owner `DesignPackageManifest` v1, M), `authority.json` (`allow_empty`), documents (`read=False`) | A1 | None exist |
-| `revision_activation` (new) | `revision-activations/<op>/(intent\|local\|result).json`: models v1, R | A2 | None exist |
-| `revision_preservation` (new) | `revision-activations/<op>/preservation/manifest.json` (`DesignReturnPreservationManifest` v1, R); `blobs/<sha256>` (`read=False`, owner-private) | A2 | None exist |
-| `revision_generation` (new) | `revisions/generations/<op>/generation.json` (`RevisionGeneration` v1, R); `revisions/generations/<op>/(contract\|frontier\|admission).json` (H, `read=False`); regex disjoint from `revision_record`'s 64-hex segment | A2 | None exist |
+| `revision_activation` (new) | `revision-activations/<op>/(intent\|demotion\|local\|result).json`: models v1, R | A2b | None exist |
+| `revision_preservation` (new) | `revision-activations/<op>/preservation/manifest.json` (`DesignReturnPreservationManifest` v1 with walk, mode-exception and ignored entries, R); `blobs/<sha256>` (`read=False`, owner-private) | A2b | None exist |
+| `revision_generation` (new) | `revisions/generations/<op>/generation.json` (`RevisionGeneration` v1, R); `revisions/generations/<op>/(contract\|frontier\|admission).json` (H, `read=False`); regex disjoint from `revision_record`'s 64-hex segment | A2b | None exist |
+| `revision_confirmation` (new) | `revision-confirmations/<confirmation_id>.json` (`RevisionConfirmationReceipt` v1, R) | B | None exist |
 | `revision_record` (legacy H) | Unchanged; read only through `legacy:` history refs | — | Unchanged |
-| `frontier` | 19 → 20 (widen 19, 20): binding `applicability` (omitted when empty); `confirmations` carried unchanged (N03 I10); stored-byte contract and comparison inventory of N03 §1.7 extended by the new successor row | B | `readable-legacy`; no rewrite (N03 D3) |
+| `frontier` | 19 → 20 (widen 19, 20): binding `applicability` with confirmation selections (omitted when empty); `confirmations` appended only by `confirm_revision_criterion`, never by activation (N03 I10); stored-byte contract and comparison inventory of N03 §1.7 extended by the new successor row and the L-row revision-confirmation source | B | `readable-legacy`; no rewrite (N03 D3) |
 | `snapshot` (remote) | 3 → 4 widen (embeds the frontier) | B | Parse natively |
 | Receipts embedding bindings or frontiers (N03 §1.7 list) | Widen | B | Unchanged |
 | Finalization review basis | Basis schema 2 when records exist (§1.7 D24); a computation, not a stored family (the review stores only `basis_digest`) | B | Schema-1 reviews unchanged |
-| `format` marker | One marker-only step per phase A1, A2 and B | A1, A2, B | — |
+| `format` marker | One marker-only step per phase A1, A2a, A2b and B | A1, A2a, A2b, B | — |
 | `contract`, `admission`, `package` | Unchanged | — | — |
 
 Downgrade: a predecessor release refuses the new format and versions before parsing (N02 D3). The
@@ -433,13 +578,15 @@ finalized or ready Change instead, so no nested literal changes.
 | `revise_design_session(change_id, expected_package_id, intent, design)` | A1 | Unadmitted: unchanged. Admitted nonterminal: `expected_package_id` is the current candidate ID, or the active authored ID to open the first candidate; writes only the candidate slot and opens the hold in one transaction. `_admitted_design_revision_allowed` is removed |
 | `read_revision_candidate(change_id)` / `discard_revision_candidate(change_id, expected_package_id)` | A1 | Candidate or `None`; discard removes the candidate and clears the hold; refused after an intent |
 | `derive_delivery_contract(change_id, candidate=True)` | A1 | Compiles the candidate without publication |
-| `admit_change` / `admit_delivery_change` | A2 | First admission and worktree-recovery admission only; an admitted Change → `revision-requires-activation`. `preserve_unresolved_outcome_ids`, `expected_frontier_digest` and `expected_design_package_snapshot_receipt_id` are removed from the request |
-| `activate_revision(DeliveryRevisionActivationRequest)` | A2 (B adds the review and `reassess`) | `{kind: revision \| reassess, change_id, expected_base_package_id, expected_candidate_package_id, expected_contract_digest, expected_head, expected_frontier_digest, history_ref (reassess only), approval, applicability_review, handoff_disposition}` → `DeliveryRevisionActivationResult{operation_id, kind, state: intent \| local \| published \| released \| superseded-by-merge, replayed}`; `snapshot-reconcile` runs only as an engine action |
-| Engine actions `reconcile-revision-activation`, `reconcile-revision-snapshot` | A2 | Selected before every other action of the Change; executable through `acquire_change_action` / `execute_change_action` under hold exception E3; the action carries `revision_operation_id` |
+| `admit_change` / `admit_delivery_change` | A2b | First admission and worktree-recovery admission only; an admitted Change → `revision-requires-activation`. `preserve_unresolved_outcome_ids`, `expected_frontier_digest` and `expected_design_package_snapshot_receipt_id` are removed from the request |
+| `activate_revision(DeliveryRevisionActivationRequest)` | A2b (B adds the review, the confirmation selections and `reassess`) | `{kind: revision \| reassess \| remote-child, change_id, expected_base_package_id, expected_candidate_package_id, expected_contract_digest, expected_head, expected_frontier_digest, history_ref (reassess only), adopt_child (remote-child only), approval, applicability_review, handoff_disposition}` → `DeliveryRevisionActivationResult{operation_id, kind, state: intent \| local \| published \| released \| superseded-by-merge, replayed}`; `snapshot-reconcile` runs only as an engine action; per-kind rules in §1.6 |
+| `open_revision_hold(change_id, expected_frontier_digest, purpose: reassess)` | B | Opens the hold for a reassessment (no candidate); `clear_revision_hold` closes it before an intent |
+| `confirm_revision_criterion(...)` (MCP; D13 boundary) | B | §1.7 candidate-scoped capture; refusals `channel-unavailable`, `declined`, `ledger-full` (N03 `ERR_DELIVERY_CONFIRMATION`) and `revision-hold-absent`, `candidate-stale`, `frontier-stale`, `confirmation-scope-invalid` |
+| Engine actions `reconcile-revision-activation`, `reconcile-revision-snapshot` | A2b | Selected before every other action of the Change; executable through `acquire_change_action` / `execute_change_action` under hold exception E3; the action carries `revision_operation_id` |
 | `preview_revision_impact(change_id, history_ref=None)` | B | Impact view and digest; lists eligible history refs (generation and legacy) |
 | `show_revision_context(change_id)` | C | Active proposal, candidate, hold, criteria with N03 identities, per-outcome stage, task and evidence history, current blocks and requests, Design-return context, activation state |
-| Readiness reasons `revision-hold`, `revision-activation-pending`, `revision-snapshot-stale`, `revision-remote-activation-pending` | A1, A2, A2, A2 | Each with TypeScript mirror, rendering, component test and parity (R16) |
-| Error | A1–B | `DeliveryRevisionError(DeliveryRuntimeConflictError)`, code `ERR_DELIVERY_REVISION`, `reason` in: `change-terminal`, `change-paused`, `change-attention`, `review-repair-open`, `revision-hold-absent`, `candidate-stale`, `base-stale`, `contract-mismatch`, `frontier-stale`, `revision-custody-active`, `revision-drain-pending`, `revision-custody-retained`, `revision-workspace-unclean`, `revision-preservation-unsupported`, `handoff-disposition-required`, `design-return-lineage-changed`, `activation-pending`, `operation-conflict`, `revision-requires-activation`, `revision-snapshot-stale`, `revision-remote-activation-pending`, `reassess-requires-unfinalized`, `reassess-history-invalid`, `applicability-review-required`, `applicability-review-incomplete`, `applicability-review-stale`, `applicability-confirmation-version-changed`, `confirmation-unresolved`, `confirmation-not-applicable`, `reviewer-not-independent` |
+| Readiness reasons `revision-hold`, `revision-activation-pending`, `revision-snapshot-stale`, `revision-remote-activation-pending` (detail `remote-activation-local-divergence` with paths) | A1, A2b, A2b, A2b | Each with TypeScript mirror, rendering, component test and parity (R16) |
+| Error | A1–B | `DeliveryRevisionError(DeliveryRuntimeConflictError)`, code `ERR_DELIVERY_REVISION`, `reason` in: `change-terminal`, `change-paused`, `change-attention`, `review-repair-open`, `revision-hold-absent`, `candidate-stale`, `base-stale`, `contract-mismatch`, `frontier-stale`, `revision-custody-active`, `revision-drain-pending`, `revision-custody-retained`, `revision-workspace-unclean`, `revision-preservation-unsupported`, `revision-preservation-collision`, `snapshot-signing-failed`, `snapshot-child-lost`, `handoff-disposition-required`, `design-return-lineage-changed`, `activation-pending`, `operation-conflict`, `revision-requires-activation`, `revision-snapshot-stale`, `revision-remote-activation-pending`, `remote-child-mismatch`, `reassess-requires-unfinalized`, `reassess-history-invalid`, `applicability-review-required`, `applicability-review-incomplete`, `applicability-review-stale`, `applicability-confirmation-version-changed`, `confirmation-unresolved`, `confirmation-not-applicable`, `confirmation-scope-invalid`, `reviewer-not-independent`. `snapshot-signing-failed`, `snapshot-child-lost` and `revision-workspace-unclean` also surface from the first-checkpoint snapshot (A2a) as workspace failures with the same reason |
 | MCP | each phase | Strict models for every new or changed tool in the phase that introduces it; error code mapping in `target_server.py` |
 | HTTP / Cockpit | C | `GET /api/changes/{id}/revision` (revision context); **Change requirements** on Change detail and group: explanatory view plus copy of `/design <change-id>` (N09 D6 copy pattern); hold and activation states rendered |
 
@@ -447,13 +594,15 @@ finalized or ready Change instead, so no nested literal changes.
 
 `DesignPackageStore` (second root; ref namespace parameter) and its CAS, verification and checkpoint
 (`design_package.py:106-399`); `RuntimeTransaction` multi-root participants (`runtime_transaction.py:120-428`);
-`snapshot_design_package` intent and receipt (`workspace_snapshots.py:74-306`; its commit step replaced, D17);
+`snapshot_design_package` intent and receipt (`workspace_snapshots.py:74-306`; its commit step replaced and its
+intent widened, D17, D28);
 D03 private preservation store, index resolution, path validation and bounds (`workspace_preservation.py`) for
 U3 (b) (D16); `_delivery_frontier` and
 `_invalidated_outcomes` (`delivery_admission.py:437-604`); D02 engine actions and receipts; `_publish_delivery_state`,
 `_publish_checkpoint_branch`, `_reconcile_change_checkpoint`, `DeliveryPendingStatePublication`; N09-A2 K1–K7,
 `require_pause_permits`, drain tokens and the start-site inventory (PR #357); N03 (as amended by #360) evaluator,
-identities, `applies_to`, confirmation ledger, `resolve_confirmation`, `confirmation_applies` and basis digest;
+identities, `applies_to`, confirmation ledger, `resolve_confirmation`, `confirmation_applies`, basis digest, D13
+`Resolve` registration and question rendering, and the L-row ledger replay;
 the provider's `return_to_draft` draft-state operation (`ReturnChangePullRequestToDraft`); `FinalizationReportStore`
 retire; `DeliveryFinalizationInvalidationReceipt`; the N02 registry, `delivery-migrate`, `delivery-lc`;
 `Client(assemble_target_server(...))`, the Cockpit HTTP client and the E2E stack.
@@ -516,8 +665,9 @@ Agent-settled with probe evidence:
 - **D10 Remove the carry-forward path and its request fields** (execution plan: no compatibility paths).
 - **D11 Legacy reconcile action** for pre-N04 revisions (P1, P2: live B1's branch holds package `7fd20cc1`
   while its active, local and remote package is `5f18111f`).
-- **D12 Re-split N04-A into A1 and A2** (§3.7): hold and candidate before the activation operation, each with
-  its adapters and companions.
+- **D12 Re-split N04-A into A1, A2a and A2b** (§3.7; round 2 split A2): hold and candidate; then deterministic
+  snapshot plumbing with its format and LC companions; then activation, preservation and fresh-host recovery;
+  each with its adapters and companions.
 - **D13 Finalization invalidation reuses `head-drift`** for `revision` and `snapshot-reconcile`, which always
   move the head (child commit), so the existing validator (`runtime_models.py:564-597`, which rejects equal
   heads except for `review-repair`) accepts it without a schema change. `reassess` moves no head and therefore
@@ -556,6 +706,40 @@ Added for Sol plan gate round 1 (§6):
   its own token and records the invalidation in A4.
 - **D23 Confirmation authority from the N03 ledger** (finding 8): no request, history or provenance route.
 - **D24 Applicability in the finalization basis** (finding 9): basis schema 2 when records exist.
+
+Added for Sol plan gate round 2 (§6):
+
+- **D25 Refuse cleanup collisions with ignored entries** (finding 1). The ignored inventory holds hashes, not
+  bytes, so the only safe rule is that `reset --hard` never writes an ignored path: A0 and the pre-cleanup
+  verification refuse a collision. Rejected: capturing ignored bytes (unbounded, and may hold secrets the user
+  never consented to move) and relying on post-cleanup verification (too late).
+- **D26 Fenced remote-child resolution and observed-head demotion** (finding 2). The marker admits exactly one
+  resolution identity (E6) with its own kind; A1b binds the provider-observed head from a permitted set and
+  journals its outcome before A3, because the provider's stored operation fixes its head
+  (`draft_pull_request.py:656-696`, stored-operation equality `:680`, `_validate_draft_state_identity`
+  `:746-762`) and the PR head follows the branch once pushed.
+- **D27 Candidate-scoped confirmation capture** (finding 3). A dedicated tool reuses N03's D13 boundary and
+  appends one ledger entry bound by its own receipt before A0; records select it beside the unchanged source
+  receipt. Rejected: eliciting inside `activate_revision` (activation would append to the ledger, against N03
+  I10 and §1.9) and placing candidate-version requests in active bindings (active work naming inactive
+  versions).
+- **D28 One durable snapshot identity carrier** (finding 4): `ChangeDesignPackageSnapshotIntent` schema 2
+  holds every input of the child commit for every caller; activation journals reference it.
+- **D29 Fully fenced fresh-host replacement** (finding 5): the marker records digests of every artifact the
+  restore wrote, including the index and the bounded-walk manifest, because an external edit leaves the
+  frontier digest unchanged.
+- **D30 Bounded filesystem walk** (finding 6): Git status omits untracked empty directories and Git trees keep
+  only the executable bit, so the inventory comes from an `lstat` walk with mode exceptions for clean files.
+- **D31 Per-kind activation contract** (finding 7): one table fixes starter, hold source, custody, fields,
+  steps, writes, loader successor and restart owner for each kind and for the plain snapshot.
+- **D32 Pinned child object; repository signing honored once; no hooks** (finding 8). The child is pinned by a
+  ref before the intent and replay never recomputes, so a signed child (whose re-signing would change the SHA)
+  stays durable. The probe on lane D shows the managed repository's pre-commit configuration excludes
+  `.owlbear/delivery/packages/` (only the warning-only `todo-check` runs on every commit), and package bytes
+  are engine-verified authority that any rewriting hook already fails today's byte check, so `commit-tree`
+  runs no hooks; server-side checks on the pull request are unaffected.
+- **D33 Split A2 into A2a and A2b** (reviewer advice): A2a is independently useful (it makes today's
+  first-checkpoint snapshot crash-safe) and carries its own format, fingerprint and LC companions.
 
 #### U1 — May reviewed applicability attribute legacy evidence?
 
@@ -640,6 +824,13 @@ Ran on `ac3bf23f9` in the lane D worktree with `uv run --no-sync`; live state on
 
 N03-A…C, N02-C and N09-A2 are not merged; N04 uses their planned interfaces ([G1](#5-verification-gaps)). Round 1
 re-read N09-A2's implementation in PR #357 (`feadd6777`) and N03's amendment in PR #360 (`9c06c97cd`), read only.
+Round 2 re-pinned both (`9a7fff990`: `repair_quarantined_delivery_state_snapshot` joined
+`_APPLICATION_PAUSE_GATED_ENTRIES` and `_PAUSE_EXEMPT_PROVIDER_ENTRIES` was removed, no other inventory change;
+`86289635f`: D13 routes, receipt-bound ledger replay, U2 widened and open) and added P10.
+
+| ID | Executed | Result | Premise settled |
+| --- | --- | --- | --- |
+| P10 | Round 2, read only in lane D: `git --version`; `git config` for `core.hooksPath`, `commit.gpgsign`, `gpg.format`; hooks in the common Git dir; `.pre-commit-config.yaml`; outputs in `.owlbear/scratch/n04r2-git.txt`, `n04r2-precommit.txt` | Git 2.56.0; no `hooksPath`, no signing configured; one installed `pre-commit` hook (pre-commit framework); its configuration excludes `.owlbear/delivery/(packages\|runtime)/`, so today's snapshot commit runs only the always-run, warning-only `todo-check`. Draft-state operations are stored once per operation ID and every call, including a replay with a stored receipt, requires the provider head to equal the stored head (`draft_pull_request.py:656-696`, `:746-762`) | D26, D32; G11 narrowed |
 
 ## 3. Phases
 
@@ -699,8 +890,11 @@ re-read N09-A2's implementation in PR #357 (`feadd6777`) and N03's amendment in 
   - Hold drain: a live Builder claim settles normally under the hold; a retained same-task handoff's successor
     claim runs (E4); an engine action started before the hold finishes (N09 K2 row reused).
   - Start-site inventory: `_HOLD_CLASSES` in `tests/test_delivery_worktree_authority.py` classifies every
-    pause-gated coordinator, manager and application entry of PR #357 as hold-refused or hold-exception; an
-    unclassified or doubly classified entry fails.
+    pause-gated coordinator, manager and application entry of PR #357 (`9a7fff990`, including
+    `repair_quarantined_delivery_state_snapshot`) as hold-refused or hold-exception; an unclassified or doubly
+    classified entry fails.
+  - E8 before any intent: a quarantined-snapshot repair runs under an open hold and leaves hold and candidate
+    unchanged.
   - Hold plus Pause: both recorded; Pause converts after drain; the hold stays; Resume leaves the hold.
   - A recovery journal issued before the hold completes after it (K4 digest unchanged).
   - Root-aware recovery: crash a package transaction at `after-first-publication` (P3 shape), restart through
@@ -729,9 +923,65 @@ re-read N09-A2's implementation in PR #357 (`feadd6777`) and N03's amendment in 
   copy; live record hashes unchanged.
 - **Size / risk:** L / high (coordination version, K3 sites, recovery roots).
 
-### 3.3 N04-A2 — Activation operation, Design-return readmission and legacy reconcile
+### 3.3 N04-A2a and N04-A2b — Snapshot plumbing; activation, Design-return readmission and legacy reconcile
+
+Two PRs (D33). A2a makes every package snapshot deterministic and crash-safe and is useful on its own: it
+repairs today's first-checkpoint snapshot (§1.6 Deterministic child commit). A2b adds the activation operation
+on top of it.
+
+#### N04-A2a — Deterministic snapshot plumbing
 
 - **Prerequisites:** N04-A1.
+- **Editable paths:**
+  - `serve/delivery/src/owlbear_delivery/workspace_snapshots.py` (`_commit_design_package_snapshot` replaced for
+    both existing callers; pin, classifier, schema-1 intent treatment, signing, pin cleanup)
+  - `workspace_models.py` (`ChangeDesignPackageSnapshotIntent` schema 2; coordination v4);
+    `workspace_coordination.py` (K6 copy of the widened field only)
+  - `state_formats.py` (coordination v4, marker step); `state_migration.py`;
+    `serve/tools/src/owlbear_tools/delivery_diagnostics.py`
+  - `owlbear_delivery/__init__.py` and `module_surface.json` only if exports change; N02 fingerprint fixture
+  - tests: new `serve/delivery/tests/test_snapshot_plumbing.py`; the existing snapshot tests in
+    `test_change_workspace.py` (or their current home); `test_state_formats.py`, `test_state_migration.py`;
+    `serve/tools/tests/test_delivery_diagnostics.py`; `tests/test_delivery_worktree_authority.py` where its Git
+    command inventory names snapshot calls
+  - this plan's A2a row; execution plan A2a status row
+- **Positive scenarios:**
+  - First-checkpoint snapshot: the branch commit equals the intent's `child_commit` (identity, dates, message,
+    only the four package paths); the pin is gone after the receipt. In a fixture repository with a
+    `pre-commit` hook that fails and one that rewrites files, the snapshot succeeds with unchanged bytes and the
+    hooks' marker files are absent (D32).
+  - Crash matrix, `BaseException` and a fresh process after each of: object and tree writes; `commit-tree`
+    before the pin; the pin before the intent; the intent before `update-ref`; `update-ref` before checkout;
+    checkout of 1, 2 and 3 of the 4 package paths (file publication); the index update before the files
+    (staging); the receipt before pin deletion. Each completes through the default loader and the checkpoint
+    supervisor with the intent's child, no second commit and a clean worktree; after the intent `commit-tree`
+    is never called again (call count over all restarts).
+  - Signed repository (`commit.gpgsign=true`, `gpg.format=ssh`, a test key): one signed child; crash after the
+    intent, then `git gc --prune=now`: the pinned object survives and replay completes with the same SHA.
+  - A pin without an intent is reused when parent, tree, identity and message match, and replaced otherwise.
+  - Schema-1 intents, one seeded per state of §1.6 step 7: a committed legacy child completes by legacy
+    replay; a clean expected head is upgraded to schema 2 and completes; package-only dirt with parent or target
+    bytes is restored and completes.
+  - The N02 fingerprint fixture records intent schema 2 and coordination v4; schema-1 intents parse
+    byte-identically.
+- **Negative scenarios:**
+  - Signing configured but failing (no key) → `snapshot-signing-failed` before the intent: no intent, no pin,
+    branch unchanged.
+  - After the intent the pinned object is removed and pruned → contained `snapshot-child-lost`, nothing written.
+  - Replay with non-package dirt or a branch elsewhere, and a schema-1 intent with any other dirt → contained
+    `revision-workspace-unclean` with the paths; nothing written or deleted.
+  - A v2 or v3 coordination holding a schema-2 intent → rejected at parse; the predecessor release refuses
+    the new marker with unchanged tree hashes.
+- **Inner loop:** `uv run pytest serve/delivery/tests/test_snapshot_plumbing.py -q`.
+- **Closeout:** `uv run test --changed`; scoped Ruff; `uv run pytest tests/test_delivery_worktree_authority.py -q`.
+- **LC:** full form: the marker step migrates; the number of live pending schema-1 intents is recorded
+  (expected 0); every live Change is available; the predecessor refuses the migrated copy; live hashes
+  unchanged; on the copy, one seeded schema-1 intent per state completes.
+- **Size / risk:** M / high (every snapshot caller; Git plumbing).
+
+#### N04-A2b — Activation operation, Design-return readmission and legacy reconcile
+
+- **Prerequisites:** N04-A2a.
 - **Editable paths:**
   - new `serve/delivery/src/owlbear_delivery/revision_activation.py` (journal, generation and preservation
     models, operation steps, operation identity)
@@ -739,20 +989,21 @@ re-read N09-A2's implementation in PR #357 (`feadd6777`) and N03's amendment in 
     generation record; request fields removed)
   - `delivery_runtime.py` facade (`prepare_revision_activation`, registered mutation; ledger append-only guard
     reused); `runtime_models.py` (`_NORMAL_CHANGE_MUTATIONS`)
-  - `workspace_snapshots.py` (deterministic child commit for every caller of `_commit_design_package_snapshot`,
-    intent-bound replay classifier, child-of-reviewed-head replacement returning a coordination participant);
-    `workspace_preservation.py` (`preserve_design_return_workspace`, test-only restore);
+  - `workspace_snapshots.py` (child-of-reviewed-head replacement over the A2a plumbing, returning a coordination
+    participant); `workspace_preservation.py` (`preserve_design_return_workspace` with the bounded walk and
+    collision check, test-only restore);
     `workspace_models.py` (`ChangeContinuationAction` kinds and `revision_operation_id`,
-    `revision_hold.activation_operation_id`, `remote_activation_pending`, coordination v4);
-    `workspace_coordination.py` (participant helpers; exceptions E1–E3; E2 token kind)
+    `revision_hold.activation_operation_id` and `purpose`, `remote_activation_pending`, coordination v5);
+    `workspace_coordination.py` (participant helpers; exceptions E1–E3 and E6–E8; E2 token kind)
   - `portfolio_application.py` (`activate_revision`, `admit_delivery_change` refusal); `application_acquisition.py`
     (engine-action selection and execution, E3); `application_publication.py` (A1b provider call, A5 owner path);
     `application_readiness.py`, `work_items.py` (`revision-activation-pending`, `revision-snapshot-stale`,
     `revision-remote-activation-pending`); `application_models.py`
   - `delivery_application_loader.py` (`_is_unpublished_revision_activation_successor` before the remote-head
-    check, legacy detection, fresh-host verified activation child restore and resolution (i))
+    check, legacy detection, fresh-host verified activation child restore with the `restored` fence, and the
+    fenced replacement of resolution (i))
   - `state_formats.py` (`revision_activation`, `revision_preservation`, `revision_generation` families,
-    coordination v4, action-receipt row, marker step); `state_migration.py`;
+    coordination v5, action-receipt row, marker step); `state_migration.py`;
     `serve/tools/src/owlbear_tools/delivery_diagnostics.py`
   - `owlbear_delivery/__init__.py`, `module_surface.json`, N02 fingerprint fixture
   - MCP `target_server.py`, `target_models.py` (`activate_revision`, changed `admit_change`); Cockpit
@@ -767,47 +1018,55 @@ re-read N09-A2's implementation in PR #357 (`feadd6777`) and N03's amendment in 
   - companion skill text (call shapes only): `w-design-session` Step 10, `designer.agent.md`,
     `w-orchestration` / `continue-change` routing of the two engine actions;
     `tests/test_agent_ecosystem_validation.py`
-  - this plan's A2 row; execution plan A2 status row
+  - this plan's A2b row; execution plan A2b status row
 - **Positive scenarios:**
   - Clean activation of a Change with two reviewed tasks (P8 shape): one child commit on the reviewed head;
     contract, frontier, admission, package and history change in one transaction; publication publishes branch
     then state; release clears the hold; acquisition resumes for the revised outcome; unchanged outcomes keep
     their bindings (V14).
-  - Crash matrix (V21), fresh process after each of: A1, A1b (after the provider call, before the next step),
-    A2 (after capture, after verification, mid-cleanup), A3 (each sub-step below), inside A4 after its first
-    participant, after A4, A5 after the branch push, A5 after the state push (response lost), before A6: restart
-    reaches the old state (before A1) or the exact new state after replay; one child commit whose SHA equals
-    the intent's; one state snapshot; blocks and requests not reset by the revision unchanged; the confirmation
-    ledger byte-identical.
-  - Deterministic child (finding 2), `BaseException` injected: after object and tree writes before the intent;
-    after `update-ref` before checkout; after the checkout has written 1, 2 and 3 of the 4 package paths
-    (file publication); after the index update but before the files (staging); after `commit-tree` before
-    `update-ref` (commit). Each restarts through the default loader and the identical call or engine action and
-    completes with the recorded child, a clean worktree and no second commit; the same matrix passes for the
-    first-checkpoint snapshot caller.
+  - Crash matrix (V21), fresh process after each of: A1, A1b (after the provider call before `demotion.json`,
+    and after it), A2 (after capture, after verification, mid-cleanup), A3 (each A2a sub-step), inside A4 after
+    its first participant, after A4, A5 after the branch push, A5 after the state push (response lost), before
+    A6: restart reaches the old state (before A1) or the exact new state after replay; one child commit whose
+    SHA equals the intent's; one state snapshot; blocks and requests not reset by the revision unchanged; the
+    confirmation ledger byte-identical.
+  - The A2a crash matrix reruns for the activation caller and for `snapshot-reconcile`.
+  - Per-kind contract (finding 7 of round 2): one parametrized test per kind of §1.6 asserts the required
+    request fields, that every "n/a" step writes nothing, the hold source and custody, the A4 artifact set and
+    the restart owner; a `reassess` journal never names a child, and `remote-child` never creates a commit.
   - Fresh-host restore (finding 3), real local bare remote, a second clone as the fresh host: (1) crash after
     the branch push, before the state push: the fresh host restores the old approved state at `change_head`,
     pins the remote child, shows `revision-remote-activation-pending` through `get_change`, MCP and HTTP, and
-    the remote branch ref is unchanged; then the origin completes A5 and the fresh host's next startup restores
-    the new snapshot over the old one; alternatively the origin is discarded and the fresh host's user-approved
-    activation of the child's package adopts the pinned child (tree and parent equal) and pushes nothing new.
+    the remote branch ref is unchanged; then the origin completes A5 and the fresh host's next startup, with
+    every `restored` value matching, replaces the old state with the new snapshot; alternatively the origin is
+    discarded and the fresh host's user-approved `remote-child` activation adopts the pinned child (tree and
+    parent equal) and pushes no branch.
     (2) crash after the state push (response lost): the fresh host restores the new state directly. Both:
     the same-host restart also converges through the journal successor (remote branch equal to the expected
     child is accepted).
+  - Origin lost for a formerly ready Change (finding 2 of round 2): the origin crashes after its branch push;
+    the fresh host restores the ready state at `change_head` with the marker; with the PR already draft at T
+    the resolution makes no provider write; with the PR re-marked ready at T it makes exactly one
+    `return_to_draft` with `exact_head` = T; A4 clears `ready` and `finalization` with `head-drift`; A5 pushes
+    no branch; A6 clears the marker. On the same host, a ready Change crashing after its A5 branch push replays
+    without any provider call (`demotion.json` present) although the PR head is now the child.
   - Both resumption routes: identical `activate_revision` and `/continue-change` engine action.
   - Ready Change (finding 5): A1 records the demotion binding; A1b demotes under the activation token while A0's
     checkpoint lock is held (no deadlock, no `review-repair` invalidation, no intermediate state publication);
     A4 clears `ready` and `finalization` with `head-drift`; readiness rebuilds. Crash after A1b, then restart:
     readiness `revision-activation-pending`, replay observes the draft PR and the ready Change activates; the
-    provider sees exactly one draft-state operation `revision-draft-<operation_id>`.
+    provider sees exactly one draft-state operation `revision-draft-<operation_id>-<finalized head>`.
   - Report-backed Finalizer attention consumed in A4; the report is retired.
   - Design-return readmission (rewritten `test_design_return_revised_admission_…`) under U3 (b), merge-blocking
     falsifiers (finding 1), each built in a real worktree before the return: a path whose staged blob differs
     from its working-tree bytes; a staged new file deleted from the working tree; an executable bit change and a
-    `0o600` file; a symlink to a file inside and one pointing outside the worktree (never followed); an untracked
-    file and an untracked empty directory; an ignored file (`.env`-style) and an ignored directory. After
+    `0o600` file; a tracked clean file whose mode changed from 0644 to 0600 (no Git diff); a symlink to a file
+    inside and one pointing outside the worktree (never followed); an untracked file and an untracked empty
+    directory (absent from `git status` output, asserted); an ignored file (`.env`-style) and an ignored
+    directory, neither colliding with the reviewed head. After
     activation: the head ref equals the old branch head; the index ref's tree and stored entry records equal
-    the original `git ls-files -s` output; the filesystem manifest equals the original `lstat`/sha256 inventory;
+    the original `git ls-files -s` output; the walk manifest equals the original `lstat`/sha256 inventory,
+    including the mode exception and the empty directory;
     the ignored inventory is unchanged in place; a test-only restore into a scratch worktree reproduces HEAD,
     index entries and filesystem manifest exactly. A crash after capture and mid-cleanup completes without a
     second capture; the revised Planner context names the preservation receipt.
@@ -817,16 +1076,19 @@ re-read N09-A2's implementation in PR #357 (`feadd6777`) and N03's amendment in 
     `sync-target` continuation (only the bound kind and operation acquire); E4 same-task successor vs a
     different-task claim racing the hold opening (exactly one of hold or claim wins; afterwards only the
     same-task successor starts). A forged `reconcile-revision-activation` action naming another operation is
-    refused.
+    refused. E6: under a `pending` marker only `remote-child` with the marker's child starts; E7: the D03
+    containment route runs only while the marker records a divergence; E8: a quarantined-snapshot repair runs
+    under a hold with no bound activation, is refused between A1 and A4, and after A4 republishes exactly the
+    `local.json` bytes.
   - Operation identity (finding 6): legacy reconcile then `reassess` on the B1 shape produce two distinct
     operation IDs, journals and generation records; each identical request replays its own result; a
     `revision` repeated over an equal package pair at a later head gets a new ID.
   - Generation history (finding 7): activations A → B → A → C each write one generation record: three records
     with ordinals 1–3 holding the replaced authority byte-correctly, contract A replaced twice (records 1 and 3)
     under different operation IDs, and C active; `legacy:` refs resolve only contract-named legacy directories.
-  - Persisted action schema (finding 10): a v3 coordination and an action receipt holding a new kind are
+  - Persisted action schema (finding 10): a v4 coordination and an action receipt holding a new kind are
     rejected by the predecessor format gate; old action receipts parse byte-identically; the N02 fingerprint
-    fixture records the widened `ChangeContinuationAction`, coordination v4 and the three new families.
+    fixture records the widened `ChangeContinuationAction`, coordination v5 and the three new families.
   - Legacy reconcile on a seeded B1 shape (branch snapshot of an older package, active package newer, remote
     snapshot of the active package): `revision-snapshot-stale`, then one action makes branch, local and remote
     agree; a fresh-host restore then succeeds.
@@ -843,14 +1105,30 @@ re-read N09-A2's implementation in PR #357 (`feadd6777`) and N03's amendment in 
     index or file bytes are neither the parent's nor the child's, or any other dirty or untracked path (an
     unrelated edit made during the crash window) → contained `revision-workspace-unclean` naming the paths; no
     write, no deletion, no second commit.
-  - Preservation: an unmerged index entry, split index, skip-worktree entry, gitlink, symlinked ancestor or a
-    bound exceeded → `revision-preservation-unsupported` before the intent; a live worktree changed between
-    capture and cleanup → verification fails, nothing cleaned, activation stays pending with the paths.
+  - Preservation: an unmerged index entry, split index, skip-worktree entry, gitlink, nested repository,
+    symlinked ancestor, a walk or capture bound exceeded → `revision-preservation-unsupported` before the
+    intent; a live worktree changed between capture and cleanup → verification fails, nothing cleaned,
+    activation stays pending with the paths.
+  - Collision falsifier (finding 1 of round 2, merge-blocking): the reviewed head tracks `config/local.env`, a
+    retained commit deletes it, the branch head's `.gitignore` ignores it, and an ignored local file with
+    secret bytes sits at that path → A0 refuses `revision-preservation-collision` naming the path; no intent,
+    capture or cleanup; the file's bytes, mode and mtime are unchanged. Variants: an ignored directory `cache/`
+    where the reviewed head tracks a file `cache`; an ignored file `build` where it tracks `build/x`; a
+    collision created between A0 and A2 → pre-cleanup verification fails and nothing is cleaned.
   - Fresh host: a remote tip that is not a verified activation child (two commits ahead, a non-package path, a
     wrong parent or message, a package that fails verification) keeps today's `remote-change-head-ahead`
     diagnostic; nothing restored, nothing pinned. With `remote_activation_pending` set, any other revision →
-    `revision-remote-activation-pending`; local work after the restore (frontier digest differs) blocks the
-    automatic replacement in resolution (i) and reports it.
+    `revision-remote-activation-pending`.
+  - Fenced replacement (finding 5 of round 2): after the restore, stage an edit to a tracked file and modify
+    another without staging, leaving every runtime file and the frontier digest unchanged; the origin
+    publishes; the next startup replaces nothing, readiness detail `remote-activation-local-divergence` lists
+    both paths, their bytes and the remote are unchanged; after E7 containment the next startup replaces.
+    Variants: an edited active package file → the Change is unavailable with the integrity diagnostic and
+    nothing is overwritten; a candidate or custody present → no replacement.
+  - `remote-child`: T's tree differs from the computed child → `remote-child-mismatch`; the PR is merged →
+    `change-attention`; both before the intent.
+  - A1b observing an open PR head outside the permitted set (another writer pushed the branch) → no provider
+    write; the activation stays pending with the observed head (G18).
   - Ready Change: the PR merged before A1b → `superseded-by-merge`, no Git effect, hold cleared; a
     `review-repair` invalidation present → `review-repair-open` before the intent.
   - Under the hold without the bound identity: snapshot intent, continuation acquisition, publication
@@ -860,33 +1138,34 @@ re-read N09-A2's implementation in PR #357 (`feadd6777`) and N03's amendment in 
     `prepare_revision_activation`.
 - **Inner loop:** `uv run pytest serve/delivery/tests/test_revision_activation.py -q -k "crash or replay"`.
 - **Closeout:** as A1, plus `uv run pytest serve/delivery/tests/test_delivery_state.py -q -k "revision or restore"`.
-- **LC:** full form: migration (coordination v4, three new families, action-receipt row, marker), every live
+- **LC:** full form: migration (coordination v5, three new families, action-receipt row, marker), every live
   Change available; on the copy, B1 shows `revision-snapshot-stale` (record, do not run on live); predecessor
   refuses; live hashes unchanged.
-- **Size / risk:** L / high (multi-root commit, loader, Git effects, preservation). If the merge-blocking
-  preservation or fresh-host falsifiers make A2 exceed one reviewable PR, the deterministic child commit and
-  generation history may land first as A2a (with LC) and activation, preservation and fresh-host restore as A2b,
-  recorded as a delta under §3.7 before the split.
+- **Size / risk:** L / high (multi-root commit, loader, Git effects, preservation, fresh-host fences).
 
 ### 3.4 N04-B — Applicability assessment and carry-forward replacement
 
-- **Prerequisites:** N04-A2.
+- **Prerequisites:** N04-A2b.
 - **Editable paths:**
-  - new `serve/delivery/src/owlbear_delivery/applicability.py` (impact view, review validation, records)
+  - new `serve/delivery/src/owlbear_delivery/applicability.py` (impact view, review validation, records,
+    `RevisionConfirmationReceipt`, candidate-scoped question rendering)
   - `evidence.py` [N03] (fold: records before results; `DeliveryConfirmationUse` view for
     `confirmation_applies`; basis schema 2 in `finalization_basis_digest`); `runtime_models.py`
     (`DeliveryApplicabilityRecord`, binding `applicability`, frontier version); `runtime_receipts.py` (widened
     embedding receipts); `delivery_state.py` (snapshot version); `delivery_application_loader.py` (S and N rows
-    of N03's comparison inventory for the new version)
+    of N03's comparison inventory for the new version; the L-row revision-confirmation source)
+  - `delivery_runtime.py` facade (`append_revision_confirmation`, declared mutation); `runtime_models.py`
+    (`_NORMAL_CHANGE_MUTATIONS`); `workspace_coordination.py` (`open_revision_hold` purpose `reassess`; E5)
   - `delivery_admission.py` (remove `_carry_forward_unresolved_binding`, `_carry_forward_request_id`,
     `preserve_unresolved_outcome_ids`); `revision_activation.py` (review binding, `reassess` kind)
   - `portfolio_application.py` (`preview_revision_impact`); `application_acquisition.py`
     (`show_plan_context` revision view); `application_models.py`; `application_lifecycle.py` (finalization
     `semantics` includes records and cited confirmations; basis re-check under the checkpoint lock)
-  - `state_formats.py`, `state_migration.py` (frontier and snapshot widening, marker step);
-    `delivery_diagnostics.py`
+  - `state_formats.py`, `state_migration.py` (frontier and snapshot widening, `revision_confirmation` family,
+    marker step); `delivery_diagnostics.py`
   - `__init__.py`, `module_surface.json`, fingerprint fixture; MCP `target_server.py`, `target_models.py`
-    (`preview_revision_impact`; `activate_revision` review field required)
+    (`preview_revision_impact`; `open_revision_hold`; `confirm_revision_criterion` with the D13 `Resolve`
+    parameter; `activate_revision` review and selection fields required)
   - companion text: `share/agents/build-reviewer.agent.md` (`applicability` mode output),
     `share/skills/w-frontier-planning/SKILL.md` (plan only uncovered/partial/unknown criteria),
     `share/agents/planner-challenger.agent.md`; `tests/test_agent_ecosystem_validation.py`
@@ -911,8 +1190,18 @@ re-read N09-A2's implementation in PR #357 (`feadd6777`) and N03's amendment in 
     `(AC-003, v)`, the outcome and the procedure, criterion `unchanged`, cited as `reusable` → `covered`;
     (2) the same after the outcome reset moved its request to the generation record → still `covered`
     (`resolve_confirmation` by ID); (3) publish, restore on a fresh host from the snapshot → identical status;
-    (4) under U1 (a) a legacy human-procedure receipt plus a new boundary confirmation scoped to the candidate
-    version and the receipt's procedure text → `covered`; a legacy machine receipt → `covered` without one.
+    (4) under U1 (a) a legacy human-procedure receipt and a legacy machine receipt, see the next scenario.
+  - Candidate-scoped capture without pre-seeded confirmations (finding 3 of round 2), on both D13 routes
+    (`mode="legacy"` and `mode="2026-07-28"`) through `Client(assemble_target_server(...))`: the fixture's
+    ledger holds only the original `(AC-003, v1)` confirmation of a `human-confirmed` result, or nothing for a
+    legacy human receipt; the candidate revises AC-003 to v2. The review marks it `reusable`; activation without
+    a selection → `applicability-confirmation-version-changed`. `confirm_revision_criterion` asks once (the
+    rendered question names AC-003 v2, its statement, the procedure and the source receipt); the
+    `elicitation_callback` accepts `passed`; one ledger entry and one `RevisionConfirmationReceipt` appear in one
+    transaction; the review stays valid (impact digest unchanged); activation with the selection → `covered`;
+    the source receipt is byte-identical and still cites its v1 confirmation; the frontier stores the selection.
+    A crash after the capture while a same-task handoff is retained restarts through the L-row receipt. A legacy
+    machine receipt → `covered` without a selection.
   - A user waiver (N03 U1 (b)) of an `unchanged` criterion with its applicable `waive` confirmation, cited as
     `reusable`, stays `waived` and satisfies finalization after activation and after a fresh-host restore; the
     projection shows it as waived.
@@ -931,6 +1220,12 @@ re-read N09-A2's implementation in PR #357 (`feadd6777`) and N03's amendment in 
     `confirmation-unresolved`; a B1-style request resolved through the old caller-provenance route, present only
     in request history → `confirmation-unresolved`. Each checked before the intent, after the reset and after a
     fresh-host restore; activation and reassessment never append to the ledger (ledger bytes compared).
+  - Capture: `decline` or `cancel` → `declined`, ledger and receipts unchanged; no form elicitation, or a legacy
+    session without a back-channel → `channel-unavailable`; a scope naming the active version, another
+    outcome's criterion or a criterion absent from the candidate → `confirmation-scope-invalid`, nothing asked;
+    the candidate or frontier changed between the rounds of the modern route → the SDK boundary refuses
+    `INVALID_PARAMS` or the CAS refuses `frontier-stale`, nothing written; Cockpit → `channel-unavailable`; a
+    local ledger entry with no revision-confirmation receipt during a retained handoff → bootstrap fails (V20).
   - Same-head applicability change (finding 9): take the finalization context and an exact review at head H;
     run `reassess` (no head move) so the records change; `finalize_change` with the old review →
     `review-basis-stale`, no receipt; a fresh context and review then finalize. A record whose cited
@@ -965,6 +1260,8 @@ re-read N09-A2's implementation in PR #357 (`feadd6777`) and N03's amendment in 
   `serve/delivery/README.md` (revision model); this plan's C row; execution plan C status row.
 - **Positive scenarios:** `/design <change-id>` on an admitted Change loads the revision context and asks one
   material question at a time; the Designer drafts the candidate, previews impact, dispatches the reviewer,
+  asks the user through `confirm_revision_criterion` for each reused human step whose criterion version
+  changed (Cockpit lists them read-only while N03 U2 is open, G17),
   presents the delta and approves through one question; activation replays after a closed chat. Cockpit
   **Change requirements** on Change detail and group copies the complete prompt with "Run it in Copilot Chat";
   the hold and activation states render. Host rehearsal on a disposable portfolio with real VS Code: a
@@ -1004,15 +1301,21 @@ re-read N09-A2's implementation in PR #357 (`feadd6777`) and N03's amendment in 
 Deltas (applied by the N04-P PR only after the plan gate and the user's approval, execution plan §1.1):
 
 1. §4.1 N04 stays XL / high; §5 N04 phases become **N04-A1** (candidate slot, hold, root-aware recovery),
-   **N04-A2** (activation operation, Design-return readmission engine path, legacy reconcile), **N04-B**,
-   **N04-C** (workflow, Cockpit control, revision context), **N04-D** (D12). Design-return readmission moves
-   from C to A2; MCP adapters ship with their contracts in A1, A2 and B (execution plan Implement action).
-2. §4.2: `N04-A1` ← N04-P, N03-C, N09-A2; `N04-A2` ← N04-A1; `N04-B`, `N04-C`, `N04-D` ← the previous phase.
-   N07-A keeps N04-D. §4.3 schedule stage 4 lane A: `N04-P … N04-D` unchanged in order.
-3. §4.4: rows `N04-A1`, `N04-A2` replace `N04-A`.
-4. §5 N04 LC line: full form for A1, A2, B and D; load form for C.
+   **N04-A2a** (deterministic snapshot plumbing for every snapshot caller: schema-2 intent, pinned child,
+   signing and hook rules, with its own format, fingerprint and LC companions), **N04-A2b** (activation
+   operation, Design-return readmission engine path, fresh-host restore and resolution, legacy reconcile),
+   **N04-B**, **N04-C** (workflow, Cockpit control, revision context), **N04-D** (D12, D33). Design-return
+   readmission moves from C to A2b; MCP adapters ship with their contracts in A1, A2b and B (execution plan
+   Implement action).
+2. §4.2: `N04-A1` ← N04-P, N03-C, N09-A2; `N04-A2a` ← N04-A1; `N04-A2b` ← N04-A2a; `N04-B`, `N04-C`, `N04-D` ←
+   the previous phase. N07-A keeps N04-D. §4.3 schedule stage 4 lane A: `N04-P … N04-D` unchanged in order.
+3. §4.4: rows `N04-A1`, `N04-A2a`, `N04-A2b` replace `N04-A`.
+4. §5 N04 LC line: full form for A1, A2a, A2b, B and D; load form for C.
 5. §7: record N04 U1 (a), U2 (a) and U3 (b) as engineering decisions of 2026-10-03 (listed to the user without
    objection), beside the inherited N03 U1 (b) answer.
+6. Round-2 delta (D33, Sol reviewer advice): the A2 split is now part of the plan, not a conditional fallback;
+   §4.1 sizes become A2a M / high and A2b L / high. §4.3 notes that N04-B and N04-C depend on N03 U2 only for
+   whether Cockpit may capture candidate-scoped confirmations; chat capture does not wait for it (G17).
 
 Premises found false or incomplete on `ac3bf23f9`:
 
@@ -1029,14 +1332,20 @@ Premises found false or incomplete on `ac3bf23f9`:
 5. Found in Sol round 1 (§6): the package snapshot owner cannot resume after a process death between its
    file writes and its commit (D17); the commit quarantine flattens staged content (D16); a fresh host leaves a
    Change whose remote branch is ahead of its snapshot unrestored and invisible (D18).
+6. Found in Sol round 2 (§6): the snapshot intent carries no child identity, so no snapshot caller can replay
+   deterministically (D28); the provider's draft-state operation fixes its head, so a demotion bound to the
+   finalized head cannot be replayed once the child is pushed (D26); `git status` omits untracked empty
+   directories and Git cannot hold non-canonical modes of clean files (D30); N03's boundary can confirm only
+   requests already in the active frontier (D27).
 
 ## 4. Progress
 
 | Phase | PR | Exact head | Proof | Challenges | Status |
 | --- | --- | --- | --- | --- | --- |
-| N04-P | #358 | — | Probes P1–P9; round-1 source re-reads (§6) | Sol plan round 1: revision-required (10 findings: 8 high, 2 medium; all accepted, none rebutted) → revised | in review |
+| N04-P | #358 | — | Probes P1–P9; round-1 source re-reads (§6); round-2 dependency re-pins and source re-reads, P10 Git hook and signing probe (§6) | Sol plan round 1: revision-required (10 findings: 8 high, 2 medium; all accepted, none rebutted) → revised; Sol plan round 2: revision-required (round-1 findings 5, 6, 7, 9, 10 resolved; 1–4 and 8 incomplete as 8 findings: 5 high, 3 medium; all accepted, none rebutted) → revised, A2 split | in review |
 | N04-A1 | — | — | — | — | — |
-| N04-A2 | — | — | — | — | — |
+| N04-A2a | — | — | — | — | — |
+| N04-A2b | — | — | — | — | — |
 | N04-B | — | — | — | — | — |
 | N04-C | — | — | — | — | — |
 | N04-D | — | — | — | — | — |
@@ -1045,20 +1354,24 @@ Premises found false or incomplete on `ac3bf23f9`:
 
 | ID | Claim | Why unproven | Evidence available | Owner | Blocks |
 | --- | --- | --- | --- | --- | --- |
-| G1 | N03-A…C (as amended by #360), N09-A2 (PR #357) and N02-C land with the interfaces this plan names (`evidence.py` fold, `applies_to`, confirmation ledger, `resolve_confirmation`, `confirmation_applies`, basis digest, K3 sites and `require_pause_permits`, drain tokens, K4 digest, bounded remote Git) | Not merged | Their plans; PR #357 `feadd6777` and PR #360 `9c06c97cd` read only | N04-A1 (re-check at start; a divergence stops for a plan revision) | N04-A1 start |
+| G1 | N03-A…C (as amended by #360), N09-A2 (PR #357) and N02-C land with the interfaces this plan names (`evidence.py` fold, `applies_to`, confirmation ledger, `resolve_confirmation`, `confirmation_applies`, basis digest, D13 `Resolve` registration and both routes, schema-2 request-resolution receipts and the L row, K3 sites and `require_pause_permits`, drain tokens, K4 digest, bounded remote Git) | Not merged | Their plans; PR #357 `9a7fff990` and PR #360 `86289635f` read only | N04-A1 (re-check at start; a divergence stops for a plan revision) | N04-A1 start |
 | G2 | Every runtime-root recoverer can learn the package and candidate roots without a layout assumption | Tests construct coordinators with non-sibling package roots (`test_portfolio_application.py:851-925`) | P3 | N04-A1 | N04-A1 merge |
-| G3 | One `RuntimeTransaction` spanning package and runtime roots recovers from every crash point through every reader | Not executed for a cross-root commit | P3 (single-root package participants) | N04-A2 crash matrix | N04-A2 merge |
-| G4 | Three-component preservation (D16) captures and restores divergent staged and working-tree content, modes, symlinks, untracked files and leaves ignored files verified in place, on macOS and Ubuntu file systems | Not implemented; D03 raw preservation refuses staged content and the commit quarantine flattens it (§6 finding 1) | Source reads; D03 preservation tests | N04-A2 falsifiers (§3.3) | N04-A2 merge |
+| G3 | One `RuntimeTransaction` spanning package and runtime roots recovers from every crash point through every reader | Not executed for a cross-root commit | P3 (single-root package participants) | N04-A2b crash matrix | N04-A2b merge |
+| G4 | Three-component preservation (D16, D25, D30) captures and restores divergent staged and working-tree content, full modes, symlinks, untracked files and empty directories, refuses ignored collisions and leaves ignored entries verified in place, on macOS and Ubuntu file systems | Not implemented; D03 raw preservation refuses staged content and the commit quarantine flattens it (§6 round 1 finding 1, round 2 findings 1 and 6) | Source reads; D03 preservation tests | N04-A2b falsifiers (§3.3) | N04-A2b merge |
 | G5 | A real reviewer gives sound applicability dispositions | Semantic judgment | Engine structure checks | N04-C host rehearsal | N04-C merge |
 | G6 | The B1 live copy reconciles and reassesses cleanly | Needs the isolated LC copy, not taken in P | P1, P2 (read-only) | N04-D LC rehearsal | N04-D merge |
 | G7 | Live B1, `delivery-action-readiness` and `frontier-serialization-contract` revision state | Live activation is out of scope | P1 | N10-M with user authorization | N10-M |
 | G8 | LC runs in CI | Needs a live copy | `delivery-lc` unit tests | Each phase | Nothing (recorded per phase) |
 | G9 | U2 (a) wait time is acceptable to users | Product judgment; U2 was settled as an engineering decision | — | N10-H host acceptance | Nothing |
 | G10 | A cited `human-confirmed` or `waived` receipt keeps an applicable confirmation after the outcome reset and after a fresh-host restore | Resolved in design by N03 (as amended by #360): the Change-wide ledger travels in the snapshot and survives resets (N03 I10); not yet executed | N03 §1.5, §1.9; §1.7 Confirmation authority | N04-B scenarios (finding 8) | N04-B merge |
-| G11 | Deterministic plumbing commits (D17) are acceptable to the managed repository: no required commit signing, no required hook on Change branches, and `commit-tree` output is byte-stable across the supported Git versions | Repository rules and Git versions not probed in round 1 | The existing snapshot uses `git commit` with hooks (`workspace_snapshots.py:243-255`) | N04-A2 start (probe; if signing is required, the intent records the signed SHA after a one-time signed `commit-tree` and replay uses the stored object) | N04-A2 merge |
-| G12 | With the origin host lost, a different revision on a fresh host first needs resolution (ii) for the pinned child, then a second activation | Accepted limitation of D18 (no remote overwrite) | — | N04-C revision context shows it; N10-H host acceptance | Nothing |
+| G11 | Remote rules that require signed commits on Change branches while the managed repository does not sign locally | Resolved in design for local configuration (D32: signing honored once, child pinned before the intent, replay never recomputes or re-signs; no hooks, P10). A provider-side signature rule is not observable from the repository; an unsigned child would be refused at push and stay pending. This exposure already applies to every Builder commit, so N04 adds none | P10; `draft_pull_request.py` provider surface | N04-A2a start (re-check whether the N05-A provider exposes branch rules; if so, A0 refuses `snapshot-signing-failed` before the intent) | Nothing |
+| G12 | With the origin host lost, a different revision on a fresh host first needs the `remote-child` resolution for the pinned child, then a second activation | Accepted limitation of D18 (no remote overwrite); the resolution itself is now a fenced entry (E6) | — | N04-C revision context shows it; N10-H host acceptance | Nothing |
 | G13 | N03's `confirmation_applies` can take the `DeliveryConfirmationUse` view without changing N03 results | N03-A not merged; the generalization edits an N03 owner | N03 §1.5 | N04-B start (re-check; a divergence stops for a plan revision) | N04-B start |
-| G14 | Every N09-A2 start site is classified for the hold, including sites added by N05-B or N08 after PR #357 | Inventory read at `feadd6777`; later sites unknown | `_COORDINATOR_PAUSE_CLASSES`, `_MANAGER_PAUSE_CLASSES`, `_APPLICATION_PAUSE_GATED_ENTRIES` | N04-A1 (`_HOLD_CLASSES` completeness test fails on an unclassified site) | N04-A1 merge |
+| G14 | Every N09-A2 start site is classified for the hold and the marker, including sites added by N05-B or N08 after PR #357 | Inventory read at `9a7fff990`; later sites unknown | `_COORDINATOR_PAUSE_CLASSES`, `_MANAGER_PAUSE_CLASSES`, `_APPLICATION_PAUSE_GATED_ENTRIES` | N04-A1 (`_HOLD_CLASSES` completeness test fails on an unclassified site) | N04-A1 merge |
+| G15 | N03's ledger validation is structural (digest, append-only, ≤ 256, scope well-formed) and accepts an entry whose scope names candidate criterion versions and whose request is not in a binding | N03-A not merged; N03 §1.5 does not state whether the ledger checks scope against the admitted contract | N03 §1.5, I10, L row | N04-B start (re-check; if N03 validates scope against the active contract, the plan is revised before B) | N04-B start |
+| G16 | `_MAX_DESIGN_RETURN_WALK_ENTRIES` admits realistic retained worktrees | The bound is fixed at A2b start from the largest supported fixture | D03 bounds (`_MAX_PRESERVED_PATHS` = 256, file 16 MiB, total 64 MiB) | N04-A2b start | N04-A2b merge |
+| G17 | Whether Cockpit may capture candidate-scoped confirmations | N03 U2 is an open user decision | N03 U2 | User (N03 U2) | Nothing in N04-B; N04-C Cockpit copy only |
+| G18 | An activation whose A1b observes a PR head outside the permitted set (another writer pushed the Change branch) has a recovery route | After the intent the activation only rolls forward, and D03's `recover_out_of_band_head` is refused under the hold; it stays pending and visible with the observed head | — | N04-A2b start (decide the route; candidate: a hold exception for `recover_out_of_band_head` bound to the observed head, after which A1b continues) | N04-A2b merge |
 
 ## 6. Round Dispositions
 
@@ -1078,3 +1391,21 @@ lane D `561b2db3f` (= `origin/dev` `634a77be7` + plan), lane A `feadd6777` (N09-
 | 8 | HIGH: portable confirmation authority undefined | Confirmed for the old text (request-bound waiver rule, G10 open); N03 (as amended by #360) supplies the ledger and resolver | Accepted | I11; §1.7 records and Confirmation authority; U1 text; D23; §3.4 positives and negatives; G10, G13 |
 | 9 | MEDIUM: applicability not in the finalization basis | Confirmed: N03's basis holds contract, head, diff base, result digests and acceptance only; reassessment changes records without a head move | Accepted | §1.7 Finalization basis; §1.8 basis row; D13, D24; §3.4 same-head staleness test |
 | 10 | MEDIUM: persisted action-schema changes missing | Confirmed: `ChangeContinuationAction.kind` is a closed literal (`workspace_models.py:551-571`) embedded in coordination and in unversioned action receipts (`state_formats.py` `action_receipt`) | Accepted | §1.8 coordination v4 and `action_receipt` rows, baseline versions; §3.3 paths, persisted-schema test and LC |
+
+Sol plan gate round 2 (on `dba34da20`): `revision-required`. Round-1 findings 5, 6, 7, 9 and 10 were resolved;
+findings 1–4 and 8 were incomplete and returned as eight findings. Dependencies were re-pinned first (lane A
+`9a7fff990`, lane C `86289635f`; header, §2, G1, G14) and each premise was re-read in source on lane D
+(`dba34da20`) and lane A. No finding was rebutted; three were accepted with a noted scope difference. The
+reviewer's split advice was applied (D33).
+
+| # | Finding | Premise check | Disposition | Plan change |
+| --- | --- | --- | --- | --- |
+| 1 | HIGH: `reset --hard` can overwrite an ignored file at a path tracked at the reviewed head | Confirmed: the reset writes every path of the reviewed head, and file/directory replacement deletes the other kind; the ignored inventory held hashes only, and post-cleanup verification runs after the bytes are gone. Narrower: untracked (not ignored) entries are captured byte-exactly, so only ignored entries need the refusal | Accepted | I12; §1.6 A0, A2, Collision check, cleanup paragraph; D25; §1.9 `revision-preservation-collision`; §3.3 A2b merge-blocking collision falsifier and variants; G4 |
+| 2 | HIGH: fresh-host resolution (ii) blocked by its own marker; A1b binds the finalized head while the PR shows T | Confirmed: the marker refused every start; the provider stores one operation per ID (`draft_pull_request.py:680`) and checks the stored head on every call, including a replay with a receipt (`:746-762`). Broader: the same head mismatch breaks a same-host A1b replay after the A5 branch push | Accepted | §1.5 E6, E8; §1.6 A1, A1b (observed head, `demotion.json`), per-kind table, Fresh-host (ii); D26; §1.8 coordination v5 marker fields; §3.3 A2b origin-lost ready-Change test and same-host replay test; G12, G18; P10 |
+| 3 | HIGH: candidate-version confirmations have no capture route | Confirmed: N03's `resolve_request` and MCP `answer` confirm only an existing scoped request (N03 §1.8 rows); N04 created none and kept the ledger unchanged at activation | Accepted | I11; §1.4 layout; §1.7 impact digest, record selections, Confirmation authority, Candidate-scoped capture; §1.8 `revision_confirmation`, frontier row; §1.9 `confirm_revision_criterion`, `open_revision_hold`; D27; §3.4 paths, capture test on both routes without pre-seeded confirmations, negatives; §3.5; G15, G17 |
+| 4 | HIGH: deterministic replay incomplete for first-checkpoint callers | Confirmed: `ChangeDesignPackageSnapshotIntent` schema 1 (`workspace_models.py:1055` on `dev`) holds operation, Change, package, branch, worktree and expected head only | Accepted | I4; §1.6 A1, Deterministic child commit (carrier, schema-1 treatment); §1.8 coordination v4 (A2a); D28; §3.3 A2a crash matrix, schema-1 states, fingerprint and LC |
+| 5 | HIGH: fresh-host replacement (i) checks too little | Confirmed: round-1 (i) compared only the frontier digest, custody and pending publication; a staged or filesystem edit changes none of them | Accepted | §1.6 Fresh-host step 2 `restored` fence and (i); §1.5 E7; §1.9 readiness detail; D29; §3.3 A2b fenced-replacement test and variants |
+| 6 | MEDIUM: inventory cannot enumerate empty directories or non-Git modes | Confirmed: `status --untracked-files=all` lists no empty directory; Git records only 100644/100755 for files, so a clean file's 0600 is invisible | Accepted | §1.6 preservation rows and Bounded walk; D30; §3.3 A2b falsifiers (clean 0600 file, empty directory absent from status); G16 |
+| 7 | MEDIUM: activation steps lack a per-kind contract | Confirmed from the plan text: `reassess` moves no head; legacy reconcile has no candidate or prior hold | Accepted | §1.6 Per-kind contract (incl. first-checkpoint snapshot, hold source, custody, restart owner); §1.4 kinds; §1.9; D31; §3.3 A2b parametrized test |
+| 8 | MEDIUM: G11 signed-commit fallback not durable; hook behavior unresolved | Confirmed: an unreferenced signed object is prunable and re-signing changes the SHA. Hooks: P10 shows this repository's pre-commit excludes package paths | Accepted | I4; §1.4 pin row; §1.6 Deterministic child commit steps 2, 3, 6; D32; §3.3 A2a signed, pruned and hook tests; G11 narrowed; P10 |
+| — | Advice: split A2 | Agreed: A2a is independently useful | Accepted | D12, D33; §3.3; §3.7 deltas 1–4 and 6; §1.8; §4 |
