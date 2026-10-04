@@ -14,6 +14,7 @@ from threading import Barrier
 from unittest.mock import patch
 
 import pytest
+from serve.delivery.tests.test_checkpoint_publication_regressions import _relabel_as_snapshot_2, _store_v18
 from serve.delivery.tests.test_portfolio_application import (
     _attach_local_target,
     _awaiting_acceptance_fixture,
@@ -1256,6 +1257,70 @@ def test_verified_clean_finalizer_recovery_keeps_failed_history(tmp_path, eviden
             "change-a", _finalization_request("change-a", attempt.exact_head, attempt.writer.attempt_id)
         )
     assert coordinator.show("change-a").writer == replacement.finalization.attempt.writer
+
+
+@pytest.mark.parametrize("stored", [18, 19])
+def test_clean_finalizer_recovery_of_a_stored_v18_frontier_records_one_marker_on_its_published_base(
+    tmp_path: Path, stored: int
+) -> None:
+    application, runtimes, _coordinator, state = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
+    runtime = runtimes["change-a"]
+    repository = application._workspace_manager.repository
+    _attach_local_target(application, tmp_path)
+    frontier_path = state / "changes/change-a/frontier.json"
+    if stored == 18:
+        _store_v18(frontier_path)
+    application._delivery_state_publisher = DeliveryStatePublisher(
+        repository, remote="origin", state_branch="owlbear/delivery-state"
+    )
+    state_head = application._publish_delivery_state("change-a", runtime, "v18-recovery-baseline").published_head
+    if stored == 18:
+        state_head = _relabel_as_snapshot_2(repository, state_head)
+    snapshot = json.loads(_git(repository, "show", f"{state_head}:.owlbear/delivery/state/change-a/snapshot.json"))
+    application._delivery_state_publisher = None
+    host = _host(application)
+    attempt = application.acquire_change_action(_continuation_request(application)).finalization.attempt
+    application.report_finalization_failure(_failure_request(application, attempt_key=attempt.writer.attempt_id))
+    intent = application._propose_recovery("change-a")
+    before = frontier_path.read_bytes()
+    assert json.loads(before)["schema_version"] == stored
+
+    application._complete_recovery("change-a", intent.recovery_id, host.seal(intent, "closed"))
+
+    written = frontier_path.read_bytes()
+    assert json.loads(written)["schema_version"] == 19
+    marker = runtime.pending_state_publication()
+    if stored == 19:
+        assert written == before
+        assert marker is None
+        return
+    assert marker is not None
+    assert marker.base_frontier_digest == runtime.publication_base_digest(before)
+    assert (
+        marker.base_frontier_digest
+        == hashlib.sha256(
+            (json.dumps(snapshot["frontier"], sort_keys=True, separators=(",", ":")) + "\n").encode()
+        ).hexdigest()
+    )
+    assert marker.frontier_digest == hashlib.sha256(written).hexdigest()
+
+    reopened, _reopened_coordinator, _manager = _reopen_portfolio(tmp_path, state, runtimes)
+    assert reopened.get_change("change-a").change_id == "change-a"
+    assert reopened._runtimes["change-a"].pending_state_publication() == marker
+    reopened._delivery_state_publisher = DeliveryStatePublisher(
+        repository, remote="origin", state_branch="owlbear/delivery-state"
+    )
+    assert reopened._replay_pending_state_publications() == ()
+    _git(repository, "fetch", "origin", "+refs/heads/owlbear/delivery-state:refs/remotes/origin/owlbear/delivery-state")
+    published = _git(repository, "rev-parse", "refs/remotes/origin/owlbear/delivery-state")
+    assert _git(repository, "rev-list", "--count", f"{state_head}..{published}") == "1"
+    republished = json.loads(_git(repository, "show", f"{published}:.owlbear/delivery/state/change-a/snapshot.json"))
+    assert republished["schema_version"] == 3
+    assert republished["parent_snapshot_id"] == snapshot["snapshot_id"]
+    assert reopened._runtimes["change-a"].pending_state_publication() is None
+    assert reopened._replay_pending_state_publications() == ()
+    _git(repository, "fetch", "origin", "+refs/heads/owlbear/delivery-state:refs/remotes/origin/owlbear/delivery-state")
+    assert _git(repository, "rev-parse", "refs/remotes/origin/owlbear/delivery-state") == published
 
 
 @pytest.mark.parametrize("exhausted", [False, True])

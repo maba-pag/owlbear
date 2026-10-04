@@ -30,12 +30,22 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryRuntime,
     DeliveryRuntimeConflictError,
     DeliveryStage,
+    DeliveryTaskDefinition,
     DeliveryTaskResult,
     FinalizeDeliveryChange,
     PublishDeliveryResult,
     _require_ledger_extension,
 )
-from owlbear_delivery.evidence import DeliveryFinalizationSemantics, evaluate_acceptance_evidence
+from owlbear_delivery.evidence import (
+    FINALIZATION_SEMANTICS_MAX_BYTES,
+    DeliveryContextRefusal,
+    DeliveryFinalizationSemantics,
+    build_finalization_semantics,
+    evaluate_acceptance_evidence,
+    finalization_basis_digest,
+    measure_semantics,
+    result_digest,
+)
 
 _AT = datetime(2026, 8, 11, 13, tzinfo=UTC)
 _HEAD = "3" * 40
@@ -335,6 +345,67 @@ def test_finalization_without_a_diff_base_is_refused(tmp_path: Path, monkeypatch
 
     assert "finalization-basis-unavailable" in _gaps(raised)
     assert runtime.finalization_semantics(_HEAD).code == "finalization-basis-unavailable"
+
+
+def test_a_real_oversized_finalization_context_is_refused_whole_and_finalization_writes_nothing(
+    tmp_path: Path,
+) -> None:
+    runtime = _runtime(tmp_path, stages=_COMPLETED)
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=True)
+    first = frontier.bindings[0]
+    constraints = tuple(f"Constraint {index:03}: " + "keep the assembled behaviour " * 40 for index in range(240))
+    large = DeliveryTaskDefinition.model_validate(first.tasks[0].model_dump() | {"constraints": constraints})
+    result = _task_result("RESULT-001", "delivery-runtime", runtime.authority_digest, large, "1" * 40)
+    oversized = frontier.model_copy(
+        update={
+            "bindings": (first.model_copy(update={"tasks": (large,), "results": (result,)}), *frontier.bindings[1:])
+        }
+    )
+    (tmp_path / "changes/delivery-runtime/frontier.json").write_bytes(_canonical(oversized))
+    _cover_all_task_results(runtime, tmp_path)
+    stored = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=True)
+    diff_base = runtime.finalization_diff_base()
+    assert diff_base is not None
+    complete = build_finalization_semantics(
+        runtime.contract, stored, contract_digest=runtime.authority_digest, change_head=_HEAD, diff_base=diff_base
+    )
+    assert sum(len(item.encode()) for item in constraints) > FINALIZATION_SEMANTICS_MAX_BYTES
+
+    refusal = runtime.finalization_semantics(_HEAD)
+
+    assert refusal == DeliveryContextRefusal(
+        code="finalization-context-oversized",
+        measured_bytes=measure_semantics(complete),
+        budget_bytes=FINALIZATION_SEMANTICS_MAX_BYTES,
+    )
+    basis = finalization_basis_digest(
+        runtime.authority_digest,
+        _HEAD,
+        diff_base,
+        tuple(result_digest(item) for binding in stored.bindings for item in binding.results),
+        acceptance_criteria(runtime.contract),
+    )
+    assert basis == complete.basis_digest
+    review = DeliveryReviewReceipt.create(
+        DeliveryReview(
+            review_mode="finalization",
+            basis_digest=basis,
+            observation_ids=(),
+            exact_commit=_HEAD,
+            author_id="finalizer",
+            reviewer_id="build-reviewer",
+            evidence=("Reviewed the exact head.",),
+            reviewed_at=_AT,
+        )
+    )
+    before = runtime.frontier_bytes()
+
+    with pytest.raises(DeliveryAcceptanceEvidenceError) as raised:
+        runtime.finalize_change(FinalizeDeliveryChange(operation_id="finalize", exact_head=_HEAD, review=review), _AT)
+
+    assert _gaps(raised) == ["finalization-context-oversized"]
+    assert runtime.frontier_bytes() == before
+    assert runtime.finalization() is None
 
 
 # --- Stored-byte contract and the append-only ledger ----------------------------------------------

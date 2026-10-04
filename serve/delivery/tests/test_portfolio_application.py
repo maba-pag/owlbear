@@ -16995,8 +16995,9 @@ def test_get_change_scopes_health_diagnostics_to_requested_change(tmp_path: Path
     assert tuple(item.change_id for item in view.health.diagnostics) == (None, "change-a")
 
 
+@pytest.mark.parametrize("stored", [17, 18])
 def test_repair_stranded_frontier_preserves_raw_evidence_and_reconciles_publication(
-    tmp_path: Path,
+    tmp_path: Path, stored: int
 ) -> None:
     application, _runtimes, _coordinator, state_root = _portfolio(
         tmp_path,
@@ -17004,10 +17005,11 @@ def test_repair_stranded_frontier_preserves_raw_evidence_and_reconciles_publicat
     )
     frontier_path = state_root / "changes/change-a/frontier.json"
     payload = json.loads(frontier_path.read_bytes())
-    payload["schema_version"] = 17
+    payload["schema_version"] = stored
     binding = payload["bindings"][0]
-    binding.pop("retry_count")
-    binding.pop("retry_fingerprint")
+    if stored == 17:
+        binding.pop("retry_count")
+        binding.pop("retry_fingerprint")
     binding["block"] = {
         "block_id": "BLOCK-001",
         "reason": "The previous pilot is stale.",
