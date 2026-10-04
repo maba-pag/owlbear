@@ -616,7 +616,7 @@ every new item exactly one lane.
 | N02-A | merged | #348 (code head `f225ad508`; Sol `implementation-sound` round 3; LC load form pass) |
 | N02-B | merged | #352 (code head `7500600c7`; Sol `implementation-sound` round 5; full LC pass) |
 | N02-C | — | — |
-| N02-D | — | — |
+| N02-D | in review | #362 (code head `f6aa72af6`; LC full form pass; D03 → N02-D and N02-C → N02-D copy rehearsals pass; Sol gate, host rehearsal G3 and the live H step pending with the user; freeze continues until the H step) |
 | N03-P | merged | #349 (plan gate `plan-sound`, round 6; D11 confirmation pending; U1 before N03-A) |
 | N03-A | — | — |
 | N03-B | — | — |
