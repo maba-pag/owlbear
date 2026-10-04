@@ -7,11 +7,13 @@
 > Starlette 1.7.0, uvicorn 0.54.0, Pydantic 2.13.5, Playwright 1.63.0 with Chromium 153 (`uv.lock`).
 > Live Delivery state was not read; no live record is needed by this plan. Rebased on `origin/dev` `634a77be7`:
 > it adds only N05-A (`delivery-github`, `publication_provider.py`, forbidden-effect gates); no file or locator
-> cited here changed.
-> **Status:** draft for the plan gate, revised after Sol plan rounds 1 and 2 ([3.6](#36-plan-gate-dispositions)).
-> Product code is unchanged by this phase. User-only confirmation is N03's boundary (PR #360 at `86289635f`: R14,
-> I6, I10, D13); N06 dispatches interaction-linked requests through N03's scoped `answer` and works under either
-> answer of N03 U2 ([1.13](#113-confirmation-channel-under-n03-u2)).
+> cited here changed. Round 3 merged `origin/dev` `141795676` (adds N09-A2, PR #357); round-3 locators are on that
+> merge (`edab21d5a`).
+> **Status:** draft for the plan gate, revised after Sol plan rounds 1–3 ([3.6](#36-plan-gate-dispositions)).
+> Product code is unchanged by this phase. User-only confirmation is N03's boundary (PR #360 at `f4d09d774`: R14,
+> I6, I10, D13 and its single-use rule `:486-513`); N06 dispatches interaction-linked requests through N03's scoped
+> `answer`, consumes N03's consent generation (D16) and works under either answer of N03 U2
+> ([1.13](#113-confirmation-channel-under-n03-u2)).
 > [U1](#u1--retention-and-privacy-policy-for-private-inputs-and-interaction-evidence) is a recorded engineering
 > decision of 2026-10-03. N03 U1 was answered (b) by the user on 2026-10-03 (user waivers satisfy finalization);
 > §1.4 keeps interaction requests out of that route.
@@ -49,10 +51,10 @@
 | R3 | Preparation is agent work; **Needs you** only once the step is actionable | Execution plan §5 N06; §9.1 (`:1152`); WP5 step 2; U3 (`:769`) |
 | R4 | Local input through a Cockpit (or loopback) form with origin checks and a one-time or session-bound token; an opaque input reference; expiry and cancel | §9.3 steps 1–4, 6 (`:1179-1185`); P16; V22 |
 | R5 | No secrets in transcripts, logs, receipts or URLs; credential-bearing URLs rejected; destinations cannot be widened by form input | §9.3 steps 2–3, 5; V22; execution plan §5 N06 |
-| R6 | Human confirmation recorded separately from machine observation, only as an N03 ledger confirmation captured by N03's scoped `answer`; a click cannot assert machine success and neither a machine, a worker nor a caller can fabricate a confirmation | §9.3 step 7; §9.1 Evidence split; [N03 plan](delivery-n03-plan.md) R14, I6, I10, §1.5, D13 (PR #360 at `86289635f`) |
+| R6 | Human confirmation recorded separately from machine observation, only as an N03 ledger confirmation captured by N03's scoped `answer` and consuming N03's consent generation; a click cannot assert machine success and neither a machine, a worker nor a caller can fabricate a confirmation | §9.3 step 7; §9.1 Evidence split; [N03 plan](delivery-n03-plan.md) R14, I6, I10, §1.5, D13, single use `:486-513` (PR #360 at `f4d09d774`) |
 | R7 | Cockpit offers **Help with this step**, **Not now**, **Explain existing evidence** and **Check not available here** | Execution plan §5 N06; §4.2 (`:860`); §9.2 (`:1172`); §9.4 (`:1191`); V17 |
 | R8 | Assisted check with unavailable handler or tool, or no agent host: agent or host-needed state, never **Needs your evidence**, no fake launch | V17 (`:1552`) |
-| R9 | Private URL or credential-like input (any undeclared query, fragment, credential-bearing or token-like path segment, encoded component) rejected; expired session; cancelled sign-in; no secret in transcript, log or receipt; only owned resources cleaned; cancel is not pass | V22 (`:1557`); execution plan §5 N06-B |
+| R9 | Private URL or credential-like input (any undeclared query, fragment or path structure, credential-bearing or token-like path segment, encoded component) rejected; expired session; cancelled sign-in; no secret in transcript, log or receipt; only owned resources cleaned; cancel is not pass | V22 (`:1557`); execution plan §5 N06-B |
 | R10 | Binding to the candidate and its resources; a changed candidate makes the result stale, never attached to the new candidate | §9.1 (`:1154`); execution plan §5 N06 "P must settle" |
 | R11 | Every new readiness reason, action or status ships with its `workItems.ts` mirror, rendering, component test and parity assertion; every new frontier-writing operation joins the mutability policy | Execution plan §1.4 |
 | R12 | Every changed persisted family registers a version owner; migrations run through the N02 core; LC full form | Execution plan §1.3; [N02 plan](delivery-n02-plan.md) I2, I3, D3 |
@@ -60,7 +62,8 @@
 | R14 | Support baseline: Python 3.14; Chromium-only Cockpit; macOS and Ubuntu; handler launch portable | Execution plan §1.1 |
 | R15 | N06 defines the interface N07's B1 runner builds on; no B1 code in N06 | Execution plan §5 N06, N07; §3 traceability (`:449`) |
 | R16 | Session custody ends only after no Delivery-owned handler process remains; ownership recorded before any handler runs and positive before any signal; containment with a user recheck route when closure is unknown | Programme §5.2; V22 (owned cleanup); [N08 plan](delivery-n08-plan.md) D12 |
-| R17 | Every interaction write survives a restart before publication, including during a retained Builder handoff | `delivery_application_loader.py:603-607`, `:1010-1053`; N03 §1.7 L row |
+| R17 | Every interaction write survives a restart before publication, including during a retained Builder handoff; there the outcome binding changes only by a receipt the loader replays | `delivery_application_loader.py:603-607`, `:1010-1053`, `:1582-1605`, `:1755-1777`; N03 §1.7 L row |
+| R18 | An interaction session coexists only with the passive handoff of its own Builder settlement; every other custody is refused both ways | `workspace_coordination.py:894`, `:1000-1001`, `:1288-1349`; `workspace_models.py:1633-1660`; programme §5.2 |
 
 ### 1.3 Invariants
 
@@ -75,7 +78,8 @@
   adds interaction checks and writes to that dispatch, never a channel. N03 already refuses a scoped request that
   arrives resolved and ignores caller `resolution` and `provenance`. `open`, `start`, `postpone` and `recheck` are
   Cockpit HTTP operations behind the guard (D5); none is a confirmation, and the nonce binds a panel to a session,
-  not to a user. MCP adds no interaction tool.
+  not to a user. MCP adds no interaction tool. A linked answer consumes N03's consent generation in the transaction
+  that records it; N06 adds no generation of its own (D16).
 - **I4 Cancel is not pass.** Not now, decline, cancel, refusal, expiry, session loss and handler failure write no
   confirmation. A `failed` (not observed) decision is recorded but never satisfies (N03 I6); only `passed` with a
   completed, non-stale interaction supports a `human-confirmed` `manual-procedure` observation, and no interaction
@@ -83,10 +87,12 @@
 - **I5 Exact candidate.** An interaction is bound to `candidate_head` (the block's `resume_commit`, which must equal
   the branch head), the contract's current acceptance versions and the handler digest. Any change makes it
   `stale`; the linked answer and `complete` refuse a stale interaction.
-- **I6 Session custody excludes writers.** An unexpired interaction session is a Change custody owner: it refuses to
-  open while any writer, claim, Finalizer attempt, continuation action, publication lease or recovery fence exists,
-  and every such acquisition refuses while it is open (programme §5.2). Custody ends only when the exclusion check
-  finds no Delivery-owned process (D13); expiry, completion or Cockpit exit alone never release it.
+- **I6 Session custody excludes writers.** An unexpired interaction session is a Change custody owner. It opens only
+  when the Change has no writer, or when its only custody is the passive handoff retained by the settlement that
+  created its interaction (D15). It refuses every other writer, claim, Finalizer attempt, continuation action,
+  publication lease or recovery fence, and every such acquisition, the same-task consumption of that handoff
+  included, refuses while it is open (programme §5.2). Custody ends only when the exclusion check finds no
+  Delivery-owned process (D13); expiry, completion or Cockpit exit alone never release it.
 - **I7 Bounded, non-sensitive portable records.** Interaction records and machine observations contain only
   registry-declared identifiers, enums, digests, heads, times and bounded counts. No handler-authored free text.
 - **I8 Version widening.** Families widen their version literal; old instances validate unchanged and are
@@ -94,7 +100,8 @@
 - **I9 Gate first.** N02 I1 and I5 unchanged; N06-A adds one format-marker step and the widened versions.
 - **I10 Ledger and replay.** N03 I10 holds: a linked answer appends exactly one ledger entry in the transaction
   that resolves the request and the interaction, and no N06 writer touches `confirmations`. Every interaction write
-  during a retained Builder handoff is bound by an interaction transition receipt in its transaction (D14).
+  during a retained Builder handoff is bound by an interaction transition receipt in its transaction and leaves the
+  outcome binding unchanged, except the receipt-backed withdrawal that starts a retry before confirmation (D14).
 - **I11 Positive ownership before any signal.** A process is signalled only when it carries the session's spawn
   token or belongs to the group of a leader verified live by pid, create time and token (D13). Nothing else in the
   recorded group or session is signalled; when a process cannot be classified, the session stays `contained`.
@@ -109,7 +116,7 @@ An interaction is attached to one Decision Request. Nothing new is added to `Del
 | Recognition | Block settlement parses `applies_to.procedure` with `interaction_registry.parse_procedure`. A prefix match that does not resolve to a registry entry, `applies_to.kind` other than `confirm-check`, non-empty `options`, a summary other than the registry `confirmation_question`, criteria that are not current, or a block without `resume_commit` equal to the branch head (`runtime_settlement.py:405`) refuses the block with `interaction-request-invalid`; nothing is written. A scoped request that arrives with a `resolution` is already refused by N03 (§1.5 Confirmation scope) |
 | Reserved `none` | `interaction-handler:none@1` declares a human-only check that no registered handler can perform. It creates an interaction in `unavailable` / `no-registered-handler` (V17) instead of a generic Action Request |
 | Engine record | Settlement writes `DeliveryInteraction` ([1.6](#16-persisted-records)) and its first transition receipt (D14) in the block's transaction |
-| Resolution | MCP `answer` on the linked request through N03's D13 boundary. Its resolver asks the interaction question only while the session is `awaiting-human`; an `accept` resolves the request, appends the ledger confirmation and sets the interaction `resolved` with its `confirmation_id` in one transaction (§1.7, §1.13). Decision `passed` is shown as observed and `failed` as not observed. Cockpit `answer_request` keeps N03-A's `channel-unavailable` refusal for scoped requests unless U2 is (a) |
+| Resolution | MCP `answer` on the linked request through N03's D13 boundary. Its resolver asks the interaction question only while the session is `awaiting-human`; an `accept` resolves the request, appends the ledger confirmation and sets the interaction `resolved` with its `confirmation_id` in one transaction that consumes N03's consent generation, whose question carries the interaction binding (§1.7, §1.13, D16). Decision `passed` is shown as observed and `failed` as not observed. Cockpit `answer_request` keeps N03-A's `channel-unavailable` refusal for scoped requests unless U2 is (a) |
 | Fabrication routes | Both Builder block routes store the worker's `DeliveryRequest` verbatim, `resolution` included (`runtime_reads.py:710-731`, `runtime_settlement.py:524-558`), and MCP `answer` passes caller-set `provenance` (`target_server.py:442-460`). After N03-A a scoped request created with a `resolution` is refused, and caller `resolution` and `provenance` confer nothing on a scoped request (N03 §1.5, D13). N06-A pins both routes for linked and ordinary scoped requests with assembled tests (§3.2) |
 | Evidence | The Builder, reacquired for the same task, records N03 schema-2 observations: one `manual-procedure` with assessment `passed`, `human-confirmed` provenance, `confirmation_id` = the interaction's ledger confirmation, `procedure` = the scope's procedure and `covers` = its acceptance refs (N03 I6); and copies of the interaction's machine observations (`machine-observed`) with `procedure_registration_digest` = handler digest. Optional locator `request:<request_id>` (an existing N03 scheme) |
 | Private input | Never enters a request. Request answers are persisted and published (`DeliveryRequestResolution.response_text`, `runtime_models.py:821-837`) |
@@ -131,7 +138,7 @@ Programme §9.1 fields and where each lives:
 | User step | Registry `user_step` (one instruction) and `human_step: sign-in\|confirmation` |
 | Evidence split | Machine: handler `observation` messages, registry-declared kinds, recorded by `complete`. Human: the ledger confirmation of the linked answer |
 | Alternatives | **Not now** (`postpone`), **Explain existing evidence** (N03-C projection of the scoped criteria), **Check not available here**, **Change requirements** (N04 control, when present). Declining never means success |
-| Resume | `complete` releases custody and clears the block; continuation reacquires the same Builder task with the interaction in its context |
+| Resume | The linked answer resolves request and block (N03's request-resolution successor); `complete` records machine observations and leaves the binding unchanged; after release, continuation reacquires the same Builder task with the interaction in its context. Without a confirmation, a failed or stale interaction is withdrawn in the reacquisition transaction (D14) |
 
 **Registry** (`owlbear_delivery.interaction_registry`, leaf; imports Pydantic and the stdlib only):
 
@@ -162,16 +169,26 @@ descriptor's `url_policy`; N06 registers none, and N07 declares B1's:
   `?client_secret=…` or a SharePoint `?e=…` sharing key is refused without depending on a keyword list.
   Declared keys are parsed with `parse_qsl(strict_parsing=True, keep_blank_values=True)`; every key must be
   declared, appear once and match its declared value pattern; a `%` left after one decoding is refused.
-- **Path.** Split on `/`; at most 32 segments. Each segment is percent-decoded once and must then match
-  `[A-Za-z0-9._~-]{1,128}`, so `;`, `=`, `:`, `@`, `+`, `,`, `%`, whitespace, controls, `\` and an encoded `/` are
-  refused, and so is double encoding. `.` and `..` segments, and empty segments other than a trailing slash, are
-  refused. A segment equal to a credential word (`token`, `access_token`, `id_token`, `session`, `sig`,
-  `signature`, `password`, `secret`, `apikey`, `api_key`, `auth`, `code`, `saml`, `jwt`, `bearer`;
-  case-insensitive) is refused, as is a token-like segment: one starting `eyJ` or holding a run of 32 or more
-  `[A-Za-z0-9_]` characters (GUIDs, whose runs are at most 12, pass).
+- **Path.** Admitted only when it matches one of the descriptor's declared `paths`; the default admits only an
+  empty path or `/`. A path template is a sequence of literal segments and named identifier slots; each slot has an
+  anchored pattern and a maximum length, for example `/wiki/{space:[A-Z]{2,16}}/pages/{page:[0-9]{1,20}}`.
+  Before matching, the path is split on `/` (at most 32 segments); each segment is
+  percent-decoded once and must then match `[A-Za-z0-9._~-]{1,128}`, so `;`, `=`, `:`, `@`, `+`, `,`, `%`,
+  whitespace, controls, `\` and an encoded `/` are refused, and so is double encoding. `.` and `..` segments, and
+  empty segments other than a trailing slash, are refused. A path that no template matches is refused
+  (`url-path-undeclared`): a bearer link such as `/invite/<GUID>` or `/s/ab3-x9k` fails because nothing declares
+  it, not because a heuristic recognized it. Registration refuses a slot without a pattern or maximum length, and a
+  template with a literal segment in the bearer-route list (`invite`, `share`, `shared`, `s`, `r`, `guest`,
+  `guestaccess`, `join`, `magic`, `reset`, `confirm`, `verify`, `activate`, `login`, `signin`, `sso`, `oauth`,
+  `callback`, `redirect`; case-insensitive) or the credential list below. As a second filter on slot values, a
+  value equal to a credential word (`token`, `access_token`, `id_token`, `session`, `sig`, `signature`,
+  `password`, `secret`, `apikey`, `api_key`, `auth`, `code`, `saml`, `jwt`, `bearer`; case-insensitive) is
+  refused, as is a token-like value: one starting `eyJ` or holding a run of 32 or more `[A-Za-z0-9_]` characters.
+  That a declared identifier is not a bearer capability is the handler author's claim, reviewed with the handler
+  (N07 for B1).
 - **Errors.** Bounded codes `url-parse`, `url-scheme`, `url-userinfo`, `url-port`, `url-host`, `url-length`,
-  `url-fragment`, `url-query-not-allowed`, `url-query-key`, `url-query-value`, `url-path-segment`,
-  `url-path-credential`, `url-path-token-like`; never the value.
+  `url-fragment`, `url-query-not-allowed`, `url-query-key`, `url-query-value`, `url-path-undeclared`,
+  `url-path-segment`, `url-path-credential`, `url-path-token-like`; never the value.
 
 `text` is length- and pattern-bounded; `choice` is an enum. Models use `SecretStr`, `hide_input_in_errors=True`,
 and errors are rendered only with `include_input=False` (P4b).
@@ -196,13 +213,15 @@ and errors are rendered only with `include_input=False` (P4b).
 | `handler_id`, `handler_version`, `handler_digest` | Registry identity; `None` for `none` |
 | `procedure`, `acceptance` | Copied from `applies_to` |
 | `candidate_head` | The block's `resume_commit` |
-| `status` | `needs-session`, `unavailable`, `postponed`, `resolved`, `completed`, `stale`, `preparation-failed` |
+| `handoff_settlement_id` | The `settlement_id` of the request-bearing Builder settlement that created it, or None when the block route released the writer (D15) |
+| `status` | `needs-session`, `unavailable`, `postponed`, `resolved`, `completed`, `stale`, `preparation-failed`, `withdrawn` |
 | `status_reason` | Enum: `no-registered-handler`, `handler-not-registered-here`, `platform-unsupported`, `tool-missing`, `candidate-missing`, `user-postponed`, `session-expired`, `session-lost`, `handler-failed`, `head-changed`, `contract-changed`, `handler-changed`, `block-cleared`, `paused`, or a registry `failure_codes` key |
 | `confirmation_id` | sha256 or None: the ledger confirmation of the linked answer. The view derives observed (`passed`) or not observed (`failed`) from its decision through N03 `resolve_confirmation`; nothing stores the outcome twice |
 | `observations` | ≤ 16 `DeliveryInteractionObservation{kind, result: passed\|failed, observed_at, platform, labels, target_class}`; kinds and labels from the registry |
 | `created_at`, `updated_at`, `completed_at` | Times |
 
-`ChangeInteractionSession` (coordination, host-local custody): `interaction_id`, `session_id` (128-bit random),
+`ChangeInteractionSession` (coordination, host-local custody): `interaction_id`, `handoff_settlement_id` (copied
+from the interaction; D15), `session_id` (128-bit random),
 `holder{pid, port, started_at}` (the Cockpit instance), `spawn{token, intent_at}` (128-bit random token committed
 before any process starts; an ownership marker that authorizes nothing), `leader{pid, create_time,
 cmdline_digest}` (the launcher, set after spawn and before the handler runs; pid = pgid = sid; `create_time` from
@@ -214,10 +233,12 @@ cmdline_digest}` (the launcher, set after spawn and before the handler runs; pid
 low-entropy values such as internal URLs could be recovered from one. `cmdline_digest` covers the launcher argv,
 which carries the token and never a value (I2).
 
-`_DeliveryInteractionTransitionReceipt` (schema 1): `change_id`, `interaction_id`, `sequence` (from 1), `kind`
-(`created`, `postponed`, `resolved`, `completed`, `failed`, `stale`), `before_digest` (sha256 of the previous
-receipt's `after`, None for `created`), `after` (the whole `DeliveryInteraction`), `confirmation_id` (only for
-`resolved`), `receipt_id` (`_receipt_digest` over the rest).
+`_DeliveryInteractionTransitionReceipt` (schema 1): `change_id`, `interaction_id`, `settlement_id` and
+`builder_handoff_context` (the retained handoff it belongs to; read through that context like N03's receipts),
+`sequence` (from 1 per handoff), `previous_receipt_id`, `kind` (`created`, `postponed`, `resolved`, `completed`,
+`failed`, `stale`, `withdrawn`), `before_frontier_digest` and `after_frontier_digest`, `after` (the whole
+`DeliveryInteraction`), `confirmation_id` (only for `resolved`), `binding_before_digest` and `binding_after`
+(only for `withdrawn`), `receipt_id` (`_receipt_digest` over the rest).
 
 ### 1.7 Interfaces and error cases
 
@@ -225,17 +246,18 @@ receipt's `after`, None for `created`), `after` (the whole `DeliveryInteraction`
 | --- | --- | --- |
 | Block settlement with an interaction-linked request | `runtime_settlement.py` (request-bearing block, `:250`, `:473-528`) | Creates the interaction (`needs-session`, or `unavailable` for `none`) and its `created` transition receipt in the block's transaction; refusal `interaction-request-invalid` with a bounded field code |
 | Readiness | `application_readiness.py`, `work_items.py` | New `DeliveryReadinessReason` values: `interaction-ready` (next actor you, action `help-with-step`), `interaction-in-progress` (session open, not awaiting the user), `interaction-awaiting-confirmation` (session `awaiting-human` and the linked request unresolved; next actor you; under U2 (b) no Cockpit action, the panel gives chat guidance; under U2 (a) action `confirm-step`), `interaction-unavailable`, `interaction-postponed` (action `help-with-step`), `interaction-handler-unverified` (session `contained`; next actor you; action `check-handler-stopped`), `interaction-preparation-failed` and `interaction-stale` (next actor agent). New `WorkItemActionKind` values `HELP_WITH_STEP` and `CHECK_HANDLER_STOPPED` (and `CONFIRM_STEP` only under U2 (a)). Progress: ready, awaiting confirmation, unavailable, postponed and unverified → `needs-sign-in` when `human_step` is sign-in, else `needs-decision`; `starting` session → `preparing`; agent reasons → `waiting-for-chat` (M12/M13 of the N09 table). Selection order: programme §5.4 rows 8–9 |
-| Continuation | `application_acquisition.py:263` | `interaction-awaiting-confirmation` returns `human` with `confirmation{request_id, expected_frontier_digest}`, the handle the orchestrator passes to MCP `answer` (§1.13); the other user reasons return `human` with no launch; `interaction-preparation-failed` and `interaction-stale` reacquire the same Builder task as a counted retry with failure code `interaction-preparation-failed` or `interaction-stale` (D03 retry ledger). A session in any state, `closing` and `contained` included, makes every Planner, Builder, Finalizer and engine acquisition `busy` |
-| `open_interaction_session(change_id, interaction_id, holder, expected_frontier_digest)` | new `application_interactions.py` mixin | Pause-gated custody start (N09-A2 K3): commits the coordination lease with the frontier as an exact no-op participant. Refuses `ERR_DELIVERY_INTERACTION_NOT_READY` (status), `_UNAVAILABLE` (static probe), `_STALE`, `_SESSION_BUSY` (another unexpired session or any writer custody), `ERR_DELIVERY_CHANGE_PAUSE_REQUESTED`. A `postponed` interaction reopens through this call |
+| Continuation | `application_acquisition.py:263` | `interaction-awaiting-confirmation` returns `human` with `confirmation{request_id, expected_frontier_digest}`, the handle the orchestrator passes to MCP `answer` (§1.13); the other user reasons return `human` with no launch; `interaction-preparation-failed` and `interaction-stale` reacquire the same Builder task: with a retained handoff through its same-task acquisition, which withdraws the unconfirmed interaction in the same transaction (D14); without one through ordinary Builder acquisition after the same withdrawal. No retry counter changes; the 64-interaction bound (§1.4) ends a loop. A session in any state, `closing` and `contained` included, makes every Planner, Builder, Finalizer and engine acquisition `busy` |
+| `open_interaction_session(change_id, interaction_id, holder, expected_frontier_digest)` | new `application_interactions.py` mixin | Pause-gated custody start (N09-A2 K3): commits the coordination lease with the frontier as an exact no-op participant. Admits a Change with no writer and no handoff, or one whose only custody is the handoff of the interaction's `handoff_settlement_id` (writer = its `original_writer` with kind `handoff`, `branch_head` = `candidate_head`; D15). Refuses `ERR_DELIVERY_INTERACTION_NOT_READY` (status), `_UNAVAILABLE` (static probe), `_STALE`, `_SESSION_BUSY` (another unexpired session, an active writer of any kind, a foreign handoff or any other custody owner), `ERR_DELIVERY_CHANGE_PAUSE_REQUESTED`. A `postponed` interaction reopens through this call |
 | `update_interaction_session(..., session_id, expected_state, state, spawn=None, leader=None, input_ref=None, inputs_provided=())` | same | CAS on session id and state; refuses foreign sessions; `starting` requires a committed `spawn`; `leader` is set once, while `starting`, under a CAS on the spawn token; an expired session accepts only the moves to `closing` and `contained` |
-| Linked answer dispatch | N03's `answer` adapter and resolver (`target_server.py`), `PortfolioApplication.answer`, `DeliveryRuntime.resolve_request`; N06-A adds the interaction branch | Resolver: for a request whose procedure parses as an interaction handler, it renders only while the interaction is non-stale and its session is `awaiting-human` on `candidate_head` = branch head; the form adds the registry `confirmation_question` and `user_step`, `interaction_id`, `session_id`, `candidate_head`, and `decision_labels` as titles of N03's `passed` and `failed`. Otherwise it returns a plain refusal value and nothing is asked: `ERR_DELIVERY_INTERACTION_NOT_AWAITING_CONFIRMATION` or `_STALE`. Apply: one `RuntimeTransaction` under N03's `expected_frontier_digest` CAS writes the request resolution, appends the ledger confirmation, sets the interaction `resolved` with that `confirmation_id`, writes N03's schema-2 request-resolution receipt and the `resolved` transition receipt (D14), and holds an exact no-op coordination participant that requires the rendered session id and state `awaiting-human`. Any mismatch writes nothing. Replay follows N03: an identical answer returns the stored resolution; a later answer finds the request resolved |
-| `complete_interaction(..., session_id, observations)` | same | Validates kinds, labels and bounds against the registry; requires `resolved`; status `completed`; session `closing`; clears the block; transition receipt. Replay with identical observations returns the stored record |
+| Linked answer dispatch | N03's `answer` adapter and resolver (`target_server.py`), `PortfolioApplication.answer`, `DeliveryRuntime.resolve_request`; N06-A adds the interaction branch | Resolver: for a request whose procedure parses as an interaction handler, it renders only while the interaction is non-stale and its session is `awaiting-human` on `candidate_head` = branch head; the form adds the registry `confirmation_question` and `user_step`, `interaction_id`, `session_id`, `candidate_head`, and `decision_labels` as titles of N03's `passed` and `failed`. Otherwise it returns a plain refusal value and nothing is asked: `ERR_DELIVERY_INTERACTION_NOT_AWAITING_CONFIRMATION` or `_STALE`. Apply: one `RuntimeTransaction` under N03's `expected_frontier_digest` CAS writes the request resolution, appends the ledger confirmation, sets the interaction `resolved` with that `confirmation_id`, writes N03's schema-2 request-resolution receipt and the `resolved` transition receipt (D14), and holds an exact no-op coordination participant that requires the rendered session id and state `awaiting-human`. This transaction consumes N03's consent generation (D16). Any mismatch writes nothing. Replay follows N03: a retry of the consumed generation returns the stored resolution and writes no second ledger entry, interaction write or receipt; a later answer finds the request resolved |
+| `complete_interaction(..., session_id, observations)` | same | Validates kinds, labels and bounds against the registry; requires `resolved`; status `completed`; session `closing`; transition receipt; the binding is unchanged, since the answer already resolved request and block (D14). Replay with identical observations returns the stored record |
 | `postpone_interaction(..., session_id \| None, reason)` | same | User Not now, expiry, session loss, pause drain: status `postponed` with reason; session `closing`; request stays unresolved; transition receipt |
 | `fail_interaction_session(..., session_id, failure_code)` | same | `preparation-failed` (repairable code) or `unavailable` (environment code); session `closing`; transition receipt |
 | `release_interaction_session(..., session_id)` | same | Runs the exclusion check itself through `interaction_custody` (D13); no caller-supplied proof. Releases only when it holds; a live owned process → `ERR_DELIVERY_INTERACTION_HANDLER_ALIVE`, lease kept; unknown → `contained` |
 | `contain_interaction_session(..., session_id, containment)` | same | Closure unknown (scan failure, unreadable identity, ambiguous member, kill refused): session `contained` with its `containment` record; lease kept; Change attention `interaction-handler-unverified`; never released by time |
 | `recheck_interaction_session(change_id, interaction_id, expected_session_id, expected_state)` | same | The user's recovery route for `closing` and `contained`, and for any state whose holder is dead (pid + `started_at`). Exact fence on session id and state. Runs the authorized kills and the exclusion check (D13), then releases, or stays `contained` with a fresh `containment`; an open session of a live holder → `_SESSION_BUSY`. Needs no nonce, opens no session, is not pause-gated (a drain step, K2) and never releases by elapsed time. Callable by the holding Cockpit or any later one |
-| `interaction_custody` | new `owlbear_delivery/interaction_custody.py` (leaf; `psutil` as `worker_stall.psutil_user_processes`, `worker_stall.py:347`) | `classify(session) -> InteractionExclusion{state: excluded \| alive \| unknown, owned, ambiguous}` and `kill_owned(session)` over current-user processes, by the rules of D13; a process-table protocol lets N06-A tests inject tables |
+| `interaction_custody` | new `owlbear_delivery/interaction_custody.py` (leaf; `psutil`) | `classify(session) -> InteractionExclusion{state: excluded \| alive \| unknown, owned, ambiguous}` and `kill_owned(session)` over every current-user process, the caller's descendants included, read by its own `psutil_same_user_processes()`; `worker_stall.psutil_user_processes` is not reused and keeps its semantics (D13). A process-table protocol lets N06-A tests inject tables |
+| Same-task handoff consumption | `workspace_coordination.py:1318-1349`, `application_acquisition.py` `_validate_builder_handoff_source`; loader | Refuses while `interaction_session` is present in any state (D15). For an unconfirmed `preparation-failed` or `stale` interaction it carries the `withdrawn` receipt and binding change (D14) |
 | `answer` | `portfolio_application.py:1340`; MCP and Cockpit callers | Linked requests: the dispatch above, with every N03 refusal (`ERR_DELIVERY_CONFIRMATION`). Every scoped request: N03's boundary. Cockpit `answer_request` keeps N03-A's `channel-unavailable` refusal for scoped requests unless U2 is (a) |
 | Builder block routes | `runtime_reads.py:710-731`, `runtime_settlement.py:524-558` | A linked request outside §1.4 (kind, options, summary, procedure, criteria, `resume_commit`) is refused `interaction-request-invalid`; a `resolution` on any scoped request is N03's refusal |
 | `submit_result` / `publish_result` admissibility | `delivery_runtime.py` facade; N03 `evidence.py` | Adds: an observation whose `procedure_registration_digest` equals a handler digest needs a `completed` interaction in the same outcome with that digest, `candidate_head == exact_commit`, and an equal machine observation (kind, result, platform, labels, target class); a `human-confirmed` observation whose `confirmation_id` is an interaction's needs that interaction `completed` and non-stale with `candidate_head == exact_commit` (N03 I6 already requires decision `passed`). Reasons `interaction-evidence-unmatched`, `interaction-not-completed`, `interaction-stale` join N03's bounded `gaps` |
@@ -261,7 +283,7 @@ Errors keep the existing envelopes: core `DeliveryInteractionError(DeliveryRunti
 | session `awaiting-human` | linked `answer` accepted (N03 boundary, §1.13) | `resolved`; session unchanged | Request resolution, ledger entry, `confirmation_id` and receipts in one transaction |
 | session `awaiting-human` | answer declined, cancelled, refused, channel missing or request state invalid | unchanged | Nothing written |
 | session `awaiting-human`, interaction `resolved` | Cockpit reads the resolution bound to its session | session `finishing` | `human-step-complete{outcome}` |
-| session `finishing` | handler `finished` | `completed`; session `closing` | Observations; block cleared |
+| session `finishing` | handler `finished` | `completed`; session `closing` | Observations; binding unchanged |
 | any open session state | Not now (`postpone`) | `postponed` / `user-postponed`; session `closing` | `cancel` |
 | any open session state | `expires_at` passes (Cockpit timer) | `postponed` / `session-expired`; session `closing` | `cancel` |
 | any open session state | handler `failed`, exit or protocol violation | `preparation-failed` or `unavailable`; session `closing` | By registry code |
@@ -271,7 +293,8 @@ Errors keep the existing envelopes: core `DeliveryInteractionError(DeliveryRunti
 | session `closing` or `contained` | **Check again** (`recheck`) | released, or `contained` with a fresh `containment` | No timer; no new session |
 | any session state | Cockpit exits (clean) | as Not now or `session-lost`; session `closing` | Shutdown hook runs close and the exclusion check before exit; if it cannot finish, the lease stays |
 | any session state | Cockpit dies (SIGKILL), including between spawn and `leader` | unchanged until a Cockpit acts | Handler sees EOF (P7); an unreleased launcher exits at control-pipe EOF (P11). Nothing is released by time: the next Cockpit start, or `open` or `recheck` on that Change, finds the holder dead (pid + `started_at`) and runs the D13 kills and exclusion check, by token alone when `leader` is missing. Then released, or `contained`. Interaction becomes `postponed` / `session-lost`, or `preparation-failed` / `session-lost` if it was `resolved` |
-| `resolved` (session `awaiting-human` or `finishing`) | session lost before `finished` | `preparation-failed` / `session-lost` | Block clears as a counted same-task Builder retry after release; the resolution cannot support a result |
+| `resolved` (session `awaiting-human` or `finishing`) | session lost before `finished` | `preparation-failed` / `session-lost` | After release the same Builder task is reacquired from the answered pause (D14); the resolution cannot support a result |
+| `preparation-failed` or `stale`, request unresolved, no session | same-task Builder reacquisition | `withdrawn` | Withdrawal receipt, binding change and claim activation in one transaction (D14) |
 | any | head, contract or handler change | `stale` | Refuse confirm and complete; Builder retry |
 | any | operator clears the block | `stale` / `block-cleared` | Session cancelled |
 | `needs-session` | pause request | unchanged; `open` refused | Open sessions drain (K2) |
@@ -291,7 +314,8 @@ Cockpit's error envelope and `handle_target_validation_error` (`target_work.py:8
 fixed body for `/api/changes`; the instance record pattern (`main.py:211-216`); `Client(assemble_target_server(...))`,
 the HTTP test client and the maintained E2E stack (`e2e/support/start-work-portfolio-stack.mjs`); N03's D13 `answer`
 resolver and boundary, ledger readers `resolve_confirmation` and `confirmation_applies`, the schema-2
-request-resolution receipt and the L replay row; `worker_stall.psutil_user_processes` (`worker_stall.py:347`).
+request-resolution receipt and the L replay row; the retained Builder handoff and its same-task acquisition
+(`workspace_coordination.py:1288-1349`); `psutil` 7.2.2, but not `worker_stall.psutil_user_processes` (D13).
 
 ### 1.10 Contracts for successors
 
@@ -299,7 +323,8 @@ request-resolution receipt and the L replay row; `worker_stall.psutil_user_proce
 
 1. One `InteractionHandlerDescriptor` for B1 added to `DEFAULT_INTERACTION_HANDLERS`: `argv` runs the candidate's
    handler inside `{candidate_worktree}`; `human_step: sign-in`; one `url` input, `private`, with a `url_policy`
-   (`host_policy`, and `query_keys` only if a B1 target needs a query, each with a value pattern);
+   (`host_policy`, `paths` templates with typed identifier slots, and `query_keys` only if a B1 target needs a
+   query, each with a value pattern);
    `target_classes` (for example `sharepoint`, `confluence`); `platforms: (macos,)`; `resources: (edge-profile,)`;
    observation kinds for launch, restart and owned cleanup; failure codes classified repairable or environment.
 2. The candidate-side handler implements protocol v1 from its own source, reads inputs only from `start`, never
@@ -410,6 +435,11 @@ Agent-settled with probe evidence:
     live process holding the leader's pid with another create time proves the recorded group ended before that
     process was created (the fork rule above), so token-less members of a group it leads are not ours and are
     ignored. Zombies count as exited.
+  - *Unfiltered scan.* `worker_stall.psutil_user_processes` skips the caller and every descendant
+    (`worker_stall.py:347-370`), because Delivery's own Git children are never a stopped worker's leftovers. A
+    launcher stays Cockpit's child under `start_new_session=True`, so that scanner would never see it and exclusion
+    would hold with the handler alive. `interaction_custody` scans every current-user process, the caller's
+    descendants included, through its own `psutil_same_user_processes()`; the worker scanner is unchanged.
   - *Containment.* A failed scan, an unreadable environment or cmdline inside the recorded group or session, an
     ambiguous member or a kill the OS refuses keeps the lease in `contained` with a bounded `containment`
     record. Nothing releases it by time; **Check again** (`recheck`, §1.7) re-runs the kills and the check.
@@ -419,17 +449,71 @@ Agent-settled with probe evidence:
     for an interaction, inheritance is the point, since every descendant is custody.
   - *Residual.* A descendant that both calls `setsid` and clears its environment escapes; registry handlers are
     repository code, and N07 owns Edge profile custody (§1.10 items 2 and 3, G15).
-- **D14 Interaction writes replay through receipts** (P12). During a retained Builder handoff the loader refuses a
-  pending publication (`delivery_application_loader.py:603-607`) and rebuilds the expected frontier from
-  `snapshot.frontier` with only the handoff binding substituted (`:1010-1053`); a local `interactions` change would
-  make the Change unavailable after a restart. Every N06 frontier write during a retained handoff therefore writes
-  one `_DeliveryInteractionTransitionReceipt` (§1.6) in its transaction. N06-A extends N03's L row: every
-  expected frontier built from `snapshot.frontier` takes the snapshot's `interactions`, then the `after` of each
-  receipt that precedes that frontier's point in the handoff (N03's answer and lifecycle rank), in sequence order.
-  A `resolved` receipt's `confirmation_id` must equal the ledger entry that its answer's schema-2
-  request-resolution receipt binds. A local interaction that no receipt binds, a broken `before_digest` chain or a
-  byte difference fails the existing bootstrap check (V20). Outside a retained handoff, interaction writes record
-  pending publication like other portable writes.
+- **D14 Interaction writes replay through receipts; the binding changes only by receipt** (P12, P13). During a
+  retained Builder handoff the loader refuses a pending publication (`delivery_application_loader.py:603-607`) and
+  rebuilds the expected frontier from `snapshot.frontier` with only the handoff binding substituted
+  (`:1010-1053`). It derives that binding only as the settlement result or N03's request-resolution successor
+  (`:1582-1605`, `:1831-1890`), and anchors lifecycle receipts only to those two baselines (`:1755-1777`).
+  - *Binding preserved.* No N06 write during a handoff changes the outcome binding except `withdrawn`. `complete`
+    does not clear the block: the linked answer already resolved request and block through N03's
+    request-resolution receipt (`runtime_receipts.py:309-348` requires `updated_block.resolved`), and the Builder
+    reacquires from that answered pause through the existing same-task acquisition. `created`, `postponed`,
+    `resolved`, `completed`, `failed` and `stale` receipts carry interaction state only; the loader requires the
+    binding to equal the one it already derives.
+  - *Withdrawal.* A failure before confirmation (`preparation-failed` or `stale`, request unresolved, no session)
+    needs the Builder without an answer. The same-task acquisition transaction that consumes the handoff
+    (`workspace_coordination.py:1318-1349`) gains one participant, a `withdrawn` receipt: the interaction becomes
+    `withdrawn`, and the binding becomes the settlement result with the block resolved (`resolution_note`
+    `interaction-withdrawn:<status_reason>`, `resolution_locators` `(request_id,)`) and the request unresolved, so
+    it can never support evidence. The loader admits it as a third baseline, exclusive with N03's
+    request-resolution receipt for that request: both, or a withdrawal of a resolved request, fail bootstrap.
+    Without a handoff the same withdrawal is an ordinary portable write before Builder acquisition.
+  - *Identity and order.* Every receipt names its handoff (`settlement_id`, `builder_handoff_context`) and is read
+    through that context, so a receipt of an earlier handoff never replays into a later one. The loader merges
+    N06's receipts and N03's answer and lifecycle receipts into one chain from the settlement frontier to the
+    local frontier: each link's `before_frontier_digest` equals the previous link's after digest; a `resolved`
+    receipt shares its transaction, frontier digests and `confirmation_id` with its N03 request-resolution
+    receipt; a lifecycle baseline takes the interactions replayed up to its link. A gap, fork, reordered link,
+    unbound local interaction or byte difference fails the existing bootstrap check (V20). Outside a handoff (no
+    retained handoff and no binding with `builder_handoff_context`, `:603-607`), interaction writes record pending
+    publication like other portable writes.
+  - *Restart cases.* (1) Failure before confirmation, restart before reacquisition: binding = settlement result,
+    interaction `preparation-failed` or `stale` from its receipt; the Change is available and readiness offers the
+    retry. (2) Restart after that reacquisition: the handoff is consumed and the loader derives the acquired claim
+    from the withdrawn baseline (G18). (3) Restart between the answer and `complete`, or between `complete` and
+    reacquisition: binding = N03's successor, interactions from receipts. (4) Restart after reacquisition from the
+    answered pause: as today, plus the interactions.
+- **D15 Session beside its own Builder handoff** (round 3). A request-bearing Builder settlement keeps the ended
+  writer as a passive `kind="handoff"` writer with `builder_handoff` (`workspace_coordination.py:1288-1316`);
+  `release` refuses it (`:894`), a coordination update refuses to change a record that holds it (`:1000-1001`),
+  and only the same-task acquisition consumes it (`:1318-1349`). An interaction created by settlement always
+  meets that writer.
+  - *Admission.* `open` admits exactly two custody shapes: no writer and no handoff (the block route released the
+    writer at `resume_commit`, `change_workspace.py:1260`), or the handoff whose `settlement_id` equals the
+    interaction's `handoff_settlement_id`, whose writer is its `original_writer` with kind `handoff`, and whose
+    `branch_head` equals `candidate_head`. An active writer of any kind, a foreign handoff or any other custody
+    owner is `_SESSION_BUSY`.
+  - *Fence.* `ChangeCoordination` validates that a session beside a handoff names that handoff's
+    `settlement_id` (`workspace_models.py:1633-1660`). The ownership-update rule gains one exception: a
+    replacement that differs from a handoff-holding record only in `interaction_session` and keeps that relation.
+    Every other handoff mutation still refuses.
+  - *Release and reacquisition.* The session never releases or replaces the handoff; the handoff outlives it.
+    `_prepare_builder_handoff_acquisition` and every other route that consumes or replaces a handoff refuse while
+    `interaction_session` is present, `closing` and `contained` included. After the D13 release, the same-task
+    acquisition consumes the handoff as today, with D14's withdrawal when no confirmation exists. Unrelated
+    custody stays refused both ways (I6).
+- **D16 One consent generation** (round 3; N03 `:486-513`). The linked answer consumes N03's consent generation in
+  the transaction that records the confirmation, the interaction `resolved` and both receipts; N06 adds no
+  generation or boundary of its own. The N06 binding inside that generation is the rendered `interaction_id`,
+  `session_id` and `candidate_head` beside N03's request, criteria and frontier digest, plus the coordination
+  participant that requires the same session in `awaiting-human`. Today the generation is the expected frontier
+  digest, made unrepeatable by the ledger append. Opening, reopening or recovering a session writes no frontier,
+  so the session id in the question and the participant, not the digest, separate one session from the next. If
+  PR #360 replaces the digest by an explicit server-owned generation consumed on accept, decline or cancel (as
+  N05's `merge_consent` generation, N05 D14), the same binding enters that generation's subject: any session or
+  interaction change supersedes it, a decline or cancel consumes it without an N06 write, and a fresh `answer`
+  while still `awaiting-human` mints the next. Either way a consumed or superseded generation records nothing
+  new, and a replay returns the recorded disposition.
 
 #### U1 — Retention and privacy policy for private inputs and interaction evidence
 
@@ -460,14 +544,15 @@ execution plan (§7) had reserved this decision for N06.
 
 ### 1.13 Confirmation channel under N03 U2
 
-N03 (PR #360 at `86289635f`) owns the only user-only confirmation. MCP `answer` on a scoped request asks the user
+N03 (PR #360 at `f4d09d774`) owns the only user-only confirmation. MCP `answer` on a scoped request asks the user
 through form elicitation from one server-injected `Annotated[DeliveryConfirmationOutcome, Resolve(...)]` parameter,
 on the legacy `elicitation/create` route or the modern `InputRequiredResult` round trip. An `accept` appends one
 `DeliveryUserConfirmation` to the Change ledger (I10) together with the request resolution and, during a retained
 handoff, a schema-2 request-resolution receipt, in one transaction. Decline, cancel or a missing channel writes
 nothing (`ERR_DELIVERY_CONFIRMATION`), and the SDK's `RequestStateBoundary` refuses forged, foreign, expired or
-re-bound state. N03 U2 (open user decision, N03 `:511-570`) decides whether a Cockpit click also counts. N06 adds
-no channel; it adds the interaction branch of §1.7 to that `answer`.
+re-bound state. Each confirmation consumes N03's consent generation (`:486-513`; D16). N03 U2 (open user
+decision, N03 `:541`) decides whether a Cockpit click also counts. N06 adds no channel; it adds the interaction
+branch of §1.7 to that `answer`.
 
 **Journey under U2 (b), chat only** (N03's recommendation):
 
@@ -485,9 +570,10 @@ no channel; it adds the interaction branch of §1.7 to that `answer`.
 6. The handler reports `finished`; `complete`, close and release follow (§1.8); continuation reacquires the
    Builder task.
 
-Decline, cancel, a missing channel, a refusal or an invalid request state writes nothing; the session stays
-`awaiting-human` until the user answers a fresh `answer`, selects **Not now**, or the session expires. An expiry
-during the elicitation changes the frontier, so the late answer fails N03's CAS.
+Decline, cancel, a missing channel, a refusal or an invalid request state records no confirmation and no N06
+write (whether a decline consumes the generation is N03's rule, D16); the session stays `awaiting-human` until the
+user answers a fresh `answer`, selects **Not now**, or the session expires. An expiry during the elicitation
+supersedes the generation, so the late answer records nothing.
 
 **Journey under U2 (a), Cockpit clicks also count.** Steps 1 and 3 change: the panel shows **Observed** and **Not
 observed**, and N06-C's `POST …/confirm` hands the decision to N03-C's Cockpit boundary adapter. That adapter
@@ -522,6 +608,7 @@ no Delivery state touched. Scripts and outputs: `.owlbear/scratch/n06p/` (unvers
 | P10 | Round-1 gate source reads on `1600efa60` (source equal to `634a77be7`) | Both Builder block routes copy the worker's `DeliveryRequest`, `resolution` included (`runtime_reads.py:710-731`, `runtime_settlement.py:524-558`); `DeliveryRequestResolution.provenance` is a caller-set literal (`runtime_models.py:821-837`); MCP `answer` forwards it (`target_server.py:442-460`); `run()` calls `uvicorn.run(app, host=_HOST, port=port)` with the default access log (`main.py:372`); the session-open response carries the nonce and the guard admits header-less clients (this plan); `psutil` 7.2.2 is locked (the `mcp` version is corrected in P12); no `elicit` call exists in `serve/` | Gate findings 1, 2, 3 and 5 hold; confirmation moves to N03's boundary (D4, §1.13); D13; access log off (§1.7) |
 | P11 | `p11_launcher.py` on `e2fa3d913` (macOS, `psutil` 7.2.2): a launcher started with `start_new_session=True`, a control pipe (`pass_fds`) and a token in argv and environment | pid = pgid = sid; `psutil` reads the token from its cmdline and environment; closing the control pipe before `release` makes it exit 0 without spawning and leaves no token holder; after `release` its child and grandchild inherit the token in the same group (3 holders); `killpg` of the verified leader leaves no token holder | D13 release gate, token ownership and group kill (Ubuntu in G6) |
 | P12 | Round-2 gate source reads on `e2fa3d913` (source equal to `634a77be7`) and lane-c `86289635f` | N03 now defines D13 (`Resolve` parameter, legacy and modern routes, SDK `RequestStateBoundary`), the ledger with `confirmation_id` and channel enum (§1.5), I6, I10, the schema-2 request-resolution receipt binding the ledger append and the L replay row (§1.7), `ERR_DELIVERY_CONFIRMATION`, N06 expected to add channel `interaction` and an `interaction:` locator (§1.5, §1.9), U2 open (`:511-570`); the `confirmation: {kind: request-resolution}` shape no longer exists. The loader refuses a pending publication beside a Builder handoff (`delivery_application_loader.py:603-607`) and rebuilds the handoff frontier from `snapshot.frontier` with one binding substituted (`:1010-1053`). N08 D12 identifies controllers by pid, create time and cmdline digest and rejects an environment marker because children inherit it. `uv.lock` locks `mcp` 2.3.0 (P10 recorded 2.2.0 in error). The round-1 URL rule admits `?client_secret=…` and `/%61ccess_token=…` | Round-2 findings 1–5 hold; D3, D4, D13, D14, §1.5, §1.13 |
+| P13 | Round-3 gate source reads on `origin/dev` `141795676`, merged as `edab21d5a`, and lane-c `f4d09d774` (the gate cited pre-merge lines `workspace_coordination.py:951` and `delivery_application_loader.py:1592`) | A request-bearing Builder settlement replaces the build writer by a `kind="handoff"` writer with `builder_handoff` (`workspace_coordination.py:1288-1316`, `:1312`); `release` refuses it (`:894`); updates refuse while it is held (`:1000-1001`); only `_prepare_builder_handoff_acquisition` consumes it (`:1318-1349`); the model pins writer = `original_writer` with kind `handoff` (`workspace_models.py:1633-1660`). The loader also refuses pending publication while any binding carries `builder_handoff_context` (`delivery_application_loader.py:603-607`), derives a handoff binding only as the settlement result or the request-resolution successor (`:1582-1605`, `:1831-1890`) and anchors lifecycle receipts only to those (`:1755-1777`); that receipt requires a resolved block (`runtime_receipts.py:309-348`). `psutil_user_processes` skips its caller and the caller's descendants (`worker_stall.py:347-370`). N03 `:486-513`: single use; for scoped requests the expected frontier digest is the generation, consumed by the ledger append; N05 binds its own `merge_consent` generation (lane-c N05 plan `:135`, `:350`). The round-2 path rule admits `/invite/<GUID>` (alphanumeric runs ≤ 12, no credential word) | Round-3 findings 1–5 hold; D13–D16, §1.5 |
 
 ## 3. Phases
 
@@ -556,14 +643,14 @@ no Delivery state touched. Scripts and outputs: `.owlbear/scratch/n06p/` (unvers
     `resolve_request`'s interaction branch, `publish_result` admissibility (§1.7); N03 `evidence.py` gap reasons
   - `workspace_models.py`: `ChangeInteractionSession`, `ChangeCoordination.interaction_session`, version widening;
     `workspace_coordination.py`: lease open, update, recheck and release with the no-op frontier participant and
-    the K3 check
+    the K3 check; the session-beside-handoff relation, its update exception and the acquisition refusal (D15)
   - `application_models.py`: views, `DeliveryContinuationReason` additions and the `confirmation` handle;
     `application_acquisition.py`: `human` results, busy under an open session, Builder retry for preparation
     failure and stale; `application_readiness.py`, `work_items.py`: reasons, `HELP_WITH_STEP`,
     `CHECK_HANDLER_STOPPED`, progress rows, static probe
   - `portfolio_application.py`: `answer`'s interaction dispatch (§1.7); `delivery_application_loader.py`:
     `interaction_handlers` composition parameter, N03 §1.7 normalized comparisons for the new frontier field, and
-    the D14 extension of N03's L row
+    the D14 extension of N03's L row (one receipt chain, the withdrawal baseline)
   - `delivery_state.py`: snapshot version
   - `state_formats.py`, `state_migration.py`: §1.6 entries, `NESTED_MODELS`, marker step
   - `owlbear_delivery/__init__.py`; `serve/delivery/tests/fixtures/module_surface.json`; N02 fingerprint and golden
@@ -606,18 +693,27 @@ no Delivery state touched. Scripts and outputs: `.owlbear/scratch/n06p/` (unvers
     with that `confirmation_id`, and writes N03's schema-2 request-resolution receipt and the `resolved` transition
     receipt; the predecessor ledger is a byte prefix of the new one (I10); continuation before the answer returns
     `human` with the `confirmation` handle. Then `complete` with registry-valid observations → `completed`,
-    session `closing`; `release` frees the lease and clears the block; the same Builder task is reacquired with
-    the interaction in its build context.
+    session `closing`; `release` frees the lease; the binding is unchanged throughout; the same Builder task is
+    reacquired from the answered pause with the interaction in its build context.
   - The Builder submits a `manual-procedure` `passed` `human-confirmed` observation citing the interaction's
     `confirmation_id` plus copied machine observations at `exact_commit = candidate_head`; the result promotes and
     N03's evaluator shows the criterion `covered`.
   - The same journey answered `failed`: the interaction is `resolved` and its view reads not observed; a `passed`
     `human-confirmed` observation citing it → N03 `confirmation-not-applicable`.
+  - Builder handoff (D15), through both block routes: after a request-bearing `settle_worker_invocation` the
+    passive `handoff` writer and `builder_handoff` remain; `open` succeeds beside them, the coordination record
+    validates the relation, the journey completes, and only after the D13 release does the same-task acquisition
+    consume the handoff. After a `transition_delivery` block (writer released at `resume_commit`), `open` succeeds
+    with no writer.
+  - Withdrawal (D14): before any answer the handler fails with a repairable code (and, separately, the handler
+    digest changes); after release, `acquire_change_action` reacquires the same Builder task in one transaction
+    with the `withdrawn` receipt; the request stays unresolved and cannot support a result. Restart through the
+    default loader after the failure and before reacquisition, and after reacquisition → available, byte-identical.
   - Restart replay (D14), parameterized after each write of the journey during the retained Builder handoff
-    (`created`, `postponed`, reopen, `resolved`, `completed`) and with N03's defer and resume receipts around the
-    answer: restart through the default loader before publication → the Change is available and its frontier,
-    ledger and interactions are byte-identical. Publication then writes snapshot 4 with both, and a fresh host
-    restores them.
+    (`created`, `postponed`, reopen, `resolved`, `completed`, `failed`, `withdrawn`) and with N03's defer and resume
+    receipts before and after the answer and the failure: restart through the default loader before publication →
+    the Change is available and its frontier, binding, ledger and interactions are byte-identical. Publication then
+    writes snapshot 4 with them, and a fresh host restores them.
   - Pause request while `needs-session` → `open` refused; with an open session → `update`, the linked answer,
     `complete`, `postpone` and `recheck` succeed and the pause converts after release (N09 K2).
   - Format: frontier 20 with interactions and coordination 3 with a session round-trip byte-identically; every
@@ -642,27 +738,42 @@ no Delivery state touched. Scripts and outputs: `.owlbear/scratch/n06p/` (unvers
     back-channel → N03's refusals; nothing written; the session stays `awaiting-human`.
   - Session moved between render and apply: the test callback expires and reopens the session during a legacy
     elicitation, or between modern rounds → nothing written (coordination participant or SDK question pin).
+  - Consent generation (D16), through `Client(assemble_target_server(...))` on both routes: declined and cancelled
+    → no ledger entry, interaction and session unchanged, and a fresh `answer` asks again; superseded, by a frontier
+    change or by closing and reopening the session (new session id, same frontier digest) between render and apply
+    → nothing written; concurrent replay, two clients applying the same accepted state at once and a re-send after
+    success → exactly one ledger entry, one `resolved` interaction and one transition receipt, and every other
+    call returns the recorded resolution and writes nothing.
+  - Custody relation (D15): `open` beside an active `build`, `plan`, `repair` or `finalize` writer,
+    `finalization-attention`, a handoff of another settlement or branch head, a continuation action, a publication
+    lease or a recovery fence → `_SESSION_BUSY`, nothing written. With a session open in each state, `closing` and
+    `contained` included, the same-task handoff acquisition and every other handoff-consuming route refuse, and a
+    coordination update that changes the handoff beside the session refuses.
   - Linked answer after the branch head, an acceptance version or the handler digest changed → `_STALE`; status
-    `stale`; readiness `interaction-stale` → same-task Builder retry with failure code `interaction-stale`.
+    `stale`; readiness `interaction-stale` → same-task Builder reacquisition with the `withdrawn` receipt (D14).
   - `postpone`; expiry; `fail` → request unresolved; a Builder result citing it as satisfying → refused
     (`confirmation-unresolved` or `interaction-not-completed`); finalization refuses.
   - A result with a machine observation carrying a handler digest but no matching completed interaction, a
     different kind, label or result, or another commit → `interaction-evidence-unmatched`.
   - A `waived` record citing an interaction's confirmation (`passed` or `failed`) → N03
     `confirmation-not-applicable`; finalization refuses; frontier bytes unchanged.
-  - Replay tamper (D14): an interaction changed locally without a receipt, a receipt with a broken `before_digest`,
-    a `resolved` receipt whose `confirmation_id` differs from its request-resolution receipt's ledger entry, or two
-    receipts reordered → the existing bootstrap failure; the Change is unavailable; nothing is rehashed.
+  - Replay tamper (D14): an interaction changed locally without a receipt, a receipt chain with a frontier-digest
+    gap or fork, a `resolved` receipt whose `confirmation_id` or digests differ from its request-resolution
+    receipt's, two receipts reordered, a `completed` receipt beside a changed block, a `withdrawn` receipt beside an
+    N03 request-resolution receipt for the same request, a withdrawal of a resolved request, or a receipt naming
+    another handoff's `settlement_id` → the existing bootstrap failure; the Change is unavailable; nothing is
+    rehashed.
   - Crash injection (N02-B harness) between the lease and the frontier participant of `open` → restart sees either
     no lease and no change or the whole open. Crash after the linked answer before `complete` → the session stays
     leased past `expires_at`; the next `open`, `recheck` or Cockpit start finds the holder dead, finds exclusion,
-    and only then the interaction becomes `preparation-failed` / `session-lost` and the block clears as a counted
-    same-task Builder retry; the resolved request cannot support a result (`interaction-not-completed`); no
+    and only then the interaction becomes `preparation-failed` / `session-lost` and the same Builder task is
+    reacquired from the answered pause; the resolved request cannot support a result (`interaction-not-completed`); no
     completion or machine observation is fabricated.
   - Custody over injected process tables (D13): a live owned process → `_HANDLER_ALIVE`, lease kept; a process
     holding the leader pid with another create time and no token is never signalled and does not block release;
     a token-less member of the recorded group with no process at the leader pid → `contained` /
-    `ambiguous-member`, never signalled; a failed scan → `contained` / `scan-failed`.
+    `ambiguous-member`, never signalled; a failed scan → `contained` / `scan-failed`; a token holder that descends
+    from the scanning process is found (the scanner does not filter descendants, D13).
   - Recovery route (finding 4 of round 2): after a transient scan failure → `contained`; the clock advances past
     `expires_at` and the 60-minute maximum → still `contained`, every acquisition `busy`, a new `open` →
     `_SESSION_BUSY`; `recheck` with the wrong session id or state → refused, nothing changes; `recheck` of an open
@@ -725,7 +836,13 @@ no Delivery state touched. Scripts and outputs: `.owlbear/scratch/n06p/` (unvers
     `/token/x`, `/a%2Fb`, `/../x`, `/eyJ…`, a 32-character alphanumeric run; userinfo; an explicit port; any
     fragment (`#access_token=…`, a bare `#`, `#%61ccess_token=…`); a non-`https` scheme; a non-round-tripping
     parse; over 2048 characters; a host outside `suffix-allowlist` (also after IDNA normalization). Each → 422
-    with its bounded code; no launcher started; lease unchanged; a GUID path segment passes.
+    with its bounded code; no launcher started; lease unchanged.
+  - Path structures, under a test policy declaring `/wiki/{space:[A-Z]{2,16}}/pages/{page:[0-9]{1,20}}` and
+    `/docs/{id:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}}`: `/invite/<GUID>`, `/s/ab3-x9k`,
+    `/join/k2f-9qz`, `/docs/<GUID>/share` and `/wiki/ENG/pages/12/x` → 422 `url-path-undeclared`, no launch;
+    `/wiki/ENG/pages/123456` and `/docs/<GUID>` pass; the default policy refuses every non-root path. Registration
+    refuses templates `/invite/{id:[0-9a-f-]{36}}` and `/s/{x:[a-z0-9-]{1,16}}` and a slot without a pattern or
+    maximum length.
   - Sentinel absence, asserted on every captured byte: HTTP responses (success and error), Cockpit logs (`caplog`),
     the real `run()` process's stdout and stderr, MCP `get_change` and `show_work_item_view` JSON, frontier,
     coordination, snapshot and receipt bytes, the launcher's and handler's argv and environment (read with
@@ -752,6 +869,12 @@ no Delivery state touched. Scripts and outputs: `.owlbear/scratch/n06p/` (unvers
     request unresolved. Variants of (1): a stub launcher that ignores control-pipe EOF is found by token and
     killed; with the process scan failing → `contained` / `scan-failed`, then **Check again** after the scan
     recovers → released, with no new session opened in between.
+  - Live-Cockpit identity failure (real processes, macOS and Ubuntu; D13 unfiltered scan): the `leader` commit is
+    made to fail while Cockpit stays alive, with a stub launcher that ignores control-pipe EOF and stays
+    unreleased. The session's own Cockpit runs close: its scan finds its own child by token, kills it, and only
+    then releases; the handler never ran. The same test with `worker_stall.psutil_user_processes` injected as the
+    process source must fail its assertions (it hides the launcher and would release with it alive). A normal
+    journey's release from the live holder likewise sees its own launcher until it exits.
   - Uncooperative handlers (real processes, macOS and Ubuntu): one ignores stdin EOF, one stalls after the
     confirmation without `finished`, one starts a grandchild in its group, one starts a grandchild that calls
     `setsid` but keeps its environment. Cockpit `SIGKILL` or expiry → lease kept while any is alive; after the
@@ -850,6 +973,8 @@ Premises found false or incomplete on `ac3bf23f9` (F1–F5) and `e2fa3d913` with
 | F5 | §9.3 forbids values in access logs; the default uvicorn access log records query strings, and middleware cannot suppress it | `main.py:372`; P2; P10 | uvicorn access log off; a route-template access logger (§1.7); asserted through real `run()` in N06-B |
 | F6 | N03 at `86289635f` (§1.5, §1.9) expects N06 to add ledger channel `interaction` and an `interaction:` locator | P12; the channel names a capture route, and the binding already lives in scope, question digest and `confirmation_id` | D3: no N06 change to N03 shapes; cross-plan note above; G16 |
 | F7 | Round 1 of this plan assumed interaction writes reload like other portable writes | The loader refuses a pending publication beside a Builder handoff and rebuilds that frontier from the snapshot (`delivery_application_loader.py:603-607`, `:1010-1053`; P12) | D14: interaction transition receipts and an extension of N03's L row |
+| F8 | Round 2 of this plan assumed a Builder interaction opens with no writer present | A request-bearing settlement keeps a passive `handoff` writer that only same-task acquisition consumes (P13) | D15: session beside its own handoff; acquisition refused while it is open |
+| F9 | Round 2 of this plan reused `worker_stall.psutil_user_processes` for exclusion | It skips the caller's descendants, and the launcher is Cockpit's child (P13) | D13: an unfiltered same-user scan of its own |
 
 ### 3.6 Plan gate dispositions
 
@@ -884,11 +1009,26 @@ No finding was rebutted. One limit on finding 1: both U2 journeys have defined a
 is built and proved only if the user chooses U2 (a), because an unchosen Cockpit confirmation channel would add the
 authority U2 exists to decide. U2 is answered before N06-A starts (§1.13 Order).
 
+Sol plan round 3 (`revision-required`, on `334a8c642`; the pre-spawn release gate and **Check again** accepted;
+the conditional U2 journey and the phase and LC split accepted). Premises checked on the `origin/dev` merge
+`edab21d5a` and lane-c `f4d09d774` (P13); the gate's line numbers are from before that merge.
+
+| Finding | Disposition | Where |
+| --- | --- | --- |
+| 1 HIGH: session admission rejects its own Builder handoff (`kind="handoff"` writer retained by request-bearing settlement) | Accepted. `open` admits no writer, or exactly the passive handoff of the interaction's own settlement (`handoff_settlement_id`, `original_writer` with kind `handoff`, `branch_head` = `candidate_head`); the coordination model validates that relation and the update rule gains only that exception. The session never releases or replaces the handoff; same-task acquisition and every other handoff-consuming route refuse while a session exists in any state, and consume it as today after the D13 release. Every other writer or custody owner stays refused both ways. Tests through both block routes | R18, I6, §1.6, §1.7, D15, F8, §3.2 |
+| 2 HIGH: D14 neither binds nor reconstructs binding changes | Accepted, by preserving the binding. `complete` no longer clears the block: N03's answer already resolves request and block through its request-resolution receipt. The one N06 binding change is a `withdrawn` receipt in the same-task acquisition transaction for an unconfirmed failed or stale interaction, admitted by the loader as a third baseline exclusive with N03's answer. Receipts name their handoff and carry frontier digests, so N06, answer and lifecycle receipts form one ordered chain. Restart cases before and after that reacquisition, around the answer and around `complete`, plus tamper cases. The counted-retry wording is removed; the 64-interaction bound ends a loop | R17, I10, §1.5, §1.6, §1.7, §1.8, D14, §3.2, G18 |
+| 3 HIGH: scanner reuse omits Cockpit-owned descendants | Accepted. `interaction_custody` has its own unfiltered same-user scan; `worker_stall.psutil_user_processes` keeps its semantics. A live-Cockpit identity-commit failure with an unreleased launcher that ignores EOF must be found and killed, and fails if the worker scanner is injected | §1.7, §1.9, D13, F9, §3.2, §3.3 |
+| 4 HIGH: confirmations must consume N03's consent generation in the answer transaction | Accepted; the apply already ran under N03's `expected_frontier_digest` CAS with a session participant, but it did not say it consumes the generation, and the session is not part of the digest. The plan now consumes "N03's consent generation" by reference (today the frontier digest; an explicit server-owned generation if PR #360 adopts one, as N05's `merge_consent`), names the N06 binding in it (`interaction_id`, `session_id`, `candidate_head`, plus the session participant), and adds no boundary. Negatives: declined and cancelled, superseded by frontier change or session reopen, concurrent and sequential replay | I3, §1.4, §1.7, §1.13, D16, §3.2 |
+| 5 MED: path admission permits bearer URLs through global heuristics | Accepted. A `url` input's path must match a handler-declared template of literal segments and typed identifier slots; the default admits only the root; undeclared paths are refused with `url-path-undeclared`; registration refuses bearer-route literals and unbounded slots. The round-2 checks remain a second filter. Tests with GUID and short hyphenated bearer links against declared document identifiers | R9, §1.5, §1.10, §3.3 |
+
+No finding was rebutted. Finding 4 was partly met already (the apply was in N03's CAS); the revision makes the
+consumption explicit and adds the session binding and the negatives.
+
 ## 4. Progress
 
 | Phase | PR | Exact head | Proof | Challenges | Status |
 | --- | --- | --- | --- | --- | --- |
-| N06-P | #359 | `e2fa3d913` | Probes P1–P12 | Sol plan round 1: revision-required (findings 1–5 accepted; confirmation delegated to N03's boundary, custody until exclusion, fragments, access log) → revised; Sol plan round 2: revision-required (findings 1–5 accepted; linked requests answered through N03's scoped `answer` with ledger append, release-gated launcher with token ownership, pinned leader and contained ambiguity, recheck route, URL admission policy; handoff replay receipts added) → revised | in review |
+| N06-P | #359 | `334a8c642` | Probes P1–P13 | Sol plan round 1: revision-required (findings 1–5 accepted; confirmation delegated to N03's boundary, custody until exclusion, fragments, access log) → revised; Sol plan round 2: revision-required (findings 1–5 accepted; linked requests answered through N03's scoped `answer` with ledger append, release-gated launcher with token ownership, pinned leader and contained ambiguity, recheck route, URL admission policy; handoff replay receipts added) → revised; Sol plan round 3: revision-required (findings 1–5 accepted; session beside its own Builder handoff, binding preserved with a receipt-backed withdrawal, unfiltered custody scan, N03 consent generation consumed with the interaction binding, handler-declared URL paths) → revised | in review |
 | N06-A | — | — | — | — | — |
 | N06-B | — | — | — | — | — |
 | N06-C | — | — | — | — | — |
@@ -910,7 +1050,8 @@ authority U2 exists to decide. U2 is answered before N06-A starts (§1.13 Order)
 | G11 | LC exercises interaction records | Live state has none | Disposable fixtures in N06-A | N06-A fixtures; N10-M | Nothing (recorded per phase) |
 | G12 | No legitimate client calls Cockpit with a cross-origin `Origin` or a non-loopback `Host` | Static search only at implementation | P8 header-less clients pass | N06-B: every maintained client against the guarded app assembled by `run()` (§3.3); the frozen live controller is unguarded until an authorized upgrade | N06-B merge |
 | G13 | Python cannot erase a value from memory after use | Immutable `str`/`bytes`; freed heap, swap and core dumps | References dropped at handoff; process ends with the session | — | Nothing (documented limit, U1) |
-| G14 | N03's boundary as N06 consumes it (D13 resolver taking tool arguments, ledger, schema-2 request-resolution receipt, L row) and the answer to N03 U2 | PR #360 (`86289635f`) is a plan, not code; U2 is an open user decision | N03 §1.5, §1.7, D13; §1.13 covers every U2 answer | N03 / user; N06-A re-checks at start; a divergence stops for a plan revision | N06-A start (N03-C needs U2) |
+| G14 | N03's boundary as N06 consumes it (D13 resolver taking tool arguments, ledger, schema-2 request-resolution receipt, L row) and the answer to N03 U2 | PR #360 (`f4d09d774`) is a plan, not code; it may replace the frontier-digest generation by an explicit one (D16); U2 is an open user decision | N03 §1.5, §1.7, D13; §1.13 covers every U2 answer | N03 / user; N06-A re-checks at start; a divergence stops for a plan revision | N06-A start (N03-C needs U2) |
 | G15 | A handler descendant that leaves custody is detected | One that both calls `setsid` and clears its environment escapes; one started by a service manager escapes | D13 residual; registry handlers are repository code | N07-P for B1 (Edge profile custody) | Nothing in N06 |
 | G16 | N03's plan text agrees with D3 | N03 §1.5 and §1.9 still say N06 adds channel `interaction` and an `interaction:` locator | F6; cross-plan note in §3.5 | N03 owner | Nothing (D3 rules for N06) |
 | G17 | VS Code shows Delivery's elicitation to the user on the route it negotiates (journey (b)) | Host behavior | N03 G10 and its N03-B rehearsal | N03-B; N06-C host rehearsal repeats it for an interaction | N06-C merge |
+| G18 | Same-task acquisition and the loader's acquired-claim derivation accept a block resolved by withdrawal with its request unresolved (D14) | Source-traced only; today both start from the settlement result or N03's successor | P13; D14 restart cases | N06-A (a divergence stops for a plan revision) | N06-A merge |
