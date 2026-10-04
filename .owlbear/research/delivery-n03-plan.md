@@ -76,7 +76,7 @@
   basis digest equals the engine's current basis, and the review's `observation_ids` equal the request's
   observation IDs in order.
 - **I6 Applicable confirmation.** `human-confirmed` provenance and `waived` results cite a
-  `confirmation_request_id` that the engine resolves to a request of the same Change and outcome
+  `request_id` that the engine resolves to a request of the same Change and outcome
   (§1.5): resolved with `provenance: user-confirmed` and the affirmative option for its use (`waive` for
   `waived`; the observation's assessment for `human-confirmed`), and with an `applies_to` scope naming
   every criterion version the observation covers and its exact `procedure`. Existence of some confirmed
@@ -125,7 +125,7 @@ union discriminated by `schema_version`.
 | `environment` | `platform`: `macos`, `linux` or null; `labels`: ≤ 8, each matching `^[a-z0-9][a-z0-9.+_-]{0,63}(:[A-Za-z0-9.+_-]{1,64})?$` | Environment constraints that bound applicability |
 | `target_class` | null or `^[a-z0-9][a-z0-9-]{0,63}$` | Class of external target (`sharepoint`, `confluence`), never a hostname |
 | `provenance` | `machine-observed` or `human-confirmed` | Who established the result |
-| `confirmation_request_id` | null or request ID | Required for `human-confirmed` and for `waived`; resolved and scope-checked by the engine (I6) |
+| `request_id` | null or request ID | Required for `human-confirmed` and for `waived`; resolved and scope-checked by the engine (I6) |
 | `locator` | null or ≤ 256 chars of `scheme:value`; scheme `path`, `ci-run`, `check-run`, `request` or `report`; no whitespace, no `://`, no `..` segment | Retained non-sensitive locator |
 | `summary` | null or ≤ 240 chars | Non-authoritative note (`171 passed`) |
 | `observation_id` (receipt) | sha256 | `_receipt_digest` over all other fields; `create` copies fields by attribute (P3 finding) |
@@ -136,7 +136,7 @@ union discriminated by `schema_version`.
 | `manual-procedure` | `assessment` `passed` or `failed` | The assessment; `human-confirmed` allowed |
 | `artifact` | `assessment` `passed` or `failed`; `artifact_digest` sha256 or null; `locator` required | The assessment; `human-confirmed` allowed |
 | `missing` | `owner` `agent`, `user`, `provider` or `assisted-check`; `reason` 1–240 chars | `missing` |
-| `waived` | `owner: user`; `reason` 1–240 chars; `confirmation_request_id` required | `waived`; with an applicable confirmation (I6) it satisfies finalization coverage and stays shown as `waived` ([U1](#u1--may-a-user-waive-a-required-acceptance-criterion)(b)) |
+| `waived` | `owner: user`; `reason` 1–240 chars; observation `request_id` required | `waived`; with an applicable confirmation (I6) it satisfies finalization coverage and stays shown as `waived` ([U1](#u1--may-a-user-waive-a-required-acceptance-criterion)(b)) |
 
 **Proof and admissible waivers.** Proof verdicts: `passed`, `expected-negative`. A satisfying record is a
 proof verdict or a `waived` record with an applicable confirmation (I6). Both complete a criterion's coverage
@@ -264,8 +264,8 @@ or publication-gate site outside this table stops for a plan revision.
 | `owlbear_delivery.evidence` (new; imports models and `acceptance_criteria`, imported by runtime and application, never by `runtime_models`) | `evaluate_acceptance_evidence(contract, frontier, request_observations=()) -> DeliveryAcceptanceCoverage`; `confirmation_applies` (§1.5); `finalization_basis_digest(...)`; projection builder (N03-C) |
 | `compile_delivery_contract` | Adds the three identity diagnostics; output bytes unchanged for valid input |
 | `DeliveryAuthorityRegistry.admit` | First admission requires authored identities |
-| `DeliveryRuntime.publish_result`, `DeliveryRuntime.finalize_change` | Enforce §1.6; on violation raise `DeliveryAcceptanceEvidenceError` (subclass of `DeliveryRuntimeConflictError`), code `ERR_DELIVERY_ACCEPTANCE_EVIDENCE`, `gaps` ≤ 64 × `{acceptance_id?, observation_id?, reason}`; reasons `uncovered`, `unknown-legacy-only`, `missing`, `failed`, `legacy-observation`, `unknown-acceptance`, `stale-acceptance-version`, `confirmation-unresolved` (no such resolved scoped request), `confirmation-not-applicable` (outcome, scope, procedure or option), `review-basis-missing`, `review-basis-stale`, `review-observations-mismatch`, `finalization-basis-unavailable`, `finalization-context-oversized` |
-| MCP `answer` (N03-A) | For a request with `applies_to` (a waiver or person-only confirmation): refuses `ERR_DELIVERY_ANSWER_USER_ONLY` before any write and says the user answers it in Cockpit (D13). Unscoped requests behave as today |
+| `DeliveryRuntime.publish_result`, `DeliveryRuntime.finalize_change` | Enforce §1.6; on violation raise `DeliveryAcceptanceEvidenceError` (subclass of `DeliveryRuntimeConflictError`), code `ERR_DELIVERY_ACCEPTANCE_EVIDENCE`, `gaps` ≤ 64 × `{acceptance_id?, observation_id?, reason}`; reasons `uncovered`, `unknown-legacy-only`, `missing`, `failed`, `legacy-observation`, `unknown-acceptance`, `stale-acceptance-version`, `request-unresolved` (no such resolved scoped request), `request-not-applicable` (outcome, scope, procedure or option), `review-basis-missing`, `review-basis-stale`, `review-observations-mismatch`, `finalization-basis-unavailable`, `finalization-context-oversized` |
+| MCP `answer` (N03-A) | For a request with `applies_to` (a waiver or person-only confirmation): refuses `ERR_DELIVERY_CONFIRMATION` before any write and says the user answers it in Cockpit (D13). Unscoped requests behave as today |
 | Cockpit HTTP `answer_request` | Unchanged route; the user's answer to a scoped request is recorded with `provenance: user-confirmed` as today. N03-C shows the scope beside the answer controls |
 | `show_finalization_context` | Adds `semantics: DeliveryFinalizationSemantics` and `semantics_refusal: DeliveryContextRefusal` (each `exclude_if` None; exactly one set whenever the context is otherwise available). `semantics` holds: contract digest and title; outcomes with promise, commitment and dependency IDs and criteria; commitments; task results (ID, title, commit, result digest, observation IDs); per promoted task its bound authority (`task_id`, `task_digest`, `result`, `constraints`, `exclusions`, `proof_boundaries`, `acceptance_observations`); confirmations cited by task evidence with their `applies_to` (retained, §1.5); `diff_base`; `change_head`; per-criterion coverage from task evidence; `basis_digest`. Task authority is bound by the result digests, which hold `task_digest`; the Design package is not included. Size: see the context budget below |
 | `show_build_context`, `show_plan_context` | Add `acceptance: tuple[DeliveryAcceptanceCriterion, …]` for the outcome |
@@ -368,7 +368,7 @@ Engineering decision by the lead (2026-10-04; replaces PR #360's D13, execution 
 - **D13 Cockpit is where the user says yes.** In the execution plan's operating context agents are trusted
   but fallible, so the guard is against an honest mistake, not forgery. Agents' MCP tools do not offer
   user-only actions: MCP `answer` refuses a request with `applies_to` (a waiver or person-only
-  confirmation) before any write, with `ERR_DELIVERY_ANSWER_USER_ONLY` and the guidance to answer it in
+  confirmation) before any write, with `ERR_DELIVERY_CONFIRMATION` and the guidance to answer it in
   Cockpit; a scoped request cannot carry a `resolution` when it is created. The user answers in Cockpit,
   recorded with provenance as today. I6 then checks scope, criterion version, procedure and the affirmative
   option, which also catches an agent citing the wrong request. There is no elicitation, ledger, consent
@@ -490,7 +490,7 @@ removed on 2026-10-04; their results remain on PR #360.
     the checkpoint lock); `application_acquisition.py`: `show_plan_context`, `show_build_context`
   - `owlbear_delivery/__init__.py`; `serve/delivery/tests/fixtures/module_surface.json`; N02 fingerprint fixture
   - `serve/delivery-mcp/src/owlbear_delivery_mcp/target_server.py` (error code mapping, `_raise` carries `gaps`;
-    `answer` refuses scoped requests with `ERR_DELIVERY_ANSWER_USER_ONLY`, D13); `target_models.py`
+    `answer` refuses scoped requests with `ERR_DELIVERY_CONFIRMATION`, D13); `target_models.py`
     (`TargetDiagnostic.gaps`, ≤ 64, `exclude_if` None)
   - `serve/tools/src/owlbear_tools/delivery_diagnostics.py` (frontier 19, snapshot 3, receipts 2, marker 2)
   - tests: new `serve/delivery/tests/test_acceptance_criteria.py`, `test_evidence.py`; schema-2 fixtures in
@@ -515,10 +515,10 @@ removed on 2026-10-04; their results remain on PR #360.
   - Finalization of a Change whose carried task evidence covers every criterion, with zero new observations
     and an exact-head finalization review with empty `observation_ids`, writes a schema-3 receipt; no
     criterion is exercised again.
-  - A `human-confirmed` manual observation whose `confirmation_request_id` names a request in the same
+  - A `human-confirmed` manual observation whose `request_id` names a request in the same
     outcome resolved through Cockpit HTTP `answer_request` with option `passed`, scoped to the covered
     criterion version and the observation's procedure, is accepted.
-  - A task result with a `waived` record (owner user) whose `confirmation_request_id` names a request
+  - A task result with a `waived` record (owner user) whose `request_id` names a request
     resolved in Cockpit with option `waive`, scoped to that criterion version and the record's procedure,
     promotes; finalization with every other criterion covered succeeds and the evaluator shows that
     criterion `waived` (U1(b)).
@@ -568,16 +568,16 @@ removed on 2026-10-04; their results remain on PR #360.
   - Unprefixed first admission → `acceptance-identity-required`; mixed, duplicate and near-miss items → their
     compiler diagnostics.
   - Result with a `failed` command, a schema-1 observation, an unknown `AC-` ID, a stale version, or a
-    `confirmation_request_id` naming an unresolved, unanswered or non-`user-confirmed` request →
+    `request_id` naming an unresolved, unanswered or non-`user-confirmed` request →
     `ERR_DELIVERY_ACCEPTANCE_EVIDENCE` with the named reason; frontier bytes unchanged.
   - A confirmation citing a resolved request without scope, for another outcome, another criterion or
     version, or another procedure, or a `confirm-check` answered `failed` cited by a `passed` observation →
-    `confirmation-not-applicable`; frontier bytes unchanged.
+    `request-not-applicable`; frontier bytes unchanged.
   - Agent tool surface (D13): MCP `answer` on a scoped `waive` or `confirm-check` request, with or without a
-    caller `resolution` → `ERR_DELIVERY_ANSWER_USER_ONLY`, request unresolved, frontier bytes unchanged. A
+    caller `resolution` → `ERR_DELIVERY_CONFIRMATION`, request unresolved, frontier bytes unchanged. A
     block request created with `applies_to` and a pre-filled `resolution` → rejected at validation.
   - Declined waiver: the user answers a `waive` request with `keep-required` in Cockpit → the request is
-    resolved with that option; a `waived` record citing it → `confirmation-not-applicable`, both in a task
+    resolved with that option; a `waived` record citing it → `request-not-applicable`, both in a task
     result and in the finalization request; finalization with that criterion otherwise uncovered →
     refused `uncovered`; no receipt.
   - Keep a valid finalization review and replace one otherwise-valid observation (or add, drop or reorder
@@ -588,9 +588,9 @@ removed on 2026-10-04; their results remain on PR #360.
     target sync or the head changed between context and finalize), no diff base, or zero observations while a
     criterion is uncovered → refused with typed gaps; no
     receipt, no retry-ledger success, no checkpoint.
-  - A `waived` record whose `confirmation_request_id` names no resolved scoped request, or whose request is
-    scoped to another outcome, criterion, version or procedure → `confirmation-unresolved` or
-    `confirmation-not-applicable`; frontier bytes unchanged (U1(b)). The same record in a finalization
+  - A `waived` record whose `request_id` names no resolved scoped request, or whose request is
+    scoped to another outcome, criterion, version or procedure → `request-unresolved` or
+    `request-not-applicable`; frontier bytes unchanged (U1(b)). The same record in a finalization
     request → refused with the same reason; no receipt.
   - A schema-2 handoff intent receipt whose frontiers also differ in a field outside the action's set → rejected;
     a schema-1 intent receipt embedding a 19 frontier → rejected. On reload, for both the Builder and the Planner
