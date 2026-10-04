@@ -192,29 +192,38 @@ Order:
 
 1. Verify the worktree still matches the handoff metadata (`_capture_builder_handoff_metadata` against
    `metadata_fingerprint`); otherwise refuse `design-return-workspace-changed`.
-2. Capture without changing the worktree: if dirty, the quarantine commit (child of the handoff
-   `branch_head`) under `refs/owlbear/quarantine/<change>/<attempt>`, extended to passive Design-return
-   custody, plus the real index as a tree under `refs/owlbear/quarantine-index/<change>/<attempt>`; the
-   head under `refs/owlbear/attempts/<change>/<attempt>`. Unmerged index entries refuse
+2. Capture without changing the worktree or the managed index (the index tree is written from a copy), in
+   this order: the head under `refs/owlbear/attempts/<change>/<attempt>`; if dirty, the real index as a
+   tree under `refs/owlbear/quarantine-index/<change>/<attempt>`, then the quarantine commit (child of the
+   handoff `branch_head`) under `refs/owlbear/quarantine/<change>/<attempt>` and, last, its receipt, both
+   through `_prepare_dirty_worktree_quarantine` extended to passive Design-return custody. The receipt is
+   therefore stored only when every preservation ref exists. Unmerged index entries refuse
    `design-return-unmerged-index`.
-3. Reset branch and worktree to the reviewed head and `clean -fd` (ignored files stay in place).
+3. Reset branch and worktree to the reviewed head and `clean -fd` (ignored files stay in place). Reset is
+   refused until capture is complete: the attempt ref and, for dirty content, the index ref, quarantine ref
+   and receipt.
 4. One transaction: frontier (binding released; pending publication marker) and coordination (`writer` and
    `builder_handoff` cleared).
 
-Replay: the refs are create-or-equal. Once the quarantine receipt exists, step 1 is skipped
-(`_capture_builder_handoff_metadata` refuses a quarantine receipt) and the existing preservation owner
+Replay: the refs are create-or-equal. Before the receipt exists (partial capture), the worktree and index are
+unchanged, so step 1 still recognizes the handoff and step 2 resumes; a quarantine ref without a receipt
+takes the existing replay path of `_prepare_dirty_worktree_quarantine`. Once the quarantine receipt exists,
+step 1 is skipped (`_capture_builder_handoff_metadata` refuses a quarantine receipt) and the existing
+preservation owner
 recognizes the captured state: `_prepare_dirty_worktree_quarantine` (existing-receipt path),
 `_quarantine_base_matches_current` (branch at the reviewed head, attempt ref at the base) and
 `_verify_worktree_matches_quarantine` (remaining paths a subset of the captured ones, with captured bytes).
 Step 3 then repeats `reset --hard` and `clean -fd`, so a crash after capture, after the reset or before step
 4 resumes; content not in the capture refuses `design-return-workspace-changed`. The receipt stays until the
 next acquisition clears it, as after a claim-held quarantine. Startup recognizes every state from capture to
-step 4: in `_validate_local_builder_handoff_workspace`, a Design-route handoff whose attempt ref equals
-`context.branch_head`, whose quarantine refs and receipt exist when the fingerprint recorded uncommitted
-content, and whose worktree still matches the handoff metadata or passes the quarantine check above at
-`last_reviewed_commit`. The released `return_context.preserved_commit` is carried into the revised binding
-(§1.6). The readiness prompt in `_design_attention_prompt` drops the "re-admission is unavailable" text and
-points to the §1.1 route.
+step 4 in `_validate_local_builder_handoff_workspace`, for a Design-route handoff: without a quarantine
+receipt (no or partial capture), the branch is at `context.branch_head` and the worktree matches the handoff
+metadata, and each preservation ref that exists is accepted without being required; with a receipt
+(complete capture), the attempt ref equals `context.branch_head`, the index and quarantine refs exist, and
+the worktree matches the handoff metadata or passes the quarantine check above at `last_reviewed_commit`.
+The released `return_context.preserved_commit` is carried into the revised binding (§1.6). The readiness
+prompt in `_design_attention_prompt` drops the "re-admission is unavailable" text and points to the §1.1
+route.
 
 ### 1.8 Change requirements control (N04-C)
 
@@ -353,6 +362,10 @@ fixed (execution plan §1.6). Durable tests are the scenarios below, no more.
   - Interruption after capture, after `reset --hard` (before `clean -fd`) and before the release
     transaction: restart loads the Change; the next `revise_design_session` finishes the release; restoring
     from the refs reproduces distinct staged, unstaged and untracked bytes.
+  - Interruption inside capture (attempt and index refs written, quarantine ref or receipt not yet
+    stored): the default loader loads the Change; the next `revise_design_session` resumes capture and the
+    release, and activation succeeds; restoring from the refs reproduces distinct staged and worktree
+    bytes.
 - **Negative scenarios:** worktree changed since the handoff; a file added after capture; unmerged index; a
   same-task or Planning-route handoff (`custody-retained` at activation).
 - **Inner loop:** the new readmission test, then `-k "design_return or quarantine or restart"`.
@@ -380,7 +393,7 @@ fixed (execution plan §1.6). Durable tests are the scenarios below, no more.
 
 | Phase | PR | Head | Proof | Challenge | Status |
 | --- | --- | --- | --- | --- | --- |
-| N04-P | #369 | revision of `f4303e9d3` | Probes P1–P6; docs only; markdownlint 0 issues | Sol round 1 `revision-required`, all lead-dispositioned fix-now and applied: F1 snapshot crash inside step 3 recognized and replayed (§1.5); F2 partial release resumed through the quarantine owner, `preserved_commit` carried (§1.7); F3 confirmations kept whole, evaluator scopes them (§1.6, D8); F4 completed-work preservation and zero-delta completion via the return-to-Planning rule (§1.6); F5 new history key recognized, D11 reworded. U1 settled by the lead as D13 | in review |
+| N04-P | #369 | revision of `f4303e9d3` | Probes P1–P6; docs only; markdownlint 0 issues | Sol round 1 `revision-required`, all lead-dispositioned fix-now and applied: F1 snapshot crash inside step 3 recognized and replayed (§1.5); F2 partial release resumed through the quarantine owner, `preserved_commit` carried (§1.7); F3 confirmations kept whole, evaluator scopes them (§1.6, D8); F4 completed-work preservation and zero-delta completion via the return-to-Planning rule (§1.6); F5 new history key recognized, D11 reworded. U1 settled by the lead as D13. Sol round 2 `revision-required`, one finding, lead fix-now, applied: capture ordering (attempt and index refs before the receipt, no reset before complete capture) and partial-capture startup recognition (§1.7, §3.2). Plan gate ends here (lead: no round 3, local ordering clarification) | in review |
 | N04-A | — | — | — | — | — |
 | N04-B | — | — | — | — | — |
 | N04-C | — | — | — | — | — |
