@@ -6,8 +6,8 @@
 > 3.14.8; uv 0.12.22). Live state observed read-only: main checkout on `delivery-live`.
 > **Builds on:** the approved [N02 plan](delivery-n02-plan.md) (lock, gate, migration engine, `delivery-lc`,
 > pinning). N08 symbols for N02 modules are the N02 plan's names; implementation re-resolves them on `dev`.
-> **Status:** approved: plan gate `plan-sound` in round 7 of fresh GPT-6.1 Sol challenges (2026-10-03). U1–U3 are pending user confirmation. Product code
-> is unchanged by this phase.
+> **Status:** approved: plan gate `plan-sound` in round 7 of fresh GPT-6.1 Sol challenges (2026-10-03). U1–U3
+> were decided on 2026-10-03: (a) each. Product code is unchanged by this phase.
 
 ## 1. Contract
 
@@ -272,7 +272,8 @@ Agent-settled with probe evidence:
 - **D11 This P revision amends execution plan §5 N08** (phase descriptions only; no sequence, prerequisite or
   re-split change): N08-A is a repair kind of N02-B's engine in Delivery with a tools CLI; N08-B also edits Delivery
   core (V18 per-Change containment and the loader effect boundary). Merged under the user's overnight
-  authorization of 2026-10-03; explicit confirmation pending. After Sol round 6 it also amends the approved
+  authorization of 2026-10-03; confirmed 2026-10-03 (listed to the user without objection). After Sol round 6
+  it also amends the approved
   N02 plan §3.3 (step 5g: migration `abort` removes the empty namespace; N02 D10) under the same authorization.
 - **D12 Gated controllers identify themselves.** After it acquires the shared lock and before the gate, N08-B's
   shared-lock helper publishes `runtime/controller-processes/<pid>.json` (pid, `psutil` create time, cmdline
@@ -291,40 +292,41 @@ Agent-settled with probe evidence:
   Engineering decision (Sol round 4: a reasonable default, not a user question): an unsafe record keeps startup
   available without exemption; the cost is that offline repair waits until that controller stops.
 
-User decisions ([U1–U3](#u-decisions)) are **pending user confirmation**; recommendations are defaults, not
-decisions. N08-A needs U1; N08-B needs none; N08-C needs U2, U3 and N02's U1 and U2 as recommended there (any other
+User decisions ([U1–U3](#u-decisions)) were decided on 2026-10-03 as engineering decisions with one defensible
+answer, listed to the user without objection: (a) each. N08-A needs U1; N08-B needs none; N08-C needs U2,
+U3 and N02's U1 and U2 as recommended there (any other
 N02 answer re-plans N08-C, whose launchers and prompt assume N02 D1 and `/upgrade-delivery`).
 
 #### U decisions
 
-**U1 — Offline repair confirmation policy** (pending user confirmation — required before N08-A starts).
+**U1 — Offline repair confirmation policy** (decided 2026-10-03: (a) — required before N08-A starts).
 Status quo: D03 offline repair is read-only; each online repair tool requires `confirmed_repair: true`. Problem:
 offline writes run while the controller is down, so the policy decides which writes an agent may apply inside
 `/repair-delivery`. Options: (a) engine-replay operations (C03, delegated `delivery-migrate resume/verify`) are
 applied by the agent after it shows the proposal; operations that replace user-owned or tracked bytes (C01, C02)
 need an explicit per-proposal confirmation through `vscode_askQuestions` naming paths, consequence and backup;
 (b) every offline write needs per-proposal confirmation; (c) the agent applies every catalogued operation without
-confirmation. **Recommended: (a).** It matches programme §1.1 (engine-owned effects with exact identity reconcile
+confirmation. **Decision: (a).** It matches programme §1.1 (engine-owned effects with exact identity reconcile
 automatically) and keeps every loss of user bytes behind a decision. Stopping the controllers is a user step in
 every option.
 
-**U2 — Consumer controller distribution** (pending user confirmation — required before N08-C starts).
+**U2 — Consumer controller distribution** (decided 2026-10-03: (a) — required before N08-C starts).
 Status quo: consumers run `uv --project <OwlBear clone>` for every MCP server (`seed/.vscode/mcp.json:6`) and
 `git pull` changes live code; `init.py` keeps any existing server entry (`setup/init.py:406`). Problem: P21 requires
 pinning parity, which changes what setup installs and rewrites. Options: (a) `init.py` installs a controller-only
 release (~50 MB, D7) from the clone's `HEAD` on first run with a visible notice, points `owlbear-delivery` at the
 launcher, and on rerun replaces only an unmodified OwlBear-installed entry (recognized by its manifest claim);
 upgrades only through `/upgrade-delivery`; (b) pinning is opt-in (`--pin-controller`), unpinned by default;
-(c) a shared user-level store `~/.owlbear/controllers/` deduplicated across projects. **Recommended: (a).**
+(c) a shared user-level store `~/.owlbear/controllers/` deduplicated across projects. **Decision: (a).**
 Parity is the requirement and the measured size removes the reason for (c), whose cross-project pruning is new risk.
 
-**U3 — Platform-defect maintenance releases** (pending user confirmation — required before N08-C starts).
+**U3 — Platform-defect maintenance releases** (decided 2026-10-03: (a) — required before N08-C starts).
 Status quo: no route; a broken controller blocks Delivery until someone edits code. Problem: §11.2 needs a reviewed
 fix and an approved upgrade, and the release source is a permission question. Options: (a) this repository: the fix
 is a normal reviewed PR to `dev`, and the controller upgrades to the merged commit; pinning a reviewed but unmerged
 commit is an emergency that needs the user's explicit approval at that step; consumers: only commits of their
 OwlBear clone, local patches unsupported, the route reports the defect upstream; (b) consumers may pin a locally
-patched, locally reviewed commit; (c) merged commits only, no emergency path. **Recommended: (a).**
+patched, locally reviewed commit; (c) merged commits only, no emergency path. **Decision: (a).**
 
 ## 2. Feasibility Probes
 
@@ -684,7 +686,7 @@ Premises found false or incomplete on `ef622c354`:
 
 | Phase | PR | Exact head | Proof | Challenges | Status |
 | --- | --- | --- | --- | --- | --- |
-| N08-P | #350 | — | Probes P1–P10 | Sol round 1: revision-required (replay custody binding, legacy exclusion for all writers, repair-specific verification, read-only degraded boundary, CLI import fallback) → revised; Sol round 2: revision-required (contained recovery boundary, exact-journal verification context, gated vs legacy exclusion) → revised; Sol round 3: revision-required (retained verified history, stale process record) → consolidated journal-state table; Sol round 4: revision-required (empty migrations namespace cleanup) → revised; Sol round 5: revision-required (abort namespace cleanup) → revised; Sol round 6: revision-required (migration abort namespace; amends N02-B §3.3) → revised; Sol round 7: `plan-sound` | approved (D11 confirmation pending; U1–U3 before their phases) |
+| N08-P | #350 | — | Probes P1–P10 | Sol round 1: revision-required (replay custody binding, legacy exclusion for all writers, repair-specific verification, read-only degraded boundary, CLI import fallback) → revised; Sol round 2: revision-required (contained recovery boundary, exact-journal verification context, gated vs legacy exclusion) → revised; Sol round 3: revision-required (retained verified history, stale process record) → consolidated journal-state table; Sol round 4: revision-required (empty migrations namespace cleanup) → revised; Sol round 5: revision-required (abort namespace cleanup) → revised; Sol round 6: revision-required (migration abort namespace; amends N02-B §3.3) → revised; Sol round 7: `plan-sound` | approved (D11 confirmed 2026-10-03; U1–U3 decided (a) 2026-10-03) |
 | N08-A | #361 | code `7e38ba20f` (round 1; merged `origin/dev` `2061047af` as `954b39931` first, no conflict; round-0 code `42aff1e78`) | **Round 1** (Sol implementation round 1 `repair-required`: 8 findings and deviation 6; own runs on `7e38ba20f`; each new test failed on the pre-fix sources at `954b39931`: 16 failed, 16 controls passed): (1) C03 binds, backs up and digest-checks every participant path, unchanged and absent ones included, before any replay: a participant already at its after-state, or an absent move source, reverted after a backup crash stops `resume` and `abort` with `repair-corruption-stop` and the drift preserved; (2) C02 restores an admitted package only when `HEAD` is exactly the package the admission's `checkpoint_commit` verified (package ID, contract digest, authority bytes); unchanged authority with a changed design and manifest is C07; (3) amendment A1: no process is exempt (a forged matching D12 record refuses), a rescan precedes every repair write (a controller started after the fence scan is refused before the next write; `resume` then converges), and the skill and every offline `delivery-repair` output state the no-restart precondition; (4) amendment A2: C01/C02 refuse pending manifests (`propose` and `apply`), C03 is offered under the loader's read-only refusals, and a pending replacement of invalid `host.local.json` bytes is replayed, verified and loads; (5) the gate and the inspector mirror validate the complete supported journal envelope in canonical bytes (truncated v1 and v2 `verified` journals refuse; N02 v1 bytes accepted); (6) every readable record is owner-validated (`owner_rejections`, the registry owners), completion receipts through `CompletionReceiptStore.read` (renamed or altered → C07), and a missing Change worktree routes to `recover_change_worktree`; (7) an explicit unsupported `host.local.json` version is C07 with no proposal or stage; (8) the skill no longer runs an initial migration (`/upgrade-delivery` or an explicit user yes); `delivery-migrate resume`/`verify` stay delegated. Deviation 6 replaced by executed loader proof (LC B below). Focused: Ruff check and format clean; state repair, migration, formats, runtime transaction, design package, tools repair/diagnostics/migrate/LC, agent ecosystem and package boundary 556 passed. `uv run test --changed --base origin/dev` (one run, on `7e38ba20f`, concurrent with the LC containers and other lanes, load average about 22): 3442 passed, 2 failed, both `pytest-timeout` (>30 s): `test_state_migration.py::test_custody_shapes_stay_available_and_unchanged_across_the_migration` (no repair path) and `test_delivery_repair.py::test_cli_classifies_proposes_confirms_applies_and_verifies_from_fresh_processes`; rerun in isolation both pass (5.7 s, 5.5 s). **LC** (`delivery-lc`, `ubuntu:24.04`, `n00a-uv-cache`, candidate `7e38ba20f`): **A** full form, previous `origin/dev` `2061047af`: form passed (migration changed exactly the marker and 3 coordination records; migrated copy loads all 3 Changes; previous gate `[]` and default load of all 3; synthetic newer refused); on the same copy `classify` no finding, injected invalid `host.local.json` → only C01 → `apply --confirm` → `verify` (archived `verified`) → no finding, gate `[]`, candidate load and the previous release's **default loader** load all 3 Changes against the post-repair state; `compare` live unchanged (132 records). **B** (replaces deviation 6) load form on a fresh unmigrated copy (format 0; N02-B and later refuse format 0 with records by design, so the eligible old release is the merged N02-A `8d2176927`): the candidate's read-only load refuses `state-migration-required` with no record changed; N02-A's gate `[]`; `classify` only C04; injected invalid `host.local.json` → C01 → `apply --confirm` → `verify` (C04 kept, format still 0) → `runtime/migrations` absent, N02-A's gate `[]`, and N02-A's **default loader** (installed from its commit) starts and loads all 3 Changes, none unavailable; `compare` live unchanged (132 records). Residuals: the window between the last pre-write scan and that single write for an ungated controller (A1); C06 states needing Git or remote reads (remote snapshot, frontier mismatch, out-of-band head, target-sync publication, publication baseline) stay with the running controller's health; Ubuntu CI on the exact head (G7). **Round 0:** Candidate (own runs): `test_state_repair.py` 93 passed (classify routes C04/C05/C06/C07 with no write; C01 propose (tree unchanged) → confirmation refusals → `apply --confirm` → I9 `verify` → archive and namespace removal, application constructors patched to fail; C02 config and admitted-package restore from a verifying `HEAD`, refused for invalid, absent or admission-mismatched `HEAD`; two startup faults one proposal at a time; retained migration history recorded and kept; changed journal set (second open, unreadable, added verified, changed retained) → `repair-verify-mismatch` with `abort` restoring; C03 mixed immutable/replacement/move participants in two roots then `delivery-migrate` proceeds; contained root replayed through the contained path; garbage, extra-field and unmapped-root manifests contained; C03 drift (added, removed, altered, participant) stale; fresh-process crash/`resume` at 4 replay boundaries and `abort` at 5 steps repeated to the exact before-state; C01 crash/`resume` at 3 boundaries and `abort` at 6 steps from two start states; third digest preserved; every repair journal-state row (7) with gates, route, allowed and refused commands and idempotent reruns; invalid J contained, `verify` mismatch, digest-checked `abort`; verified-pending-archive starts; N02-A/N02-B gate results unchanged by a verified and by an aborted first repair on format 0 (vendored blobs); migration abort cleanup routed to `delivery-migrate`; namespace preservation (retained journal, entry, symlink, file) for `verify` and `abort`; I1 real stand-ins for 5 supported forms refuse all four commands, unreadable cmdline fails closed, only a matching D12 record exempts; root-map source scan and its synthetic falsifier; V20 receipt ID mismatch contained; no provenance write; no record value or path in output). Companion suites (runtime transaction, state formats, migration, package, tools repair/diagnostics/migrate/LC, agent ecosystem, package boundary) 448 passed. `uv run test --changed --base origin/dev` (one run, on `42aff1e78`): 3366 passed, 1 failed (`tests/test_deny_code_writes.py`: a new contained-manifest fixture wrote through a helper-returned path), fixed test-only in `ff4fa8a27`, then that invariant and `test_runtime_transaction.py` 30 passed. Scoped Ruff check and format clean; editorconfig ≤ 120 in changed Python. **LC full form** (`delivery-lc`, ubuntu:24.04, `n00a-uv-cache`, candidate `42aff1e78`, previous `141795676`): isolation proven; unmigrated copy refused `state-migration-required` with unchanged hashes and agreeing inspector; migration changed exactly the marker and 3 coordination records; migrated copy loads all 3 Changes available; previous release gate `[]` and normal load of all 3 Changes (D3 rollback; retained v1 journal readable); synthetic newer refused; then on the same copy `classify` no finding, injected invalid `host.local.json` → only C01 → `apply --confirm` → `verify` (archived `verified`, retained migration journal recorded) → `classify` no finding, gate `[]`, candidate and previous release each load all 3 Changes; `runtime/migrations` holds only the retained migration journal; `compare` live unchanged (132 records) | Sol round 1: `repair-required` (8 findings, deviation 6) → repaired in `7e38ba20f`; Sol round 2 pending | in review |
 | N08-B | — | — | — | — | — |
 | N08-C | — | — | — | — | — |
