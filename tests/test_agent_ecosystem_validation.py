@@ -466,23 +466,44 @@ def test_prompt_validator_accepts_current_prompt_roots() -> None:
     assert all(_PROMPT_VALIDATOR.validate_prompt(path) == [] for path in prompt_files)
 
 
-def test_repair_delivery_prompt_is_an_ordinary_read_only_entry() -> None:
+def test_repair_delivery_prompt_bootstraps_read_only_then_routes_through_the_repair_skill() -> None:
     path = _PROMPTS_ROOT / "repair-delivery.prompt.md"
     prompt = path.read_text(encoding="utf-8")
     metadata = _frontmatter(path)
     assert metadata["agent"] == "agent"
-    assert metadata["tools"] == ["execute/runInTerminal"]
+    assert metadata["tools"] == ["execute/runInTerminal", "vscode/askQuestions", "read/readFile"]
     assert "mode" not in metadata
+    assert "../skills/w-delivery-repair/SKILL.md" in prompt
     assert "delivery-diagnose inspect" in prompt
     assert "PYTHONDONTWRITEBYTECODE=1" in prompt
     assert "python -B serve/tools/src/owlbear_tools/delivery_diagnostics.py inspect" in prompt
     assert "terminal is unavailable" in prompt
     assert "do not substitute another tool" in prompt
     assert "automation-permission bypass" in prompt
-    assert "process commands" in prompt
-    assert "D07's supported route" in prompt
     assert "automatic fix" in prompt
     assert "manual repair" in prompt
+    assert "D07" not in prompt
+
+
+def test_repair_delivery_skill_applies_the_u1_confirmation_policy() -> None:
+    skill = " ".join((_SKILLS_ROOT / "w-delivery-repair/SKILL.md").read_text(encoding="utf-8").split())
+    bootstrap, classify = skill.index("delivery-diagnose inspect"), skill.index("delivery-repair classify")
+    assert bootstrap < classify
+    assert (
+        "`engine-replay` (C03 `transaction-replay`) and the delegated `delivery-migrate resume` and `verify`" in skill
+    )
+    assert "applied by the agent after it has shown the proposal" in skill
+    assert (
+        "Ask through `vscode_askQuestions` once per proposal, naming the paths, the consequence and the backup" in skill
+    )
+    assert "Only an explicit *Apply this repair* answer authorizes `--confirm <proposal-id>`" in skill
+    assert "Stopping controllers is always the user's step; never terminate processes yourself" in skill
+    assert "An initial migration (`delivery-migrate propose`, `apply`) is never delegated by this policy" in skill
+    assert "Run `delivery-migrate propose`, `apply`, `verify` in Step 3" not in skill
+    assert "must not restart Delivery MCP or Cockpit until `verify` (or `abort`) has finished" in skill
+    assert "Never write request provenance" in skill
+    assert "C09" in skill
+    assert "D07" not in skill
 
 
 def test_inspect_change_prompt_uses_effective_read_only_allowlist() -> None:

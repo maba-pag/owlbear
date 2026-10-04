@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import subprocess
 import sys
@@ -381,3 +382,107 @@ def test_concurrent_processes_publish_one_immutable_participant_set(tmp_path: Pa
     assert [process.returncode for process in processes] == [0, 0]
     assert (work_root / "jobs/plan.yaml").read_bytes() == b"plan"
     assert not list((manifest_root / "transactions").glob("*.yaml"))
+
+
+# ---------------------------------------------------------------------------
+# Read-only pending validation and exact replay (N08-A D1)
+# ---------------------------------------------------------------------------
+
+
+class _Stop(BaseException):
+    pass
+
+
+def _leave_pending(transaction: RuntimeTransaction) -> None:
+    def stop(stage: str) -> None:
+        if stage == "before-publication":
+            raise _Stop
+
+    with pytest.raises(_Stop):
+        transaction.commit(failure=stop)
+
+
+def _tree(root: Path) -> dict[str, bytes]:
+    return {path.relative_to(root).as_posix(): path.read_bytes() for path in sorted(root.rglob("*")) if path.is_file()}
+
+
+def test_read_pending_validates_with_the_owner_rules_and_writes_nothing(tmp_path: Path) -> None:
+    manifest_root, work_root = (tmp_path / "runtime").resolve(), (tmp_path / "work").resolve()
+    manifest_root.mkdir()
+    _leave_pending(
+        RuntimeTransaction(manifest_root, "pending", (TransactionParticipant(work_root, Path("a.json"), b"a"),))
+    )
+    before = _tree(tmp_path)
+
+    pending = RuntimeTransaction.read_pending(manifest_root, roots=(manifest_root, work_root))
+
+    assert [(item.name, item.contained) for item in pending] == [("pending.yaml", False)]
+    assert pending[0].sha256 == hashlib.sha256((manifest_root / "transactions/pending.yaml").read_bytes()).hexdigest()
+    assert _tree(tmp_path) == before
+    with pytest.raises(TransactionPathError):
+        RuntimeTransaction.read_pending(manifest_root)
+    (manifest_root / "transactions/zz.yaml").write_text("schema_version: 1\nparticipants: []\n", encoding="utf-8")
+    with pytest.raises(TransactionManifestError):
+        RuntimeTransaction.read_pending(manifest_root, roots=(manifest_root, work_root))
+    assert RuntimeTransaction.read_pending(tmp_path / "absent") == ()
+
+
+def test_replay_of_a_validated_manifest_matches_owner_recovery(tmp_path: Path) -> None:
+    replayed, recovered = tmp_path / "replayed", tmp_path / "recovered"
+    for root in (replayed, recovered):
+        root.mkdir()
+        (root / "old.json").write_bytes(b"old")
+        _leave_pending(
+            RuntimeTransaction(
+                root,
+                "mixed",
+                (
+                    TransactionParticipant(root, Path("new.json"), b"new"),
+                    ReplacementTransactionParticipant(root, Path("old.json"), b"old", b"replaced"),
+                ),
+            )
+        )
+
+    (pending,) = RuntimeTransaction.read_pending(replayed)
+    pending.replay()
+    RuntimeTransaction.recover_all(recovered)
+
+    assert _tree(replayed) == _tree(recovered)
+    assert not list((replayed / "transactions").glob("*.yaml"))
+
+
+def _contained_pending(tmp_path: Path) -> Path:
+    root = (tmp_path / "report").resolve()
+    root.mkdir(parents=True)
+    descriptor = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    transaction = RuntimeTransaction(root, "report", (TransactionParticipant(root, Path("current.json"), b"pointer"),))
+
+    def stop(stage: str) -> None:
+        if stage == "before-publication":
+            raise _Stop
+
+    try:
+        with pytest.raises(_Stop):
+            transaction.commit_contained(descriptor, failure=stop)
+    finally:
+        os.close(descriptor)
+    return root
+
+
+def test_contained_pending_replays_through_the_contained_path_and_rejects_an_extra_field(tmp_path: Path) -> None:
+    root = _contained_pending(tmp_path)
+    (pending,) = RuntimeTransaction.read_pending(root, contained=True)
+    assert pending.contained
+
+    pending.replay()
+
+    assert (root / "current.json").read_bytes() == b"pointer"
+    assert not (root / "transactions/report.yaml").exists()
+    other = _contained_pending(tmp_path / "other")
+    manifest = tmp_path / "other/report/transactions/report.yaml"
+    value = yaml.safe_load(manifest.read_bytes())
+    value["unexpected"] = True
+    manifest.write_text(yaml.safe_dump(value, sort_keys=True), encoding="utf-8")
+    assert RuntimeTransaction._from_manifest(other, manifest, (other,)).participants  # noqa: SLF001
+    with pytest.raises(TransactionManifestError):
+        RuntimeTransaction.read_pending(other, contained=True)
