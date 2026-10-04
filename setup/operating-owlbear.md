@@ -235,6 +235,7 @@ Worker transitions keep correction finite and typed:
 | Failed activation or retained active custody | Readiness exposes `/repair-delivery` for read-only diagnosis | The prompt can explain the retained state; it grants no permission to retry, release custody or start replacement work |
 | `recover_claim` requested | Requires supported host exclusion | Timeout/`confirmed_lost` do not release custody |
 | Earlier valid stage is required | User selects an invariant-checked backward move in Cockpit | Runtime resets only the selected outcome and its affected successors |
+| User pauses a Change | **Pause** in Cockpit (or `set_change_intent` `defer`) is accepted at any time; while a step is running it records a **Pause requested** state | The running step finishes and records its result; no new work starts. The Change then shows **Paused**. **Resume** clears a pending request or restores the prior stage. Pause never stops or releases a worker |
 
 The window-exit row also covers a prior-session Orchestrator restart, reload, or closed window. If the
 issuing window process remains alive, only the user can confirm whether its earlier run was stopped;

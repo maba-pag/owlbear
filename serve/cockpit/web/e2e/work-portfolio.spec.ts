@@ -1094,6 +1094,7 @@ const WORKER_QUIET_PERIOD_MS = 30_000;
 type ClaimDetail = {
   item: {
     active_claim: { attempt_id: string; claim_id: string; started_at: string; continuation: boolean } | null;
+    pause_unavailable_reason?: string | null;
     card: {
       readiness: {
         status: string;
@@ -1227,5 +1228,36 @@ test.describe("assembled stuck-worker release", () => {
     expect(after.item.card.readiness?.retry_history).toEqual([
       expect.objectContaining({ status: "failed", failure_code: "worker-released-stuck" }),
     ]);
+  });
+
+  test("records Pause requested while a worker holds custody and Resume clears it", async ({ page }) => {
+    const before = await stuckWorkerDetail(page, "stuck-busy-e2e");
+    const claim = requirePresent(before.item.active_claim);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto(`${STUCK_WORKER_ORIGIN}/delivery/stuck-busy-e2e/${encodeURIComponent("outcome:OUT-001")}`);
+    const detail = page.getByTestId("work-item-detail");
+    await expect(detail.getByRole("heading", { name: "Active claim" })).toBeVisible();
+    const control = detail.getByTestId("change-pause-stuck-busy-e2e");
+
+    await control.getByText("Pause", { exact: true }).click();
+    await inputValue(control.locator('p-input-text[name="change-pause-reason"]'), "Hold for review");
+    const pauseResponse = page.waitForResponse(
+      (response) => response.request().method() === "POST" && response.url().endsWith("/defer"),
+    );
+    await control.getByText("Confirm pause", { exact: true }).click();
+    expect((await pauseResponse).status()).toBe(200);
+
+    await expect(control.getByTestId("pause-requested-stuck-busy-e2e")).toHaveText("Pause requested");
+    await expect(detail.getByRole("heading", { name: "Active claim" })).toBeVisible();
+    const requested = await stuckWorkerDetail(page, "stuck-busy-e2e");
+    expect(requested.item.active_claim).toEqual(claim);
+    expect(requested.item.pause_unavailable_reason).toBe("pause-requested");
+
+    await control.getByText("Resume", { exact: true }).click();
+    await expect(control.getByTestId("pause-requested-stuck-busy-e2e")).toHaveCount(0);
+    await expect(control.getByText("Pause", { exact: true })).toBeVisible();
+    const resumed = await stuckWorkerDetail(page, "stuck-busy-e2e");
+    expect(resumed.item.active_claim).toEqual(claim);
+    expect(resumed.item.pause_unavailable_reason).toBeNull();
   });
 });

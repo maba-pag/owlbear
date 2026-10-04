@@ -6,8 +6,9 @@ import hashlib
 import subprocess
 import time
 from contextlib import ExitStack, contextmanager, suppress
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, Never
+from typing import TYPE_CHECKING, Literal, Never, TypeVar
 
 from owlbear_delivery.application_models import (
     DeliveryActionBusyError,
@@ -22,6 +23,7 @@ from owlbear_delivery.application_support import (
     _ATTENTION_RESOLUTION_LOCK_RETRY_SECONDS,
     _ATTENTION_RESOLUTION_LOCK_TIMEOUT_SECONDS,
     _canonical_model_bytes,
+    _checkpoint_operation_id,
     _logger,
     _timestamp,
 )
@@ -29,6 +31,7 @@ from owlbear_delivery.change_workspace import (
     ChangeCoordination,
     ChangeFinalizationAttempt,
     ChangeFinalizationAttention,
+    ChangePauseRequestedError,
     ChangeWorktreeAttentionError,
     CoordinationConflictError,
     PublicationBaselineRecoveryReceipt,
@@ -46,9 +49,11 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryChangeDispositionResolution,
     DeliveryChangeStage,
     DeliveryCheckpointPublicationState,
+    DeliveryCheckpointTriggerKind,
     DeliveryFinalizationReceipt,
     DeliveryRuntime,
     FinalizeDeliveryChange,
+    parse_delivery_frontier,
 )
 from owlbear_delivery.finalization_reports import (
     ENGINE_FINALIZATION_CATEGORIES,
@@ -68,7 +73,9 @@ from owlbear_delivery.recovery import (
     read_record,
 )
 from owlbear_delivery.runtime_transaction import (
+    ReplacementTransactionParticipant,
     RuntimeTransaction,
+    TransactionConflictError,
     TransactionParticipant,
 )
 from owlbear_delivery.storage_io import locked_roots
@@ -81,7 +88,28 @@ from owlbear_delivery.work_items import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
+
+    from owlbear_delivery.workspace_coordination import DrainAuthority
+
+_T = TypeVar("_T")
+_PAUSE_FIELD_RETRY_LIMIT = 4
+# K2/K7: owner-drain writes each started owner may finish under its own token.
+_ACCEPTANCE_DRAIN_MUTATIONS = ("latch_merged_pull_request", "complete_change", "capture_change_disposition")
+_SYNC_DRAIN_MUTATIONS = (
+    "record_target_sync",
+    "capture_target_sync_conflict",
+    "clear_ready_for_head_change",
+    "capture_change_disposition",
+)
+_READY_DRAIN_MUTATIONS = ("mark_awaiting_merge", "capture_change_disposition")
+_SNAPSHOT_DRAIN_MUTATIONS = ("record_design_package_snapshot", "reconcile_finalization_head")
+_ENGINE_DRAIN_MUTATIONS: dict[str, tuple[str, ...]] = {
+    "reconcile-checkpoint": (*_SNAPSHOT_DRAIN_MUTATIONS, "capture_change_disposition"),
+    "sync-target": _SYNC_DRAIN_MUTATIONS,
+    "mark-ready": _READY_DRAIN_MUTATIONS,
+    "observe-acceptance": _ACCEPTANCE_DRAIN_MUTATIONS,
+}
 
 
 class _LifecycleMixin:
@@ -107,7 +135,11 @@ class _LifecycleMixin:
         if confirmed_recovery is not True:
             self._fail("Change worktree recovery requires explicit confirmation")
         runtime = self._runtime(change_id, for_mutation=True, allow_finalizer=True)
-        with self._coordinator.acquisition_lock(), locked_roots((self._checkpoint_lock_root(change_id),)):
+        with (
+            self._coordinator.acquisition_lock(),
+            locked_roots((self._checkpoint_lock_root(change_id),)),
+            self._operator_start(change_id, f"worktree-recovery:{recovery_reviewed_head}"),
+        ):
             if runtime.active_claims() or runtime.integration_repair_claim() is not None:
                 raise DeliveryWorkerExclusionRequiredError
             try:
@@ -283,8 +315,15 @@ class _LifecycleMixin:
     ) -> DeliveryFinalizationReceipt:
         """Finalize one exact clean reviewed Change head and queue its checkpoint."""
         runtime = self._runtime(change_id, for_mutation=True, allow_finalizer=True)
-        with locked_roots((self._checkpoint_lock_root(change_id),)):
-            return self._finalize_change_locked(change_id, runtime, request)
+        with (
+            locked_roots((self._checkpoint_lock_root(change_id),)),
+            self._owner_drain_authority(
+                change_id, f"finalizer:{request.operation_id}", "record_external_head_promotion"
+            ),
+        ):
+            finalization = self._finalize_change_locked(change_id, runtime, request)
+            self._try_convert_pause_request(change_id, runtime)
+            return finalization
 
     def _finalize_change_locked(
         self, change_id: str, runtime: DeliveryRuntime, request: FinalizeDeliveryChange
@@ -327,20 +366,24 @@ class _LifecycleMixin:
                 ValueError("Change head changed"),
             )
         results = tuple(result for binding in runtime.bindings() for result in binding.results)
-        with self._coordinator.publication_lock(change_id) as publication_lock:
-            boundary_participant = self._workspace_manager.prepare_finalization_boundary(
-                change_id,
-                request.exact_head,
-                tuple(result.completed_commit for result in results),
-                publication_lock,
-                completion=(request.operation_id, self._clock()),
-            )
-            additional_participants = () if boundary_participant is None else (boundary_participant,)
-            finalization = runtime.finalize_change(
-                request,
-                _timestamp(self._clock()),
-                additional_participants=additional_participants,
-            )
+
+        def commit_finalization() -> DeliveryFinalizationReceipt:
+            with self._coordinator.publication_lock(change_id) as publication_lock:
+                boundary_participant = self._workspace_manager.prepare_finalization_boundary(
+                    change_id,
+                    request.exact_head,
+                    tuple(result.completed_commit for result in results),
+                    publication_lock,
+                    completion=(request.operation_id, self._clock()),
+                )
+                additional_participants = () if boundary_participant is None else (boundary_participant,)
+                return runtime.finalize_change(
+                    request,
+                    _timestamp(self._clock()),
+                    additional_participants=additional_participants,
+                )
+
+        finalization = self._retry_pause_field_conflict(commit_finalization)
         self._record_finalization_retry_success(runtime, request.operation_id)
         self._promote_finalized_external_head(change_id, finalization.exact_head)
         self._retire_finalization_report(runtime, finalization.exact_head)
@@ -531,13 +574,18 @@ class _LifecycleMixin:
                     self._raise_finalizer_settlement_conflict(
                         "Finalizer settlement conflicts with its immutable receipt"
                     )
-                return prior
-            finalization = self._already_finalized_settlement(runtime, settlement)
-            if finalization is not None:
-                return finalization
-            coordination, attempt = self._active_finalizer_attempt(settlement)
-            evidence = self._finalizer_settlement_evidence(runtime, settlement, coordination, attempt)
-            return self._publish_finalizer_settlement(runtime, settlement, attempt, evidence, lock)
+                result: FinalizerSettlementReceipt | DeliveryFinalizationReceipt = prior
+            else:
+                finalization = self._already_finalized_settlement(runtime, settlement)
+                if finalization is not None:
+                    return finalization
+                coordination, attempt = self._active_finalizer_attempt(settlement)
+                evidence = self._finalizer_settlement_evidence(runtime, settlement, coordination, attempt)
+                result = self._retry_pause_field_conflict(
+                    lambda: self._publish_finalizer_settlement(runtime, settlement, attempt, evidence, lock)
+                )
+        self._convert_pause_request_unlocked(settlement.change_id)
+        return result
 
     def _validate_finalizer_settlement_envelope(self, settlement: FinalizerSettlement) -> FinalizerSettlement:
         if not isinstance(settlement, FinalizerSettlement):
@@ -796,7 +844,10 @@ class _LifecycleMixin:
             message = "publication baseline recovery requires explicit confirmation"
             raise PortfolioApplicationError(message)
         runtime = self._runtime(change_id, for_mutation=True)
-        with locked_roots((self._checkpoint_lock_root(change_id),)):
+        with (
+            locked_roots((self._checkpoint_lock_root(change_id),)),
+            self._operator_start(change_id, f"baseline-recovery:{operation_id}"),
+        ):
             if runtime.active_claims() or runtime.integration_repair_claim() is not None:
                 message = "publication baseline recovery cannot overlap an active claim"
                 raise PortfolioApplicationError(message)
@@ -807,26 +858,185 @@ class _LifecycleMixin:
                 operation_id,
             )
 
-    def defer_change(self, change_id: str, reason: str) -> DeliveryChangeDeferral:
-        """Retain one nonterminal Change and pause its claimable frontier."""
-        runtime = self._runtime(change_id, for_mutation=True)
-        with locked_roots((self._checkpoint_lock_root(change_id),)):
-            deferral = runtime.defer_change(reason, _timestamp(self._clock()))
-            self._publish_delivery_state(change_id, runtime, f"deferral-{deferral.deferral_id}")
-            return deferral
-
-    def resume_change(self, change_id: str) -> DeliveryChangeDeferral:
-        """Resume one exact deferred Change from its retained prior state."""
-        runtime = self._runtime(change_id, for_mutation=True)
-        with locked_roots((self._checkpoint_lock_root(change_id),)):
-            deferral = runtime.resume_change()
-            self._publish_delivery_state(change_id, runtime, f"resume-{deferral.deferral_id}")
-            return deferral
-
     def abandon_change(self, change_id: str, reason: str) -> DeliveryChangeAbandonment:
         """Record one terminal user abandonment without mutating the user checkout."""
         runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
-            abandonment = runtime.abandon_change(reason, _timestamp(self._clock()))
+            abandonment = runtime.abandon_change(
+                reason,
+                _timestamp(self._clock()),
+                pause_request_clear=self._pause_request_clear(change_id),
+            )
             self._publish_delivery_state(change_id, runtime, f"abandonment-{abandonment.abandonment_id}")
             return abandonment
+
+    # N09-A2 — Pause drains active work (plan §1.11).
+
+    @contextmanager
+    def _operator_start(
+        self, change_id: str, owner: str, *writes: str, publishes_checkpoint: bool = False
+    ) -> Iterator[DrainAuthority]:
+        """K3 start of one operator-started entry, inside its checkpoint lock, before any effect.
+
+        A Pause committed first refuses it with no effect; a Pause committed later finds a started owner
+        whose own named writes drain under this token (K2), then the request converts before the lock is released.
+        """
+        self._coordinator.start_pause_fenced(change_id, owner)
+        with self._coordinator.drain_authority(
+            change_id, owner, publishes_checkpoint=publishes_checkpoint, mutation=writes, operator=writes
+        ) as authority:
+            yield authority
+        self._try_convert_pause_request(change_id)
+
+    def _pause_request_clear(self, change_id: str) -> ReplacementTransactionParticipant | None:
+        """Return the participant clearing a recorded request inside a terminal or deferral transaction (I8)."""
+        request = self._coordinator.pause_request(change_id)
+        return None if request is None else self._coordinator.prepare_pause_request_clear(change_id, request)
+
+    def _pause_completion_participant(self, change_id: str) -> ReplacementTransactionParticipant:
+        """Fence ``complete_change`` against Pause: clear a request, or bind Pause-free bytes (I8, K3)."""
+        clear = self._pause_request_clear(change_id)
+        if clear is not None:
+            self._coordinator.require_pause_permits(change_id, "mutation", "complete_change")
+            return clear
+        return self._coordinator.prepare_pause_fence(change_id, "mutation", "complete_change")
+
+    def _snapshot_owner_evidence(
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+        coordination: ChangeCoordination | None = None,
+    ) -> tuple[Literal["intent", "unanchored", "handoff"], str | None] | None:
+        """Return first-checkpoint snapshot custody that blocks conversion (K2 snapshot row, K5).
+
+        The second value is the snapshot head the owner must publish, when known.
+        """
+        current = coordination if coordination is not None else self._coordinator.show(change_id)
+        if current.design_package_snapshot_intent is not None:
+            return "intent", None
+        receipt = current.design_package_snapshot
+        state = runtime.checkpoint_publication_state()
+        pending = state.pending_checkpoint
+        if receipt is None or pending is None or pending.head is None:
+            return None
+        if not any(trigger.kind == DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK for trigger in pending.triggers):
+            return None
+        if state.published_head is None and pending.head == receipt.previous_head != receipt.snapshot_head:
+            return "unanchored", receipt.snapshot_head
+        if pending.head == receipt.snapshot_head and state.published_head != pending.head:
+            return "handoff", receipt.snapshot_head
+        return None
+
+    def _pause_drained(self, change_id: str, runtime: DeliveryRuntime) -> bool:
+        """K5 drained predicate; the caller holds the Change checkpoint lock."""
+        coordination = self._coordinator.show(change_id)
+        return coordination.pause_request is not None and self._custody_drained(change_id, runtime, coordination)
+
+    def _custody_drained(self, change_id: str, runtime: DeliveryRuntime, coordination: ChangeCoordination) -> bool:
+        """Return whether no K2 owner remains by durable bytes: defer preconditions, fences, leases, snapshots."""
+        frontier = parse_delivery_frontier(runtime.frontier_bytes())[0]
+        writer = coordination.writer
+        action = coordination.continuation_action
+        expiry = coordination.publication_expiry
+        return (
+            runtime.deferral_refusal(frontier) is None
+            and coordination.recovery_owner_id is None
+            and self._coordinator.recovery_exclusions_verified(coordination)
+            and (writer is None or writer.kind in {"handoff", "finalization-attention"})
+            and (action is None or action.finished_at is not None)
+            and (expiry is None or expiry <= datetime.now(UTC))
+            and self._snapshot_owner_evidence(change_id, runtime, coordination) is None
+        )
+
+    def _convert_pause_request(self, change_id: str, runtime: DeliveryRuntime) -> DeliveryChangeDeferral | None:
+        """K5: convert a drained request into the deferral in one transaction, then publish it."""
+        if not self._pause_drained(change_id, runtime):
+            return None
+        request = self._coordinator.pause_request(change_id)
+        if request is None:
+            return None
+        deferral = runtime.defer_change(
+            request.reason,
+            datetime.fromisoformat(request.requested_at),
+            pause_request_clear=self._coordinator.prepare_pause_request_clear(change_id, request),
+        )
+        try:
+            self._publish_delivery_state(
+                change_id,
+                runtime,
+                _checkpoint_operation_id("defer", change_id, deferral.model_dump_json()),
+            )
+        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+            _logger.warning("Paused Change %s kept its deferral publication pending: %s", change_id, exc)
+        return deferral
+
+    def _try_convert_pause_request(
+        self, change_id: str, runtime: DeliveryRuntime | None = None
+    ) -> DeliveryChangeDeferral | None:
+        """Best-effort owner conversion; a failed conversion leaves the request refusing new custody."""
+        try:
+            if self._coordinator.pause_request(change_id) is None:
+                return None
+            return self._convert_pause_request(change_id, runtime or self._runtime(change_id))
+        except (OSError, RuntimeError, ValueError, DeliveryWorkerExclusionRequiredError) as exc:
+            _logger.warning("Change %s pause request awaits its next drain point: %s", change_id, exc)
+            return None
+
+    def _convert_pause_request_unlocked(self, change_id: str) -> DeliveryChangeDeferral | None:
+        """K1 immediate conversion: never wait for acquisition or checkpoint locks."""
+        try:
+            with ExitStack() as stack:
+                stack.enter_context(self._coordinator.acquisition_lock(blocking=False))
+                stack.enter_context(locked_roots((self._checkpoint_lock_root(change_id),), blocking=False))
+                self._coordinator.recover_pending_transactions()
+                return self._try_convert_pause_request(change_id)
+        except BlockingIOError:
+            return None
+
+    @contextmanager
+    def _owner_drain_authority(
+        self,
+        change_id: str,
+        owner: str,
+        *mutations: str,
+        bound: str | None = None,
+        publishes_checkpoint: bool = False,
+        requires_lease: bool = False,
+    ) -> Iterator[DrainAuthority]:
+        """Hold one owner's K2 token for this call; ``bound`` fixes a replayed publication digest."""
+        with self._coordinator.drain_authority(
+            change_id,
+            owner,
+            publishes_checkpoint=publishes_checkpoint,
+            requires_lease=requires_lease,
+            mutation=mutations,
+        ) as authority:
+            if bound is not None:
+                authority.permit("state", bound)
+            yield authority
+
+    def _require_publication_drain(self, change_id: str, runtime: DeliveryRuntime) -> DrainAuthority | None:
+        """Refuse state publication under a request unless this call is a matching K2 owner (bound publication)."""
+        if self._coordinator.pause_request(change_id) is None:
+            return None
+        authority = self._coordinator.current_drain_authority(change_id)
+        if authority is None:
+            raise ChangePauseRequestedError
+        bound = authority.permits.get("state")
+        if bound is not None:
+            intent = runtime.pending_state_publication()
+            if intent is None or (
+                intent.transition_request_digest not in bound and intent.base_frontier_digest not in bound
+            ):
+                raise ChangePauseRequestedError
+        return authority
+
+    @staticmethod
+    def _retry_pause_field_conflict(operation: Callable[[], _T]) -> _T:
+        """K6: a field-only Pause write conflicts a prepared coordination participant; re-prepare and retry."""
+        for _attempt in range(_PAUSE_FIELD_RETRY_LIMIT - 1):
+            try:
+                return operation()
+            except TransactionConflictError:
+                continue
+        return operation()

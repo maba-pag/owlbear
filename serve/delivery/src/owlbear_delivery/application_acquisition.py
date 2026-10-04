@@ -8,6 +8,7 @@ import subprocess
 from contextlib import ExitStack, contextmanager, suppress
 from typing import TYPE_CHECKING
 
+from owlbear_delivery.application_lifecycle import _ENGINE_DRAIN_MUTATIONS
 from owlbear_delivery.application_models import (
     DeliveryAcquisitionFailure,
     DeliveryAcquisitionResult,
@@ -43,6 +44,7 @@ from owlbear_delivery.change_workspace import (
     ChangeContinuationAction,
     ChangeCoordination,
     ChangeFinalizationAttempt,
+    ChangePauseRequestedError,
     ChangeTargetSyncStaleError,
     ChangeWriter,
     CoordinationConflictError,
@@ -208,6 +210,8 @@ class _AcquisitionMixin:
                 self._reconcile_runtimes()
             pending_publication_failures = self._replay_pending_state_publications()
             failures.extend(pending_publication_failures)
+            for paused_change_id in sorted(self._runtimes):
+                self._try_convert_pause_request_if_requested(paused_change_id)
             occupied = self._execution_occupancy()
             available = max(self._execution_capacity - occupied, 0)
             integration_attention = self._integration_attention_statuses(pre_claim_snapshots)
@@ -346,6 +350,7 @@ class _AcquisitionMixin:
         if replay is not None:
             return replay
         runtime = self._runtime(request.change_id, for_mutation=True, allow_finalizer=True)
+        self._try_convert_pause_request(request.change_id, runtime)
         snapshot = self._delivery_snapshot(runtime, observe_publication=False)
         cards = self._read_projector(snapshot).group_view().items
         card = self._selected_change_card(snapshot, cards)
@@ -774,7 +779,8 @@ class _AcquisitionMixin:
                     or (result.failure is not None and result.failure.pre_effect_retryable),
                 )
                 self._record_engine_attempt_result(action, result)
-                return result
+            self._try_convert_pause_request(request.change_id)
+            return result
 
     def _execute_engine_action(self, action: ChangeContinuationAction) -> DeliveryEngineActionResult:
         try:
@@ -786,12 +792,7 @@ class _AcquisitionMixin:
             preflight = self._engine_action_preflight(action, runtime)
             if preflight is not None:
                 return preflight
-            if self._coordinator.start_continuation_action(action):
-                result = self._invoke_engine_owner(action)
-            else:
-                result = self._engine_action_failure(
-                    action, "engine-action-interrupted", "Original owner result is unknown."
-                )
+            result = self._start_engine_owner(action)
         except ChangeTargetSyncStaleError:
             return DeliveryEngineActionResult(action=action, kind="stale", reason_code="readiness-changed")
         except DeliveryAcceptanceWaitingError:
@@ -811,6 +812,22 @@ class _AcquisitionMixin:
             )
         else:
             return result
+
+    def _start_engine_owner(self, action: ChangeContinuationAction) -> DeliveryEngineActionResult:
+        """K3 start: a Pause-won start is stale with no marker or effect; a won start drains under its token."""
+        try:
+            started = self._coordinator.start_continuation_action(action)
+        except ChangePauseRequestedError:
+            return DeliveryEngineActionResult(action=action, kind="stale", reason_code="readiness-changed")
+        if not started:
+            return self._engine_action_failure(action, "engine-action-interrupted", "Original owner result is unknown.")
+        with self._owner_drain_authority(
+            action.change_id,
+            f"engine:{action.operation_id}",
+            *_ENGINE_DRAIN_MUTATIONS[action.kind],
+            publishes_checkpoint=action.kind in {"reconcile-checkpoint", "sync-target"},
+        ):
+            return self._invoke_engine_owner(action)
 
     def _settled_finalizer_sync_preflight(
         self,
@@ -989,7 +1006,10 @@ class _AcquisitionMixin:
     ) -> DeliveryContinuationResult | None:
         failure = None
         coordination = self._workspace_manager.show(request.change_id)
-        if readiness.status == "unavailable" or readiness.reason_code in {
+        if coordination.pause_request is not None and readiness.status != "unavailable":
+            # A Pause request refuses new work; the started owner drains and the request converts.
+            kind, reason = "waiting", "change-paused"
+        elif readiness.status == "unavailable" or readiness.reason_code in {
             "finalization-failed",
             "claim-custody-unreconciled",
         }:
@@ -1268,6 +1288,7 @@ class _AcquisitionMixin:
             self._selected_action_checkpoint_lock(selection.change_id),
         ):
             runtime = self._runtime(selection.change_id, for_mutation=True)
+            self._try_convert_pause_request(selection.change_id, runtime)
             if runtime.active_claims() or runtime.integration_repair_claim() is not None:
                 return DeliveryAcquisitionResult(
                     launch_packages=(),
@@ -1462,7 +1483,7 @@ class _AcquisitionMixin:
                 )
             except OSError, RuntimeError, ValueError:
                 continue
-            if pending_publication is not None or occupied:
+            if pending_publication is not None or occupied or coordination.pause_request is not None:
                 continue
             pending = runtime.checkpoint_publication_state().pending_checkpoint
             if pending is not None and any(
@@ -2010,9 +2031,20 @@ class _AcquisitionMixin:
             return None
         if writer is None:
             self._fail("Builder activation lost its exact workspace writer")
-        coordination = (
-            self._coordinator.show(candidate.change_id)
-            if consumes_handoff
-            else self._coordinator.acquire(candidate.change_id, writer)
-        )
-        return coordination.writer
+        if consumes_handoff:
+            return self._coordinator.show(candidate.change_id).writer
+        # The claim activated before any Pause is a K2 owner; its writer acquisition is its own start.
+        with self._coordinator.drain_authority(
+            candidate.change_id, f"claim:{writer.claim_id}", acquire=(writer.claim_id,)
+        ):
+            return self._coordinator.acquire(candidate.change_id, writer).writer
+
+    def _try_convert_pause_request_if_requested(self, change_id: str) -> None:
+        """Next-acquisition conversion point (K5) for one Change whose checkpoint lock is free."""
+        try:
+            if self._coordinator.pause_request(change_id) is None:
+                return
+            with locked_roots((self._checkpoint_lock_root(change_id),), blocking=False):
+                self._try_convert_pause_request(change_id)
+        except BlockingIOError, CoordinationConflictError:
+            return

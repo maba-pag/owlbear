@@ -1680,6 +1680,77 @@ _NORMAL_CHANGE_MUTATIONS = frozenset(
         "abandon_change",
     }
 )
+# Attention writers outside the central registry (they guard terminal state themselves).
+_DISPOSITION_MUTATIONS = frozenset({"capture_change_disposition", "resolve_change_disposition"})
+
+# N09-A2 K7: classes of every frontier writer while a Pause request exists.
+# Completion: allowed anywhere (the started owner ends, settles or records its own effect).
+_PAUSE_COMPLETION_MUTATIONS = frozenset(
+    {
+        "remove_active_claim",
+        "publish_output",
+        "publish_plan",
+        "publish_result",
+        "transition",
+        "settle_planning_retry",
+        "settle_builder_invocation",
+        "_retry",
+        "complete_recovery",
+        "publish_recovery_attention",
+        "remove_integration_repair_claim",
+        "finalize_change",
+        "record_checkpoint_branch_publication",
+        "acknowledge_checkpoint_publication",
+        "record_checkpoint_failure",
+        "record_publication_identity",
+        "defer_change",
+        "resume_change",
+        "abandon_change",
+    }
+)
+# Owner-drain: allowed only inside a matching K2 drain-authority token.
+_PAUSE_OWNER_DRAIN_MUTATIONS = frozenset(
+    {
+        "record_target_sync",
+        "capture_target_sync_conflict",
+        "mark_awaiting_merge",
+        "clear_ready_for_head_change",
+        "reconcile_finalization_head",
+        "record_publication_successor",
+        "record_design_package_snapshot",
+        "latch_merged_pull_request",
+        "complete_change",
+        "capture_change_disposition",
+        "record_external_head_promotion",
+    }
+)
+# Pause-gated: new work; refused while a request exists.
+_PAUSE_GATED_MUTATIONS = frozenset(
+    {
+        "queue_admitted_design_checkpoint",
+        "queue_explicit_checkpoint",
+        "record_resolved_target_sync",
+        "record_target_sync_abort",
+        "record_external_head_adoption",
+        "reconcile_pull_request_draft_state",
+        "prepare_review_repair",
+        "prepare_completed_outcome_repair",
+        "activate_claim",
+        "resolve_request",
+        "unblock",
+        "administrative_move",
+        "resolve_change_disposition",
+    }
+)
+
+
+def pause_mutation_class(operation: str | None) -> Literal["completion", "owner-drain", "pause-gated"]:
+    """Classify one frontier writer for Pause (K7); unknown or absent names are pause-gated."""
+    if operation in _PAUSE_COMPLETION_MUTATIONS:
+        return "completion"
+    if operation in _PAUSE_OWNER_DRAIN_MUTATIONS:
+        return "owner-drain"
+    return "pause-gated"
 
 
 def is_change_terminal(frontier: DeliveryFrontier) -> bool:

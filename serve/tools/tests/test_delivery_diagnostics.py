@@ -18,7 +18,7 @@ from pydantic import BaseModel, ValidationError
 
 import owlbear_tools.delivery_diagnostics as diagnostics
 from owlbear_delivery import delivery_runtime, state_formats
-from owlbear_delivery.change_workspace import ChangeContinuationAction
+from owlbear_delivery.change_workspace import ChangeContinuationAction, ChangeDirectOperation
 from owlbear_delivery.delivery_admission import DeliveryAdmissionReceipt
 from owlbear_delivery.delivery_runtime import (
     CompletedOutcomeRepairReceipt,
@@ -79,7 +79,7 @@ def _add_change_authority(root: Path, change_id: str) -> Path:
     (change / "frontier.json").write_bytes(b'{"schema_version":18,"bindings":[]}\n')
     coordination = root / ".owlbear/delivery/runtime/coordination/changes" / f"{change_id}.json"
     coordination.write_text(
-        json.dumps({"schema_version": 1, "change_id": change_id}) + "\n",
+        json.dumps({"schema_version": 2, "change_id": change_id}) + "\n",
         encoding="utf-8",
     )
     snapshot = root / ".owlbear/delivery/state" / change_id
@@ -183,7 +183,7 @@ def test_valid_structure_is_bounded_and_healthy(tmp_path: Path) -> None:
     change.mkdir()
     (change / "frontier.json").write_text('{"schema_version":18,"bindings":[]}\n', encoding="utf-8")
     coordination = root / ".owlbear/delivery/runtime/coordination/changes/example.json"
-    coordination.write_text('{"schema_version":1,"change_id":"example"}\n', encoding="utf-8")
+    coordination.write_text('{"schema_version":2,"change_id":"example"}\n', encoding="utf-8")
     snapshot = root / ".owlbear/delivery/state/example"
     snapshot.mkdir(parents=True)
     (snapshot / "snapshot.json").write_text('{"schema_version":2,"frontier":{}}\n', encoding="utf-8")
@@ -194,7 +194,7 @@ def test_valid_structure_is_bounded_and_healthy(tmp_path: Path) -> None:
     assert result["writes_performed"] is False
     assert all(
         result["versions"][key] == value
-        for key, value in {"config": 2, "coordination": 1, "frontier": 18, "host": 1, "snapshot": 2}.items()
+        for key, value in {"config": 2, "coordination": 2, "frontier": 18, "host": 1, "snapshot": 2}.items()
     )
     assert result["versions"]["python"]["major"] >= 3
     assert result["counts"]["frontier"] == 1
@@ -421,6 +421,8 @@ def _write_every_change_family(change: Path) -> dict[str, int]:
         change / "action-receipts" / action.operation_id / "result.json": (
             engine_result.model_dump_json() + "\n"
         ).encode(),
+        change / "action-receipts" / f"direct-{digest}" / "started.json": v1,
+        change / "action-receipts" / f"direct-{digest}" / "finished.json": v1,
         change / "invocations" / f"{digest}.json": v1,
         change / "recovery-receipts" / digest / "intent.json": v1,
         change / "recovery-receipts" / digest / "evidence.json": v1,
@@ -459,6 +461,7 @@ def _write_every_change_family(change: Path) -> dict[str, int]:
         "action_intent": 1,
         "action_started": 1,
         "action_result": 1,
+        "direct_operation": 2,
         "recovery_invocation": 1,
         "recovery_intent": 1,
         "recovery_evidence": 1,
@@ -764,6 +767,7 @@ def test_change_record_versions_match_owner_models() -> None:
         "action_intent": (ChangeContinuationAction,),
         "action_started": (ChangeContinuationAction,),
         "action_result": (DeliveryEngineActionResult,),
+        "direct_operation": (ChangeDirectOperation,),
         "recovery_invocation": (RecoveryInvocation,),
         "recovery_intent": (RecoveryIntent,),
         "recovery_evidence": (RecoveryEvidence,),
@@ -875,7 +879,7 @@ def test_valid_runtime_frontier_without_coordination_is_unknown_and_read_only(
     elif missing == "changes":
         shutil.rmtree(coordination.parent)
     else:
-        coordination.write_bytes(b'{"schema_version":1,"change_id":"example"}\n')
+        coordination.write_bytes(b'{"schema_version":2,"change_id":"example"}\n')
         coordination.unlink()
 
     def snapshot() -> tuple[tuple[str, bytes | None], ...]:
@@ -935,7 +939,7 @@ def test_coordination_identity_mismatch_is_unknown_not_missing_and_read_only(tmp
     change.mkdir()
     (change / "frontier.json").write_bytes(b'{"schema_version":18,"bindings":[]}\n')
     coordination = root / ".owlbear/delivery/runtime/coordination/changes/example.json"
-    coordination.write_bytes(b'{"schema_version":1,"change_id":"other"}\n')
+    coordination.write_bytes(b'{"schema_version":2,"change_id":"other"}\n')
     before = tuple(
         sorted(
             (path.relative_to(root).as_posix(), path.read_bytes() if path.is_file() else None)
@@ -969,7 +973,7 @@ def test_listed_coordination_disappearing_at_stat_is_unknown_and_read_only(
     change.mkdir()
     (change / "frontier.json").write_bytes(b'{"schema_version":18,"bindings":[]}\n')
     coordination = root / ".owlbear/delivery/runtime/coordination/changes/example.json"
-    coordination.write_bytes(b'{"schema_version":1,"change_id":"example"}\n')
+    coordination.write_bytes(b'{"schema_version":2,"change_id":"example"}\n')
     before = tuple(
         sorted(
             (path.relative_to(root).as_posix(), path.read_bytes() if path.is_file() else None)
@@ -1083,9 +1087,15 @@ def test_malformed_and_unsupported_records_are_bounded(tmp_path: Path, relative:
         ),
         (
             ".owlbear/delivery/runtime/coordination/changes/example.json",
-            '{"schema_version":2,"change_id":"example"}',
+            '{"schema_version":3,"change_id":"example"}',
             "newer",
             "COORDINATION_UNSUPPORTED",
+        ),
+        (
+            ".owlbear/delivery/runtime/coordination/changes/example.json",
+            '{"schema_version":1,"change_id":"example"}',
+            "migration-required",
+            "COORDINATION_MIGRATION_REQUIRED",
         ),
         (
             ".owlbear/delivery/runtime/changes/example/claim-issuers/attempt-1.json",

@@ -334,6 +334,7 @@ ChangePauseUnavailableReason = Literal[
     "recovery-required",
     "state-unavailable",
     "change-inactive",
+    "pause-requested",
 ]
 
 
@@ -420,6 +421,7 @@ class ChangeGroupView(_ProjectionModel):
     progress: DeliveryProgress | None = None
     pause_available: bool = False
     pause_unavailable_reason: ChangePauseUnavailableReason | None = "state-unavailable"
+    pause_requested: bool = False
 
     @model_validator(mode="after")
     def _validate_pause(self) -> ChangeGroupView:
@@ -591,19 +593,21 @@ _SERVICE_RETRY_OPERATIONS = frozenset(
 )
 
 
-def derive_delivery_progress(  # noqa: C901, PLR0911 - one branch per ordered mapping row.
+def derive_delivery_progress(  # noqa: C901, PLR0911, PLR0913 - one branch per ordered mapping row.
     readiness: DeliveryReadiness,
     card: WorkItemCardView,
     frontier: DeliveryFrontier,
     *,
     issuer_state: DeliveryIssuerState | None = None,
     at_capacity: bool = False,
+    pause_drained: bool = False,
 ) -> DeliveryProgress | None:
     """Map one final readiness and supplied evidence to its programme progress; None keeps D01 rendering.
 
     ``issuer_state`` is the claim-issuing window evidence for a running Planner, Builder or Finalizer
     custody, or None when no such custody applies. ``at_capacity`` reports that other Changes fill the
-    execution capacity. Active-work keys are never emitted: no input proves a current dispatch.
+    execution capacity. ``pause_drained`` reports a Pause request whose custody has drained (M3).
+    Active-work keys are never emitted: no input proves a current dispatch.
     """
     reason = readiness.reason_code
     if frontier.change_completion is not None:
@@ -612,7 +616,7 @@ def derive_delivery_progress(  # noqa: C901, PLR0911 - one branch per ordered ma
         return None
     if readiness.status == "complete":
         return "completed"
-    if frontier.change_deferral is not None:
+    if frontier.change_deferral is not None or pause_drained:
         return "paused"
     if reason in {"worker-stall-wait", "engine-action-pending"}:
         return "waiting-for-chat"
@@ -651,7 +655,7 @@ def derive_delivery_progress(  # noqa: C901, PLR0911 - one branch per ordered ma
 class WorkItemProjector:
     """Derive MCP and Cockpit views from one immutable Delivery snapshot."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 - one immutable projection binds each readiness overlay input.
         self,
         snapshot: DeliveryPortfolioSnapshot,
         readiness: tuple[DeliveryReadiness, ...] = (),
@@ -659,10 +663,12 @@ class WorkItemProjector:
         readiness_guidance: tuple[str | None, ...] = (),
         change_progress: DeliveryProgress | None = None,
         pause_unavailable_reason: ChangePauseUnavailableReason | None = "state-unavailable",
+        pause_requested: bool = False,
     ) -> None:
         self._snapshot = snapshot
         self._change_progress = change_progress
         self._pause_unavailable_reason = pause_unavailable_reason
+        self._pause_requested = pause_requested
         self._outcomes = {item.outcome_id: item for item in snapshot.contract.outcomes}
         self._bindings = {item.outcome_id: item for item in snapshot.frontier.bindings}
         self._cards = self._project_cards()
@@ -829,6 +835,7 @@ class WorkItemProjector:
             progress=self._change_progress,
             pause_available=self._pause_unavailable_reason is None,
             pause_unavailable_reason=self._pause_unavailable_reason,
+            pause_requested=self._pause_requested,
         )
 
     def publication_phase(self) -> WorkItemPublicationPhase:

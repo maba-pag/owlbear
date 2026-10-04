@@ -41,7 +41,7 @@ _INCOMPLETE_DIAGNOSTIC_CODES = frozenset(
 SUPPORTED_VERSIONS = {
     "config": 2,
     "frontier": 18,
-    "coordination": 1,
+    "coordination": 2,
     "snapshot": 2,
     "host": 1,
     "host_local": 1,
@@ -52,6 +52,7 @@ READABLE_LEGACY_VERSIONS: dict[str, tuple[int, ...]] = {
 }
 # Mirror of the registry's fenced rewrites: these versions load only after ``delivery-migrate``.
 MIGRATION_REQUIRED_VERSIONS: dict[str, tuple[int, ...]] = {
+    "coordination": (1,),
     "frontier": (17,),
 }
 # Mirror of the registry's workspace format (``runtime/format.json``) and migration journal states.
@@ -73,6 +74,7 @@ _CHANGE_RECORD_NAME_PATTERNS = {
     "$claim_attempt.json": re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.json$"),
     "$outcome": re.compile(r"^OUT-[0-9]{3}$"),
     "$operation": re.compile(r"^continue-[0-9a-f]{64}$"),
+    "$direct": re.compile(r"^direct-[0-9a-f]{64}$"),
     "$stage": re.compile(r"^stage-[0-9a-f]{32}$"),
     "$change": _CHANGE_ID,
     "$change.json": re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*\.json$"),
@@ -111,7 +113,11 @@ _CHANGE_RECORD_LAYOUT: dict[str, object] = {
             "intent.json": "action_intent",
             "started.json": "action_started",
             "result.json": "action_result",
-        }
+        },
+        "$direct": {
+            "started.json": "direct_operation",
+            "finished.json": "direct_operation",
+        },
     },
     "invocations": {"$digest.json": "recovery_invocation"},
     "recovery-receipts": {
@@ -163,6 +169,7 @@ _CHANGE_RECORD_VERSIONS: dict[str, tuple[int, ...] | None] = {
     "action_intent": None,
     "action_started": None,
     "action_result": None,
+    "direct_operation": (1,),
     "recovery_invocation": (1,),
     "recovery_intent": (1,),
     "recovery_evidence": (1,),
@@ -288,6 +295,7 @@ _SAFE_LOCATORS = {
     "action_intent": f"{_CHANGE_ROOT}/action-receipts/<opaque>/intent.json",
     "action_started": f"{_CHANGE_ROOT}/action-receipts/<opaque>/started.json",
     "action_result": f"{_CHANGE_ROOT}/action-receipts/<opaque>/result.json",
+    "direct_operation": f"{_CHANGE_ROOT}/action-receipts/<opaque>/<marker>.json",
     "preservation_manifest": f"{_PRESERVATION_ROOT}/manifest.json",
     "preservation_object": f"{_PRESERVATION_ROOT}/objects/<opaque>.raw",
     "restoration_record": f"{_PRESERVATION_ROOT}/restoration/<opaque>/<record>.json",
@@ -1065,7 +1073,8 @@ def _inspect_coordination_file(
         expected_change_id=expected_change_id,
     )
     inspection.counts["coordination"] += 1
-    return inspection.records[-1]["status"] == "supported"
+    # A registered-migration version (coordination 1 -> 2) is a known shape: the record is resolved, not unknown.
+    return inspection.records[-1]["status"] in {"supported", "migration-required"}
 
 
 def _scan_change_transactions(change_fd: int, inspection: _Inspection) -> None:
