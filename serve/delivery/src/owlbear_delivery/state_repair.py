@@ -20,6 +20,8 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import ValidationError
 
 from owlbear_delivery import state_migration
+from owlbear_delivery.acceptance import CompletionReceiptConflictError, CompletionReceiptStore
+from owlbear_delivery.change_workspace import ChangeWorkspaceManager
 from owlbear_delivery.delivery_admission import DeliveryAdmissionReceipt
 from owlbear_delivery.delivery_application_loader import (
     DeliveryApplicationLoadError,
@@ -63,10 +65,12 @@ from owlbear_delivery.state_migration import (
     RepairParticipant,
     RepairProposal,
     live_journals,
+    owner_rejections,
     path_digest,
     repair_proposal,
     require_no_open_journal,
 )
+from owlbear_delivery.workspace_models import ChangeCoordination
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -200,14 +204,16 @@ def classify(workspace_root: Path, change_id: str | None = None, *, verifying: s
         return RepairReport((_contained("inspection-incomplete", "."),))
     if not workspace.delivery.is_dir():
         return RepairReport()
+    tracked = _tracked_findings(workspace, report)
+    environment = _environment_findings(workspace)
     findings = [
         *_journal_findings(workspace, verifying),
         *_record_findings(report),
-        *_tracked_findings(workspace, report),
+        *tracked,
         *_package_findings(workspace),
-        *_change_findings(workspace),
-        *_transaction_findings(workspace, report),
-        *_environment_findings(workspace),
+        *_change_findings(workspace, report),
+        *_transaction_findings(workspace, report, startup_refused=bool(tracked or environment)),
+        *environment,
     ]
     unique = {finding.finding_id: finding for finding in findings}
     selected = (
@@ -391,6 +397,11 @@ def _tracked_findings(workspace: _Workspace, report: CapabilityReport) -> list[R
             if locator == CONFIG:
                 findings.append(_environment("config-missing", CONFIG))
             continue
+        record = next((item for item in report.records if item.locator == locator), None)
+        if record is not None and record.status == "unknown-version" and not record.version_absent:
+            # An explicit unsupported version is not invalid content: contain it before any replacement (C07).
+            findings.append(_contained("record-unknown-version", locator))
+            continue
         if not _owner_rejects(locator, content, report):
             continue
         findings.append(_host_local_finding() if locator == HOST_LOCAL else _restore_finding(workspace, locator))
@@ -433,10 +444,14 @@ class _GitUnavailableError(RuntimeError):
 
 
 def _head_blob(workspace: _Workspace, locator: str) -> bytes | None:
+    return _git_blob(workspace, f"HEAD:{DELIVERY_STATE_ROOT}/{locator}")
+
+
+def _git_blob(workspace: _Workspace, spec: str) -> bytes | None:
     try:
         git = resolve_git_executable()
         completed = subprocess.run(  # noqa: S603 - resolved Git executable and fixed argument vector.
-            (git, "-C", str(workspace.root), "cat-file", "blob", f"HEAD:{DELIVERY_STATE_ROOT}/{locator}"),
+            (git, "-C", str(workspace.root), "cat-file", "blob", spec),
             check=False,
             capture_output=True,
             timeout=_GIT_TIMEOUT_SECONDS,
@@ -469,10 +484,10 @@ def _head_package(workspace: _Workspace, locator: str, files: tuple[str, ...]) -
     if len(content) != len(files):
         return None
     try:
-        verify_package_content(change_id, content)
+        head = verify_package_content(change_id, content)
     except DesignPackageConflictError, ValueError:
         return None
-    if not _matches_admission(workspace, change_id, content["authority.json"]):
+    if not _matches_admission(workspace, change_id, head.package_id, content["authority.json"]):
         return None
     differing = {
         f"{locator}/{name}": value for name, value in content.items() if workspace.read(f"{locator}/{name}") != value
@@ -486,8 +501,13 @@ def scan_bytes_status(locator: str, content: bytes) -> str:
     return "unrecognized" if kind is None else classify_record(kind, locator, content).status
 
 
-def _matches_admission(workspace: _Workspace, change_id: str, authority: bytes) -> bool:
-    """An admitted Change binds its package through the admission's contract digest (D4)."""
+def _matches_admission(workspace: _Workspace, change_id: str, package_id: str, authority: bytes) -> bool:
+    """An admitted Change's ``HEAD`` package must be exactly the package its admission checkpoint verified (D4).
+
+    The receipt's ``checkpoint_commit`` holds the package bytes the admission published; their verified
+    manifest identity and contract digest are the admitted identity. Missing or inconsistent checkpoint
+    evidence keeps the package contained.
+    """
     admission = workspace.read(f"runtime/changes/{change_id}/admission.json")
     if admission is None:
         return True
@@ -495,7 +515,18 @@ def _matches_admission(workspace: _Workspace, change_id: str, authority: bytes) 
         receipt = DeliveryAdmissionReceipt.model_validate_json(admission, strict=True)
     except ValidationError, ValueError:
         return False
-    return hashlib.sha256(authority).hexdigest() == receipt.contract_digest
+    checkpoint = {name: _git_blob(workspace, f"{receipt.checkpoint_commit}:{name}") for name in _PACKAGE_FILES}
+    if any(value is None for value in checkpoint.values()):
+        return False
+    try:
+        admitted = verify_package_content(change_id, {name: value or b"" for name, value in checkpoint.items()})
+    except DesignPackageConflictError, ValueError:
+        return False
+    return (
+        hashlib.sha256(admitted.authority_bytes).hexdigest() == receipt.contract_digest
+        and admitted.package_id == package_id
+        and admitted.authority_bytes == authority
+    )
 
 
 def _package_findings(workspace: _Workspace) -> list[RepairFinding]:
@@ -527,11 +558,16 @@ def _package_findings(workspace: _Workspace) -> list[RepairFinding]:
 # --- Per-Change records (C06, C07; V20) --------------------------------------------
 
 
-def _change_findings(workspace: _Workspace) -> list[RepairFinding]:
+def _change_findings(workspace: _Workspace, report: CapabilityReport) -> list[RepairFinding]:
+    findings = [
+        _contained("record-owner-invalid", locator, scope=_change_scope(locator))
+        for locator in owner_rejections(workspace.root, report, skip=_SELF_HANDLED_KINDS)
+    ]
+    findings.extend(_completion_findings(workspace))
+    findings.extend(_worktree_findings(workspace))
     changes = workspace.delivery / "runtime/changes"
     if not changes.is_dir():
-        return []
-    findings = []
+        return findings
     for directory in sorted(changes.iterdir()):
         if not directory.is_dir() or directory.is_symlink():
             continue
@@ -545,6 +581,61 @@ def _change_findings(workspace: _Workspace) -> list[RepairFinding]:
         except OSError, ValidationError, ValueError:
             findings.append(_contained("receipt-invalid", admission, scope=change_id))
     return findings
+
+
+def _completion_findings(workspace: _Workspace) -> list[RepairFinding]:
+    """V20: a completion receipt whose stored identity or file name does not match its bytes is contained."""
+    completions = workspace.delivery / "runtime/completions"
+    if not completions.is_dir() or completions.is_symlink():
+        return []
+    store = CompletionReceiptStore(workspace.delivery / "runtime")
+    findings = []
+    for directory in sorted(completions.iterdir()):
+        try:
+            store.read(directory.name)
+        except CompletionReceiptConflictError, OSError, ValueError:
+            locator = f"runtime/completions/{directory.name}"
+            findings.append(_contained("completion-invalid", locator, scope=directory.name))
+    return findings
+
+
+def _worktree_findings(workspace: _Workspace) -> list[RepairFinding]:
+    """C06: a coordinated Change whose worktree is missing (and never cleaned up) routes to its online recovery."""
+    root = workspace.delivery / "runtime/coordination/changes"
+    if not root.is_dir() or root.is_symlink():
+        return []
+    findings = []
+    for path in sorted(root.glob("*.json")):
+        coordination = _coordination(path)
+        if coordination is None or coordination.worktree_cleanup is not None:
+            continue
+        expected = workspace.delivery / "worktrees" / coordination.change_id
+        if ChangeWorkspaceManager._worktree_present(expected):  # noqa: SLF001 - the owner's attention reader.
+            continue
+        findings.append(
+            _finding(
+                "C06",
+                "worktree-missing",
+                f"worktrees/{coordination.change_id}",
+                "online",
+                "recover_change_worktree",
+                "Delivery MCP (/resolve-delivery-attention); confirmed_recovery",
+                "the controller starts with this Change's worktree attention; the online recovery recreates it",
+                scope=coordination.change_id,
+            )
+        )
+    return findings
+
+
+def _coordination(path: Path) -> ChangeCoordination | None:
+    try:
+        content = path.read_bytes()
+        try:
+            return ChangeCoordination.model_validate_json(content)
+        except ValidationError:
+            return ChangeCoordination.model_validate_json(state_migration.coordination_1_to_2(content))
+    except OSError, TypeError, ValueError:
+        return None
 
 
 def _frontier_finding(workspace: _Workspace, change_id: str) -> list[RepairFinding]:
@@ -705,6 +796,13 @@ def _sha(content: bytes) -> str:
 def _participant_shape(
     workspace: _Workspace, manifest: str, participant: object
 ) -> tuple[RepairParticipant, list[RepairEntry]]:
+    """Bind every participant path, unchanged and absent ones included, so a drift there stops replay (I4)."""
+
+    def entry(locator: str, before: str | None, after: str | None) -> RepairEntry:
+        return RepairEntry(
+            locator=locator, role="participant", manifest=manifest, before_sha256=before, after_sha256=after
+        )
+
     if isinstance(participant, MoveTransactionParticipant):
         source = _relative(workspace, participant.source())
         destination = _relative(workspace, participant.destination())
@@ -716,13 +814,7 @@ def _participant_shape(
         ):
             msg = "move participant precondition does not hold"
             raise ValueError(msg)
-        records = []
-        if current_source is not None:
-            records.append(
-                RepairEntry(locator=source, role="participant", manifest=manifest, before_sha256=current_source)
-            )
-        if current_destination != moved:
-            records.append(RepairEntry(locator=destination, role="participant", manifest=manifest, after_sha256=moved))
+        records = [entry(source, current_source, None), entry(destination, current_destination, moved)]
         return RepairParticipant(manifest=manifest, kind="move", destination=destination, source=source), records
     destination = _relative(workspace, participant.destination())  # type: ignore[attr-defined]
     current = _digest(workspace, destination)
@@ -737,23 +829,18 @@ def _participant_shape(
     if current != after and current not in allowed:
         msg = "participant precondition does not hold"
         raise ValueError(msg)
-    records = (
-        []
-        if current == after
-        else [
-            RepairEntry(
-                locator=destination, role="participant", manifest=manifest, before_sha256=current, after_sha256=after
-            )
-        ]
-    )
-    return RepairParticipant(manifest=manifest, kind=kind, destination=destination), records  # type: ignore[arg-type]
+    shape = RepairParticipant(manifest=manifest, kind=kind, destination=destination)  # type: ignore[arg-type]
+    return shape, [entry(destination, current, after)]
 
 
 def _start_refused(report: CapabilityReport) -> bool:
     return any(not refusal.locator.startswith(MIGRATIONS_ROOT) for refusal in report.refusals)
 
 
-def _transaction_findings(workspace: _Workspace, report: CapabilityReport) -> list[RepairFinding]:
+def _transaction_findings(
+    workspace: _Workspace, report: CapabilityReport, *, startup_refused: bool
+) -> list[RepairFinding]:
+    """C03 only while start is refused before replay: by the gate, or by the loader's read-only checks."""
     pending, invalid = registered_pending(workspace.root)
     if not invalid:
         try:
@@ -765,7 +852,7 @@ def _transaction_findings(workspace: _Workspace, report: CapabilityReport) -> li
         return [
             _contained("transaction-manifest-invalid", locator, scope=_change_scope(locator)) for locator in locators
         ]
-    if not pending or not _start_refused(report):
+    if not pending or not (startup_refused or _start_refused(report)):
         return []
     return [
         _finding(
@@ -851,6 +938,11 @@ def _build(workspace: _Workspace, finding_id: str) -> tuple[RepairProposal, dict
     staged: dict[str, bytes] = {}
     manifests: tuple[RepairManifest, ...] = ()
     participants: tuple[RepairParticipant, ...] = ()
+    if finding.catalogue != "C03" and _all_manifest_locators(workspace):
+        raise MigrationError(
+            code="repair-not-supported",
+            detail="a RuntimeTransaction manifest is pending; replay or contain it (C03, C07) before this repair",
+        )
     if finding.catalogue == "C01":
         before = workspace.read(HOST_LOCAL)
         entries = (_record_entry(HOST_LOCAL, before, CANONICAL_HOST_LOCAL),)

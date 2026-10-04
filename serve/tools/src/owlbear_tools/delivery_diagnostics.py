@@ -60,6 +60,16 @@ SUPPORTED_FORMAT = 1
 MIGRATION_JOURNAL_STATES = frozenset({"backed-up", "applying", "applied", "verified", "aborting"})
 # Mirror of the registry's journal kinds: version 1 is a migration, version 2 names ``repair``.
 MIGRATION_JOURNAL_KINDS = {1: "migration", 2: "repair"}
+_JOURNAL_V1_FIELDS = (
+    "schema_version",
+    "migration_id",
+    "state",
+    "source_format",
+    "target_format",
+    "backup_manifest_sha256",
+    "batches",
+)
+_JOURNAL_V2_EXTRA = ("kind", "confirmed", "retained", "steps")
 _MIGRATION_ID = re.compile(r"^[0-9a-f]{64}$")
 _JOURNAL_TEMPORARY = re.compile(r"^\.tmp-[0-9a-f]{24}$")
 
@@ -1841,7 +1851,12 @@ def _inspect_migration_journal(namespace_fd: int, name: str, inspection: _Inspec
         return
     state = value.get("state")
     kind_valid = ("kind" not in value) if schema == 1 else value.get("kind") == MIGRATION_JOURNAL_KINDS[schema]
-    if state not in MIGRATION_JOURNAL_STATES or value.get("migration_id") != name or not kind_valid:
+    if (
+        state not in MIGRATION_JOURNAL_STATES
+        or value.get("migration_id") != name
+        or not kind_valid
+        or not _journal_envelope_valid(value, content)  # type: ignore[arg-type]
+    ):
         inspection.records[-1]["status"] = "malformed"
         inspection.diagnostic("MIGRATION_JOURNAL_MALFORMED")
         return
@@ -1849,6 +1864,53 @@ def _inspect_migration_journal(namespace_fd: int, name: str, inspection: _Inspec
     inspection.records[-1]["status"] = "supported" if state == "verified" else str(state)
     if state != "verified":
         inspection.diagnostic("MIGRATION_INCOMPLETE")
+
+
+def _journal_envelope_valid(value: dict[str, object], content: bytes) -> bool:
+    """Mirror of ``state_formats.journal_envelope_valid``: the complete supported envelope in canonical bytes."""
+    fields = set(_JOURNAL_V1_FIELDS) if value.get("schema_version") == 1 else {*_JOURNAL_V1_FIELDS, *_JOURNAL_V2_EXTRA}
+    if set(value) != fields or content != (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode():
+        return False
+    formats = (value["source_format"], value["target_format"])
+    batches, digest = value["batches"], re.compile(r"[0-9a-f]{64}")
+    if not (
+        all(isinstance(item, int) and not isinstance(item, bool) and item >= 0 for item in formats)
+        and isinstance(value["backup_manifest_sha256"], str)
+        and digest.fullmatch(value["backup_manifest_sha256"])
+        and isinstance(batches, list)
+        and all(_journal_batch_valid(batch) for batch in batches)
+    ):
+        return False
+    if value["schema_version"] == 1:
+        return True
+    retained, confirmed, steps = value["retained"], value["confirmed"], value["steps"]
+    return bool(
+        batches == []
+        and formats[0] == formats[1]
+        and (confirmed is None or (isinstance(confirmed, str) and digest.fullmatch(confirmed)))
+        and isinstance(retained, list)
+        and all(
+            isinstance(item, dict)
+            and set(item) == {"migration_id", "sha256"}
+            and all(isinstance(item[key], str) and digest.fullmatch(item[key]) for key in item)
+            for item in retained
+        )
+        and isinstance(steps, list)
+        and all(isinstance(step, str) and step for step in steps)
+    )
+
+
+def _journal_batch_valid(batch: object) -> bool:
+    locators = batch.get("locators") if isinstance(batch, dict) else None
+    return bool(
+        isinstance(batch, dict)
+        and set(batch) == {"transaction_id", "locators"}
+        and isinstance(batch["transaction_id"], str)
+        and re.fullmatch(r"migration-[0-9a-f]{16}-[0-9]{4}", batch["transaction_id"])
+        and isinstance(locators, list)
+        and locators
+        and all(isinstance(locator, str) and locator for locator in locators)
+    )
 
 
 def _scan_runtime(delivery_fd: int, inspection: _Inspection, *, selected: str | None) -> None:

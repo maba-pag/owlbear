@@ -1029,6 +1029,8 @@ def _read_journal(namespace_fd: int, migration_id: str, scan: _Scan) -> Migratio
     kind = journal_kind(payload)
     if kind is None or state not in JOURNAL_STATES or payload.get("migration_id") != migration_id:
         return MigrationJournalState(locator, migration_id, "invalid", version)
+    if content is None or not journal_envelope_valid(payload, content):
+        return MigrationJournalState(locator, migration_id, "invalid", version, kind)
     return MigrationJournalState(locator, migration_id, str(state), version, kind)
 
 
@@ -1042,6 +1044,79 @@ def journal_kind(payload: dict[str, object]) -> str | None:
     if version == JOURNAL_SCHEMA_VERSION and payload.get("kind") == "repair":
         return "repair"
     return None
+
+
+_JOURNAL_V1_FIELDS = frozenset(
+    {"schema_version", "migration_id", "state", "source_format", "target_format", "backup_manifest_sha256", "batches"}
+)
+_JOURNAL_V2_FIELDS = _JOURNAL_V1_FIELDS | {"kind", "confirmed", "retained", "steps"}
+_BATCH_ID = re.compile(r"migration-[0-9a-f]{16}-[0-9]{4}")
+
+
+def _digest_value(value: object) -> bool:
+    return isinstance(value, str) and re.fullmatch(_D, value) is not None
+
+
+def _format_value(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def _text_list(value: object) -> bool:
+    return isinstance(value, list) and all(isinstance(item, str) and item for item in value)
+
+
+def _batch_value(value: object) -> bool:
+    return (
+        isinstance(value, dict)
+        and set(value) == {"transaction_id", "locators"}
+        and isinstance(value["transaction_id"], str)
+        and _BATCH_ID.fullmatch(value["transaction_id"]) is not None
+        and _text_list(value["locators"])
+        and bool(value["locators"])
+    )
+
+
+def _retained_value(value: object) -> bool:
+    return (
+        isinstance(value, dict)
+        and set(value) == {"migration_id", "sha256"}
+        and _digest_value(value["migration_id"])
+        and _digest_value(value["sha256"])
+    )
+
+
+def journal_envelope_valid(payload: dict[str, object], content: bytes) -> bool:
+    """Return whether a supported-version journal has its complete envelope in canonical bytes.
+
+    Version 1 is exactly the N02 migration journal (its bytes stay accepted); version 2 is a same-format
+    repair journal. Anything less is invalid, so a truncated ``verified`` journal never lets a start pass.
+    """
+    version = payload.get("schema_version")
+    if set(payload) != (_JOURNAL_V1_FIELDS if version == 1 else _JOURNAL_V2_FIELDS):
+        return False
+    if content != (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode():
+        return False
+    batches = payload["batches"]
+    if not (
+        _digest_value(payload["backup_manifest_sha256"])
+        and _format_value(payload["source_format"])
+        and _format_value(payload["target_format"])
+        and isinstance(batches, list)
+        and all(_batch_value(batch) for batch in batches)
+    ):
+        return False
+    if version == 1:
+        return True
+    retained = payload["retained"]
+    return (
+        payload["kind"] == "repair"
+        and batches == []
+        and payload["source_format"] == payload["target_format"]
+        and (payload["confirmed"] is None or _digest_value(payload["confirmed"]))
+        and isinstance(retained, list)
+        and all(_retained_value(item) for item in retained)
+        and _text_list(payload["steps"])
+    )
 
 
 def _passive_status(kind: RecordKind) -> CapabilityStatus:

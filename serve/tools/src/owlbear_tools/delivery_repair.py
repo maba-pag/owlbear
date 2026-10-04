@@ -18,6 +18,12 @@ from pathlib import Path
 
 _FINDINGS = "findings"
 _INVALID_INVOCATION = 2
+_OFFLINE_COMMANDS = frozenset({"propose", "apply", "resume", "verify", "abort"})
+# I1: no running process is exempt, so the user keeps every controller stopped through the whole repair.
+MAINTENANCE_PRECONDITION = (
+    "Offline maintenance: stop Delivery MCP and every Cockpit process for this project before apply, "
+    "and do not restart any of them until delivery-repair verify or abort has finished."
+)
 
 
 class _InvocationError(Exception):
@@ -93,12 +99,19 @@ def _proposal_payload(proposal: object, migration_state_root: str) -> dict[str, 
         "policy": proposal.policy,  # type: ignore[attr-defined]
         "consequence": proposal.consequence,  # type: ignore[attr-defined]
         "paths": [
-            {"locator": entry.locator, "role": entry.role, "change": "absent" if entry.after_sha256 is None else "set"}
+            {"locator": entry.locator, "role": entry.role, "change": _path_change(entry)}
             for entry in proposal.entries  # type: ignore[attr-defined]
         ],
         "backup": f"{migration_state_root}/{proposal_id}/backup",
         "staging": f"{migration_state_root}/{proposal_id}/stage",
     }
+
+
+def _path_change(entry: object) -> str:
+    before, after = entry.before_sha256, entry.after_sha256  # type: ignore[attr-defined]
+    if before == after:
+        return "unchanged"
+    return "absent" if after is None else "set"
 
 
 def run(argv: list[str] | None = None) -> tuple[int, dict[str, object], str]:
@@ -117,6 +130,8 @@ def run(argv: list[str] | None = None) -> tuple[int, dict[str, object], str]:
         code, payload = _execute(args, root, state_repair, state_migration)
     except state_migration.MigrationError as exc:
         code, payload = 1, {"status": "refused", "code": exc.code, "detail": exc.detail, "locator": exc.locator}
+    if args.command in _OFFLINE_COMMANDS:
+        payload["precondition"] = MAINTENANCE_PRECONDITION
     return code, payload, output
 
 

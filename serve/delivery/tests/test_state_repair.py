@@ -6,6 +6,7 @@ import ast
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import textwrap
@@ -34,6 +35,7 @@ from serve.delivery.tests.test_state_migration import (
 import owlbear_delivery
 from owlbear_delivery import close_delivery_application, load_delivery_application, state_migration, state_repair
 from owlbear_delivery.delivery_runtime import DeliveryStage
+from owlbear_delivery.design_package import DesignPackageManifest, DesignPackageStore
 from owlbear_delivery.runtime_transaction import (
     MoveTransactionParticipant,
     ReplacementTransactionParticipant,
@@ -107,6 +109,22 @@ def _commit_tracked(repository: Path) -> None:
     _git(repository, "add", "-f", ".owlbear/delivery/config.json", ".owlbear/delivery/runtime/host.json")
     _git(repository, "add", "-f", *(str(path) for path in (repository / ".owlbear/delivery/packages").rglob("*.*")))
     _git(repository, "commit", "-q", "-m", "tracked Delivery records")
+
+
+def _canonical_json(payload: object) -> bytes:
+    return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+
+
+def _admit_checkpoint(repository: Path, change_id: str) -> None:
+    """Bind the admission receipt to a real package checkpoint commit, as admission does."""
+    delivery = _delivery(repository)
+    store = DesignPackageStore(delivery / "packages", repository, transaction_root=delivery / "runtime")
+    admission = delivery / f"runtime/changes/{change_id}/admission.json"
+    receipt = json.loads(admission.read_bytes())
+    receipt["checkpoint_commit"] = store.checkpoint(change_id).commit
+    payload = {key: value for key, value in receipt.items() if key != "receipt_id"}
+    receipt["receipt_id"] = hashlib.sha256(_canonical_json(payload)).hexdigest()
+    admission.write_bytes(_canonical_json(receipt))
 
 
 def _delivery(repository: Path) -> Path:
@@ -323,6 +341,7 @@ def test_c02_restores_a_verifying_head_config_and_leaves_the_path_clean(tmp_path
 
 def test_c02_restores_a_tampered_admitted_package_and_the_portfolio_lists_again(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
+    _admit_checkpoint(repository, "change-a")
     _commit_tracked(repository)
     design = _delivery(repository) / "packages/change-a/design.md"
     original = design.read_bytes()
@@ -375,6 +394,28 @@ def test_c02_without_a_verifying_matching_head_is_contained_and_never_proposed(t
     assert f"C07:{locator}" in findings
     assert not any(finding_id.startswith("C02") for finding_id in findings)
     _refused("repair-not-supported", lambda: state_repair.propose(repository, f"C07:{locator}"))
+    assert record_tree_digest(repository) == tree
+
+
+def test_c02_never_restores_a_head_package_other_than_the_admitted_one(tmp_path: Path) -> None:
+    """``HEAD`` keeps the admitted ``authority.json`` but carries a different design and its own manifest."""
+    repository = _repository(tmp_path)
+    _admit_checkpoint(repository, "change-a")
+    package = _delivery(repository) / "packages/change-a"
+    original = {name: (package / name).read_bytes() for name in ("intent.md", "design.md", "authority.json")}
+    design = original["design.md"] + b"\nnot the admitted design\n"
+    manifest = DesignPackageManifest.from_content("change-a", original["intent.md"], design, original["authority.json"])
+    (package / "design.md").write_bytes(design)
+    (package / "manifest.json").write_bytes(manifest.canonical_bytes())
+    _commit_tracked(repository)
+    (package / "design.md").write_bytes(design + f"{_SENTINEL}\n".encode())
+    tree = record_tree_digest(repository)
+
+    findings = {finding.finding_id: finding for finding in state_repair.classify(repository).findings}
+
+    assert findings["C07:packages/change-a"].route == "contained"
+    assert "C02:packages/change-a" not in findings
+    _refused("repair-not-supported", lambda: state_repair.propose(repository, "C02:packages/change-a"))
     assert record_tree_digest(repository) == tree
 
 
@@ -647,6 +688,73 @@ def test_c03_drift_after_propose_is_stale_without_a_write(tmp_path: Path, drift:
 
     assert record_tree_digest(repository) == tree
     assert _live_journal(repository, proposal.proposal_id) is None
+
+
+@pytest.mark.parametrize("participant", ["replacement", "move"])
+def test_c03_binds_participants_already_at_their_after_state_and_stops_on_their_drift(
+    tmp_path: Path, participant: str
+) -> None:
+    """A participant published before the crash, or a move source already gone, is bound and backed up (I4)."""
+    repository = _repository(tmp_path, marked=False)
+    expected = _pending_runtime_and_packages(repository)
+    runtime = _delivery(repository) / "runtime"
+    original_host = (runtime / "host.json").read_bytes()
+    if participant == "replacement":
+        locator, drift = "runtime/host.json", original_host
+        (runtime / "host.json").write_bytes(expected["runtime/host.json"])  # type: ignore[arg-type]
+    else:
+        locator, drift = "runtime/notes/source.json", b'{"moved":true}\n'
+        (runtime / "notes/moved.json").write_bytes(b'{"moved":true}\n')
+        (runtime / "notes/source.json").unlink()
+    proposal = state_repair.propose(repository, "C03:transactions")
+    bound = {entry.locator: (entry.before_sha256, entry.after_sha256) for entry in proposal.entries}
+    before, after = bound[locator]
+    assert before == after
+    with pytest.raises(_Crash):
+        state_repair.apply(repository, proposal.proposal_id, processes=_none, failure=_crash_at("after-backup"))
+    (_delivery(repository) / locator).write_bytes(drift)
+    tree = record_tree_digest(repository, exclude_migrations=True)
+
+    for operation in (state_repair.resume, state_repair.abort):
+        _refused(
+            "repair-corruption-stop",
+            lambda operation=operation: operation(repository, proposal.proposal_id, processes=_none),
+        )
+
+    assert (_delivery(repository) / locator).read_bytes() == drift
+    assert record_tree_digest(repository, exclude_migrations=True) == tree
+    backup = _migration_dir(repository, proposal.proposal_id) / "backup/records" / locator
+    assert backup.exists() is (before is not None)
+
+
+def test_a_pending_replacement_of_invalid_host_local_bytes_is_replayed_before_c01(tmp_path: Path) -> None:
+    """C01 never runs over a pending manifest; the loader's read-only refusal makes C03 eligible (U1)."""
+    repository = _repository(tmp_path)
+    invalid = _corrupt_host_local(repository)
+    early = state_repair.propose(repository, _C01)
+    runtime = _delivery(repository) / "runtime"
+    replacement = b'{"execution_capacity":2,"schema_version":1}\n'
+    transaction = RuntimeTransaction(
+        runtime,
+        "host-local-tuning",
+        (ReplacementTransactionParticipant(runtime, Path("host.local.json"), invalid, replacement),),
+    )
+    with pytest.raises(_Pending):
+        transaction.commit(failure=_stop)
+    assert _ids(state_repair.classify(repository)) == [_C01, "C03:transactions"]
+    tree = record_tree_digest(repository)
+
+    _refused("repair-proposal-stale", lambda: _apply(repository, early))
+    _refused("repair-not-supported", lambda: state_repair.propose(repository, _C01))
+    assert record_tree_digest(repository) == tree
+
+    proposal = state_repair.propose(repository, "C03:transactions")
+    state_repair.apply(repository, proposal.proposal_id, processes=_none)
+    state_repair.verify(repository, proposal.proposal_id, processes=_none)
+
+    assert (runtime / "host.local.json").read_bytes() == replacement
+    assert state_repair.classify(repository).findings == ()
+    _available(repository, _CHANGES)
 
 
 _C03_CRASHES = (
@@ -1157,7 +1265,8 @@ def _publish_record(repository: Path, pid: int, create_time: float, cmdline: lis
 
 
 @pytest.mark.parametrize("record", ["other-pid", "other-create-time", "other-cmdline", "unreadable", "matching"])
-def test_only_a_matching_d12_record_exempts_a_gated_controller(tmp_path: Path, record: str) -> None:
+def test_no_d12_record_exempts_a_running_controller(tmp_path: Path, record: str) -> None:
+    """Process metadata is same-user writable: even an exactly matching record never exempts (I1, D12 deferred)."""
     repository = _repository(tmp_path)
     proposal_id = _repair_at(repository, "applied")
     process = _stand_in(repository, "module-cockpit", tmp_path)
@@ -1174,14 +1283,51 @@ def test_only_a_matching_d12_record_exempts_a_gated_controller(tmp_path: Path, r
             _publish_record(repository, pid, created, argv).write_bytes(b"{" + _SENTINEL.encode())
         else:
             _publish_record(repository, pid, created, argv)
-        call = lambda: state_repair.verify(repository, proposal_id, processes=_only(process.pid))  # noqa: E731
-        if record == "matching":
-            assert call().state == "verified"
-        else:
-            _refused("repair-controller-running", call)
+        _refused(
+            "repair-controller-running",
+            lambda: state_repair.verify(repository, proposal_id, processes=_only(process.pid)),
+        )
     finally:
         process.kill()
         process.wait()
+    assert _live_journal(repository, proposal_id).state == "applied"  # type: ignore[union-attr]
+
+
+def test_a_controller_started_after_the_fence_scan_is_refused_before_the_next_write(tmp_path: Path) -> None:
+    """The pre-write scan closes the window an ungated controller started after the fence scan would use."""
+    repository = _repository(tmp_path)
+    original = _corrupt_host_local(repository)
+    proposal = state_repair.propose(repository, _C01)
+    started: list[subprocess.Popen[bytes]] = []
+
+    def start_controller(point: str) -> None:
+        if point == "after-backup":
+            started.append(_stand_in(repository, "module-mcp", tmp_path))
+
+    def processes() -> list[object]:
+        pids = {process.pid for process in started}
+        return [view for view in state_migration.psutil_controller_processes() if view.pid in pids]
+
+    try:
+        _refused(
+            "repair-controller-running",
+            lambda: state_repair.apply(
+                repository,
+                proposal.proposal_id,
+                confirm=proposal.proposal_id,
+                processes=processes,
+                failure=start_controller,
+            ),
+        )
+        assert started
+        assert (_delivery(repository) / "runtime/host.local.json").read_bytes() == original
+        assert _live_journal(repository, proposal.proposal_id).state == "backed-up"  # type: ignore[union-attr]
+    finally:
+        for process in started:
+            process.kill()
+            process.wait()
+    state_repair.resume(repository, proposal.proposal_id, processes=processes)
+    assert (_delivery(repository) / "runtime/host.local.json").read_bytes() == CANONICAL_HOST_LOCAL
 
 
 def test_supported_forms_are_recognized_and_others_are_not() -> None:
@@ -1285,6 +1431,86 @@ def test_a_receipt_whose_stored_id_does_not_match_its_bytes_is_contained(tmp_pat
         lambda: state_repair.propose(repository, "C07:runtime/changes/change-a/admission.json"),
     )
     assert record_tree_digest(repository) == tree
+
+
+@pytest.mark.parametrize("identity", ["valid", "renamed", "altered"])
+def test_a_completion_receipt_with_an_invalid_identity_is_contained(tmp_path: Path, identity: str) -> None:
+    repository = _repository(tmp_path)
+    completions = _delivery(repository) / "runtime/completions/delivery-runtime"
+    shutil.copytree(_FIXTURES / "golden/runtime/completions/delivery-runtime", completions)
+    (receipt,) = (path for path in completions.glob("*.json") if path.name != "display.json")
+    if identity == "renamed":
+        receipt.rename(receipt.with_name(f"{'e' * 64}.json"))
+    elif identity == "altered":
+        payload = json.loads(receipt.read_bytes())
+        payload["accepted_target_ref"] = "refs/heads/other"
+        receipt.write_bytes(_canonical_json(payload))
+    tree = record_tree_digest(repository)
+
+    findings = {finding.finding_id: finding for finding in state_repair.classify(repository).findings}
+
+    if identity == "valid":
+        assert findings == {}
+        return
+    assert findings["C07:runtime/completions/delivery-runtime"].scope == "delivery-runtime"
+    assert all(finding.catalogue == "C07" for finding in findings.values())
+    _refused(
+        "repair-not-supported", lambda: state_repair.propose(repository, "C07:runtime/completions/delivery-runtime")
+    )
+    assert record_tree_digest(repository) == tree
+
+
+def test_a_missing_change_worktree_routes_to_its_online_recovery_without_a_write(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    shutil.rmtree(_delivery(repository) / "worktrees/change-b")
+    tree = record_tree_digest(repository)
+
+    report = state_repair.classify(repository)
+
+    assert [(item.finding_id, item.route, item.operation, item.scope) for item in report.findings] == [
+        ("C06:worktrees/change-b", "online", "recover_change_worktree", "change-b")
+    ]
+    assert [item.finding_id for item in state_repair.classify(repository, "change-a").findings] == []
+    _refused("repair-not-supported", lambda: state_repair.propose(repository, "C06:worktrees/change-b"))
+    assert record_tree_digest(repository) == tree
+
+
+def test_an_explicit_unsupported_host_local_version_is_contained_before_any_proposal(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    (_delivery(repository) / "runtime/host.local.json").write_bytes(b'{"schema_version":0}\n')
+    tree = record_tree_digest(repository)
+
+    report = state_repair.classify(repository)
+
+    assert [(item.finding_id, item.code) for item in report.findings] == [
+        ("C07:runtime/host.local.json", "record-unknown-version")
+    ]
+    for finding_id in (_C01, "C07:runtime/host.local.json"):
+        _refused("repair-not-supported", lambda finding_id=finding_id: state_repair.propose(repository, finding_id))
+    assert record_tree_digest(repository) == tree
+    assert not (repository / ".owlbear/delivery-migrations").exists()
+
+
+@pytest.mark.parametrize("version", [1, 2])
+def test_a_truncated_supported_version_verified_journal_refuses_start(tmp_path: Path, version: int) -> None:
+    repository = _repository(tmp_path)
+    journal_id = "c" * 64
+    payload = {"schema_version": version, "migration_id": journal_id, "state": "verified"}
+    if version == 2:
+        payload["kind"] = "repair"
+    journal = _namespace(repository) / journal_id / "journal.json"
+    journal.parent.mkdir(parents=True)
+    journal.write_bytes(_canonical_json(payload) + b"\n")
+
+    refusals = [(refusal.code, refusal.locator) for refusal in scan_capability(repository).refusals]
+
+    assert refusals == [("state-migration-incomplete", f"runtime/migrations/{journal_id}/journal.json")]
+    assert [finding.code for finding in state_repair.classify(repository).findings] == ["journal-invalid"]
+    complete = state_migration.MigrationJournal(
+        migration_id=journal_id, state="verified", source_format=0, target_format=1, backup_manifest_sha256="e" * 64
+    )
+    journal.write_bytes(complete.canonical_bytes())
+    assert scan_capability(repository).refusals == ()
 
 
 def test_no_repair_path_writes_request_provenance() -> None:

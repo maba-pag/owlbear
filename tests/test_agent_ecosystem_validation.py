@@ -498,6 +498,9 @@ def test_repair_delivery_skill_applies_the_u1_confirmation_policy() -> None:
     )
     assert "Only an explicit *Apply this repair* answer authorizes `--confirm <proposal-id>`" in skill
     assert "Stopping controllers is always the user's step; never terminate processes yourself" in skill
+    assert "An initial migration (`delivery-migrate propose`, `apply`) is never delegated by this policy" in skill
+    assert "Run `delivery-migrate propose`, `apply`, `verify` in Step 3" not in skill
+    assert "must not restart Delivery MCP or Cockpit until `verify` (or `abort`) has finished" in skill
     assert "Never write request provenance" in skill
     assert "C09" in skill
     assert "D07" not in skill

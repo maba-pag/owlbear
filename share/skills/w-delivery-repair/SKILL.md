@@ -31,8 +31,8 @@ route and keep each one's owner and resume condition verbatim:
 | Route | What the agent does |
 | --- | --- |
 | `offline` (C01, C02, C03) | Propose it in Step 2 |
-| `offline` / `migrate` journal routes (C04) | Run the named `delivery-repair` or `delivery-migrate` command with the named ID in Step 3 |
-| `migrate` (`state-migration-required`) | Run `delivery-migrate propose`, `apply`, `verify` in Step 3 |
+| `offline` / `migrate` journal routes (C04) | Run the named `delivery-repair` command, or the delegated `delivery-migrate resume` or `verify`, with the named ID in Step 3; ask the user before `delivery-migrate abort` |
+| `migrate` (`state-migration-required`) | Not delegated: name `/upgrade-delivery`, or ask the user through `vscode_askQuestions` and run `delivery-migrate propose`, `apply`, `verify` only after an explicit yes |
 | `upgrade` (C05) | Name `/upgrade-delivery`; never downgrade or rewrite newer state |
 | `online` (C06) | Name the MCP tool; it runs after Delivery starts, with that tool's own confirmation |
 | `environment` (C08) | Give the exact `setup/init.py` instruction for the named locator |
@@ -49,6 +49,8 @@ proposal: operation, policy, every path it changes, the consequence and the back
 
 - `engine-replay` (C03 `transaction-replay`) and the delegated `delivery-migrate resume` and
   `verify` commands are applied by the agent after it has shown the proposal; no further question.
+  An initial migration (`delivery-migrate propose`, `apply`) is never delegated by this policy: it
+  belongs to `/upgrade-delivery`, or runs only after the user explicitly approves it.
 - `user-confirmed` (C01 `host-local-reset`, C02 `tracked-record-restore`) replaces user-owned or
   tracked bytes. Ask through `vscode_askQuestions` once per proposal, naming the paths, the
   consequence and the backup location, with the options *Apply this repair* and *Do not apply*.
@@ -59,14 +61,17 @@ proposal: operation, policy, every path it changes, the consequence and the back
 
 Ask the user to stop Delivery MCP (*MCP: List Servers* -> `owlbear-delivery` -> *Stop*) and every
 Cockpit process for this project. Stopping controllers is always the user's step; never terminate
-processes yourself. Then run, for one proposal:
+processes yourself. **Maintenance precondition:** no running process is exempt, not even a
+degraded Cockpit, so the user must not restart Delivery MCP or Cockpit until `verify` (or `abort`)
+has finished; say so before `apply`. `delivery-repair` repeats this precondition in its output and
+checks again for controllers before every write. Then run, for one proposal:
 
 1. `delivery-repair apply --proposal <id>` (adding `--confirm <id>` only after the Step 2 answer).
 2. `delivery-repair verify <id>`.
 
 `repair-controller-running` or `repair-controller-unknown` means a controller or an uninspectable
-Python or uv process still runs in the workspace: ask the user to stop it and retry the same
-command. `repair-proposal-stale` means the state changed: classify and propose again.
+Python or uv process runs (or was started) in the workspace: ask the user to stop it, keep it
+stopped, and retry the same command (`resume` after an interrupted `apply`). `repair-proposal-stale` means the state changed: classify and propose again.
 `repair-journal-open` names the journal that must finish first. After a crash or interruption run
 `delivery-repair resume <id>`, then `verify`; `delivery-repair abort <id>` restores the complete
 before-state from the backup when the user chooses to stop. `repair-corruption-stop` and

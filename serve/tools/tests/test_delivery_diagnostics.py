@@ -1210,13 +1210,19 @@ def test_coverage_guard_reports_an_omitted_family() -> None:
 _JOURNAL_ID = "a" * 64
 
 
-def _write_journal(root: Path, state: str, *, schema_version: int = 1, kind: str | None = None) -> None:
+def _write_journal(
+    root: Path, state: str, *, schema_version: int = 1, kind: str | None = None, truncated: bool = False
+) -> None:
     journal = root / ".owlbear/delivery/runtime/migrations" / _JOURNAL_ID / "journal.json"
     journal.parent.mkdir(parents=True)
-    payload = {"schema_version": schema_version, "migration_id": _JOURNAL_ID, "state": state}
+    payload: dict[str, object] = {"schema_version": schema_version, "migration_id": _JOURNAL_ID, "state": state}
+    if not truncated:
+        payload |= {"source_format": 1, "target_format": 1, "backup_manifest_sha256": "b" * 64, "batches": []}
+        if schema_version == 2:
+            payload |= {"confirmed": None, "retained": [], "steps": []}
     if kind is not None:
         payload["kind"] = kind
-    journal.write_text(json.dumps(payload), encoding="utf-8")
+    journal.write_bytes((json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode())
 
 
 _JOURNAL_CASES = {
@@ -1227,6 +1233,8 @@ _JOURNAL_CASES = {
     "journal-repair-verified": ("verified", 2, "repair"),
     "journal-v2-without-kind": ("verified", 2, None),
     "journal-v1-with-kind": ("verified", 1, "migration"),
+    "journal-truncated-verified": ("verified", 1, None),
+    "journal-truncated-repair-verified": ("verified", 2, "repair"),
 }
 
 
@@ -1243,6 +1251,8 @@ _JOURNAL_CASES = {
         ("journal-repair-verified", [], []),
         ("journal-v2-without-kind", ["MIGRATION_JOURNAL_MALFORMED"], ["state-migration-incomplete"]),
         ("journal-v1-with-kind", ["MIGRATION_JOURNAL_MALFORMED"], ["state-migration-incomplete"]),
+        ("journal-truncated-verified", ["MIGRATION_JOURNAL_MALFORMED"], ["state-migration-incomplete"]),
+        ("journal-truncated-repair-verified", ["MIGRATION_JOURNAL_MALFORMED"], ["state-migration-incomplete"]),
         ("namespace-file", ["MIGRATION_JOURNAL_MALFORMED"], ["state-migration-incomplete"]),
     ],
 )
@@ -1259,7 +1269,7 @@ def test_inspector_mirrors_the_gate_format_and_journal_classification(
         (runtime / "migrations").write_text("not a directory\n", encoding="utf-8")
     elif case.startswith("journal-"):
         state, schema_version, kind = _JOURNAL_CASES[case]
-        _write_journal(root, state, schema_version=schema_version, kind=kind)
+        _write_journal(root, state, schema_version=schema_version, kind=kind, truncated="truncated" in case)
 
     result = inspect_delivery(root)
     gate = [refusal.code for refusal in state_formats.scan_capability(root).refusals]

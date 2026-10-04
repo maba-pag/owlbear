@@ -65,18 +65,29 @@ def test_cli_classifies_proposes_confirms_applies_and_verifies_from_fresh_proces
     assert [item["finding_id"] for item in classified["findings"]] == [_FINDING]  # type: ignore[union-attr]
     code, proposed = _json(repository, "propose", _FINDING)
     assert (code, proposed["policy"]) == (0, "user-confirmed")
+    assert proposed["precondition"] == delivery_repair.MAINTENANCE_PRECONDITION
+    assert "do not restart any of them until delivery-repair verify or abort has finished" in str(
+        proposed["precondition"]
+    )
     proposal_id = str(proposed["proposal_id"])
     assert proposed["backup"] == f".owlbear/delivery-migrations/{proposal_id}/backup"
     assert record_tree_digest(repository) == tree
     code, refused = _json(repository, "apply", "--proposal", proposal_id)
     assert (code, refused["code"]) == (1, "repair-confirmation-required")
+    assert refused["precondition"] == delivery_repair.MAINTENANCE_PRECONDITION
     assert record_tree_digest(repository) == tree
 
     assert _json(repository, "apply", "--proposal", proposal_id, "--confirm", proposal_id) == (
         0,
-        {"status": "applied", "proposal_id": proposal_id, "kind": "repair"},
+        {
+            "status": "applied",
+            "proposal_id": proposal_id,
+            "kind": "repair",
+            "precondition": delivery_repair.MAINTENANCE_PRECONDITION,
+        },
     )
     assert _json(repository, "verify", proposal_id)[1]["status"] == "verified"
+    assert "precondition" not in _json(repository, "classify")[1]
     assert _json(repository, "classify") == (0, {"status": "healthy", "findings": []})
     assert _cli(repository, "classify", "--format", "text") == (0, "healthy: no findings\n")
 

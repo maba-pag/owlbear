@@ -10,6 +10,7 @@ the backup before the marker from durable state only (never ``RuntimeTransaction
 from __future__ import annotations
 
 import contextlib
+import contextvars
 import errno
 import hashlib
 import importlib
@@ -54,10 +55,8 @@ from owlbear_delivery.runtime_transaction import (
     write_contained,
 )
 from owlbear_delivery.state_formats import (
-    CONTROLLER_PROCESSES_ROOT,
     DELIVERY_STATE_ROOT,
     FORMAT_MARKER,
-    MAX_CONTROLLER_PROCESS_RECORD_BYTES,
     MAX_RECORD_BYTES,
     MIGRATION_JOURNAL,
     MIGRATIONS_ROOT,
@@ -65,9 +64,7 @@ from owlbear_delivery.state_formats import (
     CapabilityReport,
     RecordKind,
     classify_kind,
-    controller_cmdline_digest,
     format_marker_bytes,
-    parse_controller_process_record,
     record_tree_digest,
     scan_capability,
     transaction_root,
@@ -387,6 +384,7 @@ def _read_file(root: Path, relative: str | Path) -> bytes | None:
 
 def _write_file(root: Path, relative: str | Path, content: bytes) -> None:
     """Atomically replace or create one contained file (no link is followed), then fsync."""
+    _guard_write()
     _ensure_directory(root)
     with _open_directory(root) as root_fd:
         current = read_contained(root_fd, Path(relative), limit=MAX_RECORD_BYTES) if _exists(root, relative) else None
@@ -415,6 +413,7 @@ def _ensure_directory(path: Path) -> None:
 
 def _publish_directory(temporary: Path, destination: Path) -> None:
     """Rename a fully written directory into place and fsync the parent before any later write."""
+    _guard_write()
     temporary.rename(destination)
     _fsync_directory(destination.parent)
 
@@ -524,29 +523,54 @@ def _owner_parse(kind: RecordKind, status: str, content: bytes) -> None:
     raise errors[0]
 
 
+def _owner_checked(report: CapabilityReport) -> Iterator[tuple[RecordKind, str, str]]:
+    """Readable registered records with an owner model; H, O and L kinds stay outside as in the registry."""
+    for record in report.records:
+        kind = classify_kind(record.locator) if record.kind_id is not None else None
+        if kind is None or not kind.read or not kind.owners or kind.mutability in {"H", "O", "L"}:
+            continue
+        if record.status in {"current", "readable-legacy"}:
+            yield kind, record.locator, record.status
+
+
+def owner_rejections(
+    workspace_root: Path, report: CapabilityReport, *, skip: frozenset[str] = frozenset()
+) -> tuple[str, ...]:
+    """Locators of readable records their registered owner rejects at their declared version; never writes."""
+    paths = _Paths.of(workspace_root)
+    rejected = []
+    for kind, locator, status in _owner_checked(report):
+        if kind.kind_id in skip:
+            continue
+        try:
+            content = _read_file(paths.delivery, locator)
+            if content is not None:
+                _owner_parse(kind, status, content)
+        except KeyError, TypeError, ValueError, MigrationError:
+            content = None
+        if content is None:
+            rejected.append(locator)
+    return tuple(rejected)
+
+
 def _validate_baseline_records(paths: _Paths, report: CapabilityReport) -> None:
     """Owner-parse every readable registered record the migration keeps, before any stage or write.
 
     Records needing a rewrite are validated by their rewrite; historical (H), opaque (O), transient (L)
     and unread kinds, and kinds without an owner model, stay outside this check as in the registry.
     """
-    for record in report.records:
-        kind = classify_kind(record.locator) if record.kind_id is not None else None
-        if kind is None or not kind.read or not kind.owners or kind.mutability in {"H", "O", "L"}:
-            continue
-        if record.status not in {"current", "readable-legacy"}:
-            continue
-        content = _read_file(paths.delivery, record.locator)
+    for kind, locator, status in _owner_checked(report):
+        content = _read_file(paths.delivery, locator)
         if content is None:
             detail = "record disappeared while validating"
-            raise MigrationError(code="proposal-stale", detail=detail, locator=record.locator)
+            raise MigrationError(code="proposal-stale", detail=detail, locator=locator)
         try:
-            _owner_parse(kind, record.status, content)
+            _owner_parse(kind, status, content)
         except (KeyError, TypeError, ValueError) as exc:
             raise MigrationError(
                 code="record-corrupt",
                 detail="record does not parse with its owner at its declared version",
-                locator=record.locator,
+                locator=locator,
             ) from exc
 
 
@@ -1180,6 +1204,7 @@ def _verify_restored(paths: _Paths, proposal: MigrationProposal, manifest: Migra
 
 
 def _unlink_contained(root: Path, relative: Path) -> None:
+    _guard_write()
     parent = root / relative.parent
     with _open_directory(parent) as parent_fd:
         os.unlink(relative.name, dir_fd=parent_fd)
@@ -1187,6 +1212,7 @@ def _unlink_contained(root: Path, relative: Path) -> None:
 
 
 def _remove_live_journal(paths: _Paths, migration_id: str) -> None:
+    _guard_write()
     namespace = paths.delivery / MIGRATIONS_ROOT
     with _open_directory(namespace) as namespace_fd:
         with contextlib.suppress(FileNotFoundError), _open_directory_at(namespace_fd, migration_id) as directory_fd:
@@ -1213,6 +1239,7 @@ def _open_directory_at(parent_fd: int, name: str) -> Iterator[int]:
 
 def _remove_empty_namespace(paths: _Paths) -> bool:
     """Step (g): remove ``runtime/migrations`` only when it is a real directory with no entry (D10)."""
+    _guard_write()
     try:
         with _open_directory(paths.runtime) as runtime_fd:
             info = os.stat("migrations", dir_fd=runtime_fd, follow_symlinks=False)
@@ -1263,7 +1290,8 @@ class RepairEntry(_MigrationModel):
 
     @model_validator(mode="after")
     def _changes_one_path(self) -> RepairEntry:
-        if self.before_sha256 == self.after_sha256:
+        # A C03 participant already at its after-state (or an absent move source) stays bound unchanged (I4).
+        if self.before_sha256 == self.after_sha256 and self.role != "participant":
             msg = "a repair entry must change its path"
             raise ValueError(msg)
         _delivery_relative(self.locator)
@@ -1481,20 +1509,12 @@ class ControllerProcess(Protocol):
         """Return the process name."""
         ...
 
-    def create_time(self) -> float:
-        """Return the start time used by D12 records."""
-        ...
-
     def cmdline(self) -> tuple[str, ...]:
         """Return the argument vector, for local judgement only."""
         ...
 
     def cwd(self) -> Path | None:
         """Return the working directory."""
-        ...
-
-    def descendants(self) -> tuple[ControllerProcess, ...]:
-        """Return every live descendant."""
         ...
 
 
@@ -1522,19 +1542,12 @@ class _PsutilControllerProcess:
         except (psutil.Error, OSError) as exc:
             raise ControllerProcessUnreadableError(type(exc).__name__) from exc
 
-    def create_time(self) -> float:
-        return float(self._read(self._process.create_time))
-
     def cmdline(self) -> tuple[str, ...]:
         return tuple(self._read(self._process.cmdline))
 
     def cwd(self) -> Path | None:
         cwd = self._read(self._process.cwd)
         return Path(cwd) if cwd else None
-
-    def descendants(self) -> tuple[ControllerProcess, ...]:
-        children = self._read(lambda: self._process.children(recursive=True))
-        return tuple(_PsutilControllerProcess(child, self._read(child.name)) for child in children)
 
 
 def psutil_controller_processes() -> Iterator[ControllerProcess]:
@@ -1621,38 +1634,8 @@ def _within(path: Path, root: Path) -> bool:
     return resolved == root or resolved.is_relative_to(root)
 
 
-def _gated_record_matches(paths: _Paths, process: ControllerProcess, argv: tuple[str, ...]) -> bool:
-    """D12: exempt only when the process's own record parses and equals its pid, create time and cmdline."""
-    relative = Path(CONTROLLER_PROCESSES_ROOT).relative_to("runtime") / f"{process.pid}.json"
-    try:
-        with _open_directory(paths.runtime) as runtime_fd:
-            content = read_contained(runtime_fd, relative, limit=MAX_CONTROLLER_PROCESS_RECORD_BYTES)
-        create_time = process.create_time()
-    except OSError, TransactionPathError, ControllerProcessUnreadableError, ControllerProcessVanishedError:
-        return False
-    record = parse_controller_process_record(content) if content is not None else None
-    return (
-        record is not None
-        and record.pid == process.pid
-        and record.create_time == create_time
-        and record.cmdline_sha256 == controller_cmdline_digest(argv)
-    )
-
-
-def _wrapper_exempt(paths: _Paths, process: ControllerProcess) -> bool:
-    """A ``uv run`` wrapper is exempt only when it has supported descendants and every one is exempt."""
-    try:
-        controllers = [
-            (child, argv)
-            for child in process.descendants()
-            if supported_controller_form(argv := child.cmdline()) and _executable(argv[0]) not in {"uv", "uvx"}
-        ]
-    except ControllerProcessUnreadableError, ControllerProcessVanishedError:
-        return False
-    return bool(controllers) and all(_gated_record_matches(paths, child, argv) for child, argv in controllers)
-
-
 def _controller_verdict(paths: _Paths, process: ControllerProcess) -> Literal["running", "unknown"] | None:
+    """No process is exempt: process metadata is same-user writable, so it cannot prove a gated controller."""
     candidate = _candidate_name(process.name)
     if not candidate and process.name.lower() not in _WRAPPERS:
         return None
@@ -1667,16 +1650,11 @@ def _controller_verdict(paths: _Paths, process: ControllerProcess) -> Literal["r
         return "unknown" if candidate else None
     if cwd is None or not _within(cwd, paths.workspace):
         return None
-    exempt = (
-        _wrapper_exempt(paths, process)
-        if _executable(argv[0]) in {"uv", "uvx"}
-        else _gated_record_matches(paths, process, argv)
-    )
-    return None if exempt else "running"
+    return "running"
 
 
 def require_no_controller_process(workspace_root: Path, source: ControllerProcessSource | None = None) -> None:
-    """Refuse while any ungated or unidentified controller runs in the workspace (I1)."""
+    """Refuse while any controller-like process runs in the workspace (I1; no process is exempt)."""
     paths = _Paths.of(workspace_root)
     try:
         processes = tuple((source or psutil_controller_processes)())
@@ -1696,17 +1674,34 @@ def require_no_controller_process(workspace_root: Path, source: ControllerProces
 
 @contextlib.contextmanager
 def _repair_fence(paths: _Paths, source: ControllerProcessSource | None) -> Iterator[ControllerLock]:
+    """Exclusive lock plus a process scan now and immediately before every repair write (I1)."""
     try:
         lock = acquire_controller_lock(paths.runtime, exclusive=True)
     except ControllerFencedError as exc:
         raise _repair_error(
             code="repair-controller-running", detail="a Delivery controller holds the workspace lock"
         ) from exc
+    token = None
     try:
         require_no_controller_process(paths.workspace, source)
+        token = _WRITE_GUARD.set(lambda: require_no_controller_process(paths.workspace, source))
         yield lock
     finally:
+        if token is not None:
+            _WRITE_GUARD.reset(token)
         lock.release()
+
+
+# Ungated (format-0) controllers take no lock, so a repair rescans before each write; migrations leave it unset.
+_WRITE_GUARD: contextvars.ContextVar[Callable[[], None] | None] = contextvars.ContextVar(
+    "repair_write_guard", default=None
+)
+
+
+def _guard_write() -> None:
+    guard = _WRITE_GUARD.get()
+    if guard is not None:
+        guard()
 
 
 # --- Journal set (I2, I9) ---------------------------------------------------
@@ -1822,6 +1817,7 @@ def _position(paths: _Paths, entry: RepairEntry) -> Literal["before", "after"]:
 
 
 def _put(paths: _Paths, locator: str, content: bytes, expected: bytes | None) -> None:
+    _guard_write()
     relative = _delivery_relative(locator)
     with _open_directory(paths.delivery) as delivery_fd:
         write_contained(delivery_fd, relative, content, expected=expected, limits=_LIMITS)
@@ -1915,6 +1911,12 @@ def _require_repair_current(
         )
     if report.format != proposal.format:
         raise _repair_error(code="repair-proposal-stale", detail="the workspace format changed since the proposal")
+    if proposal.operation != "transaction-replay" and (pending := _pending_transaction_manifests(paths)):
+        raise _repair_error(
+            code="repair-proposal-stale",
+            detail="a RuntimeTransaction manifest is pending; only transaction-replay (C03) may run first",
+            locator=pending[0],
+        )
     for entry in proposal.entries:
         if _path_digest(paths, entry.locator) != entry.before_sha256:
             raise _repair_error(
@@ -2058,6 +2060,7 @@ def _replay_manifests(
         digest = _path_digest(paths, manifest.locator)
         if digest == manifest.sha256:
             pending = pending_from_backup(paths.workspace, manifest, _backup_bytes(paths, proposal, manifest.locator))
+            _guard_write()
             try:
                 pending.replay(failure=_batch_hook(failure, index))
             except (TransactionConflictError, TransactionPathError, TransactionManifestError, OSError) as exc:
@@ -2120,7 +2123,7 @@ def verify_repair(  # noqa: PLR0913 - the I9 checks and test hooks are explicit 
         _require_journal_set(paths.workspace, journal)
         _require_repair_postcondition(paths, proposal, manifest, owner_check)
         observed = tuple(sorted(classify(paths.workspace, proposal_id)))
-        expected = tuple(sorted(set(proposal.findings) - {proposal.finding_id}))
+        expected = _expected_findings(proposal, set(observed))
         if observed != expected:
             added = sorted(set(observed) - set(expected))
             raise _repair_error(
@@ -2132,6 +2135,18 @@ def verify_repair(  # noqa: PLR0913 - the I9 checks and test hooks are explicit 
         journal = _transition(paths, journal, "verified")
         _fail(failure, "after-verified")
         return _archive_repair(paths, journal, failure)
+
+
+def _expected_findings(proposal: RepairProposal, observed: set[str]) -> tuple[str, ...]:
+    """Proposal-time findings minus the addressed one and any finding located at a path this repair rewrote.
+
+    Only a finding at an affected path may resolve with the repair (a C03 replay of a C01 record); a new
+    finding or an unrelated disappearance still differs.
+    """
+    affected = {entry.locator for entry in proposal.entries if entry.before_sha256 != entry.after_sha256}
+    remaining = set(proposal.findings) - {proposal.finding_id}
+    resolved = {item for item in remaining - observed if item.split(":", 1)[-1] in affected}
+    return tuple(sorted(remaining - resolved))
 
 
 def _archived_repair(paths: _Paths, proposal_id: str) -> MigrationJournal | None:
@@ -2224,7 +2239,7 @@ def abort_repair(
         _fail(failure, "abort-after-b")
         _restore_repair(paths, proposal)
         _fail(failure, "abort-after-c")
-        if any(_position(paths, entry) != "before" for entry in proposal.entries) or (
+        if any(_path_digest(paths, entry.locator) != entry.before_sha256 for entry in proposal.entries) or (
             record_tree_digest(paths.workspace, exclude_migrations=True) != manifest.tree
         ):
             raise _repair_error(code="repair-corruption-stop", detail="the restored state differs from the backup")
@@ -2243,7 +2258,7 @@ def _restore_repair(paths: _Paths, proposal: RepairProposal) -> None:
     ordered = [entry for entry in reversed(proposal.entries) if entry.role != "manifest"]
     ordered += [entry for entry in proposal.entries if entry.role == "manifest"]
     for entry in ordered:
-        if _position(paths, entry) == "before":
+        if _position(paths, entry) == "before" or entry.before_sha256 == entry.after_sha256:
             continue
         if entry.before_sha256 is None:
             _remove(paths, entry.locator)
@@ -2283,6 +2298,7 @@ __all__ = [
     "frontier_17_to_18",
     "live_journals",
     "load_repair_proposal",
+    "owner_rejections",
     "path_digest",
     "pending_from_backup",
     "propose",
