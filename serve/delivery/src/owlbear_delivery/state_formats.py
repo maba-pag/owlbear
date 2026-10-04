@@ -40,7 +40,7 @@ FORMAT_MARKER: Final = "runtime/format.json"
 MIGRATIONS_ROOT: Final = "runtime/migrations"
 MIGRATION_JOURNAL: Final = "journal.json"
 CONTROLLER_LOCK: Final = "runtime/controller.lock"
-SUPPORTED_FORMAT: Final = 1
+SUPPORTED_FORMAT: Final = 2
 JOURNAL_SCHEMA_VERSION: Final = 1
 JOURNAL_STATES: Final = frozenset({"backed-up", "applying", "applied", "verified", "aborting"})
 # Runtime entries a fresh (never-written) workspace may hold besides locks and transients.
@@ -152,7 +152,8 @@ RECORD_KINDS: Final[tuple[RecordKind, ...]] = (
         rf"{_CH}/frontier\.json",
         (f"{_RUNTIME_MODELS}:DeliveryFrontier",),
         "M",
-        18,
+        19,
+        read_upcasts=((18, "owlbear_delivery.runtime_support:parse_delivery_frontier"),),
         rewrites=((17, "owlbear_delivery.state_migration:frontier_17_to_18"),),
     ),
     _kind(
@@ -291,7 +292,8 @@ RECORD_KINDS: Final[tuple[RecordKind, ...]] = (
         rf"{_CH}/planning-pause-receipts/{_OUT}/{_D}\.json",
         (f"{_RUNTIME_RECEIPTS}:_DeliveryPlanningPauseReplay",),
         "R",
-        1,
+        2,
+        read_upcasts=((1, f"{_RUNTIME_RECEIPTS}:parse_planning_pause_receipt"),),
     ),
     _kind(
         "planning_retry_receipt",
@@ -299,7 +301,8 @@ RECORD_KINDS: Final[tuple[RecordKind, ...]] = (
         rf"{_CH}/planning-retry-receipts/{_OUT}/{_D}\.json",
         (f"{_RUNTIME_RECEIPTS}:_DeliveryPlanningRetrySettlementReceipt",),
         "R",
-        1,
+        2,
+        read_upcasts=((1, f"{_RUNTIME_RECEIPTS}:parse_planning_retry_receipt"),),
     ),
     _kind(
         "builder_invocation_receipt",
@@ -307,7 +310,8 @@ RECORD_KINDS: Final[tuple[RecordKind, ...]] = (
         rf"{_CH}/builder-invocation-receipts/{_D}\.json",
         (f"{_RUNTIME_RECEIPTS}:_DeliveryBuilderInvocationSettlementReceipt",),
         "R",
-        1,
+        2,
+        read_upcasts=((1, f"{_RUNTIME_RECEIPTS}:parse_builder_invocation_receipt"),),
     ),
     _kind(
         "builder_plan_promotion_receipt",
@@ -315,7 +319,8 @@ RECORD_KINDS: Final[tuple[RecordKind, ...]] = (
         rf"{_CH}/builder-plan-promotion-receipts/{_D}\.json",
         (f"{_RUNTIME_RECEIPTS}:_DeliveryBuilderPlanPromotionReceipt",),
         "R",
-        1,
+        2,
+        read_upcasts=((1, f"{_RUNTIME_RECEIPTS}:parse_builder_plan_promotion_receipt"),),
     ),
     _kind(
         "builder_request_resolution_receipt",
@@ -323,7 +328,8 @@ RECORD_KINDS: Final[tuple[RecordKind, ...]] = (
         rf"{_CH}/builder-request-resolution-receipts/{_D}\.json",
         (f"{_RUNTIME_RECEIPTS}:_DeliveryBuilderRequestResolutionReceipt",),
         "R",
-        1,
+        2,
+        read_upcasts=((1, f"{_RUNTIME_RECEIPTS}:parse_builder_request_resolution_receipt"),),
     ),
     _kind(
         "builder_handoff_change_intent_head",
@@ -339,6 +345,15 @@ RECORD_KINDS: Final[tuple[RecordKind, ...]] = (
         rf"{_CH}/builder-handoff-change-intent-receipts/{_D}/{_D}\.json",
         (f"{_RUNTIME_RECEIPTS}:_DeliveryBuilderHandoffChangeIntentReceipt",),
         "R",
+        2,
+        read_upcasts=((1, f"{_RUNTIME_RECEIPTS}:parse_builder_handoff_change_intent_receipt"),),
+    ),
+    _kind(
+        "consent_generation",
+        "consent_generation",
+        rf"{_CH}/consent-generations/[0-9]{{8}}\.json",
+        ("owlbear_delivery.consent_generation:DeliveryConsentGeneration",),
+        "M",
         1,
     ),
     _kind(
@@ -532,8 +547,11 @@ RECORD_KINDS: Final[tuple[RecordKind, ...]] = (
         rf"state/{_C}/snapshot\.json",
         ("owlbear_delivery.delivery_state:DeliveryStateSnapshot",),
         "R",
-        2,
-        read_upcasts=((1, "owlbear_delivery.delivery_state:parse_delivery_state_snapshot"),),
+        3,
+        read_upcasts=(
+            (1, "owlbear_delivery.delivery_state:parse_delivery_state_snapshot"),
+            (2, "owlbear_delivery.delivery_state:parse_delivery_state_snapshot"),
+        ),
     ),
     _kind("format_marker", "format_marker", r"runtime/format\.json", (), "M", None, read=False),
     _kind(
@@ -569,8 +587,8 @@ RECORD_KINDS: Final[tuple[RecordKind, ...]] = (
 )
 
 # Remote-only record, read through Git rather than the local tree.
-REMOTE_SNAPSHOT_CURRENT: Final = 2
-REMOTE_SNAPSHOT_READ_VERSIONS: Final = (1, 2)
+REMOTE_SNAPSHOT_CURRENT: Final = 3
+REMOTE_SNAPSHOT_READ_VERSIONS: Final = (1, 2, 3)
 
 # Models with ``schema_version`` persisted only inside, or as the base of, a registered owner record.
 NESTED_MODELS: Final[dict[str, str]] = {
@@ -596,6 +614,9 @@ NESTED_MODELS: Final[dict[str, str]] = {
     f"{_RUNTIME_MODELS}:DeliveryChangeAbandonment": "frontier",
     f"{_RUNTIME_MODELS}:DeliveryObservation": "frontier",
     f"{_RUNTIME_MODELS}:DeliveryObservationReceipt": "frontier",
+    f"{_RUNTIME_MODELS}:DeliveryLegacyObservation": "frontier",
+    f"{_RUNTIME_MODELS}:DeliveryLegacyObservationReceipt": "frontier",
+    f"{_RUNTIME_MODELS}:DeliveryUserConfirmation": "frontier",
     f"{_RUNTIME_MODELS}:DeliveryReview": "frontier",
     f"{_RUNTIME_MODELS}:DeliveryReviewReceipt": "frontier",
     f"{_RUNTIME_MODELS}:DeliveryFinalization": "frontier",

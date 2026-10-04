@@ -33,27 +33,27 @@
   },
   "builder_handoff_change_intent_receipt": {
     "fingerprints": {
-      "owlbear_delivery.runtime_receipts:_DeliveryBuilderHandoffChangeIntentReceipt": "d1341e2a8f2993ad0aa8ab1a507b47f2c188e9cf08f2da7724761e37425744fa"
+      "owlbear_delivery.runtime_receipts:_DeliveryBuilderHandoffChangeIntentReceipt": "3dad721255dec60664104bf90088543b5b9f0e7e6fbb8bcc3d4779cdfed362d8"
     },
-    "version": 1
+    "version": 2
   },
   "builder_invocation_receipt": {
     "fingerprints": {
-      "owlbear_delivery.runtime_receipts:_DeliveryBuilderInvocationSettlementReceipt": "63d11464393c6950e5ce642e1e47c48fc1b9c818446ef3524eb8bce7a68b8658"
+      "owlbear_delivery.runtime_receipts:_DeliveryBuilderInvocationSettlementReceipt": "97522389248b90e9d89adecd7c05ffa9f776730a78faf1f101d1ef358b0f2e47"
     },
-    "version": 1
+    "version": 2
   },
   "builder_plan_promotion_receipt": {
     "fingerprints": {
-      "owlbear_delivery.runtime_receipts:_DeliveryBuilderPlanPromotionReceipt": "c0b496d284917b32c1398fc60a81b66cedccc9ab8c283edeebeb25d24b31b5ff"
+      "owlbear_delivery.runtime_receipts:_DeliveryBuilderPlanPromotionReceipt": "52a328a6d27609a618df1d58365d76193fe0ff21e7f362c91e67b85c724883f7"
     },
-    "version": 1
+    "version": 2
   },
   "builder_request_resolution_receipt": {
     "fingerprints": {
-      "owlbear_delivery.runtime_receipts:_DeliveryBuilderRequestResolutionReceipt": "5fda1eeea58904709ebfd0f45e8d3fc15103ec2a1c6ef8157a678a493dff25b4"
+      "owlbear_delivery.runtime_receipts:_DeliveryBuilderRequestResolutionReceipt": "124ee082f449a9e19a204114b67d3390436ab97dd0073f9d733e3af4dc10a1b1"
     },
-    "version": 1
+    "version": 2
   },
   "claim_issuer": {
     "fingerprints": {
@@ -78,6 +78,12 @@
       "owlbear_delivery.delivery_application_loader:DeliveryStartupConfig": "f76e7f4730bd76a75d274896aa9fde4d0d05cb8074e62ded456aac2a19f2b77d"
     },
     "version": 2
+  },
+  "consent_generation": {
+    "fingerprints": {
+      "owlbear_delivery.consent_generation:DeliveryConsentGeneration": "2e3d81ccb0bc3365b4a2627e402501ef88dfb22c599240c44ecfec34b3d9840e"
+    },
+    "version": 1
   },
   "contract": {
     "fingerprints": {
@@ -117,9 +123,9 @@
   },
   "frontier": {
     "fingerprints": {
-      "owlbear_delivery.runtime_models:DeliveryFrontier": "114f8e1a85fe8fd456373031f87f42f96482f3975fc26eb5227e70457b889c87"
+      "owlbear_delivery.runtime_models:DeliveryFrontier": "e36accdfddadafa6e59d2fbd65c3951fffad147bf2d0aca69832f791f67816c1"
     },
-    "version": 18
+    "version": 19
   },
   "host": {
     "fingerprints": {
@@ -153,15 +159,15 @@
   },
   "planning_pause_receipt": {
     "fingerprints": {
-      "owlbear_delivery.runtime_receipts:_DeliveryPlanningPauseReplay": "6f32608466e53dc6ba84617d8685a5bdfbbc93860ecddcffe56b6a8ee12bdf15"
+      "owlbear_delivery.runtime_receipts:_DeliveryPlanningPauseReplay": "05f8ffa1e7c18bae9fa19067bd92ba06c3dfb616d2ea7192dc3cec6beeb04901"
     },
-    "version": 1
+    "version": 2
   },
   "planning_retry_receipt": {
     "fingerprints": {
-      "owlbear_delivery.runtime_receipts:_DeliveryPlanningRetrySettlementReceipt": "c7e2392d375c8cadb813d031be2356cb71b84918e3c1bf38c0dc53ff54402bb9"
+      "owlbear_delivery.runtime_receipts:_DeliveryPlanningRetrySettlementReceipt": "0896660f9bab818e811ec940c7f706f254aab5eeda840dbfdbcdf11e05cbac1a"
     },
-    "version": 1
+    "version": 2
   },
   "preservation_manifest": {
     "fingerprints": {
@@ -260,7 +266,7 @@
   },
   "result_receipt": {
     "fingerprints": {
-      "owlbear_delivery.runtime_models:DeliveryResultCandidate": "b46a60da2ae536751ec75598c1c627e8aa38d205cc72fd579b9a278aacec5df0"
+      "owlbear_delivery.runtime_models:DeliveryResultCandidate": "f900c83932f6979862a331e94dbc7e1cbcc38fc38bf36402db5a946d30f6e8f6"
     },
     "version": null
   },
@@ -296,9 +302,9 @@
   },
   "snapshot": {
     "fingerprints": {
-      "owlbear_delivery.delivery_state:DeliveryStateSnapshot": "80cbd9d74ccf92ad2e98fd1b465dcf1a28fe1e12e1e35c1c4e9db7aff8b9f915"
+      "owlbear_delivery.delivery_state:DeliveryStateSnapshot": "6bdaf001f7b2f4a62a646359c8109425584b254f2966775086d017057af8e720"
     },
-    "version": 2
+    "version": 3
   },
   "state_publication": {
     "fingerprints": {

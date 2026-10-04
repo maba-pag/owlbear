@@ -39,6 +39,7 @@ from owlbear_delivery.runtime_models import (
     DeliveryStage,
     DeliveryTaskResult,
     DeliveryTransition,
+    DeliveryUserConfirmation,
     DeliveryWorkerRole,
     EngineWorkerDisposition,
     OutcomeAuthorityBinding,
@@ -67,7 +68,9 @@ from owlbear_delivery.runtime_support import (
     _builder_handoff_change_intent_head_path,
     _builder_request_resolution_receipt_path,
     _conflict,
+    _planner_request_resolution_receipt_path,
     _read_builder_handoff_change_intent_receipts,
+    parse_stored_delivery_frontier,
 )
 from owlbear_delivery.runtime_transaction import (
     ReplacementTransactionParticipant,
@@ -661,9 +664,14 @@ class _SettlementReplayMixin:
         request: DeliveryRequest,
         resolved_request: DeliveryRequest,
         updated_block: DeliveryBlock,
+        confirmation: DeliveryUserConfirmation | None = None,
     ) -> TransactionParticipant | None:
         context = binding.builder_handoff_context
         block = binding.block
+        if context is not None and context.route == "same-outcome-planner" and confirmation is not None:
+            return self._planner_request_resolution_receipt_participant(
+                binding, request, resolved_request, updated_block, confirmation
+            )
         if context is None or context.route != "same-task":
             return None
         if (
@@ -707,12 +715,57 @@ class _SettlementReplayMixin:
             builder_handoff_context=context,
             resolved_request=resolved_request,
             updated_block=updated_block,
+            confirmation=confirmation,
         )
         receipt_path = _builder_request_resolution_receipt_path(
             self._target_root,
             self._contract.change_id,
             context,
         )
+        return self._request_resolution_receipt_participant(receipt, receipt_path)
+
+    def _planner_request_resolution_receipt_participant(
+        self,
+        binding: OutcomeAuthorityBinding,
+        request: DeliveryRequest,
+        resolved_request: DeliveryRequest,
+        updated_block: DeliveryBlock,
+        confirmation: DeliveryUserConfirmation,
+    ) -> TransactionParticipant:
+        """Bind one scoped Planner pause answer and its ledger entry for restart replay (L row)."""
+        context = binding.builder_handoff_context
+        block = binding.block
+        if (
+            context is None
+            or binding.stage != DeliveryStage.PLANNING
+            or block is None
+            or block.request_id != request.request_id
+            or request.outcome_id != binding.outcome_id
+        ):
+            _conflict("scoped Planner answer does not match its exact retained pause")
+        receipt = _DeliveryBuilderRequestResolutionReceipt(
+            change_id=self._contract.change_id,
+            outcome_id=binding.outcome_id,
+            request_id=request.request_id,
+            settlement_id=context.settlement_id,
+            builder_handoff_context=context,
+            resolved_request=resolved_request,
+            updated_block=updated_block,
+            confirmation=confirmation,
+        )
+        receipt_path = _planner_request_resolution_receipt_path(
+            self._target_root,
+            self._contract.change_id,
+            context,
+            request.request_id,
+        )
+        return self._request_resolution_receipt_participant(receipt, receipt_path)
+
+    def _request_resolution_receipt_participant(
+        self,
+        receipt: _DeliveryBuilderRequestResolutionReceipt,
+        receipt_path: Path,
+    ) -> TransactionParticipant:
         receipt_directory = receipt_path.parent
         if any(
             path.is_symlink()
@@ -826,7 +879,7 @@ class _SettlementReplayMixin:
             ):
                 _conflict("retained Builder handoff lifecycle intent has no matching receipt")
 
-    def _builder_handoff_change_intent_participants(
+    def _builder_handoff_change_intent_participants(  # noqa: PLR0913
         self,
         before: DeliveryFrontier,
         after: DeliveryFrontier,
@@ -834,6 +887,7 @@ class _SettlementReplayMixin:
         *,
         deferral: DeliveryChangeDeferral | None = None,
         abandonment: DeliveryChangeAbandonment | None = None,
+        previous: bytes | None = None,
     ) -> tuple[TransactionParticipant | ReplacementTransactionParticipant, ...]:
         handoffs = tuple(binding for binding in before.bindings if binding.builder_handoff_context is not None)
         if not handoffs:
@@ -844,7 +898,9 @@ class _SettlementReplayMixin:
         ):
             _conflict("Builder handoff lifecycle intent cannot overlap an active mutation claim")
 
-        mutation = _BuilderHandoffChangeIntentMutation(before, after, action, deferral, abandonment)
+        # The receipt binds the stored model at its stored version (an 18 stays 18) and its committed digest.
+        stored_before = parse_stored_delivery_frontier(previous) if previous is not None else before
+        mutation = _BuilderHandoffChangeIntentMutation(stored_before, after, action, deferral, abandonment)
         participants: list[TransactionParticipant | ReplacementTransactionParticipant] = []
         for binding in handoffs:
             context = binding.builder_handoff_context

@@ -382,7 +382,9 @@ def test_malformed_unchanged_record_at_its_current_version_refuses_propose_and_a
     path = repository / ".owlbear/delivery" / locator
     original = path.read_bytes()
     path.write_bytes(malform(original))
-    assert {record.status for record in scan_capability(repository).records if record.locator == locator} == {"current"}
+    statuses = {record.status for record in scan_capability(repository).records if record.locator == locator}
+    assert len(statuses) == 1
+    assert statuses <= {"current", "readable-legacy"}
     digests = record_tree_digest(repository)
 
     with pytest.raises(MigrationError) as at_propose:
@@ -1011,3 +1013,25 @@ def _report_finalizer_attention(application: PortfolioApplication, change_id: st
     )
     assert isinstance(report, FinalizationReport)
     application.settle_finalizer_invocation(_finalizer_settlement(application, attempt, report))
+
+
+def test_format_1_to_2_migration_changes_only_the_marker_and_keeps_every_change_available(tmp_path: Path) -> None:
+    """N03-A: format 2 only gates the new record versions; no stored record is rewritten."""
+    repository = _seed(tmp_path)
+    _write_config(repository)
+    (repository / ".owlbear/delivery" / FORMAT_MARKER).write_bytes(b'{"format":1}\n')
+    pre = record_tree_digest(repository)
+    _assert_refused(repository, "state-migration-required")
+
+    proposal = state_migration.propose(repository)
+
+    assert [(entry.locator, entry.before_sha256) for entry in proposal.entries] == [(FORMAT_MARKER, pre[FORMAT_MARKER])]
+    state_migration.apply(repository, proposal.migration_id)
+    state_migration.verify(repository, proposal.migration_id)
+    post = record_tree_digest(repository, exclude_migrations=True)
+    assert {locator: digest for locator, digest in post.items() if pre.get(locator) != digest} == {
+        FORMAT_MARKER: hashlib.sha256(format_marker_bytes()).hexdigest()
+    }
+    assert json.loads(_frontier_path(repository, "change-a").read_bytes())["schema_version"] == 18
+    _available(repository, ("change-a", "change-b"))
+    assert record_tree_digest(repository, exclude_migrations=True) == post

@@ -8,6 +8,7 @@ import subprocess
 from contextlib import ExitStack, contextmanager, suppress
 from typing import TYPE_CHECKING
 
+from owlbear_delivery.acceptance_criteria import DeliveryAcceptanceCriterion, acceptance_criteria
 from owlbear_delivery.application_lifecycle import _ENGINE_DRAIN_MUTATIONS
 from owlbear_delivery.application_models import (
     DeliveryAcquisitionFailure,
@@ -1388,6 +1389,7 @@ class _AcquisitionMixin:
             commitments=self._commitments(runtime, outcome.commitment_ids),
             requests=binding.requests,
             return_context=binding.return_context,
+            acceptance=self._outcome_acceptance(runtime, outcome_id),
         )
 
     def show_build_context(
@@ -1438,6 +1440,13 @@ class _AcquisitionMixin:
             return_context=binding.return_context,
             recovery_attention=binding.recovery_attention,
             prior_attempts=prior_attempts,
+            acceptance=self._outcome_acceptance(runtime, outcome_id),
+        )
+
+    @staticmethod
+    def _outcome_acceptance(runtime: DeliveryRuntime, outcome_id: str) -> tuple[DeliveryAcceptanceCriterion, ...]:
+        return tuple(
+            criterion for criterion in acceptance_criteria(runtime.contract) if criterion.outcome_id == outcome_id
         )
 
     @staticmethod

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from owlbear_delivery.acceptance_criteria import is_authored_contract
 from owlbear_delivery.delivery_runtime import (
     DeliveryFrontier,
     DeliveryRequest,
@@ -27,6 +28,7 @@ from owlbear_delivery.runtime_transaction import (
 from owlbear_delivery.storage_io import locked_roots
 from owlbear_delivery.target_contract import (
     DeliveryCompilationDiagnostic,
+    DeliveryCompilationDiagnosticCode,
     DeliveryContract,
     DeliveryOutcome,
     compile_delivery_contract,
@@ -189,6 +191,18 @@ class DeliveryAuthorityRegistry:
                 message = f"Design package changed before admission: {request.change_id}"
                 raise DeliveryAdmissionConflictError(message)
             current = self._read_current(request.change_id)
+            if (current is None or current.is_partial) and not is_authored_contract(compiled.contract):
+                message = "first admission requires an AC-NNN identity on every acceptance item"
+                raise DeliveryAdmissionValidationError(
+                    message,
+                    (
+                        DeliveryCompilationDiagnostic(
+                            code=DeliveryCompilationDiagnosticCode.ACCEPTANCE_IDENTITY_REQUIRED,
+                            subject="acceptance",
+                            detail=message,
+                        ),
+                    ),
+                )
             self._validate_current(request, current)
             self._validate_expected_frontier(request, current, compiled.contract)
             checkpoint_commit = self._publish_package_contract(request.change_id, compiled)
@@ -496,6 +510,7 @@ def _delivery_frontier(
             invalidated,
         ),
         operator_moves=current.frontier.operator_moves,
+        confirmations=current.frontier.confirmations,
     ), RevisionCarryForward(
         preserved_outcome_ids=preserved,
         invalidated_outcome_ids=tuple(dict.fromkeys(ordered_invalidated)),

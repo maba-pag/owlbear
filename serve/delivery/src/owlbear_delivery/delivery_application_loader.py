@@ -56,6 +56,7 @@ from owlbear_delivery.delivery_runtime import (
     _model_content,
     _read_builder_handoff_change_intent_receipts,
     _read_builder_request_resolution_receipt,
+    normalize_frontier,
     parse_delivery_frontier,
 )
 from owlbear_delivery.delivery_state import (
@@ -80,6 +81,7 @@ from owlbear_delivery.portfolio_operating import (
     DeliveryHealthResolution,
 )
 from owlbear_delivery.remote_git import RemoteGitError, RemoteGitFailed, read_remote_ref, run_remote_git
+from owlbear_delivery.runtime_support import _read_planner_request_resolution_receipt
 from owlbear_delivery.runtime_transaction import (
     RuntimeTransaction,
     TransactionParticipant,
@@ -105,7 +107,11 @@ from owlbear_delivery.storage_io import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from owlbear_delivery.delivery_runtime import DeliveryRequest, _DeliveryBuilderHandoffChangeIntentReceipt
+    from owlbear_delivery.delivery_runtime import (
+        DeliveryRequest,
+        DeliveryUserConfirmation,
+        _DeliveryBuilderHandoffChangeIntentReceipt,
+    )
     from owlbear_delivery.publication_provider import PublicationProvider
     from owlbear_delivery.target_contract import DeliveryContract
     from owlbear_delivery.worker_stall import WindowHostIdentity
@@ -165,6 +171,19 @@ class _PlannerPauseHistory:
     paused: tuple[OutcomeAuthorityBinding, ...]
     answered: tuple[OutcomeAuthorityBinding, ...]
     latest: OutcomeAuthorityBinding
+    # The receipt-bound ledger entry of each answer (None for an unscoped answer), in answer order.
+    confirmations: tuple[DeliveryUserConfirmation | None, ...] = ()
+
+
+def _with_ledger(
+    frontier: DeliveryFrontier,
+    confirmations: tuple[DeliveryUserConfirmation | None, ...],
+) -> DeliveryFrontier:
+    """Append receipt-bound confirmations to an expected frontier rebuilt from its snapshot (L row)."""
+    entries = tuple(item for item in confirmations if item is not None)
+    if not entries:
+        return frontier
+    return frontier.model_copy(update={"confirmations": (*(frontier.confirmations or ()), *entries)})
 
 
 class DeliveryApplicationLoadError(RuntimeError):
@@ -605,18 +624,20 @@ def _validate_local_snapshot(
         or any(binding.builder_handoff_context is not None for binding in frontier.bindings)
     ):
         _bootstrap_failure("local Builder handoff cannot be combined with portable state publication")
+    # Successor recognition compares writable models: the snapshot frontier is normalized to 19 (N rows).
+    replay_snapshot = snapshot.model_copy(update={"frontier": normalize_frontier(snapshot.frontier)})
     local_attention_successor = _is_unpublished_acceptance_attention_successor(
-        snapshot.frontier, frontier
-    ) or _is_unpublished_target_sync_attention_successor(snapshot.frontier, frontier)
-    local_claim_successor = _is_unpublished_claim_successor(snapshot.frontier, frontier)
+        replay_snapshot.frontier, frontier
+    ) or _is_unpublished_target_sync_attention_successor(replay_snapshot.frontier, frontier)
+    local_claim_successor = _is_unpublished_claim_successor(replay_snapshot.frontier, frontier)
     local_builder_handoff_successor = _is_unpublished_builder_handoff_successor(
-        snapshot,
+        replay_snapshot,
         frontier,
         coordination,
         paths,
         workspace_manager,
     )
-    local_checkpoint_successor = _is_unpublished_checkpoint_successor(snapshot.frontier, frontier)
+    local_checkpoint_successor = _is_unpublished_checkpoint_successor(replay_snapshot.frontier, frontier)
     local_recoverable_successor = (
         local_attention_successor
         or local_claim_successor
@@ -1025,6 +1046,8 @@ def _validate_local_builder_handoff_frontier(
     if local_binding is None:
         _bootstrap_failure("local Builder handoff frontier lacks its exact outcome binding")
     expected_binding = _builder_handoff_settled_binding(snapshot, local_binding, receipt, paths)
+    answered = isinstance(receipt.envelope.request, BlockDelivery) and expected_binding != receipt.result
+    confirmation = _builder_resolution_confirmation(paths.runtime_root, snapshot, receipt) if answered else None
     if local_binding.active_claim is not None:
         claim = local_binding.active_claim
         expected_binding = expected_binding.model_copy(update={"active_claim": claim})
@@ -1034,13 +1057,16 @@ def _validate_local_builder_handoff_frontier(
             expected_binding = expected_binding.model_copy(
                 update={"result_candidate": candidate, "output": candidate.output}
             )
-    expected_frontier = snapshot.frontier.model_copy(
-        update={
-            "bindings": tuple(
-                expected_binding if binding.outcome_id == receipt.envelope.outcome_id else binding
-                for binding in snapshot.frontier.bindings
-            )
-        }
+    expected_frontier = _with_ledger(
+        snapshot.frontier.model_copy(
+            update={
+                "bindings": tuple(
+                    expected_binding if binding.outcome_id == receipt.envelope.outcome_id else binding
+                    for binding in snapshot.frontier.bindings
+                )
+            }
+        ),
+        (confirmation,),
     )
     if local_binding.active_claim is None:
         expected_frontier = _builder_handoff_lifecycle_successor_frontier(
@@ -1178,13 +1204,16 @@ def _local_builder_return_successor_frontier(
     local_frontier = replay.local_frontier
     settlement = replay.settlement
     outcome_id = settlement.envelope.outcome_id
-    expected_frontier = snapshot.frontier.model_copy(
-        update={
-            "bindings": tuple(
-                expected_binding if binding.outcome_id == outcome_id else binding
-                for binding in snapshot.frontier.bindings
-            )
-        }
+    expected_frontier = _with_ledger(
+        snapshot.frontier.model_copy(
+            update={
+                "bindings": tuple(
+                    expected_binding if binding.outcome_id == outcome_id else binding
+                    for binding in snapshot.frontier.bindings
+                )
+            }
+        ),
+        history.confirmations if history is not None else (),
     )
     if next(binding for binding in local_frontier.bindings if binding.outcome_id == outcome_id).active_claim is None:
         if history is not None:
@@ -1247,6 +1276,7 @@ def _planner_handoff_pause_history(
     receipts = _read_planner_handoff_pause_receipts(replay, settled_binding)
     claim_ids = {replay.settlement.envelope.claim_id}
     answered_requests: list[DeliveryRequest] = []
+    confirmations: list[DeliveryUserConfirmation | None] = []
     paused: list[OutcomeAuthorityBinding] = []
     answered: list[OutcomeAuthorityBinding] = []
     for index, local_request in enumerate(local_binding.requests[len(settled_requests) :]):
@@ -1266,6 +1296,7 @@ def _planner_handoff_pause_history(
             answered_row = _planner_handoff_answered_request(expected, local_request, settled_binding)
             answered.append(answered_row)
             answered_requests.append(answered_row.requests[-1])
+            confirmations.append(_planner_answer_confirmation(replay, answered_row, settled_binding))
     if receipts:
         _bootstrap_failure("local Planning pause receipt is outside its exact Planner pause sequence")
     history = _PlannerPauseHistory(
@@ -1274,6 +1305,7 @@ def _planner_handoff_pause_history(
         paused=tuple(paused),
         answered=tuple(answered),
         latest=settled_binding,
+        confirmations=tuple(confirmations),
     )
     latest = (
         _exhausted_planner_handoff_row(history, local_binding.block)
@@ -1655,7 +1687,8 @@ def _builder_handoff_lifecycle_successor_frontier(
     lifecycle_fields = ("change_deferral", "change_abandonment", "pending_checkpoint")
     previous_frontier: DeliveryFrontier | None = None
     previous_baseline: DeliveryFrontier | None = None
-    for item in chain:
+    for receipt_item in chain:
+        item = _NormalizedLifecycleReceipt.of(receipt_item)
         baseline = next(
             (
                 candidate
@@ -1687,6 +1720,18 @@ def _builder_handoff_lifecycle_successor_frontier(
         previous_baseline = baseline
 
     return _builder_handoff_frontier_with_lifecycle_fields(expected_frontier, chain[-1].after_frontier)
+
+
+@dataclass(frozen=True)
+class _NormalizedLifecycleReceipt:
+    """Lifecycle receipt frontiers after the registered 18 -> 19 representation change (N rows)."""
+
+    before_frontier: DeliveryFrontier
+    after_frontier: DeliveryFrontier
+
+    @classmethod
+    def of(cls, receipt: _DeliveryBuilderHandoffChangeIntentReceipt) -> _NormalizedLifecycleReceipt:
+        return cls(normalize_frontier(receipt.before_frontier), normalize_frontier(receipt.after_frontier))
 
 
 def _builder_handoff_lifecycle_chain(
@@ -1722,17 +1767,22 @@ def _planner_handoff_lifecycle_successor_frontier(
         promotion,
     )
     previous: tuple[DeliveryFrontier, int] | None = None
-    for item in chain:
+    for receipt_item in chain:
+        item = _NormalizedLifecycleReceipt.of(receipt_item)
         row = next((binding for binding in item.before_frontier.bindings if binding.outcome_id == outcome_id), None)
         rank = None if row is None else _planner_handoff_lifecycle_rank(history, row, promotion)
         if rank is None or current_rank is None or rank > current_rank:
             _bootstrap_failure("local Builder lifecycle intent is not anchored to its exact settlement or answer")
-        baseline = snapshot_frontier.model_copy(
-            update={
-                "bindings": tuple(
-                    row if binding.outcome_id == outcome_id else binding for binding in snapshot_frontier.bindings
-                )
-            }
+        # A baseline holds exactly the ledger entries of the answers its row already includes (L row).
+        baseline = _with_ledger(
+            snapshot_frontier.model_copy(
+                update={
+                    "bindings": tuple(
+                        row if binding.outcome_id == outcome_id else binding for binding in snapshot_frontier.bindings
+                    )
+                }
+            ),
+            history.confirmations[: rank // 3],
         )
         if _builder_handoff_frontier_with_lifecycle_fields(baseline, item.before_frontier) != item.before_frontier:
             _bootstrap_failure("local Builder lifecycle intent is not anchored to its exact settlement or answer")
@@ -1826,6 +1876,53 @@ def _validate_local_builder_handoff_candidate(
         )
     ):
         _bootstrap_failure("local Builder result candidate differs from its exact active claim and task")
+
+
+def _builder_resolution_confirmation(
+    runtime_root: Path,
+    snapshot: DeliveryStateSnapshot,
+    settlement: _DeliveryBuilderInvocationSettlementReceipt,
+) -> DeliveryUserConfirmation | None:
+    """Return the ledger entry the same-task answer receipt binds (L row), or None for an unscoped answer."""
+    block_request = settlement.envelope.request
+    if not isinstance(block_request, BlockDelivery) or block_request.request is None:
+        return None
+    try:
+        receipt = _read_builder_request_resolution_receipt(
+            runtime_root,
+            snapshot.change_id,
+            block_request.request.request_id,
+            settlement.handoff_context,
+        )
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        _bootstrap_failure("local Builder request resolution receipt is unavailable or invalid", exc)
+    return receipt.confirmation
+
+
+def _planner_answer_confirmation(
+    replay: _BuilderReturnReplayContext,
+    answered_row: OutcomeAuthorityBinding,
+    settled_binding: OutcomeAuthorityBinding,
+) -> DeliveryUserConfirmation | None:
+    """Require a scoped Planner answer's schema-2 receipt and return the ledger entry it binds (L row)."""
+    request = answered_row.requests[-1]
+    if request.applies_to is None:
+        return None
+    context = settled_binding.builder_handoff_context
+    if context is None:
+        _bootstrap_failure("local Planner answer lacks its exact retained handoff")
+    try:
+        receipt = _read_planner_request_resolution_receipt(
+            replay.paths.runtime_root,
+            replay.snapshot.change_id,
+            request.request_id,
+            context,
+        )
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        _bootstrap_failure("local Planner request resolution receipt is unavailable or invalid", exc)
+    if receipt is None or receipt.resolved_request != request or receipt.updated_block != answered_row.block:
+        _bootstrap_failure("local scoped Planner answer has no exact request resolution receipt")
+    return receipt.confirmation
 
 
 def _builder_request_resolution_successor(

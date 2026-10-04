@@ -61,7 +61,7 @@ from owlbear_delivery.runtime_support import (
     _find_binding,
     _require_target_sync_attention,
     _reset_binding,
-    parse_delivery_frontier,
+    parse_stored_delivery_frontier,
 )
 from owlbear_delivery.runtime_transaction import (
     ReplacementTransactionParticipant,
@@ -74,27 +74,38 @@ if TYPE_CHECKING:
     )
 
 
+def _portable_projection(content: bytes) -> DeliveryFrontier:
+    frontier = parse_stored_delivery_frontier(content)
+    portable_bindings = tuple(
+        binding.model_copy(
+            update={
+                "active_claim": None,
+                "output": None,
+                "candidate": None,
+                "result_candidate": None,
+                "recovery_attention": None,
+                "retry_diagnostic": None,
+            }
+        )
+        for binding in frontier.bindings
+    )
+    return frontier.model_copy(update={"bindings": portable_bindings})
+
+
 class _RuntimeReadsMixin:
     """Read-side runtime queries and transition, activation and repair validation."""
 
     def publication_base_digest(self, content: bytes) -> str:
-        """Digest the portable projection that remote state can legitimately contain."""
-        frontier, _canonical = parse_delivery_frontier(content)
-        portable_bindings = tuple(
-            binding.model_copy(
-                update={
-                    "active_claim": None,
-                    "output": None,
-                    "candidate": None,
-                    "result_candidate": None,
-                    "recovery_attention": None,
-                    "retry_diagnostic": None,
-                }
-            )
-            for binding in frontier.bindings
-        )
-        portable = frontier.model_copy(update={"bindings": portable_bindings})
-        return hashlib.sha256(_model_content(portable)).hexdigest()
+        """Digest the portable projection that remote state can legitimately contain, at its stored version."""
+        return hashlib.sha256(_model_content(_portable_projection(content))).hexdigest()
+
+    def published_projection_digest(self, content: bytes) -> str:
+        """Digest the stored projection after the drain of a checkpoint already published remotely."""
+        projection = _portable_projection(content)
+        pending = projection.pending_checkpoint
+        if pending is not None and pending.head == projection.published_head:
+            projection = projection.model_copy(update={"pending_checkpoint": None})
+        return hashlib.sha256(_model_content(projection)).hexdigest()
 
     def finalization_readiness(self) -> tuple[bool, tuple[str, ...]]:
         """Return the same lifecycle readiness conditions enforced by finalization mutation."""

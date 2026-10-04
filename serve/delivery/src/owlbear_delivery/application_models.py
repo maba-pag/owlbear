@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from owlbear_delivery.acceptance import (
     CompletionReceipt,
 )
+from owlbear_delivery.acceptance_criteria import DeliveryAcceptanceCriterion
 from owlbear_delivery.application_support import (
     _publication_identity,
 )
@@ -72,6 +73,7 @@ from owlbear_delivery.draft_pull_request import (
     GeneratedPullRequestSummaryReceipt,
     PullRequestReadyReceipt,
 )
+from owlbear_delivery.evidence import DeliveryContextRefusal, DeliveryFinalizationSemantics
 from owlbear_delivery.portfolio_operating import (
     DeliveryHealthDiagnostic,
     DeliveryHealthStatus,
@@ -714,6 +716,40 @@ class DeliveryAnswerResult(_ApplicationModel):
         return self
 
 
+class DeliveryConfirmationPlan(_ApplicationModel):
+    """What the confirmation boundary renders for one scoped request in one round (D13)."""
+
+    change_id: str = Field(min_length=1)
+    request_id: str = Field(min_length=1)
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    disposition: Literal["unscoped", "resolved", "ask", "no-question", "frontier-changed"]
+    generation_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    request: DeliveryRequest | None = None
+    criteria: tuple[DeliveryAcceptanceCriterion, ...] = ()
+
+    @model_validator(mode="after")
+    def _validate_plan(self) -> DeliveryConfirmationPlan:
+        if self.disposition == "ask" and (self.generation_id is None or self.request is None):
+            message = "a confirmation question renders one open generation and its scoped request"
+            raise ValueError(message)
+        return self
+
+
+class DeliveryConfirmationResponse(_ApplicationModel):
+    """The boundary's report of the user's answer to one rendered question."""
+
+    action: Literal["accept", "decline", "cancel"]
+    decision: Literal["waive", "keep-required", "passed", "failed"] | None = None
+    question_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def _validate_response(self) -> DeliveryConfirmationResponse:
+        if (self.action == "accept") != (self.decision is not None):
+            message = "only an accepted confirmation carries the user's decision"
+            raise ValueError(message)
+        return self
+
+
 class DeliveryAcquisitionResult(_ApplicationModel):
     """Launchable task claims plus typed attention from one refresh."""
 
@@ -732,6 +768,7 @@ class DeliveryPlanContext(_ApplicationModel):
     commitments: tuple[DeliveryCommitment, ...]
     requests: tuple[DeliveryRequest, ...]
     return_context: DeliveryReturnContext | None = None
+    acceptance: tuple[DeliveryAcceptanceCriterion, ...] = ()
 
 
 class DeliveryBuildContext(_ApplicationModel):
@@ -746,6 +783,7 @@ class DeliveryBuildContext(_ApplicationModel):
     return_context: DeliveryReturnContext | None = None
     recovery_attention: DeliveryRecoveryAttention | None = None
     prior_attempts: tuple[DeliveryRetryAttemptView, ...] = Field(default=(), max_length=MAX_RETRY_HISTORY_ATTEMPTS)
+    acceptance: tuple[DeliveryAcceptanceCriterion, ...] = ()
 
 
 class DeliveryFinalizationContext(_ApplicationModel):
@@ -763,6 +801,15 @@ class DeliveryFinalizationContext(_ApplicationModel):
     finalized_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     finalization_invalidation_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     readiness: DeliveryReadiness
+    semantics: DeliveryFinalizationSemantics | None = Field(default=None, exclude_if=lambda value: value is None)
+    semantics_refusal: DeliveryContextRefusal | None = Field(default=None, exclude_if=lambda value: value is None)
+
+    @model_validator(mode="after")
+    def _validate_semantics(self) -> DeliveryFinalizationContext:
+        if self.semantics is not None and self.semantics_refusal is not None:
+            message = "finalization context holds complete semantics or their refusal, never both"
+            raise ValueError(message)
+        return self
 
 
 class DeliveryFinalizationLaunch(_ApplicationModel):
