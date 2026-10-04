@@ -478,6 +478,10 @@ def _coordination(layout: Layout, **fields: object) -> None:
     _record(layout, "runtime/coordination/changes/demo.json", {"schema_version": 2, "change_id": "demo", **fields})
 
 
+def _publication(status: str) -> dict[str, object]:
+    return {"schema_version": 1, "status": status, "frontier_digest": "e" * 64}
+
+
 def _retained(layout: Layout, reason: str) -> None:
     _coordination(layout, continuation_action={"operation_id": _OPERATION, "kind": "sync-target", "finished_at": None})
     _record(layout, f"{_CHANGE}/action-receipts/{_OPERATION}/intent.json", {})
@@ -508,9 +512,21 @@ _CUSTODY = {
         ["engine-action-retained", "engine-action-failed"],
     ),
     "pending-publication": (
-        lambda layout: _record(layout, f"{_CHANGE}/state-publication.json", {"schema_version": 1}),
+        lambda layout: _record(layout, f"{_CHANGE}/state-publication.json", _publication("pending")),
         "gone",
         ["pending-state-publication"],
+        [],
+    ),
+    "acknowledged-publication": (
+        lambda layout: _record(layout, f"{_CHANGE}/state-publication.json", _publication("acknowledged")),
+        "gone",
+        [],
+        [],
+    ),
+    "unreadable-publication": (
+        lambda layout: _record(layout, f"{_CHANGE}/state-publication.json", {"schema_version": 1}),
+        "gone",
+        ["custody-unknown"],
         [],
     ),
     "pending-checkpoint": (

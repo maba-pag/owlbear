@@ -831,12 +831,7 @@ def _scan_changes(delivery: Path, custody: _Custody, window_state: WindowState) 
         claims = _frontier_claims(delivery, change, custody)
         claims += _coordination_claims(delivery, change.name, custody)
         _scan_action_receipts(delivery, change, custody)
-        if (change / "state-publication.json").exists():
-            custody.block(
-                "pending-state-publication",
-                _locator(delivery, change / "state-publication.json"),
-                "a Delivery state publication is pending",
-            )
+        _scan_state_publication(delivery, change / "state-publication.json", custody)
         for attempt_id, role in claims:
             _classify_claim(
                 delivery, change, attempt_id=attempt_id, role=role, custody=custody, window_state=window_state
@@ -845,6 +840,20 @@ def _scan_changes(delivery: Path, custody: _Custody, window_state: WindowState) 
 
 def _locator(delivery: Path, path: Path) -> str:
     return path.relative_to(delivery).as_posix()
+
+
+def _scan_state_publication(delivery: Path, path: Path, custody: _Custody) -> None:
+    """Only a ``pending`` intent blocks; an ``acknowledged`` one records a completed publication."""
+    if not path.exists() and not path.is_symlink():
+        return
+    try:
+        status = _read_json(path).get("status")  # type: ignore[union-attr]
+    except ValueError, AttributeError:
+        status = None
+    if status == "pending":
+        custody.block("pending-state-publication", _locator(delivery, path), "a Delivery state publication is pending")
+    elif status != "acknowledged":
+        custody.block("custody-unknown", _locator(delivery, path), "the state publication intent is unreadable")
 
 
 def _frontier_claims(delivery: Path, change: Path, custody: _Custody) -> list[tuple[str, str]]:
