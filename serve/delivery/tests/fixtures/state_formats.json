@@ -135,9 +135,9 @@
   },
   "migration_journal": {
     "fingerprints": {
-      "owlbear_delivery.state_migration:MigrationJournal": "b6bc53683078044a187e9b474220af1edf117d161bc01444dfa9b312ab91b2bf"
+      "owlbear_delivery.state_migration:MigrationJournal": "7c0a19eee5fe82f1daf74182ec195c1c56c1a8f6cda4050bf4087f5a4fe6f5c4"
     },
-    "version": 1
+    "version": 2
   },
   "package_authority": {
     "fingerprints": {
