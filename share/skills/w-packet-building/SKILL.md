@@ -190,7 +190,7 @@ touching the reviewed head, classify the concrete finding against the admitted t
 | Fix now: implementation defect inside the task boundary | Repair one finding at a time, preserve the rejected commit, rerun affected proof, and obtain fresh exact-commit review. |
 | Return to authority: missing, contradictory, or observably ambiguous Planning or Design | Publish nothing and return with the owning locator, exact current branch HEAD, and required source boundary; do not clean or reset the worktree before normal settlement. |
 | Block for user-owned input: one bounded decision, action, or manual validation is required | Publish nothing and use `BlockDelivery` with a bounded request and the exact current branch HEAD. |
-| No repair: style preference or unsupported concern without a concrete defect | Do not expand the task or silently alter code; the review evidence does not satisfy the challenger contract until it names a concrete boundary and evidence. |
+| No repair: style preference, unsupported concern, or a trigger outside the operating context in `intent.md` | Do not expand the task or silently alter code; record the reason and dispute the finding under `r-challenger-protocol` when it blocks publication. A real defect whose proposed fix is oversized stays a finding: choose the smallest effective repair or authority route. |
 
 Only the first classification creates a repair commit. A deferred or out-of-scope concern is routed
 through the native return or block path when its resolution is required; it is not logged as a second
