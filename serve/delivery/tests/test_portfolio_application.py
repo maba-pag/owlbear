@@ -1605,7 +1605,7 @@ def _attach_engine_publication(application: PortfolioApplication, tmp_path: Path
     return provider, remote
 
 
-def test_continuation_publishes_syncs_finalizes_and_observes_acceptance(tmp_path: Path) -> None:
+def test_continuation_publishes_syncs_finalizes_and_observes_acceptance(tmp_path: Path) -> None:  # noqa: PLR0915 - one journey.
     application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
     runtime = runtimes["change-a"]
     head = coordinator.show("change-a").last_reviewed_commit
@@ -1650,8 +1650,10 @@ def test_continuation_publishes_syncs_finalizes_and_observes_acceptance(tmp_path
     ready = _execute_engine(application, ready_action)
     assert ready.kind == "completed", ready
     assert provider.draft_state_calls == 1
-    waiting = _execute_engine(application, _engine_action(application))
-    assert waiting.kind == "waiting", waiting
+    waiting = application.acquire_change_action(_continuation_request(application))
+    if waiting.kind == "reconciled":
+        waiting = application.acquire_change_action(_continuation_request(application))
+    assert (waiting.kind, waiting.reason_code, waiting.engine_action) == ("human", "merge-blocked", None), waiting
     assert runtime.completion_receipt() is None
     assert _git(remote, "rev-parse", "refs/heads/main") == head
     provider.pull_requests[0] = provider.pull_requests[0].model_copy(
@@ -1663,6 +1665,7 @@ def test_continuation_publishes_syncs_finalizes_and_observes_acceptance(tmp_path
         }
     )
     application._clock = lambda: "2026-08-04T00:00:01Z"
+    application._publication_observation_cache.clear()
     acceptance_action = _engine_action(application)
     accepted = _execute_engine(application, acceptance_action)
     assert accepted.kind == "completed", accepted
@@ -1693,11 +1696,29 @@ def test_engine_mark_ready_replays_lost_response_and_acceptance_waits_without_me
     assert _execute_engine(reopened, action) == result
     assert provider.set_pull_request_draft_state.call_count == 1
     assert coordinator.show("change-a").continuation_action.finished_at is not None
-    waiting_action = _engine_action(application)
+    opened = state["pull_request"]
+    state["pull_request"] = opened.model_copy(
+        update={
+            "state": "closed",
+            "merged": True,
+            "merge_commit_sha": "f" * 40,
+            "merged_at": datetime(2026, 8, 3, tzinfo=UTC),
+        }
+    )
+    application._publication_observation_cache.clear()
+    request = _continuation_request(application)
+    acquired = application.acquire_change_action(request)
+    if acquired.kind == "reconciled":
+        request = _continuation_request(application)
+        acquired = application.acquire_change_action(request)
+    waiting_action = acquired.engine_action
     assert waiting_action.kind == "observe-acceptance"
+    state["pull_request"] = opened
     waiting = _execute_engine(application, waiting_action)
     assert waiting.kind == "waiting", waiting
     assert waiting.reason_code == "merge-approval-required"
+    replayed = application.acquire_change_action(request)
+    assert (replayed.kind, replayed.reason_code, replayed.engine_result) == ("human", "merge-blocked", waiting)
     assert not state["pull_request"].merged
     assert runtime.completion_receipt() is None
     assert _execute_engine(application, waiting_action) == waiting
@@ -2095,9 +2116,7 @@ def test_mark_ready_read_failure_retries_after_backoff_with_new_operation(
     next_action = application.acquire_change_action(_continuation_request(application))
     if next_action.kind == "reconciled":
         next_action = application.acquire_change_action(_continuation_request(application))
-    assert next_action.kind == "acquired"
-    assert next_action.engine_action is not None
-    assert next_action.engine_action.kind == "observe-acceptance"
+    assert (next_action.kind, next_action.reason_code, next_action.engine_action) == ("human", "merge-blocked", None)
 
 
 def test_mark_ready_retry_exhaustion_is_non_actionable_with_diagnostic(tmp_path: Path) -> None:
@@ -2300,9 +2319,16 @@ def test_readiness_projects_recorded_engine_failure_as_contained(tmp_path: Path)
 
 
 def test_readiness_contains_unexecuted_acceptance_observation(tmp_path: Path) -> None:
-    application, runtime, _provider, _state, _head, _state_root = _awaiting_acceptance_fixture(
-        tmp_path, mark_ready=True
+    application, runtime, _provider, state, _head, _state_root = _awaiting_acceptance_fixture(tmp_path, mark_ready=True)
+    state["pull_request"] = state["pull_request"].model_copy(
+        update={
+            "state": "closed",
+            "merged": True,
+            "merge_commit_sha": "f" * 40,
+            "merged_at": datetime(2026, 8, 3, tzinfo=UTC),
+        }
     )
+    application._publication_observation_cache.clear()
     action = _engine_action(application)
 
     assert action.kind == "observe-acceptance"
@@ -2406,8 +2432,7 @@ def test_acceptance_retry_budget_never_infers_explicit_observation(tmp_path: Pat
     application._clock = clock
     for index, seconds in enumerate((0, 1, 3)):
         now = datetime(2026, 8, 4, tzinfo=UTC) + timedelta(seconds=seconds)
-        action = _engine_action(application)
-        assert _execute_engine(application, action).kind == "waiting"
+        assert application.reconcile_awaiting_acceptance(("change-a",))[0].status.value == "waiting"
         episode = RetryLedger(state_root, "change-a").read().episodes[0]
         assert episode.total_attempts == index + 1
         assert episode.explicit_observations == 0
@@ -2416,8 +2441,10 @@ def test_acceptance_retry_budget_never_infers_explicit_observation(tmp_path: Pat
     calls = provider.read_pull_request.call_count
     now += timedelta(days=1)
     stopped = application.acquire_change_action(_continuation_request(application, session_id="another-session"))
+    if stopped.kind == "reconciled":
+        stopped = application.acquire_change_action(_continuation_request(application, session_id="another-session"))
     assert stopped.engine_action is None
-    assert stopped.reason_code == "acceptance-wait"
+    assert stopped.reason_code == "merge-blocked"
     assert provider.read_pull_request.call_count == calls
     with pytest.raises(ValidationError):
         DeliveryContinuationRequest.model_validate(
@@ -2439,7 +2466,8 @@ def test_background_and_explicit_acceptance_share_durable_budget(tmp_path: Path,
         now = start + timedelta(seconds=seconds)
         calls = provider.read_pull_request.call_count
         if mixed and index != 1:
-            assert _execute_engine(application, _engine_action(application)).kind == "waiting"
+            with pytest.raises(DeliveryAcceptanceWaitingError):
+                application.observe_acceptance("change-a")
         else:
             assert application.reconcile_awaiting_acceptance(("change-a",))[0].status.value == "waiting"
         assert provider.read_pull_request.call_count == calls + 1
@@ -2453,16 +2481,19 @@ def test_background_and_explicit_acceptance_share_durable_budget(tmp_path: Path,
     reopened._draft_pull_request_publisher = application._draft_pull_request_publisher
     now = start + timedelta(days=1)
     reopened._clock = clock
+    request = _continuation_request(reopened)
     calls = provider.read_pull_request.call_count
-    assert reopened.acquire_change_action(_continuation_request(reopened)).engine_action is None
-    with pytest.raises(DeliveryAcceptanceWaitingError):
-        reopened.observe_acceptance("change-a")
-    assert provider.read_pull_request.call_count == calls + 1
-    episode = RetryLedger(state_root, "change-a").read().episodes[0]
-    assert (episode.total_attempts, episode.explicit_observations, episode.reset_count) == (3, 1, 0)
-    with pytest.raises(DeliveryAcceptanceWaitingError):
-        reopened.observe_acceptance("change-a")
-    assert provider.read_pull_request.call_count == calls + 1
+    assert reopened.acquire_change_action(request).engine_action is None
+    assert reopened.reconcile_awaiting_acceptance(("change-a",))[0].status.value == "waiting"
+    assert provider.read_pull_request.call_count == calls
+    for explicit in (1, 2):
+        with pytest.raises(DeliveryAcceptanceWaitingError):
+            reopened.observe_acceptance("change-a")
+        assert provider.read_pull_request.call_count == calls + explicit
+        episode = RetryLedger(state_root, "change-a").read().episodes[0]
+        assert (episode.total_attempts, episode.explicit_observations, episode.reset_count) == (3, explicit, 0)
+        assert reopened.reconcile_awaiting_acceptance(("change-a",))[0].status.value == "waiting"
+        assert provider.read_pull_request.call_count == calls + explicit
 
 
 def acceptance_budget_case(tmp_path: Path, *, exhausted: bool):
@@ -10088,13 +10119,14 @@ def test_finalization_invalidates_provider_pull_request_head_drift(tmp_path: Pat
     assert provider.set_pull_request_draft_state.call_count == 3
 
 
-def _awaiting_acceptance_fixture(
+def _awaiting_acceptance_fixture(  # noqa: PLR0913 - shared fixture keeps each independent control.
     tmp_path: Path,
     *,
     checks: tuple[PublicationCheck, ...] | Callable[[str], tuple[PublicationCheck, ...]] = (),
     mark_ready: bool = True,
     record_publication_identity: bool = True,
     clock: Callable[[], str] = lambda: "2026-08-04T00:00:00Z",
+    sync_target: bool = False,
 ):
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
@@ -10103,6 +10135,10 @@ def _awaiting_acceptance_fixture(
     )
     runtime = runtimes["change-a"]
     exact_head = coordinator.show("change-a").last_reviewed_commit
+    if sync_target:
+        _attach_local_target(application, tmp_path)
+        application.sync_change_with_current_target("change-a", "sync-before-finalization")
+        exact_head = _commit_local_descendant(coordinator.show("change-a"), "merge-offer.txt")
     application.finalize_change(
         "change-a",
         _finalization_request("change-a", exact_head),
@@ -10797,9 +10833,9 @@ def test_review_repair_fences_external_head_mutations_before_workspace_side_effe
 
 
 def test_review_repair_commit_can_be_refinalized_published_and_marked_ready(tmp_path: Path) -> None:
-    application, runtime, provider, state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
-    _attach_local_target(application, tmp_path)
-    application.sync_change_with_current_target("change-a", "before-review-repair")
+    application, runtime, provider, state, exact_head, _state_root = _awaiting_acceptance_fixture(
+        tmp_path, sync_target=True
+    )
     invalidation = application.prepare_review_repair("change-a")
     stopped = application.acquire_change_action(_continuation_request(application))
     assert stopped.kind == "reconciled"
@@ -11354,16 +11390,8 @@ def test_observe_acceptance_completes_once_and_replays_without_provider_io(  # n
     assert receipt.accepted_merge_commit == "f" * 40
     assert receipt.check_observation_ids
     assert receipt.review_receipt_ids == (finalization.review.review_id,)
-    retained = application.list_retained_change_worktrees()
-    assert len(retained) == 1
-    assert retained[0].cleanup_eligible is True
-    assert retained[0].cleanup_blocked_reason is None
-    detail = application.show_work_item_view("change-a", "publication")
-    change = application.get_change("change-a")
-    assert detail.publication.worktree_cleanup == change.detail.publication.worktree_cleanup
-    assert detail.publication.worktree_cleanup.eligible is True
-    assert detail.publication.worktree_cleanup.completion_id == receipt.completion_id
-    application.cleanup_change_worktree("change-a", receipt.completion_id)
+    assert application.list_retained_change_worktrees() == ()
+    assert application.cleanup_change_worktree("change-a", receipt.completion_id).change_id == "change-a"
     assert application.show_work_item_view("change-a", "publication").publication.worktree_cleanup is None
     assert application.get_change("change-a").detail.publication.worktree_recovery is None
     user_checkout_before.assert_unchanged(repository)

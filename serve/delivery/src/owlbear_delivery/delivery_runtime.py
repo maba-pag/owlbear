@@ -1659,6 +1659,7 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
         finalization = frontier.finalization
         invalidation = frontier.finalization_invalidation
         ready = frontier.ready
+        proof = frontier.target_sync_receipt
         if finalization is not None and finalization.exact_head != receipt.merged_head:
             invalidation = DeliveryFinalizationInvalidationReceipt.create(
                 DeliveryFinalizationInvalidation(
@@ -1669,6 +1670,10 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
                     invalidated_at=synced_at,
                 )
             )
+            finalization = None
+            ready = None
+        elif finalization is not None and (proof is None or proof.target_head != receipt.target_head):
+            # U3(a) strict proof: a new target needs fresh proof even when the Change head is unchanged.
             finalization = None
             ready = None
 

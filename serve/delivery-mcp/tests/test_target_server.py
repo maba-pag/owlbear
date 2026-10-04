@@ -163,7 +163,7 @@ async def test_registered_direct_mark_ready_lost_to_pause_is_a_typed_no_effect_r
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("exhausted", [False, True])
-async def test_registered_explicit_acceptance_is_one_bounded_read(tmp_path: Path, *, exhausted: bool) -> None:
+async def test_registered_explicit_acceptance_reads_once_per_invocation(tmp_path: Path, *, exhausted: bool) -> None:
     application, provider, ledger, restart = acceptance_budget_case(tmp_path, exhausted=exhausted)
     calls = provider.read_pull_request.call_count
     async with Client(assemble_target_server(application)) as client:
@@ -173,11 +173,11 @@ async def test_registered_explicit_acceptance_is_one_bounded_read(tmp_path: Path
     assert first.is_error
     assert second.is_error
     assert "ERR_DELIVERY_ACCEPTANCE_WAITING" in first.content[0].text
-    assert ("acceptance-wait" if exhausted else "retry-backoff") in second.content[0].text
-    assert provider.read_pull_request.call_count == calls + int(exhausted)
+    assert ("still open and unmerged" if exhausted else "retry-backoff") in second.content[0].text
+    assert provider.read_pull_request.call_count == calls + 2 * int(exhausted)
     episode = ledger.read().episodes[0]
     assert (episode.total_attempts, episode.explicit_observations, episode.reset_count) == (
-        (3, 1, 0) if exhausted else (1, 0, 0)
+        (3, 2, 0) if exhausted else (1, 0, 0)
     )
 
 
@@ -805,6 +805,7 @@ async def test_registered_loader_replays_and_contains_interrupted_engine_rows(  
                 "merged_at": datetime(2026, 8, 4, tzinfo=UTC),
             }
         )
+        application._publication_observation_cache.clear()  # noqa: SLF001
         basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
     runtime = application._runtimes["change-a"]  # noqa: SLF001
     sibling_frontier = application._runtimes["change-c"].frontier_bytes()  # noqa: SLF001
@@ -1065,6 +1066,7 @@ async def test_registered_loader_contains_unknown_custody_without_repeating_effe
                 "merged_at": datetime(2026, 8, 4, tzinfo=UTC),
             }
         )
+        application._publication_observation_cache.clear()  # noqa: SLF001
         basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
     sibling_frontier = application._runtimes["change-c"].frontier_bytes()  # noqa: SLF001
     sibling_publication = application._runtimes["change-c"].checkpoint_publication_state()  # noqa: SLF001

@@ -200,6 +200,35 @@ class _LifecycleMixin:
             branch_head=receipt.branch_head,
         )
 
+    def _cleanup_completed_worktree_best_effort(
+        self, change_id: str, runtime: DeliveryRuntime, completion_id: str
+    ) -> None:
+        """D10: clean an eligible completed worktree under the held lock; attention stays computed."""
+        if self._coordinator.executing_continuation(change_id):
+            return  # Engine custody keeps its worktree until its result is published; the sweep retries.
+        try:
+            self._cleanup_change_worktree_locked(change_id, runtime, completion_id)
+        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+            _logger.info("Completed Change %s worktree was retained: %s", change_id, exc)
+
+    def _sweep_completed_change_worktrees(self) -> None:
+        """Retry cleanup of each completed Change at most once per controller process (D10)."""
+        for change_id, runtime in sorted(self._runtimes.items()):
+            if change_id in self._completed_cleanup_swept:
+                continue
+            try:
+                completion = runtime.completion_receipt()
+            except OSError, RuntimeError, ValueError:
+                continue
+            if completion is None:
+                continue
+            self._completed_cleanup_swept.add(change_id)
+            try:
+                with locked_roots((self._checkpoint_lock_root(change_id),), blocking=False):
+                    self._cleanup_completed_worktree_best_effort(change_id, runtime, completion.completion_id)
+            except BlockingIOError:
+                self._completed_cleanup_swept.discard(change_id)
+
     def cleanup_abandoned_change_worktree(self, change_id: str) -> DeliveryChangeWorktreeCleanup:
         """Clean one abandoned Change worktree without reopening its terminal state."""
         runtime = self._runtime(change_id, for_mutation=True)

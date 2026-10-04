@@ -305,7 +305,7 @@ def test_awaiting_merge_and_acceptance_wait_are_ready_to_merge(tmp_path: Path) -
 
     _first, _provider, _ledger, restart = acceptance_budget_case(tmp_path / "exhausted", exhausted=True)
     readiness = restart().get_change("change-a").readiness
-    assert (readiness.reason_code, readiness.progress) == ("acceptance-wait", "ready-to-merge")
+    assert (readiness.reason_code, readiness.progress) == ("merge-blocked", "ready-to-merge")
 
 
 def test_provider_backoff_waits_for_service(tmp_path: Path) -> None:
@@ -593,6 +593,11 @@ _EXPECTED: dict[str, tuple[str, WorkItemActionKind | None, bool, str | None, Del
     "retry-containment": ("blocked", None, False, None, None),
     "retry-ledger-unavailable": ("unavailable", None, False, None, None),
     "worker-stall-wait": ("waiting", None, False, None, "waiting-for-chat"),
+    "merge-approval-required": ("waiting", None, False, None, "ready-to-merge"),
+    "merge-checking": ("waiting", None, False, None, "waiting-for-service"),
+    "merge-blocked": ("blocked", None, False, None, "needs-decision"),
+    "checks-running": ("waiting", None, False, None, "waiting-for-service"),
+    "provider-unavailable": ("waiting", None, False, None, "waiting-for-service"),
 }
 
 
