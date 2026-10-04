@@ -10,8 +10,9 @@
 > start-site inventory and K3 fences named here are now on `dev`. Round 4 merged `origin/dev` `2061047af` (N02-C,
 > PR #355, merged: `remote_git.py` and the bounded `ChangeBranchPublisher`), re-read here. Round 5 merged
 > `origin/dev` `bff93d73e`: #360 is merged as `d79d20426` at exactly `c6bcbbc25` (the pin below), plus the N06
-> plan (#359); `supersede_publication` and the branch and draft-PR publishers were re-read there.
-> **Status:** draft for the plan gate; revised after Sol plan gate rounds 1–5 ([§6](#6-round-dispositions)).
+> plan (#359); `supersede_publication` and the branch and draft-PR publishers were re-read there. Round 6
+> found `origin/dev` unchanged and re-read the draft-PR publisher's merged-predecessor refusal (`:1053`).
+> **Status:** draft for the plan gate; revised after Sol plan gate rounds 1–6 ([§6](#6-round-dispositions)).
 > Product code is unchanged by this phase. U1–U3 are recorded engineering decisions of 2026-10-03
 > ([1.13](#113-decisions)).
 > Dependencies (re-pinned in round 4): **N03 (as amended by #360)**: the [N03 plan](delivery-n03-plan.md) with
@@ -580,24 +581,18 @@ A4 may already have installed the revised authority and cleared `ready` and `fin
    (`DeliveryRuntime.capture_publication_attention`, `delivery_runtime.py:596`; diagnostics
    `revision-merged-after-activation:<operation_id>` and `merged-head:<M>`; the bound PR identity).
 4. *Resolution (user, existing routes; D46).* The Change never completes from M: `observe_acceptance`
-   refuses without finalization (`portfolio_application.py:692`), which A4 cleared. Publication attention
-   admits `set_change_intent(abandon)` with successor guidance, and `supersede_publication`
-   (`application_publication.py:586`: successor branch and PR from the child, then state) only when its
-   unchanged predicate holds: it passes the provider publication receipt's `head_sha`, which is immutable and
-   names the head at which that publication was created (later checkpoints and `return_to_draft` never add or
-   rewrite a receipt, `draft_pull_request.py:144-164`, `:656-697`, `:829-894`), and
-   `_validate_supersession_predecessor` (`change_publication.py:284`) refuses unless the remote predecessor
-   branch is exactly at that head (moved: "changed before supersession"; deleted after merge: "missing").
-   Step 3 evaluates that predicate with one `ls-remote` read (no write) and records diagnostic
-   `supersession-unavailable:<moved|missing>` when it fails; the diagnostic only selects the offered route
-   (never authority; `supersede_publication` keeps its own check). With it, readiness offers abandonment
-   alone, and the user text states that the PR was merged at M without the activated revision, that
-   supersession needs the published branch at its publication head, and that the revision continues as a
-   successor Change citing this one. A merge at an authorized foreign head F fails the predicate (the remote
-   holds F, not the receipt's head), as does, on current `dev`, the usual case of a Change checkpointed after
-   its publication was created; no prior receipt, foreign pin or merged branch is rewritten. Until a published
-   snapshot carries the `local.json` digests the loader accepts the local revised authority through the
-   journal (§1.6 Loader).
+   refuses without finalization (`portfolio_application.py:692`), which A4 cleared. Step 3 also records
+   diagnostic `supersession-unavailable:merged-predecessor` (it only selects the offered route, never
+   authority), and publication attention offers only `set_change_intent(abandon)` with successor guidance: the
+   user text states that the PR was merged at M without the activated revision, that a merged pull request
+   cannot be superseded, and that the revision continues as a successor Change citing this one. Supersession
+   is never offered after a merge, whatever the remote predecessor branch holds: the draft-PR publisher
+   refuses every merged predecessor (`draft_pull_request.py:1053`), and `_publish_supersession`
+   (`application_publication.py:751-764`) pushes the successor branch before that provider call, so an offer
+   could leave a published successor branch without a pull request. `supersede_publication` is unchanged
+   (D46); a direct call keeps its `dev` behavior, which N05 owns (N05 G14). No prior receipt, foreign pin or
+   merged branch is rewritten. Until a published snapshot carries the `local.json` digests the loader accepts
+   the local revised authority through the journal (§1.6 Loader).
 
 **Generation history (D20).** Today `revisions/<contract digest>/` is written with create participants
 (`delivery_admission.py:425-429`); a second departure from the same contract writes different frontier bytes to
@@ -827,7 +822,7 @@ finalized or ready Change instead, so no nested literal changes.
 | Engine actions `reconcile-revision-activation`, `reconcile-revision-snapshot` | A2b | Selected before every other action of the Change; executable through `acquire_change_action` / `execute_change_action` under hold exception E3; the action carries `revision_operation_id` |
 | `preview_revision_impact(change_id, history_ref=None)` | B | Impact view and digest; lists eligible history refs (generation and legacy) |
 | `show_revision_context(change_id)` | C | Active proposal, candidate, hold, criteria with N03 identities, per-outcome stage, task and evidence history, current blocks and requests, Design-return context, activation state |
-| Readiness reasons `revision-hold`, `revision-activation-pending` (details `revision-foreign-head` with F, `revision-merged-after-effects` with M), `revision-snapshot-stale`, `revision-remote-activation-pending` (details `remote-activation-local-divergence` with paths and, under `replacing`, the `replacement_id` and its E7 route; `remote-activation-local-confirmations`, `remote-activation-origin-published`); publication-attention diagnostic `supersession-unavailable` (abandonment-only route and successor text, D46) | A1, A2b, A2b, A2b | Each with TypeScript mirror, rendering, component test and parity (R16) |
+| Readiness reasons `revision-hold`, `revision-activation-pending` (details `revision-foreign-head` with F, `revision-merged-after-effects` with M), `revision-snapshot-stale`, `revision-remote-activation-pending` (details `remote-activation-local-divergence` with paths and, under `replacing`, the `replacement_id` and its E7 route; `remote-activation-local-confirmations`, `remote-activation-origin-published`); publication-attention diagnostic `supersession-unavailable:merged-predecessor` (abandonment-only route and successor text; supersession never offered, D46) | A1, A2b, A2b, A2b | Each with TypeScript mirror, rendering, component test and parity (R16) |
 | Error | A1–B | `DeliveryRevisionError(DeliveryRuntimeConflictError)`, code `ERR_DELIVERY_REVISION`, `reason` in: `change-terminal`, `change-paused`, `change-attention`, `review-repair-open`, `revision-hold-absent`, `candidate-stale`, `base-stale`, `contract-mismatch`, `frontier-stale`, `revision-custody-active`, `revision-drain-pending`, `revision-custody-retained`, `revision-workspace-unclean`, `revision-preservation-unsupported`, `revision-preservation-collision` (detail `ignore-rule-change` for D34), `revision-remote-head-moved`, `foreign-head-stale`, `revision-merged-after-effects`, `snapshot-signing-failed`, `snapshot-child-lost`, `handoff-disposition-required`, `design-return-lineage-changed`, `activation-pending`, `operation-conflict`, `revision-requires-activation`, `revision-snapshot-stale`, `revision-remote-activation-pending`, `remote-child-mismatch`, `reassess-requires-unfinalized`, `reassess-history-invalid`, `applicability-review-required`, `applicability-review-incomplete`, `applicability-review-stale`, `applicability-confirmation-version-changed`, `confirmation-unresolved`, `confirmation-not-applicable`, `confirmation-scope-invalid`, `reviewer-not-independent`. `snapshot-signing-failed`, `snapshot-child-lost` and `revision-workspace-unclean` also surface from the first-checkpoint snapshot (A2a) as workspace failures with the same reason |
 | MCP | each phase | Strict models for every new or changed tool in the phase that introduces it; error code mapping in `target_server.py` |
 | HTTP / Cockpit | C | `GET /api/changes/{id}/revision` (revision context); **Change requirements** on Change detail and group: explanatory view plus copy of `/design <change-id>` (N09 D6 copy pattern); hold and activation states rendered |
@@ -847,7 +842,7 @@ identities, `applies_to`, confirmation ledger, `resolve_confirmation`, `confirma
 `Resolve` registration and question rendering, the shared `consent_generation` owner, and the L-row ledger
 replay; N02-C `run_remote_git` and `classify_write_readback` (`remote_git.py`) and `ChangeBranchPublisher`
 (`change_publication.py`: lock, reservation, operation store, readback; one new entry, D42);
-`capture_publication_attention` and `supersede_publication` (D43);
+`capture_publication_attention` (D43; `supersede_publication` unchanged and not offered after a merge, D46);
 the provider's `return_to_draft` draft-state operation (`ReturnChangePullRequestToDraft`); `FinalizationReportStore`
 retire; `DeliveryFinalizationInvalidationReceipt`; the N02 registry, `delivery-migrate`, `delivery-lc`;
 `Client(assemble_target_server(...))`, the Cockpit HTTP client and the E2E stack.
@@ -1033,11 +1028,10 @@ Added for Sol plan gate round 4 (§6):
   path) and `supersede` (a successor branch and PR for a head the user chose to replace).
 - **D43 Merge after effects is contained, not superseded** (finding 5). I3's exception stays pre-effect.
   Afterwards the activation stops remote writes, finishes locally and releases into the existing publication
-  attention, whose existing routes (`supersede_publication`, abandonment) resolve the merged PR (narrowed by
-  D46). Rejected:
-  ending `superseded-by-merge` after A4 (the merged head never carried the revised authority, and A4 already
-  cleared finalization) and pushing the child to the merged PR's branch (it breaks the supersession
-  predecessor check, `_validate_supersession_predecessor`).
+  attention, which resolves the merged PR by abandonment and a successor Change only (narrowed by D46 in
+  rounds 5 and 6). Rejected: ending `superseded-by-merge` after A4 (the merged head never carried the revised
+  authority, and A4 already cleared finalization) and pushing the child to the merged PR's branch (a merged
+  PR cannot carry new work, and the push moves the predecessor branch).
 - **D44 N03's shared consent generation** (re-pin to #360 `c6bcbbc25`): N04 registers two uses with its own
   bindings and adds no family; supersedes D36's own family and closes G19.
 
@@ -1048,15 +1042,18 @@ Added for Sol plan gate round 5 (§6):
   record (re-classified in E7's start transaction), the Change is visible with the paths and route, and the
   next startup resumes the replay. Rejected: refusing every start under `replacing` (the replay could never
   finish) and an unbound E7 (it would admit containment for another replacement or a stale divergence).
-- **D46 Merged-after-effects resolves by abandonment unless supersession's predicate holds** (finding 2;
-  narrows D43). Option (b): `supersede_publication` is unchanged and offered only when the remote predecessor
-  branch is at the publication receipt's head; otherwise the route is abandonment plus a successor Change.
-  Rejected: option (a), a foreign-predecessor supersession contract, because it needs a new branch- and
-  draft-PR-publisher predecessor contract bound to per-head authorization records, not a small predicate,
-  for a case that requires an outside actor to mark the demoted draft PR ready and merge it inside one
-  activation window, after another outside push (GitHub refuses to merge a draft PR); no live record shows
-  it. The same predicate also fails, on current `dev`, for most non-foreign merges after effects, whose
-  publication receipt predates later checkpoints; widening supersession for them is outside N04.
+- **D46 Merged-after-effects resolves by abandonment only** (round 5 finding 2, round 6 finding 1; narrows
+  D43). `supersede_publication` is unchanged and never offered after a merge; the route is abandonment plus a
+  successor Change, with diagnostic `supersession-unavailable:merged-predecessor`. Round 6 removed round 5's
+  predicate-gated supersession: the draft-PR publisher refuses every merged predecessor
+  (`draft_pull_request.py:1053`), so supersession cannot succeed for any merged PR, and
+  `_publish_supersession` pushes the successor branch before that refusal, which could leave a published
+  successor branch without a pull request. Rejected: option (a), a foreign-predecessor supersession contract
+  (round 5: a new branch- and draft-PR-publisher predecessor contract bound to per-head authorization
+  records, for a case needing an outside actor to mark the demoted draft PR ready and merge it inside one
+  activation window after another outside push; no live record shows it); and merged-predecessor
+  supersession or a provider check before the successor push, which change publication supersession, owned
+  by N05 publication continuity (N05 G14).
 
 #### U1 — May reviewed applicability attribute legacy evidence?
 
@@ -1542,17 +1539,16 @@ on top of it.
     fresh-process restart; A5 observes the merge: `merge-observed.json` written, no `superseded-by-merge`, no
     branch push, lease push, provider call or state publication; the generation record and revised authority
     are unchanged; `result.json` `merged-after-effects` and publication attention with the merged head;
-    `observe_acceptance` refuses and the Change is not completed. Supersession (finding 2 of round 5): in a
-    fixture whose remote branch is still at the publication receipt's head, no diagnostic is recorded and
-    `supersede_publication` publishes the child on `owlbear/change/<id>+s1` and the state, and a second clone
-    loads the revised authority. Variants: merged after A3 before A4 (A4 completes; same result); merged at
-    an authorized foreign head F before the replacement push, a Change checkpointed after its publication was
-    created, and a predecessor branch deleted after the merge → no lease push, diagnostic
-    `supersession-unavailable` (`moved`, `moved`, `missing`), readiness offers abandonment only with the
-    successor text, `supersede_publication` refuses with no remote or provider write, the publication
-    receipt, `foreign-authorizations/<F>.json`, the foreign pin and the merged branch keep their bytes, and
-    `set_change_intent(abandon)` succeeds; merged observed at A1b before any Git effect →
-    `superseded-by-merge` with the old authority (I3 kept).
+    `observe_acceptance` refuses and the Change is not completed. No supersession for a merged predecessor
+    (finding 1 of round 6): in a fixture whose remote branch is still at the publication receipt's head,
+    diagnostic `supersession-unavailable:merged-predecessor` is recorded, readiness and publication attention
+    offer abandonment only with the successor text and no `supersede_publication` action, no
+    `owlbear/change/<id>+s1` branch or successor PR exists, and `set_change_intent(abandon)` succeeds.
+    Variants: merged after A3 before A4 (A4 completes; same result); merged at an authorized foreign head F
+    before the replacement push, a Change checkpointed after its publication was created, and a predecessor
+    branch deleted after the merge → no lease push, the same diagnostic and abandonment-only route, and the
+    publication receipt, `foreign-authorizations/<F>.json`, the foreign pin and the merged branch keep their
+    bytes; merged observed at A1b before any Git effect → `superseded-by-merge` with the old authority (I3).
   - `remote-child`: T's tree differs from the computed child → `remote-child-mismatch`; the PR is merged →
     `change-attention`; both before the intent.
   - A remote Change branch not at the expected head at A0 → `revision-remote-head-moved` before the intent;
@@ -1816,12 +1812,15 @@ Premises found false or incomplete on `ac3bf23f9`:
    `supersede_publication` passes the immutable publication receipt's creation head, which
    `_validate_supersession_predecessor` requires on the remote branch (`change_publication.py:284`), so it
    cannot resolve a merge at a foreign head nor, usually, a merge after later checkpoints (D46).
+10. Found in Sol round 6 (§6): the draft-PR publisher refuses every merged predecessor
+    (`draft_pull_request.py:1053`) after `_publish_supersession` has pushed the successor branch, so no merged
+    PR can be superseded and an attempt can leave a successor branch without a pull request (D46; N05 G14).
 
 ## 4. Progress
 
 | Phase | PR | Exact head | Proof | Challenges | Status |
 | --- | --- | --- | --- | --- | --- |
-| N04-P | #358 | — | Probes P1–P9; round-1 source re-reads (§6); round-2 dependency re-pins and source re-reads, P10 Git hook and signing probe (§6); round-3 merge of `origin/dev` `141795676`, #360 re-pin `f4d09d774` and source re-reads (§6); round-4 merge of `origin/dev` `2061047af` (N02-C), #360 re-pin `c6bcbbc25` and source re-reads of the branch publisher, remote Git, loader head check, acceptance and supersession (§6); round-5 merge of `origin/dev` `bff93d73e` (#360 merged at `c6bcbbc25`, #359) and source re-reads of `supersede_publication`, `_validate_supersession_predecessor` and the draft-PR publication receipt (§6) | Sol plan round 1: revision-required (10 findings: 8 high, 2 medium; all accepted, none rebutted) → revised; Sol plan round 2: revision-required (round-1 findings 5, 6, 7, 9, 10 resolved; 1–4 and 8 incomplete as 8 findings: 5 high, 3 medium; all accepted, none rebutted) → revised, A2 split; Sol plan round 3: revision-required (9 findings: 6 high, 3 medium; all accepted, none rebutted; G18 settled) → revised; Sol plan round 4: revision-required (5 high; all accepted, none rebutted; shared consent generation adopted, G19 closed) → revised; Sol plan round 5: revision-required (2 high; both accepted, none rebutted; option (b) chosen for finding 2) → revised | in review |
+| N04-P | #358 | — | Probes P1–P9; round-1 source re-reads (§6); round-2 dependency re-pins and source re-reads, P10 Git hook and signing probe (§6); round-3 merge of `origin/dev` `141795676`, #360 re-pin `f4d09d774` and source re-reads (§6); round-4 merge of `origin/dev` `2061047af` (N02-C), #360 re-pin `c6bcbbc25` and source re-reads of the branch publisher, remote Git, loader head check, acceptance and supersession (§6); round-5 merge of `origin/dev` `bff93d73e` (#360 merged at `c6bcbbc25`, #359) and source re-reads of `supersede_publication`, `_validate_supersession_predecessor` and the draft-PR publication receipt (§6); round-6 re-read on `bff93d73e` of the draft-PR merged-predecessor refusal (`draft_pull_request.py:1053`) and the branch-before-provider order of `_publish_supersession` (§6) | Sol plan round 1: revision-required (10 findings: 8 high, 2 medium; all accepted, none rebutted) → revised; Sol plan round 2: revision-required (round-1 findings 5, 6, 7, 9, 10 resolved; 1–4 and 8 incomplete as 8 findings: 5 high, 3 medium; all accepted, none rebutted) → revised, A2 split; Sol plan round 3: revision-required (9 findings: 6 high, 3 medium; all accepted, none rebutted; G18 settled) → revised; Sol plan round 4: revision-required (5 high; all accepted, none rebutted; shared consent generation adopted, G19 closed) → revised; Sol plan round 5: revision-required (2 high; both accepted, none rebutted; option (b) chosen for finding 2) → revised; Sol plan round 6: revision-required (1 high; accepted, none rebutted; supersession withdrawn for every merged predecessor, N05 G14 recorded) → revised | in review |
 | N04-A1 | — | — | — | — | — |
 | N04-A2a | — | — | — | — | — |
 | N04-A2b | — | — | — | — | — |
@@ -1850,7 +1849,7 @@ Premises found false or incomplete on `ac3bf23f9`:
 | G15 | N03's ledger validation is structural (digest, append-only, ≤ 256, scope well-formed) and accepts an entry whose scope names candidate criterion versions and whose request is not in a binding | N03-A not merged; N03 §1.5 does not state whether the ledger checks scope against the admitted contract | N03 §1.5, I10, L row | N04-B start (re-check; if N03 validates scope against the active contract, the plan is revised before B) | N04-B start |
 | G16 | `_MAX_DESIGN_RETURN_WALK_ENTRIES` admits realistic retained worktrees | The bound is fixed at A2b start from the largest supported fixture | D03 bounds (`_MAX_PRESERVED_PATHS` = 256, file 16 MiB, total 64 MiB) | N04-A2b start | N04-A2b merge |
 | G17 | Whether Cockpit may capture candidate-scoped confirmations | N03 U2 is an open user decision | N03 U2 | User (N03 U2) | Nothing in N04-B; N04-C Cockpit copy only |
-| G18 | An activation whose A1b or A5 observes a foreign Change head after the intent has a recovery route | Settled in design in round 3 (D35, §1.6 Foreign Change head): observe and journal, user-only authorization under E10 with a consent generation, local pin, observed-head demotion and a lease push; round 4 adds the restart-safe loader state (D40), per-head records and the authorization-bound publisher entry (D42) and merge containment (D43); round 5 resolves a merge after effects by abandonment whenever supersession's unchanged predicate fails, including every merge at a foreign head (D46); not yet executed | §3.3 foreign-head scenarios | N04-A2b | N04-A2b merge |
+| G18 | An activation whose A1b or A5 observes a foreign Change head after the intent has a recovery route | Settled in design in round 3 (D35, §1.6 Foreign Change head): observe and journal, user-only authorization under E10 with a consent generation, local pin, observed-head demotion and a lease push; round 4 adds the restart-safe loader state (D40), per-head records and the authorization-bound publisher entry (D42) and merge containment (D43); rounds 5 and 6 resolve every merge after effects by abandonment and a successor Change, with supersession never offered (D46); not yet executed | §3.3 foreign-head scenarios | N04-A2b | N04-A2b merge |
 | G19 | Closed in round 4. The sealing premise is moot: N03 D13 *Single use* (#360 `c6bcbbc25`) carries `generation_id` in the rendered question, which the SDK boundary matches before applying an answer, and N04 uses that shared owner (D44) | — | N03 D13 *Single use*, I11 | Existence of the owner is G1 | Nothing |
 
 ## 6. Round Dispositions
@@ -1934,3 +1933,11 @@ broader scope.
 | --- | --- | --- | --- | --- |
 | 1 | HIGH: the `replacing` marker forbids the containment its replay requires | Confirmed from the plan text: D41 admitted no start under `replacing`, while (i) step 2 and the replacement restart proof contained `revision-workspace-unclean` and named E7 as the route | Accepted | §1.5 E7 (bound to `replacement_id` and a re-classified divergence record), Marker permissions `replacing` row, inventory note; §1.6 (i) step 2 (create-only divergence record) and the `replacing` paragraph (visible intermediate state, detail with paths and `replacement_id`, E7 route, resume at the next startup); §1.8 `remote_activation_replacement`; §1.9 readiness detail; D45; §3.3 marker-state and replacement restart tests |
 | 2 | HIGH: existing supersession cannot resolve a merge at an authorized foreign head | Confirmed on `bff93d73e`: `_publish_supersession` passes `context.predecessor.head_sha` (`application_publication.py:754-755`), the immutable provider receipt's creation head (`draft_pull_request.py:144-164`); `return_to_draft` writes only draft-state records (`:656-697`) and summaries never add receipts (`:829-894`); `_validate_supersession_predecessor` (`change_publication.py:284-299`) refuses unless the remote predecessor branch is exactly at that head. Broader: the same predicate fails for most non-foreign merges after effects (a Change checkpointed after its publication was created) and for a branch deleted after the merge | Accepted; option (b) | §1.6 Merge after effects step 4 (predicate read at release, `supersession-unavailable` diagnostic, abandonment-only route and successor text; supersession unchanged and offered only when its predicate holds); §1.9 diagnostic; D43 note, D46 (option (a) rejected, frequency stated); §3.3 falsifier variants; §3.7 item 9; G18 |
+
+Sol plan gate round 6 (on `d4e936036`): `revision-required`, 1 finding (high); D45 and D46's moved and
+missing variants were resolved. `origin/dev` was still `bff93d73e`, so nothing was merged. The premise was
+re-read in source on lane D. It was not rebutted; it was accepted with a broader scope, recorded for N05.
+
+| # | Finding | Premise check | Disposition | Plan change |
+| --- | --- | --- | --- | --- |
+| 1 | HIGH: D46's remaining supersession success path is unimplementable | Confirmed on `bff93d73e`: `_validate_predecessor_pull_request` refuses "merged predecessor pull request cannot be superseded" for every merged predecessor (`draft_pull_request.py:1053-1054`), so the round-5 positive scenario cannot succeed; `_publish_supersession` runs `branch_publisher.supersede` (`application_publication.py:751-763`; predecessor check before the successor push, `change_publication.py:255-256`) before `provider_publisher.supersede` (`:764`), so an offered supersession could publish the successor branch without a successor PR. Broader (structural; frequency unmeasured): the receipt's creation `head_sha` also makes a moved or deleted predecessor fail the Git check, so supersession after a merge or a later checkpoint is a publication-continuity limitation outside N04 | Accepted | §1.6 Merge after effects step 4 (abandonment only for every merged-after-effects case, diagnostic `supersession-unavailable:merged-predecessor`, no predicate read); §1.9 diagnostic; §1.10; D43, D46; §3.3 supersession-success scenario replaced by a not-offered scenario, variants on the same route; §3.7 item 10; G18; header; N05 G14 (one gap row in the [N05 plan](delivery-n05-plan.md#5-verification-gaps)) |
