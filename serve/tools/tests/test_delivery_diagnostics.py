@@ -22,6 +22,7 @@ from owlbear_delivery.change_workspace import ChangeContinuationAction, ChangeDi
 from owlbear_delivery.delivery_admission import DeliveryAdmissionReceipt
 from owlbear_delivery.delivery_runtime import (
     CompletedOutcomeRepairReceipt,
+    DeliveryCommandResult,
     DeliveryObservation,
     DeliveryObservationReceipt,
     DeliveryPendingStatePublication,
@@ -69,14 +70,14 @@ def _root(tmp_path: Path) -> Path:
         '{"schema_version":2,"remote":"origin","target_branch":"dev","github_repository":"safe/project"}\n',
         encoding="utf-8",
     )
-    (delivery / "runtime/format.json").write_text('{"format":1}\n', encoding="utf-8")
+    (delivery / "runtime/format.json").write_text('{"format":2}\n', encoding="utf-8")
     return tmp_path
 
 
 def _add_change_authority(root: Path, change_id: str) -> Path:
     change = root / ".owlbear/delivery/runtime/changes" / change_id
     change.mkdir(parents=True, exist_ok=True)
-    (change / "frontier.json").write_bytes(b'{"schema_version":18,"bindings":[]}\n')
+    (change / "frontier.json").write_bytes(b'{"schema_version":19,"bindings":[]}\n')
     coordination = root / ".owlbear/delivery/runtime/coordination/changes" / f"{change_id}.json"
     coordination.write_text(
         json.dumps({"schema_version": 2, "change_id": change_id}) + "\n",
@@ -84,7 +85,7 @@ def _add_change_authority(root: Path, change_id: str) -> Path:
     )
     snapshot = root / ".owlbear/delivery/state" / change_id
     snapshot.mkdir(parents=True)
-    (snapshot / "snapshot.json").write_bytes(b'{"schema_version":2,"frontier":{}}\n')
+    (snapshot / "snapshot.json").write_bytes(b'{"schema_version":3,"frontier":{}}\n')
     return change
 
 
@@ -181,12 +182,12 @@ def test_valid_structure_is_bounded_and_healthy(tmp_path: Path) -> None:
     root = _root(tmp_path)
     change = root / ".owlbear/delivery/runtime/changes/example"
     change.mkdir()
-    (change / "frontier.json").write_text('{"schema_version":18,"bindings":[]}\n', encoding="utf-8")
+    (change / "frontier.json").write_text('{"schema_version":19,"bindings":[]}\n', encoding="utf-8")
     coordination = root / ".owlbear/delivery/runtime/coordination/changes/example.json"
     coordination.write_text('{"schema_version":2,"change_id":"example"}\n', encoding="utf-8")
     snapshot = root / ".owlbear/delivery/state/example"
     snapshot.mkdir(parents=True)
-    (snapshot / "snapshot.json").write_text('{"schema_version":2,"frontier":{}}\n', encoding="utf-8")
+    (snapshot / "snapshot.json").write_text('{"schema_version":3,"frontier":{}}\n', encoding="utf-8")
 
     result = inspect_delivery(root)
 
@@ -194,7 +195,7 @@ def test_valid_structure_is_bounded_and_healthy(tmp_path: Path) -> None:
     assert result["writes_performed"] is False
     assert all(
         result["versions"][key] == value
-        for key, value in {"config": 2, "coordination": 2, "frontier": 18, "host": 1, "snapshot": 2}.items()
+        for key, value in {"config": 2, "coordination": 2, "frontier": 19, "host": 1, "snapshot": 3}.items()
     )
     assert result["versions"]["python"]["major"] >= 3
     assert result["counts"]["frontier"] == 1
@@ -339,8 +340,8 @@ def _promoted_result_candidate(change_id: str) -> DeliveryResultCandidate:
                     task_or_finalization_id=task.task_id,
                     exact_commit=commit,
                     observation_kind="pytest",
-                    command_or_procedure="diagnostic fixture",
-                    exit_status_or_artifact_locator="exit:0",
+                    procedure="diagnostic fixture",
+                    result=DeliveryCommandResult(exit_status=0),
                     observer_or_runner_identity="pytest",
                     observed_at=observed_at,
                 )
@@ -348,6 +349,7 @@ def _promoted_result_candidate(change_id: str) -> DeliveryResultCandidate:
         ),
         review=DeliveryReviewReceipt.create(
             DeliveryReview(
+                review_mode="task",
                 exact_commit=commit,
                 author_id="diagnostic fixture author",
                 reviewer_id="diagnostic fixture reviewer",
@@ -575,7 +577,7 @@ def test_many_change_current_records_obey_entry_budget(tmp_path: Path) -> None:
     for index in range(300):
         change = changes / f"change-{index:03}"
         (change / "retry-ledger").mkdir(parents=True)
-        (change / "frontier.json").write_bytes(b'{"schema_version":18,"bindings":[]}\n')
+        (change / "frontier.json").write_bytes(b'{"schema_version":19,"bindings":[]}\n')
         (change / "retry-ledger/current.json").write_bytes(b'{"schema_version":1}\n')
 
     completed = _run_cli(root, "inspect", "--project-root", os.fspath(root), "--format", "json")
@@ -872,7 +874,7 @@ def test_valid_runtime_frontier_without_coordination_is_unknown_and_read_only(
     root = _root(tmp_path)
     change = root / ".owlbear/delivery/runtime/changes/example"
     change.mkdir()
-    (change / "frontier.json").write_bytes(b'{"schema_version":18,"bindings":[]}\n')
+    (change / "frontier.json").write_bytes(b'{"schema_version":19,"bindings":[]}\n')
     coordination = root / ".owlbear/delivery/runtime/coordination/changes/example.json"
     if missing == "coordination":
         shutil.rmtree(coordination.parent.parent)
@@ -937,7 +939,7 @@ def test_coordination_identity_mismatch_is_unknown_not_missing_and_read_only(tmp
     root = _root(tmp_path)
     change = root / ".owlbear/delivery/runtime/changes/example"
     change.mkdir()
-    (change / "frontier.json").write_bytes(b'{"schema_version":18,"bindings":[]}\n')
+    (change / "frontier.json").write_bytes(b'{"schema_version":19,"bindings":[]}\n')
     coordination = root / ".owlbear/delivery/runtime/coordination/changes/example.json"
     coordination.write_bytes(b'{"schema_version":2,"change_id":"other"}\n')
     before = tuple(
@@ -971,7 +973,7 @@ def test_listed_coordination_disappearing_at_stat_is_unknown_and_read_only(
     root = _root(tmp_path)
     change = root / ".owlbear/delivery/runtime/changes/example"
     change.mkdir()
-    (change / "frontier.json").write_bytes(b'{"schema_version":18,"bindings":[]}\n')
+    (change / "frontier.json").write_bytes(b'{"schema_version":19,"bindings":[]}\n')
     coordination = root / ".owlbear/delivery/runtime/coordination/changes/example.json"
     coordination.write_bytes(b'{"schema_version":2,"change_id":"example"}\n')
     before = tuple(
@@ -1013,7 +1015,7 @@ def test_symlinked_coordination_is_unknown_not_missing(tmp_path: Path, symlink: 
     root = _root(tmp_path)
     change = root / ".owlbear/delivery/runtime/changes/example"
     change.mkdir()
-    (change / "frontier.json").write_bytes(b'{"schema_version":18,"bindings":[]}\n')
+    (change / "frontier.json").write_bytes(b'{"schema_version":19,"bindings":[]}\n')
     coordination = root / ".owlbear/delivery/runtime/coordination/changes/example.json"
     target = root / "target"
     target.mkdir()
@@ -1074,8 +1076,20 @@ def test_malformed_and_unsupported_records_are_bounded(tmp_path: Path, relative:
             None,
         ),
         (
+            ".owlbear/delivery/state/example/snapshot.json",
+            '{"schema_version":2,"frontier":{}}',
+            "readable-legacy",
+            None,
+        ),
+        (
             ".owlbear/delivery/runtime/changes/example/frontier.json",
-            '{"schema_version":19,"bindings":[]}',
+            '{"schema_version":18,"bindings":[]}',
+            "readable-legacy",
+            None,
+        ),
+        (
+            ".owlbear/delivery/runtime/changes/example/frontier.json",
+            '{"schema_version":20,"bindings":[]}',
             "newer",
             "FRONTIER_UNSUPPORTED",
         ),
@@ -1243,7 +1257,7 @@ _JOURNAL_CASES = {
     [
         ("fresh", [], []),
         ("format-0-with-records", ["FORMAT_MIGRATION_REQUIRED"], ["state-migration-required"]),
-        ("format-2", ["FORMAT_UNSUPPORTED"], ["state-newer-than-controller"]),
+        ("format-3", ["FORMAT_UNSUPPORTED"], ["state-newer-than-controller"]),
         ("journal-applied", ["MIGRATION_INCOMPLETE"], ["state-migration-incomplete"]),
         ("journal-verified", [], []),
         ("journal-newer", ["MIGRATION_JOURNAL_UNSUPPORTED"], ["state-newer-than-controller"]),
@@ -1263,8 +1277,8 @@ def test_inspector_mirrors_the_gate_format_and_journal_classification(
     runtime = root / ".owlbear/delivery/runtime"
     if case in {"fresh", "format-0-with-records"}:
         (runtime / "format.json").unlink()
-    elif case == "format-2":
-        (runtime / "format.json").write_text('{"format":2}\n', encoding="utf-8")
+    elif case == "format-3":
+        (runtime / "format.json").write_text('{"format":3}\n', encoding="utf-8")
     elif case == "namespace-file":
         (runtime / "migrations").write_text("not a directory\n", encoding="utf-8")
     elif case.startswith("journal-"):
@@ -1914,7 +1928,7 @@ def test_total_byte_budget_stays_bounded_when_file_grows_during_read(
         nonlocal grown
         data = real_read(fd, size)
         if fd == frontier_fd and data and not grown:
-            frontier.write_bytes(b'{"schema_version":18,"bindings":[]}\n')
+            frontier.write_bytes(b'{"schema_version":19,"bindings":[]}\n')
             grown = True
         return data
 

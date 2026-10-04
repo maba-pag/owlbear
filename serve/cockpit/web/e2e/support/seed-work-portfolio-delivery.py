@@ -28,6 +28,7 @@ from owlbear_delivery.delivery_application_loader import (
 )
 from owlbear_delivery.delivery_runtime import (
     DeliveryBlock,
+    DeliveryCommandResult,
     DeliveryFrontier,
     DeliveryObservation,
     DeliveryObservationReceipt,
@@ -140,14 +141,15 @@ def _result(contract: DeliveryContract, task: DeliveryTaskDefinition, head: str)
             task_or_finalization_id=task.task_id,
             exact_commit=head,
             observation_kind="playwright",
-            command_or_procedure="Assembled Cockpit fixture validation",
-            exit_status_or_artifact_locator="fixture:passed",
+            procedure="Assembled Cockpit fixture validation",
+            result=DeliveryCommandResult(exit_status=0),
             observer_or_runner_identity="work-portfolio-e2e",
             observed_at=observed_at,
         )
     )
     review = DeliveryReviewReceipt.create(
         DeliveryReview(
+            review_mode="task",
             exact_commit=head,
             author_id="work-portfolio-e2e-author",
             reviewer_id="work-portfolio-e2e-reviewer",

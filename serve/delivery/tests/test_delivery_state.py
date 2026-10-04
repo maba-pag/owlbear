@@ -31,6 +31,7 @@ from owlbear_delivery import (
     DeliveryChangeIntent,
     DeliveryChangeIntentKind,
     DeliveryChangeStage,
+    DeliveryCommandResult,
     DeliveryCommitment,
     DeliveryCommitmentClass,
     DeliveryContract,
@@ -477,14 +478,17 @@ def test_loader_accepts_unpublished_head_moved_acceptance_successor(tmp_path: Pa
             task_or_finalization_id=operation_id,
             exact_commit=initial,
             observation_kind="snapshot-test",
-            command_or_procedure="head moved acceptance fallback",
-            exit_status_or_artifact_locator="exit:0",
+            procedure="head moved acceptance fallback",
+            result=DeliveryCommandResult(exit_status=0),
             observer_or_runner_identity="pytest",
             observed_at=observed_at,
         )
     )
     review = DeliveryReviewReceipt.create(
         DeliveryReview(
+            review_mode="finalization",
+            basis_digest="e" * 64,
+            observation_ids=(observation.observation_id,),
             exact_commit=initial,
             author_id="snapshot-head-moved-author",
             reviewer_id="snapshot-head-moved-reviewer",
@@ -561,14 +565,17 @@ def test_loader_accepts_finalized_snapshot_when_remote_change_branch_was_deleted
             task_or_finalization_id=operation_id,
             exact_commit=initial,
             observation_kind="snapshot-test",
-            command_or_procedure="finalized snapshot target fallback",
-            exit_status_or_artifact_locator="exit:0",
+            procedure="finalized snapshot target fallback",
+            result=DeliveryCommandResult(exit_status=0),
             observer_or_runner_identity="pytest",
             observed_at=observed_at,
         )
     )
     review = DeliveryReviewReceipt.create(
         DeliveryReview(
+            review_mode="finalization",
+            basis_digest="e" * 64,
+            observation_ids=(observation.observation_id,),
             exact_commit=initial,
             author_id="snapshot-finalization-author",
             reviewer_id="snapshot-finalization-reviewer",
@@ -821,7 +828,7 @@ def test_state_snapshot_migrates_schema_1_and_retains_predecessor_identity(tmp_p
 
     migrated = parse_delivery_state_snapshot(raw)
 
-    assert migrated.schema_version == 2
+    assert migrated.schema_version == 3
     assert migrated.migrated_from_snapshot_id == legacy_snapshot_id
     assert migrated.frontier.schema_version == 18
     assert migrated.frontier.bindings[0].retry_count == 0
@@ -872,7 +879,7 @@ def test_state_publisher_rewrites_migrated_snapshot_to_current_schema(tmp_path: 
     assert rewritten.published_head != legacy_head
     current = publisher.read_snapshot("legacy-publish")
     assert current is not None
-    assert current.schema_version == 2
+    assert current.schema_version == 3
     assert current.migrated_from_snapshot_id is None
     assert current.parent_snapshot_id is not None
     assert publisher._git_blob(legacy_head, snapshot_path) == legacy_raw  # noqa: SLF001
@@ -907,7 +914,7 @@ def test_schema_1_remote_snapshot_reads_as_pure_upcast_with_verified_stored_iden
     assert inventory.diagnostics == ()
     assert inventory.remote_head == legacy_head
     snapshot = inventory.snapshots[0]
-    assert snapshot.schema_version == 2
+    assert snapshot.schema_version == 3
     assert snapshot.migrated_from_snapshot_id == stored_id
     assert snapshot.snapshot_id != stored_id
     assert snapshot.frontier.schema_version == 18
@@ -927,7 +934,7 @@ def test_newer_remote_snapshot_is_unsupported_never_restored_published_over_or_r
     first = _publish(publisher, runtime, manager, change_id, package_id, "newer-state-one")
     snapshot_path = f".owlbear/delivery/state/{change_id}/snapshot.json"
     newer_payload = json.loads(publisher._git_blob(first.published_head, snapshot_path))  # noqa: SLF001
-    newer_payload["schema_version"] = 3
+    newer_payload["schema_version"] = 4
     newer_payload["future_field"] = {"written": "by a newer controller"}
     newer_raw = _canonical_payload(newer_payload)
     newer_head = _commit_corrupt_snapshot(repository, first.published_head, change_id, newer_raw)
@@ -1015,14 +1022,17 @@ def test_state_snapshot_accepts_terminal_completion_projection(tmp_path: Path) -
             task_or_finalization_id="finalize-state-complete",
             exact_commit=initial,
             observation_kind="snapshot-test",
-            command_or_procedure="terminal snapshot construction",
-            exit_status_or_artifact_locator="exit:0",
+            procedure="terminal snapshot construction",
+            result=DeliveryCommandResult(exit_status=0),
             observer_or_runner_identity="pytest",
             observed_at=observed_at,
         )
     )
     review = DeliveryReviewReceipt.create(
         DeliveryReview(
+            review_mode="finalization",
+            basis_digest="e" * 64,
+            observation_ids=(observation.observation_id,),
             exact_commit=initial,
             author_id="snapshot-author",
             reviewer_id="snapshot-reviewer",
@@ -1233,14 +1243,15 @@ def test_state_publisher_rejects_unreachable_result_commit(tmp_path: Path) -> No
             task_or_finalization_id=task.task_id,
             exact_commit=completed_commit,
             observation_kind="snapshot-test",
-            command_or_procedure="unreachable result fixture",
-            exit_status_or_artifact_locator="exit:0",
+            procedure="unreachable result fixture",
+            result=DeliveryCommandResult(exit_status=0),
             observer_or_runner_identity="pytest",
             observed_at=observed_at,
         )
     )
     review = DeliveryReviewReceipt.create(
         DeliveryReview(
+            review_mode="task",
             exact_commit=completed_commit,
             author_id="result-author",
             reviewer_id="result-reviewer",
@@ -1956,14 +1967,15 @@ def _builder_return_restart_fixture(tmp_path: Path, change_id: str) -> _BuilderR
             task_or_finalization_id=completed_task.task_id,
             exact_commit=initial,
             observation_kind="snapshot-test",
-            command_or_procedure="initial completed task fixture",
-            exit_status_or_artifact_locator="exit:0",
+            procedure="initial completed task fixture",
+            result=DeliveryCommandResult(exit_status=0),
             observer_or_runner_identity="pytest",
             observed_at=observed_at,
         )
     )
     review = DeliveryReviewReceipt.create(
         DeliveryReview(
+            review_mode="task",
             exact_commit=initial,
             author_id="task-author",
             reviewer_id="task-reviewer",
@@ -3433,14 +3445,15 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
                 task_or_finalization_id=task.task_id,
                 exact_commit=completed_commit,
                 observation_kind="pytest",
-                command_or_procedure="active Builder result restart fixture",
-                exit_status_or_artifact_locator="exit:0",
+                procedure="active Builder result restart fixture",
+                result=DeliveryCommandResult(exit_status=0),
                 observer_or_runner_identity="pytest",
                 observed_at=observed_at,
             )
         )
         review = DeliveryReviewReceipt.create(
             DeliveryReview(
+                review_mode="task",
                 exact_commit=completed_commit,
                 author_id="Builder fixture author",
                 reviewer_id="Builder fixture reviewer",

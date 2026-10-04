@@ -9,15 +9,22 @@ import json
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
 from pathlib import Path
 from threading import Barrier
-from unittest.mock import patch
+from typing import Any
+from unittest.mock import Mock, patch
 
 import pytest
+from serve.delivery.tests.test_checkpoint_publication_regressions import _CONFIG as _LOADER_CONFIG
+from serve.delivery.tests.test_checkpoint_publication_regressions import _SNAPSHOT_PATH as _LOADER_SNAPSHOT_PATH
+from serve.delivery.tests.test_checkpoint_publication_regressions import _relabel_as_snapshot_2, _store_v18
+from serve.delivery.tests.test_delivery_state import _admission
 from serve.delivery.tests.test_portfolio_application import (
     _attach_local_target,
     _awaiting_acceptance_fixture,
     _builder_retry_handoff_setup,
+    _canonical,
     _commit_reviewed_head,
     _continuation_request,
     _engine_action,
@@ -26,9 +33,11 @@ from serve.delivery.tests.test_portfolio_application import (
     _file_bytes,
     _finalization_request,
     _git,
+    _legacy_task_result,
     _portfolio,
     _prepare_legacy_integration_repair,
     _reopen_portfolio,
+    _seed_loader_composed_completed_change,
     _settle_builder_handoff_attempt,
     _task,
     _task_result,
@@ -37,20 +46,35 @@ from serve.delivery.tests.test_portfolio_application import (
 from owlbear_delivery import (
     BlockDelivery,
     CompletedOutcomeRepairReceipt,
+    CreateOrReconcileDraftPullRequest,
+    DeliveryChangePublicationIdentity,
     DeliveryRequest,
     DeliveryRequestKind,
     DeliveryRequestOption,
     DeliveryResultSubmission,
     DeliveryRuntimeReferenceError,
     DeliveryStage,
+    DraftPullRequestPublisher,
     PortfolioApplicationError,
     PrepareCompletedOutcomeRepair,
     PreservationRejectedError,
+    PublicationCheckSnapshot,
     RetryDelivery,
     ReturnDelivery,
 )
+from owlbear_delivery.delivery_application_loader import load_delivery_application
+from owlbear_delivery.delivery_runtime import (
+    DeliveryFinalization,
+    DeliveryFinalizationReceipt,
+    DeliveryFrontier,
+    DeliveryLegacyObservationReceipt,
+    DeliveryReviewReceipt,
+    DeliveryRuntime,
+    DeliveryTaskResult,
+)
 from owlbear_delivery.delivery_state import DeliveryStatePublisher
 from owlbear_delivery.portfolio_application import DeliveryLaunchPackage
+from owlbear_delivery.publication_provider import PublicationPullRequest, PublicationRepository
 from owlbear_delivery.recovery import (
     DeliveryWorkerExclusionRequiredError,
     RecoveryEvidence,
@@ -66,6 +90,7 @@ from owlbear_delivery.recovery import (
     encoded,
     journal_path,
 )
+from owlbear_delivery.runtime_models import _model_content, _receipt_digest
 from owlbear_delivery.runtime_transaction import RuntimeTransaction, TransactionConflictError, TransactionParticipant
 from owlbear_delivery.work_items import WorkItemActionKind
 
@@ -1256,6 +1281,367 @@ def test_verified_clean_finalizer_recovery_keeps_failed_history(tmp_path, eviden
             "change-a", _finalization_request("change-a", attempt.exact_head, attempt.writer.attempt_id)
         )
     assert coordinator.show("change-a").writer == replacement.finalization.attempt.writer
+
+
+@pytest.mark.parametrize("stored", [18, 19])
+def test_clean_finalizer_recovery_of_a_stored_v18_frontier_records_one_marker_on_its_published_base(
+    tmp_path: Path, stored: int
+) -> None:
+    application, runtimes, _coordinator, state = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
+    runtime = runtimes["change-a"]
+    repository = application._workspace_manager.repository
+    _attach_local_target(application, tmp_path)
+    frontier_path = state / "changes/change-a/frontier.json"
+    if stored == 18:
+        _store_v18(frontier_path)
+    application._delivery_state_publisher = DeliveryStatePublisher(
+        repository, remote="origin", state_branch="owlbear/delivery-state"
+    )
+    state_head = application._publish_delivery_state("change-a", runtime, "v18-recovery-baseline").published_head
+    if stored == 18:
+        state_head = _relabel_as_snapshot_2(repository, state_head)
+    snapshot = json.loads(_git(repository, "show", f"{state_head}:.owlbear/delivery/state/change-a/snapshot.json"))
+    application._delivery_state_publisher = None
+    host = _host(application)
+    attempt = application.acquire_change_action(_continuation_request(application)).finalization.attempt
+    application.report_finalization_failure(_failure_request(application, attempt_key=attempt.writer.attempt_id))
+    intent = application._propose_recovery("change-a")
+    before = frontier_path.read_bytes()
+    assert json.loads(before)["schema_version"] == stored
+
+    application._complete_recovery("change-a", intent.recovery_id, host.seal(intent, "closed"))
+
+    written = frontier_path.read_bytes()
+    assert json.loads(written)["schema_version"] == 19
+    marker = runtime.pending_state_publication()
+    if stored == 19:
+        assert written == before
+        assert marker is None
+        return
+    assert marker is not None
+    assert marker.base_frontier_digest == runtime.publication_base_digest(before)
+    assert (
+        marker.base_frontier_digest
+        == hashlib.sha256(
+            (json.dumps(snapshot["frontier"], sort_keys=True, separators=(",", ":")) + "\n").encode()
+        ).hexdigest()
+    )
+    assert marker.frontier_digest == hashlib.sha256(written).hexdigest()
+
+    reopened, _reopened_coordinator, _manager = _reopen_portfolio(tmp_path, state, runtimes)
+    assert reopened.get_change("change-a").change_id == "change-a"
+    assert reopened._runtimes["change-a"].pending_state_publication() == marker
+    reopened._delivery_state_publisher = DeliveryStatePublisher(
+        repository, remote="origin", state_branch="owlbear/delivery-state"
+    )
+    assert reopened._replay_pending_state_publications() == ()
+    _git(repository, "fetch", "origin", "+refs/heads/owlbear/delivery-state:refs/remotes/origin/owlbear/delivery-state")
+    published = _git(repository, "rev-parse", "refs/remotes/origin/owlbear/delivery-state")
+    assert _git(repository, "rev-list", "--count", f"{state_head}..{published}") == "1"
+    republished = json.loads(_git(repository, "show", f"{published}:.owlbear/delivery/state/change-a/snapshot.json"))
+    assert republished["schema_version"] == 3
+    assert republished["parent_snapshot_id"] == snapshot["snapshot_id"]
+    assert reopened._runtimes["change-a"].pending_state_publication() is None
+    assert reopened._replay_pending_state_publications() == ()
+    _git(repository, "fetch", "origin", "+refs/heads/owlbear/delivery-state:refs/remotes/origin/owlbear/delivery-state")
+    assert _git(repository, "rev-parse", "refs/remotes/origin/owlbear/delivery-state") == published
+
+
+def _legacy_finalization(
+    finalization: DeliveryFinalizationReceipt, results: tuple[DeliveryTaskResult, ...]
+) -> DeliveryFinalizationReceipt:
+    """Return the same finalization as a D03 schema-2 record holding only schema-1 evidence."""
+    observation_values = {
+        "schema_version": 1,
+        "change_id": finalization.change_id,
+        "task_or_finalization_id": finalization.operation_id,
+        "step_id": None,
+        "exact_commit": finalization.exact_head,
+        "observation_kind": "pytest",
+        "command_or_procedure": "Portfolio finalization exact-head check",
+        "exit_status_or_artifact_locator": "exit:0",
+        "observer_or_runner_identity": "pytest",
+        "observed_at": finalization.finalized_at,
+    }
+    observation = DeliveryLegacyObservationReceipt.model_construct(observation_id="0" * 64, **observation_values)
+    review_values = {
+        "schema_version": 1,
+        "exact_commit": finalization.exact_head,
+        "author_id": finalization.review.author_id,
+        "reviewer_id": finalization.review.reviewer_id,
+        "disposition": "pass",
+        "evidence": finalization.review.evidence,
+        "reviewed_at": finalization.review.reviewed_at,
+    }
+    review = DeliveryReviewReceipt.model_construct(review_id="0" * 64, **review_values)
+    return DeliveryFinalizationReceipt.create(
+        DeliveryFinalization(
+            schema_version=2,
+            operation_id=finalization.operation_id,
+            change_id=finalization.change_id,
+            exact_head=finalization.exact_head,
+            authority_digest=finalization.authority_digest,
+            result_digests=tuple(hashlib.sha256(_model_content(result)).hexdigest() for result in results),
+            observations=(
+                DeliveryLegacyObservationReceipt(
+                    observation_id=_receipt_digest(observation, "observation_id"), **observation_values
+                ),
+            ),
+            review=DeliveryReviewReceipt(review_id=_receipt_digest(review, "review_id"), **review_values),
+            finalized_at=finalization.finalized_at,
+        )
+    )
+
+
+def _store_as_schema_18(frontier_path: Path, frontier: DeliveryFrontier) -> bytes:
+    """Store ``frontier`` as schema 18; the retained model refuses any N03 content at that version (I2)."""
+    payload = frontier.model_dump(mode="json") | {"schema_version": 18}
+    content = _canonical(DeliveryFrontier.model_validate_json(json.dumps(payload), strict=True))
+    frontier_path.write_bytes(content)
+    return content
+
+
+def _store_d03_records(frontier_path: Path) -> bytes:
+    """Rebuild every typed result and finalization from the retained legacy models, then store schema 18."""
+    frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=True)
+    bindings = tuple(
+        binding.model_copy(update={"results": tuple(_legacy_task_result(item) for item in binding.results)})
+        for binding in frontier.bindings
+    )
+    finalization = frontier.finalization
+    if finalization is not None:
+        finalization = _legacy_finalization(
+            finalization, tuple(item for binding in bindings for item in binding.results)
+        )
+    return _store_as_schema_18(
+        frontier_path, frontier.model_copy(update={"bindings": bindings, "finalization": finalization})
+    )
+
+
+def _acknowledge_local_markers(runtime: DeliveryRuntime) -> None:
+    """Drop the setup's local markers; the fixture publishes the resulting state itself."""
+    marker = runtime.pending_state_publication()
+    if marker is not None:
+        runtime.acknowledge_pending_publication(marker.frontier_digest)
+    assert runtime.pending_state_publication() is None
+
+
+def _mock_pull_request_publisher(tmp_path: Path, exact_head: str) -> DraftPullRequestPublisher:
+    state = {
+        "pull_request": PublicationPullRequest(
+            repository="example/project",
+            number=7,
+            node_id="PR_node_7",
+            head_branch="owlbear/change/change-a",
+            head_sha=exact_head,
+            base_branch="main",
+            title="Change A",
+            body=(
+                "<!-- owlbear-change:change-a -->\n\n<!-- owlbear-generated:start -->\n"
+                "Finalized Change A.\n<!-- owlbear-generated:end -->\n"
+            ),
+            draft=True,
+            state="open",
+            merged=False,
+        )
+    }
+    provider = Mock()
+    provider.read_repository.return_value = PublicationRepository(repository="example/project", default_branch="main")
+    provider.find_pull_request.side_effect = lambda *_args, **_kwargs: state["pull_request"]
+    provider.create_draft_pull_request.side_effect = lambda _request: state["pull_request"]
+    provider.read_pull_request.side_effect = lambda _repository, _number: state["pull_request"]
+    provider.observe_checks.return_value = PublicationCheckSnapshot(
+        repository="example/project", number=7, head_sha=exact_head, checks=()
+    )
+
+    def set_draft_state(request: Any) -> PublicationPullRequest:
+        state["pull_request"] = state["pull_request"].model_copy(update={"draft": request.draft})
+        return state["pull_request"]
+
+    provider.set_pull_request_draft_state.side_effect = set_draft_state
+    return DraftPullRequestPublisher(
+        provider, repository="example/project", target_branch="main", state_root=tmp_path / "pull-requests"
+    )
+
+
+def _d03_ready_readback_owner(application: Any, tmp_path: Path, frontier_path: Path) -> Any:
+    """Finalize, publish the draft PR, and let a D03-era mark-ready owner lose its engine result."""
+    runtime = application._runtimes["change-a"]
+    exact_head = application._workspace_manager.show("change-a").last_reviewed_commit
+    application.finalize_change("change-a", _finalization_request("change-a", exact_head, runtime=runtime))
+    publisher = _mock_pull_request_publisher(tmp_path, exact_head)
+    publisher.publish(
+        CreateOrReconcileDraftPullRequest(
+            change_id="change-a",
+            operation_id="create-change-a",
+            published_head=exact_head,
+            title="Change A",
+            generated_summary="Finalized Change A.",
+        )
+    )
+    application._draft_pull_request_publisher = publisher
+    checkpoint = runtime.checkpoint_publication_state()
+    assert checkpoint.pending_checkpoint is not None
+    runtime.record_checkpoint_branch_publication(checkpoint, exact_head)
+    runtime.acknowledge_checkpoint_publication(checkpoint.pending_checkpoint, exact_head)
+    runtime.record_publication_identity(
+        DeliveryChangePublicationIdentity(
+            change_id="change-a", repository="example/project", number=7, node_id="PR_node_7", head_sha=exact_head
+        )
+    )
+    _acknowledge_local_markers(runtime)
+    _store_d03_records(frontier_path)
+    host = _host(application)
+    action = _engine_action(application)
+    invoke = application._invoke_engine_owner
+
+    def lose_result(retained: Any) -> None:
+        invoke(retained)
+        raise KeyboardInterrupt
+
+    with patch.object(application, "_invoke_engine_owner", side_effect=lose_result), pytest.raises(KeyboardInterrupt):
+        _execute_engine(application, action)
+    ready = runtime.ready_receipt()
+    assert ready is not None
+    assert ready.finalization_id == runtime.finalization().finalization_id
+    _acknowledge_local_markers(runtime)
+    # The D03 owner wrote the ready receipt at schema 18; only legacy records are present to store.
+    _store_as_schema_18(frontier_path, DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=True))
+    return host
+
+
+def _d03_finalizer_workspace(tmp_path: Path, kind: str) -> tuple[Path, Path, str, Any]:
+    """Seed a loader workspace whose remote snapshot 2 holds the local D03 (schema-18) frontier.
+
+    Returns the repository, the runtime root, the relabeled state head and, for ready-readback, the
+    seeding application whose process host and draft PR provider observed the lost owner.
+    """
+    repository, runtime_root = _seed_loader_composed_completed_change(tmp_path)
+    remote = tmp_path / "state-remote.git"
+    _git(tmp_path, "init", "--bare", "-b", "main", str(remote))
+    _git(repository, "config", f"url.{remote}.insteadOf", "https://github.com/example/project.git")
+    _git(repository, "push", "origin", "HEAD:refs/heads/main")
+    frontier_path = runtime_root / "changes/change-a/frontier.json"
+    seeding = load_delivery_application(_LOADER_CONFIG, workspace_root=repository)
+    state_publisher = seeding._delivery_state_publisher
+    assert state_publisher is not None
+    seeding._delivery_state_publisher = None
+    runtime = seeding._runtimes["change-a"]
+    seeding.sync_change_with_target("change-a", seeding._workspace_manager.observed_target_head(), "sync-d03")
+    _acknowledge_local_markers(runtime)
+    if kind == "ready-readback":
+        seeding._recovery_evidence_provider = _d03_ready_readback_owner(seeding, tmp_path, frontier_path)
+    else:
+        _store_d03_records(frontier_path)
+    published = state_publisher.publish(
+        change_id="change-a",
+        package_id=seeding._package_store.read_verified("change-a").package_id,
+        coordination=seeding._workspace_manager.show("change-a"),
+        runtime=runtime,
+        admission=_admission(runtime, seeding._workspace_manager, "change-a"),
+        operation_id="d03-finalizer-state",
+        captured_at=datetime(2026, 8, 4, tzinfo=UTC),
+    )
+    state_head = _relabel_as_snapshot_2(repository, published.published_head)
+    return repository, runtime_root, state_head, seeding if kind == "ready-readback" else None
+
+
+def _assert_default_loader_republishes_once(repository: Path, state_head: str, marker: object) -> str:
+    """Reload through the default loader, replay the marker once, and converge on a second reload."""
+    snapshot_2 = json.loads(_git(repository, "show", f"{state_head}:{_LOADER_SNAPSHOT_PATH}"))
+    reloaded = load_delivery_application(_LOADER_CONFIG, workspace_root=repository)
+    assert "state-publication-pending" in [item.code for item in reloaded.delivery_health().diagnostics]
+    assert reloaded.get_change("change-a").change_id == "change-a"
+    assert reloaded._runtimes["change-a"].pending_state_publication() == marker
+    assert reloaded._replay_pending_state_publications() == ()
+    _git(repository, "fetch", "origin", "+refs/heads/owlbear/delivery-state:refs/remotes/origin/owlbear/delivery-state")
+    republished_head = _git(repository, "rev-parse", "refs/remotes/origin/owlbear/delivery-state")
+    assert _git(repository, "rev-list", "--count", f"{state_head}..{republished_head}") == "1"
+    republished = json.loads(_git(repository, "show", f"{republished_head}:{_LOADER_SNAPSHOT_PATH}"))
+    assert republished["schema_version"] == 3
+    assert republished["parent_snapshot_id"] == snapshot_2["snapshot_id"]
+
+    converged = load_delivery_application(_LOADER_CONFIG, workspace_root=repository)
+    assert converged._runtimes["change-a"].pending_state_publication() is None
+    assert converged._replay_pending_state_publications() == ()
+    _git(repository, "fetch", "origin", "+refs/heads/owlbear/delivery-state:refs/remotes/origin/owlbear/delivery-state")
+    assert _git(repository, "rev-parse", "refs/remotes/origin/owlbear/delivery-state") == republished_head
+    return republished_head
+
+
+@pytest.mark.parametrize("kind", ["clean-finalizer", "ready-readback"])
+def test_v18_finalizer_recovery_reloads_through_the_default_loader_and_republishes_once(
+    tmp_path: Path, kind: str
+) -> None:
+    repository, runtime_root, state_head, owner = _d03_finalizer_workspace(tmp_path, kind)
+    frontier_path = runtime_root / "changes/change-a/frontier.json"
+    snapshot_2 = json.loads(_git(repository, "show", f"{state_head}:{_LOADER_SNAPSHOT_PATH}"))
+    stored = frontier_path.read_bytes()
+    assert json.loads(stored)["schema_version"] == 18
+    nested = _nested_receipt_ids(stored)
+
+    application = load_delivery_application(_LOADER_CONFIG, workspace_root=repository)
+    loaded = application._runtimes["change-a"]
+    assert loaded.frontier_bytes() == stored
+    assert loaded.pending_state_publication() is None
+    application._delivery_state_publisher = None
+    if owner is not None:
+        # The process host that observed the lost owner keeps its evidence across the controller reload.
+        host = owner._recovery_evidence_provider
+        application._recovery_evidence_provider = host
+        application._draft_pull_request_publisher = owner._draft_pull_request_publisher
+    else:
+        host = _host(application)
+        acquired = application.acquire_change_action(_continuation_request(application))
+        assert acquired.finalization is not None, acquired.readiness.model_dump_json()
+        attempt = acquired.finalization.attempt
+        application.report_finalization_failure(_failure_request(application, attempt_key=attempt.writer.attempt_id))
+    intent = application._propose_recovery("change-a")
+    assert intent.kind == kind
+    assert frontier_path.read_bytes() == stored
+
+    receipt = application._complete_recovery("change-a", intent.recovery_id, host.seal(intent, "closed"))
+
+    written = frontier_path.read_bytes()
+    assert json.loads(written)["schema_version"] == 19
+    assert _nested_receipt_ids(written) == nested
+    marker = loaded.pending_state_publication()
+    assert marker is not None
+    remote_base = hashlib.sha256(
+        (json.dumps(snapshot_2["frontier"], sort_keys=True, separators=(",", ":")) + "\n").encode()
+    ).hexdigest()
+    assert marker.base_frontier_digest == loaded.publication_base_digest(stored) == remote_base
+    assert marker.frontier_digest == hashlib.sha256(written).hexdigest()
+    recovery_records = _recovery_records(runtime_root, intent.recovery_id)
+    assert encoded(receipt) == recovery_records["receipt"]
+
+    _assert_default_loader_republishes_once(repository, state_head, marker)
+
+    assert json.loads(_git(repository, "show", f"{state_head}:{_LOADER_SNAPSHOT_PATH}")) == snapshot_2
+    assert _recovery_records(runtime_root, intent.recovery_id) == recovery_records
+    assert frontier_path.read_bytes() == written
+
+
+def _nested_receipt_ids(content: bytes) -> dict[str, object]:
+    frontier = json.loads(content)
+    finalization = frontier.get("finalization") or {}
+    return {
+        "head": finalization.get("exact_head") or "",
+        "results": [
+            (result["review"]["review_id"], [item["observation_id"] for item in result["observations"]])
+            for binding in frontier["bindings"]
+            for result in binding.get("results", [])
+        ],
+        "finalization": finalization.get("finalization_id"),
+        "ready": (frontier.get("ready") or {}).get("receipt_id"),
+    }
+
+
+def _recovery_records(runtime_root: Path, recovery_id: str) -> dict[str, bytes]:
+    return {
+        record: (runtime_root / journal_path("change-a", recovery_id, record)).read_bytes()
+        for record in ("intent", "evidence", "receipt")
+    }
 
 
 @pytest.mark.parametrize("exhausted", [False, True])

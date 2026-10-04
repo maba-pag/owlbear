@@ -65,6 +65,7 @@ from owlbear_delivery.state_formats import (
     RecordKind,
     classify_kind,
     format_marker_bytes,
+    format_migration_steps,
     record_tree_digest,
     scan_capability,
     transaction_root,
@@ -154,11 +155,16 @@ class MigrationEntry(_MigrationModel):
 
 
 class MigrationProposal(_MigrationModel):
-    """Staged migration whose identity binds every entry, both formats and the controller release."""
+    """Staged migration whose identity binds every entry, both formats, its format steps and the release.
+
+    ``steps`` names the registered format migrations from ``source_format`` to ``target_format`` in order;
+    their record rewrites precede the format marker, which commits last at the target format.
+    """
 
     migration_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     source_format: int = Field(ge=0)
     target_format: int = Field(ge=0)
+    steps: tuple[str, ...]
     release: str = Field(min_length=1)
     entries: tuple[MigrationEntry, ...] = Field(min_length=1)
 
@@ -433,6 +439,7 @@ def propose(workspace_root: Path) -> MigrationProposal:
     paths = _Paths.of(workspace_root)
     report = scan_capability(paths.workspace)
     _require_migratable(report)
+    steps = _format_steps(report.format)
     _validate_baseline_records(paths, report)
     entries: list[MigrationEntry] = []
     staged: dict[str, bytes] = {}
@@ -457,9 +464,16 @@ def propose(workspace_root: Path) -> MigrationProposal:
         staged[FORMAT_MARKER] = marker_after
     if not entries:
         raise MigrationError(code="migration-not-required", detail="Delivery state already has the supported format")
-    proposal = _proposal(report.format, tuple(entries))
+    proposal = _proposal(report.format, tuple(entries), steps=steps)
     _write_stage(paths, proposal, staged)
     return proposal
+
+
+def _format_steps(source_format: int) -> tuple[str, ...]:
+    try:
+        return format_migration_steps(source_format)
+    except ValueError as exc:
+        raise MigrationError(code="state-unsupported", detail=str(exc), locator=FORMAT_MARKER) from exc
 
 
 def _require_migratable(report: CapabilityReport) -> None:
@@ -604,6 +618,7 @@ def _proposal(
     source_format: int,
     entries: tuple[MigrationEntry, ...],
     *,
+    steps: tuple[str, ...],
     release: str | None = None,
     target_format: int = SUPPORTED_FORMAT,
 ) -> MigrationProposal:
@@ -612,6 +627,7 @@ def _proposal(
         "entries": [[entry.locator, entry.before_sha256, entry.after_sha256] for entry in entries],
         "release": release,
         "source_format": source_format,
+        "steps": list(steps),
         "target_format": target_format,
     }
     migration_id = _sha256(json.dumps(identity, sort_keys=True, separators=(",", ":")).encode())
@@ -619,6 +635,7 @@ def _proposal(
         migration_id=migration_id,
         source_format=source_format,
         target_format=target_format,
+        steps=steps,
         release=release,
         entries=entries,
     )
@@ -660,7 +677,11 @@ def _load_proposal(paths: _Paths, migration_id: str) -> tuple[MigrationProposal,
             raise MigrationError(code="proposal-unknown", detail="this ID names a repair; use delivery-repair") from exc
         raise MigrationError(code="proposal-invalid", detail="staged proposal is malformed") from exc
     rebuilt = _proposal(
-        proposal.source_format, proposal.entries, release=proposal.release, target_format=proposal.target_format
+        proposal.source_format,
+        proposal.entries,
+        steps=proposal.steps,
+        release=proposal.release,
+        target_format=proposal.target_format,
     )
     if proposal.migration_id != migration_id or rebuilt != proposal:
         raise MigrationError(code="proposal-invalid", detail="staged proposal does not match its identity")
@@ -757,7 +778,11 @@ def resume(
 
 
 def _require_same_release(proposal: MigrationProposal) -> None:
-    if proposal.release != controller_release() or proposal.target_format != SUPPORTED_FORMAT:
+    if (
+        proposal.release != controller_release()
+        or proposal.target_format != SUPPORTED_FORMAT
+        or proposal.steps != _format_steps(proposal.source_format)
+    ):
         raise MigrationError(code="proposal-stale", detail="the proposal was made by another controller release")
 
 
