@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -12,14 +13,18 @@ import pytest
 from mcp import Client
 from serve.delivery.tests.confirmation_support import SCOPED_REQUEST_ID as _REQUEST
 from serve.delivery.tests.confirmation_support import scoped_request_case as _scoped_case
+from serve.delivery.tests.evidence_support import finalization_proof
 
 from owlbear_delivery.consent_generation import ConsentGenerationStore
 from owlbear_delivery.delivery_runtime import (
+    DeliveryAcceptanceEvidenceError,
     DeliveryConfirmationError,
+    DeliveryEvidenceGap,
     DeliveryRequest,
     DeliveryRequestResolution,
     DeliveryRuntime,
 )
+from owlbear_delivery.evidence import DeliveryContextRefusal
 from owlbear_delivery.portfolio_application import DeliveryAnswer, DeliveryAnswerKind
 from owlbear_delivery_mcp.target_server import assemble_target_server
 
@@ -183,3 +188,70 @@ def test_core_answer_refuses_a_scoped_request_without_the_boundary(tmp_path: Pat
     assert raised.value.reason == "confirmation-required"
     assert runtime.frontier_bytes() == before
     assert _generation(state_root) is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["legacy", _MODERN])
+async def test_a_declined_question_is_never_reopened_and_a_new_call_asks_a_fresh_one(tmp_path: Path, mode: str) -> None:
+    application, runtime, state_root = _scoped_case(tmp_path)
+    store = ConsentGenerationStore(state_root, "change-a")
+    declined: list[types.ElicitRequestParams] = []
+    accepted: list[types.ElicitRequestParams] = []
+
+    async with Client(
+        assemble_target_server(application), mode=mode, elicitation_callback=_callback("decline", None, declined)
+    ) as client:
+        first = await client.call_tool("answer", _arguments(runtime))
+    async with Client(
+        assemble_target_server(application), mode=mode, elicitation_callback=_callback("accept", "waive", accepted)
+    ) as client:
+        second = await client.call_tool("answer", _arguments(runtime))
+
+    assert first.is_error
+    assert not second.is_error, second.content
+    old, _content = store.read(1)
+    new, _content = store.read(2)
+    assert old.disposition.outcome == "declined"
+    assert new.disposition.outcome == "accepted"
+    assert old.generation_id != new.generation_id
+    assert declined[0].message != accepted[0].message
+    (confirmation,) = runtime.confirmations()
+    assert confirmation.generation_id == new.generation_id
+
+
+@pytest.mark.asyncio
+async def test_registered_finalize_refusal_carries_the_exact_bounded_gaps(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    application, _runtime, _state_root = _scoped_case(tmp_path)
+    gaps = (
+        DeliveryEvidenceGap(acceptance_id="AC-001", reason="uncovered"),
+        DeliveryEvidenceGap(reason="review-basis-stale"),
+    )
+
+    def refuse(*_args: object) -> None:
+        raise DeliveryAcceptanceEvidenceError(gaps)
+
+    monkeypatch.setattr(application, "finalize_change", refuse)
+    proof = finalization_proof(
+        DeliveryContextRefusal(code="finalization-basis-unavailable"),
+        change_id="change-a",
+        exact_head="1" * 40,
+        operation_id="finalize-change-a",
+        observed_at=datetime(2026, 10, 4, tzinfo=UTC),
+        procedure="uv run pytest",
+        author_id="finalizer",
+        reviewer_id="build-reviewer",
+        evidence="Reviewed.",
+    )
+
+    async with Client(assemble_target_server(application)) as client:
+        result = await client.call_tool(
+            "finalize_change", {"change_id": "change-a", "finalization": proof.model_dump(mode="json")}
+        )
+
+    assert result.is_error
+    diagnostic = _diagnostic(result)
+    assert diagnostic["code"] == "ERR_DELIVERY_ACCEPTANCE_EVIDENCE"
+    assert diagnostic["retry_safe"] is False
+    assert diagnostic["gaps"] == [gap.model_dump(mode="json") for gap in gaps]

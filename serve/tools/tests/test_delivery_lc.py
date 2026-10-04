@@ -262,9 +262,12 @@ def _live(tmp_path: Path, *, marked: bool = False) -> Path:
 _FRONTIER = "runtime/changes/change-a/frontier.json"
 
 
-def _pretty_frontier(live: Path) -> bytes:
+def _pretty_frontier(live: Path, *, schema_version: int | None = None) -> bytes:
     frontier = live / ".owlbear/delivery" / _FRONTIER
-    frontier.write_text(json.dumps(json.loads(frontier.read_bytes()), indent=2), encoding="utf-8")
+    payload = json.loads(frontier.read_bytes())
+    if schema_version is not None:
+        payload["schema_version"] = schema_version
+    frontier.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return frontier.read_bytes()
 
 
@@ -338,7 +341,8 @@ def test_full_form_fails_when_the_migrated_load_rewrites_a_record(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     live, previous = _live_with_previous_gate(tmp_path, _N02A_GATE)
-    pretty = _pretty_frontier(live)
+    # A stored schema-18 frontier is never rewritten by a read (N03 section 1.7); a non-canonical 19 one is.
+    pretty = _pretty_frontier(live, schema_version=19)
     monkeypatch.setattr(delivery_lc, "_read_only_load", delivery_lc._load_every_change)  # noqa: SLF001
 
     report = delivery_lc.full_form(live, previous, previous_load=_unexpected_previous_load)
@@ -743,7 +747,7 @@ def test_full_form_downgrade_refuses_exactly_the_records_of_a_family_version_the
     report = delivery_lc.full_form(live, previous, previous_load=_unexpected_previous_load)
 
     assert report["passed"] is True, json.dumps(report, indent=1)
-    assert report["previous_gate_after"]["supported_format"] == 1  # type: ignore[index]
+    assert report["previous_gate_after"]["supported_format"] == report["target_format"]  # type: ignore[index]
     assert report["previous_gate_after"]["refusals"] == [["state-newer-than-controller", _COORDINATION]]  # type: ignore[index]
     assert report["previous_beyond"] == [_COORDINATION]
     assert "previous_load" not in report

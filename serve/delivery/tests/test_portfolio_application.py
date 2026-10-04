@@ -15435,7 +15435,7 @@ def test_work_item_queries_do_not_resolve_integration_target(
         ("change-b", "OUT-001"),
         ("change-b", "change-b"),
     )
-    assert shown.acceptance == ("The launch is observable.",)
+    assert shown.acceptance == ("AC-001: The launch is observable.",)
     assert grouped[0].change_id == "change-a"
     assert detailed.card.work_item_id == "OUT-001"
     assert resolved == []
