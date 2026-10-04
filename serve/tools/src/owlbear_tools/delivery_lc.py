@@ -1220,11 +1220,14 @@ def upgrade_passed(report: dict[str, Any]) -> bool:
     proposed = {entry["locator"] for entry in (migration.get("proposal") or {}).get("entries", [])}
     migrated = not migration["required"] or migration["verified"]
     rollback = report["rollback"]
-    rollback_ok = (
-        rollback["exit"] == 0 and _session_ok(report.get("rollback_start") or {})
-        if previous.get("gated")
-        else rollback["exit"] == 1 and rollback.get("code") == "release-invalid"
-    )
+    previous_format = (previous.get("release") or {}).get("supported_format")
+    if not previous.get("gated"):
+        rollback_ok = rollback["exit"] == 1 and rollback.get("code") == "release-invalid"
+    elif previous_format == report["candidate_release"].get("supported_format"):
+        rollback_ok = rollback["exit"] == 0 and _session_ok(report.get("rollback_start") or {})
+    else:
+        # The migrated state is newer than the previous release's format: its gate must refuse (D3).
+        rollback_ok = rollback["exit"] == 1 and rollback.get("code") == "release-refuses-state"
     return bool(
         _session_ok(previous.get("online") or {})
         and report["candidate_release"].get("installed")

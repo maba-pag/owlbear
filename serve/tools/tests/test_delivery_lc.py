@@ -937,8 +937,8 @@ def _session(**overrides: object) -> dict[str, object]:
 
 def _upgrade_report(*, gated: bool, **overrides: object) -> dict[str, Any]:
     report: dict[str, Any] = {
-        "previous_controller": {"gated": gated, "online": _session()},
-        "candidate_release": {"installed": True},
+        "previous_controller": {"gated": gated, "online": _session(), "release": {"supported_format": 2}},
+        "candidate_release": {"installed": True, "supported_format": 2},
         "offline_preflight": {"exit": 0, "ready": True, "blockers": []},
         "backup": {"exit": 0},
         "migration": {"required": True, "verified": True, "proposal": {"entries": [{"locator": FORMAT_MARKER}]}},
@@ -958,6 +958,11 @@ def _upgrade_report(*, gated: bool, **overrides: object) -> dict[str, Any]:
     return {**report, **overrides}
 
 
+# A gated previous release whose format is older than the migrated state's must refuse the switch back (D3).
+_older_previous = {"gated": True, "online": _session(), "release": {"supported_format": 1}}
+_refused = {"exit": 1, "code": "release-refuses-state"}
+
+
 @pytest.mark.parametrize(
     ("report", "passed"),
     [
@@ -973,6 +978,8 @@ def _upgrade_report(*, gated: bool, **overrides: object) -> dict[str, Any]:
         (_upgrade_report(gated=False, checkout_controller={"loaded": True}), False),
         (_upgrade_report(gated=False, rollback={"exit": 0}), False),
         (_upgrade_report(gated=True, rollback={"exit": 1, "code": "release-refuses-state"}), False),
+        (_upgrade_report(gated=True, previous_controller=_older_previous, rollback=_refused), True),
+        (_upgrade_report(gated=True, previous_controller=_older_previous), False),
         (_upgrade_report(gated=True, rollback_start=_session(unavailable=["a"])), False),
         (_upgrade_report(gated=False, first_start=_session(health_status="degraded")), False),
         (_upgrade_report(gated=False, second_start=_session(health_status="degraded")), False),
@@ -996,6 +1003,8 @@ def _upgrade_report(*, gated: bool, **overrides: object) -> dict[str, Any]:
         "checkout-code-started",
         "ungated-switch-back",
         "gated-rollback-refused",
+        "older-format-rollback-refused",
+        "older-format-rollback-accepted",
         "rollback-loses-change",
         "candidate-unhealthy",
         "restart-unhealthy",
