@@ -16,6 +16,7 @@ import {
   type DeliveryRequestResolution,
   type DeliveryWorkerRole,
   isUnavailableDetail,
+  type MergeOffer,
   type PublicationCheckBlockingState,
   type PublicationChecksObservationResponse,
   WorkItemApiError,
@@ -32,6 +33,7 @@ import {
   changePauseUnavailableMessage,
   DELIVERY_PROGRESS_LABELS,
   isContinuationPrompt,
+  MERGE_BLOCK_LABELS,
   NEXT_ACTOR_LABELS,
   PROGRESS_STAGE_LABELS,
   progressTone,
@@ -977,6 +979,34 @@ function ReadinessAttempt({ attempt }: { attempt: NonNullable<DeliveryReadiness[
   );
 }
 
+/** Read-only merge offer; approval is not available in this phase, so no control is rendered. */
+function MergeOfferSummary({ offer }: { offer: MergeOffer }) {
+  const checks = offer.check_summary;
+  const proof = offer.proof;
+  return (
+    <dl className="mt-static-xs grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md text-xs" data-testid="merge-offer">
+      <IdentityRow label="Pull request" value={`${offer.repository}#${offer.number} ${offer.title}`} />
+      <IdentityRow label="Head" value={offer.head_sha.slice(0, 12)} />
+      <IdentityRow label="Target" value={`${offer.base_branch} at ${offer.target_head.slice(0, 12)}`} />
+      <IdentityRow label="Merge method" value={offer.merge_method} />
+      <IdentityRow
+        label="Required checks"
+        value={
+          `${checks.required_passed} passed, ${checks.required_pending} pending, ` +
+          `${checks.required_failed} failed; ${checks.optional_failed} optional failed`
+        }
+      />
+      <IdentityRow
+        label="Proof"
+        value={
+          `${proof.observation_count} observations, review ${proof.review_id.slice(0, 12)}, ` +
+          `proof target ${proof.proof_target.slice(0, 12)}`
+        }
+      />
+    </dl>
+  );
+}
+
 /** Render engine-computed readiness. Eligibility is never recomputed here. */
 function ReadinessSection({
   readiness,
@@ -1011,6 +1041,13 @@ function ReadinessSection({
       <p className="mt-static-xs text-sm leading-relaxed" data-readiness-reason={readiness.reason_code}>
         {READINESS_REASON_LABELS[readiness.reason_code]}
       </p>
+      {readiness.merge_block ? (
+        <p className="mt-static-xs text-sm leading-relaxed" data-testid="merge-block">
+          {MERGE_BLOCK_LABELS[readiness.merge_block.reason]}
+          {readiness.merge_block.detail ? ` (${readiness.merge_block.detail})` : ""}
+        </p>
+      ) : null}
+      {readiness.merge_offer ? <MergeOfferSummary offer={readiness.merge_offer} /> : null}
       {readiness.prompt ? (
         <pre
           className="mt-static-xs whitespace-pre-wrap break-words rounded-md bg-contrast-low p-static-xs text-xs"

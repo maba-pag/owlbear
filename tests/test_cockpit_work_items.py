@@ -861,7 +861,7 @@ def test_http_builder_transition_diagnostic_is_blocked_without_active_request(tm
 
 
 @pytest.mark.parametrize("exhausted", [False, True])
-def test_http_explicit_acceptance_is_one_bounded_read(tmp_path: Path, *, exhausted: bool) -> None:
+def test_http_explicit_acceptance_reads_once_per_invocation(tmp_path: Path, *, exhausted: bool) -> None:
     application, provider, ledger, restart = acceptance_budget_case(tmp_path, exhausted=exhausted)
     calls = provider.read_pull_request.call_count
     with TestClient(assemble_target_app(application)) as client:
@@ -877,11 +877,13 @@ def test_http_explicit_acceptance_is_one_bounded_read(tmp_path: Path, *, exhaust
         second = client.post("/api/changes/change-a/acceptance/observe")
     assert first.status_code == second.status_code == 409
     assert first.json()["code"] == "ERR_DELIVERY_ACCEPTANCE_WAITING"
-    assert second.json()["detail"] == ("acceptance-wait" if exhausted else "retry-backoff")
-    assert provider.read_pull_request.call_count == calls + int(exhausted)
+    assert second.json()["detail"] == (
+        "provider pull request is still open and unmerged" if exhausted else "retry-backoff"
+    )
+    assert provider.read_pull_request.call_count == calls + 2 * int(exhausted)
     episode = ledger.read().episodes[0]
     assert (episode.total_attempts, episode.explicit_observations, episode.reset_count) == (
-        (3, 1, 0) if exhausted else (1, 0, 0)
+        (3, 2, 0) if exhausted else (1, 0, 0)
     )
 
 
@@ -1682,6 +1684,7 @@ def test_http_loader_replays_and_contains_interrupted_engine_rows(  # noqa: PLR0
                 "merged_at": datetime(2026, 8, 4, tzinfo=UTC),
             }
         )
+        application._publication_observation_cache.clear()  # noqa: SLF001
         basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
     runtime = application._runtimes["change-a"]  # noqa: SLF001
     sibling_frontier = application._runtimes["change-c"].frontier_bytes()  # noqa: SLF001
@@ -1925,6 +1928,7 @@ def test_http_loader_contains_unknown_custody_without_repeating_effects(  # noqa
                 "merged_at": datetime(2026, 8, 4, tzinfo=UTC),
             }
         )
+        application._publication_observation_cache.clear()  # noqa: SLF001
         basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
     sibling_frontier = application._runtimes["change-c"].frontier_bytes()  # noqa: SLF001
     sibling_publication = application._runtimes["change-c"].checkpoint_publication_state()  # noqa: SLF001
@@ -2896,6 +2900,8 @@ def test_list_and_detail_preserve_known_unavailable_change_projection() -> None:
                 "retry_history": [],
                 "prompt": None,
                 "progress": None,
+                "merge_offer": None,
+                "merge_block": None,
             },
         },
     ]

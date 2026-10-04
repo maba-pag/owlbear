@@ -10,6 +10,7 @@ from typing import get_args
 import pytest
 
 from owlbear_delivery.finalization_reports import FinalizationFailureCode, ReportFinalizationFailure
+from owlbear_delivery.merge_offer import MergeBlockReason
 from owlbear_delivery.portfolio_operating import DeliveryHealthReason
 from owlbear_delivery.work_items import ChangePauseUnavailableReason, DeliveryProgress, DeliveryReadinessReason
 
@@ -40,6 +41,21 @@ _FINALIZATION_IMPORT_NAMES: frozenset[str] = frozenset(
         "finalize_change",
     }
 )
+
+
+def test_merge_block_reason_typescript_parity(project_root: Path) -> None:
+    """Every Delivery merge-block reason has a Cockpit type and presentation label."""
+    expected = {item.value for item in MergeBlockReason}
+    api = (project_root / "serve/cockpit/web/src/api/workItems.ts").read_text()
+    union = re.search(r"export type MergeBlockReason\s*=\s*(.*?);", api, re.DOTALL)
+    assert union is not None
+    assert set(re.findall(r'"([^"]+)"', union.group(1))) == expected
+
+    presentation = (project_root / "serve/cockpit/web/src/components/workItemPresentation.ts").read_text()
+    labels = re.search(r"MERGE_BLOCK_LABELS[^=]*=\s*\{(.*?)\};", presentation, re.DOTALL)
+    assert labels is not None
+    keys = set(re.findall(r'^\s*"?([a-z-]+)"?:', labels.group(1), re.MULTILINE))
+    assert keys == expected
 
 
 def test_delivery_readiness_reason_typescript_parity(project_root: Path) -> None:

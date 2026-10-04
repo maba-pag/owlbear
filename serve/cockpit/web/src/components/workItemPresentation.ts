@@ -5,6 +5,7 @@ import type {
   DeliveryReadinessReasonCode,
   DeliveryReadinessStatus,
   DeliveryWorkerRole,
+  MergeBlockReason,
   WorkItemCardView,
   WorkItemNextActor,
   WorkItemPublicationPhase,
@@ -70,6 +71,25 @@ export const READINESS_REASON_LABELS: Record<DeliveryReadinessReasonCode, string
   "worker-stall-wait":
     "The VS Code window that ran this worker closed. Delivery records a failed attempt once no process uses " +
     "the worktree and it has stayed unchanged for 30 seconds.",
+  "merge-approval-required": "Merge the pull request in GitHub.",
+  "merge-checking": "GitHub is still computing mergeability.",
+  "merge-blocked": "The pull request cannot be merged as offered; the next step is shown below.",
+  "checks-running": "Required checks are still running.",
+  "provider-unavailable": "GitHub could not be read; Delivery will read it again shortly.",
+};
+
+export const MERGE_BLOCK_LABELS: Record<MergeBlockReason, string> = {
+  conflicts: "The pull request has merge conflicts; synchronize the target before merging.",
+  behind: "The pull request is behind its target; synchronize the target before merging.",
+  protection: "Branch protection blocks the merge; resolve it in GitHub, then merge there.",
+  draft: "The pull request is a draft in GitHub; mark it ready there or merge in GitHub.",
+  closed: "The pull request is closed in GitHub.",
+  "checks-failed": "Required checks failed; fix them, then merge in GitHub.",
+  "queue-required": "The target only accepts queued merges; merge in GitHub.",
+  stacked: "The pull request is part of a stack; merge in GitHub.",
+  "wrong-base": "The pull request targets another base branch; merge in GitHub or retarget it.",
+  "capability-unavailable": "Delivery cannot merge here; merge the pull request in GitHub.",
+  "method-not-allowed": "The repository disallows merge commits; merge in GitHub.",
 };
 
 /** Truthful check labels: absence of a run is never reported as a pass. */
