@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import textwrap
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -18,7 +21,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from serve.delivery.tests.test_state_formats import _portfolio
 
-from owlbear_delivery import close_delivery_application, load_delivery_application
+from owlbear_delivery import close_delivery_application, load_delivery_application, release_integrity
 from owlbear_delivery.delivery_application_loader import DeliveryStateVersionError
 from owlbear_delivery.state_formats import SUPPORTED_FORMAT, record_tree_digest
 from owlbear_delivery.storage_io import acquire_controller_lock
@@ -74,7 +77,7 @@ class ShimToolchain:
                 f"""
                 import runpy, sys
                 sys.path[:0] = {paths!r}
-                arguments = [argument for argument in sys.argv[1:] if argument not in {{"-I", "-B"}}]
+                arguments = [argument for argument in sys.argv[1:] if argument not in {{"-I", "-B", "-S"}}]
                 if arguments[0] == "-m":
                     sys.argv = [arguments[1], *arguments[2:]]
                     runpy.run_module(arguments[1], run_name="__main__", alter_sys=True)
@@ -238,6 +241,102 @@ def test_a_hand_edited_launcher_fails_verification(tmp_path: Path, source: tuple
     assert result["failures"] == ["launcher bin/delivery-mcp does not exec the pinned release"]
 
 
+def _tamper(layout: Layout, commit: str, marker: Path) -> None:
+    """Modify one release module so that importing it would leave ``marker`` behind."""
+    module = layout.release(commit) / "serve/delivery/src/owlbear_delivery/__init__.py"
+    module.chmod(0o644)
+    module.write_bytes(module.read_bytes() + f"\nopen({str(marker)!r}, 'w').close()\n".encode())
+
+
+@pytest.mark.parametrize("launcher", delivery_controller.LAUNCHERS)
+def test_a_launcher_refuses_a_modified_release_before_importing_any_of_its_code(
+    tmp_path: Path, source: tuple[Path, list[str]], launcher: str
+) -> None:
+    repository, commits = source
+    layout, _config = _workspace(tmp_path)
+    _install(layout, repository, commits[0])
+    _pin(layout, commits[0], first=True)
+    marker = tmp_path / "imported"
+    _tamper(layout, commits[0], marker)
+    digests = record_tree_digest(layout.workspace)
+
+    completed = subprocess.run(  # noqa: S603 - the generated launcher of this test's workspace.
+        (str(layout.bin / launcher),),
+        cwd=layout.workspace,
+        env={**os.environ, "COCKPIT_NO_OPEN": "1"},
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+
+    assert completed.returncode == 78
+    assert completed.stderr.startswith(f"controller-release-invalid: controller release {layout.release(commits[0])}")
+    assert "modified after install" in completed.stderr
+    assert not marker.exists()
+    assert record_tree_digest(layout.workspace) == digests
+    assert delivery_controller.verify(layout)["verified"] is False
+
+
+_ENTRY_PROBE = """
+import asyncio, json
+from pathlib import Path
+from owlbear_cockpit.target_context import load_target_context
+from owlbear_delivery import load_delivery_application
+from owlbear_delivery.delivery_application_loader import DeliveryApplicationLoadError, DeliveryStartupConfig
+from owlbear_delivery_mcp.server import app_lifespan, mcp
+root = Path.cwd()
+refusals = {}
+config = DeliveryStartupConfig.model_validate_json((root / ".owlbear/delivery/config.json").read_bytes())
+try:
+    load_delivery_application(config, workspace_root=root)
+except DeliveryApplicationLoadError as exc:
+    refusals["loader"] = exc.detail
+try:
+    load_target_context(root)
+except RuntimeError as exc:
+    refusals["cockpit"] = str(exc)
+async def start():
+    async with app_lifespan(mcp):
+        pass
+try:
+    asyncio.run(start())
+except Exception as exc:
+    refusals["mcp"] = getattr(exc, "detail", str(exc))
+print(json.dumps(refusals))
+"""
+
+
+def test_every_entry_that_bypasses_a_launcher_refuses_a_modified_release_before_reading_state(
+    tmp_path: Path, source: tuple[Path, list[str]]
+) -> None:
+    repository, commits = source
+    layout, _config = _workspace(tmp_path)
+    _install(layout, repository, commits[0])
+    _pin(layout, commits[0], first=True)
+    module = layout.release(commits[0]) / "serve/cockpit/src/owlbear_cockpit/target_context.py"
+    module.chmod(0o644)
+    module.write_bytes(module.read_bytes() + b"\n# modified after install\n")
+    digests = record_tree_digest(layout.workspace)
+
+    completed = subprocess.run(  # noqa: S603 - the release interpreter runs a fixed probe.
+        (str(layout.release(commits[0]) / ".venv/bin/python"), "-I", "-B", "-c", _ENTRY_PROBE),
+        cwd=layout.workspace,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+
+    refusals = json.loads(completed.stdout)
+    assert sorted(refusals) == ["cockpit", "loader", "mcp"], completed.stderr
+    for detail in refusals.values():
+        assert "controller-release-invalid: controller release" in detail
+        assert "modified after install" in detail
+    assert record_tree_digest(layout.workspace) == digests
+
+
 def test_switch_records_previous_rolls_back_and_prune_keeps_current_and_previous(
     tmp_path: Path, source: tuple[Path, list[str]]
 ) -> None:
@@ -262,6 +361,54 @@ def test_switch_records_previous_rolls_back_and_prune_keeps_current_and_previous
         commits[1]: "previous",
     }
     assert delivery_controller.verify(layout)["verified"] is True
+
+
+def test_verify_detects_a_changed_interpreter_and_a_release_record_the_pin_does_not_name(
+    tmp_path: Path, source: tuple[Path, list[str]]
+) -> None:
+    repository, commits = source
+    layout, _config = _workspace(tmp_path)
+    installed = _install(layout, repository, commits[0])
+    _pin(layout, commits[0], first=True)
+    interpreter = installed["release"]["interpreter"]
+    assert interpreter == release_integrity.interpreter_identity()
+    record = layout.release(commits[0]) / release_integrity.RELEASE_FILE
+    payload = json.loads(record.read_text(encoding="utf-8"))
+    payload["interpreter"]["sha256"] = "0" * 64
+    record.chmod(0o644)
+    record.write_text(json.dumps(payload), encoding="utf-8")
+
+    failures = delivery_controller.verify(layout)["failures"]
+
+    assert f"the interpreter {interpreter['path']} of release {commits[0]} changed after install" in failures
+    assert f"pin.json does not name the RELEASE.json of release {commits[0]}" in failures
+
+
+def test_prune_belongs_to_the_stopped_interval_after_switch_and_verify(
+    tmp_path: Path, source: tuple[Path, list[str]]
+) -> None:
+    repository, commits = source
+    layout, _config = _workspace(tmp_path)
+    _mark(layout)
+    for commit in commits:
+        _install(layout, repository, commit)
+    _pin(layout, commits[0], first=True)
+    _pin(layout, commits[1], first=False)
+    assert delivery_controller.verify(layout)["verified"] is True
+
+    pruned = delivery_controller.prune(layout, processes=_stopped)
+    restarted = acquire_controller_lock(layout.runtime)
+    try:
+        with pytest.raises(ControllerError) as refused:
+            delivery_controller.prune(layout, processes=_stopped)
+    finally:
+        restarted.release()
+
+    assert (pruned["kept"], pruned["removed"]) == (sorted(commits[:2]), [commits[2]])
+    assert refused.value.code == "controller-running"
+    assert sorted(path.name for path in layout.releases.iterdir()) == sorted(commits[:2])
+    assert delivery_controller.verify(layout)["verified"] is True
+    assert delivery_controller.verify(layout, commits[0])["verified"] is True
 
 
 def test_pin_and_switch_refuse_without_changing_the_pin(tmp_path: Path, source: tuple[Path, list[str]]) -> None:
@@ -595,6 +742,69 @@ def test_preflight_reports_an_unmigrated_workspace_as_attention_only(tmp_path: P
 
     assert (code, report["ready"], report["format"]) == (0, True, 0)
     assert [row["code"] for row in report["attention"]] == ["migration-required"]
+
+
+def _without_blocking(fifo: Path, command: Any) -> Any:
+    """Run ``command`` in a thread; a reader still blocked on ``fifo`` after 10 s is released and fails the test."""
+    with ThreadPoolExecutor(1) as pool:
+        future = pool.submit(command)
+        try:
+            return future.result(timeout=10)
+        finally:
+            with contextlib.suppress(OSError):
+                os.close(os.open(fifo, os.O_WRONLY | os.O_NONBLOCK))
+
+
+@pytest.mark.parametrize(
+    "locator",
+    [
+        f"{_CHANGE}/state-publication.json",
+        f"{_CHANGE}/frontier.json",
+        f"{_CHANGE}/claim-issuers/attempt-1.json",
+        "runtime/coordination/changes/demo.json",
+    ],
+    ids=["state-publication", "frontier", "claim-issuer", "coordination"],
+)
+def test_preflight_refuses_a_fifo_record_without_blocking_under_the_controller_lock(
+    tmp_path: Path, locator: str
+) -> None:
+    layout, _config = _workspace(tmp_path)
+    _mark(layout)
+    if "claim-issuers" in locator:
+        _claim(layout)
+        (layout.workspace / ".owlbear/delivery" / locator).unlink()
+    fifo = layout.workspace / ".owlbear/delivery" / locator
+    fifo.parent.mkdir(parents=True, exist_ok=True)
+    os.mkfifo(fifo)
+
+    report = _without_blocking(
+        fifo, lambda: delivery_controller.preflight(layout, processes=_stopped, window_state=lambda _w: "gone")
+    )
+
+    assert report["ready"] is False
+    codes = {row["code"] for row in report["blockers"]}
+    assert codes & {"custody-unknown", "claim-running"}
+    assert stat.S_ISFIFO(fifo.lstat().st_mode)
+    assert _exclusive_controller_lock_free(layout)
+
+
+def test_backup_refuses_a_fifo_record_without_blocking(tmp_path: Path) -> None:
+    layout, _config = _workspace(tmp_path)
+    _mark(layout)
+    fifo = layout.workspace / ".owlbear/delivery" / _CHANGE / "frontier.json"
+    fifo.parent.mkdir(parents=True)
+    os.mkfifo(fifo)
+
+    with pytest.raises(ControllerError) as refused:
+        _without_blocking(fifo, lambda: delivery_controller.backup(layout, tmp_path / "backup", processes=_stopped))
+
+    assert refused.value.code == "backup-invalid"
+    assert not (tmp_path / "backup").exists()
+
+
+def _exclusive_controller_lock_free(layout: Layout) -> bool:
+    acquire_controller_lock(layout.runtime, exclusive=True).release()
+    return True
 
 
 # ---------------------------------------------------------------------------

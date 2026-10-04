@@ -36,15 +36,18 @@ and report it unchanged; never retry a mutating step blindly.
 7. **Switch:** ask the user to confirm the switch from the current to the new release, then run
    `NEW/delivery-controller --project-root <root> switch <new commit>` (`pin` when the workspace is not
    pinned yet). Report the recorded `previous`.
-8. **Restart and verify:** ask the user to start `owlbear-delivery` from *MCP: List Servers* and Cockpit
-   with `.owlbear/controller/bin/cockpit`. Then run `NEW/delivery-controller --project-root <root> verify`,
-   call `delivery_health` and `list_changes`, and call `get_change` for every Change: each must be
-   available and match its step-2 state. Only then run `NEW/delivery-controller --project-root <root>
-   prune`, which keeps the current and previous releases.
-9. **Failure after the switch:** ask the user to stop both controllers, copy the state with another
-   `backup` to a second directory, and report. Offer `switch <previous>`; it succeeds only when the
-   previous release's own gate accepts the migrated state. Restoring the step-5 backup is the user's
-   decision; never restore, edit or delete Delivery state yourself.
+8. **Verify and prune while stopped:** run `NEW/delivery-controller --project-root <root> verify`, which
+   must report `verified` true for the release, its interpreter, the pin and the launchers. Then run
+   `NEW/delivery-controller --project-root <root> prune`, which keeps the current and previous releases
+   and refuses while a controller runs, so it belongs here, before the restart.
+9. **Restart and verify:** ask the user to start `owlbear-delivery` from *MCP: List Servers* and Cockpit
+   with `.owlbear/controller/bin/cockpit`. Then call `delivery_health`, which must be `healthy`, and
+   `list_changes`, and call `get_change` for every Change: each must be available and match its step-2
+   state.
+10. **Failure after the switch:** ask the user to stop both controllers, copy the state with another
+    `backup` to a second directory, and report. Offer `switch <previous>`; it succeeds only when the
+    previous release's own gate accepts the migrated state. Restoring the step-5 backup is the user's
+    decision; never restore, edit or delete Delivery state yourself.
 
 Never edit `pin.json`, launchers or release directories by hand, never run checkout code
 (`uv run python -m owlbear_delivery_mcp`, `uv run cockpit`) against a pinned workspace, and never call

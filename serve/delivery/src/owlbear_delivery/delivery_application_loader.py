@@ -79,6 +79,8 @@ from owlbear_delivery.portfolio_operating import (
     DeliveryHealthReason,
     DeliveryHealthResolution,
 )
+from owlbear_delivery.release_integrity import REFUSAL_CODE as CONTROLLER_RELEASE_INVALID
+from owlbear_delivery.release_integrity import ReleaseIntegrityError, require_release
 from owlbear_delivery.remote_git import RemoteGitError, RemoteGitFailed, read_remote_ref, run_remote_git
 from owlbear_delivery.runtime_transaction import (
     RuntimeTransaction,
@@ -88,12 +90,15 @@ from owlbear_delivery.runtime_transaction import (
 )
 from owlbear_delivery.state_formats import (
     CONTROLLER_PIN,
+    CONTROLLER_RELEASES,
     FORMAT_MARKER,
     MIGRATIONS_ROOT,
     SUPPORTED_FORMAT,
+    ControllerPinError,
     StateCapabilityError,
     controller_pin_refusal,
     format_marker_bytes,
+    read_controller_pin,
     require_capability,
     scan_capability,
 )
@@ -2552,11 +2557,25 @@ def _acquire_controller_fence(paths: _DeliveryPaths) -> ControllerLock:
 
 
 def _require_pinned_code(paths: _DeliveryPaths) -> None:
-    """Refuse a controller whose code is not the workspace's pinned release (I6), before any state read."""
+    """Refuse a controller whose code is not the workspace's intact pinned release (I6), before any state read."""
     detail = controller_pin_refusal(paths.repository_root, Path(__file__))
     if detail is not None:
         message = f"{CONTROLLER_NOT_PINNED}: {detail}"
         raise DeliveryStateVersionError(CONTROLLER_NOT_PINNED, message, locator=CONTROLLER_PIN)
+    try:
+        pin = read_controller_pin(paths.repository_root)
+    except ControllerPinError as exc:
+        message = f"{CONTROLLER_NOT_PINNED}: the controller pin is unusable ({exc})"
+        raise DeliveryStateVersionError(CONTROLLER_NOT_PINNED, message, locator=CONTROLLER_PIN) from exc
+    if pin is None:
+        return
+    release = paths.repository_root / CONTROLLER_RELEASES / pin.commit
+    try:
+        require_release(release, pin.release_sha256)
+    except ReleaseIntegrityError as exc:
+        message = f"{CONTROLLER_RELEASE_INVALID}: controller release {pin.commit} is not intact: {exc}"
+        locator = f"{CONTROLLER_RELEASES}/{pin.commit}"
+        raise DeliveryStateVersionError(CONTROLLER_RELEASE_INVALID, message, locator=locator) from exc
 
 
 def _require_state_capability(paths: _DeliveryPaths) -> bool:

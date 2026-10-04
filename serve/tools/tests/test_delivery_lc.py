@@ -926,7 +926,7 @@ def test_readiness_blockers_name_running_and_interrupted_custody_only() -> None:
 
 
 def _session(**overrides: object) -> dict[str, object]:
-    return {"started": True, "unavailable": [], "blockers": [], **overrides}
+    return {"started": True, "health_status": "healthy", "unavailable": [], "blockers": [], **overrides}
 
 
 def _upgrade_report(*, gated: bool, **overrides: object) -> dict[str, Any]:
@@ -940,6 +940,7 @@ def _upgrade_report(*, gated: bool, **overrides: object) -> dict[str, Any]:
         "switch": {"exit": 0},
         "mcp_json_names_launcher": True,
         "first_start": _session(),
+        "second_start": _session(),
         "round_trip_unchanged": True,
         "cockpit": {"work_items_status": 200, "index_matches_release": True},
         "checkout_controller": {"loaded": False, "code": "controller-not-pinned"},
@@ -967,6 +968,14 @@ def _upgrade_report(*, gated: bool, **overrides: object) -> dict[str, Any]:
         (_upgrade_report(gated=False, rollback={"exit": 0}), False),
         (_upgrade_report(gated=True, rollback={"exit": 1, "code": "release-refuses-state"}), False),
         (_upgrade_report(gated=True, rollback_start=_session(unavailable=["a"])), False),
+        (_upgrade_report(gated=False, first_start=_session(health_status="degraded")), False),
+        (_upgrade_report(gated=False, second_start=_session(health_status="degraded")), False),
+        (_upgrade_report(gated=False, first_start=_session(health_status=None)), False),
+        (_upgrade_report(gated=True, rollback_start=_session(health_status="degraded")), False),
+        (
+            _upgrade_report(gated=False, previous_controller={"gated": False, "online": _session(health_status="x")}),
+            False,
+        ),
     ],
     ids=[
         "first-upgrade",
@@ -982,6 +991,11 @@ def _upgrade_report(*, gated: bool, **overrides: object) -> dict[str, Any]:
         "ungated-switch-back",
         "gated-rollback-refused",
         "rollback-loses-change",
+        "candidate-unhealthy",
+        "restart-unhealthy",
+        "candidate-health-missing",
+        "rollback-unhealthy",
+        "previous-unhealthy",
     ],
 )
 def test_upgrade_verdict_requires_every_procedure_step(report: dict[str, Any], *, passed: bool) -> None:

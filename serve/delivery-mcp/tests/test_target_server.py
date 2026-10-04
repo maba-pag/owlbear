@@ -3677,7 +3677,9 @@ async def test_lifespan_refuses_checkout_code_on_a_pinned_workspace(
     _write_config(path, _config())
     pin = repository / ".owlbear/controller/pin.json"
     pin.parent.mkdir(parents=True)
-    pin.write_text(json.dumps({"schema_version": 1, "commit": "a" * 40, "previous": None}), "utf-8")
+    pin.write_text(
+        json.dumps({"schema_version": 1, "commit": "a" * 40, "previous": None, "release_sha256": "f" * 64}), "utf-8"
+    )
     monkeypatch.chdir(repository)
 
     with pytest.raises(DeliveryStartupDiagnostic) as exc_info:

@@ -533,7 +533,9 @@ def test_upgrade_delivery_prompt_follows_the_rehearsed_upgrade_procedure() -> No
         "delivery-migrate",
         "switch <new commit>",
         "<root> verify",
-        "prune",
+        "<root> prune",
+        "ask the user to start `owlbear-delivery`",
+        "`delivery_health`, which must be `healthy`",
     )
     positions = [prompt.index(step) for step in steps]
     assert positions == sorted(positions)

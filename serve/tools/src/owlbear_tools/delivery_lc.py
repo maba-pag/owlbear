@@ -934,6 +934,7 @@ def _full_form_passed(report: dict[str, Any], proposed: set[str]) -> bool:
 
 _GATE_SOURCE = "serve/delivery/src/owlbear_delivery/state_formats.py"
 _HTTP_OK = 200
+_HEALTHY = "healthy"
 _BLOCKING_READINESS = frozenset({"engine-action-interrupted", "worker-stall-wait"})
 _UNGATED_PROBE = """
 import json, sys
@@ -1035,7 +1036,8 @@ def _ungated_session(live: Path, previous: str, change_ids: list[str]) -> dict[s
         probe = json.loads(completed.stdout)
     except ValueError:
         return {"started": False, "error": completed.stderr[-2000:]}
-    return {"started": True, **_session_summary(probe["views"], probe["health"])}
+    health = probe["health"]
+    return {"started": True, "health_status": health.get("status"), **_session_summary(probe["views"], health)}
 
 
 def cockpit_check(launcher: Path, live: Path, index: Path) -> dict[str, Any]:
@@ -1199,7 +1201,13 @@ def upgrade_form(live: Path, previous: str, *, control: Path) -> dict[str, Any]:
 
 
 def _session_ok(session: dict[str, Any]) -> bool:
-    return bool(session.get("started") and not session.get("unavailable") and not session.get("blockers"))
+    """A controller start passes only when ``delivery_health`` is healthy and every Change is available."""
+    return bool(
+        session.get("started")
+        and session.get("health_status") == _HEALTHY
+        and not session.get("unavailable")
+        and not session.get("blockers")
+    )
 
 
 def upgrade_passed(report: dict[str, Any]) -> bool:
@@ -1225,6 +1233,7 @@ def upgrade_passed(report: dict[str, Any]) -> bool:
         and report["switch"]["exit"] == 0
         and report["mcp_json_names_launcher"]
         and _session_ok(report["first_start"])
+        and _session_ok(report["second_start"])
         and report["round_trip_unchanged"]
         and report["cockpit"]["work_items_status"] == _HTTP_OK
         and report["cockpit"]["index_matches_release"]

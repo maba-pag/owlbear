@@ -2,10 +2,11 @@
 
 A release is ``.owlbear/controller/releases/<commit>/``: ``git archive <commit>``, a locked
 ``uv sync --compile-bytecode`` environment, the Cockpit bundle and ``RELEASE.json`` (commit, supported
-format, tree digest), then made read-only. ``pin`` and ``switch`` write the generated launchers
-``bin/delivery-mcp`` and ``bin/cockpit`` and commit ``pin.json`` last. A pinned workspace refuses every
-controller whose code is not its pinned release (I6). ``preflight``, ``backup``, ``pin``, ``switch`` and
-``prune`` hold the workspace controller lock exclusively and refuse while any controller runs.
+format, interpreter identity, tree digest), then made read-only. ``pin`` and ``switch`` write the generated
+launchers ``bin/delivery-mcp`` and ``bin/cockpit`` and commit ``pin.json`` (with the digest of
+``RELEASE.json``) last. Every pinned start verifies the release against that digest before any release code
+runs, and refuses a controller whose code is not its pinned release (I6). ``preflight``, ``backup``, ``pin``,
+``switch`` and ``prune`` hold the workspace controller lock exclusively and refuse while any controller runs.
 """
 
 from __future__ import annotations
@@ -30,6 +31,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
+from owlbear_delivery import release_integrity
+from owlbear_delivery.release_integrity import RELEASE_FILE, ReleaseIntegrityError, file_sha256, tree_digest
 from owlbear_delivery.state_formats import (
     CONTROLLER_PIN,
     CONTROLLER_RELEASES,
@@ -47,21 +50,17 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
     from types import ModuleType
 
-RELEASE_FILE = "RELEASE.json"
 RELEASE_SCHEMA_VERSION = 1
 LAUNCHERS = ("delivery-mcp", "cockpit")
 _MAINTENANCE_LOCK = ".maintenance.lock"
 _COMMIT = re.compile(r"[0-9a-f]{40}")
 _DIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+_RECORD_FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
 _MAX_RECORD_BYTES = 64 << 20
 _WRITE_BITS = stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH
 _CLEAN_ENVIRONMENT = ("VIRTUAL_ENV", "PYTHONPATH", "PYTHONHOME", "UV_PROJECT_ENVIRONMENT", "CONDA_PREFIX")
-_LAUNCH_MODULES = {
-    "delivery-mcp": "-m owlbear_delivery_mcp",
-    "cockpit": "-c 'from owlbear_cockpit.main import main; raise SystemExit(main())'",
-}
 _PROBE = """
-import json, sys
+import json, os, sys
 import owlbear_delivery, owlbear_delivery_mcp, owlbear_cockpit, owlbear_tools
 try:
     from owlbear_delivery import state_formats
@@ -69,7 +68,8 @@ try:
 except ImportError:
     supported = None
 print(json.dumps({"modules": [m.__file__ for m in (owlbear_delivery, owlbear_delivery_mcp, owlbear_cockpit,
-    owlbear_tools)], "supported_format": supported, "python": sys.version.split()[0]}))
+    owlbear_tools)], "supported_format": supported, "python": sys.version.split()[0],
+    "interpreter": os.path.realpath(sys.executable)}))
 """
 _GATE_PROBE = """
 import json, sys
@@ -305,38 +305,6 @@ def stopped_controllers(layout: Layout, processes: ProcessSource) -> Iterator[No
 # ---------------------------------------------------------------------------
 
 
-def tree_digest(tree: Path) -> str:
-    """SHA-256 over every entry's type, path, executable bit and content or link target (no mode bits)."""
-    digest = hashlib.sha256()
-    for directory, names, files in os.walk(tree):
-        names.sort()
-        base = Path(directory)
-        relative = base.relative_to(tree).as_posix()
-        for name in sorted([*files, *(name for name in names if (base / name).is_symlink())]):
-            path = base / name
-            locator = f"{relative}/{name}" if relative != "." else name
-            if locator == RELEASE_FILE:
-                continue
-            info = path.lstat()
-            if stat.S_ISLNK(info.st_mode):
-                digest.update(f"l {locator} {path.readlink()}\n".encode())
-            elif stat.S_ISREG(info.st_mode):
-                executable = "x" if info.st_mode & stat.S_IXUSR else "-"
-                digest.update(f"f {locator} {executable} {_file_digest(path)}\n".encode())
-            else:
-                digest.update(f"o {locator}\n".encode())
-        digest.update(f"d {relative}\n".encode())
-    return digest.hexdigest()
-
-
-def _file_digest(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1 << 20), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 def _writable_entries(tree: Path) -> list[str]:
     found = []
     for directory, names, files in os.walk(tree):
@@ -399,11 +367,27 @@ def verify_release(layout: Layout, commit: str) -> list[str]:
     if release is None:
         return [f"release {commit} is incomplete ({RELEASE_FILE} is absent)"]
     failures = [] if release.get("commit") == commit else [f"{RELEASE_FILE} names {release.get('commit')}"]
-    if tree_digest(tree) != release.get("tree_sha256"):
+    try:
+        modified = tree_digest(tree) != release.get("tree_sha256")
+    except ReleaseIntegrityError as exc:
+        modified, failures = True, [*failures, str(exc)]
+    if modified:
         failures.append(f"release {commit} was modified after install (tree digest differs from {RELEASE_FILE})")
+    failures += _interpreter_failures(commit, release.get("interpreter"))
     if writable := _writable_entries(tree):
         failures.append(f"release {commit} has writable entries: {writable}")
     return failures
+
+
+def _interpreter_failures(commit: str, interpreter: object) -> list[str]:
+    """The interpreter lives outside the release: its recorded binary must still hash as at install."""
+    if not isinstance(interpreter, dict) or not isinstance(interpreter.get("path"), str):
+        return [f"{RELEASE_FILE} of {commit} records no interpreter identity"]
+    try:
+        unchanged = file_sha256(interpreter["path"]) == interpreter.get("sha256")
+    except OSError, ReleaseIntegrityError:
+        unchanged = False
+    return [] if unchanged else [f"the interpreter {interpreter['path']} of release {commit} changed after install"]
 
 
 def _require_intact(layout: Layout, commit: str) -> dict[str, Any]:
@@ -501,7 +485,11 @@ def install(  # noqa: PLR0913 - every install input is an explicit keyword.
             "schema_version": RELEASE_SCHEMA_VERSION,
             "commit": commit,
             "supported_format": probe["supported_format"],
-            "python": probe["python"],
+            "interpreter": {
+                "path": probe["interpreter"],
+                "version": probe["python"],
+                "sha256": file_sha256(probe["interpreter"]),
+            },
             "platform": f"{sys.platform}-{os.uname().machine}",
             "bundle": bundle,
             "installed_at": now().strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -541,7 +529,7 @@ def bundle(
         _extract(source, commit, tree)
         (toolchain or UvNodeToolchain()).build_bundle(tree)
         shutil.copytree(tree / "serve/cockpit/dist", output)
-    return {"status": "built", "commit": commit, "index_sha256": _file_digest(output / "index.html")}
+    return {"status": "built", "commit": commit, "index_sha256": file_sha256(output / "index.html")}
 
 
 def _install_bundle(tree: Path, bundle_source: Path | None, toolchain: Toolchain) -> dict[str, str]:
@@ -557,7 +545,7 @@ def _install_bundle(tree: Path, bundle_source: Path | None, toolchain: Toolchain
         origin = "built"
     if not (dist / "index.html").is_file():
         raise ControllerError(code="bundle-unavailable", detail="the Cockpit bundle has no index.html")
-    return {"origin": origin, "index_sha256": _file_digest(dist / "index.html")}
+    return {"origin": origin, "index_sha256": file_sha256(dist / "index.html")}
 
 
 # ---------------------------------------------------------------------------
@@ -565,21 +553,34 @@ def _install_bundle(tree: Path, bundle_source: Path | None, toolchain: Toolchain
 # ---------------------------------------------------------------------------
 
 
-def launcher_bytes(layout: Layout, commit: str, name: str) -> bytes:
-    """Return the generated launcher: exec the release interpreter isolated from the caller's environment."""
-    python = shlex.quote(str(Path(os.path.realpath(layout.release(commit))) / ".venv/bin/python"))
+def launcher_bytes(layout: Layout, commit: str, name: str, release_sha256: str) -> bytes:
+    """Return the generated launcher: verify the release, then run its controller isolated from the caller.
+
+    The launcher embeds ``owlbear_delivery.release_integrity`` and runs it with ``-I -S``: the release's
+    ``RELEASE.json`` must hash to the pinned digest and the tree and interpreter must match it before
+    site-packages (and their ``.pth`` files) or any release module load.
+    """
+    release = os.path.realpath(layout.release(commit))
+    python = shlex.quote(f"{release}/.venv/bin/python")
+    verifier = shlex.quote(Path(release_integrity.__file__).read_text(encoding="utf-8"))
     return (
         "#!/bin/sh\n"
         f"# Generated by delivery-controller for release {commit}; do not edit.\n"
-        f'exec env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV {python} -I -B {_LAUNCH_MODULES[name]} "$@"\n'
+        f"exec env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV {python} -I -S -B -c {verifier} "
+        f'{shlex.quote(release)} {release_sha256} {name} "$@"\n'
     ).encode()
 
 
-def _pin_bytes(commit: str, previous: str | None, now: datetime) -> bytes:
+def _release_sha256(layout: Layout, commit: str) -> str:
+    return hashlib.sha256(release_integrity.read_release_record(layout.release(commit))).hexdigest()
+
+
+def _pin_bytes(commit: str, previous: str | None, release_sha256: str, now: datetime) -> bytes:
     payload = {
         "schema_version": PIN_SCHEMA_VERSION,
         "commit": commit,
         "previous": previous,
+        "release_sha256": release_sha256,
         "pinned_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
     return (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode()
@@ -644,10 +645,11 @@ def pin(
                 refusals=gate["refusals"],
             )
         layout.bin.mkdir(parents=True, exist_ok=True)
+        release_sha256 = _release_sha256(layout, commit)
         for name in LAUNCHERS:
-            _replace(layout.bin / name, launcher_bytes(layout, commit, name), 0o555)
+            _replace(layout.bin / name, launcher_bytes(layout, commit, name, release_sha256), 0o555)
         previous = existing.commit if existing is not None else None
-        _replace(layout.pin, _pin_bytes(commit, previous, now()), 0o444)
+        _replace(layout.pin, _pin_bytes(commit, previous, release_sha256, now()), 0o444)
     return {"status": "pinned", "commit": commit, "previous": previous}
 
 
@@ -660,18 +662,29 @@ def verify(layout: Layout, commit: str | None = None) -> dict[str, Any]:
         raise ControllerError(code="not-pinned", detail=detail)
     failures = verify_release(layout, target)
     if pinned is not None and pinned.commit == target:
-        for name in LAUNCHERS:
-            path = layout.bin / name
-            if path.is_symlink() or not path.is_file() or path.read_bytes() != launcher_bytes(layout, target, name):
-                failures.append(f"launcher bin/{name} does not exec the pinned release")
-            elif not os.access(path, os.X_OK):
-                failures.append(f"launcher bin/{name} is not executable")
+        failures += _pin_failures(layout, pinned)
     return {
         "verified": not failures,
         "commit": target,
         "pinned": pinned is not None and pinned.commit == target,
         "failures": failures,
     }
+
+
+def _pin_failures(layout: Layout, pinned: ControllerPin) -> list[str]:
+    try:
+        anchored = _release_sha256(layout, pinned.commit) == pinned.release_sha256
+    except OSError, ReleaseIntegrityError:
+        anchored = False
+    failures = [] if anchored else [f"pin.json does not name the {RELEASE_FILE} of release {pinned.commit}"]
+    for name in LAUNCHERS:
+        path = layout.bin / name
+        expected = launcher_bytes(layout, pinned.commit, name, pinned.release_sha256)
+        if path.is_symlink() or not path.is_file() or path.read_bytes() != expected:
+            failures.append(f"launcher bin/{name} does not exec the pinned release")
+        elif not os.access(path, os.X_OK):
+            failures.append(f"launcher bin/{name} is not executable")
+    return failures
 
 
 def list_releases(layout: Layout) -> dict[str, Any]:
@@ -757,21 +770,41 @@ def process_window_state(window: dict[str, Any]) -> str:
     return ProcessWindowLivenessProbe().window_state(identity)
 
 
-def _read_json(path: Path) -> object:
-    """Read one bounded record without following a final link; raise ``ValueError`` when unusable."""
+def _read_json(delivery: Path, path: Path) -> object:
+    """Read one bounded regular record inside the Delivery root, never following a link or blocking.
+
+    Every component below ``delivery`` is opened relative to its parent without following links, and the
+    record itself nonblocking, so a FIFO, device or symlink is refused (``ValueError``) instead of stalling
+    the caller, which holds the exclusive controller lock.
+    """
+    parts = path.relative_to(delivery).parts
     try:
-        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        descriptor = os.open(delivery, _DIRECTORY_FLAGS)
     except OSError as exc:
-        raise ValueError(str(path.name)) from exc
+        raise ValueError(path.name) from exc
     try:
-        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
-            raise ValueError(path.name)
-        content = os.read(descriptor, _MAX_RECORD_BYTES + 1)
+        for part in parts[:-1]:
+            child = os.open(part, _DIRECTORY_FLAGS, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = child
+        record = os.open(parts[-1], _RECORD_FLAGS, dir_fd=descriptor)
+    except OSError as exc:
+        raise ValueError(path.name) from exc
     finally:
         os.close(descriptor)
+    try:
+        info = os.fstat(record)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > _MAX_RECORD_BYTES:
+            raise ValueError(path.name)
+        content = os.read(record, _MAX_RECORD_BYTES + 1)
+    finally:
+        os.close(record)
     if len(content) > _MAX_RECORD_BYTES:
         raise ValueError(path.name)
-    return json.loads(content)
+    try:
+        return json.loads(content)
+    except RecursionError as exc:
+        raise ValueError(path.name) from exc
 
 
 def preflight(
@@ -847,7 +880,7 @@ def _scan_state_publication(delivery: Path, path: Path, custody: _Custody) -> No
     if not path.exists() and not path.is_symlink():
         return
     try:
-        status = _read_json(path).get("status")  # type: ignore[union-attr]
+        status = _read_json(delivery, path).get("status")  # type: ignore[union-attr]
     except ValueError, AttributeError:
         status = None
     if status == "pending":
@@ -858,10 +891,10 @@ def _scan_state_publication(delivery: Path, path: Path, custody: _Custody) -> No
 
 def _frontier_claims(delivery: Path, change: Path, custody: _Custody) -> list[tuple[str, str]]:
     path = change / "frontier.json"
-    if not path.exists():
+    if not path.exists() and not path.is_symlink():
         return []
     try:
-        frontier = _read_json(path)
+        frontier = _read_json(delivery, path)
         bindings = frontier["bindings"]
         claims = [
             (str(binding["active_claim"]["attempt_id"]), str(binding["active_claim"]["worker_role"]))
@@ -880,10 +913,10 @@ def _frontier_claims(delivery: Path, change: Path, custody: _Custody) -> list[tu
 
 def _coordination_claims(delivery: Path, change_id: str, custody: _Custody) -> list[tuple[str, str]]:
     path = delivery / "runtime/coordination/changes" / f"{change_id}.json"
-    if not path.exists():
+    if not path.exists() and not path.is_symlink():
         return []
     try:
-        coordination = _read_json(path)
+        coordination = _read_json(delivery, path)
         attempt = coordination.get("finalization_attempt")
         lease = coordination.get("publication_lease")
         action = coordination.get("continuation_action")
@@ -905,7 +938,7 @@ def _classify_claim(  # noqa: PLR0913 - one claim classification binds each inpu
     issuer = change / "claim-issuers" / f"{attempt_id}.json"
     locator = _locator(delivery, issuer)
     try:
-        window = _read_json(issuer).get("window")
+        window = _read_json(delivery, issuer).get("window")
     except ValueError, AttributeError:
         window = None
     state = window_state(window) if isinstance(window, dict) else "unknown"
@@ -937,9 +970,9 @@ def _scan_action_receipts(delivery: Path, change: Path, custody: _Custody) -> No
 def _classify_action_result(delivery: Path, change: Path, operation: Path, custody: _Custody) -> None:
     locator = _locator(delivery, operation / "result.json")
     try:
-        result = _read_json(operation / "result.json")
+        result = _read_json(delivery, operation / "result.json")
         kind, reason = result.get("kind"), result.get("reason_code")
-        coordination = _read_json(delivery / "runtime/coordination/changes" / f"{change.name}.json")
+        coordination = _read_json(delivery, delivery / "runtime/coordination/changes" / f"{change.name}.json")
         action = coordination.get("continuation_action") or {}
     except ValueError, AttributeError:
         custody.block("custody-unknown", locator, "an engine action result could not be classified")
@@ -986,7 +1019,14 @@ def _manifest(root: Path) -> dict[str, str]:
         for name in [*files, *(name for name in names if (base / name).is_symlink())]:
             path = base / name
             locator = path.relative_to(root).as_posix()
-            manifest[locator] = f"symlink:{path.readlink()}" if path.is_symlink() else _file_digest(path)
+            if path.is_symlink():
+                manifest[locator] = f"symlink:{path.readlink()}"
+                continue
+            try:
+                manifest[locator] = file_sha256(path)
+            except ReleaseIntegrityError as exc:
+                detail = f"{locator} is not a regular file; state was not changed"
+                raise ControllerError(code="backup-invalid", detail=detail) from exc
     return manifest
 
 

@@ -16,14 +16,14 @@ import sys
 import types
 from datetime import datetime
 from pathlib import Path
-from typing import Literal, Self, get_args
+from typing import Any, Literal, Self, get_args
 
 import pytest
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 import owlbear_delivery
 from owlbear_delivery import delivery_application_loader as loader_module
-from owlbear_delivery import state_formats
+from owlbear_delivery import release_integrity, state_formats
 from owlbear_delivery.delivery_application_loader import (
     DeliveryApplicationLoadError,
     DeliveryStartupConfig,
@@ -949,6 +949,7 @@ def test_scan_stops_enumerating_a_directory_at_the_entry_bound(tmp_path: Path, m
 # ---------------------------------------------------------------------------
 
 _RELEASE = "a" * 40
+_PIN = {"schema_version": 1, "commit": _RELEASE, "previous": None, "release_sha256": "f" * 64}
 
 
 def _pin(repository: Path, payload: object, *, release: bool = True) -> Path:
@@ -962,9 +963,25 @@ def _pin(repository: Path, payload: object, *, release: bool = True) -> Path:
     return module
 
 
+def _intact_release(repository: Path, *, interpreter: dict[str, str] | None = None) -> Path:
+    """Pin a fake release whose ``RELEASE.json`` matches its tree and (by default) this interpreter."""
+    module = _pin(repository, _PIN)
+    release = repository / ".owlbear/controller/releases" / _RELEASE
+    record = {
+        "schema_version": 1,
+        "commit": _RELEASE,
+        "tree_sha256": release_integrity.tree_digest(release),
+        "interpreter": interpreter or release_integrity.interpreter_identity(),
+    }
+    content = json.dumps(record).encode()
+    (release / release_integrity.RELEASE_FILE).write_bytes(content)
+    _pin(repository, {**_PIN, "release_sha256": hashlib.sha256(content).hexdigest()})
+    return module
+
+
 def test_dev_code_on_a_pinned_workspace_is_refused_before_any_state_read(tmp_path: Path) -> None:
     repository, config = _portfolio(tmp_path)
-    _pin(repository, {"schema_version": 1, "commit": _RELEASE, "previous": None})
+    _pin(repository, _PIN)
     _write(repository, "runtime/changes/demo/frontier.json", {"schema_version": 19, "bindings": []})
     digests = record_tree_digest(repository)
 
@@ -981,8 +998,13 @@ def test_dev_code_on_a_pinned_workspace_is_refused_before_any_state_read(tmp_pat
 
 @pytest.mark.parametrize(
     "content",
-    ['{"schema_version": 2, "commit": "' + _RELEASE + '"}', '{"schema_version": 1, "commit": "abc"}', "not json"],
-    ids=["newer-pin", "short-commit", "malformed"],
+    [
+        '{"schema_version": 2, "commit": "' + _RELEASE + '"}',
+        '{"schema_version": 1, "commit": "abc"}',
+        '{"schema_version": 1, "commit": "' + _RELEASE + '", "previous": null}',
+        "not json",
+    ],
+    ids=["newer-pin", "short-commit", "no-release-digest", "malformed"],
 )
 def test_an_unusable_pin_refuses_every_controller(tmp_path: Path, content: str) -> None:
     repository, config = _portfolio(tmp_path)
@@ -999,7 +1021,7 @@ def test_an_unusable_pin_refuses_every_controller(tmp_path: Path, content: str) 
 
 def test_pin_accepts_only_code_inside_the_real_pinned_release(tmp_path: Path) -> None:
     repository = tmp_path / "workspace"
-    module = _pin(repository, {"schema_version": 1, "commit": _RELEASE, "previous": None})
+    module = _pin(repository, _PIN)
     other = repository / ".owlbear/controller/releases" / ("b" * 40) / "owlbear_delivery/loader.py"
     other.parent.mkdir(parents=True)
     other.write_text("", encoding="utf-8")
@@ -1016,7 +1038,7 @@ def test_pin_accepts_only_code_inside_the_real_pinned_release(tmp_path: Path) ->
 
 def test_a_symlinked_pin_is_unusable(tmp_path: Path) -> None:
     repository = tmp_path / "workspace"
-    module = _pin(repository, {"schema_version": 1, "commit": _RELEASE, "previous": None})
+    module = _pin(repository, _PIN)
     target = tmp_path / "pin.json"
     pin_path = repository / ".owlbear/controller/pin.json"
     pin_path.rename(target)
@@ -1027,11 +1049,62 @@ def test_a_symlinked_pin_is_unusable(tmp_path: Path) -> None:
 
 def test_the_pinned_release_starts_and_holds_the_shared_lock(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     repository, config = _portfolio(tmp_path)
-    module = _pin(repository, {"schema_version": 1, "commit": _RELEASE, "previous": None})
+    module = _intact_release(repository)
     monkeypatch.setattr(loader_module, "__file__", str(module))
+    monkeypatch.setattr(release_integrity, "_verified", set())
 
     application = load_delivery_application(config, workspace_root=repository)
 
     assert not _exclusive_available(repository)
     close_delivery_application(application)
+    assert _exclusive_available(repository)
+    monkeypatch.setattr(release_integrity, "tree_digest", _unexpected_digest)
+    close_delivery_application(load_delivery_application(config, workspace_root=repository))
+
+
+def _unexpected_digest(_tree: Path) -> str:
+    msg = "a verified release is hashed once per process"
+    raise AssertionError(msg)
+
+
+def _modify_module(repository: Path) -> None:
+    module = repository / ".owlbear/controller/releases" / _RELEASE / "serve/delivery/src/owlbear_delivery/x.py"
+    module.write_text("# added after install\n", encoding="utf-8")
+
+
+def _foreign_interpreter(repository: Path) -> None:
+    _intact_release(repository, interpreter={**release_integrity.interpreter_identity(), "sha256": "0" * 64})
+
+
+def _foreign_record(repository: Path) -> None:
+    _pin(repository, {**_PIN, "release_sha256": "e" * 64})
+
+
+@pytest.mark.parametrize(
+    ("change", "reason"),
+    [
+        (_modify_module, "modified after install"),
+        (_foreign_interpreter, "is not the one recorded at install"),
+        (_foreign_record, "differs from the release record named by the pin"),
+    ],
+    ids=["modified-file", "other-interpreter", "record-not-pinned"],
+)
+def test_a_pinned_release_that_is_not_intact_is_refused_before_any_state_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change: Any, reason: str
+) -> None:
+    repository, config = _portfolio(tmp_path)
+    module = _intact_release(repository)
+    change(repository)
+    monkeypatch.setattr(loader_module, "__file__", str(module))
+    monkeypatch.setattr(release_integrity, "_verified", set())
+    _write(repository, "runtime/changes/demo/frontier.json", {"schema_version": 19, "bindings": []})
+    digests = record_tree_digest(repository)
+
+    with pytest.raises(DeliveryStateVersionError) as refusal:
+        load_delivery_application(config, workspace_root=repository)
+
+    assert refusal.value.code == "controller-release-invalid"
+    assert refusal.value.locator == f".owlbear/controller/releases/{_RELEASE}"
+    assert reason in refusal.value.detail
+    assert record_tree_digest(repository) == digests
     assert _exclusive_available(repository)
