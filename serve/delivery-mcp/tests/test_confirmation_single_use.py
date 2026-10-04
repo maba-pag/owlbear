@@ -295,6 +295,58 @@ async def test_frontier_advanced_between_rounds_consumes_the_question_as_frontie
     _assert_unanswered(runtime, advanced)
 
 
+def _assert_deferred_refusal(result: object) -> None:
+    assert isinstance(result, types.CallToolResult)
+    assert result.is_error
+    diagnostic = _diagnostic(result)
+    assert diagnostic["code"] == "ERR_DELIVERY_RUNTIME_CONFLICT"
+    assert "deferred" in str(diagnostic["detail"])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["legacy", _MODERN])
+async def test_an_accepted_answer_the_lifecycle_recheck_refuses_consumes_its_generation(
+    tmp_path: Path, mode: str
+) -> None:
+    application, runtime, state_root = _scoped_case(tmp_path)
+    _unrelated_frontier_write(application, runtime)
+    deferred = runtime.frontier_bytes()
+    arguments = _arguments(runtime)
+    seen: list[types.ElicitRequestParams] = []
+
+    async with Client(
+        assemble_target_server(application), mode=mode, elicitation_callback=_accepting("waive", seen)
+    ) as client:
+        result = await client.call_tool("answer", arguments)
+
+    assert len(seen) == 1
+    _assert_deferred_refusal(result)
+    generation = _store(state_root).read(1)[0]
+    assert generation.state == "answered"
+    assert generation.disposition is not None
+    assert (generation.disposition.outcome, generation.disposition.code) == ("refused", "change-deferred")
+    _assert_unanswered(runtime, deferred)
+
+
+@pytest.mark.asyncio
+async def test_resending_an_answer_the_lifecycle_recheck_refused_returns_the_same_refusal(tmp_path: Path) -> None:
+    application, runtime, state_root = _scoped_case(tmp_path)
+    _unrelated_frontier_write(application, runtime)
+    deferred = runtime.frontier_bytes()
+    arguments = _arguments(runtime)
+    async with _modern(application) as client:
+        asked = await _ask(client, arguments)
+        first = await _round(client, arguments, asked, "accept", "waive")
+        recorded = _generations(state_root)
+        again = await _round(client, arguments, asked, "accept", "waive")
+
+    for result in (first, again):
+        _assert_deferred_refusal(result)
+    assert _generations(state_root) == recorded
+    assert _store(state_root).read(1)[0].disposition.code == "change-deferred"
+    _assert_unanswered(runtime, deferred)
+
+
 # --- Single use (D13 *Single use*, I11), modern route ---------------------------------------------
 
 

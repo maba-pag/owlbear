@@ -10,7 +10,7 @@ import uuid
 from contextlib import contextmanager, suppress
 from datetime import UTC, datetime, timedelta
 from threading import Lock
-from typing import TYPE_CHECKING, Literal, Never
+from typing import TYPE_CHECKING, Literal, Never, get_args
 
 from owlbear_delivery.acceptance import (
     CompletionEvidence,
@@ -152,6 +152,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryResultCandidate,
     DeliveryRuntime,
     DeliveryRuntimeConflictError,
+    DeliveryRuntimeReferenceError,
     DeliveryStage,
     DeliveryTaskDefinition,
     DeliveryUserConfirmation,
@@ -224,6 +225,41 @@ if TYPE_CHECKING:
 
 def _refuse_confirmation(reason: DeliveryConfirmationRefusal, detail: str | None = None) -> Never:
     raise DeliveryConfirmationError(reason, detail)
+
+
+_CONFIRMATION_REFUSALS: frozenset[str] = frozenset(get_args(DeliveryConfirmationRefusal.__value__))
+# Expected re-check refusals of an accepted answer; I/O and transaction failures are not among them.
+_ANSWER_RECHECK_REFUSALS = (DeliveryRuntimeConflictError, DeliveryRuntimeReferenceError, CoordinationConflictError)
+
+
+def _answer_refusal_code(runtime: DeliveryRuntime, error: Exception) -> str:
+    """Name why the lifecycle or custody re-check refused an accepted answer (D13 *Single use*)."""
+    if isinstance(error, DeliveryConfirmationError):
+        return error.reason
+    if isinstance(error, CoordinationConflictError):
+        return "custody-conflict"
+    if isinstance(error, DeliveryRuntimeReferenceError):
+        return "request-invalid"
+    states = (
+        (runtime.completion_bundle(), "change-completed"),
+        (runtime.change_abandonment(), "change-abandoned"),
+        (runtime.change_deferral(), "change-deferred"),
+        (runtime.change_disposition(), "change-attention"),
+        (runtime.active_claims() or None, "claim-active"),
+    )
+    return next((code for state, code in states if state is not None), "request-refused")
+
+
+def _raise_recorded_refusal(code: str) -> Never:
+    """Raise the typed refusal recorded for a re-check that consumed its generation."""
+    detail = f"the answered question was refused: {code}"
+    if code in _CONFIRMATION_REFUSALS:
+        raise DeliveryConfirmationError(code)  # type: ignore[arg-type]
+    if code == "custody-conflict":
+        raise CoordinationConflictError(detail)
+    if code == "request-invalid":
+        raise DeliveryRuntimeReferenceError(detail)
+    raise DeliveryRuntimeConflictError(detail)
 
 
 def _confirmation_binding_digest(request: DeliveryRequest, expected_frontier_digest: str) -> str:
@@ -1758,9 +1794,13 @@ class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _Publication
                 outcome="accepted", confirmation_id=confirmation.confirmation_id, record_id=request.request_id
             ),
         )
-        resolved = runtime.resolve_request(
-            request.request_id, resolution, confirmation=confirmation, consent_participant=participant
-        )
+        try:
+            resolved = runtime.resolve_request(
+                request.request_id, resolution, confirmation=confirmation, consent_participant=participant
+            )
+        except _ANSWER_RECHECK_REFUSALS as error:
+            refuse(_answer_refusal_code(runtime, error))
+            raise
         self._publish_delivery_state(
             change_id,
             runtime,
@@ -1785,9 +1825,9 @@ class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _Publication
         if disposition.outcome in {"declined", "cancelled"}:
             _refuse_confirmation("declined", f"the user {disposition.outcome} this question")
         if disposition.outcome == "refused":
-            if disposition.code == "ledger-full":
-                _refuse_confirmation("ledger-full")
-            self._fail("answer frontier changed" if disposition.code == "frontier-changed" else "request closed")
+            if disposition.code in {"frontier-changed", "request-closed"}:
+                self._fail("answer frontier changed" if disposition.code == "frontier-changed" else "request closed")
+            _raise_recorded_refusal(disposition.code or "request-refused")
         request = self._optional_request(runtime, generation.subject_id)
         if request is None:
             _refuse_confirmation("question-closed", "the confirmed request is no longer active")
