@@ -25,7 +25,6 @@ _COCKPIT_NODE_FILES = {
 _ROOT_NODE_FILES = {"package-lock.json", "package.json"}
 _DIAGRAM_FILES = {".owlbear/scripts/diagrams/archify.lock.json"}
 _PYTHON_BEHAVIOR_FILES = {
-    ".github/workflows/source-verification.yml",
     ".python-version",
     "conftest.py",
 }
@@ -271,7 +270,7 @@ def _python_behavior_changed(
     before_files: Mapping[str, str | None] | None,
     after_files: Mapping[str, str | None] | None,
 ) -> bool:
-    """Return whether source verification needs the full Python behavior proof."""
+    """Return whether Python behavior or its locked dependencies changed."""
     if changed & _PYTHON_BEHAVIOR_FILES or any(
         path.startswith(("serve/", "tests/", "setup/", "seed/")) for path in changed
     ):

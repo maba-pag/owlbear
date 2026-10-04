@@ -25,6 +25,7 @@ from owlbear_delivery.completed_history import (
 from owlbear_delivery.delivery_runtime import (
     DeliveryChangeAbandonment,
     DeliveryChangeStage,
+    DeliveryCommandResult,
     DeliveryFrontier,
     DeliveryObservation,
     DeliveryObservationReceipt,
@@ -94,14 +95,15 @@ def _task_result(
             task_or_finalization_id=task.task_id,
             exact_commit=completed_commit,
             observation_kind="pytest",
-            command_or_procedure="completed-history fixture validation",
-            exit_status_or_artifact_locator="exit:0",
+            procedure="completed-history fixture validation",
+            result=DeliveryCommandResult(exit_status=0),
             observer_or_runner_identity="pytest",
             observed_at=observed_at,
         )
     )
     review = DeliveryReviewReceipt.create(
         DeliveryReview(
+            review_mode="task",
             exact_commit=completed_commit,
             author_id="Completed history test author",
             reviewer_id="Completed history test reviewer",

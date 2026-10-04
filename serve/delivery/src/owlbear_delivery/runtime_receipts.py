@@ -10,7 +10,9 @@ from pydantic import Field, model_validator
 
 from owlbear_delivery.runtime_models import (
     _BUILDER_HANDOFF_CHANGE_INTENT_FRONTIER_FIELDS,
+    _FRONTIER_SCHEMA_VERSION,
     _MAX_BUILDER_HANDOFF_CHANGE_INTENT_RECEIPTS,
+    _READABLE_LEGACY_FRONTIER_SCHEMA_VERSION,
     REQUESTLESS_WORKER_SETTLEMENT_FAILURE_CODES,
     BlockDelivery,
     DeliveryActiveClaim,
@@ -31,9 +33,27 @@ from owlbear_delivery.runtime_models import (
     ReturnDelivery,
     _DeliveryModel,
     _model_content,
+    _normalize_frontier,
     _receipt_digest,
+    binding_has_n03_content,
     derive_change_stage,
+    retained_requests,
 )
+
+
+def _require_legacy_content(
+    schema_version: int,
+    bindings: tuple[OutcomeAuthorityBinding, ...],
+    request: DeliveryRequest | None = None,
+) -> None:
+    """Reject N03 content inside a schema-1 receipt (I2); writers emit schema 2 only."""
+    if schema_version != 1:
+        return
+    if any(binding_has_n03_content(binding) for binding in bindings) or (
+        request is not None and request.has_n03_content
+    ):
+        message = "schema-1 Delivery receipt cannot carry schema-2 evidence or scoped requests"
+        raise ValueError(message)
 
 
 class DeliveryPlanningRetrySettlement(_DeliveryModel):
@@ -127,12 +147,13 @@ class DeliveryEngineBuilderSettlement(DeliveryBuilderInvocationSettlement):
 class _DeliveryPlanningRetrySettlementReceipt(_DeliveryModel):
     """Immutable result for replaying one exact completed Planner retry invocation."""
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 2
     envelope: DeliveryEnginePlanningSettlement | DeliveryPlanningRetrySettlement
     result: OutcomeAuthorityBinding
 
     @model_validator(mode="after")
     def _validate_receipt(self) -> _DeliveryPlanningRetrySettlementReceipt:
+        _require_legacy_content(self.schema_version, (self.result,))
         if (
             self.result.outcome_id != self.envelope.outcome_id
             or self.result.stage != DeliveryStage.PLANNING
@@ -146,7 +167,7 @@ class _DeliveryPlanningRetrySettlementReceipt(_DeliveryModel):
 class _DeliveryBuilderInvocationSettlementReceipt(_DeliveryModel):
     """Immutable result for replaying one exact completed Builder invocation."""
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 2
     settlement_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     envelope: DeliveryEngineBuilderSettlement | DeliveryBuilderInvocationSettlement
     handoff_context: DeliveryBuilderHandoffContext
@@ -154,6 +175,12 @@ class _DeliveryBuilderInvocationSettlementReceipt(_DeliveryModel):
 
     @model_validator(mode="after")
     def _validate_receipt(self) -> _DeliveryBuilderInvocationSettlementReceipt:
+        envelope_request = self.envelope.request
+        _require_legacy_content(
+            self.schema_version,
+            (self.result,),
+            envelope_request.request if isinstance(envelope_request, BlockDelivery) else None,
+        )
         context = self.handoff_context
         if (
             self.settlement_id != hashlib.sha256(_model_content(self.envelope)).hexdigest()
@@ -184,7 +211,7 @@ class _DeliveryBuilderInvocationSettlementReceipt(_DeliveryModel):
 class _DeliveryBuilderPlanPromotionReceipt(_DeliveryModel):
     """Immutable proof that one retained Builder return was promoted through Planning."""
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 2
     promotion_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     change_id: str = Field(min_length=1, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
     outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
@@ -218,11 +245,12 @@ class _DeliveryBuilderPlanPromotionReceipt(_DeliveryModel):
             "candidate": candidate,
             "result_binding": result_binding,
         }
-        receipt = cls.model_construct(promotion_id="0" * 64, schema_version=1, **values)
+        receipt = cls.model_construct(promotion_id="0" * 64, schema_version=2, **values)
         return cls(promotion_id=_receipt_digest(receipt, "promotion_id"), **values)
 
     @model_validator(mode="after")
     def _validate_receipt(self) -> _DeliveryBuilderPlanPromotionReceipt:
+        _require_legacy_content(self.schema_version, (self.source_binding, self.result_binding))
         self._validate_identity()
         self._validate_task_lineage()
         self._validate_successor()
@@ -296,7 +324,7 @@ class _DeliveryBuilderPlanPromotionReceipt(_DeliveryModel):
                 "recovery_attention": None,
                 "retry_diagnostic": None,
                 "block": None,
-                "requests": (),
+                "requests": retained_requests(self.source_binding.requests),
                 "retry_fingerprint": None,
                 "retry_count": 0,
             }
@@ -309,7 +337,7 @@ class _DeliveryBuilderPlanPromotionReceipt(_DeliveryModel):
 class _DeliveryBuilderRequestResolutionReceipt(_DeliveryModel):
     """Immutable user answer bound to one exact local Builder pause."""
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 2
     change_id: str = Field(min_length=1, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
     outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
     request_id: str = Field(min_length=1)
@@ -320,6 +348,7 @@ class _DeliveryBuilderRequestResolutionReceipt(_DeliveryModel):
 
     @model_validator(mode="after")
     def _validate_receipt(self) -> _DeliveryBuilderRequestResolutionReceipt:
+        _require_legacy_content(self.schema_version, (), self.resolved_request)
         context = self.builder_handoff_context
         resolution = self.resolved_request.resolution
         expected_note = None if resolution is None else resolution.response_text or resolution.selected_option_id
@@ -351,7 +380,7 @@ class _DeliveryBuilderRequestResolutionReceipt(_DeliveryModel):
 class _DeliveryBuilderHandoffChangeIntentReceipt(_DeliveryModel):
     """Immutable proof of one supported lifecycle intent during a retained Builder handoff."""
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 2
     receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     action: Literal["defer", "resume", "abandon"]
     change_id: str = Field(min_length=1, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -398,11 +427,12 @@ class _DeliveryBuilderHandoffChangeIntentReceipt(_DeliveryModel):
             "deferral": deferral,
             "abandonment": abandonment,
         }
-        candidate = cls.model_construct(receipt_id="0" * 64, schema_version=1, **values)
+        candidate = cls.model_construct(receipt_id="0" * 64, schema_version=2, **values)
         return cls(receipt_id=_receipt_digest(candidate, "receipt_id"), **values)
 
     @model_validator(mode="after")
     def _validate_receipt(self) -> _DeliveryBuilderHandoffChangeIntentReceipt:
+        self._validate_versions()
         self._validate_identity()
         self._validate_bound_frontiers()
         self._validate_action(self._changed_frontier_fields())
@@ -435,11 +465,21 @@ class _DeliveryBuilderHandoffChangeIntentReceipt(_DeliveryModel):
                 message = "Builder handoff change-intent receipt does not bind its retained context"
                 raise ValueError(message)
 
+    def _validate_versions(self) -> None:
+        before, after = self.before_frontier.schema_version, self.after_frontier.schema_version
+        legacy = _READABLE_LEGACY_FRONTIER_SCHEMA_VERSION
+        if (self.schema_version == 1 and (before, after) != (legacy, legacy)) or (
+            self.schema_version != 1 and after != _FRONTIER_SCHEMA_VERSION
+        ):
+            message = "Builder handoff change-intent receipt frontiers do not match its schema"
+            raise ValueError(message)
+
     def _changed_frontier_fields(self) -> set[str]:
+        before, after = _normalize_frontier(self.before_frontier), _normalize_frontier(self.after_frontier)
         return {
             field_name
             for field_name in DeliveryFrontier.model_fields
-            if getattr(self.before_frontier, field_name) != getattr(self.after_frontier, field_name)
+            if getattr(before, field_name) != getattr(after, field_name)
         }
 
     def _validate_action(self, changed_fields: set[str]) -> None:
@@ -540,7 +580,7 @@ class _BuilderHandoffChangeIntentMutation:
 class _DeliveryPlanningPauseReplay(_DeliveryModel):
     """Immutable result for replaying one exact request-bearing Planning pause."""
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 2
     change_id: str = Field(min_length=1, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
     outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
     claim_id: str = Field(min_length=1)
@@ -550,6 +590,7 @@ class _DeliveryPlanningPauseReplay(_DeliveryModel):
 
     @model_validator(mode="after")
     def _validate_replay(self) -> _DeliveryPlanningPauseReplay:
+        _require_legacy_content(self.schema_version, (self.result,), self.request.request)
         delivery_request = self.request.request
         block = self.result.block
         if delivery_request is None:
@@ -577,6 +618,36 @@ class _DeliveryPlanningPauseReplay(_DeliveryModel):
             message = "Planning pause replay receipt does not bind its original transition"
             raise ValueError(message)
         return self
+
+
+def parse_planning_pause_receipt(content: bytes) -> _DeliveryPlanningPauseReplay:
+    """Registered reader for schema-1 Planning pause receipts; the widened model validates them unchanged."""
+    return _DeliveryPlanningPauseReplay.model_validate_json(content, strict=True)
+
+
+def parse_planning_retry_receipt(content: bytes) -> _DeliveryPlanningRetrySettlementReceipt:
+    """Registered reader for schema-1 Planning retry receipts."""
+    return _DeliveryPlanningRetrySettlementReceipt.model_validate_json(content, strict=True)
+
+
+def parse_builder_invocation_receipt(content: bytes) -> _DeliveryBuilderInvocationSettlementReceipt:
+    """Registered reader for schema-1 Builder invocation receipts."""
+    return _DeliveryBuilderInvocationSettlementReceipt.model_validate_json(content, strict=True)
+
+
+def parse_builder_plan_promotion_receipt(content: bytes) -> _DeliveryBuilderPlanPromotionReceipt:
+    """Registered reader for schema-1 Builder plan promotion receipts."""
+    return _DeliveryBuilderPlanPromotionReceipt.model_validate_json(content, strict=True)
+
+
+def parse_builder_request_resolution_receipt(content: bytes) -> _DeliveryBuilderRequestResolutionReceipt:
+    """Registered reader for schema-1 request resolution receipts."""
+    return _DeliveryBuilderRequestResolutionReceipt.model_validate_json(content, strict=True)
+
+
+def parse_builder_handoff_change_intent_receipt(content: bytes) -> _DeliveryBuilderHandoffChangeIntentReceipt:
+    """Registered reader for schema-1 handoff change-intent receipts."""
+    return _DeliveryBuilderHandoffChangeIntentReceipt.model_validate_json(content, strict=True)
 
 
 class AdministrativeDeliveryMove(_DeliveryModel):

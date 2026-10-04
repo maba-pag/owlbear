@@ -143,7 +143,7 @@ class TargetCockpitService:
             resolution=resolution,
             expected_frontier_digest=body.expected_frontier_digest,
         )
-        return self._invoke(lambda: self._application.answer(answer))
+        return self._invoke(lambda: self._application.answer(answer, allow_user_only=True))
 
     def clear_block(
         self,

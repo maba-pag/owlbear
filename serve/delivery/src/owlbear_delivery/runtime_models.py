@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import inspect
 import json
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -13,6 +14,7 @@ from typing import TYPE_CHECKING, Annotated, Literal, TypedDict, Unpack, cast
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
+from owlbear_delivery.acceptance_criteria import ACCEPTANCE_ID_PATTERN, DeliveryAcceptanceRef
 from owlbear_delivery.change_workspace import (
     ChangeExternalHeadAdoptionReceipt,
     ChangeExternalHeadPromotionReceipt,
@@ -372,8 +374,8 @@ class DeliveryTaskDefinition(_DeliveryModel):
         return hashlib.sha256(_model_content(self)).hexdigest()
 
 
-class DeliveryObservation(_DeliveryModel):
-    """Typed validation evidence before its immutable receipt identity is assigned."""
+class DeliveryLegacyObservation(_DeliveryModel):
+    """Schema-1 free-text validation evidence, read-only since observation schema 2."""
 
     schema_version: Literal[1] = 1
     change_id: str = Field(min_length=1)
@@ -387,10 +389,183 @@ class DeliveryObservation(_DeliveryModel):
     observed_at: datetime
 
 
-class DeliveryObservationReceipt(DeliveryObservation):
-    """One exact-commit validation observation retained as lifecycle evidence."""
+class DeliveryLegacyObservationReceipt(DeliveryLegacyObservation):
+    """One retained schema-1 observation; its coverage is unknown and it is never relabeled."""
 
     observation_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def _validate_receipt(self) -> DeliveryLegacyObservationReceipt:
+        if self.observed_at.tzinfo is None:
+            message = "Delivery observation timestamp must include a timezone"
+            raise ValueError(message)
+        if self.observation_id != _receipt_digest(self, "observation_id"):
+            message = "Delivery observation receipt identity is invalid"
+            raise ValueError(message)
+        return self
+
+
+_SHA256 = r"^[0-9a-f]{64}$"
+_LOCATOR = re.compile(r"(?:path|ci-run|check-run|request|report):\S+")
+_ENVIRONMENT_LABEL = r"^[a-z0-9][a-z0-9.+_-]{0,63}(:[A-Za-z0-9.+_-]{1,64})?$"
+
+
+class DeliveryCommandResult(_DeliveryModel):
+    """Machine-run command evidence whose verdict is derived from exit status and expectation."""
+
+    kind: Literal["command"] = "command"
+    exit_status: int = Field(ge=-255, le=255)
+    expectation: Literal["success", "expected-failure"] = "success"
+    expected_exit_status: int | None = Field(default=None, ge=-255, le=255)
+
+    @model_validator(mode="after")
+    def _validate_expectation(self) -> DeliveryCommandResult:
+        if (self.expectation == "expected-failure") != (self.expected_exit_status is not None):
+            message = "an expected exit status is required exactly for an expected-failure command"
+            raise ValueError(message)
+        if self.expected_exit_status == 0:
+            message = "an expected-failure command must expect a nonzero exit status"
+            raise ValueError(message)
+        return self
+
+    @property
+    def verdict(self) -> DeliveryEvidenceVerdict:
+        """Derive the command verdict; it can never contradict exit status and expectation."""
+        if self.expectation == "success":
+            return "passed" if self.exit_status == 0 else "failed"
+        return "expected-negative" if self.exit_status == self.expected_exit_status else "failed"
+
+
+class DeliveryManualProcedureResult(_DeliveryModel):
+    """Evidence from a named manual procedure with an explicit assessment."""
+
+    kind: Literal["manual-procedure"] = "manual-procedure"
+    assessment: Literal["passed", "failed"]
+
+    @property
+    def verdict(self) -> DeliveryEvidenceVerdict:
+        """Return the explicit assessment."""
+        return self.assessment
+
+
+class DeliveryArtifactResult(_DeliveryModel):
+    """Evidence from one retained artifact with an explicit assessment."""
+
+    kind: Literal["artifact"] = "artifact"
+    assessment: Literal["passed", "failed"]
+    artifact_digest: str | None = Field(default=None, pattern=_SHA256)
+
+    @property
+    def verdict(self) -> DeliveryEvidenceVerdict:
+        """Return the explicit assessment."""
+        return self.assessment
+
+
+class DeliveryMissingResult(_DeliveryModel):
+    """A durable, owned gap: required evidence that does not exist yet."""
+
+    kind: Literal["missing"] = "missing"
+    owner: Literal["agent", "user", "provider", "assisted-check"]
+    reason: str = Field(min_length=1, max_length=240)
+
+    @property
+    def verdict(self) -> DeliveryEvidenceVerdict:
+        """Return the missing verdict."""
+        return "missing"
+
+
+class DeliveryWaivedResult(_DeliveryModel):
+    """An explicit user waiver; it applies only through the user-resolved request its observation cites."""
+
+    kind: Literal["waived"] = "waived"
+    owner: Literal["user"] = "user"
+    reason: str = Field(min_length=1, max_length=240)
+
+    @property
+    def verdict(self) -> DeliveryEvidenceVerdict:
+        """Return the waived verdict."""
+        return "waived"
+
+
+type DeliveryEvidenceVerdict = Literal["passed", "expected-negative", "failed", "missing", "waived"]
+DeliveryEvidenceResult = Annotated[
+    DeliveryCommandResult
+    | DeliveryManualProcedureResult
+    | DeliveryArtifactResult
+    | DeliveryMissingResult
+    | DeliveryWaivedResult,
+    Field(discriminator="kind"),
+]
+PROOF_VERDICTS: frozenset[str] = frozenset({"passed", "expected-negative"})
+
+
+class DeliveryObservationEnvironment(_DeliveryModel):
+    """Environment constraints that bound where an observation applies."""
+
+    platform: Literal["macos", "linux"] | None = None
+    labels: tuple[Annotated[str, Field(pattern=_ENVIRONMENT_LABEL)], ...] = Field(default=(), max_length=8)
+
+
+class DeliveryObservation(_DeliveryModel):
+    """Typed schema-2 validation evidence before its immutable receipt identity is assigned."""
+
+    schema_version: Literal[2] = 2
+    change_id: str = Field(min_length=1)
+    task_or_finalization_id: str = Field(min_length=1)
+    step_id: str | None = Field(default=None, min_length=1)
+    exact_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    observation_kind: str = Field(min_length=1, max_length=64)
+    procedure: str = Field(min_length=1, max_length=512)
+    procedure_registration_digest: str | None = Field(default=None, pattern=_SHA256)
+    result: DeliveryEvidenceResult
+    covers: tuple[DeliveryAcceptanceRef, ...] = Field(default=(), max_length=32)
+    environment: DeliveryObservationEnvironment = DeliveryObservationEnvironment()
+    target_class: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9-]{0,63}$")
+    provenance: Literal["machine-observed", "human-confirmed"] = "machine-observed"
+    request_id: str | None = Field(default=None, min_length=1)
+    locator: str | None = Field(default=None, max_length=256)
+    summary: str | None = Field(default=None, max_length=240)
+    observer_or_runner_identity: str = Field(min_length=1)
+    observed_at: datetime
+
+    @model_validator(mode="after")
+    def _validate_evidence(self) -> DeliveryObservation:
+        identities = tuple(reference.acceptance_id for reference in self.covers)
+        if len(identities) != len(set(identities)):
+            message = "an observation covers each acceptance criterion at most once"
+            raise ValueError(message)
+        kind = self.result.kind
+        if self.provenance == "human-confirmed" and kind not in {"manual-procedure", "artifact", "waived"}:
+            message = "human-confirmed provenance applies only to manual, artifact, or waived evidence"
+            raise ValueError(message)
+        needs_request = self.provenance == "human-confirmed" or kind == "waived"
+        if needs_request != (self.request_id is not None):
+            message = "a resolved request is cited exactly by human-confirmed or waived evidence"
+            raise ValueError(message)
+        if kind == "artifact" and self.locator is None:
+            message = "artifact evidence requires a retained locator"
+            raise ValueError(message)
+        if self.locator is not None and not _valid_locator(self.locator):
+            message = "observation locator must be a bounded scheme:value without URLs or parent segments"
+            raise ValueError(message)
+        return self
+
+    @property
+    def verdict(self) -> DeliveryEvidenceVerdict:
+        """Return the derived verdict of the typed result."""
+        return self.result.verdict
+
+
+def _valid_locator(locator: str) -> bool:
+    if _LOCATOR.fullmatch(locator) is None or "://" in locator:
+        return False
+    return ".." not in locator.split(":", 1)[1].split("/")
+
+
+class DeliveryObservationReceipt(DeliveryObservation):
+    """One exact-commit schema-2 observation retained as lifecycle evidence."""
+
+    observation_id: str = Field(pattern=_SHA256)
 
     @classmethod
     def create(
@@ -398,7 +573,7 @@ class DeliveryObservationReceipt(DeliveryObservation):
         observation: DeliveryObservation,
     ) -> DeliveryObservationReceipt:
         """Create one receipt using the canonical typed-content digest."""
-        values = observation.model_dump()
+        values = {field_name: getattr(observation, field_name) for field_name in DeliveryObservation.model_fields}
         candidate = cls.model_construct(observation_id="0" * 64, **values)
         return cls(observation_id=_receipt_digest(candidate, "observation_id"), **values)
 
@@ -413,16 +588,42 @@ class DeliveryObservationReceipt(DeliveryObservation):
         return self
 
 
+DeliveryAnyObservationReceipt = Annotated[
+    DeliveryLegacyObservationReceipt | DeliveryObservationReceipt,
+    Field(discriminator="schema_version"),
+]
+
+
 class DeliveryReview(_DeliveryModel):
     """Typed independent advisory pass before receipt identity is assigned."""
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 2
     exact_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
     author_id: str = Field(min_length=1)
     reviewer_id: str = Field(min_length=1)
     disposition: Literal["pass"] = "pass"
     evidence: tuple[str, ...] = Field(min_length=1)
     reviewed_at: datetime
+    review_mode: Literal["task", "finalization"] | None = Field(default=None, exclude_if=_omit_when_none)
+    basis_digest: str | None = Field(default=None, pattern=_SHA256, exclude_if=_omit_when_none)
+    observation_ids: tuple[Annotated[str, Field(pattern=_SHA256)], ...] | None = Field(
+        default=None, exclude_if=_omit_when_none
+    )
+
+    @model_validator(mode="after")
+    def _validate_review_version(self) -> DeliveryReview:
+        if self.schema_version == 1:
+            if self.review_mode is not None or self.basis_digest is not None or self.observation_ids is not None:
+                message = "schema-1 Delivery review cannot carry review mode, basis, or observation binding"
+                raise ValueError(message)
+            return self
+        if self.review_mode is None:
+            message = "schema-2 Delivery review requires its review mode"
+            raise ValueError(message)
+        if self.review_mode == "task" and self.basis_digest is not None:
+            message = "a task review cannot bind a finalization basis"
+            raise ValueError(message)
+        return self
 
 
 class DeliveryReviewReceipt(DeliveryReview):
@@ -436,7 +637,7 @@ class DeliveryReviewReceipt(DeliveryReview):
         review: DeliveryReview,
     ) -> DeliveryReviewReceipt:
         """Create one independent pass receipt using the canonical digest."""
-        values = review.model_dump()
+        values = {field_name: getattr(review, field_name) for field_name in DeliveryReview.model_fields}
         candidate = cls.model_construct(review_id="0" * 64, **values)
         return cls(review_id=_receipt_digest(candidate, "review_id"), **values)
 
@@ -483,8 +684,14 @@ class DeliveryTaskResult(_DeliveryModel):
     task_id: str = Field(min_length=1)
     task_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     completed_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
-    observations: tuple[DeliveryObservationReceipt, ...] = Field(min_length=1)
+    observations: tuple[DeliveryAnyObservationReceipt, ...] = Field(min_length=1)
     review: DeliveryReviewReceipt
+
+    @property
+    def has_n03_content(self) -> bool:
+        """Return whether this result holds content that only frontier 19 may carry."""
+        typed = _TYPED_EVIDENCE_SCHEMA_VERSION
+        return self.review.schema_version == typed or any(item.schema_version == typed for item in self.observations)
 
     @model_validator(mode="after")
     def _validate_exact_commit_evidence(self) -> DeliveryTaskResult:
@@ -509,15 +716,32 @@ class DeliveryTaskResult(_DeliveryModel):
 class DeliveryFinalization(_DeliveryModel):
     """Exact reviewed Change head and evidence prepared for finalization."""
 
-    schema_version: Literal[2] = 2
+    schema_version: Literal[2, 3] = 3
     operation_id: str = Field(min_length=1)
     change_id: str = Field(min_length=1)
     exact_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     authority_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     result_digests: tuple[str, ...] = Field(min_length=1)
-    observations: tuple[DeliveryObservationReceipt, ...] = Field(min_length=1)
+    observations: tuple[DeliveryAnyObservationReceipt, ...]
     review: DeliveryReviewReceipt
     finalized_at: datetime
+
+    @model_validator(mode="after")
+    def _validate_finalization_version(self) -> DeliveryFinalization:
+        typed = tuple(item.schema_version != 1 for item in self.observations)
+        if self.schema_version == _LEGACY_FINALIZATION_SCHEMA_VERSION:
+            if not self.observations or any(typed) or self.review.schema_version != 1:
+                message = "schema-2 Delivery finalization holds only schema-1 evidence and at least one observation"
+                raise ValueError(message)
+            return self
+        if (
+            not all(typed)
+            or self.review.review_mode != "finalization"
+            or self.review.observation_ids != tuple(item.observation_id for item in self.observations)
+        ):
+            message = "schema-3 Delivery finalization requires typed evidence and its matching finalization review"
+            raise ValueError(message)
+        return self
 
 
 class DeliveryFinalizationReceipt(DeliveryFinalization):
@@ -836,6 +1060,29 @@ class DeliveryRequestResolution(_DeliveryModel):
         return self
 
 
+CONFIRMATION_DECISIONS: Mapping[str, tuple[str, ...]] = MappingProxyType(
+    {"waive": ("waive", "keep-required"), "confirm-check": ("passed", "failed")}
+)
+# The decision that makes a scoped request answer affirmative for each scope kind (I6).
+AFFIRMATIVE_DECISIONS: Mapping[str, str] = MappingProxyType({"waive": "waive", "confirm-check": "passed"})
+
+
+class DeliveryConfirmationScope(_DeliveryModel):
+    """Exact criterion versions and procedure that a user's answer to a scoped request applies to."""
+
+    kind: Literal["waive", "confirm-check"]
+    acceptance: tuple[DeliveryAcceptanceRef, ...] = Field(min_length=1, max_length=32)
+    procedure: str = Field(min_length=1, max_length=512)
+
+    @model_validator(mode="after")
+    def _validate_scope(self) -> DeliveryConfirmationScope:
+        identities = tuple(reference.acceptance_id for reference in self.acceptance)
+        if len(identities) != len(set(identities)):
+            message = "a confirmation scope names each acceptance criterion at most once"
+            raise ValueError(message)
+        return self
+
+
 class DeliveryRequest(_DeliveryModel):
     """One bounded request retained because resumed work consumes its answer."""
 
@@ -845,6 +1092,7 @@ class DeliveryRequest(_DeliveryModel):
     summary: str = Field(min_length=1)
     options: tuple[DeliveryRequestOption, ...] = ()
     resolution: DeliveryRequestResolution | None = None
+    applies_to: DeliveryConfirmationScope | None = Field(default=None, exclude_if=_omit_when_none)
 
     @model_validator(mode="after")
     def _validate_options(self) -> DeliveryRequest:
@@ -855,7 +1103,35 @@ class DeliveryRequest(_DeliveryModel):
         if self.kind == DeliveryRequestKind.DECISION and not self.options:
             message = "Decision Requests require bounded options"
             raise ValueError(message)
+        self._validate_confirmation_scope()
         return self
+
+    def _validate_confirmation_scope(self) -> None:
+        scope = self.applies_to
+        if scope is None:
+            return
+        if self.kind != DeliveryRequestKind.DECISION or {option.option_id for option in self.options} != set(
+            CONFIRMATION_DECISIONS[scope.kind]
+        ):
+            message = "a scoped request is a Decision Request whose options are exactly its confirmation decisions"
+            raise ValueError(message)
+        resolution = self.resolution
+        if resolution is not None and (
+            resolution.selected_option_id not in CONFIRMATION_DECISIONS[scope.kind]
+            or resolution.response_text is not None
+        ):
+            message = "a scoped request resolution must select one of its confirmation decisions"
+            raise ValueError(message)
+
+    @property
+    def has_n03_content(self) -> bool:
+        """Return whether this request holds content that only frontier 19 may carry."""
+        return self.applies_to is not None
+
+
+def retained_requests(requests: tuple[DeliveryRequest, ...]) -> tuple[DeliveryRequest, ...]:
+    """Return the answered scoped requests that promotion keeps, since evidence may cite them."""
+    return tuple(request for request in requests if request.applies_to is not None and request.resolution is not None)
 
 
 class DeliveryBlock(_DeliveryModel):
@@ -1184,7 +1460,7 @@ class OutcomeAuthorityBinding(_DeliveryModel):
 class DeliveryFrontier(_DeliveryModel):
     """Canonical outcome and Change checkpoint state persisted beside authority."""
 
-    schema_version: Literal[18] = 18
+    schema_version: Literal[18, 19] = 19
     bindings: tuple[OutcomeAuthorityBinding, ...]
     published_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     pending_checkpoint: DeliveryPendingCheckpoint | None = None
@@ -1205,6 +1481,13 @@ class DeliveryFrontier(_DeliveryModel):
     change_disposition_resolution: DeliveryChangeDispositionResolution | None = None
     integration_attention: DeliveryIntegrationAttention | None = None
     integration_repair_claim: DeliveryActiveClaim | None = None
+
+    @model_validator(mode="after")
+    def _validate_version_content(self) -> DeliveryFrontier:
+        if self.schema_version == _READABLE_LEGACY_FRONTIER_SCHEMA_VERSION and frontier_has_n03_content(self):
+            message = "Delivery frontier schema 18 cannot carry schema-19 evidence or scoped requests"
+            raise ValueError(message)
+        return self
 
     @model_validator(mode="after")
     def _discard_stale_target_sync_receipt(self) -> DeliveryFrontier:
@@ -1492,7 +1775,7 @@ class FinalizeDeliveryChange(_DeliveryModel):
 
     operation_id: str = Field(min_length=1)
     exact_head: str = Field(pattern=r"^[0-9a-f]{40}$")
-    observations: tuple[DeliveryObservationReceipt, ...] = Field(min_length=1)
+    observations: tuple[DeliveryAnyObservationReceipt, ...] = ()
     review: DeliveryReviewReceipt
 
     @model_validator(mode="after")
@@ -1549,6 +1832,13 @@ class BlockDelivery(_DeliveryModel):
     locators: tuple[str, ...] = Field(min_length=1)
     request: DeliveryRequest | None = None
     resume_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+
+    @model_validator(mode="after")
+    def _validate_scoped_request(self) -> BlockDelivery:
+        if self.request is not None and self.request.applies_to is not None and self.request.resolution is not None:
+            message = "a scoped request cannot carry a resolution when it is created"
+            raise ValueError(message)
+        return self
 
 
 type DeliveryTransition = Annotated[
@@ -1615,6 +1905,75 @@ class DeliveryRuntimeReferenceError(ValueError):
     code = "ERR_DELIVERY_RUNTIME_REFERENCE"
 
 
+type DeliveryEvidenceGapReason = Literal[
+    "uncovered",
+    "unknown-legacy-only",
+    "missing",
+    "failed",
+    "legacy-observation",
+    "unknown-acceptance",
+    "stale-acceptance-version",
+    "request-unresolved",
+    "request-not-applicable",
+    "review-basis-missing",
+    "review-basis-stale",
+    "review-observations-mismatch",
+    "finalization-basis-unavailable",
+    "finalization-context-oversized",
+]
+MAX_EVIDENCE_GAPS = 64
+
+
+class DeliveryEvidenceGap(_DeliveryModel):
+    """One bounded reason why evidence cannot support a result or finalization."""
+
+    acceptance_id: str | None = Field(default=None, pattern=ACCEPTANCE_ID_PATTERN)
+    observation_id: str | None = Field(default=None, pattern=_SHA256)
+    reason: DeliveryEvidenceGapReason
+
+
+class DeliveryAcceptanceEvidenceError(DeliveryRuntimeConflictError):
+    """Submitted evidence does not satisfy the admitted acceptance authority; nothing was written."""
+
+    code = "ERR_DELIVERY_ACCEPTANCE_EVIDENCE"
+    retry_safe = False
+
+    def __init__(self, gaps: tuple[DeliveryEvidenceGap, ...]) -> None:
+        self.gaps = gaps[:MAX_EVIDENCE_GAPS]
+        reasons = ", ".join(dict.fromkeys(gap.reason for gap in self.gaps))
+        super().__init__(f"acceptance evidence is insufficient: {reasons}")
+
+
+class DeliveryConfirmationError(DeliveryRuntimeConflictError):
+    """A waiver or person-only confirmation request is answered only by the user in Cockpit."""
+
+    code = "ERR_DELIVERY_CONFIRMATION"
+    retry_safe = False
+
+
+def frontier_has_n03_content(frontier: DeliveryFrontier) -> bool:
+    """Return whether a frontier holds evidence or scoped requests that need schema 19."""
+    finalization = frontier.finalization
+    if finalization is not None and finalization.schema_version != _LEGACY_FINALIZATION_SCHEMA_VERSION:
+        return True
+    return any(binding_has_n03_content(binding) for binding in frontier.bindings)
+
+
+def binding_has_n03_content(binding: OutcomeAuthorityBinding) -> bool:
+    """Return whether one binding holds content that only frontier 19 and receipts 2 may carry."""
+    if any(result.has_n03_content for result in binding.results):
+        return True
+    if binding.result_candidate is not None and binding.result_candidate.result.has_n03_content:
+        return True
+    if any(request.has_n03_content for request in binding.requests):
+        return True
+    attention = binding.recovery_attention
+    diagnostic = attention.diagnostic_transition if attention is not None else None
+    return (
+        isinstance(diagnostic, BlockDelivery) and diagnostic.request is not None and diagnostic.request.has_n03_content
+    )
+
+
 _STAGE_ORDER = {
     DeliveryStage.DESIGN: 0,
     DeliveryStage.PLANNING: 1,
@@ -1626,7 +1985,16 @@ _STAGE_ORDER = {
 _LEGACY_FRONTIER_SCHEMA_VERSION = 17
 
 
-_FRONTIER_SCHEMA_VERSION = 18
+_READABLE_LEGACY_FRONTIER_SCHEMA_VERSION = 18
+
+
+_FRONTIER_SCHEMA_VERSION = 19
+
+
+_LEGACY_FINALIZATION_SCHEMA_VERSION = 2
+
+
+_TYPED_EVIDENCE_SCHEMA_VERSION = 2
 
 
 _RETURN_TARGETS = {
@@ -1785,6 +2153,12 @@ def derive_change_stage(frontier: DeliveryFrontier) -> DeliveryChangeStage:
 def _model_content(model: BaseModel) -> bytes:
     payload = model.model_dump(mode="json")
     return (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+
+def _normalize_frontier(frontier: DeliveryFrontier) -> DeliveryFrontier:
+    if frontier.schema_version == _FRONTIER_SCHEMA_VERSION:
+        return frontier
+    return frontier.model_copy(update={"schema_version": _FRONTIER_SCHEMA_VERSION})
 
 
 def _receipt_digest(receipt: BaseModel, identity_field: str) -> str:

@@ -3574,7 +3574,7 @@ async def test_lifespan_refuses_newer_state_with_typed_detail_and_releases_the_l
     _write_config(path, _config())
     frontier = repository / ".owlbear/delivery/runtime/changes/change-a/frontier.json"
     frontier.parent.mkdir(parents=True)
-    frontier.write_text('{"schema_version": 19, "bindings": []}', encoding="utf-8")
+    frontier.write_text('{"schema_version": 20, "bindings": []}', encoding="utf-8")
     monkeypatch.chdir(repository)
 
     with pytest.raises(DeliveryStartupDiagnostic) as exc_info:

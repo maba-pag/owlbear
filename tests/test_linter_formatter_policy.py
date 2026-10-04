@@ -466,7 +466,7 @@ def test_biome_replaces_frontend_and_json_scanners() -> None:
     assert "stages" not in biome_hook
     assert "check --write" in biome_hook.get("entry", "")
 
-    workflow = (_ROOT / ".github/workflows/cockpit-verification.yml").read_text(encoding="utf-8")
+    workflow = (_ROOT / ".github/workflows/static.yml").read_text(encoding="utf-8")
     assert "npm run lint:biome:ci\n" in workflow
 
     for path, expected in _P08_JSON_SCOPE_SAMPLES:

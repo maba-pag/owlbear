@@ -74,6 +74,49 @@ outputs, impact closure, and cheapest falsifying proof.
 - Do not accept file replacement when a targeted edit works, adjacent cleanup, speculative
   hardening, one-test-per-criterion mapping, or scope expansion justified by adding more tests.
 
+## Operating Context
+
+Judge every finding against the operating context of the work under review: who and what can act on
+it or feed it, how far each is trusted, what reaches it from outside that trusted set, and what a
+failure costs. The Design package states it in `intent.md`; otherwise use the context the caller
+supplies, or state the narrowest context the evidence supports.
+
+A **plausible trigger** is an action by an actor or input that this context includes, at a likelihood
+that matters for the stakes. A concern that needs an actor or input the context excludes, such as a
+deliberately misbehaving agent, a same-user attacker, or a coincidence of independent timing events,
+is outside the context and is not a material finding. If the context itself looks wrong for the
+evidence, say so once as a context concern; do not convert it into defects.
+
+## Finding Quality
+
+A reviewer is asked to find problems, so it will almost always report something, and each repeated
+review reaches further for less likely scenarios. A finding's existence is therefore no evidence that
+anything must change.
+
+- **Reviewer:** report only findings with a plausible trigger, a concrete consequence, and evidence.
+  For each, name the actor or input, the action, the consequence, and the cheapest adequate response,
+  which may be a documented limit, a check that fails safely, or no change. `No material findings` is
+  a complete and valuable result. Marginal findings are not harmless: each one costs repair work,
+  permanent complexity, and another review.
+- **Caller:** treat every finding as a claim to evaluate, never as a work order. Verify it, test it
+  against the operating context, and weigh consequence and likelihood against the full cost of the
+  fix, including permanent complexity, new failure modes, and new review surface. Rejecting a finding
+  is normal; record a one-line reason so a later review does not reopen it. Pass your dispositions,
+  not the reviewer's findings, to whoever repairs.
+- **Prefer the smallest response.** A fix that adds a mechanism invites findings about that
+  mechanism. When the same area keeps producing findings, question the design and simplify it
+  instead of adding another layer.
+- **Review again when it is worth it.** Request another review when accepted findings of substance
+  changed something material. When a review produces only rejected, marginal, or cosmetic findings,
+  the work has reached its useful quality; stop. Decide by the substance of the findings, not by a
+  count of rounds.
+- **Dispute instead of complying.** When a typed gate needs `pass` and the caller rejects a finding on
+  an unchanged candidate, request a fresh review of the same identity with the caller's dispositions
+  and evidence. The reviewer either upholds the finding with a plausible trigger inside the operating
+  context or withdraws it. The caller never writes its own `pass`; a finding that is upheld and still
+  disputed goes to its owning authority through the normal return or block route. Judge a proposed
+  fix separately from its finding: an oversized fix never makes a real defect disappear.
+
 ## Caller Routing
 
 | Reviewer | Caller route |

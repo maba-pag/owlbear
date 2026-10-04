@@ -89,7 +89,9 @@ write a bounded internal record containing:
 
 A reviewer sees only a partial code context. Do not accept a comment merely because it is specific,
 confident, or from a trusted reviewer. Do not reject it merely because it conflicts with the current
-implementation. Reproduce or reason through the concrete behavior.
+implementation. Reproduce or reason through the concrete behavior, and judge its trigger against the
+Change's operating context in `intent.md`: a concern that needs an actor or input that context
+excludes is `no-change`.
 
 Use these routes:
 

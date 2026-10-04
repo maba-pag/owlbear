@@ -14,6 +14,8 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_vali
 from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
+from owlbear_delivery.acceptance_criteria import is_near_miss_acceptance_item, parse_acceptance_item
+
 ChangeId = Annotated[str, StringConstraints(strict=True, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")]
 CommitmentId = Annotated[str, StringConstraints(strict=True, pattern=r"^COM-[0-9]{3}$")]
 OutcomeId = Annotated[str, StringConstraints(strict=True, pattern=r"^OUT-[0-9]{3}$")]
@@ -60,6 +62,10 @@ class DeliveryCompilationDiagnosticCode(StrEnum):
     ACTIVE_OUTCOME_MISSING = "active-outcome-missing"
     SCOPE_IDENTITY_COLLISION = "scope-identity-collision"
     SCOPE_COVERAGE_INVALID = "scope-coverage-invalid"
+    ACCEPTANCE_IDENTITY_MIXED = "acceptance-identity-mixed"
+    ACCEPTANCE_IDENTITY_DUPLICATE = "acceptance-identity-duplicate"
+    ACCEPTANCE_IDENTITY_INVALID = "acceptance-identity-invalid"
+    ACCEPTANCE_IDENTITY_REQUIRED = "acceptance-identity-required"
 
 
 class _ContractModel(BaseModel):
@@ -523,6 +529,7 @@ def _validate_definitions(
             )
         )
         return
+    _validate_acceptance_identities(outcomes, outcome_sources, diagnostics)
     commitment_ids = {item.commitment_id for item in commitments}
     outcome_ids = {item.outcome_id for item in outcomes}
     for outcome in outcomes:
@@ -548,6 +555,51 @@ def _validate_definitions(
             if reference not in outcome_ids
         )
     _validate_dependency_dag(outcomes, outcome_ids, outcome_sources, diagnostics)
+
+
+def _validate_acceptance_identities(
+    outcomes: list[DeliveryOutcome],
+    outcome_sources: dict[str, SourceName],
+    diagnostics: list[DeliveryCompilationDiagnostic],
+) -> None:
+    seen: set[str] = set()
+    authored = legacy = 0
+    for outcome in outcomes:
+        source_name = outcome_sources[outcome.outcome_id]
+        for item in outcome.acceptance:
+            if is_near_miss_acceptance_item(item):
+                diagnostics.append(
+                    _diagnostic(
+                        DeliveryCompilationDiagnosticCode.ACCEPTANCE_IDENTITY_INVALID,
+                        "acceptance item starts like an AC-NNN identity but is not of the form 'AC-NNN: <statement>'",
+                        source_name,
+                        outcome.outcome_id,
+                    )
+                )
+                continue
+            identity = parse_acceptance_item(item)[0]
+            if identity is None:
+                legacy += 1
+                continue
+            authored += 1
+            if identity in seen:
+                diagnostics.append(
+                    _diagnostic(
+                        DeliveryCompilationDiagnosticCode.ACCEPTANCE_IDENTITY_DUPLICATE,
+                        "acceptance identity is duplicated within the Change",
+                        source_name,
+                        identity,
+                    )
+                )
+            seen.add(identity)
+    if authored and legacy:
+        diagnostics.append(
+            _diagnostic(
+                DeliveryCompilationDiagnosticCode.ACCEPTANCE_IDENTITY_MIXED,
+                "every acceptance item must declare an AC-NNN identity, or none may",
+                subject="acceptance",
+            )
+        )
 
 
 def _validate_dependency_dag(

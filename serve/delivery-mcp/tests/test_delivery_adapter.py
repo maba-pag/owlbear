@@ -56,6 +56,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryChangePublicationHistory,
     DeliveryChangePublicationIdentity,
     DeliveryChangeStage,
+    DeliveryCommandResult,
     DeliveryObservation,
     DeliveryObservationReceipt,
     DeliveryOperatorMove,
@@ -787,14 +788,15 @@ def _result() -> dict[str, object]:
             task_or_finalization_id="TASK-001",
             exact_commit=COMMIT,
             observation_kind="pytest",
-            command_or_procedure="Delivery MCP adapter contract test",
-            exit_status_or_artifact_locator="exit:0",
+            procedure="Delivery MCP adapter contract test",
+            result=DeliveryCommandResult(exit_status=0),
             observer_or_runner_identity="pytest",
             observed_at=observed_at,
         )
     )
     review = DeliveryReviewReceipt.create(
         DeliveryReview(
+            review_mode="task",
             exact_commit=COMMIT,
             author_id="MCP adapter test author",
             reviewer_id="MCP adapter test reviewer",
@@ -823,14 +825,17 @@ def _finalization() -> dict[str, object]:
             task_or_finalization_id=operation_id,
             exact_commit=COMMIT,
             observation_kind="pytest",
-            command_or_procedure="Delivery MCP finalization contract test",
-            exit_status_or_artifact_locator="exit:0",
+            procedure="Delivery MCP finalization contract test",
+            result=DeliveryCommandResult(exit_status=0),
             observer_or_runner_identity="pytest",
             observed_at=observed_at,
         )
     )
     review = DeliveryReviewReceipt.create(
         DeliveryReview(
+            review_mode="finalization",
+            basis_digest="e" * 64,
+            observation_ids=(observation.observation_id,),
             exact_commit=COMMIT,
             author_id="MCP finalization test author",
             reviewer_id="MCP finalization test reviewer",

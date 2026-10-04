@@ -22,6 +22,11 @@ Before dispatching the challenger, and again when reconciling its memo, establis
 - **Problem:** the specific failure, cost, risk, or unmet need that is actually evidenced. Do not
  turn a preference, theoretical possibility, or confusing symptom into a problem without proof.
 - **Expected outcome:** what should be observably different, for whom, and in which workflow.
+- **Operating context:** who and what can act on or feed the result, how far each is trusted, what
+ reaches it from outside that trusted set, and what a failure costs. Take it from the change's
+ `intent.md` when one exists; otherwise state the narrowest context the evidence supports. A plausible
+ trigger is an action by an actor or input this context includes, at a likelihood that matters for
+ the stakes; concerns that need an excluded actor or input are not material findings.
 - **Intent and change contract:** what the user is trying to accomplish, why it matters now, what
  to do, why to do it, how the proposed route does it, and what result that route should produce.
 - **Commitments and scope:** distinguish explicit requirements and constraints, approved decisions,
@@ -156,8 +161,12 @@ Ask for these sections, in this order:
 
 ## Reconciliation After The Subagent
 
-Do not forward the memo uncritically. Verify each high-impact, scope-expanding, or recommendation-
-determining claim through focused read-only checks, prioritizing the primary workflow and connected risks.
+Do not forward the memo uncritically. A challenger is asked to find problems and will almost always
+report some; each repeated challenge reaches further for less likely scenarios, so a finding's
+existence is no evidence that the plan must change. Verify each high-impact, scope-expanding, or
+recommendation-determining claim through focused read-only checks, prioritizing the primary workflow
+and connected risks. Test every finding against the operating context and reject those whose
+trigger the context excludes or whose fix costs more than the risk it removes.
 Reconcile the findings against the original user intent and the direction the revised plan would
 take. This is neither a defense exercise nor an automatic remediation exercise.
 Address material requirements the reviewer missed. If the plan or source premises changed during
@@ -180,8 +189,12 @@ delta or `no change`.
 
 Do not expand task count, scope tier, or architecture solely for a low-confidence edge case. An
 expansion requires an accepted finding with a named user-facing or connected operational impact and
-proportionate proof. Keep this reconciliation compact: one line per material finding rather than
-reproducing the memo.
+proportionate proof. A fix that adds a mechanism invites findings about that mechanism; when the same
+area keeps producing findings, simplify the design instead of adding another layer. Challenge a
+revised plan again only when accepted findings of substance changed it materially; when a challenge
+yields only rejected or marginal findings, the plan has reached its useful quality. Decide by the
+substance of the findings, not by a count of rounds. Keep this reconciliation compact: one line per
+material finding rather than reproducing the memo.
 
 ### Recommendation
 

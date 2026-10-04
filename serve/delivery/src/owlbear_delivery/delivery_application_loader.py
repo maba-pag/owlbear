@@ -56,6 +56,7 @@ from owlbear_delivery.delivery_runtime import (
     _model_content,
     _read_builder_handoff_change_intent_receipts,
     _read_builder_request_resolution_receipt,
+    normalize_frontier,
     parse_delivery_frontier,
 )
 from owlbear_delivery.delivery_state import (
@@ -608,18 +609,20 @@ def _validate_local_snapshot(
         or any(binding.builder_handoff_context is not None for binding in frontier.bindings)
     ):
         _bootstrap_failure("local Builder handoff cannot be combined with portable state publication")
+    # Successor recognition compares writable models: the snapshot frontier is normalized to 19 (N rows).
+    replay_snapshot = snapshot.model_copy(update={"frontier": normalize_frontier(snapshot.frontier)})
     local_attention_successor = _is_unpublished_acceptance_attention_successor(
-        snapshot.frontier, frontier
-    ) or _is_unpublished_target_sync_attention_successor(snapshot.frontier, frontier)
-    local_claim_successor = _is_unpublished_claim_successor(snapshot.frontier, frontier)
+        replay_snapshot.frontier, frontier
+    ) or _is_unpublished_target_sync_attention_successor(replay_snapshot.frontier, frontier)
+    local_claim_successor = _is_unpublished_claim_successor(replay_snapshot.frontier, frontier)
     local_builder_handoff_successor = _is_unpublished_builder_handoff_successor(
-        snapshot,
+        replay_snapshot,
         frontier,
         coordination,
         paths,
         workspace_manager,
     )
-    local_checkpoint_successor = _is_unpublished_checkpoint_successor(snapshot.frontier, frontier)
+    local_checkpoint_successor = _is_unpublished_checkpoint_successor(replay_snapshot.frontier, frontier)
     local_recoverable_successor = (
         local_attention_successor
         or local_claim_successor
@@ -1658,7 +1661,8 @@ def _builder_handoff_lifecycle_successor_frontier(
     lifecycle_fields = ("change_deferral", "change_abandonment", "pending_checkpoint")
     previous_frontier: DeliveryFrontier | None = None
     previous_baseline: DeliveryFrontier | None = None
-    for item in chain:
+    for receipt_item in chain:
+        item = _NormalizedLifecycleReceipt.of(receipt_item)
         baseline = next(
             (
                 candidate
@@ -1690,6 +1694,18 @@ def _builder_handoff_lifecycle_successor_frontier(
         previous_baseline = baseline
 
     return _builder_handoff_frontier_with_lifecycle_fields(expected_frontier, chain[-1].after_frontier)
+
+
+@dataclass(frozen=True)
+class _NormalizedLifecycleReceipt:
+    """Lifecycle receipt frontiers after the registered 18 -> 19 representation change (N rows)."""
+
+    before_frontier: DeliveryFrontier
+    after_frontier: DeliveryFrontier
+
+    @classmethod
+    def of(cls, receipt: _DeliveryBuilderHandoffChangeIntentReceipt) -> _NormalizedLifecycleReceipt:
+        return cls(normalize_frontier(receipt.before_frontier), normalize_frontier(receipt.after_frontier))
 
 
 def _builder_handoff_lifecycle_chain(
@@ -1725,7 +1741,8 @@ def _planner_handoff_lifecycle_successor_frontier(
         promotion,
     )
     previous: tuple[DeliveryFrontier, int] | None = None
-    for item in chain:
+    for receipt_item in chain:
+        item = _NormalizedLifecycleReceipt.of(receipt_item)
         row = next((binding for binding in item.before_frontier.bindings if binding.outcome_id == outcome_id), None)
         rank = None if row is None else _planner_handoff_lifecycle_rank(history, row, promotion)
         if rank is None or current_rank is None or rank > current_rank:

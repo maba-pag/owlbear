@@ -31,7 +31,7 @@ One active Design session is a manifest-bound package owned by Delivery:
 
 | Package part | Owns |
 | --- | --- |
-| `intent.md` | Problem, actors, Product Promise, normal workflows, scope, accepted exclusions, preserved behavior, material user decisions, success, assumptions, and technically-done-but-wrong outcomes |
+| `intent.md` | Problem, actors, operating context, Product Promise, normal workflows, scope, accepted exclusions, preserved behavior, material user decisions, success, assumptions, and technically-done-but-wrong outcomes |
 | `design.md` | Current ownership, proposed architecture and interfaces, tradeoffs, weaknesses, migration, proof approach, and decision consequences |
 | `authority.json` | Generated Delivery contract bytes; authored revision clears this authority |
 | `manifest.json` | Delivery-owned hashes binding the exact package identity |
@@ -117,6 +117,28 @@ Maintain a Product Promise ledger in that authority:
 Do not reduce the requested outcome to make delivery easier. An omission from the Product Promise is
 accepted only through an explicit user decision persisted in the complete package intent and design.
 
+### Operating Context
+
+Record in `intent.md` the context that decides how much defense, recovery, and proof the change
+deserves. Keep it to a few lines that answer:
+
+- **Actors and trust:** who or what can cause effects (people, agents, other programs) and how far
+  each is trusted: trusted, trusted but fallible, or untrusted. Agents that follow their instructions
+  but make honest mistakes are trusted but fallible.
+- **Exposure:** what reaches the result from outside that trusted set, such as a network listener,
+  fetched web content, pull-request comments, third-party data, or dependencies.
+- **Stakes:** what a failure costs: reversible or not, local or shared, and whether data, secrets,
+  money, or people are affected.
+- **Guarded and not guarded:** the failure and misuse classes the design defends against, and those
+  it deliberately does not, each with its reason.
+
+Infer the context from evidence first. When the project or an admitted change already states a fitting
+context, cite it and record only the differences. Ask the user only when exposure or stakes are
+unclear, or when the change itself alters them, and mark each line as inferred or confirmed. Design,
+review, and proof depth follow this context: guard against plausible failures within it, and treat
+defenses against actors or inputs it excludes as scope growth that needs a user decision. Changing
+the context later is a material decision.
+
 ## Step 5 - Ground Claims And Use Qualified Memory
 
 Investigate repository-answerable facts before asking the user. Load `h-codebase-orientation` and use
@@ -191,6 +213,9 @@ identity before admission:
 - provenance-classed commitments for dealbreakers, protected requests, important reviewed meaning,
   agreed paths, and implementation discretion;
 - user-facing outcomes with promises, observable acceptance, commitment links, and dependency IDs;
+  write every acceptance item as one quoted YAML string `"AC-NNN: <statement>"` with an ID unique
+  across the Change and stable across revisions (first admission refuses unprefixed items; never
+  reuse a retired ID);
 - exactly one outcome task-plan scope for every active outcome;
 - persisted Design re-entry briefings, semantic updates, and completion summaries only when they
   already exist as durable authority.

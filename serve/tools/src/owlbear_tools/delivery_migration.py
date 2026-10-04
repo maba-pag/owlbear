@@ -24,6 +24,7 @@ def _proposal_payload(proposal: MigrationProposal) -> dict[str, object]:
         "migration_id": proposal.migration_id,
         "source_format": proposal.source_format,
         "target_format": proposal.target_format,
+        "steps": list(proposal.steps),
         "release": proposal.release,
         "entries": [entry.model_dump(mode="json") for entry in proposal.entries],
         "staging": f"{state_migration.MIGRATION_STATE_ROOT}/{proposal.migration_id}/stage",

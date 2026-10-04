@@ -31,6 +31,8 @@ from owlbear_delivery.delivery_runtime import (
     AdministrativeDeliveryMove,
     AdministrativeDeliveryMovePreview,
     AdministrativeDeliveryMoveResult,
+    DeliveryAcceptanceEvidenceError,
+    DeliveryEvidenceGap,
     DeliveryPlanCandidate,
 )
 from owlbear_delivery.design_package import DesignPackageResult
@@ -1200,7 +1202,8 @@ class TargetMCPAdapter:
             authority = self._authority(params)
             if isinstance(exc, CompletedHistoryError):
                 authority = exc.diagnostic.change_id or exc.diagnostic.completion_id or authority
-            self._raise(failure.code, failure.detail, authority, retry_safe=failure.retry_safe)
+            gaps = exc.gaps if isinstance(exc, DeliveryAcceptanceEvidenceError) else None
+            self._raise(failure.code, failure.detail, authority, retry_safe=failure.retry_safe, gaps=gaps)
 
     @staticmethod
     def _serialize(value: object) -> StructuredOutput:
@@ -1240,12 +1243,20 @@ class TargetMCPAdapter:
         return None
 
     @staticmethod
-    def _raise(code: str, detail: str, authority: str, *, retry_safe: bool) -> Never:
+    def _raise(
+        code: str,
+        detail: str,
+        authority: str,
+        *,
+        retry_safe: bool,
+        gaps: tuple[DeliveryEvidenceGap, ...] | None = None,
+    ) -> Never:
         diagnostic = TargetDiagnostic(
             code=code,
             detail=detail,
             current_authority_identity=authority,
             retry_safe=retry_safe,
+            gaps=gaps,
         )
         raise ToolError(diagnostic.model_dump_json())
 

@@ -884,6 +884,9 @@ def full_form(
         proposal = state_migration.propose(live)
         report["proposal"] = {
             "migration_id": proposal.migration_id,
+            "source_format": proposal.source_format,
+            "target_format": proposal.target_format,
+            "steps": list(proposal.steps),
             "entries": [entry.model_dump(mode="json") for entry in proposal.entries],
         }
         report["apply"] = state_migration.apply(live, proposal.migration_id).state

@@ -32,43 +32,32 @@ The development instructions in `.github/copilot-instructions.md` are not the sa
 consumer template at `seed/.github/copilot-instructions.md`. The former describes this repository;
 the latter is a placeholder that `init.py` adapts for a project using OwlBear.
 
-Dependency verification checks the declared Python compatibility floor and current `.python-version`
-Dependency verification runs Python proofs only on the `.python-version` pin. Cockpit verification
-uses the pinned `serve/cockpit/web/.nvmrc` Node version and runs its Chromium compatibility gate on
-both pull requests and manual dispatch. Dependency workflow contract tests own workflow-shape validation;
-the agent-ecosystem workflow focuses on agent, hook, and knowledge surfaces.
+## Pull-request checks
 
-## Cache comparisons
+Agents wait for every check on the head commit, so the checks are shaped to finish fast and to
+report few rows. Each workflow is path-filtered, every job starts immediately (no `needs`), and
+each job installs only what it uses.
 
-The [dependency workflow](workflows/dependency-verification.yml) has a manual `cache_probe` input.
-Leave it at `none` for normal verification. Select `uv` or `precommit` for preparation-only
-measurements on disposable Ubuntu runners; probe runs do not satisfy the dependency verification
-gate or run the full test/lint suites. They do not change production cache policy or browser ordering.
-The skipped gate is named `Cache probe (no dependency proof)` during probes, not
-`Verify dependency update`: GitHub accepts skipped required jobs, so the check names must differ.
+| Workflow | Jobs | Runs when the PR touches |
+| --- | --- | --- |
+| [Python](workflows/python.yml) | 4 hash-sharded test jobs (`worksteal` inside each) | Python sources, tests, setup, seed, manifests, locks |
+| [Python browser](workflows/python-browser.yml) | Browser-marked tests with Chromium | `serve/browser*`, `serve/web-content`, manifests, locks |
+| [Cockpit](workflows/cockpit.yml) | Unit tests and the browser smoke build, in parallel | `serve/cockpit/web`, `biome.json` |
+| [Static checks](workflows/static.yml) | Ruff, repository-wide Biome, HTMLHint | Python, JSON, frontend, lint configuration |
+| [Tooling](workflows/tooling.yml) | Lock, toolchain, workflow, hook, PDS, and diagram proofs, selected per changed surface | Manifests, locks, workflows, tool configuration, diagrams |
+| [Agent ecosystem](workflows/agent-ecosystem.yml) | Agent, skill, prompt, hook, and knowledge contracts | Agent ecosystem paths |
 
-1. Dispatch the chosen probe on the intended revision. This is the cold attempt: keys include the
-  run ID, not the attempt number. Experiment cache paths and cancellation groups are isolated from
-  normal verification. The uv comparison uses six runners and can upload several GB of cache data.
-2. After it completes, use **Re-run all jobs** on that same run for a warm attempt. Do not dispatch
-  again: a new run ID starts cold. Check the reported revision, actual cache hits, and runner image
-  versions before comparing attempts. A missing or evicted cache is not a warm result.
-3. Compare total preparation costs, including post-job cache saves. For uv, include setup, Python
-  installation, workspace installation, and post-setup durations. Current and pruned policies
-  The uv comparison uses three runners for the pinned Python runtime and can upload several GB of cache
-  data. Inspect reservation warnings as well as hit flags. The disabled policy has no remote cache
-  traffic. Compare per-job totals, not upload time alone.
-4. For pre-commit, compare cache restore/save, actionlint, and remaining-hook preparation durations.
-  Both policies execute the pinned actionlint hook; `install-hooks` prepares other environments
-  without running their checks. A warm hit must avoid repeated environment installation. This
-  bounded result does not establish full-lint execution time or cross-PR cache reuse.
+`paths` filters evaluate the whole PR diff, so a follow-up push reruns every workflow the PR ever
+touched. To avoid repeating identical proofs, each job fingerprints its inputs with
+`git ls-files -s` and stores a marker cache entry after it passes. A later run in the same PR with
+the same fingerprint reports the reused result and skips its work. Python and static fingerprints
+cover the whole tree except `.owlbear/research`; the others cover their own inputs. Bump the
+`ci-pass-v1` key prefix when a job's commands change meaning without changing those inputs.
 
-Retain a production policy only after cold and warm totals show a useful benefit for the expected
-run pattern. PR merge-ref caches cannot be shared with sibling PRs; same-PR reruns can reuse them.
-Pruning removes downloaded wheels, so reduced archive size alone is not evidence of a speedup.
-Do not add cache-seeding triggers or change package requirements to make a probe look faster.
-Browser overlap remains a separate scheduling choice: it can shorten successful runs but also
-increase work and final failure latency when unit tests fail early.
+uv caches are scoped per install profile (`python-tests`, `python-browser`, `dev-tools`). Python
+test environments skip the torch/CUDA model stack that only the deselected `model` tests import;
+keep the `CI_SKIPPED_PACKAGES` lists in the Python workflow and Copilot setup identical.
+[`test_ci_workflows.py`](../tests/test_ci_workflows.py) owns these workflow-shape contracts.
 
 ## MegaLinter toolchain updates
 
@@ -91,7 +80,7 @@ PR lockfile changes are discarded in the disposable checkout and regenerated fro
 baseline, with Python builds and npm install scripts disabled. Publication checks the open PR's
 identity and uses an exact-head lease, so a concurrent Renovate update is not overwritten.
 
-The [dependency verification workflow](workflows/dependency-verification.yml) independently checks
+The [Tooling workflow](workflows/tooling.yml) independently checks
 Ruff, Biome, their locks, and the schema on the resulting commit. Local check-only equivalent:
 
 ```shell

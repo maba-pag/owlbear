@@ -32,7 +32,7 @@ from owlbear_delivery.delivery_application_loader import (
     load_configured_delivery_application,
     load_delivery_application,
 )
-from owlbear_delivery.delivery_runtime import DeliveryFrontier, parse_delivery_frontier
+from owlbear_delivery.delivery_runtime import DeliveryFrontier, parse_delivery_frontier, parse_stored_delivery_frontier
 from owlbear_delivery.delivery_state import parse_delivery_state_snapshot
 from owlbear_delivery.git_executable import resolve_git_executable
 from owlbear_delivery.state_formats import (
@@ -450,7 +450,7 @@ def test_schema_17_frontier_requires_its_registered_rewrite_and_reads_through_th
 
     assert [(record.status, record.version) for record in report.records] == [("migration-required", 17)]
     assert [(refusal.code, refusal.locator) for refusal in report.refusals] == [("state-migration-required", locator)]
-    assert frontier.schema_version == 18
+    assert frontier.schema_version == 19
     assert all(binding.retry_count == 0 for binding in frontier.bindings)
     assert parse_delivery_frontier(canonical)[1] == canonical
 
@@ -461,14 +461,14 @@ def test_frontier_string_for_integer_is_rejected_by_the_strict_parser() -> None:
     payload["bindings"][0]["retry_count"] = str(payload["bindings"][0]["retry_count"])
     content = json.dumps(payload).encode()
 
-    assert DeliveryFrontier.model_validate_json(content, strict=False) == parse_delivery_frontier(raw)[0]
+    assert DeliveryFrontier.model_validate_json(content, strict=False) == parse_stored_delivery_frontier(raw)
     with pytest.raises(ValidationError, match="retry_count"):
         parse_delivery_frontier(content)
 
 
 def test_frontier_number_for_datetime_is_rejected_by_the_strict_parser() -> None:
     _locator, raw = _golden_frontier()
-    original = parse_delivery_frontier(raw)[0]
+    original = parse_stored_delivery_frontier(raw)
     lax_only = []
     for path in _datetime_paths(json.loads(raw)):
         payload = json.loads(raw)
@@ -524,7 +524,7 @@ def _set_path(value: object, path: tuple[object, ...], replacement: object) -> N
 
 
 _NEWER_STATE = {
-    "frontier-19": ("runtime/changes/demo/frontier.json", {"schema_version": 19, "bindings": []}),
+    "frontier-20": ("runtime/changes/demo/frontier.json", {"schema_version": 20, "bindings": []}),
     "coordination-3": ("runtime/coordination/changes/demo.json", {"schema_version": 3, "change_id": "demo"}),
     "config-3": (
         "config.json",
@@ -536,7 +536,7 @@ _NEWER_STATE = {
         },
     ),
     "claim-issuer-2": ("runtime/changes/demo/claim-issuers/attempt-1.json", {"schema_version": 2, "window": None}),
-    "format-2": ("runtime/format.json", {"format": 2}),
+    "format-3": ("runtime/format.json", {"format": 3}),
 }
 
 
@@ -563,7 +563,7 @@ def test_loader_refuses_newer_state_before_remote_bootstrap(tmp_path: Path, case
 def test_loader_gate_runs_before_git_configuration_validation(tmp_path: Path) -> None:
     repository, config = _portfolio(tmp_path)
     _git(repository, "update-ref", "-d", "refs/remotes/origin/main")
-    _write(repository, "runtime/changes/demo/frontier.json", {"schema_version": 19, "bindings": []})
+    _write(repository, "runtime/changes/demo/frontier.json", {"schema_version": 20, "bindings": []})
 
     with pytest.raises(DeliveryStateVersionError) as refusal:
         load_delivery_application(config, workspace_root=repository)

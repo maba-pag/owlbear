@@ -86,6 +86,7 @@ from owlbear_delivery.portfolio_operating import (
     DeliveryHealthStatus,
     DeliveryHealthView,
 )
+from owlbear_delivery.runtime_models import MAX_EVIDENCE_GAPS, DeliveryEvidenceGap
 
 
 class _TargetProtocolModel(BaseModel):
@@ -121,6 +122,9 @@ class TargetDiagnostic(_TargetProtocolModel):
     detail: str = Field(min_length=1)
     current_authority_identity: str = Field(min_length=1)
     retry_safe: bool
+    gaps: tuple[DeliveryEvidenceGap, ...] | None = Field(
+        default=None, max_length=MAX_EVIDENCE_GAPS, exclude_if=lambda value: value is None
+    )
 
 
 class DeliveryHealthDiagnosticResponse(_TargetProtocolModel):

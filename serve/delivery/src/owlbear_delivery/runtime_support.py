@@ -15,6 +15,7 @@ from owlbear_delivery.runtime_models import (
     _MAX_BUILDER_HANDOFF_CHANGE_INTENT_RECEIPTS,
     _MAX_BUILDER_HANDOFF_CHANGE_INTENTS,
     _NORMAL_CHANGE_MUTATIONS,
+    _READABLE_LEGACY_FRONTIER_SCHEMA_VERSION,
     _STAGE_ORDER,
     DeliveryBuilderHandoffContext,
     DeliveryChangeDisposition,
@@ -32,6 +33,7 @@ from owlbear_delivery.runtime_models import (
     OutcomeAuthorityBinding,
     PrepareCompletedOutcomeRepair,
     _model_content,
+    _normalize_frontier,
     _reference,
 )
 from owlbear_delivery.runtime_receipts import (
@@ -128,20 +130,48 @@ def is_acceptance_waiting_observation(
     return snapshot.state == "open" and not snapshot.merged
 
 
-def parse_delivery_frontier(
-    content: bytes,
-) -> tuple[DeliveryFrontier, bytes]:
-    """Parse one frontier strictly and canonicalize the immediately prior persisted schema."""
+def parse_stored_delivery_frontier(content: bytes) -> DeliveryFrontier:
+    """Parse one frontier strictly at its stored version; schema 17 reads as its registered 18 form."""
     payload = json.loads(content)
     if not isinstance(payload, dict):
         raise TypeError
     schema_version = payload.get("schema_version")
-    if schema_version == _LEGACY_FRONTIER_SCHEMA_VERSION and not isinstance(schema_version, bool):
-        content = json.dumps({**payload, "schema_version": _FRONTIER_SCHEMA_VERSION}).encode()
-    elif schema_version != _FRONTIER_SCHEMA_VERSION or isinstance(schema_version, bool):
+    if schema_version == _LEGACY_FRONTIER_SCHEMA_VERSION and type(schema_version) is int:
+        content = json.dumps({**payload, "schema_version": _READABLE_LEGACY_FRONTIER_SCHEMA_VERSION}).encode()
+    elif type(schema_version) is not int or schema_version not in {
+        _READABLE_LEGACY_FRONTIER_SCHEMA_VERSION,
+        _FRONTIER_SCHEMA_VERSION,
+    }:
         raise ValueError
-    frontier = DeliveryFrontier.model_validate_json(content, strict=True)
-    return frontier, _model_content(frontier)
+    return DeliveryFrontier.model_validate_json(content, strict=True)
+
+
+def normalize_frontier(frontier: DeliveryFrontier) -> DeliveryFrontier:
+    """Apply the registered 18 -> 19 representation change: the schema version only (I2)."""
+    return _normalize_frontier(frontier)
+
+
+def stored_frontier_version(content: bytes) -> int:
+    """Return the verified stored schema version of frontier bytes (17 for an unmigrated record)."""
+    payload = json.loads(content)
+    version = payload.get("schema_version") if isinstance(payload, dict) else None
+    if type(version) is not int:
+        raise ValueError
+    return version
+
+
+def parse_delivery_frontier(
+    content: bytes,
+) -> tuple[DeliveryFrontier, bytes]:
+    """Return the writable schema-19 frontier and its stored bytes.
+
+    Schema 19 yields canonical bytes; schema 18 yields the verified file bytes, never re-serialized;
+    schema 17 yields the canonical bytes of its registered 18 rewrite.
+    """
+    stored = parse_stored_delivery_frontier(content)
+    if stored_frontier_version(content) == _READABLE_LEGACY_FRONTIER_SCHEMA_VERSION:
+        return normalize_frontier(stored), content
+    return normalize_frontier(stored), _model_content(stored)
 
 
 def repair_missing_request_provenance(  # noqa: C901 - narrow structural migration validates each legacy layer.
@@ -175,7 +205,8 @@ def repair_missing_request_provenance(  # noqa: C901 - narrow structural migrati
         _reference("frontier contains an unsupported request-provenance defect")
     missing[0][1]["provenance"] = "user-confirmed"
     repaired_payload = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
-    return parse_delivery_frontier(repaired_payload)
+    repaired = parse_delivery_frontier(repaired_payload)[0]
+    return repaired, _model_content(repaired)
 
 
 def _find_request(frontier: DeliveryFrontier, request_id: str) -> tuple[OutcomeAuthorityBinding, DeliveryRequest]:

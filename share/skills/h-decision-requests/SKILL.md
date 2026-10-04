@@ -50,7 +50,9 @@ a separate request tool or hand-write request records.
 ## Resolution And Resume
 
 Resolution is user/Cockpit controlled. It updates the durable request and lets Delivery recompute
-readiness; workers do not invoke a resolution tool.
+readiness; workers do not invoke a resolution tool. A request scoped to acceptance criteria
+(`applies_to`: a waiver or a person-only check) is answered only by the user in Cockpit; the agent
+`answer` tool refuses it.
 
 On a newly acquired resumed claim:
 

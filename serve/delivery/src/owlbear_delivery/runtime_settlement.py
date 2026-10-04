@@ -68,6 +68,7 @@ from owlbear_delivery.runtime_support import (
     _builder_request_resolution_receipt_path,
     _conflict,
     _read_builder_handoff_change_intent_receipts,
+    parse_stored_delivery_frontier,
 )
 from owlbear_delivery.runtime_transaction import (
     ReplacementTransactionParticipant,
@@ -826,7 +827,7 @@ class _SettlementReplayMixin:
             ):
                 _conflict("retained Builder handoff lifecycle intent has no matching receipt")
 
-    def _builder_handoff_change_intent_participants(
+    def _builder_handoff_change_intent_participants(  # noqa: PLR0913
         self,
         before: DeliveryFrontier,
         after: DeliveryFrontier,
@@ -834,6 +835,7 @@ class _SettlementReplayMixin:
         *,
         deferral: DeliveryChangeDeferral | None = None,
         abandonment: DeliveryChangeAbandonment | None = None,
+        previous: bytes | None = None,
     ) -> tuple[TransactionParticipant | ReplacementTransactionParticipant, ...]:
         handoffs = tuple(binding for binding in before.bindings if binding.builder_handoff_context is not None)
         if not handoffs:
@@ -844,7 +846,9 @@ class _SettlementReplayMixin:
         ):
             _conflict("Builder handoff lifecycle intent cannot overlap an active mutation claim")
 
-        mutation = _BuilderHandoffChangeIntentMutation(before, after, action, deferral, abandonment)
+        # The receipt binds the stored model at its stored version (an 18 stays 18) and its committed digest.
+        stored_before = parse_stored_delivery_frontier(previous) if previous is not None else before
+        mutation = _BuilderHandoffChangeIntentMutation(stored_before, after, action, deferral, abandonment)
         participants: list[TransactionParticipant | ReplacementTransactionParticipant] = []
         for binding in handoffs:
             context = binding.builder_handoff_context

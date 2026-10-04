@@ -1,0 +1,124 @@
+---
+name: Static checks
+
+"on":
+  pull_request:
+    branches:
+      - dev
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+    paths:
+      - .github/workflows/static.yml
+      - "**/*.py"
+      - "**/*.json"
+      - "**/*.jsonc"
+      - "**/.editorconfig"
+      - "**/.gitignore"
+      - biome.json
+      - pyproject.toml
+      - uv.lock
+      - serve/cockpit/web/**
+  workflow_dispatch:
+
+concurrency:
+  group: static-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Static checks
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout requested revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Fingerprint inputs
+        id: fingerprint
+        run: |
+          value="$(git ls-files -s -- . ':!:.owlbear/research' | sha256sum | cut -c1-40)"
+          echo "value=$value" >> "$GITHUB_OUTPUT"
+
+      - name: Look up passing result for identical inputs
+        id: reuse
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ci-pass
+          key: ci-pass-v1-static-${{ steps.fingerprint.outputs.value }}
+          lookup-only: true
+
+      - name: Report reused result
+        if: steps.reuse.outputs.cache-hit == 'true'
+        run: echo "Reused a passing result for identical inputs; checks skipped." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Setup uv
+        if: steps.reuse.outputs.cache-hit != 'true'
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
+        with:
+          enable-cache: true
+          cache-suffix: dev-tools
+          cache-dependency-glob: uv.lock
+          prune-cache: false
+
+      - name: Check uv runtime
+        if: steps.reuse.outputs.cache-hit != 'true'
+        run: python3 .github/scripts/check_uv_version.py
+
+      - name: Install locked Python tooling
+        if: steps.reuse.outputs.cache-hit != 'true'
+        run: |
+          uv python install
+          uv sync --locked --only-group dev
+
+      - name: Check Python sources
+        if: steps.reuse.outputs.cache-hit != 'true'
+        run: |
+          uv run --no-sync ruff check .
+          uv run --no-sync ruff format --check .
+
+      - name: Setup Node.js
+        if: steps.reuse.outputs.cache-hit != 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version-file: serve/cockpit/web/.nvmrc
+          cache: npm
+          cache-dependency-path: serve/cockpit/web/package-lock.json
+
+      - name: Install locked Cockpit tooling
+        if: steps.reuse.outputs.cache-hit != 'true'
+        run: npm ci --prefix serve/cockpit/web --engine-strict --no-audit --no-fund
+
+      - name: Check Biome and HTML sources
+        if: steps.reuse.outputs.cache-hit != 'true'
+        working-directory: serve/cockpit/web
+        run: |
+          npm run lint:biome:ci
+          npm run lint:html
+
+      - name: Record passing result
+        if: github.event_name == 'pull_request' && steps.reuse.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/ci-pass"
+          echo "$HEAD_SHA" > "$RUNNER_TEMP/ci-pass/head"
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+
+      - name: Save passing result
+        if: github.event_name == 'pull_request' && steps.reuse.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ci-pass
+          key: ci-pass-v1-static-${{ steps.fingerprint.outputs.value }}

@@ -155,8 +155,14 @@ after generation so post-commit checks cannot silently rewrite the candidate.
 Rerun every Task-required observation against that exact candidate commit; pre-commit proof does
 not bind a commit and cannot support publication. For each passing observation, construct
 `DeliveryObservationReceipt.create(DeliveryObservation(...))` with the launch change ID, context
-task ID, candidate commit, observation kind, exact command or procedure, exit status or artifact
-locator, runner identity, and timezone-aware observation time. Serialize the returned receipt with
+task ID, candidate commit, observation kind, exact `procedure`, a typed `result` (a `command`
+result records the real `exit_status`; Delivery derives the verdict, and an expected-failure test
+records its `expected_exit_status`), the `covers` criterion IDs and versions from the context's
+`acceptance`, runner identity, and timezone-aware observation time. Record a gap that is not yours to
+close as a `missing` result with its owner instead of omitting it. Author a `waived` or
+`human-confirmed` record only with the `request_id` of a waiver or person-only check request the user
+answered in Cockpit; never answer such a request yourself. Use `review_mode: task` in the review.
+Serialize the returned receipt with
 `model_dump(mode="json")`; never calculate, copy, or invent `observation_id`. Any post-commit change
 invalidates the receipts and requires a successor commit plus fresh proof.
 
@@ -190,7 +196,7 @@ touching the reviewed head, classify the concrete finding against the admitted t
 | Fix now: implementation defect inside the task boundary | Repair one finding at a time, preserve the rejected commit, rerun affected proof, and obtain fresh exact-commit review. |
 | Return to authority: missing, contradictory, or observably ambiguous Planning or Design | Publish nothing and return with the owning locator, exact current branch HEAD, and required source boundary; do not clean or reset the worktree before normal settlement. |
 | Block for user-owned input: one bounded decision, action, or manual validation is required | Publish nothing and use `BlockDelivery` with a bounded request and the exact current branch HEAD. |
-| No repair: style preference or unsupported concern without a concrete defect | Do not expand the task or silently alter code; the review evidence does not satisfy the challenger contract until it names a concrete boundary and evidence. |
+| No repair: style preference, unsupported concern, or a trigger outside the operating context in `intent.md` | Do not expand the task or silently alter code; record the reason and dispute the finding under `r-challenger-protocol` when it blocks publication. A real defect whose proposed fix is oversized stays a finding: choose the smallest effective repair or authority route. |
 
 Only the first classification creates a repair commit. A deferred or out-of-scope concern is routed
 through the native return or block path when its resolution is required; it is not logged as a second

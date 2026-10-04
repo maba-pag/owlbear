@@ -20,6 +20,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryChangeStage,
     DeliveryCheckpointTrigger,
     DeliveryCheckpointTriggerKind,
+    DeliveryCommandResult,
     DeliveryFinalization,
     DeliveryFinalizationInvalidation,
     DeliveryFinalizationInvalidationReceipt,
@@ -141,14 +142,15 @@ def _task_result(
             task_or_finalization_id=task.task_id,
             exact_commit=completed_commit,
             observation_kind="pytest",
-            command_or_procedure="work-item fixture validation",
-            exit_status_or_artifact_locator="exit:0",
+            procedure="work-item fixture validation",
+            result=DeliveryCommandResult(exit_status=0),
             observer_or_runner_identity="pytest",
             observed_at=observed_at,
         )
     )
     review = DeliveryReviewReceipt.create(
         DeliveryReview(
+            review_mode="task",
             exact_commit=completed_commit,
             author_id="Work item test author",
             reviewer_id="Work item test reviewer",
@@ -285,14 +287,17 @@ def _finalization(exact_head: str = "3" * 40) -> DeliveryFinalizationReceipt:
             task_or_finalization_id="finalize-portfolio-change",
             exact_commit=exact_head,
             observation_kind="pytest",
-            command_or_procedure="work-item finalization validation",
-            exit_status_or_artifact_locator="exit:0",
+            procedure="work-item finalization validation",
+            result=DeliveryCommandResult(exit_status=0),
             observer_or_runner_identity="pytest",
             observed_at=observed_at,
         )
     )
     review = DeliveryReviewReceipt.create(
         DeliveryReview(
+            review_mode="finalization",
+            basis_digest="e" * 64,
+            observation_ids=(observation.observation_id,),
             exact_commit=exact_head,
             author_id="Work item finalization author",
             reviewer_id="Work item finalization reviewer",

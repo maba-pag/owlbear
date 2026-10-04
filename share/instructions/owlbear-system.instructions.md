@@ -18,6 +18,10 @@ applyTo: "**"
   satisfies the request. Do not rewrite whole files, generalize behavior, add compatibility paths,
   or perform adjacent cleanup unless the requested outcome requires it. Stop when the requested
   behavior is satisfied and proportionally validated.
+- **Proportional to the operating context.** Defense, recovery, and proof depth follow who and what
+  can act on the work, what reaches it from outside, and what failure costs. Review findings are
+  claims to weigh against that context, not work orders; follow `r-challenger-protocol` when
+  handling them.
 - **Goal-driven.** Delivery implementation traces to an engine-selected native job and admitted
   packet. Audits, research, ideation, and exploration may remain jobless until they produce admitted
   Delivery work.

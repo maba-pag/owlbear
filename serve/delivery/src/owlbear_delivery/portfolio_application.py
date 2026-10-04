@@ -131,6 +131,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryActiveClaim,
     DeliveryChangeDeferral,
     DeliveryChangeStage,
+    DeliveryConfirmationError,
     DeliveryMergedPullRequestLatch,
     DeliveryPlanCandidate,
     DeliveryRecoveryAttention,
@@ -1469,8 +1470,17 @@ class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _Publication
             binding=binding,
         )
 
-    def answer(self, answer: DeliveryAnswer) -> DeliveryAnswerResult:  # noqa: C901, PLR0911
-        """Apply one version-bound request answer or requestless block evidence."""
+    def answer(  # noqa: C901, PLR0911
+        self,
+        answer: DeliveryAnswer,
+        *,
+        allow_user_only: bool = False,
+    ) -> DeliveryAnswerResult:
+        """Apply one version-bound request answer or requestless block evidence.
+
+        A waiver or person-only confirmation (a request scoped to acceptance criteria) is answered only
+        by the user in Cockpit, which passes ``allow_user_only``; agents' tools never do.
+        """
         with self._coordinator.acquisition_lock():
             runtime = self._runtime(answer.change_id, for_mutation=True)
             checkpoint_lock = (
@@ -1482,6 +1492,9 @@ class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _Publication
                 current_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
                 if answer.kind is DeliveryAnswerKind.REQUEST:
                     current = self._request(runtime, answer.request_id)
+                    if current.applies_to is not None and not allow_user_only:
+                        message = "a waiver or person-only confirmation request is answered by the user in Cockpit"
+                        raise DeliveryConfirmationError(message)
                     if current.kind is DeliveryRequestKind.DECISION and (
                         answer.resolution.selected_option_id is None or answer.resolution.response_text is not None
                     ):
