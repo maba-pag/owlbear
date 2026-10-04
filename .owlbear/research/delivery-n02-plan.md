@@ -675,8 +675,9 @@ reject in lax mode too; they are the same deliberate rejections as in run 1. No 
 - **Positive scenarios:** install, pin and launch in a disposable workspace (MCP over stdio and
   Cockpit over HTTP serve release code); upgrade rehearsal from a release of the N02-C head to the
   N02-D candidate on an LC copy with passive custody present, which resumes afterwards; after an
-  injected post-switch failure, step 9 switches back to the N02-C release, which loads the
-  format-1 state with every Change available (supported rollback, D3); `prune` keeps current and
+  injected post-switch failure, switching back to the N02-C release is refused with
+  `release-refuses-state`, because N02-C reads format 1 and the candidate wrote format 2 (D3: no
+  supported rollback across a format step); `prune` keeps current and
   previous.
 - **Negative scenarios:** a controller from the dev venv on a pinned workspace → `controller-not-pinned`
   before any read; `switch` or `prune` while a controller holds the lock → refused; preflight with
@@ -826,7 +827,7 @@ collisions() {
 | Step | Command (from `$LIVE`) | Expected | On failure |
 | --- | --- | --- | --- |
 | 0 Host rehearsal (G3, pre-H activation gate) | With the user, two real VS Code windows on a disposable portfolio pinned to `M` (`delivery-controller --project-root <disposable> install --pin M`, `.vscode/mcp.json` naming the launcher): start, stop and restart `owlbear-delivery` from *MCP: List Servers*; start Cockpit through `bin/cockpit`; note `chat.mcp.autostart` | the launcher starts release code in each window; *Stop* and *Start* work; no automatic restart; `delivery_health` healthy | Stop before step 1: nothing live changed; fix and rerun the rehearsal |
-| 1 Install (D03 still running) | `env -u PYTHONPATH uv --directory "$LANE" run --no-sync python -m owlbear_tools.delivery_controller --project-root "$LIVE" install "$M"` | `"status": "installed"`, `"supported_format": 1`, bundle `"origin": "built"` (Node 24.21.0) | Nothing live changed; fix and rerun (an incomplete release is rebuilt) |
+| 1 Install (D03 still running) | `env -u PYTHONPATH uv --directory "$LANE" run --no-sync python -m owlbear_tools.delivery_controller --project-root "$LIVE" install "$M"` | `"status": "installed"`, `"supported_format": 2`, bundle `"origin": "built"` (Node 24.21.0) | Nothing live changed; fix and rerun (an incomplete release is rebuilt) |
 | 1a Checkout collisions (before any migration step) | `collisions` | prints nothing. Observed 2026-10-04 (read-only): `.owlbear/research/delivery-redesign-execution-plan.md`, untracked in `$LIVE` (dated 2026-10-03 02:23) and tracked on `dev` | For each listed path, with the user: `git -C "$LIVE" show "$M:<path>" \| diff -u - "$LIVE/<path>"` (review; a path absent from `M` is on `dev` only: use `dev:<path>`), then `mkdir -p ~/owlbear-backups/$STAMP/checkout/<dir> && mv -n "$LIVE/<path>" ~/owlbear-backups/$STAMP/checkout/<path>` (never delete); a tracked modification is the user's to commit or move the same way; rerun `collisions` until it prints nothing. Nothing live changed |
 | 2 Online preflight | In the main window: `delivery_health`, `list_changes`, `get_change` for each of the 3 Changes | healthy; every Change available; no running claim, interrupted action, pending checkpoint or publication | Let work finish; never settle it from this procedure |
 | 3 Stop | User: *MCP: List Servers* → `owlbear-delivery` → *Stop*; stop Cockpit (Ctrl-C) | no `owlbear_delivery_mcp`/`cockpit` process with cwd in `$LIVE` | — |
@@ -839,9 +840,9 @@ collisions() {
 | 10 Verify | `"$R/delivery-controller" --project-root "$LIVE" verify`; MCP `delivery_health`, `list_changes`, `get_change` ×3; restart the server once and repeat `get_change` | `"verified": true`; healthy; all 3 Changes available and identical to step 2 and across the restart; Cockpit shows them | Go to rollback |
 | 11 Record | Execution plan §1.2/§2.6 note and status row: freeze ended; N02 progress row | — | — |
 
-Rollback after step 6 (format 1 written): stop both controllers; `"$R/delivery-controller"
+Rollback after step 6 (format 2 written): stop both controllers; `"$R/delivery-controller"
 --project-root "$LIVE" backup --destination <second directory>` to preserve the failed state; report.
-There is no gated previous release (D03 is ungated and is never started on format-1 state, D3), so
+There is no gated previous release (D03 is ungated and is never started on migrated state, D3), so
 `switch` back is refused (rehearsed). The options are a user decision: fix forward with a new release
 through `/upgrade-delivery`, or restore the step-5 backup (move `.owlbear/delivery` aside, copy the
 backup's `delivery/` back, remove `.owlbear/controller/pin.json` and `bin/`, `git -C "$LIVE" switch
