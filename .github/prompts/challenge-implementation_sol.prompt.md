@@ -24,6 +24,11 @@ Before dispatch, establish the narrowest review frame supported by evidence:
 - **Status quo and problem:** relevant behavior before the implementation and the evidenced failure,
   cost, risk, or unmet need that motivated the change.
 - **Intent and expected outcome:** what should observably change, for whom, and why.
+- **Operating context:** who and what can act on or feed the implementation, how far each is trusted,
+  what reaches it from outside that trusted set, and what a failure costs. Take it from the change's
+  `intent.md` when one exists; otherwise state the narrowest context the evidence supports. A
+  plausible trigger is an action by an actor or input this context includes, at a likelihood that
+  matters for the stakes; concerns that need an excluded actor or input are not material findings.
 - **Acceptance contract:** explicit requirements, accepted plan decisions, invariants, and exclusions.
   Distinguish approved commitments from tentative suggestions. Explain how the plan should achieve
   the intended result.
@@ -169,10 +174,13 @@ Ask for these sections in this order:
 
 ## Caller Reconciliation
 
-Do not forward the challenger memo uncritically. Verify each high-impact, scope-expanding, or
-verdict-determining claim with a focused read-only check. Reconcile it against the user's intent,
-accepted plan, actual reviewed state, and directly connected workflow. The challenger's confidence,
-finding, proposed fix, and overall verdict are evidence, not authority.
+Do not forward the challenger memo uncritically. A challenger is asked to find problems and will
+almost always report some; each repeated review reaches further for less likely scenarios, so a
+finding's existence is no evidence that the implementation must change. Verify each high-impact,
+scope-expanding, or verdict-determining claim with a focused read-only check. Reconcile it against the
+user's intent, operating context, accepted plan, actual reviewed state, and directly connected
+workflow. The challenger's confidence, finding, proposed fix, and overall verdict are evidence, not
+authority.
 Address any material requirement the reviewer missed.
 
 For every material finding and proposed fix, assign exactly one of `fix-now`, `reject`, or `block`
@@ -183,7 +191,12 @@ defending the implementation. Normalize every invalid parking label.
 
 Do not reject a demonstrated defect solely because its suggested fix is too broad. Reconcile evidence
 gaps with proportionate proof, a narrower claim that preserves requirements, or an exact blocker.
-Never convert lack of proof into an invented defect or unsupported approval. If the candidate changed
+Never convert lack of proof into an invented defect or unsupported approval. A repair that adds a
+mechanism invites findings about that mechanism; when the same area keeps producing findings,
+simplify instead of adding another layer. Review a repaired candidate again only when accepted
+findings of substance changed it materially; when a review yields only rejected or marginal findings,
+the implementation has reached its useful quality. Decide by the substance of the findings, not by a
+count of rounds. If the candidate changed
 during review, identify what was and was not reviewed; do not transfer the verdict without checking
 the changed state.
 
