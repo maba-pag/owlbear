@@ -362,6 +362,7 @@ class DeliveryConfirmationRound:
     refusal: Literal["channel-unavailable"] | None = None
     message: str | None = None
     question_digest: str | None = None
+    failure: Exception | None = None
 
 
 @dataclass(frozen=True)
@@ -371,6 +372,7 @@ class DeliveryConfirmationOutcome:
     plan: DeliveryConfirmationPlan | None
     refusal: Literal["channel-unavailable"] | None = None
     response: DeliveryConfirmationResponse | None = None
+    failure: Exception | None = None
 
 
 def _channel_available(ctx: Context) -> bool:
@@ -472,8 +474,11 @@ async def _confirmation_round(  # noqa: PLR0911, PLR0913, PLR0917 - a resolver r
             expected_frontier_digest,
             create=channel and not answer_round,
         )
-    except Exception:  # noqa: BLE001 - the handler reports the typed failure through its normal path.
-        return DeliveryConfirmationRound(plan=None)
+    except Exception as exc:
+        if classify_delivery_failure(exc) is None:
+            raise
+        # A typed Delivery refusal reaches the handler, which reports it with its own code.
+        return DeliveryConfirmationRound(plan=None, failure=exc)
     if plan.disposition in {"unscoped", "resolved"}:
         return DeliveryConfirmationRound(plan=plan)
     if not channel:
@@ -484,6 +489,10 @@ async def _confirmation_round(  # noqa: PLR0911, PLR0913, PLR0917 - a resolver r
     return DeliveryConfirmationRound(
         plan=plan, message=message, question_digest=_question_digest(message, _question_form(plan))
     )
+
+
+def _reraise(failure: Exception) -> Never:
+    raise failure
 
 
 def _confirmation_ask(
@@ -501,7 +510,7 @@ def confirmation_question(
     answer: Annotated[ElicitationResult[BaseModel], Resolve(_confirmation_ask)],
 ) -> DeliveryConfirmationOutcome:
     """Combine the server-owned plan with the user's form answer; caller arguments confer nothing."""
-    outcome = DeliveryConfirmationOutcome(plan=round_plan.plan, refusal=round_plan.refusal)
+    outcome = DeliveryConfirmationOutcome(plan=round_plan.plan, refusal=round_plan.refusal, failure=round_plan.failure)
     data = answer.data if isinstance(answer, AcceptedElicitation) else None
     if isinstance(data, _NoQuestion) or round_plan.question_digest is None:
         return outcome
@@ -662,6 +671,8 @@ class TargetMCPAdapter:
         """
         params = self._validate(AnswerParams, request)
         plan = confirmation.plan if confirmation is not None else None
+        if confirmation is not None and confirmation.failure is not None:
+            await asyncio.to_thread(self._call_raw, params, partial(_reraise, confirmation.failure))
         if params.kind is DeliveryAnswerKind.REQUEST and plan is not None and plan.disposition != "unscoped":
             result = await asyncio.to_thread(
                 self._call_model,
