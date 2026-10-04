@@ -19,17 +19,25 @@ from owlbear_delivery.delivery_admission import DeliveryAdmissionReceipt
 from owlbear_delivery.delivery_runtime import DeliveryFrontier, parse_delivery_frontier
 from owlbear_delivery.git_executable import resolve_git_executable
 from owlbear_delivery.identities import ChangeId, Digest
+from owlbear_delivery.remote_git import (
+    RemoteGitError,
+    RemoteGitFailed,
+    RemoteGitWriteUnknown,
+    classify_write_readback,
+    read_remote_ref,
+    run_remote_git,
+)
 from owlbear_delivery.runtime_models import _FRONTIER_SCHEMA_VERSION
 from owlbear_delivery.target_contract import DeliveryContract
 
 if TYPE_CHECKING:
     from owlbear_delivery.change_workspace import ChangeCoordination
     from owlbear_delivery.delivery_runtime import DeliveryRuntime
+    from owlbear_delivery.remote_git import RemoteGitKind
 
 _CHANGE_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _BRANCH_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/+:-]*$")
 _STATE_ROOT = ".owlbear/delivery/state"
-_REMOTE_REF_MISSING = 2
 _LEGACY_SNAPSHOT_SCHEMA_VERSION = 1
 _SNAPSHOT_SCHEMA_VERSION = 2
 
@@ -526,14 +534,13 @@ class DeliveryStatePublisher:
         before = self._remote_head()
         if before is None:
             return None
-        fetched = self._run_git(
+        fetched = self._run_remote_git(
             "fetch",
             "--no-tags",
             "--no-write-fetch-head",
             "--refmap=",
             self._remote,
             f"refs/heads/{self._state_branch}",
-            check=False,
         )
         if fetched.returncode != 0:
             _raise_state_error("remote Delivery-state branch could not be fetched", retry_safe=True)
@@ -543,22 +550,13 @@ class DeliveryStatePublisher:
         return before
 
     def _remote_head(self) -> str | None:
-        result = self._run_git(
-            "ls-remote",
-            "--exit-code",
-            "--heads",
-            self._remote,
-            f"refs/heads/{self._state_branch}",
-            check=False,
-        )
-        if result.returncode == _REMOTE_REF_MISSING:
-            return None
-        if result.returncode != 0:
-            _raise_state_error("remote Delivery-state branch could not be observed", retry_safe=True)
-        line = result.stdout.decode(errors="replace").strip().splitlines()
-        if len(line) != 1 or not line[0].endswith(f"\trefs/heads/{self._state_branch}"):
-            _raise_state_error("remote Delivery-state branch response is invalid", retry_safe=False)
-        return line[0].split("\t", 1)[0]
+        try:
+            return read_remote_ref(self._repository, self._remote, f"refs/heads/{self._state_branch}")
+        except RemoteGitError as exc:
+            invalid = isinstance(exc, RemoteGitFailed) and exc.result is not None and not exc.retry_safe
+            detail = "response is invalid" if invalid else "could not be observed"
+            error = DeliveryStatePublicationError(f"remote Delivery-state branch {detail}", retry_safe=exc.retry_safe)
+            raise error from exc
 
     def _read_snapshot(self, commit: str, change_id: str) -> DeliveryStateSnapshot | None:
         raw = self._read_snapshot_bytes(commit, change_id)
@@ -612,14 +610,9 @@ class DeliveryStatePublisher:
 
     def _push_snapshot(self, commit: str, expected_remote_head: str | None) -> None:
         destination = f"refs/heads/{self._state_branch}"
-        result = self._run_git(
-            "push",
-            "--porcelain",
-            self._remote,
-            f"{commit}:{destination}",
-            check=False,
-        )
-        if result.returncode != 0:
+        try:
+            self._run_remote_git("push", "--porcelain", self._remote, f"{commit}:{destination}", kind="write")
+        except RemoteGitWriteUnknown:
             try:
                 observed = self._remote_head()
             except DeliveryStatePublicationError as exc:
@@ -628,9 +621,10 @@ class DeliveryStatePublisher:
                     retry_safe=False,
                 )
                 raise error from exc
-            if observed == commit:
+            readback = classify_write_readback(observed, intended=commit, expected_old=expected_remote_head)
+            if readback == "applied":
                 return
-            if observed != expected_remote_head:
+            if readback == "conflict":
                 _raise_state_conflict("remote Delivery-state branch changed before publication")
             _raise_state_error("Delivery-state snapshot push failed", retry_safe=True)
         try:
@@ -662,6 +656,18 @@ class DeliveryStatePublisher:
         environment: dict[str, str] | None = None,
     ) -> str:
         return self._run_git(*arguments, input_bytes=input_bytes, environment=environment).stdout.decode().strip()
+
+    def _run_remote_git(self, *arguments: str, kind: RemoteGitKind = "read") -> subprocess.CompletedProcess[bytes]:
+        try:
+            return run_remote_git(self._repository, arguments, kind=kind)
+        except RemoteGitWriteUnknown:
+            raise
+        except RemoteGitError as exc:
+            error = DeliveryStatePublicationError(
+                f"remote Delivery-state branch is unavailable: {exc}",
+                retry_safe=exc.retry_safe,
+            )
+            raise error from exc
 
     def _run_git(
         self,

@@ -387,6 +387,12 @@ work by `sync_with_target` (`workspace_target_sync.py:323-421`) and `ChangeBranc
 (`change_publication.py:156-186`). An owner can acquire or start between a custody observation and
 that path's lock entry, so every A2 Pause takes K1.
 
+Reconciled with N02-C (#355, D7): `sync_with_target` now fetches outside the publication and
+target-sync locks into a private ref. The direct marker is still committed under the publication lock
+after the replay and start checks and before any fetch or ref write; the merge, CAS and coordination
+update retake both locks. The checkpoint lock still spans the direct entry to return (K5), so the
+K2 row, F4 and F6 hold; P14's "across fetch" citation predates N02-C.
+
 **K1 Admission.** Every Pause, and every Resume of a request, takes these steps.
 
 | Step | Rule |

@@ -156,6 +156,7 @@ from owlbear_delivery import (
     WorkspaceRecoverySnapshot,
     classify_publication_check,
     load_delivery_application,
+    remote_git,
 )
 from owlbear_delivery.change_workspace import (
     ChangeContinuationAction,
@@ -5465,6 +5466,8 @@ def test_engine_target_fetch_drift_is_stale_then_syncs_exact_target(tmp_path: Pa
     target = _advance_remote_target(tmp_path, remote, product="Competing target edit\n" if conflict else None)
     stale = _execute_engine(application, action)
     assert stale.kind == "stale", stale
+    repository = application._workspace_manager.repository
+    assert _git(repository, "rev-parse", "refs/remotes/origin/main") == action.target_head
     started_path = coordinator.continuation_record_path("change-a", action.operation_id).with_name("started.json")
     assert started_path.is_file()
     pending_attempt_ids = {attempt.attempt_id for attempt in RetryLedger(state_root, "change-a").pending_attempts()}
@@ -5488,6 +5491,45 @@ def test_engine_target_fetch_drift_is_stale_then_syncs_exact_target(tmp_path: Pa
     assert synchronized.target_sync.target_head == target
     assert synchronized.target_sync.merged_head != action.exact_head
     assert _execute_engine(application, fresh) == synchronized
+
+
+def test_engine_exact_sync_after_remote_rewind_selects_the_rewound_target(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
+    _set_checkpoint(
+        runtimes["change-a"],
+        state_root,
+        DeliveryPendingCheckpoint(
+            head=coordinator.show("change-a").last_reviewed_commit,
+            triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK),),
+        ),
+    )
+    _provider, remote = _attach_engine_publication(application, tmp_path)
+    assert _execute_engine(application, _engine_action(application)).kind == "completed"
+    repository = application._workspace_manager.repository
+    initial = _git(remote, "rev-parse", "refs/heads/main")
+    (tmp_path / "abandoned").mkdir()
+    (tmp_path / "replacement").mkdir()
+    abandoned = _advance_remote_target(tmp_path / "abandoned", remote, product="Abandoned target edit\n")
+    _git(repository, "fetch", "origin", "+refs/heads/main:refs/remotes/origin/main")
+    _git(remote, "update-ref", "refs/heads/main", initial)
+    replacement = _advance_remote_target(tmp_path / "replacement", remote)
+    action = _engine_action(application)
+    assert action.kind == "sync-target"
+    assert action.target_head == abandoned
+
+    assert _execute_engine(application, action).kind == "stale"
+    assert _git(repository, "rev-parse", "refs/remotes/origin/main") == abandoned
+    fresh = _engine_action(application)
+    assert fresh.target_head == replacement
+    synchronized = _execute_engine(application, fresh)
+
+    assert synchronized.kind == "completed", synchronized
+    assert synchronized.target_sync.target_head == replacement
+    assert _git(repository, "rev-parse", "refs/remotes/origin/main") == replacement
+    assert application.get_change("change-a").readiness.basis.target_head == replacement
+    following = application.acquire_change_action(_continuation_request(application))
+    assert following.kind != "stale", following
+    assert following.engine_action is None or following.engine_action.target_head == replacement
 
 
 def test_continuation_finalizer_survives_restart_and_completes_exactly_once(tmp_path: Path) -> None:
@@ -7095,6 +7137,44 @@ def test_provider_demotion_failure_prevents_target_sync_branch_movement(tmp_path
 
     assert _git(repository, "rev-parse", branch) == exact_head
     assert runtime.ready_receipt() is not None
+
+
+def test_hung_target_fetch_is_bounded_and_releases_checkpoint_target_sync_and_publication_locks(
+    tmp_path: Path,
+    ext_remote,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    application, runtime, _provider, _state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    repository = application._workspace_manager.repository
+    remote = tmp_path / "hung-target-remote.git"
+    subprocess.run(("git", "init", "--bare", "-b", "main", str(remote)), check=True, capture_output=True)  # noqa: S603, S607
+    _git(repository, "remote", "add", "origin", str(remote))
+    _git(repository, "push", "origin", "refs/heads/main:refs/heads/main")
+    target_head = _advance_remote_target(tmp_path, remote)
+    transport = ext_remote(remote)
+    transport.use(repository)
+    transport.modes("upload-pack", "hang")
+    monkeypatch.setattr(remote_git, "READ_TIMEOUT_SECONDS", 1.0)
+    branch = application._workspace_manager.show("change-a").branch
+
+    started = time.monotonic()
+    with pytest.raises(PortfolioApplicationError, match="target synchronization could not be completed") as raised:
+        application.sync_change_with_target("change-a", target_head, "sync-hung-fetch")
+
+    assert time.monotonic() - started < 10
+    assert isinstance(raised.value.__cause__, remote_git.RemoteGitTimeout)
+    transport.assert_exited("upload-pack")
+    assert _git(repository, "rev-parse", branch) == exact_head
+    assert runtime.ready_receipt() is not None
+    lock_roots = (
+        application._checkpoint_lock_root("change-a"),
+        application._workspace_manager.runtime_root / "coordination" / "target-sync-lock",
+    )
+    with (
+        locked_roots(lock_roots, blocking=False),
+        application._workspace_manager._coordinator.publication_lock("change-a", blocking=False),
+    ):
+        pass
 
 
 def test_application_captures_target_sync_conflict_as_publication_attention(tmp_path: Path) -> None:
