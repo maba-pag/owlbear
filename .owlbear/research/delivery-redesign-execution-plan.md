@@ -531,8 +531,9 @@ so implementation re-resolves paths after N01 moves code.
 | N03-B | N03-A |
 | N03-C | N03-B |
 | N04-P (re-plan, 2026-10-04) | N03-P |
-| N04-A | N04-P, N03-C |
-| Later N04 phases | as the new N04-P splits them, each after the previous N04 phase |
+| N04-A | N04-P, N03-C; N04 plan U1 answered |
+| N04-B | N04-A |
+| N04-C | N04-B |
 | N05-P | N02-P |
 | N05-A | N05-P, N01-P, N00-C; N05-P must list editable paths disjoint from every N01 phase's paths |
 | N05-B | N05-A, N01-C, N02-B |
@@ -647,8 +648,10 @@ every new item exactly one lane.
 | N03-A | merged | #363 (`82be4eb1c`; simplified 2026-10-04; Sol `implementation-sound` on the simplification delta; LC full form pass) |
 | N03-B | — | — |
 | N03-C | — | — |
-| N04-P | re-plan | #358 closed as superseded; re-planned small under the 2026-10-04 process |
-| Later N04 phases | — | per the new N04-P |
+| N04-P | in review | re-plan PR (this branch `redesign/n04-p-replan`); #358 closed as superseded |
+| N04-A | — | — |
+| N04-B | — | — |
+| N04-C | — | — |
 | N05-P | merged | #353 (plan gate `plan-sound`, round 12; F1–F8 confirmed 2026-10-03; U1 (a), U2 (b), U3 (a) + (e) by the user, U4 (b) decided 2026-10-03; U3 (e) revises programme §10.2). History: #360's F10 and F11 and U4 (b) retirement were removed on 2026-10-04 ([7](#7-decisions)) |
 | N05-A | merged | #356 (code head `a4951b044`; Sol `implementation-sound` round 2; Ubuntu CI exact head) |
 | N05-B | — | — |
@@ -961,7 +964,17 @@ agent-assisted manual step, not by a product route.
 
 **Plan inputs:** the N03 plan (acceptance identities); N09-A2 (Pause); N02 (migration contract).
 
-**Phases:** set by the new N04-P. LC gate: full form where a persisted format changes.
+**Phases** ([N04 plan](delivery-n04-plan.md) §3):
+
+- N04-P (re-plan, 2026-10-04).
+- N04-A: revision activation: Pause-gated revision, package snapshot on the reviewed head, one authority
+  transaction that resumes the Change, replay and startup recognition, evidence and confirmations by
+  criterion version, Designer workflow and README.
+- N04-B: D03 Design-return readmission: preserve the retained Builder work under refs, reset to the
+  reviewed head, release the handoff, then readmit.
+- N04-C: Cockpit **Change requirements** control and operating guide.
+
+LC gate: load form for N04-A and N04-B (no persisted format change); not applicable to N04-C.
 
 ### N05 — Exact-head merge approval, completion and publication continuity
 
@@ -1149,6 +1162,7 @@ The programme is complete when all of the following hold:
 - **N05:** merge-method policy (U1); real merge test on a disposable repository (U2); target
   freshness and the execution-time target race (U3) (decided 2026-10-03: N05 plan U1 (a), U2 (b),
   U3 (a) + (e)). U4 (b) retirement was reversed on 2026-10-04 (below).
+- **N04:** evidence inside a replanned outcome (N04 plan U1, open; needed before N04-A).
 - **N10-M:** abandoning the `frontier-serialization-contract` live Change; the disposition of the
   unfinished live record `delivery-action-readiness` (product merged via PR #316); the one-time
   reconciliation of B1.
