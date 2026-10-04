@@ -50,7 +50,19 @@ jobs:
 
       - name: Install locked Python workspace and test tools
         timeout-minutes: 8
-        run: uv sync --locked --all-packages --group dev
+        env:
+          # Only the deselected `model` tests import this stack; it is 96% of the workspace download.
+          CI_SKIPPED_PACKAGES: >-
+            torch triton nvidia-cublas nvidia-cuda-cupti nvidia-cuda-nvrtc nvidia-cuda-runtime
+            nvidia-cudnn-cu13 nvidia-cufft nvidia-cufile nvidia-curand nvidia-cusolver nvidia-cusparse
+            nvidia-cusparselt-cu13 nvidia-nccl-cu13 nvidia-nvjitlink nvidia-nvshmem-cu13 nvidia-nvtx
+            cuda-bindings cuda-pathfinder cuda-toolkit flagembedding accelerate transformers
+            sentence-transformers peft datasets ir-datasets pyarrow pandas scipy scikit-learn sympy
+            tokenizers safetensors sentencepiece hf-xet huggingface-hub
+        run: |
+          skipped=()
+          for package in $CI_SKIPPED_PACKAGES; do skipped+=(--no-install-package "$package"); done
+          uv sync --locked --all-packages --group dev "${skipped[@]}"
 
       - name: Install locked Cockpit dependencies
         if: hashFiles('serve/cockpit/web/package-lock.json') != ''
