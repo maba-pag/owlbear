@@ -67,6 +67,8 @@ candidate_commit: <exact reviewed commit>
 disposition: pass|finding
 finding_boundary: none|implementation|planning|design
 evidence: [<one or more source-grounded observations>]
+basis_digest: <finalization only: the semantics basis_digest you reviewed, echoed unchanged>
+observation_ids: [<finalization only: the submitted observation IDs you reviewed, in order>]
 memory_candidate: null | {source_agent, title, content, categories, confidence}
 ```
 

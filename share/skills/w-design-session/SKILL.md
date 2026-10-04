@@ -191,6 +191,9 @@ identity before admission:
 - provenance-classed commitments for dealbreakers, protected requests, important reviewed meaning,
   agreed paths, and implementation discretion;
 - user-facing outcomes with promises, observable acceptance, commitment links, and dependency IDs;
+  write every acceptance item as one quoted YAML string `"AC-NNN: <statement>"` with an ID unique
+  across the Change and stable across revisions (first admission refuses unprefixed items; never
+  reuse a retired ID);
 - exactly one outcome task-plan scope for every active outcome;
 - persisted Design re-entry briefings, semantic updates, and completion summaries only when they
   already exist as durable authority.

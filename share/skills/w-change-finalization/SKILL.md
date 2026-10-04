@@ -96,12 +96,17 @@ failure; do not repair it by discarding state.
 ## Step 2 - Capture Exact-Head Observations
 
 Run the relevant maintained checks for the changed surfaces read-only in the managed Change worktree.
-Capture at least one discriminating `DeliveryObservationReceipt` for the exact `change_head`, using
-the actual command or procedure, exit status or artifact locator, observer identity, and a
-timezone-aware observation time. Different checks may use different commands, tools, or evidence
-types; there is no target-bound profile or required step list. A failed check, dirty worktree, or
-changed head produces no finalization request. Do not mutate target refs, create another worktree, or
-author evidence for a different commit.
+Read `semantics` from the context: its `coverage` shows which acceptance criteria carried task evidence
+already covers or waives. Capture schema-2 `DeliveryObservationReceipt`s for the exact `change_head`
+only for criteria that are not yet covered; when carried evidence covers every criterion, no new
+observation is required. Each receipt names the exact `procedure`, a typed `result` (a `command` result
+records its real `exit_status`; Delivery derives the verdict), the `covers` criterion IDs and versions
+from `semantics`, the observer identity, and a timezone-aware observation time. Different checks may
+use different commands, tools, or evidence types; there is no target-bound profile or required step
+list. A failed check, dirty worktree, or changed head produces no finalization request. Do not mutate
+target refs, create another worktree, or author evidence for a different commit. Never author a
+`waived` or `human-confirmed` record yourself; only a user confirmation in the Delivery ledger can
+back one. When `semantics_refusal` is set, the context is withheld as a whole; stop before any proof.
 
 ## Step 2a - Retain A Trusted Failure
 
@@ -164,11 +169,13 @@ candidates without repair. Memory handling must not change the review or Deliver
 Only after observations and review pass, use the core Delivery models to construct values in memory:
 
 - one `DeliveryObservationReceipt.create(DeliveryObservation(...))` for each relevant passing check,
-  including the command or procedure, its exit status or artifact locator, and the exact Change head;
-- one `DeliveryReviewReceipt.create(DeliveryReview(...))` using the exact reviewer evidence, the
-  finalizer as `author_id`, and the independent reviewer as `reviewer_id`;
-- one `FinalizeDeliveryChange` containing the operation ID, exact head, canonical observations, and
-  canonical review.
+  including the exact `procedure`, its typed `result`, the `covers` criterion references, and the
+  exact Change head;
+- one `DeliveryReviewReceipt.create(DeliveryReview(...))` with `review_mode: finalization`, the
+  `basis_digest` from `semantics`, the ordered `observation_ids` of the submitted receipts, the exact
+  reviewer evidence, the finalizer as `author_id`, and the independent reviewer as `reviewer_id`;
+- one `FinalizeDeliveryChange` containing the operation ID, exact head, canonical observations (none
+  when carried evidence covers every criterion), and canonical review.
 
 Under an issued attempt, the operation ID is exactly `attempt.writer.attempt_id` and the exact head
 is exactly `attempt.exact_head`; every observation binds that same operation ID and head.
