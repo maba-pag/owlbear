@@ -1039,3 +1039,35 @@ def test_format_1_to_2_migration_changes_only_the_marker_and_keeps_every_change_
     assert json.loads(_frontier_path(repository, "change-a").read_bytes())["schema_version"] == 18
     _available(repository, ("change-a", "change-b"))
     assert record_tree_digest(repository, exclude_migrations=True) == post
+
+
+# ---------------------------------------------------------------------------
+# Shared journal (N08-A): migration journals keep version-1 bytes; repairs are version 2
+# ---------------------------------------------------------------------------
+
+
+def test_migration_journals_keep_their_version_1_bytes_and_repair_fields_need_version_2() -> None:
+    fields = {"migration_id": "a" * 64, "state": "applied", "backup_manifest_sha256": "b" * 64}
+    migration = MigrationJournal(source_format=0, target_format=1, **fields)
+    v1 = (
+        b'{"backup_manifest_sha256":"'
+        + b"b" * 64
+        + b'","batches":[],"migration_id":"'
+        + b"a" * 64
+        + b'","schema_version":1,"source_format":0,"state":"applied","target_format":1}\n'
+    )
+
+    assert migration.canonical_bytes() == v1
+    assert state_migration.upcast_migration_journal_v1(v1) == migration
+    for invalid in (
+        {"schema_version": 1, "kind": "repair", "source_format": 0, "target_format": 0},
+        {"schema_version": 1, "kind": "migration", "source_format": 0, "target_format": 1},
+        {"schema_version": 2, "kind": "migration", "source_format": 0, "target_format": 0},
+        {"schema_version": 2, "kind": "repair", "source_format": 0, "target_format": 1},
+    ):
+        with pytest.raises(ValueError, match="journals"):
+            MigrationJournal(**fields, **invalid)
+    repair = MigrationJournal(schema_version=2, kind="repair", source_format=1, target_format=1, **fields)
+    assert json.loads(repair.canonical_bytes())["kind"] == "repair"
+    with pytest.raises(ValueError, match="upcast"):
+        state_migration.upcast_migration_journal_v1(repair.canonical_bytes())
