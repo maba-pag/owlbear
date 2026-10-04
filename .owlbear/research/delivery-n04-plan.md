@@ -8,8 +8,10 @@
 > (`delivery-github`, `publication_provider.py`, forbidden-effect gates), so no locator here moved; P3–P8 rerun
 > there with identical outcomes. Round 3 merged `origin/dev` `141795676` (N09-A2, PR #357, merged); the N09-A2
 > start-site inventory and K3 fences named here are now on `dev`. Round 4 merged `origin/dev` `2061047af` (N02-C,
-> PR #355, merged: `remote_git.py` and the bounded `ChangeBranchPublisher`), re-read here.
-> **Status:** draft for the plan gate; revised after Sol plan gate rounds 1–4 ([§6](#6-round-dispositions)).
+> PR #355, merged: `remote_git.py` and the bounded `ChangeBranchPublisher`), re-read here. Round 5 merged
+> `origin/dev` `bff93d73e`: #360 is merged as `d79d20426` at exactly `c6bcbbc25` (the pin below), plus the N06
+> plan (#359); `supersede_publication` and the branch and draft-PR publishers were re-read there.
+> **Status:** draft for the plan gate; revised after Sol plan gate rounds 1–5 ([§6](#6-round-dispositions)).
 > Product code is unchanged by this phase. U1–U3 are recorded engineering decisions of 2026-10-03
 > ([1.13](#113-decisions)).
 > Dependencies (re-pinned in round 4): **N03 (as amended by #360)**: the [N03 plan](delivery-n03-plan.md) with
@@ -214,7 +216,7 @@ its K2 token does (a Pause after the intent makes the activation a K2 owner, N09
 | E4 | Retained same-task successor | Coordinator `acquire` and `prepare_builder_handoff_acquisition` for a Builder writer whose outcome, task and attempt lineage equal the passive `builder_handoff` (route `same-task`); a new task, a Planner claim, a Finalizer attempt or a different task refused | A1 |
 | E5 | Hold policy writes | `open_revision_hold` (purpose `revision` with a candidate, or `reassess` bound to one `history_ref` without one, B), `clear_revision_hold`, candidate revise and discard, and the `confirm_revision_criterion` consent-generation writes and ledger append for purposes `revision` and `reassess` (§1.7, B); each a K1-style admission or a declared frontier write, no start | A1, B |
 | E6 | Remote-child resolution | `activate_revision` kind `remote-child` whose `adopt_child` equals `remote_activation_pending.child` while the marker is `pending`; its A1 sets the marker `resolving` with this operation's ID; afterwards the `resolving` row below applies. Also the candidate write and discard of route (ii) (bytes equal to T's package) | A2b |
-| E7 | Divergence containment under the marker | The D03 dirty-worktree containment route named for `revision-workspace-unclean`, for this Change only while the marker records a worktree or index divergence (§1.6 Fresh-host restore); it preserves before it cleans | A2b |
+| E7 | Divergence containment under the marker | The D03 dirty-worktree containment route named for `revision-workspace-unclean`, for this Change only while the marker records a worktree or index divergence (§1.6 Fresh-host restore); it preserves before it cleans. Under `replacing` it is additionally bound to the marker's `replacement_id` and to one create-only divergence record `remote-activations/<op>/divergences/<digest>.json` whose digest equals the step-2 classifier result recomputed in E7's start transaction; its cleanup target is the record's branch head (`change_head` or T, both intent-bound), it never moves the branch and writes no authority (D45) | A2b |
 | E8 | Quarantined snapshot repair | `repair_quarantined_delivery_state_snapshot` while no activation is bound (it republishes validated local authority and starts no custody); with a bound activation only once `local.json` exists and the republished bytes equal its digests | A1, A2b |
 | E9 | Remote-child confirmation capture | `confirm_revision_criterion` purpose `remote-child` while the marker is `pending` and the candidate slot holds exactly T's package (`expected_candidate_package_id` = T's package ID); its transaction also advances the marker's `restored` frontier digest and records the receipt (§1.7) | B |
 | E10 | Foreign-head authorization | `resolve_revision_foreign_head` whose operation equals the bound operation and whose head F has `foreign-heads/<F>.json`, has no `foreign-authorizations/<F>.json`, and equals the provider and `ls-remote` heads read in the call, while no `merge-observed.json` exists (§1.6 Foreign Change head) | A2b |
@@ -226,7 +228,7 @@ state and bind its identities; every other start is refused `revision-remote-act
 | --- | --- |
 | `pending` | E6 (`adopt_child` = marker child; route (ii) candidate write and discard); E7 while a divergence is recorded; E8 with no bound activation; E9 |
 | `resolving` (`resolution_operation_id` = R) | For R only, as for a hold-bound activation: E2; E3 (`reconcile-revision-activation` with `revision_operation_id` = R); E10 (foreign head after R's intent); E8 once R's `local.json` exists |
-| `replacing` | None: the loader's replacement replay runs before the Change is available (§1.6 (i)) |
+| `replacing` (`replacement_id` = P) | Only E7 for P, while a divergence record of P matches the live classifier (§1.6 (i) step 2, D45); E2, E3, E6, E8, E9, E10, claims and every other start are refused. Without such a record the loader's replay runs before the Change is available (§1.6 (i)) |
 
 Every other N09-A2 start site stays refused under the hold and under `remote_activation_pending`. The
 inventory, from PR #357 (`9a7fff990`), is classified in `tests/test_delivery_worktree_authority.py` by a new
@@ -241,7 +243,7 @@ marker admits exactly its state's row above; the test classifies each site for t
 | `update` (intent-creating snapshot replacement, `_validate_update`), manager `snapshot_design_package` | refused, except E1 (and E2 for the receipt completion) |
 | `reserve_publication` | refused, except E2 and existing K2 tokens |
 | `start_direct_operation` (`sync-target`, `mark-ready`), manager `sync_with_target` | refused |
-| `start_pause_fenced` operator starts: `adopt_external_head`, `adopt_external_head_after_acceptance_attention`, `promote_external_head`, `abort_target_sync_conflict`, `resolve_target_sync_conflict`, `prepare_review_repair`, `reconcile_finalization_head`, `recover_out_of_band_head`, `repair_target_sync_publication`, `recover_publication_baseline`, `recover_change_worktree` | refused (`recover_change_worktree` and `recover_out_of_band_head` stay D03 containment routes: they run after Discard, or after the activation releases; E7 under the marker; a foreign head after the intent uses E10, never `recover_out_of_band_head`) |
+| `start_pause_fenced` operator starts: `adopt_external_head`, `adopt_external_head_after_acceptance_attention`, `promote_external_head`, `abort_target_sync_conflict`, `resolve_target_sync_conflict`, `prepare_review_repair`, `reconcile_finalization_head`, `recover_out_of_band_head`, `repair_target_sync_publication`, `recover_publication_baseline`, `recover_change_worktree` | refused (`recover_change_worktree` and `recover_out_of_band_head` stay D03 containment routes: they run after Discard, or after the activation releases; E7 under the marker: `pending` with a recorded divergence, `replacing` only for its `replacement_id` with a matching divergence record; a foreign head after the intent uses E10, never `recover_out_of_band_head`) |
 | `repair_quarantined_delivery_state_snapshot` (operator start `quarantine-repair:<op>`, Pause-gated since `9a7fff990`) | refused, except E8 |
 | `prepare_pause_fence` (`observe-acceptance` provider fence; `complete_change`) | refused before A1; after A1 only the A1b merged-PR path (I3) reaches completion |
 | `prepare_runtime_custody_guard` pause-gated class (K7) | refused, except E2 participants; completion class unchanged |
@@ -452,7 +454,9 @@ restore the Change: it is invisible and has no route. N04-A2b adds a verified re
         replacement.
      2. *Git steps.* CAS `update-ref` from `change_head` to T, then `git checkout T -- <four package paths>`;
         on restart the A3 classifier (§ Deterministic child commit step 5, child = T) finishes them or contains
-        `revision-workspace-unclean` with the paths (E7 then applies).
+        `revision-workspace-unclean` with the paths. Containment writes, create-only, the divergence record
+        `remote-activations/<op>/divergences/<digest>.json` (`replacement_id`, branch head `change_head` or T,
+        paths, classifier digest) and stops the replay before step 3 (D45).
      3. *Install.* One runtime transaction installs the stored snapshot's authority (package, contract,
         admission, frontier, coordination with its receipt and `last_reviewed_commit` = T), clears the marker
         and writes `replaced.json`; root-aware recovery completes a torn transaction (D3).
@@ -460,8 +464,12 @@ restore the Change: it is invisible and has no route. N04-A2b adds a verified re
 
      While the marker is `replacing`, the loader runs this replay before the Change becomes available,
      acquisition stays refused and the loader's local-versus-remote checks accept exactly the replacement's
-     intermediate states (branch at `change_head` or T; local authority old or the stored snapshot's). A
-     mismatch before step 1 replaces nothing. A differing index or worktree is
+     intermediate states (branch at `change_head` or T; local authority old or the stored snapshot's). When
+     step 2 contains, the Change becomes available in that intermediate state (old local authority, branch at
+     the record's head) with readiness `revision-remote-activation-pending` detail
+     `remote-activation-local-divergence` naming the paths and the `replacement_id`, and its one route is E7
+     for that record (§1.5 Marker permissions); after E7 the next startup resumes the replay at step 2, whose
+     classifier then finishes. A mismatch before step 1 replaces nothing. A differing index or worktree is
      contained: readiness stays `revision-remote-activation-pending` with detail
      `remote-activation-local-divergence` and the exact paths, and the user resolves it through E7, after
      which the next startup re-evaluates. A differing package, contract, admission or coordination cannot come
@@ -571,12 +579,25 @@ A4 may already have installed the revised authority and cleared `ready` and `fin
    state publication that A4 queued for the child, and captures the existing publication attention
    (`DeliveryRuntime.capture_publication_attention`, `delivery_runtime.py:596`; diagnostics
    `revision-merged-after-activation:<operation_id>` and `merged-head:<M>`; the bound PR identity).
-4. *Resolution (user, existing routes).* The Change never completes from M: `observe_acceptance` refuses
-   without finalization (`portfolio_application.py:692`), which A4 cleared. Publication attention admits
-   `supersede_publication` (`application_publication.py:586`: successor branch and PR from the child, then
-   state) or `set_change_intent(abandon)` with successor guidance; both were refused under the hold. Until a
-   published snapshot carries the `local.json` digests the loader accepts the local revised authority
-   through the journal (§1.6 Loader).
+4. *Resolution (user, existing routes; D46).* The Change never completes from M: `observe_acceptance`
+   refuses without finalization (`portfolio_application.py:692`), which A4 cleared. Publication attention
+   admits `set_change_intent(abandon)` with successor guidance, and `supersede_publication`
+   (`application_publication.py:586`: successor branch and PR from the child, then state) only when its
+   unchanged predicate holds: it passes the provider publication receipt's `head_sha`, which is immutable and
+   names the head at which that publication was created (later checkpoints and `return_to_draft` never add or
+   rewrite a receipt, `draft_pull_request.py:144-164`, `:656-697`, `:829-894`), and
+   `_validate_supersession_predecessor` (`change_publication.py:284`) refuses unless the remote predecessor
+   branch is exactly at that head (moved: "changed before supersession"; deleted after merge: "missing").
+   Step 3 evaluates that predicate with one `ls-remote` read (no write) and records diagnostic
+   `supersession-unavailable:<moved|missing>` when it fails; the diagnostic only selects the offered route
+   (never authority; `supersede_publication` keeps its own check). With it, readiness offers abandonment
+   alone, and the user text states that the PR was merged at M without the activated revision, that
+   supersession needs the published branch at its publication head, and that the revision continues as a
+   successor Change citing this one. A merge at an authorized foreign head F fails the predicate (the remote
+   holds F, not the receipt's head), as does, on current `dev`, the usual case of a Change checkpointed after
+   its publication was created; no prior receipt, foreign pin or merged branch is rewritten. Until a published
+   snapshot carries the `local.json` digests the loader accepts the local revised authority through the
+   journal (§1.6 Loader).
 
 **Generation history (D20).** Today `revisions/<contract digest>/` is written with create participants
 (`delivery_admission.py:425-429`); a second departure from the same contract writes different frontier bytes to
@@ -773,7 +794,7 @@ the renumber rule.
 | `revision_activation` (new) | `revision-activations/<op>/(intent\|demotion\|local\|result\|merge-observed).json`, `revision-activations/<op>/foreign-heads/<F>.json` and `revision-activations/<op>/foreign-authorizations/<F>.json`: models v1, R, create-only (one record per head; D42) | A2b | None exist |
 | `consent_generation` (N03-A) | No change: N04 adds uses `confirm-revision-criterion` and `authorize-revision-foreign-head` (bounded slugs, owner-validated bindings; N03 D13 *Single use*; D44) | A2b (foreign head), B (captures) | Unchanged |
 | `branch_publication` (existing, `runtime/publications/change-branches/operations/<digest>.json`) | Model union widened with `_ForeignHeadReplacementOperation` v1 (path `sha256("foreign-head:" + op)`); `ChangeBranchForeignHeadReplacementReceipt` v1 registered as `action_receipt` beside the supersession receipt; existing operation bytes and paths unchanged (D42) | A2b | Unchanged; covered by A2b's marker step |
-| `remote_activation_replacement` (new) | `remote-activations/<op>/(replacement\|replacement-snapshot\|replaced).json` (`RemoteActivationReplacement` v1 and the stored snapshot bytes, R; §1.6 (i)) | A2b | None exist |
+| `remote_activation_replacement` (new) | `remote-activations/<op>/(replacement\|replacement-snapshot\|replaced).json` (`RemoteActivationReplacement` v1 and the stored snapshot bytes, R; §1.6 (i)); `remote-activations/<op>/divergences/<digest>.json` (`RemoteActivationReplacementDivergence` v1, R, create-only; D45) | A2b | None exist |
 | `revision_preservation` (new) | `revision-activations/<op>/preservation/manifest.json` (`DesignReturnPreservationManifest` v1 with walk (files, symlinks, directories with modes), mode-exception, ignored and rule-change entries, R); `blobs/<sha256>` (`read=False`, owner-private) | A2b | None exist |
 | `revision_generation` (new) | `revisions/generations/<op>/generation.json` (`RevisionGeneration` v1, R); `revisions/generations/<op>/(contract\|frontier\|admission).json` (H, `read=False`); regex disjoint from `revision_record`'s 64-hex segment | A2b | None exist |
 | `revision_confirmation` (new) | `revision-confirmations/<confirmation_id>.json` (`RevisionConfirmationReceipt` v1, R); `revision-confirmations/retired/<op>/<confirmation_id>.json` (H, `read=False`; §1.6 (i)) | B | None exist |
@@ -806,7 +827,7 @@ finalized or ready Change instead, so no nested literal changes.
 | Engine actions `reconcile-revision-activation`, `reconcile-revision-snapshot` | A2b | Selected before every other action of the Change; executable through `acquire_change_action` / `execute_change_action` under hold exception E3; the action carries `revision_operation_id` |
 | `preview_revision_impact(change_id, history_ref=None)` | B | Impact view and digest; lists eligible history refs (generation and legacy) |
 | `show_revision_context(change_id)` | C | Active proposal, candidate, hold, criteria with N03 identities, per-outcome stage, task and evidence history, current blocks and requests, Design-return context, activation state |
-| Readiness reasons `revision-hold`, `revision-activation-pending` (details `revision-foreign-head` with F, `revision-merged-after-effects` with M), `revision-snapshot-stale`, `revision-remote-activation-pending` (details `remote-activation-local-divergence` with paths, `remote-activation-local-confirmations`, `remote-activation-origin-published`) | A1, A2b, A2b, A2b | Each with TypeScript mirror, rendering, component test and parity (R16) |
+| Readiness reasons `revision-hold`, `revision-activation-pending` (details `revision-foreign-head` with F, `revision-merged-after-effects` with M), `revision-snapshot-stale`, `revision-remote-activation-pending` (details `remote-activation-local-divergence` with paths and, under `replacing`, the `replacement_id` and its E7 route; `remote-activation-local-confirmations`, `remote-activation-origin-published`); publication-attention diagnostic `supersession-unavailable` (abandonment-only route and successor text, D46) | A1, A2b, A2b, A2b | Each with TypeScript mirror, rendering, component test and parity (R16) |
 | Error | A1–B | `DeliveryRevisionError(DeliveryRuntimeConflictError)`, code `ERR_DELIVERY_REVISION`, `reason` in: `change-terminal`, `change-paused`, `change-attention`, `review-repair-open`, `revision-hold-absent`, `candidate-stale`, `base-stale`, `contract-mismatch`, `frontier-stale`, `revision-custody-active`, `revision-drain-pending`, `revision-custody-retained`, `revision-workspace-unclean`, `revision-preservation-unsupported`, `revision-preservation-collision` (detail `ignore-rule-change` for D34), `revision-remote-head-moved`, `foreign-head-stale`, `revision-merged-after-effects`, `snapshot-signing-failed`, `snapshot-child-lost`, `handoff-disposition-required`, `design-return-lineage-changed`, `activation-pending`, `operation-conflict`, `revision-requires-activation`, `revision-snapshot-stale`, `revision-remote-activation-pending`, `remote-child-mismatch`, `reassess-requires-unfinalized`, `reassess-history-invalid`, `applicability-review-required`, `applicability-review-incomplete`, `applicability-review-stale`, `applicability-confirmation-version-changed`, `confirmation-unresolved`, `confirmation-not-applicable`, `confirmation-scope-invalid`, `reviewer-not-independent`. `snapshot-signing-failed`, `snapshot-child-lost` and `revision-workspace-unclean` also surface from the first-checkpoint snapshot (A2a) as workspace failures with the same reason |
 | MCP | each phase | Strict models for every new or changed tool in the phase that introduces it; error code mapping in `target_server.py` |
 | HTTP / Cockpit | C | `GET /api/changes/{id}/revision` (revision context); **Change requirements** on Change detail and group: explanatory view plus copy of `/design <change-id>` (N09 D6 copy pattern); hold and activation states rendered |
@@ -1003,7 +1024,7 @@ Added for Sol plan gate round 4 (§6):
   the Change) and loader writes (the loader stays a reader for activation state).
 - **D41 State-dependent marker permissions** (finding 2): `pending`, `resolving` and `replacing` each admit an
   exact identity-bound set; `resolving` grants the resolving operation the same E2, E3 and E10 a hold-bound
-  activation has.
+  activation has (`replacing` amended by D45).
 - **D42 Per-head authorization records and an authorization-bound publisher entry** (findings 3, 4). Each
   foreign head gets its own immutable observation, authorization, pin and publisher operation
   (`<operation_id>-foreign-<F>`). The lease push is one new `ChangeBranchPublisher` entry reusing its lock,
@@ -1012,12 +1033,30 @@ Added for Sol plan gate round 4 (§6):
   path) and `supersede` (a successor branch and PR for a head the user chose to replace).
 - **D43 Merge after effects is contained, not superseded** (finding 5). I3's exception stays pre-effect.
   Afterwards the activation stops remote writes, finishes locally and releases into the existing publication
-  attention, whose existing routes (`supersede_publication`, abandonment) resolve the merged PR. Rejected:
+  attention, whose existing routes (`supersede_publication`, abandonment) resolve the merged PR (narrowed by
+  D46). Rejected:
   ending `superseded-by-merge` after A4 (the merged head never carried the revised authority, and A4 already
   cleared finalization) and pushing the child to the merged PR's branch (it breaks the supersession
   predecessor check, `_validate_supersession_predecessor`).
 - **D44 N03's shared consent generation** (re-pin to #360 `c6bcbbc25`): N04 registers two uses with its own
   bindings and adds no family; supersedes D36's own family and closes G19.
+
+Added for Sol plan gate round 5 (§6):
+
+- **D45 Replacement-bound divergence containment** (finding 1). A `replacing` replay that contains at its Git
+  steps journals a create-only divergence record; the marker then admits E7 for exactly that replacement and
+  record (re-classified in E7's start transaction), the Change is visible with the paths and route, and the
+  next startup resumes the replay. Rejected: refusing every start under `replacing` (the replay could never
+  finish) and an unbound E7 (it would admit containment for another replacement or a stale divergence).
+- **D46 Merged-after-effects resolves by abandonment unless supersession's predicate holds** (finding 2;
+  narrows D43). Option (b): `supersede_publication` is unchanged and offered only when the remote predecessor
+  branch is at the publication receipt's head; otherwise the route is abandonment plus a successor Change.
+  Rejected: option (a), a foreign-predecessor supersession contract, because it needs a new branch- and
+  draft-PR-publisher predecessor contract bound to per-head authorization records, not a small predicate,
+  for a case that requires an outside actor to mark the demoted draft PR ready and merge it inside one
+  activation window, after another outside push (GitHub refuses to merge a draft PR); no live record shows
+  it. The same predicate also fails, on current `dev`, for most non-foreign merges after effects, whose
+  publication receipt predates later checkpoints; widening supersession for them is outside N04.
 
 #### U1 — May reviewed applicability attribute legacy evidence?
 
@@ -1401,8 +1440,10 @@ on top of it.
     acquired under E3 and completes (marker cleared); the same action naming another operation, a new claim and
     a second `remote-child` are refused; (2) after R's A1 another writer pushes F over T: the observation is
     journaled, `resolve_revision_foreign_head` for R runs under E10, and `replace_foreign_head` restores T with
-    a lease on F (the only remote-child branch write). Under `pending` E3 and E10 are refused; under
-    `replacing` every start is refused.
+    a lease on F (the only remote-child branch write). Under `pending` E3 and E10 are refused. Under
+    `replacing` (finding 1 of round 5) with a divergence record P-d: only E7 for P with P-d starts; E7 naming
+    another `replacement_id`, a record whose digest differs from the live classifier, and E2, E3, E6, E8, E9,
+    E10 and a new claim are refused in their start transaction; without a record every start is refused.
   - Operation identity (finding 6): legacy reconcile then `reassess` on the B1 shape produce two distinct
     operation IDs, journals and generation records; each identical request replays its own result; a
     `revision` repeated over an equal package pair at a later head gets a new ID.
@@ -1465,8 +1506,11 @@ on top of it.
     pin cleanup. Each restart completes from the stored snapshot bytes (the remote state branch is moved again
     during the crash window and the replay ignores it), ends with the marker cleared, branch, index and
     worktree at T and local authority equal to the stored snapshot's; acquisition is refused at every
-    intermediate restart; an unrelated edit made during the window → contained `revision-workspace-unclean`,
-    then E7, then completion.
+    intermediate restart; an unrelated edit made during the window (after the `update-ref` to T, and after 2
+    of 4 package paths) → contained `revision-workspace-unclean`, one divergence record, the Change available
+    with readiness detail `remote-activation-local-divergence` naming the paths and `replacement_id`; E7 runs
+    under `replacing`, preserves the edit, leaves the branch at the record's head and writes no authority;
+    the next fresh-process startup completes the replacement.
   - Foreign head (finding 6 of round 3; settles G18), real bare remote and the fake provider: after A1 another
     writer pushes F to the Change branch. (1) Formerly ready Change, PR ready at F: A1b journals
     `foreign-heads/<F>.json`, makes no provider write, readiness `revision-activation-pending` detail
@@ -1498,10 +1542,16 @@ on top of it.
     fresh-process restart; A5 observes the merge: `merge-observed.json` written, no `superseded-by-merge`, no
     branch push, lease push, provider call or state publication; the generation record and revised authority
     are unchanged; `result.json` `merged-after-effects` and publication attention with the merged head;
-    `observe_acceptance` refuses and the Change is not completed; `supersede_publication` then publishes the
-    child on `owlbear/change/<id>+s1` and the state, and a second clone loads the revised authority. Variants:
-    merged after A3 before A4 (A4 completes; same result); merged at an authorized foreign head F before the
-    replacement push (no lease push; same result); merged observed at A1b before any Git effect →
+    `observe_acceptance` refuses and the Change is not completed. Supersession (finding 2 of round 5): in a
+    fixture whose remote branch is still at the publication receipt's head, no diagnostic is recorded and
+    `supersede_publication` publishes the child on `owlbear/change/<id>+s1` and the state, and a second clone
+    loads the revised authority. Variants: merged after A3 before A4 (A4 completes; same result); merged at
+    an authorized foreign head F before the replacement push, a Change checkpointed after its publication was
+    created, and a predecessor branch deleted after the merge → no lease push, diagnostic
+    `supersession-unavailable` (`moved`, `moved`, `missing`), readiness offers abandonment only with the
+    successor text, `supersede_publication` refuses with no remote or provider write, the publication
+    receipt, `foreign-authorizations/<F>.json`, the foreign pin and the merged branch keep their bytes, and
+    `set_change_intent(abandon)` succeeds; merged observed at A1b before any Git effect →
     `superseded-by-merge` with the old authority (I3 kept).
   - `remote-child`: T's tree differs from the computed child → `remote-child-mismatch`; the PR is merged →
     `change-attention`; both before the intent.
@@ -1762,12 +1812,16 @@ Premises found false or incomplete on `ac3bf23f9`:
    restart (D40); `ChangeBranchPublisher` has no non-fast-forward path and freezes `expected_remote_head` per
    stored operation (`change_publication.py:384`, `:609`, `:1007`; D42); acceptance refuses a merged PR
    without finalization (`portfolio_application.py:692`), so a merge after A4 cannot complete the Change (D43).
+9. Found in Sol round 5 (§6): a `replacing` marker refused the E7 containment its own replay required (D45);
+   `supersede_publication` passes the immutable publication receipt's creation head, which
+   `_validate_supersession_predecessor` requires on the remote branch (`change_publication.py:284`), so it
+   cannot resolve a merge at a foreign head nor, usually, a merge after later checkpoints (D46).
 
 ## 4. Progress
 
 | Phase | PR | Exact head | Proof | Challenges | Status |
 | --- | --- | --- | --- | --- | --- |
-| N04-P | #358 | — | Probes P1–P9; round-1 source re-reads (§6); round-2 dependency re-pins and source re-reads, P10 Git hook and signing probe (§6); round-3 merge of `origin/dev` `141795676`, #360 re-pin `f4d09d774` and source re-reads (§6); round-4 merge of `origin/dev` `2061047af` (N02-C), #360 re-pin `c6bcbbc25` and source re-reads of the branch publisher, remote Git, loader head check, acceptance and supersession (§6) | Sol plan round 1: revision-required (10 findings: 8 high, 2 medium; all accepted, none rebutted) → revised; Sol plan round 2: revision-required (round-1 findings 5, 6, 7, 9, 10 resolved; 1–4 and 8 incomplete as 8 findings: 5 high, 3 medium; all accepted, none rebutted) → revised, A2 split; Sol plan round 3: revision-required (9 findings: 6 high, 3 medium; all accepted, none rebutted; G18 settled) → revised; Sol plan round 4: revision-required (5 high; all accepted, none rebutted; shared consent generation adopted, G19 closed) → revised | in review |
+| N04-P | #358 | — | Probes P1–P9; round-1 source re-reads (§6); round-2 dependency re-pins and source re-reads, P10 Git hook and signing probe (§6); round-3 merge of `origin/dev` `141795676`, #360 re-pin `f4d09d774` and source re-reads (§6); round-4 merge of `origin/dev` `2061047af` (N02-C), #360 re-pin `c6bcbbc25` and source re-reads of the branch publisher, remote Git, loader head check, acceptance and supersession (§6); round-5 merge of `origin/dev` `bff93d73e` (#360 merged at `c6bcbbc25`, #359) and source re-reads of `supersede_publication`, `_validate_supersession_predecessor` and the draft-PR publication receipt (§6) | Sol plan round 1: revision-required (10 findings: 8 high, 2 medium; all accepted, none rebutted) → revised; Sol plan round 2: revision-required (round-1 findings 5, 6, 7, 9, 10 resolved; 1–4 and 8 incomplete as 8 findings: 5 high, 3 medium; all accepted, none rebutted) → revised, A2 split; Sol plan round 3: revision-required (9 findings: 6 high, 3 medium; all accepted, none rebutted; G18 settled) → revised; Sol plan round 4: revision-required (5 high; all accepted, none rebutted; shared consent generation adopted, G19 closed) → revised; Sol plan round 5: revision-required (2 high; both accepted, none rebutted; option (b) chosen for finding 2) → revised | in review |
 | N04-A1 | — | — | — | — | — |
 | N04-A2a | — | — | — | — | — |
 | N04-A2b | — | — | — | — | — |
@@ -1796,7 +1850,7 @@ Premises found false or incomplete on `ac3bf23f9`:
 | G15 | N03's ledger validation is structural (digest, append-only, ≤ 256, scope well-formed) and accepts an entry whose scope names candidate criterion versions and whose request is not in a binding | N03-A not merged; N03 §1.5 does not state whether the ledger checks scope against the admitted contract | N03 §1.5, I10, L row | N04-B start (re-check; if N03 validates scope against the active contract, the plan is revised before B) | N04-B start |
 | G16 | `_MAX_DESIGN_RETURN_WALK_ENTRIES` admits realistic retained worktrees | The bound is fixed at A2b start from the largest supported fixture | D03 bounds (`_MAX_PRESERVED_PATHS` = 256, file 16 MiB, total 64 MiB) | N04-A2b start | N04-A2b merge |
 | G17 | Whether Cockpit may capture candidate-scoped confirmations | N03 U2 is an open user decision | N03 U2 | User (N03 U2) | Nothing in N04-B; N04-C Cockpit copy only |
-| G18 | An activation whose A1b or A5 observes a foreign Change head after the intent has a recovery route | Settled in design in round 3 (D35, §1.6 Foreign Change head): observe and journal, user-only authorization under E10 with a consent generation, local pin, observed-head demotion and a lease push; round 4 adds the restart-safe loader state (D40), per-head records and the authorization-bound publisher entry (D42) and merge containment (D43); not yet executed | §3.3 foreign-head scenarios | N04-A2b | N04-A2b merge |
+| G18 | An activation whose A1b or A5 observes a foreign Change head after the intent has a recovery route | Settled in design in round 3 (D35, §1.6 Foreign Change head): observe and journal, user-only authorization under E10 with a consent generation, local pin, observed-head demotion and a lease push; round 4 adds the restart-safe loader state (D40), per-head records and the authorization-bound publisher entry (D42) and merge containment (D43); round 5 resolves a merge after effects by abandonment whenever supersession's unchanged predicate fails, including every merge at a foreign head (D46); not yet executed | §3.3 foreign-head scenarios | N04-A2b | N04-A2b merge |
 | G19 | Closed in round 4. The sealing premise is moot: N03 D13 *Single use* (#360 `c6bcbbc25`) carries `generation_id` in the rendered question, which the SDK boundary matches before applying an answer, and N04 uses that shared owner (D44) | — | N03 D13 *Single use*, I11 | Existence of the owner is G1 | Nothing |
 
 ## 6. Round Dispositions
@@ -1868,3 +1922,15 @@ source on lane D (`2061047af`). No finding was rebutted; one was accepted with a
 | 3 | HIGH: successive authorizations reuse one receipt path | Confirmed: `foreign-head.json` was one R-class create-only path per operation, so F′ after F could not be authorized | Accepted | §1.4 rows; §1.5 E10; §1.6 A1b, steps 2–4 (`foreign-authorizations/<F>.json` per head, `authorization_id`); §1.8 `revision_activation`; D42; §3.3 F → F′ test through a fresh-process restart |
 | 4 | HIGH: the lease push has no compatible publication owner | Confirmed on `2061047af`: `_publish` refuses a remote that is not an ancestor (`change_publication.py:384`), `_push_exact_head` runs a plain push (`:609`), the stored operation freezes `expected_remote_head` (`_validate_replay`, `:1007`), and no lease push exists in Delivery; A2b bound A5 to one child-based operation ID | Accepted | §1.6 A5 row and Authorization-bound publisher entry (`replace_foreign_head`, per-head operation `<op>-foreign-<F>`, N02-C readback); §1.4 and §1.8 `branch_publication` union and receipt; §1.5 E2; §1.9 row; §1.10; D42; §3.3 paths and negative authorization tests |
 | 5 | HIGH: the merge exception extends beyond I3 | Confirmed: step 1 allowed `superseded-by-merge` before any *remote* effect, i.e. after A3 and A4, when A4 had installed the revised authority and cleared `finalization` and `ready`. Broader: after A4 no existing route completed the Change, since `observe_acceptance` refuses without finalization (`portfolio_application.py:692`) | Accepted | I3 (pre-effect only); §1.6 step 1 and Merge after effects (record, fence, release into the existing publication attention, existing `supersede_publication` or abandonment); loader rule; §1.9 state, detail and reason; D43; §3.3 after-A4 merge falsifier with variants |
+
+Sol plan gate round 5 (on `cbb1c7842`): `revision-required`, 2 findings (both high); D40, the per-head
+authorization and publication identities, the format widenings and D44 were accepted as coherent, and
+implementation gaps may remain at phase start. First `origin/dev` `bff93d73e` was merged into lane D (no
+conflict): #360 merged as `d79d20426`, whose N03 side is exactly the pinned `c6bcbbc25`, and #359 adds the N06
+plan. Each premise was re-read in source on lane D. No finding was rebutted; finding 2 was accepted with a
+broader scope.
+
+| # | Finding | Premise check | Disposition | Plan change |
+| --- | --- | --- | --- | --- |
+| 1 | HIGH: the `replacing` marker forbids the containment its replay requires | Confirmed from the plan text: D41 admitted no start under `replacing`, while (i) step 2 and the replacement restart proof contained `revision-workspace-unclean` and named E7 as the route | Accepted | §1.5 E7 (bound to `replacement_id` and a re-classified divergence record), Marker permissions `replacing` row, inventory note; §1.6 (i) step 2 (create-only divergence record) and the `replacing` paragraph (visible intermediate state, detail with paths and `replacement_id`, E7 route, resume at the next startup); §1.8 `remote_activation_replacement`; §1.9 readiness detail; D45; §3.3 marker-state and replacement restart tests |
+| 2 | HIGH: existing supersession cannot resolve a merge at an authorized foreign head | Confirmed on `bff93d73e`: `_publish_supersession` passes `context.predecessor.head_sha` (`application_publication.py:754-755`), the immutable provider receipt's creation head (`draft_pull_request.py:144-164`); `return_to_draft` writes only draft-state records (`:656-697`) and summaries never add receipts (`:829-894`); `_validate_supersession_predecessor` (`change_publication.py:284-299`) refuses unless the remote predecessor branch is exactly at that head. Broader: the same predicate fails for most non-foreign merges after effects (a Change checkpointed after its publication was created) and for a branch deleted after the merge | Accepted; option (b) | §1.6 Merge after effects step 4 (predicate read at release, `supersession-unavailable` diagnostic, abandonment-only route and successor text; supersession unchanged and offered only when its predicate holds); §1.9 diagnostic; D43 note, D46 (option (a) rejected, frequency stated); §3.3 falsifier variants; §3.7 item 9; G18 |
