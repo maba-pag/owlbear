@@ -29,7 +29,7 @@ _DIGEST_LENGTH = 64
 MAX_RECOVERY_INTENTS = 256
 _MAX_PROVENANCE_VALUE_LENGTH = 512
 _MAX_REPAIR_BINDINGS = 256
-# Three budgeted attempts (or 3 automatic + 1 explicit observation) plus refunded human pauses.
+# Readiness shows the latest attempts: three budgeted ones plus explicit observations and refunded pauses.
 MAX_RETRY_HISTORY_ATTEMPTS = 6
 _RETRY_FAILURE_CODE_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
 MAX_ADMITTED_PATH_LENGTH = 4096
@@ -1325,7 +1325,6 @@ class RetryLedger:
             and not automatic
             and current is not None
             and current.stop_code is RetryStopCode.ACCEPTANCE_WAIT
-            and current.explicit_observations == 0
         )
         if policy is RetryFailureClass.ACCEPTANCE and not automatic and not explicit_acceptance:
             return RetryReservation(
@@ -1390,14 +1389,6 @@ class RetryLedger:
                 stop_code=RetryStopCode.EXHAUSTED,
             )
         if policy is RetryFailureClass.ACCEPTANCE and automatic and observations >= self.acceptance_observations:
-            return RetryReservation(
-                episode_id=key.identity,
-                allowed=False,
-                reason_code=RetryStopCode.ACCEPTANCE_WAIT.value,
-                attempts=total,
-                stop_code=RetryStopCode.ACCEPTANCE_WAIT,
-            )
-        if policy is RetryFailureClass.ACCEPTANCE and not automatic and explicit_observations >= 1:
             return RetryReservation(
                 episode_id=key.identity,
                 allowed=False,

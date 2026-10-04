@@ -206,6 +206,7 @@ if TYPE_CHECKING:
         DesignCheckpointResult,
         VerifiedDesignPackage,
     )
+    from owlbear_delivery.merge_offer import MergeFacts
     from owlbear_delivery.workspace_coordination import DrainAuthority
 
 
@@ -231,6 +232,8 @@ class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _Publication
             str,
             tuple[float, str, PublicationPullRequestObservationReceipt | None],
         ] = {}
+        self._merge_facts_cache: dict[str, tuple[float, str, MergeFacts]] = {}
+        self._completed_cleanup_swept: set[str] = set()
         self._acceptance_reconciliation_cursor: str | None = None
         self._has_reconciled_runtimes = False
         self._target_root = dependencies.target_root.resolve()
@@ -812,6 +815,7 @@ class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _Publication
             )
         )
         self._publish_delivery_state(change_id, runtime, f"acceptance-{receipt.completion_id}")
+        self._cleanup_completed_worktree_best_effort(change_id, runtime, completed.completion_id)
         return completed
 
     def _latch_acceptance_observation(

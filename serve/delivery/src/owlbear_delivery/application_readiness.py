@@ -77,6 +77,7 @@ from owlbear_delivery.finalization_reports import (
     FinalizationReportStore,
     FinalizerSettlementReceipt,
 )
+from owlbear_delivery.merge_offer import MergeDecision, MergeFacts, MergeOfferAuthority, decide_merge
 from owlbear_delivery.portfolio_operating import (
     DeliveryHealthDiagnostic,
     DeliveryHealthReason,
@@ -92,6 +93,8 @@ from owlbear_delivery.portfolio_operating import (
     derive_portfolio_guidance,
 )
 from owlbear_delivery.publication_provider import (
+    ObservePublicationChecks,
+    PublicationMergeProvider,
     PublicationProviderError,
 )
 from owlbear_delivery.recovery import (
@@ -132,6 +135,7 @@ from owlbear_delivery.work_items import (
     WorkItemWorktreeCleanupView,
     WorkItemWorktreeRecoveryView,
     derive_delivery_progress,
+    resolve_publication_phase,
 )
 
 if TYPE_CHECKING:
@@ -814,7 +818,8 @@ class _ReadinessViewsMixin:
             frontier_digest=snapshot.version,
             candidate_head=snapshot.frontier.finalization.exact_head if snapshot.frontier.finalization else None,
         )
-        basis, workspace_reason, readiness_guidance = self._capture_action_basis(snapshot, cards, basis)
+        merge = self._merge_decision(snapshot)
+        basis, workspace_reason, readiness_guidance = self._capture_action_basis(snapshot, cards, basis, merge)
         if readiness_guidance is None:
             readiness_guidance = self._settled_attention_workspace_guidance(
                 snapshot.contract.change_id, workspace_reason
@@ -827,6 +832,10 @@ class _ReadinessViewsMixin:
         decisions = tuple(
             self._with_finalization_report(self._card_readiness(snapshot, card, basis, workspace_reason), reports)
             for card in cards
+        )
+        decisions = tuple(
+            self._with_merge_readiness(snapshot, card, decision, merge, workspace_reason)
+            for card, decision in zip(cards, decisions, strict=True)
         )
         decisions = tuple(
             self._with_retry_readiness(snapshot, card, decision)
@@ -1456,8 +1465,12 @@ class _ReadinessViewsMixin:
             return reason
         return "target-sync-required"
 
-    def _capture_action_basis(
-        self, snapshot: DeliveryPortfolioSnapshot, cards: tuple[WorkItemCardView, ...], basis: DeliveryReadinessBasis
+    def _capture_action_basis(  # noqa: C901 - one ordered row per workspace and target state.
+        self,
+        snapshot: DeliveryPortfolioSnapshot,
+        cards: tuple[WorkItemCardView, ...],
+        basis: DeliveryReadinessBasis,
+        merge: MergeDecision | None = None,
     ) -> tuple[DeliveryReadinessBasis, str | None, str | None]:
         try:
             coordination = self._workspace_manager.show(snapshot.contract.change_id)
@@ -1494,6 +1507,10 @@ class _ReadinessViewsMixin:
                     reason = "checkpoint-pending"
                 elif sync is None or sync.target_head != basis.target_head:
                     reason = "target-sync-required"
+            elif reason is None and merge is not None and merge.reason == "target-sync-required":
+                # U3(a): a finalized Change syncs to the provider's target head, not the unfetched local ref.
+                basis = basis.model_copy(update={"target_head": merge.target_head})
+                reason = "target-sync-required"
             return basis, reason, None
         if any(
             self._captured_action(snapshot.frontier, card).kind is WorkItemActionKind.START_ORCHESTRATION
@@ -2209,14 +2226,155 @@ class _ReadinessViewsMixin:
     ) -> DeliveryPortfolioSnapshot:
         frontier_bytes = runtime.frontier_bytes()
         frontier = parse_delivery_frontier(frontier_bytes)[0]
-        cached = self._publication_observation_cache.get(runtime.contract.change_id)
+        change_id = runtime.contract.change_id
+        cached = self._publication_observation_cache.get(change_id)
         observation = cached[2] if cached is not None and cached[1] == frontier.published_head else None
         if observe_publication:
-            observation = self._publication_observation(runtime.contract.change_id, frontier)
+            observation = self._publication_observation(change_id, frontier)
         return DeliveryPortfolioSnapshot.capture(
             runtime.contract,
             frontier_bytes,
             publication_observation=observation,
+            merge_facts=self._merge_facts(change_id, frontier, observation, refresh=observe_publication),
+        )
+
+    def _merge_facts(
+        self,
+        change_id: str,
+        frontier: DeliveryFrontier,
+        observation: PublicationPullRequestObservationReceipt | None,
+        *,
+        refresh: bool,
+    ) -> MergeFacts | None:
+        """Read offer facts for an open awaiting-merge PR; failures are never cached (D8)."""
+        publisher = self._draft_pull_request_publisher
+        ready = frontier.ready
+        if (
+            publisher is None
+            or ready is None
+            or observation is None
+            or observation.snapshot.state != "open"
+            or resolve_publication_phase(frontier) is not WorkItemPublicationPhase.AWAITING_MERGE
+        ):
+            return None
+        now = time.monotonic()
+        cached = self._merge_facts_cache.get(change_id)
+        if cached is not None and cached[1] == ready.receipt_id and (not refresh or cached[0] > now):
+            return cached[2]
+        if not refresh:
+            return None
+        provider = publisher.provider
+        if not isinstance(provider, PublicationMergeProvider):
+            facts = MergeFacts(capable=False)
+        else:
+            try:
+                facts = MergeFacts(
+                    capable=True,
+                    evidence=provider.read_merge_evidence(ready.repository, ready.number),
+                    settings=provider.read_merge_settings(ready.repository, publisher.target_branch),
+                    checks=provider.observe_checks(
+                        ObservePublicationChecks(
+                            repository=ready.repository, number=ready.number, expected_head_sha=ready.head_sha
+                        )
+                    ),
+                    target_head=provider.read_branch_head(ready.repository, publisher.target_branch).head_sha,
+                )
+            except OSError, PublicationProviderError, RuntimeError, subprocess.SubprocessError, ValueError:
+                return None
+        self._merge_facts_cache[change_id] = (now + _PUBLICATION_OBSERVATION_CACHE_SECONDS, ready.receipt_id, facts)
+        return facts
+
+    def _merge_decision(self, snapshot: DeliveryPortfolioSnapshot) -> MergeDecision | None:
+        """Classify an open awaiting-merge PR at the finalized head; other states stay with acceptance."""
+        frontier = snapshot.frontier
+        finalization, ready = frontier.finalization, frontier.ready
+        publisher = self._draft_pull_request_publisher
+        if (
+            publisher is None
+            or finalization is None
+            or ready is None
+            or frontier.change_disposition is not None
+            or resolve_publication_phase(frontier) is not WorkItemPublicationPhase.AWAITING_MERGE
+        ):
+            return None
+        observation = snapshot.publication_observation
+        if observation is None:
+            return MergeDecision(reason="provider-unavailable")
+        # Mergeability lives on the receipt; the persisted snapshot excludes it.
+        pull_request = observation.snapshot.model_copy(
+            update={"mergeable": observation.mergeable, "merge_state_status": observation.merge_state_status}
+        )
+        if pull_request.merged or pull_request.state != "open" or pull_request.head_sha != finalization.exact_head:
+            return None
+        sync = frontier.target_sync_receipt
+        authority = MergeOfferAuthority(
+            repository=ready.repository,
+            number=ready.number,
+            node_id=ready.node_id,
+            target_branch=publisher.target_branch,
+            exact_head=finalization.exact_head,
+            finalization_id=finalization.finalization_id,
+            ready_receipt_id=ready.receipt_id,
+            observation_count=len(finalization.observations),
+            review_id=finalization.review.review_id,
+            proof_target=sync.target_head if sync is not None else None,
+        )
+        return decide_merge(authority, pull_request, snapshot.merge_facts)
+
+    @classmethod
+    def _with_merge_readiness(
+        cls,
+        snapshot: DeliveryPortfolioSnapshot,
+        card: WorkItemCardView,
+        decision: DeliveryReadiness,
+        merge: MergeDecision | None,
+        workspace_reason: str | None,
+    ) -> DeliveryReadiness:
+        """L2: an open awaiting-merge PR shows its real wait, block, offer or strict-proof sync route."""
+        if (
+            merge is None
+            or card.scope is not WorkItemScope.CHANGE_PUBLICATION
+            or decision.reason_code != "request-action"
+            or decision.operation is not WorkItemActionKind.OBSERVE_ACCEPTANCE
+        ):
+            return decision
+        if merge.reason == "target-sync-required" and workspace_reason == "target-sync-required":
+            action = WorkItemAction(kind=WorkItemActionKind.SYNC_TARGET, label="Synchronize target")
+            updates: dict[str, object] = {
+                "status": "ready",
+                "operation": WorkItemActionKind.SYNC_TARGET,
+                "executable": True,
+                "action": action,
+                "next_actor": WorkItemNextActor.AGENT,
+                "reason_code": "target-sync-required",
+            }
+        elif merge.reason == "target-sync-required":
+            updates = {
+                "status": "blocked",
+                "operation": None,
+                "executable": False,
+                "action": None,
+                "next_actor": WorkItemNextActor.AGENT,
+                "reason_code": workspace_reason or "target-sync-required",
+            }
+        else:
+            updates = {
+                "status": "blocked" if merge.reason == "merge-blocked" else "waiting",
+                "operation": None,
+                "executable": False,
+                "action": None,
+                "next_actor": (
+                    WorkItemNextActor.YOU
+                    if merge.reason in {"merge-approval-required", "merge-blocked"}
+                    else WorkItemNextActor.NONE
+                ),
+                "reason_code": merge.reason,
+                "merge_offer": merge.offer,
+                "merge_block": merge.block,
+            }
+        updated = decision.model_copy(update=updates)
+        return updated.model_copy(
+            update={"prompt": cls._readiness_prompt(snapshot, card, updated.reason_code, executable=updated.executable)}
         )
 
     def _publication_observation(
@@ -2231,8 +2389,6 @@ class _ReadinessViewsMixin:
             return None
         now = time.monotonic()
         cached = self._publication_observation_cache.get(change_id)
-        if frontier.ready is not None:
-            return cached[2] if cached is not None and cached[1] == published_head else None
         if cached is not None and cached[0] > now and cached[1] == published_head:
             return cached[2]
         try:
