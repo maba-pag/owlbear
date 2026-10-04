@@ -7,6 +7,11 @@
 > D9 merged under the user's overnight authorization of 2026-10-03 ("do whatever is necessary to keep
 > work going … merging") and was confirmed on 2026-10-03 (listed to the user without objection).
 > U1 (a), U2 (a) and U3 (default) were decided on 2026-10-03.
+> **Simplification 2026-10-04** (lead decision, [execution plan §7](delivery-redesign-execution-plan.md#7-decisions)):
+> N02-D works in the execution plan's
+> [operating context](delivery-redesign-execution-plan.md#19-operating-context), which replaces the
+> 2026-10-04 release-integrity threat-boundary amendment of PR #362. Release integrity is defined by
+> [§3.5](#35-n02-d--controller-pinning-and-upgrade-procedure) *Release integrity*; start cost is normal.
 > Product code is unchanged by this phase.
 
 ## 1. Contract
@@ -628,6 +633,13 @@ reject in lax mode too; they are the same deliberate rejections as in run 1. No 
   and the Delivery sections of `README.md`; tests (`serve/tools/tests/test_delivery_controller.py`,
   loader pin tests); this plan; execution plan status row and the factual §1.2/§2.6 note that the
   freeze ended. Seed and `setup/init.py` stay unchanged (N08-C).
+- **Release integrity** (simplified 2026-10-04): install seals every release read-only;
+  `delivery-controller verify` hashes the full content and checks the interpreter on demand and
+  inside `pin` and `switch`; a non-pinned controller refuses to start on a pinned workspace
+  (`controller-not-pinned`, I6), which guards an honest mistake. There is no start-time integrity
+  verification: no launcher-embedded verifier, no loader repeat check, no stat-fingerprint fast path
+  and no interpreter digest check at start. Offline preflight, `/upgrade-delivery` and the H-step
+  runbook of PR #362, including its checkout-collisions step, stay.
 - **Upgrade procedure** (extends N00-M's live-activation steps):
   1. Read-only preflight through the running controller; the user settles blocking custody (D6).
   2. The user stops `owlbear-delivery` (*MCP: List Servers* → *Stop*) and Cockpit; the tool

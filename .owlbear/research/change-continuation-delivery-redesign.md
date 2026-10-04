@@ -12,6 +12,17 @@
 **Execution status:** D01, D02 and D03 are complete; D03 merged with PR #326 as `881b500f` and is
 live. Remaining work and its status are in [the execution plan](delivery-redesign-execution-plan.md).
 
+**Simplification 2026-10-04:** the lead simplified the remaining programme under the user's
+authorization ([execution plan §7](delivery-redesign-execution-plan.md#7-decisions)). Every remaining
+phase works in the stated
+[operating context](delivery-redesign-execution-plan.md#19-operating-context): trusted but fallible
+agents, trusted concurrent own processes, an unreliable GitHub, loopback-only Cockpit; deliberately
+misbehaving agents and same-user tampering are out of scope. Dropped requirements: V17 and V22 with
+the section 9 prepared-interaction machinery (person-only checks are ordinary Action Requests
+answered in Cockpit), and V23 (B1's own acceptance). Every user answer, including waivers and merge
+approval, is given in Cockpit; agents' MCP tools do not offer user-only actions. The sections below
+are unchanged history unless marked.
+
 **Reading route:** For execution, start with [the execution plan](delivery-redesign-execution-plan.md).
 Sections 1-11 explain the product and technical contracts; section 12 retains the original WP/P
 identifiers for traceability only; section 13 supplies proof scenarios. Do not invoke Delivery to
@@ -1132,6 +1143,8 @@ Replace `_carry_forward_unresolved_binding`'s blanket human request with agent-o
 
 ## 9. Prepared Human Assistance
 
+> Dropped on 2026-10-04 (see the simplification note at the top). Kept as history.
+
 ### 9.1 Readiness gate for asking the user
 
 Introduce a typed prepared-interaction contract, not a free-form task summary. Minimum fields:
@@ -1568,13 +1581,13 @@ Tests below are required scenarios for the proposed programme, not claims that c
 | V14 | Requirement changes with old code/proof present | Prior authority retained; candidate delta reviewed; activation coherent; only affected work invalidated | Source-bound admission integration |
 | V15 | B1-style repeated request IDs with unchanged proven claim | Evidence reused by covered claim/version; no new human exercise just because request ID changed | Evidence applicability and UI fixture |
 | V16 | Revised target not covered by old evidence | Exact missing claim shown; no silent acceptance waiver; runnable new step only after preparation | Revision/assistance integration |
-| V17 | Assisted check with unavailable handler/tool or no agent host | Agent preparation/host-needed state, not **Needs your evidence**; no fake launch | Capability and Cockpit E2E |
+| V17 | Assisted check with unavailable handler/tool or no agent host | Dropped 2026-10-04. Was: agent preparation/host-needed state, not **Needs your evidence**; no fake launch | — |
 | V18 | Invalid frontier or pending snapshot while UI loads | Degraded Change remains visible; maintenance entry works without loading invalid runtime | Startup/API/maintenance integration |
 | V19 | Approve merge, then head changes or protection fails | No merge of unapproved head; reason and actionable review/retry presented | Provider and UI confirmation test |
 | V20 | Unknown corruption or missing user-confirmation provenance | No auto-blessing/rehashed state; preserve and diagnose; no fabricated approval | Maintenance negative fixture |
 | V21 | Crash after each revision/migration durable step | Restart reaches old approved version or replayed new coherent version; no duplicate child commit or lost block | Parameterized transaction/remote snapshot replay |
-| V22 | Private URL/credential-like input, expired session, cancelled sign-in | Validate/reject safely; no secrets in transcript/log/receipt; cleanup only owned resources; cancel is not pass | Local helper/browser/privacy fixtures |
-| V23 | Real managed-device assisted check | User only inputs approved address locally and signs in/confirms; agent runs remaining procedure and stores bounded evidence | Controlled user session, explicitly not replaceable by synthetic CI |
+| V22 | Private URL/credential-like input, expired session, cancelled sign-in | Dropped 2026-10-04. Was: validate/reject safely; no secrets in transcript/log/receipt; cleanup only owned resources; cancel is not pass | — |
+| V23 | Real managed-device assisted check | Moved to B1's own acceptance on 2026-10-04. Was: user only inputs approved address locally and signs in/confirms; agent runs remaining procedure and stores bounded evidence | B1's Action Request |
 | V24 | Controller upgrade with active work or unsupported downgrade | Actions drain/fence; invalid upgrade refused or safely reverted; existing records resume under supported schema | Versioned startup/migration rehearsal |
 
 Repository checks should reuse current suites and helpers. Find owning test roots before execution; use focused public-function tests for local logic, registered MCP/HTTP tests for contracts, and maintained Cockpit E2E for interactions. Relevant gates include `uv run test` routing, `npm test`/frontend build, package-boundary tests, and agent/skill/prompt validators. Select exact commands from the implementation checkout; do not copy old test counts as evidence.
