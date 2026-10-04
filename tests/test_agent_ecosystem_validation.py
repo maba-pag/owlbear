@@ -150,6 +150,8 @@ _RETIRED_DELIVERY_TOOLS = {
     "recover_blocked_implementation",
     "validate_delivery_contract",
 }
+# Schema-1 observation fields and self-answering of user-only requests have no place in active guidance.
+_RETIRED_EVIDENCE_PHRASES = {"command_or_procedure", "exit_status_or_artifact_locator", "call `answer`"}
 
 
 def _load_module(path: Path, name: str) -> types.ModuleType:
@@ -881,7 +883,7 @@ async def test_declared_mcp_tools_exist_in_live_registries() -> None:
 
 
 def test_retired_delivery_operations_are_absent_from_active_customization_prose() -> None:
-    """Retired MCP mutations must not survive in active customization sources."""
+    """Retired MCP mutations and schema-1 evidence guidance must not survive in active customization sources."""
     roots = (
         _REPO_ROOT / "share/agents",
         _REPO_ROOT / "share/instructions",
@@ -901,6 +903,8 @@ def test_retired_delivery_operations_are_absent_from_active_customization_prose(
             assert operation not in content, (
                 f"{path.relative_to(_REPO_ROOT)} mentions retired Delivery operation {operation}"
             )
+        for phrase in _RETIRED_EVIDENCE_PHRASES:
+            assert phrase not in content, f"{path.relative_to(_REPO_ROOT)} mentions retired evidence guidance {phrase}"
 
     orchestrator = (_AGENTS_ROOT / "orchestrator.agent.md").read_text(encoding="utf-8")
     assert "repair result" not in orchestrator
@@ -1194,6 +1198,58 @@ def test_worker_settlement_guidance_matches_native_contract() -> None:
             ),
         )
     )
+
+
+_FINALIZATION_SKILL = "share/skills/w-change-finalization/SKILL.md"
+_PACKET_SKILL = "share/skills/w-packet-building/SKILL.md"
+_BUILD_REVIEWER = "share/agents/build-reviewer.agent.md"
+_FINALIZER = "share/agents/finalizer.agent.md"
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "phrase"),
+    [
+        (_FINALIZATION_SKILL, "plan coverage before running proof"),
+        (_FINALIZATION_SKILL, "when carried evidence covers every criterion, no new observation is required"),
+        (_FINALIZATION_SKILL, "Delivery derives the verdict"),
+        (_FINALIZATION_SKILL, "report `maintained-check-unavailable` with `checks_state: not-run`"),
+        (_FINALIZATION_SKILL, "stop before any proof and never request, reconstruct, or review a partial context"),
+        (_FINALIZATION_SKILL, "Report `independent-review-unavailable` with `checks_state: not-run`"),
+        (_FINALIZATION_SKILL, "`semantics` with its `basis_digest` and `diff_base`"),
+        (_FINALIZATION_SKILL, "`basis_digest` equal to `semantics.basis_digest`"),
+        (_FINALIZATION_SKILL, "`observation_ids` equal to the submitted receipts' IDs in submission order"),
+        (_FINALIZATION_SKILL, "it is the only reason to exercise a covered criterion again"),
+        (_FINALIZATION_SKILL, "Submit a `waived` or `human-confirmed` record only when its `request_id` cites"),
+        (_FINALIZATION_SKILL, "Never invent or answer such a request yourself"),
+        (_FINALIZATION_SKILL, "Never resubmit an altered request in the same attempt"),
+        (_FINALIZER, "On `semantics_refusal`, stop before any proof, report `independent-review-unavailable`"),
+        (_FINALIZER, "require the exact commit, `basis_digest`, and `observation_ids` echo"),
+        (_BUILD_REVIEWER, "does not match finalization mode: reject it and never review a partial context"),
+        (_BUILD_REVIEWER, "Read the `diff_base..change_head` diff and cited source at `change_head` only"),
+        (_BUILD_REVIEWER, "an unmet promise or a violated exclusion or constraint is a `finding`"),
+        (_BUILD_REVIEWER, "Return `semantics.basis_digest` unchanged and the supplied observation IDs"),
+        (_PACKET_SKILL, "Delivery derives the verdict"),
+        (_PACKET_SKILL, "never to record a check that failed; a failing check is not a result"),
+        (_PACKET_SKILL, "Block instead when this task cannot be shown complete without user input now"),
+        (_PACKET_SKILL, "block with a Decision `request` whose `applies_to` names `kind`"),
+        (_PACKET_SKILL, "the `answer` tool refuses it with `ERR_DELIVERY_CONFIRMATION`"),
+        (_PACKET_SKILL, "never answer such a request yourself"),
+        (_PACKET_SKILL, "`keep-required` or `failed` confirms nothing"),
+        ("share/agents/builder.agent.md", "only through a scoped block request; never answer such a request yourself"),
+        ("share/skills/w-frontier-planning/SKILL.md", "Cover every criterion"),
+        (
+            "share/agents/planner-challenger.agent.md",
+            "an uncited criterion or an ID outside the context is a `finding`",
+        ),
+        ("share/agents/designer-challenger.agent.md", "Each outcome acceptance item reads `AC-NNN: <statement>`"),
+        ("serve/delivery/README.md", "digests prove content integrity, not that a procedure ran"),
+    ],
+)
+def test_finalization_and_proof_guidance_pins_each_procedure_step(relative_path: str, phrase: str) -> None:
+    """Each evidence procedure step stays in the skill or agent that owns it."""
+    content = " ".join((_REPO_ROOT / relative_path).read_text(encoding="utf-8").split())
+
+    assert phrase in content
 
 
 def test_memory_audit_rescoping_requires_corroborated_agent_names() -> None:

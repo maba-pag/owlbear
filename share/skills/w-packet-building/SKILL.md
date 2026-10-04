@@ -162,6 +162,19 @@ records its `expected_exit_status`), the `covers` criterion IDs and versions fro
 close as a `missing` result with its owner instead of omitting it. Author a `waived` or
 `human-confirmed` record only with the `request_id` of a waiver or person-only check request the user
 answered in Cockpit; never answer such a request yourself. Use `review_mode: task` in the review.
+Use `expectation: expected-failure` only for a check whose specified behavior is that failure, never
+to record a check that failed; a failing check is not a result, so repair it, retry, or block. Record
+`missing` (owner `user`, `provider`, `assisted-check`, or `agent` for a later task of this chain) when
+this task is complete but a criterion can only be observed later or by that owner; the gap stays
+visible and blocks finalization until later evidence covers it. Block instead when this task cannot
+be shown complete without user input now. To ask the user to waive a criterion or to confirm a check
+only a person can make, block with a Decision `request` whose `applies_to` names `kind`
+(`waive` or `confirm-check`), the `acceptance` references from the context, and the exact
+`procedure`, with options exactly `waive` and `keep-required` or `passed` and `failed` and no
+`resolution`. The user answers it in Cockpit; the `answer` tool refuses it with
+`ERR_DELIVERY_CONFIRMATION`. A resumed claim cites the answered request by `request_id` from a
+`waived` record, or a `human-confirmed` manual or artifact record, whose `covers` lie in that scope
+and whose `procedure` equals it; `keep-required` or `failed` confirms nothing.
 Serialize the returned receipt with
 `model_dump(mode="json")`; never calculate, copy, or invent `observation_id`. Any post-commit change
 invalidates the receipts and requires a successor commit plus fresh proof.
@@ -259,6 +272,7 @@ request:
   outcome_id: <context outcome ID>
   summary: <one bounded user request>
   options: [{option_id: <stable option identity>, label: <bounded choice label>}]
+  applies_to: <only for a waiver or person-only check (Step 2): {kind, acceptance, procedure}>
 ```
 
 Use `block` only when user-owned input is required. Never substitute `unblock_evidence` for the

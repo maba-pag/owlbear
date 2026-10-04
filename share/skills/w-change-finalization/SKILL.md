@@ -96,22 +96,33 @@ failure; do not repair it by discarding state.
 ## Step 2 - Capture Exact-Head Observations
 
 Run the relevant maintained checks for the changed surfaces read-only in the managed Change worktree.
-Read `semantics` from the context: its `coverage` shows which acceptance criteria carried task evidence
-already covers or waives. Capture schema-2 `DeliveryObservationReceipt`s for the exact `change_head`
-only for criteria that are not yet covered; when carried evidence covers every criterion, no new
-observation is required. Each receipt names the exact `procedure`, a typed `result` (a `command` result
-records its real `exit_status`; Delivery derives the verdict), the `covers` criterion IDs and versions
-from `semantics`, the observer identity, and a timezone-aware observation time. Different checks may
-use different commands, tools, or evidence types; there is no target-bound profile or required step
-list. A failed check, dirty worktree, or changed head produces no finalization request. Do not mutate
-target refs, create another worktree, or author evidence for a different commit.
+Read `semantics` from the context and plan coverage before running proof: its `coverage` shows which
+acceptance criteria carried task evidence already covers or waives. A `covered` or `waived` criterion
+needs no new observation; each `missing`, `uncovered`, or `unknown` criterion needs exact-head
+evidence. Choose its procedure from the criterion statement and the task `acceptance_observations`
+and `proof_boundaries` in `semantics.task_authority`. Capture schema-2 `DeliveryObservationReceipt`s
+for the exact `change_head` only for criteria that are not yet covered; when carried evidence covers
+every criterion, no new observation is required. Each receipt names the exact `procedure`, a typed
+`result` (a `command` result records its real `exit_status`; Delivery derives the verdict), the
+`covers` criterion IDs and versions from `semantics`, the observer identity, and a timezone-aware
+observation time. Different checks may use different commands, tools, or evidence types; there is no
+target-bound profile or required step list. A failed check, dirty worktree, or changed head produces
+no finalization request. Do not mutate target refs, create another worktree, or author evidence for a
+different commit.
+Submit only satisfying records: a `passed` or `expected-negative` result, or an applicable waiver;
+never a `missing` or failed record. When no procedure available here can observe an open criterion,
+stop before review: report `maintained-check-unavailable` with `checks_state: not-run` (Step 2a) and
+return `proof_failed`. Never cover it with a check that does not observe it. A failed check is
+`maintained-check-failed` with `checks_state: failed`.
 `semantics.confirmations` lists every waiver or person-only check request the user answered in
 Cockpit. Submit a `waived` or `human-confirmed` record only when its `request_id` cites one of them:
 its `outcome_id` owns every criterion the record `covers`, those criteria and versions are in its
 `scope.acceptance`, the record's `procedure` equals `scope.procedure`, and its `decision` is `waive`
 for a waiver or `passed` for a passed `human-confirmed` assessment. Never invent or answer such a
 request yourself; the `answer` tool refuses it. When `semantics_refusal` is set, the context is withheld
-as a whole; stop before any proof.
+as a whole; stop before any proof and never request, reconstruct, or review a partial context. Report
+`independent-review-unavailable` with `checks_state: not-run` (Step 2a) and return `review_failed`;
+for `finalization-context-oversized` the remedy is a requirement change or split, not a retry.
 
 ## Step 2a - Retain A Trusted Failure
 
@@ -147,21 +158,30 @@ Change's original attempt budget.
 
 ## Step 3 - Obtain Independent Exact-Commit Review
 
-Dispatch `build-reviewer` with `review_mode: finalization`, the complete fresh context, the exact
-Change head, the observations, and the finalization diff boundary. Require the reviewer to
+Dispatch `build-reviewer` with `review_mode: finalization`, the complete fresh context including
+`semantics` with its `basis_digest` and `diff_base`, the exact Change head, and the final ordered
+observation receipts with their `observation_id`s (none when carried evidence covers every
+criterion). The finalization diff boundary is `diff_base..change_head`. Require the reviewer to
 independently resolve and inspect the exact commit with read-only Git. Accept only a response with:
 
 - `review_mode: finalization`;
 - the exact reviewed commit equal to `change_head`;
+- `basis_digest` equal to `semantics.basis_digest`;
+- `observation_ids` equal to the submitted receipts' IDs in submission order;
 - `disposition: pass`;
 - `finding_boundary: none`;
 - non-empty source-grounded evidence; and
 - reviewer identity different from the finalizer identity.
 
 A finding, stale head, malformed response, or unavailable reviewer produces no finalization request.
+Any change to the observation set after review requires a fresh review. A finding whose only evidence
+is that carried evidence for named criteria does not apply to the assembled head permits one fresh
+exact-head observation of those criteria and a fresh review; it is the only reason to exercise a
+covered criterion again.
 For a trusted independent-review failure, retain the registered `independent-review` diagnostic
-before returning the review failure; unavailable context or report storage remains a bounded failure
-without a fabricated report identity.
+(`independent-review-failed` for a finding, `independent-review-unavailable` for an unavailable
+reviewer or malformed response) before returning the review failure; unavailable context or report
+storage remains a bounded failure without a fabricated report identity.
 Do not repair reviewer findings inside this workflow and do not turn reviewer prose into a lifecycle
 transition.
 
@@ -173,9 +193,9 @@ candidates without repair. Memory handling must not change the review or Deliver
 
 Only after observations and review pass, use the core Delivery models to construct values in memory:
 
-- one `DeliveryObservationReceipt.create(DeliveryObservation(...))` for each relevant passing check,
-  including the exact `procedure`, its typed `result`, the `covers` criterion references, and the
-  exact Change head;
+- the observation receipts the reviewer reviewed, unchanged and in the reviewed order, each built once
+  with `DeliveryObservationReceipt.create(DeliveryObservation(...))` from the exact `procedure`, its
+  typed `result`, the `covers` criterion references, and the exact Change head;
 - one `DeliveryReviewReceipt.create(DeliveryReview(...))` with `review_mode: finalization`, the
   `basis_digest` from `semantics`, the ordered `observation_ids` of the submitted receipts, the exact
   reviewer evidence, the finalizer as `author_id`, and the independent reviewer as `reviewer_id`;
@@ -197,7 +217,11 @@ worktree, Change head, and reviewed head used by the observations and review. Di
 any identity, head, or cleanliness value changed.
 
 Call `finalize_change` once with the unchanged Change ID and the typed `FinalizeDeliveryChange`. Treat
-its returned `DeliveryFinalizationReceipt` as the only successful finalization result. It is also the
+its returned `DeliveryFinalizationReceipt` as the only successful finalization result. A refusal with
+`ERR_DELIVERY_ACCEPTANCE_EVIDENCE` wrote nothing; its `gaps` name the criteria. Report a gap whose
+reason starts with `review-` or `finalization-` as `independent-review-unavailable` and return
+`review_failed`; report any other gap as `maintained-check-unavailable` and return `proof_failed`.
+Never resubmit an altered request in the same attempt. The `finalize_change` call is the
 only mutation this workflow performs for an issued attempt: never submit a result, forward a
 transition, or release custody beside it. Do not call `promote_external_head` separately from this
 workflow; finalization owns that promotion when the exact head is an adopted completed head. Do not
