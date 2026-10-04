@@ -460,11 +460,19 @@ def test_target_sync_rejects_a_private_head_that_differs_from_the_expected_targe
     assert _target_observation_refs(repository) == {}
 
 
-def _target_observation_refs(repository: Path) -> dict[str, str]:
+def _target_observation_generations(repository: Path) -> dict[str, str]:
     output = _git(
         repository, "for-each-ref", "--format=%(refname) %(objectname)", "refs/owlbear/target-observation"
     ).stdout
     return dict(line.split(" ", 1) for line in output.splitlines())
+
+
+def _target_observation_refs(repository: Path) -> dict[str, str]:
+    """Map each observation base to its head, requiring at most one recording per base."""
+    generations = _target_observation_generations(repository)
+    by_base = {ref.rsplit("/", 1)[0]: head for ref, head in generations.items()}
+    assert len(by_base) == len(generations)
+    return by_base
 
 
 def _target_observation_ref(base: str) -> str:
@@ -711,6 +719,110 @@ def test_exact_sync_that_began_before_a_stale_recording_carries_the_observation(
     assert _target_observation_refs(repository) == {}
 
 
+def test_exact_sync_keeps_a_newer_recording_of_the_same_head_after_a_rewind(tmp_path: Path) -> None:
+    repository, remote, initial = _repository(tmp_path)
+    _coordinator, manager = _change_workspace(tmp_path, repository)
+    worktree, _reviewed = _reviewed_change(manager, "same-head-exact")
+    _reviewed_change(manager, "same-head-stale")
+    rewound = _advance_remote_target(tmp_path, remote)
+    with pytest.raises(ChangeTargetSyncStaleError):
+        manager.sync_with_target(
+            SyncChangeWithTarget(change_id="same-head-stale", expected_target=initial, operation_id="same-stale-1")
+        )
+    first = _target_observation_generations(repository)
+    assert _target_observation_refs(repository) == {_target_observation_ref(initial): rewound}
+    exact = _advance_remote_target(tmp_path, remote, repository_name="exact", path="exact.txt")
+    recorded: dict[str, str] = {}
+
+    def rewind_and_record_again() -> None:
+        _git(remote, "update-ref", "refs/heads/main", rewound, exact)
+        with pytest.raises(ChangeTargetSyncStaleError):
+            manager.sync_with_target(
+                SyncChangeWithTarget(change_id="same-head-stale", expected_target=exact, operation_id="same-stale-2")
+            )
+        recorded.update(_target_observation_generations(repository))
+
+    with patch.object(workspace_target_sync, "run_remote_git", side_effect=_nested_fetch(rewind_and_record_again)):
+        receipt = manager.sync_with_target(
+            SyncChangeWithTarget(change_id="same-head-exact", expected_target=exact, operation_id="same-exact-1")
+        )
+
+    # The re-recording names the same head under the same base, yet it is a distinct, newer recording.
+    assert sorted(recorded.values()) == sorted(first.values()) == [rewound]
+    assert recorded.keys() != first.keys()
+    assert receipt.target_head == exact
+    assert _head(worktree) == receipt.merged_head
+    assert _head(repository, "refs/remotes/origin/main") == exact
+    assert _target_observation_refs(repository) == {_target_observation_ref(exact): rewound}
+    assert manager.observed_target_head() == rewound
+
+
+def test_overlapping_stale_fetch_yields_to_a_newer_recording_of_the_same_head(tmp_path: Path) -> None:
+    repository, remote, initial = _repository(tmp_path)
+    _coordinator, manager = _change_workspace(tmp_path, repository)
+    _reviewed_change(manager, "same-head-one")
+    _reviewed_change(manager, "same-head-two")
+    rewound = _advance_remote_target(tmp_path, remote)
+    with pytest.raises(ChangeTargetSyncStaleError):
+        manager.sync_with_target(
+            SyncChangeWithTarget(change_id="same-head-two", expected_target=initial, operation_id="same-two-1")
+        )
+    first = _target_observation_generations(repository)
+    newer = _advance_remote_target(tmp_path, remote, repository_name="newer", path="newer.txt")
+    recorded: dict[str, str] = {}
+
+    def rewind_then_record() -> None:
+        _git(remote, "update-ref", "refs/heads/main", rewound, newer)
+        with pytest.raises(ChangeTargetSyncStaleError):
+            manager.sync_with_target(
+                SyncChangeWithTarget(change_id="same-head-two", expected_target=initial, operation_id="same-two-2")
+            )
+        recorded.update(_target_observation_generations(repository))
+
+    with (
+        patch.object(workspace_target_sync, "run_remote_git", side_effect=_nested_fetch(rewind_then_record)),
+        pytest.raises(ChangeTargetSyncStaleError),
+    ):
+        manager.sync_with_target(
+            SyncChangeWithTarget(change_id="same-head-one", expected_target=initial, operation_id="same-one-1")
+        )
+
+    # The first fetch saw ``newer`` but a recording of the rewound head was made after it began, so it yields.
+    assert recorded.keys() != first.keys()
+    assert _target_observation_generations(repository) == recorded
+    assert _target_observation_refs(repository) == {_target_observation_ref(initial): rewound}
+    assert manager.observed_target_head() == rewound
+    assert _head(repository, "refs/remotes/origin/main") == initial
+
+
+def test_exact_sync_replans_its_ref_transaction_after_a_concurrent_shared_ref_move(tmp_path: Path) -> None:
+    repository, remote, initial = _repository(tmp_path)
+    _coordinator, manager = _change_workspace(tmp_path, repository)
+    worktree, reviewed = _reviewed_change(manager, "sync-replan")
+    target_head = _advance_remote_target(tmp_path, remote)
+    real_update_refs = manager._update_refs
+    attempts: list[list[str]] = []
+
+    def move_shared_ref_first(commands: list[str]) -> bool:
+        if not attempts:
+            _git(repository, "update-ref", "refs/remotes/origin/main", reviewed, initial)
+        attempts.append(commands)
+        return real_update_refs(commands)
+
+    with patch.object(manager, "_update_refs", side_effect=move_shared_ref_first):
+        receipt = manager.sync_with_target(
+            SyncChangeWithTarget(change_id="sync-replan", expected_target=target_head, operation_id="sync-replan-1")
+        )
+
+    assert attempts == [
+        [f"update refs/remotes/origin/main {target_head} {initial}"],
+        [f"verify refs/remotes/origin/main {reviewed}"],
+    ]
+    assert _head(repository, "refs/remotes/origin/main") == reviewed
+    assert receipt.target_head == target_head
+    assert receipt.merged_head == _head(worktree)
+
+
 _GIT_SHIM = """#!/bin/sh
 printf '%s\\n' "$*" >> "{log}"
 previous=
@@ -799,6 +911,47 @@ def test_unexplained_observation_failure_raises_instead_of_reporting_stale(
     assert _target_observation_refs(repository) == {}
     assert _private_target_refs(repository) == {}
     assert _head(worktree) == reviewed
+
+
+@pytest.mark.parametrize("remote_move", ["rewind", "advance"])
+def test_failed_exact_sync_ref_transaction_raises_before_merging(
+    tmp_path: Path, git_without_reflog_write: tuple[Path, Path], remote_move: str
+) -> None:
+    _log, fail_marker = git_without_reflog_write
+    repository, remote, initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    worktree, reviewed = _reviewed_change(manager, "sync-unadvanced")
+    stale_head = _advance_remote_target(tmp_path, remote)
+    with pytest.raises(ChangeTargetSyncStaleError):
+        manager.sync_with_target(
+            SyncChangeWithTarget(change_id="sync-unadvanced", expected_target=initial, operation_id="sync-unadv-1")
+        )
+    if remote_move == "rewind":
+        _git(remote, "update-ref", "refs/heads/main", initial)
+        expected = initial
+    else:
+        expected = _advance_remote_target(tmp_path, remote, repository_name="advanced", path="advanced.txt")
+    before = coordinator.show("sync-unadvanced")
+    request = SyncChangeWithTarget(change_id="sync-unadvanced", expected_target=expected, operation_id="sync-unadv-2")
+    fail_marker.touch()
+
+    with pytest.raises(RuntimeError, match="engine target could not be advanced") as raised:
+        manager.sync_with_target(request)
+
+    assert not isinstance(raised.value, ChangeTargetSyncStaleError)
+    assert _head(worktree) == reviewed
+    assert coordinator.show("sync-unadvanced") == before
+    assert _head(repository, "refs/remotes/origin/main") == initial
+    assert manager.observed_target_head() == stale_head
+    assert _private_target_refs(repository) == {}
+
+    fail_marker.unlink()
+    receipt = manager.sync_with_target(request)
+    assert receipt.target_head == expected
+    assert _head(worktree) == receipt.merged_head
+    assert _head(repository, "refs/remotes/origin/main") == expected
+    assert _target_observation_refs(repository) == {}
+    assert manager.observed_target_head() == expected
 
 
 def test_exact_sync_after_a_remote_rewind_rewinds_the_engine_target(tmp_path: Path) -> None:

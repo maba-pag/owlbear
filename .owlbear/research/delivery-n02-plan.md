@@ -245,26 +245,40 @@ Agent-settled with probe evidence:
   `expected_target`, and take the existing portfolio and per-Change locks only for the local merge,
   receipt and a compare-and-swap `update-ref` of the shared remote-tracking ref. The portfolio lock
   no longer spans network I/O.
-  **Stale-target observation, amended after Sol round 3, §1.5 contract review (2026-10-04, under the
-  overnight authorization; confirmation pending).** Rounds 1–3 each found material defects in the
-  observation mechanism, so its contract was re-derived instead of repaired again. A stale fetch never
-  moves `refs/remotes/<remote>/<target>`. The engine learns the fetched head from one advisory ref
-  `refs/owlbear/target-observation/<sha256(target ref)>/<base>` naming it, where `<base>` is the shared
-  ref's value when that fetch began; the engine target is that head while the shared ref equals `<base>`,
-  otherwise the shared ref. Each observation write and each engine move of the shared ref runs under the
-  existing target-sync lock as one `update-ref --stdin` transaction, compare-and-swapped on the shared
-  value and the observation set read before the fetch. A stale result replaces exactly those
-  observations, or is dropped when either changed (among overlapping fetches the first writer wins; a
-  fetch that starts after a recording may replace it). An exact sync deletes only those observations,
-  which are older than its result, and carries an observation recorded after its fetch began to the new
-  shared value. A transaction that fails without such a change raises, so progress is never silently
-  lost. Only `update-ref --stdin`, `for-each-ref` and `rev-parse` are used (all present in Git 2.43, the
-  Ubuntu 24.04 package); no reflog. Rejected: the reflog marker (`git reflog write` is absent in Git
-  2.43, and its head ref and marker were two unlocked writes); re-fetching at the point of use
-  (readiness and custody reads would do network I/O and could change between two reads of one
-  decision). Accepted residual: an external return of the shared ref to the exact base (A→C→A) revives
-  the observation. It is a hint, never authority: only an exact fetch merges, and the next fetch starts
-  after the recording and replaces it, so the cost is one stale round.
+  **Stale-target observation, amended after Sol round 3, §1.5 contract review, and after Sol round 4
+  (2026-10-04, under the overnight authorization; confirmation pending).** Rounds 1–3 each found
+  material defects in the observation mechanism, so its contract was re-derived instead of repaired
+  again. A stale fetch never moves `refs/remotes/<remote>/<target>`. The engine learns the fetched head
+  from one advisory recording `refs/owlbear/target-observation/<sha256(target ref)>/<base>/<generation>`
+  naming it, where `<base>` is the shared ref's value when that fetch began and `<generation>` is a fresh
+  random token created in the same transaction. The generation gives each recording its own identity:
+  a later recording of the same head under the same base is a different ref, so compare-and-swap checks
+  distinguish it (round 4: name and head alone could not, so an exact sync deleted a newer re-recording
+  and an overlapping stale fetch overwrote it). The engine target is the recording's head while the
+  shared ref equals `<base>`, otherwise the shared ref. Each recording write and each engine move of the
+  shared ref runs under the existing target-sync lock as one `update-ref --stdin` transaction,
+  compare-and-swapped on the shared value and on the recordings it replaces. A stale result replaces
+  exactly the recordings read before its fetch, or is dropped when the shared ref or that set changed
+  (among overlapping fetches the first writer wins; a fetch that starts after a recording may replace
+  it). An exact sync moves the shared ref, deletes only the recordings read before its fetch (older than
+  its result) and carries one recorded after its fetch began to the new shared value, all in one
+  transaction. If that transaction is refused because a ref changed concurrently, the exact sync replans
+  from the new state (at most three attempts; a concurrent shared-ref move keeps its value and the
+  receipt stays exact); a refusal with no such change raises before the merge and receipt, so progress
+  is never silently lost and the engine never keeps selecting a head the receipt superseded. Only
+  `update-ref --stdin`, `for-each-ref` and `rev-parse` are used (all present in Git 2.43, the Ubuntu
+  24.04 package); no reflog and no new object types. Rejected: the reflog marker (`git reflog write` is
+  absent in Git 2.43, and its head ref and marker were two unlocked writes); re-fetching at the point of
+  use (readiness and custody reads would do network I/O and could change between two reads of one
+  decision); a recording that points at a generated commit (needs `commit-tree` and a parent read for
+  no gain over a generation in the ref name). Accepted residuals: (1) an external return of the shared
+  ref to the exact base (A→C→A) revives the recording. It is a hint, never authority: only an exact
+  fetch merges, and the next fetch starts after the recording and replaces it, so the cost is one stale
+  round. (2) Engine target reads take no lock and Git applies a multi-ref transaction ref by ref, so a
+  read that overlaps a recording or exact-sync transaction can briefly miss a recording being replaced
+  or carried and select the shared value instead; the next read after the transaction sees its result.
+  (3) A stale fetch that read the remote before an exact fetch but records after that exact fetch began
+  is carried as if newer; the next fetch replaces it, again one stale round.
 - **D8 Bounded runner kills the process group** (P6): `subprocess.run(timeout=…)` returns on time
   but leaves the transport helper running; the runner starts Git in a new session and kills the
   group on timeout.

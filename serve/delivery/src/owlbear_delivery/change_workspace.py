@@ -169,13 +169,16 @@ class ChangeWorkspaceManager(_WorktreeStateMixin, _PreservationMixin, _SnapshotM
 
         A stale target sync records the newer remote head it fetched, bound to the shared remote-tracking
         ref's value at that fetch's start; the engine selects it while the shared ref still holds that value
-        (see ``_record_target_observation``). Observations are read first because an exact sync moves the
-        shared ref before it deletes older observations.
+        (see ``_record_target_observation``). This read takes no lock: while a ref transaction is being
+        applied it can see part of it and briefly return a shared value instead of a recording; a read after
+        the transaction sees its result.
         """
         self._require_preservation_environment()
         observations = self._target_observations()
         shared = self._resolve(self._target_ref())
-        return observations.get(self._target_observation_ref(shared)) or shared
+        prefix = self._target_observation_ref(shared)
+        heads = [head for ref, head in observations.items() if ref.startswith(prefix)]
+        return heads[0] if len(heads) == 1 else shared
 
     def prepare_runtime_custody_guard(
         self,

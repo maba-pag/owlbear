@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import secrets
 from collections.abc import Callable
 from itertools import pairwise
 from typing import TYPE_CHECKING, Literal, NamedTuple, Never
@@ -50,6 +51,7 @@ if TYPE_CHECKING:
 _TARGET_SYNC_REF_PREFIX = "refs/owlbear/target-sync/"
 _TARGET_OBSERVATION_REF_PREFIX = "refs/owlbear/target-observation/"
 _ZERO_OID = "0" * 40
+_TARGET_REF_TRANSACTION_ATTEMPTS = 3
 
 
 class _TargetFetchStart(NamedTuple):
@@ -993,13 +995,14 @@ class _TargetSyncMixin:
             _workspace_failure("fetched private target-sync ref is unavailable")
         return fetched_head, private_ref
 
-    def _target_observation_ref(self, base: str) -> str:
+    def _target_observation_ref(self, base: str, generation: str = "") -> str:
+        """Return one recording's ref, or with no generation the prefix of every recording for ``base``."""
         # Hashing the target ref keeps the per-base refs free of directory/file conflicts.
         key = hashlib.sha256(self._target_ref().encode()).hexdigest()
-        return f"{_TARGET_OBSERVATION_REF_PREFIX}{key}/{base}"
+        return f"{_TARGET_OBSERVATION_REF_PREFIX}{key}/{base}/{generation}"
 
     def _target_observations(self) -> dict[str, str]:
-        prefix = self._target_observation_ref("").removesuffix("/")
+        prefix = self._target_observation_ref("").removesuffix("//")
         listing = self._git("for-each-ref", "--format=%(refname) %(objectname)", prefix)
         return dict(line.split(" ", 1) for line in listing.splitlines())
 
@@ -1011,11 +1014,12 @@ class _TargetSyncMixin:
     def _record_target_observation(self, start: _TargetFetchStart, fetched_head: str) -> None:
         """Record what a stale fetch saw for the engine; the shared remote-tracking ref keeps its value.
 
-        The observation is the ref ``<prefix>/<hash(target ref)>/<shared value at fetch start>`` naming the
-        fetched head; it applies only while the shared ref holds that value. Under the target-sync lock one
-        transaction verifies the shared ref and replaces exactly the observations read at fetch start. An
-        observation or shared-ref write after this fetch began wins (first writer among overlapping
-        fetches); a failure with no such write raises instead of losing the newer head.
+        Each recording is the ref ``<prefix>/<hash(target ref)>/<shared value at fetch start>/<generation>``
+        naming the fetched head; it applies only while the shared ref holds that value. The fresh generation
+        gives every recording its own identity, so a later recording of the same head is still distinct.
+        Under the target-sync lock one transaction verifies the shared ref and replaces exactly the
+        recordings read at fetch start. A recording or shared-ref write after this fetch began wins (first
+        writer among overlapping fetches); a failure with no such write raises instead of losing the head.
         """
         if start.shared is None:
             return
@@ -1025,40 +1029,60 @@ class _TargetSyncMixin:
                 or self._target_observations() != start.observations
             ):
                 return
-            name = self._target_observation_ref(start.shared)
             commands = [f"verify {start.target_ref} {start.shared}"]
-            commands += [f"delete {ref} {oid}" for ref, oid in start.observations.items() if ref != name]
+            commands += [f"delete {ref} {oid}" for ref, oid in start.observations.items()]
             if fetched_head != start.shared:
-                commands.append(f"update {name} {fetched_head} {start.observations.get(name, _ZERO_OID)}")
-            elif name in start.observations:
-                commands.append(f"delete {name} {start.observations[name]}")
-            if self._update_refs(commands) or self._resolve(start.target_ref, missing_ok=True) != start.shared:
+                name = self._target_observation_ref(start.shared, secrets.token_hex(16))
+                commands.append(f"create {name} {fetched_head}")
+            if self._update_refs(commands) or (
+                self._resolve(start.target_ref, missing_ok=True) != start.shared
+                or self._target_observations() != start.observations
+            ):
                 return
             _workspace_failure("newer target head could not be recorded")
 
     def _advance_shared_target_ref(self, start: _TargetFetchStart, target_head: str) -> None:
         """Move the shared remote-tracking ref to the exact fetched head unless it moved since the fetch began.
 
-        The CAS ignores ancestry, so an exact sync after a remote rewind also rewinds the engine target.
-        Observations read at fetch start are older than this exact result and are deleted; one recorded
-        after the fetch began moves with the shared ref, so this sync never discards it. Runs under the
-        target-sync lock.
+        One transaction moves the shared ref, deletes the recordings read at fetch start (older than this
+        exact result) and carries a recording made after the fetch began to the new shared value. The CAS
+        ignores ancestry, so an exact sync after a remote rewind also rewinds the engine target. A
+        transaction refused by a concurrent ref change is replanned from the new state; any other failure
+        raises before the caller merges or records a receipt. Runs under the target-sync lock.
         """
-        current = self._target_observations()
-        if start.shared != target_head:
-            commands = [f"update {start.target_ref} {target_head} {start.shared or _ZERO_OID}"]
-            if start.shared is not None:
-                carried = self._target_observation_ref(start.shared)
-                later = current.get(carried)
-                moved = self._target_observation_ref(target_head)
-                if later is not None and start.observations.get(carried) != later and moved not in current:
-                    commands.append(f"delete {carried} {later}")
-                    if later != target_head:
-                        commands.append(f"create {moved} {later}")
-            self._update_refs(commands)
+        for _attempt in range(_TARGET_REF_TRANSACTION_ATTEMPTS):
+            shared = self._resolve(start.target_ref, missing_ok=True)
+            current = self._target_observations()
+            if self._update_refs(self._advance_commands(start, target_head, shared, current)):
+                return
+            if self._resolve(start.target_ref, missing_ok=True) == shared and self._target_observations() == current:
+                break
+        _workspace_failure("engine target could not be advanced to the exact fetched head")
+
+    def _advance_commands(
+        self,
+        start: _TargetFetchStart,
+        target_head: str,
+        shared: str | None,
+        current: Mapping[str, str],
+    ) -> list[str]:
         older = [f"delete {ref} {oid}" for ref, oid in start.observations.items() if current.get(ref) == oid]
-        if older:
-            self._update_refs(older)
+        if shared != start.shared or shared == target_head:
+            # A concurrent move keeps its value (the receipt stays exact); later recordings keep their base.
+            return [f"verify {start.target_ref} {shared or _ZERO_OID}", *older]
+        commands = [f"update {start.target_ref} {target_head} {start.shared or _ZERO_OID}", *older]
+        if start.shared is None:
+            return commands
+        later = {ref: oid for ref, oid in current.items() if start.observations.get(ref) != oid}
+        source = self._target_observation_ref(start.shared)
+        carried = [(ref, oid) for ref, oid in later.items() if ref.startswith(source)]
+        occupied = any(ref.startswith(self._target_observation_ref(target_head)) for ref in later)
+        if len(carried) == 1 and not occupied:
+            ref, oid = carried[0]
+            commands.append(f"delete {ref} {oid}")
+            if oid != target_head:
+                commands.append(f"create {self._target_observation_ref(target_head, secrets.token_hex(16))} {oid}")
+        return commands
 
     def _unmerged_paths(self, worktree: Path) -> tuple[str, ...]:
         result = self._run_git(
