@@ -1,5 +1,10 @@
 # Delivery N06 — Prepared Interaction Core and Private Local Input
 
+> **Superseded on 2026-10-04; kept as history.** The lead cut N06 under the user's authorization
+> ([execution plan §7](delivery-redesign-execution-plan.md#7-decisions)): V17 and V22 and the programme
+> section 9 machinery are dropped, person-only checks are ordinary Action Requests answered in Cockpit, and
+> N03's user-only confirmation boundary that this plan consumed was removed. Nothing below is live work.
+>
 > **Package:** N06 of the
 > [execution plan](delivery-redesign-execution-plan.md#n06--prepared-interaction-core-and-private-local-input).
 > **Planned on:** `origin/dev` `ac3bf23f9` (N01, N02-A, N02-B and N09-A1 merged; N03-A…C, N04, N05-B,

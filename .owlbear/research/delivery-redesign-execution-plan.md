@@ -12,7 +12,10 @@
 > fresh GPT-6.1 Sol challenges). Revised the same day for the support baseline (N00-C; `plan-sound`
 > in revision round 2) and for the start report and model split (`plan-sound`). Revised on 2026-10-03
 > for pinned Node and Chromium-only Cockpit (`plan-sound` in revision round 2). This is the
-> execution authority; on `dev` since N00-B.
+> execution authority; on `dev` since N00-B. **Simplified on 2026-10-04** by the lead under the
+> user's authorization ([7](#7-decisions)): every remaining phase works in the
+> [operating context](#19-operating-context); V17, V22 and V23 are dropped from the programme, N06 and
+> N07 are cut, N08-B is cut, and the user-only confirmation machinery of PR #360 is removed.
 
 | Document | Role once this plan is approved |
 | --- | --- |
@@ -110,7 +113,7 @@ the user present and the explicit authorization described in that package.
   - Ubuntu support means: CI passes on the Ubuntu workers wherever it applies, and no
     implementation depends on macOS-only behavior. Platform-dependent code is either portable or
     has an explicit Ubuntu path, and that path is exercised by tests on the Ubuntu workers.
-  - Host-only acceptance (N10-H) runs on macOS; the B1 managed-Mac check is macOS by definition.
+  - Host-only acceptance (N10-H) runs on macOS.
 - Stop and ask the user only for a genuine product, permission, privacy, destructive-action or
   live-state decision. Ask through `vscode_askQuestions`, stating status quo, problem, options and a
   recommendation. Never guess intent.
@@ -237,23 +240,24 @@ the user present and the explicit authorization described in that package.
 
 ### 1.5 Review gates
 
-The user requires repeated challenges until the result is clean, both for plans and during
-implementation.
+Follow [`r-challenger-protocol`](../../share/skills/r-challenger-protocol/SKILL.md), including its
+Operating Context and Finding Quality rules (PR #364), and the `/challenge-*_sol` prompts.
 
-- **Plan gate.** Applies to every P phase and every revision of this plan. Follow
-  [`challenge-plan_sol`](../../.github/prompts/challenge-plan_sol.prompt.md): a fresh, unnamed
-  `GPT-6.1 Sol (copilot)` subagent per round, then caller reconciliation with exactly one
-  disposition per finding (`fix-now`, `reject` or `block`). Revise the plan and start a fresh round
-  until a round returns `plan-sound` with no `fix-now`. Only then present open user decisions.
-- **Implementation gate.** Applies to every implementation phase, after proof, on the exact
-  committed head. Follow [`challenge-implementation_sol`](../../.github/prompts/challenge-implementation_sol.prompt.md).
-  Reconcile, repair, rerun the affected proof and challenge the new head with a fresh subagent.
-  Repeat until `implementation-sound` with no `fix-now`. The last phase of a package also gets a
-  cumulative challenge of the whole package diff against its plan.
-- **Pattern check.** Keep challenging until the round is clean. But if one contract area produces
-  new material findings in three consecutive rounds, report it to the user as a probable contract
-  gap and propose a package-plan revision instead of more local patches. This changes the approach,
-  not the cleanliness bar.
+- **Plan gate.** Every P phase and every revision of this plan, through
+  [`challenge-plan_sol`](../../.github/prompts/challenge-plan_sol.prompt.md).
+- **Implementation gate.** Every implementation phase, after proof, on the exact committed head,
+  through [`challenge-implementation_sol`](../../.github/prompts/challenge-implementation_sol.prompt.md).
+  The last phase of a package also gets a cumulative challenge of the whole package diff against
+  its plan.
+- **Dispatch.** A fresh `GPT-6.1 Sol (copilot)` subagent with the prompt's full contract and the
+  [operating context](#19-operating-context).
+- **Reconciliation.** Evaluate every finding critically against the operating context; record one
+  disposition per finding (`fix-now`, `reject` with a one-line reason, or `block`). A finding that
+  needs an actor or input outside the context is rejected. Prefer the smallest response; when one
+  area keeps producing findings, simplify its design instead of adding a layer.
+- **Next review.** Review again only when accepted findings of substance changed something
+  material. A review with only rejected, marginal or cosmetic findings ends the gate. No round
+  counts.
 - **Independence.** The challenger must belong to a different model family from the implementing
   chat. The default implementer is Claude Opus 5.5 ([1.6](#16-models)). Code delegated to GPT-6 Luna
   under 1.6 is accepted under the Opus chat's ownership and review; the user accepted that overlap
@@ -288,7 +292,8 @@ User decision 2026-10-02: Opus leads; Luna does bounded slices; Sol challenges.
 ### 1.7 Package plans
 
 A package plan is `.owlbear/research/delivery-nNN-plan.md`. Keep it to the current specification:
-no diary, no session transcripts. Evidence and history live on the PRs.
+no diary, no session transcripts. It is as long as needed and no longer; there is no line limit.
+Evidence and history live on the PRs.
 
 1. **Contract.** Result; requirements, with programme section, WP/P/V and issue references;
    invariants; interfaces and error cases; existing owners to reuse; exclusions; user decisions and
@@ -311,6 +316,32 @@ no diary, no session transcripts. Evidence and history live on the PRs.
   [start report](#0-agent-start-here)); and one copy-ready next prompt in a `text` block (normally
   `Continue lane X using …`). If the next step is a user decision or a user merge, say so instead
   of giving a prompt.
+
+### 1.9 Operating context
+
+Every remaining phase, plan and review works in this context (lead decision 2026-10-04,
+[7](#7-decisions)). A concern that needs an actor or input it excludes is not a finding.
+
+- **Actors.** The developer: trusted; answers requests and approves merges in Cockpit. Agents in
+  VS Code chats: trusted but fallible (wrong IDs, stale heads, retries, crashes, misread output).
+  The developer's own processes: trusted and concurrent (several VS Code windows, Delivery MCP,
+  Cockpit, CLIs). GitHub: trusted but unreliable (outages, slow or lost responses, asynchronous
+  merges). Repository collaborators: trusted; they occasionally push or merge concurrently.
+- **Exposure.** Cockpit listens on loopback only; nothing listens on the network. External content
+  (PR comments, fetched pages) reaches agents, not Delivery's state machine; prompt injection is an
+  agent-instruction concern.
+- **Stakes.** Corrupted Delivery state is costly but recoverable (Git history, backups, repair
+  tooling). A wrong merge into the target is visible and revertible. Uncommitted worktree work is a
+  real loss, and Delivery preserves it. Delivery state holds no secrets.
+- **Guarded against:** crashes and interruptions at any step; lost or unknown provider responses;
+  concurrent own processes; honest agent mistakes, through exact-identity fences, typed refusals and
+  agent tools that do not expose user-only actions; upgrades that would misread state (versioned
+  formats, migration, pinning); destroying uncommitted work.
+- **Not guarded against:** deliberately misbehaving or forging agents; tampering by the same OS user
+  with files, refs, processes or memory; PID, inode or process-group reuse; timestamp manipulation;
+  coincidences of independent timing events, such as a foreign push or retarget in the seconds
+  around Delivery's own step (detected afterwards at most, where that is cheap); hostile networks;
+  root.
 
 ## 2. Status Quo
 
@@ -351,7 +382,7 @@ no diary, no session transcripts. Evidence and history live on the PRs.
 - No automatic dirty-worktree recovery of unattributed edits. This is the approved bounded-recovery
   boundary.
 - **Design-return readmission is refused before authority mutation. Correcting it is open work**
-  ([N04](#n04--same-change-revision-activation-and-evidence-applicability)).
+  ([N04](#n04--same-change-requirement-revision-and-evidence-reuse)).
 - Claims issued by Cockpit or CLI never settle automatically. Writes deep inside ignored trees are
   not observed.
 - Unknown invocations can still hold all execution capacity until settled or released. The user
@@ -368,10 +399,11 @@ no diary, no session transcripts. Evidence and history live on the PRs.
 | 2026-09-30 | Native Orchestrator settlement; no Copilot CLI, sampling or alternate host | Every later worker flow builds on `settle_worker_invocation` and the retry ledger |
 | 2026-10-02 | Crashed returned workers settle as `ended-without-result` | Same |
 | 2026-10-02 | A + B option 1: window-identity evidence plus user-confirmed release | Upgrade and drain logic (N02) must respect issuer records and passive custody |
-| 2026-10-02 | Local chats instead of cloud; no dogfooding; repeated challenges until clean; behavior-preserving split first | This plan |
+| 2026-10-02 | Local chats instead of cloud; no dogfooding; behavior-preserving split first (the "repeated challenges until clean" rule of that day is replaced by the 2026-10-04 statement) | This plan |
 | 2026-10-02 | Python 3.14 only; macOS and Ubuntu; Windows dropped | N00-C, then the [support baseline](#11-authority-and-boundaries) applies to every phase |
 | 2026-10-03 | Node only at the `.nvmrc` version; Cockpit on Chromium (Chrome, Edge) only | Added to N00-C and the support baseline |
 | 2026-10-02 | Opus leads every chat; Luna subagents for bounded slices; Sol challenges; start report names parallel work | [1.6](#16-models), [section 0](#0-agent-start-here) |
+| 2026-10-04 | "Rethink paranoid escapades"; "you have to be sure what to do yourself, I trust you" | The lead simplified the remaining work ([7](#7-decisions)): [operating context](#19-operating-context), review gates judged by the substance of findings ([1.5](#15-review-gates)), V17, V22 and V23 dropped, N06, N07 and N08-B cut |
 
 ### 2.4 Lessons applied
 
@@ -380,12 +412,16 @@ no diary, no session transcripts. Evidence and history live on the PRs.
    ([Plan action](#actions)).
 2. **Mid-package decisions rewrote the contract.** Rule: P phases surface the decision points
    up front with options.
-3. **Repeated challenges found real defects.** Rule: they are kept, but run per phase PR, so each
-   round reviews a small delta ([1.5](#15-review-gates)).
+3. **Repeated challenges found real defects, then ever less likely ones.** Rule: review per phase
+   PR, so each review sees a small delta, and stop when the findings are no longer of substance
+   ([1.5](#15-review-gates)).
 4. **Module size slowed agents and will cause conflicts.** Rule: N01 runs before parallel feature
    work.
 5. **The D03 plan grew into a 1,548-line diary.** Rule: lean package plans ([1.7](#17-package-plans)).
 6. **One long-lived package PR.** Rule: one PR per phase, merged often.
+7. **Reviews without a stated operating context added machinery against threats outside it** (PR
+   #360's confirmation boundary, N02-D's start-time integrity check, N08-A amendments A1–A3). Rule:
+   every review and reconciliation works in the [operating context](#19-operating-context).
 
 ### 2.5 Code shape on the D03 head
 
@@ -407,7 +443,9 @@ no diary, no session transcripts. Evidence and history live on the PRs.
     unfinished (Implementation, 4 of 5 results, schema-1 evidence, not finalized); N10-M disposes of it.
   - `frontier-serialization-contract`: issue #215, open PR #314. This is a Delivery fix, so under
     the no-dogfooding rule it is absorbed into N02.
-  - `macos-managed-browser-authentication`: B1, open PR #312, TASK-004 managed-Mac pilot pending.
+  - `macos-managed-browser-authentication`: B1, open PR #312. Its TASK-004 managed-Mac pilot is B1's
+    own acceptance through its normal Action Request, not programme work. N10-M reconciles B1 once
+    by an agent-assisted manual step and continues it.
   - The `.vscode/mcp.json` registration of `owlbear-delivery` was restored on 2026-09-13. The
     programme's "intentionally removed" note is stale.
 - **Open Delivery issues and their allocation:**
@@ -419,7 +457,7 @@ no diary, no session transcripts. Evidence and history live on the PRs.
     (N09 plan U1)
   - #219 typed proof verdicts and #222 whole-Change acceptance in finalization → N03
   - #220 bounded remote Git → N02
-  - #225 PR-feedback continuity → N05
+  - #225 PR-feedback continuity → N05-D, only if it stays small (otherwise #225 stays open)
 
 ## 3. Requirement Traceability
 
@@ -434,24 +472,24 @@ N10 reruns it as regression.
 | V11 target advances during final verification | D03 partly; N05 completes | Approval invalidated on target change; fresh review |
 | V12 lost push/merge response | N05 | |
 | V14 requirement change with old code/proof | N04 | |
-| V15 repeated request IDs, unchanged proven claim | N03 model, N04 applicability, N07 B1 | |
-| V16 revised target not covered | N04, N07 | |
-| V17 assisted check, handler unavailable | N06 | |
-| V18 invalid state while UI loads | D03 offline CLI; N08 Cockpit degraded start | |
+| V15 repeated request IDs, unchanged proven claim | N03 identities; N04 reuse by unchanged criterion ID and version | |
+| V16 revised target not covered | N04 | |
+| V17 assisted check, handler unavailable | Dropped 2026-10-04 ([7](#7-decisions)) | No prepared-interaction handlers exist; a person-only check is an ordinary Action Request with clear instructions, answered in Cockpit |
+| V18 invalid state while UI loads | D03 diagnosis and offline CLI; N08-A repair | N08-B (degraded Cockpit) is cut: Cockpit shows its startup error and the user runs `/repair-delivery` |
 | V19 approval, then head change or protection failure | N05 | |
-| V20 unknown corruption, missing provenance | D03 diagnosis; N02 refusal; N08 proposals | |
+| V20 unknown corruption, missing provenance | D03 diagnosis; N02 refusal; N08-A proposals | |
 | V21 crash after each revision/migration step | N02 migration; N04 activation | |
-| V22 private input, expiry, cancel | N06 | |
-| V23 real managed-device check | N07 runner; N10-H real device | |
+| V22 private input, expiry, cancel | Dropped 2026-10-04 ([7](#7-decisions)) | No private-input form exists; B1 keeps its own owned sign-in boundary |
+| V23 real managed-device check | B1 (its own acceptance) | B1's TASK-004 pilot through B1's normal Action Request; not programme work |
 | V24 upgrade with active work, unsupported downgrade | N02 | |
 | WP2 steps 4–5, P08/P09, R2/R3, sections 10.1–10.3, J05–J07, governance conflict | N05 | |
-| WP4, P12–P14, section 8, #213, D03 Design-return | N03 (evidence model), N04 (activation/applicability) | |
-| WP5, P15–P18, section 9 | N06 (core and input), N07 (B1 and presentation) | |
-| WP6, P19–P21, section 11 | N02 (versioning, migration, pinning, upgrade), N08 (repair application, degraded entry, distribution) | |
+| WP4, P12–P14, section 8, #213, D03 Design-return | N03 (evidence model), N04 (revision, reuse by identity) | |
+| WP5, P15–P18, section 9 | Dropped 2026-10-04 with V17 and V22 | Person-only checks are Action Requests; B1's check is B1's work |
+| WP6, P19–P21, section 11 | N02 (versioning, migration, pinning, upgrade), N08 (repair application, consumer upgrade) | |
 | WP7 and R1: retire `/orchestrate` as normal entry; section 4.2 labels; section 4.3 progress copy; P22 docs | N09 | |
 | P23 cumulative matrix, P24 host acceptance and activation | N10 | |
 | Support baseline: Python 3.14; pinned Node; Chromium-only Cockpit; macOS and Ubuntu; no Windows | N00-C | Kept by every later phase ([1.1](#11-authority-and-boundaries)) |
-| Programme section 4.2 controls | Change requirements → N04; Approve merge → N05; Help with this step → N06; Repair Delivery → N08; Copy continuation prompt, Pause/Resume → N09 | Each control ships with its owning behavior |
+| Programme section 4.2 controls | Change requirements → N04; Approve merge → N05; Repair Delivery → `/repair-delivery` (D03, N08-A; no Cockpit control); Copy continuation prompt, Pause/Resume → N09; Help with this step → dropped with V17 | Each control ships with its owning behavior |
 
 ## 4. Package Map, Dependencies and Status
 
@@ -463,13 +501,13 @@ N10 reruns it as regression.
 | N01 | Behavior-preserving split of the large Delivery modules | L / medium |
 | N02 | Controller pinning, versioned state and migration core | L / high |
 | N03 | Evidence model and finalization assurance | L / high |
-| N04 | Same-Change revision activation and evidence applicability | XL / high |
+| N04 | Same-Change requirement revision and evidence reuse | M / high |
 | N05 | Exact-head merge approval, completion and publication continuity | L / high |
-| N06 | Prepared interaction core and private local input | L / high |
-| N07 | B1 assisted-check runner and assistance presentation | L / high |
-| N08 | Offline repair application, degraded Cockpit and distribution | M / medium |
+| N06 | Prepared interaction core and private local input: cut 2026-10-04 | — |
+| N07 | B1 assisted-check runner and assistance presentation: cut 2026-10-04 | — |
+| N08 | Offline repair application and consumer upgrade | M / medium (N08-A merged; N08-C minimal) |
 | N09 | Continuation entry cutover and Cockpit entry surface | M / medium |
-| N10 | Integration, fault matrix, host acceptance and live migration | L / high |
+| N10 | Regression matrix, host journey and live migration | M / high |
 
 ### 4.2 Phase prerequisites
 
@@ -495,39 +533,33 @@ so implementation re-resolves paths after N01 moves code.
 | N03-P | N02-P |
 | N03-A | N03-P, N02-B |
 | N03-B | N03-A |
-| N03-C | N03-B; N03 plan U2 answered |
-| N04-P | N03-P |
+| N03-C | N03-B |
+| N04-P (re-plan, 2026-10-04) | N03-P |
 | N04-A | N04-P, N03-C |
-| N04-B, N04-C, N04-D | the previous N04 phase |
+| Later N04 phases | as the new N04-P splits them, each after the previous N04 phase |
 | N05-P | N02-P |
 | N05-A | N05-P, N01-P, N00-C; N05-P must list editable paths disjoint from every N01 phase's paths |
-| N05-B | N05-A, N01-C, N02-B, N03-A (shared single-use consent generation, N03 plan D13; N05 plan F11) |
-| N05-C | N05-B, N03-A (user-only confirmation boundary, N03 plan D13); N03 plan U2 answered (N05 plan F10) |
-| N05-D | N05-C |
-| N06-P | N03-P |
-| N06-A | N06-P, N03-C |
-| N06-B, N06-C | the previous N06 phase |
-| N07-P | N04-P, N06-P |
-| N07-A | N07-P, N04-D, N06-C |
-| N07-B | N07-A |
+| N05-B | N05-A, N01-C, N02-B |
+| N05-C | N05-B |
+| N05-D (only if it stays small) | N05-C |
+| N06, N07 (every phase) | cut 2026-10-04 ([7](#7-decisions)) |
 | N08-P | N02-P |
 | N08-A | N08-P, N02-B |
-| N08-B | N08-A |
-| N08-C | N08-B, N02-D |
+| N08-B | cut 2026-10-04 ([7](#7-decisions)) |
+| N08-C | N08-A, N02-D |
 | N09-P1 (plans N09-A1, N09-A2) | N00-B |
 | N09-A1 | N09-P1, N01-C |
 | N09-A2 | N09-A1, N02-B |
-| N09-P2 (plans N09-B, N09-C) | N05-P, N06-P, N07-P, N08-P, N09-A2 |
-| N09-B | N09-P2, N05-D, N06-C, N07-B, N08-C |
+| N09-P2 (plans N09-B, N09-C) | N05-P, N08-P, N09-A2, N04-P (the 2026-10-04 re-plan) |
+| N09-B | N09-P2, N05-D (N05-C when N05-D is not built), N08-C |
 | N09-C | N09-B |
 | N10-P | N09-P2 |
-| N10-A | N10-P, N09-C |
+| N10-A | N10-P, N09-C, the last N04 phase |
 | N10-H | N10-A |
 | N10-M | N10-H; user authorization at the step |
 
-Format-marker order (N05-P; PR #360 round 4): N03-A and N05-B each add an N02 format step. N05-B
-follows N03-A (its prerequisite above), so N05-B renumbers its migration onto N03-A's and reruns the
-LC full form.
+Format-marker order: N03-A and N05-B each add an N02 format step. Whichever merges second renumbers
+its migration onto the other's and reruns the LC full form.
 
 Package-level view (derived from the table):
 
@@ -538,19 +570,15 @@ flowchart LR
   N01 --> N05[N05 merge approval + completion]
   N02 --> N03[N03 evidence model]
   N02 --> N05
-  N02 --> N08[N08 repair + degraded entry]
-  N03 --> N04[N04 revision + applicability]
-  N03 --> N05
-  N03 --> N06[N06 prepared interaction]
-  N04 --> N07[N07 B1 runner]
-  N06 --> N07
+  N02 --> N08[N08 repair + consumer upgrade]
+  N03 --> N04[N04 requirement revision]
   N01 --> N09A[N09-A1/A2 presentation + pause]
   N02 --> N09A
   N05 --> N09B[N09-B/C cutover + docs]
-  N07 --> N09B
   N08 --> N09B
   N09A --> N09B
-  N09B --> N10[N10 integration + host + live]
+  N04 --> N10[N10 regression + host + live]
+  N09B --> N10
 ```
 
 ### 4.3 Ready rule and default schedule
@@ -587,15 +615,13 @@ phase.
 | 1 | N01-P, then N01-A | N00-C, N02-P, N09-P1, then N01-B | N01-A, N01-B merged |
 | 1b | N01-C | N05-P, then N05-A | N01-C merged |
 | 2 | N02-A … N02-D | N09-A1, N03-P, N08-P | N02-B merged |
-| 3 | N03-A … N03-C | N05-B … N05-D, N08-A, N08-B, N09-A2 | N03 merged |
-| 4 | N04-P … N04-D | N06-P … N06-C, N08-C | N04, N06, N08 merged |
-| 5 | N07-P … N07-B | N09-P2, N10-P | N07 merged |
-| 6 | N09-B, N09-C, N10-A, N10-H, N10-M | — | Programme complete |
+| 3 | N03-A … N03-C | N05-B … N05-D, N08-A, N09-A2 | N03 merged |
+| 4 | N04-P, then its phases | N08-C, N09-P2, N10-P | N04, N05 and N08 merged |
+| 5 | N09-B, N09-C, N10-A, N10-H, N10-M | — | Programme complete |
 
 Stage 3 note (N05-P): N03 and N05-B…D list shared core modules (`application_readiness.py`,
 `application_acquisition.py`, `work_items.py`, `workspace_models.py`), so the ready rule runs them
-sequentially where their editable paths overlap, despite the lane split. N05-B also waits for N03-A
-([4.2](#42-phase-prerequisites)).
+sequentially where their editable paths overlap, despite the lane split.
 
 ### 4.4 Status
 
@@ -607,7 +633,7 @@ every new item exactly one lane.
 
 | Item | State | PR |
 | --- | --- | --- |
-| This plan | approved 2026-10-02 | — |
+| This plan | approved 2026-10-02; simplified 2026-10-04 | — |
 | N00-A | merged | #326 (head `4ef678fe`; Sol `implementation-sound`; LC repair `7c05d377`; CI green) |
 | N00-M | done | #326 merged as `881b500f`; main checkout on `delivery-live`; health clean; 3 Changes available; 114 live records unchanged vs. backup `~/owlbear-backups/n00m-20261003-015344` |
 | N00-B | merged | #340 |
@@ -619,36 +645,28 @@ every new item exactly one lane.
 | N02-P | merged | #345 (plan gate `plan-sound`, round 4; amends §1.3, D9: confirmed 2026-10-03; U1 (a), U2 (a), U3 default decided 2026-10-03) |
 | N02-A | merged | #348 (code head `f225ad508`; Sol `implementation-sound` round 3; LC load form pass) |
 | N02-B | merged | #352 (code head `7500600c7`; Sol `implementation-sound` round 5; full LC pass) |
-| N02-C | — | — |
-| N02-D | in review | #362 (code head `8744795ae`; Sol implementation round 1 `repair-required` (4 findings + interpreter identity) → repaired; LC full form and the N02-C → N02-D upgrade rehearsal pass on `8744795ae`; host rehearsal G3 is a pre-H activation gate (N02 plan amendment 2026-10-04), so G3, the D03 → N02-D rehearsal for the merged head and the live H step stay pending with the user; freeze continues until the H step) |
-| N03-P | merged | #349 (plan gate `plan-sound`, round 6; D11 confirmed 2026-10-03; U1 decided (b) by the user 2026-10-03; #360 adds the confirmation boundary D13 with legacy and modern elicitation routes and opens U2, covering Cockpit merge approval and retirement, before N03-C and N05-C; #360 round 4 adds the shared single-use consent generation `consent_generation` (D13, I11) used by N03, N04, N05 and N06, so N05-B also needs N03-A) |
-| N03-A | in review | #363 (code head `8e2faf3cd`; Sol implementation round 1 `repair-required` repaired: a lifecycle or custody re-check that refuses an accepted answer now consumes its generation as `refused`, format-0 proposals run `format-0-to-1` then `format-1-to-2`, and finalization semantics list every ledger confirmation an exact-head record can cite; the ready-readback recovery variant and the anchored-lifecycle ledger tamper now have assembled proof; LC full form re-run on the code head; format marker 2 taken first, §4.2) |
+| N02-C | merged | #355 (code head `411590913`) |
+| N02-D | merged | #362 (`9000513f9`; integrity simplified 2026-10-04; Sol `implementation-sound` on the simplification; LC and both upgrade rehearsals (N02-C and D03 to N02-D, format 2) pass; G3 host rehearsal and the live H step pending with the user) |
+| N03-P | merged | #349 (plan gate `plan-sound`, round 6; D11 confirmed 2026-10-03; U1 decided (b) by the user 2026-10-03). History: #360 added a user-only confirmation boundary and opened U2; both were removed and U2 resolved on 2026-10-04 ([7](#7-decisions)) |
+| N03-A | merged | #363 (`82be4eb1c`; simplified 2026-10-04; Sol `implementation-sound` on the simplification delta; LC full form pass) |
 | N03-B | — | — |
 | N03-C | — | — |
-| N04-P | — | — |
-| N04-A | — | — |
-| N04-B | — | — |
-| N04-C | — | — |
-| N04-D | — | — |
-| N05-P | merged | #353 (plan gate `plan-sound`, round 12; amendments F1–F8 confirmed 2026-10-03; U1 (a), U2 (b), U3 (a) + (e) by the user, U4 (b) decided 2026-10-03; U3 (e) revises programme §10.2; #360 adds F10: approval, retirement and reply decisions on the N03 D13 boundary; #360 round 4 adds F11: those questions use N03's `consent_generation`, so N05-B also needs N03-A) |
+| N04-P | re-plan | #358 closed as superseded; re-planned small under the 2026-10-04 process |
+| Later N04 phases | — | per the new N04-P |
+| N05-P | merged | #353 (plan gate `plan-sound`, round 12; F1–F8 confirmed 2026-10-03; U1 (a), U2 (b), U3 (a) + (e) by the user, U4 (b) decided 2026-10-03; U3 (e) revises programme §10.2). History: #360's F10 and F11 and U4 (b) retirement were removed on 2026-10-04 ([7](#7-decisions)) |
 | N05-A | merged | #356 (code head `a4951b044`; Sol `implementation-sound` round 2; Ubuntu CI exact head) |
 | N05-B | — | — |
 | N05-C | — | — |
-| N05-D | — | — |
-| N06-P | in review | PR #359 |
-| N06-A | — | — |
-| N06-B | — | — |
-| N06-C | — | — |
-| N07-P | — | — |
-| N07-A | — | — |
-| N07-B | — | — |
+| N05-D | — | — (only if it stays small) |
+| N06-P | merged, then superseded | #359; superseded 2026-10-04 ([7](#7-decisions)) |
+| N06-A … N07-B | cut 2026-10-04 | — |
 | N08-P | merged | #350 (plan gate `plan-sound`, round 7; amends N02-B abort (N02 D10); D11 confirmed 2026-10-03; U1–U3 decided (a) 2026-10-03) |
-| N08-A | in review | #361 (code head `d7cad415c`; Sol rounds 1 and 2 `repair-required` repaired, round 3 pending; N08 plan amendments A1, A2; full LC, C01 rehearsal and format-0 N02-A loader rollback pass on `7e38ba20f`, no persisted format change since) |
-| N08-B | — | — |
-| N08-C | — | — |
+| N08-A | merged | #361 (code head `286046c76`; N08 plan amendments A1–A3) |
+| N08-B | cut 2026-10-04 | — |
+| N08-C | — | — (minimal scope, 2026-10-04) |
 | N09-P1 | merged | #351 (plan gate `plan-sound`, round 8; D9 re-split confirmed 2026-10-03; U1 decided (b) 2026-10-03) |
 | N09-A1 | merged | #354 (code head `3573866ac`; Sol `implementation-sound` round 3) |
-| N09-A2 | — | — |
+| N09-A2 | merged | #357 (code head `7a2d974b3`) |
 | N09-P2 | — | — |
 | N09-B | — | — |
 | N09-C | — | — |
@@ -893,7 +911,8 @@ LC gate: load form for N02-A; full form from N02-B.
 **Covers:** #219, #222; the programme section 8.4 model; U6, U7; groundwork for V15; stronger V03
 assurance.
 
-**Excluded:** revision activation and applicability after revision (N04); human assistance (N06).
+**Excluded:** revision activation and evidence reuse after revision (N04); prepared human
+assistance (dropped 2026-10-04).
 
 **Plan inputs:** N02-P (migration contract). N03-P alone owns the stable acceptance identities
 (programme section 8.4), including how they survive a revision; N04-P consumes that contract.
@@ -913,80 +932,59 @@ assurance.
   registered migration, strict MCP models; the finalization semantic context (including bounded task
   authority), basis digest, review binding of the observation set and receipt-construction skill text.
   Existing frontiers stay `readable-legacy` 18 until their next normal mutation writes 19; no frontier
-  rewrite migration. Also the user-only confirmation boundary with its shared single-use consent
-  generation (N03 plan D13), which N04, N05 and N06 reuse.
+  rewrite migration. Also the MCP `answer` refusal of waiver and person-only requests, which the
+  user answers in Cockpit (N03 plan D13).
 - N03-B: finalization procedures and proof guidance: `w-change-finalization`, the `build-reviewer`
   finalization mode, `w-packet-building`; host rehearsal.
 - N03-C: evidence projection through `get_change`, operator views, MCP, HTTP and Cockpit.
 
 LC gate: full form for N03-A and N03-C; not applicable to N03-B. Amended by N03-P (its D11).
 
-### N04 — Same-Change revision activation and evidence applicability
+### N04 — Same-Change requirement revision and evidence reuse
+
+Re-scoped 2026-10-04 ([7](#7-decisions)); PR #358's plan is superseded. N04-P is re-done as a short
+plan under the [operating context](#19-operating-context).
 
 **Result:**
 
-- The user changes a nonterminal Change's requirements through Cockpit **Change requirements** or
-  `/design <change-id>`.
-- The Designer loads the active proposal, decisions, task and evidence history, and the current
-  block.
-- The engine stops new incompatible work. Current custody finishes or settles through the D03
-  routes. No revision activates while writable custody remains.
-- The candidate is challenged and approved, then activated through one replayable operation:
-  prepare → snapshot → local commit → publish → reconcile. The operation spans package, admission,
-  contract, frontier remap, managed-branch snapshot and publication. A crash at any boundary
-  restarts to the old approved state or the exact new state, without duplicate child commits.
-  Acquisition is blocked during activation.
-- An applicability report classifies each obligation as reusable, partial, invalidated or unknown,
-  with reviewer justification. It replaces the blanket request created by
-  `_carry_forward_unresolved_binding`: the agent reassesses and plans, and asks the user for at most
-  the minimum human step.
+- A requirement change on a nonterminal Change is: Pause (N09-A2 drain), then the Designer revises
+  the package through the existing revision admission, then the revised authority is activated
+  crash-safely through the existing transaction owners, then the Change is replanned.
+- Evidence reuse falls out of N03 identities: an observation still covers a criterion whose ID and
+  version are unchanged; changed criteria are uncovered and replanned; person-only evidence for a
+  changed criterion is asked again.
 - D03's retained-handoff Design return can be readmitted.
 - Completed Changes stay immutable; further work starts a successor Change.
 
-**Covers:** programme sections 8.1–8.4, WP4, P12, P13 (applicability), P14; V14, V15, V16, V21
-(activation); #213; source finding S01 (workflow prohibition versus source); D03 Design-return.
+**Excluded:** applicability records; foreign-head, fresh-host-replacement and remote-child routes;
+signed deterministic child commits; exception tables. Live B1 is reconciled once at N10-M by an
+agent-assisted manual step, not by a product route.
 
-**Plan inputs:** the approved N03-P contract, including acceptance identities; N02-P (migration
-contract).
+**Covers:** programme sections 8.1–8.4 as simplified; WP4, P12, P14; V14, V15, V16, V21
+(activation); #213; D03 Design-return.
 
-**P must settle:**
+**Plan inputs:** the N03 plan (acceptance identities); N09-A2 (Pause); N02 (migration contract).
 
-- The candidate versus active layout, reusing `DesignPackageStore` revisions and admission
-  `revisions/`.
-- The activation participants and their identities.
-- Quiescence rules against every D03 custody state.
-- Acceptance identity mapping across a revision.
-- Probes: activation replay on copies, including a copy of B1's live revision history.
-
-**Phases:**
-
-- N04-P.
-- N04-A: prepare/activate/reconcile operation with crash injection at every durable boundary and
-  acquisition blocking.
-- N04-B: applicability assessment, reviewer step and carry-forward replacement.
-- N04-C: Designer workflow (`w-design-session`, `designer.agent.md`) for same-Change resume;
-  Design-return readmission; MCP/HTTP; Cockpit **Change requirements**.
-- N04-D: cumulative proof with B1-like fixtures (repeated request IDs; a revised target not
-  covered by old evidence).
-
-LC gate: full form.
+**Phases:** set by the new N04-P. LC gate: full form where a persisted format changes.
 
 ### N05 — Exact-head merge approval, completion and publication continuity
 
 **Result:**
 
 - When a Change is ready, Cockpit shows **Approve merge** with the repository, PR, exact reviewed
-  head, target, proof and required-check summary, and the merge method. The continuation chat
-  offers the same bounded approval. The approval is a user-only confirmation through the N03 D13
-  boundary (N05 plan D14); if N03 plan U2 is answered (b), Cockpit shows the offer without an approve
-  control and the approval happens in chat.
+  head, target, proof and required-check summary, and the merge method. The user approves there;
+  the continuation chat shows the same offer and points to Cockpit. No MCP tool approves a merge
+  (N05 plan D14).
 - The approval binds the exact head and target. Before the merge, the provider re-reads PR state,
-  head, target, rules, mergeability and checks. A head change invalidates the approval. A target
-  change requires sync, revalidation and fresh review where the proof depends on it. No GitHub
-  merge API fences the target; under the user's N05 U3 decision (2026-10-03) Delivery detects and
-  reports that race as acceptance attention (programme §10.2 as revised).
+  head, target, rules, mergeability and checks, and refuses a draft, closed or stacked PR, a wrong
+  base or failing checks. A head change invalidates the approval. A target change before the request
+  means automatic sync, refinalization and fresh review (U3 part 1 (a)). No GitHub merge API fences
+  the target; Delivery checks parent and base after the merge and reports a difference as acceptance
+  attention (U3 (e), programme §10.2 as revised).
 - An unknown merge response is read back before any retry. There is never a duplicate or
-  unapproved merge.
+  unapproved merge. A response still unknown after readback is exhausted shows attention; the user
+  checks GitHub and resolves it through existing routes (a merge is observed and completes;
+  otherwise abandon or defer).
 - Completion is observed exactly once, including merges done manually in GitHub.
 - The worktree of a completed Change is cleaned automatically when eligible; unexpected contents
   are preserved.
@@ -996,151 +994,59 @@ LC gate: full form.
   it is only an engine-result reason).
 - Governance states that engine/provider publication is system work and that agents never push
   arbitrarily.
-- PR-feedback repair has a durable handoff and replay-safe replies (#225).
+- PR-feedback repair has a durable handoff and replay-safe replies (#225), only if N05-D stays
+  small; otherwise #225 stays open.
 
 **Covers:** WP2 steps 4–5, P08, P09, R2, R3; programme sections 10.1–10.3; J05–J07; V11 (approval
-part), V12, V19; L1, L2; #225.
+part), V12, V19; L1, L2; #225 (if built).
 
 **Plan inputs:** D02/D03 publication owners; N02-P (record versioning).
 
-**P must settle:**
-
-- GitHub capabilities, probed read-only ([1.3](#13-servers-live-state-and-rehearsals)): merge methods, rulesets and protections,
-  merge queue, required-check reads, and the head-SHA fence on the merge mutation.
-- Approval record and invalidation rules.
-- Engine action shape.
-- Auto-cleanup eligibility.
-- **User decision:** whether a real merge rehearsal on a disposable repository is permitted, and
-  the merge-method policy.
-
 **Phases:**
 
-- N05-P.
+- N05-P (merged #353; simplified 2026-10-04, N05 plan header).
 - N05-A: provider merge and readback adapter with fakes; revises the forbidden-effect gates that
-  assert Delivery never merges into an allowlist. Its editable paths must be disjoint from
-  every N01 phase so that it can run during N01.
+  assert Delivery never merges into an allowlist (merged #356).
 - N05-B: approval identity and invalidation, engine merge action, readiness L1/L2, distinct waits,
-  exactly-once completion, automatic cleanup. Approvals consume N03-A's consent generations (N05 plan
-  D14, F11).
-- N05-C: MCP/HTTP and Cockpit confirm/cancel/error states, stale-confirmation E2E, continuation
-  prompt path, governance text. Approval, retirement and reply decisions use the N03 D13 user-only
-  boundary (N05 plan D14); whether a Cockpit click counts follows N03 plan U2.
-- N05-D: #225 PR-feedback continuity.
+  exactly-once completion, automatic cleanup.
+- N05-C: Cockpit **Approve merge** with confirm, cancel and error states, stale-offer E2E, HTTP and
+  read-only MCP status, continuation prompt path, governance text; one smoke test on a disposable
+  repository (create PR, approve, merge at the exact head, observe completion).
+- N05-D: #225 PR-feedback continuity, only if small.
 
 LC gate: full form from N05-B.
 
 ### N06 — Prepared interaction core and private local input
 
-**Result:**
-
-- A typed prepared-interaction contract with the programme section 9.1 fields. Handlers come from a
-  code registry, never shell text from a request.
-- Preparation is agent work. The Change shows "needs you" only once the step is actionable.
-- Local input is handed off through a loopback or Cockpit form with origin checks and a one-time
-  token, and becomes an opaque input reference. Inputs expire and can be cancelled.
-- Secrets never appear in transcripts, logs, receipts or URLs. Human confirmation is recorded
-  separately from machine observation, using N03 provenance.
-- Cockpit offers **Help with this step**, **Not now**, **Explain existing evidence**, and **Check
-  not available here** when no handler is available (V17).
-- A synthetic handler proves the whole flow end to end.
-
-**Covers:** programme sections 9.1, 9.3, 9.4; P15, P16; V17, V22; U3.
-
-**Plan inputs:** the approved N03-P contract (provenance and observation model).
-
-**P must settle:**
-
-- The relation to the existing `DeliveryRequest` model.
-- The form host and its origin/token design, probed in a real browser.
-- Input descriptors and sensitivity classes.
-- Binding to the candidate and its resources, and when that binding goes stale.
-- **User decision:** the retention and privacy policy for private inputs and evidence.
-- Whether a Cockpit-hosted confirmation counts as user-only follows N03 plan U2; human confirmation
-  uses the N03 confirmation ledger and boundary (N03 plan D13).
-
-**Phases:**
-
-- N06-P.
-- N06-A: lifecycle, registry, readiness gate and binding, with migration and strict MCP models.
-- N06-B: secure local input and V22 negative tests: credential-like URL, logs and receipts, expired
-  session, cancel is not a pass.
-- N06-C: MCP/HTTP and Cockpit presentation; synthetic-handler E2E.
-
-LC gate: full form.
+Cut on 2026-10-04 ([7](#7-decisions)). V17 and V22 and the programme section 9 machinery are
+dropped; person-only checks are ordinary Action Requests with clear instructions, answered in
+Cockpit. The [N06 plan](delivery-n06-plan.md) (#359) is kept as superseded history.
 
 ### N07 — B1 assisted-check runner and assistance presentation
 
-**Result:**
+Cut on 2026-10-04 ([7](#7-decisions)). V23 and the B1 TASK-004 pilot are B1's own product acceptance
+through B1's normal Action Request. B1 is reconciled once at N10-M.
 
-- B1's remaining human obligation (the TASK-004 managed-Mac pilot) becomes runnable as a prepared
-  interaction:
-  - The agent launches the reviewed B1 candidate from its worktree with the owned Edge profile.
-  - The user enters an approved address in the local form, signs in in the visible window and
-    confirms.
-  - The agent runs restart and cleanup and records only bounded evidence: no URLs, hostnames,
-    cookies or page content.
-- Existing B1 evidence, including the three reported exercises, is reassessed through N04
-  applicability before any new check is requested. The UI shows the exact gap per claim
-  (programme section 9.2).
-- B1's product tasks are not programme work. B1 stays a live product Change; the runner consumes
-  its candidate.
+### N08 — Offline repair application and consumer upgrade
 
-**Covers:** P17, P18; V15 and V16 on B1 data; V23 preparation; programme section 9.2; source S16.
-
-**Plan inputs:** the approved N04-P and N06-P contracts; B1 candidate on PR #312.
-
-**P must settle:**
-
-- The handler location and how candidate code runs: its worktree and environment.
-- Profile custody and contention.
-- Synthetic sites for tests.
-- **User input:** which earlier B1 evidence exists and how Jira versus Confluence evidence is
-  treated, without silently changing the requirement.
-
-**Phases:**
-
-- N07-P.
-- N07-A: runner with synthetic sites.
-- N07-B: evidence reassessment and presentation; cumulative proof.
-
-The real-device run is N10-H.
-
-### N08 — Offline repair application, degraded Cockpit and distribution
+Simplified 2026-10-04 ([7](#7-decisions)).
 
 **Result:**
 
-- Beyond D03's read-only diagnosis, `/repair-delivery` can create fenced proposals for known
-  recoverable states and apply them under policy and confirmation. Unknown corruption is preserved
-  and only diagnosed.
-- Cockpit starts and shows degraded Changes plus the **Repair Delivery** entry without a healthy
-  `PortfolioApplication` (V18).
-- A reviewed, isolated maintenance route for platform code defects exists (programme section 11.2).
-- Setup and distribution give consumer installations controller selection and upgrade parity with
-  N02 (P21).
+- N08-A (merged #361): `/repair-delivery` creates fenced proposals for known recoverable states and
+  applies them offline under policy and confirmation. Unknown corruption is preserved and only
+  diagnosed. No further investment.
+- N08-B (degraded Cockpit) is cut. If Delivery state is unusable, Cockpit shows its startup error and
+  the user runs `/repair-delivery`. V18 is satisfied by D03 diagnosis plus N08-A repair.
+- N08-C: a consumer project can upgrade OwlBear and migrate its Delivery state through
+  `/upgrade-delivery`, documented. Pinning is optional for consumers, not the default. There is no
+  maintenance route beyond normal PRs.
 
-**Covers:** P19 (application), P20 (offline application), P21; V18, V20; programme sections 11.1
-and 11.2; R4; the Repair Delivery control from section 4.2.
+**Covers:** P19 (application), P20 (offline application), P21 as reduced; V18, V20; programme
+section 11.1; R4.
 
-**Plan inputs:** the approved N02-P contract.
-
-**P must settle:**
-
-- The catalogue of supported proposals, derived from D03 diagnosis findings and known recoverable
-  states.
-- The confirmation policy.
-- The design for Cockpit degraded start.
-- The consumer upgrade path through `setup/init.py` and the `main` sync.
-
-**Phases:**
-
-- N08-P.
-- N08-A: proposals and application below application composition: a repair kind of N02-B's
-  migration engine in Delivery, with a tools CLI.
-- N08-B: Cockpit degraded start, the Repair Delivery entry and its Delivery core changes: per-Change
-  containment (V18) and a read-only loader preflight before startup effects.
-- N08-C: setup and distribution, maintenance route, operating docs.
-
-LC gate: full form for A.
+**Phases:** N08-P (merged #350), N08-A (merged #361), N08-C. LC gate: full form for A; upgrade
+rehearsal for C.
 
 ### N09 — Continuation entry cutover and Cockpit entry surface
 
@@ -1173,34 +1079,34 @@ issue #218; P22.
 - N09-P1: plans N09-A1 and N09-A2 (presentation, Pause/Resume semantics, #218).
 - N09-A1: presentation, progress copy, Change-level Pause/Resume, #218 closure evidence.
 - N09-A2: Pause drains active work (coordination format change; after N02-B).
-- N09-P2: capability inventory; plans N09-B and N09-C using the approved N05–N08 plans.
+- N09-P2: capability inventory; plans N09-B and N09-C using the approved N05 and N08 plans and the
+  new N04-P.
 - N09-B: retirement and routing.
 - N09-C: documentation reconciliation.
 
-### N10 — Integration, fault matrix, host acceptance and live migration
+### N10 — Regression matrix, host journey and live migration
+
+Reduced 2026-10-04 ([7](#7-decisions)).
 
 **Result:**
 
-- The cumulative V01–V24 automated matrix passes on the exact candidate (P23).
-- A cumulative challenge comes back clean.
-- Host acceptance with the user:
-  - a real VS Code / Copilot journey on a disposable project, from start through completion;
-  - a fresh-session resume at each stopping point;
-  - stale-claim scenarios;
-  - the B1 V23 check on the managed device.
-- Live migration: the pinned controller is upgraded to the final release and the live Changes are
-  migrated:
+- The V-matrix of the remaining requirements (V01–V24 without V17, V22 and V23) passes as
+  regression on the exact candidate (P23).
+- One host journey with the user: a real VS Code / Copilot journey on a disposable project, from
+  start through completion.
+- Live migration: the pinned controller is upgraded to the final release, and:
   - `delivery-action-readiness` completes or is observed;
   - `frontier-serialization-contract` is abandoned through the supported route and PR #314 closed;
     the user confirms this at the step, since its scope is delivered by N02;
-  - B1 continues.
+  - B1 is reconciled once by an agent-assisted manual step and continues.
 - The programme is closed: section 0 of the programme and this plan are marked complete.
 
 **Phases:**
 
-- N10-P: acceptance map from V01–V24, U1–U8 and programme section 14.5 to proof and gaps.
+- N10-P: acceptance map from the remaining V-scenarios, U1–U8 and programme section 14.5 to proof
+  and gaps.
 - N10-A: matrix and gap fixes.
-- N10-H: host acceptance, with the user present. Its docs-only PR records the evidence.
+- N10-H: host journey, with the user present. Its docs-only PR records the evidence.
 - N10-M: live migration and activation; explicit user authorization. Its docs-only PR records the
   evidence and closes the programme.
 
@@ -1208,15 +1114,16 @@ issue #218; P22.
 
 The programme is complete when all of the following hold:
 
-- The user can start a Change, resume it after interruption, answer a genuine prepared question,
+- The user can start a Change, resume it after interruption, answer a genuine request in Cockpit,
   approve the merge and see accepted completion, without running tests, editing files or operating
   Git or Delivery internals (programme section 14.5; U1–U8).
-- Every V01–V24 scenario has the proof named in programme section 13, as revised. Host-only claims
-  have host evidence.
+- Every remaining V-scenario (V01–V24 without the dropped V17, V22 and V23) has the proof named in
+  programme section 13, as revised. The host journey has host evidence.
 - Every supported failure fixture either resumes automatically or exposes one working prompt or
   control.
-- Live Changes are migrated and the pinned controller runs the final release.
-- Issues #213, #215, #216, #218–#222 and #225 are closed with evidence.
+- Live Changes are migrated or disposed of, B1 is reconciled once and continues, and the pinned
+  controller runs the final release.
+- Issues #213, #215, #216 and #218–#222 are closed with evidence, and #225 too if N05-D is built.
 - Documentation matches shipped behavior.
 - No `fix-now` finding is open.
 
@@ -1241,13 +1148,41 @@ The programme is complete when all of the following hold:
 
 - **N02:** pinning of this repository's live controller and the upgrade UX (decided 2026-10-03:
   N02 plan U1 (a), U2 (a)).
-- **N03:** user waivers (U1, decided 2026-10-03: (b), captured through the D13 confirmation
-  boundary); which clicks and answers count as the user's agreement for waivers, human-confirmed checks
-  and N05 merge approval and retirement (U2, open, required before N03-C and N05-C).
-- **N05:** merge-method policy (U1); real merge rehearsal on a disposable repository (U2); target
+- **N03:** user waivers (U1, decided 2026-10-03: (b)); where the user's agreement is given (U2,
+  resolved 2026-10-04 below).
+- **N05:** merge-method policy (U1); real merge test on a disposable repository (U2); target
   freshness and the execution-time target race (U3) (decided 2026-10-03: N05 plan U1 (a), U2 (b),
-  U3 (a) + (e), U4 (b)).
-- **N06:** retention and privacy policy for private inputs.
-- **N07:** treatment of earlier B1 evidence.
+  U3 (a) + (e)). U4 (b) retirement was reversed on 2026-10-04 (below).
 - **N10-M:** abandoning the `frontier-serialization-contract` live Change; the disposition of the
-  unfinished live record `delivery-action-readiness` (product merged via PR #316).
+  unfinished live record `delivery-action-readiness` (product merged via PR #316); the one-time
+  reconciliation of B1.
+
+**Decided by the lead on 2026-10-04, under the user's authorization** ("rethink paranoid
+escapades"; "you have to be sure what to do yourself, I trust you"), with the process rules of
+PR #364 (`r-challenger-protocol` Operating Context and Finding Quality):
+
+- **Operating context.** [1.9](#19-operating-context) applies to every remaining phase, plan and
+  review; review gates follow [1.5](#15-review-gates).
+- **User-only confirmation machinery removed.** MCP elicitation for request answers, the
+  `consent_generation` record family, the frontier confirmation ledger and the request-resolution
+  receipt confirmation binding (N03 D13, I10, I11 as amended by #360), N05 D14 consent generations and
+  N04/N06 uses are dropped. Every user answer (Decision Request, Action Request, waiver, person-only
+  check confirmation, merge approval) is given in Cockpit and recorded with provenance as today. No
+  Origin or cookie hardening and no OS presence check. Agents' MCP tools do not offer user-only
+  actions: MCP `answer` refuses waiver and person-only confirmation requests, and no MCP tool approves
+  a merge.
+- **N03 U2 resolved:** Cockpit is where the user says yes; there is no enforcement beyond the agent
+  tool surface.
+- **N02-D:** start-time release integrity verification (launcher-embedded verifier, loader repeat
+  check, stat fingerprint fast path, interpreter digest at start) is removed; sealed releases,
+  `delivery-controller verify` on demand and inside pin/switch, `controller-not-pinned`, offline
+  preflight, `/upgrade-delivery` and the H-step runbook stay (N02 plan §3.5).
+- **N04:** re-planned small ([5](#n04--same-change-requirement-revision-and-evidence-reuse)); PR #358
+  is superseded.
+- **N05:** U4 (b) retirement (`retire_held_merge`) is removed; an unsettled merge shows attention
+  and the user resolves it through existing routes. The multi-scenario real-GitHub rehearsal is
+  replaced by one smoke test on a disposable repository that the agent creates and the user deletes.
+- **V17, V22 and V23 dropped; N06 and N07 cut.** Person-only checks are ordinary Action Requests
+  answered in Cockpit; V23 and B1's TASK-004 pilot are B1's own acceptance.
+- **N08:** N08-B cut; N08-C reduced to a documented consumer upgrade and migration.
+- **N10:** reduced to the remaining V-matrix as regression, one host journey and the live migration.

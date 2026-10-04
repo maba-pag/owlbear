@@ -7,21 +7,14 @@
 > D9 merged under the user's overnight authorization of 2026-10-03 ("do whatever is necessary to keep
 > work going … merging") and was confirmed on 2026-10-03 (listed to the user without objection).
 > U1 (a), U2 (a) and U3 (default) were decided on 2026-10-03.
+> **Simplification 2026-10-04** (lead decision, [execution plan §7](delivery-redesign-execution-plan.md#7-decisions)):
+> N02-D works in the execution plan's
+> [operating context](delivery-redesign-execution-plan.md#19-operating-context), which replaces the
+> 2026-10-04 release-integrity threat-boundary amendment of PR #362. Release integrity is defined by
+> [§3.5](#35-n02-d--controller-pinning-and-upgrade-procedure) *Release integrity*; start cost is normal.
 > **Amendment 2026-10-04** (lead engineering decision while live remains frozen): the host rehearsal
 > [G3](#5-verification-gaps) no longer blocks the N02-D merge; it is a pre-H activation gate that must
 > pass before any live migration or switch in the H step (runbook step 0).
-> **Amendment 2026-10-04, release integrity boundary** (lead engineering decision after Sol N02-D
-> implementation round 2; recorded explicitly, not a silent narrowing): R1/I6 release integrity is
-> defined against accidental and ordinary-tool modification (editor saves, Git operations in the wrong
-> directory, partial or interrupted installs, package-manager writes, restores), the failure mode
-> pinning exists to prevent, and not against a determined same-user actor, who can replace the pin,
-> the launcher or Python anyway. Within that boundary: (1) install seals every release file and
-> directory read-only and refuses a release that keeps a write bit; `pin`/`switch` (and `verify`)
-> refuse a writable release; sealing also prevents new write opens or mappings after install;
-> (2) `pin`, `switch`, `verify` and every start whose fingerprint differs verify the full content;
-> (3) a start whose stat fingerprint matches the pin is accepted as the ordinary-modification
-> detector, not as proof of unchanged bytes; (4) the cases outside the boundary are stated in
-> [I6](#13-invariants) and in `setup/operating-owlbear.md`.
 > Product code is unchanged by this phase.
 
 ## 1. Contract
@@ -88,20 +81,12 @@
   preflight, `switch` and `prune` (N02-D) take it exclusively and non-blocking. The D03 controller
   does not take it, so the first upgrade also verifies that no controller process runs.
 - **I6 Code origin follows the pin.** On a pinned workspace, a controller whose code is not the
-  pinned release refuses to start (N02-D), and so does a release that is not intact: its
-  `RELEASE.json` must hash to the digest recorded in `pin.json`, and the release tree and the
-  interpreter must match that record before any controller composition. Unpinned workspaces (tests,
-  disposable portfolios, consumers until N08-C) keep today's behavior.
-  **Threat boundary (amended 2026-10-04).** "Intact" means not modified by accident or by an ordinary
-  tool: editor saves, Git operations in the wrong directory, partial or interrupted installs,
-  package-manager writes and restores. Install seals the release read-only; `pin`, `switch`, `verify`
-  and any start whose stat fingerprint differs from the pin hash the full content; a start whose
-  fingerprint matches is accepted as that ordinary-modification detector. Outside the boundary, by
-  decision: root; a determined same-user actor, who can make the release writable again, replace
-  `pin.json`, a launcher or the interpreter, or keep a writable mapping opened before sealing and
-  change bytes without a metadata change; the interpreter's standard library and shared libraries
-  outside its binary; and a release edited to disable its own in-process check when started without
-  a launcher (the launcher and `verify` cover that). Whole-system hashing is not proportionate.
+  pinned release refuses to start (`controller-not-pinned`, N02-D). Unpinned workspaces (tests,
+  disposable portfolios, consumers) keep today's behavior. Release integrity follows the execution
+  plan's [operating context](delivery-redesign-execution-plan.md#19-operating-context): install seals
+  every release read-only, and `pin`, `switch` and `verify` hash the full content and the interpreter
+  against `RELEASE.json`; starts do not re-verify. It guards against accidental and ordinary-tool
+  changes, not against root or another process of the same user.
 
 ### 1.4 Persisted record families
 
@@ -656,6 +641,13 @@ reject in lax mode too; they are the same deliberate rejections as in run 1. No 
   and the Delivery sections of `README.md`; tests (`serve/tools/tests/test_delivery_controller.py`,
   loader pin tests); this plan; execution plan status row and the factual §1.2/§2.6 note that the
   freeze ended. Seed and `setup/init.py` stay unchanged (N08-C).
+- **Release integrity** (simplified 2026-10-04): install seals every release read-only;
+  `delivery-controller verify` hashes the full content and checks the interpreter on demand and
+  inside `pin` and `switch`; a non-pinned controller refuses to start on a pinned workspace
+  (`controller-not-pinned`, I6), which guards an honest mistake. There is no start-time integrity
+  verification: no launcher-embedded verifier, no loader repeat check, no stat-fingerprint fast path
+  and no interpreter digest check at start. Offline preflight, `/upgrade-delivery` and the H-step
+  runbook of PR #362, including its checkout-collisions step, stay.
 - **Upgrade procedure** (extends N00-M's live-activation steps):
   1. Read-only preflight through the running controller; the user settles blocking custody (D6).
   2. The user stops `owlbear-delivery` (*MCP: List Servers* → *Stop*) and Cockpit; the tool
@@ -730,15 +722,10 @@ reject in lax mode too; they are the same deliberate rejections as in run 1. No 
   `pin`/`switch` verify the release, run **that release's own gate** against the stopped workspace
   (no gate → `release-ungated`; any refusal → `release-refuses-state`, the D3 rollback rule), write
   the launchers and commit `pin.json` (schema 1: `commit`, `previous`, `release_sha256` = SHA-256 of
-  the release's `RELEASE.json`, `release_stat_sha256` = stat fingerprint taken before and after the
-  full verification and required equal, `pinned_at`) last. Launchers `exec env -u PYTHONPATH -u PYTHONHOME
-  -u VIRTUAL_ENV <real release>/.venv/bin/python -I -S -B -c <owlbear_delivery.release_integrity
-  source> <release> <release_sha256> <release_stat_sha256> <entry>`: the embedded stdlib verifier checks the record digest,
-  the tree digest and the interpreter before site-packages (and their `.pth` files) or any release
-  module load, refuses `controller-release-invalid` (exit 78), and only then enables site-packages
-  and runs the MCP or Cockpit entry point. `verify` also checks that the pin names the release's
-  record, the launchers are the generated bytes and the recorded interpreter binary is unchanged,
-  and reports `fast_start` (whether starts still take the fingerprint path).
+  the release's `RELEASE.json`, `pinned_at`) last. Launchers `exec env -u PYTHONPATH -u PYTHONHOME
+  -u VIRTUAL_ENV <real release>/.venv/bin/python` with the MCP or Cockpit entry point; they do not
+  verify the release. `verify` checks that the pin names the release's record, the launchers are the
+  generated bytes, the tree digest matches and the recorded interpreter binary is unchanged.
 - Fences: every layout change takes `.owlbear/controller/.maintenance.lock` (a second upgrade
   refuses `upgrade-in-progress`); `preflight`, `backup`, `pin`, `switch`, `prune` also prove no
   controller process runs (same-user `psutil` scan: `owlbear_delivery_mcp`, `owlbear_cockpit`,
@@ -763,20 +750,7 @@ reject in lax mode too; they are the same deliberate rejections as in run 1. No 
   bound); the fenced controller load (`_load_fenced_application`: MCP, Cockpit, default loader)
   refuses `controller-not-pinned` after taking the shared lock and before the gate when the real
   path of the loader module is not inside the real, non-symlink `releases/<pinned commit>`, or when
-  the pin is unusable. It then refuses `controller-release-invalid` unless
-  `release_integrity.require_release` proves the pinned release intact: the record digest must equal
-  `pin.json`'s `release_sha256`; then either the stat fingerprint of the tree and interpreter
-  (type, mode, size, mtime, ctime and inode of every entry) equals `pin.json`'s
-  `release_stat_sha256`, which `pin`/`switch` recorded around a full content verification, or the
-  full tree digest and the interpreter binary digest equal the record. The fast path is the
-  ordinary-modification detector of the [I6 threat boundary](#13-invariants), not proof of unchanged
-  bytes: an ordinary write to the sealed release must first add a write bit (a mode change), and
-  ordinary writes, replacements and restores change a ctime, an inode or the entry set; any
-  difference makes the start re-hash everything. A launcher that verified the same release in the
-  same process marks it verified, so each start checks once. The cases outside the boundary (root,
-  a determined same-user actor including a writable mapping held from before sealing, external
-  standard and shared libraries, launcher-bypassed starts of a release edited to disable its check)
-  are listed in I6.
+  the pin is unusable. It does not re-verify release content (see I6).
   Offline compositions (`load_read_only_application`, migration verification)
   are not pinned: they run from the target release during an upgrade.
 - `delivery-lc`: `prepare` also copies `pin.json` and launchers into the copy, each release's

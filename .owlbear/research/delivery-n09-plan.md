@@ -2,7 +2,8 @@
 
 > **Package:** N09 of the [execution plan][n09-section].
 > **This plan (N09-P1) plans N09-A only.** N09-B (retirement and routing) and N09-C (documentation
-> reconciliation) are planned later by N09-P2, after the N05–N08 plans and N09-A are approved.
+> reconciliation) are planned later by N09-P2, after the N05 and N08 plans, N09-A2 and the re-planned N04-P
+> (execution plan §4.2, simplified 2026-10-04; N06 and N07 are cut).
 > **Planned on:** `origin/dev` `ef622c354` (N01-A merged; N01-B and N01-C not merged; Python 3.14.8).
 > Live controller observed read-only: three Changes, frontier schema 18, no deferral, no active claim.
 > **Status:** approved: plan gate `plan-sound` in round 8 of fresh GPT-6.1 Sol challenges (2026-10-03). Product code is unchanged by this phase.
@@ -49,8 +50,8 @@ and gives Pause/Resume the programme's policy semantics. It is split into two ph
 | R10 | Support baseline: Python 3.14; Chromium-only Cockpit (clipboard via `navigator.clipboard`); macOS and Ubuntu | Execution plan §1.1 |
 | R11 | LC gate where persisted formats, loading or startup change (A2: full form); never activate against live state | Execution plan §1.3 |
 
-N09-A owns no V-scenario on its own. It supplies the entry surface that V01 (N10) and V17 (N06)
-exercise, and keeps the D01–D03 regressions (V02–V10, V13) green.
+N09-A owns no V-scenario on its own. It supplies the entry surface that V01 (N10) exercises (V17 was
+dropped on 2026-10-04), and keeps the D01–D03 regressions (V02–V10, V13) green.
 
 ### 1.3 Invariants
 
@@ -88,12 +89,12 @@ New `DeliveryProgress` literal in `work_items.py` (keys) and Cockpit labels (`wo
 
 | Key | Cockpit label | Emitted from |
 | --- | --- | --- |
-| `preparing` | Preparing | Reserved; N06/N07 (assistance preparation) |
+| `preparing` | Preparing | Reserved; no owner since N06 and N07 were cut (2026-10-04) |
 | `working` | Working | Reserved; needs dispatch evidence (G3) |
 | `checking` | Checking | Reserved; needs dispatch evidence (G3) |
 | `repairing` | Repairing | Reserved; needs dispatch evidence (G3) |
 | `needs-decision` | Needs your decision | A1 |
-| `needs-sign-in` | Needs your sign-in | Reserved; N06/N07 |
+| `needs-sign-in` | Needs your sign-in | Reserved; no owner since N06 and N07 were cut (2026-10-04) |
 | `waiting-for-service` | Waiting for service | A1 |
 | `waiting-for-change` | Waiting for another Change | A1 |
 | `ready-to-merge` | Ready to merge | A1 (N05 may refine, see G8) |
@@ -256,8 +257,9 @@ A2 direct operations (§1.11 K2, K3, K5):
   `finalize-change`, `resolve-delivery-attention`, `resolve-target-conflict`, `address-pr-feedback`,
   `release-stuck-worker` and `inspect-change`, renaming `start-orchestration` / `queued_for_orchestration`
   / portfolio guidance commands (`WorkPortfolioPage.tsx:652-654`), WIRING and operating docs (P22).
-- Controls owned elsewhere: **Help with this step** (N06), **Change requirements** (N04),
-  **Approve merge** (N05), **Repair Delivery** (N08); **Open in Copilot** (not planned).
+- Controls owned elsewhere: **Change requirements** (N04), **Approve merge** (N05); **Help with this step**
+  (dropped 2026-10-04 with V17), the Cockpit **Repair Delivery** control (cut with N08-B; `/repair-delivery`
+  remains) and **Open in Copilot** (not planned).
 - Prompt-file to agent-skill migration of `/continue-change` (input to N09-P2, probe P8).
 - New user copy for containment or unavailable states (D3); Abandon placement and semantics.
 - Terminating or cancelling any running worker or started effect (I6).
