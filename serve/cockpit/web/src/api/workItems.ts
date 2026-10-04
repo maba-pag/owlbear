@@ -484,7 +484,7 @@ export type DeliveryFinalizationRules = "typed" | "legacy" | "none";
 
 export interface DeliveryEvidenceItem {
   observation_id: string;
-  schema_version: 1 | 2;
+  observation_schema: 1 | 2;
   source: "task" | "finalization";
   task_or_finalization_id: string;
   exact_commit: string;

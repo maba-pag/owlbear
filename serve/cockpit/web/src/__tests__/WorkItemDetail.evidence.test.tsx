@@ -8,7 +8,7 @@ installWorkPortfolioHarness();
 function record(overrides: Partial<DeliveryEvidenceItem>): DeliveryEvidenceItem {
   return {
     observation_id: "1".repeat(64),
-    schema_version: 2,
+    observation_schema: 2,
     source: "task",
     task_or_finalization_id: "TASK-001",
     exact_commit: "2".repeat(40),
@@ -69,7 +69,7 @@ const evidence: DeliveryEvidenceProjection = {
     ]),
     criterion("AC-004", "uncovered"),
   ],
-  unattributed: [record({ observation_id: "8".repeat(64), schema_version: 1, verdict: null, summary: "exit:0" })],
+  unattributed: [record({ observation_id: "8".repeat(64), observation_schema: 1, verdict: null, summary: "exit:0" })],
   unattributed_truncated: 0,
   counts: { covered: 1, waived: 1, missing: 1, uncovered: 1, unknown: 0 },
 };

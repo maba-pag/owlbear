@@ -567,7 +567,7 @@ def test_legacy_change_shows_unknown_and_its_schema_one_records_unattributed() -
     assert [view.status for view in projection.criteria] == ["unknown"]
     assert projection.criteria[0].identity_source == "authored"
     (item,) = projection.unattributed
-    assert (item.observation_id, item.schema_version, item.verdict, item.summary) == (
+    assert (item.observation_id, item.observation_schema, item.verdict, item.summary) == (
         legacy.observation_id,
         1,
         None,

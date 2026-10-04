@@ -459,7 +459,7 @@ class DeliveryEvidenceItemView(_EvidenceModel):
     """One retained observation as shown beside a criterion; legacy records carry no verdict."""
 
     observation_id: str = Field(pattern=r"^[0-9a-f]{64}$")
-    schema_version: Literal[1, 2]
+    observation_schema: Literal[1, 2]
     source: DeliveryEvidenceSource
     task_or_finalization_id: str
     exact_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
@@ -577,7 +577,7 @@ def build_evidence_projection(
 def _evidence_item(observation: DeliveryAnyObservation, source: DeliveryEvidenceSource) -> DeliveryEvidenceItemView:
     common = {
         "observation_id": observation.observation_id,
-        "schema_version": observation.schema_version,
+        "observation_schema": observation.schema_version,
         "source": source,
         "task_or_finalization_id": observation.task_or_finalization_id,
         "exact_commit": observation.exact_commit,
