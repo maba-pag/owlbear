@@ -643,7 +643,7 @@ every new item exactly one lane.
 | N07-A | — | — |
 | N07-B | — | — |
 | N08-P | merged | #350 (plan gate `plan-sound`, round 7; amends N02-B abort (N02 D10); D11 confirmed 2026-10-03; U1–U3 decided (a) 2026-10-03) |
-| N08-A | — | — |
+| N08-A | merged | #361 (code head `7e38ba20f`; Sol round 1 `repair-required` repaired, round 2 pending; N08 plan amendments A1, A2; full LC, C01 rehearsal and format-0 N02-A loader rollback pass) |
 | N08-B | — | — |
 | N08-C | — | — |
 | N09-P1 | merged | #351 (plan gate `plan-sound`, round 8; D9 re-split confirmed 2026-10-03; U1 decided (b) 2026-10-03) |
