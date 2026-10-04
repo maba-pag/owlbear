@@ -531,7 +531,7 @@ so implementation re-resolves paths after N01 moves code.
 | N03-B | N03-A |
 | N03-C | N03-B |
 | N04-P (re-plan, 2026-10-04) | N03-P |
-| N04-A | N04-P, N03-C; N04 plan U1 answered |
+| N04-A | N04-P, N03-C |
 | N04-B | N04-A |
 | N04-C | N04-B |
 | N05-P | N02-P |
@@ -974,7 +974,8 @@ agent-assisted manual step, not by a product route.
   reviewed head, release the handoff, then readmit.
 - N04-C: Cockpit **Change requirements** control and operating guide.
 
-LC gate: load form for N04-A and N04-B (no persisted format change); not applicable to N04-C.
+LC gate: load form for N04-A and N04-B (record schemas unchanged; revision-history path layout
+extended); not applicable to N04-C.
 
 ### N05 — Exact-head merge approval, completion and publication continuity
 
@@ -1162,7 +1163,6 @@ The programme is complete when all of the following hold:
 - **N05:** merge-method policy (U1); real merge test on a disposable repository (U2); target
   freshness and the execution-time target race (U3) (decided 2026-10-03: N05 plan U1 (a), U2 (b),
   U3 (a) + (e)). U4 (b) retirement was reversed on 2026-10-04 (below).
-- **N04:** evidence inside a replanned outcome (N04 plan U1, open; needed before N04-A).
 - **N10-M:** abandoning the `frontier-serialization-contract` live Change; the disposition of the
   unfinished live record `delivery-action-readiness` (product merged via PR #316); the one-time
   reconciliation of B1.
@@ -1188,7 +1188,8 @@ PR #364 (`r-challenger-protocol` Operating Context and Finding Quality):
   `delivery-controller verify` on demand and inside pin/switch, `controller-not-pinned`, offline
   preflight, `/upgrade-delivery` and the H-step runbook stay (N02 plan §3.5).
 - **N04:** re-planned small ([5](#n04--same-change-requirement-revision-and-evidence-reuse)); PR #358
-  is superseded.
+  is superseded. Former N04 plan U1 decided (b) (N04 plan D13): a replanned outcome keeps completed
+  tasks and results whose commitments still exist and plans only the delta.
 - **N05:** U4 (b) retirement (`retire_held_merge`) is removed; an unsettled merge shows attention
   and the user resolves it through existing routes. The multi-scenario real-GitHub rehearsal is
   replaced by one smoke test on a disposable repository that the agent creates and the user deletes.

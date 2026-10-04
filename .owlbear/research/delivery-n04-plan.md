@@ -24,7 +24,8 @@ A requirement change on a nonterminal admitted Change runs in four steps, all th
    Change and records the publication obligation. Restart at any step reaches the old version or the
    replayed new one.
 4. **Replan.** Unchanged outcomes keep their bindings and evidence. Changed outcomes and their dependents
-   return to Planning; the normal continuation prompt picks up the Planner.
+   return to Planning with the completed work whose commitments survive, and the Planner plans only the
+   delta (D13); the normal continuation prompt picks up the Planner.
 
 Evidence reuse falls out of N03 identities (N03 plan §1.4, §1.9): an observation covers a criterion only at
 an unchanged ID and version; a changed criterion is uncovered and gets new tasks; a person-only confirmation
@@ -102,9 +103,13 @@ package):
 2. Publish the package contract (`_publish_package_contract`, existing).
 3. Snapshot the revised package on the **reviewed head**: `_replace_design_package_snapshot` takes
    `coordination.last_reviewed_commit` as the expected head and requires the branch there and a clean
-   worktree. Its intent and receipt make it replayable (existing). For a revision, the registry runs step 2
-   and step 4 as separate calls so the application snapshots between them; first admission keeps today's
-   order.
+   worktree. Its intent and receipt make it replayable (existing). A crash inside it leaves the intent with
+   either the package files written or staged on the reviewed head, or the snapshot commit made before the
+   receipt and reviewed head are stored. Replay through the intent covers both: worktree changes confined
+   to the three package paths are restored before `_commit_design_package_snapshot` commits again; a direct
+   child with the intent's snapshot message is adopted (`_replay_design_package_snapshot`, existing). For a
+   revision, the registry runs step 2 and step 4 as separate calls so the application snapshots between
+   them; first admission keeps today's order.
 4. One transaction (I2): `_delivery_frontier` returns the revised frontier (§1.6), with `change_deferral`
    cleared (activation resumes the Change, D4), the review-repair invalidation cleared, and the checkpoint
    for the snapshot head queued by the rule of `record_design_package_snapshot` and
@@ -113,6 +118,8 @@ package):
    admission receipt, history and a `DeliveryPendingStatePublication` marker whose base is the published
    frontier digest. New history entries are keyed `revisions/<previous contract digest>-<previous frontier
    digest>/`, so revise, cancel and revise again never collide (today's key is the contract digest alone).
+   The `revision_record` kind in `state_formats.RECORD_KINDS` and the `revisions` entry of the offline
+   diagnostics layout (`delivery_diagnostics._CHANGE_RECORD_LAYOUT`) accept this key beside the old one.
 5. Best-effort publication and checkpoint reconciliation (existing path); a failure leaves the marker for the
    normal replay before any claim.
 
@@ -133,6 +140,7 @@ the deferral.
 | --- | --- | --- |
 | `revise_design_session` or step 2 | package ID (and generated authority) | runtime contract, frontier and admission equal the snapshot (or a recognized frontier successor) and the frontier is deferred |
 | step 3 | additionally reviewed head and branch | every first-parent commit from the snapshot's reviewed head to the local reviewed head (= branch head) is a Design package snapshot commit of this Change (the message `_commit_design_package_snapshot` writes), and the latest snapshot receipt names the local package |
+| inside step 3 | additionally branch or package-path worktree content | the first-row condition holds, `design_package_snapshot_intent` names the local package with `expected_head` = local reviewed head, and the branch is at that head with changes only in the three package paths, or is its direct child carrying the intent's snapshot message |
 | step 4 | additionally contract, admission, frontier | the pending marker matches the local frontier; the history entry keyed by the snapshot's contract digest and the marker's base frontier digest holds the snapshot's contract, admission and (normalized) frontier; the step-3 condition holds |
 
 Anything else still fails closed as today.
@@ -152,15 +160,20 @@ blanket carried request with replanning, and §1.6 keeps the confirmations that 
 
 - **Unchanged:** binding kept byte-identical, with its results and requests. Results that cover a changed
   criterion simply stop covering it (P3).
-- **Changed or dependent:** a Planning binding. What it keeps depends on [U1](#u1--evidence-inside-a-replanned-outcome):
-  - Retained in every option: resolved scoped requests (`retained_requests`) whose `applies_to.acceptance`
-    names only current `(id, version)` pairs; a `return_context` (target Planning, reason "requirement
-    revision", locators = changed `AC-NNN` IDs, `source_boundary` = new contract digest) so the Planner sees
-    what changed. Requests naming a changed version are dropped; the Builder raises a new scoped request.
-  - U1 (b) adds: completed tasks whose `commitment_ids` are still in the revised outcome, and their results,
-    minus any task depending on a dropped one. Planning promotion must keep completed tasks byte-identical
-    and add at least one task; `_validate_plan` applies this to every binding with results (today only the
-    handoff route checks it).
+- **Changed or dependent:** a Planning binding (D13) that keeps:
+  - completed tasks whose `commitment_ids` are all still in the revised outcome, and their results, minus
+    any task depending on a dropped one;
+  - every request `retained_requests` keeps, whole. `request_applies` already accepts a confirmation only
+    for observations whose covered `(id, version)` pairs it names, so a mixed-scope confirmation keeps
+    covering an unchanged criterion while a revised one needs a new confirmation;
+  - a `return_context` (target Planning, reason "requirement revision", locators = changed `AC-NNN` IDs,
+    `source_boundary` = new contract digest, `preserved_commit` of a released Design return, §1.7).
+
+Planning promotion reuses the return-to-Planning rule: `_validate_plan` applies the completed-task check of
+`_validate_planner_return_plan` (completed definitions present and byte-identical) to every binding with
+results; the original-task checks stay on the handoff route. No new task is required: `_advance` makes the
+binding Completed when every promoted task already has a result (a removal-only revision whose remaining
+criteria are covered).
 
 Finalization coverage, the finalization context and the projection then follow N03 unchanged.
 
@@ -188,12 +201,20 @@ Order:
 4. One transaction: frontier (binding released; pending publication marker) and coordination (`writer` and
    `builder_handoff` cleared).
 
-Replay: the refs are create-or-equal; step 3 runs only when the worktree matches the captured state or is
-already clean at the reviewed head. Startup recognizes the state between steps 3 and 4: in
-`_validate_local_builder_handoff_workspace`, a Design-route handoff whose attempt ref equals
-`context.branch_head`, whose quarantine refs exist when the fingerprint recorded uncommitted content, and
-whose worktree is clean at `last_reviewed_commit`. The readiness prompt in `_design_attention_prompt` drops
-the "re-admission is unavailable" text and points to the §1.1 route.
+Replay: the refs are create-or-equal. Once the quarantine receipt exists, step 1 is skipped
+(`_capture_builder_handoff_metadata` refuses a quarantine receipt) and the existing preservation owner
+recognizes the captured state: `_prepare_dirty_worktree_quarantine` (existing-receipt path),
+`_quarantine_base_matches_current` (branch at the reviewed head, attempt ref at the base) and
+`_verify_worktree_matches_quarantine` (remaining paths a subset of the captured ones, with captured bytes).
+Step 3 then repeats `reset --hard` and `clean -fd`, so a crash after capture, after the reset or before step
+4 resumes; content not in the capture refuses `design-return-workspace-changed`. The receipt stays until the
+next acquisition clears it, as after a claim-held quarantine. Startup recognizes every state from capture to
+step 4: in `_validate_local_builder_handoff_workspace`, a Design-route handoff whose attempt ref equals
+`context.branch_head`, whose quarantine refs and receipt exist when the fingerprint recorded uncommitted
+content, and whose worktree still matches the handoff metadata or passes the quarantine check above at
+`last_reviewed_commit`. The released `return_context.preserved_commit` is carried into the revised binding
+(§1.6). The readiness prompt in `_design_attention_prompt` drops the "re-admission is unavailable" text and
+points to the §1.1 route.
 
 ### 1.8 Change requirements control (N04-C)
 
@@ -218,37 +239,26 @@ Settled by the planner (2026-10-04), each with one defensible answer in the oper
 - **D5 Finalized Changes reopen first.** `prepare_review_repair` (existing) returns the PR to draft and
   invalidates finalization; then Pause and revise. Activation clears that invalidation (#213).
 - **D6 Publish before, mark after.** Activation requires the current state published and leaves one pending
-  marker, so startup needs exactly the three predicates of §1.5.
+  marker, so startup needs exactly the predicates of §1.5.
 - **D7 Snapshot from the reviewed head, before the transaction** (P2), so the Change never runs under the
   new authority with the old branch package.
-- **D8 Confirmations kept by version** (N03 §1.9); no other request survives into a replanned outcome.
+- **D8 Confirmations kept whole** (N03 §1.9). A resolved scoped request survives a revision unchanged; the
+  evaluator applies it only to the criterion versions it names. No other request survives into a
+  replanned outcome.
 - **D9 Remove the carried-forward gate** (§1.5 Removed); programme §8.4.
 - **D10 Release, then readmit** (§1.7). Reuses the attempt ref and quarantine owners; the index tree ref
   keeps staged content that differs from the worktree. The alternative of carrying the handoff into the
   revised outcome would run new authority on an unreviewed branch.
-- **D11 No persisted format change.** Only existing record shapes and refs are written; the new history key
-  names a directory for new entries and leaves old ones untouched. LC load form for A and B. A phase that
-  finds a format change necessary stops for a plan revision (N02 migration contract).
+- **D11 Record schemas unchanged; persisted path layout extended.** Only existing record shapes and refs
+  are written; new history entries use the `<contract digest>-<frontier digest>` key, which state-format
+  classification and offline diagnostics recognize beside the old digest key; old entries stay untouched.
+  No migration; LC load form for A and B. A phase that finds a schema change or migration necessary stops
+  for a plan revision (N02 migration contract).
 - **D12 Copy control, no new MCP tool** (§1.8).
-
-Open user decisions:
-
-#### U1 — Evidence inside a replanned outcome
-
-- **When:** every requirement change that edits a criterion of an outcome that already has completed tasks,
-  likely the common case.
-- **Status quo and problem:** revision resets a changed outcome to an empty binding, so its completed tasks
-  and their machine evidence disappear, including evidence for criteria of that outcome that did not change.
-  The re-scoped N04 says such evidence still covers.
-- **(a) Reset the outcome.** Keep only confirmations (§1.6). Pro: smallest code; the Planner plans the
-  outcome from scratch. Con: finished work is planned and proven again; contradicts "evidence still covers"
-  for siblings of a changed criterion. Risk: low.
-- **(b) Keep completed work and replan the delta.** Keep completed tasks and results whose commitments
-  survive; the Planner adds tasks for what changed (the rule that a return to Planning already follows).
-  Pro: no repeated work; matches R5 literally. Con: more code in `_delivery_frontier` and `_validate_plan`;
-  completed task text written for the old requirement stays as history, and the finalization reviewer judges
-  whether carried evidence still applies (N03 §1.6). Risk: medium.
-- **Recommendation: (b).** Needed before N04-A starts.
+- **D13 A replanned outcome keeps its completed work** (former U1; lead decision 2026-10-04, option (b)).
+  Completed tasks and results whose commitments still exist survive, and the Planner plans only the delta,
+  as a return to Planning already does (§1.6). Reason: execution plan §5 N04 requires that observations
+  covering unchanged criteria still count; resetting the outcome would discard them.
 
 ## 2. Feasibility Probes
 
@@ -272,17 +282,20 @@ fixed (execution plan §1.6). Durable tests are the scenarios below, no more.
 
 ### 3.1 N04-A — Revision activation
 
-- **Prerequisites:** N04-P, N03-C; [U1](#u1--evidence-inside-a-replanned-outcome) answered.
+- **Prerequisites:** N04-P, N03-C.
 - **Editable paths:** `delivery_admission.py` (`DeliveryAuthorityRegistry.admit`, `_delivery_frontier`,
   `_delivery_participants`, replay recognition; remove `_carry_forward_unresolved_binding` and
   `preserve_unresolved_outcome_ids`); `portfolio_application.py` (`revise_design_session`,
   `_admitted_design_revision_allowed`, `admit_delivery_change`); `workspace_snapshots.py`
-  (`_replace_design_package_snapshot`); `delivery_runtime.py` (shared checkpoint-queue function);
-  `runtime_reads.py` (`_validate_plan`, U1 (b) only);
+  (`_replace_design_package_snapshot`, `_commit_design_package_snapshot` interrupted-staging replay);
+  `delivery_runtime.py` (shared checkpoint-queue function); `runtime_reads.py` (`_validate_plan`,
+  `_validate_planner_return_plan`, `_advance`); `state_formats.py` (`revision_record` pattern);
+  `serve/tools/src/owlbear_tools/delivery_diagnostics.py` (`revisions` layout entry);
   `delivery_application_loader.py` (`_validate_local_snapshot` predicates); `delivery-mcp` `target_server.py`
   and `target_models.py` (error mapping, removed field); `owlbear_delivery/__init__.py` and
   `module_surface.json` if exports change; tests in `test_source_bound_admission.py`,
-  `test_portfolio_application.py`, `test_delivery_state.py` (loader), `test_target_server.py`;
+  `test_portfolio_application.py`, `test_delivery_state.py` (loader), `test_target_server.py`,
+  `test_state_formats.py` and `serve/tools/tests/test_delivery_diagnostics.py` (new history key);
   `share/skills/w-design-session/SKILL.md` (revision procedure: Pause, wait, revise, delta, approval,
   `admit_change`, report; remove "do not revise the admitted package in place"),
   `tests/test_agent_ecosystem_validation.py` if it pins that text; `serve/delivery/README.md`; this plan's
@@ -291,14 +304,21 @@ fixed (execution plan §1.6). Durable tests are the scenarios below, no more.
   does not cover admission, add it. No new readiness reason.
 - **Positive scenarios:**
   - Paused Change with one promoted task and one unchanged outcome: revise one criterion, activate. The
-    unchanged binding is byte-identical, the changed outcome is Planning (per U1), the snapshot commit is a
-    child of the reviewed head, publication history and target-sync receipt are kept, the deferral is gone,
-    one pending marker exists; the Planner is acquirable.
+    unchanged binding is byte-identical, the changed outcome is Planning with its surviving completed task
+    and result, the snapshot commit is a child of the reviewed head, publication history and target-sync
+    receipt are kept, the deferral is gone, one pending marker exists; the Planner is acquirable.
   - Evidence: an observation covering the unchanged `AC-001` still covers it; the changed `AC-002` is
-    uncovered; a retained confirmation for `AC-001` satisfies a new human-confirmed observation; the one for
-    `AC-002` is gone.
-  - Crash injection after step 2, after step 3 and after step 4: restart loads the Change as available;
-    replaying the same `admit_change` request finishes with one snapshot commit and `replayed: true`.
+    uncovered; one resolved confirmation scoped to `AC-001` and `AC-002` survives the revision, keeps
+    `AC-001` covered, and revised `AC-002` needs a new confirmation.
+  - Replanning: completed definitions and results survive Planning promotion; a plan that alters or
+    removes a completed task is refused; a completed task whose commitment was removed is dropped with its
+    dependents; a removal-only revision whose remaining criteria are covered completes the outcome at
+    promotion without fresh proof.
+  - Crash injection after step 2, inside step 3 (package files staged; snapshot committed before its
+    receipt), after step 3 and after step 4: the default loader loads the Change; replaying the original
+    `admit_change` request finishes with one snapshot commit and `replayed: true`.
+  - Revise, cancel, revise again: two history entries under the new key; state-format classification and
+    offline diagnostics accept them beside an old-key entry.
   - Finalized Change: `prepare_review_repair`, Pause, revise, activate; finalization and the invalidation are
     gone.
 - **Negative scenarios:** not paused; Pause request pending; active claim; ready PR or finalization
@@ -328,10 +348,13 @@ fixed (execution plan §1.6). Durable tests are the scenarios below, no more.
   - The `_return_builder` fixture (committed, staged, unstaged and untracked bytes) returns to Design;
     Pause; revise; the release preserves the head and the quarantine and index trees, the worktree is clean
     at the reviewed head, custody is released and published; activation then succeeds and the Planner sees
-    `preserved_commit`. Restoring from the refs reproduces every byte, including the staged one.
-  - Crash after step 3: restart loads the Change; the next `revise_design_session` finishes the release.
-- **Negative scenarios:** worktree changed since the handoff; unmerged index; a same-task or Planning-route
-  handoff (`custody-retained` at activation).
+    `preserved_commit` in the revised binding. Restoring from the refs reproduces every byte, including the
+    staged one.
+  - Interruption after capture, after `reset --hard` (before `clean -fd`) and before the release
+    transaction: restart loads the Change; the next `revise_design_session` finishes the release; restoring
+    from the refs reproduces distinct staged, unstaged and untracked bytes.
+- **Negative scenarios:** worktree changed since the handoff; a file added after capture; unmerged index; a
+  same-task or Planning-route handoff (`custody-retained` at activation).
 - **Inner loop:** the new readmission test, then `-k "design_return or quarantine or restart"`.
 - **Closeout:** as N04-A; LC load form.
 - **Size / risk:** M / high.
@@ -357,7 +380,7 @@ fixed (execution plan §1.6). Durable tests are the scenarios below, no more.
 
 | Phase | PR | Head | Proof | Challenge | Status |
 | --- | --- | --- | --- | --- | --- |
-| N04-P | #369 | `31dd70bd6` | Probes P1–P6; docs only; markdownlint 0 issues | Lead runs the plan gate | in review |
+| N04-P | #369 | revision of `f4303e9d3` | Probes P1–P6; docs only; markdownlint 0 issues | Sol round 1 `revision-required`, all lead-dispositioned fix-now and applied: F1 snapshot crash inside step 3 recognized and replayed (§1.5); F2 partial release resumed through the quarantine owner, `preserved_commit` carried (§1.7); F3 confirmations kept whole, evaluator scopes them (§1.6, D8); F4 completed-work preservation and zero-delta completion via the return-to-Planning rule (§1.6); F5 new history key recognized, D11 reworded. U1 settled by the lead as D13 | in review |
 | N04-A | — | — | — | — | — |
 | N04-B | — | — | — | — | — |
 | N04-C | — | — | — | — | — |
@@ -366,7 +389,7 @@ fixed (execution plan §1.6). Durable tests are the scenarios below, no more.
 
 | ID | Claim | Why unproven | Evidence now | Owner | Blocks |
 | --- | --- | --- | --- | --- | --- |
-| G1 | The three startup predicates (§1.5) accept every intermediate state and nothing else | Not built; P5 is a source read | Loader comparisons on `d0223e0a1` | N04-A crash-injection tests | N04-A merge |
+| G1 | The startup predicates (§1.5), including the interrupted-snapshot row, accept every intermediate state and nothing else | Not built; P5 is a source read | Loader comparisons on `d0223e0a1` | N04-A crash-injection tests | N04-A merge |
 | G2 | `_publish_package_contract` changes the package ID the loader compares | Not probed; the predicate for step 2 covers either answer | `DesignPackageStore.revise` clears generated authority | N04-A first check | N04-A merge |
 | G3 | The released Design return publishes as a portable state accepted by the remote snapshot comparison | Not built | `settle_builder_invocation` portability rule; P6 | N04-B | N04-B merge |
 | G4 | A real Designer chat follows the revised `w-design-session` route | No host run | Skill text only | N10-H host journey | N10 only |
