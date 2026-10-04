@@ -319,9 +319,9 @@ Agent-settled with probe evidence:
   an engine operation through the provider with a hidden per-reply marker. Reply writes are
   serialized per handoff under one mutation-fence entry (1.12) and run through the release-gated
   launcher (D16): frozen body before spawn, group record, then release record. Settlement follows rows
-  Y1–Y4 of [1.11](#111-effect-settlement-contract): transport closure and marker-negative reads
-  never prove non-execution, so an `unknown` reply is never reposted automatically (G12, G13). A
-  user `repost` persists its replacement `reply_id` before any transport; a replay resumes it.
+  Y1–Y4 of [1.11](#111-effect-settlement-contract). An `unknown` reply (Y4) is reposted once with the
+  same marker after transport closure and a marker-negative read; the worst case is one duplicate
+  comment, which is visible and harmless in the operating context. No user decision is involved.
   External comments stay evidence, never Design or Delivery authority.
 - **D14 Merge approval in Cockpit** (2026-10-04; replaces PR #360's elicitation and consent records).
   In the execution plan's operating context agents are trusted but fallible, so the guard is that their
@@ -329,8 +329,7 @@ Agent-settled with probe evidence:
   offer and points to Cockpit. The user approves in Cockpit's **Approve merge** dialog; the approval is
   recorded with the dialog's `submission_id` and provenance as today. Under the fence entry (1.12) the
   owner re-verifies the fresh offer's `offer_id` the user saw (else `ERR_DELIVERY_MERGE_OFFER_STALE`). No
-  Origin or cookie hardening and no OS presence check. A Y4 reply decision is an ordinary Decision
-  Request on the Change (1.11).
+  Origin or cookie hardening and no OS presence check.
 - **D15 No time expiry.** Approvals do not expire by time; I1 re-verifies every fact at execution.
 - **D16 EOF-safe effect entry.** `gh api --input -` passes stdin to `client.Do` unbuffered
   (v2.65.0 `api.go` `openUserFile`, `http.go`), so a dead controller's closed stdin can send an
@@ -489,7 +488,8 @@ it (exempt from I11).
 - After possible submission, a terminal state needs independently sufficient provider evidence of
   merge, refusal or cancellation. Expiry, absence, timeouts and transport closure are not evidence.
 - Merge may re-request (M8): GitHub returns the live pending request on `409` and a PR merges at
-  most once. A reply has no provider de-duplication, so a re-post needs a user decision (Y4).
+  most once. A reply has no provider de-duplication; an unknown reply is reposted once (Y4), accepting
+  a possible duplicate comment.
 - A merge attempt is one request series: its first request and every M8 re-request are
   submissions under one approval, each with its own group record, response and UUID, if any. A
   submission answered `409` and adopted shares the adopted UUID's result.
@@ -526,36 +526,26 @@ it (exempt from I11).
 | Y1 | Reply | No release record (a group may be recorded; D16) | No possible submission; stays `intent` | Post after a marker read |
 | Y2 | Reply | Hidden marker found in a viewer reply on the thread | `posted` | Thread may be resolved |
 | Y3 | Reply | Complete provider rejection of this write: HTTP `4xx` error body, or GraphQL `errors` with null `data` (G13) | `not-posted` | Post again with the same marker after a marker read |
-| Y4 | Reply | Anything else after the release record: timeout, signal, `5xx`, unreadable output, controller death; transport open or closed; any number of marker-negative reads | `unknown` (contained) | Never reposted automatically; thread stays unresolved; a recorded user decision (below; duplicate risk shown); a later marker hit settles Y2 |
+| Y4 | Reply | Anything else after the release record: timeout, signal, `5xx`, unreadable output, controller death | `unknown` | After transport closure and one marker-negative read, post once more with the same marker; a later marker hit settles Y2. At most one automatic repost per reply |
 
-Y4 user decisions are durable and replay-safe:
-
-- Each decision is the user's answer to one Decision Request on the Change (D14), cited by its
-  `request_id`. The decision identity is SHA-256 of handoff ID, original `reply_id`, decision
-  and `request_id`.
-- `repost`: before any transport, a CAS revision of the original's receipt records the decision
-  and its replacement `reply_id` (SHA-256 of the decision identity). The replacement starts at Y1.
-- Replaying an accepted decision resumes that replacement through Y1–Y4, marker read first; it
-  never mints another. A different decision for an already decided reply is refused with the
-  accepted one.
-- `leave-unposted` is a user disposition, not evidence: the original stays `unknown`, never
-  `not-posted` (Y3 only); posting stops for it; a later marker hit still settles Y2.
+A repost may produce a duplicate comment when the first write landed late. That is visible, harmless
+and accepted under the operating context; it needs no user decision.
 
 Falsifiers: UUID `404` with the PR open and the request merging later stays nonterminal until M2
 (N05-B); original pending, its UUID unavailable, re-request `422`, original merges later →
 nonterminal and fenced until M2 (N05-B); original pending at head A, transport closed, head A→B →
 nonterminal and fenced; head back to A, original executes → M2, fence never released before
-(N05-B); a reply effect delayed past transport closure and two marker-negative reads is never
-reposted (N05-D); `repost` accepted, replacement sent, crash before return, identical decision
-replayed → one replacement identity, settled by marker read (N05-D).
+(N05-B); a reply effect delayed past transport closure and a marker-negative read is reposted
+exactly once and never again (N05-D); crash after the repost, replay → marker read, no third post
+(N05-D).
 
 EOF falsifier (G12; N05-A launcher, N05-B and N05-D controller): real `gh` against a local HTTP
 recorder, on macOS and Ubuntu. Controller death right after spawn or after the group record, with no
 release record → no request recorded; M1 or Y1. Death after the durable release record, including
 before or during token delivery (empty or truncated token) or with a truncated body file → at most
 one request, byte-equal to the frozen body (`sha`, `merge_method`, `merge_action`, `bypass_rules`),
-and settlement stays nonterminal: merge M6–M9 until M2–M5 evidence, reply Y4 without automatic
-repost, even when the recorder log is empty. Only the absence of a release record permits M1 or Y1.
+and settlement stays nonterminal: merge M6–M9 until M2–M5 evidence; a reply follows Y4,
+even when the recorder log is empty. Only the absence of a release record permits M1 or Y1.
 Engine merge and engine replies are offered only after it passes on both platforms.
 
 ### 1.12 Mutation-fence lock entry
@@ -1099,10 +1089,8 @@ open.
     "run `start` again at the current head" (already fixed findings become `stale` with evidence).
   - `post_review_feedback_replies` requires `resume`'s checks and posts each reply under D13 custody
     with a hidden marker `<!-- owlbear-reply:<reply_id> -->`; before posting and after any unknown
-    response it reads the thread's comments by the viewer and settles by 1.11 rows Y1–Y4. An
-    `unknown` reply blocks posting on its thread until a marker hit or a Y4 user decision, asked as one
-    Decision Request on the Change (D14) and recorded and replayed under the 1.11 Y4
-    decision rules. It resolves a thread
+    response it reads the thread's comments by the viewer and settles by 1.11 rows Y1–Y4; an `unknown`
+    reply is reposted once with its marker (Y4). It resolves a thread
     only after its reply is recorded; failures leave the thread unresolved with the exact provider
     code.
 - **Positive scenarios:** fresh-session `resume` recovers classifications and repair map without chat
@@ -1113,16 +1101,11 @@ open.
   and before the release record → no reply sent, stays `intent` (Y1), one later post (1.11 EOF
   falsifier); fresh finalization with one
   unmapped `fix` thread → `…_INCOMPLETE` before any reply; provider effect delayed past transport
-  closure and two marker-negative reads → `unknown`, no repost, then the delayed reply → `posted`;
+  closure and a marker-negative read → `unknown`, one repost, then the delayed reply → `posted`;
   timeout or `5xx` → `unknown`, never `not-posted`; GraphQL `errors` with null `data` → `not-posted`,
-  one later post; user `repost` (answered Decision Request, D14) → one replacement with a new marker;
-  `repost` accepted,
-  replacement sent, crash before return, identical decision replayed → one replacement identity,
-  marker read, no second post; a later call naming that reply asks nothing and returns the accepted
-  decision; a concurrent different answer → refused with the accepted
-  one (`ERR_DELIVERY_REVIEW_REPLY_DECIDED`);
-  `leave-unposted` → disposition recorded, evidence
-  stays `unknown`, never `not-posted`, a later marker hit → `posted`; repaired thread not repaired
+  one later post; `unknown` after transport closure and a marker-negative read → exactly one repost with
+  the same marker, then a late original → both comments visible, reply `posted`, no further post;
+  repaired thread not repaired
   twice after restart (repair commit already recorded); reply response lost → marker found →
   no duplicate; reply posted but resolve fails → thread unresolved, repair evidence intact; external
   comment text never changes Delivery authority.
