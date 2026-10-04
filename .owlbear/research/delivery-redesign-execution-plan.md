@@ -620,7 +620,7 @@ every new item exactly one lane.
 | N02-A | merged | #348 (code head `f225ad508`; Sol `implementation-sound` round 3; LC load form pass) |
 | N02-B | merged | #352 (code head `7500600c7`; Sol `implementation-sound` round 5; full LC pass) |
 | N02-C | — | — |
-| N02-D | — | — |
+| N02-D | in review | #362 (code head `8744795ae`; Sol implementation round 1 `repair-required` (4 findings + interpreter identity) → repaired; LC full form and the N02-C → N02-D upgrade rehearsal pass on `8744795ae`; host rehearsal G3 is a pre-H activation gate (N02 plan amendment 2026-10-04), so G3, the D03 → N02-D rehearsal for the merged head and the live H step stay pending with the user; freeze continues until the H step) |
 | N03-P | merged | #349 (plan gate `plan-sound`, round 6; D11 confirmed 2026-10-03; U1 decided (b) by the user 2026-10-03; #360 adds the confirmation boundary D13 with legacy and modern elicitation routes and opens U2, covering Cockpit merge approval and retirement, before N03-C and N05-C; #360 round 4 adds the shared single-use consent generation `consent_generation` (D13, I11) used by N03, N04, N05 and N06, so N05-B also needs N03-A) |
 | N03-A | in review | #363 (code head `8e2faf3cd`; Sol implementation round 1 `repair-required` repaired: a lifecycle or custody re-check that refuses an accepted answer now consumes its generation as `refused`, format-0 proposals run `format-0-to-1` then `format-1-to-2`, and finalization semantics list every ledger confirmation an exact-head record can cite; the ready-readback recovery variant and the anchored-lifecycle ledger tamper now have assembled proof; LC full form re-run on the code head; format marker 2 taken first, §4.2) |
 | N03-B | — | — |

@@ -533,6 +533,40 @@ def test_release_stuck_worker_prompt_has_minimal_allowlist() -> None:
     assert _PROMPT_VALIDATOR.validate_prompt(path) == []
 
 
+def test_upgrade_delivery_prompt_follows_the_rehearsed_upgrade_procedure() -> None:
+    path = _PROMPTS_ROOT / "upgrade-delivery.prompt.md"
+    metadata = _frontmatter(path)
+    prompt = " ".join(path.read_text(encoding="utf-8").split())
+
+    assert metadata["agent"] == "agent"
+    assert metadata["tools"] == [
+        "execute/runInTerminal",
+        "owlbear-delivery/delivery_health",
+        "owlbear-delivery/list_changes",
+        "owlbear-delivery/get_change",
+        "vscode/askQuestions",
+    ]
+    assert _PROMPT_VALIDATOR.validate_prompt(path) == []
+    steps = (
+        "install <revision>",
+        "preflight",
+        "backup --destination",
+        "delivery-migrate",
+        "switch <new commit>",
+        "<root> verify",
+        "<root> prune",
+        "ask the user to start `owlbear-delivery`",
+        "`delivery_health`, which must be `healthy`",
+    )
+    positions = [prompt.index(step) for step in steps]
+    assert positions == sorted(positions)
+    assert "Do not stop or kill processes yourself" in prompt
+    assert "previous release's own gate accepts the migrated state" in prompt
+    assert "Restoring the step-5 backup is the user's decision" in prompt
+    assert "never run checkout code" in prompt
+    assert "upgrade-delivery" in (_REPO_ROOT / "share/WIRING.md").read_text(encoding="utf-8")
+
+
 def test_prompt_validator_rejects_inspect_change_allowlist_drift(tmp_path: Path) -> None:
     path = _write_prompt(
         tmp_path / "prompts",

@@ -872,3 +872,146 @@ def test_inspector_must_agree_with_the_gate_and_the_load(
     inspection: dict[str, object], gate: list[list[str]], load: dict[str, object], *, agrees: bool
 ) -> None:
     assert delivery_lc.inspector_agrees(inspection, gate, load) is agrees
+
+
+# ---------------------------------------------------------------------------
+# N02-D: pin-state capture and the upgrade rehearsal verdict
+# ---------------------------------------------------------------------------
+
+
+def _pinned(live: Path) -> None:
+    controller = live / ".owlbear/controller"
+    (controller / "bin").mkdir(parents=True)
+    (controller / "pin.json").write_text('{"schema_version": 1, "commit": "' + "a" * 40 + '"}\n', encoding="utf-8")
+    (controller / "bin/delivery-mcp").write_text("#!/bin/sh\nexec release\n", encoding="utf-8")
+    release = controller / "releases" / ("a" * 40)
+    (release / ".venv").mkdir(parents=True)
+    (release / "RELEASE.json").write_text('{"commit": "' + "a" * 40 + '"}\n', encoding="utf-8")
+    (live / ".vscode").mkdir()
+    (live / ".vscode/mcp.json").write_text('{"servers": {}}\n', encoding="utf-8")
+
+
+def test_prepare_copies_pin_state_without_release_trees_and_compare_covers_it(tmp_path: Path) -> None:
+    live = _live(tmp_path)
+    _pinned(live)
+    stage = tmp_path / "stage"
+
+    delivery_lc.prepare(live, stage)
+
+    root, control = stage / "root/.owlbear/controller", stage / "control"
+    assert (root / "pin.json").read_bytes() == (live / ".owlbear/controller/pin.json").read_bytes()
+    assert (root / "bin/delivery-mcp").is_file()
+    assert not (root / "releases").exists()
+    assert (control / "controller/releases" / ("a" * 40) / "RELEASE.json").is_file()
+    assert (control / "mcp.json").is_file()
+    assert {"controller/pin.json", "controller/bin/delivery-mcp"} <= set(delivery_lc.record_hashes(live))
+    (live / ".owlbear/controller/pin.json").write_text("{}\n", encoding="utf-8")
+    assert delivery_lc.compare(live, stage)["changed"] == ["controller/pin.json"]
+
+
+def test_upgrade_form_needs_a_previous_release_and_prebuilt_bundles(tmp_path: Path) -> None:
+    base = ["run", "--stage", str(tmp_path), "--live", str(tmp_path), "--candidate", "c" * 40, "--form", "upgrade"]
+
+    assert delivery_lc._run_command(delivery_lc._parser().parse_args(base), tmp_path)[0] == 2  # noqa: SLF001
+    with_previous = delivery_lc._parser().parse_args([*base, "--previous", "p" * 40])  # noqa: SLF001
+    assert delivery_lc._run_command(with_previous, tmp_path) == (  # noqa: SLF001
+        2,
+        {"error": "the upgrade form needs --bundles with the candidate's (and a gated previous) bundle"},
+    )
+
+
+def test_readiness_blockers_name_running_and_interrupted_custody_only() -> None:
+    views = {
+        "a": {"kind": "change", "outcomes": [{"readiness": {"state": "running", "reason_code": "claim-active"}}]},
+        "b": {"finalization": {"readiness": {"state": "blocked", "reason_code": "engine-action-interrupted"}}},
+        "c": {"readiness": {"state": "ready", "reason_code": "plan-ready"}},
+        "d": [{"readiness": {"state": "attention", "reason_code": "engine-action-failed"}}],
+    }
+
+    assert delivery_lc.readiness_blockers(views) == ["claim-active", "engine-action-interrupted"]
+
+
+def _session(**overrides: object) -> dict[str, object]:
+    return {"started": True, "health_status": "healthy", "unavailable": [], "blockers": [], **overrides}
+
+
+def _upgrade_report(*, gated: bool, **overrides: object) -> dict[str, Any]:
+    report: dict[str, Any] = {
+        "previous_controller": {"gated": gated, "online": _session(), "release": {"supported_format": 2}},
+        "candidate_release": {"installed": True, "supported_format": 2},
+        "offline_preflight": {"exit": 0, "ready": True, "blockers": []},
+        "backup": {"exit": 0},
+        "migration": {"required": True, "verified": True, "proposal": {"entries": [{"locator": FORMAT_MARKER}]}},
+        "changed_records": [FORMAT_MARKER],
+        "switch": {"exit": 0},
+        "mcp_json_names_launcher": True,
+        "first_start": _session(),
+        "second_start": _session(),
+        "round_trip_unchanged": True,
+        "cockpit": {"work_items_status": 200, "index_matches_release": True},
+        "checkout_controller": {"loaded": False, "code": "controller-not-pinned"},
+        "verify": {"exit": 0},
+        "rollback": {"exit": 0} if gated else {"exit": 1, "code": "release-invalid"},
+    }
+    if gated:
+        report["rollback_start"] = _session()
+    return {**report, **overrides}
+
+
+# A gated previous release whose format is older than the migrated state's must refuse the switch back (D3).
+_older_previous = {"gated": True, "online": _session(), "release": {"supported_format": 1}}
+_refused = {"exit": 1, "code": "release-refuses-state"}
+
+
+@pytest.mark.parametrize(
+    ("report", "passed"),
+    [
+        (_upgrade_report(gated=False), True),
+        (_upgrade_report(gated=True), True),
+        (_upgrade_report(gated=True, migration={"required": False, "proposal": {}}, changed_records=[]), True),
+        (_upgrade_report(gated=False, previous_controller={"gated": False, "online": _session(blockers=["x"])}), False),
+        (_upgrade_report(gated=False, offline_preflight={"exit": 1, "blockers": [{"code": "claim-running"}]}), False),
+        (_upgrade_report(gated=False, changed_records=[FORMAT_MARKER, "runtime/changes/a/frontier.json"]), False),
+        (_upgrade_report(gated=False, first_start=_session(unavailable=["a"])), False),
+        (_upgrade_report(gated=False, round_trip_unchanged=False), False),
+        (_upgrade_report(gated=False, cockpit={"work_items_status": 200, "index_matches_release": False}), False),
+        (_upgrade_report(gated=False, checkout_controller={"loaded": True}), False),
+        (_upgrade_report(gated=False, rollback={"exit": 0}), False),
+        (_upgrade_report(gated=True, rollback={"exit": 1, "code": "release-refuses-state"}), False),
+        (_upgrade_report(gated=True, previous_controller=_older_previous, rollback=_refused), True),
+        (_upgrade_report(gated=True, previous_controller=_older_previous), False),
+        (_upgrade_report(gated=True, rollback_start=_session(unavailable=["a"])), False),
+        (_upgrade_report(gated=False, first_start=_session(health_status="degraded")), False),
+        (_upgrade_report(gated=False, second_start=_session(health_status="degraded")), False),
+        (_upgrade_report(gated=False, first_start=_session(health_status=None)), False),
+        (_upgrade_report(gated=True, rollback_start=_session(health_status="degraded")), False),
+        (
+            _upgrade_report(gated=False, previous_controller={"gated": False, "online": _session(health_status="x")}),
+            False,
+        ),
+    ],
+    ids=[
+        "first-upgrade",
+        "gated-rollback",
+        "no-migration-needed",
+        "online-blocker",
+        "offline-blocker",
+        "unproposed-record-changed",
+        "change-unavailable",
+        "round-trip-changed",
+        "foreign-bundle",
+        "checkout-code-started",
+        "ungated-switch-back",
+        "gated-rollback-refused",
+        "older-format-rollback-refused",
+        "older-format-rollback-accepted",
+        "rollback-loses-change",
+        "candidate-unhealthy",
+        "restart-unhealthy",
+        "candidate-health-missing",
+        "rollback-unhealthy",
+        "previous-unhealthy",
+    ],
+)
+def test_upgrade_verdict_requires_every_procedure_step(report: dict[str, Any], *, passed: bool) -> None:
+    assert delivery_lc.upgrade_passed(report) is passed

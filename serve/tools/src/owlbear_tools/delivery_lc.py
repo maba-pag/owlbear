@@ -40,6 +40,9 @@ LAUNCH_REPORT = "launch.json"
 CA_BUNDLE = "ca-bundle.crt"
 DEFAULT_IMAGE = "ubuntu:24.04"
 _FORMAT_MARKER = "runtime/format.json"
+_CONTROLLER = ".owlbear/controller"
+_RELEASE_DESCRIPTOR = "RELEASE.json"
+_FORMS = ("load", "full", "upgrade")
 _RECORD_ROOTS = ("config.json", "runtime", "packages")
 _COPY_EXCLUDES = (".venv", "node_modules", "dist", "__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache")
 _PREVIOUS_GATE = "serve/delivery/src/owlbear_delivery/state_formats.py"
@@ -87,7 +90,10 @@ def _sha256(path: Path) -> str:
 
 
 def record_hashes(live: Path) -> dict[str, str]:
-    """Hash live Delivery records (config, runtime, packages) without following links or worktrees."""
+    """Hash live Delivery records (config, runtime, packages) and controller pin state without following links.
+
+    Controller entries (``pin.json``, launchers and each release's ``RELEASE.json``) are keyed ``controller/...``.
+    """
     delivery = live / ".owlbear/delivery"
     hashes: dict[str, str] = {}
     for name in _RECORD_ROOTS:
@@ -96,11 +102,37 @@ def record_hashes(live: Path) -> dict[str, str]:
         for path in paths:
             locator = path.relative_to(delivery).as_posix()
             hashes[locator] = f"symlink:{path.readlink()}" if path.is_symlink() else _sha256(path)
+    for path in _controller_state_files(live):
+        locator = path.relative_to(live / ".owlbear").as_posix()
+        hashes[locator] = f"symlink:{path.readlink()}" if path.is_symlink() else _sha256(path)
     return hashes
+
+
+def _controller_state_files(live: Path) -> list[Path]:
+    """Pin state that an upgrade rehearsal must reproduce: the pin, launchers and release descriptors."""
+    controller = live / _CONTROLLER
+    files = [controller / "pin.json", *sorted((controller / "bin").glob("*"))]
+    files += sorted((controller / "releases").glob(f"*/{_RELEASE_DESCRIPTOR}"))
+    return [path for path in files if path.is_file() or path.is_symlink()]
 
 
 def _copy_tree(source: Path, destination: Path) -> None:
     shutil.copytree(source, destination, symlinks=True, ignore=shutil.ignore_patterns(*_COPY_EXCLUDES))
+
+
+def _copy_pin_state(live: Path, root: Path, control: Path) -> None:
+    """Copy the pin and launchers into the copy and release descriptors and ``mcp.json`` beside it.
+
+    Release trees are platform-specific and never copied; ``run`` rebuilds them from their commits.
+    """
+    controller = live / _CONTROLLER
+    for path in _controller_state_files(live):
+        relative = path.relative_to(controller)
+        target = (control / "controller" if relative.parts[0] == "releases" else root / _CONTROLLER) / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, target, follow_symlinks=False)
+    if (live / ".vscode/mcp.json").is_file():
+        shutil.copy2(live / ".vscode/mcp.json", control / "mcp.json")
 
 
 def prepare(live: Path, stage: Path) -> dict[str, object]:
@@ -114,6 +146,7 @@ def prepare(live: Path, stage: Path) -> dict[str, object]:
     control.mkdir()
     _copy_tree(live / ".git", root / ".git")
     _copy_tree(live / ".owlbear/delivery", root / ".owlbear/delivery")
+    _copy_pin_state(live, root, control)
     stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     (root / COPY_MARKER).write_text(f"copy-of-{live} {stamp}\n", encoding="utf-8")
     hashes = record_hashes(live)
@@ -526,11 +559,13 @@ def run(  # noqa: PLR0913 - mirrors docker_command.
     image: str = DEFAULT_IMAGE,
     uv_cache_volume: str | None = None,
     ca_bundle: Path | None = None,
+    bundles: Path | None = None,
     dry_run: bool = False,
 ) -> dict[str, object]:
     """Write the container script, validate the created container's launch provenance and run the LC form.
 
     ``ca_bundle`` (PEM) is appended to the container trust store, for networks that intercept TLS.
+    ``bundles`` holds prebuilt Cockpit bundles as ``<commit>/index.html``; the upgrade form needs them.
     """
     control = stage / "control"
     command = docker_command(stage, live, candidate, form, previous, image=image, uv_cache_volume=uv_cache_volume)
@@ -539,6 +574,9 @@ def run(  # noqa: PLR0913 - mirrors docker_command.
     (control / LAUNCH_REPORT).unlink(missing_ok=True)
     if ca_bundle is not None:
         shutil.copyfile(ca_bundle, control / CA_BUNDLE)
+    if bundles is not None:
+        shutil.rmtree(control / "bundles", ignore_errors=True)
+        shutil.copytree(bundles, control / "bundles")
     if dry_run:
         return {"command": command}
     return _launch(command, control, stage=stage, live=live, uv_cache_volume=uv_cache_volume)
@@ -894,6 +932,324 @@ def _full_form_passed(report: dict[str, Any], proposed: set[str]) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Inside the container: upgrade rehearsal (N02-D procedure on the copy)
+# ---------------------------------------------------------------------------
+
+_GATE_SOURCE = "serve/delivery/src/owlbear_delivery/state_formats.py"
+_HTTP_OK = 200
+_HEALTHY = "healthy"
+_BLOCKING_READINESS = frozenset({"engine-action-interrupted", "worker-stall-wait"})
+_UNGATED_PROBE = """
+import json, sys
+from pathlib import Path
+from owlbear_delivery_mcp.server import load_delivery_application, load_delivery_config
+root = Path(sys.argv[1])
+application = load_delivery_application(load_delivery_config(root / ".owlbear/delivery/config.json"), root)
+views = {change: application.get_change(change).model_dump(mode="json") for change in sys.argv[2:]}
+print(json.dumps({"started": True, "health": application.delivery_health().model_dump(mode="json"), "views": views}))
+"""
+
+
+def readiness_blockers(payload: object) -> list[str]:
+    """Readiness reasons in a controller projection that block an upgrade (running or interrupted custody)."""
+    found: set[str] = set()
+    pending: list[object] = [payload]
+    while pending:
+        value = pending.pop()
+        if isinstance(value, dict):
+            reason = value.get("reason_code")
+            if isinstance(reason, str) and (value.get("state") == "running" or reason in _BLOCKING_READINESS):
+                found.add(reason)
+            pending.extend(value.values())
+        elif isinstance(value, list):
+            pending.extend(value)
+    return sorted(found)
+
+
+def _change_ids(live: Path) -> list[str]:
+    changes = live / ".owlbear/delivery/runtime/changes"
+    return sorted(path.name for path in changes.iterdir() if path.is_dir()) if changes.is_dir() else []
+
+
+def _cli(executable: Path, *arguments: str) -> dict[str, Any]:
+    completed = subprocess.run(  # noqa: S603 - release console scripts with fixed argument vectors.
+        (str(executable), *arguments), check=False, capture_output=True, text=True
+    )
+    try:
+        payload = json.loads(completed.stdout)
+    except ValueError:
+        payload = {"output": completed.stdout[-2000:], "stderr": completed.stderr[-2000:]}
+    return {"exit": completed.returncode, **payload}
+
+
+def _session_summary(views: dict[str, Any], health: object) -> dict[str, Any]:
+    unavailable = sorted(change for change, view in views.items() if view.get("kind") == "unavailable")
+    return {"unavailable": unavailable, "blockers": readiness_blockers([views, health]), "views": views}
+
+
+async def _mcp_calls(command: list[str], live: Path, change_ids: list[str]) -> dict[str, Any]:
+    from mcp import ClientSession, StdioServerParameters  # noqa: PLC0415
+    from mcp.client.stdio import stdio_client  # noqa: PLC0415
+
+    parameters = StdioServerParameters(command=command[0], args=command[1:], cwd=str(live), env=dict(os.environ))
+    async with stdio_client(parameters) as (read, write), ClientSession(read, write) as session:
+        await session.initialize()
+
+        async def call(name: str, arguments: dict[str, str]) -> dict[str, Any]:
+            result = await session.call_tool(name, arguments)
+            return json.loads(result.content[0].text)  # type: ignore[union-attr]
+
+        health = await call("delivery_health", {})
+        views = {change: await call("get_change", {"change_id": change}) for change in change_ids}
+    return {"started": True, "health_status": health.get("status"), **_session_summary(views, health)}
+
+
+def mcp_session(command: list[str], live: Path, change_ids: list[str]) -> dict[str, Any]:
+    """Start one MCP controller over stdio exactly as VS Code would, read health and every Change, stop it."""
+    import asyncio  # noqa: PLC0415
+
+    try:
+        return asyncio.run(asyncio.wait_for(_mcp_calls(command, live, change_ids), 300))
+    except Exception as exc:  # noqa: BLE001 - any startup or protocol failure is the recorded result.
+        return {"started": False, "error": f"{type(exc).__name__}: {exc}"[:2000]}
+
+
+def _ungated_session(live: Path, previous: str, change_ids: list[str]) -> dict[str, Any]:
+    """Step 1 through an ungated (D03) controller run from its commit, as the live checkout runs it."""
+    environment = {key: value for key, value in os.environ.items() if key not in {"VIRTUAL_ENV", "PYTHONPATH"}}
+    with tempfile.TemporaryDirectory() as directory:
+        tree = Path(directory) / "previous"
+        archive = Path(directory) / "previous.tar"
+        subprocess.run(  # noqa: S603 - fixed Git argument vector.
+            ("git", "-C", str(live), "archive", "--format=tar", "-o", str(archive), previous),  # noqa: S607
+            check=True,
+            capture_output=True,
+        )
+        with tarfile.open(archive) as handle:
+            handle.extractall(tree, filter="data")
+        subprocess.run(("uv", "sync", "--locked", "--quiet"), cwd=tree, env=environment, check=True)  # noqa: S607
+        completed = subprocess.run(  # noqa: S603 - the previous interpreter runs a fixed probe.
+            (str(tree / ".venv/bin/python"), "-I", "-c", _UNGATED_PROBE, str(live), *change_ids),
+            env=environment,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    try:
+        probe = json.loads(completed.stdout)
+    except ValueError:
+        return {"started": False, "error": completed.stderr[-2000:]}
+    health = probe["health"]
+    return {"started": True, "health_status": health.get("status"), **_session_summary(probe["views"], health)}
+
+
+def cockpit_check(launcher: Path, live: Path, index: Path) -> dict[str, Any]:
+    """Start Cockpit through its launcher, read ``/api/work-items`` and compare ``/`` with the release bundle."""
+    import socket  # noqa: PLC0415
+    import time  # noqa: PLC0415
+    import urllib.error  # noqa: PLC0415
+    import urllib.request  # noqa: PLC0415
+
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    environment = {**os.environ, "COCKPIT_NO_OPEN": "1", "COCKPIT_PORT": str(port)}
+    process = subprocess.Popen(  # noqa: S603 - the generated release launcher, no arguments.
+        (str(launcher),),
+        cwd=live,
+        env=environment,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+    status, served = None, b""
+    try:
+        deadline = time.monotonic() + 120
+        while status is None and process.poll() is None and time.monotonic() < deadline:
+            try:
+                with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/work-items", timeout=10) as response:
+                    status = response.status
+                with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=10) as response:
+                    served = response.read()
+            except urllib.error.URLError, ConnectionError, TimeoutError:
+                time.sleep(0.5)
+    finally:
+        process.terminate()
+        try:
+            _out, error = process.communicate(timeout=15)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            _out, error = process.communicate()
+    return {
+        "work_items_status": status,
+        "index_matches_release": bool(served) and served == index.read_bytes(),
+        "stderr": error.decode(errors="replace")[-1500:] if status != _HTTP_OK else "",
+    }
+
+
+def _mcp_command(live: Path) -> list[str]:
+    """The tracked ``.vscode/mcp.json`` command for ``owlbear-delivery``, ``${workspaceFolder}`` resolved."""
+    server = json.loads((live / ".vscode/mcp.json").read_text(encoding="utf-8"))["servers"]["owlbear-delivery"]
+    return [part.replace("${workspaceFolder}", str(live)) for part in (server["command"], *server.get("args", []))]
+
+
+def _migrate(release_bin: Path, live: Path) -> dict[str, Any]:
+    proposal = _cli(release_bin / "delivery-migrate", "--project-root", str(live), "propose")
+    if proposal["exit"] != 0:
+        return (
+            {"required": False, "proposal": proposal}
+            if proposal.get("code") == "migration-not-required"
+            else {"required": True, "proposal": proposal, "verified": False}
+        )
+    migration_id = str(proposal["migration_id"])
+    applied = _cli(release_bin / "delivery-migrate", "--project-root", str(live), "apply", migration_id)
+    verified = _cli(release_bin / "delivery-migrate", "--project-root", str(live), "verify", migration_id)
+    return {
+        "required": True,
+        "proposal": proposal,
+        "apply": applied,
+        "verify": verified,
+        "verified": verified.get("status") == "verified",
+    }
+
+
+def _install_release(live: Path, commit: str, control: Path) -> dict[str, Any]:
+    from owlbear_tools import delivery_controller  # noqa: PLC0415
+
+    layout = delivery_controller.Layout(live)
+    try:
+        result = delivery_controller.install(layout, commit, bundle_source=control / "bundles" / commit)
+    except delivery_controller.ControllerError as exc:
+        return {"installed": False, "code": exc.code, "detail": exc.detail}
+    release = result.get("release") or {}
+    copied = control / "controller/releases" / commit / _RELEASE_DESCRIPTOR
+    if copied.is_file():
+        recorded = json.loads(copied.read_text(encoding="utf-8"))
+        same = {key: recorded.get(key) for key in ("commit", "supported_format")}
+        if same != {key: release.get(key) for key in same}:
+            return {"installed": False, "code": "release-differs-from-pinned", "copied": same}
+    return {"installed": True, "commit": commit, "supported_format": release.get("supported_format")}
+
+
+def _previous_controller(live: Path, previous: str, control: Path, change_ids: list[str]) -> dict[str, Any]:
+    """Bring up the controller the copy runs before the upgrade and observe it read-only (procedure step 1)."""
+    from owlbear_delivery.state_formats import read_controller_pin  # noqa: PLC0415
+    from owlbear_tools import delivery_controller  # noqa: PLC0415
+
+    gated = (
+        subprocess.run(  # noqa: S603 - fixed Git argument vector.
+            ("git", "-C", str(live), "cat-file", "-e", f"{previous}:{_GATE_SOURCE}"),  # noqa: S607
+            check=False,
+            capture_output=True,
+        ).returncode
+        == 0
+    )
+    if not gated:
+        return {"gated": False, "online": _ungated_session(live, previous, change_ids)}
+    pinned = read_controller_pin(live)
+    if pinned is not None and pinned.commit != previous:
+        return {"gated": True, "error": f"the copy is pinned to {pinned.commit}, not {previous}"}
+    steps: dict[str, Any] = {"gated": True, "release": _install_release(live, previous, control)}
+    if pinned is None:
+        layout = delivery_controller.Layout(live)
+        steps["migration"] = _migrate(layout.release(previous) / ".venv/bin", live)
+        steps["pin"] = delivery_controller.run(["--project-root", str(live), "pin", previous])[1]
+    steps["online"] = mcp_session(_mcp_command(live), live, change_ids)
+    return steps
+
+
+def upgrade_form(live: Path, previous: str, *, control: Path) -> dict[str, Any]:
+    """Run the N02-D upgrade procedure from ``previous`` to the checked-out candidate on the copy."""
+    from owlbear_delivery.state_formats import read_controller_pin, record_tree_digest  # noqa: PLC0415
+    from owlbear_tools import delivery_controller  # noqa: PLC0415
+
+    layout = delivery_controller.Layout(live)
+    candidate = subprocess.run(  # noqa: S603 - fixed Git argument vector.
+        ("git", "-C", str(live), "rev-parse", "HEAD"),  # noqa: S607
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    change_ids = _change_ids(live)
+    report: dict[str, Any] = {"form": "upgrade", "candidate": candidate, "previous": previous, "changes": change_ids}
+    report["previous_controller"] = _previous_controller(live, previous, control, change_ids)
+    report["candidate_release"] = _install_release(live, candidate, control)
+    new = layout.release(candidate) / ".venv/bin"
+    root = ("--project-root", str(live))
+    report["offline_preflight"] = _cli(new / "delivery-controller", *root, "preflight")
+    report["backup"] = _cli(new / "delivery-controller", *root, "backup", "--destination", "/lc-backup")
+    before = record_tree_digest(live, exclude_migrations=True)
+    report["migration"] = _migrate(new, live)
+    after = record_tree_digest(live, exclude_migrations=True)
+    report["changed_records"] = sorted(key for key in set(before) | set(after) if before.get(key) != after.get(key))
+    report["switch"] = _cli(
+        new / "delivery-controller", *root, "switch" if read_controller_pin(live) else "pin", candidate
+    )
+    command = _mcp_command(live)
+    report["mcp_json_names_launcher"] = command == [str(layout.bin / "delivery-mcp")]
+    report["first_start"] = mcp_session(command, live, change_ids)
+    between = record_tree_digest(live)
+    report["second_start"] = mcp_session(command, live, change_ids)
+    report["round_trip_unchanged"] = record_tree_digest(live) == between and report["first_start"].get(
+        "views"
+    ) == report["second_start"].get("views")
+    index = layout.release(candidate) / "serve/cockpit/dist/index.html"
+    report["cockpit"] = cockpit_check(layout.bin / "cockpit", live, index)
+    report["checkout_controller"] = _load_every_change(live)
+    report["verify"] = _cli(new / "delivery-controller", *root, "verify")
+    report["rollback"] = _cli(new / "delivery-controller", *root, "switch", previous)
+    if report["rollback"]["exit"] == 0:
+        report["rollback_start"] = mcp_session(command, live, change_ids)
+    report["passed"] = upgrade_passed(report)
+    return report
+
+
+def _session_ok(session: dict[str, Any]) -> bool:
+    """A controller start passes only when ``delivery_health`` is healthy and every Change is available."""
+    return bool(
+        session.get("started")
+        and session.get("health_status") == _HEALTHY
+        and not session.get("unavailable")
+        and not session.get("blockers")
+    )
+
+
+def upgrade_passed(report: dict[str, Any]) -> bool:
+    """N02-D first-upgrade and rollback rehearsal criteria (plan section 3.5)."""
+    previous = report["previous_controller"]
+    migration = report["migration"]
+    proposed = {entry["locator"] for entry in (migration.get("proposal") or {}).get("entries", [])}
+    migrated = not migration["required"] or migration["verified"]
+    rollback = report["rollback"]
+    previous_format = (previous.get("release") or {}).get("supported_format")
+    if not previous.get("gated"):
+        rollback_ok = rollback["exit"] == 1 and rollback.get("code") == "release-invalid"
+    elif previous_format == report["candidate_release"].get("supported_format"):
+        rollback_ok = rollback["exit"] == 0 and _session_ok(report.get("rollback_start") or {})
+    else:
+        # The migrated state is newer than the previous release's format: its gate must refuse (D3).
+        rollback_ok = rollback["exit"] == 1 and rollback.get("code") == "release-refuses-state"
+    return bool(
+        _session_ok(previous.get("online") or {})
+        and report["candidate_release"].get("installed")
+        and report["offline_preflight"]["exit"] == 0
+        and not report["offline_preflight"].get("blockers")
+        and report["backup"]["exit"] == 0
+        and migrated
+        and set(report["changed_records"]) == proposed
+        and report["switch"]["exit"] == 0
+        and report["mcp_json_names_launcher"]
+        and _session_ok(report["first_start"])
+        and _session_ok(report["second_start"])
+        and report["round_trip_unchanged"]
+        and report["cockpit"]["work_items_status"] == _HTTP_OK
+        and report["cockpit"]["index_matches_release"]
+        and report["checkout_controller"].get("code") == "controller-not-pinned"
+        and report["verify"]["exit"] == 0
+        and rollback_ok
+    )
+
+
+# ---------------------------------------------------------------------------
 # Command line
 # ---------------------------------------------------------------------------
 
@@ -918,11 +1274,12 @@ def _parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--stage", type=Path, required=True)
     run_parser.add_argument("--live", type=Path, default=None)
     run_parser.add_argument("--candidate", required=True)
-    run_parser.add_argument("--form", choices=("load", "full"), required=True)
+    run_parser.add_argument("--form", choices=_FORMS, required=True)
     run_parser.add_argument("--previous", default="")
     run_parser.add_argument("--image", default=DEFAULT_IMAGE)
     run_parser.add_argument("--uv-cache-volume", default=None)
     run_parser.add_argument("--ca-bundle", type=Path, default=None)
+    run_parser.add_argument("--bundles", type=Path, default=None, help="prebuilt Cockpit bundles <commit>/index.html")
     run_parser.add_argument("--dry-run", action="store_true")
     compare_parser = commands.add_parser("compare")
     compare_parser.add_argument("--stage", type=Path, required=True)
@@ -934,7 +1291,7 @@ def _parser() -> argparse.ArgumentParser:
     proof_parser.add_argument("--report", type=Path, required=True)
     inside_parser = commands.add_parser("inside")
     inside_parser.add_argument("--live", type=Path, required=True)
-    inside_parser.add_argument("--form", choices=("load", "full"), required=True)
+    inside_parser.add_argument("--form", choices=_FORMS, required=True)
     inside_parser.add_argument("--previous", default="")
     inside_parser.add_argument("--report", type=Path, required=True)
     load_parser = commands.add_parser("load-changes")
@@ -943,8 +1300,10 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _run_command(args: argparse.Namespace, live: Path) -> tuple[int, dict[str, object]]:
-    if args.form == "full" and not args.previous:
-        return 2, {"error": "the full form needs --previous (the merged predecessor phase head)"}
+    if args.form in {"full", "upgrade"} and not args.previous:
+        return 2, {"error": f"the {args.form} form needs --previous (the merged predecessor or pinned release)"}
+    if args.form == "upgrade" and args.bundles is None:
+        return 2, {"error": "the upgrade form needs --bundles with the candidate's (and a gated previous) bundle"}
     try:
         result: dict[str, Any] = run(
             args.stage,
@@ -955,6 +1314,7 @@ def _run_command(args: argparse.Namespace, live: Path) -> tuple[int, dict[str, o
             image=args.image,
             uv_cache_volume=args.uv_cache_volume,
             ca_bundle=args.ca_bundle,
+            bundles=args.bundles,
             dry_run=args.dry_run,
         )
     except ValueError as exc:
@@ -977,6 +1337,8 @@ def _execute(args: argparse.Namespace) -> tuple[int, dict[str, object]]:
         return (0 if result.get("loaded") else 1), result
     if args.command == "prove-isolation":
         result = prove_isolation(live, args.stage_source, args.launch)
+    elif args.form == "upgrade":
+        result = upgrade_form(live, args.previous, control=Path(CONTROL_MOUNT))
     else:
         result = full_form(live, args.previous) if args.form == "full" else load_form(live)
     args.report.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")

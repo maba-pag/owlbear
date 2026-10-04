@@ -23,6 +23,9 @@ worktrees/
 # Delivery migration staging, backups and archived journals (outside authoritative state)
 delivery-migrations/
 
+# Pinned Delivery controller releases, launchers and pin (delivery-controller)
+controller/
+
 # Lock files (transient runtime artifacts)
 .storage.lock
 kanban/activity.jsonl

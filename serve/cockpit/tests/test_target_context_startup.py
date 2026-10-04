@@ -83,6 +83,30 @@ def test_cockpit_is_fenced_by_an_exclusive_controller_lock_holder(tmp_path: Path
         holder.release()
 
 
+def test_cockpit_from_checkout_code_refuses_a_pinned_workspace(tmp_path: Path) -> None:
+    repository = _workspace(tmp_path)
+    pin = repository / ".owlbear/controller/pin.json"
+    pin.parent.mkdir(parents=True)
+    pin.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "commit": "a" * 40,
+                "previous": None,
+                "release_sha256": "f" * 64,
+            }
+        ),
+        encoding="utf-8",
+    )
+    digests = record_tree_digest(repository)
+
+    with pytest.raises(RuntimeError, match="state_version: controller-not-pinned"):
+        load_target_context(repository)
+
+    assert record_tree_digest(repository) == digests
+    acquire_controller_lock(repository / ".owlbear/delivery/runtime", exclusive=True).release()
+
+
 @pytest.mark.parametrize("state", ["backed-up", "applying", "applied", "aborting"])
 def test_cockpit_refuses_a_migration_journal_that_is_not_verified(tmp_path: Path, state: str) -> None:
     repository = _workspace(tmp_path)

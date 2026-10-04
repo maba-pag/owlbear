@@ -90,6 +90,7 @@ not proof.
 | `finalize-change` | `prompt` -> finalizer | Agent required-reading loads `w-change-finalization`; engine proof and exact reviewed finalization |
 | `inspect-change` | built-in `ask` mode | Read-only Change diagnosis through `get_change` and `delivery_health` only; no mutation or host repair |
 | `release-stuck-worker` | `prompt` -> orchestrator | Claim from `get_change`; skip `worker-stall-wait`; confirm stop if needed; release once under the write/process guard |
+| `upgrade-delivery` | Current agent directed by prompt | Prompt-defined N02-D procedure: install, online read-only preflight, user stop, offline preflight, backup, `delivery-migrate`, confirmed switch, user restart and verification through `delivery-controller` |
 | `address-pr-feedback` | Current agent directed by prompt | Loads `w-address-pr-feedback`; `start` evaluates and repairs external review threads, while `resume` publishes the fresh finalized head before replying and resolving threads |
 | `resolve-target-conflict` | Current agent directed by prompt | Loads `w-target-conflict-resolution`; resolves exact target merges in the managed Change worktree and hands off to finalization |
 | `repair-delivery` | Current agent directed by prompt | Loads `w-delivery-repair`; read-only `delivery-diagnose` bootstrap, then `delivery-repair` classification and fenced proposals under the confirmation policy while the user has stopped the controllers |

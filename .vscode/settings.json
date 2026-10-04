@@ -94,6 +94,7 @@
     "**/*.egg-info": true
   },
   "files.watcherExclude": {
+    ".owlbear/controller/**": true,
     ".owlbear/kanban/**": true
   },
   "git.autorefresh": false,
@@ -136,6 +137,7 @@
   "scm.defaultViewMode": "tree",
   "scm.graph.pageOnScroll": false,
   "search.exclude": {
+    ".owlbear/controller/**": true,
     ".owlbear/kanban/activity.jsonl": true,
     ".owlbear/kanban/archive/**": true,
     ".owlbear/scratch/**": true,
