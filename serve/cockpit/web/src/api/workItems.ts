@@ -100,7 +100,58 @@ export type DeliveryReadinessReasonCode =
   | "acceptance-wait"
   | "retry-containment"
   | "retry-ledger-unavailable"
-  | "worker-stall-wait";
+  | "worker-stall-wait"
+  | "merge-approval-required"
+  | "merge-checking"
+  | "merge-blocked"
+  | "checks-running"
+  | "provider-unavailable";
+
+export type MergeBlockReason =
+  | "conflicts"
+  | "behind"
+  | "protection"
+  | "draft"
+  | "closed"
+  | "checks-failed"
+  | "queue-required"
+  | "stacked"
+  | "wrong-base"
+  | "capability-unavailable"
+  | "method-not-allowed";
+
+export interface MergeBlock {
+  reason: MergeBlockReason;
+  detail: string | null;
+}
+
+export interface MergeOffer {
+  offer_id: string;
+  repository: string;
+  number: number;
+  node_id: string;
+  title: string;
+  head_sha: string;
+  base_branch: string;
+  target_head: string;
+  finalization_id: string;
+  ready_receipt_id: string;
+  merge_method: "merge" | "squash" | "rebase";
+  stack_size: number;
+  required_checks: Array<{ name: string; conclusion: string }>;
+  check_summary: {
+    required_passed: number;
+    required_pending: number;
+    required_failed: number;
+    optional_failed: number;
+  };
+  proof: {
+    observation_count: number;
+    review_id: string;
+    proof_target: string;
+  };
+}
+
 /** Engine-projected programme progress; Cockpit only maps keys to labels. */
 export type DeliveryProgress =
   | "preparing"
@@ -203,6 +254,8 @@ export interface DeliveryReadiness {
   retry_history?: DeliveryRetryAttempt[];
   prompt?: string | null;
   progress?: DeliveryProgress | null;
+  merge_offer?: MergeOffer | null;
+  merge_block?: MergeBlock | null;
 }
 
 export interface WorkItemCardView {

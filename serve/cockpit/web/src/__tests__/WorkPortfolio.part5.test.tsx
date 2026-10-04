@@ -7,7 +7,7 @@ import type {
   WorkItemAvailableDetailResponse,
   WorkItemCardView,
 } from "../api/workItems";
-import { READINESS_REASON_LABELS } from "../components/workItemPresentation";
+import { MERGE_BLOCK_LABELS, READINESS_REASON_LABELS } from "../components/workItemPresentation";
 import {
   CONTINUATION_PROMPT,
   card,
@@ -522,6 +522,96 @@ it("labels every continuation readiness reason without blanking a new engine sta
     unmount();
   }
 }, 60_000);
+
+it("renders an awaiting-merge offer as read-only readiness", async () => {
+  const offer: NonNullable<DeliveryReadiness["merge_offer"]> = {
+    offer_id: "9".repeat(64),
+    repository: "owlbear/example",
+    number: 42,
+    node_id: "PR_example_42",
+    title: "Merge approval example",
+    head_sha: "a".repeat(40),
+    base_branch: "main",
+    target_head: "b".repeat(40),
+    finalization_id: "c".repeat(64),
+    ready_receipt_id: "d".repeat(64),
+    merge_method: "merge",
+    stack_size: 1,
+    required_checks: [{ name: "build", conclusion: "success" }],
+    check_summary: {
+      required_passed: 2,
+      required_pending: 1,
+      required_failed: 0,
+      optional_failed: 1,
+    },
+    proof: {
+      observation_count: 3,
+      review_id: "e".repeat(64),
+      proof_target: "f".repeat(40),
+    },
+  };
+  const state = readiness({
+    status: "waiting",
+    next_actor: "you",
+    reason_code: "merge-approval-required",
+    merge_offer: offer,
+  });
+  const item = publicationCardForChecks({ publication_phase: "awaiting-merge", readiness: state });
+  fixtureState.currentPortfolio = portfolio([group({ lifecycle: "awaiting-merge", items: [item] })]);
+  fixtureState.currentDetail = detail({
+    card: item,
+    readiness: state,
+    publication: publicationForChecks("awaiting-merge"),
+  });
+  renderPage(`/delivery/change-alpha/${item.item_key}`);
+
+  const inspector = await screen.findByTestId("work-item-detail");
+  expect(inspector.querySelector('[data-readiness-reason="merge-approval-required"]')).toHaveTextContent(
+    READINESS_REASON_LABELS["merge-approval-required"],
+  );
+  const summary = within(inspector).getByTestId("merge-offer");
+  expect(summary).toHaveTextContent("owlbear/example#42");
+  expect(summary).toHaveTextContent("Merge approval example");
+  expect(summary).toHaveTextContent("2 passed, 1 pending, 0 failed; 1 optional failed");
+  expect(within(inspector).queryByRole("button", { name: /approve|merge/i })).not.toBeInTheDocument();
+});
+
+it("renders the GitHub next step for a blocked merge offer", async () => {
+  const detailText = "GitHub reported an unresolved conflict.";
+  const state = readiness({
+    status: "blocked",
+    next_actor: "you",
+    reason_code: "merge-blocked",
+    merge_block: { reason: "conflicts", detail: detailText },
+  });
+  const item = publicationCardForChecks({ publication_phase: "awaiting-merge", readiness: state });
+  fixtureState.currentPortfolio = portfolio([group({ lifecycle: "awaiting-merge", items: [item] })]);
+  fixtureState.currentDetail = detail({
+    card: item,
+    readiness: state,
+    publication: publicationForChecks("awaiting-merge"),
+  });
+  renderPage(`/delivery/change-alpha/${item.item_key}`);
+
+  const inspector = await screen.findByTestId("work-item-detail");
+  expect(within(inspector).getByTestId("merge-block")).toHaveTextContent(
+    `${MERGE_BLOCK_LABELS.conflicts} (${detailText})`,
+  );
+});
+
+it("gives every new merge readiness reason a distinct non-empty label", () => {
+  const reasons: DeliveryReadinessReasonCode[] = [
+    "merge-approval-required",
+    "merge-checking",
+    "merge-blocked",
+    "checks-running",
+    "provider-unavailable",
+  ];
+  const labels = reasons.map((reason) => READINESS_REASON_LABELS[reason]);
+
+  expect(labels.every((label) => label.trim().length > 0)).toBe(true);
+  expect(new Set(labels).size).toBe(reasons.length);
+});
 
 it("renders durable retry readiness metadata", async () => {
   fixtureState.currentDetail = detail({
