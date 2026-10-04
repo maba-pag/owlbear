@@ -61,7 +61,8 @@ has moved that checkout.
    releases and refuses while a controller runs, so it belongs here, before the restart.
 10. **Restart and verify:** ask the user to start `owlbear-delivery` from *MCP: List Servers* and Cockpit
     (pinned: `.owlbear/controller/bin/cockpit`; unpinned: `uv run --project <owlbear> cockpit`). Then call
-    `delivery_health`, which must be `healthy`, and `list_changes`, and call `get_change` for every Change:
+    `delivery_health`, which must be `healthy` or report only attention that step 2 already recorded, and
+    `list_changes`, and call `get_change` for every Change:
     each must be available and match the state step 2 recorded for it, where step 2 recorded one. In an
     unpinned workspace, remind the user to rerun OwlBear setup from the project root to refresh copied
     files.
