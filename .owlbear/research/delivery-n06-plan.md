@@ -8,9 +8,10 @@
 > Live Delivery state was not read; no live record is needed by this plan. Rebased on `origin/dev` `634a77be7`:
 > it adds only N05-A (`delivery-github`, `publication_provider.py`, forbidden-effect gates); no file or locator
 > cited here changed.
-> **Status:** draft for the plan gate, revised after Sol plan round 1 ([3.6](#36-plan-gate-dispositions)). Product
-> code is unchanged by this phase. User-only confirmation is N03's boundary (PR #360, in revision); N06 consumes it
-> and works under either answer of N03 U2 ([1.13](#113-confirmation-channel-under-n03-u2)).
+> **Status:** draft for the plan gate, revised after Sol plan rounds 1 and 2 ([3.6](#36-plan-gate-dispositions)).
+> Product code is unchanged by this phase. User-only confirmation is N03's boundary (PR #360 at `86289635f`: R14,
+> I6, I10, D13); N06 dispatches interaction-linked requests through N03's scoped `answer` and works under either
+> answer of N03 U2 ([1.13](#113-confirmation-channel-under-n03-u2)).
 > [U1](#u1--retention-and-privacy-policy-for-private-inputs-and-interaction-evidence) is a recorded engineering
 > decision of 2026-10-03. N03 U1 was answered (b) by the user on 2026-10-03 (user waivers satisfy finalization);
 > §1.4 keeps interaction requests out of that route.
@@ -26,14 +27,15 @@
   the handler is registered, its static probe passes on this host, and no writer custody exists. Otherwise the
   Change shows agent work (`waiting-for-chat`) or **Check not available here** with the exact reason (V17).
 - Cockpit owns the session. **Help with this step** opens a Cockpit panel that says what will be launched; **Start
-  check** launches the registered handler as a child process, passes private inputs only through the child's
-  stdin, holds them only in memory, and ends the session on completion, **Not now**, expiry or Cockpit exit.
-  Custody ends only once the handler's processes are verified gone (D13). Delivery receives an opaque input
-  reference, never a value.
-- The user's confirmation counts only through N03's user-only confirmation boundary, the single definition N06
-  consumes ([1.13](#113-confirmation-channel-under-n03-u2)). It resolves the linked Decision Request with
-  `observed` or `not-observed` as N03's scoped confirmation. Caller- or worker-supplied provenance never counts.
-  Machine observations from the handler are recorded separately on the interaction.
+  check** starts a Delivery-owned launcher that runs the registered handler only after its process identity is
+  recorded, passes private inputs only through the handler's stdin, holds them only in memory, and ends the
+  session on completion, **Not now**, expiry or Cockpit exit. Custody ends only once no process carrying the
+  session's ownership token remains (D13). Delivery receives an opaque input reference, never a value.
+- The user's confirmation counts only through N03's boundary: MCP `answer` on the linked request, which asks the
+  user by MCP elicitation ([1.13](#113-confirmation-channel-under-n03-u2)). Its `passed` or `failed` decision is
+  shown as observed or not observed, appended to the Change confirmation ledger and bound to the interaction in
+  one transaction. Caller-, worker- or Cockpit-supplied provenance never counts (a Cockpit channel exists only if
+  N03 U2 is (a)). Machine observations from the handler are recorded separately on the interaction.
 - Secrets and private values never appear in chat transcripts, MCP results, logs, receipts, remote snapshots or
   URLs. Cancel, decline and expiry never count as a pass.
 - A synthetic handler proves the flow end to end in real Chromium against the built Cockpit bundle.
@@ -47,17 +49,18 @@
 | R3 | Preparation is agent work; **Needs you** only once the step is actionable | Execution plan §5 N06; §9.1 (`:1152`); WP5 step 2; U3 (`:769`) |
 | R4 | Local input through a Cockpit (or loopback) form with origin checks and a one-time or session-bound token; an opaque input reference; expiry and cancel | §9.3 steps 1–4, 6 (`:1179-1185`); P16; V22 |
 | R5 | No secrets in transcripts, logs, receipts or URLs; credential-bearing URLs rejected; destinations cannot be widened by form input | §9.3 steps 2–3, 5; V22; execution plan §5 N06 |
-| R6 | Human confirmation recorded separately from machine observation, only through N03's user-only confirmation boundary; a click cannot assert machine success and neither a machine, a worker nor a caller can fabricate a confirmation | §9.3 step 7; §9.1 Evidence split; [N03 plan](delivery-n03-plan.md) I6, §1.5 and its user-only boundary (PR #360) |
+| R6 | Human confirmation recorded separately from machine observation, only as an N03 ledger confirmation captured by N03's scoped `answer`; a click cannot assert machine success and neither a machine, a worker nor a caller can fabricate a confirmation | §9.3 step 7; §9.1 Evidence split; [N03 plan](delivery-n03-plan.md) R14, I6, I10, §1.5, D13 (PR #360 at `86289635f`) |
 | R7 | Cockpit offers **Help with this step**, **Not now**, **Explain existing evidence** and **Check not available here** | Execution plan §5 N06; §4.2 (`:860`); §9.2 (`:1172`); §9.4 (`:1191`); V17 |
 | R8 | Assisted check with unavailable handler or tool, or no agent host: agent or host-needed state, never **Needs your evidence**, no fake launch | V17 (`:1552`) |
-| R9 | Private URL or credential-like input (query, fragment, encoded component) rejected; expired session; cancelled sign-in; no secret in transcript, log or receipt; only owned resources cleaned; cancel is not pass | V22 (`:1557`); execution plan §5 N06-B |
+| R9 | Private URL or credential-like input (any undeclared query, fragment, credential-bearing or token-like path segment, encoded component) rejected; expired session; cancelled sign-in; no secret in transcript, log or receipt; only owned resources cleaned; cancel is not pass | V22 (`:1557`); execution plan §5 N06-B |
 | R10 | Binding to the candidate and its resources; a changed candidate makes the result stale, never attached to the new candidate | §9.1 (`:1154`); execution plan §5 N06 "P must settle" |
 | R11 | Every new readiness reason, action or status ships with its `workItems.ts` mirror, rendering, component test and parity assertion; every new frontier-writing operation joins the mutability policy | Execution plan §1.4 |
 | R12 | Every changed persisted family registers a version owner; migrations run through the N02 core; LC full form | Execution plan §1.3; [N02 plan](delivery-n02-plan.md) I2, I3, D3 |
 | R13 | Pause prevents new interaction sessions and drains open ones | Programme §4.2 Pause; [N09 plan](delivery-n09-plan.md) §1.11 K1–K3 |
 | R14 | Support baseline: Python 3.14; Chromium-only Cockpit; macOS and Ubuntu; handler launch portable | Execution plan §1.1 |
 | R15 | N06 defines the interface N07's B1 runner builds on; no B1 code in N06 | Execution plan §5 N06, N07; §3 traceability (`:449`) |
-| R16 | Session custody ends only after the handler's owned processes are verified gone; restart-safe process identity; containment when closure is unknown | Programme §5.2; V22 (owned cleanup); [N08 plan](delivery-n08-plan.md) D12 |
+| R16 | Session custody ends only after no Delivery-owned handler process remains; ownership recorded before any handler runs and positive before any signal; containment with a user recheck route when closure is unknown | Programme §5.2; V22 (owned cleanup); [N08 plan](delivery-n08-plan.md) D12 |
+| R17 | Every interaction write survives a restart before publication, including during a retained Builder handoff | `delivery_application_loader.py:603-607`, `:1010-1053`; N03 §1.7 L row |
 
 ### 1.3 Invariants
 
@@ -67,26 +70,34 @@
 - **I2 Registry-only execution.** The handler argv, environment allowlist, working directory and probe come from
   the registry entry. Allowed placeholders are engine-derived (`{candidate_worktree}`, `{python}`); request text,
   input values and agent text are never interpolated.
-- **I3 One confirmation boundary.** A resolution counts as a user confirmation only when N03's boundary recorded it
-  (§1.13). `open`, `start`, `postpone` and `stop` are Cockpit HTTP operations behind the guard (D5) and the session
-  nonce; none is a confirmation, and the nonce binds a panel to a session, not to a user. Worker-supplied
-  resolutions, MCP `answer` arguments and Cockpit `answer` bodies never resolve an interaction-linked request.
-  MCP exposes interactions read-only apart from N03's boundary tool.
-- **I4 Cancel is not pass.** Not now, decline, expiry, session loss and handler failure never resolve the linked
-  request. Only a boundary confirmation resolves it, with `observed` or `not-observed`; only `observed` can support
-  a satisfying N03 `manual-procedure` result, and no outcome can confirm an N03 waiver (§1.4).
+- **I3 One confirmation boundary.** A linked request is resolved only by N03's scoped `answer` (D13), which builds
+  the ledger confirmation from the user's elicitation answer (or from N03-C's Cockpit channel if U2 is (a)). N06
+  adds interaction checks and writes to that dispatch, never a channel. N03 already refuses a scoped request that
+  arrives resolved and ignores caller `resolution` and `provenance`. `open`, `start`, `postpone` and `recheck` are
+  Cockpit HTTP operations behind the guard (D5); none is a confirmation, and the nonce binds a panel to a session,
+  not to a user. MCP adds no interaction tool.
+- **I4 Cancel is not pass.** Not now, decline, cancel, refusal, expiry, session loss and handler failure write no
+  confirmation. A `failed` (not observed) decision is recorded but never satisfies (N03 I6); only `passed` with a
+  completed, non-stale interaction supports a `human-confirmed` `manual-procedure` observation, and no interaction
+  confirmation can support a waiver (§1.4).
 - **I5 Exact candidate.** An interaction is bound to `candidate_head` (the block's `resume_commit`, which must equal
   the branch head), the contract's current acceptance versions and the handler digest. Any change makes it
-  `stale`; `confirm` and `complete` refuse a stale interaction.
+  `stale`; the linked answer and `complete` refuse a stale interaction.
 - **I6 Session custody excludes writers.** An unexpired interaction session is a Change custody owner: it refuses to
   open while any writer, claim, Finalizer attempt, continuation action, publication lease or recovery fence exists,
-  and every such acquisition refuses while it is open (programme §5.2). Custody ends only when the handler's
-  processes are verified gone (D13); expiry, completion or Cockpit exit alone never release it.
+  and every such acquisition refuses while it is open (programme §5.2). Custody ends only when the exclusion check
+  finds no Delivery-owned process (D13); expiry, completion or Cockpit exit alone never release it.
 - **I7 Bounded, non-sensitive portable records.** Interaction records and machine observations contain only
   registry-declared identifiers, enums, digests, heads, times and bounded counts. No handler-authored free text.
 - **I8 Version widening.** Families widen their version literal; old instances validate unchanged and are
   constrained to old content; no stored byte or identity changes (N03 I1, I2).
 - **I9 Gate first.** N02 I1 and I5 unchanged; N06-A adds one format-marker step and the widened versions.
+- **I10 Ledger and replay.** N03 I10 holds: a linked answer appends exactly one ledger entry in the transaction
+  that resolves the request and the interaction, and no N06 writer touches `confirmations`. Every interaction write
+  during a retained Builder handoff is bound by an interaction transition receipt in its transaction (D14).
+- **I11 Positive ownership before any signal.** A process is signalled only when it carries the session's spawn
+  token or belongs to the group of a leader verified live by pid, create time and token (D13). Nothing else in the
+  recorded group or session is signalled; when a process cannot be classified, the session stays `contained`.
 
 ### 1.4 Relation to `DeliveryRequest` (programme "P must settle")
 
@@ -94,15 +105,15 @@ An interaction is attached to one Decision Request. Nothing new is added to `Del
 
 | Element | Rule |
 | --- | --- |
-| Creation route | The Builder blocks on the existing request-bearing route (`BlockDelivery.request`, `runtime_models.py:1539-1551`; settlement `runtime_settlement.py:250`). The request is a Decision Request whose N03 `applies_to` names the acceptance criteria and `procedure = "interaction-handler:<handler_id>@<version>"` |
-| Recognition | Block settlement parses `applies_to.procedure` with `interaction_registry.parse_procedure`. A prefix match that does not resolve to a registry entry, options that differ from the handler's two fixed outcome options, a summary other than the registry `confirmation_question`, a request that already carries a `resolution`, criteria that are not current, or a block without `resume_commit` equal to the branch head (`runtime_settlement.py:405`) refuses the block with `interaction-request-invalid`; nothing is written |
+| Creation route | The Builder blocks on the existing request-bearing route (`BlockDelivery.request`, `runtime_models.py:1539-1551`; settlement `runtime_settlement.py:250`). The request is a Decision Request with no `options`, `summary` equal to the registry `confirmation_question`, and N03 `applies_to{kind: confirm-check, acceptance, procedure: "interaction-handler:<handler_id>@<version>"}` |
+| Recognition | Block settlement parses `applies_to.procedure` with `interaction_registry.parse_procedure`. A prefix match that does not resolve to a registry entry, `applies_to.kind` other than `confirm-check`, non-empty `options`, a summary other than the registry `confirmation_question`, criteria that are not current, or a block without `resume_commit` equal to the branch head (`runtime_settlement.py:405`) refuses the block with `interaction-request-invalid`; nothing is written. A scoped request that arrives with a `resolution` is already refused by N03 (§1.5 Confirmation scope) |
 | Reserved `none` | `interaction-handler:none@1` declares a human-only check that no registered handler can perform. It creates an interaction in `unavailable` / `no-registered-handler` (V17) instead of a generic Action Request |
-| Engine record | Settlement writes `DeliveryInteraction` ([1.6](#16-persisted-records)) in the same transaction as the block |
-| Resolution | Only N03's boundary resolves the request (§1.13), with `selected_option_id` = outcome, and only through `confirm_interaction`'s checks. Every other resolution of a linked request (MCP or Cockpit `answer` arguments, `portfolio_application.py:1340`; a worker-supplied `resolution`) is refused with `ERR_DELIVERY_INTERACTION_CONFIRMATION_ROUTE` or `interaction-request-invalid` |
-| Fabrication routes | Both Builder block routes store the worker's `DeliveryRequest` verbatim, `resolution` included (`runtime_reads.py:710-731`, `runtime_settlement.py:524-558`), and MCP `answer` passes caller-set `provenance` (`target_server.py:442-460`). N03's boundary makes neither count for any request, interaction-linked or ordinary, waiver requests included (G14). N06-A also refuses a pre-resolved linked request at block time and pins both routes for both request kinds with assembled tests (§3.2) |
-| Evidence | The Builder, reacquired for the same task, records N03 schema-2 observations: one `manual-procedure` with `human-confirmed` provenance and `confirmation: {kind: request-resolution, request_id}` (N03 I6), and copies of the interaction's machine observations with `procedure_registration_digest` = handler digest. Locator `request:<request_id>` (an existing N03 scheme) |
+| Engine record | Settlement writes `DeliveryInteraction` ([1.6](#16-persisted-records)) and its first transition receipt (D14) in the block's transaction |
+| Resolution | MCP `answer` on the linked request through N03's D13 boundary. Its resolver asks the interaction question only while the session is `awaiting-human`; an `accept` resolves the request, appends the ledger confirmation and sets the interaction `resolved` with its `confirmation_id` in one transaction (§1.7, §1.13). Decision `passed` is shown as observed and `failed` as not observed. Cockpit `answer_request` keeps N03-A's `channel-unavailable` refusal for scoped requests unless U2 is (a) |
+| Fabrication routes | Both Builder block routes store the worker's `DeliveryRequest` verbatim, `resolution` included (`runtime_reads.py:710-731`, `runtime_settlement.py:524-558`), and MCP `answer` passes caller-set `provenance` (`target_server.py:442-460`). After N03-A a scoped request created with a `resolution` is refused, and caller `resolution` and `provenance` confer nothing on a scoped request (N03 §1.5, D13). N06-A pins both routes for linked and ordinary scoped requests with assembled tests (§3.2) |
+| Evidence | The Builder, reacquired for the same task, records N03 schema-2 observations: one `manual-procedure` with assessment `passed`, `human-confirmed` provenance, `confirmation_id` = the interaction's ledger confirmation, `procedure` = the scope's procedure and `covers` = its acceptance refs (N03 I6); and copies of the interaction's machine observations (`machine-observed`) with `procedure_registration_digest` = handler digest. Optional locator `request:<request_id>` (an existing N03 scheme) |
 | Private input | Never enters a request. Request answers are persisted and published (`DeliveryRequestResolution.response_text`, `runtime_models.py:821-837`) |
-| Waiver (N03 U1 (b)) | An interaction-linked request is never a waiver confirmation. Under N03 U1 (b) a `waived` observation with a resolved user-confirmed request satisfies finalization, so a genuine `not-observed` confirmation would otherwise turn a failed check into a pass. A `waived` observation whose `confirmation` cites an interaction-linked request is refused (`interaction-request-not-waiver`); a waiver uses its own N03 request, confirmed through the same boundary. This is a semantic rule; protection against fabricated confirmations is the boundary (row above) |
+| Waiver (N03 U1 (b)) | A linked request is `confirm-check`, so its decisions are `passed` or `failed`, never `waive`; N03's `confirmation_applies` already refuses a `waived` record citing it (`confirmation-not-applicable`). A waiver needs its own `waive` request answered through the same boundary. N06 adds no waiver rule |
 | Action Requests | Unchanged for non-interactive human operations. Skill text forbids asking for URLs, hostnames, credentials or tokens in any request answer |
 
 ### 1.5 Prepared-interaction contract
@@ -118,7 +129,7 @@ Programme §9.1 fields and where each lives:
 | Preparation | Agent: the Builder prepares candidate, build and harness before blocking. Engine: static probe (platform, executables on `PATH`, candidate worktree present) before **Needs you**. Cockpit: lease at **Help with this step**; launch only at **Start check**, after the panel showed `launch_summary` (§9.1 authorization before an external effect) |
 | Input descriptors | `InteractionInput{name, label, kind: url\|text\|choice, required, validation, sensitivity: private\|public}`; `public` only for `choice` |
 | User step | Registry `user_step` (one instruction) and `human_step: sign-in\|confirmation` |
-| Evidence split | Machine: handler `observation` messages, registry-declared kinds, recorded by `complete`. Human: the request resolution recorded by `confirm` |
+| Evidence split | Machine: handler `observation` messages, registry-declared kinds, recorded by `complete`. Human: the ledger confirmation of the linked answer |
 | Alternatives | **Not now** (`postpone`), **Explain existing evidence** (N03-C projection of the scoped criteria), **Check not available here**, **Change requirements** (N04 control, when present). Declining never means success |
 | Resume | `complete` releases custody and clears the block; continuation reacquires the same Builder task with the interaction in its context |
 
@@ -126,8 +137,9 @@ Programme §9.1 fields and where each lives:
 
 - `InteractionHandlerDescriptor` fields: `handler_id`, `version`, `purpose`, `why_human`, `launch_summary` (what
   starting the check launches or accesses), `human_step`, `user_step`, `confirmation_question`,
-  `outcome_options` (fixed `observed`, `not-observed` with labels), `inputs`,
-  `observation_kinds` and `label_allowlist`, `target_classes`, `platforms` (`macos`, `linux`), `resources`
+  `decision_labels` (labels for N03's `passed` and `failed`; default "Observed" and "Not observed"), `inputs`
+  (a `url` input carries a `url_policy`), `observation_kinds` and `label_allowlist`, `target_classes`,
+  `platforms` (`macos`, `linux`), `resources`
   (names only; custody owned by the declaring package), `argv`, `env_allowlist`, `cwd` (`candidate-worktree` or
   `temporary`), `probe` (`executables`, `platforms`, `candidate_paths`), `timeouts` (`start`, `human_step`,
   `cleanup`), `failure_codes` (code → `repairable` or `environment`).
@@ -137,17 +149,32 @@ Programme §9.1 fields and where each lives:
 - `DEFAULT_INTERACTION_HANDLERS` holds only the reserved `none` entry in N06. N07 adds B1. Tests inject a synthetic
   registry through composition (`load_delivery_application(..., interaction_handlers=...)`, Cockpit `run(...)`).
 
-**Input validation** (`owlbear_delivery.interaction_inputs`, leaf): `url` is parsed with `urllib.parse.urlsplit`,
-never by pattern over the raw string, and refused if the parse is not a lossless round trip. It accepts `https`
-only by default; rejects userinfo; rejects any fragment (`#…`, including an empty one) unless the descriptor
-declares `fragment: allowed`, which N06 never registers; rejects query keys matching
-`token|access_token|id_token|code|session|sig|signature|password|pwd|key|apikey|auth|sso|saml` (case-insensitive)
-after `parse_qsl` percent-decoding, and keys or values that still contain `%` after one decoding (double encoding);
-at most 2048 characters; host by the descriptor's static `host_policy`
-(`any-host`, `suffix-allowlist(...)` or `handler-validated`, the last reported back by the handler as a bounded
-`destination-not-admitted` code), compared after IDNA normalization. `text` is length- and pattern-bounded;
-`choice` is an enum. Models use `SecretStr`, `hide_input_in_errors=True`, and errors are rendered only with
-`include_input=False` (P4b).
+**Input validation** (`owlbear_delivery.interaction_inputs`, leaf). A `url` input is admitted only through its
+descriptor's `url_policy`; N06 registers none, and N07 declares B1's:
+
+- **Parse.** `urllib.parse.urlsplit`, never a pattern over the raw string; refused unless `urlunsplit` returns the
+  input unchanged; at most 2048 characters; scheme in `schemes` (default `https` only); no userinfo; no explicit
+  port unless declared; host by `host_policy` (`any-host`, `suffix-allowlist(...)` or `handler-validated`, the
+  last reported back by the handler as a bounded `destination-not-admitted` code), compared after IDNA
+  normalization.
+- **Fragment.** Any `#`, including an empty fragment, is refused.
+- **Query.** Refused unless the descriptor declares `query_keys`. The default is no query at all, so
+  `?client_secret=…` or a SharePoint `?e=…` sharing key is refused without depending on a keyword list.
+  Declared keys are parsed with `parse_qsl(strict_parsing=True, keep_blank_values=True)`; every key must be
+  declared, appear once and match its declared value pattern; a `%` left after one decoding is refused.
+- **Path.** Split on `/`; at most 32 segments. Each segment is percent-decoded once and must then match
+  `[A-Za-z0-9._~-]{1,128}`, so `;`, `=`, `:`, `@`, `+`, `,`, `%`, whitespace, controls, `\` and an encoded `/` are
+  refused, and so is double encoding. `.` and `..` segments, and empty segments other than a trailing slash, are
+  refused. A segment equal to a credential word (`token`, `access_token`, `id_token`, `session`, `sig`,
+  `signature`, `password`, `secret`, `apikey`, `api_key`, `auth`, `code`, `saml`, `jwt`, `bearer`;
+  case-insensitive) is refused, as is a token-like segment: one starting `eyJ` or holding a run of 32 or more
+  `[A-Za-z0-9_]` characters (GUIDs, whose runs are at most 12, pass).
+- **Errors.** Bounded codes `url-parse`, `url-scheme`, `url-userinfo`, `url-port`, `url-host`, `url-length`,
+  `url-fragment`, `url-query-not-allowed`, `url-query-key`, `url-query-value`, `url-path-segment`,
+  `url-path-credential`, `url-path-token-like`; never the value.
+
+`text` is length- and pattern-bounded; `choice` is an enum. Models use `SecretStr`, `hide_input_in_errors=True`,
+and errors are rendered only with `include_input=False` (P4b).
 
 ### 1.6 Persisted records
 
@@ -157,8 +184,9 @@ at most 2048 characters; host by the descriptor's static `host_policy`
 | `snapshot` (remote) | Embeds the frontier | N03's 3 → widen 3, 4 | Native parse | — |
 | handoff change-intent receipts | Embed whole frontiers | N03's 2 → widen 2, 3 (normalized delta per N03 §1.7) | Unchanged | — |
 | `coordination` | `interaction_session: ChangeInteractionSession \| None` (omitted when None) | N09-A2's 2 → widen 2, 3 | Unchanged; validator rejects the field below 3 | No (host-local) |
+| interaction transition receipts (new) | `_DeliveryInteractionTransitionReceipt` under the Change's runtime receipts, one per interaction write during a retained Builder handoff (D14) | New, schema 1 | None exist | No (host-local; the frontier carries the state once published) |
 | `format` marker | `format-N-to-N+1` marker-only migration | N assigned at merge (G3) | — | — |
-| binding-embedding receipts, `DeliveryRequest`, `DeliveryBlock`, observations, `result_receipt` | Unchanged | — | — | — |
+| binding-embedding receipts, `DeliveryRequest`, `DeliveryBlock`, `DeliveryUserConfirmation`, request-resolution receipts, observations, `result_receipt` | Unchanged (N03's shapes, channels and locator schemes; D3) | — | — | — |
 
 `DeliveryInteraction` (schema 1, nested in the frontier family; registered in `NESTED_MODELS`):
 
@@ -170,42 +198,53 @@ at most 2048 characters; host by the descriptor's static `host_policy`
 | `candidate_head` | The block's `resume_commit` |
 | `status` | `needs-session`, `unavailable`, `postponed`, `resolved`, `completed`, `stale`, `preparation-failed` |
 | `status_reason` | Enum: `no-registered-handler`, `handler-not-registered-here`, `platform-unsupported`, `tool-missing`, `candidate-missing`, `user-postponed`, `session-expired`, `session-lost`, `handler-failed`, `head-changed`, `contract-changed`, `handler-changed`, `block-cleared`, `paused`, or a registry `failure_codes` key |
-| `outcome` | `observed`, `not-observed` or None (mirrors the authoritative request resolution) |
+| `confirmation_id` | sha256 or None: the ledger confirmation of the linked answer. The view derives observed (`passed`) or not observed (`failed`) from its decision through N03 `resolve_confirmation`; nothing stores the outcome twice |
 | `observations` | ≤ 16 `DeliveryInteractionObservation{kind, result: passed\|failed, observed_at, platform, labels, target_class}`; kinds and labels from the registry |
 | `created_at`, `updated_at`, `completed_at` | Times |
 
 `ChangeInteractionSession` (coordination, host-local custody): `interaction_id`, `session_id` (128-bit random),
-`holder{pid, port, started_at}` (the Cockpit instance), `handler{pid, pgid, create_time, argv_digest}` (set at
-spawn; `create_time` from `psutil`, as N08 D12), `candidate_head`, `opened_at`, `expires_at`, `state`
-(`awaiting-input`, `starting`, `awaiting-human`, `finishing`, `closing`, `contained`), `input_ref` (128-bit random,
-never derived from a value), `inputs_provided` (descriptor names only). No digest, hash or prefix of any private
-value is stored, because low-entropy values such as internal URLs could be recovered from one. `argv_digest`
-covers the registry argv only, which never carries a value (I2).
+`holder{pid, port, started_at}` (the Cockpit instance), `spawn{token, intent_at}` (128-bit random token committed
+before any process starts; an ownership marker that authorizes nothing), `leader{pid, create_time,
+cmdline_digest}` (the launcher, set after spawn and before the handler runs; pid = pgid = sid; `create_time` from
+`psutil`, as N08 D12), `candidate_head`, `opened_at`, `expires_at`, `state` (`awaiting-input`, `starting`,
+`awaiting-human`, `finishing`, `closing`, `contained`), `containment{reason, observed_at, processes}` (only in
+`contained`; reason `scan-failed`, `identity-unreadable`, `ambiguous-member` or `kill-refused`; at most 8
+`{pid, create_time, name}` with `name` ≤ 64 characters), `input_ref` (128-bit random, never derived from a value),
+`inputs_provided` (descriptor names only). No digest, hash or prefix of any private value is stored, because
+low-entropy values such as internal URLs could be recovered from one. `cmdline_digest` covers the launcher argv,
+which carries the token and never a value (I2).
+
+`_DeliveryInteractionTransitionReceipt` (schema 1): `change_id`, `interaction_id`, `sequence` (from 1), `kind`
+(`created`, `postponed`, `resolved`, `completed`, `failed`, `stale`), `before_digest` (sha256 of the previous
+receipt's `after`, None for `created`), `after` (the whole `DeliveryInteraction`), `confirmation_id` (only for
+`resolved`), `receipt_id` (`_receipt_digest` over the rest).
 
 ### 1.7 Interfaces and error cases
 
 | Interface | Owner | Behavior |
 | --- | --- | --- |
-| Block settlement with an interaction-linked request | `runtime_settlement.py` (request-bearing block, `:250`, `:473-528`) | Creates the interaction (`needs-session`, or `unavailable` for `none`) in the block's transaction; refusal `interaction-request-invalid` with a bounded field code |
-| Readiness | `application_readiness.py`, `work_items.py` | New `DeliveryReadinessReason` values: `interaction-ready` (next actor you, action `help-with-step`), `interaction-in-progress` (session open), `interaction-unavailable`, `interaction-postponed` (action `help-with-step`), `interaction-handler-unverified` (session `contained`; next actor you; action `help-with-step` re-runs the exclusion check), `interaction-preparation-failed` and `interaction-stale` (next actor agent). New `WorkItemActionKind.HELP_WITH_STEP`. Progress: ready, in progress, unavailable and postponed → `needs-sign-in` when `human_step` is sign-in, else `needs-decision`; `starting` session → `preparing`; agent reasons → `waiting-for-chat` (M12/M13 of the N09 table). Selection order: programme §5.4 rows 8–9 |
-| Continuation | `application_acquisition.py:263` | An interaction reason returns `human` (ready, in progress, unavailable, postponed) with no launch; `interaction-preparation-failed` and `interaction-stale` reacquire the same Builder task as a counted retry with failure code `interaction-preparation-failed` or `interaction-stale` (D03 retry ledger). A session in any state, `closing` and `contained` included, makes every other acquisition `busy` |
+| Block settlement with an interaction-linked request | `runtime_settlement.py` (request-bearing block, `:250`, `:473-528`) | Creates the interaction (`needs-session`, or `unavailable` for `none`) and its `created` transition receipt in the block's transaction; refusal `interaction-request-invalid` with a bounded field code |
+| Readiness | `application_readiness.py`, `work_items.py` | New `DeliveryReadinessReason` values: `interaction-ready` (next actor you, action `help-with-step`), `interaction-in-progress` (session open, not awaiting the user), `interaction-awaiting-confirmation` (session `awaiting-human` and the linked request unresolved; next actor you; under U2 (b) no Cockpit action, the panel gives chat guidance; under U2 (a) action `confirm-step`), `interaction-unavailable`, `interaction-postponed` (action `help-with-step`), `interaction-handler-unverified` (session `contained`; next actor you; action `check-handler-stopped`), `interaction-preparation-failed` and `interaction-stale` (next actor agent). New `WorkItemActionKind` values `HELP_WITH_STEP` and `CHECK_HANDLER_STOPPED` (and `CONFIRM_STEP` only under U2 (a)). Progress: ready, awaiting confirmation, unavailable, postponed and unverified → `needs-sign-in` when `human_step` is sign-in, else `needs-decision`; `starting` session → `preparing`; agent reasons → `waiting-for-chat` (M12/M13 of the N09 table). Selection order: programme §5.4 rows 8–9 |
+| Continuation | `application_acquisition.py:263` | `interaction-awaiting-confirmation` returns `human` with `confirmation{request_id, expected_frontier_digest}`, the handle the orchestrator passes to MCP `answer` (§1.13); the other user reasons return `human` with no launch; `interaction-preparation-failed` and `interaction-stale` reacquire the same Builder task as a counted retry with failure code `interaction-preparation-failed` or `interaction-stale` (D03 retry ledger). A session in any state, `closing` and `contained` included, makes every Planner, Builder, Finalizer and engine acquisition `busy` |
 | `open_interaction_session(change_id, interaction_id, holder, expected_frontier_digest)` | new `application_interactions.py` mixin | Pause-gated custody start (N09-A2 K3): commits the coordination lease with the frontier as an exact no-op participant. Refuses `ERR_DELIVERY_INTERACTION_NOT_READY` (status), `_UNAVAILABLE` (static probe), `_STALE`, `_SESSION_BUSY` (another unexpired session or any writer custody), `ERR_DELIVERY_CHANGE_PAUSE_REQUESTED`. A `postponed` interaction reopens through this call |
-| `update_interaction_session(..., session_id, state, input_ref=None, inputs_provided=(), handler=None)` | same | Session-id CAS; refuses foreign sessions; refuses `starting` without a handler identity; an expired session accepts only the moves to `closing` and `contained` |
-| `confirm_interaction(..., session_id, outcome, confirmation, expected_frontier_digest)` | same | Called only by N03's boundary adapter with that boundary's confirmation record (§1.13); refuses without one. Re-checks I5 and that the session is `awaiting-human`; resolves the linked request; interaction `resolved`. Identical replay returns the stored resolution; a different outcome conflicts (`_CONFIRMATION_CONFLICT`) |
-| `complete_interaction(..., session_id, observations)` | same | Validates kinds, labels and bounds against the registry; status `completed`; session `closing`; clears the block. Replay with identical observations returns the stored record |
-| `postpone_interaction(..., session_id \| None, reason)` | same | User Not now, expiry, session loss, pause drain: status `postponed` with reason; session `closing`; request stays unresolved |
-| `fail_interaction_session(..., session_id, failure_code)` | same | `preparation-failed` (repairable code) or `unavailable` (environment code); session `closing` |
-| `release_interaction_session(..., session_id, exclusion)` | same | Releases the lease only with an exclusion proof (D13): no live process matches the recorded handler `pid` + `create_time`, and no live process is in its `pgid`. Otherwise `ERR_DELIVERY_INTERACTION_HANDLER_ALIVE`; the lease stays |
-| `contain_interaction_session(..., session_id, reason)` | same | Closure unknown (identity unreadable, `psutil` failure, kill refused): session `contained`; lease kept; Change shows attention `interaction-handler-unverified` with the recorded pid; the user or a later Cockpit re-runs the exclusion check; never auto-released by time |
-| `answer` | `portfolio_application.py:1340`; MCP and Cockpit callers | Refuses interaction-linked requests: `ERR_DELIVERY_INTERACTION_CONFIRMATION_ROUTE`. For every other request, N03's boundary decides whether a resolution counts as user-confirmed |
-| Builder block routes | `runtime_reads.py:710-731`, `runtime_settlement.py:524-558` | A linked request carrying a `resolution` is refused `interaction-request-invalid`; ordinary requests follow N03's boundary |
-| `submit_result` / `publish_result` admissibility | `delivery_runtime.py` facade; N03 `evidence.py` | Adds: an observation whose `procedure_registration_digest` equals a handler digest needs a `completed` interaction in the same outcome with that digest, `candidate_head == exact_commit`, and an equal machine observation (kind, result, platform, labels, target class); a `human-confirmed` observation citing an interaction-linked request needs `outcome = observed` and a non-stale completed interaction; a `waived` observation may not cite an interaction-linked request (§1.4). Reasons `interaction-evidence-unmatched`, `interaction-not-completed`, `interaction-stale`, `interaction-request-not-waiver` join N03's bounded `gaps` |
-| Projection | `work_items.py`, `application_models.py`, MCP `target_models.py`, Cockpit `target_models.py` | `DeliveryInteractionView{interaction_id, status, status_reason, handler purpose, why_human, user_step, human_step, confirmation_question, inputs (name, label, kind, required; never values), acceptance refs, candidate_head, session (state, expires_at, inputs_provided, input_ref; holder only as "this Cockpit" or "another Cockpit"), observations}` on `WorkItemDetailView`, `get_change` and the build context |
-| Cockpit HTTP (N06-B) | new `owlbear_cockpit/routes/interactions.py`, `interaction_sessions.py` | `POST /api/changes/{c}/interactions/{i}/session` (Help; lease; returns descriptors, `launch_summary` and the nonce in the JSON body; launches nothing), `POST …/start` (Start check; inputs, possibly none; launches), `GET …/session`, `POST …/postpone`, and the confirmation step of §1.13. Nonce header `X-OwlBear-Interaction-Session`, compared with `secrets.compare_digest`. The nonce is a panel-to-session binding, never user authorization. Error envelope `{code, detail, authority: "delivery", retry_safe}` with bounded field codes, never input values |
-| Loopback request guard (N06-B) | new `owlbear_cockpit/request_guard.py`, installed by `run()` (`main.py:311`) | Every request: `Host` ∈ {`127.0.0.1:<port>`, `localhost:<port>`} else 403 `COCKPIT_HOST_REJECTED`. Unsafe methods: a present `Origin` must equal `http://127.0.0.1:<port>` or `http://localhost:<port>`, and a present `Sec-Fetch-Site` must be `same-origin` or `none`, else 403 `COCKPIT_ORIGIN_REJECTED`. Header-less local clients pass (P8), so the guard is a cross-site defense only, never a user-presence check. Under N03 U2 (a) the confirmation route additionally needs the boundary's session cookie (§1.13) |
+| `update_interaction_session(..., session_id, expected_state, state, spawn=None, leader=None, input_ref=None, inputs_provided=())` | same | CAS on session id and state; refuses foreign sessions; `starting` requires a committed `spawn`; `leader` is set once, while `starting`, under a CAS on the spawn token; an expired session accepts only the moves to `closing` and `contained` |
+| Linked answer dispatch | N03's `answer` adapter and resolver (`target_server.py`), `PortfolioApplication.answer`, `DeliveryRuntime.resolve_request`; N06-A adds the interaction branch | Resolver: for a request whose procedure parses as an interaction handler, it renders only while the interaction is non-stale and its session is `awaiting-human` on `candidate_head` = branch head; the form adds the registry `confirmation_question` and `user_step`, `interaction_id`, `session_id`, `candidate_head`, and `decision_labels` as titles of N03's `passed` and `failed`. Otherwise it returns a plain refusal value and nothing is asked: `ERR_DELIVERY_INTERACTION_NOT_AWAITING_CONFIRMATION` or `_STALE`. Apply: one `RuntimeTransaction` under N03's `expected_frontier_digest` CAS writes the request resolution, appends the ledger confirmation, sets the interaction `resolved` with that `confirmation_id`, writes N03's schema-2 request-resolution receipt and the `resolved` transition receipt (D14), and holds an exact no-op coordination participant that requires the rendered session id and state `awaiting-human`. Any mismatch writes nothing. Replay follows N03: an identical answer returns the stored resolution; a later answer finds the request resolved |
+| `complete_interaction(..., session_id, observations)` | same | Validates kinds, labels and bounds against the registry; requires `resolved`; status `completed`; session `closing`; clears the block; transition receipt. Replay with identical observations returns the stored record |
+| `postpone_interaction(..., session_id \| None, reason)` | same | User Not now, expiry, session loss, pause drain: status `postponed` with reason; session `closing`; request stays unresolved; transition receipt |
+| `fail_interaction_session(..., session_id, failure_code)` | same | `preparation-failed` (repairable code) or `unavailable` (environment code); session `closing`; transition receipt |
+| `release_interaction_session(..., session_id)` | same | Runs the exclusion check itself through `interaction_custody` (D13); no caller-supplied proof. Releases only when it holds; a live owned process → `ERR_DELIVERY_INTERACTION_HANDLER_ALIVE`, lease kept; unknown → `contained` |
+| `contain_interaction_session(..., session_id, containment)` | same | Closure unknown (scan failure, unreadable identity, ambiguous member, kill refused): session `contained` with its `containment` record; lease kept; Change attention `interaction-handler-unverified`; never released by time |
+| `recheck_interaction_session(change_id, interaction_id, expected_session_id, expected_state)` | same | The user's recovery route for `closing` and `contained`, and for any state whose holder is dead (pid + `started_at`). Exact fence on session id and state. Runs the authorized kills and the exclusion check (D13), then releases, or stays `contained` with a fresh `containment`; an open session of a live holder → `_SESSION_BUSY`. Needs no nonce, opens no session, is not pause-gated (a drain step, K2) and never releases by elapsed time. Callable by the holding Cockpit or any later one |
+| `interaction_custody` | new `owlbear_delivery/interaction_custody.py` (leaf; `psutil` as `worker_stall.psutil_user_processes`, `worker_stall.py:347`) | `classify(session) -> InteractionExclusion{state: excluded \| alive \| unknown, owned, ambiguous}` and `kill_owned(session)` over current-user processes, by the rules of D13; a process-table protocol lets N06-A tests inject tables |
+| `answer` | `portfolio_application.py:1340`; MCP and Cockpit callers | Linked requests: the dispatch above, with every N03 refusal (`ERR_DELIVERY_CONFIRMATION`). Every scoped request: N03's boundary. Cockpit `answer_request` keeps N03-A's `channel-unavailable` refusal for scoped requests unless U2 is (a) |
+| Builder block routes | `runtime_reads.py:710-731`, `runtime_settlement.py:524-558` | A linked request outside §1.4 (kind, options, summary, procedure, criteria, `resume_commit`) is refused `interaction-request-invalid`; a `resolution` on any scoped request is N03's refusal |
+| `submit_result` / `publish_result` admissibility | `delivery_runtime.py` facade; N03 `evidence.py` | Adds: an observation whose `procedure_registration_digest` equals a handler digest needs a `completed` interaction in the same outcome with that digest, `candidate_head == exact_commit`, and an equal machine observation (kind, result, platform, labels, target class); a `human-confirmed` observation whose `confirmation_id` is an interaction's needs that interaction `completed` and non-stale with `candidate_head == exact_commit` (N03 I6 already requires decision `passed`). Reasons `interaction-evidence-unmatched`, `interaction-not-completed`, `interaction-stale` join N03's bounded `gaps` |
+| Projection | `work_items.py`, `application_models.py`, MCP `target_models.py`, Cockpit `target_models.py` | `DeliveryInteractionView{interaction_id, status, status_reason, handler purpose, why_human, user_step, human_step, confirmation_question, inputs (name, label, kind, required; never values), acceptance refs, candidate_head, confirmation (request_id, decision label) when resolved, session (state, expires_at, inputs_provided, input_ref, containment; holder only as "this Cockpit" or "another Cockpit"), observations}` on `WorkItemDetailView`, `get_change` and the build context |
+| Cockpit HTTP (N06-B) | new `owlbear_cockpit/routes/interactions.py`, `interaction_sessions.py` | `POST /api/changes/{c}/interactions/{i}/session` (Help; lease; returns descriptors, `launch_summary` and the nonce in the JSON body; launches nothing), `POST …/start` (Start check; inputs, possibly none; launches), `GET …/session`, `POST …/postpone`, `POST …/session/recheck` (body `{session_id, state}`; no nonce). No confirm route unless U2 is (a) (N06-C, §1.13). Nonce header `X-OwlBear-Interaction-Session`, compared with `secrets.compare_digest`. The nonce is a panel-to-session binding, never user authorization. Error envelope `{code, detail, authority: "delivery", retry_safe}` with bounded field codes, never input values |
+| Loopback request guard (N06-B) | new `owlbear_cockpit/request_guard.py`, installed by `run()` (`main.py:311`) | Every request: `Host` ∈ {`127.0.0.1:<port>`, `localhost:<port>`} else 403 `COCKPIT_HOST_REJECTED`. Unsafe methods: a present `Origin` must equal `http://127.0.0.1:<port>` or `http://localhost:<port>`, and a present `Sec-Fetch-Site` must be `same-origin` or `none`, else 403 `COCKPIT_ORIGIN_REJECTED`. Header-less local clients pass (P8), so the guard is a cross-site defense only, never a user-presence check. Under U2 (a) N06-C's confirm route also needs N03-C's exact `Origin` and cookie checks (§1.13) |
 | Cockpit access log (N06-B) | `run()` (`main.py:372`) | `uvicorn.run(..., access_log=False)` plus a Cockpit access logger emitted by the outer ASGI wrapper that logs method, route template (or `unmatched`), status and duration only, never the raw path, query string or headers; installed before the guard so rejected requests are logged the same way. uvicorn's error logger stays on; its malformed-request warnings carry no request target (verified in N06-B) |
-| Handler protocol v1 (N06-B) | new `owlbear_delivery/interaction_protocol.py` | JSON Lines, ≤ 16 KiB per line, ≤ 256 lines. Cockpit → handler: `start{protocol: 1, interaction_id, candidate_head, inputs}`, `human-step-complete{outcome}`, `cancel{}`. Handler → Cockpit: `ready`, `awaiting-human`, `observation{kind, result, platform, labels, target_class}`, `finished`, `failed{code}`. stdin EOF means cancel: clean up and exit (P7). Unknown messages, oversize lines or values echoed back end the session as `handler-failed` |
-| Handler launch (N06-B) | `owlbear_cockpit/interaction_sessions.py` | `subprocess.Popen(argv, stdin=PIPE, stdout=PIPE, stderr=PIPE, env=allowlist, cwd=…, start_new_session=True)`; the handler identity (pid, pgid = pid, `psutil` create time) is committed to the session before the `start` message is written, and a spawn whose identity cannot be committed is killed before any input is sent; inputs only in `start`; stderr kept in a 4 KiB memory ring, never logged or returned; deadlines per registry; close sends `cancel` (or `human-step-complete`), closes stdin, waits the cleanup deadline, then `killpg(SIGKILL)` and runs the exclusion check (D13) |
+| Handler protocol v1 (N06-B) | new `owlbear_delivery/interaction_protocol.py` | JSON Lines, ≤ 16 KiB per line, ≤ 256 lines. Cockpit → handler: `start{protocol: 1, interaction_id, candidate_head, inputs}`, `human-step-complete{outcome}` (`observed` or `not-observed`, from the ledger decision `passed` or `failed`), `cancel{}`. Handler → Cockpit: `ready`, `awaiting-human`, `observation{kind, result, platform, labels, target_class}`, `finished`, `failed{code}`. stdin EOF means cancel: clean up and exit (P7). Unknown messages, oversize lines or values echoed back end the session as `handler-failed` |
+| Handler launch (N06-B) | `owlbear_cockpit/interaction_sessions.py`, new `owlbear_cockpit/interaction_launcher.py` | After `spawn` is committed: `subprocess.Popen([python, -m, owlbear_cockpit.interaction_launcher, --token=<t>], stdin=PIPE, stdout=PIPE, stderr=PIPE, env=allowlist + token, cwd=…, pass_fds=(control,), start_new_session=True)`. `leader` (pid, `psutil` create time, cmdline digest; cmdline must carry the token) is committed before `release` is written to the control pipe; a failed commit closes the pipe. The launcher then starts the registry argv as its child with inherited stdio and the token in its environment; `start` (inputs only there) is written after `release`. stderr is kept in a 4 KiB memory ring, never logged or returned; deadlines per registry; close sends `cancel` (or nothing after `human-step-complete`), closes stdin, waits the cleanup deadline, then runs the D13 kills and `release_interaction_session` |
 
 Errors keep the existing envelopes: core `DeliveryInteractionError(DeliveryRuntimeConflictError)` with
 `ERR_DELIVERY_INTERACTION_*` codes mapped by MCP `_raise` (`target_server.py:1243-1250`) and Cockpit `_http_error`
@@ -215,21 +254,24 @@ Errors keep the existing envelopes: core `DeliveryInteractionError(DeliveryRunti
 
 | From | Event (channel) | To | Effects |
 | --- | --- | --- | --- |
-| — | Builder block with linked request (MCP settlement) | `needs-session` or `unavailable` | Block, request, interaction in one transaction |
+| — | Builder block with linked request (MCP settlement) | `needs-session` or `unavailable` | Block, request, interaction and `created` receipt in one transaction |
 | `needs-session`, `postponed` | Help with this step (Cockpit `open`) | session `awaiting-input` | Lease; nonce in memory; panel shows `launch_summary` and inputs; nothing launched |
-| session `awaiting-input` | Start check (Cockpit `start`) | session `starting` | Validate; spawn; handler identity committed; `start` message on stdin; `input_ref`; Cockpit drops its reference |
-| session `starting` | handler `awaiting-human` | session `awaiting-human` | Panel shows the confirmation question |
-| session `awaiting-human` | boundary confirmation (§1.13) | `resolved`; session `finishing` | Request resolved; `human-step-complete` sent |
+| session `awaiting-input` | Start check (Cockpit `start`) | session `starting` | Validate inputs; commit `spawn`; start the launcher; commit `leader`; `release`; the launcher starts the handler; `start` on stdin; `input_ref`; Cockpit drops its references (D13) |
+| session `starting` | handler `awaiting-human` | session `awaiting-human` | Readiness `interaction-awaiting-confirmation`; panel per §1.13 |
+| session `awaiting-human` | linked `answer` accepted (N03 boundary, §1.13) | `resolved`; session unchanged | Request resolution, ledger entry, `confirmation_id` and receipts in one transaction |
+| session `awaiting-human` | answer declined, cancelled, refused, channel missing or request state invalid | unchanged | Nothing written |
+| session `awaiting-human`, interaction `resolved` | Cockpit reads the resolution bound to its session | session `finishing` | `human-step-complete{outcome}` |
 | session `finishing` | handler `finished` | `completed`; session `closing` | Observations; block cleared |
 | any open session state | Not now (`postpone`) | `postponed` / `user-postponed`; session `closing` | `cancel` |
 | any open session state | `expires_at` passes (Cockpit timer) | `postponed` / `session-expired`; session `closing` | `cancel` |
 | any open session state | handler `failed`, exit or protocol violation | `preparation-failed` or `unavailable`; session `closing` | By registry code |
-| session `closing` | exclusion verified (D13) | lease released | Only now may another session or writer acquire the Change |
-| session `closing` | cleanup deadline passes | still `closing` | `killpg(SIGKILL)`; exclusion check again |
-| session `closing` | exclusion cannot be verified | session `contained` | Lease kept; attention `interaction-handler-unverified` |
+| session `closing` | exclusion holds (D13) | lease released | Only now may another session or writer acquire the Change |
+| session `closing` | cleanup deadline passes | still `closing` | D13 kills; exclusion check again |
+| session `closing` | exclusion unknown | session `contained` | Lease kept; attention `interaction-handler-unverified` with `containment` |
+| session `closing` or `contained` | **Check again** (`recheck`) | released, or `contained` with a fresh `containment` | No timer; no new session |
 | any session state | Cockpit exits (clean) | as Not now or `session-lost`; session `closing` | Shutdown hook runs close and the exclusion check before exit; if it cannot finish, the lease stays |
-| any session state | Cockpit dies (SIGKILL) | unchanged until a Cockpit starts | Handler sees EOF (P7), but nothing is released by time: the next Cockpit start, or `open` on that Change, finds the holder dead (pid + `started_at`), kills the recorded group, runs the exclusion check and moves the session to `closing` → released, or to `contained`. Interaction becomes `postponed` / `session-lost`, or `preparation-failed` / `session-lost` if it was `resolved` |
-| `resolved` (session `finishing`) | session lost before `finished` | `preparation-failed` / `session-lost` | Block clears as a counted same-task Builder retry after release; the resolution cannot support a result |
+| any session state | Cockpit dies (SIGKILL), including between spawn and `leader` | unchanged until a Cockpit acts | Handler sees EOF (P7); an unreleased launcher exits at control-pipe EOF (P11). Nothing is released by time: the next Cockpit start, or `open` or `recheck` on that Change, finds the holder dead (pid + `started_at`) and runs the D13 kills and exclusion check, by token alone when `leader` is missing. Then released, or `contained`. Interaction becomes `postponed` / `session-lost`, or `preparation-failed` / `session-lost` if it was `resolved` |
+| `resolved` (session `awaiting-human` or `finishing`) | session lost before `finished` | `preparation-failed` / `session-lost` | Block clears as a counted same-task Builder retry after release; the resolution cannot support a result |
 | any | head, contract or handler change | `stale` | Refuse confirm and complete; Builder retry |
 | any | operator clears the block | `stale` / `block-cleared` | Session cancelled |
 | `needs-session` | pause request | unchanged; `open` refused | Open sessions drain (K2) |
@@ -247,18 +289,23 @@ inventory; D03 retry ledger and same-task reacquisition; `ChangeContinuationActi
 (`workspace_models.py:551-571`) as the holder pattern; the N02 registry, gate, `delivery-migrate` and `delivery-lc`;
 Cockpit's error envelope and `handle_target_validation_error` (`target_work.py:845-858`), which already returns a
 fixed body for `/api/changes`; the instance record pattern (`main.py:211-216`); `Client(assemble_target_server(...))`,
-the HTTP test client and the maintained E2E stack (`e2e/support/start-work-portfolio-stack.mjs`).
+the HTTP test client and the maintained E2E stack (`e2e/support/start-work-portfolio-stack.mjs`); N03's D13 `answer`
+resolver and boundary, ledger readers `resolve_confirmation` and `confirmation_applies`, the schema-2
+request-resolution receipt and the L replay row; `worker_stall.psutil_user_processes` (`worker_stall.py:347`).
 
 ### 1.10 Contracts for successors
 
 **N07 (B1 assisted-check runner)** builds on exactly these N06 surfaces:
 
 1. One `InteractionHandlerDescriptor` for B1 added to `DEFAULT_INTERACTION_HANDLERS`: `argv` runs the candidate's
-   handler inside `{candidate_worktree}`; `human_step: sign-in`; one `url` input, `private`, with a `host_policy`;
+   handler inside `{candidate_worktree}`; `human_step: sign-in`; one `url` input, `private`, with a `url_policy`
+   (`host_policy`, and `query_keys` only if a B1 target needs a query, each with a value pattern);
    `target_classes` (for example `sharepoint`, `confluence`); `platforms: (macos,)`; `resources: (edge-profile,)`;
    observation kinds for launch, restart and owned cleanup; failure codes classified repairable or environment.
 2. The candidate-side handler implements protocol v1 from its own source, reads inputs only from `start`, never
-   echoes them, treats stdin EOF as cancel, and reports only registry-declared kinds and labels.
+   echoes them, treats stdin EOF as cancel, and reports only registry-declared kinds and labels. Every process it
+   starts keeps the inherited environment, so the spawn token marks it as custody (D13); a process started
+   through a service manager (for example `open -a`) leaves custody and is N07's to track.
 3. Profile custody and cross-Change contention for `edge-profile` are N07's: the N06 lease ends when the session
    ends and does not prove the browser or profile was released.
 4. N07-B's evidence reassessment uses N04 applicability over interaction-backed observations; N06 adds no
@@ -267,8 +314,9 @@ the HTTP test client and the maintained E2E stack (`e2e/support/start-work-portf
    through `/upgrade-delivery`, so Cockpit runs the pinned release. Whether candidate code launched from it
    needs a launcher change is N07's question (G8).
 
-**N09-B** lists **Help with this step** and the interaction reasons in its capability inventory and keeps
-`/continue-change`'s `human` yield for them. **N04** maps interaction-backed observations like other `manual-procedure`
+**N09-B** lists **Help with this step**, **Check again** and the interaction reasons in its capability inventory
+and keeps `/continue-change`'s `human` yield for them, including the `confirmation` hand-off to MCP `answer`
+(§1.13). **N04** maps interaction-backed observations like other `manual-procedure`
 and `command` evidence; an activation makes open interactions `stale`. **N08-B** does not mount interaction routes in
 degraded mode. **N10** covers V17 and V22 in the cumulative matrix; the real B1 device run is N10-H.
 
@@ -277,7 +325,7 @@ degraded mode. **N10** covers V17 and V22 in the cumulative matrix; the real B1 
 B1 handler, synthetic sites and Edge profile custody (N07); evidence applicability after revision (N04); the
 **Change requirements** control (N04); prompt retirement (N09-B); generic interactive-browser tools and B5's policy;
 OS keychain storage; a separate loopback form server, runner process or Unix-socket channel (D1); defining a
-user-only confirmation mechanism (N03's boundary, §1.13); confirmation through chat text; Windows.
+user-only confirmation mechanism or channel (N03's boundary and U2, §1.13); confirmation through chat text; Windows.
 
 ### 1.12 Decisions
 
@@ -296,17 +344,22 @@ Agent-settled with probe evidence:
 - **D2 Interaction attached to a Decision Request** ([1.4](#14-relation-to-deliveryrequest-programme-p-must-settle)).
   Reuses the Builder block route, retained scoped confirmations and N03's evaluator; no request or block schema
   change; no binding-embedding receipt widens.
-- **D3 No nested evidence schema change.** N03 §1.9 anticipated `confirmation.kind = interaction` and an
-  `interaction:` locator scheme. With D2 the confirmation is N03's request resolution and the locator is
-  `request:<id>`; the extra binding to candidate and handler is an admissibility rule (§1.7). N03's G5 closes here.
+- **D3 No N06 change to N03's confirmation or locator shapes** (P12). N03 §1.5 and §1.9 expect N06 to add
+  confirmation channel `interaction` and an `interaction:` locator scheme. Neither is needed. The channel records
+  the capture route (`mcp-elicitation`, or N03-C's `cockpit` under U2 (a)); an `interaction` value would name a
+  target, not a route. The interaction binding is carried by the scope's `procedure`, by the rendered question
+  whose digest the ledger keeps (`interaction_id`, `session_id`, `candidate_head`), and by
+  `DeliveryInteraction.confirmation_id`. `DeliveryUserConfirmation` stays schema 1 with N03's channel enum, the
+  locator schemes stay N03's, and N06 adds no nested version step beyond the frontier widening for
+  `interactions` (§1.6). N03 G5 closes; F6 records the N03 text this supersedes.
 - **D4 Confirmation through N03's boundary only.** The MCP `answer` tool accepts caller-set
-  `provenance: user-confirmed` (`target_server.py:442-460`; Cockpit `AnswerRequestBody` defaults it,
+  `provenance: user-confirmed` today (`target_server.py:442-460`; Cockpit `AnswerRequestBody` defaults it,
   `target_models.py:381`), and both Builder block routes store a worker-supplied `resolution` verbatim
-  (`runtime_reads.py:710-731`, `runtime_settlement.py:524-558`). None of these can separate a user's confirmation
-  from an agent call, for linked or ordinary requests. N06 therefore defines no confirmation channel of its own:
-  `confirm_interaction` accepts only N03's boundary record (§1.13), `answer` refuses linked requests, block
-  settlement refuses pre-resolved linked requests, and N03's boundary governs every other request, waivers
-  included. Round 1 of this plan made a Cockpit-only route the boundary; that was wrong (P10).
+  (`runtime_reads.py:710-731`, `runtime_settlement.py:524-558`). N03-A closes all three for scoped requests. N06
+  defines no channel: a linked request is a scoped `confirm-check` request answered through N03's `answer`, with
+  an interaction branch in its resolver and transaction (§1.7). Round 1 of this plan made a Cockpit-only route
+  the boundary (wrong, P10); its revision refused `answer` on linked requests and accepted a removed
+  `confirmation: {kind: request-resolution}` record (incompatible with N03's ledger, P12).
 - **D5 Loopback request guard for all of Cockpit** (P2, P8). Cockpit has no middleware (`main.py:57-62`). From any
   page on another loopback port, Chromium executes body-less cross-origin POSTs such as
   `POST /api/changes/{id}/publication/ready` (`target_work.py:638-640`), sending `Sec-Fetch-Site: same-site`; a
@@ -330,16 +383,53 @@ Agent-settled with probe evidence:
 - **D11 No handler free text in portable records** (I7): portable state is published to the configured remote.
 - **D12 Execution-plan deltas** ([3.5](#35-execution-plan-deltas-and-false-premises)): one added prerequisite, no
   re-split.
-- **D13 Custody until exclusion.** Expiry, completion and Cockpit exit start closing; only a verified exclusion
-  releases the lease. The session records the handler's `pid`, `pgid` and `psutil` create time before any input is
-  sent (restart-safe identity, as N08 D12). Exclusion holds when no live process has the recorded pid with that
-  create time and no live process with a create time at or after it is in the recorded group. Group members are
-  killed with `killpg(SIGKILL)` only while that identity check holds, so a reused pid is never signalled. If the
-  check cannot run or a member survives the kill, the session is `contained`: the lease stays, the Change shows
-  `interaction-handler-unverified`, and no timer releases it. A dead Cockpit's session is recovered by the next
-  Cockpit start or `open` (holder pid + `started_at` no longer live), never by elapsed time. Residual: a handler
-  that leaves its process group (`setsid`, double fork) escapes this check; registry handlers are repository code,
-  and N07 owns Edge profile custody (§1.10 item 3).
+- **D13 Custody until exclusion, with positive process ownership** (P7, P11; programme §5.2). A crash or a
+  reused pid must never release custody or aim a signal at another process.
+  - *Pre-spawn authority.* Before any process exists, Cockpit commits the session's `spawn{token, intent_at}`
+    (state `starting`). The token is 128-bit random and marks ownership; it authorizes nothing, so its
+    visibility to the same user (P5) is harmless.
+  - *Release-gated launcher.* Cockpit starts `owlbear_cockpit.interaction_launcher` with `start_new_session=True`
+    (pid = pgid = sid), the token in its argv and environment, and a control pipe. It runs nothing until it reads
+    `release`; EOF or any other bytes first make it exit without starting the handler (P11).
+  - *Identity before execution.* Cockpit reads the launcher's `psutil` create time, checks the token in its
+    cmdline, commits `leader{pid, create_time, cmdline_digest}` under a session-id and token CAS, and only then
+    writes `release`. The launcher starts the registry argv as its child with the token added to the allowlisted
+    environment; Cockpit then writes `start`. A failed commit closes the control pipe. A Cockpit crash at any
+    point therefore leaves either no handler or a recorded leader.
+  - *Pinned leader.* After `release` the launcher reaps its child and then waits; it never exits on its own. A
+    live leader pins its group for the whole custody: POSIX never gives a new process the pid of an active
+    process group, and `setpgid` joins only groups of the caller's session, whose members descend from the
+    leader.
+  - *Who may be signalled.* (1) The recorded group, by `killpg(SIGKILL)`, only right after the leader was
+    verified live by pid, create time and cmdline token. (2) Any current-user process whose environment or
+    cmdline carries the token, one at a time through `psutil.Process.send_signal`, which refuses a pid whose
+    create time changed. Nothing else is ever signalled (I11).
+  - *Exclusion.* Holds when no live process carries the token, the leader identity is not live, and no member of
+    the recorded group or session is ambiguous. A member is ambiguous when it lacks the token while no process
+    holds the leader's pid: it may belong to a reused group or be a descendant that cleared its environment. A
+    live process holding the leader's pid with another create time proves the recorded group ended before that
+    process was created (the fork rule above), so token-less members of a group it leads are not ours and are
+    ignored. Zombies count as exited.
+  - *Containment.* A failed scan, an unreadable environment or cmdline inside the recorded group or session, an
+    ambiguous member or a kill the OS refuses keeps the lease in `contained` with a bounded `containment`
+    record. Nothing releases it by time; **Check again** (`recheck`, §1.7) re-runs the kills and the check.
+  - *Missing identity.* A session with `spawn` and no `leader` (a crash between spawn and commit) is checked by
+    token alone; the blocked launcher has normally exited at control-pipe EOF already (P11).
+  - *Token here, not in N08 D12.* N08 rejects an environment marker for controllers because children inherit it;
+    for an interaction, inheritance is the point, since every descendant is custody.
+  - *Residual.* A descendant that both calls `setsid` and clears its environment escapes; registry handlers are
+    repository code, and N07 owns Edge profile custody (§1.10 items 2 and 3, G15).
+- **D14 Interaction writes replay through receipts** (P12). During a retained Builder handoff the loader refuses a
+  pending publication (`delivery_application_loader.py:603-607`) and rebuilds the expected frontier from
+  `snapshot.frontier` with only the handoff binding substituted (`:1010-1053`); a local `interactions` change would
+  make the Change unavailable after a restart. Every N06 frontier write during a retained handoff therefore writes
+  one `_DeliveryInteractionTransitionReceipt` (§1.6) in its transaction. N06-A extends N03's L row: every
+  expected frontier built from `snapshot.frontier` takes the snapshot's `interactions`, then the `after` of each
+  receipt that precedes that frontier's point in the handoff (N03's answer and lifecycle rank), in sequence order.
+  A `resolved` receipt's `confirmation_id` must equal the ledger entry that its answer's schema-2
+  request-resolution receipt binds. A local interaction that no receipt binds, a broken `before_digest` chain or a
+  byte difference fails the existing bootstrap check (V20). Outside a retained handoff, interaction writes record
+  pending publication like other portable writes.
 
 #### U1 — Retention and privacy policy for private inputs and interaction evidence
 
@@ -370,35 +460,48 @@ execution plan (§7) had reserved this decision for N06.
 
 ### 1.13 Confirmation channel under N03 U2
 
-N03 owns the single definition of a user-only confirmation (PR #360, being amended): the Delivery MCP server asks
-the user through MCP elicitation (`elicitation/create`) inside the tool call; caller-supplied provenance never
-counts; a declined or cancelled elicitation records nothing; a client without elicitation support gets a typed
-refusal. N03 applies it to waivers and human-confirmed evidence. Its U2 (open user decision) is whether a Cockpit
-click also counts. N06 defines no mechanism; it binds the boundary to an interaction:
+N03 (PR #360 at `86289635f`) owns the only user-only confirmation. MCP `answer` on a scoped request asks the user
+through form elicitation from one server-injected `Annotated[DeliveryConfirmationOutcome, Resolve(...)]` parameter,
+on the legacy `elicitation/create` route or the modern `InputRequiredResult` round trip. An `accept` appends one
+`DeliveryUserConfirmation` to the Change ledger (I10) together with the request resolution and, during a retained
+handoff, a schema-2 request-resolution receipt, in one transaction. Decline, cancel or a missing channel writes
+nothing (`ERR_DELIVERY_CONFIRMATION`), and the SDK's `RequestStateBoundary` refuses forged, foreign, expired or
+re-bound state. N03 U2 (open user decision, N03 `:511-570`) decides whether a Cockpit click also counts. N06 adds
+no channel; it adds the interaction branch of §1.7 to that `answer`.
 
-- **Common to both answers.** The boundary's question is the registry `confirmation_question`, its two options are
-  the registry outcomes, and its target is the exact interaction, session and `candidate_head`. The boundary
-  adapter calls `confirm_interaction` with the boundary's record; N06 then re-checks I5 and `awaiting-human`.
-  Decline, cancel, refusal or timeout records nothing and leaves the session `awaiting-human` until **Not now** or
-  expiry. Every other path to a resolution of a linked request is refused (§1.4, §1.7).
-- **Under U2 (b), only elicitation counts** (lead recommendation). Cockpit has no confirm route. When the handler
-  reports `awaiting-human`, the panel tells the user to answer the confirmation in VS Code chat; the
-  interaction projection marks the step `awaiting-confirmation` and `/continue-change` yields `human` with an
-  instruction to call N03's boundary tool for this interaction. The Cockpit panel shows progress and **Not now**
-  only. Cockpit start, inputs and handler launch are unchanged; they are not confirmations.
-- **Under U2 (a), Cockpit clicks count** with N03's defense: `POST …/confirm` additionally requires an exact
-  `Origin` (no header-less pass) and N03's `HttpOnly; SameSite=Strict` session cookie set by Cockpit's own page,
-  plus the nonce. Residual risks, recorded with the decision: an agent driving a browser tool against Cockpit
-  clicks as the user; another loopback port is same-site, so the cookie is sent cross-port (P2) and only the exact
-  `Origin` check stops that; a same-user process can read the browser cookie store. The elicitation path of (b)
-  also stays available.
-- **What changes between (a) and (b):** only the confirm step. Under (b): no `…/confirm` route, the panel's
-  confirmation buttons become chat guidance, the orchestrator skill gains the elicitation hand-off, and N06-C's
-  E2E confirms through a stub MCP client that answers elicitation. Under (a): the route exists with cookie and
-  exact-Origin checks, and N06-C clicks **Observed** in Chromium. Readiness, custody, inputs, launch, D13,
-  evidence admissibility and V22 are identical.
-- **Until U2 is answered:** N06-A builds `confirm_interaction` against N03's boundary record type and tests it with
-  an elicitation-backed MCP client; N06-B does not ship a confirm route (G14).
+**Journey under U2 (b), chat only** (N03's recommendation):
+
+1. The handler reports `awaiting-human`; Cockpit moves the session to `awaiting-human`. The panel shows the
+   question, says to confirm in VS Code chat, offers a copyable `/continue-change <change-id>` and keeps **Not now**.
+2. Readiness reads `interaction-awaiting-confirmation`. `/continue-change` acquires `human` with
+   `confirmation{request_id, expected_frontier_digest}` and, per `w-orchestration`, calls MCP `answer` with only
+   the Change, request and frontier identifiers. The agent supplies no decision, and a caller `resolution` would
+   confer nothing.
+3. The resolver renders the interaction question (§1.7) and VS Code shows the form; the user picks **Observed**
+   (`passed`) or **Not observed** (`failed`).
+4. The §1.7 transaction resolves the request, appends the ledger entry and sets the interaction `resolved`.
+5. Cockpit's session manager, which reads the frontier at most once a second while `awaiting-human`, sees the
+   resolution bound to its session, sends `human-step-complete{outcome}` and moves the session to `finishing`.
+6. The handler reports `finished`; `complete`, close and release follow (§1.8); continuation reacquires the
+   Builder task.
+
+Decline, cancel, a missing channel, a refusal or an invalid request state writes nothing; the session stays
+`awaiting-human` until the user answers a fresh `answer`, selects **Not now**, or the session expires. An expiry
+during the elicitation changes the frontier, so the late answer fails N03's CAS.
+
+**Journey under U2 (a), Cockpit clicks also count.** Steps 1 and 3 change: the panel shows **Observed** and **Not
+observed**, and N06-C's `POST …/confirm` hands the decision to N03-C's Cockpit boundary adapter. That adapter
+builds the channel-`cockpit` confirmation behind N03-C's exact-`Origin` and `SameSite=Strict` cookie checks and
+calls the same `PortfolioApplication.answer` dispatch, so steps 4 to 6 are identical. The chat journey stays
+available. Residual risk is N03 U2 (a)'s: an agent driving a browser can click.
+
+**U2 (c) or (d).** (d) keeps human checks chat-only, so N06 follows (b). (c) needs an N03 plan revision for the
+presence helper; N06 follows (b) until it lands.
+
+**Order.** N06-A starts after N03-C (execution plan §4.2), and N03-C starts only after U2 is answered, so the answer
+is known before any N06 code. N06-A proves the dispatch through `Client(assemble_target_server(...))` on both
+protocol routes; N06-B proves journey (b) end to end with a real Cockpit, launcher and handler; N06-C ships and
+proves journey (a) only if U2 is (a), and otherwise proves that no confirm route exists (G14).
 
 ## 2. Feasibility Probes
 
@@ -416,7 +519,9 @@ no Delivery state touched. Scripts and outputs: `.owlbear/scratch/n06p/` (unvers
 | P7 | `p7_p8_handler_guard.py` P7: parent → child JSON over stdin, then `SIGKILL` of the parent; `killpg` of a new-session group with a grandchild | Child's first message carried input names only; after the parent's death the child read EOF immediately; `killpg` left no survivor | Handler protocol EOF = cancel; group kill ends grandchildren (macOS; Ubuntu in G6) |
 | P8 | P8: prototype guard middleware, same Chromium setup | Same-origin page 200; cross-port forged POST blocked; rebinding host 403; header-less local `httpx` POST 200 | D5 guard is feasible and does not break local clients |
 | P9 | `pytest serve/delivery/tests/test_state_formats.py` (one file) | 85 passed in 4.13 s; hygiene (`:179`), fingerprint (`:274`) and unrecognized-record (`:686`) tests present | New nested and coordination models must be registered; the fingerprint test catches an unversioned schema change |
-| P10 | Round-1 gate source reads on `1600efa60` (source equal to `634a77be7`) | Both Builder block routes copy the worker's `DeliveryRequest`, `resolution` included (`runtime_reads.py:710-731`, `runtime_settlement.py:524-558`); `DeliveryRequestResolution.provenance` is a caller-set literal (`runtime_models.py:821-837`); MCP `answer` forwards it (`target_server.py:442-460`); `run()` calls `uvicorn.run(app, host=_HOST, port=port)` with the default access log (`main.py:372`); the session-open response carries the nonce and the guard admits header-less clients (this plan); `psutil` 7.2.2 and `mcp` 2.2.0 are locked; no `elicit` call exists in `serve/` | Gate findings 1, 2, 3 and 5 hold; confirmation moves to N03's boundary (D4, §1.13); D13; access log off (§1.7) |
+| P10 | Round-1 gate source reads on `1600efa60` (source equal to `634a77be7`) | Both Builder block routes copy the worker's `DeliveryRequest`, `resolution` included (`runtime_reads.py:710-731`, `runtime_settlement.py:524-558`); `DeliveryRequestResolution.provenance` is a caller-set literal (`runtime_models.py:821-837`); MCP `answer` forwards it (`target_server.py:442-460`); `run()` calls `uvicorn.run(app, host=_HOST, port=port)` with the default access log (`main.py:372`); the session-open response carries the nonce and the guard admits header-less clients (this plan); `psutil` 7.2.2 is locked (the `mcp` version is corrected in P12); no `elicit` call exists in `serve/` | Gate findings 1, 2, 3 and 5 hold; confirmation moves to N03's boundary (D4, §1.13); D13; access log off (§1.7) |
+| P11 | `p11_launcher.py` on `e2fa3d913` (macOS, `psutil` 7.2.2): a launcher started with `start_new_session=True`, a control pipe (`pass_fds`) and a token in argv and environment | pid = pgid = sid; `psutil` reads the token from its cmdline and environment; closing the control pipe before `release` makes it exit 0 without spawning and leaves no token holder; after `release` its child and grandchild inherit the token in the same group (3 holders); `killpg` of the verified leader leaves no token holder | D13 release gate, token ownership and group kill (Ubuntu in G6) |
+| P12 | Round-2 gate source reads on `e2fa3d913` (source equal to `634a77be7`) and lane-c `86289635f` | N03 now defines D13 (`Resolve` parameter, legacy and modern routes, SDK `RequestStateBoundary`), the ledger with `confirmation_id` and channel enum (§1.5), I6, I10, the schema-2 request-resolution receipt binding the ledger append and the L replay row (§1.7), `ERR_DELIVERY_CONFIRMATION`, N06 expected to add channel `interaction` and an `interaction:` locator (§1.5, §1.9), U2 open (`:511-570`); the `confirmation: {kind: request-resolution}` shape no longer exists. The loader refuses a pending publication beside a Builder handoff (`delivery_application_loader.py:603-607`) and rebuilds the handoff frontier from `snapshot.frontier` with one binding substituted (`:1010-1053`). N08 D12 identifies controllers by pid, create time and cmdline digest and rejects an environment marker because children inherit it. `uv.lock` locks `mcp` 2.3.0 (P10 recorded 2.2.0 in error). The round-1 URL rule admits `?client_secret=…` and `/%61ccess_token=…` | Round-2 findings 1–5 hold; D3, D4, D13, D14, §1.5, §1.13 |
 
 ## 3. Phases
 
@@ -437,44 +542,51 @@ no Delivery state touched. Scripts and outputs: `.owlbear/scratch/n06p/` (unvers
 
 ### 3.2 N06-A — Interaction lifecycle, registry, readiness gate and binding
 
-- **Prerequisites:** N06-P, N03-C and N03's user-only boundary as amended by PR #360 (G14); added by this plan:
-  N09-A2 (coordination v2, pause K-inventory).
+- **Prerequisites:** N06-P and N03-C (execution plan §4.2); N03-C needs N03-A's boundary, ledger and receipts as
+  amended by PR #360 and an answered N03 U2 (G14); added by this plan: N09-A2 (coordination v2, pause K-inventory).
 - **Editable paths:**
-  - new `serve/delivery/src/owlbear_delivery/interaction_registry.py`, `application_interactions.py`
+  - new `serve/delivery/src/owlbear_delivery/interaction_registry.py`, `application_interactions.py`,
+    `interaction_custody.py`
   - `runtime_models.py`: `DeliveryInteraction`, `DeliveryInteractionObservation`, `DeliveryFrontier.interactions`
     and version widening; `DeliveryInteractionError`
-  - `runtime_settlement.py`, `runtime_reads.py`: both request-bearing block routes (interaction creation,
-    validation, refusal of a pre-resolved linked request)
-  - `delivery_runtime.py` facade: frontier writers for interaction status, `publish_result` admissibility (§1.7);
-    N03 `evidence.py` gap reasons
+  - `runtime_settlement.py`, `runtime_reads.py`: both request-bearing block routes (interaction creation and
+    validation, `created` receipt)
+  - `runtime_receipts.py`: `_DeliveryInteractionTransitionReceipt`; handoff change-intent widening
+  - `delivery_runtime.py` facade: frontier writers for interaction status with their transition receipts,
+    `resolve_request`'s interaction branch, `publish_result` admissibility (§1.7); N03 `evidence.py` gap reasons
   - `workspace_models.py`: `ChangeInteractionSession`, `ChangeCoordination.interaction_session`, version widening;
-    `workspace_coordination.py`: lease open/update/release with the no-op frontier participant and the K3 check
-  - `application_models.py`: views, `DeliveryContinuationReason` additions; `application_acquisition.py`: `human`
-    results, busy under an open session, Builder retry for preparation failure and stale;
-    `application_readiness.py`, `work_items.py`: reasons, `HELP_WITH_STEP`, progress rows, static probe
-  - `portfolio_application.py`: `answer` refusal; `delivery_application_loader.py`: `interaction_handlers` composition
-    parameter and N03 §1.7 normalized comparisons for the new frontier field
-  - `delivery_state.py`: snapshot version; `runtime_receipts.py`: handoff change-intent widening
+    `workspace_coordination.py`: lease open, update, recheck and release with the no-op frontier participant and
+    the K3 check
+  - `application_models.py`: views, `DeliveryContinuationReason` additions and the `confirmation` handle;
+    `application_acquisition.py`: `human` results, busy under an open session, Builder retry for preparation
+    failure and stale; `application_readiness.py`, `work_items.py`: reasons, `HELP_WITH_STEP`,
+    `CHECK_HANDLER_STOPPED`, progress rows, static probe
+  - `portfolio_application.py`: `answer`'s interaction dispatch (§1.7); `delivery_application_loader.py`:
+    `interaction_handlers` composition parameter, N03 §1.7 normalized comparisons for the new frontier field, and
+    the D14 extension of N03's L row
+  - `delivery_state.py`: snapshot version
   - `state_formats.py`, `state_migration.py`: §1.6 entries, `NESTED_MODELS`, marker step
   - `owlbear_delivery/__init__.py`; `serve/delivery/tests/fixtures/module_surface.json`; N02 fingerprint and golden
     fixtures
-  - `serve/delivery-mcp/src/owlbear_delivery_mcp/target_models.py`, `target_server.py`: views, error codes; no new
-    tool
+  - `serve/delivery-mcp/src/owlbear_delivery_mcp/target_models.py`, `target_server.py`: views, error codes, the
+    interaction branch of N03's `answer` resolver; no new tool
   - `serve/tools/src/owlbear_tools/delivery_diagnostics.py`: version mirror
   - frontend companions: `serve/cockpit/web/src/api/workItems.ts`, `components/workItemPresentation.ts`,
     `WorkItemDetail.tsx` (interaction-linked requests show status and reason without answer controls),
     `WorkPortfolioPage.tsx`; component test; `serve/cockpit/src/owlbear_cockpit/target_models.py`
-  - tests: new `serve/delivery/tests/test_interaction_registry.py`, `test_interactions.py`; `test_state_formats.py`,
-    `test_state_migration.py`, `test_delivery_runtime.py`, `test_work_items.py`;
-    `serve/delivery-mcp/tests/test_target_server.py`;
-    `serve/tools/tests/test_delivery_diagnostics.py`; `tests/test_cockpit_boundary.py` (reason, progress and action
-    parity); `tests/test_delivery_worktree_authority.py` (new frontier writers; lease in the K-inventory);
-    `tests/test_agent_ecosystem_validation.py`
-  - skill and agent text: `share/skills/w-packet-building/SKILL.md` (block with an interaction-linked request; copy
-    machine observations; never collect values in requests), `share/skills/h-decision-requests/SKILL.md` (no URLs,
-    hostnames, credentials or tokens in request answers), `share/skills/w-orchestration/SKILL.md` (yield on
-    interaction reasons with the Cockpit instruction; never confirm), `share/agents/repairer.agent.md` (never answer
-    linked requests)
+  - tests: new `serve/delivery/tests/test_interaction_registry.py`, `test_interactions.py`,
+    `test_interaction_custody.py`; `test_state_formats.py`, `test_state_migration.py`, `test_delivery_runtime.py`,
+    `test_work_items.py`, `test_portfolio_application.py`; `serve/delivery-mcp/tests/test_target_server.py`,
+    `test_delivery_adapter.py`; `serve/tools/tests/test_delivery_diagnostics.py`; `tests/test_cockpit_boundary.py`
+    (reason, progress and action parity); `tests/test_delivery_worktree_authority.py` (new frontier writers; lease
+    in the K-inventory); `tests/test_agent_ecosystem_validation.py`
+  - skill and agent text: `share/skills/w-packet-building/SKILL.md` (block with a `confirm-check` request naming the
+    interaction procedure; cite the interaction's `confirmation_id`; copy machine observations; never collect
+    values in requests), `share/skills/h-decision-requests/SKILL.md` (no URLs, hostnames, credentials or tokens in
+    request answers), `share/skills/w-orchestration/SKILL.md` (on `interaction-awaiting-confirmation`, call MCP
+    `answer` with only the Change, request and frontier identifiers and tell the user to answer the form; never pass
+    a resolution; on other interaction reasons, yield with the Cockpit instruction), `share/agents/repairer.agent.md`
+    (never answer scoped requests)
   - this plan's N06-A row; execution plan status row
 - **Positive scenarios:**
   - A Builder block whose Decision Request names `interaction-handler:synthetic-acknowledgement@1` (test registry)
@@ -486,52 +598,76 @@ no Delivery state touched. Scripts and outputs: `.owlbear/scratch/n06p/` (unvers
   - `open` → lease; Builder, Planner, Finalizer and engine-action acquisition on that Change return `busy`; a second
     `open` from another holder → `_SESSION_BUSY`; after `expires_at` the session moves to `closing`, the old
     interaction reads `postponed` / `session-expired`, and a new `open` succeeds only after
-    `release_interaction_session` with an exclusion proof.
-  - `update` (input_ref, names, handler identity) → `confirm_interaction(observed)` from an elicitation-backed MCP
-    test client through N03's boundary resolves the request; identical replay returns it; `complete` with
-    registry-valid observations → `completed`, session `closing`; `release` with an exclusion proof frees the
-    lease and clears the block; the same Builder task is reacquired with the interaction in its build context.
-  - The Builder submits a `manual-procedure` `human-confirmed` observation citing the request plus copied machine
-    observations at `exact_commit = candidate_head`; the result promotes and N03's evaluator shows the criterion
-    `covered`.
-  - Pause request while `needs-session` → `open` refused; with an open session → `update`, `confirm`, `complete` and
-    `postpone` succeed and the pause converts after release (N09 K2).
+    `release_interaction_session` finds exclusion in the injected process table.
+  - Linked answer (§1.7, §1.13) with the session `awaiting-human`, through `Client(assemble_target_server(...))`
+    with an `elicitation_callback` that accepts `passed`, on `mode="legacy"` and `mode="2026-07-28"`: the rendered
+    form carries the registry question, `interaction_id`, `session_id` and `candidate_head`; one transaction
+    resolves the request, appends one ledger entry (channel `mcp-elicitation`), sets the interaction `resolved`
+    with that `confirmation_id`, and writes N03's schema-2 request-resolution receipt and the `resolved` transition
+    receipt; the predecessor ledger is a byte prefix of the new one (I10); continuation before the answer returns
+    `human` with the `confirmation` handle. Then `complete` with registry-valid observations → `completed`,
+    session `closing`; `release` frees the lease and clears the block; the same Builder task is reacquired with
+    the interaction in its build context.
+  - The Builder submits a `manual-procedure` `passed` `human-confirmed` observation citing the interaction's
+    `confirmation_id` plus copied machine observations at `exact_commit = candidate_head`; the result promotes and
+    N03's evaluator shows the criterion `covered`.
+  - The same journey answered `failed`: the interaction is `resolved` and its view reads not observed; a `passed`
+    `human-confirmed` observation citing it → N03 `confirmation-not-applicable`.
+  - Restart replay (D14), parameterized after each write of the journey during the retained Builder handoff
+    (`created`, `postponed`, reopen, `resolved`, `completed`) and with N03's defer and resume receipts around the
+    answer: restart through the default loader before publication → the Change is available and its frontier,
+    ledger and interactions are byte-identical. Publication then writes snapshot 4 with both, and a fresh host
+    restores them.
+  - Pause request while `needs-session` → `open` refused; with an open session → `update`, the linked answer,
+    `complete`, `postpone` and `recheck` succeed and the pause converts after release (N09 K2).
   - Format: frontier 20 with interactions and coordination 3 with a session round-trip byte-identically; every
     golden record of earlier versions round-trips unchanged; `delivery-migrate` marker step on a disposable portfolio
     with a passive Builder handoff and an N03-format Change changes only the marker.
 - **Negative scenarios:**
-  - Block refused with `interaction-request-invalid`, nothing written: unknown handler, options not equal to the
-    handler's, criterion not current, missing or non-head `resume_commit`, more than 64 interactions.
+  - Block refused with `interaction-request-invalid`, nothing written: unknown handler, `applies_to.kind` `waive`,
+    non-empty options, a summary other than the registry question, criterion not current, missing or non-head
+    `resume_commit`, more than 64 interactions.
   - Registry refuses a credential-named input, a `public` url input, an unknown placeholder, an unregistered label.
-  - `answer` on a linked request (MCP and application) → `_CONFIRMATION_ROUTE`; frontier bytes unchanged.
   - Fabrication, assembled (`Client(assemble_target_server(...))`, default loader, real worktree), each for an
     interaction-linked request and for an ordinary scoped waiver request, through both block routes
     (`transition_delivery` block and Builder `settle_worker_invocation`): (1) the worker supplies a request already
-    resolved `user-confirmed`; (2) the agent calls MCP `answer` with `provenance: user-confirmed`. Route 1 on a
-    linked request → `interaction-request-invalid`, nothing written. In every other case N03's boundary leaves the
-    request unconfirmed. Then a Builder result with a `human-confirmed` observation or a `waived` record citing it
-    is refused, finalization refuses, and no criterion reads `covered` or `waived`.
-  - `confirm_interaction` without a boundary record, with a record for another interaction, session or head, or
-    while the session is not `awaiting-human` → refused; a declined or cancelled elicitation records nothing.
-  - `confirm` after the branch head, an acceptance version or the handler digest changed → `_STALE`; status
+    resolved `user-confirmed` → N03's validation refusal, nothing written; (2) the agent calls MCP `answer` with
+    `provenance: user-confirmed` through a client without elicitation → `channel-unavailable`; (3) Cockpit HTTP
+    `answer_request` → 409. Each leaves no ledger entry and the request unresolved; a Builder result with a
+    `human-confirmed` observation or a `waived` record citing it is refused, finalization refuses, and no criterion
+    reads `covered` or `waived`.
+  - Linked answer refused before anything is asked, frontier and coordination bytes unchanged: no session, or a
+    session in `awaiting-input`, `starting`, `finishing`, `closing` or `contained` →
+    `_NOT_AWAITING_CONFIRMATION`; a stale interaction → `_STALE`. Declined, cancelled, no capability, no
+    back-channel → N03's refusals; nothing written; the session stays `awaiting-human`.
+  - Session moved between render and apply: the test callback expires and reopens the session during a legacy
+    elicitation, or between modern rounds → nothing written (coordination participant or SDK question pin).
+  - Linked answer after the branch head, an acceptance version or the handler digest changed → `_STALE`; status
     `stale`; readiness `interaction-stale` → same-task Builder retry with failure code `interaction-stale`.
-  - `confirm(not-observed)`; `postpone`; expiry; `fail` → request unresolved or `not-observed`; a Builder result citing
-    it as satisfying → refused (`confirmation-unresolved` or `interaction-not-completed`); finalization refuses.
+  - `postpone`; expiry; `fail` → request unresolved; a Builder result citing it as satisfying → refused
+    (`confirmation-unresolved` or `interaction-not-completed`); finalization refuses.
   - A result with a machine observation carrying a handler digest but no matching completed interaction, a
     different kind, label or result, or another commit → `interaction-evidence-unmatched`.
-  - `confirm` with a different outcome after an accepted one → `_CONFIRMATION_CONFLICT`.
-  - A `waived` observation whose confirmation cites an interaction-linked request, resolved `observed` or
-    `not-observed` → refused `interaction-request-not-waiver`; finalization refuses; frontier bytes unchanged.
+  - A `waived` record citing an interaction's confirmation (`passed` or `failed`) → N03
+    `confirmation-not-applicable`; finalization refuses; frontier bytes unchanged.
+  - Replay tamper (D14): an interaction changed locally without a receipt, a receipt with a broken `before_digest`,
+    a `resolved` receipt whose `confirmation_id` differs from its request-resolution receipt's ledger entry, or two
+    receipts reordered → the existing bootstrap failure; the Change is unavailable; nothing is rehashed.
   - Crash injection (N02-B harness) between the lease and the frontier participant of `open` → restart sees either
-    no lease and no change or the whole open. Crash after `confirm` before `complete` → the session stays leased
-    past `expires_at`; the next `open` or Cockpit start finds the holder dead, verifies exclusion of the recorded
-    handler, and only then the interaction becomes `preparation-failed` / `session-lost` and the block clears as a
-    counted same-task Builder retry; the resolved request cannot support a result (`interaction-not-completed`); no
+    no lease and no change or the whole open. Crash after the linked answer before `complete` → the session stays
+    leased past `expires_at`; the next `open`, `recheck` or Cockpit start finds the holder dead, finds exclusion,
+    and only then the interaction becomes `preparation-failed` / `session-lost` and the block clears as a counted
+    same-task Builder retry; the resolved request cannot support a result (`interaction-not-completed`); no
     completion or machine observation is fabricated.
-  - Custody: `release_interaction_session` while a process with the recorded pid and create time is live →
-    `_HANDLER_ALIVE`, lease kept; a recorded pid now held by a process with another create time counts as gone and
-    is never signalled; an unreadable identity → `contained`, readiness `interaction-handler-unverified`, every
-    acquisition `busy`, and no elapsed time releases it.
+  - Custody over injected process tables (D13): a live owned process → `_HANDLER_ALIVE`, lease kept; a process
+    holding the leader pid with another create time and no token is never signalled and does not block release;
+    a token-less member of the recorded group with no process at the leader pid → `contained` /
+    `ambiguous-member`, never signalled; a failed scan → `contained` / `scan-failed`.
+  - Recovery route (finding 4 of round 2): after a transient scan failure → `contained`; the clock advances past
+    `expires_at` and the 60-minute maximum → still `contained`, every acquisition `busy`, a new `open` →
+    `_SESSION_BUSY`; `recheck` with the wrong session id or state → refused, nothing changes; `recheck` of an open
+    session with a live holder → `_SESSION_BUSY`; `recheck` with a healthy table → released, interaction
+    `postponed` / `session-lost`; then `open` succeeds. Run with the holder alive and with a dead holder.
   - Corruption (V20): an interaction field inside a frontier 19, a session inside coordination 2, an observation
     kind outside the registry → rejected at parse; the Change is unavailable; never rehashed.
   - Downgrade: the predecessor release refuses the new marker, frontier 20, coordination 3 and snapshot 4 with typed
@@ -547,69 +683,90 @@ no Delivery state touched. Scripts and outputs: `.owlbear/scratch/n06p/` (unvers
 - **LC:** full form with `delivery-lc`: unmigrated copy refused; migrated copy lists and reads every Change as
   available with no interaction; the predecessor refuses it; a synthetic newer format is refused; live hashes
   unchanged.
-- **Size / risk:** L / high. Four widened families, a marker step, custody and settlement changes and a new
-  admissibility rule; the risk is a custody hole between session and writers, which the K-inventory test and the
-  `busy` scenarios pin.
+- **Size / risk:** L / high. Four widened families, a new receipt family, a marker step, custody, settlement and
+  loader replay changes and a new admissibility rule; the risks are a custody hole between session and writers,
+  which the K-inventory test and the `busy` scenarios pin, and a handoff replay gap, which the D14 restart
+  scenarios pin.
 
 ### 3.3 N06-B — Secure local input, handler launch and V22
 
 - **Prerequisites:** N06-A.
 - **Editable paths:**
   - new `serve/delivery/src/owlbear_delivery/interaction_inputs.py`, `interaction_protocol.py`
-  - new `serve/cockpit/src/owlbear_cockpit/request_guard.py`, `interaction_sessions.py`, `routes/interactions.py`;
-    `main.py` (`run()` installs the guard, the access logger with `access_log=False`, the session manager, its
-    startup recovery of dead-holder sessions and its shutdown); `target_models.py` (bodies with
-    `SecretStr` and `hide_input_in_errors`); `routes/target_work.py` (shared error mapping only)
+  - new `serve/cockpit/src/owlbear_cockpit/request_guard.py`, `interaction_sessions.py`, `interaction_launcher.py`,
+    `routes/interactions.py` (no confirm route); `main.py` (`run()` installs the guard, the access logger with
+    `access_log=False`, the session manager, its startup `recheck` of dead-holder sessions and its shutdown);
+    `target_models.py` (bodies with `SecretStr` and `hide_input_in_errors`); `routes/target_work.py` (shared error
+    mapping only)
   - `owlbear_delivery/__init__.py` and `module_surface.json` if exports change
   - tests: new `serve/cockpit/tests/test_request_guard.py`, `test_interaction_sessions.py`,
-    `serve/cockpit/tests/support/synthetic_interaction_handler.py`, `synthetic_registry.py`;
+    `test_interaction_launcher.py`, `serve/cockpit/tests/support/synthetic_interaction_handler.py`,
+    `synthetic_registry.py`, `process_fixtures.py` (unrelated groups, env-cleared descendants);
     new `serve/delivery/tests/test_interaction_inputs.py`, `test_interaction_protocol.py`;
     `tests/test_cockpit_launch.py` (guard installed by `run()`)
   - this plan's N06-B row; execution plan status row
 - **Positive scenarios:**
-  - Real Cockpit process (`run()` on a disposable portfolio, synthetic registry, isolated port): `open` returns
-    descriptors, `launch_summary` and a nonce and launches nothing; `start` with a valid `https` URL spawns the
-    synthetic handler; the handler receives the value on stdin only and reports `awaiting-human`; the boundary
-    confirmation (§1.13; an elicitation-backed MCP test client until U2 is answered) records `observed` →
-    `finished` → `completed`; the handler exits; the exclusion check passes and the lease is released; no child or
-    grandchild remains.
+  - Journey (b) end to end (§1.13): real Cockpit process (`run()` on a disposable portfolio, synthetic registry,
+    isolated port) and `Client(assemble_target_server(...))` on the same workspace. `open` returns descriptors,
+    `launch_summary` and a nonce and launches nothing; `start` with a valid `https` URL commits `spawn`, starts the
+    launcher, commits `leader`, releases it, and the handler receives the value on stdin only and reports
+    `awaiting-human`; continuation returns the `confirmation` handle; MCP `answer` with an `elicitation_callback`
+    accepting `passed` (legacy and modern routes) resolves the request; Cockpit sees it, sends
+    `human-step-complete`, the handler reports `finished` → `completed`; the D13 group kill and exclusion check
+    pass; the lease is released; no token holder remains.
   - An inputless handler launches only at `start` with an empty input set; a `choice` input is accepted.
-  - Same-origin requests with `Origin: http://127.0.0.1:<port>` pass; header-less local clients pass on
-    non-confirming routes. G12: the maintained clients (the built SPA, `cockpit list`, `test_cockpit_launch.py`,
-    the E2E stacks) run against the guarded app assembled by `run()`, not against an unguarded `TestClient`.
+  - Same-origin requests with `Origin: http://127.0.0.1:<port>` pass; header-less local clients pass. G12: the
+    maintained clients (the built SPA, `cockpit list`, `test_cockpit_launch.py`, the E2E stacks) run against the
+    guarded app assembled by `run()`, not against an unguarded `TestClient`.
 - **Negative scenarios (V22):**
-  - URL with userinfo, a credential-like query key (plain, `%61ccess_token`, or double-encoded `%2561…`), any
-    fragment (`https://approved.example/#access_token=…`, a bare `#`, `#%61ccess_token=…`), a non-`https` scheme,
-    a non-round-tripping parse, over 2048 characters, or a host outside
-    `suffix-allowlist` (also after IDNA normalization) → 422 with a bounded field code; no handler spawned; lease
-    unchanged; the response never contains the sentinel.
+  - URL admission through the real guarded `POST …/start`, each with the sentinel: `?client_secret=S`, `?e=S`, any
+    query on the default policy, an undeclared or repeated key or a bad value under a test policy with
+    `query_keys`; path segments `/%61ccess_token=S`, `/%2561ccess_token=S`, `/a;jsessionid=S`, `/a%3Bjsessionid=S`,
+    `/token/x`, `/a%2Fb`, `/../x`, `/eyJ…`, a 32-character alphanumeric run; userinfo; an explicit port; any
+    fragment (`#access_token=…`, a bare `#`, `#%61ccess_token=…`); a non-`https` scheme; a non-round-tripping
+    parse; over 2048 characters; a host outside `suffix-allowlist` (also after IDNA normalization). Each → 422
+    with its bounded code; no launcher started; lease unchanged; a GUID path segment passes.
   - Sentinel absence, asserted on every captured byte: HTTP responses (success and error), Cockpit logs (`caplog`),
     the real `run()` process's stdout and stderr, MCP `get_change` and `show_work_item_view` JSON, frontier,
-    coordination and snapshot bytes, the handler's argv and environment (recorded by the spawner in tests), and a
-    forced spawn failure whose input carries the sentinel.
+    coordination, snapshot and receipt bytes, the launcher's and handler's argv and environment (read with
+    `psutil` in tests), and a forced spawn failure whose input carries the sentinel.
   - Access log through the real `run()` wiring: the sentinel in a query string on an accepted route (200), on a
     guard-rejected request (403), on an unknown route (404), on a 422, and in a malformed request line sent over a
     raw socket never appears in stdout or stderr; the access line shows the route template or `unmatched`.
   - Local HTTP cannot confirm: a header-less local client with the nonce from `open` calls every Cockpit route;
-    none resolves the request. Under U2 (b) no confirm route exists (404); under U2 (a) `…/confirm` without the
-    boundary cookie or exact `Origin` → 403 and the request stays unresolved.
+    none resolves the request; `POST …/confirm` → 404; Cockpit `answer_request` on the linked request → 409.
   - Expired session: `start` after `expires_at` → `_EXPIRED`; with a short test TTL the Cockpit timer cancels the
-    handler, killpg leaves no survivor, the exclusion check passes before release, status `postponed` /
-    `session-expired`, request unresolved.
+    handler, the D13 kill leaves no token holder, the exclusion check passes before release, status `postponed` /
+    `session-expired`, request unresolved; an elicitation answered after that expiry writes nothing.
   - Cancelled sign-in: handler `failed{user-cancelled}` and user **Not now** → request unresolved; a Builder result
     citing it as satisfying is refused; cancel is not pass.
   - Guard: cross-origin `Origin`, `Sec-Fetch-Site: same-site` or `cross-site`, or a foreign `Host` → 403; nothing
     changes. Missing, wrong or closed-session nonce → 409; a second `start` in one session → refused.
   - Protocol: oversize line, unknown message, a message echoing the input, non-zero exit before `awaiting-human`,
     start or cleanup deadline exceeded → `preparation-failed` or `unavailable` by registry code; lease released.
-  - Cockpit `SIGKILL` during `awaiting-human` (real processes): the lease survives `expires_at`; a second
-    Cockpit's `open` before the restart check → `_SESSION_BUSY`; the restarted Cockpit finds the holder dead,
-    verifies exclusion and only then reopens; the request stays unresolved.
-  - Uncooperative handlers (real processes, macOS and the Ubuntu CI workers): one ignores stdin EOF, one stalls
-    after the confirmation without `finished`, one spawns a grandchild in its group. Cockpit `SIGKILL` or expiry
-    → lease kept while any is alive; after `killpg` and the exclusion check, released with no survivor. With
-    `psutil` forced to fail → `contained`, lease kept, every acquisition `busy`, no release by time. A recorded pid
-    reused by an unrelated process (create time differs) is never signalled.
+  - Crash injection around launch (real processes, macOS and the Ubuntu CI workers; the test Cockpit wrapper
+    SIGKILLs itself at an injected point): (1) right after the launcher starts, before `leader` is committed;
+    (2) after `leader`, before `release`; (3) after `release`, before `start`; (4) during `awaiting-human`. Each:
+    the lease survives `expires_at`; another Cockpit's `open` → `_SESSION_BUSY`; the restarted Cockpit finds the
+    holder dead and recovers by token for (1) and by leader for (2)–(4); released with no token holder and the
+    request unresolved. Variants of (1): a stub launcher that ignores control-pipe EOF is found by token and
+    killed; with the process scan failing → `contained` / `scan-failed`, then **Check again** after the scan
+    recovers → released, with no new session opened in between.
+  - Uncooperative handlers (real processes, macOS and Ubuntu): one ignores stdin EOF, one stalls after the
+    confirmation without `finished`, one starts a grandchild in its group, one starts a grandchild that calls
+    `setsid` but keeps its environment. Cockpit `SIGKILL` or expiry → lease kept while any is alive; after the
+    D13 kills, released with no token holder.
+  - Reused or foreign groups (real processes from `process_fixtures.py`; the session's recorded `leader` is set to
+    the fixture's pid with another create time and token): (a) an unrelated `start_new_session` process with
+    children, its leader alive → never signalled (fixture processes still alive afterwards), session released;
+    (b) the unrelated leader exits and its children remain in the group → never signalled, session `contained` /
+    `ambiguous-member` with their pids, no release by time; after the fixture ends them, **Check again** →
+    released. (c) Our own launcher killed externally while the handler (token) lives → the handler is killed by
+    token and the session released; (d) as (c) with a grandchild started under `env -i` → `contained` /
+    `ambiguous-member`, never signalled, then **Check again** after the test ends it → released.
+  - Recovery route over HTTP: `POST …/session/recheck` with the holder Cockpit alive and from a restarted Cockpit
+    without the nonce: wrong session id or state → 409, nothing changes; a `contained` session after a transient
+    scan failure → released; under a pause request → accepted and the pause converts after release.
 - **Inner loop:** `uv run pytest serve/cockpit/tests/test_request_guard.py -q`, then
   `uv run pytest serve/cockpit/tests/test_interaction_sessions.py -q`.
 - **Closeout:** `uv run test --changed`; scoped Ruff;
@@ -617,39 +774,49 @@ no Delivery state touched. Scripts and outputs: `.owlbear/scratch/n06p/` (unvers
   `npm run test:e2e:work` (the guard runs in the real stack).
 - **LC:** load form (startup gains the guard and session manager; no format change): the live copy loads and lists
   through a guarded Cockpit with unchanged hashes.
-- **Size / risk:** M / high. The security boundary of the package.
+- **Size / risk:** M / high. The security boundary of the package: input admission, launch custody and signals.
 
 ### 3.4 N06-C — Presentation, MCP/HTTP projection and synthetic E2E
 
-- **Prerequisites:** N06-B.
+- **Prerequisites:** N06-B. Under U2 (a), N03-C's Cockpit boundary adapter (already merged before N06-A).
 - **Editable paths:**
   - `serve/cockpit/web/src/api/workItems.ts` (interaction view, session calls), new
     `src/components/InteractionPanel.tsx` (**Help with this step**, launch summary, **Start check** with the input
-    form from descriptors and no value echo, waiting text, confirmation question, **Not now**, **Explain existing
-    evidence** filtered from N03-C's projection, **Check not available here** with the reason),
-    `WorkItemDetail.tsx`, `workItemPresentation.ts`, `WorkPortfolioPage.tsx`; component tests
-  - `serve/cockpit/web/e2e/interaction.spec.ts`, new `e2e/support/start-interaction-stack.mjs` and
-    `e2e/support/interaction-cockpit.py` (calls `owlbear_cockpit.main.run` with the synthetic registry), seed additions
+    form from descriptors and no value echo, waiting text, confirmation question with chat guidance and a copyable
+    `/continue-change` (U2 (b)) or **Observed** / **Not observed** (U2 (a)), **Not now**, **Explain existing
+    evidence** filtered from N03-C's projection, **Check not available here** with the reason, and the contained
+    view with its processes and **Check again**), `WorkItemDetail.tsx`, `workItemPresentation.ts`,
+    `WorkPortfolioPage.tsx`; component tests
+  - under U2 (a) only: `serve/cockpit/src/owlbear_cockpit/routes/interactions.py` `POST …/confirm` through N03-C's
+    adapter, and its tests
+  - `serve/cockpit/web/e2e/interaction.spec.ts`, new `e2e/support/start-interaction-stack.mjs`,
+    `e2e/support/interaction-cockpit.py` (calls `owlbear_cockpit.main.run` with the synthetic registry) and
+    `e2e/support/elicitation-client.py` (an MCP client on the same workspace that answers the elicitation), seed
+    additions
   - `work_items.py`, `application_models.py`, MCP `target_models.py`: view fields not added in A, if any
-  - `tests/test_cockpit_boundary.py`; `setup/operating-owlbear.md` (Help with this step, privacy expiry, cancel);
-    `share/skills/w-orchestration/SKILL.md` wording if the view changed
+  - `tests/test_cockpit_boundary.py`; `setup/operating-owlbear.md` (Help with this step, confirming in chat,
+    privacy expiry, cancel, Check again); `share/skills/w-orchestration/SKILL.md` wording if the view changed
   - this plan's N06-C row and package closeout; execution plan status row
 - **Positive scenarios (real Chromium, built bundle):** the card shows **Needs your decision** and **Help with this
   step**; the panel shows purpose, why human, what **Start check** launches and one instruction; nothing runs before
-  **Start check**; a valid URL is accepted and the field is cleared;
-  the confirmation question appears; the boundary confirmation records **Observed** (U2 (a): a click in the panel;
-  U2 (b): the panel points to chat and a stub MCP client answers the elicitation) → completed; the card returns to
-  **Waiting for chat to resume**.
-  **Explain existing evidence** lists the scoped criteria. A `none` interaction shows **Check not available here**
-  with its reason and no Help control.
+  **Start check**; a valid URL is accepted and the field is cleared; the confirmation question appears. Journey (b):
+  the panel offers chat guidance and no confirm control; the elicitation client calls `answer` with the
+  continuation handle and accepts **Observed** → completed. Journey (a), only under U2 (a): a click on
+  **Observed** → completed, and journey (b) also still completes. The card returns to **Waiting for chat to
+  resume**. **Explain existing evidence** lists the scoped criteria. A `none` interaction shows **Check not
+  available here** with its reason and no Help control. A contained session shows its processes; **Check again**
+  after they end returns the card to Help.
 - **Negative scenarios:** a credential URL shows the bounded error and keeps the session; **Not now** returns the
   card to postponed with Help available; a short-TTL session expires with the privacy-expiry text; a page served
-  from a second loopback port cannot open, start, post input or confirm (403); after a Cockpit restart the panel
-  reports a lost session only after the exclusion check, or `interaction-handler-unverified`; the URL bar never
-  contains an input or nonce; TypeScript and Python unions disagree → parity fails.
+  from a second loopback port cannot open, start, post input, recheck or confirm (403); under U2 (b) `…/confirm`
+  → 404; under U2 (a) `…/confirm` without N03-C's cookie or exact `Origin` → 403 and nothing is written; after a
+  Cockpit restart the panel reports a lost session only after the exclusion check, or
+  `interaction-handler-unverified`; the URL bar never contains an input or nonce; TypeScript and Python unions
+  disagree → parity fails.
 - **Host rehearsal:** on a disposable portfolio in a real VS Code window, a Builder blocks with an interaction-linked
-  request through Copilot, the user completes the synthetic check in Cockpit, and `/continue-change` reacquires the
-  same task and submits the result. Evidence on the PR (G5).
+  request through Copilot, the user starts the synthetic check in Cockpit, answers the elicitation form in chat
+  through `/continue-change` (or clicks under U2 (a)), and `/continue-change` reacquires the same task and submits
+  the result. Evidence on the PR (G5; N03 G10).
 - **Inner loop:** `npm --prefix serve/cockpit/web test -- InteractionPanel`; then
   `npm --prefix serve/cockpit/web run test:e2e:work -- interaction`.
 - **Closeout:** `uv run test --changed`; `npm test`; `npm run build`; Biome on changed files; `npm run test:e2e:work`;
@@ -668,15 +835,21 @@ Deltas to apply in the N06-P PR:
 4. §7: record N06 U1 (inputs (a), evidence (a)) as an engineering decision of 2026-10-03, listed to the user
    without objection, in place of "N06: retention and privacy policy for private inputs" under "Decided later".
 
-Premises found false or incomplete on `ac3bf23f9`:
+Cross-plan note, not applied here (N06-P does not edit the N03 plan): N03 §1.5
+(`confirmation_id` and ledger `channel` rows) and §1.9 (N06 bullet) say N06 adds channel `interaction` and an
+`interaction:` locator. Under D3 N06 adds neither; the N03 owner should amend that text (F6, G16).
+
+Premises found false or incomplete on `ac3bf23f9` (F1–F5) and `e2fa3d913` with lane-c `86289635f` (F6, F7):
 
 | ID | Premise | Evidence | Consequence |
 | --- | --- | --- | --- |
 | F1 | Execution plan §5 N06 assumes an origin-checked form host is available; Cockpit has no request guard | `main.py:57-62`; P2: body-less cross-port POST executed, rebinding `Host` accepted | D5 adds the guard for all of Cockpit in N06-B; until then, and on the frozen live controller until an authorized `/upgrade-delivery`, live Cockpit's body-less POST routes (for example `target_work.py:638-640`) are forgeable from other loopback pages |
-| F2 | Programme §5.3 proposes extending `answer` with typed interaction outcomes | MCP `answer` accepts caller-set `provenance: user-confirmed` (`target_server.py:442-460`); HTTP defaults it (`target_models.py:381`); block routes keep worker resolutions (P10) | D4: confirmation only through N03's boundary (§1.13); `answer` refuses linked requests |
+| F2 | Programme §5.3 proposes extending `answer` with typed interaction outcomes | MCP `answer` accepts caller-set `provenance: user-confirmed` (`target_server.py:442-460`); HTTP defaults it (`target_models.py:381`); block routes keep worker resolutions (P10) | D4: no typed interaction outcome; a linked request is a scoped `confirm-check` request answered through N03's boundary, whose `passed` / `failed` decisions are the outcomes (§1.13) |
 | F3 | Programme §9.3 step 1 has the agent launch the check session | The continuation controller has no terminal tool (`orchestrator.agent.md:8`) | D1, D7: Cockpit launches at **Start check** (programme §4.2 allows preparation without a running agent) |
 | F4 | N03 §1.9 expects N06 to add `confirmation.kind = interaction` and an `interaction:` locator scheme | Not needed under D2 | D3; N03 G5 closes without an N03 schema change |
 | F5 | §9.3 forbids values in access logs; the default uvicorn access log records query strings, and middleware cannot suppress it | `main.py:372`; P2; P10 | uvicorn access log off; a route-template access logger (§1.7); asserted through real `run()` in N06-B |
+| F6 | N03 at `86289635f` (§1.5, §1.9) expects N06 to add ledger channel `interaction` and an `interaction:` locator | P12; the channel names a capture route, and the binding already lives in scope, question digest and `confirmation_id` | D3: no N06 change to N03 shapes; cross-plan note above; G16 |
+| F7 | Round 1 of this plan assumed interaction writes reload like other portable writes | The loader refuses a pending publication beside a Builder handoff and rebuilds that frontier from the snapshot (`delivery_application_loader.py:603-607`, `:1010-1053`; P12) | D14: interaction transition receipts and an extension of N03's L row |
 
 ### 3.6 Plan gate dispositions
 
@@ -695,11 +868,27 @@ Sol plan round 1 (`revision-required`, on `1600efa60`). Premises checked against
 
 No finding was rebutted.
 
+Sol plan round 2 (`revision-required`, on `e2fa3d913`; round-1 fragment rejection and access-log replacement
+accepted). Premises checked against source and N03 at `86289635f` (P11, P12).
+
+| Finding | Disposition | Where |
+| --- | --- | --- |
+| 1 HIGH: N03 integration incompatible (removed `confirmation: {kind: request-resolution}` shape, linked `answer` refused, undefined "boundary tool", no executable entry under U2 (b)) | Accepted. A linked request is an N03 `confirm-check` scoped request answered through N03's `answer` (D13) with an interaction branch: the resolver asks only while the session is `awaiting-human` and renders interaction, session and head; `passed` / `failed` are shown as observed / not observed; one transaction writes the resolution, the ledger append (I10 preserved), the interaction `resolved` with its `confirmation_id`, N03's schema-2 receipt and the transition receipt, guarded by the session. `confirm_interaction`, the `answer` refusal and `interaction-request-not-waiver` (now N03 I6) are removed. Channel and locator stay N03's, so no nested version step (D3, F6). The (b) entry is the continuation `confirmation` handle passed to `answer` by `/continue-change`. Both journeys have assembled proofs; (a) ships only if U2 is (a) | §1.1, §1.4, §1.7, §1.8, §1.13, D3, D4, I3, I4, I10, §3.2–§3.4, F6 |
+| Found while verifying finding 1: interaction writes during a retained Builder handoff do not survive a restart | Added. The loader refuses pending publication beside a handoff and rebuilds that frontier from the snapshot; every interaction write now carries a transition receipt replayed by an extension of N03's L row, with restart and tamper scenarios | R17, I10, §1.6, D14, F7, §3.2 |
+| 2 HIGH: crash between spawn and identity persistence | Accepted as suggested. `spawn{token}` committed before any process; a release-gated launcher (token in argv and environment) runs the handler only after `leader` is committed; recovery by token when `leader` is missing; crash injection at four points including right after spawn, on macOS and Ubuntu | §1.6, §1.7, §1.8, D13, P11, §3.3 |
+| 3 HIGH: group ownership after pgid reuse | Accepted. A Delivery-owned leader stays alive and pins its group; `killpg` only right after verifying it by pid, create time and token; otherwise only token holders are signalled, one by one; token-less group members without a live leader are ambiguous and contained, never signalled; reused-group tests with present and absent replacement leaders, plus our leader killed with and without an env-cleared descendant | I11, D13, §3.2, §3.3 |
+| 4 MED: no recovery route for a contained session | Accepted. `recheck_interaction_session` (exact session-id and state fence, no nonce, not pause-gated, never time-based, opens nothing), Cockpit `POST …/session/recheck` and **Check again** (`CHECK_HANDLER_STOPPED`), `containment` in the view; proved after a transient scan failure with a live holder and after restart | §1.6, §1.7, §1.8, §3.2–§3.4 |
+| 5 MED: URL rejection incomplete | Accepted. Descriptor `url_policy`: no query by default, declared keys and value patterns only; path segments unreserved after one decoding, credential words and token-like segments refused; negatives through the real guarded `start` | R9, §1.5, §1.10, §3.3 |
+
+No finding was rebutted. One limit on finding 1: both U2 journeys have defined assembled proofs, but journey (a)
+is built and proved only if the user chooses U2 (a), because an unchosen Cockpit confirmation channel would add the
+authority U2 exists to decide. U2 is answered before N06-A starts (§1.13 Order).
+
 ## 4. Progress
 
 | Phase | PR | Exact head | Proof | Challenges | Status |
 | --- | --- | --- | --- | --- | --- |
-| N06-P | #359 | `1600efa60` | Probes P1–P10 | Sol plan round 1: revision-required (findings 1–5 accepted; confirmation delegated to N03's boundary, custody until exclusion, fragments, access log) → revised | in review |
+| N06-P | #359 | `e2fa3d913` | Probes P1–P12 | Sol plan round 1: revision-required (findings 1–5 accepted; confirmation delegated to N03's boundary, custody until exclusion, fragments, access log) → revised; Sol plan round 2: revision-required (findings 1–5 accepted; linked requests answered through N03's scoped `answer` with ledger append, release-gated launcher with token ownership, pinned leader and contained ambiguity, recheck route, URL admission policy; handoff replay receipts added) → revised | in review |
 | N06-A | — | — | — | — | — |
 | N06-B | — | — | — | — | — |
 | N06-C | — | — | — | — | — |
@@ -713,7 +902,7 @@ No finding was rebutted.
 | G3 | Version and marker numbering composes with N03-A, N04-A, N05-B and N09-A2 | None of them is merged | N02 D3 linear chain; N05 F6 | Second of each pair to merge | That merge |
 | G4 | The panel works in the built bundle in Chromium | No frontend was built in P | P2, P8 browser behavior | N06-C (`npm run build`, `test:e2e:work`) | N06-C merge |
 | G5 | A real Builder blocks with an interaction-linked request and resumes the same task after confirmation | Agent behavior; fixtures cannot prove it | Settlement and reacquisition are D03 routes | N06-C host rehearsal | N06-C merge |
-| G6 | Handler EOF, process-group kill, `psutil` create time, the exclusion check and spawn redaction behave the same on Ubuntu | P5 and P7 ran on macOS only | POSIX semantics; N08 G7 | N06-B tests on the Ubuntu CI workers | N06-B merge |
+| G6 | Handler EOF, the release-gated launcher, process-group kill, `psutil` create time, token reads from cmdline and environment, the exclusion check, crash recovery and spawn redaction behave the same on Ubuntu | P5, P7 and P11 ran on macOS only | POSIX semantics; N08 G7 | N06-B tests on the Ubuntu CI workers | N06-B merge |
 | G7 | Chromium's public-to-local network restrictions | P2 and P8 used a loopback attacker origin | The guard does not depend on them | — | Nothing |
 | G8 | Launching candidate code from a pinned Cockpit release | N02-D and N07 are not designed against each other yet | D1, §1.10 item 5 | N07-P | N07-A |
 | G9 | Edge profile custody and cross-Change contention | N07 scope | §1.10 item 3 | N07 | N07-A |
@@ -721,5 +910,7 @@ No finding was rebutted.
 | G11 | LC exercises interaction records | Live state has none | Disposable fixtures in N06-A | N06-A fixtures; N10-M | Nothing (recorded per phase) |
 | G12 | No legitimate client calls Cockpit with a cross-origin `Origin` or a non-loopback `Host` | Static search only at implementation | P8 header-less clients pass | N06-B: every maintained client against the guarded app assembled by `run()` (§3.3); the frozen live controller is unguarded until an authorized upgrade | N06-B merge |
 | G13 | Python cannot erase a value from memory after use | Immutable `str`/`bytes`; freed heap, swap and core dumps | References dropped at handoff; process ends with the session | — | Nothing (documented limit, U1) |
-| G14 | N03's user-only boundary (elicitation record, refusals) and the answer to N03 U2 | PR #360 does not yet contain the boundary text (head `4839b1fc8`); U2 is an open user decision | User's description of #360; §1.13 covers both answers | N03 / user; N06-A re-checks at start; a divergence stops for a plan revision | N06-A start (record type); N06-B confirm route (U2) |
-| G15 | A handler that leaves its process group is detected | `setsid` or double fork escapes pgid tracking | D13 residual; registry handlers are repository code | N07-P for B1 (Edge profile custody) | Nothing in N06 |
+| G14 | N03's boundary as N06 consumes it (D13 resolver taking tool arguments, ledger, schema-2 request-resolution receipt, L row) and the answer to N03 U2 | PR #360 (`86289635f`) is a plan, not code; U2 is an open user decision | N03 §1.5, §1.7, D13; §1.13 covers every U2 answer | N03 / user; N06-A re-checks at start; a divergence stops for a plan revision | N06-A start (N03-C needs U2) |
+| G15 | A handler descendant that leaves custody is detected | One that both calls `setsid` and clears its environment escapes; one started by a service manager escapes | D13 residual; registry handlers are repository code | N07-P for B1 (Edge profile custody) | Nothing in N06 |
+| G16 | N03's plan text agrees with D3 | N03 §1.5 and §1.9 still say N06 adds channel `interaction` and an `interaction:` locator | F6; cross-plan note in §3.5 | N03 owner | Nothing (D3 rules for N06) |
+| G17 | VS Code shows Delivery's elicitation to the user on the route it negotiates (journey (b)) | Host behavior | N03 G10 and its N03-B rehearsal | N03-B; N06-C host rehearsal repeats it for an interaction | N06-C merge |
