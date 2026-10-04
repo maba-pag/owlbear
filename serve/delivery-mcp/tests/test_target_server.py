@@ -3666,6 +3666,41 @@ async def test_lifespan_refuses_an_applied_but_unverified_migration_journal(
     acquire_controller_lock(runtime_root, exclusive=True).release()
 
 
+@pytest.mark.asyncio
+async def test_lifespan_refuses_checkout_code_on_a_pinned_workspace(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = _repository(tmp_path)
+    path = repository / ".owlbear/delivery/config.json"
+    path.parent.mkdir(parents=True)
+    _write_config(path, _config())
+    pin = repository / ".owlbear/controller/pin.json"
+    pin.parent.mkdir(parents=True)
+    pin.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "commit": "a" * 40,
+                "previous": None,
+                "release_sha256": "f" * 64,
+            }
+        ),
+        "utf-8",
+    )
+    monkeypatch.chdir(repository)
+
+    with pytest.raises(DeliveryStartupDiagnostic) as exc_info:
+        async with app_lifespan(mcp):
+            pass
+
+    assert exc_info.value.code == "ERR_DELIVERY_STATE_VERSION"
+    assert exc_info.value.detail.startswith("controller-not-pinned")
+    assert ".owlbear/controller/bin/delivery-mcp" in exc_info.value.detail
+    assert not (repository / ".owlbear/delivery/runtime/format.json").exists()
+    acquire_controller_lock(repository / ".owlbear/delivery/runtime", exclusive=True).release()
+
+
 def _spy_config_opens(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     """Record every open of a ``config.json`` path through the os, io and builtin open functions."""
     opened: list[str] = []

@@ -74,6 +74,12 @@ Open this checkout directly in VS Code. Its repository settings already load the
 `share/` and project-local `.owlbear/` agent, skill, instruction, and prompt roots; do not run
 consumer setup against the OwlBear checkout itself.
 
+This checkout's `owlbear-delivery` server runs a pinned controller release through
+`.owlbear/controller/bin/delivery-mcp`, so new `dev` commits never change running Delivery. It
+fails to start until `uv run delivery-controller install --pin <commit>` installs and pins a
+release; later upgrades use `/upgrade-delivery`. See
+[Pinned controller releases](setup/operating-owlbear.md#pinned-controller-releases).
+
 Run the repository checks:
 
 ```shell
