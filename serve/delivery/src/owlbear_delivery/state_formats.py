@@ -143,7 +143,8 @@ RECORD_KINDS: Final[tuple[RecordKind, ...]] = (
         rf"runtime/coordination/changes/{_C}\.json",
         (f"{_WORKSPACE}:ChangeCoordination",),
         "M",
-        1,
+        2,
+        rewrites=((1, "owlbear_delivery.state_migration:coordination_1_to_2"),),
     ),
     _kind(
         "frontier",
@@ -200,6 +201,14 @@ RECORD_KINDS: Final[tuple[RecordKind, ...]] = (
         ),
         "R",
         None,
+    ),
+    _kind(
+        "direct_operation",
+        "direct_operation",
+        rf"{_CH}/action-receipts/direct-{_D}/(?:started|finished)\.json",
+        (f"{_WORKSPACE}:ChangeDirectOperation",),
+        "R",
+        1,
     ),
     _kind(
         "recovery_invocation",

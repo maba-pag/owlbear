@@ -420,6 +420,7 @@ function PortfolioWorkspace({
         <ChangePauseControl
           changeId={group.change_id}
           paused={group.progress === "paused" || group.lifecycle === "deferred"}
+          pauseRequested={group.pause_requested === true}
           unavailableMessage={changePauseUnavailableMessage(group)}
           pendingAction={intent.pendingAction(group.change_id)}
           reasonName={`change-pause-reason-${group.change_id}`}

@@ -218,8 +218,10 @@ class _SettlementReplayMixin:
             return receipt
         return None
 
-    def require_result_replay(self, outcome_id: str, claim_id: str, result: DeliveryTaskResult) -> None:
-        """Require immutable original claim provenance before replaying a promoted result."""
+    def require_result_replay(
+        self, outcome_id: str, claim_id: str, result: DeliveryTaskResult
+    ) -> DeliveryResultCandidate:
+        """Require and return the immutable original claim receipt before replaying a promoted result."""
         binding = self.show_binding(outcome_id)
         if result not in binding.results:
             _conflict("result replay requires current promoted authority")
@@ -233,6 +235,7 @@ class _SettlementReplayMixin:
             candidate_id=f"result-{digest}", claim_id=claim_id, digest=digest, result=result
         ):
             _conflict("submitted result replay does not match original claim custody")
+        return receipt
 
     def _result_receipt_path(self, outcome_id: str, digest: str) -> Path:
         return (
@@ -315,8 +318,8 @@ class _SettlementReplayMixin:
         attempt_id: str,
         claim_id: str,
         disposition: EngineWorkerDisposition,
-    ) -> OutcomeAuthorityBinding | None:
-        """Return the immutable result of one exact engine-settled worker attempt, if any."""
+    ) -> tuple[OutcomeAuthorityBinding, DeliveryEnginePlanningSettlement | DeliveryEngineBuilderSettlement] | None:
+        """Return the immutable result and envelope of one exact engine-settled worker attempt, if any."""
         if re.fullmatch(r"OUT-[0-9]{3}", outcome_id) is None:
             return None
         attempt_digest = hashlib.sha256(attempt_id.encode("utf-8")).hexdigest()
@@ -348,7 +351,7 @@ class _SettlementReplayMixin:
                 and envelope.claim_id == claim_id
                 and envelope.disposition == disposition
             ):
-                return receipt.result
+                return receipt.result, envelope
             _conflict("worker attempt is already settled with different authority")
         return None
 

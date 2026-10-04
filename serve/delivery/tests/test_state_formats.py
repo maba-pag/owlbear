@@ -525,7 +525,7 @@ def _set_path(value: object, path: tuple[object, ...], replacement: object) -> N
 
 _NEWER_STATE = {
     "frontier-19": ("runtime/changes/demo/frontier.json", {"schema_version": 19, "bindings": []}),
-    "coordination-2": ("runtime/coordination/changes/demo.json", {"schema_version": 2, "change_id": "demo"}),
+    "coordination-3": ("runtime/coordination/changes/demo.json", {"schema_version": 3, "change_id": "demo"}),
     "config-3": (
         "config.json",
         {

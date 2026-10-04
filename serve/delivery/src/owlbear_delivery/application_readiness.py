@@ -96,7 +96,6 @@ from owlbear_delivery.publication_provider import (
 )
 from owlbear_delivery.recovery import (
     DeliveryRetryAttemptView,
-    DeliveryWorkerExclusionRequiredError,
     RetryEpisodeKey,
     RetryEpisodeSummary,
     RetryFailureClass,
@@ -834,48 +833,81 @@ class _ReadinessViewsMixin:
             for card, decision in zip(cards, decisions, strict=True)
         )
         decisions = self._with_worker_stall_readiness(snapshot, cards, decisions)
-        decisions, card_guidance = self._with_progress(snapshot, cards, decisions, readiness_guidance)
+        pause_requested, pause_drained = self._pause_request_state(snapshot)
+        if pause_requested:
+            decisions = self._with_pause_request_readiness(snapshot, cards, decisions)
+        decisions, card_guidance = self._with_progress(
+            snapshot, cards, decisions, readiness_guidance, pause_drained=pause_drained
+        )
         return WorkItemProjector(
             snapshot,
             decisions,
             readiness_guidance=card_guidance,
-            change_progress=self._change_activity_progress(snapshot, cards, decisions),
+            change_progress=("paused" if pause_drained else self._change_activity_progress(snapshot, cards, decisions)),
             pause_unavailable_reason=self._pause_unavailable_reason(snapshot),
+            pause_requested=pause_requested,
         )
 
-    def _pause_unavailable_reason(  # noqa: PLR0911 - one return per defer refusal predicate.
-        self, snapshot: DeliveryPortfolioSnapshot
-    ) -> ChangePauseUnavailableReason | None:
-        """Evaluate the defer intent's own refusal predicates read-only, independent of readiness overlays."""
+    def _pause_request_state(self, snapshot: DeliveryPortfolioSnapshot) -> tuple[bool, bool]:
+        """Return (request recorded, custody drained) read-only; unreadable custody is never drained (§1.5)."""
+        change_id = snapshot.contract.change_id
+        try:
+            coordination = self._workspace_manager.show(change_id)
+        except OSError, RuntimeError, ValueError:
+            return False, False
+        if coordination.pause_request is None:
+            return False, False
+        runtime = self._runtimes.get(change_id)
+        try:
+            drained = runtime is not None and self._custody_drained(change_id, runtime, coordination)
+        except OSError, RuntimeError, ValueError:
+            drained = False
+        return True, drained
+
+    def _with_pause_request_readiness(
+        self,
+        snapshot: DeliveryPortfolioSnapshot,
+        cards: tuple[WorkItemCardView, ...],
+        decisions: tuple[DeliveryReadiness, ...],
+    ) -> tuple[DeliveryReadiness, ...]:
+        """§1.5/I7: a request refuses every new start, so no new-work action stays executable.
+
+        Retained-owner, containment and recovery readiness is not executable and keeps its guidance.
+        """
+        return tuple(
+            decision.model_copy(
+                update={
+                    "status": "blocked",
+                    "reason_code": "change-paused",
+                    "executable": False,
+                    "action": None,
+                    "prompt": self._readiness_prompt(snapshot, card, "change-paused", executable=False),
+                }
+            )
+            if decision.executable
+            else decision
+            for card, decision in zip(cards, decisions, strict=True)
+        )
+
+    def _pause_unavailable_reason(self, snapshot: DeliveryPortfolioSnapshot) -> ChangePauseUnavailableReason | None:
+        """A2: Pause admits under any custody (§1.11 K1); only inactive, unreadable or already-requested refuse."""
         change_id = snapshot.contract.change_id
         runtime = self._runtimes.get(change_id)
-        frontier_refusal = runtime.deferral_refusal(snapshot.frontier) if runtime is not None else None
-        if frontier_refusal == "change-inactive":
-            return frontier_refusal
+        frontier = snapshot.frontier
+        if (
+            frontier.change_deferral is not None
+            or frontier.change_abandonment is not None
+            or (frontier.change_completion is not None)
+        ):
+            return "change-inactive"
         if runtime is None or change_id in self._runtime_reconciliation_errors:
             return "state-unavailable"
         try:
             coordination = self._workspace_manager.show(change_id)
-            self._coordinator.require_no_pending_recovery(change_id)
-        except DeliveryWorkerExclusionRequiredError:
-            return "recovery-required"
         except OSError, RuntimeError, ValueError:
             return "state-unavailable"
-        action = coordination.continuation_action
-        if action is not None and action.finished_at is None:
-            return "step-in-progress"
-        if coordination.writer is not None and coordination.writer.kind == "finalize":
-            return "finalizer-custody"
-        if frontier_refusal is not None:
-            return frontier_refusal
-        try:
-            self._workspace_manager.prepare_runtime_custody_guard(
-                change_id, expected_finalization_attention=coordination.finalization_attention
-            )
-        except DeliveryWorkerExclusionRequiredError:
-            return "recovery-required"
-        except OSError, RuntimeError, ValueError:
-            return "state-unavailable"
+        if coordination.pause_request is not None:
+            return "pause-requested"
         return None
 
     def _with_progress(
@@ -884,6 +916,8 @@ class _ReadinessViewsMixin:
         cards: tuple[WorkItemCardView, ...],
         decisions: tuple[DeliveryReadiness, ...],
         guidance: str | None,
+        *,
+        pause_drained: bool = False,
     ) -> tuple[tuple[DeliveryReadiness, ...], tuple[str | None, ...]]:
         """Project progress from final readiness plus read-only issuer and occupancy evidence."""
         at_capacity: bool | None = None
@@ -904,7 +938,12 @@ class _ReadinessViewsMixin:
                     at_capacity = self._other_changes_fill_capacity(snapshot.contract.change_id)
                 capacity = at_capacity
             progress = derive_delivery_progress(
-                decision, card, snapshot.frontier, issuer_state=issuer_state, at_capacity=capacity
+                decision,
+                card,
+                snapshot.frontier,
+                issuer_state=issuer_state,
+                at_capacity=capacity,
+                pause_drained=pause_drained,
             )
             updated.append(decision.model_copy(update={"progress": progress}))
             card_guidance.append(custody if custody is not None else guidance)

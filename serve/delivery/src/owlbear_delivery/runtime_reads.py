@@ -48,6 +48,7 @@ from owlbear_delivery.runtime_models import (
     _model_content,
     _reference,
     derive_change_stage,
+    pause_mutation_class,
 )
 from owlbear_delivery.runtime_receipts import (
     AdministrativeDeliveryMovePreview,
@@ -56,6 +57,7 @@ from owlbear_delivery.runtime_support import (
     _administrative_move_closure,
     _completed_outcome_repair_id,
     _conflict,
+    _declared_mutation,
     _find_binding,
     _require_target_sync_attention,
     _reset_binding,
@@ -778,9 +780,12 @@ class _RuntimeReadsMixin:
     ) -> tuple[TransactionParticipant | ReplacementTransactionParticipant, ...]:
         if self._workspace_manager is None:
             return participants
+        operation = _declared_mutation()
         guard = self._workspace_manager.prepare_runtime_custody_guard(
             self._contract.change_id,
             expected_finalization_attention=expected_finalization_attention,
+            operation=operation,
+            mutation_class=pause_mutation_class(operation),
         )
         return (*participants, guard)
 
