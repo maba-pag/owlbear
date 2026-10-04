@@ -74,7 +74,7 @@ class ShimToolchain:
                 f"""
                 import runpy, sys
                 sys.path[:0] = {paths!r}
-                arguments = [argument for argument in sys.argv[1:] if argument != "-I"]
+                arguments = [argument for argument in sys.argv[1:] if argument not in {{"-I", "-B"}}]
                 if arguments[0] == "-m":
                     sys.argv = [arguments[1], *arguments[2:]]
                     runpy.run_module(arguments[1], run_name="__main__", alter_sys=True)
@@ -215,6 +215,7 @@ def test_pin_writes_launchers_that_run_release_code_and_refuse_checkout_code(
     assert delivery_controller.verify(layout)["verified"] is True
     health = asyncio.run(asyncio.wait_for(_mcp_health(layout.bin / "delivery-mcp", layout.workspace), 60))
     assert health["status"] == "healthy"
+    assert delivery_controller.verify(layout)["verified"] is True
     digests = record_tree_digest(layout.workspace)
     with pytest.raises(DeliveryStateVersionError) as refused:
         load_delivery_application(config, workspace_root=layout.workspace)
