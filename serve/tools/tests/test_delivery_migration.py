@@ -11,6 +11,7 @@ from serve.delivery.tests.test_portfolio_application import (
     _seed_loader_composed_completed_change,
     _startup_config,
 )
+from serve.delivery.tests.test_state_repair import _stand_in
 
 from owlbear_delivery.state_formats import FORMAT_MARKER, record_tree_digest
 from owlbear_delivery.storage_io import acquire_controller_lock
@@ -72,6 +73,21 @@ def test_cli_reports_a_typed_refusal_while_a_controller_holds_the_lock(tmp_path:
         "detail": "a Delivery controller holds the workspace lock",
         "locator": None,
     }
+    assert record_tree_digest(repository) == digests
+
+
+def test_cli_refuses_a_running_controller_that_takes_no_lock(tmp_path: Path) -> None:
+    repository = _workspace(tmp_path)
+    migration_id = str(delivery_migration.run(["--project-root", str(repository), "propose"])[1]["migration_id"])
+    digests = record_tree_digest(repository)
+    process = _stand_in(repository, "module-mcp", tmp_path)
+    try:
+        code, payload = delivery_migration.run(["--project-root", str(repository), "apply", migration_id])
+    finally:
+        process.kill()
+        process.wait()
+
+    assert (code, payload["code"]) == (1, "repair-controller-running")
     assert record_tree_digest(repository) == digests
 
 

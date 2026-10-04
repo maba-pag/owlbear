@@ -162,7 +162,8 @@ The upgrade refuses while a Delivery MCP server or Cockpit still runs for the pr
 nothing. To go back after a migration, the backup has to be restored first, which is your decision;
 moving the checkout back alone is safe only when no migration was needed. The upgrade also leaves
 `.owlbear/controller/` (its lock) and `.owlbear/delivery-migrations/` (the migration journal and the
-previous bytes of the migrated records) in the project; keep both out of commits.
+previous bytes of the migrated records) in the project; the setup rerun in step 4 ignores both in
+`.owlbear/.gitignore`.
 
 ## Uninstalling
 
@@ -429,9 +430,8 @@ uv --project ../owlbear run delivery-controller --project-root "$PWD" install HE
 ```
 
 Then set the `owlbear-delivery` entry in `.vscode/mcp.json` to
-`"command": "${workspaceFolder}/.owlbear/controller/bin/delivery-mcp", "args": []`, start Cockpit
-with `.owlbear/controller/bin/cockpit`, and keep `.owlbear/controller/` out of commits. Rerunning
-setup keeps your edited entry.
+`"command": "${workspaceFolder}/.owlbear/controller/bin/delivery-mcp", "args": []` and start Cockpit
+with `.owlbear/controller/bin/cockpit`. Rerunning setup keeps your edited entry.
 
 | Path | Content |
 | --- | --- |

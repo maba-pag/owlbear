@@ -539,6 +539,11 @@ Reduced on 2026-10-04 (header).
 - **Editable paths:** `share/prompts/upgrade-delivery.prompt.md` and `share/prompts/repair-delivery.prompt.md` (consumer
   wording only, if needed); docs: `setup/operating-owlbear.md`, `setup/setup-guide.md`, `setup/sharing-guide.md`,
   `README-consumer.md`; `tests/test_agent_ecosystem_validation.py` if a prompt changes; this plan; status row.
+  Lead decision 2026-10-04: editable paths extended by `serve/tools/src/owlbear_tools/delivery_migration.py` and
+  `serve/tools/tests/test_delivery_migration.py` because a direct `delivery-migrate` step must refuse a running
+  controller that predates the lock, reusing the `delivery-repair` process scan.
+  Lead decision 2026-10-04: editable paths extended by `seed/.owlbear/.gitignore` because the upgrade writes
+  `.owlbear/controller/` and `.owlbear/delivery-migrations/` into consumer projects, which setup must ignore.
 - **Positive scenario:** a disposable consumer project created from a `main`-shaped clone, on Delivery state of the
   previous format, follows the documented steps: the clone moves forward, `/upgrade-delivery` runs preflight and
   migration, and every Change stays available.
