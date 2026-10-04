@@ -67,6 +67,7 @@ from owlbear_delivery.storage_io import (
     acquire_controller_lock,
     read_only_state,
 )
+from owlbear_delivery.workspace_models import ChangeCoordination
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -197,12 +198,32 @@ def frontier_17_to_18(content: bytes) -> bytes:
     return parse_delivery_frontier(content)[1]
 
 
+def coordination_1_to_2(content: bytes) -> bytes:
+    """Registered rewrite ``coordination-1-to-2``: the same record at version 2, without a Pause request.
+
+    Version 2 only adds the optional ``pause_request`` (omitted when absent), so the K4 recovery
+    authority digest of the rewritten record equals the digest of its version-1 bytes.
+    """
+    payload = json.loads(content)
+    if not isinstance(payload, dict) or payload.get("schema_version") != 1 or "pause_request" in payload:
+        msg = "coordination-1-to-2 applies only to schema-1 coordination records"
+        raise ValueError(msg)
+    payload["schema_version"] = 2
+    return _canonical_coordination(json.dumps(payload).encode())
+
+
+def _canonical_coordination(content: bytes) -> bytes:
+    return _canonical(ChangeCoordination.model_validate_json(content, strict=True))
+
+
 REWRITES: dict[str, Callable[[bytes], bytes]] = {
     "owlbear_delivery.state_migration:frontier_17_to_18": frontier_17_to_18,
+    "owlbear_delivery.state_migration:coordination_1_to_2": coordination_1_to_2,
 }
 # Target-release strict parsers; each staged record must parse back to its own bytes.
 _TARGET_PARSERS: dict[str, Callable[[bytes], bytes]] = {
     "frontier": lambda content: parse_delivery_frontier(content)[1],
+    "coordination": _canonical_coordination,
 }
 # Owners whose strict read is a parser function rather than one model (frontier strict JSON, snapshot upcast).
 _OWNER_PARSERS: dict[str, Callable[[bytes], object]] = {
@@ -1147,6 +1168,7 @@ __all__ = [
     "abort",
     "apply",
     "controller_release",
+    "coordination_1_to_2",
     "frontier_17_to_18",
     "propose",
     "resume",

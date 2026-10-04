@@ -308,7 +308,7 @@ class _PreservationMixin:
             msg = "integration target moved since verified recovery"
             raise PreservationFenceError(msg)
         frontier_bytes = self._read_frontier_bytes(change_id)
-        coordination_bytes = self._coordinator.coordination_bytes(change_id)
+        coordination_authority = self._coordinator.recovery_authority_digest(change_id)
         worktree_identity = self._directory_identity(worktree, "registered worktree")
         repository_identity = self._directory_identity(self._repository, "managed repository")
         index = self._resolve_managed_index(worktree)
@@ -423,7 +423,7 @@ class _PreservationMixin:
         if (
             current_intent != intent
             or current_recovery != _recovery
-            or self._coordinator.coordination_bytes(change_id) != coordination_bytes
+            or self._coordinator.recovery_authority_digest(change_id) != coordination_authority
             or self._read_frontier_bytes(change_id) != frontier_bytes
             or self.observed_target_head() != target_head
             or self._directory_identity(worktree, "registered worktree")[:3] != worktree_identity[:3]
@@ -552,7 +552,7 @@ class _PreservationMixin:
             target_head=target_head,
             integration_target=coordination.integration_target,
             frontier_digest=digest(frontier_bytes),
-            coordination_digest=digest(coordination_bytes),
+            coordination_digest=coordination_authority,
             repository=self._repository,
             runtime_root=self.runtime_root,
             worktree_device=worktree_identity[0],
@@ -1105,7 +1105,7 @@ class _PreservationMixin:
         if digest(frontier) != receipt.frontier_digest:
             msg = "Delivery frontier changed since preservation"
             raise PreservationFenceError(msg)
-        if digest(self._coordinator.coordination_bytes(change_id)) != receipt.coordination_digest:
+        if self._coordinator.recovery_authority_digest(change_id) != receipt.coordination_digest:
             msg = "Change coordination changed since preservation"
             raise PreservationFenceError(msg)
         index = self._verify_preservation_roots(change_id, receipt, worktree)

@@ -33,13 +33,18 @@ import DesignWorkDetail from "../components/DesignWorkDetail";
 import DesignWorkSection from "../components/DesignWorkSection";
 import { designCommand, designWorkTitle } from "../components/designWorkPresentation";
 import PortfolioOperatingSummary, { PortfolioHeaderSummary } from "../components/PortfolioOperatingSummary";
-import WorkItemDetail from "../components/WorkItemDetail";
+import WorkItemDetail, { ChangePauseControl } from "../components/WorkItemDetail";
 import WorkPortfolioTable from "../components/WorkPortfolioTable";
 import { WorkspaceHeader } from "../components/WorkspaceHeader";
 import { WorkspaceViewCount } from "../components/WorkspaceViewHeader";
-import { READINESS_CHECKS_LABELS, READINESS_REASON_LABELS } from "../components/workItemPresentation";
+import {
+  changePauseUnavailableMessage,
+  READINESS_CHECKS_LABELS,
+  READINESS_REASON_LABELS,
+} from "../components/workItemPresentation";
 import {
   useAcceptanceReconciliation,
+  useChangeIntent,
   useDesignWorkDetail,
   useWorkItemDetail,
   useWorkPortfolio,
@@ -396,13 +401,36 @@ function PortfolioWorkspace({
   selected,
   emptyMessage,
   onSelect,
+  onChanged,
 }: {
   groups: ChangeGroupView[];
   selected: WorkItemIdentity | null;
   emptyMessage?: string;
   onSelect: (identity: WorkItemIdentity, trigger: HTMLElement) => void;
+  onChanged: () => void;
 }) {
-  return <WorkPortfolioTable groups={groups} selected={selected} emptyMessage={emptyMessage} onSelect={onSelect} />;
+  const intent = useChangeIntent(onChanged);
+  return (
+    <WorkPortfolioTable
+      groups={groups}
+      selected={selected}
+      emptyMessage={emptyMessage}
+      onSelect={onSelect}
+      renderGroupControls={(group) => (
+        <ChangePauseControl
+          changeId={group.change_id}
+          paused={group.progress === "paused" || group.lifecycle === "deferred"}
+          pauseRequested={group.pause_requested === true}
+          unavailableMessage={changePauseUnavailableMessage(group)}
+          pendingAction={intent.pendingAction(group.change_id)}
+          reasonName={`change-pause-reason-${group.change_id}`}
+          actionError={intent.actionError(group.change_id)}
+          onPause={(reason) => intent.pause(group, reason)}
+          onResume={() => intent.resume(group)}
+        />
+      )}
+    />
+  );
 }
 
 function EmptyPortfolioState({ filtered }: { filtered: boolean }) {
@@ -1056,6 +1084,7 @@ export default function WorkPortfolioPage() {
                   <PortfolioWorkspace
                     groups={filteredGroups}
                     selected={selected}
+                    onChanged={retry}
                     onSelect={(identity, trigger) => {
                       lastTrigger.current = trigger;
                       lastTriggerIdentity.current = `${identity.changeId}:${identity.itemKey}`;

@@ -60,3 +60,32 @@ it("reports a clipboard failure without navigating", async () => {
   );
   expect(screen.getByRole("button")).toHaveAttribute("title", "Could not copy /orchestrate");
 });
+
+it.each([
+  [true, "Copied continuation prompt", "success"],
+  [false, "Could not copy continuation prompt", "error"],
+])("labelled copy keeps the exact prompt and names the copy (clipboard ok=%s)", async (ok, text, state) => {
+  const prompt = "/continue-change change-a reread get_change and pass its readiness basis unchanged.";
+  const writeText = ok ? vi.fn().mockResolvedValue(undefined) : vi.fn().mockRejectedValue(new Error("denied"));
+  stubClipboard(writeText);
+  render(
+    <>
+      <CopyCommand
+        command={prompt}
+        label="Copy continuation prompt"
+        helper="Run it in Copilot Chat. Copying does not start an agent."
+      />
+      <PToast />
+    </>,
+  );
+  const toast = document.querySelector("p-toast") as HTMLElement & { addMessage: (message: unknown) => void };
+  const addMessage = vi.spyOn(toast, "addMessage");
+  const button = screen.getByRole("button", { name: "Copy continuation prompt" });
+  expect(button).toHaveAccessibleDescription("Run it in Copilot Chat. Copying does not start an agent.");
+  expect(button).not.toHaveTextContent("/continue-change");
+
+  fireEvent.click(button);
+
+  await waitFor(() => expect(addMessage).toHaveBeenCalledWith({ text, state }));
+  expect(writeText).toHaveBeenCalledWith(prompt);
+});

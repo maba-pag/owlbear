@@ -7,9 +7,10 @@ import os
 import re
 from contextlib import ExitStack, contextmanager
 from contextvars import ContextVar
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import ValidationError
 
@@ -36,8 +37,11 @@ from owlbear_delivery.workspace_models import (
     ChangeBuilderHandoff,
     ChangeContinuationAction,
     ChangeCoordination,
+    ChangeDirectOperation,
     ChangeFinalizationAttempt,
     ChangeFinalizationAttention,
+    ChangePauseRequest,
+    ChangePauseRequestedError,
     ChangeWriter,
     CoordinationConflictError,
     PublicationLease,
@@ -47,11 +51,46 @@ from owlbear_delivery.workspace_models import (
     _model_content,
     _publication_timestamp,
     _replacement,
+    direct_operation_marker_name,
+    recovery_authority_digest,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Iterable, Iterator
     from contextlib import AbstractContextManager
+
+
+DrainPermitKind = Literal["mutation", "operator", "reserve", "acquire", "provider", "state", "lease", "snapshot"]
+
+
+@dataclass
+class DrainAuthority:
+    """Process-local K2 token: one owner's permitted drain operations for one Change.
+
+    Each entry rebuilds it from durable evidence or creates it with its own start marker; it is
+    never persisted. It permits only the named operations, each bound to the owner's identity.
+    ``publishes_checkpoint`` marks owners whose K2 row includes the queued checkpoint's branch
+    reservation; ``requires_lease`` keeps a standalone publication token inert until its own lease commits.
+    """
+
+    change_id: str
+    owner: str
+    permits: dict[str, set[str]] = field(default_factory=dict)
+    publishes_checkpoint: bool = False
+    requires_lease: bool = False
+
+    @property
+    def active(self) -> bool:
+        """Return whether this token currently grants anything (a lease token needs its committed lease)."""
+        return not self.requires_lease or bool(self.permits.get("lease"))
+
+    def permit(self, kind: DrainPermitKind, *identities: str) -> None:
+        """Add operations this owner learned it must finish (for example a merged head's push)."""
+        self.permits.setdefault(kind, set()).update(identities)
+
+    def allows(self, kind: DrainPermitKind, identity: str) -> bool:
+        """Return whether this token permits one exact operation."""
+        return identity in self.permits.get(kind, set())
 
 
 class PortfolioCoordinator:
@@ -61,6 +100,7 @@ class PortfolioCoordinator:
         self._state_root = state_root
         self._coordination_root = state_root / "coordination" / "changes"
         self._continuation_owner: ContextVar[str | None] = ContextVar("continuation_owner", default=None)
+        self._drain_authorities: ContextVar[tuple[DrainAuthority, ...]] = ContextVar("drain_authorities", default=())
         self._verified_exclusions: set[tuple[int, str]] = set()
         state_root.mkdir(parents=True, exist_ok=True)
         RuntimeTransaction.recover_all(state_root)
@@ -74,10 +114,10 @@ class PortfolioCoordinator:
         """Return the shared transaction and recovery root."""
         return self._state_root.resolve()
 
-    def acquisition_lock(self) -> AbstractContextManager[None]:
+    def acquisition_lock(self, *, blocking: bool = True) -> AbstractContextManager[None]:
         """Serialize portfolio selection and staged claim preparation."""
         lock_root = self._state_root / "claims" / "acquisition-lock"
-        return locked_roots((lock_root,))
+        return locked_roots((lock_root,), blocking=blocking)
 
     @contextmanager
     def publication_lock(self, change_id: str, *, blocking: bool = True) -> Iterator[PublicationLock]:
@@ -119,7 +159,8 @@ class PortfolioCoordinator:
         replacement = self.recovery_coordination_bytes(request.change_id, request.owner_id)
         frontier_path = Path("changes") / request.change_id / "frontier.json"
         frontier = (self._state_root / frontier_path).read_bytes()
-        if digest(replacement) != intent.coordination_digest or digest(frontier) != intent.frontier_digest:
+        authority = recovery_authority_digest(ChangeCoordination.model_validate_json(replacement))
+        if authority != intent.coordination_digest or digest(frontier) != intent.frontier_digest:
             raise DeliveryWorkerExclusionRequiredError
         self._commit(
             f"propose-recovery-{intent.recovery_id}",
@@ -146,7 +187,7 @@ class PortfolioCoordinator:
         if coordination.builder_handoff is not None or coordination.finalization_attention is not None:
             raise DeliveryWorkerExclusionRequiredError
         if (
-            digest(previous) != intent.coordination_digest
+            recovery_authority_digest(coordination) != intent.coordination_digest
             or coordination.recovery_owner_id != request.owner_id
             or receipt.recovery_id != intent.recovery_id
             or receipt.evidence.recovery_id != intent.recovery_id
@@ -306,6 +347,243 @@ class PortfolioCoordinator:
         finally:
             self._continuation_owner.reset(token)
 
+    @contextmanager
+    def drain_authority(
+        self,
+        change_id: str,
+        owner: str,
+        *,
+        publishes_checkpoint: bool = False,
+        requires_lease: bool = False,
+        **permits: Iterable[str],
+    ) -> Iterator[DrainAuthority]:
+        """Hold one process-local K2 drain token for this call context only."""
+        self._coordination_path(change_id)
+        authority = DrainAuthority(
+            change_id, owner, publishes_checkpoint=publishes_checkpoint, requires_lease=requires_lease
+        )
+        for kind, identities in permits.items():
+            authority.permit(kind, *identities)  # type: ignore[arg-type]
+        token = self._drain_authorities.set((*self._drain_authorities.get(), authority))
+        try:
+            yield authority
+        finally:
+            self._drain_authorities.reset(token)
+
+    def drain_permits(self, change_id: str, kind: DrainPermitKind, identity: str) -> bool:
+        """Return whether an active token in this call context permits one exact drain operation."""
+        return any(
+            authority.change_id == change_id and authority.active and authority.allows(kind, identity)
+            for authority in self._drain_authorities.get()
+        )
+
+    def current_drain_authority(self, change_id: str) -> DrainAuthority | None:
+        """Return the innermost active token for one Change, if this context owns one."""
+        return next(
+            (
+                authority
+                for authority in reversed(self._drain_authorities.get())
+                if authority.change_id == change_id and authority.active
+            ),
+            None,
+        )
+
+    def _grant_committed_lease(self, change_id: str, operation_id: str) -> None:
+        """K2 lease row: the token created with this context's committed lease now drains its call."""
+        for authority in self._drain_authorities.get():
+            if authority.change_id == change_id and authority.requires_lease:
+                authority.permit("lease", operation_id)
+
+    def start_pause_fenced(self, change_id: str, owner: str) -> None:
+        """K3 operator start: commit Pause-free coordination bytes as this entry's start point.
+
+        A Pause committed first refuses the start before any effect; one committed later finds a
+        started owner that drains under its own token. Takes no lock of its own.
+        """
+        path = self._coordination_path(change_id).relative_to(self._state_root)
+        for _attempt in range(_OCC_RETRY_LIMIT):
+            coordination, previous = self._read_coordination(change_id)
+            if coordination.pause_request is not None:
+                raise ChangePauseRequestedError
+            identity = hashlib.sha256(owner.encode() + previous).hexdigest()
+            try:
+                self._commit(
+                    f"operator-start-{identity}",
+                    (ReplacementTransactionParticipant(self._state_root, path, previous, previous),),
+                )
+            except TransactionConflictError:
+                continue
+            return
+        _coordination_conflict("operator start coordination remained concurrent")
+
+    def require_pause_permits(
+        self,
+        change_id: str,
+        kind: DrainPermitKind,
+        identity: str,
+        coordination: ChangeCoordination | None = None,
+    ) -> None:
+        """Refuse one new start while a Pause request exists unless its own drain token permits it."""
+        current = coordination if coordination is not None else self.show(change_id)
+        if current.pause_request is not None and not self.drain_permits(change_id, kind, identity):
+            raise ChangePauseRequestedError
+
+    def pause_request(self, change_id: str) -> ChangePauseRequest | None:
+        """Return the durable Pause request recorded beside custody, if any."""
+        return self.show(change_id).pause_request
+
+    def record_pause_request(self, request: ChangePauseRequest, expected_frontier_digest: str) -> ChangePauseRequest:
+        """K1 Record: commit the request with the exact observed frontier, taking no Change lock."""
+        return self._replace_pause_request(request.change_id, request, expected_frontier_digest)
+
+    def clear_pause_request(self, change_id: str, expected_frontier_digest: str) -> ChangePauseRequest | None:
+        """K1 Resume of a request: clear it through the same frontier-bound transaction."""
+        return self._replace_pause_request(change_id, None, expected_frontier_digest)
+
+    def _replace_pause_request(
+        self,
+        change_id: str,
+        request: ChangePauseRequest | None,
+        expected_frontier_digest: str,
+    ) -> ChangePauseRequest | None:
+        frontier_path = Path("changes") / change_id / "frontier.json"
+        for _attempt in range(_OCC_RETRY_LIMIT):
+            coordination, previous = self._read_coordination(change_id)
+            existing = coordination.pause_request
+            if request is not None and existing is not None:
+                if existing.reason != request.reason:
+                    _coordination_conflict("Change pause request already exists with another reason")
+                return existing
+            if request is None and existing is None:
+                return None
+            frontier = (self._state_root / frontier_path).read_bytes()
+            if hashlib.sha256(frontier).hexdigest() != expected_frontier_digest:
+                _coordination_conflict("Change intent frontier changed")
+            replacement = coordination.model_copy(update={"pause_request": request})
+            identity = hashlib.sha256(previous + _model_content(replacement)).hexdigest()
+            try:
+                self._commit(
+                    f"pause-request-{change_id}-{identity}",
+                    (
+                        _replacement(self._state_root, self._coordination_path(change_id), previous, replacement),
+                        ReplacementTransactionParticipant(self._state_root, frontier_path, frontier, frontier),
+                    ),
+                )
+            except TransactionConflictError:
+                continue
+            return request if request is not None else existing
+        return _coordination_conflict("Change pause request coordination remained concurrent")
+
+    def prepare_pause_request_clear(
+        self, change_id: str, request: ChangePauseRequest
+    ) -> ReplacementTransactionParticipant:
+        """Join one exact request's removal to a conversion, completion or abandonment transaction."""
+        coordination, previous = self._read_coordination(change_id)
+        if coordination.pause_request != request:
+            _coordination_conflict("Change pause request changed before conversion")
+        return _replacement(
+            self._state_root,
+            self._coordination_path(change_id),
+            previous,
+            coordination.model_copy(update={"pause_request": None}),
+        )
+
+    def recovery_authority_digest(self, change_id: str) -> str:
+        """Return the K4 recovery authority digest of current coordination."""
+        return recovery_authority_digest(self.show(change_id))
+
+    def prepare_pause_fence(
+        self, change_id: str, kind: DrainPermitKind, identity: str
+    ) -> ReplacementTransactionParticipant:
+        """Join exact Pause-free (or token-permitted) coordination bytes to one start commit (K3)."""
+        coordination, previous = self._read_coordination(change_id)
+        self.require_pause_permits(change_id, kind, identity, coordination)
+        return ReplacementTransactionParticipant(
+            self._state_root,
+            self._coordination_path(change_id).relative_to(self._state_root),
+            previous,
+            previous,
+        )
+
+    def direct_operation_path(self, operation: ChangeDirectOperation, *, finished: bool = False) -> Path:
+        """Locate one direct marker under ``action-receipts/direct-<sha256(kind:operation_id)>/``."""
+        self._coordination_path(operation.change_id)
+        return (
+            self._state_root
+            / "changes"
+            / operation.change_id
+            / "action-receipts"
+            / direct_operation_marker_name(operation.kind, operation.operation_id)
+            / ("finished.json" if finished else "started.json")
+        )
+
+    def direct_operation_state(self, operation: ChangeDirectOperation) -> Literal["absent", "started", "finished"]:
+        """Read one direct marker's identity-checked state without writing."""
+        started = self._read_direct_marker(operation, finished=False)
+        if started is None:
+            return "absent"
+        return "finished" if self._read_direct_marker(operation, finished=True) is not None else "started"
+
+    def _read_direct_marker(self, operation: ChangeDirectOperation, *, finished: bool) -> ChangeDirectOperation | None:
+        try:
+            content = self.direct_operation_path(operation, finished=finished).read_bytes()
+        except FileNotFoundError:
+            return None
+        recorded = ChangeDirectOperation.model_validate_json(content)
+        if (recorded.change_id, recorded.kind, recorded.operation_id) != (
+            operation.change_id,
+            operation.kind,
+            operation.operation_id,
+        ):
+            _coordination_conflict("direct operation marker identity is invalid")
+        if recorded.request_digest != operation.request_digest:
+            _coordination_conflict("direct operation identity was started with another request")
+        return recorded
+
+    def start_direct_operation(self, operation: ChangeDirectOperation) -> bool:
+        """K3: commit ``started.json`` fenced by Pause-free coordination; an identical replay returns False.
+
+        Runs inside the entry's checkpoint lock and takes no lock of its own.
+        """
+        if self._read_direct_marker(operation, finished=False) is not None:
+            return False
+        path = self.direct_operation_path(operation).relative_to(self._state_root)
+        for _attempt in range(_OCC_RETRY_LIMIT):
+            coordination, previous = self._read_coordination(operation.change_id)
+            if coordination.pause_request is not None:
+                raise ChangePauseRequestedError
+            try:
+                self._commit(
+                    f"direct-start-{direct_operation_marker_name(operation.kind, operation.operation_id)}",
+                    (
+                        TransactionParticipant(self._state_root, path, _model_content(operation)),
+                        ReplacementTransactionParticipant(
+                            self._state_root,
+                            self._coordination_path(operation.change_id).relative_to(self._state_root),
+                            previous,
+                            previous,
+                        ),
+                    ),
+                )
+            except TransactionConflictError:
+                if self._read_direct_marker(operation, finished=False) is not None:
+                    return False
+                continue
+            return True
+        return _coordination_conflict("direct operation start remained concurrent")
+
+    def finish_direct_operation(self, operation: ChangeDirectOperation) -> None:
+        """Write ``finished.json`` for one exact started marker; a repeated finish is a no-op."""
+        if self._read_direct_marker(operation, finished=False) is None:
+            _coordination_conflict("direct operation finish requires its matching start marker")
+        if self._read_direct_marker(operation, finished=True) is not None:
+            return
+        path = self.direct_operation_path(operation, finished=True).relative_to(self._state_root)
+        self._commit(
+            f"direct-finish-{direct_operation_marker_name(operation.kind, operation.operation_id)}",
+            (TransactionParticipant(self._state_root, path, _model_content(operation)),),
+        )
+
     def continuation_record_path(self, change_id: str, operation_id: str, *, result: bool = False) -> Path:
         """Locate an immutable action intent or exact result in existing Change state."""
         self._coordination_path(change_id)
@@ -325,6 +603,8 @@ class PortfolioCoordinator:
         with self.publication_lock(action.change_id):
             coordination, previous = self._read_coordination(action.change_id)
             self.require_continuation_access(action.change_id)
+            if coordination.pause_request is not None:
+                raise ChangePauseRequestedError
             attention_sync = _is_settled_finalizer_attention_sync(coordination, action)
             if (coordination.writer is not None and not attention_sync) or coordination.publication_lease is not None:
                 _coordination_conflict("continuation cannot overlap active ownership")
@@ -366,38 +646,67 @@ class PortfolioCoordinator:
         return True
 
     def start_continuation_action(self, action: ChangeContinuationAction) -> bool:
-        """Record effect entry; an interrupted call is not permission for another effect."""
+        """Record effect entry fenced by Pause-free coordination (K3).
+
+        An interrupted call is not permission for another effect.
+        """
         if self.continuation_action_started(action):
             return False
         path = self.continuation_record_path(action.change_id, action.operation_id).with_name("started.json")
-        self._commit(
-            f"start-{action.operation_id}",
-            (TransactionParticipant(self._state_root, path.relative_to(self._state_root), _model_content(action)),),
-        )
-        return True
+        for _attempt in range(_OCC_RETRY_LIMIT):
+            coordination, previous = self._read_coordination(action.change_id)
+            if coordination.pause_request is not None:
+                raise ChangePauseRequestedError
+            try:
+                self._commit(
+                    f"start-{action.operation_id}",
+                    (
+                        TransactionParticipant(
+                            self._state_root, path.relative_to(self._state_root), _model_content(action)
+                        ),
+                        ReplacementTransactionParticipant(
+                            self._state_root,
+                            self._coordination_path(action.change_id).relative_to(self._state_root),
+                            previous,
+                            previous,
+                        ),
+                    ),
+                )
+            except TransactionConflictError:
+                if self.continuation_start_recorded(action):
+                    return False
+                continue
+            return True
+        return _coordination_conflict("continuation start remained concurrent")
 
     def finish_continuation_action(
         self, action: ChangeContinuationAction, result: bytes, finished_at: str, *, release: bool
     ) -> None:
         """Persist exact result with custody release, or retain custody on a blocked effect."""
         self.require_continuation_access(action.change_id)
-        coordination, previous = self._read_coordination(action.change_id)
-        if coordination.continuation_action != action:
-            _coordination_conflict("continuation result does not match retained custody")
-        retained = action.model_copy(update={"finished_at": finished_at}) if release else action
         result_path = self.continuation_record_path(action.change_id, action.operation_id, result=True)
-        self._commit(
-            f"result-{action.operation_id}",
-            (
-                _replacement(
-                    self._state_root,
-                    self._coordination_path(action.change_id),
-                    previous,
-                    coordination.model_copy(update={"continuation_action": retained}),
-                ),
-                TransactionParticipant(self._state_root, result_path.relative_to(self._state_root), result),
-            ),
-        )
+        for _attempt in range(_OCC_RETRY_LIMIT):
+            coordination, previous = self._read_coordination(action.change_id)
+            if coordination.continuation_action != action:
+                _coordination_conflict("continuation result does not match retained custody")
+            retained = action.model_copy(update={"finished_at": finished_at}) if release else action
+            try:
+                self._commit(
+                    f"result-{action.operation_id}",
+                    (
+                        _replacement(
+                            self._state_root,
+                            self._coordination_path(action.change_id),
+                            previous,
+                            coordination.model_copy(update={"continuation_action": retained}),
+                        ),
+                        TransactionParticipant(self._state_root, result_path.relative_to(self._state_root), result),
+                    ),
+                )
+            except TransactionConflictError:
+                continue
+            return
+        _coordination_conflict("continuation result coordination remained concurrent")
 
     def find_registered(self, change_id: str) -> ChangeCoordination | None:
         """Distinguish genuine absence from unreadable or invalid coordination."""
@@ -514,6 +823,7 @@ class PortfolioCoordinator:
         coordination_path = self._coordination_path(change_id)
         coordination_bytes = coordination_path.read_bytes()
         coordination = ChangeCoordination.model_validate_json(coordination_bytes)
+        self.require_pause_permits(change_id, "acquire", writer.claim_id, coordination)
         publication_expiry = coordination.publication_expiry
         publication_active = publication_expiry is not None and publication_expiry > datetime.now(UTC)
         attention_retry = self._validate_finalizer_attention_retry(
@@ -555,6 +865,17 @@ class PortfolioCoordinator:
                 tuple(participants),
             )
         except TransactionConflictError as exc:
+            current = self.show(change_id)
+            if current.model_copy(update={"pause_request": None}) == coordination.model_copy(
+                update={"pause_request": None}
+            ):
+                self.require_pause_permits(change_id, "acquire", writer.claim_id, current)
+                return self._acquire(
+                    change_id,
+                    writer,
+                    finalization_attempt=finalization_attempt,
+                    expected_finalization_attention=expected_finalization_attention,
+                )
             msg = "writer coordination changed concurrently"
             raise CoordinationConflictError(msg) from exc
         return claimed
@@ -598,6 +919,7 @@ class PortfolioCoordinator:
     ) -> ChangeCoordination:
         """OCC-replace one registered per-change record without changing ownership."""
         existing = self.show(coordination.change_id)
+        coordination = coordination.model_copy(update={"pause_request": existing.pause_request})
         if existing.publication_lease is not None and existing != coordination:
             _coordination_conflict("workspace update cannot change a reserved publication boundary")
         if lock is not None:
@@ -608,9 +930,35 @@ class PortfolioCoordinator:
 
     def _update(self, coordination: ChangeCoordination) -> ChangeCoordination:
         self.require_continuation_access(coordination.change_id)
-        path = self._coordination_path(coordination.change_id)
-        previous = path.read_bytes()
-        existing = ChangeCoordination.model_validate_json(previous)
+        for _attempt in range(_OCC_RETRY_LIMIT):
+            path = self._coordination_path(coordination.change_id)
+            previous = path.read_bytes()
+            existing = ChangeCoordination.model_validate_json(previous)
+            # K6: carry the concurrent Pause policy field forward; never erase it.
+            coordination = coordination.model_copy(update={"pause_request": existing.pause_request})
+            self._validate_update(existing, coordination)
+            participant = _replacement(self._state_root, path, previous, coordination)
+            try:
+                self._commit(f"update-{coordination.change_id}", (participant,))
+            except TransactionConflictError as exc:
+                current = ChangeCoordination.model_validate_json(path.read_bytes())
+                if current.model_copy(update={"pause_request": None}) == existing.model_copy(
+                    update={"pause_request": None}
+                ):
+                    continue
+                msg = "change workspace changed concurrently"
+                raise CoordinationConflictError(msg) from exc
+            return coordination
+        return _coordination_conflict("change workspace changed concurrently")
+
+    def _validate_update(self, existing: ChangeCoordination, coordination: ChangeCoordination) -> None:
+        # K3: only an intent-creating replacement starts snapshot work; receipt completion and identical intents drain.
+        if (
+            existing.pause_request is not None
+            and coordination.design_package_snapshot_intent is not None
+            and coordination.design_package_snapshot_intent != existing.design_package_snapshot_intent
+        ):
+            raise ChangePauseRequestedError
         self._validate_coordination_ownership_update(existing, coordination)
         if existing.publication_lease is not None and existing != coordination:
             _coordination_conflict("workspace update cannot change a reserved publication boundary")
@@ -643,13 +991,6 @@ class PortfolioCoordinator:
             if writer is None or writer.attempt_id != receipt.attempt_id or writer.claim_id != receipt.claim_id:
                 _coordination_conflict("dirty worktree quarantine authority requires matching writer custody")
         self._validate_out_of_band_head_recovery_update(existing, coordination)
-        participant = _replacement(self._state_root, path, previous, coordination)
-        try:
-            self._commit(f"update-{coordination.change_id}", (participant,))
-        except TransactionConflictError as exc:
-            msg = "change workspace changed concurrently"
-            raise CoordinationConflictError(msg) from exc
-        return coordination
 
     def _validate_coordination_ownership_update(
         self,
@@ -798,12 +1139,22 @@ class PortfolioCoordinator:
         change_id: str,
         *,
         expected_finalization_attention: ChangeFinalizationAttention | None = None,
+        operation: str | None = None,
+        mutation_class: Literal["completion", "owner-drain", "pause-gated"] = "pause-gated",
     ) -> ReplacementTransactionParticipant:
-        """Fence a runtime mutation against concurrent finalizer acquisition."""
+        """Fence a runtime mutation against concurrent finalizer acquisition and Pause (K7)."""
         self.require_continuation_access(change_id)
         path = self._coordination_path(change_id)
         coordination, previous = self._read_coordination(change_id)
         self._require_continuation_coordination(coordination)
+        # K7: owner-drain names need their K2 token; a pause-gated name only a started operator's own token.
+        permit_kind: DrainPermitKind = "mutation" if mutation_class == "owner-drain" else "operator"
+        if (
+            coordination.pause_request is not None
+            and mutation_class != "completion"
+            and (operation is None or not self.drain_permits(change_id, permit_kind, operation))
+        ):
+            raise ChangePauseRequestedError
         attempt = coordination.finalization_attempt
         if expected_finalization_attention is None and (
             (coordination.writer is not None and coordination.writer.kind == "finalize")
@@ -843,6 +1194,7 @@ class PortfolioCoordinator:
         path = self._coordination_path(change_id)
         previous = path.read_bytes()
         coordination = ChangeCoordination.model_validate_json(previous)
+        self.require_pause_permits(change_id, "reserve", lease.operation_id, coordination)
         existing_lease = coordination.publication_lease
         existing_expiry = coordination.publication_expiry
         same_owner = existing_lease is not None and existing_lease.owner_id == lease.owner_id
@@ -862,8 +1214,15 @@ class PortfolioCoordinator:
                 (_replacement(self._state_root, path, previous, reserved),),
             )
         except TransactionConflictError as exc:
+            current = self.show(change_id)
+            if current.model_copy(update={"pause_request": None}) == coordination.model_copy(
+                update={"pause_request": None}
+            ):
+                self.require_pause_permits(change_id, "reserve", lease.operation_id, current)
+                return self.reserve_publication(change_id, lease, lock, now=now)
             msg = "change ownership changed during publication reservation"
             raise CoordinationConflictError(msg) from exc
+        self._grant_committed_lease(change_id, lease.operation_id)
         return reserved
 
     def release_publication(

@@ -6,7 +6,7 @@ import hashlib
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from owlbear_delivery.acceptance import (
     CompletionDisplayMetadata,
@@ -102,6 +102,7 @@ from owlbear_delivery.runtime_models import (  # noqa: F401
     derive_change_stage,
     integration_attention_disposition,
     is_change_terminal,
+    pause_mutation_class,
 )
 from owlbear_delivery.runtime_reads import (
     _RuntimeReadsMixin,
@@ -131,6 +132,8 @@ from owlbear_delivery.runtime_support import (  # noqa: F401
     _checkpoint_with_head,
     _completed_outcome_repair_id,
     _conflict,
+    _consume_declared_mutation,
+    _declare_mutation,
     _find_binding,
     _find_request,
     _invalidate_finalization_checkpoint,
@@ -155,6 +158,7 @@ from owlbear_delivery.runtime_support import (  # noqa: F401
 from owlbear_delivery.runtime_transaction import (
     ReplacementTransactionParticipant,
     RuntimeTransaction,
+    TransactionConflictError,
     TransactionParticipant,
 )
 from owlbear_delivery.storage_io import state_is_read_only
@@ -177,6 +181,32 @@ if TYPE_CHECKING:
         PullRequestReadyReceipt,
     )
     from owlbear_delivery.target_contract import DeliveryContract
+
+
+_GUARD_RETRY_LIMIT = 8
+
+
+def _deferral_lifecycle_refusal(
+    frontier: DeliveryFrontier,
+) -> Literal["change-inactive", "step-in-progress"] | None:
+    """Read-only mirror of ``defer_change``'s lifecycle and claim guards, in the same order."""
+    if frontier.change_deferral is not None:
+        return "change-inactive"
+    try:
+        _require_change_mutable(frontier, "defer_change")
+    except DeliveryRuntimeConflictError:
+        return "change-inactive"
+    finally:
+        _consume_declared_mutation()
+    if frontier.change_abandonment is not None or is_change_terminal(frontier):
+        return "change-inactive"
+    try:
+        _require_no_active_change_claim(frontier, "Change deferral")
+    except DeliveryRuntimeConflictError:
+        return "step-in-progress"
+    if derive_change_stage(frontier) in {DeliveryChangeStage.DEFERRED, DeliveryChangeStage.ABANDONED}:
+        return "change-inactive"
+    return None
 
 
 class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
@@ -303,14 +333,33 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
         """Return the terminal user-requested Change abandonment, if any."""
         return self._read()[0].change_abandonment
 
+    def deferral_refusal(
+        self, frontier: DeliveryFrontier
+    ) -> Literal["change-inactive", "step-in-progress", "state-unavailable"] | None:
+        """Evaluate ``defer_change``'s frontier refusals read-only; None means it would record a deferral."""
+        refusal = _deferral_lifecycle_refusal(frontier)
+        if refusal is not None:
+            return refusal
+        try:
+            for binding in frontier.bindings:
+                if binding.builder_handoff_context is not None:
+                    self._builder_handoff_change_intent_chain(frontier, binding.builder_handoff_context, "defer")
+        except DeliveryRuntimeConflictError, OSError, ValueError:
+            return "state-unavailable"
+        return None
+
     def defer_change(
         self,
         reason: str,
         deferred_at: datetime,
         *,
         expected_finalization_attention: ChangeFinalizationAttention | None = None,
+        pause_request_clear: ReplacementTransactionParticipant | None = None,
     ) -> DeliveryChangeDeferral:
-        """Pause one nonterminal Change while retaining its exact frontier and worktree."""
+        """Pause one nonterminal Change while retaining its exact frontier and worktree.
+
+        ``pause_request_clear`` converts a drained Pause request in this same transaction (K5).
+        """
         frontier, previous = self._read()
         if frontier.change_deferral is not None:
             self._require_recorded_builder_handoff_change_intent(frontier)
@@ -335,7 +384,11 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
             "defer",
             deferral=deferral,
         )
-        participants = self._change_intent_custody_participants(participants, expected_finalization_attention)
+        participants = (
+            self._change_intent_custody_participants(participants, expected_finalization_attention)
+            if pause_request_clear is None
+            else (*participants, pause_request_clear)
+        )
         self._replace(
             previous,
             replacement,
@@ -380,6 +433,7 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
         abandoned_at: datetime,
         *,
         expected_finalization_attention: ChangeFinalizationAttention | None = None,
+        pause_request_clear: ReplacementTransactionParticipant | None = None,
     ) -> DeliveryChangeAbandonment:
         """Terminate one uncompleted Change without discarding its retained authority."""
         frontier, previous = self._read()
@@ -419,7 +473,11 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
             deferral=frontier.change_deferral,
             abandonment=abandonment,
         )
-        participants = self._change_intent_custody_participants(participants, expected_finalization_attention)
+        participants = (
+            self._change_intent_custody_participants(participants, expected_finalization_attention)
+            if pause_request_clear is None
+            else (*participants, pause_request_clear)
+        )
         self._replace(
             previous,
             replacement,
@@ -466,6 +524,7 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
     ) -> DeliveryChangeDisposition:
         """Persist one first-write-wins Change attention record."""
         frontier, previous = self._read()
+        _declare_mutation("capture_change_disposition")
         existing = frontier.change_disposition
         if existing is not None:
             result, updated = self._capture_existing_change_disposition(
@@ -507,6 +566,7 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
     ) -> DeliveryChangeDispositionResolution:
         """Clear one exact Change attention record without restoring provider authority."""
         frontier, previous = self._read()
+        _declare_mutation("resolve_change_disposition")
         current = frontier.change_disposition
         existing = frontier.change_disposition_resolution
         if current is None:
@@ -1042,7 +1102,10 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
         return candidate
 
     def complete_change(
-        self, receipt: CompletionReceipt, *, additional_participants: tuple[TransactionParticipant, ...] = ()
+        self,
+        receipt: CompletionReceipt,
+        *,
+        additional_participants: tuple[TransactionParticipant | ReplacementTransactionParticipant, ...] = (),
     ) -> CompletionReceipt:
         """Atomically publish one terminal receipt and its minimal frontier projection."""
         frontier, previous = self._read()
@@ -1111,7 +1174,12 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
             + display_participant.content
             + previous
             + replacement
-            + b"".join(participant.content for participant in additional_participants)
+            + b"".join(
+                participant.content
+                if isinstance(participant, TransactionParticipant)
+                else participant.replacement_content
+                for participant in additional_participants
+            )
         ).hexdigest()
         RuntimeTransaction(
             self._target_root,
@@ -1385,6 +1453,8 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
             finished_at,
         )
         additional_participants = (*additional_participants, custody)
+        if self._workspace_manager.show(self._contract.change_id).pause_request is not None:
+            _conflict("Change pause requested")
         replacement = _replace_binding(frontier, binding, updated_binding)
         # The exact finalizer release is one of the participants below, so the
         # ordinary no-active-finalizer guard must not be added here.
@@ -1945,7 +2015,9 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
             return binding
         _require_claim(binding, request.claim_id)
         if self._workspace_manager is not None:
-            self._workspace_manager.prepare_runtime_custody_guard(self._contract.change_id)
+            self._workspace_manager.prepare_runtime_custody_guard(
+                self._contract.change_id, operation="transition", mutation_class="completion"
+            )
         updated = self._transitioned_binding(binding, request)
         if isinstance(request, AdvanceDelivery) and binding.builder_handoff_context is not None:
             updated = self._advanced_builder_handoff(binding, updated)
@@ -2347,19 +2419,34 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
         additional_participants: tuple[TransactionParticipant | ReplacementTransactionParticipant, ...] = (),
         include_custody_guard: bool = True,
     ) -> None:
-        if self._workspace_manager is not None and include_custody_guard:
-            guard = self._workspace_manager.prepare_runtime_custody_guard(self._contract.change_id)
-            additional_participants = (*additional_participants, guard)
+        operation = _consume_declared_mutation()
+        guarded = self._workspace_manager is not None and include_custody_guard
         portable = not any(binding.active_claim is not None for binding in frontier.bindings)
         portable = portable and not any(binding.builder_handoff_context is not None for binding in frontier.bindings)
         portable = portable and frontier.integration_repair_claim is None
-        self._replace_content(
-            previous,
-            _model_content(frontier),
-            transition_request_digest=transition_request_digest if portable else None,
-            record_pending_publication=portable,
-            additional_participants=additional_participants,
-        )
+        for attempt in range(_GUARD_RETRY_LIMIT):
+            participants = additional_participants
+            if guarded and self._workspace_manager is not None:
+                guard = self._workspace_manager.prepare_runtime_custody_guard(
+                    self._contract.change_id,
+                    operation=operation,
+                    mutation_class=pause_mutation_class(operation),
+                )
+                participants = (*participants, guard)
+            try:
+                self._replace_content(
+                    previous,
+                    _model_content(frontier),
+                    transition_request_digest=transition_request_digest if portable else None,
+                    record_pending_publication=portable,
+                    additional_participants=participants,
+                )
+            except TransactionConflictError:
+                # K6: a concurrent Pause write changes only coordination; re-prepare the guard and retry.
+                if not guarded or attempt == _GUARD_RETRY_LIMIT - 1 or self._frontier_path.read_bytes() != previous:
+                    raise
+                continue
+            return
 
     def _replace_content(  # noqa: PLR0913 - one transaction binds state, publication intent, and immutable receipts.
         self,
@@ -2372,6 +2459,7 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
         additional_participants: tuple[TransactionParticipant | ReplacementTransactionParticipant, ...] = (),
     ) -> None:
         """Transactionally replace frontier bytes and its local publication intent."""
+        _consume_declared_mutation()
         participant = ReplacementTransactionParticipant(
             self._target_root,
             self._frontier_path.relative_to(self._target_root),

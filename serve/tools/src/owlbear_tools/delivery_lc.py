@@ -53,6 +53,7 @@ sys.modules[loader.name] = module
 loader.exec_module(module)
 report = module.scan_capability(Path(sys.argv[2]))
 print(json.dumps({"supported_format": module.SUPPORTED_FORMAT,
+                  "read_versions": {kind.kind_id: list(kind.read_versions) for kind in module.RECORD_KINDS},
                   "refusals": [[item.code, item.locator] for item in report.refusals]}))
 """
 _INSIDE = """#!/bin/sh
@@ -743,26 +744,57 @@ def _previous_load(live: Path, previous: str) -> dict[str, object]:
         return {"loaded": False, "code": "previous-load-failed", "detail": completed.stderr[-2000:]}
 
 
+def beyond_previous_release(report: dict[str, Any]) -> list[str]:
+    """Locators of migrated records whose version exceeds every version the previous registry reads (D3).
+
+    A record kind absent from the previous registry supports no version.
+    """
+    supported = report["previous_gate_after"].get("read_versions", {})
+    return sorted(
+        locator
+        for kind_id, locator, version in report.get("migrated_versions", [])
+        if version > max(supported.get(kind_id, ()), default=0)
+    )
+
+
 def previous_release_oracle(report: dict[str, Any]) -> bool:
-    """D3 on the migrated copy: a release supporting its format loads every Change, otherwise refuses it.
+    """D3 on the migrated copy: a release supporting its format and family versions loads it, else refuses it.
 
     Supported rollback needs no gate refusal and a load by that release listing the candidate's Changes,
-    all available. Unsupported downgrade needs the typed newer-format refusal at ``runtime/format.json``
-    and unchanged record hashes; any other refusal (for example only an incomplete journal) is not enough.
+    all available. Unsupported downgrade needs unchanged record hashes and the typed newer refusal: at
+    ``runtime/format.json`` for a newer format, otherwise at exactly the records whose family version
+    exceeds the previous registry, with no other refusal and no load. Any other refusal is not enough.
     """
     previous = report["previous_gate_after"]
-    if previous["supported_format"] >= report["target_format"]:
-        load = report.get("previous_load") or {}
+    load = report.get("previous_load") or {}
+    if previous["supported_format"] < report["target_format"]:
         return bool(
-            previous["refusals"] == []
-            and load.get("loaded") is True
-            and load.get("changes") == report["migrated"]["load"].get("changes")
-            and not load.get("unavailable")
+            ["state-newer-than-controller", _FORMAT_MARKER] in previous["refusals"]
+            and report.get("previous_gate_hashes_unchanged") is True
+        )
+    if beyond := beyond_previous_release(report):
+        return bool(
+            sorted(previous["refusals"]) == [["state-newer-than-controller", locator] for locator in beyond]
+            and report.get("previous_gate_hashes_unchanged") is True
+            and not load.get("loaded")
         )
     return bool(
-        ["state-newer-than-controller", _FORMAT_MARKER] in previous["refusals"]
-        and report.get("previous_gate_hashes_unchanged") is True
+        previous["refusals"] == []
+        and load.get("loaded") is True
+        and load.get("changes") == report["migrated"]["load"].get("changes")
+        and not load.get("unavailable")
     )
+
+
+def _record_versions(live: Path) -> list[list[object]]:
+    """Candidate registry kind, locator and version of every versioned record."""
+    from owlbear_delivery.state_formats import scan_capability  # noqa: PLC0415
+
+    return [
+        [record.kind_id, record.locator, record.version]
+        for record in scan_capability(live).records
+        if record.kind_id is not None and record.version is not None
+    ]
 
 
 def _synthetic_newer(live: Path) -> list[list[str]]:
@@ -825,11 +857,13 @@ def full_form(
     post = record_tree_digest(live, exclude_migrations=True)
     report["changed_records"] = sorted(k for k in set(pre) | set(post) if pre.get(k) != post.get(k))
     report["migrated"] = _read_phase(live)
+    report["migrated_versions"] = _record_versions(live)
     migrated_hashes = record_tree_digest(live)
     report["previous_gate_after"] = _previous_gate(live, previous, live)
     report["previous_gate_hashes_unchanged"] = record_tree_digest(live) == migrated_hashes
+    report["previous_beyond"] = beyond_previous_release(report)
     report["synthetic_newer"] = _synthetic_newer(live)
-    if report["previous_gate_after"]["supported_format"] >= SUPPORTED_FORMAT:
+    if report["previous_gate_after"]["supported_format"] >= SUPPORTED_FORMAT and not report["previous_beyond"]:
         # Last: a normal load by the rollback release may write to the copy.
         report["previous_load"] = previous_load(live, previous)
     report["passed"] = _full_form_passed(report, {entry["locator"] for entry in report["proposal"]["entries"]})

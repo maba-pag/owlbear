@@ -4,6 +4,9 @@ import hashlib
 import json
 from datetime import UTC, datetime
 
+import pytest
+from pydantic import ValidationError
+
 from owlbear_delivery.change_workspace import ChangeTargetSyncReceipt
 from owlbear_delivery.delivery_runtime import (
     DeliveryActiveClaim,
@@ -481,9 +484,35 @@ def test_dependency_and_active_claim_are_independent_axes() -> None:
 
     assert cards[0].activity.state == WorkItemActivityState.WORKING
     assert cards[0].needs == WorkItemNeed.NONE
-    assert (cards[0].next_actor, cards[0].next_step) == (WorkItemNextActor.AGENT, "Work in progress")
+    assert (cards[0].next_actor, cards[0].next_step) == (WorkItemNextActor.AGENT, "Claimed by Builder")
     assert (cards[1].needs, cards[1].needs_headline) == (WorkItemNeed.DEPENDENCY, "Waiting on OUT-001")
     assert cards[1].next_actor == WorkItemNextActor.DEPENDENCY
+
+
+def test_projector_carries_change_activity_and_continuation_next_step() -> None:
+    projector = WorkItemProjector(
+        _snapshot((_binding("OUT-001", DeliveryStage.PLANNING), _binding("OUT-002", DeliveryStage.PLANNING))),
+        change_progress="waiting-for-chat",
+    )
+
+    assert projector.group_view().progress == "waiting-for-chat"
+    assert projector.show_view("outcome:OUT-002").change_progress == "waiting-for-chat"
+    assert projector.group_view().items[0].next_step == "Run the continuation prompt in Copilot Chat"
+    assert WorkItemProjector(projector._snapshot).group_view().progress is None  # noqa: SLF001
+
+
+def test_projector_carries_change_pause_availability_and_fails_closed_by_default() -> None:
+    snapshot = _snapshot((_binding("OUT-001", DeliveryStage.PLANNING), _binding("OUT-002", DeliveryStage.PLANNING)))
+    available = WorkItemProjector(snapshot, pause_unavailable_reason=None)
+    refused = WorkItemProjector(snapshot, pause_unavailable_reason="finalizer-custody")
+
+    assert (available.group_view().pause_available, available.group_view().pause_unavailable_reason) == (True, None)
+    detail = refused.show_view("outcome:OUT-001")
+    assert (detail.pause_available, detail.pause_unavailable_reason) == (False, "finalizer-custody")
+    default = WorkItemProjector(snapshot).group_view()
+    assert (default.pause_available, default.pause_unavailable_reason) == (False, "state-unavailable")
+    with pytest.raises(ValidationError):
+        default.model_validate({**default.model_dump(), "pause_available": True})
 
 
 def test_completed_outcome_progress_and_detail_contain_result_evidence() -> None:

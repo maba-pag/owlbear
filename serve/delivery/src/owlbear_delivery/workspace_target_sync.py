@@ -48,6 +48,8 @@ if TYPE_CHECKING:
     from contextlib import AbstractContextManager
     from pathlib import Path
 
+    from owlbear_delivery.workspace_models import ChangeDirectOperation
+
 _TARGET_SYNC_REF_PREFIX = "refs/owlbear/target-sync/"
 _TARGET_OBSERVATION_REF_PREFIX = "refs/owlbear/target-observation/"
 _ZERO_OID = "0" * 40
@@ -335,12 +337,16 @@ class _TargetSyncMixin:
         self,
         request: SyncChangeWithTarget,
         before_head_change: Callable[[], None] | None = None,
+        direct_operation: ChangeDirectOperation | None = None,
     ) -> ChangeTargetSyncReceipt:
         """Fetch one exact target head and merge it only in the managed Change worktree.
 
         The fetch runs outside every lock into a private per-operation ref, so an unreachable remote
         cannot stall other Changes; the locks cover only the local merge, receipt, shared-ref CAS and
         target observation writes.
+
+        ``direct_operation`` is the direct entry's K2 marker, committed under K3 after the
+        replay and start checks and before any write or fetch.
         """
         with self._coordinator.publication_lock(request.change_id):
             coordination = self._coordinator.show(request.change_id)
@@ -348,6 +354,8 @@ class _TargetSyncMixin:
             if previous_receipt is not None:
                 return previous_receipt
             self._require_target_sync_start(request, coordination)
+            if direct_operation is not None:
+                self._coordinator.start_direct_operation(direct_operation)
         source_ref, target_ref, _target_branch = self._target_refs()
         # Locked so the snapshot never mixes refs from another sync's half-applied transaction.
         with self._target_sync_lock():

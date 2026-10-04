@@ -20,10 +20,12 @@ from unittest.mock import Mock, patch
 import pytest
 from mcp import Client
 from pydantic import BaseModel, ConfigDict, ValidationError
+from serve.delivery.tests.test_delivery_progress import _complete_first_outcome, _progress_portfolio
 from serve.delivery.tests.test_portfolio_application import (
     _assert_checkpoint_branch_operation,
     _assert_loader_observation_only,
     _assert_loader_retry_recording,
+    _awaiting_acceptance_fixture,
     _builder_retry_handoff_setup,
     _canonical,
     _continuation_request,
@@ -49,6 +51,9 @@ from serve.delivery.tests.test_recovery import (
     recovery_effect_snapshot,
     recovery_journal_snapshot,
 )
+from serve.delivery.tests.test_worker_stall import _HOST as _PROGRESS_HOST
+from serve.delivery.tests.test_worker_stall import _iso as _progress_iso
+from serve.delivery.tests.test_worker_stall import _real_now as _progress_now
 
 import owlbear_delivery_mcp.server as live_server
 from owlbear_delivery import (
@@ -98,7 +103,7 @@ from owlbear_delivery.finalization_reports import FinalizationFailureCode, Final
 from owlbear_delivery.portfolio_operating import DeliveryHealthStatus, DeliveryHealthView
 from owlbear_delivery.recovery import DeliveryWorkerExclusionRequiredError
 from owlbear_delivery.state_formats import format_marker_bytes
-from owlbear_delivery.storage_io import ControllerFencedError, acquire_controller_lock
+from owlbear_delivery.storage_io import ControllerFencedError, acquire_controller_lock, locked_roots
 from owlbear_delivery.work_items import WorkItemNextActor
 from owlbear_delivery_github import GitHubCliPublicationProvider
 from owlbear_delivery_mcp.server import (
@@ -109,6 +114,51 @@ from owlbear_delivery_mcp.server import (
 )
 from owlbear_delivery_mcp.target_models import DeliveryStartupDiagnostic
 from owlbear_delivery_mcp.target_server import TargetMCPAdapter, assemble_target_server
+
+
+@pytest.mark.asyncio
+async def test_registered_direct_mark_ready_lost_to_pause_is_a_typed_no_effect_refusal(tmp_path: Path) -> None:
+    application, runtime, provider, _state, exact_head, state_root = _awaiting_acceptance_fixture(
+        tmp_path, mark_ready=False
+    )
+    finalization = runtime.finalization()
+    async with Client(assemble_target_server(application)) as client:
+        # The busy checkpoint lock keeps K1 from converting, so the request itself refuses the direct start.
+        with locked_roots((application._checkpoint_lock_root("change-a"),)):  # noqa: SLF001
+            requested = await client.call_tool(
+                "set_change_intent",
+                {
+                    "change_id": "change-a",
+                    "kind": "defer",
+                    "expected_frontier_digest": hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+                    "reason": "Hold for review",
+                },
+            )
+        provider.reset_mock()
+        before = runtime.frontier_bytes()
+        refused = await client.call_tool(
+            "mark_change_ready",
+            {
+                "change_id": "change-a",
+                "operation_id": "ready-under-pause",
+                "finalization_id": finalization.finalization_id,
+                "exact_head": exact_head,
+            },
+        )
+
+    assert not requested.is_error
+    assert requested.structured_content["receipt"]["reason"] == "Hold for review"
+    assert "deferral_id" not in requested.structured_content["receipt"]
+    assert refused.is_error
+    diagnostic = _registered_diagnostic(refused)
+    assert diagnostic["code"] == "ERR_DELIVERY_CHANGE_PAUSE_REQUESTED"
+    assert diagnostic["detail"] == "Change pause requested"
+    assert diagnostic["retry_safe"] is True
+    assert not list((state_root / "changes/change-a/action-receipts").glob("direct-*"))
+    provider.observe_checks.assert_not_called()
+    provider.set_pull_request_draft_state.assert_not_called()
+    assert runtime.frontier_bytes() == before
+    assert runtime.ready_receipt() is None
 
 
 @pytest.mark.asyncio
@@ -170,6 +220,37 @@ async def test_registered_get_change_exposes_exhausted_builder_retry_history(tmp
         },
     ]
     assert runtime.retry_ledger().read() == ledger_before
+
+
+@pytest.mark.asyncio
+async def test_registered_change_reads_carry_progress_and_change_activity(tmp_path: Path) -> None:
+    now = [_progress_iso(_progress_now())]
+    application, runtimes, _coordinator, state_root, probe = _progress_portfolio(
+        tmp_path, {"change-a": DeliveryStage.IMPLEMENTATION}, now, include_independent=True
+    )
+    _complete_first_outcome(application, runtimes["change-a"], state_root)
+
+    async with Client(assemble_target_server(application)) as client:
+        ready = (await client.call_tool("get_change", {"change_id": "change-a"})).structured_content
+        assert application.acquire_change_action(_continuation_request(application)).launch is not None
+        probe.states[_PROGRESS_HOST] = "unknown"
+        held = (await client.call_tool("get_change", {"change_id": "change-a"})).structured_content
+        listed = (await client.call_tool("list_changes", {})).structured_content
+
+    assert "progress" in ready["readiness"]
+    assert "change_progress" in ready["detail"]
+    assert ready["detail"]["card"]["work_item_id"] == "OUT-001"
+    assert ready["detail"]["card"]["readiness"]["progress"] == "completed"
+    assert ready["detail"]["change_progress"] == "waiting-for-chat"
+    assert (ready["detail"]["pause_available"], ready["detail"]["pause_unavailable_reason"]) == (True, None)
+    assert held["detail"]["change_progress"] == "needs-decision"
+    # N09-A2: Pause is admissible under custody; the request drains the running step first.
+    assert (held["detail"]["pause_available"], held["detail"]["pause_unavailable_reason"]) == (True, None)
+    held_card = next(item for item in held["unresolved_outcomes"] if item["outcome_id"] == "OUT-002")["card"]
+    assert (held_card["readiness"]["progress"], held_card["next_step"]) == ("needs-decision", "Claimed by Builder")
+    (group,) = listed["groups"]
+    assert group["progress"] == "needs-decision"
+    assert (group["pause_available"], group["pause_unavailable_reason"]) == (True, None)
 
 
 @pytest.mark.asyncio

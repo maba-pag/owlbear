@@ -34,7 +34,12 @@ function Guidance({ guidance }: { guidance: PortfolioGuidance }) {
     case "start-orchestration":
       return <>Process {countLabel(guidance.work_count, "queued work item")}.</>;
     case "work-underway":
-      return <>An orchestration session is already working; no new session is needed.</>;
+      return (
+        <>
+          {countLabel(guidance.work_count, "Work Item")} {guidance.work_count === 1 ? "holds" : "hold"} active custody;
+          each Change shows its progress.
+        </>
+      );
     case "wait":
       return <>No session action needed.</>;
     case "create-change":

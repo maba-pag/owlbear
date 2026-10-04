@@ -1,4 +1,6 @@
 import type {
+  ChangePauseUnavailableReason,
+  DeliveryProgress,
   DeliveryReadinessChecksState,
   DeliveryReadinessReasonCode,
   DeliveryReadinessStatus,
@@ -109,6 +111,70 @@ const WORKER_STATUS_LABELS: Record<DeliveryWorkerRole, string> = {
 
 export type WorkItemStatusTone = "attention" | "blocked" | "active" | "ready" | "complete" | "neutral";
 
+/** Labels for engine-projected progress; Delivery decides which key applies. */
+export const DELIVERY_PROGRESS_LABELS: Record<DeliveryProgress, string> = {
+  preparing: "Preparing",
+  working: "Working",
+  checking: "Checking",
+  repairing: "Repairing",
+  "needs-decision": "Needs your decision",
+  "needs-sign-in": "Needs your sign-in",
+  "waiting-for-service": "Waiting for service",
+  "waiting-for-change": "Waiting for another Change",
+  "ready-to-merge": "Ready to merge",
+  completed: "Completed",
+  paused: "Paused",
+  "waiting-for-chat": "Waiting for chat to resume",
+};
+
+const DELIVERY_PROGRESS_TONES: Record<DeliveryProgress, WorkItemStatusTone> = {
+  preparing: "active",
+  working: "active",
+  checking: "active",
+  repairing: "active",
+  "needs-decision": "attention",
+  "needs-sign-in": "attention",
+  "waiting-for-service": "neutral",
+  "waiting-for-change": "neutral",
+  "ready-to-merge": "ready",
+  completed: "complete",
+  paused: "neutral",
+  "waiting-for-chat": "neutral",
+};
+
+export function progressTone(progress: DeliveryProgress): WorkItemStatusTone {
+  return DELIVERY_PROGRESS_TONES[progress];
+}
+
+/** Only the engine-authored `/continue-change <this Change> …` prompt is a continuation prompt. */
+export function isContinuationPrompt(prompt: string | null | undefined, changeId: string): prompt is string {
+  return typeof prompt === "string" && prompt.startsWith(`/continue-change ${changeId} `);
+}
+
+export const CONTINUATION_PROMPT_HELP = "Run it in Copilot Chat. Copying does not start an agent.";
+
+/** Copy for Delivery's own reason that the defer intent would refuse Pause. */
+export const PAUSE_UNAVAILABLE_COPY: Record<ChangePauseUnavailableReason, string> = {
+  "finalizer-custody": "A Finalizer attempt holds this Change.",
+  "step-in-progress": "A step is in progress; Pause is available when it returns.",
+  "recovery-required": "An interrupted step must be recovered first.",
+  "state-unavailable": "Delivery cannot confirm this Change is idle, so Pause is unavailable.",
+  "change-inactive": "This Change cannot be paused.",
+  "pause-requested": "Pause requested; the current step finishes first.",
+};
+
+/**
+ * Pause availability comes only from Delivery's Change-level projection, never from card readiness;
+ * a view without the field fails closed.
+ */
+export function changePauseUnavailableMessage(view: {
+  pause_available?: boolean;
+  pause_unavailable_reason?: ChangePauseUnavailableReason | null;
+}): string | null {
+  if (view.pause_available === true) return null;
+  return PAUSE_UNAVAILABLE_COPY[view.pause_unavailable_reason ?? "state-unavailable"];
+}
+
 export interface WorkItemStatusPresentation {
   label: string;
   tone: WorkItemStatusTone;
@@ -148,12 +214,18 @@ function publicationStatus(item: WorkItemCardView): WorkItemStatusPresentation |
     };
   }
   const phaseLabel = PUBLICATION_PHASE_LABELS[item.publication_phase];
+  const progress = item.readiness?.progress;
+  if (progress) {
+    const label = DELIVERY_PROGRESS_LABELS[progress];
+    return { label, tone: progressTone(progress), detail: distinctDetail(label, phaseLabel) };
+  }
   // Engine readiness owns the reported state; the lifecycle phase is identified separately.
   if (item.readiness) {
+    const label = READINESS_STATUS_LABELS[item.readiness.status];
     return {
-      label: READINESS_STATUS_LABELS[item.readiness.status],
+      label,
       tone: readinessTone(item.readiness.status),
-      detail: distinctDetail(READINESS_STATUS_LABELS[item.readiness.status], phaseLabel),
+      detail: distinctDetail(label, phaseLabel),
     };
   }
   const tone: WorkItemStatusTone =
@@ -178,12 +250,19 @@ function publicationStatus(item: WorkItemCardView): WorkItemStatusPresentation |
 export function workItemStatus(item: WorkItemCardView): WorkItemStatusPresentation {
   const publication = publicationStatus(item);
   if (publication) return publication;
+  const progress = item.readiness?.progress;
+  if (progress) {
+    const label = DELIVERY_PROGRESS_LABELS[progress];
+    return { label, tone: progressTone(progress), detail: distinctDetail(label, item.needs_headline) };
+  }
   if (item.readiness) {
     const label = READINESS_STATUS_LABELS[item.readiness.status];
+    // Held custody without progress is neutral: the step names who holds it, never that work runs.
+    const detail = item.readiness.status === "running" ? item.next_step : item.needs_headline;
     return {
       label,
       tone: readinessTone(item.readiness.status),
-      detail: distinctDetail(label, item.needs_headline),
+      detail: distinctDetail(label, detail),
     };
   }
   if (item.needs === "you") {
@@ -198,8 +277,8 @@ export function workItemStatus(item: WorkItemCardView): WorkItemStatusPresentati
   }
   if (item.activity.state === "working") {
     return {
-      label: "Working",
-      tone: "active",
+      label: "Claimed",
+      tone: "neutral",
       detail: item.activity.worker_role ? WORKER_STATUS_LABELS[item.activity.worker_role] : "Agent",
     };
   }

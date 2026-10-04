@@ -15,11 +15,14 @@ from unittest.mock import Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+from serve.delivery.tests.test_delivery_progress import _progress_portfolio
 from serve.delivery.tests.test_portfolio_application import (
     _assert_checkpoint_branch_operation,
     _assert_loader_observation_only,
     _assert_loader_retry_recording,
+    _awaiting_acceptance_fixture,
     _canonical,
+    _continuation_request,
     _engine_action,
     _failure_request,
     _git,
@@ -150,7 +153,9 @@ class _LockOnlyPortfolioApplication(PortfolioApplication):
 
 def _card(change_id: str, outcome_id: str, needs: WorkItemNeed) -> WorkItemCardView:
     next_actor = WorkItemNextActor.YOU if needs == WorkItemNeed.YOU else WorkItemNextActor.AGENT
-    next_step = "Your attention is required" if needs == WorkItemNeed.YOU else "Ready for Orchestration"
+    next_step = (
+        "Your attention is required" if needs == WorkItemNeed.YOU else "Run the continuation prompt in Copilot Chat"
+    )
     return WorkItemCardView(
         item_key=f"outcome:{outcome_id}",
         work_item_id=outcome_id,
@@ -1040,6 +1045,120 @@ def test_http_release_stuck_worker_rejects_malformed_identity_before_mutation(
     assert runtime.frontier_bytes() == frontier
     assert runtime.show_binding("OUT-001").active_claim == launch.claim
     assert not owner_result.exists()
+
+
+def _record_tree(root: Path) -> dict[str, bytes]:
+    return {str(path.relative_to(root)): path.read_bytes() for path in sorted(root.rglob("*")) if path.is_file()}
+
+
+def test_http_portfolio_and_detail_carry_progress_without_writing_records(tmp_path: Path) -> None:
+    now = [_stall_iso(datetime.now(UTC).replace(microsecond=0))]
+    application, _runtimes, _coordinator, state_root, _probe = _progress_portfolio(
+        tmp_path, {"change-a": DeliveryStage.PLANNING, "change-b": DeliveryStage.PLANNING}, now, capacity=1
+    )
+    assert application.acquire_change_action(_continuation_request(application, "change-a")).launch is not None
+    before = _record_tree(state_root)
+
+    with TestClient(assemble_target_app(application)) as client:
+        portfolio = client.get("/api/work-items")
+        held = client.get("/api/changes/change-a/work-items/outcome:OUT-001")
+        waiting = client.get("/api/changes/change-b/work-items/outcome:OUT-001")
+
+    assert portfolio.status_code == held.status_code == waiting.status_code == 200
+    groups = {group["change_id"]: group for group in portfolio.json()["groups"]}
+    assert groups["change-a"]["progress"] is None
+    assert groups["change-a"]["items"][0]["readiness"]["progress"] is None
+    assert groups["change-a"]["items"][0]["next_step"] == "Claimed by Planner"
+    assert groups["change-b"]["progress"] == "waiting-for-change"
+    # N09-A2: Pause is admissible under custody; the request drains the running step first.
+    assert (groups["change-a"]["pause_available"], groups["change-a"]["pause_unavailable_reason"]) == (True, None)
+    assert (groups["change-b"]["pause_available"], groups["change-b"]["pause_unavailable_reason"]) == (True, None)
+    assert (held.json()["item"]["pause_available"], held.json()["item"]["pause_unavailable_reason"]) == (True, None)
+    assert held.json()["item"]["change_progress"] is None
+    assert held.json()["item"]["card"]["readiness"]["status"] == "running"
+    waiting_item = waiting.json()["item"]
+    assert waiting_item["change_progress"] == "waiting-for-change"
+    assert (waiting_item["pause_available"], waiting_item["pause_unavailable_reason"]) == (True, None)
+    assert waiting_item["card"]["readiness"]["action"]["label"] == "Copy continuation prompt"
+    assert waiting_item["card"]["readiness"]["prompt"].startswith("/continue-change change-b ")
+    assert _record_tree(state_root) == before
+
+
+def test_http_pause_requests_drain_under_custody_and_pauses_a_quiescent_change(tmp_path: Path) -> None:
+    now = [_stall_iso(datetime.now(UTC).replace(microsecond=0))]
+    application, runtimes, coordinator, _state_root, _probe = _progress_portfolio(
+        tmp_path, {"change-a": DeliveryStage.PLANNING, "change-b": DeliveryStage.PLANNING}, now
+    )
+    assert application.acquire_change_action(_continuation_request(application, "change-a")).launch is not None
+    held_before = runtimes["change-a"].frontier_bytes()
+
+    with TestClient(assemble_target_app(application)) as client:
+        requested = client.post(
+            "/api/changes/change-a/defer",
+            json={"reason": "Hold", "expected_frontier_digest": application.get_change("change-a").frontier_digest},
+        )
+        requested_view = client.get("/api/changes/change-a/work-items/outcome:OUT-001").json()["item"]
+        portfolio = client.get("/api/work-items").json()
+        paused = client.post(
+            "/api/changes/change-b/defer",
+            json={"reason": "Hold", "expected_frontier_digest": application.get_change("change-b").frontier_digest},
+        )
+        paused_view = client.get("/api/changes/change-b/work-items/outcome:OUT-001").json()["item"]
+        resumed = client.post(
+            "/api/changes/change-b/resume",
+            json={"expected_frontier_digest": application.get_change("change-b").frontier_digest},
+        )
+        resumed_view = client.get("/api/changes/change-b/work-items/outcome:OUT-001").json()["item"]
+
+    assert requested.status_code == 200
+    assert runtimes["change-a"].frontier_bytes() == held_before
+    assert runtimes["change-a"].change_stage() != "deferred"
+    assert coordinator.pause_request("change-a") is not None
+    assert (requested_view["pause_available"], requested_view["pause_unavailable_reason"]) == (
+        False,
+        "pause-requested",
+    )
+    groups = {group["change_id"]: group for group in portfolio["groups"]}
+    assert groups["change-a"]["pause_requested"] is True
+    assert groups["change-b"]["pause_requested"] is False
+    assert paused.status_code == resumed.status_code == 200
+    assert (paused_view["change_progress"], paused_view["card"]["readiness"]["progress"]) == ("paused", "paused")
+    assert resumed_view["change_progress"] == "waiting-for-chat"
+
+
+def test_http_direct_mark_ready_lost_to_pause_is_a_typed_no_effect_refusal(tmp_path: Path) -> None:
+    application, runtime, provider, _state, _exact_head, state_root = _awaiting_acceptance_fixture(
+        tmp_path, mark_ready=False
+    )
+
+    with TestClient(assemble_target_app(application)) as client:
+        # The busy checkpoint lock keeps K1 from converting, so the request itself refuses the direct start.
+        with locked_roots((application._checkpoint_lock_root("change-a"),)):  # noqa: SLF001
+            requested = client.post(
+                "/api/changes/change-a/defer",
+                json={
+                    "reason": "Hold for review",
+                    "expected_frontier_digest": application.get_change("change-a").frontier_digest,
+                },
+            )
+        provider.reset_mock()
+        before = runtime.frontier_bytes()
+        refused = client.post("/api/changes/change-a/publication/ready")
+
+    assert requested.status_code == 200
+    assert "deferral_id" not in requested.json()["receipt"]
+    assert refused.status_code == 409
+    assert refused.json() == {
+        "code": "ERR_DELIVERY_CHANGE_PAUSE_REQUESTED",
+        "detail": "Change pause requested",
+        "authority": "delivery",
+        "retry_safe": True,
+    }
+    assert not list((state_root / "changes/change-a/action-receipts").glob("direct-*"))
+    provider.observe_checks.assert_not_called()
+    provider.set_pull_request_draft_state.assert_not_called()
+    assert runtime.frontier_bytes() == before
+    assert runtime.ready_receipt() is None
 
 
 _FRESH_COCKPIT_SERIALIZATION_SCRIPT = """
@@ -2765,6 +2884,7 @@ def test_list_and_detail_preserve_known_unavailable_change_projection() -> None:
                 "stop_reason": None,
                 "retry_history": [],
                 "prompt": None,
+                "progress": None,
             },
         },
     ]

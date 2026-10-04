@@ -16,6 +16,9 @@ from owlbear_delivery import (
     AdvanceDelivery,
     BlockDelivery,
     ChangeBranchPublisher,
+    ChangeDirectOperation,
+    ChangePauseRequest,
+    ChangePauseRequestedError,
     ChangeTargetSyncReceipt,
     DeliveryAcceptanceAttentionReason,
     DeliveryActiveClaim,
@@ -25,6 +28,8 @@ from owlbear_delivery import (
     DeliveryChangeCompletion,
     DeliveryChangeDisposition,
     DeliveryChangeDispositionKind,
+    DeliveryChangeIntent,
+    DeliveryChangeIntentKind,
     DeliveryChangeStage,
     DeliveryCommitment,
     DeliveryCommitmentClass,
@@ -97,6 +102,8 @@ from owlbear_delivery.delivery_application_loader import (
     _is_unpublished_target_sync_attention_successor,
     _RemoteChangeHeadMismatchError,
     _require_local_snapshot_branch,
+    close_delivery_application,
+    load_configured_delivery_application,
     load_delivery_application,
 )
 from owlbear_delivery.delivery_runtime import (
@@ -2458,6 +2465,44 @@ def _healthy_restart(restart: _BuilderReturnRestartFixture) -> PortfolioApplicat
     return application
 
 
+# N09-A2 §3.3: a Pause request and an unfinished direct marker survive the real configured loader.
+def test_pause_request_and_unfinished_direct_marker_survive_default_loader_restart(tmp_path: Path) -> None:
+    change_id = "pause-restart"
+    restart = _builder_return_restart_fixture(tmp_path, change_id)
+    application = restart.application
+    launch = application.acquire_frontier_work().launch_packages[0]
+    direct = ChangeDirectOperation(
+        change_id=change_id, kind="mark-ready", operation_id="ready-before-restart", request_digest="a" * 64
+    )
+    assert application._coordinator.start_direct_operation(direct) is True  # noqa: SLF001
+    runtime = application._runtimes[change_id]  # noqa: SLF001
+    requested = application.set_change_intent(
+        DeliveryChangeIntent(
+            change_id=change_id,
+            kind=DeliveryChangeIntentKind.DEFER,
+            expected_frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+            reason="Hold for review",
+        )
+    )
+    assert isinstance(requested.receipt, ChangePauseRequest)
+    close_delivery_application(application)
+
+    restarted = load_configured_delivery_application(restart.fresh, lambda _path: restart.config)
+    coordinator = restarted._coordinator  # noqa: SLF001
+
+    assert restarted.delivery_health().status.value == "healthy"
+    assert coordinator.pause_request(change_id) == requested.receipt
+    assert coordinator.direct_operation_state(direct) == "started"
+    assert restarted.get_change(change_id).pause_requested is True
+    assert restarted.acquire_frontier_work().launch_packages == ()
+    restarted_runtime = restarted._runtimes[change_id]  # noqa: SLF001
+    assert restarted_runtime.show_binding(launch.outcome_id).active_claim == launch.claim
+    assert restarted_runtime.change_deferral() is None
+    with pytest.raises(ChangePauseRequestedError):
+        coordinator.start_direct_operation(direct.model_copy(update={"operation_id": "ready-after-restart"}))
+    close_delivery_application(restarted)
+
+
 def _acquire_planner_after_pause(application: PortfolioApplication, minutes: int) -> DeliveryLaunchPackage:
     # A Planner block ends its attempt with a retry backoff before reacquisition.
     eligible_at = (datetime.now(UTC) + timedelta(minutes=minutes)).isoformat()
@@ -2730,6 +2775,20 @@ def test_repeated_planner_pauses_on_builder_planning_return_survive_default_load
     assert builder_resume.task_id == restart.original_task.task_id
 
 
+def _change_intent(
+    application: PortfolioApplication, change_id: str, kind: DeliveryChangeIntentKind, reason: str | None = None
+) -> object:
+    runtime = application._runtimes[change_id]  # noqa: SLF001
+    return application.set_change_intent(
+        DeliveryChangeIntent(
+            change_id=change_id,
+            kind=kind,
+            expected_frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+            reason=reason,
+        )
+    ).receipt
+
+
 def _assert_change_intent_restarts(
     restart: _BuilderReturnRestartFixture,
     change_id: str,
@@ -2738,10 +2797,10 @@ def _assert_change_intent_restarts(
 ) -> PortfolioApplication:
     application = _healthy_restart(restart)
     expected = application._runtimes[change_id].show_binding("OUT-001")  # noqa: SLF001
-    application.defer_change(change_id, "Wait while the Planner pause is reviewed.")
+    _change_intent(application, change_id, DeliveryChangeIntentKind.DEFER, "Wait while the Planner pause is reviewed.")
     deferred_application = _healthy_restart(restart)
     assert deferred_application.acquire_frontier_work().launch_packages == ()
-    deferred_application.resume_change(change_id)
+    _change_intent(deferred_application, change_id, DeliveryChangeIntentKind.RESUME)
     resumed_application = _healthy_restart(restart)
     assert resumed_application._runtimes[change_id].show_binding("OUT-001") == expected  # noqa: SLF001
     if not abandon:

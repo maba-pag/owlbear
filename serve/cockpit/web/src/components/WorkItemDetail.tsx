@@ -28,8 +28,13 @@ import {
 import CopyCommand from "./CopyCommand";
 import { SectionCard, StatusChip } from "./DeliveryPrimitives";
 import {
+  CONTINUATION_PROMPT_HELP,
+  changePauseUnavailableMessage,
+  DELIVERY_PROGRESS_LABELS,
+  isContinuationPrompt,
   NEXT_ACTOR_LABELS,
   PROGRESS_STAGE_LABELS,
+  progressTone,
   READINESS_CHECKS_LABELS,
   READINESS_REASON_LABELS,
   READINESS_STATUS_LABELS,
@@ -257,7 +262,7 @@ function ChangeDispositionSection(props: WorkItemDetailProps) {
         <p className="text-sm text-contrast-medium">
           Use only when the Change should leave its current delivery path. Abandonment is permanent.
         </p>
-        {phase === "deferred" ? <p className="text-sm">This Change is deferred and retains its worktree.</p> : null}
+        {phase === "deferred" ? <p className="text-sm">This Change is paused and retains its worktree.</p> : null}
         <PInputText
           compact
           name="change-disposition-reason"
@@ -268,17 +273,6 @@ function ChangeDispositionSection(props: WorkItemDetailProps) {
           onInput={(event) => setReason(fieldValue(event as FieldValueEvent))}
         />
         <div className="flex flex-wrap gap-static-sm">
-          {phase !== "deferred" ? (
-            <PButton
-              type="button"
-              compact
-              variant="secondary"
-              disabled={!canSubmit}
-              onClick={() => void props.onDeferChange(reason.trim())}
-            >
-              {props.pendingAction === "change-defer" ? "Deferring..." : "Defer Change"}
-            </PButton>
-          ) : null}
           <PButton
             type="button"
             compact
@@ -327,6 +321,114 @@ function ChangeDispositionSection(props: WorkItemDetailProps) {
         </PModal>
       ) : null}
     </details>
+  );
+}
+
+export interface ChangePauseControlProps {
+  changeId: string;
+  paused: boolean;
+  /** A recorded Pause request still draining the started step; Resume clears it. */
+  pauseRequested?: boolean;
+  /** Delivery's reason Pause would be refused, or null when the defer intent is accepted. */
+  unavailableMessage: string | null;
+  pendingAction: string | null;
+  reasonName: string;
+  actionError?: Error | null;
+  onPause: (reason: string) => Promise<Error | null>;
+  onResume: () => Promise<Error | null>;
+}
+
+/** Change-level Pause and Resume over the existing defer intent; Pause never stops a running step. */
+export function ChangePauseControl(props: ChangePauseControlProps) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const busy = props.pendingAction !== null;
+  const pause = async () => {
+    const error = await props.onPause(reason.trim());
+    if (!error) {
+      setOpen(false);
+      setReason("");
+    }
+  };
+  return (
+    <div className="grid min-w-0 gap-static-xs" data-testid={`change-pause-${props.changeId}`}>
+      {props.paused || props.pauseRequested ? (
+        <div className="flex flex-wrap items-center gap-static-xs">
+          {props.pauseRequested && !props.paused ? (
+            <PTag compact data-testid={`pause-requested-${props.changeId}`}>
+              Pause requested
+            </PTag>
+          ) : null}
+          <PButton
+            className="w-fit"
+            type="button"
+            compact
+            variant="secondary"
+            disabled={busy}
+            onClick={() => void props.onResume()}
+          >
+            {props.pendingAction === "change-resume" ? "Resuming..." : "Resume"}
+          </PButton>
+        </div>
+      ) : open && props.unavailableMessage === null ? (
+        <div className="flex flex-wrap items-end gap-static-xs">
+          <PInputText
+            compact
+            name={props.reasonName}
+            label="Pause reason"
+            value={reason}
+            disabled={busy}
+            onChange={(event) => setReason(fieldValue(event as FieldValueEvent))}
+            onInput={(event) => setReason(fieldValue(event as FieldValueEvent))}
+          />
+          <PButton type="button" compact disabled={!reason.trim() || busy} onClick={() => void pause()}>
+            {props.pendingAction === "change-defer" ? "Pausing..." : "Confirm pause"}
+          </PButton>
+          <PButton type="button" compact variant="secondary" disabled={busy} onClick={() => setOpen(false)}>
+            Cancel
+          </PButton>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-static-xs">
+          <PButton
+            type="button"
+            compact
+            variant="secondary"
+            disabled={busy || props.unavailableMessage !== null}
+            onClick={() => setOpen(true)}
+          >
+            Pause
+          </PButton>
+          {props.unavailableMessage !== null ? (
+            <span className="text-xs text-contrast-medium">{props.unavailableMessage}</span>
+          ) : null}
+        </div>
+      )}
+      {props.actionError ? <ActionFeedback error={props.actionError} result={null} /> : null}
+    </div>
+  );
+}
+
+function ChangePauseSection(props: WorkItemDetailProps) {
+  const item = props.detail.item;
+  const phase = item.publication?.phase;
+  if (item.change_progress === "completed" || phase === "abandoned") return null;
+  return (
+    <section aria-labelledby="change-pause-heading" className="grid gap-static-xs">
+      <PHeading id="change-pause-heading" tag="h3" size="sm">
+        Change
+      </PHeading>
+      <ChangePauseControl
+        changeId={item.card.change_id}
+        paused={item.change_progress === "paused" || phase === "deferred"}
+        pauseRequested={item.pause_unavailable_reason === "pause-requested"}
+        unavailableMessage={changePauseUnavailableMessage(item)}
+        pendingAction={props.pendingAction}
+        reasonName="change-pause-reason"
+        onPause={props.onDeferChange}
+        onResume={props.onResumeChange}
+      />
+    </section>
   );
 }
 
@@ -876,11 +978,24 @@ function ReadinessAttempt({ attempt }: { attempt: NonNullable<DeliveryReadiness[
 }
 
 /** Render engine-computed readiness. Eligibility is never recomputed here. */
-function ReadinessSection({ readiness }: { readiness: DeliveryReadiness | null | undefined }) {
+function ReadinessSection({
+  readiness,
+  changeId,
+}: {
+  readiness: DeliveryReadiness | null | undefined;
+  changeId: string;
+}) {
   if (!readiness) return null;
   return (
     <SectionCard dataTestId="delivery-readiness" ariaLabel="Delivery readiness" className="p-static-sm">
       <div className="flex flex-wrap items-center gap-static-xs">
+        {readiness.progress ? (
+          <StatusChip
+            label={DELIVERY_PROGRESS_LABELS[readiness.progress]}
+            tone={progressTone(readiness.progress)}
+            testId="readiness-progress"
+          />
+        ) : null}
         <StatusChip
           label={READINESS_STATUS_LABELS[readiness.status]}
           tone={readinessTone(readiness.status)}
@@ -903,6 +1018,14 @@ function ReadinessSection({ readiness }: { readiness: DeliveryReadiness | null |
         >
           <code>{readiness.prompt}</code>
         </pre>
+      ) : null}
+      {isContinuationPrompt(readiness.prompt, changeId) ? (
+        <CopyCommand
+          className="mt-static-xs"
+          command={readiness.prompt}
+          label="Copy continuation prompt"
+          helper={CONTINUATION_PROMPT_HELP}
+        />
       ) : null}
       {!readiness.executable ? (
         <p className="mt-static-xs text-xs text-contrast-medium" data-testid="readiness-not-executable">
@@ -981,7 +1104,7 @@ function UnavailableChangeDetail({ detail }: { detail: WorkItemUnavailableDetail
             <p className="mt-static-xs text-sm">Coordination record: {detail.coordination_status}</p>
           ) : null}
         </SectionCard>
-        <ReadinessSection readiness={detail.readiness} />
+        <ReadinessSection readiness={detail.readiness} changeId={detail.change_id} />
       </div>
     </section>
   );
@@ -2046,10 +2169,17 @@ export default function WorkItemDetail(
           <dl className="mt-static-md grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md py-static-xs text-sm">
             <dt className="text-contrast-medium">Progress</dt>
             <dd>{card.progress.label}</dd>
+            {props.detail.item.change_progress ? (
+              <>
+                <dt className="text-contrast-medium">Change</dt>
+                <dd data-testid="change-progress">{DELIVERY_PROGRESS_LABELS[props.detail.item.change_progress]}</dd>
+              </>
+            ) : null}
           </dl>
         </div>
         <ActionFeedback error={props.actionError} result={props.actionResult} />
-        <ReadinessSection readiness={props.detail.item.readiness} />
+        <ReadinessSection readiness={props.detail.item.readiness} changeId={card.change_id} />
+        <ChangePauseSection {...available} />
         <BlockSection {...available} />
         <RequestsSection {...available} />
         <PublicationSection {...available} />

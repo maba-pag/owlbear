@@ -420,7 +420,7 @@ test.describe("assembled Delivery portfolio", () => {
     inspected = await inspect(page, "Publication");
     await expect(inspected.detail).toContainText("Ready for finalization");
     await expect(inspected.detail).toContainText("Finalize the reviewed Change");
-    await expect(inspected.detail.getByTestId("publication-readiness-status")).toHaveText("Ready");
+    await expect(inspected.detail.getByTestId("publication-readiness-status")).toHaveText("Waiting for chat to resume");
     await expect(
       inspected.detail.locator('section[aria-labelledby="work-publication-heading"] [data-section-tone="neutral"]'),
     ).toBeVisible();
@@ -1038,6 +1038,43 @@ test.describe("assembled Delivery portfolio", () => {
     }
   });
 
+  test("copies the continuation prompt and pauses then resumes a quiescent Change", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page.goto("/delivery");
+
+    const row = (await visibleRows(page)).filter({ hasText: "Build operator controls" });
+    await expect(row.getByText("Waiting for chat to resume", { exact: true })).toBeVisible();
+    const copy = row.getByRole("button", { name: "Copy continuation prompt" });
+    await expect(copy).toHaveAccessibleDescription("Run it in Copilot Chat. Copying does not start an agent.");
+    await copy.click();
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toMatch(/^\/continue-change work-e2e /);
+    await expect(page).toHaveURL(/\/delivery$/);
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    const table = page.getByTestId("work-portfolio-table");
+    await expect(table).not.toContainText(/\bStart\b/);
+    await expect(table).not.toContainText(/\bWorking\b/);
+
+    const { detail, trigger } = await inspect(page, "Build operator controls");
+    await expect(detail.getByTestId("readiness-prompt")).toHaveText(copied);
+    await expect(detail.getByTestId("readiness-progress")).toHaveText("Waiting for chat to resume");
+    await expect(detail.getByTestId("change-pause-work-e2e").getByText("Pause", { exact: true })).toBeVisible();
+    await returnToPortfolio(page, trigger);
+
+    const control = page.getByTestId("change-pause-publication-e2e");
+    const progress = page.getByTestId("change-progress-publication-e2e");
+    await expect(progress).toHaveText("Waiting for chat to resume");
+    await control.getByText("Pause", { exact: true }).click();
+    await inputValue(control.locator('p-input-text[name="change-pause-reason-publication-e2e"]'), "Hold for review");
+    await control.getByText("Confirm pause", { exact: true }).click();
+    await expect(progress).toHaveText("Paused");
+    await control.getByText("Resume", { exact: true }).click();
+    await expect(progress).toHaveText("Waiting for chat to resume");
+    await expect(page.getByLabel("Change publication for Publication release")).toContainText("Ready for finalization");
+  });
+
   test("unknown paths render the global Not Found view", async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.goto("/delivery/work-e2e");
@@ -1057,6 +1094,7 @@ const WORKER_QUIET_PERIOD_MS = 30_000;
 type ClaimDetail = {
   item: {
     active_claim: { attempt_id: string; claim_id: string; started_at: string; continuation: boolean } | null;
+    pause_unavailable_reason?: string | null;
     card: {
       readiness: {
         status: string;
@@ -1190,5 +1228,36 @@ test.describe("assembled stuck-worker release", () => {
     expect(after.item.card.readiness?.retry_history).toEqual([
       expect.objectContaining({ status: "failed", failure_code: "worker-released-stuck" }),
     ]);
+  });
+
+  test("records Pause requested while a worker holds custody and Resume clears it", async ({ page }) => {
+    const before = await stuckWorkerDetail(page, "stuck-busy-e2e");
+    const claim = requirePresent(before.item.active_claim);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto(`${STUCK_WORKER_ORIGIN}/delivery/stuck-busy-e2e/${encodeURIComponent("outcome:OUT-001")}`);
+    const detail = page.getByTestId("work-item-detail");
+    await expect(detail.getByRole("heading", { name: "Active claim" })).toBeVisible();
+    const control = detail.getByTestId("change-pause-stuck-busy-e2e");
+
+    await control.getByText("Pause", { exact: true }).click();
+    await inputValue(control.locator('p-input-text[name="change-pause-reason"]'), "Hold for review");
+    const pauseResponse = page.waitForResponse(
+      (response) => response.request().method() === "POST" && response.url().endsWith("/defer"),
+    );
+    await control.getByText("Confirm pause", { exact: true }).click();
+    expect((await pauseResponse).status()).toBe(200);
+
+    await expect(control.getByTestId("pause-requested-stuck-busy-e2e")).toHaveText("Pause requested");
+    await expect(detail.getByRole("heading", { name: "Active claim" })).toBeVisible();
+    const requested = await stuckWorkerDetail(page, "stuck-busy-e2e");
+    expect(requested.item.active_claim).toEqual(claim);
+    expect(requested.item.pause_unavailable_reason).toBe("pause-requested");
+
+    await control.getByText("Resume", { exact: true }).click();
+    await expect(control.getByTestId("pause-requested-stuck-busy-e2e")).toHaveCount(0);
+    await expect(control.getByText("Pause", { exact: true })).toBeVisible();
+    const resumed = await stuckWorkerDetail(page, "stuck-busy-e2e");
+    expect(resumed.item.active_claim).toEqual(claim);
+    expect(resumed.item.pause_unavailable_reason).toBeNull();
   });
 });

@@ -572,6 +572,54 @@ class ChangeContinuationAction(_WorkspaceModel):
         return self
 
 
+class ChangePauseRequest(_WorkspaceModel):
+    """Durable user Pause policy retained beside custody until it drains into a deferral."""
+
+    request_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    change_id: ChangeId
+    reason: str = Field(min_length=1)
+    requested_at: str = Field(min_length=1)
+
+    @classmethod
+    def create(cls, *, change_id: str, reason: str, requested_at: str) -> Self:
+        """Create the deterministic request for one Pause intent."""
+        values = {"change_id": change_id, "reason": reason, "requested_at": requested_at}
+        return cls(request_id=_pause_request_digest(values), **values)
+
+    @model_validator(mode="after")
+    def _validate_identity(self) -> Self:
+        datetime.fromisoformat(self.requested_at)
+        values = {"change_id": self.change_id, "reason": self.reason, "requested_at": self.requested_at}
+        if self.request_id != _pause_request_digest(values):
+            message = "Change pause request identity is invalid"
+            raise ValueError(message)
+        return self
+
+
+def _pause_request_digest(values: dict[str, str]) -> str:
+    return hashlib.sha256(json.dumps(values, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+class ChangeDirectOperation(_WorkspaceModel):
+    """Drain and replay evidence for one direct engine-owned effect entry; never custody."""
+
+    schema_version: Literal[1] = 1
+    change_id: ChangeId
+    kind: Literal["sync-target", "mark-ready"]
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    request_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @property
+    def marker_name(self) -> str:
+        """Return the marker directory bound to this kind and operation identity."""
+        return direct_operation_marker_name(self.kind, self.operation_id)
+
+
+def direct_operation_marker_name(kind: str, operation_id: str) -> str:
+    """Name the direct marker directory ``direct-<sha256(kind:operation_id)>``."""
+    return f"direct-{hashlib.sha256(f'{kind}:{operation_id}'.encode()).hexdigest()}"
+
+
 def _is_settled_finalizer_attention_sync(
     coordination: ChangeCoordination,
     action: ChangeContinuationAction,
@@ -1480,7 +1528,7 @@ class PublicationLock:
 class ChangeCoordination(_WorkspaceModel):
     """One OCC-guarded writable workspace record per change."""
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     change_id: ChangeId
     branch: str = Field(min_length=1)
     worktree_path: Path
@@ -1513,6 +1561,7 @@ class ChangeCoordination(_WorkspaceModel):
     worktree_cleanup: ChangeWorktreeCleanup | None = None
     dirty_worktree_quarantine: DirtyWorktreeQuarantineReceipt | None = None
     out_of_band_head_recovery: OutOfBandHeadRecoveryReceipt | None = None
+    pause_request: ChangePauseRequest | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @model_validator(mode="before")
     @classmethod
@@ -1646,6 +1695,13 @@ class ChangeCoordination(_WorkspaceModel):
             )
         ):
             message = "Finalizer attention does not match its ended attempt and retained workspace custody"
+            raise ValueError(message)
+        return self
+
+    @model_validator(mode="after")
+    def _validate_pause_request(self) -> Self:
+        if self.pause_request is not None and self.pause_request.change_id != self.change_id:
+            message = "Change pause request does not match its Change"
             raise ValueError(message)
         return self
 
@@ -1912,6 +1968,15 @@ class ChangeTargetSyncStaleError(CoordinationConflictError):
     """The target fetch changed its expected head before any Change mutation."""
 
 
+class ChangePauseRequestedError(CoordinationConflictError):
+    """A durable Pause request refuses new custody or a new effect start (K3)."""
+
+    code = "ERR_DELIVERY_CHANGE_PAUSE_REQUESTED"
+
+    def __init__(self, detail: str = "Change pause requested") -> None:
+        super().__init__(detail)
+
+
 def _directory_identity_tuple(metadata: os.stat_result) -> tuple[int, int, int]:
     return metadata.st_dev, metadata.st_ino, stat.S_IMODE(metadata.st_mode)
 
@@ -2075,6 +2140,19 @@ def _replacement(
 def _model_content(model: BaseModel) -> bytes:
     payload = model.model_dump(mode="json")
     return f"{json.dumps(payload, sort_keys=True, separators=(',', ':'))}\n".encode()
+
+
+def recovery_authority_content(coordination: ChangeCoordination) -> bytes:
+    """Return coordination bytes as recovery authority: v1 shape, without Pause policy (K4)."""
+    payload = coordination.model_dump(mode="json")
+    payload.pop("pause_request", None)
+    payload["schema_version"] = 1
+    return f"{json.dumps(payload, sort_keys=True, separators=(',', ':'))}\n".encode()
+
+
+def recovery_authority_digest(coordination: ChangeCoordination) -> str:
+    """Hash recovery authority so a Pause write or clear never invalidates an issued journal."""
+    return hashlib.sha256(recovery_authority_content(coordination)).hexdigest()
 
 
 def _target_sync_digest(receipt: ChangeTargetSyncReceipt) -> str:
