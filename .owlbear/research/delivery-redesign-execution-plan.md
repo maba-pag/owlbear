@@ -669,7 +669,7 @@ every new item exactly one lane.
 | N09-P1 | merged | #351 (plan gate `plan-sound`, round 8; D9 re-split confirmed 2026-10-03; U1 decided (b) 2026-10-03) |
 | N09-A1 | merged | #354 (code head `3573866ac`; Sol `implementation-sound` round 3) |
 | N09-A2 | merged | #357 (code head `7a2d974b3`) |
-| N09-P2 | in review | #372 (capability inventory; plans N09-B and N09-C; U2 open) |
+| N09-P2 | merged | #372 (Sol plan gate round 1 revision-required; F1 consumer-publication boundary and F2 Cockpit inventory rows fixed; gate ended after round 1 corrections (lead); U2 settled (a) by the lead 2026-10-04 → N09 plan D21) |
 | N09-B | — | — |
 | N09-C | — | — |
 | N10-P | — | — |
