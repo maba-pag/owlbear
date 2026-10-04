@@ -708,6 +708,7 @@ class _ReadinessViewsMixin:
         """Show current bounded operator state from one exact runtime binding."""
         runtime = self._runtime(change_id)
         binding = runtime.show_binding(outcome_id)
+        snapshot = self._delivery_snapshot(runtime, observe_publication=False)
         return DeliveryOperatorContext(
             change_id=change_id,
             outcome_id=outcome_id,
@@ -718,6 +719,7 @@ class _ReadinessViewsMixin:
             return_context=binding.return_context,
             recovery_attention=_operator_recovery_attention(binding.recovery_attention),
             retry_diagnostic=binding.retry_diagnostic,
+            evidence=WorkItemProjector(snapshot).evidence(outcome_id),
         )
 
     def resolve_request(

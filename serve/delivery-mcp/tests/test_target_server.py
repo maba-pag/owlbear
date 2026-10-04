@@ -14,12 +14,14 @@ import threading
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import Mock, patch
 
 import pytest
 from mcp import Client
 from pydantic import BaseModel, ConfigDict, ValidationError
+from serve.delivery.tests.confirmation_support import EVIDENCE_STATUSES, WAIVER_REQUEST_ID, evidence_projection_case
 from serve.delivery.tests.test_delivery_progress import _complete_first_outcome, _progress_portfolio
 from serve.delivery.tests.test_portfolio_application import (
     _assert_checkpoint_branch_operation,
@@ -83,6 +85,7 @@ from owlbear_delivery import (
     RetryDelivery,
     WindowHostIdentity,
 )
+from owlbear_delivery.application_support import _checkpoint_summary
 from owlbear_delivery.change_workspace import ChangeTargetSyncReceipt
 from owlbear_delivery.delivery_application_loader import (
     DeliveryStateVersionError,
@@ -220,6 +223,37 @@ async def test_registered_get_change_exposes_exhausted_builder_retry_history(tmp
         },
     ]
     assert runtime.retry_ledger().read() == ledger_before
+
+
+def _evidence_statuses(projection: dict[str, Any]) -> dict[str, str]:
+    return {item["acceptance_id"]: item["status"] for item in projection["criteria"]}
+
+
+@pytest.mark.asyncio
+async def test_registered_evidence_projection_agrees_across_reads_and_names_waivers(tmp_path: Path) -> None:
+    application, runtime, state_root = evidence_projection_case(tmp_path)
+
+    def state_tree() -> dict[str, bytes]:
+        return {str(path): path.read_bytes() for path in sorted(state_root.rglob("*")) if path.is_file()}
+
+    before = state_tree()
+    change = application.get_change("change-a")
+    async with Client(assemble_target_server(application)) as client:
+        registered = (await client.call_tool("get_change", {"change_id": "change-a"})).structured_content
+        context = await client.call_tool("show_operator_context", {"change_id": "change-a", "outcome_id": "OUT-001"})
+    summary = _checkpoint_summary(runtime, SimpleNamespace(intent_bytes=b""), None, "1" * 40, ())
+
+    assert state_tree() == before
+    assert change.evidence is not None
+    assert _evidence_statuses(change.evidence.model_dump(mode="json")) == EVIDENCE_STATUSES
+    assert registered["evidence"] == change.evidence.model_dump(mode="json")
+    assert not context.is_error
+    outcome = context.structured_content["evidence"]
+    assert _evidence_statuses(outcome) == {key: value for key, value in EVIDENCE_STATUSES.items() if key != "AC-005"}
+    missing = next(item for item in outcome["criteria"] if item["acceptance_id"] == "AC-002")
+    assert (missing["evidence"][0]["verdict"], missing["evidence"][0]["owner"]) == ("missing", "assisted-check")
+    assert f"Waived by the user, `AC-003`: The launch has a manual sign-off. (request {WAIVER_REQUEST_ID})" in summary
+    assert "`AC-001`" not in summary
 
 
 @pytest.mark.asyncio

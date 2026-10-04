@@ -8,6 +8,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from owlbear_delivery.delivery_contract_discovery import contract_fingerprint
 from owlbear_delivery.delivery_runtime import (
     BlockDelivery,
     DeliveryAcceptanceAttentionReason,
@@ -27,6 +28,7 @@ from owlbear_delivery.delivery_runtime import (
     parse_delivery_frontier,
 )
 from owlbear_delivery.draft_pull_request import PublicationPullRequestObservationReceipt
+from owlbear_delivery.evidence import DeliveryEvidenceProjection, build_evidence_projection
 from owlbear_delivery.finalization_reports import FinalizationAttempt
 from owlbear_delivery.merge_offer import MergeBlock, MergeBlockReason, MergeFacts, MergeOffer
 from owlbear_delivery.recovery import MAX_RETRY_HISTORY_ATTEMPTS, DeliveryRetryAttemptView
@@ -594,6 +596,7 @@ class WorkItemDetailView(_ProjectionModel):
     change_progress: DeliveryProgress | None = None
     pause_available: bool = False
     pause_unavailable_reason: ChangePauseUnavailableReason | None = "state-unavailable"
+    evidence: DeliveryEvidenceProjection | None = None
 
     @model_validator(mode="after")
     def _validate_pause(self) -> WorkItemDetailView:
@@ -921,6 +924,16 @@ class WorkItemProjector:
         """Return the Change publication phase from the captured frontier."""
         return self._publication_phase()
 
+    def evidence(self, outcome_id: str | None = None) -> DeliveryEvidenceProjection:
+        """Return the evidence projection of the whole Change or one outcome."""
+        return build_evidence_projection(
+            self._snapshot.contract,
+            self._snapshot.frontier,
+            contract_digest=contract_fingerprint(self._snapshot.contract),
+            frontier_digest=self._snapshot.version,
+            outcome_id=outcome_id,
+        )
+
     def show_view(self, item_key: str) -> WorkItemDetailView:
         """Return semantic and operator detail for one scope-qualified key."""
         card = next(item for item in self._cards if item.item_key == item_key)
@@ -936,6 +949,7 @@ class WorkItemProjector:
                 change_progress=self._change_progress,
                 pause_available=self._pause_unavailable_reason is None,
                 pause_unavailable_reason=self._pause_unavailable_reason,
+                evidence=self.evidence(),
             )
         outcome_id = card.work_item_id
         outcome = self._outcomes[outcome_id]
@@ -962,6 +976,7 @@ class WorkItemProjector:
             change_progress=self._change_progress,
             pause_available=self._pause_unavailable_reason is None,
             pause_unavailable_reason=self._pause_unavailable_reason,
+            evidence=self.evidence(outcome_id),
         )
 
     def _project_cards(self) -> tuple[WorkItemCardView, ...]:

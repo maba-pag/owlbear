@@ -8,17 +8,20 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections import Counter
 from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery.acceptance_criteria import DeliveryAcceptanceCriterion, acceptance_criteria
 from owlbear_delivery.runtime_models import (
+    _LEGACY_FINALIZATION_SCHEMA_VERSION,
     AFFIRMATIVE_DECISIONS,
     PROOF_VERDICTS,
     DeliveryConfirmationScope,
     DeliveryEvidenceGap,
     DeliveryEvidenceGapReason,
+    DeliveryEvidenceVerdict,
     DeliveryFrontier,
     DeliveryLegacyObservationReceipt,
     DeliveryObservationReceipt,
@@ -445,16 +448,179 @@ def finalization_semantics_or_refusal(
     return semantics
 
 
+MAX_CRITERION_EVIDENCE = 16
+MAX_UNATTRIBUTED_EVIDENCE = 64
+
+type DeliveryFinalizationRules = Literal["typed", "legacy", "none"]
+type DeliveryEvidenceSource = Literal["task", "finalization"]
+
+
+class DeliveryEvidenceItemView(_EvidenceModel):
+    """One retained observation as shown beside a criterion; legacy records carry no verdict."""
+
+    observation_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    schema_version: Literal[1, 2]
+    source: DeliveryEvidenceSource
+    task_or_finalization_id: str
+    exact_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    observation_kind: str
+    procedure: str = Field(max_length=512)
+    verdict: DeliveryEvidenceVerdict | None = None
+    owner: Literal["agent", "user", "provider", "assisted-check"] | None = None
+    reason: str | None = None
+    provenance: Literal["machine-observed", "human-confirmed"] | None = None
+    request_id: str | None = None
+    locator: str | None = None
+    summary: str | None = Field(default=None, max_length=240)
+    observed_at: str
+
+
+class DeliveryAcceptanceEvidenceView(_EvidenceModel):
+    """One current criterion, its evaluator status and its latest covering records."""
+
+    acceptance_id: str
+    acceptance_version: str = Field(pattern=r"^[0-9a-f]{64}$")
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    statement: str
+    identity_source: Literal["authored", "legacy-position"]
+    status: DeliveryCriterionStatus
+    decided_by: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    evidence: tuple[DeliveryEvidenceItemView, ...] = Field(default=(), max_length=MAX_CRITERION_EVIDENCE)
+    evidence_truncated: int = Field(default=0, ge=0)
+
+
+class DeliveryEvidenceCounts(_EvidenceModel):
+    """Criterion totals by status."""
+
+    covered: int = Field(default=0, ge=0)
+    waived: int = Field(default=0, ge=0)
+    missing: int = Field(default=0, ge=0)
+    uncovered: int = Field(default=0, ge=0)
+    unknown: int = Field(default=0, ge=0)
+
+
+class DeliveryEvidenceProjection(_EvidenceModel):
+    """Read-only acceptance criterion -> evidence -> status projection of one Change or outcome."""
+
+    change_id: str
+    contract_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    finalization_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    finalization_rules: DeliveryFinalizationRules
+    criteria: tuple[DeliveryAcceptanceEvidenceView, ...]
+    unattributed: tuple[DeliveryEvidenceItemView, ...] = Field(default=(), max_length=MAX_UNATTRIBUTED_EVIDENCE)
+    unattributed_truncated: int = Field(default=0, ge=0)
+    counts: DeliveryEvidenceCounts
+
+
+def build_evidence_projection(
+    contract: DeliveryContract,
+    frontier: DeliveryFrontier,
+    *,
+    contract_digest: str,
+    frontier_digest: str,
+    outcome_id: str | None = None,
+) -> DeliveryEvidenceProjection:
+    """Project the evaluator's statuses with their records; ``outcome_id`` limits it to one outcome."""
+    criteria = acceptance_criteria(contract)
+    coverage = {item.acceptance_id: item for item in evaluate_acceptance_evidence(contract, frontier).criteria}
+    current = {criterion.ref: criterion.acceptance_id for criterion in criteria}
+    by_criterion: dict[str, list[DeliveryEvidenceItemView]] = {}
+    unattributed: list[DeliveryEvidenceItemView] = []
+    for record_outcome, observation in reversed(tuple(_ordered_records(frontier, ()))):
+        item = _evidence_item(observation, "task" if record_outcome is not None else "finalization")
+        covered = (
+            [current[ref] for ref in observation.covers if ref in current]
+            if isinstance(observation, DeliveryObservationReceipt)
+            else []
+        )
+        for acceptance_id in covered:
+            by_criterion.setdefault(acceptance_id, []).append(item)
+        if not covered and (outcome_id is None or record_outcome == outcome_id):
+            unattributed.append(item)
+    views = tuple(
+        DeliveryAcceptanceEvidenceView(
+            acceptance_id=criterion.acceptance_id,
+            acceptance_version=criterion.acceptance_version,
+            outcome_id=criterion.outcome_id,
+            statement=criterion.statement,
+            identity_source=criterion.identity_source,
+            status=coverage[criterion.acceptance_id].status,
+            decided_by=coverage[criterion.acceptance_id].observation_id,
+            evidence=tuple(items[:MAX_CRITERION_EVIDENCE]),
+            evidence_truncated=max(len(items) - MAX_CRITERION_EVIDENCE, 0),
+        )
+        for criterion in criteria
+        if outcome_id is None or criterion.outcome_id == outcome_id
+        for items in (by_criterion.get(criterion.acceptance_id, []),)
+    )
+    finalization = frontier.finalization
+    return DeliveryEvidenceProjection(
+        change_id=contract.change_id,
+        contract_digest=contract_digest,
+        frontier_digest=frontier_digest,
+        finalization_id=finalization.finalization_id if finalization is not None else None,
+        finalization_rules=(
+            "none"
+            if finalization is None
+            else "legacy"
+            if finalization.schema_version == _LEGACY_FINALIZATION_SCHEMA_VERSION
+            else "typed"
+        ),
+        criteria=views,
+        unattributed=tuple(unattributed[:MAX_UNATTRIBUTED_EVIDENCE]),
+        unattributed_truncated=max(len(unattributed) - MAX_UNATTRIBUTED_EVIDENCE, 0),
+        counts=DeliveryEvidenceCounts(**Counter(view.status for view in views)),
+    )
+
+
+def _evidence_item(observation: DeliveryAnyObservation, source: DeliveryEvidenceSource) -> DeliveryEvidenceItemView:
+    common = {
+        "observation_id": observation.observation_id,
+        "schema_version": observation.schema_version,
+        "source": source,
+        "task_or_finalization_id": observation.task_or_finalization_id,
+        "exact_commit": observation.exact_commit,
+        "observation_kind": observation.observation_kind,
+        "observed_at": observation.observed_at.isoformat(),
+    }
+    if isinstance(observation, DeliveryLegacyObservationReceipt):
+        return DeliveryEvidenceItemView(
+            **common,
+            procedure=observation.command_or_procedure[:512],
+            summary=observation.exit_status_or_artifact_locator[:240],
+        )
+    result = observation.result
+    return DeliveryEvidenceItemView(
+        **common,
+        procedure=observation.procedure,
+        verdict=observation.verdict,
+        owner=getattr(result, "owner", None),
+        reason=getattr(result, "reason", None),
+        provenance=observation.provenance,
+        request_id=observation.request_id,
+        locator=observation.locator,
+        summary=observation.summary,
+    )
+
+
 __all__ = [
     "FINALIZATION_SEMANTICS_MAX_BYTES",
+    "MAX_CRITERION_EVIDENCE",
+    "MAX_UNATTRIBUTED_EVIDENCE",
     "DeliveryAcceptanceCoverage",
+    "DeliveryAcceptanceEvidenceView",
     "DeliveryContextRefusal",
     "DeliveryCriterionCoverage",
+    "DeliveryEvidenceCounts",
+    "DeliveryEvidenceItemView",
+    "DeliveryEvidenceProjection",
     "DeliveryFinalizationSemantics",
     "DeliverySemanticsConfirmation",
     "DeliverySemanticsOutcome",
     "DeliverySemanticsTaskAuthority",
     "DeliverySemanticsTaskResult",
+    "build_evidence_projection",
     "build_finalization_semantics",
     "evaluate_acceptance_evidence",
     "finalization_basis_digest",

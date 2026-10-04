@@ -16,7 +16,12 @@ from unittest.mock import Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-from serve.delivery.tests.confirmation_support import SCOPED_REQUEST_ID, scoped_request_case
+from serve.delivery.tests.confirmation_support import (
+    EVIDENCE_STATUSES,
+    SCOPED_REQUEST_ID,
+    evidence_projection_case,
+    scoped_request_case,
+)
 from serve.delivery.tests.test_delivery_progress import _progress_portfolio
 from serve.delivery.tests.test_portfolio_application import (
     _assert_checkpoint_branch_operation,
@@ -818,6 +823,27 @@ def test_real_core_claim_recovery_exclusion_required(tmp_path: Path, kind: str) 
     assert diagnostic["retry_safe"] is False
     assert "Custody and files are unchanged" in diagnostic["detail"]
     unchanged()
+
+
+@pytest.mark.parametrize(
+    ("item_key", "criteria"),
+    [
+        ("outcome:OUT-001", ("AC-001", "AC-002", "AC-003", "AC-004")),
+        ("outcome:OUT-002", ("AC-005",)),
+        ("publication", tuple(EVIDENCE_STATUSES)),
+    ],
+)
+def test_http_work_item_detail_carries_its_evidence_projection(
+    tmp_path: Path, item_key: str, criteria: tuple[str, ...]
+) -> None:
+    application, _runtime, _state_root = evidence_projection_case(tmp_path)
+    with TestClient(assemble_target_app(application)) as client:
+        response = client.get(f"/api/changes/change-a/work-items/{item_key}")
+    assert response.status_code == 200
+    evidence = response.json()["item"]["evidence"]
+    assert {item["acceptance_id"]: item["status"] for item in evidence["criteria"]} == {
+        key: EVIDENCE_STATUSES[key] for key in criteria
+    }
 
 
 @pytest.mark.parametrize("action", ["block", "return"])

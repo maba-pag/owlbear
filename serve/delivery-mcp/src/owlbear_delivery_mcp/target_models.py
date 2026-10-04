@@ -54,6 +54,7 @@ from owlbear_delivery.delivery_runtime import (
 )
 from owlbear_delivery.design_package import DesignPackageManifest, DesignPackageResult
 from owlbear_delivery.draft_pull_request import DraftPullRequestSupersessionReceipt, MarkChangePullRequestReady
+from owlbear_delivery.evidence import DeliveryEvidenceProjection
 from owlbear_delivery.finalization_reports import (
     FinalizerSettlement,
     ReportFinalizationFailure,
@@ -624,6 +625,7 @@ class DeliveryOperatorContextResponse(_TargetProtocolModel):
     recovery_attention: DeliveryOperatorRecoveryAttentionResponse | None = None
     retry_diagnostic: DeliveryRetryDiagnostic | None = None
     integration_attention: DeliveryOperatorIntegrationAttentionResponse | None = None
+    evidence: DeliveryEvidenceProjection | None = None
 
     @classmethod
     def from_context(cls, context: DeliveryOperatorContext) -> DeliveryOperatorContextResponse:
@@ -673,6 +675,7 @@ class DeliveryOperatorContextResponse(_TargetProtocolModel):
                 if integration_attention is not None
                 else None
             ),
+            evidence=context.evidence,
         )
 
 

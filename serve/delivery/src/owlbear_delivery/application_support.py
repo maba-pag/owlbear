@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 from markdown_it import MarkdownIt
 
+from owlbear_delivery.delivery_contract_discovery import contract_fingerprint
 from owlbear_delivery.delivery_runtime import (
     DeliveryChangePublicationIdentity,
     DeliveryCheckpointTrigger,
@@ -18,7 +19,9 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryPendingCheckpoint,
     DeliveryRuntime,
     DeliveryStage,
+    parse_delivery_frontier,
 )
+from owlbear_delivery.evidence import build_evidence_projection
 from owlbear_delivery.portfolio_operating import (
     DeliveryHealthDiagnostic,
     PortfolioWorkScope,
@@ -117,6 +120,9 @@ _MAX_PR_OUTCOME_TITLE_LENGTH = 180
 
 
 _MAX_PR_OUTCOME_PROMISE_LENGTH = 480
+
+
+_MAX_PR_WAIVED_CRITERIA = 24
 
 
 _CHECKPOINT_RETRY_BASE_SECONDS = 5
@@ -312,6 +318,7 @@ def _checkpoint_summary(  # noqa: PLR0913 - summary binds semantic and checkpoin
             f"- Outcomes complete: {completed_outcomes} of {len(runtime.contract.outcomes)}",
         )
     )
+    lines.extend(_waived_acceptance_summary(runtime))
     if pending is not None:
         lines.append(
             f"- Checkpoint includes: {', '.join(_checkpoint_trigger_label(trigger) for trigger in pending.triggers)}"
@@ -344,6 +351,29 @@ def _checkpoint_summary(  # noqa: PLR0913 - summary binds semantic and checkpoin
             )
         )
     return "\n".join(lines)
+
+
+def _waived_acceptance_summary(runtime: DeliveryRuntime) -> list[str]:
+    """Name every criterion the user waived, with the request that recorded the waiver (U1(b))."""
+    frontier_bytes = runtime.frontier_bytes()
+    projection = build_evidence_projection(
+        runtime.contract,
+        parse_delivery_frontier(frontier_bytes)[0],
+        contract_digest=contract_fingerprint(runtime.contract),
+        frontier_digest=hashlib.sha256(frontier_bytes).hexdigest(),
+    )
+    waived = [view for view in projection.criteria if view.status == "waived"]
+    lines = []
+    for view in waived[:_MAX_PR_WAIVED_CRITERIA]:
+        request_id = next((item.request_id for item in view.evidence if item.observation_id == view.decided_by), None)
+        cited = f" (request {_summary_text(request_id, _MAX_PR_OUTCOME_TITLE_LENGTH)})" if request_id else ""
+        lines.append(
+            f"- Waived by the user, `{view.acceptance_id}`: "
+            f"{_summary_text(view.statement, _MAX_PR_OUTCOME_PROMISE_LENGTH)}{cited}"
+        )
+    if len(waived) > _MAX_PR_WAIVED_CRITERIA:
+        lines.append(f"- {len(waived) - _MAX_PR_WAIVED_CRITERIA} additional waived criterion(s) omitted")
+    return lines
 
 
 def _checkpoint_trigger_label(trigger: DeliveryCheckpointTrigger) -> str:
