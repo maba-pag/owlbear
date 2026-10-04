@@ -8,7 +8,7 @@ user-invocable: false
 
 Own one user-invoked finalization attempt for one named Delivery Change. The Delivery context is the
 source of truth for the managed worktree, Change branch, exact reviewed Change head, and current
-publication phase. Produce heterogeneous exact-head observations, obtain an independent review, and
+publication phase. Prove every criterion that carried evidence does not cover, obtain an independent review, and
 call only the finalization operation.
 
 ## Step 0 - Resolve Current Authority

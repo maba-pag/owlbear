@@ -39,8 +39,10 @@ naming the owning boundary. You never repair or route the candidate.
   `DeliveryBuildContext`, task boundary, complete diff, changed paths, proof, and prior evidence.
 - **For finalization, require** the fresh `DeliveryFinalizationContext` with complete `semantics`
   (its `basis_digest`, `diff_base`, and `change_head`), exact Change head, reviewed
-  head, clean managed worktree, complete finalization diff boundary, heterogeneous exact-head
-  observations, and the finalizer's independent review request. A request without complete
+  head, clean managed worktree, complete finalization diff boundary, the ordered exact-head
+  observations (none when carried evidence covers every criterion), and the finalizer's independent
+  review request. Judge coverage from `semantics` and those observations; never require a minimum
+  number or variety of observations. A request without complete
   `semantics`, or with `semantics_refusal`, does not match finalization mode: reject it and never
   review a partial context. Inspect the exact commit and
   observations as Change evidence; do not require target refs, target profiles, or a separate engine

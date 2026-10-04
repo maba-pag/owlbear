@@ -151,7 +151,12 @@ _RETIRED_DELIVERY_TOOLS = {
     "validate_delivery_contract",
 }
 # Schema-1 observation fields and self-answering of user-only requests have no place in active guidance.
-_RETIRED_EVIDENCE_PHRASES = {"command_or_procedure", "exit_status_or_artifact_locator", "call `answer`"}
+_RETIRED_EVIDENCE_PHRASES = {
+    "command_or_procedure",
+    "exit_status_or_artifact_locator",
+    "call `answer`",
+    "heterogeneous",
+}
 
 
 def _load_module(path: Path, name: str) -> types.ModuleType:
