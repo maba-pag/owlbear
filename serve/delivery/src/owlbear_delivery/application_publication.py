@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import subprocess
-from contextlib import suppress
+from contextlib import contextmanager, suppress
 from typing import TYPE_CHECKING
 
+from owlbear_delivery.application_lifecycle import (
+    _READY_DRAIN_MUTATIONS,
+    _SNAPSHOT_DRAIN_MUTATIONS,
+    _SYNC_DRAIN_MUTATIONS,
+)
 from owlbear_delivery.application_models import (
     DeliveryAcquisitionFailure,
     DeliveryChangePublicationSupersessionReceipt,
@@ -42,8 +48,10 @@ from owlbear_delivery.change_publication import (
 )
 from owlbear_delivery.change_workspace import (
     AdoptExternalHead,
+    ChangeDirectOperation,
     ChangeExternalHeadAdoptionReceipt,
     ChangeExternalHeadPromotionReceipt,
+    ChangePauseRequestedError,
     ChangeTargetSyncAbortReceipt,
     ChangeTargetSyncConflictError,
     ChangeTargetSyncReceipt,
@@ -91,7 +99,38 @@ from owlbear_delivery.publication_provider import (
 from owlbear_delivery.storage_io import locked_roots
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from datetime import datetime
+
     from owlbear_delivery.delivery_state import DeliveryStatePublisher
+    from owlbear_delivery.workspace_models import ChangeDesignPackageSnapshotReceipt
+
+# K2/K7 writes each started operator entry finishes under its own token.
+_ADOPTION_WRITES = ("clear_ready_for_head_change", "capture_change_disposition", "record_external_head_adoption")
+_FINALIZATION_HEAD_WRITES = (
+    "reconcile_finalization_head",
+    "capture_change_disposition",
+    "reconcile_pull_request_draft_state",
+    "record_external_head_promotion",
+)
+
+
+def _direct_operation(change_id: str, kind: str, operation_id: str, *request: str | None) -> ChangeDirectOperation:
+    """Bind one direct entry's marker to its exact request (K2 direct markers)."""
+    request_digest = hashlib.sha256(
+        json.dumps([change_id, kind, operation_id, *request], separators=(",", ":")).encode()
+    ).hexdigest()
+    return ChangeDirectOperation(
+        change_id=change_id,
+        kind=kind,  # type: ignore[arg-type]
+        operation_id=operation_id,
+        request_digest=request_digest,
+    )
+
+
+def _snapshot_identity(operation_id: str, package_id: str, previous_head: str) -> str:
+    """Bind a snapshot token to one snapshot operation, package and pre-snapshot head (K2 snapshot row)."""
+    return f"{operation_id}:{package_id}:{previous_head}"
 
 
 class _PublicationMixin:
@@ -133,42 +172,72 @@ class _PublicationMixin:
                 self._fail("target synchronization requires Change attention resolution first")
             if runtime.active_claims() or runtime.integration_repair_claim() is not None:
                 self._fail("target synchronization cannot overlap an active Delivery claim")
-            try:
-                receipt = self._workspace_manager.sync_with_target(
-                    request,
-                    before_head_change=lambda: self._return_publication_to_draft_before_head_change(
-                        change_id,
-                        runtime,
-                        operation_id,
-                    ),
-                )
-            except ChangeTargetSyncStaleError:
-                raise
-            except ChangeTargetSyncConflictError as exc:
-                history = runtime.publication_history()
-                runtime.capture_target_sync_conflict(
-                    exc.operation_id,
-                    exc.target_head,
-                    _timestamp(self._clock()),
-                    (
-                        "target synchronization merge conflict",
-                        *tuple(f"conflict-path:{path}" for path in exc.conflict_paths),
-                    ),
-                    publication_identity=history.current if history is not None else None,
-                )
-                self._publish_attention_best_effort(
+            direct = (
+                None
+                if self._coordinator.executing_continuation(change_id)
+                else _direct_operation(change_id, "sync-target", operation_id, expected_target)
+            )
+            with self._owner_drain_authority(
+                change_id, f"sync-target:{operation_id}", *_SYNC_DRAIN_MUTATIONS, publishes_checkpoint=True
+            ):
+                receipt = self._sync_change_with_target_owned(change_id, runtime, request, direct)
+                self._finish_direct_operation(direct)
+            self._try_convert_pause_request(change_id, runtime)
+            return receipt
+
+    def _finish_direct_operation(self, direct: ChangeDirectOperation | None) -> None:
+        """Write ``finished.json`` before a direct entry returns, when its own start marker exists."""
+        if direct is not None and self._coordinator.direct_operation_state(direct) == "started":
+            self._coordinator.finish_direct_operation(direct)
+
+    def _sync_change_with_target_owned(
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+        request: SyncChangeWithTarget,
+        direct: ChangeDirectOperation | None,
+    ) -> ChangeTargetSyncReceipt:
+        operation_id = request.operation_id
+        try:
+            receipt = self._workspace_manager.sync_with_target(
+                request,
+                before_head_change=lambda: self._return_publication_to_draft_before_head_change(
                     change_id,
                     runtime,
-                    f"target-sync-attention-{exc.operation_id}",
-                )
-                raise
-            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
-                self._fail("target synchronization could not be completed", exc)
-            runtime.record_target_sync(receipt, _timestamp(self._clock()))
-            self._publish_target_sync_branch(change_id, runtime, receipt.merged_head)
-            self._publish_delivery_state(change_id, runtime, f"target-sync-{receipt.receipt_id}")
-            self._acknowledge_published_target_sync_checkpoint(runtime, receipt.merged_head)
-            return receipt
+                    operation_id,
+                ),
+                direct_operation=direct,
+            )
+        except ChangeTargetSyncStaleError:
+            raise
+        except ChangePauseRequestedError:
+            raise
+        except ChangeTargetSyncConflictError as exc:
+            history = runtime.publication_history()
+            runtime.capture_target_sync_conflict(
+                exc.operation_id,
+                exc.target_head,
+                _timestamp(self._clock()),
+                (
+                    "target synchronization merge conflict",
+                    *tuple(f"conflict-path:{path}" for path in exc.conflict_paths),
+                ),
+                publication_identity=history.current if history is not None else None,
+            )
+            self._publish_attention_best_effort(
+                change_id,
+                runtime,
+                f"target-sync-attention-{exc.operation_id}",
+            )
+            self._finish_direct_operation(direct)
+            raise
+        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+            self._fail("target synchronization could not be completed", exc)
+        runtime.record_target_sync(receipt, _timestamp(self._clock()))
+        self._publish_target_sync_branch(change_id, runtime, receipt.merged_head)
+        self._publish_delivery_state(change_id, runtime, f"target-sync-{receipt.receipt_id}")
+        self._acknowledge_published_target_sync_checkpoint(runtime, receipt.merged_head)
+        return receipt
 
     def sync_change_with_current_target(
         self,
@@ -197,7 +266,10 @@ class _PublicationMixin:
             adopted_head=adopted_head,
             operation_id=operation_id,
         )
-        with locked_roots((self._checkpoint_lock_root(change_id),)):
+        with (
+            locked_roots((self._checkpoint_lock_root(change_id),)),
+            self._operator_start(change_id, f"adopt:{operation_id}", *_ADOPTION_WRITES),
+        ):
             self._require_external_head_adoption_change_mutable(runtime)
             self._require_no_review_repair(runtime, "external Change head adoption")
             if runtime.change_disposition() is not None:
@@ -273,7 +345,10 @@ class _PublicationMixin:
             adopted_head=adopted_head,
             operation_id=operation_id,
         )
-        with locked_roots((self._checkpoint_lock_root(change_id),)):
+        with (
+            locked_roots((self._checkpoint_lock_root(change_id),)),
+            self._operator_start(change_id, f"adopt:{operation_id}", *_ADOPTION_WRITES, "resolve_change_disposition"),
+        ):
             disposition = runtime.change_disposition()
             if (
                 disposition is None
@@ -325,7 +400,10 @@ class _PublicationMixin:
     ) -> ChangeExternalHeadPromotionReceipt:
         """Promote one exact adopted head before granting Builder authority."""
         runtime = self._runtime(change_id, for_mutation=True)
-        with locked_roots((self._checkpoint_lock_root(change_id),)):
+        with (
+            locked_roots((self._checkpoint_lock_root(change_id),)),
+            self._operator_start(change_id, f"promote:{operation_id}", "record_external_head_promotion"),
+        ):
             self._require_external_head_promotion_change_mutable(runtime)
             self._require_no_review_repair(runtime, "external Change head promotion")
             if runtime.change_disposition() is not None:
@@ -366,7 +444,10 @@ class _PublicationMixin:
     ) -> ChangeTargetSyncAbortReceipt:
         """Abort one exact preserved target merge and clear its attention."""
         runtime = self._runtime(change_id, for_mutation=True)
-        with locked_roots((self._checkpoint_lock_root(change_id),)):
+        with (
+            locked_roots((self._checkpoint_lock_root(change_id),)),
+            self._operator_start(change_id, f"target-sync-abort:{operation_id}", "record_target_sync_abort"),
+        ):
             disposition = runtime.change_disposition()
             attention_active = disposition is not None
             if attention_active:
@@ -410,7 +491,15 @@ class _PublicationMixin:
             target_head=target_head,
             operation_id=operation_id,
         )
-        with locked_roots((self._checkpoint_lock_root(change_id),)):
+        with (
+            locked_roots((self._checkpoint_lock_root(change_id),)),
+            self._operator_start(
+                change_id,
+                f"target-sync-resolve:{operation_id}",
+                "record_resolved_target_sync",
+                publishes_checkpoint=True,
+            ),
+        ):
             existing = runtime.target_sync_receipt()
             if existing is not None:
                 return self._replay_target_sync_resolution(
@@ -520,29 +609,35 @@ class _PublicationMixin:
             if replay_head is not None and superseding_head != replay_head:
                 self._fail("publication supersession replay requires the stored successor head")
 
-            git_receipt, provider_receipt = self._publish_supersession(
-                runtime,
-                _SupersessionPublishContext(
-                    change_id=change_id,
-                    expected_publication_id=expected_publication_id,
-                    operation_id=operation_id,
-                    predecessor=predecessor,
-                    superseding_head=superseding_head,
-                    target_branch=self._draft_pull_request_publisher.target_branch,
-                ),
-            )
-            finalization = runtime.finalization()
-            if finalization is not None and finalization.exact_head != superseding_head:
-                runtime.reconcile_finalization_head(superseding_head, _timestamp(self._clock()))
-            updated_history = self._bind_supersession_successor(
-                runtime,
-                runtime_history,
-                predecessor,
-                provider_receipt,
-            )
-            self._publish_delivery_state(
-                change_id, runtime, f"supersession-{provider_receipt.successor_publication.receipt_id}"
-            )
+            with self._owner_drain_authority(
+                change_id, f"lease:{operation_id}", publishes_checkpoint=True, requires_lease=True
+            ) as lease_authority:
+                git_receipt, provider_receipt = self._publish_supersession(
+                    runtime,
+                    _SupersessionPublishContext(
+                        change_id=change_id,
+                        expected_publication_id=expected_publication_id,
+                        operation_id=operation_id,
+                        predecessor=predecessor,
+                        superseding_head=superseding_head,
+                        target_branch=self._draft_pull_request_publisher.target_branch,
+                    ),
+                )
+                # The lease owner finishes its own successor binding after its push (K2 lease row).
+                lease_authority.permit("mutation", "record_publication_successor", "reconcile_finalization_head")
+                finalization = runtime.finalization()
+                if finalization is not None and finalization.exact_head != superseding_head:
+                    runtime.reconcile_finalization_head(superseding_head, _timestamp(self._clock()))
+                updated_history = self._bind_supersession_successor(
+                    runtime,
+                    runtime_history,
+                    predecessor,
+                    provider_receipt,
+                )
+                self._publish_delivery_state(
+                    change_id, runtime, f"supersession-{provider_receipt.successor_publication.receipt_id}"
+                )
+            self._try_convert_pause_request(change_id, runtime)
             return DeliveryChangePublicationSupersessionReceipt.create(
                 operation_id=operation_id,
                 predecessor_publication_id=expected_publication_id,
@@ -767,36 +862,65 @@ class _PublicationMixin:
             if publication.published_head != finalization.exact_head or publication.pending_checkpoint is not None:
                 message = "pull-request readiness requires the reconciled final checkpoint"
                 raise PortfolioApplicationError(message)
-            existing_ready = runtime.ready_receipt()
-            if (
-                existing_ready is not None
-                and existing_ready.finalization_id == finalization.finalization_id
-                and existing_ready.head_sha == finalization.exact_head
-            ):
-                receipt = self._draft_pull_request_publisher.mark_ready(request)
-                ready = runtime.mark_awaiting_merge(receipt)
-                self._publish_delivery_state(change_id, runtime, f"ready-{ready.receipt_id}")
-                return ready
-            try:
-                observation, failures = self._observe_required_checks_for_ready(
-                    change_id,
-                    finalization.exact_head,
+            direct = (
+                None
+                if self._coordinator.executing_continuation(change_id)
+                else _direct_operation(
+                    change_id, "mark-ready", request.operation_id, request.finalization_id, request.exact_head
                 )
-            except PublicationProviderError as exc:
-                if not exc.retry_safe:
-                    raise
-                raise _PreEffectReadyObservationError(
-                    exc.code,
-                    exc.operation,
-                    str(exc),
-                    retry_safe=True,
-                ) from exc
-            receipt = self._draft_pull_request_publisher.mark_ready(request)
+            )
+            if direct is not None and self._coordinator.direct_operation_state(direct) == "finished":
+                # Replay after finished.json: the existing replay answers and no token is granted (§1.6).
+                return self._mark_change_ready_owned(change_id, runtime, request, finalization)
+            if direct is not None:
+                self._coordinator.start_direct_operation(direct)
+            with self._owner_drain_authority(change_id, f"mark-ready:{request.operation_id}", *_READY_DRAIN_MUTATIONS):
+                ready = self._mark_change_ready_owned(change_id, runtime, request, finalization)
+                self._finish_direct_operation(direct)
+            self._try_convert_pause_request(change_id, runtime)
+            return ready
+
+    def _mark_change_ready_owned(
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+        request: MarkChangePullRequestReady,
+        finalization: DeliveryFinalizationReceipt,
+    ) -> PullRequestReadyReceipt:
+        publisher = self._draft_pull_request_publisher
+        if publisher is None:
+            message = "draft pull-request publication is not configured"
+            raise PortfolioApplicationError(message)
+        existing_ready = runtime.ready_receipt()
+        if (
+            existing_ready is not None
+            and existing_ready.finalization_id == finalization.finalization_id
+            and existing_ready.head_sha == finalization.exact_head
+        ):
+            receipt = publisher.mark_ready(request)
             ready = runtime.mark_awaiting_merge(receipt)
-            if failures:
-                self._record_required_check_attention(runtime, observation, failures, ready)
             self._publish_delivery_state(change_id, runtime, f"ready-{ready.receipt_id}")
             return ready
+        try:
+            observation, failures = self._observe_required_checks_for_ready(
+                change_id,
+                finalization.exact_head,
+            )
+        except PublicationProviderError as exc:
+            if not exc.retry_safe:
+                raise
+            raise _PreEffectReadyObservationError(
+                exc.code,
+                exc.operation,
+                str(exc),
+                retry_safe=True,
+            ) from exc
+        receipt = publisher.mark_ready(request)
+        ready = runtime.mark_awaiting_merge(receipt)
+        if failures:
+            self._record_required_check_attention(runtime, observation, failures, ready)
+        self._publish_delivery_state(change_id, runtime, f"ready-{ready.receipt_id}")
+        return ready
 
     def _observe_required_checks_for_ready(
         self,
@@ -857,7 +981,10 @@ class _PublicationMixin:
             message = "review repair requires a publication provider"
             raise PortfolioApplicationError(message)
         runtime = self._runtime(change_id, for_mutation=True)
-        with locked_roots((self._checkpoint_lock_root(change_id),)):
+        with (
+            locked_roots((self._checkpoint_lock_root(change_id),)),
+            self._operator_start(change_id, "review-repair", "prepare_review_repair"),
+        ):
             authority = self._review_repair_authority(runtime)
             observation = self._observe_review_repair_pull_request(change_id, publisher, authority)
             replayed = self._replay_review_repair(change_id, publisher, authority, observation)
@@ -1044,7 +1171,10 @@ class _PublicationMixin:
     ) -> DeliveryFinalizationReceipt | DeliveryFinalizationInvalidationReceipt | None:
         """Retain or invalidate finalization from the engine-derived Change branch head."""
         runtime = self._runtime(change_id, for_mutation=True)
-        with locked_roots((self._checkpoint_lock_root(change_id),)):
+        with (
+            locked_roots((self._checkpoint_lock_root(change_id),)),
+            self._operator_start(change_id, "finalization-head-reconciliation", *_FINALIZATION_HEAD_WRITES),
+        ):
             before_frontier = runtime.frontier_bytes()
             before_coordination = self._workspace_manager.show(change_id)
             result = self._reconcile_finalization_head_locked(change_id, runtime)
@@ -1084,7 +1214,10 @@ class _PublicationMixin:
                     error_code=pending.last_error_code,
                     error_detail=pending.last_error_detail or "Checkpoint retry is waiting for its next eligible time.",
                 )
-            return self._reconcile_change_checkpoint_with_failure_recording(change_id, runtime)
+            with self._checkpoint_owner_authority(change_id, runtime):
+                result = self._reconcile_change_checkpoint_with_failure_recording(change_id, runtime)
+            self._try_convert_pause_request(change_id, runtime)
+            return result
 
     def _reconcile_change_checkpoint_with_failure_recording(
         self,
@@ -1093,7 +1226,7 @@ class _PublicationMixin:
     ) -> DeliveryCheckpointReconciliationResult:
         """Reconcile one checkpoint and retain bounded failure evidence for retries."""
         try:
-            return self._reconcile_change_checkpoint(change_id, runtime)
+            return self._reconcile_change_checkpoint_or_paused(change_id, runtime)
         except (
             PublicationProviderError,
             PublicationBaselineUnavailableError,
@@ -1152,7 +1285,9 @@ class _PublicationMixin:
                     pending = current.pending_checkpoint
                     if pending is None or not _checkpoint_retry_ready(pending, now):
                         continue
-                    results.append(self._reconcile_change_checkpoint(change_id, runtime))
+                    # K5: failure recording and conversion stay inside the checkpoint lock.
+                    results.append(self._reconcile_pending_checkpoint_locked(change_id, runtime, now))
+                    self._try_convert_pause_request(change_id, runtime)
             except BlockingIOError:
                 state = runtime.checkpoint_publication_state()
                 results.append(
@@ -1164,41 +1299,138 @@ class _PublicationMixin:
                         error_detail="Checkpoint reconciliation is already in progress.",
                     )
                 )
-            except (
-                PublicationProviderError,
-                PublicationBaselineUnavailableError,
-                DeliveryRuntimeConflictError,
-                OSError,
-                RuntimeError,
-                subprocess.SubprocessError,
-                ValueError,
-            ) as exc:
-                state = runtime.checkpoint_publication_state()
-                pending = state.pending_checkpoint
-                error_code = _checkpoint_error_code(exc)
-                error_detail = _checkpoint_error_detail(
-                    str(exc),
-                    "Checkpoint reconciliation failed; the pending checkpoint was retained.",
-                )
-                if pending is not None:
-                    with suppress(DeliveryRuntimeConflictError):
-                        state = runtime.record_checkpoint_failure(
-                            pending,
-                            now,
-                            error_code,
-                            error_detail,
-                        )
-                results.append(
-                    DeliveryCheckpointReconciliationResult(
-                        change_id=change_id,
-                        attempted_head=pending.head if pending else None,
-                        state=state,
-                        reconciled=False,
-                        error_code=error_code,
-                        error_detail=error_detail,
-                    )
-                )
         return tuple(results)
+
+    def _reconcile_pending_checkpoint_locked(
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+        now: datetime,
+    ) -> DeliveryCheckpointReconciliationResult:
+        try:
+            with self._checkpoint_owner_authority(change_id, runtime):
+                return self._reconcile_change_checkpoint_or_paused(change_id, runtime)
+        except (
+            PublicationProviderError,
+            PublicationBaselineUnavailableError,
+            DeliveryRuntimeConflictError,
+            OSError,
+            RuntimeError,
+            subprocess.SubprocessError,
+            ValueError,
+        ) as exc:
+            state = runtime.checkpoint_publication_state()
+            pending = state.pending_checkpoint
+            error_code = _checkpoint_error_code(exc)
+            error_detail = _checkpoint_error_detail(
+                str(exc),
+                "Checkpoint reconciliation failed; the pending checkpoint was retained.",
+            )
+            if pending is not None:
+                with suppress(DeliveryRuntimeConflictError):
+                    state = runtime.record_checkpoint_failure(
+                        pending,
+                        now,
+                        error_code,
+                        error_detail,
+                    )
+            return DeliveryCheckpointReconciliationResult(
+                change_id=change_id,
+                attempted_head=pending.head if pending else None,
+                state=state,
+                reconciled=False,
+                error_code=error_code,
+                error_detail=error_detail,
+            )
+
+    def _reconcile_change_checkpoint_or_paused(
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+    ) -> DeliveryCheckpointReconciliationResult:
+        """Run one reconciliation; a start refused by Pause is not a checkpoint failure (K3)."""
+        refusal: ChangePauseRequestedError | None = None
+        if (
+            self._coordinator.pause_request(change_id) is not None
+            and self._coordinator.current_drain_authority(change_id) is None
+        ):
+            # No marker, lease, snapshot or replay owner: a new publication start under a request.
+            refusal = ChangePauseRequestedError()
+        else:
+            try:
+                return self._reconcile_change_checkpoint(change_id, runtime)
+            except ChangePauseRequestedError as exc:
+                refusal = exc
+        state = runtime.checkpoint_publication_state()
+        return DeliveryCheckpointReconciliationResult(
+            change_id=change_id,
+            attempted_head=state.pending_checkpoint.head if state.pending_checkpoint else None,
+            state=state,
+            reconciled=False,
+            error_code=refusal.code,
+            error_detail=str(refusal),
+        )
+
+    @contextmanager
+    def _checkpoint_owner_authority(self, change_id: str, runtime: DeliveryRuntime) -> Iterator[None]:
+        """Hold this reconciliation's K2 token until it returns (snapshot, handoff or lease row).
+
+        Snapshot custody rebuilds from its durable intent, un-anchored receipt or handoff (a)-(b) and binds
+        that exact snapshot. A first-task snapshot not yet started binds only the intent this call commits
+        under K3. Any other checkpoint takes the lease row: its token is inert until its own lease commits.
+        """
+        evidence = self._snapshot_owner_evidence(change_id, runtime)
+        if evidence is None:
+            state = runtime.checkpoint_publication_state()
+            pending = state.pending_checkpoint
+            if not (
+                pending is not None
+                and state.published_head is None
+                and any(item.kind == DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK for item in pending.triggers)
+            ):
+                with self._owner_drain_authority(
+                    change_id, "lease:checkpoint", publishes_checkpoint=True, requires_lease=True
+                ):
+                    yield
+                return
+            with self._owner_drain_authority(change_id, "snapshot:new", *_SNAPSHOT_DRAIN_MUTATIONS):
+                yield
+            return
+        _kind, snapshot_head = evidence
+        coordination = self._coordinator.show(change_id)
+        intent = coordination.design_package_snapshot_intent
+        receipt = coordination.design_package_snapshot
+        if intent is not None:
+            owner = intent.operation_id
+            identity = _snapshot_identity(intent.operation_id, intent.package_id, intent.expected_head)
+        else:
+            owner = receipt.operation_id
+            identity = _snapshot_identity(receipt.operation_id, receipt.package_id, receipt.previous_head)
+        with self._owner_drain_authority(change_id, f"snapshot:{owner}", *_SNAPSHOT_DRAIN_MUTATIONS) as authority:
+            authority.permit("snapshot", identity)
+            if snapshot_head is not None:
+                authority.permit("reserve", _checkpoint_operation_id("branch", change_id, snapshot_head))
+            yield
+
+    def _bind_snapshot_owner(
+        self,
+        change_id: str,
+        before: ChangeDesignPackageSnapshotReceipt | None,
+        snapshot: ChangeDesignPackageSnapshotReceipt,
+    ) -> None:
+        """K2 snapshot row: under a request, continue only the exact snapshot this token owns."""
+        authority = self._coordinator.current_drain_authority(change_id)
+        if authority is None or not authority.owner.startswith("snapshot:"):
+            return
+        identity = _snapshot_identity(snapshot.operation_id, snapshot.package_id, snapshot.previous_head)
+        committed_here = before is None or before.receipt_id != snapshot.receipt_id
+        if authority.owner == "snapshot:new" and committed_here and not authority.permits.get("snapshot"):
+            authority.permit("snapshot", identity)
+        if not authority.allows("snapshot", identity):
+            if self._coordinator.pause_request(change_id) is not None:
+                raise ChangePauseRequestedError
+            return
+        authority.permit("reserve", _checkpoint_operation_id("branch", change_id, snapshot.snapshot_head))
 
     def _reconcile_change_checkpoint(  # noqa: C901
         self,
@@ -1292,6 +1524,8 @@ class _PublicationMixin:
             )
 
         draft_receipt = None
+        # Provider entries continue only for an owner that started before any request (K2, K3).
+        self._require_publication_drain(change_id, runtime)
         if first_checkpoint:
             draft_receipt = self._draft_pull_request_publisher.publish(
                 CreateOrReconcileDraftPullRequest(
@@ -1361,12 +1595,17 @@ class _PublicationMixin:
         pending = checkpoint.pending_checkpoint
         if pending is None or pending.head != head:
             self._fail("Change branch publication does not match the pending checkpoint")
+        operation_id = _checkpoint_operation_id("branch", change_id, head)
+        authority = self._coordinator.current_drain_authority(change_id)
+        if authority is not None and authority.publishes_checkpoint:
+            # K2 bound bookkeeping: only an owner whose row names it may reserve, and only the queued head.
+            authority.permit("reserve", operation_id)
         return publisher.publish(
             PublishChangeBranch(
                 change_id=change_id,
                 expected_remote_head=checkpoint.published_head,
                 expected_published_head=head,
-                operation_id=_checkpoint_operation_id("branch", change_id, head),
+                operation_id=operation_id,
             )
         )
 
@@ -1413,6 +1652,7 @@ class _PublicationMixin:
         if first_task_checkpoint and initial.published_head is None:
             package = self._package_store.read_verified(change_id)
             self._validate_package_authority(runtime, package)
+            before = self._coordinator.show(change_id).design_package_snapshot
             snapshot = self._workspace_manager.snapshot_design_package(
                 change_id,
                 package.package_id,
@@ -1424,6 +1664,7 @@ class _PublicationMixin:
                 },
                 _checkpoint_operation_id("package", change_id, pending.head, package.package_id),
             )
+            self._bind_snapshot_owner(change_id, before, snapshot)
             if snapshot.snapshot_head != pending.head:
                 runtime.record_design_package_snapshot(initial, snapshot)
                 initial = runtime.checkpoint_publication_state()
@@ -1496,12 +1737,16 @@ class _PublicationMixin:
                 pending,
                 current_frontier_digest=current_digest,
             )
-            self._publish_delivery_state(
-                change_id,
-                runtime,
-                f"replay-state-{pending.frontier_digest}",
-                expected_remote_head=remote_head,
-            )
+            bound = pending.transition_request_digest or pending.base_frontier_digest
+            with self._owner_drain_authority(
+                change_id, f"replay:{pending.frontier_digest}", bound=bound, publishes_checkpoint=True
+            ):
+                self._publish_delivery_state(
+                    change_id,
+                    runtime,
+                    f"replay-state-{pending.frontier_digest}",
+                    expected_remote_head=remote_head,
+                )
         except (OSError, RuntimeError, subprocess.SubprocessError, TypeError, ValueError) as exc:
             return DeliveryAcquisitionFailure(
                 change_id=change_id,

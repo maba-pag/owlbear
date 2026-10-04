@@ -1242,11 +1242,13 @@ class RetryLedger:
         original: bool = False,
         operation_alias: str | None = None,
         resume_attempt_id: str | None = None,
+        fence: ReplacementTransactionParticipant | None = None,
     ) -> RetryReservation:
         """Reserve one attempt atomically before dispatch/effect entry.
 
         Reusing an existing attempt ID is an idempotent replay and does not
-        consume another allowance.
+        consume another allowance. ``fence`` joins exact coordination bytes to the
+        reservation commit so a concurrent Pause and this start serialize (K3).
         """
         if key.change_id != self.change_id:
             raise ValueError("retry key belongs to another Change")
@@ -1483,6 +1485,7 @@ class RetryLedger:
             ),
             RetryAttempt,
             attempt,
+            fence=fence,
         )
         return RetryReservation(
             episode_id=key.identity,
@@ -1910,7 +1913,7 @@ class RetryLedger:
             raise RetryLedgerCorruptError
         return summary, previous
 
-    def _commit_summary(
+    def _commit_summary(  # noqa: PLR0913 - one commit binds summary, record and its coordination fence.
         self,
         previous: bytes | None,
         summary: RetryLedgerSummary,
@@ -1918,6 +1921,7 @@ class RetryLedger:
         record: RetryAttempt | RetryAttemptOutcome | None = None,
         *,
         outcome_id: str | None = None,
+        fence: ReplacementTransactionParticipant | None = None,
     ) -> None:
         participants: list[TransactionParticipant | ReplacementTransactionParticipant] = []
         if record_type is RetryAttempt and isinstance(record, RetryAttempt):
@@ -1952,6 +1956,8 @@ class RetryLedger:
                 for participant in participants
             )
         )
+        if fence is not None:
+            participants.append(fence)
         try:
             RuntimeTransaction(self.runtime_root, f"retry-ledger-{transaction_id}", tuple(participants)).commit()
         except TransactionConflictError as exc:

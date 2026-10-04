@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from contextvars import ContextVar
 from itertools import pairwise
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -56,6 +57,24 @@ def _find_binding(frontier: DeliveryFrontier, outcome_id: str) -> OutcomeAuthori
         _reference(f"Delivery outcome is absent: {outcome_id}", exc)
 
 
+# The writer name the next custody-guarded frontier replacement classifies for Pause (K7).
+_DECLARED_MUTATION: ContextVar[str | None] = ContextVar("declared_delivery_mutation", default=None)
+
+
+def _declare_mutation(operation: str) -> None:
+    _DECLARED_MUTATION.set(operation)
+
+
+def _declared_mutation() -> str | None:
+    return _DECLARED_MUTATION.get()
+
+
+def _consume_declared_mutation() -> str | None:
+    operation = _DECLARED_MUTATION.get()
+    _DECLARED_MUTATION.set(None)
+    return operation
+
+
 def _require_change_mutable(
     frontier: DeliveryFrontier,
     operation: str,
@@ -65,6 +84,7 @@ def _require_change_mutable(
     if operation not in _NORMAL_CHANGE_MUTATIONS:
         message = f"unregistered Delivery Change mutation: {operation}"
         raise ValueError(message)
+    _declare_mutation(operation)
     if frontier.change_completion is not None:
         _conflict("completed Delivery Change is terminal")
     if frontier.change_abandonment is not None:

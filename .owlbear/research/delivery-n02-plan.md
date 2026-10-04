@@ -502,6 +502,7 @@ reject in lax mode too; they are the same deliberate rejections as in run 1. No 
   registry includes the format, refuses it otherwise), and the candidate refuses a synthetic
   newer-format copy; `compare` proves live records unchanged. Receipt bytes are never rewritten to
   make a copy load.
+  Amended in N09-A2: the oracle implements D3's family-version rule (refusal exactly at newer-family records).
 - **Positive scenarios:** propose/apply/verify on a disposable D03-format portfolio with each
   custody shape (passive Builder handoff, Planner pause, report-backed Finalizer attention,
   completed Change) → every Change available after; LC full form on a live copy.

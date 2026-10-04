@@ -87,7 +87,13 @@
   },
   "coordination": {
     "fingerprints": {
-      "owlbear_delivery.workspace_models:ChangeCoordination": "207dc25eb813f6c7ab506a6bb398d030448c027e5eff3bc8ae10ee432355b04d"
+      "owlbear_delivery.workspace_models:ChangeCoordination": "848bb1e52ada8c6e4211f77b4a0f297ea04a039bbeb1cd77688b8c05d40db48f"
+    },
+    "version": 2
+  },
+  "direct_operation": {
+    "fingerprints": {
+      "owlbear_delivery.workspace_models:ChangeDirectOperation": "4c746388b84ee73394eeea849b9df351b3a055d39fcbeedbfd98666389f49baf"
     },
     "version": 1
   },
