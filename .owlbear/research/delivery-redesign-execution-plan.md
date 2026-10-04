@@ -122,19 +122,15 @@ the user present and the explicit authorization described in that package.
 
 ### 1.2 Where work happens
 
-- **The main checkout `/Users/GGN7H9Q/Projects/owlbear-dev` runs live Delivery and is frozen.**
-  Its tracked `.vscode/mcp.json` starts `owlbear-delivery` with `uv run python -m owlbear_delivery_mcp`
-  from this checkout, and `uv run cockpit` does the same. Whatever code is checked out there becomes
-  the live controller on the next (re)start. D03 requires that controller to run from the primary
-  worktree, so it cannot be moved to a lane worktree.
-  - In N00-M, after PR #326 is merged, the agent switches the main checkout to a local branch
-    `delivery-live` at the merged D03 commit. From then on, nobody pulls, merges or checks out
-    programme code in the main checkout. Programme PRs merge into `origin/dev` only.
-  - The freeze ends only through N02-D (pinned controller plus an authorized, rehearsed upgrade)
-    or N10-M. A passing LC gate on a copy never authorizes running new code against live state.
-  - Other work in this repository uses a worktree from `origin/dev`, not the main checkout.
-    Delivery only requires the primary worktree; it does not read or advance that worktree's
-    branch.
+- **The main checkout `/Users/GGN7H9Q/Projects/owlbear-dev` runs live Delivery from a pinned release.**
+  The freeze ended on 2026-10-04 with the N02-D H step: live state was migrated to format 2 (backup
+  `~/owlbear-backups/n02d-20261004-123545`), the workspace is pinned to release `841b1cffb`, and the
+  main checkout is on `dev`. `.vscode/mcp.json` and Cockpit start the pinned release through
+  `.owlbear/controller/bin/`, so pulling or checking out code there no longer changes live behavior;
+  live code changes only through `/upgrade-delivery`. Starting the checkout's own code against this
+  workspace is refused (`controller-not-pinned`).
+  - History: from N00-M until that H step the checkout was frozen on `delivery-live` at the D03 merge.
+  - Phase work still uses lane worktrees from `origin/dev`.
 - **Each lane gets its own git worktree, VS Code window and chat.** The agent creates the worktree
   once per lane, on its current phase branch:
 
@@ -646,7 +642,7 @@ every new item exactly one lane.
 | N02-A | merged | #348 (code head `f225ad508`; Sol `implementation-sound` round 3; LC load form pass) |
 | N02-B | merged | #352 (code head `7500600c7`; Sol `implementation-sound` round 5; full LC pass) |
 | N02-C | merged | #355 (code head `411590913`) |
-| N02-D | merged | #362 (`9000513f9`; integrity simplified 2026-10-04; Sol `implementation-sound` on the simplification; LC and both upgrade rehearsals (N02-C and D03 to N02-D, format 2) pass; G3 host rehearsal and the live H step pending with the user) |
+| N02-D | merged | #362 (`9000513f9`; integrity simplified 2026-10-04; Sol `implementation-sound` on the simplification; LC and both upgrade rehearsals (N02-C and D03 to N02-D, format 2) pass; H step done 2026-10-04 with the user: G3 host check passed (start, stop, restart; no autostart), live migrated 0 → 1 → 2 with the rehearsed proposal, pinned to `841b1cffb`, main checkout on `dev`, health healthy and all 3 Changes available and unchanged across a restart; freeze ended) |
 | N03-P | merged | #349 (plan gate `plan-sound`, round 6; D11 confirmed 2026-10-03; U1 decided (b) by the user 2026-10-03). History: #360 added a user-only confirmation boundary and opened U2; both were removed and U2 resolved on 2026-10-04 ([7](#7-decisions)) |
 | N03-A | merged | #363 (`82be4eb1c`; simplified 2026-10-04; Sol `implementation-sound` on the simplification delta; LC full form pass) |
 | N03-B | — | — |
