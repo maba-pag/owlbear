@@ -3684,7 +3684,6 @@ async def test_lifespan_refuses_checkout_code_on_a_pinned_workspace(
                 "commit": "a" * 40,
                 "previous": None,
                 "release_sha256": "f" * 64,
-                "release_stat_sha256": "d" * 64,
             }
         ),
         "utf-8",

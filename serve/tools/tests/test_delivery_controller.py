@@ -290,102 +290,6 @@ def test_a_hand_edited_launcher_fails_verification(tmp_path: Path, source: tuple
     assert result["failures"] == ["launcher bin/delivery-mcp does not exec the pinned release"]
 
 
-def _tamper(layout: Layout, commit: str, marker: Path) -> None:
-    """Modify one release module so that importing it would leave ``marker`` behind."""
-    module = layout.release(commit) / "serve/delivery/src/owlbear_delivery/__init__.py"
-    module.chmod(0o644)
-    module.write_bytes(module.read_bytes() + f"\nopen({str(marker)!r}, 'w').close()\n".encode())
-
-
-@pytest.mark.parametrize("launcher", delivery_controller.LAUNCHERS)
-def test_a_launcher_refuses_a_modified_release_before_importing_any_of_its_code(
-    tmp_path: Path, source: tuple[Path, list[str]], launcher: str
-) -> None:
-    repository, commits = source
-    layout, _config = _workspace(tmp_path)
-    _install(layout, repository, commits[0])
-    _pin(layout, commits[0], first=True)
-    marker = tmp_path / "imported"
-    _tamper(layout, commits[0], marker)
-    digests = record_tree_digest(layout.workspace)
-
-    completed = subprocess.run(  # noqa: S603 - the generated launcher of this test's workspace.
-        (str(layout.bin / launcher),),
-        cwd=layout.workspace,
-        env={**os.environ, "COCKPIT_NO_OPEN": "1"},
-        stdin=subprocess.DEVNULL,
-        capture_output=True,
-        text=True,
-        timeout=60,
-        check=False,
-    )
-
-    assert completed.returncode == 78
-    assert completed.stderr.startswith(f"controller-release-invalid: controller release {layout.release(commits[0])}")
-    assert "modified after install" in completed.stderr
-    assert not marker.exists()
-    assert record_tree_digest(layout.workspace) == digests
-    assert delivery_controller.verify(layout)["verified"] is False
-
-
-_ENTRY_PROBE = """
-import asyncio, json
-from pathlib import Path
-from owlbear_cockpit.target_context import load_target_context
-from owlbear_delivery import load_delivery_application
-from owlbear_delivery.delivery_application_loader import DeliveryApplicationLoadError, DeliveryStartupConfig
-from owlbear_delivery_mcp.server import app_lifespan, mcp
-root = Path.cwd()
-refusals = {}
-config = DeliveryStartupConfig.model_validate_json((root / ".owlbear/delivery/config.json").read_bytes())
-try:
-    load_delivery_application(config, workspace_root=root)
-except DeliveryApplicationLoadError as exc:
-    refusals["loader"] = exc.detail
-try:
-    load_target_context(root)
-except RuntimeError as exc:
-    refusals["cockpit"] = str(exc)
-async def start():
-    async with app_lifespan(mcp):
-        pass
-try:
-    asyncio.run(start())
-except Exception as exc:
-    refusals["mcp"] = getattr(exc, "detail", str(exc))
-print(json.dumps(refusals))
-"""
-
-
-def test_every_entry_that_bypasses_a_launcher_refuses_a_modified_release_before_reading_state(
-    tmp_path: Path, source: tuple[Path, list[str]]
-) -> None:
-    repository, commits = source
-    layout, _config = _workspace(tmp_path)
-    _install(layout, repository, commits[0])
-    _pin(layout, commits[0], first=True)
-    module = layout.release(commits[0]) / "serve/cockpit/src/owlbear_cockpit/target_context.py"
-    module.chmod(0o644)
-    module.write_bytes(module.read_bytes() + b"\n# modified after install\n")
-    digests = record_tree_digest(layout.workspace)
-
-    completed = subprocess.run(  # noqa: S603 - the release interpreter runs a fixed probe.
-        (str(layout.release(commits[0]) / ".venv/bin/python"), "-I", "-B", "-c", _ENTRY_PROBE),
-        cwd=layout.workspace,
-        capture_output=True,
-        text=True,
-        timeout=120,
-        check=False,
-    )
-
-    refusals = json.loads(completed.stdout)
-    assert sorted(refusals) == ["cockpit", "loader", "mcp"], completed.stderr
-    for detail in refusals.values():
-        assert "controller-release-invalid: controller release" in detail
-        assert "modified after install" in detail
-    assert record_tree_digest(layout.workspace) == digests
-
-
 def test_switch_records_previous_rolls_back_and_prune_keeps_current_and_previous(
     tmp_path: Path, source: tuple[Path, list[str]]
 ) -> None:
@@ -412,40 +316,6 @@ def test_switch_records_previous_rolls_back_and_prune_keeps_current_and_previous
     assert delivery_controller.verify(layout)["verified"] is True
 
 
-def _unexpected_digest(_tree: Path) -> str:
-    msg = "an unchanged pinned release is not re-hashed at start"
-    raise AssertionError(msg)
-
-
-def test_an_unchanged_release_starts_without_rehashing_and_an_edit_with_restored_times_is_refused(
-    tmp_path: Path, source: tuple[Path, list[str]], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    repository, commits = source
-    layout, _config = _workspace(tmp_path)
-    _install(layout, repository, commits[0])
-    _pin(layout, commits[0], first=True)
-    pinned = delivery_controller.current_pin(layout)
-    assert pinned is not None
-    release = layout.release(commits[0])
-    anchors = (pinned.release_sha256, pinned.release_stat_sha256)
-    with monkeypatch.context() as patched:
-        patched.setattr(release_integrity, "tree_digest", _unexpected_digest)
-        assert release_integrity.release_failures(release, *anchors) == []
-    assert delivery_controller.verify(layout)["fast_start"] is True
-    module = release / "serve/delivery/src/owlbear_delivery/state_formats.py"
-    times = module.stat()
-    module.chmod(0o644)
-    module.write_bytes(module.read_bytes().replace(b"Registry", b"registry", 1))
-    module.chmod(times.st_mode)
-    os.utime(module, ns=(times.st_atime_ns, times.st_mtime_ns))
-
-    failures = release_integrity.release_failures(release, *anchors)
-
-    assert failures == ["the release tree was modified after install (tree digest differs)"]
-    assert delivery_controller.verify(layout)["fast_start"] is False
-    assert delivery_controller.verify(layout)["verified"] is False
-
-
 def test_verify_detects_a_changed_interpreter_and_a_release_record_the_pin_does_not_name(
     tmp_path: Path, source: tuple[Path, list[str]]
 ) -> None:
@@ -454,7 +324,7 @@ def test_verify_detects_a_changed_interpreter_and_a_release_record_the_pin_does_
     installed = _install(layout, repository, commits[0])
     _pin(layout, commits[0], first=True)
     interpreter = installed["release"]["interpreter"]
-    assert interpreter == release_integrity.interpreter_identity()
+    assert interpreter["path"] == os.path.realpath(sys.executable)
     record = layout.release(commits[0]) / release_integrity.RELEASE_FILE
     payload = json.loads(record.read_text(encoding="utf-8"))
     payload["interpreter"]["sha256"] = "0" * 64

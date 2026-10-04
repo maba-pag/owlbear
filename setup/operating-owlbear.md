@@ -380,22 +380,16 @@ new commits on `dev` never change the running controller. Consumer projects keep
 
 On a pinned workspace every controller whose code is not the pinned release refuses to start with
 `controller-not-pinned` before it reads state, including `uv run cockpit` and
-`uv run python -m owlbear_delivery_mcp` from the checkout. Every pinned start also verifies the
-release against the pinned `RELEASE.json` digest (tree content and interpreter) before any release
-code runs, and refuses a modified release with `controller-release-invalid`; the launchers do this
-before importing anything from the release. Start Cockpit with
+`uv run python -m owlbear_delivery_mcp` from the checkout. Start Cockpit with
 `.owlbear/controller/bin/cockpit`. A clone without a release shows `owlbear-delivery` as failed to
 start until `uv run delivery-controller install --pin <commit>` installs and pins one.
 
 Release integrity protects against accidental and ordinary-tool changes: editor saves, Git commands
 in the wrong directory, interrupted installs, package-manager writes and restores. Install seals
 every release file and directory read-only and refuses a release it cannot seal; `pin`, `switch` and
-`verify` hash the full content and refuse a writable entry. A start whose file metadata still matches
-the fingerprint recorded at `pin` skips re-hashing; any metadata difference makes it re-hash the whole
-release. It is not a security boundary: root, a determined actor running as your user (who can make
-the release writable again, replace `pin.json`, a launcher or Python, or keep a writable mapping
-opened before sealing), the interpreter's standard and shared libraries, and a release edited to
-disable its own check and started without a launcher are outside it.
+`verify` hash the full content and the interpreter against `RELEASE.json`, refuse a writable entry and
+report a modified release. Starts do not re-verify the release. It is not a security boundary
+against root or another process running as your user.
 
 Upgrade only through `/upgrade-delivery`, which drives `delivery-controller` and `delivery-migrate`:
 install, online preflight, stop, offline `preflight`, `backup`, migration, `switch`, `verify` and
