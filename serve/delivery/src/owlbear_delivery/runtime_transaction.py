@@ -557,7 +557,8 @@ class RuntimeTransaction:
                     failure("after-first-publication")
                 continue
             if isinstance(participant, ReplacementTransactionParticipant):
-                _publish_replacement(destination, participant, guard)
+                _before_write(guard)
+                _publish_replacement(destination, participant)
                 if failure and index == 0:
                     failure("after-first-publication")
                 continue
@@ -909,9 +910,7 @@ def _before_write(guard: Callable[[], None] | None) -> None:
         guard()
 
 
-def _publish_replacement(
-    destination: Path, participant: ReplacementTransactionParticipant, guard: Callable[[], None] | None = None
-) -> None:
+def _publish_replacement(destination: Path, participant: ReplacementTransactionParticipant) -> None:
     if not destination.exists() or destination.read_bytes() not in (
         participant.expected_content,
         participant.replacement_content,
@@ -919,7 +918,6 @@ def _publish_replacement(
         raise TransactionConflictError
     if destination.read_bytes() == participant.replacement_content:
         return
-    _before_write(guard)
     temporary = destination.with_name(f".tmp-{secrets.token_hex(12)}-{destination.name}")
     try:
         with temporary.open("xb") as handle:
