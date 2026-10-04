@@ -1163,6 +1163,13 @@ def test_inspector_version_tables_mirror_the_delivery_format_registry() -> None:
     } == diagnostics.MIGRATION_REQUIRED_VERSIONS
     assert diagnostics.SUPPORTED_FORMAT == state_formats.SUPPORTED_FORMAT
     assert diagnostics.MIGRATION_JOURNAL_STATES == state_formats.JOURNAL_STATES
+    assert tuple(diagnostics.MIGRATION_JOURNAL_KINDS) == state_formats.JOURNAL_READ_VERSIONS
+    assert {
+        version: state_formats.journal_kind(
+            {"schema_version": version, "kind": kind} if version > 1 else {"schema_version": version}
+        )
+        for version, kind in diagnostics.MIGRATION_JOURNAL_KINDS.items()
+    } == diagnostics.MIGRATION_JOURNAL_KINDS
 
 
 def _inspector_version_tables() -> dict[str, object]:
@@ -1203,11 +1210,24 @@ def test_coverage_guard_reports_an_omitted_family() -> None:
 _JOURNAL_ID = "a" * 64
 
 
-def _write_journal(root: Path, state: str, *, schema_version: int = 1) -> None:
+def _write_journal(root: Path, state: str, *, schema_version: int = 1, kind: str | None = None) -> None:
     journal = root / ".owlbear/delivery/runtime/migrations" / _JOURNAL_ID / "journal.json"
     journal.parent.mkdir(parents=True)
     payload = {"schema_version": schema_version, "migration_id": _JOURNAL_ID, "state": state}
+    if kind is not None:
+        payload["kind"] = kind
     journal.write_text(json.dumps(payload), encoding="utf-8")
+
+
+_JOURNAL_CASES = {
+    "journal-applied": ("applied", 1, None),
+    "journal-verified": ("verified", 1, None),
+    "journal-newer": ("applied", 3, None),
+    "journal-repair-applied": ("applied", 2, "repair"),
+    "journal-repair-verified": ("verified", 2, "repair"),
+    "journal-v2-without-kind": ("verified", 2, None),
+    "journal-v1-with-kind": ("verified", 1, "migration"),
+}
 
 
 @pytest.mark.parametrize(
@@ -1219,6 +1239,10 @@ def _write_journal(root: Path, state: str, *, schema_version: int = 1) -> None:
         ("journal-applied", ["MIGRATION_INCOMPLETE"], ["state-migration-incomplete"]),
         ("journal-verified", [], []),
         ("journal-newer", ["MIGRATION_JOURNAL_UNSUPPORTED"], ["state-newer-than-controller"]),
+        ("journal-repair-applied", ["MIGRATION_INCOMPLETE"], ["state-migration-incomplete"]),
+        ("journal-repair-verified", [], []),
+        ("journal-v2-without-kind", ["MIGRATION_JOURNAL_MALFORMED"], ["state-migration-incomplete"]),
+        ("journal-v1-with-kind", ["MIGRATION_JOURNAL_MALFORMED"], ["state-migration-incomplete"]),
         ("namespace-file", ["MIGRATION_JOURNAL_MALFORMED"], ["state-migration-incomplete"]),
     ],
 )
@@ -1234,8 +1258,8 @@ def test_inspector_mirrors_the_gate_format_and_journal_classification(
     elif case == "namespace-file":
         (runtime / "migrations").write_text("not a directory\n", encoding="utf-8")
     elif case.startswith("journal-"):
-        state = {"journal-applied": "applied", "journal-verified": "verified"}.get(case, "applied")
-        _write_journal(root, state, schema_version=2 if case == "journal-newer" else 1)
+        state, schema_version, kind = _JOURNAL_CASES[case]
+        _write_journal(root, state, schema_version=schema_version, kind=kind)
 
     result = inspect_delivery(root)
     gate = [refusal.code for refusal in state_formats.scan_capability(root).refusals]

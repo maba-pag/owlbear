@@ -58,6 +58,8 @@ MIGRATION_REQUIRED_VERSIONS: dict[str, tuple[int, ...]] = {
 # Mirror of the registry's workspace format (``runtime/format.json``) and migration journal states.
 SUPPORTED_FORMAT = 1
 MIGRATION_JOURNAL_STATES = frozenset({"backed-up", "applying", "applied", "verified", "aborting"})
+# Mirror of the registry's journal kinds: version 1 is a migration, version 2 names ``repair``.
+MIGRATION_JOURNAL_KINDS = {1: "migration", 2: "repair"}
 _MIGRATION_ID = re.compile(r"^[0-9a-f]{64}$")
 _JOURNAL_TEMPORARY = re.compile(r"^\.tmp-[0-9a-f]{24}$")
 
@@ -239,7 +241,7 @@ _RUNTIME_RECORD_VERSIONS: dict[str, tuple[int, ...] | None] = {
     "acceptance_cursor": (1,),
     "package_manifest": (1,),
     "package_authority": (2,),
-    "migration_journal": (1,),
+    "migration_journal": (1, 2),
 }
 # An unadmitted Design keeps an empty authority file.
 _EMPTY_RECORD_KINDS = frozenset({"package_authority"})
@@ -254,6 +256,7 @@ VERSION_UNINSPECTED_KINDS: dict[str, str] = {
     "lock": "locks are transient and never opened",
     "transaction": "pending transactions, temporaries and logs are opaque; listed by name and size only",
     "format_marker": "the workspace format is checked against SUPPORTED_FORMAT, not a schema_version",
+    "controller_process": "gated controller identity records are transient (class L) and never opened",
 }
 _VERSIONLESS_REQUIRED_FIELDS: dict[str, dict[str, type]] = {
     "result_receipt": {"candidate_id": str, "claim_id": str, "digest": str, "result": dict},
@@ -365,9 +368,11 @@ MAINTENANCE_PROMPT = """The offline inspection is structural evidence only. Revi
 diagnostic codes and the responsible Delivery owner before continuing the ordinary session.
 Do not infer healthy execution, user confirmation, provenance, worker termination, approval,
 or merge readiness from this report. Do not edit, delete, copy, unlock, recover, upgrade, or
-repair the inspected files. Supported repair and upgrade writes are a D07 route; if that route
-is unavailable, leave the state contained and request the responsible owner. Do not use Git,
-network, provider, process, or manual filesystem repair commands."""
+repair the inspected files by hand. Supported repair writes run only through `/repair-delivery`
+(`delivery-repair`: classify, a fenced proposal, the user's confirmation where its policy needs it,
+apply and verify); migrations through `delivery-migrate` and upgrades through `/upgrade-delivery`.
+Anything without such a route stays contained for its owner. Do not use Git, network, provider,
+process, or manual filesystem repair commands."""
 _ENTRY_LIMIT_MAINTENANCE_PROMPT = (
     "The 256-entry budget was exhausted, so this inspection is incomplete. Rerun the complete "
     "inspection one Change at a time with `delivery-diagnose inspect --project-root "
@@ -1830,12 +1835,13 @@ def _inspect_migration_journal(namespace_fd: int, name: str, inspection: _Inspec
             inspection.records[-1]["status"] = "malformed"
         inspection.diagnostic("MIGRATION_JOURNAL_MALFORMED")
         return
-    if schema != _RUNTIME_RECORD_VERSIONS["migration_journal"][-1]:  # type: ignore[index]
-        inspection.records[-1]["status"] = _version_status(schema, 1) if isinstance(schema, int) else "unsupported"
+    if schema not in _RUNTIME_RECORD_VERSIONS["migration_journal"]:  # type: ignore[operator]
+        inspection.records[-1]["status"] = _version_status(schema, 2) if isinstance(schema, int) else "unsupported"
         inspection.diagnostic("MIGRATION_JOURNAL_UNSUPPORTED")
         return
     state = value.get("state")
-    if state not in MIGRATION_JOURNAL_STATES or value.get("migration_id") != name:
+    kind_valid = ("kind" not in value) if schema == 1 else value.get("kind") == MIGRATION_JOURNAL_KINDS[schema]
+    if state not in MIGRATION_JOURNAL_STATES or value.get("migration_id") != name or not kind_valid:
         inspection.records[-1]["status"] = "malformed"
         inspection.diagnostic("MIGRATION_JOURNAL_MALFORMED")
         return
