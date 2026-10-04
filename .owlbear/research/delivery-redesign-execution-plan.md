@@ -501,7 +501,7 @@ so implementation re-resolves paths after N01 moves code.
 | N04-B, N04-C, N04-D | the previous N04 phase |
 | N05-P | N02-P |
 | N05-A | N05-P, N01-P, N00-C; N05-P must list editable paths disjoint from every N01 phase's paths |
-| N05-B | N05-A, N01-C, N02-B |
+| N05-B | N05-A, N01-C, N02-B, N03-A (shared single-use consent generation, N03 plan D13; N05 plan F11) |
 | N05-C | N05-B, N03-A (user-only confirmation boundary, N03 plan D13); N03 plan U2 answered (N05 plan F10) |
 | N05-D | N05-C |
 | N06-P | N03-P |
@@ -525,8 +525,9 @@ so implementation re-resolves paths after N01 moves code.
 | N10-H | N10-A |
 | N10-M | N10-H; user authorization at the step |
 
-Format-marker order (N05-P): N03-A and N05-B each add an N02 format step. The second to merge
-renumbers its migration onto the first and reruns the LC full form. This adds no prerequisite.
+Format-marker order (N05-P; PR #360 round 4): N03-A and N05-B each add an N02 format step. N05-B
+follows N03-A (its prerequisite above), so N05-B renumbers its migration onto N03-A's and reruns the
+LC full form.
 
 Package-level view (derived from the table):
 
@@ -539,6 +540,7 @@ flowchart LR
   N02 --> N05
   N02 --> N08[N08 repair + degraded entry]
   N03 --> N04[N04 revision + applicability]
+  N03 --> N05
   N03 --> N06[N06 prepared interaction]
   N04 --> N07[N07 B1 runner]
   N06 --> N07
@@ -592,7 +594,8 @@ phase.
 
 Stage 3 note (N05-P): N03 and N05-B…D list shared core modules (`application_readiness.py`,
 `application_acquisition.py`, `work_items.py`, `workspace_models.py`), so the ready rule runs them
-sequentially where their editable paths overlap, despite the lane split.
+sequentially where their editable paths overlap, despite the lane split. N05-B also waits for N03-A
+([4.2](#42-phase-prerequisites)).
 
 ### 4.4 Status
 
@@ -618,7 +621,7 @@ every new item exactly one lane.
 | N02-B | merged | #352 (code head `7500600c7`; Sol `implementation-sound` round 5; full LC pass) |
 | N02-C | — | — |
 | N02-D | — | — |
-| N03-P | merged | #349 (plan gate `plan-sound`, round 6; D11 confirmed 2026-10-03; U1 decided (b) by the user 2026-10-03; #360 adds the confirmation boundary D13 with legacy and modern elicitation routes and opens U2, covering Cockpit merge approval and retirement, before N03-C and N05-C) |
+| N03-P | merged | #349 (plan gate `plan-sound`, round 6; D11 confirmed 2026-10-03; U1 decided (b) by the user 2026-10-03; #360 adds the confirmation boundary D13 with legacy and modern elicitation routes and opens U2, covering Cockpit merge approval and retirement, before N03-C and N05-C; #360 round 4 adds the shared single-use consent generation `consent_generation` (D13, I11) used by N03, N04, N05 and N06, so N05-B also needs N03-A) |
 | N03-A | — | — |
 | N03-B | — | — |
 | N03-C | — | — |
@@ -627,7 +630,7 @@ every new item exactly one lane.
 | N04-B | — | — |
 | N04-C | — | — |
 | N04-D | — | — |
-| N05-P | merged | #353 (plan gate `plan-sound`, round 12; amendments F1–F8 confirmed 2026-10-03; U1 (a), U2 (b), U3 (a) + (e) by the user, U4 (b) decided 2026-10-03; U3 (e) revises programme §10.2; #360 adds F10: approval, retirement and reply decisions on the N03 D13 boundary) |
+| N05-P | merged | #353 (plan gate `plan-sound`, round 12; amendments F1–F8 confirmed 2026-10-03; U1 (a), U2 (b), U3 (a) + (e) by the user, U4 (b) decided 2026-10-03; U3 (e) revises programme §10.2; #360 adds F10: approval, retirement and reply decisions on the N03 D13 boundary; #360 round 4 adds F11: those questions use N03's `consent_generation`, so N05-B also needs N03-A) |
 | N05-A | merged | #356 (code head `a4951b044`; Sol `implementation-sound` round 2; Ubuntu CI exact head) |
 | N05-B | — | — |
 | N05-C | — | — |
@@ -910,7 +913,8 @@ assurance.
   registered migration, strict MCP models; the finalization semantic context (including bounded task
   authority), basis digest, review binding of the observation set and receipt-construction skill text.
   Existing frontiers stay `readable-legacy` 18 until their next normal mutation writes 19; no frontier
-  rewrite migration.
+  rewrite migration. Also the user-only confirmation boundary with its shared single-use consent
+  generation (N03 plan D13), which N04, N05 and N06 reuse.
 - N03-B: finalization procedures and proof guidance: `w-change-finalization`, the `build-reviewer`
   finalization mode, `w-packet-building`; host rehearsal.
 - N03-C: evidence projection through `get_change`, operator views, MCP, HTTP and Cockpit.
@@ -1016,7 +1020,8 @@ part), V12, V19; L1, L2; #225.
   assert Delivery never merges into an allowlist. Its editable paths must be disjoint from
   every N01 phase so that it can run during N01.
 - N05-B: approval identity and invalidation, engine merge action, readiness L1/L2, distinct waits,
-  exactly-once completion, automatic cleanup.
+  exactly-once completion, automatic cleanup. Approvals consume N03-A's consent generations (N05 plan
+  D14, F11).
 - N05-C: MCP/HTTP and Cockpit confirm/cancel/error states, stale-confirmation E2E, continuation
   prompt path, governance text. Approval, retirement and reply decisions use the N03 D13 user-only
   boundary (N05 plan D14); whether a Cockpit click counts follows N03 plan U2.

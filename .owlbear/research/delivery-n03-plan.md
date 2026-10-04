@@ -16,7 +16,9 @@
 > boundary (P16), binds the ledger append into request-resolution receipts for restart replay, and
 > widens U2 to Cockpit merge approval and retirement. Round 3 makes every boundary answer single-use (D13
 > *Single use*), restates U2's applicability and cost, and drops the expectation that N06 adds a channel
-> or locator scheme (N06 D3).
+> or locator scheme (N06 D3). Round 4 replaces the frontier-as-generation rule with one shared single-use
+> consent generation (`consent_generation`, D13 *Single use*, I11): decline, cancel and a failed re-check
+> consume the question too. N04, N05 and N06 use the same family; N05-B therefore also needs N03-A.
 
 ## 1. Contract
 
@@ -59,7 +61,7 @@
 | R11 | Every changed persisted family registers a version owner; migrations run through the N02-B core; LC full form | Execution plan §1.3; N02 plan I2, I3, D3 |
 | R12 | Trust boundary documented: digests prove content integrity, not execution authenticity | #219 scope |
 | R13 | Support baseline (Python 3.14; macOS and Ubuntu); §1.4 mandatory companions for new statuses | Execution plan §1.1, §1.4 |
-| R14 | Waivers and `human-confirmed` evidence count only through a user confirmation captured on a channel the agent's tool surface cannot satisfy; caller-asserted provenance confers nothing; a declined or negative answer confirms nothing; an answer counts once, and re-sending it never records another confirmation | PR #360 plan gate rounds 1 and 3; U7; V16 |
+| R14 | Waivers and `human-confirmed` evidence count only through a user confirmation captured on a channel the agent's tool surface cannot satisfy; caller-asserted provenance confers nothing; a declined or negative answer confirms nothing; an answer counts once, and re-sending it never records another confirmation; a declined or cancelled question is consumed and never later yields a confirmation | PR #360 plan gate rounds 1, 3 and 4; U7; V16 |
 
 ### 1.3 Invariants
 
@@ -81,8 +83,9 @@
   through the confirmation boundary (D13), in the same Change and outcome, whose scope names every criterion
   version the observation covers and its exact `procedure`, and whose recorded decision is the affirmative one
   for its use (`waive` for `waived`; the observation's assessment for `human-confirmed`). Caller-supplied
-  `provenance` never creates or substitutes for one; a declined or cancelled elicitation records nothing; a
-  `keep-required` answer waives nothing. Nothing synthesizes one (V20). A `waived` record with an applicable
+  `provenance` never creates or substitutes for one; a declined or cancelled elicitation records no
+  confirmation (it only consumes its consent generation, I11); a `keep-required` answer waives nothing.
+  Nothing synthesizes one (V20). A `waived` record with an applicable
   confirmation satisfies finalization for that criterion version, from a task result or the finalization
   request, and stays shown as `waived` (U1(b)); agents and reviewers never waive.
 - **I7 One evaluator.** One pure function computes coverage for `finalize_change`, the finalization context
@@ -94,6 +97,11 @@
 - **I10 Append-only confirmations.** Every frontier successor's `confirmations` extends its predecessor's
   unchanged; the facade writer refuses any other write before touching bytes. `_reset_binding`, request
   history moves and N04 revision activation leave the ledger as it is.
+- **I11 Single-use consent.** Every question asked through the confirmation boundary (D13) renders one
+  server-owned consent generation that exists before it is asked. The first answer the handler receives
+  for it, affirmative or not, consumes it under the owning lock, atomically with every write that answer
+  causes; every later answer to it returns the recorded disposition and writes nothing. Only a new call,
+  which renders a new generation, can ask again.
 
 ### 1.4 Acceptance identities
 
@@ -161,7 +169,8 @@ the worker's honesty (R12).
 (`waive` or `keep-required` for kind `waive`; `passed` or `failed` for `confirm-check`), `channel`
 (`mcp-elicitation`; U2 may add `cockpit`; N06 adds none, N06 D3), `question_digest` (sha256 of the
 canonical JSON of the exact rendered `ElicitRequestFormParams`, the rendering the SDK pins its answer to,
-P16), `confirmed_at`, and `confirmation_id` (`_receipt_digest` over the rest).
+P16), `generation_id` (the consent generation it consumed, I11), `confirmed_at`, and `confirmation_id`
+(`_receipt_digest` over the rest).
 `DeliveryFrontier.confirmations` holds them for the whole Change, ≤ 256 entries (I8), `exclude_if` None,
 append-only (I10). It travels in every snapshot that embeds the frontier, so the ledger is as portable as
 the frontier. Two pure functions in `evidence.py` are the only readers: `resolve_confirmation(frontier,
@@ -198,6 +207,7 @@ Every change below is registered in the N02 registry (`state_formats.FAMILIES`) 
 | nested `DeliveryFinalizationReceipt` | `DeliveryFinalization` | 2 → widen 2, 3 | Unchanged | none local |
 | nested `DeliveryRequest` | `applies_to` (`exclude_if` None); `DeliveryRequestResolution.confirmation_id` (`exclude_if` None) | Covered by the frontier, snapshot and receipt widening | Unchanged | — |
 | nested `DeliveryUserConfirmation` (new) | `DeliveryFrontier.confirmations` (`exclude_if` None) | New, schema 1; only in frontier 19, snapshot 3 and receipts 2 through their embedded frontiers | None exist; I2 rejects a ledger in an old-version instance | — |
+| `consent_generation` (new, local; not in snapshots) | `DeliveryConsentGeneration` (new `consent_generation.py`) at `runtime/changes/<change>/consent-generations/<sequence>.json` (per-Change sequence, zero-padded, exclusive create) | New, schema 1; mutable by one CAS transition `open` → `answered` (D13 *Single use*, I11); identity `generation_id` | None exist | — |
 | `planning_*`, `builder_*` receipts embedding bindings, frontiers or requests | `_DeliveryPlanningRetrySettlementReceipt`, `_DeliveryBuilderInvocationSettlementReceipt`, `_DeliveryBuilderPlanPromotionReceipt`, `_DeliveryBuilderHandoffChangeIntentReceipt`, `_DeliveryPlanningPauseReplay` (P8), `_DeliveryBuilderRequestResolutionReceipt` (P10; schema 2 also binds the ledger append, below) | 1 → widen 1, 2 | Unchanged; embedded frontiers keep 18 | none |
 | `snapshot` (remote R) | `DeliveryStateSnapshot` | 2 → widen 2, 3; v1 keeps its read-upcast, now to 3 | v2 parse natively (no forced republish); v1 upcast as today | 2 × v2, 1 × v1 (N02 P3) |
 | `result_receipt` (R, unversioned) | `DeliveryResultCandidate` | Content may now hold schema-2 observations | Unchanged | none |
@@ -296,8 +306,8 @@ or publication-gate site outside this table stops for a plan revision.
 | `compile_delivery_contract` | Adds the three identity diagnostics; output bytes unchanged for valid input |
 | `DeliveryAuthorityRegistry.admit` | First admission requires authored identities |
 | `DeliveryRuntime.publish_result`, `DeliveryRuntime.finalize_change` | Enforce §1.6; on violation raise `DeliveryAcceptanceEvidenceError` (subclass of `DeliveryRuntimeConflictError`), code `ERR_DELIVERY_ACCEPTANCE_EVIDENCE`, `gaps` ≤ 64 × `{acceptance_id?, observation_id?, reason}`; reasons `uncovered`, `unknown-legacy-only`, `missing`, `failed`, `legacy-observation`, `unknown-acceptance`, `stale-acceptance-version`, `confirmation-unresolved` (no such ledger entry), `confirmation-not-applicable` (outcome, scope, procedure or decision), `review-basis-missing`, `review-basis-stale`, `review-observations-mismatch`, `finalization-basis-unavailable`, `finalization-context-oversized` |
-| `DeliveryRuntime.resolve_request`, `PortfolioApplication.answer` | For a scoped request, accept only a `DeliveryUserConfirmation` built by a boundary adapter (D13) and write the request resolution, the ledger entry and, during a retained Builder or Planner handoff, the schema-2 request-resolution receipt binding that entry (§1.7) in one transaction under the existing `expected_frontier_digest` CAS; a scoped request without one, a caller `resolution` on a scoped request or a full ledger raise `DeliveryConfirmationError`, code `ERR_DELIVERY_CONFIRMATION`, reasons `confirmation-required`, `declined`, `channel-unavailable`, `ledger-full`; nothing is written. Unscoped requests behave as today |
-| MCP `answer` (N03-A) | The adapter method declares the server-injected `confirmation` parameter of D13, which `_flatten_tool` registers and keeps out of the input schema. For a scoped request the resolver checks the channel (form elicitation declared; on the legacy route also a back-channel), else the handler refuses `channel-unavailable`; otherwise one question is asked on the negotiated route (legacy `elicitation/create` mid-call, modern `InputRequiredResult` round trip) and the handler builds the confirmation from an `accept` only; `decline` or `cancel` → `declined`. A `request_state` the SDK boundary rejects fails with JSON-RPC `INVALID_PARAMS` before the resolver or handler runs (P16). Caller `resolution` and `provenance` are ignored for confirmation purposes. No lock is held while the user answers |
+| `DeliveryRuntime.resolve_request`, `PortfolioApplication.answer` | For a scoped request, accept only a `DeliveryUserConfirmation` built by a boundary adapter (D13) and write the request resolution, the ledger entry and, during a retained Builder or Planner handoff, the schema-2 request-resolution receipt binding that entry (§1.7) in one transaction under the existing `expected_frontier_digest` CAS, together with consuming the request's consent generation (I11); a scoped request without one, a caller `resolution` on a scoped request or a full ledger raise `DeliveryConfirmationError`, code `ERR_DELIVERY_CONFIRMATION`, reasons `confirmation-required`, `declined`, `channel-unavailable`, `ledger-full`, `question-closed`; nothing is written except the generation's recorded disposition (D13 *Single use*). Unscoped requests behave as today |
+| MCP `answer` (N03-A) | The adapter method declares the server-injected `confirmation` parameter of D13, which `_flatten_tool` registers and keeps out of the input schema. For a scoped request the resolver checks the channel (form elicitation declared; on the legacy route also a back-channel), else the handler refuses `channel-unavailable`; otherwise one question is asked on the negotiated route (legacy `elicitation/create` mid-call, modern `InputRequiredResult` round trip) and the handler builds the confirmation from an `accept` only; `decline` or `cancel` → `declined`, consuming the question's consent generation (I11); a re-sent answer to a consumed generation returns its recorded disposition. A `request_state` the SDK boundary rejects fails with JSON-RPC `INVALID_PARAMS` before the resolver or handler runs (P16). Caller `resolution` and `provenance` are ignored for confirmation purposes. No lock is held while the user answers |
 | Cockpit HTTP `answer_request` (N03-A) | For a scoped request: `409` `ERR_DELIVERY_CONFIRMATION` reason `channel-unavailable` with chat guidance; caller `provenance` never counts. [U2](#u2--which-clicks-and-answers-count-as-the-user-said-yes) may add a Cockpit channel in N03-C |
 | `show_finalization_context` | Adds `semantics: DeliveryFinalizationSemantics` and `semantics_refusal: DeliveryContextRefusal` (each `exclude_if` None; exactly one set whenever the context is otherwise available). `semantics` holds: contract digest and title; outcomes with promise, commitment and dependency IDs and criteria; commitments; task results (ID, title, commit, result digest, observation IDs); per promoted task its bound authority (`task_id`, `task_digest`, `result`, `constraints`, `exclusions`, `proof_boundaries`, `acceptance_observations`); ledger confirmations cited by task evidence (scope, decision, channel; §1.5); `diff_base`; `change_head`; per-criterion coverage from task evidence; `basis_digest`. Task authority is bound by the result digests, which hold `task_digest`; the Design package is not included. Size: see the context budget below |
 | `show_build_context`, `show_plan_context` | Add `acceptance: tuple[DeliveryAcceptanceCriterion, …]` for the outcome |
@@ -331,18 +341,22 @@ collections, so one byte budget bounds `semantics`:
   `confirmation_id`, never from active requests, so a request that N04 moves to history keeps its
   confirmation authority. `confirmation_applies` checks the exact criterion version: for `(id, old version)`
   → `(id, new version)` a `waived` or `human-confirmed` record stays `stale-acceptance-version` until the
-  user confirms the new version through the boundary (D13); no reviewed applicability record transfers it.
+  user confirms the new version through the boundary (D13): N04's `confirm_revision_criterion` asks with
+  use `confirm-revision-criterion` and its own binding, one consent generation per question (I11); no
+  reviewed applicability record transfers it.
   Same ID and version: the original confirmation still applies.
 - **N06** adds no confirmation channel and no locator scheme (N06 D3). An interaction-linked request is an
   ordinary scoped `confirm-check` request (§1.5) answered through N03's `answer` and the D13 boundary,
-  including its single-use rule; its ledger entry has channel `mcp-elicitation` (`cockpit` only if U2 adds
+  including its consent generation (use `confirm-check`, the N03 binding; I11); its ledger entry has
+  channel `mcp-elicitation` (`cockpit` only if U2 adds
   it), and the link lives in its scope, question digest and `confirmation_id`. Whether a Cockpit-hosted
   confirmation counts as user-only follows [U2](#u2--which-clicks-and-answers-count-as-the-user-said-yes);
   assisted checks record `manual-procedure` or `command` results with `procedure_registration_digest` = handler
   digest, `target_class` and `environment`. `missing` with owner `assisted-check` is the gap N06 resolves.
 - **N05** may show the projection counts in **Approve merge**; it adds no evidence semantics. N05-C reuses
   D13's registration and both elicitation routes for merge approval, retirement and reply decisions
-  (N05 D14), with its own confirmation record; whether Cockpit counts follows U2.
+  (N05 D14), with its own confirmation record; N05-B uses the `consent_generation` family with its own
+  uses and bindings and adds no generation family of its own. Whether Cockpit counts follows U2.
 - **N08** renders N02 `CapabilityReport` rows for format 2 and the widened families.
 
 ### 1.10 Existing owners to reuse
@@ -455,7 +469,8 @@ Engineering decision by the lead (PR #360 plan gate round 1):
     `_install_strict_argument_model` (`target_server.py:1272-1290`) derives its strict model from that
     schema with `extra="forbid"`, so no caller can supply them. No other tool's schema changes.
   - *Outcomes.* An `accept` records one `DeliveryUserConfirmation` with channel `mcp-elicitation` and the
-    digest of the exact rendered question. `decline` or `cancel` records nothing and leaves the request open.
+    digest of the exact rendered question. `decline` or `cancel` records no confirmation; it consumes the
+    question's consent generation and leaves the request open and the frontier unchanged (*Single use*).
     A `keep-required` or `failed` answer is recorded as the user's decision but is not affirmative for a
     waiver or a passed check (I6). Caller `resolution` and `provenance` are ignored for confirmation purposes.
   - *No fallback.* A client without form elicitation, or a legacy session without a back-channel, is
@@ -483,35 +498,60 @@ Engineering decision by the lead (PR #360 plan gate round 1):
       decision against the request kind. An answer therefore applies only to the request, criteria,
       versions and frontier it was asked for. Stdio carries no authentication, so no principal is bound
       (`request_state.py:394-405`); the per-process key stands in for it.
-  - *Single use* (PR #360 round 3). The boundary authenticates `request_state` but does not consume it: its
-    checks hold no one-time identity (`request_state.py:327-406`), so within the TTL the same state and
-    answer can be sent again, and the SDK pairs a re-sent answer with an identical rendering
-    (`resolve.py:607`). Every use of the boundary therefore follows one rule: the question renders a
-    server-owned generation that exists before it is asked; applying an answer consumes that generation in
-    the transaction that records its confirmation; a retry of a consumed generation returns the recorded
-    disposition and never records another confirmation; a new confirmation needs a new generation, i.e. a
-    new question the user answers.
-    - *Scoped requests: the frontier is the generation.* The question renders `expected_frontier_digest`,
-      the resolver asks only while it equals the current frontier digest, and an accepted answer resolves
-      the request and appends the ledger entry in one transaction under that CAS. The append consumes it:
-      the ledger is append-only and part of the frontier bytes (I10), so no later frontier has that digest
-      and the question never renders again.
-    - *A resolved request rejects a second answer.* `DeliveryRuntime.resolve_request` returns the request
-      for an identical resolution and raises `request is already resolved` for any other; a second
-      confirmation always differs, since `confirmation_id` covers `confirmed_at`. A new confirmation needs
-      a new scoped request, which is a new question.
-    - *Retry.* When the frontier no longer equals `expected_frontier_digest` and the named request is
-      resolved with a `confirmation_id`, the resolver asks nothing and the handler returns that resolution
-      and its ledger entry, writing nothing; otherwise the existing frontier conflict. A decline or cancel
-      writes nothing, so re-sending it renders the same question and returns `declined` again. An accepted
-      answer that was not applied (CAS lost to a concurrent write, `ledger-full`) consumed nothing: it was
-      never used, and it can still apply at most once, to the identical request and frontier, within the
-      TTL.
-    - *N05.* Merge approval can be renewed for an identical offer, so it binds its own generation record;
-      retirement and reply decisions use the same record (N05 D14).
+  - *Single use* (PR #360 rounds 3 and 4; I11). The boundary authenticates `request_state` but does not
+    consume it: its checks hold no one-time identity (`request_state.py:327-406`), so within the TTL the
+    same state can be sent again with any `input_responses`, and `_fulfil` accepts them while the rendered
+    question still matches (`resolve.py:607`). Round 3 let the frontier stand in for that identity, but a
+    decline or cancel leaves the frontier unchanged, so a refused question could be replayed with an
+    affirmative answer. One shared mechanism, built by N03-A, therefore fences every boundary question:
+    - *Record.* `DeliveryConsentGeneration` (family `consent_generation`, §1.7; `consent_generation.py`):
+      `change_id`, `use`, `subject_id`, `binding_digest`, per-Change `sequence`, `generation_id` (256-bit
+      nonce from `secrets`), `created_at`, and state `open` or `answered` with a disposition: `outcome`
+      (`accepted`, `declined`, `cancelled` or `refused`), a bounded `code` and, when accepted,
+      `confirmation_id` and the owner's record ID. `use` is a bounded slug and `binding_digest` the sha256
+      of the use's canonical binding, so successors add uses without a schema change; each owner
+      validates its own binding. Generations are local replay protection, not confirmation authority, and
+      are not in snapshots: the ledger stays the authority (I6, I10), and a sealed state never outlives
+      the process key that minted it, so a fresh host restored from a snapshot needs none.
+    - *Uses.* N03: `waive` and `confirm-check` (the scope kind), subject `request_id`, binding
+      `{outcome_id, request_id, applies_to, expected_frontier_digest}`; N06 interaction confirmations are
+      `confirm-check` requests with this binding (§1.9). N04: `confirm-revision-criterion`, with the
+      binding N04 defines. N05 (D14): `approve-merge` (subject `offer_id`), `retire-held-merge` (subject
+      `approval_id`, binding the hold snapshot) and `reply-decision` (subject reply ID), each with its
+      `change_id`.
+    - *Before asking.* A round without input responses (every legacy call; each modern first round) first
+      returns a disposition already in force (a resolved request's resolution; for N05 a live approval, a
+      decided reply or a retirement) and asks nothing. Otherwise, under the owning lock, which it releases
+      before asking, it renders the subject's latest generation if that is `open` with the call's binding,
+      else durably creates one (exclusive create of the next sequence). The rendered question includes
+      `generation_id`, and the ledger entry or owner record names it.
+    - *Answer-bearing rounds never create.* A modern round with input responses renders the subject's
+      latest generation only while it is `open` with the call's binding; otherwise it asks nothing and
+      passes that generation, or none, to the handler. An older generation is never rendered again, so
+      an answer to it is re-asked by the SDK, never applied.
+    - *Consumption.* Under the owning lock (N03: the Change's frontier writer; N05: its mutation-fence
+      entry), the handler applies an answer only to the subject's latest generation while it is `open`,
+      and in one replacement transaction writes it `answered` with its disposition together with every
+      write the answer causes. Accept, decline, cancel and a failed re-check all consume it. For a scoped
+      request: an accepted answer resolves the request and appends the ledger entry (`accepted`); decline
+      or cancel writes only the generation (`declined`, `cancelled`), so the request stays unresolved and
+      the frontier bytes unchanged; a frontier other than `expected_frontier_digest`, a request no longer
+      open or a full ledger writes only the generation (`refused`, code `frontier-changed`,
+      `request-closed` or `ledger-full`) and raises the existing conflict or `ledger-full`.
+    - *Replay.* An answer that reaches an `answered` generation, whatever `input_responses` it carries,
+      returns the recorded disposition (the resolution and ledger entry; `declined` for a decline or
+      cancel; the same typed refusal) and writes nothing. A continuation round whose subject has no
+      generation, or whose latest generation has another binding, refuses `ERR_DELIVERY_CONFIRMATION`
+      `question-closed`. Only a new call renders a new generation, i.e. a new question the user answers.
+    - *Never applied.* An accepted answer whose transaction did not commit (crash, I/O failure) consumed
+      nothing; it can apply at most once, only while its generation stays `open`, its request and
+      frontier still match and validation succeeds. `ledger-full` is a recorded refusal and keeps refusing.
+    - *A resolved request still rejects a second answer.* `DeliveryRuntime.resolve_request` returns the
+      request for an identical resolution and raises `request is already resolved` for any other.
   - *Concurrency.* No lock is held while the user answers, on either route; between modern rounds nothing
-    is held at all. The answer applies under the existing `expected_frontier_digest` CAS; a changed frontier
-    refuses, and a retry asks again.
+    is held at all. Competing answers to one `open` generation serialize on the owning lock: the first
+    consumes it, the others return its disposition. A changed frontier consumes the generation as
+    `frontier-changed`; a new call asks again.
   - *Scope.* The same boundary covers `human-confirmed` evidence, which has the same fabrication route, and
     N05 merge approval, retirement and reply decisions (N05 D14). Whether a Cockpit confirmation also counts
     is [U2](#u2--which-clicks-and-answers-count-as-the-user-said-yes); until it is decided, Cockpit refuses
@@ -668,9 +708,8 @@ modules; paths starting with `mcp/` are relative to `site-packages/`.
   `application_*` mixins, workspace methods in `workspace_*`, runtime models in `runtime_models.py`, runtime
   receipts in `runtime_receipts.py`, and the 43 frontier writers (including `finalize_change`,
   `publish_result`) in the `delivery_runtime.py` facade (N01 I6).
-- **Version numbering.** N05-B may also bump the format marker or frontier version. Whichever phase merges
-  second renumbers its versions and migration on rebase and reruns LC. The ready rule already serializes them
-  (both edit `delivery_runtime.py`).
+- **Version numbering.** N05-B also bumps the format marker and follows N03-A (execution plan §4.2, since
+  PR #360 round 4), so N05-B renumbers its versions and migration onto N03-A's and reruns LC.
 - **Ownership** (execution plan §1.6). Opus keeps models, versioning, migration registration, evaluator,
   finalize validation, the confirmation boundary and ledger, and challenge reconciliation. Luna may take
   fixture conversion to schema-2 observations,
@@ -686,7 +725,8 @@ modules; paths starting with `mcp/` are relative to `site-packages/`.
 - **Prerequisites:** N03-P, N02-B; [U1](#u1--may-a-user-waive-a-required-acceptance-criterion) answered
   ((b), 2026-10-03).
 - **Editable paths:**
-  - new `serve/delivery/src/owlbear_delivery/acceptance_criteria.py`, `evidence.py`
+  - new `serve/delivery/src/owlbear_delivery/acceptance_criteria.py`, `evidence.py`, `consent_generation.py`
+    (`DeliveryConsentGeneration`, its store and replacement-transaction participant; D13 *Single use*)
   - `target_contract.py`: `DeliveryCompilationDiagnosticCode`, `_parse_outcome` (`:354`), `_validate_definitions`
   - `delivery_admission.py`: `DeliveryAuthorityRegistry.admit` (`:183`)
   - `runtime_models.py` [N01-C]: observation, result, confirmation, environment and reference models;
@@ -721,12 +761,14 @@ modules; paths starting with `mcp/` are relative to `site-packages/`.
   - `owlbear_delivery/__init__.py`; `serve/delivery/tests/fixtures/module_surface.json`; N02 fingerprint fixture
   - `serve/delivery-mcp/src/owlbear_delivery_mcp/target_server.py` (error code mapping, `_raise` carries `gaps`;
     `_flatten_tool` keeps server-injected `Context` and `Resolve` parameters through registration (D13);
-    `answer` declares the D13 `confirmation` parameter and its resolver, with no Delivery MAC; the default
+    `answer` declares the D13 `confirmation` parameter and its resolver, with no Delivery MAC, on the shared
+    consent-generation resolver helper that N04, N05 and N06 reuse; the default
     `RequestStateBoundary` stays installed); `target_models.py` (`TargetDiagnostic.gaps`, ≤ 64, `exclude_if` None)
   - `serve/cockpit/src/owlbear_cockpit/routes/target_work.py` (`answer_request` refuses scoped requests,
     U2 default) and `serve/cockpit/tests`
   - `serve/tools/src/owlbear_tools/delivery_diagnostics.py` (frontier 19, snapshot 3, receipts 2, marker 2)
-  - tests: new `serve/delivery/tests/test_acceptance_criteria.py`, `test_evidence.py`; schema-2 fixtures in
+  - tests: new `serve/delivery/tests/test_acceptance_criteria.py`, `test_evidence.py`,
+    `test_consent_generation.py`; schema-2 fixtures in
     `test_delivery_runtime.py`, `test_portfolio_application.py`, `test_target_contract.py`,
     `test_source_bound_admission.py`, `test_delivery_state.py`, `test_work_items.py`,
     `test_completed_history.py`, `test_state_formats.py`, `test_state_migration.py`,
@@ -782,8 +824,9 @@ modules; paths starting with `mcp/` are relative to `site-packages/`.
     parameterized for both routes (P16): `mode="legacy"` (the callback receives a mid-call
     `elicitation/create`) and `mode="2026-07-28"` (the first round returns `InputRequiredResult`, the
     client retries with the answer and the sealed state). Each → one ledger entry (channel `mcp-elicitation`,
-    question digest equal on both routes for the same question) and the resolved request with its
-    `confirmation_id`, in one transaction; reacquire; submit a `human-confirmed` result citing it; promote
+    naming the request's consent generation, whose rendering its question digest covers) and the resolved
+    request with its `confirmation_id`, and the generation `answered` `accepted`, in one transaction;
+    reacquire; submit a `human-confirmed` result citing it; promote
     (requests cleared as today); reload: the ledger entry is byte-identical and appears in `semantics`;
     finalization with carried evidence and no new observation succeeds.
   - Registration (D13): the assembled server's `answer` input schema holds no injected parameter name, the
@@ -828,7 +871,9 @@ modules; paths starting with `mcp/` are relative to `site-packages/`.
     elicitation → `ERR_DELIVERY_CONFIRMATION` `channel-unavailable`; through a legacy session without a
     back-channel → `channel-unavailable`; through a client that declares it but declines, and again
     cancels → `declined`. A caller argument named like the injected parameter → `ERR_TARGET_PARAM_VALIDATION`.
-    Each: no ledger entry, request unresolved, frontier bytes unchanged. Cockpit HTTP `answer_request` with
+    Each: no ledger entry, request unresolved, frontier bytes unchanged; after a decline or cancel the
+    request's consent generation is `answered` `declined` or `cancelled`, otherwise none exists. Cockpit
+    HTTP `answer_request` with
     `provenance: user-confirmed` on a scoped request → `409`,
     nothing written. A block request created with `applies_to` and a pre-filled `resolution` → rejected at
     validation. `submit_result` with a `waived` or `human-confirmed` record citing a request resolved
@@ -838,17 +883,38 @@ modules; paths starting with `mcp/` are relative to `site-packages/`.
     for request A replayed on request B, or with another `expected_frontier_digest`; a state from a second
     assembled server (foreign key); a state past its TTL (clock advanced); a state minted before the server
     was re-assembled (restart) → JSON-RPC `INVALID_PARAMS` "Invalid or expired requestState" before the
-    resolver or handler runs: no ledger entry, request unresolved, frontier bytes unchanged. A following
+    resolver or handler runs: no ledger entry, request unresolved, frontier bytes and any generation
+    unchanged. A following
     fresh call asks the user again, and accepting then records exactly one entry. A valid state whose
-    answer was given for a different rendering (the frontier advanced between rounds) → the resolver
-    refuses with the existing frontier conflict; nothing written.
-  - Single use (D13), modern route through the assembled server: capture the answering round's
-    `request_state` and accepted `input_responses` and re-send them in a raw `tools/call` within the TTL:
-    (1) right after the answer applied, and (2) after a later unrelated frontier write → no elicitation; the
-    original resolution and ledger entry returned; ledger length and frontier bytes unchanged. (3) Re-sending
-    a declined round → `declined`, nothing written. (4) A fresh call on the resolved request → no question,
-    the original resolution returned, no second entry. (5) Two concurrent continuation rounds carrying the
-    same answer → one ledger entry; the other returns it.
+    answer was given for a different rendering (the frontier advanced between rounds) → the existing
+    frontier conflict; only the generation is written (`refused` `frontier-changed`), and re-sending the
+    round returns the same refusal.
+  - Single use (D13 *Single use*, I11), modern route through the assembled server; each re-send is a raw
+    `tools/call` within the TTL carrying a captured round's `request_state`:
+    (1) the accepted round's state and responses right after the answer applied, and (2) after a later
+    unrelated frontier write → no elicitation; the original resolution and ledger entry returned; ledger
+    length and frontier bytes unchanged.
+    (3) Decline → affirmative: after a declined round, re-send its state with substituted `input_responses`
+    that accept (`waive` on a `waive` request; `passed` on a `confirm-check` request) → `declined`; no
+    ledger entry, request unresolved, frontier bytes unchanged, generation still `declined`.
+    (4) Cancel → affirmative: the same after a cancelled round → `declined`, generation still `cancelled`,
+    nothing else written.
+    (5) After (3) or (4), a new `answer` call renders a fresh generation (new `generation_id` and question
+    digest); the old state re-sent with an accept is re-asked by the SDK and never applied; accepting the
+    new question records exactly one entry naming the new generation.
+    (6) Concurrent competing responses on one `open` generation: a declining and an accepting
+    continuation round, both orders forced through a barrier on the owning lock → exactly one
+    disposition; the loser returns it; a ledger entry exists only when the accept won; a later re-send of
+    either round returns the same disposition.
+    (7) Two concurrent rounds carrying the same accepted answer → one ledger entry; the other returns it.
+    (8) A fresh call on the resolved request → no question, the original resolution returned, no second
+    entry.
+    (9) A continuation round whose subject has no generation (fixture), or whose latest generation has
+    another binding → `question-closed`; nothing written.
+    (10) Crash injected before the accepting transaction commits → the generation stays `open`; re-sending
+    that answer applies it once while request and frontier still match, and a further re-send returns it.
+    Legacy route: a decline, then the same call again → a new generation and a new question; the
+    declined one stays `declined`.
   - Replay tamper (§1.7 L row): a local ledger entry no schema-2 receipt binds, a receipt-bound entry
     absent locally or differing in one byte, a schema-1 receipt for a scoped answer, two entries reordered,
     or a lifecycle receipt anchored before the answer whose frontier holds the entry → the existing
@@ -859,7 +925,8 @@ modules; paths starting with `mcp/` are relative to `site-packages/`.
     refused `uncovered`; no receipt.
   - Append-only ledger (I10): a frontier write that drops, reorders or alters a ledger entry → refused before
     any byte write; a stored frontier whose ledger entry fails its digest → the Change is unavailable (V20);
-    the 257th confirmation → `ledger-full`, nothing written.
+    the 257th confirmation → `ledger-full`; only the generation is written (`refused` `ledger-full`), and
+    re-sending that answer refuses `ledger-full` again.
   - Keep a valid finalization review and replace one otherwise-valid observation (or add, drop or reorder
     one) → `review-observations-mismatch`; no receipt, no report, frontier bytes unchanged.
   - Finalization with one criterion uncovered (all task checks pass: the #222 mechanical case), one whose last
@@ -995,13 +1062,14 @@ Applied in this PR's execution-plan edits (D11).
 5. §2.6 and §7: PR #316 was merged (merge commit `364daf61`), so "product merged via PR #316" stays. Separately,
    the live record `delivery-action-readiness` is unfinished (Implementation, 4 of 5 results, schema-1
    evidence, no finalization; P1); add its disposition to N10-M beside `frontier-serialization-contract`.
-6. §4.4: N03-P row on merge. No §4.2 change.
+6. §4.4: N03-P row on merge. §4.2 (PR #360 round 4, from N05 plan F11): N05-B also needs N03-A for the
+   shared `consent_generation` family (D13 *Single use*); the format-marker note orders N05-B after N03-A.
 
 ## 4. Progress
 
 | Phase | PR | Exact head | Proof | Challenges | Status |
 | --- | --- | --- | --- | --- | --- |
-| N03-P | #349 | — | Probes P1–P16 | Sol round 1: revision-required (observation binding, stored-byte upcast contract, confirmation applicability, bounded exclusions context, all-carried path) → revised; Sol round 2: revision-required (snapshot consumer serialization, confirmation retention through promotion, upgraded handoff receipt contract, MCP output owners) → revised; Sol round 3: revision-required (Planner lifecycle normalization, context budget) → consolidated comparison inventory; Sol round 4: revision-required (representation-only write publication) → revised; Sol round 5: revision-required (drained acknowledgment base) → revised; Sol round 6: `plan-sound`; user-decision revision #360: Sol round 1: revision-required (fabricated confirmation, Finalizer waiver admissibility, confirmation authority across revision) → confirmation boundary D13, ledger, U2 opened; Sol round 2: revision-required (elicitation route across protocols, ledger append missing from handoff replay, request-state premise) → D13 legacy and modern routes with registration (P16), receipt-bound ledger replay (L row), SDK boundary instead of a MAC; U2 widened to merge approval and retirement; Sol round 3: revision-required (renewed consent replayable within the request-state TTL, U2 applicability and cost) → D13 *Single use* (frontier as generation for scoped requests; N05 D14 generation record), U2 restated; N06 D3 cross-plan note applied (no `interaction` channel or locator) | approved (D11 confirmed 2026-10-03; U1 decided (b) 2026-10-03; U2 open before N03-C and N05-C) |
+| N03-P | #349 | — | Probes P1–P16 | Sol round 1: revision-required (observation binding, stored-byte upcast contract, confirmation applicability, bounded exclusions context, all-carried path) → revised; Sol round 2: revision-required (snapshot consumer serialization, confirmation retention through promotion, upgraded handoff receipt contract, MCP output owners) → revised; Sol round 3: revision-required (Planner lifecycle normalization, context budget) → consolidated comparison inventory; Sol round 4: revision-required (representation-only write publication) → revised; Sol round 5: revision-required (drained acknowledgment base) → revised; Sol round 6: `plan-sound`; user-decision revision #360: Sol round 1: revision-required (fabricated confirmation, Finalizer waiver admissibility, confirmation authority across revision) → confirmation boundary D13, ledger, U2 opened; Sol round 2: revision-required (elicitation route across protocols, ledger append missing from handoff replay, request-state premise) → D13 legacy and modern routes with registration (P16), receipt-bound ledger replay (L row), SDK boundary instead of a MAC; U2 widened to merge approval and retirement; Sol round 3: revision-required (renewed consent replayable within the request-state TTL, U2 applicability and cost) → D13 *Single use* (frontier as generation for scoped requests; N05 D14 generation record), U2 restated; N06 D3 cross-plan note applied (no `interaction` channel or locator); Sol round 4: revision-required (a declined or cancelled question stayed replayable with an affirmative answer) → one shared single-use consent generation (`consent_generation`, D13 *Single use*, I11) consumed by every answer, used by N03, N04, N05 and N06; N05-B now needs N03-A | approved (D11 confirmed 2026-10-03; U1 decided (b) 2026-10-03; U2 open before N03-C and N05-C) |
 | N03-A | — | — | — | — | — |
 | N03-B | — | — | — | — | — |
 | N03-C | — | — | — | — | — |

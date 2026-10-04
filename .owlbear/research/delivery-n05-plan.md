@@ -9,7 +9,9 @@
 > U1 (a), U2 (b), U3 part 1 (a) and part 2 (e), U4 (b). PR #360 round 2 moves merge approval, retirement
 > and reply decisions onto the user-only confirmation boundary of N03 D13 (D14); whether a Cockpit click
 > also counts is N03 U2, open before N05-C. Round 3 binds every D14 question to a single-use consent
-> generation, so a re-sent answer never approves again (D14, D4).
+> generation, so a re-sent answer never approves again (D14, D4). Round 4 makes that generation N03's
+> shared `consent_generation` family (N03 D13 *Single use*); N05 adds no generation family, and N05-B
+> therefore also needs N03-A (F11).
 
 ## 1. Contract
 
@@ -132,7 +134,7 @@ implementation against the registry then on `origin/dev`.
 | Family (proposed registry ID) | Path | Owner model (module) | Class | Identity over bytes | Phase |
 | --- | --- | --- | --- | --- | --- |
 | `merge_approval` | `merge-approvals/<approval_id>/approval.json` | `MergeApprovalRecord` (new `merge_approval`), embedding its `DeliveryActionConfirmation` and `generation_id` (D14) | R | `approval_id` = SHA-256 of `offer_id` and `confirmation_id` (D4) | N05-B |
-| `merge_consent` | `merge-consent/<sequence>.json` (per-Change sequence, zero-padded, exclusive create) | `MergeConsentGeneration` (`merge_approval`): action, subject ID, sequence, `generation_id`, created time; `open` → `answered` with its disposition (D14) | M (one CAS transition) | `generation_id` (256-bit nonce from `secrets`) | N05-B |
+| `consent_generation` (N03-A family; N05 adds none) | N03 §1.7: `runtime/changes/<change>/consent-generations/<sequence>.json` | N03's `DeliveryConsentGeneration` (`consent_generation.py`); N05 uses `approve-merge` (subject `offer_id`), `retire-held-merge` (subject `approval_id`, binding the hold snapshot) and `reply-decision` (subject reply ID), each with its `change_id` (D14) | M (one CAS transition, N03 D13) | `generation_id` | N03-A (N05-B, N05-D use it) |
 | `merge_approval_revocation` | `merge-approvals/<approval_id>/revocation.json` | `MergeApprovalRevocation` | R | `revocation_id` | N05-B |
 | `merge_attempt` | `merge-approvals/<approval_id>/attempts/<operation_id>.json`; frozen bodies `merge-approvals/<approval_id>/request-bodies/<sha256>.json` (read-only, never rewritten) | `MergeAttemptRecord`: one request series per approval (1.11); per submission (first request and each M8 re-request): frozen body digest (file written before spawn, D16), process group ID and start time (after spawn), release record (before the release token), response, UUID or adopted `409` UUID; per series: a head-drift record (first drifted head; blocks M8, 1.11); series state `intent → released` (first release recorded) `→ pending` or `unknown →` terminal `merged`, `refused`, `head-changed` (M3 only) or `revoked-unsent`; an unreleased series reaches `merged` or `head-changed` directly on merged evidence (1.11) | M (bodies R) | file name = engine operation ID of the creating action; body file name = SHA-256 of its bytes | N05-B |
 | `coordination` (changed) | `runtime/coordination/changes/<change>.json` | nested `ChangeContinuationAction`: kind `merge-pull-request`, `merge_approval_id`, `publication_observation_id`, `reconciles_operation_id` | M | nested | N05-B |
@@ -342,18 +344,19 @@ Agent-settled with probe evidence:
     `RequestStateBoundary`, which binds the state to the tool and its arguments (`change_id` with
     `offer_id`, `approval_id` or the reply ID) and refuses forged, foreign, expired or pre-restart state
     with `INVALID_PARAMS` (N03 P16). After a refusal the next call asks again.
-  - *Consent generation (replay fence, PR #360 round 3).* The SDK authenticates `request_state` but does
+  - *Consent generation (replay fence, PR #360 rounds 3 and 4).* The SDK authenticates `request_state` but does
     not consume it, and D4 accepts a new approval of an identical offer once the earlier one is terminal.
     Without a fence, re-sending the original state and affirmative answer within the 600 s TTL, after a
     revocation or a terminal refusal, would mint a new confirmation without asking. Every D14 question is
     therefore bound to a server-owned, single-use consent generation (N03 D13 *Single use*):
-    - *Record.* `MergeConsentGeneration` (family `merge_consent`, 1.4): Change, action, subject ID
-      (`offer_id`, `approval_id` or reply ID), per-Change sequence, `generation_id` (256-bit nonce from
-      `secrets`), created time, and state `open` or `answered` with its disposition: `approved` (with
-      `confirmation_id` and `approval_id`), `retired`, `decided` (with the decision identity),
-      `declined`, or the typed refusal (`offer-stale`, `merge-unavailable`, `hold-changed`,
-      `reply-decided`). The resolver creates it under the fence entry (1.12), durably, before the question
-      is returned or sent.
+    - *Record.* N03's shared `DeliveryConsentGeneration` (family `consent_generation`, N03 §1.7 and D13
+      *Single use*, built by N03-A); N05 adds no generation family. N05's uses and bindings: `approve-merge`
+      (subject `offer_id`), `retire-held-merge` (subject `approval_id`, binding the hold snapshot) and
+      `reply-decision` (subject reply ID), each with its `change_id`. An accepted disposition names the
+      approval (`confirmation_id`, `approval_id`), retirement or decision record; `not-now`, decline and
+      cancel are `declined` or `cancelled`; refusal codes are `offer-stale`, `merge-unavailable`,
+      `hold-changed` and `reply-decided`. The resolver creates it under the fence entry (1.12), durably,
+      before the question is returned or sent.
     - *Question.* The rendered question includes `generation_id`, so the SDK pairs an answer only with
       the generation it was asked for (`resolve.py:607`).
     - *First round.* A round without input responses (`Context.input_responses` empty: every legacy call
@@ -579,13 +582,14 @@ deltas to the execution plan (amendment recorded in [1.9](#19-user-decisions)).
 | F3 | The forbidden-effect gates assert that Delivery cannot merge anywhere; N05-A must revise them | `tests/test_delivery_worktree_authority.py:1417-1430`, `:1603-1629`; P6 | §5 N05-A: revises the no-merge gates to an allowlist (N01 §3.7 allows the file) |
 | F4 | `merge-approval-required` is an engine-result reason, not a readiness reason; Cockpit has no mirror | `application_models.py:1169-1176`; `work_items.py:274-311`; `workItems.ts:67-120` | §5 N05: N05-B owns it as a readiness reason, with companions |
 | F5 | N05-B and N03 phases list shared core modules (`application_readiness.py`, `application_acquisition.py`, `work_items.py`, `workspace_models.py`), so §4.3's ready rule serializes them despite the stage-3 lane split | §4.3 ready rule bullet 4; N05-B paths ([3.4](#34-n05-b--approval-merge-action-readiness-and-cleanup)) | §4.3 schedule note: stage 3 runs N03 and N05-B…D sequentially where paths overlap |
-| F6 | N05-B and N03-A both bump N02's format marker; the second to merge must renumber its migration and rerun LC full form | N02 plan D3 | §4.2 note (adds no prerequisite) |
+| F6 | N05-B and N03-A both bump N02's format marker; N05-B, which follows N03-A (F11), renumbers its migration onto N03-A's and reruns LC full form | N02 plan D3 | §4.2 note |
 | F7 | Reason text renders from `workItemPresentation.ts`, not only `WorkItemDetail.tsx`/`WorkPortfolioPage.tsx` | `workItemPresentation.ts:58-64` | §1.4 companion list: add `workItemPresentation.ts` |
 | F8 | New N05 decision U3 (target freshness and execution-time target race) | §1.9 | §7 "Decided later": add U3 to N05 |
 | F9 | Package-plan prerequisites added: N05-B needs U1, U3 and U4 answered (decided 2026-10-03); N05-B merge needs A-R evidence (U2(b)); engine merge needs no scope-enforcing fact (U3(e); G2 is an accepted residual risk) | §1.9 | None (§4.2 allows package-added prerequisites) |
 | F10 | Merge approval, retirement and reply decisions need N03 D13's user-only boundary (D14), built by N03-A; whether Cockpit counts is N03 U2 | PR #360 round 2; N03 plan D13, U2 | §4.2: N05-C also needs N03-A and N03 U2 answered; §5 N05 result notes the boundary |
+| F11 | Every D14 question uses N03's shared single-use `consent_generation` family (N03 D13 *Single use*), built by N03-A; N05-B's approval, retirement and replay paths consume it, and N05-B could otherwise merge before N03-A | PR #360 round 4; N03 plan D13, I11 | §4.2: N05-B also needs N03-A; the format-marker note orders N05-B after N03-A |
 
-No phase is re-split; §4.2 dependencies are unchanged.
+No phase is re-split; F10 and F11 add §4.2 prerequisites.
 
 ### 1.11 Effect settlement contract
 
@@ -938,13 +942,14 @@ outputs, unversioned). GitHub probes were read-only GETs and GraphQL queries aga
 
 ### 3.4 N05-B — Approval, merge action, readiness and cleanup
 
-- **Prerequisites:** N05-A, N01-C, N02-B (execution plan §4.2); U1, U3 and U4 answered (decided
+- **Prerequisites:** N05-A, N01-C, N02-B, N03-A (shared `consent_generation` family and store, N03 D13;
+  F11) (execution plan §4.2); U1, U3 and U4 answered (decided
   2026-10-03); A-R evidence before merge (U2(b)); the G12 EOF falsifier green on macOS and Ubuntu
   before engine merge is offered. G2 is an accepted residual risk (U3(e)) and gates nothing.
 - **Editable paths** (N01 phase in brackets):
   - new `owlbear_delivery/merge_approval.py` (`MergeOffer`, `MergeHold`, `MergeApprovalRecord`,
     `MergeApprovalRevocation`, `MergeAttemptRecord`, `PullRequestMergeReceipt`, `DeliveryActionConfirmation`
-    (D14), `MergeConsentGeneration` and its store (D14), store, errors; `MergeRetirementRecord` under U4(b))
+    (D14) and N05's uses of N03-A's consent-generation store (D14), store, errors; `MergeRetirementRecord` under U4(b))
   - new `owlbear_delivery/application_merge.py` (`_MergeMixin`: offer, approve, revoke, merge
     owner, `check_merge_status` (1.13), capability, cleanup best effort and sweep;
     `retire_held_merge` under U4(b))
@@ -1345,7 +1350,7 @@ plan's status table, a companion that the ready rule does not block.
 
 | Phase | PR | Exact head | Proof | Challenges | Status |
 | --- | --- | --- | --- | --- | --- |
-| N05-P | #353 | — | Probes P1–P16 | Sol round 1: revision-required (stack scope, execution-time target race in U3, pending/unknown reconciliation, renewable consent, no-repair handoff, 409 option validation) → revised; Sol round 2: revision-required (execution scope policy, successor ledger accounting, outstanding-reply reconciliation, complete repair map, fence owner/ordering) → revised; Sol round 3: revision-required (reply non-execution authority, expiry ≠ refusal, fence lock-entry contract) → consolidated settlement contract; Sol round 4: revision-required (request-series settlement, repost decision replay, guard helper scope) → revised; consistency pass (D6/§1.4/§1.5 aligned with §1.11–§1.12); Sol round 5: revision-required (EOF-safe effect entry) → revised; Sol round 6: revision-required (EOF oracle vs release record) → revised; Sol round 7: revision-required (head drift vs pending series) → revised; Sol round 8: revision-required (held-state user exit) → revised; Sol round 9: blocked (U4 non-merging retirement) + 3 fix-now → revised; U4 pending; Sol round 10: revision-required (exhausted M7 hold) → revised; Sol round 11: revision-required (M1 vs observed manual merge) → revised; Sol round 12: `plan-sound`; user-decision revision #360: Sol round 1: revision-required (raced M2 completion, A-R rehearsal split and ownership, unbounded execution interval) → revised; Sol round 2: revision-required (A-R does not discriminate execution-time rules) → ordered pending-then-change step with stop-and-ask; lead's deferred item: D14 moves approval, retirement and reply decisions onto N03 D13 (F10); Sol round 3: revision-required (renewed merge consent replayable within the request-state TTL) → single-use consent generation (D14, D4, `merge_consent`) | approved (execution-plan amendments confirmed 2026-10-03; U1–U4 decided 2026-10-03; N03 U2 open before N05-C) |
+| N05-P | #353 | — | Probes P1–P16 | Sol round 1: revision-required (stack scope, execution-time target race in U3, pending/unknown reconciliation, renewable consent, no-repair handoff, 409 option validation) → revised; Sol round 2: revision-required (execution scope policy, successor ledger accounting, outstanding-reply reconciliation, complete repair map, fence owner/ordering) → revised; Sol round 3: revision-required (reply non-execution authority, expiry ≠ refusal, fence lock-entry contract) → consolidated settlement contract; Sol round 4: revision-required (request-series settlement, repost decision replay, guard helper scope) → revised; consistency pass (D6/§1.4/§1.5 aligned with §1.11–§1.12); Sol round 5: revision-required (EOF-safe effect entry) → revised; Sol round 6: revision-required (EOF oracle vs release record) → revised; Sol round 7: revision-required (head drift vs pending series) → revised; Sol round 8: revision-required (held-state user exit) → revised; Sol round 9: blocked (U4 non-merging retirement) + 3 fix-now → revised; U4 pending; Sol round 10: revision-required (exhausted M7 hold) → revised; Sol round 11: revision-required (M1 vs observed manual merge) → revised; Sol round 12: `plan-sound`; user-decision revision #360: Sol round 1: revision-required (raced M2 completion, A-R rehearsal split and ownership, unbounded execution interval) → revised; Sol round 2: revision-required (A-R does not discriminate execution-time rules) → ordered pending-then-change step with stop-and-ask; lead's deferred item: D14 moves approval, retirement and reply decisions onto N03 D13 (F10); Sol round 3: revision-required (renewed merge consent replayable within the request-state TTL) → single-use consent generation (D14, D4, `merge_consent`); Sol round 4 (N03 finding, cross-plan): a declined or cancelled question stayed replayable with an affirmative answer → D14 moves onto N03's shared `consent_generation` family (N03 D13 *Single use*), `merge_consent` removed, N05-B needs N03-A (F11) | approved (execution-plan amendments confirmed 2026-10-03; U1–U4 decided 2026-10-03; N03 U2 open before N05-C) |
 | N05-A | #356 | `a4951b044` | Ubuntu CI run 37147328711 exact head: 3953 passed, 3 skipped (no launcher skips); macOS focused launcher/provider/authority 149 passed; `test --changed --py` 3955 passed; real-gh recorder 409 formats captured; parser mutation fails 7 tests | Sol implementation round 1: repair-required (real-gh 409 parsing, merge-call ownership gate, typed pre-release failures) → repaired; round 2: `implementation-sound` | merged |
 | A-R | — | — | — | — | — |
 | N05-B | — | — | — | — | — |
@@ -1360,7 +1365,7 @@ plan's status table, a companion that the ready rule does not block.
 | G2 | The target, the PR's `base` or its stack cannot change between the final read and background execution | No GitHub merge API fences the base or the stack; `base` is editable without a head change; `dev` has no up-to-date rule (P1, P2, P4) | Accepted residual risk (U3(e), programme §10.2 revised 2026-10-03): post-merge parent-1 and base check (D9, I4); separate A-R target-advance, retarget and stack-join steps show the detection; whether that check exposes every stacked execution is unproven until the stack-join step | A-R; N05-B (detection) | Nothing for target advance and retarget; N05-B merge if the stack-join step finds an undetected execution |
 | G3 | A merge approval, retirement or reply decision elicited through N03 D13 is answered by the user, not by the model or the host automatically | MCP cannot verify host dialogs; the SDK warns an agent client may answer itself | D14: no caller confirmation argument, both elicitation routes and request-state refusals tested in-process (N05-C); destructive annotation; N03 G10 | N03-B host rehearsal (N03 G10); N10-H host rehearsal | N10-H evidence; without N03 G10, chat approval is unavailable and merges happen in GitHub (R4) |
 | G4 | Merge-queue and up-to-date-required targets behave as designed | This repository has neither (P1) | Memory-provider scenarios | N05-B | Nothing |
-| G5 | Format-marker steps of N03-A and N05-B compose | Neither exists yet (P15) | N02 D3 linear chain | Second of N03-A/N05-B to merge | That phase's merge |
+| G5 | Format-marker steps of N03-A and N05-B compose | Neither exists yet (P15) | N02 D3 linear chain; N05-B follows N03-A (F11) | N05-B | N05-B merge |
 | G6 | The fake `gh` used in E2E matches real GitHub responses | Fake fidelity | P10; A-R real evidence | N05-C | Nothing |
 | G7 | Marker-based reply dedupe survives edited or deleted replies | Not exercised | Read-back design (D13) | N05-D | Nothing |
 | G8 | A 15-second observation cache is fresh enough under rate limits | Not measured | P8; existing constant `application_support.py:143` | N05-B | Nothing |
