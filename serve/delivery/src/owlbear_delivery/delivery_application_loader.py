@@ -87,10 +87,12 @@ from owlbear_delivery.runtime_transaction import (
     write_contained,
 )
 from owlbear_delivery.state_formats import (
+    CONTROLLER_PIN,
     FORMAT_MARKER,
     MIGRATIONS_ROOT,
     SUPPORTED_FORMAT,
     StateCapabilityError,
+    controller_pin_refusal,
     format_marker_bytes,
     require_capability,
     scan_capability,
@@ -191,6 +193,7 @@ class DeliveryStateVersionError(DeliveryApplicationLoadError):
 
 
 CONTROLLER_FENCED = "controller-fenced"
+CONTROLLER_NOT_PINNED = "controller-not-pinned"
 _CONFIG_LOCATOR = ".owlbear/delivery/config.json"
 _CONTROLLER_LOCKS: weakref.WeakKeyDictionary[PortfolioApplication, ControllerLock] = weakref.WeakKeyDictionary()
 
@@ -2514,6 +2517,7 @@ def _load_fenced_application(
     paths = _derive_paths(workspace_root)
     controller_lock = _acquire_controller_fence(paths)
     try:
+        _require_pinned_code(paths)
         fresh = _require_state_capability(paths)
         config = read_config(paths.repository_root / _CONFIG_LOCATOR)
         application = _load_gated_application(config, paths, publication_provider, issuer_host, stamp_format=fresh)
@@ -2545,6 +2549,14 @@ def _acquire_controller_fence(paths: _DeliveryPaths) -> ControllerLock:
     except (OSError, ValueError) as exc:
         error = _load_error("runtime_root", "workspace controller lock is unavailable")
         raise error from exc
+
+
+def _require_pinned_code(paths: _DeliveryPaths) -> None:
+    """Refuse a controller whose code is not the workspace's pinned release (I6), before any state read."""
+    detail = controller_pin_refusal(paths.repository_root, Path(__file__))
+    if detail is not None:
+        message = f"{CONTROLLER_NOT_PINNED}: {detail}"
+        raise DeliveryStateVersionError(CONTROLLER_NOT_PINNED, message, locator=CONTROLLER_PIN)
 
 
 def _require_state_capability(paths: _DeliveryPaths) -> bool:

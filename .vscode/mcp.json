@@ -2,8 +2,8 @@
   "servers": {
     "owlbear-delivery": {
       "type": "stdio",
-      "command": "uv",
-      "args": ["run", "python", "-m", "owlbear_delivery_mcp"]
+      "command": "${workspaceFolder}/.owlbear/controller/bin/delivery-mcp",
+      "args": []
     },
     "owlbear-knowledge": {
       "type": "stdio",

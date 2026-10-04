@@ -366,6 +366,31 @@ not copy `.git`, hidden OwlBear refs, ignored runtime files, or an old managed w
 reports a package, Change-branch, target, or state-snapshot divergence, preserve both sides and
 resolve the typed attention before acquiring work.
 
+### Pinned controller releases
+
+The OwlBear development checkout runs Delivery from a pinned, immutable controller release so that
+new commits on `dev` never change the running controller. Consumer projects keep the
+`uv --project <owlbear clone>` entries that setup writes until consumer pinning ships.
+
+| Path | Content |
+| --- | --- |
+| `.owlbear/controller/releases/<commit>/` | Read-only `git archive` of the commit, its locked `.venv`, the Cockpit bundle and `RELEASE.json` (commit, supported format, tree digest) |
+| `.owlbear/controller/pin.json` | Pinned release `commit` and its `previous` (rollback) release |
+| `.owlbear/controller/bin/delivery-mcp`, `bin/cockpit` | Generated launchers; `.vscode/mcp.json` starts `owlbear-delivery` through `bin/delivery-mcp` |
+
+On a pinned workspace every controller whose code is not the pinned release refuses to start with
+`controller-not-pinned` before it reads state, including `uv run cockpit` and
+`uv run python -m owlbear_delivery_mcp` from the checkout. Start Cockpit with
+`.owlbear/controller/bin/cockpit`. A clone without a release shows `owlbear-delivery` as failed to
+start until `uv run delivery-controller install --pin <commit>` installs and pins one.
+
+Upgrade only through `/upgrade-delivery`, which drives `delivery-controller` and `delivery-migrate`:
+install, online preflight, stop, offline `preflight`, `backup`, migration, `switch`, restart and
+verification. `preflight`, `backup`, `pin`, `switch` and `prune` hold the controller lock
+exclusively and refuse while any controller runs. `switch <previous>` rolls back only when that
+release's own gate accepts the current state; otherwise restoring the backup is your decision.
+`verify` detects a release modified after install. `prune` keeps the current and previous releases.
+
 ---
 
 ## Cockpit details

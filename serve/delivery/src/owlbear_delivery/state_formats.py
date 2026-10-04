@@ -40,6 +40,18 @@ FORMAT_MARKER: Final = "runtime/format.json"
 MIGRATIONS_ROOT: Final = "runtime/migrations"
 MIGRATION_JOURNAL: Final = "journal.json"
 CONTROLLER_LOCK: Final = "runtime/controller.lock"
+# Pinned controller releases live beside, not inside, Delivery state (N02 D1, I6).
+CONTROLLER_ROOT: Final = ".owlbear/controller"
+CONTROLLER_PIN: Final = ".owlbear/controller/pin.json"
+CONTROLLER_RELEASES: Final = ".owlbear/controller/releases"
+PIN_SCHEMA_VERSION: Final = 1
+_PIN_KEYS: Final = frozenset({"schema_version", "commit", "previous", "pinned_at"})
+_MAX_PIN_BYTES: Final = 4096
+_COMMIT: Final = re.compile(r"[0-9a-f]{40}")
+_LAUNCHER_HINT: Final = (
+    "start Delivery through .owlbear/controller/bin/delivery-mcp or .owlbear/controller/bin/cockpit, "
+    "or change the pin with delivery-controller switch"
+)
 SUPPORTED_FORMAT: Final = 1
 JOURNAL_SCHEMA_VERSION: Final = 1
 JOURNAL_STATES: Final = frozenset({"backed-up", "applying", "applied", "verified", "aborting"})
@@ -1076,6 +1088,109 @@ def format_marker_bytes(format_value: int = SUPPORTED_FORMAT) -> bytes:
     return json.dumps({"format": format_value}, sort_keys=True, separators=(",", ":")).encode() + b"\n"
 
 
+@dataclass(frozen=True, slots=True)
+class ControllerPin:
+    """The workspace's pinned controller release (``.owlbear/controller/pin.json``) and its predecessor."""
+
+    commit: str
+    previous: str | None = None
+
+
+class ControllerPinError(ValueError):
+    """The workspace pin exists but cannot be trusted; a pinned workspace then refuses every controller."""
+
+
+def _open_contained(parent_fd: int, name: str, flags: int) -> int | None:
+    """Open one child without following links; ``None`` when absent, ``ControllerPinError`` when unusable."""
+    try:
+        return os.open(name, flags, dir_fd=parent_fd)
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        detail = f"{name} is a symlink" if exc.errno == errno.ELOOP else f"{name} is unreadable"
+        raise ControllerPinError(detail) from exc
+
+
+def _read_pin_bytes(workspace_root: Path) -> bytes | None:
+    try:
+        owlbear_fd = os.open(workspace_root / ".owlbear", _DIRECTORY_FLAGS)
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        msg = ".owlbear is not a readable directory"
+        raise ControllerPinError(msg) from exc
+    try:
+        controller_fd = _open_contained(owlbear_fd, "controller", _DIRECTORY_FLAGS)
+    finally:
+        os.close(owlbear_fd)
+    if controller_fd is None:
+        return None
+    try:
+        pin_fd = _open_contained(controller_fd, "pin.json", _FILE_FLAGS)
+    finally:
+        os.close(controller_fd)
+    if pin_fd is None:
+        return None
+    try:
+        if not stat.S_ISREG(os.fstat(pin_fd).st_mode):
+            msg = "pin.json is not a regular file"
+            raise ControllerPinError(msg)
+        content = os.read(pin_fd, _MAX_PIN_BYTES + 1)
+    finally:
+        os.close(pin_fd)
+    if len(content) > _MAX_PIN_BYTES:
+        msg = "pin.json exceeds its size bound"
+        raise ControllerPinError(msg)
+    return content
+
+
+def read_controller_pin(workspace_root: Path) -> ControllerPin | None:
+    """Return the pinned release, ``None`` for an unpinned workspace, or raise ``ControllerPinError``."""
+    content = _read_pin_bytes(workspace_root)
+    if content is None:
+        return None
+    try:
+        payload = json.loads(content)
+    except UnicodeDecodeError, RecursionError, ValueError:
+        payload = None
+    if not isinstance(payload, dict) or set(payload) - _PIN_KEYS:
+        msg = "pin.json is not a controller pin record"
+        raise ControllerPinError(msg)
+    version, commit, previous = payload.get("schema_version"), payload.get("commit"), payload.get("previous")
+    if isinstance(version, bool) or version != PIN_SCHEMA_VERSION:
+        msg = f"pin.json schema_version {version!r} is not supported (accepted: {PIN_SCHEMA_VERSION})"
+        raise ControllerPinError(msg)
+    if not isinstance(commit, str) or _COMMIT.fullmatch(commit) is None:
+        msg = "pin.json does not name a full commit"
+        raise ControllerPinError(msg)
+    if previous is not None and (not isinstance(previous, str) or _COMMIT.fullmatch(previous) is None):
+        msg = "pin.json names an invalid previous release"
+        raise ControllerPinError(msg)
+    return ControllerPin(commit, previous)
+
+
+def controller_pin_refusal(workspace_root: Path, code_file: Path) -> str | None:
+    """Return why code at ``code_file`` may not control this workspace (I6), or ``None`` when it may.
+
+    Unpinned workspaces accept any controller. A pinned workspace accepts only code whose real path lies
+    inside the real directory of its pinned release; an unusable pin refuses every controller.
+    """
+    try:
+        pin = read_controller_pin(workspace_root)
+    except ControllerPinError as exc:
+        return f"the controller pin is unusable ({exc}); {_LAUNCHER_HINT}"
+    if pin is None:
+        return None
+    release = workspace_root / CONTROLLER_RELEASES / pin.commit
+    code = Path(os.path.realpath(code_file))
+    if not release.is_symlink() and release.is_dir() and code.is_relative_to(os.path.realpath(release)):
+        return None
+    return (
+        f"this workspace is pinned to controller release {pin.commit}, but this controller runs from "
+        f"{code.parent}; {_LAUNCHER_HINT}"
+    )
+
+
 def record_tree_digest(workspace_root: Path, *, exclude_migrations: bool = False) -> dict[str, str]:
     """Return SHA-256 digests of every non-transient Delivery record file, for no-write proofs.
 
@@ -1113,6 +1228,9 @@ def record_tree_digest(workspace_root: Path, *, exclude_migrations: bool = False
 
 __all__ = [
     "CONTROLLER_LOCK",
+    "CONTROLLER_PIN",
+    "CONTROLLER_RELEASES",
+    "CONTROLLER_ROOT",
     "DELIVERY_STATE_ROOT",
     "FAMILIES",
     "FORMAT_MARKER",
@@ -1122,12 +1240,15 @@ __all__ = [
     "MIGRATION_JOURNAL",
     "NESTED_MODELS",
     "NON_PERSISTED_MODELS",
+    "PIN_SCHEMA_VERSION",
     "RECORD_KINDS",
     "REMOTE_SNAPSHOT_CURRENT",
     "REMOTE_SNAPSHOT_READ_VERSIONS",
     "SUPPORTED_FORMAT",
     "CapabilityRefusal",
     "CapabilityReport",
+    "ControllerPin",
+    "ControllerPinError",
     "MigrationJournalState",
     "RecordCapability",
     "RecordKind",
@@ -1136,7 +1257,9 @@ __all__ = [
     "classify_record",
     "classify_version",
     "config_capability",
+    "controller_pin_refusal",
     "format_marker_bytes",
+    "read_controller_pin",
     "record_tree_digest",
     "require_capability",
     "scan_capability",
