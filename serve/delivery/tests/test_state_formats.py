@@ -942,3 +942,96 @@ def test_scan_stops_enumerating_a_directory_at_the_entry_bound(tmp_path: Path, m
     assert not report.complete
     assert [refusal.code for refusal in report.refusals] == ["state-version-unknown"]
     assert "entry capability scan bound" in report.refusals[0].detail
+
+
+# ---------------------------------------------------------------------------
+# Controller pin (N02-D, I6)
+# ---------------------------------------------------------------------------
+
+_RELEASE = "a" * 40
+
+
+def _pin(repository: Path, payload: object, *, release: bool = True) -> Path:
+    controller = repository / ".owlbear/controller"
+    controller.mkdir(parents=True, exist_ok=True)
+    (controller / "pin.json").write_text(json.dumps(payload), encoding="utf-8")
+    module = controller / "releases" / _RELEASE / "serve/delivery/src/owlbear_delivery/delivery_application_loader.py"
+    if release:
+        module.parent.mkdir(parents=True, exist_ok=True)
+        module.write_text("", encoding="utf-8")
+    return module
+
+
+def test_dev_code_on_a_pinned_workspace_is_refused_before_any_state_read(tmp_path: Path) -> None:
+    repository, config = _portfolio(tmp_path)
+    _pin(repository, {"schema_version": 1, "commit": _RELEASE, "previous": None})
+    _write(repository, "runtime/changes/demo/frontier.json", {"schema_version": 19, "bindings": []})
+    digests = record_tree_digest(repository)
+
+    with pytest.raises(DeliveryStateVersionError) as refusal:
+        load_delivery_application(config, workspace_root=repository)
+
+    assert refusal.value.code == "controller-not-pinned"
+    assert refusal.value.locator == ".owlbear/controller/pin.json"
+    assert _RELEASE in refusal.value.detail
+    assert "bin/delivery-mcp" in refusal.value.detail
+    assert record_tree_digest(repository) == digests
+    assert _exclusive_available(repository)
+
+
+@pytest.mark.parametrize(
+    "content",
+    ['{"schema_version": 2, "commit": "' + _RELEASE + '"}', '{"schema_version": 1, "commit": "abc"}', "not json"],
+    ids=["newer-pin", "short-commit", "malformed"],
+)
+def test_an_unusable_pin_refuses_every_controller(tmp_path: Path, content: str) -> None:
+    repository, config = _portfolio(tmp_path)
+    module = _pin(repository, {})
+    (repository / ".owlbear/controller/pin.json").write_text(content, encoding="utf-8")
+
+    with pytest.raises(DeliveryStateVersionError) as refusal:
+        load_delivery_application(config, workspace_root=repository)
+
+    assert refusal.value.code == "controller-not-pinned"
+    assert "unusable" in refusal.value.detail
+    assert state_formats.controller_pin_refusal(repository, module) is not None
+
+
+def test_pin_accepts_only_code_inside_the_real_pinned_release(tmp_path: Path) -> None:
+    repository = tmp_path / "workspace"
+    module = _pin(repository, {"schema_version": 1, "commit": _RELEASE, "previous": None})
+    other = repository / ".owlbear/controller/releases" / ("b" * 40) / "owlbear_delivery/loader.py"
+    other.parent.mkdir(parents=True)
+    other.write_text("", encoding="utf-8")
+
+    assert state_formats.controller_pin_refusal(repository, module) is None
+    assert state_formats.controller_pin_refusal(repository, other) is not None
+    assert state_formats.controller_pin_refusal(tmp_path / "unpinned", other) is None
+    release = repository / ".owlbear/controller/releases" / _RELEASE
+    moved = tmp_path / "elsewhere"
+    release.rename(moved)
+    release.symlink_to(moved)
+    assert state_formats.controller_pin_refusal(repository, moved / module.relative_to(release)) is not None
+
+
+def test_a_symlinked_pin_is_unusable(tmp_path: Path) -> None:
+    repository = tmp_path / "workspace"
+    module = _pin(repository, {"schema_version": 1, "commit": _RELEASE, "previous": None})
+    target = tmp_path / "pin.json"
+    pin_path = repository / ".owlbear/controller/pin.json"
+    pin_path.rename(target)
+    pin_path.symlink_to(target)
+
+    assert "symlink" in (state_formats.controller_pin_refusal(repository, module) or "")
+
+
+def test_the_pinned_release_starts_and_holds_the_shared_lock(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repository, config = _portfolio(tmp_path)
+    module = _pin(repository, {"schema_version": 1, "commit": _RELEASE, "previous": None})
+    monkeypatch.setattr(loader_module, "__file__", str(module))
+
+    application = load_delivery_application(config, workspace_root=repository)
+
+    assert not _exclusive_available(repository)
+    close_delivery_application(application)
+    assert _exclusive_available(repository)
