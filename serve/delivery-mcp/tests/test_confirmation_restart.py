@@ -54,6 +54,11 @@ from owlbear_delivery.delivery_runtime import (
 )
 from owlbear_delivery.evidence import resolve_confirmation
 from owlbear_delivery.portfolio_application import DeliveryResultSubmission
+from owlbear_delivery.runtime_models import _model_content
+from owlbear_delivery.runtime_receipts import (
+    _DeliveryBuilderHandoffChangeIntentHead,
+    _DeliveryBuilderHandoffChangeIntentReceipt,
+)
 from owlbear_delivery_mcp.target_server import assemble_target_server
 
 _PROCEDURE = "manual browser check"
@@ -434,4 +439,79 @@ async def test_two_scoped_planner_answers_replay_in_answer_order_and_a_reordered
         item.change_id == change_id and item.code == "remote-state-reconciliation-required"
         for item in health.diagnostics
     ), health.diagnostics
+    assert _change_files(restart, change_id) == tampered
+
+
+def _rebuild_lifecycle_chain(
+    restart: _BuilderReturnRestartFixture, change_id: str, entry: DeliveryUserConfirmation | None
+) -> None:
+    """Re-create every lifecycle receipt with valid identities, adding ``entry`` to both frontiers of each."""
+    root = _runtime_root(restart) / "changes" / change_id / "builder-handoff-change-intent-receipts"
+    (directory,) = root.iterdir()
+    receipts = sorted(
+        (
+            _DeliveryBuilderHandoffChangeIntentReceipt.model_validate_json(path.read_bytes(), strict=True)
+            for path in directory.glob("*.json")
+            if path.name != "head.json"
+        ),
+        key=lambda item: item.sequence,
+    )
+
+    def anchored(frontier: DeliveryFrontier) -> DeliveryFrontier:
+        return frontier if entry is None else frontier.model_copy(update={"confirmations": (entry,)})
+
+    previous: str | None = None
+    for receipt in receipts:
+        rebuilt = _DeliveryBuilderHandoffChangeIntentReceipt.create(
+            action=receipt.action,
+            change_id=receipt.change_id,
+            outcome_id=receipt.outcome_id,
+            context=receipt.builder_handoff_context,
+            sequence=receipt.sequence,
+            previous_receipt_id=previous,
+            before_frontier=anchored(receipt.before_frontier),
+            after_frontier=anchored(receipt.after_frontier),
+            deferral=receipt.deferral,
+            abandonment=receipt.abandonment,
+        )
+        (directory / f"{receipt.receipt_id}.json").unlink()
+        (directory / f"{rebuilt.receipt_id}.json").write_bytes(_model_content(rebuilt))
+        previous = rebuilt.receipt_id
+    head_path = directory / "head.json"
+    head = _DeliveryBuilderHandoffChangeIntentHead.model_validate_json(head_path.read_bytes(), strict=True)
+    head_path.write_bytes(_model_content(head.model_copy(update={"latest_receipt_id": previous})))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("route", ["builder", "planner"])
+async def test_lifecycle_receipts_anchored_before_the_answer_that_hold_its_entry_leave_the_change_unavailable(
+    tmp_path: Path, route: str
+) -> None:
+    change_id = f"anchored-{route}-answer"
+    restart = _builder_return_restart_fixture(tmp_path, change_id)
+    request, _tasks = (_builder_pause if route == "builder" else _planner_pause)(
+        restart, change_id, f"{route}-confirmation"
+    )
+    _defer_and_resume(restart, change_id)
+    await _accept(_healthy_restart(restart), change_id, request.request_id)
+    (entry,) = _healthy_restart(restart)._runtimes[change_id].confirmations()
+    answered = _change_files(restart, change_id)
+    assert sum("builder-handoff-change-intent-receipts" in name for name in answered) == 3
+
+    # Control: the same rebuild without the entry reproduces every receipt byte for byte.
+    _rebuild_lifecycle_chain(restart, change_id, None)
+    assert _change_files(restart, change_id) == answered
+    _rebuild_lifecycle_chain(restart, change_id, entry)
+    tampered = _change_files(restart, change_id)
+    assert tampered != answered
+
+    application = load_delivery_application(restart.config, workspace_root=restart.fresh)
+    health = application.delivery_health()
+
+    assert health.status.value == "attention"
+    assert any(
+        item.change_id == change_id and item.code == "remote-state-reconciliation-required"
+        for item in health.diagnostics
+    ), health.diagnostics
+    assert application.acquire_frontier_work().launch_packages == ()
     assert _change_files(restart, change_id) == tampered
