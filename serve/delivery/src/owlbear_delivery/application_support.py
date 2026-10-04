@@ -364,15 +364,19 @@ def _waived_acceptance_summary(runtime: DeliveryRuntime) -> list[str]:
     )
     waived = [view for view in projection.criteria if view.status == "waived"]
     lines = []
-    for view in waived[:_MAX_PR_WAIVED_CRITERIA]:
+    remaining = []
+    for index, view in enumerate(waived):
         request_id = next((item.request_id for item in view.evidence if item.observation_id == view.decided_by), None)
         cited = f" (request {_summary_text(request_id, _MAX_PR_OUTCOME_TITLE_LENGTH)})" if request_id else ""
+        if index >= _MAX_PR_WAIVED_CRITERIA:
+            remaining.append(f"`{view.acceptance_id}`{cited}")
+            continue
         lines.append(
             f"- Waived by the user, `{view.acceptance_id}`: "
             f"{_summary_text(view.statement, _MAX_PR_OUTCOME_PROMISE_LENGTH)}{cited}"
         )
-    if len(waived) > _MAX_PR_WAIVED_CRITERIA:
-        lines.append(f"- {len(waived) - _MAX_PR_WAIVED_CRITERIA} additional waived criterion(s) omitted")
+    if remaining:
+        lines.append(f"- Also waived by the user: {', '.join(remaining)}")
     return lines
 
 

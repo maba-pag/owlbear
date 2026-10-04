@@ -21,7 +21,12 @@ from unittest.mock import Mock, patch
 import pytest
 from mcp import Client
 from pydantic import BaseModel, ConfigDict, ValidationError
-from serve.delivery.tests.confirmation_support import EVIDENCE_STATUSES, WAIVER_REQUEST_ID, evidence_projection_case
+from serve.delivery.tests.confirmation_support import (
+    EVIDENCE_STATUSES,
+    WAIVER_REQUEST_ID,
+    evidence_projection_case,
+    extra_waiver_ids,
+)
 from serve.delivery.tests.test_delivery_progress import _complete_first_outcome, _progress_portfolio
 from serve.delivery.tests.test_portfolio_application import (
     _assert_checkpoint_branch_operation,
@@ -254,6 +259,12 @@ async def test_registered_evidence_projection_agrees_across_reads_and_names_waiv
     assert (missing["evidence"][0]["verdict"], missing["evidence"][0]["owner"]) == ("missing", "assisted-check")
     assert f"Waived by the user, `AC-003`: The launch has a manual sign-off. (request {WAIVER_REQUEST_ID})" in summary
     assert "`AC-001`" not in summary
+    (tmp_path / "many").mkdir()
+    _application, many_runtime, _state_root = evidence_projection_case(tmp_path / "many", waived_count=25)
+    many = _checkpoint_summary(many_runtime, SimpleNamespace(intent_bytes=b""), None, "1" * 40, ())
+    assert all(f"`{item}`" in many for item in ("AC-003", *extra_waiver_ids(24)))
+    assert f"`{extra_waiver_ids(24)[-1]}` (request {WAIVER_REQUEST_ID})" in many
+    assert "omitted" not in many
 
 
 @pytest.mark.asyncio
