@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
@@ -14,6 +13,14 @@ from owlbear_delivery.acceptance import (
     CompletionReceiptBundle,
     CompletionReceiptConflictError,
     CompletionReceiptStore,
+)
+from owlbear_delivery.acceptance_criteria import acceptance_criteria
+from owlbear_delivery.evidence import (
+    DeliveryContextRefusal,
+    DeliveryFinalizationSemantics,
+    evaluate_acceptance_evidence,
+    finalization_semantics_or_refusal,
+    observation_gaps,
 )
 from owlbear_delivery.recovery import (
     DeliveryWorkerExclusionRequiredError,
@@ -27,17 +34,23 @@ from owlbear_delivery.recovery import (
 
 # Consumer import surface kept at this module path.
 from owlbear_delivery.runtime_models import (  # noqa: F401
+    _FRONTIER_SCHEMA_VERSION,
     _NORMAL_CHANGE_MUTATIONS,
+    _READABLE_LEGACY_FRONTIER_SCHEMA_VERSION,
+    CONFIRMATION_DECISIONS,
     DELIVERY_TRANSITION_ADAPTER,
+    PROOF_VERDICTS,
     REQUESTLESS_WORKER_SETTLEMENT_FAILURE_CODES,
     ActivateDeliveryClaim,
     AdvanceDelivery,
     BlockDelivery,
     CompletedOutcomeRepairReceipt,
     DeliveryAcceptanceAttentionReason,
+    DeliveryAcceptanceEvidenceError,
     DeliveryAcceptanceWaitingError,
     DeliveryActionSelectionConflictError,
     DeliveryActiveClaim,
+    DeliveryArtifactResult,
     DeliveryBlock,
     DeliveryBuilderHandoffContext,
     DeliveryChangeAbandonment,
@@ -54,6 +67,10 @@ from owlbear_delivery.runtime_models import (  # noqa: F401
     DeliveryCheckpointPublicationState,
     DeliveryCheckpointTrigger,
     DeliveryCheckpointTriggerKind,
+    DeliveryCommandResult,
+    DeliveryConfirmationError,
+    DeliveryConfirmationScope,
+    DeliveryEvidenceGap,
     DeliveryFinalization,
     DeliveryFinalizationInvalidation,
     DeliveryFinalizationInvalidationReceipt,
@@ -62,8 +79,13 @@ from owlbear_delivery.runtime_models import (  # noqa: F401
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
     DeliveryIntegrationAttentionDisposition,
+    DeliveryLegacyObservation,
+    DeliveryLegacyObservationReceipt,
+    DeliveryManualProcedureResult,
     DeliveryMergedPullRequestLatch,
+    DeliveryMissingResult,
     DeliveryObservation,
+    DeliveryObservationEnvironment,
     DeliveryObservationReceipt,
     DeliveryOperatorMove,
     DeliveryOutputKind,
@@ -87,6 +109,7 @@ from owlbear_delivery.runtime_models import (  # noqa: F401
     DeliveryTaskDefinition,
     DeliveryTaskResult,
     DeliveryTransition,
+    DeliveryWaivedResult,
     DeliveryWorkerRole,
     EngineWorkerDisposition,
     FinalizeDeliveryChange,
@@ -152,8 +175,11 @@ from owlbear_delivery.runtime_support import (  # noqa: F401
     _target_sync_operation_id,
     invalidate_checkpoint_publication,
     is_acceptance_waiting_observation,
+    normalize_frontier,
     parse_delivery_frontier,
+    parse_stored_delivery_frontier,
     repair_missing_request_provenance,
+    stored_frontier_version,
 )
 from owlbear_delivery.runtime_transaction import (
     ReplacementTransactionParticipant,
@@ -184,6 +210,14 @@ if TYPE_CHECKING:
 
 
 _GUARD_RETRY_LIMIT = 8
+
+
+def _is_portable(frontier: DeliveryFrontier) -> bool:
+    return (
+        not any(binding.active_claim is not None for binding in frontier.bindings)
+        and not any(binding.builder_handoff_context is not None for binding in frontier.bindings)
+        and frontier.integration_repair_claim is None
+    )
 
 
 def _deferral_lifecycle_refusal(
@@ -383,6 +417,7 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
             replacement,
             "defer",
             deferral=deferral,
+            previous=previous,
         )
         participants = (
             self._change_intent_custody_participants(participants, expected_finalization_attention)
@@ -417,6 +452,7 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
             replacement,
             "resume",
             deferral=deferral,
+            previous=previous,
         )
         participants = self._change_intent_custody_participants(participants, expected_finalization_attention)
         self._replace(
@@ -472,6 +508,7 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
             "abandon",
             deferral=frontier.change_deferral,
             abandonment=abandonment,
+            previous=previous,
         )
         participants = (
             self._change_intent_custody_participants(participants, expected_finalization_attention)
@@ -841,7 +878,16 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
             )
         pending = current.model_copy(update={"triggers": retained}) if retained else None
         updated = frontier.model_copy(update={"pending_checkpoint": pending})
-        self._replace_content(previous, _model_content(updated), record_pending_publication=False)
+        if stored_frontier_version(previous) == _FRONTIER_SCHEMA_VERSION or not _is_portable(updated):
+            self._replace_content(previous, _model_content(updated), record_pending_publication=False)
+        else:
+            # The 18 -> 19 representation change is a new portable state; its base is the drained
+            # projection the remote snapshot already holds, so publication replay can match it.
+            self._replace_content(
+                previous,
+                _model_content(updated),
+                base_frontier_digest=self.published_projection_digest(previous),
+            )
         return self.checkpoint_publication_state()
 
     def record_checkpoint_failure(
@@ -1236,6 +1282,7 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
                 _conflict("Delivery finalization requires every Task result in authority order")
         if any(observation.change_id != self._contract.change_id for observation in request.observations):
             _conflict("Delivery finalization observations do not match the Change")
+        self._require_finalization_evidence(frontier, request)
         results = tuple(result for binding in frontier.bindings for result in binding.results)
         finalization = DeliveryFinalization(
             operation_id=request.operation_id,
@@ -1833,7 +1880,8 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
         self._replace_content(
             previous,
             _model_content(replacement),
-            record_pending_publication=replacement != frontier and portable,
+            record_pending_publication=portable
+            and (replacement != frontier or _model_content(replacement) != previous),
             additional_participants=participants,
         )
 
@@ -1979,6 +2027,11 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
             or request.result.task_digest != task.digest
         ):
             _conflict("compact result does not match promoted task authority")
+        if request.result.review.review_mode == "finalization":
+            _conflict("a task result review cannot use finalization mode")
+        gaps = self._evidence_gaps(frontier, request.result.observations, binding.outcome_id)
+        if gaps:
+            raise DeliveryAcceptanceEvidenceError(gaps)
         digest = hashlib.sha256(_model_content(request.result)).hexdigest()
         candidate = DeliveryResultCandidate(
             candidate_id=f"result-{digest}",
@@ -2397,18 +2450,18 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
         RuntimeTransaction.recover_all(self._target_root)
         try:
             content = self._frontier_path.read_bytes()
-            frontier, canonical = parse_delivery_frontier(content)
+            frontier, stored = parse_delivery_frontier(content)
             self._validate_frontier(frontier)
-            stored_current = json.loads(content).get("schema_version") == frontier.schema_version
-            if canonical != content and stored_current and not state_is_read_only():
-                self._replace_content(content, canonical, record_pending_publication=False)
+            version = stored_frontier_version(content)
+            if stored != content and version == _FRONTIER_SCHEMA_VERSION and not state_is_read_only():
+                self._replace_content(content, stored, record_pending_publication=False)
         except (OSError, TypeError, ValueError) as exc:
             message = f"Delivery frontier is missing or invalid: {self._contract.change_id}"
             raise DeliveryRuntimeReferenceError(message) from exc
-        if not stored_current:
+        if version not in {_READABLE_LEGACY_FRONTIER_SCHEMA_VERSION, _FRONTIER_SCHEMA_VERSION}:
             message = f"Delivery frontier needs its registered fenced migration: {self._contract.change_id}"
             raise DeliveryRuntimeReferenceError(message)
-        return frontier, canonical
+        return frontier, stored
 
     def _replace(
         self,
@@ -2481,6 +2534,84 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
         transaction_id = hashlib.sha256(previous + replacement).hexdigest()
         RuntimeTransaction(self._target_root, f"delivery-runtime-{transaction_id}", tuple(participants)).commit()
 
+    def _evidence_gaps(
+        self,
+        frontier: DeliveryFrontier,
+        observations: tuple[DeliveryLegacyObservationReceipt | DeliveryObservationReceipt, ...],
+        outcome_id: str | None,
+        *,
+        finalization: bool = False,
+    ) -> tuple[DeliveryEvidenceGap, ...]:
+        """Return why submitted records are not admissible evidence (section 1.6 of the N03 plan)."""
+        criteria = acceptance_criteria(self._contract)
+        gaps: list[DeliveryEvidenceGap] = []
+        for observation in observations:
+            gaps.extend(observation_gaps(observation, frontier, criteria, outcome_id))
+            if isinstance(observation, DeliveryObservationReceipt) and (
+                observation.verdict == "failed" or (finalization and observation.verdict == "missing")
+            ):
+                gaps.append(DeliveryEvidenceGap(observation_id=observation.observation_id, reason=observation.verdict))
+        return tuple(gaps)
+
+    def finalization_diff_base(self, frontier: DeliveryFrontier | None = None) -> str | None:
+        """Return the engine-derived diff base: the latest target sync, else the publication base."""
+        frontier = self._read()[0] if frontier is None else frontier
+        if frontier.target_sync_receipt is not None:
+            return frontier.target_sync_receipt.target_head
+        if self._workspace_manager is None:
+            return None
+        return self._workspace_manager.show(self._contract.change_id).publication_base_head
+
+    def finalization_semantics(
+        self,
+        change_head: str | None,
+    ) -> DeliveryFinalizationSemantics | DeliveryContextRefusal:
+        """Return the complete finalization semantics for one head, or its typed refusal (D12)."""
+        frontier = self._read()[0]
+        return finalization_semantics_or_refusal(
+            self._contract,
+            frontier.model_copy(update={"finalization": None}),
+            contract_digest=self._authority_digest,
+            change_head=change_head,
+            diff_base=self.finalization_diff_base(frontier),
+        )
+
+    def _require_finalization_evidence(self, frontier: DeliveryFrontier, request: FinalizeDeliveryChange) -> None:
+        """Refuse finalization unless records, review basis and coverage all hold (section 1.6 of the N03 plan)."""
+        gaps = [
+            *self._evidence_gaps(frontier, request.observations, None, finalization=True),
+            *self._finalization_review_gaps(frontier, request),
+            *evaluate_acceptance_evidence(self._contract, frontier, request.observations).gaps,
+        ]
+        if gaps:
+            raise DeliveryAcceptanceEvidenceError(tuple(gaps))
+
+    def _finalization_review_gaps(
+        self,
+        frontier: DeliveryFrontier,
+        request: FinalizeDeliveryChange,
+    ) -> tuple[DeliveryEvidenceGap, ...]:
+        review = request.review
+        gaps: list[DeliveryEvidenceGap] = []
+        semantics = finalization_semantics_or_refusal(
+            self._contract,
+            frontier,
+            contract_digest=self._authority_digest,
+            change_head=request.exact_head,
+            diff_base=self.finalization_diff_base(frontier),
+        )
+        if isinstance(semantics, DeliveryContextRefusal):
+            gaps.append(DeliveryEvidenceGap(reason=semantics.code))
+        elif review.review_mode != "finalization" or review.basis_digest is None:
+            gaps.append(DeliveryEvidenceGap(reason="review-basis-missing"))
+        elif review.basis_digest != semantics.basis_digest:
+            gaps.append(DeliveryEvidenceGap(reason="review-basis-stale"))
+        if review.review_mode == "finalization" and review.observation_ids != tuple(
+            observation.observation_id for observation in request.observations
+        ):
+            gaps.append(DeliveryEvidenceGap(reason="review-observations-mismatch"))
+        return tuple(gaps)
+
     def _validate_frontier(self, frontier: DeliveryFrontier) -> None:
         expected = tuple((scope.outcome_id, scope.scope_id) for scope in self._contract.plan_scopes)
         actual = tuple((binding.outcome_id, binding.plan_scope_id) for binding in frontier.bindings)
@@ -2520,6 +2651,7 @@ __all__ = [
     "BlockDelivery",
     "CompletedOutcomeRepairReceipt",
     "DeliveryAcceptanceAttentionReason",
+    "DeliveryAcceptanceEvidenceError",
     "DeliveryAcceptanceWaitingError",
     "DeliveryBlock",
     "DeliveryBuilderInvocationSettlement",
@@ -2537,6 +2669,9 @@ __all__ = [
     "DeliveryCheckpointPublicationState",
     "DeliveryCheckpointTrigger",
     "DeliveryCheckpointTriggerKind",
+    "DeliveryConfirmationError",
+    "DeliveryConfirmationScope",
+    "DeliveryEvidenceGap",
     "DeliveryFinalization",
     "DeliveryFinalizationInvalidation",
     "DeliveryFinalizationInvalidationReceipt",
@@ -2544,6 +2679,8 @@ __all__ = [
     "DeliveryFrontier",
     "DeliveryIntegrationAttention",
     "DeliveryIntegrationAttentionCode",
+    "DeliveryLegacyObservation",
+    "DeliveryLegacyObservationReceipt",
     "DeliveryMergedPullRequestLatch",
     "DeliveryObservation",
     "DeliveryObservationReceipt",
@@ -2579,6 +2716,8 @@ __all__ = [
     "invalidate_checkpoint_publication",
     "is_acceptance_waiting_observation",
     "is_change_terminal",
+    "normalize_frontier",
     "parse_delivery_frontier",
+    "parse_stored_delivery_frontier",
     "repair_missing_request_provenance",
 ]

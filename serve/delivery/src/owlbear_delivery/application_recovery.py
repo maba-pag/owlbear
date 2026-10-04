@@ -109,6 +109,7 @@ from owlbear_delivery.recovery import (
     read_record,
     verify_evidence,
 )
+from owlbear_delivery.runtime_models import retained_requests
 from owlbear_delivery.runtime_transaction import (
     ReplacementTransactionParticipant,
     RuntimeTransaction,
@@ -1311,18 +1312,25 @@ class _RecoveryMixin:
                 return False
             if snapshot_binding == local_binding:
                 continue
-            if snapshot_binding.block is not None or snapshot_binding.requests or local_binding.block is None:
-                return False
-            if local_binding.block.request_id is None:
-                if local_binding.requests:
-                    return False
-            elif (
-                len(local_binding.requests) != 1
-                or local_binding.requests[0].request_id != local_binding.block.request_id
-                or local_binding.requests[0].outcome_id != local_binding.outcome_id
+            prior = snapshot_binding.requests
+            if (
+                snapshot_binding.block is not None
+                or prior != retained_requests(prior)
+                or local_binding.block is None
+                or local_binding.requests[: len(prior)] != prior
             ):
                 return False
-            if local_binding.model_copy(update={"block": None, "requests": ()}) != snapshot_binding:
+            added = local_binding.requests[len(prior) :]
+            if local_binding.block.request_id is None:
+                if added:
+                    return False
+            elif (
+                len(added) != 1
+                or added[0].request_id != local_binding.block.request_id
+                or added[0].outcome_id != local_binding.outcome_id
+            ):
+                return False
+            if local_binding.model_copy(update={"block": None, "requests": prior}) != snapshot_binding:
                 return False
             changed += 1
         return changed == 1

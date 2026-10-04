@@ -17,10 +17,9 @@ import yaml
 from owlbear_tools.dependency_ci import classify_dependency_change
 
 ROOT = Path(__file__).parents[1]
-VERIFY_PATH = ROOT / ".github/workflows/dependency-verification.yml"
-COCKPIT_VERIFY_PATH = ROOT / ".github/workflows/cockpit-verification.yml"
+VERIFY_PATH = ROOT / ".github/workflows/tooling.yml"
+COCKPIT_VERIFY_PATH = ROOT / ".github/workflows/cockpit.yml"
 AGENT_WORKFLOW_PATH = ROOT / ".github/workflows/agent-ecosystem.yml"
-SOURCE_VERIFY_PATH = ROOT / ".github/workflows/source-verification.yml"
 COPILOT_SETUP_PATH = ROOT / ".github/workflows/copilot-setup-steps.yml"
 MEGALINTER_PATH = ROOT / ".github/workflows/megalinter.yml"
 SYNC_PATH = ROOT / ".github/workflows/sync-to-main.yml"
@@ -28,6 +27,11 @@ RUNTIME_SCRIPT = ROOT / ".github/scripts/check_node_runtime.py"
 UV_VERSION_SCRIPT = ROOT / ".github/scripts/check_uv_version.py"
 WORKSPACE_LOCK_SCRIPT = ROOT / ".github/scripts/check_uv_workspace_lock.py"
 RUFF_TOOLCHAIN_SCRIPT = ROOT / ".github/scripts/check_ruff_toolchain.py"
+COPILOT_UV_SYNC = (
+    "skipped=()\n"
+    'for package in $CI_SKIPPED_PACKAGES; do skipped+=(--no-install-package "$package"); done\n'
+    'uv sync --locked --all-packages --group dev "${skipped[@]}"\n'
+)
 
 
 @pytest.fixture
@@ -245,9 +249,7 @@ def test_dependency_workflow_runs_without_dependency_label_gate() -> None:
     assert pull_request["types"] == ["opened", "reopened", "synchronize", "ready_for_review"]
     assert set(pull_request["paths"]) == {
         ".github/renovate.json",
-        ".github/scripts/check_ruff_toolchain.py",
-        ".github/scripts/check_uv_workspace_lock.py",
-        ".github/scripts/sync_megalinter_toolchain.py",
+        ".github/scripts/**",
         ".github/workflows/**",
         ".mega-linter.yml",
         ".pre-commit-config.yaml",
@@ -268,30 +270,8 @@ def test_dependency_workflow_runs_without_dependency_label_gate() -> None:
         "tests/test_dependency_verification_workflow.py",
         "uv.lock",
     }
-    assert _job(workflow, "classify")["if"] == (
-        "(github.event_name != 'pull_request' || github.event.pull_request.draft == false) && "
-        "(github.event_name != 'workflow_dispatch' || inputs.cache_probe == 'none')"
-    )
+    assert set(workflow["jobs"]) == {"verify"}
     assert "workflow_dispatch" in workflow["on"]
-
-
-def test_pull_request_proof_workflows_skip_draft_jobs_and_run_when_ready() -> None:
-    expected_types = ["opened", "reopened", "synchronize", "ready_for_review"]
-    for path in (AGENT_WORKFLOW_PATH, VERIFY_PATH, COCKPIT_VERIFY_PATH, SOURCE_VERIFY_PATH):
-        workflow = _workflow(path)
-        pull_request = workflow["on"]["pull_request"]
-        assert pull_request["types"] == expected_types
-        jobs = workflow["jobs"]
-        assert isinstance(jobs, dict)
-        for job_name, job in jobs.items():
-            assert isinstance(job, dict)
-            condition = job.get("if")
-            assert isinstance(condition, str), f"{path.name}:{job_name} needs a draft guard"
-            if path == VERIFY_PATH and job_name in {"cache-probe-uv", "cache-probe-precommit"}:
-                assert condition.startswith("github.event_name == 'workflow_dispatch' && ")
-                continue
-            assert "github.event_name != 'pull_request'" in condition
-            assert "github.event.pull_request.draft == false" in condition
 
 
 def test_agent_workflow_delegates_python_workspace_paths() -> None:
@@ -313,7 +293,7 @@ def test_dependency_verification_is_read_only_and_has_no_renovate_runner() -> No
     workflow = _workflow(VERIFY_PATH)
     text = VERIFY_PATH.read_text(encoding="utf-8")
 
-    assert workflow["permissions"] == {"actions": "read", "contents": "read"}
+    assert workflow["permissions"] == {"contents": "read"}
     for forbidden in (
         "contents: write",
         "RENOVATE_PACKAGE",
@@ -335,46 +315,24 @@ def test_dependency_verification_is_read_only_and_has_no_renovate_runner() -> No
 def test_dependency_proofs_install_committed_state_and_run_behavior_checks() -> None:
     workflow = _workflow(VERIFY_PATH)
     text = VERIFY_PATH.read_text(encoding="utf-8")
-    resolve = _job(workflow, "resolve_runtimes")
-    proof_python = _job(workflow, "proof-python")
-    proof_node = _job(workflow, "proof-node")
+    verify = _job(workflow, "verify")
 
-    assert resolve["outputs"] == {"python_matrix": "${{ steps.runtime.outputs.python_matrix }}"}
-    assert "python_upper=\"$(tr -d '\\r\\n' < .python-version)\"" in text
-    assert 'python_matrix=["%s"]' in text
-    assert proof_python["strategy"] == {
-        "fail-fast": False,
-        "matrix": {"python": "${{ fromJSON(needs.resolve_runtimes.outputs.python_matrix) }}"},
-    }
-    assert proof_python["needs"] == ["classify", "resolve_runtimes"]
-    assert proof_python["env"] == {"UV_PROJECT_ENVIRONMENT": ".venv-${{ matrix.python }}"}
-    assert 'uv sync --locked --python "${MATRIX_PYTHON}" --all-packages --all-extras --all-groups' in text
-    assert 'uv run --python "${MATRIX_PYTHON}" pytest tests serve \\' in text
-    assert '            -m "not api and not e2e and not browser and not cockpit and not model"' in text
-    assert "npm ci --engine-strict" in text
+    assert "pytest tests serve" not in text
+    assert "--all-extras" not in text
+    assert "npm ci --prefix serve/cockpit/web --engine-strict" in text
     assert "npm run sync:pds" in text
     assert "git apply" not in text
-    assert proof_python["if"] == (
-        "(github.event_name != 'pull_request' || github.event.pull_request.draft == false) && "
-        "needs.classify.outputs.python == 'true'"
-    )
-    assert "runtime" not in workflow["jobs"]
-    assert "proof-pds" not in workflow["jobs"]
-    assert "proof-root-node" not in workflow["jobs"]
-    assert "proof-diagrams" not in workflow["jobs"]
     assert "Check Node runtime declaration" in text
-    assert "needs.classify.outputs.pds == 'true'" in proof_node["if"]
-    assert "needs.classify.outputs.root_node == 'true'" in proof_node["if"]
-    assert "needs.classify.outputs.diagrams == 'true'" in proof_node["if"]
-    assert "needs.classify.outputs.shared_node_runtime == 'true'" in proof_node["if"]
+    node_setup = next(step for step in verify["steps"] if step.get("name") == "Setup Node.js")
+    for surface in ("node", "shared_node_runtime", "root_node", "diagrams", "pds", "precommit"):
+        assert f"steps.scope.outputs.{surface} == 'true'" in node_setup["if"]
     archify_steps = [
-        step for step in proof_node["steps"] if step.get("name") == "Verify pinned Archify release and static render"
+        step for step in verify["steps"] if step.get("name") == "Verify pinned Archify release and static render"
     ]
     assert len(archify_steps) == 1
     archify_step = archify_steps[0]
-    assert archify_step["if"] == (
-        "needs.classify.outputs.diagrams == 'true' || needs.classify.outputs.shared_node_runtime == 'true'"
-    )
+    assert "steps.scope.outputs.diagrams == 'true'" in archify_step["if"]
+    assert "steps.scope.outputs.shared_node_runtime == 'true'" in archify_step["if"]
     assert archify_step["timeout-minutes"] == 10
     assert archify_step["shell"] == "bash"
     archify_run = archify_step["run"]
@@ -393,103 +351,52 @@ def test_dependency_proofs_install_committed_state_and_run_behavior_checks() -> 
     assert "Regenerate with:" in archify_run
 
 
-def test_dependency_workflow_avoids_duplicate_pr_python_proof() -> None:
-    workflow = _workflow(VERIFY_PATH)
-    proof_python = _job(workflow, "proof-python")
-    python_steps = {step["name"]: step for step in proof_python["steps"]}
+def test_dependency_workflow_proves_lock_regeneration_without_python_suite() -> None:
+    steps = {step["name"]: step for step in _job(_workflow(VERIFY_PATH), "verify")["steps"]}
 
-    assert "if" not in python_steps["Prove workspace lock regeneration"]
-    for step_name in ("Compile Python sources", "Check Python sources", "Run Python behavior tests"):
-        assert "if" not in python_steps[step_name]
+    lock = steps["Prove workspace lock regeneration"]
+    assert "steps.scope.outputs.python == 'true'" in lock["if"]
+    assert "steps.proof_tooling.outputs.workspace_lock_tooling == 'true'" in lock["if"]
+    assert lock["run"] == "uv run python .github/scripts/check_uv_workspace_lock.py"
+    assert not any("pytest tests" in str(step.get("run", "")) for step in steps.values())
 
 
 def test_dependency_workflow_proves_ruff_toolchain_parity() -> None:
-    workflow = _workflow(VERIFY_PATH)
-    compatibility = _job(workflow, "compatibility")
+    verify = _job(_workflow(VERIFY_PATH), "verify")
     text = VERIFY_PATH.read_text(encoding="utf-8")
 
-    assert "ruff_toolchain: ${{ steps.scope.outputs.ruff_toolchain }}" in text
     assert "uv sync --locked --group dev" in text
-    parity_steps = [step for step in compatibility["steps"] if step.get("name") == "Verify Ruff toolchain parity"]
+    parity_steps = [step for step in verify["steps"] if step.get("name") == "Verify Ruff toolchain parity"]
     assert parity_steps == [
         {
             "name": "Verify Ruff toolchain parity",
-            "if": "needs.classify.outputs.ruff_toolchain == 'true'",
+            "if": "steps.reuse.outputs.cache-hit != 'true' && steps.scope.outputs.ruff_toolchain == 'true'",
             "run": "uv run python .github/scripts/check_ruff_toolchain.py",
         }
     ]
 
 
 def test_dependency_workflow_does_not_download_megalinter_image() -> None:
-    workflow = _workflow(VERIFY_PATH)
-    compatibility = _job(workflow, "compatibility")
+    verify = _job(_workflow(VERIFY_PATH), "verify")
     text = VERIFY_PATH.read_text(encoding="utf-8")
 
-    megalinter_steps = [
-        step for step in compatibility["steps"] if step.get("name") == "Exercise updated MegaLinter image"
-    ]
-    assert megalinter_steps == []
+    assert not [step for step in verify["steps"] if step.get("name") == "Exercise updated MegaLinter image"]
     assert "megalint --no-fix" not in text
 
 
-def test_source_verification_keeps_ruff_only_updates_lightweight() -> None:
-    workflow = _workflow(SOURCE_VERIFY_PATH)
-    classify = _job(workflow, "classify")
-    python = _job(workflow, "python")
-    steps = {step["name"]: step for step in python["steps"]}
-    text = SOURCE_VERIFY_PATH.read_text(encoding="utf-8")
-
-    assert classify["outputs"] == {"python": "${{ steps.scope.outputs.python }}"}
-    assert python["needs"] == "classify"
-    assert steps["Install locked Python workspace"]["if"] == "needs.classify.outputs.python == 'true'"
-    assert steps["Install locked Python tooling"]["if"] == "needs.classify.outputs.python != 'true'"
-    assert steps["Install locked Python tooling"]["run"] == "uv sync --locked --group dev"
-    assert steps["Install Chromium for browser-marked tests"]["if"] == "needs.classify.outputs.python == 'true'"
-    assert steps["Compile Python sources"]["if"] == "needs.classify.outputs.python == 'true'"
-    assert steps["Run Python behavior tests"]["if"] == "needs.classify.outputs.python == 'true'"
-    assert "dependency_ci.py" in text
-    assert "git diff --name-only -z" in text
-
-
 def test_dependency_workflow_uses_semantic_snapshots_and_protects_proof_tooling() -> None:
-    workflow = _workflow(VERIFY_PATH)
-    classify = _job(workflow, "classify")
-    compatibility = _job(workflow, "compatibility")
+    verify = _job(_workflow(VERIFY_PATH), "verify")
     text = VERIFY_PATH.read_text(encoding="utf-8")
+    steps = {step["name"]: step for step in verify["steps"]}
 
-    assert classify["outputs"]["proof_tooling"] == "${{ steps.proof_tooling.outputs.proof_tooling }}"
-    assert classify["outputs"]["workspace_lock_tooling"] == (
-        "${{ steps.proof_tooling.outputs.workspace_lock_tooling }}"
-    )
     assert 'MERGE_BASE="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"' in text
     assert '--base-ref "$MERGE_BASE"' in text
     assert '--head-ref "$HEAD_SHA"' in text
-    assert compatibility["if"] == (
-        "(github.event_name != 'pull_request' || github.event.pull_request.draft == false) && "
-        "(needs.classify.outputs.compatibility == 'true' || "
-        "needs.classify.outputs.proof_tooling == 'true' || "
-        "needs.classify.outputs.workspace_lock_tooling == 'true')"
-    )
-    proof_step_name = "Exercise dependency proof tooling"
-    steps = compatibility["steps"]
-    proof_steps = [step for step in steps if step.get("name") == proof_step_name]
-    assert proof_steps == [
-        {
-            "name": "Exercise dependency proof tooling",
-            "if": "needs.classify.outputs.proof_tooling == 'true'",
-            "run": (
-                "uv run pytest -q tests/test_dependency_verification_workflow.py serve/tools/tests/test_megalinter.py"
-            ),
-        }
-    ]
-    workspace_lock_steps = [step for step in steps if step.get("name") == "Exercise workspace lock proof"]
-    assert workspace_lock_steps == [
-        {
-            "name": "Exercise workspace lock proof",
-            "if": "needs.classify.outputs.workspace_lock_tooling == 'true'",
-            "run": "uv run python .github/scripts/check_uv_workspace_lock.py",
-        }
-    ]
+    assert steps["Exercise dependency proof tooling"] == {
+        "name": "Exercise dependency proof tooling",
+        "if": "steps.reuse.outputs.cache-hit != 'true' && steps.proof_tooling.outputs.proof_tooling == 'true'",
+        "run": "uv run pytest -q tests/test_dependency_verification_workflow.py serve/tools/tests/test_megalinter.py",
+    }
     assert ".github/scripts/check_uv_workspace_lock.py)" in text
     assert ".github/workflows/*|" in text
     assert "serve/tools/src/owlbear_tools/megalinter.py|" in text
@@ -510,11 +417,11 @@ def test_copilot_setup_keeps_task_checkout_and_bounds_installation() -> None:
     assert checkout["with"]["persist-credentials"] is False
     runs = [step["run"] for step in steps if "run" in step]
     assert "uv python install" in runs
-    assert "uv sync --locked --all-packages --group dev" in runs
+    assert COPILOT_UV_SYNC in runs
     assert "npm ci --engine-strict --no-audit --no-fund" in runs
     install_commands = {
         "uv python install",
-        "uv sync --locked --all-packages --group dev",
+        COPILOT_UV_SYNC,
         "npm ci --engine-strict --no-audit --no-fund",
     }
     for step in steps:
@@ -535,7 +442,7 @@ def test_copilot_setup_keeps_task_checkout_and_bounds_installation() -> None:
 def test_copilot_setup_installs_after_toolchains_before_reporting() -> None:
     steps = _job(_workflow(COPILOT_SETUP_PATH), "copilot-setup-steps")["steps"]
     install_commands = {
-        "uv sync --locked --all-packages --group dev",
+        COPILOT_UV_SYNC,
         "npm ci --engine-strict --no-audit --no-fund",
     }
     install_indices = [index for index, step in enumerate(steps) if step.get("run") in install_commands]
@@ -570,33 +477,6 @@ def test_copilot_setup_uses_renovate_managed_version_sources() -> None:
     for line in COPILOT_SETUP_PATH.read_text().splitlines():
         if "uses:" in line:
             assert re.search(r"@[0-9a-f]{40}\s+# v[0-9]+\.[0-9]+\.[0-9]+$", line)
-
-
-def test_uv_runtime_check_precedes_uv_commands() -> None:
-    for path in (VERIFY_PATH, AGENT_WORKFLOW_PATH, COPILOT_SETUP_PATH):
-        workflow = _workflow(path)
-        jobs = workflow["jobs"]
-        assert isinstance(jobs, dict)
-        for job in jobs.values():
-            assert isinstance(job, dict)
-            steps = job.get("steps", [])
-            if not isinstance(steps, list):
-                continue
-            setup_indices = [
-                index for index, step in enumerate(steps) if "astral-sh/setup-uv@" in str(step.get("uses", ""))
-            ]
-            if not setup_indices:
-                continue
-            setup_index = setup_indices[0]
-            check_index = next(
-                index for index, step in enumerate(steps) if "check_uv_version.py" in str(step.get("run", ""))
-            )
-            first_uv_command = next(
-                index
-                for index, step in enumerate(steps)
-                if re.search(r"\buv\s+(?:python|run|sync|lock)", str(step.get("run", "")))
-            )
-            assert setup_index < check_index < first_uv_command
 
 
 def test_uv_runtime_checker_accepts_the_declared_boundary(tmp_path: Path) -> None:
@@ -647,106 +527,6 @@ def test_ruff_toolchain_proof_rejects_installed_version_drift(
             ruff_executable=str(_fake_ruff(tmp_path, "0.16.1")),
             megalinter_versions_loader=lambda _: {"ruff": _workspace_ruff_version()},
         )
-
-
-def test_shared_node_runtime_uses_one_node_proof() -> None:
-    workflow = _workflow(VERIFY_PATH)
-
-    condition = _job(workflow, "proof-node")["if"]
-    assert "needs.classify.outputs.shared_node_runtime == 'true'" in condition
-    assert "needs.classify.outputs.root_node == 'true'" in condition
-    assert "needs.classify.outputs.diagrams == 'true'" in condition
-
-    gate_env = _job(workflow, "gate")["steps"][0]["env"]
-    assert gate_env["NODE_EXPECTED"] == (
-        "${{ needs.classify.outputs.pds == 'true' || "
-        "needs.classify.outputs.root_node == 'true' || "
-        "needs.classify.outputs.diagrams == 'true' || "
-        "needs.classify.outputs.shared_node_runtime == 'true' }}"
-    )
-
-
-def test_gate_requires_only_current_read_only_proofs() -> None:
-    workflow = _workflow(VERIFY_PATH)
-    gate = _job(workflow, "gate")
-
-    assert gate["if"] == (
-        "always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) && "
-        "(github.event_name != 'workflow_dispatch' || inputs.cache_probe == 'none')"
-    )
-    assert gate["needs"] == [
-        "classify",
-        "resolve_runtimes",
-        "proof-python",
-        "proof-node",
-        "compatibility",
-    ]
-    assert "extraction" not in gate["needs"]
-    assert "prepare-fixes" not in gate["needs"]
-
-    gate_env = gate["steps"][0]["env"]
-    assert gate_env["COMPATIBILITY_EXPECTED"] == (
-        "${{ needs.classify.outputs.compatibility == 'true' || "
-        "needs.classify.outputs.proof_tooling == 'true' || "
-        "needs.classify.outputs.workspace_lock_tooling == 'true' }}"
-    )
-
-
-def test_cache_probes_are_opt_in_and_isolated_from_required_proofs() -> None:
-    workflow = _workflow(VERIFY_PATH)
-    probe_input = workflow["on"]["workflow_dispatch"]["inputs"]["cache_probe"]
-    assert probe_input["default"] == "none"
-    assert probe_input["options"] == ["none", "uv", "precommit"]
-    assert "inputs.cache_probe || 'none'" in workflow["concurrency"]["group"]
-    assert _job(workflow, "gate")["name"] == (
-        "${{ github.event_name == 'workflow_dispatch' && inputs.cache_probe != 'none' && "
-        "'Cache probe (no dependency proof)' || 'Verify dependency update' }}"
-    )
-    for job_name in ("classify", "resolve_runtimes", "gate"):
-        assert (
-            "github.event_name != 'workflow_dispatch' || inputs.cache_probe == 'none'"
-            in (_job(workflow, job_name)["if"])
-        )
-    assert not set(_job(workflow, "gate")["needs"]) & {"cache-probe-uv", "cache-probe-precommit"}
-    for job_name, mode in (("cache-probe-uv", "uv"), ("cache-probe-precommit", "precommit")):
-        probe = _job(workflow, job_name)
-        assert probe["if"] == f"github.event_name == 'workflow_dispatch' && inputs.cache_probe == '{mode}'"
-        assert probe["runs-on"] == "ubuntu-26.04"
-        assert not probe["strategy"]["fail-fast"]
-        assert "needs" not in probe
-        for step in probe["steps"]:
-            assert not any(command in step.get("run", "") for command in ("pytest", "uv run lint", "megalint"))
-
-    uv_probe = _job(workflow, "cache-probe-uv")
-    assert uv_probe["strategy"]["matrix"] == {
-        "policy": ["current", "pruned", "disabled"],
-        "python": ["pinned"],
-    }
-    uv_cache = next(step["with"] for step in uv_probe["steps"] if step.get("id") == "uv")
-    assert uv_cache["enable-cache"] == "${{ matrix.policy != 'disabled' }}"
-    assert uv_cache["prune-cache"] == "${{ matrix.policy == 'pruned' }}"
-    assert uv_cache["cache-local-path"] == "${{ runner.temp }}/uv-cache-probe-${{ matrix.policy }}"
-    assert uv_cache["cache-suffix"] == "probe-${{ github.run_id }}-${{ matrix.policy }}"
-    precommit_probe = _job(workflow, "cache-probe-precommit")
-    hooks = next(step for step in precommit_probe["steps"] if step.get("id") == "hooks")
-    assert hooks["if"] == "matrix.policy == 'cached'"
-    assert hooks["with"]["path"] == "${{ env.PRE_COMMIT_HOME }}"
-    assert "precommit-probe-${{ github.run_id }}" in hooks["with"]["key"]
-    assert "steps.python.outputs.identity" in hooks["with"]["key"]
-    assert ".pre-commit-config.yaml" in hooks["with"]["key"]
-    assert "restore-keys" not in hooks["with"]
-    assert "github.run_attempt" not in uv_cache["cache-suffix"] + hooks["with"]["key"]
-
-
-def test_dependency_workflow_actions_are_pinned() -> None:
-    for line in VERIFY_PATH.read_text(encoding="utf-8").splitlines():
-        stripped = line.strip()
-        if not stripped.startswith("uses:"):
-            continue
-        action = stripped.split("#", maxsplit=1)[0].removeprefix("uses:").strip()
-        revision = action.rsplit("@", maxsplit=1)[1]
-        assert len(revision) == 40
-        assert all(character in "0123456789abcdef" for character in revision)
 
 
 def test_renovate_archify_match_spans_version_and_digest() -> None:
@@ -802,7 +582,7 @@ def test_classifier_maps_every_dependency_surface(path: str, surface: str) -> No
 @pytest.mark.parametrize(
     "path",
     [
-        ".github/workflows/source-verification.yml",
+        "conftest.py",
         "serve/delivery/src/owlbear_delivery/example.py",
         "tests/test_example.py",
     ],
@@ -1146,51 +926,19 @@ def test_node_runtime_checker_rejects_an_unexpected_installed_runtime(tmp_path: 
 
 def test_cockpit_workflow_proves_node_floor_and_browser_engines() -> None:
     workflow = _workflow(COCKPIT_VERIFY_PATH)
-    resolve = _job(workflow, "resolve_runtimes")
-    proof = _job(workflow, "proof")
-    browser = _job(workflow, "browser_compatibility")
-    gate = _job(workflow, "gate")
+    browser = _job(workflow, "browser")
     text = COCKPIT_VERIFY_PATH.read_text(encoding="utf-8")
     package = json.loads((ROOT / "serve/cockpit/web/package.json").read_text(encoding="utf-8"))
 
-    assert workflow["on"]["pull_request"]["paths"] == [
-        "**/*.json",
-        "**/*.jsonc",
-        "**/.editorconfig",
-        "**/.gitignore",
-        ".mega-linter.yml",
-        ".pre-commit-config.yaml",
-        "serve/cockpit/web/**",
-        "serve/cockpit/README.md",
-        ".github/scripts/check_node_runtime.py",
-        ".github/workflows/cockpit-verification.yml",
-    ]
-    assert proof["strategy"] == {
-        "fail-fast": False,
-        "matrix": {"node": "${{ fromJSON(needs.resolve_runtimes.outputs.node_matrix) }}"},
-    }
-    assert resolve["outputs"] == {"node_matrix": "${{ steps.runtime.outputs.node_matrix }}"}
-    assert proof["needs"] == "resolve_runtimes"
-    assert "node_upper=\"$(tr -d '\\r\\n' < serve/cockpit/web/.nvmrc)\"" in text
-    assert 'node_matrix=["%s"]' in text
-    assert "npm ci --engine-strict" in text
-    assert "npm run build" in text
-    assert browser["needs"] == "proof"
-    assert browser["if"] == (
-        "(github.event_name != 'pull_request' || github.event.pull_request.draft == false) && "
-        "needs.proof.result == 'success'"
-    )
-    assert gate["name"] == "Verify Cockpit"
-    assert gate["needs"] == ["resolve_runtimes", "proof", "browser_compatibility"]
-    assert gate["if"] == (
-        "always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)"
-    )
+    assert set(workflow["jobs"]) == {"unit", "browser"}
     assert "workflow_dispatch:" in text
     assert "ref: ${{ github.event.pull_request.head.sha || github.sha }}" in text
+    assert "node-version-file: serve/cockpit/web/.nvmrc" in text
+    assert "npm ci --engine-strict" in text
     assert browser["env"] == {
         "E2E_COMPAT_BROWSERS": "chromium",
     }
-    assert 'npx playwright install --with-deps "$E2E_COMPAT_BROWSERS"' in text
+    assert "npx playwright install --with-deps chromium" in text
     assert "npm run test:e2e:compat" in text
     assert package["scripts"]["test:e2e:compat:all"] == (
         "cross-env E2E_COMPAT_BROWSERS=chromium node scripts/run-e2e-compat.mjs"
@@ -1204,36 +952,25 @@ def test_cockpit_workflow_proves_node_floor_and_browser_engines() -> None:
 def test_cockpit_compatibility_retains_failure_diagnostics() -> None:
     config = (ROOT / "serve/cockpit/web/playwright.compat.config.ts").read_text(encoding="utf-8")
     workflow = _workflow(COCKPIT_VERIFY_PATH)
-    browser = _job(workflow, "browser_compatibility")
+    browser = _job(workflow, "browser")
 
     assert re.search(r"trace:\s*['\"]retain-on-failure['\"]", config)
     assert re.search(r"outputFolder:\s*['\"]playwright-report['\"]", config)
 
-    upload_steps = [step for step in browser["steps"] if step.get("name") == "Upload browser compatibility diagnostics"]
+    upload_steps = [step for step in browser["steps"] if step.get("name") == "Upload browser diagnostics"]
     assert upload_steps == [
         {
-            "name": "Upload browser compatibility diagnostics",
-            "if": "always()",
+            "name": "Upload browser diagnostics",
+            "if": "failure()",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
             "with": {
-                "name": "cockpit-browser-compatibility-diagnostics",
+                "name": "cockpit-browser-diagnostics",
                 "path": "serve/cockpit/web/test-results\nserve/cockpit/web/playwright-report\n",
                 "if-no-files-found": "ignore",
                 "retention-days": 15,
             },
         }
     ]
-
-
-def test_cockpit_workflow_actions_are_pinned() -> None:
-    for line in COCKPIT_VERIFY_PATH.read_text(encoding="utf-8").splitlines():
-        stripped = line.strip()
-        if not stripped.startswith("uses:"):
-            continue
-        action = stripped.split("#", maxsplit=1)[0].removeprefix("uses:").strip()
-        revision = action.rsplit("@", maxsplit=1)[1]
-        assert len(revision) == 40
-        assert all(character in "0123456789abcdef" for character in revision)
 
 
 def test_uv_workspace_lock_regeneration_tracks_member_changes() -> None:

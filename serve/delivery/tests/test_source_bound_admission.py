@@ -15,6 +15,7 @@ from owlbear_delivery import (
     DeliveryBlock,
     DeliveryCheckpointTrigger,
     DeliveryCheckpointTriggerKind,
+    DeliveryCommandResult,
     DeliveryFrontier,
     DeliveryObservation,
     DeliveryObservationReceipt,
@@ -83,7 +84,7 @@ kind: outcome
 id: {identity}
 title: Result {identity}
 promise: Deliver {identity}.
-acceptance: [{identity} is observable.]
+acceptance: ["AC-{identity[4:]}: {identity} is observable."]
 commitments: [{commitment}]
 dependencies: [{dependency_list}]
 ```
@@ -171,14 +172,15 @@ def _task_result(
             task_or_finalization_id=task.task_id,
             exact_commit=completed_commit,
             observation_kind="pytest",
-            command_or_procedure="source-bound admission fixture validation",
-            exit_status_or_artifact_locator="exit:0",
+            procedure="source-bound admission fixture validation",
+            result=DeliveryCommandResult(exit_status=0),
             observer_or_runner_identity="pytest",
             observed_at=observed_at,
         )
     )
     review = DeliveryReviewReceipt.create(
         DeliveryReview(
+            review_mode="task",
             exact_commit=completed_commit,
             author_id="Source admission test author",
             reviewer_id="Source admission test reviewer",

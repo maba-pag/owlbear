@@ -240,7 +240,7 @@ def test_agent_workflow_covers_its_contract_tests_without_duplicate_paths() -> N
         "share/instructions/**",
     } <= set(pull_request["paths"])
     assert not {
-        ".github/workflows/dependency-verification.yml",
+        ".github/workflows/tooling.yml",
         "serve/tools/src/owlbear_tools/dependency_ci.py",
         "serve/knowledge-mcp/**",
         "share/agents/knowledge-ingestor.agent.md",

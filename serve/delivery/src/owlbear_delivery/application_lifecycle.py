@@ -55,6 +55,7 @@ from owlbear_delivery.delivery_runtime import (
     FinalizeDeliveryChange,
     parse_delivery_frontier,
 )
+from owlbear_delivery.evidence import DeliveryContextRefusal, DeliveryFinalizationSemantics
 from owlbear_delivery.finalization_reports import (
     ENGINE_FINALIZATION_CATEGORIES,
     FinalizationReport,
@@ -293,6 +294,7 @@ class _LifecycleMixin:
         finalization = snapshot.frontier.finalization
         invalidation = snapshot.frontier.finalization_invalidation
         ready = readiness.executable and readiness.operation is WorkItemActionKind.FINALIZE
+        semantics = runtime.finalization_semantics(readiness.basis.candidate_head)
         return DeliveryFinalizationContext(
             change_id=change_id,
             branch=coordination.branch,
@@ -306,6 +308,8 @@ class _LifecycleMixin:
             finalized_head=finalization.exact_head if finalization is not None else None,
             finalization_invalidation_id=invalidation.invalidation_id if invalidation is not None else None,
             readiness=readiness,
+            semantics=semantics if isinstance(semantics, DeliveryFinalizationSemantics) else None,
+            semantics_refusal=semantics if isinstance(semantics, DeliveryContextRefusal) else None,
         )
 
     def finalize_change(

@@ -49,6 +49,7 @@ from owlbear_delivery.runtime_transaction import (
     TransactionParticipant,
 )
 from owlbear_delivery.state_formats import (
+    SUPPORTED_FORMAT,
     TRANSACTION_ROOTS,
     controller_process_record_bytes,
     format_marker_bytes,
@@ -254,7 +255,7 @@ def test_routes_name_their_owner_and_write_nothing(tmp_path: Path) -> None:
 
 def test_newer_format_routes_to_upgrade_before_any_typed_read(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
-    (_delivery(repository) / "runtime/format.json").write_bytes(format_marker_bytes(2))
+    (_delivery(repository) / "runtime/format.json").write_bytes(format_marker_bytes(SUPPORTED_FORMAT + 1))
     _corrupt_host_local(repository)
     tree = record_tree_digest(repository)
 

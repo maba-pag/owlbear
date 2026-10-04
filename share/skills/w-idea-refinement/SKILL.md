@@ -78,6 +78,9 @@ least one of:
 - observable behavior or result;
 - scope boundaries and preserved behavior;
 - a constraint or risk that changes the viable shape;
+- the operating context: who and what can act on or feed the result, how far each is trusted, and
+  what a failure would cost. Infer it from the repository and the idea; ask only when exposure or
+  stakes are unclear or the idea changes them;
 - what success looks like through the assembled workflow.
 
 Use a lightweight Refinement Turn:
@@ -124,6 +127,7 @@ The idea is refined enough only when:
 - the behaviors or effects that make the result worth using are concrete;
 - the normal workflow and observable result are understandable;
 - scope boundaries and preserved behavior are explicit where material;
+- the operating context is stated, inferred or confirmed;
 - every reduction of a user-stated outcome is explicitly accepted;
 - repository facts have been investigated;
 - genuine user-owned choices are confirmed or explicitly deferred;
@@ -157,6 +161,11 @@ After confirmation, produce this summary. Omit a section only when it is genuine
 - Out of scope: ...
 - Preserved behavior: ...
 - Accepted exclusions: <only user-approved reductions of an originally stated outcome, or none>
+
+### Operating Context
+- Actors and trust: <who or what can act on or feed the result; trusted, trusted but fallible, or untrusted>
+- Exposure and stakes: <what reaches it from outside the trusted set; what a failure costs>
+- Guarded / not guarded: <failure and misuse classes defended against, and those deliberately not>
 
 ### Confirmed Refinements and Choices
 - <clarification or choice, its basis, and any accepted trade-off>

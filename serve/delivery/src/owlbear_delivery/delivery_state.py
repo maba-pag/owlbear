@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from owlbear_delivery.acceptance import CompletionReceiptBundle
 from owlbear_delivery.delivery_admission import DeliveryAdmissionReceipt
-from owlbear_delivery.delivery_runtime import DeliveryFrontier, parse_delivery_frontier
+from owlbear_delivery.delivery_runtime import DeliveryFrontier
 from owlbear_delivery.git_executable import resolve_git_executable
 from owlbear_delivery.identities import ChangeId, Digest
 from owlbear_delivery.remote_git import (
@@ -27,8 +27,11 @@ from owlbear_delivery.remote_git import (
     read_remote_ref,
     run_remote_git,
 )
-from owlbear_delivery.runtime_models import _FRONTIER_SCHEMA_VERSION
+from owlbear_delivery.runtime_models import _FRONTIER_SCHEMA_VERSION, _READABLE_LEGACY_FRONTIER_SCHEMA_VERSION
+from owlbear_delivery.runtime_support import parse_stored_delivery_frontier
 from owlbear_delivery.target_contract import DeliveryContract
+
+_READABLE_LEGACY_FRONTIER = _READABLE_LEGACY_FRONTIER_SCHEMA_VERSION
 
 if TYPE_CHECKING:
     from owlbear_delivery.change_workspace import ChangeCoordination
@@ -39,7 +42,8 @@ _CHANGE_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _BRANCH_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/+:-]*$")
 _STATE_ROOT = ".owlbear/delivery/state"
 _LEGACY_SNAPSHOT_SCHEMA_VERSION = 1
-_SNAPSHOT_SCHEMA_VERSION = 2
+_SNAPSHOT_V2 = 2
+_SNAPSHOT_SCHEMA_VERSION = 3
 
 
 class DeliveryStatePublicationError(RuntimeError):
@@ -88,7 +92,7 @@ class _StateModel(BaseModel):
 class DeliveryStateSnapshot(_StateModel):
     """Sanitized resumable state for one Change at one semantic checkpoint."""
 
-    schema_version: Literal[2] = 2
+    schema_version: Literal[2, 3] = 3
     snapshot_id: Digest = Field(pattern=r"^[0-9a-f]{64}$")
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
     change_id: ChangeId
@@ -216,6 +220,9 @@ def _validate_snapshot_authority(snapshot: DeliveryStateSnapshot) -> None:
     """Validate package, contract, admission, and frontier identity bindings."""
     if snapshot.contract.change_id != snapshot.change_id or snapshot.admission.change_id != snapshot.change_id:
         message = "Delivery-state snapshot authority does not match its Change"
+        raise ValueError(message)
+    if snapshot.schema_version == _SNAPSHOT_V2 and snapshot.frontier.schema_version != _READABLE_LEGACY_FRONTIER:
+        message = "Delivery-state snapshot schema 2 embeds only a schema-18 frontier"
         raise ValueError(message)
     if snapshot.admission.integration_target != snapshot.integration_target:
         message = "Delivery-state snapshot admission target does not match its Change"
@@ -897,7 +904,7 @@ def parse_delivery_state_snapshot(content: bytes) -> DeliveryStateSnapshot:
         frontier_payload = payload.get("frontier")
         if not isinstance(frontier_payload, dict):
             raise TypeError
-        frontier, _canonical = parse_delivery_frontier(_canonical_payload(frontier_payload))
+        frontier = parse_stored_delivery_frontier(_canonical_payload(frontier_payload))
         payload = {
             **payload,
             "schema_version": _SNAPSHOT_SCHEMA_VERSION,
@@ -908,7 +915,7 @@ def parse_delivery_state_snapshot(content: bytes) -> DeliveryStateSnapshot:
         }
         payload["snapshot_id"] = hashlib.sha256(_canonical_payload(payload)).hexdigest()
         return DeliveryStateSnapshot.model_validate_json(_canonical_payload(payload), strict=True)
-    if schema_version != _SNAPSHOT_SCHEMA_VERSION or isinstance(schema_version, bool):
+    if schema_version not in {_SNAPSHOT_V2, _SNAPSHOT_SCHEMA_VERSION} or isinstance(schema_version, bool):
         raise ValueError
     return DeliveryStateSnapshot.model_validate_json(content, strict=True)
 

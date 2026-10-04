@@ -15,9 +15,11 @@ from owlbear_delivery.change_workspace import (
 from owlbear_delivery.completed_history import CompletedHistoryError, CompletedHistoryMissingError
 from owlbear_delivery.delivery_admission import DeliveryAdmissionError
 from owlbear_delivery.delivery_runtime import (
+    DeliveryAcceptanceEvidenceError,
     DeliveryAcceptanceWaitingError,
     DeliveryActionSelectionConflictError,
     DeliveryChangeDispositionConflictError,
+    DeliveryConfirmationError,
     DeliveryRuntimeConflictError,
     DeliveryRuntimeReferenceError,
 )
@@ -112,6 +114,8 @@ def classify_delivery_failure(error: Exception) -> DeliveryFailureClassification
             DeliveryWorkerExclusionRequiredError,
             DeliveryChangeDispositionConflictError,
             DeliveryActionSelectionConflictError,
+            DeliveryAcceptanceEvidenceError,
+            DeliveryConfirmationError,
         ),
     ):
         classification = _classification(error, category=DeliveryFailureCategory.CONFLICT, retry_safe=False)

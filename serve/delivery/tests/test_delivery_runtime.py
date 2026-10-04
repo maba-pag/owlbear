@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 import pytest
 from pydantic import ValidationError
+from serve.delivery.tests.evidence_support import runtime_finalization_proof
 
 from owlbear_delivery import (
     DELIVERY_TRANSITION_ADAPTER,
@@ -38,6 +39,7 @@ from owlbear_delivery import (
     DeliveryChangeStage,
     DeliveryCheckpointTrigger,
     DeliveryCheckpointTriggerKind,
+    DeliveryCommandResult,
     DeliveryContract,
     DeliveryFinalizationInvalidationReceipt,
     DeliveryFinalizationReceipt,
@@ -110,6 +112,17 @@ from owlbear_delivery.runtime_transaction import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _publication_base(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Supply the publication base a workspace-less runtime cannot derive (finalization basis, D12)."""
+    derive = DeliveryRuntime.finalization_diff_base
+
+    def diff_base(runtime: DeliveryRuntime, frontier: DeliveryFrontier | None = None) -> str | None:
+        return derive(runtime, frontier) or "0" * 40
+
+    monkeypatch.setattr(DeliveryRuntime, "finalization_diff_base", diff_base)
+
+
 def test_parse_delivery_frontier_canonicalizes_schema_17_retry_defaults() -> None:
     frontier = DeliveryFrontier(bindings=(OutcomeAuthorityBinding(outcome_id="OUT-001", plan_scope_id="SCOPE-001"),))
     payload = frontier.model_dump(mode="json")
@@ -120,13 +133,11 @@ def test_parse_delivery_frontier_canonicalizes_schema_17_retry_defaults() -> Non
 
     migrated, canonical = parse_delivery_frontier(raw)
 
-    assert migrated.schema_version == 18
+    assert migrated.schema_version == 19
     assert migrated.bindings[0].retry_count == 0
     assert migrated.bindings[0].retry_fingerprint is None
-    assert (
-        canonical
-        == (json.dumps(migrated.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n").encode()
-    )
+    stored = migrated.model_dump(mode="json") | {"schema_version": 18}
+    assert canonical == (json.dumps(stored, sort_keys=True, separators=(",", ":")) + "\n").encode()
 
 
 def test_parse_delivery_frontier_keeps_bytes_written_before_optional_binding_fields() -> None:
@@ -207,14 +218,15 @@ def test_exact_commit_evidence_receipts_validate_identity_and_independence() -> 
             task_or_finalization_id="TASK-001",
             exact_commit="1" * 40,
             observation_kind="pytest",
-            command_or_procedure="uv run pytest focused.py",
-            exit_status_or_artifact_locator="exit:0",
+            procedure="uv run pytest focused.py",
+            result=DeliveryCommandResult(exit_status=0),
             observer_or_runner_identity="GitHub Copilot",
             observed_at=observed_at,
         )
     )
     review = DeliveryReviewReceipt.create(
         DeliveryReview(
+            review_mode="task",
             exact_commit="1" * 40,
             author_id="GitHub Copilot",
             reviewer_id="build-reviewer",
@@ -248,6 +260,7 @@ def test_exact_commit_evidence_receipts_validate_identity_and_independence() -> 
                 | {
                     "review": DeliveryReviewReceipt.create(
                         DeliveryReview(
+                            review_mode="task",
                             exact_commit="2" * 40,
                             author_id="GitHub Copilot",
                             reviewer_id="build-reviewer",
@@ -505,14 +518,15 @@ def _task_result(
             task_or_finalization_id=task.task_id,
             exact_commit=completed_commit,
             observation_kind="pytest",
-            command_or_procedure="focused Delivery runtime test",
-            exit_status_or_artifact_locator="exit:0",
+            procedure="focused Delivery runtime test",
+            result=DeliveryCommandResult(exit_status=0),
             observer_or_runner_identity="pytest",
             observed_at=observed_at,
         )
     )
     review = DeliveryReviewReceipt.create(
         DeliveryReview(
+            review_mode="task",
             exact_commit=completed_commit,
             author_id="Delivery test author",
             reviewer_id="Delivery test reviewer",
@@ -532,35 +546,9 @@ def _task_result(
     )
 
 
-def _finalization_request(exact_head: str) -> FinalizeDeliveryChange:
-    operation_id = "finalize-delivery-runtime"
-    observed_at = datetime(2026, 8, 11, 13, tzinfo=UTC)
-    observation = DeliveryObservationReceipt.create(
-        DeliveryObservation(
-            change_id="delivery-runtime",
-            task_or_finalization_id=operation_id,
-            exact_commit=exact_head,
-            observation_kind="pytest",
-            command_or_procedure="full Delivery finalization validation",
-            exit_status_or_artifact_locator="exit:0",
-            observer_or_runner_identity="pytest",
-            observed_at=observed_at,
-        )
-    )
-    review = DeliveryReviewReceipt.create(
-        DeliveryReview(
-            exact_commit=exact_head,
-            author_id="Delivery finalization author",
-            reviewer_id="Delivery finalization reviewer",
-            evidence=("The exact Change head satisfies finalization authority.",),
-            reviewed_at=observed_at,
-        )
-    )
-    return FinalizeDeliveryChange(
-        operation_id=operation_id,
-        exact_head=exact_head,
-        observations=(observation,),
-        review=review,
+def _finalization_request(runtime: DeliveryRuntime, exact_head: str) -> FinalizeDeliveryChange:
+    return runtime_finalization_proof(
+        runtime, exact_head, "finalize-delivery-runtime", datetime(2026, 8, 11, 13, tzinfo=UTC)
     )
 
 
@@ -683,7 +671,7 @@ def _awaiting_merge_runtime(tmp_path: Path) -> DeliveryRuntime:
     )
     exact_head = "3" * 40
     finalization = runtime.finalize_change(
-        _finalization_request(exact_head),
+        _finalization_request(runtime, exact_head),
         datetime(2026, 8, 11, 14, tzinfo=UTC),
     )
     runtime.mark_awaiting_merge(_ready_receipt(finalization.finalization_id, exact_head))
@@ -697,7 +685,7 @@ def test_finalization_binds_exact_head_and_invalidates_on_head_drift(tmp_path: P
         stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
     )
     exact_head = "3" * 40
-    request = _finalization_request(exact_head)
+    request = _finalization_request(runtime, exact_head)
 
     receipt = runtime.finalize_change(request, datetime(2026, 8, 11, 14, tzinfo=UTC))
 
@@ -733,7 +721,7 @@ def test_review_repair_invalidates_current_finalization_and_replays(tmp_path: Pa
         stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
     )
     finalization = runtime.finalize_change(
-        _finalization_request("3" * 40),
+        _finalization_request(runtime, "3" * 40),
         datetime(2026, 8, 11, 14, tzinfo=UTC),
     )
     runtime.mark_awaiting_merge(_ready_receipt(finalization.finalization_id, "3" * 40))
@@ -760,14 +748,14 @@ def test_review_repair_rejects_finalizing_the_unchanged_head(tmp_path: Path) -> 
         stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
     )
     finalization = runtime.finalize_change(
-        _finalization_request("3" * 40),
+        _finalization_request(runtime, "3" * 40),
         datetime(2026, 8, 11, 14, tzinfo=UTC),
     )
     runtime.prepare_review_repair(finalization.finalization_id, datetime(2026, 8, 11, 16, tzinfo=UTC))
 
     with pytest.raises(DeliveryRuntimeConflictError, match="new Change commit"):
         runtime.finalize_change(
-            _finalization_request("3" * 40),
+            _finalization_request(runtime, "3" * 40),
             datetime(2026, 8, 11, 17, tzinfo=UTC),
         )
 
@@ -780,7 +768,7 @@ def test_target_sync_persists_receipt_invalidates_finalization_and_queues_republ
         stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
     )
     finalization = runtime.finalize_change(
-        _finalization_request("3" * 40),
+        _finalization_request(runtime, "3" * 40),
         datetime(2026, 8, 11, 14, tzinfo=UTC),
     )
     receipt = ChangeTargetSyncReceipt.create(
@@ -819,7 +807,7 @@ def test_external_head_adoption_persists_receipt_invalidates_finalization_and_qu
         stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
     )
     finalization = runtime.finalize_change(
-        _finalization_request("3" * 40),
+        _finalization_request(runtime, "3" * 40),
         datetime(2026, 8, 11, 14, tzinfo=UTC),
     )
     receipt = ChangeExternalHeadAdoptionReceipt.create(
@@ -917,7 +905,7 @@ def test_target_sync_conflict_captures_attention_and_invalidates_finalization(
         stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
     )
     finalization = runtime.finalize_change(
-        _finalization_request("3" * 40),
+        _finalization_request(runtime, "3" * 40),
         datetime(2026, 8, 11, 14, tzinfo=UTC),
     )
 
@@ -1329,7 +1317,7 @@ def test_pull_request_draft_regression_persists_publication_attention(tmp_path: 
     )
     exact_head = "3" * 40
     finalization = runtime.finalize_change(
-        _finalization_request(exact_head),
+        _finalization_request(runtime, exact_head),
         datetime(2026, 8, 11, 14, tzinfo=UTC),
     )
     ready = runtime.mark_awaiting_merge(_ready_receipt(finalization.finalization_id, exact_head))
@@ -1355,7 +1343,7 @@ def test_open_unmerged_pull_request_is_retry_safe_waiting(tmp_path: Path) -> Non
     )
     exact_head = "3" * 40
     finalization = runtime.finalize_change(
-        _finalization_request(exact_head),
+        _finalization_request(runtime, exact_head),
         datetime(2026, 8, 11, 14, tzinfo=UTC),
     )
     runtime.mark_awaiting_merge(_ready_receipt(finalization.finalization_id, exact_head))
@@ -1374,7 +1362,7 @@ def test_closed_unmerged_pull_request_persists_acceptance_attention(tmp_path: Pa
     )
     exact_head = "3" * 40
     finalization = runtime.finalize_change(
-        _finalization_request(exact_head),
+        _finalization_request(runtime, exact_head),
         datetime(2026, 8, 11, 14, tzinfo=UTC),
     )
     runtime.mark_awaiting_merge(_ready_receipt(finalization.finalization_id, exact_head))
@@ -1405,7 +1393,7 @@ def test_merged_pull_request_latch_is_monotonic_and_rejects_regression(tmp_path:
     )
     exact_head = "3" * 40
     finalization = runtime.finalize_change(
-        _finalization_request(exact_head),
+        _finalization_request(runtime, exact_head),
         datetime(2026, 8, 11, 14, tzinfo=UTC),
     )
     runtime.mark_awaiting_merge(_ready_receipt(finalization.finalization_id, exact_head))
@@ -2069,7 +2057,7 @@ def test_implementation_nonadvance_requires_verified_worker_exclusion(
     legacy_attention = after.model_dump(mode="json")
     legacy_attention["bindings"][0]["recovery_attention"].pop("diagnostic_transition")
     parsed, _canonical_bytes = parse_delivery_frontier(json.dumps(legacy_attention).encode())
-    assert parsed.schema_version == 18
+    assert parsed.schema_version == 19
     assert parsed.bindings[0].recovery_attention.diagnostic_transition is None
     assert parsed.bindings[0].active_claim == after.bindings[0].active_claim
 

@@ -40,15 +40,16 @@ _INCOMPLETE_DIAGNOSTIC_CODES = frozenset(
 
 SUPPORTED_VERSIONS = {
     "config": 2,
-    "frontier": 18,
+    "frontier": 19,
     "coordination": 2,
-    "snapshot": 2,
+    "snapshot": 3,
     "host": 1,
     "host_local": 1,
 }
 # Mirror of the Delivery format registry's registered read-upcasts; a parity test pins both.
 READABLE_LEGACY_VERSIONS: dict[str, tuple[int, ...]] = {
-    "snapshot": (1,),
+    "frontier": (18,),
+    "snapshot": (1, 2),
 }
 # Mirror of the registry's fenced rewrites: these versions load only after ``delivery-migrate``.
 MIGRATION_REQUIRED_VERSIONS: dict[str, tuple[int, ...]] = {
@@ -56,7 +57,7 @@ MIGRATION_REQUIRED_VERSIONS: dict[str, tuple[int, ...]] = {
     "frontier": (17,),
 }
 # Mirror of the registry's workspace format (``runtime/format.json``) and migration journal states.
-SUPPORTED_FORMAT = 1
+SUPPORTED_FORMAT = 2
 MIGRATION_JOURNAL_STATES = frozenset({"backed-up", "applying", "applied", "verified", "aborting"})
 # Mirror of the registry's journal kinds: version 1 is a migration, version 2 names ``repair``.
 MIGRATION_JOURNAL_KINDS = {1: "migration", 2: "repair"}
@@ -193,13 +194,13 @@ _CHANGE_RECORD_VERSIONS: dict[str, tuple[int, ...] | None] = {
     "retry_outcome": (1,),
     "retry_repair_binding": (1,),
     "retry_owner_result": (1,),
-    "planning_pause_receipt": (1,),
-    "planning_retry_receipt": (1,),
-    "builder_invocation_receipt": (1,),
-    "builder_plan_promotion_receipt": (1,),
-    "builder_request_resolution_receipt": (1,),
+    "planning_pause_receipt": (1, 2),
+    "planning_retry_receipt": (1, 2),
+    "builder_invocation_receipt": (1, 2),
+    "builder_plan_promotion_receipt": (1, 2),
+    "builder_request_resolution_receipt": (1, 2),
     "builder_handoff_change_intent_head": (1,),
-    "builder_handoff_change_intent_receipt": (1,),
+    "builder_handoff_change_intent_receipt": (1, 2),
     "claim_issuer": (1,),
 }
 _PULL_REQUEST_RECORDS = {

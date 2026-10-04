@@ -24,6 +24,7 @@ from unittest.mock import Mock, patch, sentinel
 
 import pytest
 from pydantic import ValidationError
+from serve.delivery.tests.evidence_support import finalization_proof
 from serve.delivery.tests.test_delivery_state import _commit_corrupt_snapshot
 from serve.delivery.tests.test_draft_pull_request import _Provider
 
@@ -75,6 +76,7 @@ from owlbear_delivery import (
     DeliveryCheckpointPublicationState,
     DeliveryCheckpointTrigger,
     DeliveryCheckpointTriggerKind,
+    DeliveryCommandResult,
     DeliveryCommitment,
     DeliveryCommitmentClass,
     DeliveryContract,
@@ -172,6 +174,7 @@ from owlbear_delivery.delivery_contract_discovery import (
 )
 from owlbear_delivery.delivery_runtime import (
     DeliveryBuilderInvocationSettlement,
+    DeliveryLegacyObservationReceipt,
     DeliveryPlanningRetrySettlement,
     DeliveryRuntimeReferenceError,
     parse_delivery_frontier,
@@ -210,6 +213,7 @@ from owlbear_delivery.recovery import (
     RetryLedgerConflictError,
     digest,
 )
+from owlbear_delivery.runtime_models import _receipt_digest
 from owlbear_delivery.runtime_transaction import ReplacementTransactionParticipant, RuntimeTransaction
 from owlbear_delivery.state_formats import format_marker_bytes
 from owlbear_delivery.storage_io import locked_roots
@@ -481,7 +485,7 @@ def _contract(
             outcome_id="OUT-001",
             title="Acquire work",
             promise="Return one bounded launch package.",
-            acceptance=("The launch is observable.",),
+            acceptance=("AC-001: The launch is observable.",),
             commitment_ids=("COM-001",),
             dependency_ids=(),
         )
@@ -493,7 +497,7 @@ def _contract(
                 outcome_id="OUT-002",
                 title="Report work",
                 promise="Retain one downstream report.",
-                acceptance=("The report is retained.",),
+                acceptance=("AC-002: The report is retained.",),
                 commitment_ids=("COM-001",),
                 dependency_ids=("OUT-001",) if include_downstream else (),
             )
@@ -589,14 +593,15 @@ def _task_result(
             task_or_finalization_id=task.task_id,
             exact_commit=completed_commit,
             observation_kind="pytest",
-            command_or_procedure="PortfolioApplication fixture validation",
-            exit_status_or_artifact_locator="exit:0",
+            procedure="PortfolioApplication fixture validation",
+            result=DeliveryCommandResult(exit_status=0),
             observer_or_runner_identity="pytest",
             observed_at=observed_at,
         )
     )
     review = DeliveryReviewReceipt.create(
         DeliveryReview(
+            review_mode="task",
             exact_commit=completed_commit,
             author_id="Portfolio test author",
             reviewer_id="Portfolio test reviewer",
@@ -616,61 +621,91 @@ def _task_result(
     )
 
 
+_FINALIZATION_RUNTIMES: dict[str, DeliveryRuntime] = {}
+"""Latest fixture runtime per Change; its state supplies the engine-derived finalization basis."""
+
+
+def _legacy_task_result(result: DeliveryTaskResult) -> DeliveryTaskResult:
+    """Return the same result as a D03 record: schema-1 observation and review receipts."""
+    observed_at = result.review.reviewed_at
+    observation_values = {
+        "schema_version": 1,
+        "change_id": result.change_id,
+        "task_or_finalization_id": result.task_id,
+        "step_id": None,
+        "exact_commit": result.completed_commit,
+        "observation_kind": "pytest",
+        "command_or_procedure": "PortfolioApplication fixture validation",
+        "exit_status_or_artifact_locator": "exit:0",
+        "observer_or_runner_identity": "pytest",
+        "observed_at": observed_at,
+    }
+    observation = DeliveryLegacyObservationReceipt.model_construct(observation_id="0" * 64, **observation_values)
+    review_values = {
+        "schema_version": 1,
+        "exact_commit": result.completed_commit,
+        "author_id": result.review.author_id,
+        "reviewer_id": result.review.reviewer_id,
+        "disposition": "pass",
+        "evidence": result.review.evidence,
+        "reviewed_at": observed_at,
+    }
+    review = DeliveryReviewReceipt.model_construct(review_id="0" * 64, **review_values)
+    return result.model_copy(
+        update={
+            "observations": (
+                DeliveryLegacyObservationReceipt(
+                    observation_id=_receipt_digest(observation, "observation_id"), **observation_values
+                ),
+            ),
+            "review": DeliveryReviewReceipt(review_id=_receipt_digest(review, "review_id"), **review_values),
+        }
+    )
+
+
 def _finalization_request(
     change_id: str,
     exact_head: str,
     operation_id: str | None = None,
+    *,
+    runtime: DeliveryRuntime | None = None,
 ) -> FinalizeDeliveryChange:
-    operation_id = operation_id or f"finalize-{change_id}"
-    observed_at = datetime(2026, 8, 11, 13, tzinfo=UTC)
-    observations = (
-        DeliveryObservationReceipt.create(
-            DeliveryObservation(
-                change_id=change_id,
-                task_or_finalization_id=operation_id,
-                exact_commit=exact_head,
-                observation_kind="finalization-observation",
-                command_or_procedure="Portfolio finalization exact-head check",
-                exit_status_or_artifact_locator="observed:clean-reviewed-head",
-                observer_or_runner_identity="Portfolio test observer",
-                observed_at=observed_at,
-            )
-        ),
-    )
-    review = DeliveryReviewReceipt.create(
-        DeliveryReview(
-            exact_commit=exact_head,
-            author_id="Portfolio finalization author",
-            reviewer_id="Portfolio finalization reviewer",
-            evidence=("The exact Change head satisfies finalization authority.",),
-            reviewed_at=observed_at,
-        )
-    )
-    return FinalizeDeliveryChange(
-        operation_id=operation_id,
+    runtime = runtime or _FINALIZATION_RUNTIMES[change_id]
+    return finalization_proof(
+        runtime.finalization_semantics(exact_head),
+        change_id=change_id,
         exact_head=exact_head,
-        observations=observations,
-        review=review,
+        operation_id=operation_id or f"finalize-{change_id}",
+        observed_at=datetime(2026, 8, 11, 13, tzinfo=UTC),
+        procedure="Portfolio finalization exact-head check",
+        author_id="Portfolio finalization author",
+        reviewer_id="Portfolio finalization reviewer",
+        evidence="The exact Change head satisfies finalization authority.",
     )
 
 
-def _runtime(
+def _runtime(  # noqa: PLR0913
     state_root: Path,
     contract: DeliveryContract,
     manager: ChangeWorkspaceManager,
     stage: DeliveryStage,
     completed_commit: str,
+    *,
+    legacy: bool = False,
 ) -> DeliveryRuntime:
     task = _task()
     authority_digest = hashlib.sha256(_canonical(contract)).hexdigest()
     has_task = stage in {DeliveryStage.IMPLEMENTATION, DeliveryStage.COMPLETED}
     has_result = stage == DeliveryStage.COMPLETED
-    result = _task_result(
-        "RESULT-001",
-        contract.change_id,
-        authority_digest,
-        task,
-        completed_commit,
+    shape = _legacy_task_result if legacy else (lambda item: item)
+    result = shape(
+        _task_result(
+            "RESULT-001",
+            contract.change_id,
+            authority_digest,
+            task,
+            completed_commit,
+        )
     )
     bindings = [
         OutcomeAuthorityBinding(
@@ -685,12 +720,14 @@ def _runtime(
         downstream_task = _downstream_task()
         if not contract.outcomes[1].dependency_ids:
             downstream_task = downstream_task.model_copy(update={"dependency_ids": ()})
-        downstream_result = _task_result(
-            "RESULT-002",
-            contract.change_id,
-            authority_digest,
-            downstream_task,
-            completed_commit,
+        downstream_result = shape(
+            _task_result(
+                "RESULT-002",
+                contract.change_id,
+                authority_digest,
+                downstream_task,
+                completed_commit,
+            )
         )
         bindings.append(
             OutcomeAuthorityBinding(
@@ -701,11 +738,13 @@ def _runtime(
                 results=(downstream_result,) if has_result else (),
             )
         )
-    frontier = DeliveryFrontier(bindings=tuple(bindings))
+    frontier = DeliveryFrontier(bindings=tuple(bindings), schema_version=18 if legacy else 19)
     path = state_root / "changes" / contract.change_id / "frontier.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(_canonical(frontier))
-    return DeliveryRuntime(state_root, contract, workspace_manager=manager)
+    runtime = DeliveryRuntime(state_root, contract, workspace_manager=manager)
+    _FINALIZATION_RUNTIMES[contract.change_id] = runtime
+    return runtime
 
 
 def _set_checkpoint(
@@ -965,6 +1004,7 @@ def _seed_loader_composed_completed_change(
             manager,
             stage,
             coordination.last_reviewed_commit,
+            legacy=not marked,
         )
         frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=True)
         change_root = runtime_root / "changes" / change_id
@@ -11697,7 +11737,7 @@ kind: outcome
 id: OUT-001
 title: Observe admission
 promise: Make persisted admission observable.
-acceptance: [Admission is observable.]
+acceptance: ["AC-001: Admission is observable."]
 commitments: [COM-001]
 dependencies: []
 ```
@@ -11759,7 +11799,7 @@ kind: outcome
 id: OUT-001
 title: Observe admission
 promise: Make persisted admission observable.
-acceptance: [Admission is observable.]
+acceptance: ["AC-001: Admission is observable."]
 commitments: [COM-001]
 dependencies: []
 ```
@@ -11834,7 +11874,7 @@ kind: outcome
 id: OUT-001
 title: Reconcile concurrent admission
 promise: Keep admitted runtime state available.
-acceptance: [Concurrent health remains available.]
+acceptance: ["AC-001: Concurrent health remains available."]
 commitments: [COM-001]
 dependencies: []
 ```
@@ -14077,7 +14117,7 @@ kind: outcome
 id: OUT-001
 title: Discover persisted authority
 promise: Make persisted authority observable.
-acceptance: [Admission is observable.]
+acceptance: ["AC-001: Admission is observable."]
 commitments: [COM-001]
 dependencies: []
 ```
@@ -14413,7 +14453,7 @@ kind: outcome
 id: OUT-001
 title: Compose owners
 promise: Delegate exact operations.
-acceptance: [Delegation is observable.]
+acceptance: ["AC-001: Delegation is observable."]
 commitments: [COM-001]
 dependencies: []
 ```
@@ -14559,7 +14599,7 @@ kind: outcome
 id: OUT-001
 title: Complete first admission
 promise: Register the workspace with the verified Design package.
-acceptance: [The admitted Design snapshot is registered.]
+acceptance: ["AC-001: The admitted Design snapshot is registered."]
 commitments: [COM-001]
 dependencies: []
 ```
@@ -14660,7 +14700,7 @@ kind: outcome
 id: OUT-001
 title: Revised outcome
 promise: Revised promise.
-acceptance: [Revised acceptance.]
+acceptance: ["AC-001: Revised acceptance."]
 commitments: [COM-001]
 dependencies: []
 ```
@@ -14740,7 +14780,7 @@ kind: outcome
 id: OUT-001
 title: Publish initial package
 promise: Publish the stable package before workers run.
-acceptance: [The initial package is published.]
+acceptance: ["AC-001: The initial package is published."]
 commitments: [COM-001]
 dependencies: []
 ```
@@ -14833,7 +14873,7 @@ kind: outcome
 id: OUT-001
 title: "Outcome <tag> @team #7"
 promise: "Deliver <script> Fixes #8 @team https://example.test/path `literal`."
-acceptance: [The authored content is rendered safely.]
+acceptance: ["AC-001: The authored content is rendered safely."]
 commitments: [COM-001]
 dependencies: []
 ```
@@ -15395,7 +15435,7 @@ def test_work_item_queries_do_not_resolve_integration_target(
         ("change-b", "OUT-001"),
         ("change-b", "change-b"),
     )
-    assert shown.acceptance == ("The launch is observable.",)
+    assert shown.acceptance == ("AC-001: The launch is observable.",)
     assert grouped[0].change_id == "change-a"
     assert detailed.card.work_item_id == "OUT-001"
     assert resolved == []
@@ -15505,7 +15545,7 @@ kind: outcome
 id: OUT-001
 title: Admit the Change
 promise: Admit exact source authority.
-acceptance: [Admission is observable.]
+acceptance: ["AC-001: Admission is observable."]
 commitments: [COM-001]
 dependencies: []
 ```
@@ -16955,8 +16995,9 @@ def test_get_change_scopes_health_diagnostics_to_requested_change(tmp_path: Path
     assert tuple(item.change_id for item in view.health.diagnostics) == (None, "change-a")
 
 
+@pytest.mark.parametrize("stored", [17, 18])
 def test_repair_stranded_frontier_preserves_raw_evidence_and_reconciles_publication(
-    tmp_path: Path,
+    tmp_path: Path, stored: int
 ) -> None:
     application, _runtimes, _coordinator, state_root = _portfolio(
         tmp_path,
@@ -16964,10 +17005,11 @@ def test_repair_stranded_frontier_preserves_raw_evidence_and_reconciles_publicat
     )
     frontier_path = state_root / "changes/change-a/frontier.json"
     payload = json.loads(frontier_path.read_bytes())
-    payload["schema_version"] = 17
+    payload["schema_version"] = stored
     binding = payload["bindings"][0]
-    binding.pop("retry_count")
-    binding.pop("retry_fingerprint")
+    if stored == 17:
+        binding.pop("retry_count")
+        binding.pop("retry_fingerprint")
     binding["block"] = {
         "block_id": "BLOCK-001",
         "reason": "The previous pilot is stale.",
@@ -17007,7 +17049,7 @@ def test_repair_stranded_frontier_preserves_raw_evidence_and_reconciles_publicat
     repaired = frontier_path.read_bytes()
     history_path = state_root / "changes/change-a/revisions" / expected_digest / "frontier.json"
     assert history_path.read_bytes() == raw
-    assert json.loads(repaired)["schema_version"] == 18
+    assert json.loads(repaired)["schema_version"] == 19
     assert json.loads(repaired)["bindings"][0]["requests"][0]["resolution"]["provenance"] == "user-confirmed"
     pending = json.loads((frontier_path.parent / "state-publication.json").read_bytes())
     assert pending["frontier_digest"] == hashlib.sha256(repaired).hexdigest()
