@@ -1,12 +1,14 @@
 # Delivery N09 — Continuation Entry Cutover and Cockpit Entry Surface
 
 > **Package:** N09 of the [execution plan][n09-section].
-> **This plan (N09-P1) plans N09-A only.** N09-B (retirement and routing) and N09-C (documentation
-> reconciliation) are planned later by N09-P2, after the N05 and N08 plans, N09-A2 and the re-planned N04-P
-> (execution plan §4.2, simplified 2026-10-04; N06 and N07 are cut).
-> **Planned on:** `origin/dev` `ef622c354` (N01-A merged; N01-B and N01-C not merged; Python 3.14.8).
+> **N09-P1 planned N09-A1 and N09-A2** (§1.1–§1.11, §3.2–§3.3). **N09-P2 plans N09-B and N09-C**
+> ([§1.12](#112-entry-cutover-contract-n09-p2), §3.4–§3.5) on `origin/dev` `66dcd5da0` (N03-B #368 and
+> N04-P #369 merged; N05-B1 on PR #371 and N08-C on PR #370 read from their branches). N09-P2 works in the
+> execution plan's [operating context](delivery-redesign-execution-plan.md#19-operating-context).
+> **N09-P1 planned on:** `origin/dev` `ef622c354` (N01-A merged; N01-B and N01-C not merged; Python 3.14.8).
 > Live controller observed read-only: three Changes, frontier schema 18, no deferral, no active claim.
-> **Status:** approved: plan gate `plan-sound` in round 8 of fresh GPT-6.1 Sol challenges (2026-10-03). Product code is unchanged by this phase.
+> **Status:** N09-P1 approved: plan gate `plan-sound` in round 8 of fresh GPT-6.1 Sol challenges (2026-10-03).
+> N09-P2 in review; its PR changes no product code.
 
 ## 1. Contract
 
@@ -350,6 +352,28 @@ and closes #218.
 No other genuine user decision was found. Pause semantics are settled by programme §4.2; D1–D11 are
 engineering choices inside that contract.
 
+**U2 — Periodic memory curation after `/orchestrate` retires** (N09-P2; open; must be answered before
+N09-B starts). *When it applies:* in every long Delivery run. Today `/orchestrate` dispatches the memory
+curator after its third completed cycle and every tenth after that, so long portfolio runs turn pending agent
+lessons into curated memory automatically; short runs never do. *Problem:* retiring `/orchestrate` removes
+that trigger, and a continuation session carries one Change. Options:
+
+- (a) No automatic trigger. Curation runs when the user starts `memory-curator` (`Curate: Periodic curation`);
+  Cockpit's Memory tab already lists pending entries, and the docs say when to curate. Pro: smallest change;
+  Delivery's normal entry stays free of housekeeping (the #218 class of coupling); matches the documented
+  policy that the cadence is opportunistic and the operator invokes the curator (`h-mcp-memory`, curation
+  trigger). Con: pending lessons wait until the user remembers. Risk: low; pending entries are invisible to
+  recall, so nothing breaks, value is only delayed.
+- (b) Move the same cadence into the continuation loop. Pro: keeps today's automatic curation. Con: puts a
+  delegate and its failure rules back into the most important workflow; a one-Change session rarely reaches
+  cycle 3, so it seldom fires. Risk: low to medium (more text in the continuation contract).
+- (c) Cockpit shows the pending count with a copyable curator prompt. Pro: a visible nudge. Con: a Cockpit
+  change for a non-Delivery concern.
+
+**Recommendation: (a).** N09-B's editable paths cover (a) and (b); (c) would add Cockpit paths.
+
+D12–D20 ([1.12](#112-entry-cutover-contract-n09-p2)) are planner choices inside the programme contract.
+
 ### 1.10 Execution-plan delta
 
 This P phase re-splits N09-A. Execution plan §4.4 says the P phase's PR updates §4.2, the schedule
@@ -578,6 +602,111 @@ points; "before release" means the Pause receipt returns while the owner's barri
 | F9 | Owner-drain mutations from an unrelated direct call, for another Change, owner or operation, or inside `continuation_execution` before `started.json`; a direct, lease, snapshot or replay token used for another operation identity; a snapshot token used for another snapshot, package or head | Refused with no partial effect |
 | F10 | Crash after Record and before conversion; crash after conversion and before publication | Restart shows the request or the deferral, never both (I8); tokens rebuild from K2 sources |
 
+### 1.12 Entry cutover contract (N09-P2)
+
+**Result.**
+
+- `/continue-change <change-id>` is the one normal execution entry. `/ideate` and `/design` keep semantic
+  approval, and Design's admission output names the continuation prompt (J02).
+- `/orchestrate` is retired: its prompt is deleted, and `w-orchestration` loses the portfolio batch loop, the
+  portfolio claim check and the periodic housekeeping ([U2](#u-decisions)). The orchestrator agent keeps only
+  what the continuation entry uses. Portfolio monitoring stays in Cockpit and the read tools, and engine
+  coordination (readiness, capacity, dependencies, custody) stays in Delivery.
+- Every other public prompt and control is normal, exceptional, maintenance or retired as listed in the
+  inventory below. A retirement happens only where a tested replacement is named.
+- User-facing documentation describes exactly that surface (P22).
+
+| ID | Requirement | Source |
+| --- | --- | --- |
+| R12 | `/continue-change` is the normal entry; `/orchestrate` is retired as a normal entry; portfolio monitoring and engine coordination are retained | Programme §1.1 R1, §6, WP7 steps 1–2; execution plan §5 N09 |
+| R13 | Every public prompt and control is classified, and each retirement has demonstrated replacement proof | WP7 risk; execution plan §5 N09 *P must settle* |
+| R14 | No old public alias remains as an alternative path after cutover | WP7 step 2 |
+| R15 | Design admission returns the complete continuation prompt | Programme §4.1 J02 |
+| R16 | The continuation entry names `/repair-delivery` when Delivery MCP is unavailable | [N08 plan](delivery-n08-plan.md) G9 |
+| R17 | WIRING, operating guide, setup guides and READMEs match the shipped entries and labels | P22; programme §6 completion ("Documentation matches shipped behavior") |
+| R18 | Periodic memory curation is settled once `/orchestrate` retires | D10; [U2](#u-decisions) |
+
+#### Capability inventory
+
+Prompts (`share/prompts/`) and agents. *Engine-authored* means Delivery or Cockpit writes the command into a
+readiness prompt, card action or diagnostic (P20).
+
+| Entry | Normal capabilities | Exceptional capabilities | Disposition | Replacement proof, or why it stays |
+| --- | --- | --- | --- | --- |
+| `/ideate`, `/design` | Discover, design, approve, admit | `/design` resumes a Design return and, from N04, a requirement change | Normal | Unchanged; admission output adds the continuation prompt (R15) |
+| `/continue-change` | One Change: Planner and Builder launches, issued finalization, the engine actions `reconcile-checkpoint`, `sync-target`, `mark-ready` and `observe-acceptance`, worker settlement and transition routing, `resume-design` handoff, merge-offer pointer (N05-C) | Per-Change claim check and stopped-worker release; engine-authored repair proposal → `repairer`; reports engine-authored exceptional prompts unchanged | **Normal**, the only execution entry | D02; `test_continuation_plans_builds_and_finalizes_via_existing_result_routes`, `test_continuation_publishes_syncs_finalizes_and_observes_acceptance`, `test_continuation_reenters_finalization_with_new_exact_attempt_after_invalidation` (P19) |
+| `/orchestrate` | Portfolio batch (`acquire_actions`) and dispatch across Changes; settlement and transition routing | Portfolio claim check; repair-proposal routing; `recover_claim` and `recover_integration_repair_claim` on acquisition failures; health hint; periodic memory curation; quiescence report | **Retired** (prompt deleted) | Batch dispatch → one `/continue-change` chat per Change; capacity and dependencies stay engine-enforced across sessions (programme §5.2, `_execution_occupancy`). Monitoring → Cockpit portfolio view, guidance and N09-A1 progress; `list_changes`, `get_change`. Claim check → the continuation check, Cockpit **Release stuck worker**, engine `worker-host-lost`. Settlement, transition and repairer routing → kept in `w-orchestration` for continuation. `recover_claim` → Cockpit **Recover claim**, `/resolve-delivery-attention` (it refuses without host exclusion anyway). `recover_integration_repair_claim` → `/resolve-delivery-attention`. Health hint → `get_change` availability, Cockpit health panel, `/repair-delivery`. Curation → U2. Quiescence → Cockpit portfolio |
+| `/finalize-change` | Finalize one exact reviewed head | Fallback that continuation names when its host cannot dispatch Finalizer (`host-capability-unavailable`); `/address-pr-feedback` start-mode handoff | **Exceptional**: kept, removed from normal surfaces (D16) | Normal path → continuation's issued finalization (tests above). Not retired: no full host run of nested Finalizer and `build-reviewer` dispatch under `/continue-change` (G11) |
+| `/resolve-target-conflict` | — | Engine-authored for a preserved target-sync conflict and for a PR with merge conflicts | **Exceptional**; handoff becomes `/continue-change <change-id>` (D15) | Continuation then finalizes and publishes (tests above) |
+| `/address-pr-feedback` | — | User-initiated after external review: `start` (prepare review repair, one commit per thread), `resume` (publish, reply, resolve); engine-authored on the review-repair card | **Exceptional**, user-initiated (D16) | External review arrives outside Delivery's loop; N05-D owns its continuity (#225) |
+| `/resolve-delivery-attention` | — | Engine-authored for typed dispositions and health diagnostics; external-head adoption and promotion, publication-baseline recovery, legacy Integration repair claim recovery | **Exceptional** (kept) | Its own retirement condition (prompt header) is not demonstrated; N09 does not re-audit it |
+| `/release-stuck-worker` | — | Release one user-confirmed stopped worker | **Retired** (prompt deleted, D18) | Cockpit **Release stuck worker** (`test_http_release_stuck_worker_*`, `WorkPortfolio.part1.test.tsx`, `e2e/work-portfolio.spec.ts`) and the continuation claim check, both through the same guarded `release_stuck_worker` (`test_registered_release_stuck_worker_*`). No engine-authored text names the prompt (P20) |
+| `/inspect-change` | — | Read-only diagnosis; engine-authored for `retry-exhausted`, `settled-attention-target-drift`, a retained Design-return handoff and unavailable readiness | **Exceptional** (kept) | Engine-authored and read-only |
+| `/repair-delivery` | — | Offline diagnosis and fenced repair while Delivery is unusable | **Maintenance** (kept) | Programme §11.1; N08-A. N09-B adds the continuation pointer (R16) |
+| `/upgrade-delivery` | — | Controller upgrade and state migration | **Maintenance** (kept) | N02-D, N08-C |
+| Other prompts (`test-curation`, `kb-*`, `*-audit`, `architecture-review`) | Non-Delivery work | — | Unchanged | Outside N09 |
+| Agent `orchestrator` | Continuation controller | — | Kept; persona, tools and delegates trimmed (D14) | — |
+| Agents `finalizer`, `memory-curator` (user-invocable) | — | `/finalize-change`; manual curation | Kept | D16; U2 |
+
+Cockpit controls (P21):
+
+| Control | Disposition |
+| --- | --- |
+| **Copy continuation prompt**, **Pause**/**Resume** (N09-A1, A2); answer request, clear block; **Approve merge** (N05-C), **Change requirements** (N04-C) | Normal |
+| Engine-action buttons (publish checkpoint, synchronize target, make PR ready, check merge status) through Cockpit's HTTP routes (`…/continuation/acquire`, `…/execute`, `…/publication/ready`, `…/acceptance/observe`) | Normal: the same engine owners continuation uses |
+| **Release stuck worker**, **Recover claim**, **Adopt changed PR head**, attention resolution, abandon, move backward; health panel naming `/resolve-delivery-attention` | Exceptional, kept |
+| Card copy command `/finalize-change` on a ready-to-finalize or invalidated publication card | **Removed**: duplicates the continuation prompt the same card already offers (I10) |
+| Portfolio guidance `start-orchestration` and `work-underway` copying `/orchestrate` | **Replaced** by text pointing to each Change's **Copy continuation prompt**; no command (D17) |
+| **Repair Delivery** (cut with N08-B), **Help with this step** (dropped with V17), **Open in Copilot** (not planned) | Not built |
+
+#### Invariants (N09-B, N09-C)
+
+- **I9 Retire only by replacement.** Every retired capability maps to a row above whose replacement exists and
+  is tested. After N09-B no shipped prompt, skill, agent, engine-authored text or Cockpit copy names a retired
+  entry (N09-B grep gate).
+- **I10 One offered entry per step.** A card offers the continuation prompt or one exceptional command, never
+  both for the same step (programme §4.3 item 4).
+- **I11 No new routing machinery.** N09-B adds no Delivery operation, readiness reason, action kind, persisted
+  record or MCP tool. It edits text, removes command strings and changes Cockpit guidance copy.
+- **I12 Engine coordination unchanged.** Readiness, capacity, dependency and custody owners are not edited.
+
+#### Decisions (planner, 2026-10-04)
+
+- **D12 Retire `/orchestrate` entirely.** It is not kept as an exceptional portfolio entry: R1 and WP7 step 2
+  ask for no alternative path, and every capability has a replacement above. Several chats, one per Change, are
+  the developer's normal concurrency; engine capacity governs them.
+- **D13 Keep `acquire_actions` and the guidance wire names.** The MCP tool `acquire_actions` stays registered
+  for engine coordination (R1), tests and disposable rehearsals, granted to no shipped agent and behind the same
+  engine fences. `start-orchestration` and `queued_for_orchestration` keep their identifiers: the user-visible
+  label is already **Copy continuation prompt**, and a rename would touch Python, TypeScript, HTTP models and
+  parity tests with no user-visible effect.
+- **D14 Keep the agent name `orchestrator`.** Programme §6 permits a rename but does not require it; the name is
+  the memory identity and is pinned by WIRING and tests. N09-B rewrites the description, persona and output to
+  the continuation controller and keeps only tools and delegates the remaining text uses (expected removals:
+  `list_changes`, `acquire_actions`, `recover_claim`, `recover_integration_repair_claim`, and `memory-curator`
+  under U2 (a)).
+- **D15 `/resolve-target-conflict` stays explicit.** An internal handler would add continuation dispatch for a
+  rare step that may need the user's judgment; programme §7.3 allows either. Its handoff becomes
+  `/continue-change <change-id>`, because continuation finalizes after a resolved conflict (P19).
+- **D16 `/finalize-change` stays exceptional.** Normal surfaces drop it: Cockpit card commands, Cockpit copy
+  ("run `/finalize-change` again"), the target-conflict handoff and the docs' normal path.
+  `/address-pr-feedback` keeps its finalize-only handoff, because continuation would also publish and mark the
+  PR ready before the `resume` replies (`w-address-pr-feedback` Steps 5–6, P23). The N05 plan §1.7 names
+  `/address-pr-feedback` retirement as N09-B work; N09-P2 keeps it, since external review is user-initiated.
+- **D17 Cockpit portfolio guidance.** `start-orchestration` reads "Copy the continuation prompt of each ready
+  Change" with the count; neither it nor `work-underway` offers a command. `resume-design` and
+  `create-change` are unchanged.
+- **D18 Retire `/release-stuck-worker`.** The Cockpit control and the continuation claim check call the same
+  guarded operation and are tested (inventory row).
+- **D19 No prompt-file migration of `/continue-change`.** Prompt files work with the Local agent today
+  (N09-P1 P8); no replacement host binding has been shown. N10-H exercises the copied prompt in the real host;
+  a future host change is an ordinary PR (G2).
+- **D20 Phase boundary.** N09-B owns every agent-facing and product surface (prompts, skills, agents, WIRING,
+  engine-authored text, Cockpit, tests), so each removal ships with its companions. N09-C owns user-facing
+  prose (operating, setup and sharing guides, READMEs) as the P22 audit after N09-B, N05 and N08-C have
+  merged. Until N09-C merges, user-facing docs on `dev` may still name `/orchestrate`; consumers receive docs
+  only through the manually dispatched `sync-to-main`.
+
 ## 2. Feasibility Probes
 
 All probes ran on `ef622c354` in the lane worktree, read-only, plus read-only reads of live state and
@@ -605,7 +734,22 @@ other lanes' output, so every result was redirected to a file and read back.
 | P17 | Round-6 source re-read of the Sol finding on lane D `0e126b007` (`origin/dev` after N01 and N03-P; publication owners unchanged by N02-A) | Confirmed: `_prepare_checkpoint_head` re-anchors (`application_publication.py:1428`) before `_publish_checkpoint_branch` (`:1278`), whose `publish` reserves the lease (`change_publication.py:267`); the finalization-invalidated return (`application_publication.py:1433-1441`, `:1263-1269`) leaves the queue anchored and unpublished without a crash; re-anchoring is a `_replace` (`delivery_runtime.py:704`) that writes a pending state-publication intent for a portable frontier (`:2348-2357`, `:2380-2386`) and returns early once anchored (`:687-688`); a replay returns the stored receipt for the same package whatever the operation ID (`workspace_snapshots.py:89-93`) and requires the worktree (`:198-211`); `_publish_delivery_state` pushes the pending head under the same branch operation (`portfolio_application.py:1709-1712`); the supervisor replays through `reconcile_pending_checkpoints` (`checkpoint_supervisor.py:68`) | K2 snapshot handoff, K5, F6 |
 | P18 | Round-7 source re-read of the Sol finding in the lane D tree (head not re-observed: terminal exit 130) | Confirmed: `ChangeBranchPublisher._publish` returns the stored receipt when the remote has the head (`change_publication.py:344-349`) before `_reserve_publication` (`:350`); the push path releases the lease before returning (`:389-391`); `_reconcile_change_checkpoint` (`application_publication.py:1203`) then records the branch (`:1279-1280`), creates the draft (`:1294-1313`), updates the summary (`:1314-1332`), publishes state (`:1333-1337`) and acknowledges (`:1338-1340`). The round-6 handoff cite `change_publication.py:267` is the supersession reservation; corrected to `:350` | K2 handoff fast path, K5, F6, §3.3 |
 
-Not run in P (machine load): Vitest, Cockpit build, E2E, any multi-file suite (G6).
+N09-P2 probes ran read-only on `66dcd5da0` in lane D, plus `git show` reads of the PR #371 and PR #370
+branches. Output went to files under `.owlbear/scratch/` (unversioned) because the shared terminal garbles
+foreground output.
+
+| ID | Executed | Result | Premise settled |
+| --- | --- | --- | --- |
+| P19 | Source read of continuation routing: `acquire_change_action` (`application_acquisition.py:356-396`) and `_card_readiness` / `_engine_action_prompt` (`application_readiness.py:1801-1880`, `:1898-1990`); test names in `serve/delivery/tests/test_portfolio_application.py` | Executable `reconcile-checkpoint`, `sync-target`, `mark-ready`, `observe-acceptance` → engine action; executable `finalize` → issued Finalizer launch; otherwise the next worker launch, or `human`/`waiting`/`unsupported`. An executable publication card's readiness prompt is already `/continue-change`. Tests cover plan → build → finalize, sync → finalize → acceptance, and re-finalization after invalidation (`:1608`, `:5603`, `:5988`) | `/continue-change` already routes every normal step; N09-B needs no routing code (I11); D15, D16 |
+| P20 | `git grep` of slash commands in `serve/*/src` and `serve/cockpit/web/src` | Engine-authored: `/continue-change`, `/inspect-change`, `/repair-delivery`, `/design` (`application_readiness.py`, `application_models.py:152`); `/finalize-change` card commands (`work_items.py:1107`, `:1116`; `application_readiness.py:1767`); `/address-pr-feedback` (`work_items.py:1099`, `application_support.py:338`); `/resolve-target-conflict` (`work_items.py:1167`, `:1205`, `:1263`); `/resolve-delivery-attention` (`work_items.py:1344`, `state_repair.py`, Cockpit health panel `WorkPortfolioPage.tsx:461`); `/upgrade-delivery` (`state_repair.py:357`). `/orchestrate` only in Cockpit guidance (`WorkPortfolioPage.tsx:688`). `/release-stuck-worker` nowhere in product source. Cockpit copy names `/finalize-change` at `WorkItemDetail.tsx:1188`, `:1955` | Inventory "engine-authored" column; D16–D18 |
+| P21 | `WorkItemActionKind` (`work_items.py:85-103`); Cockpit HTTP routes (`routes/target_work.py:492-779`); release-stuck tests | Cockpit has continuation acquire and execute, answer, clear block, recover claim, release stuck, move backward, ready, observe acceptance, attention resolve, defer/resume, abandon. Release is covered by HTTP (`tests/test_cockpit_work_items.py:962-1242`), Vitest (`WorkPortfolio.part1.test.tsx:940-1100`), E2E (`e2e/work-portfolio.spec.ts:1123-1221`) and MCP (`test_target_server.py:2164-2245`) | Cockpit inventory; D18 |
+| P22 | `git grep` for retired entries and portfolio steps in `share/`, docs and tests | Skills: `w-orchestration` (session-start, Steps 1, 5, 6, continuation note), `orchestrator.agent.md`, `h-mcp-memory` (curation trigger), `w-mem-curation` (`:9`, `:57`), `w-target-conflict-resolution` (`:75`, `:91`, `:113`), `h-decision-requests:46` (cites Step 3). Tests: `tests/test_agent_ecosystem_validation.py` pins the orchestrate and release prompts and the portfolio route (`:531-540`, `:679`, `:990-1078`, `:1108`, `:1190`); Cockpit Vitest pins `/orchestrate` guidance (`WorkPortfolio.part1.test.tsx:324-326`) and `/finalize-change` card commands (`CockpitShell.test.tsx:103`, `WorkPortfolio.part2.test.tsx:869-934`, fixtures in parts 2–5); `test_work_items.py:559`, `:647`. No E2E names either command. Docs: `README.md:41-43`, `README-consumer.md:20-30`, `:132-142`, `setup/setup-guide.md:201-221`, `setup/operating-owlbear.md` (`/orchestrate`, `/release-stuck-worker`, `/finalize-change` as normal path), `serve/delivery-mcp/README.md:63` (stale `acquire_frontier_work`) | N09-B and N09-C editable paths |
+| P23 | Read `w-address-pr-feedback` Steps 5–6 and `w-design-session` Session Output | `start` hands off to `/finalize-change` and `resume` replies before the ready decision; continuation would also publish and mark ready after finalizing (P19). Admission output names no continuation prompt | D16; R15 |
+| P24 | `git show` of the N05 plan (PR #371 branch) §1.7, §3.6, §3.7 and the N08 plan (PR #370 branch) §3.4, G9; their diff stats | N05-C edits `continue-change.prompt.md`, `w-orchestration`, `orchestrator.agent.md`, the operating guide and `README.md`; N05-D edits `w-address-pr-feedback`; N08-C edits the operating, setup and sharing guides and the consumer README. N05 §1.7 assigns `/address-pr-feedback` retirement to N09-B; N08 G9 assigns the MCP-down pointer to N09-B | Prerequisite order (N09-B after N05-D or N05-C and N08-C); D16; R16 |
+| P25 | Read `h-mcp-memory` curation trigger, `memory-curator.agent.md`, `memory-audit.prompt.md`, Cockpit `MemoryTab.tsx` | The cadence is "opportunistic, not an eventual-processing SLA"; the operator invokes the curator when needed; pending entries are recall-invisible; `memory-curator` is user-invocable; Cockpit lists pending entries (`MemoryTab.tsx:58`) | U2 options |
+
+Not run in N09-P1 (machine load): Vitest, Cockpit build, E2E, any multi-file suite (G6). N09-P2 ran source
+reads only; no test or host run was needed to settle its premises.
 
 ## 3. Phases
 
@@ -859,6 +1003,103 @@ Not run in P (machine load): Vitest, Cockpit build, E2E, any multi-file suite (G
 - **Size / risk:** M / high (custody gating on every effect path; crash ordering; first coordination
   format change).
 
+### 3.4 N09-B — Entry cutover
+
+- **Prerequisites:** N09-P2; N05-D (N05-C when N05-D is not built); N08-C (execution plan §4.2). Package
+  addition: U2 answered.
+- **Editable paths** (re-resolve lines; N05-C, N05-D and N08-C edit some of these files first, P24):
+  - Delete `share/prompts/orchestrate.prompt.md` and `share/prompts/release-stuck-worker.prompt.md`.
+  - `share/skills/w-orchestration/SKILL.md`: remove Step 1, the portfolio half of the session-start check,
+    Step 5 (under U2 (a); under (b) it moves into the continuation section), Step 6, the portfolio output
+    and the "`/orchestrate` remains the unchanged portfolio entry" sentence. Keep Steps 2–4 under their
+    current headings as the shared dispatch, settlement, release and repair rules the continuation section
+    cites, so references such as `h-decision-requests:46` stay valid. Continuation Bindings name
+    `/repair-delivery` when Delivery MCP is unavailable or refuses to start (R16).
+  - `share/agents/orchestrator.agent.md`: description, argument hint, persona, critical rules, `tools`,
+    `agents`, `<agents>` table and output for the continuation controller (D14).
+  - `share/skills/w-design-session/SKILL.md`: Session Output gains `- Next: /continue-change <change_id>`
+    after admission (R15).
+  - `share/skills/w-target-conflict-resolution/SKILL.md` and `share/prompts/resolve-target-conflict.prompt.md`:
+    handoff `/continue-change <change-id>` (D15).
+  - `share/skills/h-mcp-memory/SKILL.md` (curation trigger) and `share/skills/w-mem-curation/SKILL.md`
+    (periodic-mode audience) per U2.
+  - `share/WIRING.md`: orchestrator runtime row and paragraph, Prompt Entry Map (remove `orchestrate` and
+    `release-stuck-worker`; `continue-change` as the normal entry; `finalize-change` as the exceptional
+    fallback), delegation rows for `finalizer` and `memory-curator`.
+  - Product: `serve/delivery/src/owlbear_delivery/work_items.py` (no `command` on the two `FINALIZE`
+    publication actions) and `application_readiness.py` (`_captured_action` `FINALIZE` without `command`);
+    `serve/delivery/tests/test_work_items.py` (`:559`, `:647`) and any assembled assertion of that command.
+  - Cockpit web: `pages/WorkPortfolioPage.tsx` (`guidanceCommands`), `components/PortfolioOperatingSummary.tsx`
+    (D17 text), `components/WorkItemDetail.tsx` (`:1188`, `:1955`: "run the continuation prompt again");
+    `src/CockpitShell.test.tsx`, `src/__tests__/WorkPortfolio.part1.test.tsx`–`part5`, only where an
+    assertion depends on a removed command.
+  - `tests/test_agent_ecosystem_validation.py`: drop the pins on the deleted prompts and the portfolio route,
+    and keep every pin on the continuation section unchanged (P22).
+  - Records: this plan's N09-B progress row; the execution plan's status row.
+- **Required companions:** none of the §1.4 product companions (I11: no new reason, action, status or
+  frontier writer); agent, skill and prompt validators; WIRING in the same phase.
+- **First discriminating check:** the grep gate, run before any edit (it lists the hits of P22) and after
+  (it must be empty): `git grep -n -E '/(orchestrate|release-stuck-worker)([^-a-z]|$)' -- share serve
+  .github ':!**/__tests__/**' ':!**/*.test.tsx'`.
+- **Positive scenarios:**
+  - The validators (`validate_prompts.py`, `validate_agents.py`, `validate_skills.py`) and the ecosystem
+    tests pass with the reduced prompt set; WIRING lists exactly the shipped prompts.
+  - A ready-to-finalize or invalidated publication card has no `command`; its readiness prompt is the
+    `/continue-change` prompt, which Cockpit renders as **Copy continuation prompt** (I10).
+  - Portfolio guidance with queued work shows the D17 text and no copy command.
+  - The admission output template names the continuation prompt.
+  - Every continuation pin in the ecosystem tests passes unchanged: launch, finalization, engine-action,
+    settlement, release and repairer routing are intact.
+- **Negative scenarios:**
+  - The grep gate is empty, and `/finalize-change` appears only in its prompt, the finalizer agent,
+    `w-change-finalization`, the `w-address-pr-feedback` handoff and the continuation fallback text (with
+    their WIRING rows).
+  - No skill or agent still cites Step 1, 5 or 6 of `w-orchestration`, `acquire_actions` or the
+    `list_changes` portfolio check.
+  - The orchestrator `tools` keep every continuation binding (`get_change`, `acquire_change_action`,
+    `execute_change_action`, `transition_delivery`, `settle_worker_invocation`, `release_stuck_worker`).
+  - `acquire_actions` stays registered and its MCP tests pass unchanged (D13).
+- **Inner loop:** `uv run pytest tests/test_agent_ecosystem_validation.py -q -n0`; the three validators;
+  `uv run pytest serve/delivery/tests/test_work_items.py -q -n0`; `npm --prefix serve/cockpit/web test --
+  WorkPortfolio CockpitShell`.
+- **Closeout:** `uv run test --changed --base origin/dev`; `npm --prefix serve/cockpit/web test` and
+  `run build`; Biome on changed frontend files; scoped Ruff; the grep gate. No E2E: no Cockpit interaction or
+  HTTP contract changes and no E2E names a removed command (P22).
+- **LC:** not applicable (no persisted format, loading or startup change).
+- **Size / risk:** M / medium (many small text edits; the risk is deleting a rule continuation still needs,
+  caught by the unchanged continuation pins and the implementation gate).
+
+### 3.5 N09-C — Documentation reconciliation (P22)
+
+- **Prerequisites:** N09-B.
+- **Editable paths:** `setup/operating-owlbear.md`, `setup/setup-guide.md`, `setup/sharing-guide.md`,
+  `README.md`, `README-consumer.md`, `serve/delivery/README.md`, `serve/delivery-mcp/README.md`,
+  `serve/cockpit/README.md`, `share/README.md` (each only where it names an entry, a label or the journey);
+  `tests/test_agent_ecosystem_validation.py` only to keep an existing doc pin true; this plan's progress row;
+  the execution plan's status row.
+- **Contract:**
+  - The normal journey reads: `/ideate` or `/design` → admission returns `/continue-change <change-id>` → run
+    it in Copilot Chat → Cockpit shows progress, requests, **Pause**/**Resume** and **Approve merge** →
+    **Completed**. After an interruption, the same prompt resumes (J08). Several Changes: one chat per Change.
+  - One "Exceptional entries" table replaces the scattered prose: `/resolve-target-conflict`,
+    `/address-pr-feedback`, `/resolve-delivery-attention`, `/inspect-change`, `/finalize-change` (fallback),
+    `/repair-delivery`, `/upgrade-delivery`, each with where it is offered (engine-authored prompt or Cockpit
+    control).
+  - Remove statements that are false on N09-C's base (`/orchestrate`, `/release-stuck-worker`, the portfolio
+    claim check, `/finalize-change` as a normal step, stale tool names such as `acquire_frontier_work`). Keep
+    the wording other packages shipped (N04-C, N05-C, N08-C) and author no policy (P22).
+- **Positive scenarios:** every `/name` in the edited docs has a `share/prompts/<name>.prompt.md`; every bold
+  Cockpit label they quote occurs in `serve/cockpit/web/src`; markdownlint passes on the edited files; the
+  ecosystem tests pass.
+- **Negative scenarios:** `git grep -n -E '/(orchestrate|release-stuck-worker)([^-a-z]|$)'` over the edited
+  docs is empty; no doc presents `/finalize-change` as a normal step or promises **Help with this step**, a
+  **Repair Delivery** control, **Open in Copilot** or an always-on agent (programme §6).
+- **Inner loop:** the two greps; markdownlint on the edited files.
+- **Closeout:** `uv run pytest tests/test_agent_ecosystem_validation.py -q -n0`; markdownlint; `uv run test
+  --changed --base origin/dev` (record it if the runner falls back to the full suite for `setup/` paths).
+- **LC:** not applicable.
+- **Size / risk:** S / low.
+
 ## 4. Progress
 
 | Phase | PR | Exact head | Proof | Challenges | Status |
@@ -866,14 +1107,17 @@ Not run in P (machine load): Vitest, Cockpit build, E2E, any multi-file suite (G
 | N09-P1 | #351 | — | Probes P1–P18 | Sol round 1: revision-required (drain exceptions, custody-neutral pause admission, pause/start atomicity + coordinator inventory, Change progress selection, liveness evidence) → revised; Sol round 2: revision-required (short pause fence, frontier-bound CAS, completion-call drain authority, eligibility-based C4) → revised; Sol round 3: revision-required (recovery authority vs pause policy, settled-owner replay authority, unified admission) → consolidated A2 custody contract; Sol round 4: revision-required (direct/standalone owner rows, owner-specific replay bindings) → revised; consistency pass (§1.6/§3.3/formats aligned with §1.11); Sol round 5: revision-required (pre-lease snapshot drain authority) → revised; Sol round 6: revision-required (anchored pre-lease snapshot handoff) → revised; Sol round 7: revision-required (fast-path handoff lease) → revised; Sol round 8: `plan-sound` | approved (D9 re-split confirmed 2026-10-03; U1 decided (b) 2026-10-03) |
 | N09-A1 | #354 | `3573866ac` | First check `test_undispatched_builder_claim_with_live_issuer_shows_neutral_custody` fails on base (`progress` missing), passes after; `test_delivery_progress.py` 66 passed; `test_work_items.py` + MCP progress test 26 passed; HTTP progress/pause 2 passed; Vitest WorkPortfolio + CockpitShell + CopyCommand targeted pass; `npm run build` pass; `test:e2e:work` 26 passed; Ruff and Biome clean on touched files; `test --changed --base origin/dev`: pytest 2552 passed, 1 failed (HTTP wire snapshot lacked `progress`; fixed; `test_cockpit_work_items.py` + `test_cockpit_boundary.py` rerun 122 passed), Vitest 25 files / 345 passed; P1 housekeeping rerun 1 passed. Repair: 26 new Pause cases (12 retained-custody reasons × group/detail, non-custody blocked control, filtered mixed group) — 23 fail on `e3fc1d482` sources, all pass after; WorkPortfolio.test.tsx 165 passed; `npm run build` pass; Biome clean on 3 touched files; `test:e2e:work` 26 passed; `test --changed --base origin/dev --web` Vitest 25 files / 371 passed. Repair 2 (Pause availability derived by Delivery from the defer intent's own refusal predicates, `pause_available`/`pause_unavailable_reason` on group and detail): 10 assembled fixtures assert projection == defer acceptance, read-only (masked Finalizer and every retained claim/engine-action state refused; passive Finalizer attention, reservation-only retry containment and quiescent Change accepted) plus unreadable coordination and unverified recovery; `test_delivery_progress.py` + `test_work_items.py` + `test_cockpit_boundary.py` + `test_cockpit_work_items.py` 226 passed, 1 failed (projector fixture lacked a second binding; fixed, rerun passed); `test_target_server.py` 126 passed; Vitest WorkPortfolio + CopyCommand + AcceptanceReconciliation 166 passed; `npm run build` pass; Biome and Ruff clean on touched files; `test:e2e:work` 26 passed; `test --changed --base origin/dev`: pytest 2566 passed, 1 failed (runtime writer-inventory invariant counted the read-only probe; frontier guards moved to a module-level mirror; invariant + progress rerun 117 passed), rerun EXIT=0, pytest 2567 passed, Vitest 25 files / 360 passed | Sol implementation round 1: repair-required (retained-custody Pause predicate, filtered custody) → repaired; Sol implementation round 2: repair-required (server-derived Pause availability) → repaired; Sol implementation round 3 `implementation-sound` | merged |
 | N09-A2 | #357 | `7a2d974b3` (round-2 repair; round-1 product `28a446ff6`, candidate `e0da9da1a`; LC oracle `d512a42e4`) | First check `test_pause_under_builder_drains_result_then_converts_and_resumes` (Pause under a Builder claim → `ChangePauseRequest`, acquisition waits, `submit_result` converts → `paused`, Resume restores). `test_change_pause.py` 21 passed (F1–F6, F9, F10, K4, K6, K7, direct markers, refusals); step-1 inventory + K7 writer-declaration tests in `test_delivery_worktree_authority.py` (64 passed with the pause suite); `test --changed --base origin/dev`: pytest 3087 passed, 2 failed (package-export fixture; LC fixture still seeded coordination v2 and the inspector reported `PENDING_EFFECTS_UNKNOWN` for a v1 coordination record — both fixed; LC + diagnostics + module-structure rerun 282 passed; diagnostics consumers + state migration/formats rerun 276 passed), Vitest 25 files / 361 passed; WorkPortfolio Vitest 155 passed after the Pause-requested updates; `npm run build` pass; Biome and Ruff clean on touched files; `test:e2e:work` 25 passed, 1 failed (`unknown paths render the global Not Found view`, `route.fetch: Test ended` teardown race; isolated rerun `--repeat-each=3` 3 passed). LC full form not run here (lead runs `delivery-lc`). Gap repair: operator new-work entries (both adoptions, promotion, target-conflict abort/resolve, review repair, standalone finalization-head reconciliation, out-of-band and baseline recovery, target-sync publication repair, worktree recovery) start through `_operator_start`, a Pause-fenced coordination commit (`start_pause_fenced`) inside their checkpoint lock, and drain only their own named writes; `_publish_checkpoint_branch` grants a reservation only to owners whose K2 row names the queued checkpoint; standalone reconciliation holds a lease token inert until its own lease commits and a start with no owner under a request returns not reconciled without a failure; snapshot tokens bind the exact snapshot (`_bind_snapshot_owner`) and cover the handoff fast path; a mark-ready replay after `finished.json` gets no token. Direct sync/mark-ready lost to Pause stay the typed `ERR_DELIVERY_CHANGE_PAUSE_REQUESTED` refusal (§1.6; engine form returns `stale`/`readiness-changed`). `test_change_pause.py` 41 passed (adds Finalizer via `finalize_change` and report+settlement, host-lost, `release_stuck_worker`, operator start lost/won ×2, Builder drain with in-token refusals, direct sync won/lost, first-task snapshot after its commit, snapshot handoff via supervisor and acquisition replay, handoff fast path, F9 snapshot, F8 Builder and Planner replays, K4 v1 journal and preservation after `coordination-1-to-2`); default-loader restart, MCP and HTTP refusal tests pass; operator-start inventory in `test_delivery_worktree_authority.py`; `test:e2e:work` stuck-worker group 4 passed incl. **Pause requested**; closeout `test --changed --base origin/dev`: pytest 3111 passed, Vitest 25 files / 361 passed; focused rerun after the last source edit (pause, worktree-authority, checkpoint/snapshot portfolio tests) 122 passed; `npm run build` pass; `test:e2e:work` 27 passed (Chromium); Ruff check and format clean on changed Python (Biome ignores `e2e/`; no other frontend file changed in the repair). Sol round-1 repair (`28a446ff6`): (1) worker replay tokens bind only the replaying owner's own digest — `submit_result` rebuilds `AdvanceDelivery` from its verified result receipt, transition, settlement and release bind their own request or envelope — and a replay token without its own digest permits no publication; (2) a repeated `release_stuck_worker` rebuilds authority from its release receipt, finishes that receipt's pending publication and converts; (3) public `PortfolioApplication.defer_change`/`resume_change` retired (only tests called them; MCP and Cockpit already use `set_change_intent`); Pause admission refuses an unreconciled runtime, matching its projection; (4) a recorded request overlays `blocked`/`change-paused` non-executable readiness on every executable card, retained-owner, containment and recovery readiness unchanged; (5) K8 assembled tests: F1 production owner starts inside Pause's Validate→Record window (engine-action acquisition, Finalizer writer, standalone lease held on a thread, direct mark-ready held inside the provider on a thread), F5 Pause between `_engine_action_preflight` and start, F6 bulk push failure with a waiting Pause (failure recorded before conversion), F6 crash/restart/identical replay of direct mark-ready and direct sync, F7 `ready-readback` under Pause and under Resume, F8 old result replay against a later pending intent, Builder-settlement and Planner-advance replays with changed-envelope refusal and in-token foreign-start refusal, F9 digestless replay token; step-1 inventory adds provider-effect gating (call graph to a Pause gate; quarantined-snapshot repair classified deferral-equivalent), the K2 authority-source map with own-request replay digests, checkpoint-lock lifetime of direct and standalone entries, and direct finish markers. Fail-before (`e0da9da1a` sources, `serve/delivery/src` stashed): 9 failed — `test_f8_old_builder_result_replay_never_publishes_a_later_pending_intent`, `test_f9_replay_token_without_its_own_digest_permits_no_publication`, `test_release_stuck_worker_replay_after_crash_publishes_then_converts`, `test_pause_and_resume_admit_only_through_the_change_intent`, `test_unconverted_request_projects_no_executable_new_work`, `test_request_under_custody_blocks_sibling_new_work_and_keeps_owner_readiness` and the 3 unreconciled-runtime Pause cases in `test_portfolio_application.py`; all pass after. `test_change_pause.py` + `test_delivery_worktree_authority.py` 105 passed; portfolio/state/progress/work-items/worker-stall/recovery/MCP/Cockpit suites 1218 passed; `test --changed --base origin/dev` on `28a446ff6`: pytest 3132 passed, 1 failed (`test_http_loader_contains_unknown_custody_without_repeating_effects[observe-acceptance]`: pytest-timeout >30 s inside a `git show-ref` subprocess while the LC container ran; isolated rerun of all 3 parametrizations 3 passed), Vitest 25 files / 361 passed; Ruff check and format clean on 9 touched files; LC full form (`delivery-lc run --form full --candidate 28a446ff6 --previous ac3bf23f9 --uv-cache-volume n00a-uv-cache`, stage `/private/tmp/n09a2-r1-lc`, 132 live records): unmigrated copy refused (`state-migration-required`, gate also names the 3 coordination v1 records, inspector `COORDINATION_MIGRATION_REQUIRED` + `FORMAT_MIGRATION_REQUIRED`, hashes unchanged); `coordination-1-to-2` ×3 + format marker applied and verified, changed records equal the proposal; migrated copy: gate clean, inspector healthy, all 3 Changes loaded, none unavailable; synthetic newer format refused; previous release `ac3bf23f9` refuses the 3 coordination v2 records with typed `state-newer-than-controller` (gate and load) and unchanged hashes; `compare`: live unchanged (132 records). Tool verdict `passed: false` solely from `previous_release_oracle`, which recognised an unsupported downgrade only at `runtime/format.json` when the previous release supports the target format; D3 and §3.3 require exactly this family-version refusal. Oracle fix `d512a42e4` (engineering decision by the lead; no format bump): with the target format supported, the previous release must refuse with typed `state-newer-than-controller` exactly the records whose candidate family version exceeds every version its registry reads, with unchanged hashes and no load; full load only when no family exceeds it; `test_delivery_lc.py` 93 passed (6 new oracle cases + family-bump full form), `test_change_pause.py` 58 passed, Ruff clean. LC full form rerun (`--candidate d512a42e4 --previous ac3bf23f9` = merge-base with `origin/dev`, `--uv-cache-volume n00a-uv-cache`, stage `/private/tmp/n09a2-r2-lc`, 132 live records): **`passed: true`**, run exit 0, launch validated; unmigrated refused (`state-migration-required`, hashes unchanged); 3 coordination + marker migrated and `verified`; migrated gate clean, inspector healthy, 3 Changes loaded, none unavailable; previous gate refuses exactly the 3 coordination v2 records (`previous_beyond` = those 3; registry reads coordination 1), hashes unchanged, no previous load; synthetic newer format refused; `compare`: live unchanged. Round-2 repair `7a2d974b3`: (1) K3 start-commit interleavings `test_k3_acceptance_reservation_commit_races_pause` (`[pause]`, `[start]`; Pause injected in `RetryLedger._commit_summary` of the reservation, before or after its commit) and `test_k3_snapshot_intent_commit_races_pause` (same pair; Pause injected at the intent-creating `update-change-a` coordination commit, before or after): Pause wins → `ChangePauseRequestedError` / not reconciled with no failure recorded; retry-ledger bytes, intent, snapshot receipt, reviewed head and branch unchanged; no provider read or pull request. Start wins → the owner drains (acceptance completes and clears the request; the snapshot anchors, publishes, then converts). Fence-removal check: with `fence=` dropped from `_reserve_acceptance_observation` and the `_validate_update` intent check removed, both `[pause]` cases fail (`DID NOT RAISE`; `reconciled` true) and both `[start]` cases pass; fences restored (`git diff` empty on both files). (2) `repair_quarantined_delivery_state_snapshot` starts through `_operator_start` inside its acquisition and checkpoint locks (refused before any read or push under a request; a started repair drains, then converts); inventory exemption removed and the entry added to the operator-gated set. Failing before: `test_new_quarantined_snapshot_repair_refuses_under_request_without_push`, `test_quarantined_snapshot_repair_start_races_pause[pause]` (`DID NOT RAISE`) and `[start]` (no conversion), plus inventory `test_every_provider_effect_entry_is_reached_only_through_a_pause_gate` and `test_operator_new_work_entries_start_pause_fenced_inside_their_checkpoint_lock`; all pass after. `test_change_pause.py` + `test_delivery_worktree_authority.py` 112 passed; Ruff clean on 3 touched files; `test --changed --base origin/dev --py` 3147 passed (exit 0); no persisted-format change, LC not rerun | Sol implementation round 1: repair-required (replay token copied a foreign pending digest; crashed release replay skipped publication and conversion; second guarded Pause entry; executable readiness under an unconverted request; missing K8 interleavings and inventory properties) → repaired; Sol implementation round 2: repair-required (start-race evidence, snapshot repair exemption) → repaired | candidate ready for round 3 |
+| N09-P2 | — | — | Probes P19–P25 (read-only source and branch reads); markdownlint on a temporary copy | Lead runs the Sol plan gate | in review |
+| N09-B | — | — | — | — | not started (needs U2) |
+| N09-C | — | — | — | — | not started |
 
 ## 5. Verification Gaps
 
 | ID | Claim | Why unproven | Evidence available | Owner | Blocks |
 | --- | --- | --- | --- | --- | --- |
 | G1 | An `alive` issuer window with a held claim may have no running worker | The issuer is the VS Code window process; a stopped chat or an undispatched claim in a live window still reads `alive` (P6, P13) | A1 shows neutral custody, never an active label (I2, D4); D03 user-confirmed release | Accepted D03 limit; N10-H observes it in the host journey | Nothing |
-| G2 | The copied `/continue-change <id> …` prompt binds the right Change in Copilot Chat now and after the Local agent's removal | Input binding is model inference; prompt files are deprecated for Agent Host (P8); no host run in P | D02 named-host rehearsal; VS Code docs 2026-09-30 | N09-P2 (skill migration in the capability inventory); N10-H | N09-P2 |
-| G3 | Some evidence boundary establishes current dispatch, so **Working**, **Checking** and **Repairing** can be emitted | Issuer evidence precedes activation and the launch package, and the probe checks process existence only (P13); a new heartbeat was rejected | None today; the keys stay reserved (D2) | N09-P2 capability inventory records whether any later package supplies such evidence | Nothing in N09-A |
+| G2 | The copied `/continue-change <id> …` prompt binds the right Change in Copilot Chat now and after the Local agent's removal | Input binding is model inference; prompt files are deprecated for Agent Host (P8); no host run in P | D02 named-host rehearsal; VS Code docs 2026-09-30 | N09-P2 settled: no migration (D19); N10-H runs the copied prompt in the real host | Nothing |
+| G3 | Some evidence boundary establishes current dispatch, so **Working**, **Checking** and **Repairing** can be emitted | Issuer evidence precedes activation and the launch package, and the probe checks process existence only (P13); a new heartbeat was rejected | None today; the keys stay reserved (D2). N09-P2: no remaining package supplies dispatch evidence (N06 and N07 cut; N05 adds none) | Keys stay reserved; any later evidence boundary is new work | Nothing |
 | G4 | Every custody acquisition, effect start and provider entry passes a pause-gated entry serialized with its start | P9 and P13 are source reads, not an inventory | Named coordinator, manager and application chokepoints; 16 `_require_no_active_change_claim` call sites | N09-A2 step 1 inventory test | N09-A2 merge |
 | G5 | #218 is closed with evidence | The agent has not yet posted the evidence comment (U1 (b)) | PR #308, P1 test run | Agent (U1 (b)) | N10-M programme closure |
 | G6 | Frontend, build and E2E behave as planned | Not run in P (machine load); only Python probes ran | Source reads P3, P4, P12 | N09-A1 closeout | N09-A1 merge |
@@ -881,5 +1125,6 @@ Not run in P (machine load): Vitest, Cockpit build, E2E, any multi-file suite (G
 | G8 | `ready-to-merge` stays correct once exact-head merge approval exists | N05 not planned yet (in progress in another lane) | Programme §4.2, §10.2 | N05-P / the N05 phase that adds **Approve merge** updates M10 | Nothing in N09-A |
 | G9 | `needs-decision` for unknown issuer evidence does not lead users to release a live worker | Behavioral, host-level | `release_stuck_worker` 30-second write and process guard | Accepted D03 guard; N10-H | Nothing |
 | G10 | K4's projection reproduces the stored digest of every issued recovery journal and preservation receipt across `coordination-1-to-2` | No live journal or receipt was inspected; equality rests on sorted-key encoding (P15) | `_model_content` (`workspace_models.py:2075-2077`); F7 | N09-A2 fixtures with v1 journals and receipts migrated by `delivery-lc` | N09-A2 merge |
+| G11 | Under `/continue-change`, a real host dispatches the nested Finalizer and its `build-reviewer` and finalizes | N03-B rehearsed the reviewer only; a full Finalizer chat against a Delivery MCP server was not run (N03 plan G4 limit; programme §6) | Engine tests of the issued finalization (P19); N03-B reviewer rehearsal | N10-H host journey | Nothing: `/finalize-change` stays as the fallback (D16) |
 
 [n09-section]: delivery-redesign-execution-plan.md#n09--continuation-entry-cutover-and-cockpit-entry-surface
