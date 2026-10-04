@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -15,6 +16,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+from serve.delivery.tests.confirmation_support import SCOPED_REQUEST_ID, scoped_request_case
 from serve.delivery.tests.test_delivery_progress import _progress_portfolio
 from serve.delivery.tests.test_portfolio_application import (
     _assert_checkpoint_branch_operation,
@@ -89,6 +91,7 @@ from owlbear_delivery.completed_history import (
     CompletedChangePage,
     ReceiptCompletedChangeRecord,
 )
+from owlbear_delivery.consent_generation import ConsentGenerationStore
 from owlbear_delivery.delivery_application_loader import (
     DeliveryApplicationLoadError,
     DeliveryStartupConfig,
@@ -4050,3 +4053,25 @@ def test_http_retry_diagnostic_is_blocked_and_projected(tmp_path: Path) -> None:
     assert after_payload == before_payload
     assert coordinator.show("change-a") == before_coordination
     assert _workspace_mutation_snapshot(launch.worktree_path) == before_workspace
+
+
+def test_http_answer_cannot_confirm_a_scoped_request(tmp_path: Path) -> None:
+    """Until U2 is answered a Cockpit click never counts as the user's confirmation; nothing is written."""
+    application, runtime, state_root = scoped_request_case(tmp_path)
+    before = runtime.frontier_bytes()
+    with TestClient(assemble_target_app(application)) as client:
+        response = client.post(
+            f"/api/changes/change-a/requests/{SCOPED_REQUEST_ID}/answer",
+            json={
+                "selected_option_id": "waive",
+                "provenance": "user-confirmed",
+                "expected_frontier_digest": hashlib.sha256(before).hexdigest(),
+            },
+        )
+    assert response.status_code == 409
+    diagnostic = response.json()
+    assert diagnostic["code"] == "ERR_DELIVERY_CONFIRMATION"
+    assert "channel-unavailable" in diagnostic["detail"]
+    assert runtime.frontier_bytes() == before
+    assert runtime.confirmations() == ()
+    assert ConsentGenerationStore(state_root, "change-a").latest("waive", SCOPED_REQUEST_ID) is None
