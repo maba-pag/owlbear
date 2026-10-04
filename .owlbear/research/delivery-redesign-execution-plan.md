@@ -495,14 +495,15 @@ so implementation re-resolves paths after N01 moves code.
 | N03-P | N02-P |
 | N03-A | N03-P, N02-B |
 | N03-B | N03-A |
-| N03-C | N03-B |
+| N03-C | N03-B; N03 plan U2 answered |
 | N04-P | N03-P |
 | N04-A | N04-P, N03-C |
 | N04-B, N04-C, N04-D | the previous N04 phase |
 | N05-P | N02-P |
 | N05-A | N05-P, N01-P, N00-C; N05-P must list editable paths disjoint from every N01 phase's paths |
 | N05-B | N05-A, N01-C, N02-B |
-| N05-C, N05-D | the previous N05 phase |
+| N05-C | N05-B, N03-A (user-only confirmation boundary, N03 plan D13); N03 plan U2 answered (N05 plan F10) |
+| N05-D | N05-C |
 | N06-P | N03-P |
 | N06-A | N06-P, N03-C |
 | N06-B, N06-C | the previous N06 phase |
@@ -617,7 +618,7 @@ every new item exactly one lane.
 | N02-B | merged | #352 (code head `7500600c7`; Sol `implementation-sound` round 5; full LC pass) |
 | N02-C | — | — |
 | N02-D | — | — |
-| N03-P | merged | #349 (plan gate `plan-sound`, round 6; D11 confirmed 2026-10-03; U1 decided (b) by the user 2026-10-03; #360 adds the confirmation boundary D13 and opens U2 before N03-C) |
+| N03-P | merged | #349 (plan gate `plan-sound`, round 6; D11 confirmed 2026-10-03; U1 decided (b) by the user 2026-10-03; #360 adds the confirmation boundary D13 with legacy and modern elicitation routes and opens U2, covering Cockpit merge approval and retirement, before N03-C and N05-C) |
 | N03-A | — | — |
 | N03-B | — | — |
 | N03-C | — | — |
@@ -626,7 +627,7 @@ every new item exactly one lane.
 | N04-B | — | — |
 | N04-C | — | — |
 | N04-D | — | — |
-| N05-P | merged | #353 (plan gate `plan-sound`, round 12; amendments F1–F8 confirmed 2026-10-03; U1 (a), U2 (b), U3 (a) + (e) by the user, U4 (b) decided 2026-10-03; U3 (e) revises programme §10.2) |
+| N05-P | merged | #353 (plan gate `plan-sound`, round 12; amendments F1–F8 confirmed 2026-10-03; U1 (a), U2 (b), U3 (a) + (e) by the user, U4 (b) decided 2026-10-03; U3 (e) revises programme §10.2; #360 adds F10: approval, retirement and reply decisions on the N03 D13 boundary) |
 | N05-A | merged | #356 (code head `a4951b044`; Sol `implementation-sound` round 2; Ubuntu CI exact head) |
 | N05-B | — | — |
 | N05-C | — | — |
@@ -972,7 +973,9 @@ LC gate: full form.
 
 - When a Change is ready, Cockpit shows **Approve merge** with the repository, PR, exact reviewed
   head, target, proof and required-check summary, and the merge method. The continuation chat
-  offers the same bounded approval.
+  offers the same bounded approval. The approval is a user-only confirmation through the N03 D13
+  boundary (N05 plan D14); if N03 plan U2 is answered (b), Cockpit shows the offer without an approve
+  control and the approval happens in chat.
 - The approval binds the exact head and target. Before the merge, the provider re-reads PR state,
   head, target, rules, mergeability and checks. A head change invalidates the approval. A target
   change requires sync, revalidation and fresh review where the proof depends on it. No GitHub
@@ -1015,7 +1018,8 @@ part), V12, V19; L1, L2; #225.
 - N05-B: approval identity and invalidation, engine merge action, readiness L1/L2, distinct waits,
   exactly-once completion, automatic cleanup.
 - N05-C: MCP/HTTP and Cockpit confirm/cancel/error states, stale-confirmation E2E, continuation
-  prompt path, governance text.
+  prompt path, governance text. Approval, retirement and reply decisions use the N03 D13 user-only
+  boundary (N05 plan D14); whether a Cockpit click counts follows N03 plan U2.
 - N05-D: #225 PR-feedback continuity.
 
 LC gate: full form from N05-B.
@@ -1233,7 +1237,8 @@ The programme is complete when all of the following hold:
 - **N02:** pinning of this repository's live controller and the upgrade UX (decided 2026-10-03:
   N02 plan U1 (a), U2 (a)).
 - **N03:** user waivers (U1, decided 2026-10-03: (b), captured through the D13 confirmation
-  boundary); whether Cockpit confirmations count as user-only (U2, open, required before N03-C).
+  boundary); which clicks and answers count as the user's agreement for waivers, human-confirmed checks
+  and N05 merge approval and retirement (U2, open, required before N03-C and N05-C).
 - **N05:** merge-method policy (U1); real merge rehearsal on a disposable repository (U2); target
   freshness and the execution-time target race (U3) (decided 2026-10-03: N05 plan U1 (a), U2 (b),
   U3 (a) + (e), U4 (b)).

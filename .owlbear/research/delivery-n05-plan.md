@@ -6,7 +6,9 @@
 > **Round 3:** lock, runtime and transport locators rechecked at `origin/dev` `58c4d928b` (N01 merged).
 > **Status:** approved: plan gate `plan-sound` in round 12 of fresh GPT-6.1 Sol challenges (2026-10-03).
 > Product code is unchanged by this phase. U1–U4 decided 2026-10-03 ([1.9](#19-user-decisions)):
-> U1 (a), U2 (b), U3 part 1 (a) and part 2 (e), U4 (b).
+> U1 (a), U2 (b), U3 part 1 (a) and part 2 (e), U4 (b). PR #360 round 2 moves merge approval, retirement
+> and reply decisions onto the user-only confirmation boundary of N03 D13 (D14); whether a Cockpit click
+> also counts is N03 U2, open before N05-C.
 
 ## 1. Contract
 
@@ -15,6 +17,9 @@
 - A Change whose exact reviewed head is published, ready and mergeable offers **Approve merge** in
   Cockpit and the same bounded approval in the continuation chat. The offer shows repository, PR,
   exact reviewed head, target branch and head, proof and required-check summary, and merge method.
+  The approval itself is a user-only confirmation through the N03 D13 boundary (D14): the chat asks
+  it as an MCP elicitation; a Cockpit click counts only if N03 U2 so decides, otherwise Cockpit shows
+  the offer and points to the chat.
 - One approval authorizes one exact merge offer. Delivery's engine executes it through the provider
   adapter after a fresh re-read of PR state, head, stack, target, rules, mergeability and required
   checks. A head change invalidates the approval for any further request; a sent request stays
@@ -39,7 +44,7 @@
 
 | ID | Requirement | Source |
 | --- | --- | --- |
-| R1 | **Approve merge** in Cockpit and chat with repository, PR, exact head, target, proof and required-check summary, merge method | Execution plan §5 N05; programme §4.2, §10.2, J05–J06; R3 |
+| R1 | **Approve merge** in Cockpit and chat with repository, PR, exact head, target, proof and required-check summary, merge method; the approval is a user-only confirmation (N03 D13; a Cockpit click counts only per N03 U2) | Execution plan §5 N05; programme §4.2, §10.2, J05–J06; R3; PR #360 round 2 |
 | R2 | Approval binds exact head and target; pre-merge provider re-read of PR state, head, stack, target, rules and checks; head change invalidates; target change per U3(a); execution-time target and scope race detected and reported per U3(e) | §10.2 (revised 2026-10-03); V19; V11 (approval part) |
 | R3 | Unknown merge response is read back before any retry; no duplicate or unapproved merge | §6.1 unknown write; §10.2; V12 |
 | R4 | Completion observed exactly once when the finalized head merges, including manually in GitHub; a merge at another head is acceptance attention, never completion | §10.1; §10.2; J06 |
@@ -85,8 +90,9 @@
   already terminal `merged`, and restart. It reads only the merge commit, parent 1 and merged base
   that M2 persisted on the attempt record, so every path gives the same answer; a raced series never
   latches, completes or cleans up, and a repeated observation returns the recorded attention.
-- **I5 No inferred approval.** Only the two adapters (Cockpit HTTP after a visible confirmation,
-  MCP `approve_merge` with `confirmation="user-confirmed"`) create approvals. Proposal approval,
+- **I5 No inferred approval.** Only a user confirmation captured by a boundary adapter creates an
+  approval (D14): MCP `approve_merge` through N03 D13 elicitation, and Cockpit HTTP only where N03 U2
+  (a), (c) or (d) makes a Cockpit click count. No caller argument confers it. Proposal approval,
   readiness, the engine, the supervisor and workers never approve.
 - **I6 Cleanup never forces.** Automatic cleanup uses the existing `ChangeWorkspaceManager.cleanup`
   path; computed attention (dirty, untracked, ownership, branch mismatch) stops before any
@@ -123,13 +129,13 @@ implementation against the registry then on `origin/dev`.
 
 | Family (proposed registry ID) | Path | Owner model (module) | Class | Identity over bytes | Phase |
 | --- | --- | --- | --- | --- | --- |
-| `merge_approval` | `merge-approvals/<approval_id>/approval.json` | `MergeApprovalRecord` (new `merge_approval`) | R | `approval_id` = SHA-256 of `offer_id` and `confirmation_id` (D4) | N05-B |
+| `merge_approval` | `merge-approvals/<approval_id>/approval.json` | `MergeApprovalRecord` (new `merge_approval`), embedding its `DeliveryActionConfirmation` (D14) | R | `approval_id` = SHA-256 of `offer_id` and `confirmation_id` (D4) | N05-B |
 | `merge_approval_revocation` | `merge-approvals/<approval_id>/revocation.json` | `MergeApprovalRevocation` | R | `revocation_id` | N05-B |
 | `merge_attempt` | `merge-approvals/<approval_id>/attempts/<operation_id>.json`; frozen bodies `merge-approvals/<approval_id>/request-bodies/<sha256>.json` (read-only, never rewritten) | `MergeAttemptRecord`: one request series per approval (1.11); per submission (first request and each M8 re-request): frozen body digest (file written before spawn, D16), process group ID and start time (after spawn), release record (before the release token), response, UUID or adopted `409` UUID; per series: a head-drift record (first drifted head; blocks M8, 1.11); series state `intent → released` (first release recorded) `→ pending` or `unknown →` terminal `merged`, `refused`, `head-changed` (M3 only) or `revoked-unsent`; an unreleased series reaches `merged` or `head-changed` directly on merged evidence (1.11) | M (bodies R) | file name = engine operation ID of the creating action; body file name = SHA-256 of its bytes | N05-B |
 | `coordination` (changed) | `runtime/coordination/changes/<change>.json` | nested `ChangeContinuationAction`: kind `merge-pull-request`, `merge_approval_id`, `publication_observation_id`, `reconciles_operation_id` | M | nested | N05-B |
 | `action_result` (changed) | `action-receipts/<op>/result.json` | `DeliveryEngineActionResult`: `merge` receipt, merge reasons | R | operation ID | N05-B |
 | `retry_*`, `recovery_*` (changed) | `retry-ledger/**`, `invocations/*.json` | `RetryEpisodeKey` kinds `merge-pull-request` (effect: one reservation per submission; closing it counts budget only, 1.11) and `merge-readback` (D6); `RecoveryInvocationRequest.kind` (`recovery.py:53`) | M/R | unchanged | N05-B |
-| `merge_retirement` (U4(b) only) | `merge-approvals/<approval_id>/retirement.json` | `MergeRetirementRecord` (`merge_approval`): hold snapshot, `confirmation_id`, provenance, time (U4) | R | `retirement_id` = SHA-256 of `approval_id` and `confirmation_id` | N05-B |
+| `merge_retirement` (U4(b) only) | `merge-approvals/<approval_id>/retirement.json` | `MergeRetirementRecord` (`merge_approval`): hold snapshot, its `DeliveryActionConfirmation` (D14), time (U4) | R | `retirement_id` = SHA-256 of `approval_id` and `confirmation_id` | N05-B |
 | `review_feedback_handoff` | `review-feedback/<handoff_id>/handoff.json`, `revisions/<digest>.json` | `ReviewFeedbackHandoff` (new `review_feedback`; kind `repair` or `no-repair`) | M (CAS revisions, R history) | `handoff_id` | N05-D |
 | `review_reply` | `review-feedback/<handoff_id>/replies/<reply_id>.json`; frozen bodies `review-feedback/<handoff_id>/reply-bodies/<sha256>.json` (read-only) | `ReviewReplyReceipt`: frozen body digest (file written before spawn, D16); `intent → released` (release recorded) `→ posted` or `not-posted`; `unknown` until a marker hit (Y2); a CAS revision records a Y4 user decision before any transport: decision identity, `confirmation_id`, and `repost` with its replacement `reply_id` or `leave-unposted` (a user choice, never evidence; state stays `unknown`); 1.11 | M (CAS revisions) | `reply_id`; a replacement's `reply_id` = SHA-256 of the decision identity | N05-D |
 
@@ -150,15 +156,15 @@ Completion receipts, latches and observation receipts keep their bytes (I2 of N0
 | `MergeOffer` (projection on `DeliveryReadiness.merge_offer`) | B | Fields of I1 plus title, proof summary (finalization observation count, review ID), check summary (required passed/pending/failed, optional failed); `offer_id` excludes the title |
 | `MergeHold` (projection on `DeliveryReadiness.merge_hold`) | B | Fields of [1.13](#113-held-merge-state-and-user-exit): `row` M6, M8, M9, or M7 only when `merge_reads_exhausted`; `cause` includes `pending-provider-request` (M7); null while not held, including M7 before exhaustion; computed from the attempt record, D6 ledger and fresh read; no persisted field, no N02 registry change |
 | `PortfolioApplication.check_merge_status(change_id, approval_id)` | B | One 1.11 read per call; no request, reservation or budget reset (1.13); returns the settlement (on M3 with the acceptance attention it records) or the refreshed `MergeHold` (a matching `pending` under exhaustion: row `M7`, cause `pending-provider-request`); `ERR_DELIVERY_MERGE_NOT_HELD` when no nonterminal attempt matches `approval_id`; a failed read keeps the hold (`read-failed`) |
-| `PortfolioApplication.retire_held_merge(RetireHeldMerge)` (U4(b) only) | B | Inputs `change_id`, `approval_id`, `confirmation_id`, `provenance`; contract of U4(b) (1.9): one fresh 1.11 read first (M2–M5 wins, no record); else writes the retirement record; no provider write; `ERR_DELIVERY_MERGE_NOT_HELD` unless held with `merge_reads_exhausted` |
-| `PortfolioApplication.approve_merge(ApproveChangeMerge)` | B | Inputs `change_id`, `offer_id`, `confirmation_id` (one per visible confirmation), `provenance` (`cockpit` or `chat-user-confirmed`), `host_id`, `session_id`. Recomputes the offer from a fresh observation; idempotent per offer and confirmation; while an approval is live, returns it. Errors `ERR_DELIVERY_MERGE_OFFER_STALE` (carries the fresh offer or block), `ERR_DELIVERY_MERGE_UNAVAILABLE` (typed block), provider errors |
+| `PortfolioApplication.retire_held_merge(RetireHeldMerge)` (U4(b) only) | B | Inputs `change_id`, `approval_id`, `confirmation` (`DeliveryActionConfirmation`, action `retire-held-merge`, decision `retire`, built only by a boundary adapter, D14); contract of U4(b) (1.9): one fresh 1.11 read first (M2–M5 wins, no record); else writes the retirement record; no provider write; `ERR_DELIVERY_MERGE_NOT_HELD` unless held with `merge_reads_exhausted` |
+| `PortfolioApplication.approve_merge(ApproveChangeMerge)` | B | Inputs `change_id`, `offer_id`, `confirmation` (`DeliveryActionConfirmation`, action `approve-merge`, subject `offer_id`, decision `approve`, built only by a boundary adapter, D14), `host_id`, `session_id`. Recomputes the offer from a fresh observation; idempotent per offer and confirmation; while an approval is live, returns it. Errors `ERR_DELIVERY_MERGE_OFFER_STALE` (carries the fresh offer or block), `ERR_DELIVERY_MERGE_UNAVAILABLE` (typed block), provider errors |
 | `PortfolioApplication.revoke_merge_approval(change_id, approval_id)` | B | Allowed when no attempt exists or no submission has a release record (row M1; a recorded unreleased group is confirmed gone or killed first; settled `revoked-unsent`, fence released); a fresh read showing the PR merged settles M2 or M3 instead and returns it; else `ERR_DELIVERY_MERGE_IN_PROGRESS` |
 | Engine action `merge-pull-request` | B | Acquired through `acquire_change_action` when a live approval exists; executed by `execute_change_action`. Results: `completed` (row M2, `PullRequestMergeReceipt`), `waiting/merge-in-progress` (M7), `stale/readiness-changed` (no request sent), terminal `head-changed` or `refused` (rows M3–M5: series and approval end, custody and fence released; M3 then yields acceptance attention, not completion), `merge-response-unknown` (M6: head drift, consent withdrawn; M8 without a permitted re-request; M9: read failed, transport open, foreign pending request). One submission's refusal is terminal only when it completes M4 or M5; otherwise the series stays in M6, M8 or M9. Head drift never ends a released series. `waiting/merge-in-progress` and `merge-response-unknown` are non-terminal: the next acquisition yields a reconciliation successor (D6) |
 | New readiness reasons | B | `merge-approval-required`, `merge-approved`, `merge-in-progress`, `merge-checking`, `merge-blocked` (with `merge_block`: `conflicts`, `behind`, `protection`, `draft`, `closed`, `checks-failed`, `queue-required`, `stacked`, `capability-unavailable`, `method-not-allowed`), `checks-running`, `provider-unavailable`, `merge-response-unknown` (with `merge_hold`, 1.13); `merge-retired-unsettled` (U4(b) only) |
 | `DeliveryReadinessBasis` | B | Adds `publication_observation_id` and `merge_approval_id`; acquisition of `mark-ready`, `observe-acceptance` and `merge-pull-request` returns `stale` when a fresh observation differs (L1) |
-| MCP `approve_merge`, `revoke_merge_approval`, `check_merge_status` | C | Strict models; `approve_merge` annotated destructive and requires `confirmation: "user-confirmed"` and a `confirmation_id`; `check_merge_status` is not destructive; the continuation calls it once per user Check answer (1.13); under U4(b) `retire_held_merge` is annotated destructive and requires `confirmation: "user-confirmed"` and a `confirmation_id` |
-| HTTP `POST …/changes/{change_id}/approve-merge`, `…/approve-merge/revoke`, `…/merge-status/check` | C | Approve, then run the merge engine action and the single-Change acceptance reconciliation in one request; `409` stale offer with the fresh offer, `409` in progress, `503` provider unavailable; `merge-status/check` runs one `check_merge_status` (`409` not held); under U4(b) `…/merge-status/retire` runs one `retire_held_merge` (`409` not held) |
-| MCP `record_review_feedback_handoff`, `show_review_feedback_handoff`, `post_review_feedback_replies` | D | Handoff CAS revisions bound to PR and head, and to the repair invalidation (`repair`) or the current finalization (`no-repair`); replies posted by the engine under D13 custody and settled by 1.11 rows Y1–Y4; `post_review_feedback_replies` takes optional `unknown_reply_decisions` (`repost` or `leave-unposted` per reply, each with its answer's `confirmation_id`) only with `confirmation: "user-confirmed"`; a decision persists before any transport and replays per 1.11; errors `ERR_DELIVERY_REVIEW_HANDOFF_STALE`, `…_MISSING`, `…_INCOMPLETE`, `ERR_DELIVERY_REVIEW_REPLY_DECIDED` (a different decision for a decided reply; returns the accepted one) |
+| MCP `approve_merge`, `revoke_merge_approval`, `check_merge_status` | C | Strict models. `approve_merge(change_id, offer_id)` is annotated destructive and has no `confirmation`, `confirmation_id` or `provenance` argument: its handler elicits the user's answer through N03 D13 on the negotiated route (D14); without client support it refuses `ERR_DELIVERY_CONFIRMATION` `channel-unavailable`; decline, cancel or `not-now` → `declined`; nothing is written in either case. `check_merge_status` neither elicits nor is destructive; the continuation calls it once per user Check answer (1.13). Under U4(b) `retire_held_merge(change_id, approval_id)` is annotated destructive and elicits the same way (`retire` or `keep-holding`) |
+| HTTP `POST …/changes/{change_id}/approve-merge`, `…/approve-merge/revoke`, `…/merge-status/check` | C | Under N03 U2(b), and until U2 is answered, `approve-merge` and `merge-status/retire` refuse with `409` `ERR_DELIVERY_CONFIRMATION` `channel-unavailable` and chat guidance; nothing is written. Under U2(a), (c) after its plan revision, or (d) they record a `cockpit` channel confirmation after a visible dialog behind the Origin and SameSite checks, then approve and run the merge engine action and the single-Change acceptance reconciliation in one request (`retire_held_merge` likewise); `409` stale offer with the fresh offer, `409` in progress, `503` provider unavailable. `merge-status/check` runs one `check_merge_status` under every option (`409` not held) |
+| MCP `record_review_feedback_handoff`, `show_review_feedback_handoff`, `post_review_feedback_replies` | D | Handoff CAS revisions bound to PR and head, and to the repair invalidation (`repair`) or the current finalization (`no-repair`); replies posted by the engine under D13 custody and settled by 1.11 rows Y1–Y4; `post_review_feedback_replies` takes an optional `decide_unknown_reply_id` naming one `unknown` reply, for which the handler elicits the user's `repost` or `leave-unposted` answer through N03 D13 (D14; no caller decision or confirmation argument); a decision persists before any transport and replays per 1.11; a reply already decided is not asked again and returns its accepted decision; errors `ERR_DELIVERY_REVIEW_HANDOFF_STALE`, `…_MISSING`, `…_INCOMPLETE`, `ERR_DELIVERY_REVIEW_REPLY_DECIDED` (a concurrent different answer for a decided reply; returns the accepted one), `ERR_DELIVERY_CONFIRMATION` (`channel-unavailable`, `declined`) |
 
 ### 1.6 Existing owners to reuse
 
@@ -314,10 +320,35 @@ Agent-settled with probe evidence:
   never prove non-execution, so an `unknown` reply is never reposted automatically (G12, G13). A
   user `repost` persists its replacement `reply_id` before any transport; a replay resumes it.
   External comments stay evidence, never Design or Delivery authority.
-- **D14 Chat approval trust.** The MCP tool cannot verify that the user answered. The continuation
-  workflow must obtain an explicit answer in the same session, the tool is annotated destructive so
-  VS Code prompts unless the user auto-approved it, and the record keeps `chat-user-confirmed`
-  provenance and that answer's `confirmation_id` (G3). Y4 reply decisions follow the same rule.
+- **D14 User-only confirmation for merge actions** (PR #360 round 2; replaces caller-asserted
+  `confirmation="user-confirmed"`). An agent can call every MCP tool with any arguments, so a caller
+  argument cannot show that the user agreed (N03 D13 threat model). `approve_merge`, `retire_held_merge`
+  and Y4 reply decisions therefore use N03 D13's boundary:
+  - *No caller confirmation.* Their MCP schemas have no `confirmation`, `confirmation_id`, `provenance`
+    or decision argument. Each handler declares a server-injected `confirmation` parameter that N03-A's
+    `_flatten_tool` registers outside the input schema; the strict model rejects such a name.
+  - *Question.* The resolver renders the exact subject: for approve, the offer's repository, PR,
+    head, target and target head, proof and check summary, method and the consequence text; for retire,
+    the hold row, cause, outstanding submissions and the U4 text; for a reply, the thread, reply and
+    duplicate risk. Its one field is the enum `decision`: `approve` or `not-now`; `retire` or
+    `keep-holding`; `repost`, `leave-unposted` or `not-now`. It asks nothing while an approval for that
+    offer is live (returned as is) or for a reply already decided.
+  - *Routes.* Legacy `elicitation/create` mid-call, or modern `InputRequiredResult` under the SDK's
+    `RequestStateBoundary`, which binds the state to the tool and its arguments (`change_id` with
+    `offer_id`, `approval_id` or the reply ID) and refuses forged, foreign, expired or pre-restart state
+    with `INVALID_PARAMS` (N03 P16). After a refusal the next call asks again.
+  - *Outcome.* An affirmative accept builds one `DeliveryActionConfirmation` (N05-B, `merge_approval.py`:
+    action, subject ID, Change, channel `mcp-elicitation`, question digest, decision, time, and
+    `confirmation_id` = SHA-256 of the rest) that the application API requires. Decline, cancel or a
+    negative decision → `ERR_DELIVERY_CONFIRMATION` `declined`; a client without form elicitation, or a
+    legacy session without a back-channel → `channel-unavailable`; nothing is written and nothing falls
+    back to a caller argument.
+  - *Re-check.* Under the fence entry the owner re-verifies the subject the user saw: the fresh offer's
+    `offer_id` (else `ERR_DELIVERY_MERGE_OFFER_STALE`), the unchanged hold, or the reply still `unknown`.
+  - *Cockpit.* A Cockpit click counts only under N03 U2 (a), (c) after its plan revision, or (d), with
+    channel `cockpit`; under U2(b), and until U2 is answered, Cockpit shows the offer or hold and points to
+    the chat. The destructive annotation stays as defense in depth. That the host shows the form to the
+    user is N03 G10 (G3).
 - **D15 No time expiry.** Approvals do not expire by time; I1 re-verifies every fact at execution.
 - **D16 EOF-safe effect entry.** `gh api --input -` passes stdin to `client.Do` unbuffered
   (v2.65.0 `api.go` `openUserFile`, `http.go`), so a dead controller's closed stdin can send an
@@ -420,7 +451,8 @@ execution-scope race of I10.** Consequences:
   execution is not bounded by Delivery (a request can stay pending, 1.11 rows M6–M9); unintended
   merges can occur in it, and detection cannot undo them.
 - G2 becomes a recorded, accepted residual risk with detection evidence; A-R runs separate
-  rules-at-execution (G1), target-advance, retarget and stack-join steps (3.3). The stack-join step
+  rules-at-submission and rules-at-execution (G1), target-advance, retarget and stack-join steps
+  (3.3). The stack-join step
   establishes whether the parent-1 and base comparison exposes every stacked execution; that is
   not assumed.
 - This revises programme §10.2, recorded with the old text, revision and reason in the
@@ -446,8 +478,8 @@ attention). N05-B adds nothing. Cost: actor you and a `human` continuation resul
 
 (b) **User-confirmed non-merging retirement.** N05-B and N05-C implement this contract:
 
-- *Entry.* `retire_held_merge(change_id, approval_id, confirmation_id, provenance)`: Cockpit
-  after a visible confirmation; MCP with `confirmation="user-confirmed"` (D14, destructive);
+- *Entry.* `retire_held_merge(change_id, approval_id, confirmation)`: MCP elicits the user's answer
+  (D14, destructive; no caller confirmation argument); Cockpit only where N03 U2 makes a click count;
   HTTP `POST …/merge-status/retire`. Allowed only while held with `merge_reads_exhausted`;
   otherwise `ERR_DELIVERY_MERGE_NOT_HELD`.
 - *Order.* Under one fence entry (1.12) it first takes one 1.11 read. A match of M2–M5 wins: that
@@ -507,6 +539,7 @@ deltas to the execution plan (amendment recorded in [1.9](#19-user-decisions)).
 | F7 | Reason text renders from `workItemPresentation.ts`, not only `WorkItemDetail.tsx`/`WorkPortfolioPage.tsx` | `workItemPresentation.ts:58-64` | §1.4 companion list: add `workItemPresentation.ts` |
 | F8 | New N05 decision U3 (target freshness and execution-time target race) | §1.9 | §7 "Decided later": add U3 to N05 |
 | F9 | Package-plan prerequisites added: N05-B needs U1, U3 and U4 answered (decided 2026-10-03); N05-B merge needs A-R evidence (U2(b)); engine merge needs no scope-enforcing fact (U3(e); G2 is an accepted residual risk) | §1.9 | None (§4.2 allows package-added prerequisites) |
+| F10 | Merge approval, retirement and reply decisions need N03 D13's user-only boundary (D14), built by N03-A; whether Cockpit counts is N03 U2 | PR #360 round 2; N03 plan D13, U2 | §4.2: N05-C also needs N03-A and N03 U2 answered; §5 N05 result notes the boundary |
 
 No phase is re-split; §4.2 dependencies are unchanged.
 
@@ -571,8 +604,9 @@ it (exempt from I11).
 
 Y4 user decisions are durable and replay-safe:
 
-- Each `unknown_reply_decisions` entry carries the `confirmation_id` of one user answer. The
-  decision identity is SHA-256 of handoff ID, original `reply_id`, decision and `confirmation_id`.
+- Each decision is one user answer captured through the N03 D13 boundary (D14) and carries its
+  `confirmation_id`. The decision identity is SHA-256 of handoff ID, original `reply_id`, decision
+  and `confirmation_id`.
 - `repost`: before any transport, a CAS revision of the original's receipt records the decision
   and its replacement `reply_id` (SHA-256 of the decision identity). The replacement starts at Y1.
 - Replaying an accepted decision resumes that replacement through Y1–Y4, marker read first; it
@@ -828,8 +862,21 @@ outputs, unversioned). GitHub probes were read-only GETs and GraphQL queries aga
   draft (expect `400`); exact head (expect `202` or `200`, then `merged` by UUID); repeated
   request (no second merge); lost response (send, discard the response, read back, repeat request
   → same UUID or `merged`); merge commit parents. Then:
-  - *Rules at execution* (G1): the required check is `success` at the final read and set to
-    `failure` before the request; expect UUID result `failed` or refusal `rules-failed`, PR unmerged.
+  - *Rules at submission* (not proof of execution-time evaluation): the required check is `success` at
+    the final read and set to `failure` before the request; expect a refusal or UUID result `failed`, PR
+    unmerged. A provider that validates only when the request arrives passes this step too.
+  - *Rules at execution* (G1): the request must be accepted and waiting before the rules change, and the
+    evidence must show that order. (1) The required check is `pending` (in progress) at the final read.
+    (2) Send the request and record its response. (3) Read the UUID result until it reports `pending`;
+    record it with the provider's timestamp. (4) Only then set the check to `failure`, and in a second
+    PR add a ruleset rule the head fails instead; record each change with its provider timestamp.
+    (5) Read until terminal: expect UUID result `failed` (`rules-failed`) and the PR unmerged. Control:
+    the same flow with the check set to `success` in (4) merges. The step passes only when the recorded
+    order is pending result, then rules change, then terminal result. If GitHub refuses the request at
+    submission because the check is pending, merges or fails before a `pending` result is observed, or
+    never reports `pending`, the step cannot tell execution-time from submission-time enforcement: A-R
+    stops and asks the user, G1's execution-time claim stays an open gap, and neither this step nor the
+    submission step is treated as proof of it.
   - *Target advance* (G2): the target advances after the final read and before the request;
     expect a merge with parent 1 ≠ approved target head and `target-advanced-during-merge`.
   - *Retarget* (G2): the PR's `base` changes to a second branch after the final read, same head;
@@ -852,8 +899,8 @@ outputs, unversioned). GitHub probes were read-only GETs and GraphQL queries aga
   before engine merge is offered. G2 is an accepted residual risk (U3(e)) and gates nothing.
 - **Editable paths** (N01 phase in brackets):
   - new `owlbear_delivery/merge_approval.py` (`MergeOffer`, `MergeHold`, `MergeApprovalRecord`,
-    `MergeApprovalRevocation`, `MergeAttemptRecord`, `PullRequestMergeReceipt`, store, errors;
-    `MergeRetirementRecord` under U4(b))
+    `MergeApprovalRevocation`, `MergeAttemptRecord`, `PullRequestMergeReceipt`, `DeliveryActionConfirmation`
+    (D14), store, errors; `MergeRetirementRecord` under U4(b))
   - new `owlbear_delivery/application_merge.py` (`_MergeMixin`: offer, approve, revoke, merge
     owner, `check_merge_status` (1.13), capability, cleanup best effort and sweep;
     `retire_held_merge` under U4(b))
@@ -1062,13 +1109,16 @@ outputs, unversioned). GitHub probes were read-only GETs and GraphQL queries aga
 
 ### 3.5 N05-C — Adapters, Cockpit confirmation, continuation path and governance
 
-- **Prerequisites:** N05-B.
+- **Prerequisites:** N05-B; N03-A (D13 registration and elicitation routes in `target_server.py`);
+  N03 U2 answered (F10).
 - **Editable paths:**
   - `serve/delivery-mcp/src/owlbear_delivery_mcp/target_server.py` (tool names, annotations,
-    handlers) and `target_models.py`; `serve/delivery-mcp/tests/test_target_server.py`
+    handlers and their D14 confirmation resolvers) and `target_models.py`;
+    `serve/delivery-mcp/tests/test_target_server.py`
   - `serve/cockpit/src/owlbear_cockpit/routes/target_work.py`, `target_models.py`;
     `tests/test_cockpit_work_items.py`, `tests/test_cockpit_boundary.py`
-  - frontend: `src/api/workItems.ts`, new `src/components/MergeApprovalDialog.tsx`, new
+  - frontend: `src/api/workItems.ts`, new `src/components/MergeApprovalDialog.tsx` (U2(a), (c) or (d);
+    under U2(b) a read-only offer panel with chat guidance instead), new
     `src/components/MergeHoldPanel.tsx`, `WorkItemDetail.tsx`, `workItemPresentation.ts`, the
     work-items mutation hook, component tests
   - E2E: `e2e/work-portfolio.spec.ts`, `e2e/support/seed-work-portfolio-delivery.py`
@@ -1082,30 +1132,48 @@ outputs, unversioned). GitHub probes were read-only GETs and GraphQL queries aga
     `serve/delivery-github/README.md`
   - `tests/test_delivery_worktree_authority.py` (allowlist entries for C files only)
   - this plan's progress row; the execution plan's status row
-- **Contract:** Cockpit shows **Approve merge** only for `merge-approval-required` with an offer.
-  The dialog shows every R1 field and the consequence ("merges into `<target>` in GitHub; Delivery
-  cannot undo it"), with **Approve merge** and **Cancel**; each opening carries one
-  `confirmation_id`. States: submitting, merged then
+- **Contract:** Cockpit shows the offer only for `merge-approval-required` with an offer, with every R1
+  field and the consequence ("merges into `<target>` in GitHub; Delivery cannot undo it"). Under N03
+  U2(b), and until U2 is answered, it is read-only and says to approve in the chat that runs the Change.
+  Under U2(a), (c) after its plan revision, or (d) it is the **Approve merge** dialog with **Approve
+  merge** and **Cancel**, each opening one `cockpit` confirmation (D14). States: submitting, merged then
   completing, refused with reason, stale (re-review the new offer), provider unavailable, held
   (`MergeHoldPanel`, 1.13; never shown as checking; cause `pending-provider-request` renders the
   1.13 pending copy in panel and chat). The continuation workflow, on a `human`
-  result with `merge-approval-required`, shows the offer, asks one question (Approve / Not now),
-  and on Approve calls `approve_merge` with `confirmation="user-confirmed"` and a
-  `confirmation_id` for that answer, then continues acquisition; it never approves without that
-  answer (D14). On `human` with `merge-response-unknown` it shows the 1.13 hold and guidance,
+  result with `merge-approval-required`, shows the offer and calls `approve_merge(change_id, offer_id)`;
+  the tool's elicitation is the one question (Approve / Not now), so the workflow does not ask it again
+  in text and never claims an approval itself (D14). On `declined` it stops; on `channel-unavailable` it
+  says that this chat cannot show the question and that the user may merge in GitHub. Then it continues
+  acquisition. On `human` with `merge-response-unknown` it shows the 1.13 hold and guidance,
   asks one question (Check merge status / Not now) and makes one `check_merge_status` call per
-  Check answer; it never calls `observe_acceptance` as a fallback and never loops. Under U4(b) the
-  panel adds **Retire without merging** (dialog with the outstanding submissions and the U4 text,
-  one `confirmation_id` per opening) and chat asks Check / Retire / Not now.
-- **Positive scenarios:** MCP and HTTP approve, merge and complete on a disposable portfolio with
-  the memory provider; E2E: approve in the dialog → fake `gh` records exactly one merge request →
-  card shows **Completed**; revoke before execution; agent-ecosystem tests accept the revised
+  Check answer; it never calls `observe_acceptance` as a fallback and never loops. Under U4(b) chat
+  offers Check / Retire / Not now, and Retire calls `retire_held_merge(change_id, approval_id)`, whose
+  elicitation asks the user; the panel adds **Retire without merging** (dialog with the outstanding
+  submissions and the U4 text) only where N03 U2 makes a Cockpit click count.
+- **Positive scenarios:** MCP `approve_merge` through `Client(assemble_target_server(...))` with an
+  `elicitation_callback` answering `approve`, on both routes (`mode="legacy"` and `mode="2026-07-28"`,
+  N03 P16) → one `mcp-elicitation` confirmation, one approval, merge and completion on a disposable
+  portfolio with the memory provider; a second call while that approval is live asks nothing and returns
+  it; `retire_held_merge` likewise under U4(b). E2E under U2(b): the card shows the read-only offer and the
+  chat guidance with no approve control; after the MCP approval the fake `gh` records exactly one merge
+  request and the card shows **Completed**. Under U2(a), (c) or (d) instead: approve in the dialog → one
+  merge request → **Completed**. Revoke before execution; agent-ecosystem tests accept the revised
   skills and prompts.
-- **Negative scenarios:** stale-confirmation E2E (fake head changes while the dialog is open →
+- **Negative scenarios:** the `approve_merge` and `retire_held_merge` input schemas hold no
+  `confirmation`, `confirmation_id`, `provenance` or decision name, and a call carrying one →
+  `ERR_TARGET_PARAM_VALIDATION`; a client without form elicitation, or a legacy session without a
+  back-channel → `channel-unavailable`; decline, cancel, `not-now` or `keep-holding` → `declined`; each with
+  no approval or retirement record and an empty merge log. Request-state boundary on the modern route:
+  forged state, state minted for another `offer_id` or `approval_id`, foreign-server, expired and
+  pre-restart state → `INVALID_PARAMS` before the handler, nothing written; the next call asks again.
+  Offer changed between the question and the answer → `ERR_DELIVERY_MERGE_OFFER_STALE`, no approval.
+  Under U2(b) HTTP `approve-merge` and `merge-status/retire` → `409` `channel-unavailable`, nothing
+  written. Stale-confirmation E2E (fake head changes while the offer is shown or the dialog is open →
   stale message, no merge request in the fake log); cancel sends nothing; HTTP `409` stale and in
-  progress, `503` provider unavailable; MCP rejects a missing or wrong `confirmation`; no control
+  progress, `503` provider unavailable; no control
   appears for `merge-blocked`, `checks-running`, `merge-checking`; the capability gate still rejects
-  auto-merge and update-branch strings in Cockpit and agent files.
+  auto-merge and update-branch strings in Cockpit and agent files; the continuation prompt contains no
+  `user-confirmed` argument and no approve question of its own.
 - **Held-state falsifier (1.13):** E2E on the held fixture (drift recorded, UUID `404`, both
   episodes exhausted, fake `gh` at head B). Reload → panel shows consent withdrawn, outstanding
   uncertainty, disabled controls, PR link, settle and no-settle guidance, one **Check merge
@@ -1117,7 +1185,8 @@ outputs, unversioned). GitHub probes were read-only GETs and GraphQL queries aga
   copy (row M7), still held, **Check merge status** remains, no **Approve merge**; next
   reconciliation tick → no read in the fake log.
   Expired original plus refused re-request → panel and chat say the hold remains; neither says
-  the refusal settled it. Under U4(b): retire in the dialog → card shows retired, Check merge
+  the refusal settled it. Under U4(b): retire through MCP elicitation (or the dialog where N03 U2 makes
+  a click count) → card shows retired, Check merge
   status remains, no merge request in the fake log. HTTP `merge-status/check` on a non-held
   Change → `409`. Continuation test:
   acquisition returns `human` with `merge_hold`; prompt asks Check / Not now, one call per
@@ -1160,8 +1229,9 @@ outputs, unversioned). GitHub probes were read-only GETs and GraphQL queries aga
   - `post_review_feedback_replies` requires `resume`'s checks and posts each reply under D13 custody
     with a hidden marker `<!-- owlbear-reply:<reply_id> -->`; before posting and after any unknown
     response it reads the thread's comments by the viewer and settles by 1.11 rows Y1–Y4. An
-    `unknown` reply blocks posting on its thread until a marker hit or a user decision in
-    `unknown_reply_decisions`, recorded and replayed under the 1.11 Y4 decision rules. It resolves a thread
+    `unknown` reply blocks posting on its thread until a marker hit or a Y4 user decision elicited
+    through N03 D13 for `decide_unknown_reply_id` (D14), recorded and replayed under the 1.11 Y4
+    decision rules. It resolves a thread
     only after its reply is recorded; failures leave the thread unresolved with the exact provider
     code.
 - **Positive scenarios:** fresh-session `resume` recovers classifications and repair map without chat
@@ -1174,10 +1244,13 @@ outputs, unversioned). GitHub probes were read-only GETs and GraphQL queries aga
   unmapped `fix` thread → `…_INCOMPLETE` before any reply; provider effect delayed past transport
   closure and two marker-negative reads → `unknown`, no repost, then the delayed reply → `posted`;
   timeout or `5xx` → `unknown`, never `not-posted`; GraphQL `errors` with null `data` → `not-posted`,
-  one later post; user `repost` → one replacement with a new marker; `repost` accepted,
+  one later post; user `repost` (elicited, D14) → one replacement with a new marker; `repost` accepted,
   replacement sent, crash before return, identical decision replayed → one replacement identity,
-  marker read, no second post; a different decision for that reply → refused with the accepted
-  one (`ERR_DELIVERY_REVIEW_REPLY_DECIDED`); `leave-unposted` → disposition recorded, evidence
+  marker read, no second post; a later call naming that reply asks nothing and returns the accepted
+  decision; a concurrent different answer → refused with the accepted
+  one (`ERR_DELIVERY_REVIEW_REPLY_DECIDED`); a caller-supplied decision or confirmation argument →
+  `ERR_TARGET_PARAM_VALIDATION`; no form elicitation → `channel-unavailable`, nothing recorded;
+  `leave-unposted` → disposition recorded, evidence
   stays `unknown`, never `not-posted`, a later marker hit → `posted`; repaired thread not repaired
   twice after restart (repair commit already recorded); reply response lost → marker found →
   no duplicate; reply posted but resolve fails → thread unresolved, repair evidence intact; external
@@ -1209,7 +1282,7 @@ plan's status table, a companion that the ready rule does not block.
 
 | Phase | PR | Exact head | Proof | Challenges | Status |
 | --- | --- | --- | --- | --- | --- |
-| N05-P | #353 | — | Probes P1–P16 | Sol round 1: revision-required (stack scope, execution-time target race in U3, pending/unknown reconciliation, renewable consent, no-repair handoff, 409 option validation) → revised; Sol round 2: revision-required (execution scope policy, successor ledger accounting, outstanding-reply reconciliation, complete repair map, fence owner/ordering) → revised; Sol round 3: revision-required (reply non-execution authority, expiry ≠ refusal, fence lock-entry contract) → consolidated settlement contract; Sol round 4: revision-required (request-series settlement, repost decision replay, guard helper scope) → revised; consistency pass (D6/§1.4/§1.5 aligned with §1.11–§1.12); Sol round 5: revision-required (EOF-safe effect entry) → revised; Sol round 6: revision-required (EOF oracle vs release record) → revised; Sol round 7: revision-required (head drift vs pending series) → revised; Sol round 8: revision-required (held-state user exit) → revised; Sol round 9: blocked (U4 non-merging retirement) + 3 fix-now → revised; U4 pending; Sol round 10: revision-required (exhausted M7 hold) → revised; Sol round 11: revision-required (M1 vs observed manual merge) → revised; Sol round 12: `plan-sound`; user-decision revision #360: Sol round 1: revision-required (raced M2 completion, A-R rehearsal split and ownership, unbounded execution interval) → revised | approved (execution-plan amendments confirmed 2026-10-03; U1–U4 decided 2026-10-03) |
+| N05-P | #353 | — | Probes P1–P16 | Sol round 1: revision-required (stack scope, execution-time target race in U3, pending/unknown reconciliation, renewable consent, no-repair handoff, 409 option validation) → revised; Sol round 2: revision-required (execution scope policy, successor ledger accounting, outstanding-reply reconciliation, complete repair map, fence owner/ordering) → revised; Sol round 3: revision-required (reply non-execution authority, expiry ≠ refusal, fence lock-entry contract) → consolidated settlement contract; Sol round 4: revision-required (request-series settlement, repost decision replay, guard helper scope) → revised; consistency pass (D6/§1.4/§1.5 aligned with §1.11–§1.12); Sol round 5: revision-required (EOF-safe effect entry) → revised; Sol round 6: revision-required (EOF oracle vs release record) → revised; Sol round 7: revision-required (head drift vs pending series) → revised; Sol round 8: revision-required (held-state user exit) → revised; Sol round 9: blocked (U4 non-merging retirement) + 3 fix-now → revised; U4 pending; Sol round 10: revision-required (exhausted M7 hold) → revised; Sol round 11: revision-required (M1 vs observed manual merge) → revised; Sol round 12: `plan-sound`; user-decision revision #360: Sol round 1: revision-required (raced M2 completion, A-R rehearsal split and ownership, unbounded execution interval) → revised; Sol round 2: revision-required (A-R does not discriminate execution-time rules) → ordered pending-then-change step with stop-and-ask; lead's deferred item: D14 moves approval, retirement and reply decisions onto N03 D13 (F10) | approved (execution-plan amendments confirmed 2026-10-03; U1–U4 decided 2026-10-03; N03 U2 open before N05-C) |
 | N05-A | #356 | `a4951b044` | Ubuntu CI run 37147328711 exact head: 3953 passed, 3 skipped (no launcher skips); macOS focused launcher/provider/authority 149 passed; `test --changed --py` 3955 passed; real-gh recorder 409 formats captured; parser mutation fails 7 tests | Sol implementation round 1: repair-required (real-gh 409 parsing, merge-call ownership gate, typed pre-release failures) → repaired; round 2: `implementation-sound` | merged |
 | A-R | — | — | — | — | — |
 | N05-B | — | — | — | — | — |
@@ -1220,9 +1293,9 @@ plan's status table, a companion that the ready rule does not block.
 
 | ID | Claim | Why unproven | Evidence available | Owner | Blocks |
 | --- | --- | --- | --- | --- | --- |
-| G1 | GitHub's async merge behaves as documented (UUID and options on `409`, `400` drafts, rules run at execution, readback, head fence) | Provider mutations need the A-R repository (U2(b)); P phase ran read-only | P4 reference; P2 schema; fake tests (A) | A-R steps of 3.3, including the separate rules-at-execution step (N05-B implements) | N05-B merge |
+| G1 | GitHub's async merge behaves as documented (UUID and options on `409`, `400` drafts, rules run at execution, readback, head fence) | Provider mutations need the A-R repository (U2(b)); P phase ran read-only; execution-time rules need an accepted, still pending request whose rules change before execution, with observable order | P4 reference; P2 schema; fake tests (A) | A-R steps of 3.3, including the separate submission and execution-time rules steps (N05-B implements) | N05-B merge. If the execution-time step cannot observe `pending` before the rules change, A-R stops and asks the user; the claim stays unproven and nothing treats it as shown |
 | G2 | The target, the PR's `base` or its stack cannot change between the final read and background execution | No GitHub merge API fences the base or the stack; `base` is editable without a head change; `dev` has no up-to-date rule (P1, P2, P4) | Accepted residual risk (U3(e), programme §10.2 revised 2026-10-03): post-merge parent-1 and base check (D9, I4); separate A-R target-advance, retarget and stack-join steps show the detection; whether that check exposes every stacked execution is unproven until the stack-join step | A-R; N05-B (detection) | Nothing for target advance and retarget; N05-B merge if the stack-join step finds an undetected execution |
-| G3 | A chat approval reflects a real user answer | MCP cannot verify host dialogs | D14 rules; destructive annotation | N05-C; N10-H host rehearsal | N10-H evidence |
+| G3 | A merge approval, retirement or reply decision elicited through N03 D13 is answered by the user, not by the model or the host automatically | MCP cannot verify host dialogs; the SDK warns an agent client may answer itself | D14: no caller confirmation argument, both elicitation routes and request-state refusals tested in-process (N05-C); destructive annotation; N03 G10 | N03-B host rehearsal (N03 G10); N10-H host rehearsal | N10-H evidence; without N03 G10, chat approval is unavailable and merges happen in GitHub (R4) |
 | G4 | Merge-queue and up-to-date-required targets behave as designed | This repository has neither (P1) | Memory-provider scenarios | N05-B | Nothing |
 | G5 | Format-marker steps of N03-A and N05-B compose | Neither exists yet (P15) | N02 D3 linear chain | Second of N03-A/N05-B to merge | That phase's merge |
 | G6 | The fake `gh` used in E2E matches real GitHub responses | Fake fidelity | P10; A-R real evidence | N05-C | Nothing |
