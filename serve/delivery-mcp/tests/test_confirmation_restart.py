@@ -206,12 +206,17 @@ def _human_confirmed_submission(
     )
 
 
+def _committer_identity(restart: _BuilderReturnRestartFixture) -> None:
+    """Configure the fresh clone's committer; CI provides no global Git identity."""
+    _git(restart.fresh, "config", "user.name", "Delivery State Test")
+    _git(restart.fresh, "config", "user.email", "delivery-state@example.invalid")
+
+
 def _builder_pause(
     restart: _BuilderReturnRestartFixture, change_id: str, request_id: str
 ) -> tuple[DeliveryRequest, Any]:
     application = restart.application
-    _git(restart.fresh, "config", "user.name", "Delivery State Test")
-    _git(restart.fresh, "config", "user.email", "delivery-state@example.invalid")
+    _committer_identity(restart)
     launch = application.acquire_frontier_work().launch_packages[0]
     assert launch.claim.worker_role is DeliveryWorkerRole.BUILDER
     (launch.worktree_path / "paused.txt").write_text("preserved Builder work\n", encoding="utf-8")
@@ -240,6 +245,7 @@ def _builder_pause(
 def _planner_pause(
     restart: _BuilderReturnRestartFixture, change_id: str, request_id: str
 ) -> tuple[DeliveryRequest, Any]:
+    _committer_identity(restart)
     settled = _settle_default_loader_planning_return(restart, change_id)
     assert settled.builder_handoff_context is not None
     application = _healthy_restart(restart)
