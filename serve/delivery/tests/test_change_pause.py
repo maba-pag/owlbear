@@ -14,6 +14,7 @@ from unittest.mock import patch
 
 import pytest
 from serve.delivery.tests.test_change_workspace import _preservation_workspace
+from serve.delivery.tests.test_delivery_state import _commit_corrupt_snapshot
 from serve.delivery.tests.test_portfolio_application import (
     _acquire_planning_claim,
     _attach_engine_publication,
@@ -45,6 +46,8 @@ from owlbear_delivery import (
     DeliveryChangeIntentKind,
     DeliveryCheckpointTrigger,
     DeliveryCheckpointTriggerKind,
+    DeliveryHealthDiagnostic,
+    DeliveryHealthReason,
     DeliveryPendingCheckpoint,
     DeliveryPlanningRetrySettlement,
     DeliveryResultSubmission,
@@ -61,6 +64,7 @@ from owlbear_delivery.change_publication import ChangeBranchPublisher
 from owlbear_delivery.delivery_runtime import DeliveryRuntime
 from owlbear_delivery.delivery_state import DeliveryStatePublisher
 from owlbear_delivery.draft_pull_request import DraftPullRequestPublisher
+from owlbear_delivery.recovery import RetryAttempt, RetryLedger
 from owlbear_delivery.runtime_models import (
     _DISPOSITION_MUTATIONS,
     _NORMAL_CHANGE_MUTATIONS,
@@ -439,6 +443,55 @@ def test_f6_acceptance_owner_completes_and_clears_a_mid_flight_request(tmp_path:
     assert runtime.change_deferral() is None
 
 
+# K3/F1 (acceptance): Pause and the retry reservation commit race at that exact commit; exactly one wins.
+@pytest.mark.parametrize("winner", ["pause", "start"])
+def test_k3_acceptance_reservation_commit_races_pause(tmp_path: Path, winner: str) -> None:
+    application, runtime, provider, state, _exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    merged = state["pull_request"].model_copy(
+        update={
+            "state": "closed",
+            "merged": True,
+            "merge_commit_sha": "d" * 40,
+            "merged_at": datetime(2026, 8, 3, 23, tzinfo=UTC),
+            "merged_by_login": "octocat",
+        }
+    )
+    provider.reset_mock()
+    provider.read_pull_request.side_effect = lambda _repository, _number: merged
+    commit_summary = RetryLedger._commit_summary
+    recorded: list[object] = []
+
+    def race(ledger, previous, summary, record_type=None, record=None, **kwargs):
+        if record_type is not RetryAttempt or recorded:
+            return commit_summary(ledger, previous, summary, record_type, record, **kwargs)
+        if winner == "pause":
+            recorded.append(_pause(application).receipt)
+            return commit_summary(ledger, previous, summary, record_type, record, **kwargs)
+        committed = commit_summary(ledger, previous, summary, record_type, record, **kwargs)
+        recorded.append(_pause(application).receipt)
+        return committed
+
+    ledger_before = runtime.retry_ledger(clock=application._clock)._read_with_bytes()[1]
+    with patch.object(RetryLedger, "_commit_summary", race):
+        if winner == "pause":
+            with pytest.raises(ChangePauseRequestedError):
+                application.observe_acceptance("change-a")
+        else:
+            application.observe_acceptance("change-a")
+
+    assert isinstance(recorded[0], ChangePauseRequest)
+    if winner == "pause":
+        assert runtime.retry_ledger(clock=application._clock)._read_with_bytes()[1] == ledger_before
+        provider.read_pull_request.assert_not_called()
+        assert runtime.completion_receipt() is None
+        assert application._coordinator.pause_request("change-a") == recorded[0]
+    else:
+        provider.read_pull_request.assert_called()
+        assert runtime.completion_receipt() is not None
+        assert application._coordinator.pause_request("change-a") is None
+        assert runtime.change_deferral() is None
+
+
 # F9: tokens permit only their own Change and named owner-drain operations; nothing else passes.
 def test_f9_drain_tokens_are_exact_and_never_grant_new_starts(tmp_path: Path) -> None:
     application, _runtimes, coordinator, _state_root = _portfolio(
@@ -778,6 +831,119 @@ def test_operator_finalization_head_reconciliation_started_before_pause_finishes
     assert _paused(application)
 
 
+def _quarantined_state_snapshot(tmp_path: Path):
+    """Publish a real state snapshot, corrupt it remotely and return the repair proposal fences."""
+    application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.IMPLEMENTATION})
+    repository = application._workspace_manager.repository
+    remote = tmp_path / "state-remote.git"
+    _git(tmp_path, "init", "--bare", "-b", "main", str(remote))
+    _git(repository, "remote", "add", "origin", str(remote))
+    _git(repository, "push", "origin", "HEAD:refs/heads/main")
+    publisher = DeliveryStatePublisher(repository, remote=str(remote), state_branch="owlbear/delivery-state")
+    first = publisher.publish(
+        change_id="change-a",
+        package_id=application.read_design_session("change-a").package_id,
+        coordination=coordinator.show("change-a"),
+        runtime=runtimes["change-a"],
+        admission=DeliveryAdmissionReceipt.model_validate_json(
+            (state_root / "changes/change-a/admission.json").read_bytes()
+        ),
+        operation_id="pause-quarantine-seed",
+        captured_at=datetime(2026, 8, 23, tzinfo=UTC),
+    )
+    payload = json.loads(publisher._git_blob(first.published_head, ".owlbear/delivery/state/change-a/snapshot.json"))
+    payload["snapshot_id"] = "0" * 64
+    corrupted = (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    corrupted_head = _commit_corrupt_snapshot(repository, first.published_head, "change-a", corrupted)
+    _git(repository, "push", "origin", f"{corrupted_head}:refs/heads/owlbear/delivery-state", "--force")
+    application._delivery_state_publisher = publisher
+    application._startup_health_diagnostics = (
+        DeliveryHealthDiagnostic(
+            source="remote-state",
+            code="snapshot-identity-invalid",
+            detail="Remote Delivery snapshot is quarantined.",
+            change_id="change-a",
+            reason=DeliveryHealthReason.REMOTE_STATE_RECONCILIATION,
+        ),
+    )
+    return application, publisher, remote, application.propose_quarantined_delivery_state_snapshot_repair("change-a")
+
+
+def _repair_quarantine(application, proposal, operation_id: str):
+    return application.repair_quarantined_delivery_state_snapshot(
+        "change-a",
+        operation_id,
+        confirmed_repair=True,
+        expected_remote_head=proposal.expected_remote_head,
+        expected_snapshot_digest=proposal.snapshot_digest,
+        expected_diagnostic_code=proposal.diagnostic_code,
+    )
+
+
+def _state_branch(remote: Path) -> str:
+    return _git(remote, "rev-parse", "refs/heads/owlbear/delivery-state")
+
+
+def _record_pause(application) -> ChangePauseRequest:
+    """K1 Record from another process: the startup diagnostic refuses in-process Validate, not the durable request."""
+    request = ChangePauseRequest.create(change_id="change-a", reason=_REASON, requested_at="2026-08-04T00:00:00Z")
+    return application._coordinator.record_pause_request(request, _digest(application._runtimes["change-a"]))
+
+
+# K3/§3.3 negative: a new quarantined-snapshot repair under a retained request is refused before its push.
+def test_new_quarantined_snapshot_repair_refuses_under_request_without_push(tmp_path: Path) -> None:
+    application, _publisher, remote, proposal = _quarantined_state_snapshot(tmp_path)
+    request = _record_pause(application)
+    state_head = _state_branch(remote)
+
+    with pytest.raises(ChangePauseRequestedError):
+        _repair_quarantine(application, proposal, "repair-under-request")
+
+    assert _state_branch(remote) == state_head
+    assert application._coordinator.pause_request("change-a") == request
+    assert application.propose_quarantined_delivery_state_snapshot_repair("change-a") == proposal
+
+
+# K3/F1 (quarantine repair): Pause and the repair's fenced start race; Pause first refuses it, a started repair drains.
+@pytest.mark.parametrize("winner", ["pause", "start"])
+def test_quarantined_snapshot_repair_start_races_pause(tmp_path: Path, winner: str) -> None:
+    application, publisher, remote, proposal = _quarantined_state_snapshot(tmp_path)
+    coordinator = application._coordinator
+    commit = coordinator._commit
+    repair = publisher.repair_quarantined_snapshot
+    recorded: list[object] = []
+
+    def pause_inside_fence(name, participants):
+        if winner == "pause" and name.startswith("operator-start-") and not recorded:
+            recorded.append(_record_pause(application))
+        return commit(name, participants)
+
+    def pause_before_push(**kwargs):
+        if winner == "start":
+            recorded.append(_record_pause(application))
+        return repair(**kwargs)
+
+    state_head = _state_branch(remote)
+    with (
+        patch.object(coordinator, "_commit", side_effect=pause_inside_fence),
+        patch.object(publisher, "repair_quarantined_snapshot", side_effect=pause_before_push),
+    ):
+        if winner == "pause":
+            with pytest.raises(ChangePauseRequestedError):
+                _repair_quarantine(application, proposal, "repair-race")
+        else:
+            receipt = _repair_quarantine(application, proposal, "repair-race")
+
+    assert isinstance(recorded[0], ChangePauseRequest)
+    if winner == "pause":
+        assert _state_branch(remote) == state_head
+        assert coordinator.pause_request("change-a") == recorded[0]
+    else:
+        assert receipt.invalid_snapshot_digest == proposal.snapshot_digest
+        assert _state_branch(remote) != state_head
+        assert _paused(application)
+
+
 # §3.3 Builder drain with publication: the claim token reserves and pushes only its queued checkpoint head.
 def test_builder_drain_publishes_its_checkpoint_and_refuses_foreign_starts_inside_its_token(tmp_path: Path) -> None:
     application, runtimes, coordinator, _state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.IMPLEMENTATION})
@@ -936,6 +1102,59 @@ def test_f6_first_task_snapshot_started_before_pause_publishes_then_converts(tmp
     assert provider.create_calls == 1
     assert _paused(application)
     _assert_snapshot_heads_agree(application, remote)
+
+
+def _creates_snapshot_intent(coordinator, participants) -> bool:
+    if coordinator.show("change-a").design_package_snapshot_intent is not None:
+        return False
+    return any(
+        ChangeCoordination.model_validate_json(content).design_package_snapshot_intent is not None
+        for participant in participants
+        if (content := getattr(participant, "replacement_content", None))
+    )
+
+
+# K3/F1 (snapshot): Pause and the snapshot-intent start commit race at that exact commit; exactly one wins.
+@pytest.mark.parametrize("winner", ["pause", "start"])
+def test_k3_snapshot_intent_commit_races_pause(tmp_path: Path, winner: str) -> None:
+    application, runtimes, _state_root, provider, remote = _first_task_checkpoint(tmp_path)
+    coordinator = application._coordinator
+    repository = application._workspace_manager.repository
+    branch = coordinator.show("change-a").branch
+    before = (coordinator.show("change-a").last_reviewed_commit, _git(repository, "rev-parse", branch))
+    commit = coordinator._commit
+    recorded: list[object] = []
+
+    def race(name, participants):
+        if recorded or name != "update-change-a" or not _creates_snapshot_intent(coordinator, participants):
+            return commit(name, participants)
+        if winner == "pause":
+            recorded.append(_pause(application).receipt)
+            return commit(name, participants)
+        committed = commit(name, participants)
+        recorded.append(_pause(application).receipt)
+        return committed
+
+    with patch.object(coordinator, "_commit", side_effect=race):
+        result = application.reconcile_change_checkpoint("change-a")
+
+    assert isinstance(recorded[0], ChangePauseRequest)
+    if winner == "pause":
+        current = coordinator.show("change-a")
+        assert result.reconciled is False
+        assert result.error_code == ChangePauseRequestedError.code
+        assert current.design_package_snapshot_intent is None
+        assert current.design_package_snapshot is None
+        assert (current.last_reviewed_commit, _git(repository, "rev-parse", branch)) == before
+        assert runtimes["change-a"].checkpoint_publication_state().pending_checkpoint.last_error_code is None
+        # Only the ordinary deferral publication may push the unsnapshotted queued head; no snapshot commit exists.
+        assert _remote_branch(remote) in {None, before[1]}
+        assert provider.create_calls == 0
+    else:
+        assert result.reconciled
+        assert provider.create_calls == 1
+        assert _paused(application)
+        _assert_snapshot_heads_agree(application, remote)
 
 
 # F6 snapshot handoff: crash after re-anchoring, before the lease; every conversion waits for the replay.

@@ -1043,7 +1043,11 @@ class _RecoveryMixin:
         if publisher is None:
             self._fail("quarantined snapshot repair requires a configured state publisher")
         self._reconcile_runtimes()
-        with self._coordinator.acquisition_lock(), locked_roots((self._checkpoint_lock_root(change_id),)):
+        with (
+            self._coordinator.acquisition_lock(),
+            locked_roots((self._checkpoint_lock_root(change_id),)),
+            self._operator_start(change_id, f"quarantine-repair:{operation_id}"),
+        ):
             inventory = publisher.read_snapshot_inventory()
             diagnostic = next(
                 (

@@ -1818,6 +1818,7 @@ _APPLICATION_PAUSE_GATED_ENTRIES = frozenset(
         "repair_target_sync_publication",
         "recover_publication_baseline",
         "recover_change_worktree",
+        "repair_quarantined_delivery_state_snapshot",
     }
 )
 
@@ -1932,9 +1933,6 @@ _PROVIDER_EFFECT_ENTRIES = frozenset(
         "repair_quarantined_delivery_state_snapshot",
     }
 )
-# Allowed under a request exactly as under a deferral: it republishes validated local authority inside the
-# acquisition and checkpoint locks, creates no custody and writes no Change worktree, branch or provider PR.
-_PAUSE_EXEMPT_PROVIDER_ENTRIES = frozenset({"repair_quarantined_delivery_state_snapshot"})
 # K2 rows: each replay or owner entry enters exactly its row's token; replay tokens bind their own request.
 _K2_AUTHORITY_SOURCES: dict[str, str] = {
     "submit_result": "_worker_drain_authority",
@@ -2026,7 +2024,7 @@ def test_every_provider_effect_entry_is_reached_only_through_a_pause_gate() -> N
     callers = {name: {caller for caller, called in calls.items() if name in called} for name in functions}
 
     def ungated_path(name: str, seen: frozenset[str]) -> tuple[str, ...] | None:
-        if calls[name] & _PAUSE_GATES or name in _PAUSE_EXEMPT_PROVIDER_ENTRIES:
+        if calls[name] & _PAUSE_GATES:
             return None
         parents = callers[name] - seen
         if not parents:
