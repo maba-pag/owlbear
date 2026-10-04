@@ -1008,7 +1008,8 @@ part), V12, V19; L1, L2; #225 (if built).
 - N05-A: provider merge and readback adapter with fakes; revises the forbidden-effect gates that
   assert Delivery never merges into an allowlist (merged #356).
 - N05-B1: merge offer, readiness L1/L2 and distinct waits, strict-proof target route for finalized
-  Changes, automatic cleanup and its sweep (read side, no format change).
+  Changes (a sync to a new target invalidates finalization), one acceptance read per Check again,
+  automatic cleanup and its sweep (read side, no format change).
 - N05-B2: one merge attempt per approval, approve-and-execute owner, settlement inside the acceptance
   owner, post-merge parent and base check, owner fence, format step.
 - N05-C: Cockpit **Approve merge** with confirm, cancel and error states and the unknown-merge
