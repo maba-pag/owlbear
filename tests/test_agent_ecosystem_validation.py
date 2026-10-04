@@ -544,6 +544,7 @@ def test_upgrade_delivery_prompt_follows_the_rehearsed_upgrade_procedure() -> No
         "owlbear-delivery/delivery_health",
         "owlbear-delivery/list_changes",
         "owlbear-delivery/get_change",
+        "owlbear-delivery/list_work_items",
         "vscode/askQuestions",
     ]
     assert _PROMPT_VALIDATOR.validate_prompt(path) == []
@@ -563,6 +564,11 @@ def test_upgrade_delivery_prompt_follows_the_rehearsed_upgrade_procedure() -> No
     unpinned = ("*Stop*", "git -C <owlbear> pull --ff-only` (or", "<root> preflight")
     assert [prompt.index(step) for step in unpinned] == sorted(prompt.index(step) for step in unpinned)
     assert "`NEW/<tool>` is `uv --project <owlbear> run <tool>`" in prompt
+    assert "install `HEAD`" in prompt
+    assert "git -C <owlbear> archive <revision> serve/cockpit/dist" in prompt
+    assert "install `<revision>` with `--bundle-source <that directory>/serve/cockpit/dist`" in prompt
+    assert "no per-Change baseline exists, and continue; steps 3 and 5 still apply" in prompt
+    assert "where step 2 recorded one" in prompt
     assert "safe only when step 7 reported `migration-not-required`" in prompt
     assert "Do not stop or kill processes yourself" in prompt
     assert "previous release's own gate accepts the migrated state" in prompt

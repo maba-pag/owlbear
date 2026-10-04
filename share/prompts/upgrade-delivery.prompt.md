@@ -6,6 +6,7 @@ tools:
   - owlbear-delivery/delivery_health
   - owlbear-delivery/list_changes
   - owlbear-delivery/get_change
+  - owlbear-delivery/list_work_items
   - vscode/askQuestions
 ---
 Upgrade the Delivery controller of this workspace to ${input:revision:OwlBear commit or ref; empty for the latest commit of the checkout's branch}.
@@ -23,14 +24,21 @@ has moved that checkout.
 
 1. **Install (pinned only)** while Delivery may still run: `delivery-controller install <revision>` from the
    current release (`.owlbear/controller/releases/<current>/.venv/bin/delivery-controller`). In a consumer
-   project, first bring the revision into the OwlBear checkout (`git -C <owlbear> pull --ff-only`) and add
-   `--source <owlbear> --bundle-source <owlbear>/serve/cockpit/dist`; the revision is then that checkout's
-   `HEAD`. It refuses a modified release and reuses an intact one. Report the resolved commit.
+   project, add `--source <owlbear>` and the Cockpit bundle of the same commit. With no revision given,
+   run `git -C <owlbear> pull --ff-only`, install `HEAD` and add
+   `--bundle-source <owlbear>/serve/cockpit/dist`. With a named revision, run `git -C <owlbear> fetch`,
+   extract that commit's bundle into an empty directory outside the repository with
+   `git -C <owlbear> archive <revision> serve/cockpit/dist | tar -x -C <that directory>`, and install
+   `<revision>` with `--bundle-source <that directory>/serve/cockpit/dist`; the checkout's `HEAD` stays
+   where it is. It refuses a modified release and reuses an intact one. Report the resolved commit.
 2. **Online check:** call `delivery_health`, `list_changes` and `get_change` for every Change. Report
    running claims, started or interrupted engine actions, pending checkpoints and pending publications.
    If any exists, ask the user to let the work finish or settle it; do not settle, release or repair
-   anything yourself. If `owlbear-delivery` does not start because it refuses `state-migration-required`
-   (the checkout was already moved), skip this step and step 4 and rely on step 5.
+   anything yourself. An older running controller may lack `list_changes` and `get_change`: then report
+   what `delivery_health` and, where offered, `list_work_items` show, tell the user that no per-Change
+   baseline exists, and continue; steps 3 and 5 still apply. If `owlbear-delivery` does not start because
+   it refuses `state-migration-required` (the checkout was already moved), skip this step and step 4 and
+   rely on step 5.
 3. **Stop:** with `vscode/askQuestions`, ask the user to stop `owlbear-delivery` (*MCP: List Servers* →
    *Stop*) and Cockpit, and wait for the confirmation. Do not stop or kill processes yourself.
 4. **Move the checkout (unpinned only):** require an empty `git -C <owlbear> status --porcelain`, record
@@ -54,8 +62,9 @@ has moved that checkout.
 10. **Restart and verify:** ask the user to start `owlbear-delivery` from *MCP: List Servers* and Cockpit
     (pinned: `.owlbear/controller/bin/cockpit`; unpinned: `uv run --project <owlbear> cockpit`). Then call
     `delivery_health`, which must be `healthy`, and `list_changes`, and call `get_change` for every Change:
-    each must be available and match its step-2 state. In an unpinned workspace, remind the user to rerun
-    OwlBear setup from the project root to refresh copied files.
+    each must be available and match the state step 2 recorded for it, where step 2 recorded one. In an
+    unpinned workspace, remind the user to rerun OwlBear setup from the project root to refresh copied
+    files.
 11. **Failure after migration or switch:** ask the user to stop both controllers, copy the state with
     another `backup` to a second directory, and report. Pinned: offer `switch <previous>`; it succeeds only
     when the previous release's own gate accepts the migrated state. Unpinned: moving the checkout back to
