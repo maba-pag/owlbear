@@ -306,7 +306,7 @@ def stopped_controllers(layout: Layout, processes: ProcessSource) -> Iterator[No
 
 
 def _writable_entries(tree: Path) -> list[str]:
-    found = []
+    found = ["."] if tree.lstat().st_mode & _WRITE_BITS else []
     for directory, names, files in os.walk(tree):
         for name in (*names, *files):
             path = Path(directory) / name
@@ -495,12 +495,21 @@ def install(  # noqa: PLR0913 - every install input is an explicit keyword.
             "installed_at": now().strftime("%Y-%m-%dT%H:%M:%SZ"),
         }
         _set_read_only(tree)
+        _require_sealed(tree, commit)
         tree.chmod(stat.S_IRWXU)
         release["tree_sha256"] = tree_digest(tree)
         (tree / RELEASE_FILE).write_text(json.dumps(release, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         (tree / RELEASE_FILE).chmod(0o444)
         tree.chmod(0o555)
+        _require_sealed(tree, commit)
     return {"status": "installed", "commit": commit, "reused": False, "release": release}
+
+
+def _require_sealed(tree: Path, commit: str) -> None:
+    """Refuse a release whose entries kept a write bit (a filesystem that ignores modes cannot hold one)."""
+    if writable := _writable_entries(tree):
+        detail = f"release {commit} could not be sealed read-only; writable entries: {writable}"
+        raise ControllerError(code="release-invalid", detail=detail)
 
 
 def _integrity(layout: Layout, commit: str) -> dict[str, Any]:

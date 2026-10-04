@@ -132,6 +132,11 @@ def _controller_state(layout: Layout) -> dict[str, bytes]:
 # ---------------------------------------------------------------------------
 
 
+def _writable(tree: Path) -> list[str]:
+    entries = [tree, *(path for path in tree.rglob("*") if not path.is_symlink())]
+    return [path.relative_to(tree).as_posix() for path in entries if path.lstat().st_mode & 0o222]
+
+
 def test_install_builds_a_read_only_release_whose_digest_detects_any_modification(
     tmp_path: Path, source: tuple[Path, list[str]]
 ) -> None:
@@ -143,9 +148,10 @@ def test_install_builds_a_read_only_release_whose_digest_detects_any_modificatio
     release = installed["release"]
     assert (release["commit"], release["supported_format"]) == (commits[0], SUPPORTED_FORMAT)
     assert release["bundle"]["origin"] == "built"
+    tree = layout.release(commits[0])
+    assert _writable(tree) == []
     assert delivery_controller.verify(layout, commits[0])["failures"] == []
     assert _install(layout, repository, commits[0])["reused"] is True
-    tree = layout.release(commits[0])
     with pytest.raises(PermissionError):
         (tree / "release.txt").write_text("tampered\n", encoding="utf-8")
     module = tree / "serve/delivery/src/owlbear_delivery/state_formats.py"
@@ -157,6 +163,49 @@ def test_install_builds_a_read_only_release_whose_digest_detects_any_modificatio
     with pytest.raises(ControllerError) as refused:
         _install(layout, repository, commits[0])
     assert refused.value.code == "release-invalid"
+
+
+def test_an_install_that_cannot_seal_its_release_is_refused_and_rebuilt(
+    tmp_path: Path, source: tuple[Path, list[str]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository, commits = source
+    layout, _config = _workspace(tmp_path)
+    seal = delivery_controller._set_read_only  # noqa: SLF001 - the seal is the behavior under test.
+
+    def _ignored_mode(tree: Path) -> None:
+        seal(tree)
+        (tree / "release.txt").chmod(0o644)
+
+    with monkeypatch.context() as patched:
+        patched.setattr(delivery_controller, "_set_read_only", _ignored_mode)
+        with pytest.raises(ControllerError) as refused:
+            _install(layout, repository, commits[0])
+
+    assert refused.value.code == "release-invalid"
+    assert "could not be sealed read-only" in refused.value.detail
+    assert "release.txt" in refused.value.detail
+    assert delivery_controller.read_release(layout, commits[0]) is None
+    assert _install(layout, repository, commits[0])["reused"] is False
+    assert _writable(layout.release(commits[0])) == []
+
+
+@pytest.mark.parametrize("entry", [".", "serve/delivery", "serve/delivery/src/owlbear_delivery/state_formats.py"])
+def test_pin_refuses_a_release_with_a_writable_entry_even_when_its_content_is_unchanged(
+    tmp_path: Path, source: tuple[Path, list[str]], entry: str
+) -> None:
+    repository, commits = source
+    layout, _config = _workspace(tmp_path)
+    _install(layout, repository, commits[0])
+    path = layout.release(commits[0]) / entry
+    path.chmod(path.stat().st_mode | stat.S_IWUSR)
+
+    with pytest.raises(ControllerError) as refused:
+        _pin(layout, commits[0], first=True)
+
+    assert refused.value.code == "release-invalid"
+    assert f"writable entries: ['{entry}']" in refused.value.detail
+    assert "modified after install" not in refused.value.detail
+    assert not layout.pin.exists()
 
 
 def test_an_interrupted_install_is_rebuilt_and_an_unknown_revision_is_refused(

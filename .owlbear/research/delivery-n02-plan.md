@@ -10,6 +10,18 @@
 > **Amendment 2026-10-04** (lead engineering decision while live remains frozen): the host rehearsal
 > [G3](#5-verification-gaps) no longer blocks the N02-D merge; it is a pre-H activation gate that must
 > pass before any live migration or switch in the H step (runbook step 0).
+> **Amendment 2026-10-04, release integrity boundary** (lead engineering decision after Sol N02-D
+> implementation round 2; recorded explicitly, not a silent narrowing): R1/I6 release integrity is
+> defined against accidental and ordinary-tool modification (editor saves, Git operations in the wrong
+> directory, partial or interrupted installs, package-manager writes, restores), the failure mode
+> pinning exists to prevent, and not against a determined same-user actor, who can replace the pin,
+> the launcher or Python anyway. Within that boundary: (1) install seals every release file and
+> directory read-only and refuses a release that keeps a write bit; `pin`/`switch` (and `verify`)
+> refuse a writable release; sealing also prevents new write opens or mappings after install;
+> (2) `pin`, `switch`, `verify` and every start whose fingerprint differs verify the full content;
+> (3) a start whose stat fingerprint matches the pin is accepted as the ordinary-modification
+> detector, not as proof of unchanged bytes; (4) the cases outside the boundary are stated in
+> [I6](#13-invariants) and in `setup/operating-owlbear.md`.
 > Product code is unchanged by this phase.
 
 ## 1. Contract
@@ -36,7 +48,7 @@
 
 | ID | Requirement | Source |
 | --- | --- | --- |
-| R1 | Pin one controller executable and schema capability set per active session; the dev checkout never hot-replaces it | Programme §11.3; WP6 step 3; P20 |
+| R1 | Pin one controller executable and schema capability set per active session; the dev checkout never hot-replaces it, and accidental or ordinary-tool modification of the pinned release is refused before it runs (boundary amended 2026-10-04: [I6](#13-invariants)) | Programme §11.3; WP6 step 3; P20 |
 | R2 | Unsupported or newer state is refused before it is read or mutated | §11.3; WP6 step 5; V24; V20 refusal half |
 | R3 | Registered, versioned migrations; no runtime compatibility paths by default | §11.3; P19 |
 | R4 | Migration is fenced and copy-first, with backup and replay at every durable boundary; restart reaches the old version or the replayed new coherent version | V21; P19 |
@@ -80,6 +92,16 @@
   `RELEASE.json` must hash to the digest recorded in `pin.json`, and the release tree and the
   interpreter must match that record before any controller composition. Unpinned workspaces (tests,
   disposable portfolios, consumers until N08-C) keep today's behavior.
+  **Threat boundary (amended 2026-10-04).** "Intact" means not modified by accident or by an ordinary
+  tool: editor saves, Git operations in the wrong directory, partial or interrupted installs,
+  package-manager writes and restores. Install seals the release read-only; `pin`, `switch`, `verify`
+  and any start whose stat fingerprint differs from the pin hash the full content; a start whose
+  fingerprint matches is accepted as that ordinary-modification detector. Outside the boundary, by
+  decision: root; a determined same-user actor, who can make the release writable again, replace
+  `pin.json`, a launcher or the interpreter, or keep a writable mapping opened before sealing and
+  change bytes without a metadata change; the interpreter's standard library and shared libraries
+  outside its binary; and a release edited to disable its own in-process check when started without
+  a launcher (the launcher and `verify` cover that). Whole-system hashing is not proportionate.
 
 ### 1.4 Persisted record families
 
@@ -179,7 +201,8 @@ Agent-settled with probe evidence:
 - **D1 Pinning by workspace-local immutable releases and generated launchers** (P4, P5). A release
   is `.owlbear/controller/releases/<commit>/`: `git archive <commit>` + `uv sync --locked
   --compile-bytecode` + the Cockpit bundle (built from the archive with the pinned Node, or taken
-  from a `main` archive) + `RELEASE.json` (commit, format range), then made read-only.
+  from a `main` archive) + `RELEASE.json` (commit, format range), then sealed read-only (install
+  refuses a release in which any entry keeps a write bit; amended 2026-10-04).
   `delivery-controller pin` writes `.owlbear/controller/pin.json` and the launchers
   `.owlbear/controller/bin/delivery-mcp` and `bin/cockpit`, each `exec`-ing the release's realpath.
   The tracked `.vscode/mcp.json` runs `${workspaceFolder}/.owlbear/controller/bin/delivery-mcp`
@@ -698,7 +721,10 @@ reject in lax mode too; they are the same deliberate rejections as in run 1. No 
   paths), `RELEASE.json` (schema 1: commit, `supported_format`, interpreter identity — resolved path,
   version and SHA-256 of the interpreter binary —, platform, bundle origin and index digest,
   `tree_sha256` over type, path, executable bit and content or link target) is written
-  last, then every entry is made read-only; a directory without `RELEASE.json` is an interrupted
+  last, then every entry is made read-only and install refuses `release-invalid` ("could not be sealed
+  read-only") while any file or directory, the release root included, keeps a write bit (checked before
+  `RELEASE.json` is written, so the refused tree is rebuilt, and again after); `verify`, `pin` and
+  `switch` refuse a writable entry even when its content is unchanged; a directory without `RELEASE.json` is an interrupted
   install and is rebuilt; an intact release is reused; a modified one refuses `release-invalid`.
   `pin`/`switch` verify the release, run **that release's own gate** against the stopped workspace
   (no gate → `release-ungated`; any refusal → `release-refuses-state`, the D3 rollback rule), write
@@ -740,13 +766,16 @@ reject in lax mode too; they are the same deliberate rejections as in run 1. No 
   `release_integrity.require_release` proves the pinned release intact: the record digest must equal
   `pin.json`'s `release_sha256`; then either the stat fingerprint of the tree and interpreter
   (type, mode, size, mtime, ctime and inode of every entry) equals `pin.json`'s
-  `release_stat_sha256`, which `pin`/`switch` recorded around a full content verification (fast
-  path: without root, no content, mode or entry changes without changing a ctime, an inode or the
-  entry set), or the full tree digest and the interpreter binary digest equal the record. A launcher
-  that verified the same release in the same process marks it verified, so each start checks once.
-  Not covered at start: the interpreter's standard library and shared libraries outside its binary,
-  root-level tampering (root can also rewrite `pin.json`), and a release modified to disable the
-  in-process check itself when started without a launcher (the launcher and `verify` cover that).
+  `release_stat_sha256`, which `pin`/`switch` recorded around a full content verification, or the
+  full tree digest and the interpreter binary digest equal the record. The fast path is the
+  ordinary-modification detector of the [I6 threat boundary](#13-invariants), not proof of unchanged
+  bytes: an ordinary write to the sealed release must first add a write bit (a mode change), and
+  ordinary writes, replacements and restores change a ctime, an inode or the entry set; any
+  difference makes the start re-hash everything. A launcher that verified the same release in the
+  same process marks it verified, so each start checks once. The cases outside the boundary (root,
+  a determined same-user actor including a writable mapping held from before sealing, external
+  standard and shared libraries, launcher-bypassed starts of a release edited to disable its check)
+  are listed in I6.
   Offline compositions (`load_read_only_application`, migration verification)
   are not pinned: they run from the target release during an upgrade.
 - `delivery-lc`: `prepare` also copies `pin.json` and launchers into the copy, each release's
@@ -783,15 +812,25 @@ LIVE=/Users/GGN7H9Q/Projects/owlbear-dev
 LANE=/Users/GGN7H9Q/Projects/owlbear-dev-lane-b   # any worktree at origin/dev containing M
 git -C "$LIVE" fetch origin && M=$(git -C "$LIVE" rev-parse origin/dev)
 R="$LIVE/.owlbear/controller/releases/$M/.venv/bin"
+STAMP=$(date -u +%Y%m%d-%H%M%S)
+# Read-only: paths tracked on dev or M that exist untracked or ignored in $LIVE (step 8 would refuse or overwrite them).
+collisions() {
+  comm -23 <({ git -C "$LIVE" -c core.quotePath=false ls-tree -r --name-only dev
+               git -C "$LIVE" -c core.quotePath=false ls-tree -r --name-only "$M"; } | sort -u) \
+           <(git -C "$LIVE" -c core.quotePath=false ls-files | sort) |
+    while IFS= read -r p; do if [ -e "$LIVE/$p" ] || [ -L "$LIVE/$p" ]; then printf '%s\n' "$p"; fi; done
+  git -C "$LIVE" status --porcelain --untracked-files=no
+}
 ```
 
 | Step | Command (from `$LIVE`) | Expected | On failure |
 | --- | --- | --- | --- |
 | 0 Host rehearsal (G3, pre-H activation gate) | With the user, two real VS Code windows on a disposable portfolio pinned to `M` (`delivery-controller --project-root <disposable> install --pin M`, `.vscode/mcp.json` naming the launcher): start, stop and restart `owlbear-delivery` from *MCP: List Servers*; start Cockpit through `bin/cockpit`; note `chat.mcp.autostart` | the launcher starts release code in each window; *Stop* and *Start* work; no automatic restart; `delivery_health` healthy | Stop before step 1: nothing live changed; fix and rerun the rehearsal |
 | 1 Install (D03 still running) | `env -u PYTHONPATH uv --directory "$LANE" run --no-sync python -m owlbear_tools.delivery_controller --project-root "$LIVE" install "$M"` | `"status": "installed"`, `"supported_format": 1`, bundle `"origin": "built"` (Node 24.21.0) | Nothing live changed; fix and rerun (an incomplete release is rebuilt) |
+| 1a Checkout collisions (before any migration step) | `collisions` | prints nothing. Observed 2026-10-04 (read-only): `.owlbear/research/delivery-redesign-execution-plan.md`, untracked in `$LIVE` (dated 2026-10-03 02:23) and tracked on `dev` | For each listed path, with the user: `git -C "$LIVE" show "$M:<path>" \| diff -u - "$LIVE/<path>"` (review; a path absent from `M` is on `dev` only: use `dev:<path>`), then `mkdir -p ~/owlbear-backups/$STAMP/checkout/<dir> && mv -n "$LIVE/<path>" ~/owlbear-backups/$STAMP/checkout/<path>` (never delete); a tracked modification is the user's to commit or move the same way; rerun `collisions` until it prints nothing. Nothing live changed |
 | 2 Online preflight | In the main window: `delivery_health`, `list_changes`, `get_change` for each of the 3 Changes | healthy; every Change available; no running claim, interrupted action, pending checkpoint or publication | Let work finish; never settle it from this procedure |
 | 3 Stop | User: *MCP: List Servers* → `owlbear-delivery` → *Stop*; stop Cockpit (Ctrl-C) | no `owlbear_delivery_mcp`/`cockpit` process with cwd in `$LIVE` | — |
-| 4 Offline preflight | `"$R/delivery-controller" --project-root "$LIVE" preflight` | `"ready": true`, `"format": 0`, `"blockers": []`, attention only `migration-required` | `controller-running`/`controller-unknown`: a controller still runs; any blocker: restart D03, settle, repeat from 2 |
+| 4 Offline preflight | `"$R/delivery-controller" --project-root "$LIVE" preflight`; `collisions` | `"ready": true`, `"format": 0`, `"blockers": []`, attention only `migration-required`; `collisions` prints nothing | `controller-running`/`controller-unknown`: a controller still runs; any blocker: restart D03, settle, repeat from 2; a collision: repeat 1a |
 | 5 Backup | `"$R/delivery-controller" --project-root "$LIVE" backup --destination ~/owlbear-backups/n02d-$(date -u +%Y%m%d-%H%M%S)` | `"status": "backed-up"`, files ≥ the live record count, refs ≥ 1 | Stop; nothing changed |
 | 6 Migrate | `"$R/delivery-migrate" --project-root "$LIVE" propose`, then `apply <id>`, `verify <id>` | entries exactly the rehearsed (path, before digest) set: `runtime/format.json` (absent before) plus `coordination-1-to-2` of `runtime/coordination/changes/delivery-action-readiness.json` (`77836b50095a…`), `…/frontier-serialization-contract.json` (`5b505daa6be7…`) and `…/macos-managed-browser-authentication.json` (`231c391e7215…`); `applied`, then `verified` | Different set: stop, fresh rehearsal. Refused apply: `delivery-migrate abort <id>` (pre-marker) restores; D03 may restart only while `runtime/format.json` is absent |
 | 7 Pin | `"$R/delivery-controller" --project-root "$LIVE" pin "$M"` | `"status": "pinned"`, `"previous": null` | `release-refuses-state`: stop and report |

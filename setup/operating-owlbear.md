@@ -387,6 +387,16 @@ before importing anything from the release. Start Cockpit with
 `.owlbear/controller/bin/cockpit`. A clone without a release shows `owlbear-delivery` as failed to
 start until `uv run delivery-controller install --pin <commit>` installs and pins one.
 
+Release integrity protects against accidental and ordinary-tool changes: editor saves, Git commands
+in the wrong directory, interrupted installs, package-manager writes and restores. Install seals
+every release file and directory read-only and refuses a release it cannot seal; `pin`, `switch` and
+`verify` hash the full content and refuse a writable entry. A start whose file metadata still matches
+the fingerprint recorded at `pin` skips re-hashing; any metadata difference makes it re-hash the whole
+release. It is not a security boundary: root, a determined actor running as your user (who can make
+the release writable again, replace `pin.json`, a launcher or Python, or keep a writable mapping
+opened before sealing), the interpreter's standard and shared libraries, and a release edited to
+disable its own check and started without a launcher are outside it.
+
 Upgrade only through `/upgrade-delivery`, which drives `delivery-controller` and `delivery-migrate`:
 install, online preflight, stop, offline `preflight`, `backup`, migration, `switch`, `verify` and
 `prune` while both controllers are still stopped, then restart and online verification. `preflight`,

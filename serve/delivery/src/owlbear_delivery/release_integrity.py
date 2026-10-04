@@ -5,11 +5,15 @@ generated launchers, which run it with ``python -I -S`` so the release is verifi
 including ``.pth`` files, is imported. The loader repeats the check for callers that bypass a launcher,
 unless a launcher in the same process already verified the same release record.
 
-``pin`` and ``switch`` verify the full content digest and record, in ``pin.json``, the release record's
-digest and a stat fingerprint of the verified tree and interpreter (type, mode, size, mtime, ctime and
-inode of every entry). A start whose fingerprint still matches skips re-hashing: without root, no file
-content, mode or entry can change without changing its ctime, inode or the entry set. Any other start
-re-hashes the whole tree and the interpreter binary against the record.
+Integrity is defined against accidental and ordinary-tool modification (editor saves, Git or package-manager
+writes, interrupted installs, restores), not against root or a determined same-user actor, who can replace
+the pin, the launcher or the interpreter anyway. Install seals every release entry read-only; ``pin``,
+``switch`` and ``verify`` hash the full content and refuse a writable entry, and record, in ``pin.json``,
+the release record's digest and a stat fingerprint of the verified tree and interpreter (type, mode, size,
+mtime, ctime and inode of every entry). A start whose fingerprint still matches skips re-hashing: an
+ordinary write to a sealed release must first change a mode, and ordinary writes, replacements and
+restores change a ctime, an inode or the entry set. Any other start re-hashes the whole tree and the
+interpreter binary against the record.
 """
 
 from __future__ import annotations
