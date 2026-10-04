@@ -71,7 +71,8 @@ checks again for controllers before every write. Then run, for one proposal:
 
 `repair-controller-running` or `repair-controller-unknown` means a controller or an uninspectable
 Python or uv process runs (or was started) in the workspace: ask the user to stop it, keep it
-stopped, and retry the same command (`resume` after an interrupted `apply`). `repair-proposal-stale` means the state changed: classify and propose again.
+stopped, and retry the same command (`resume` after an interrupted `apply`).
+`repair-proposal-stale` means the state changed: classify and propose again.
 `repair-journal-open` names the journal that must finish first. After a crash or interruption run
 `delivery-repair resume <id>`, then `verify`; `delivery-repair abort <id>` restores the complete
 before-state from the backup when the user chooses to stop. `repair-corruption-stop` and
