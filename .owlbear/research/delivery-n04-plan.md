@@ -7,14 +7,15 @@
 > main checkout on `delivery-live` (D03). Rebased on `origin/dev` `634a77be7`: it adds only N05-A
 > (`delivery-github`, `publication_provider.py`, forbidden-effect gates), so no locator here moved; P3–P8 rerun
 > there with identical outcomes. Round 3 merged `origin/dev` `141795676` (N09-A2, PR #357, merged); the N09-A2
-> start-site inventory and K3 fences named here are now on `dev`.
-> **Status:** draft for the plan gate; revised after Sol plan gate rounds 1–3 ([§6](#6-round-dispositions)).
+> start-site inventory and K3 fences named here are now on `dev`. Round 4 merged `origin/dev` `2061047af` (N02-C,
+> PR #355, merged: `remote_git.py` and the bounded `ChangeBranchPublisher`), re-read here.
+> **Status:** draft for the plan gate; revised after Sol plan gate rounds 1–4 ([§6](#6-round-dispositions)).
 > Product code is unchanged by this phase. U1–U3 are recorded engineering decisions of 2026-10-03
 > ([1.13](#113-decisions)).
-> Dependencies (re-pinned in round 3): **N03 (as amended by #360)**: the [N03 plan](delivery-n03-plan.md) with
-> PR #360 (lane C `f4d09d774`, under review; it adds N05 D14's single-use consent generation `merge_consent` and
-> N03 D13 *Single use*, which treats the expected frontier digest as the generation of a scoped request and
-> states that a decline, a cancel or an unapplied accepted answer consumes nothing): evidence model;
+> Dependencies (re-pinned in round 4): **N03 (as amended by #360)**: the [N03 plan](delivery-n03-plan.md) with
+> PR #360 (lane C `c6bcbbc25`, under review; N03 D13 *Single use* and I11 now define one shared single-use
+> `consent_generation` family built by N03-A, consumed by every answer, with uses for N03, N04 (including
+> `confirm-revision-criterion` with N04's binding), N05 and N06): evidence model;
 > user-only confirmation through MCP elicitation (N03 D13, R14,
 > I6) declared once as a server-injected `Resolve` parameter with a legacy route (`elicitation/create`) and a
 > modern route (`InputRequiredResult`) behind the SDK's default `RequestStateBoundary`; the Change-wide
@@ -94,7 +95,9 @@
 - **I3 Roll forward only.** Before the activation intent the Change is in its old approved state and the user may
   discard the candidate. After the intent the operation only rolls forward; it never silently falls back
   (programme §8.3 step 5). Sole exception: A1b observes the bound pull request merged before any Git effect of
-  the activation; the journal then ends `superseded-by-merge` and the acceptance owner completes the Change.
+  the activation (no preservation capture, branch at the expected head); the journal then ends
+  `superseded-by-merge` and the acceptance owner completes the Change. A merge observed after any Git effect
+  never ends or reverses the activation; it is contained (§1.6 Merge after effects, D43).
 - **I4 One deterministic child commit.** An activation or snapshot creates at most one managed-branch commit:
   the direct child of the intent's expected head, touching only `.owlbear/delivery/packages/<change>/`, with an
   operation-bound message and fixed author, committer and dates. Its SHA, tree and dates live in one durable
@@ -122,8 +125,9 @@
   captured entries, never by `git clean`. No ignored entry may collide with a path the cleanup writes or stop
   being ignored under the reviewed head's ignore rules; either refuses before the intent (D25, D34).
 - **I13 One answer per question.** Every N04 user question (candidate-scoped confirmation, foreign-head
-  authorization) is bound to a server-owned single-use consent generation that its first answer consumes,
-  whether accepted, declined, cancelled or refused at the re-check (§1.7 Consent generation, D36).
+  authorization) is bound to N03's shared single-use consent generation (N03 D13 *Single use*, I11) under an
+  N04 use and binding; its first answer consumes it, whether accepted, declined, cancelled or refused at the
+  re-check (§1.7 Consent generation, D44).
 
 ### 1.4 Authority layout
 
@@ -134,14 +138,15 @@
 | Candidate package (admitted Changes only) | `runtime/package-candidates/<change>/{authority.json,design.md,intent.md,manifest.json}`; `authority.json` always empty | second `DesignPackageStore` instance | M | no (host-local, like unadmitted drafts) |
 | Candidate history | `refs/owlbear/package-candidates/<change>` | `DesignPackageStore.checkpoint` with a ref namespace | Git | no |
 | Revision hold | `ChangeCoordination.revision_hold` (A1); bound activation operation and `purpose` added at A1 of the operation (A2b) | `PortfolioCoordinator` | M | no |
-| Activation journal | `runtime/changes/<change>/revision-activations/<operation_id>/{intent,demotion,local,result}.json` | activation owner (A2b) | R | no |
+| Activation journal | `runtime/changes/<change>/revision-activations/<operation_id>/{intent,demotion,local,result,merge-observed}.json` | activation owner (A2b) | R | no |
 | Design-return preservation | `runtime/changes/<change>/revision-activations/<operation_id>/preservation/{manifest.json,blobs/<sha256>}` (owner-private, D03 store rules); refs `refs/owlbear/preserved/<change>/<operation_id>/{head,index}` | activation owner (A2b) | R | no |
 | Generation history | `runtime/changes/<change>/revisions/generations/<operation_id>/{contract,frontier,admission}.json` (the replaced authority, H) and `generation.json` (R) | activation owner (A2b) via `DeliveryAuthorityRegistry` participants | H, R | no |
 | Legacy history | `runtime/changes/<change>/revisions/<64-hex>/` (existing; contract- or frontier-digest named) | none (read only) | H | no |
 | Remote activation pin (fresh host) | `refs/owlbear/remote-activations/<change>/<operation_id>`; `ChangeCoordination.remote_activation_pending` | loader restore (A2b) | Git, M | no |
 | Fresh-host replacement | `runtime/changes/<change>/remote-activations/<operation_id>/{replacement,replacement-snapshot,replaced}.json` | loader replacement owner (A2b, D38) | R | no |
-| Foreign-head records and pin | `revision-activations/<operation_id>/foreign-heads/<F>.json`, `foreign-head.json`; `refs/owlbear/preserved/<change>/<operation_id>/foreign-<F>` | activation owner (A2b, D35) | R, Git | no |
-| Consent generations | `runtime/changes/<change>/revision-consents/<sequence>.json` | activation owner store (A2b, D36) | M | no |
+| Foreign-head records and pins (one set per head) | `revision-activations/<operation_id>/foreign-heads/<F>.json` (observation), `foreign-authorizations/<F>.json` (authorization), both create-only; `refs/owlbear/preserved/<change>/<operation_id>/foreign-<F>` | activation owner (A2b, D35, D42) | R, Git | no |
+| Foreign-head replacement operations | `runtime/publications/change-branches/operations/<sha256("foreign-head:" + op)>.json` (existing `branch_publication` family) | `ChangeBranchPublisher.replace_foreign_head` (A2b, D42) | R | no |
+| Consent generations | `runtime/changes/<change>/consent-generations/<sequence>.json` (N03 `consent_generation`) | N03-A owner; N04 uses (D44) | M | no |
 | Snapshot child pin | `refs/owlbear/snapshot-children/<change>/<operation_id>` (pre-intent; deleted after the receipt) | snapshot owner (A2a) | Git | no |
 | Revision confirmation receipts | `runtime/changes/<change>/revision-confirmations/<confirmation_id>.json` | `confirm_revision_criterion` (B) | R | no (the ledger entry is portable) |
 | Applicability records | frontier binding `applicability` (B) | runtime | M (nested) | yes (snapshot) |
@@ -204,21 +209,30 @@ its K2 token does (a Pause after the intent makes the activation a K2 owner, N09
 | ID | Exception | Exact identity check (in the start's own transaction) | Phase |
 | --- | --- | --- | --- |
 | E1 | Activation intent | The replacement adds `design_package_snapshot_intent` (schema 2, D28) whose `operation_id` equals `revision_hold.activation_operation_id` (for `remote-child`, the marker's `resolution_operation_id`; "bound operation" below means either) written by the same A1 transaction, whose `expected_head` equals the journal intent's expected head and whose `package_id` equals the intent's activated package ID (origin `built` for `revision` and `snapshot-reconcile`, `adopted` = T for `remote-child`); a `reassess` A1 adds no snapshot intent and does not use E1 (D31) | A2b |
-| E2 | Activation owner steps | Process-local `revision-activation` drain token rebuilt at call start from the journal `intent.json` (operation ID, intent digest) whose ID equals the bound operation (E1); permits only that operation's A1b draft operation `revision-draft-<operation_id>-<observed head>`, A3 ref update, A4 participants, A5 reservation for `_checkpoint_operation_id("branch", change, expected child)`, state publication `revision-<operation_id>`, and A6 | A2b |
+| E2 | Activation owner steps | Process-local `revision-activation` drain token rebuilt at call start from the journal `intent.json` (operation ID, intent digest) whose ID equals the bound operation (E1); permits only that operation's A1b draft operation `revision-draft-<operation_id>-<observed head>`, A3 ref update, A4 participants, A5 reservation for `_checkpoint_operation_id("branch", change, expected child)` or, for a head F with `foreign-authorizations/<F>.json`, for `<operation_id>-foreign-<F>` (D42), state publication `revision-<operation_id>`, and A6 | A2b |
 | E3 | Reconciliation actions | `acquire_continuation_action` / `start_continuation_action` with kind `reconcile-revision-activation` and `revision_operation_id` equal to the hold's bound operation, or kind `reconcile-revision-snapshot` whose recomputed `snapshot-reconcile` operation ID equals `revision_operation_id` while no other activation is bound; every other kind refused | A2b |
 | E4 | Retained same-task successor | Coordinator `acquire` and `prepare_builder_handoff_acquisition` for a Builder writer whose outcome, task and attempt lineage equal the passive `builder_handoff` (route `same-task`); a new task, a Planner claim, a Finalizer attempt or a different task refused | A1 |
 | E5 | Hold policy writes | `open_revision_hold` (purpose `revision` with a candidate, or `reassess` bound to one `history_ref` without one, B), `clear_revision_hold`, candidate revise and discard, and the `confirm_revision_criterion` consent-generation writes and ledger append for purposes `revision` and `reassess` (§1.7, B); each a K1-style admission or a declared frontier write, no start | A1, B |
-| E6 | Remote-child resolution | `activate_revision` kind `remote-child` whose `adopt_child` equals `remote_activation_pending.child` while the marker is `pending`; its A1 sets the marker `resolving` with this operation's ID; afterwards only E2 for that ID. Also the candidate write and discard of route (ii) (bytes equal to T's package) | A2b |
+| E6 | Remote-child resolution | `activate_revision` kind `remote-child` whose `adopt_child` equals `remote_activation_pending.child` while the marker is `pending`; its A1 sets the marker `resolving` with this operation's ID; afterwards the `resolving` row below applies. Also the candidate write and discard of route (ii) (bytes equal to T's package) | A2b |
 | E7 | Divergence containment under the marker | The D03 dirty-worktree containment route named for `revision-workspace-unclean`, for this Change only while the marker records a worktree or index divergence (§1.6 Fresh-host restore); it preserves before it cleans | A2b |
 | E8 | Quarantined snapshot repair | `repair_quarantined_delivery_state_snapshot` while no activation is bound (it republishes validated local authority and starts no custody); with a bound activation only once `local.json` exists and the republished bytes equal its digests | A1, A2b |
 | E9 | Remote-child confirmation capture | `confirm_revision_criterion` purpose `remote-child` while the marker is `pending` and the candidate slot holds exactly T's package (`expected_candidate_package_id` = T's package ID); its transaction also advances the marker's `restored` frontier digest and records the receipt (§1.7) | B |
-| E10 | Foreign-head authorization | `resolve_revision_foreign_head` whose operation equals the bound operation and whose foreign head equals the journal's latest `foreign-heads/<F>.json` observation while no `foreign-head.json` authorizes F (§1.6 Foreign Change head) | A2b |
+| E10 | Foreign-head authorization | `resolve_revision_foreign_head` whose operation equals the bound operation and whose head F has `foreign-heads/<F>.json`, has no `foreign-authorizations/<F>.json`, and equals the provider and `ls-remote` heads read in the call, while no `merge-observed.json` exists (§1.6 Foreign Change head) | A2b |
+
+**Marker permissions (D41).** Under `remote_activation_pending` the permitted starts depend on the marker
+state and bind its identities; every other start is refused `revision-remote-activation-pending`:
+
+| Marker state | Permitted (exact identity) |
+| --- | --- |
+| `pending` | E6 (`adopt_child` = marker child; route (ii) candidate write and discard); E7 while a divergence is recorded; E8 with no bound activation; E9 |
+| `resolving` (`resolution_operation_id` = R) | For R only, as for a hold-bound activation: E2; E3 (`reconcile-revision-activation` with `revision_operation_id` = R); E10 (foreign head after R's intent); E8 once R's `local.json` exists |
+| `replacing` | None: the loader's replacement replay runs before the Change is available (§1.6 (i)) |
 
 Every other N09-A2 start site stays refused under the hold and under `remote_activation_pending`. The
 inventory, from PR #357 (`9a7fff990`), is classified in `tests/test_delivery_worktree_authority.py` by a new
 `_HOLD_CLASSES` map beside `_COORDINATOR_PAUSE_CLASSES`, `_MANAGER_PAUSE_CLASSES` and
 `_APPLICATION_PAUSE_GATED_ENTRIES`; an entry that is pause-gated but has no hold class fails the test. The
-marker admits only E6–E9; the test classifies each site for both policies:
+marker admits exactly its state's row above; the test classifies each site for the hold and each marker state:
 
 | N09-A2 start site | Hold class |
 | --- | --- |
@@ -239,11 +253,11 @@ marker admits only E6–E9; the test classifies each site for both policies:
 | --- | --- | --- |
 | A0 Validate | No authority, branch, index or worktree write. Under the acquisition and checkpoint locks: the per-kind preconditions (table below); §1.5 preconditions; candidate verified and compiles to `contract_digest`; base package equals active; frontier digest equals expected; branch head equals `last_reviewed_commit`, worktree clean (except a U3 (b) handoff, whose bounded walk, collision check and bounds must pass, D25, D30); approval and (from B) applicability review and selected confirmations bound (§1.7); the remote Change branch (`ls-remote`) equals the expected head (T for `remote-child`; else `revision-remote-head-moved`). Git work by kind (D31): `revision` and `snapshot-reconcile` build and pin the child object (§ Deterministic child commit; D32); `remote-child` verifies T at its remote-activation pin and calls no `commit-tree`; `reassess` creates and pins no object | Old approved state; a pin without an intent is reused or replaced by the next A0 (D32); nothing else to replay |
 | A1 Intent | One transaction: journal `intent.json` (kind, all §1.4 identities, predecessor generation, expected frontier, branch head, approval, review ID, selected confirmations, handoff disposition, ready-demotion binding: finalization ID, finalized head, PR identity and the permitted observed heads; except for `reassess`, the schema-2 snapshot intent ID, which carries child SHA, tree, dates and pin (D28)) and coordination with `revision_hold.activation_operation_id` and, except for `reassess`, that `design_package_snapshot_intent` (origin `built`, parent = reviewed head; or origin `adopted`, child = T, parent = restored `change_head`) (E1) | Old authority plus intent: readiness `revision-activation-pending`; acquisition refused; replay continues |
-| A1b Demote (ready only) | Provider observation of the bound PR. Open, unmerged, not draft, head in the permitted set (the finalized head; for `remote-child` also T; a foreign head F once `foreign-head.json` authorizes it): `return_to_draft` with `exact_head` = the observed head and operation `revision-draft-<operation_id>-<observed head>` under the E2 token, inside the held checkpoint lock (no lock re-entry, no frontier write, no state publication). Already draft at a permitted head: no provider write. Then journal `demotion.json` (observed head, draft receipt ID or `already-draft`) in its own write, before A3 (D26). A head outside the set → § Foreign Change head | Before `demotion.json`: replay observes again; the provider returns the stored receipt for the same operation, or a new observed head gets its own operation. After it: replay never calls the provider (the PR head may already be the child). PR merged before any Git effect → journal `result.json` `superseded-by-merge`, hold cleared, acceptance owner completes (I3); for `remote-child` a merged PR refuses at A0 (`change-attention`) |
+| A1b Demote (ready only) | Provider observation of the bound PR. Open, unmerged, not draft, head in the permitted set (the finalized head; for `remote-child` also T; a foreign head F once `foreign-authorizations/<F>.json` exists): `return_to_draft` with `exact_head` = the observed head and operation `revision-draft-<operation_id>-<observed head>` under the E2 token, inside the held checkpoint lock (no lock re-entry, no frontier write, no state publication). Already draft at a permitted head: no provider write. Then journal `demotion.json` (observed head, draft receipt ID or `already-draft`) in its own write, before A3 (D26). A head outside the set → § Foreign Change head | Before `demotion.json`: replay observes again; the provider returns the stored receipt for the same operation, or a new observed head gets its own operation. After it: replay never calls the provider (the PR head may already be the child). PR merged before any Git effect → journal `result.json` `superseded-by-merge`, hold cleared, acceptance owner completes (I3); for `remote-child` a merged PR refuses at A0 (`change-attention`) |
 | A2 Preserve (U3 (b) only) | `preserve_design_return_workspace` (§ Design-return preservation): walk and collision check re-run on the live worktree, HEAD ref, index ref and raw index, filesystem manifest and blobs; verified against the live worktree; then cleanup to the reviewed head and post-cleanup verification | Replay recognizes the stored manifest and refs, re-verifies, and never captures twice; a partial cleanup completes only on a worktree that matches the capture or the reviewed head path by path |
 | A3 Child commit | `update-ref refs/heads/<branch> <expected child> <expected head>` with the pinned object (T for `remote-child`), then the worktree moves to the child for the four package paths (§ Deterministic child commit) | Replay classifies the ref and each package path's index and file state as intent-bound (parent or child bytes only) and completes; any other dirt → contained `revision-workspace-unclean`, nothing written |
 | A4 Local commit | One `RuntimeTransaction` across the package and runtime roots: active package files; contract, frontier (confirmations ledger carried byte-identical, N03 I10), admission; generation record `revisions/generations/<operation_id>/`; coordination (snapshot receipt, `last_reviewed_commit` = child, intent cleared, consumed passive custody); pending checkpoint (admitted-design trigger at the child) and pending state publication on the base digest; `ready` and `finalization` cleared with a `head-drift` invalidation when present; journal `local.json` with the digest of every written artifact | Any runtime-root recoverer completes the transaction (A1 fix); the loader accepts the journal-bound local successor; publication replays |
-| A5 Publish | Existing owners: checkpoint branch push (with `--force-with-lease=<branch>:<F>` only when `foreign-head.json` authorizes F; otherwise a fast-forward from the expected head), state snapshot, draft PR summary; bounded remote Git with unknown-write readback (N02-C); a remote head other than the expected head, the child or an authorized F → § Foreign Change head | Branch pushed, state not: same host replays the state; a fresh host follows § Fresh-host restore. Remote outage: stays pending with its reason |
+| A5 Publish | Existing owners: checkpoint branch push (a fast-forward from the expected head through `ChangeBranchPublisher.publish`; over an authorized foreign head F only through `replace_foreign_head`, § Foreign Change head), state snapshot, draft PR summary; bounded remote Git with unknown-write readback (N02-C `run_remote_git`, `classify_write_readback`); a remote head other than the expected head, the child or an authorized F → § Foreign Change head; a merged PR → § Merge after effects | Branch pushed, state not: same host replays the state; a fresh host follows § Fresh-host restore. Remote outage: stays pending with its reason |
 | A6 Release | One transaction: journal `result.json`, `revision_hold` cleared (and `remote_activation_pending` for `remote-child`), publication acknowledged; then idempotent cleanup of the candidate slot and the snapshot child pin | Released; the Change continues under the new authority |
 
 - **Who runs it.** The Designer calls `activate_revision` after approval. After any interruption the identical
@@ -252,12 +266,22 @@ marker admits only E6–E9; the test classifies each site for both policies:
 - **Replay rules.** Same operation ID (D19) and intent digest → resume. Same operation ID, different intent
   digest → `operation-conflict`, no write. A different operation while one is unfinished → `activation-pending`.
   A released operation's identical request returns its `result.json`.
-- **Loader.** `_is_unpublished_revision_activation_successor(snapshot, local, journal)` runs before the remote
-  branch-head check: the remote snapshot's `package_id`, `authority_digest` and `change_head` equal the journal
-  base; the remote Change branch equals either the base head or the journal's expected child; local package,
-  contract, admission, frontier and coordination receipt equal the `local.json` digests (or the frontier is a
-  recognized pending-publication successor of them); then `_validate_local_snapshot` accepts and publication
-  replays. Without a matching journal the existing mismatch and `remote-change-head-ahead` handling stands.
+- **Loader (D5, D40).** `_is_unpublished_revision_activation_successor(snapshot, local, journal)` runs before
+  the remote branch-head check (`_fetch_remote_snapshot_change_head`, `delivery_application_loader.py:727`,
+  which quarantines any remote head other than the snapshot's): the remote snapshot's `package_id`,
+  `authority_digest` and `change_head` equal the journal base; local package, contract, admission, frontier
+  and coordination receipt equal the base (before A4) or the `local.json` digests (or the frontier is a
+  recognized pending-publication successor of them); the journal has no `result.json`, or its result is
+  `merged-after-effects` and no published snapshot yet carries the `local.json` digests. Then the remote
+  Change branch is classified and never fetched as authority: the base head or the expected child (T for
+  `remote-child`) → accepted as today; any other head H → *foreign-pending*: the Change loads with its
+  journal-bound local authority and local branch (expected head or child), readiness
+  `revision-activation-pending` detail `revision-foreign-head` naming H (`revision-merged-after-effects`
+  when `merge-observed.json` exists). H is not fetched into a branch, compared with local authority or
+  adopted, and the loader writes nothing; the activation's replay journals the observation. This holds
+  before and after an authorization of H, until the replacement push lands or the remote returns. Then
+  `_validate_local_snapshot` accepts and publication replays. Without a matching journal (including any
+  fresh host) the existing mismatch and `remote-change-head-ahead` handling stands.
 
 **Per-kind contract (D31).** Every kind uses the journal, operation identity, replay rules and loader
 successor above; the table fixes what each kind requires, writes and owns. "n/a" steps are skipped and never
@@ -278,8 +302,8 @@ replayed. The ordinary first-checkpoint snapshot is not an activation: it uses o
 | A2 | U3 (b) handoff only | n/a | n/a (refused with any handoff) | n/a | n/a |
 | A3 | New child via the schema-2 intent | n/a (no head move) | New child of the same active package | No new commit: CAS `update-ref` to T, path-limited checkout | New child via the schema-2 intent |
 | A4 writes | Package, contract, frontier, admission, generation, coordination receipt, checkpoint and state queue, `head-drift` when finalized | Frontier (binding reset plus records), generation, state queue | Coordination receipt, generation, checkpoint queue, `head-drift` when finalized | As `revision` | Coordination receipt and `last_reviewed_commit` (existing owner) |
-| A5 | Branch push, then state | State only | Branch push, then state | State only; the branch push is a verified no-op (remote already T) | Existing checkpoint publication |
-| Loader successor (remote branch) | Base head or expected child | Base head only | Base head or expected child | T only | Existing replay |
+| A5 | Branch push, then state | State only | Branch push, then state | State only; the branch push is a verified no-op (remote already T), except over an authorized foreign head F, which `replace_foreign_head` replaces by T | Existing checkpoint publication |
+| Loader successor (remote branch) | Base head or expected child; foreign-pending (D40) | Base head; foreign-pending | Base head or expected child; foreign-pending | T; foreign-pending | Existing replay |
 | Restart owner | Identical call or `reconcile-revision-activation` | Same | `reconcile-revision-snapshot` only | Same as `revision` | Checkpoint supervisor's snapshot replay |
 
 **Deterministic child commit (A2a; D17, D28, D32).** The existing owner writes package files into the
@@ -408,9 +432,12 @@ restore the Change: it is invisible and has no route. N04-A2b adds a verified re
    digest computed with the marker omitted, branch head, raw index digest and the bounded-walk manifest digest
    of the clean worktree (D30), each measured after the restore, plus `captures` (revision-confirmation receipt
    IDs appended under E9, initially empty). Readiness `revision-remote-activation-pending`; every start is
-   refused except E6–E9 (§1.5); state publication is suppressed while the marker exists, and E9's receipts are
+   refused except the marker state's row (§1.5 Marker permissions); state publication is suppressed while the
+   marker exists, and E9's receipts are
    the L-row replay authority for the local ledger suffix, as for a retained handoff (§1.7). The remote branch
-   is never pushed to, reset or force-updated from this host, and T is never treated as reviewed authority.
+   is never pushed to, reset or force-updated from this host, except that a `remote-child` resolution may
+   restore T over a user-authorized foreign head (E10 under `resolving`, D41); T is never treated as reviewed
+   authority before that resolution's approval.
 3. **Resolve.**
    - (i) **Origin publishes (D29, D38).** At a later startup the remote snapshot's `change_head` equals T. The
      loader replaces the old state with the new snapshot only if every `restored` value still matches (package,
@@ -452,8 +479,10 @@ restore the Change: it is invisible and has no route. N04-A2b adds a verified re
      and full A0 validation, `activate_revision` kind `remote-child` with `adopt_child` = T runs under E6: its
      A1 sets the marker `resolving` with its operation ID in the intent transaction; T's parent and tree must
      equal the computed child's (message and dates aside; else `remote-child-mismatch` before the intent), so
-     A3 moves the local branch to T and A5 pushes no
-     branch. For a formerly ready Change the restored state is ready at `change_head` while the provider's PR
+     A3 moves the local branch to T and A5 pushes no branch unless a foreign head F replaced T on the remote
+     after the intent: then E10 applies under `resolving` and `replace_foreign_head` restores T with a lease
+     on F (the only remote-child branch write). For a formerly ready Change the restored state is ready at
+     `change_head` while the provider's PR
      head is T (the origin's A1b preceded its push): A1b observes the PR and accepts T as a permitted head;
      already draft → no provider write; ready at T (re-marked externally) → `return_to_draft` with
      `exact_head` = T; merged → refused at A0 `change-attention`. A4 clears `ready` and `finalization` with
@@ -473,31 +502,81 @@ route inside the activation:
 1. **Observe.** The step writes nothing to Git or the provider. It journals
    `foreign-heads/<F>.json` (F, source `provider` or `remote-branch`, PR state: open draft, open ready or
    merged, observed time), create-only, and the activation stays pending with readiness
-   `revision-activation-pending` detail `revision-foreign-head` naming F. Replay re-observes: if the remote
-   and PR return to a permitted head, the activation continues without authorization; a merged PR before any
-   remote Git effect of the activation ends `superseded-by-merge` (I3), whatever its head, and the acceptance
-   owner reports any head mismatch as today.
+   `revision-activation-pending` detail `revision-foreign-head` naming F; the loader keeps that state across
+   restarts (§1.6 Loader, foreign-pending). Replay re-observes: if the remote and PR return to a permitted
+   head, the activation continues without authorization. A merged PR follows I3: `superseded-by-merge` only
+   from A1b before any Git effect; otherwise § Merge after effects.
 2. **Authorize (user only).** `resolve_revision_foreign_head(change_id, operation_id, foreign_head)` runs under
-   E10 and asks the user through the D13 `Resolve` boundary with its own consent generation (§1.7, I13); the
+   E10 and asks the user through the D13 `Resolve` boundary under consent use `authorize-revision-foreign-head`
+   (§1.7, I13); the
    question shows F, its commits not in the reviewed head, the PR state and that F will be preserved locally
    and replaced on the remote branch by the activation's child. Predecessor fences, all re-checked in the
-   authorizing transaction: the bound operation (E1) and its intent digest; F equal to the latest observation and
+   authorizing transaction: the bound operation (E1) and its intent digest; F with an observation record and
+   no authorization record, equal
    to the provider and `ls-remote` heads read in this call; the local branch at the expected head or the
    expected child (A3 classifier); for a formerly ready Change the journal's finalization ID, finalized head and
-   PR identity unchanged; no `result.json`.
+   PR identity unchanged; no `result.json` and no `merge-observed.json`.
 3. **Preserve, then record.** `fetch` F and pin it create-only at
    `refs/owlbear/preserved/<change>/<operation_id>/foreign-<F>` (local only, like D03 preservation); then one
-   transaction answers the consent generation and writes `foreign-head.json` (F, pin, observation digest,
-   generation ID). A crash between the pin and the transaction leaves the generation open and the pin reused.
+   transaction consumes the consent generation and writes the immutable per-head record
+   `foreign-authorizations/<F>.json` (create-only: F, pin, observation digest, generation ID; its
+   `authorization_id` is the sha256 of its canonical bytes). A crash between the pin and the transaction
+   leaves the generation open and the pin reused. Records of earlier heads are never rewritten.
 4. **Continue.** F joins the permitted set: a ready PR at F gets `return_to_draft` with `exact_head` = F and
-   operation `revision-draft-<operation_id>-<F>`; a draft PR at F gets no provider write; A5 pushes the child
-   with `--force-with-lease=<branch>:<F>`, and its readback treats the remote at the child as done and at F as
-   not yet pushed. A later different head F′ repeats steps 1–4 with its own records; an authorization never
-   covers another head.
+   operation `revision-draft-<operation_id>-<F>`; a draft PR at F gets no provider write; A5 replaces F by the
+   child through `ChangeBranchPublisher.replace_foreign_head` (below), never through `publish`. A later
+   different head F′ repeats steps 1–4 with its own observation, authorization, pin and publisher operation;
+   an authorization covers exactly its head, never another.
+
+**Authorization-bound publisher entry (D42).** `ChangeBranchPublisher.publish` cannot serve step 4: it refuses
+a remote that is not an ancestor of the published head (`change_publication.py:384`), pushes without a lease
+(`_push_exact_head`, `:609`) and freezes `expected_remote_head` in the operation stored per operation ID
+(`_validate_replay`, `:1007`). N04-A2b adds one entry beside `supersede`, reusing its publication lock,
+reservation, `_prepare_operation` workspace checks (branch at `last_reviewed_commit` = the child after A4, clean
+worktree), `_remote_head`, `_fetch_change_head` and N02-C `run_remote_git`:
+`replace_foreign_head(ReplaceForeignChangeBranchHead{change_id, operation_id, foreign_head, published_head,
+authorization_id})`.
+
+- *Identity.* `operation_id` = `<activation operation_id>-foreign-<F>` (98 characters, valid under the
+  existing pattern), so F and F′ never share an operation. The stored `_ForeignHeadReplacementOperation` v1
+  (operation, Change, remote, branch, target branch, `foreign_head`, `published_head`, `authorization_id`) is
+  written create-only at `sha256("foreign-head:" + operation_id)`; replay with any differing field → conflict.
+- *Authorization.* Only the activation owner calls it, under E2, after reading `foreign-authorizations/<F>.json`
+  and checking that its `authorization_id` is the one passed and that F is the remote head read in the same
+  call; the entry stores and returns `authorization_id`.
+- *Push.* Remote at `published_head` → receipt, no write. Remote at F → one `push --porcelain
+  --force-with-lease=refs/heads/<branch>:<F> <child>:refs/heads/<branch>`; readback
+  `classify_write_readback(observed, intended=child, expected_old=F)`: `applied` → receipt
+  `ChangeBranchForeignHeadReplacementReceipt` v1; `not-applied` → retry-safe failure; `conflict` (F′ or
+  missing) → conflict, no further write, and the activation observes the new head (step 1). Any other remote
+  head before the push → conflict, nothing written.
+- *Unchanged.* `publish` and `supersede` keep refusing non-fast-forward updates; no other caller gains a lease.
 
 Declining (or cancelling) consumes the generation and changes nothing else; the activation stays pending with
 the same detail, and a new call asks again. F's commits are never adopted into the revision; a later Builder
 may re-apply them from the pin.
+
+**Merge after effects (A2–A6; D43).** I3's exception stays pre-effect: `superseded-by-merge` only when A1b
+observes the bound PR merged before A2 and A3. A merge observed after the first Git effect (A2 capture or A3;
+A4 may already have installed the revised authority and cleared `ready` and `finalization`) is contained:
+
+1. *Record.* The observing step (A5 PR summary, a foreign-head observation, an E10 re-check) journals
+   `merge-observed.json` create-only (PR identity equal to the intent's binding, merged head M, observed
+   time); readiness detail `revision-merged-after-effects` naming M; the loader keeps it (D40).
+2. *Fence.* From then the activation makes no remote write: no branch push, no `replace_foreign_head` (E10
+   refuses `revision-merged-after-effects`), no provider call and no state publication, since the bound PR
+   can no longer carry the revised work. A3 and A4 still complete as journaled; nothing is reverted.
+3. *Release into attention.* After A4, one transaction under E2 writes `result.json` state
+   `merged-after-effects` (M), clears the hold (and the marker for `remote-child`), drops the checkpoint and
+   state publication that A4 queued for the child, and captures the existing publication attention
+   (`DeliveryRuntime.capture_publication_attention`, `delivery_runtime.py:596`; diagnostics
+   `revision-merged-after-activation:<operation_id>` and `merged-head:<M>`; the bound PR identity).
+4. *Resolution (user, existing routes).* The Change never completes from M: `observe_acceptance` refuses
+   without finalization (`portfolio_application.py:692`), which A4 cleared. Publication attention admits
+   `supersede_publication` (`application_publication.py:586`: successor branch and PR from the child, then
+   state) or `set_change_intent(abandon)` with successor guidance; both were refused under the hold. Until a
+   published snapshot carries the `local.json` digests the loader accepts the local revised authority
+   through the journal (§1.6 Loader).
 
 **Generation history (D20).** Today `revisions/<contract digest>/` is written with create participants
 (`delivery_admission.py:425-429`); a second departure from the same contract writes different frontier bytes to
@@ -611,34 +690,27 @@ DeliveryConfirmationScope, source_observation_id | None)`.
   N03 §1.5 builds it (`request_id`, `scope`, `decision`, `channel: mcp-elicitation`, `question_digest`) and
   nothing else; `RevisionConfirmationReceipt` v1 `{change_id, purpose, candidate_package_id, history_ref,
   outcome_id, request (resolved: provenance user-confirmed, confirmation_id), confirmation, generation_id,
-  predecessor_frontier_digest, successor_frontier_digest, receipt_id}`; the consent generation answered
-  `confirmed`; and for `remote-child` the marker's `restored.frontier` advanced to the successor digest with
-  the receipt ID added to `restored.captures` (§1.6 Fresh-host restore).
-- **Consent generation (D36; aligned with N05 D14 `merge_consent` in #360 `f4d09d774`).** The SDK
-  authenticates `request_state` but does not consume it, and a decline, a cancel or an unapplied accept leaves
-  the frontier unchanged (N03 D13 *Single use* says so), so the frontier digest alone cannot stop a replay of
-  the original state with an affirmative answer. N04 therefore uses its own server-owned single-use generation,
-  the same shape as N05's:
-  - *Record.* `RevisionConsentGeneration` v1 (family `revision_consent`,
-    `runtime/changes/<change>/revision-consents/<sequence>.json`, per-Change zero-padded sequence, exclusive
-    create, M): Change, subject (the synthesized request ID, or `foreign-head:<operation_id>:<F>`), sequence,
-    `generation_id` (256-bit nonce from `secrets`), created time, state `open` or `answered` with its
-    disposition: `confirmed` (with `confirmation_id`), `authorized` (foreign head), `declined` (decline or
-    cancel) or the typed refusal of the re-check (`frontier-stale`, `candidate-stale`, `ledger-full`,
-    `confirmation-scope-invalid`, `revision-hold-absent`, `foreign-head-stale`).
-  - *Issue.* The first round creates the generation under the fences above (a short coordination-lock
-    transaction, released before asking) and seals `generation_id` in the `Resolve` dependency's request state,
-    which the boundary authenticates with the method, tool and argument digest (G19). The legacy route keeps
-    it in the call.
-  - *Consume.* An answer applies only to the generation its state carries, and only while that generation is
-    the subject's latest and `open`. In one transaction under the fences it writes the generation `answered`
-    with its disposition and, for an `accept` that passes the re-check, the ledger append and receipt above (or
-    the foreign-head record). Every answer consumes its generation: accept, decline, cancel and a failed
-    re-check alike.
-  - *Retry.* A continuation round whose generation is `answered` returns the recorded disposition and writes
-    nothing; it never appends, never records a receipt and never elicits again. A round whose generation is
-    absent, or is not the subject's latest, refuses `ERR_DELIVERY_CONFIRMATION` `question-closed`. A new call
-    (first round) asks again under a new generation.
+  predecessor_frontier_digest, successor_frontier_digest, receipt_id}`; the consent generation consumed
+  `accepted` with the `confirmation_id`; and for `remote-child` the marker's `restored.frontier` advanced to the
+  successor digest with the receipt ID added to `restored.captures` (§1.6 Fresh-host restore).
+- **Consent generation (D44; N03 D13 *Single use* and I11 in #360 `c6bcbbc25`).** N04 adds no generation
+  family: every N04 question uses N03-A's shared `consent_generation` owner (`DeliveryConsentGeneration`,
+  `consent_generation.py`, `runtime/changes/<change>/consent-generations/<sequence>.json`) unchanged. N03
+  admits successor uses as bounded slugs whose owners validate their own binding; N04 registers two:
+
+  | Use | Subject | Binding (canonical, digested into `binding_digest`) | Owning lock | Disposition in force before asking |
+  | --- | --- | --- | --- | --- |
+  | `confirm-revision-criterion` | The synthesized request ID | `{purpose, candidate_package_id, history_ref, outcome_id, scope, source_observation_id, expected_frontier_digest}` | The Change's frontier writer (`append_revision_confirmation`) | A ledger entry already captured for that request ID |
+  | `authorize-revision-foreign-head` | `<operation_id>:<F>` | `{operation_id, intent_digest, foreign_head, observation_digest, pull_request identity}` | The activation's acquisition and checkpoint locks | `foreign-authorizations/<F>.json` |
+
+  Rendering (the question includes `generation_id`), answer-bearing rounds that never create, consumption in
+  the same transaction as every write the answer causes, replay of an `answered` generation and
+  `question-closed` follow N03 D13 *Single use* exactly. Dispositions are N03's `accepted`, `declined`,
+  `cancelled` or `refused` with an N04 bounded code (`frontier-changed`, `candidate-stale`, `ledger-full`,
+  `confirmation-scope-invalid`, `revision-hold-absent`, `foreign-head-stale`,
+  `revision-merged-after-effects`); an accepted generation names the `confirmation_id` or the
+  `authorization_id`. Generations stay local replay protection; the ledger and the authorization records are
+  the authority.
 - **Replay.** The ledger append is published by the normal pending state publication. While a retained handoff
   or the remote-activation marker suppresses publication (P9, §1.6), the receipt is replay authority: N04-B
   adds it to N03's L row as a ledger-suffix source; an entry no receipt binds, a bound entry missing locally, a
@@ -698,8 +770,9 @@ the renumber rule.
 | `coordination` | v4 → v5 (widen 2–5): `revision_hold.activation_operation_id`, `purpose` and `history_ref`; `remote_activation_pending` (with `state` `pending` \| `resolving` \| `replacing`, `resolution_operation_id`, `replacement_id`, `restored` including `captures`); nested `continuation_action: ChangeContinuationAction` kind widened with `reconcile-revision-activation`, `reconcile-revision-snapshot` and optional `revision_operation_id` (required for those kinds, `exclude_if` None); an older instance holding any of these is rejected; K4 digest excludes the new fields | A2b | Unchanged; first write emits v5 |
 | `action_receipt` (R, unversioned: `intent.json`, `started.json` = `ChangeContinuationAction` content; `result.json` = `DeliveryEngineActionResult`) | Same nested widening; existing receipt bytes, `continuation_start_recorded` byte equality and operation IDs unchanged (new fields absent); result kinds and reason codes reused (re-checked at A2b start; a needed new value is an A2b schema change under this row) | A2b | Unchanged; covered by A2b's marker step (a predecessor refuses the marker before parsing) |
 | `package_candidate` (new) | `runtime/package-candidates/<c>/manifest.json` (owner `DesignPackageManifest` v1, M), `authority.json` (`allow_empty`), documents (`read=False`) | A1 | None exist |
-| `revision_activation` (new) | `revision-activations/<op>/(intent\|demotion\|local\|result\|foreign-head).json` and `revision-activations/<op>/foreign-heads/<F>.json`: models v1, R | A2b | None exist |
-| `revision_consent` (new) | `revision-consents/<sequence>.json` (`RevisionConsentGeneration` v1, M, one CAS transition `open` → `answered`; §1.7 Consent generation) | A2b (foreign head); B reuses it for captures | None exist |
+| `revision_activation` (new) | `revision-activations/<op>/(intent\|demotion\|local\|result\|merge-observed).json`, `revision-activations/<op>/foreign-heads/<F>.json` and `revision-activations/<op>/foreign-authorizations/<F>.json`: models v1, R, create-only (one record per head; D42) | A2b | None exist |
+| `consent_generation` (N03-A) | No change: N04 adds uses `confirm-revision-criterion` and `authorize-revision-foreign-head` (bounded slugs, owner-validated bindings; N03 D13 *Single use*; D44) | A2b (foreign head), B (captures) | Unchanged |
+| `branch_publication` (existing, `runtime/publications/change-branches/operations/<digest>.json`) | Model union widened with `_ForeignHeadReplacementOperation` v1 (path `sha256("foreign-head:" + op)`); `ChangeBranchForeignHeadReplacementReceipt` v1 registered as `action_receipt` beside the supersession receipt; existing operation bytes and paths unchanged (D42) | A2b | Unchanged; covered by A2b's marker step |
 | `remote_activation_replacement` (new) | `remote-activations/<op>/(replacement\|replacement-snapshot\|replaced).json` (`RemoteActivationReplacement` v1 and the stored snapshot bytes, R; §1.6 (i)) | A2b | None exist |
 | `revision_preservation` (new) | `revision-activations/<op>/preservation/manifest.json` (`DesignReturnPreservationManifest` v1 with walk (files, symlinks, directories with modes), mode-exception, ignored and rule-change entries, R); `blobs/<sha256>` (`read=False`, owner-private) | A2b | None exist |
 | `revision_generation` (new) | `revisions/generations/<op>/generation.json` (`RevisionGeneration` v1, R); `revisions/generations/<op>/(contract\|frontier\|admission).json` (H, `read=False`); regex disjoint from `revision_record`'s 64-hex segment | A2b | None exist |
@@ -725,15 +798,16 @@ finalized or ready Change instead, so no nested literal changes.
 | `read_revision_candidate(change_id)` / `discard_revision_candidate(change_id, expected_package_id)` | A1 | Candidate or `None`; discard removes the candidate and clears the hold; refused after an intent |
 | `derive_delivery_contract(change_id, candidate=True)` | A1 | Compiles the candidate without publication |
 | `admit_change` / `admit_delivery_change` | A2b | First admission and worktree-recovery admission only; an admitted Change → `revision-requires-activation`. `preserve_unresolved_outcome_ids`, `expected_frontier_digest` and `expected_design_package_snapshot_receipt_id` are removed from the request |
-| `activate_revision(DeliveryRevisionActivationRequest)` | A2b (B adds the review, the confirmation selections and `reassess`) | `{kind: revision \| reassess \| remote-child, change_id, expected_base_package_id, expected_candidate_package_id, expected_contract_digest, expected_head, expected_frontier_digest, history_ref (reassess only), adopt_child (remote-child only), approval, applicability_review, handoff_disposition}` → `DeliveryRevisionActivationResult{operation_id, kind, state: intent \| local \| published \| released \| superseded-by-merge, replayed}`; `snapshot-reconcile` runs only as an engine action; per-kind rules in §1.6 |
+| `activate_revision(DeliveryRevisionActivationRequest)` | A2b (B adds the review, the confirmation selections and `reassess`) | `{kind: revision \| reassess \| remote-child, change_id, expected_base_package_id, expected_candidate_package_id, expected_contract_digest, expected_head, expected_frontier_digest, history_ref (reassess only), adopt_child (remote-child only), approval, applicability_review, handoff_disposition}` → `DeliveryRevisionActivationResult{operation_id, kind, state: intent \| local \| published \| released \| superseded-by-merge \| merged-after-effects, replayed}`; `snapshot-reconcile` runs only as an engine action; per-kind rules in §1.6 |
 | `open_revision_hold(change_id, expected_frontier_digest, purpose: reassess, history_ref)` | B | Opens the hold for a reassessment (no candidate) bound to one history ref; `clear_revision_hold` closes it before an intent |
 | `confirm_revision_criterion(...)` (MCP; D13 boundary) | B | §1.7 capture for purposes `revision`, `reassess` and `remote-child`, each under one consent generation; refusals `channel-unavailable`, `declined`, `question-closed`, `ledger-full` (N03 `ERR_DELIVERY_CONFIRMATION`) and `revision-hold-absent`, `candidate-stale`, `frontier-stale`, `confirmation-scope-invalid`, `reassess-history-invalid`, `revision-remote-activation-pending` |
-| `resolve_revision_foreign_head(change_id, operation_id, foreign_head)` (MCP; D13 boundary) | A2b | §1.6 Foreign Change head under E10 and one consent generation; refusals `channel-unavailable`, `declined`, `question-closed`, `foreign-head-stale`, `activation-pending` (no bound activation) |
+| `resolve_revision_foreign_head(change_id, operation_id, foreign_head)` (MCP; D13 boundary) | A2b | §1.6 Foreign Change head under E10 and consent use `authorize-revision-foreign-head`; refusals `channel-unavailable`, `declined`, `question-closed`, `foreign-head-stale`, `revision-merged-after-effects`, `activation-pending` (no bound activation) |
+| `ChangeBranchPublisher.replace_foreign_head(ReplaceForeignChangeBranchHead)` (internal) | A2b | §1.6 Authorization-bound publisher entry: lease push of the reviewed child over exactly one authorized F; conflict on any other remote head; `publish` and `supersede` unchanged |
 | Engine actions `reconcile-revision-activation`, `reconcile-revision-snapshot` | A2b | Selected before every other action of the Change; executable through `acquire_change_action` / `execute_change_action` under hold exception E3; the action carries `revision_operation_id` |
 | `preview_revision_impact(change_id, history_ref=None)` | B | Impact view and digest; lists eligible history refs (generation and legacy) |
 | `show_revision_context(change_id)` | C | Active proposal, candidate, hold, criteria with N03 identities, per-outcome stage, task and evidence history, current blocks and requests, Design-return context, activation state |
-| Readiness reasons `revision-hold`, `revision-activation-pending` (detail `revision-foreign-head` with F), `revision-snapshot-stale`, `revision-remote-activation-pending` (details `remote-activation-local-divergence` with paths, `remote-activation-local-confirmations`, `remote-activation-origin-published`) | A1, A2b, A2b, A2b | Each with TypeScript mirror, rendering, component test and parity (R16) |
-| Error | A1–B | `DeliveryRevisionError(DeliveryRuntimeConflictError)`, code `ERR_DELIVERY_REVISION`, `reason` in: `change-terminal`, `change-paused`, `change-attention`, `review-repair-open`, `revision-hold-absent`, `candidate-stale`, `base-stale`, `contract-mismatch`, `frontier-stale`, `revision-custody-active`, `revision-drain-pending`, `revision-custody-retained`, `revision-workspace-unclean`, `revision-preservation-unsupported`, `revision-preservation-collision` (detail `ignore-rule-change` for D34), `revision-remote-head-moved`, `foreign-head-stale`, `snapshot-signing-failed`, `snapshot-child-lost`, `handoff-disposition-required`, `design-return-lineage-changed`, `activation-pending`, `operation-conflict`, `revision-requires-activation`, `revision-snapshot-stale`, `revision-remote-activation-pending`, `remote-child-mismatch`, `reassess-requires-unfinalized`, `reassess-history-invalid`, `applicability-review-required`, `applicability-review-incomplete`, `applicability-review-stale`, `applicability-confirmation-version-changed`, `confirmation-unresolved`, `confirmation-not-applicable`, `confirmation-scope-invalid`, `reviewer-not-independent`. `snapshot-signing-failed`, `snapshot-child-lost` and `revision-workspace-unclean` also surface from the first-checkpoint snapshot (A2a) as workspace failures with the same reason |
+| Readiness reasons `revision-hold`, `revision-activation-pending` (details `revision-foreign-head` with F, `revision-merged-after-effects` with M), `revision-snapshot-stale`, `revision-remote-activation-pending` (details `remote-activation-local-divergence` with paths, `remote-activation-local-confirmations`, `remote-activation-origin-published`) | A1, A2b, A2b, A2b | Each with TypeScript mirror, rendering, component test and parity (R16) |
+| Error | A1–B | `DeliveryRevisionError(DeliveryRuntimeConflictError)`, code `ERR_DELIVERY_REVISION`, `reason` in: `change-terminal`, `change-paused`, `change-attention`, `review-repair-open`, `revision-hold-absent`, `candidate-stale`, `base-stale`, `contract-mismatch`, `frontier-stale`, `revision-custody-active`, `revision-drain-pending`, `revision-custody-retained`, `revision-workspace-unclean`, `revision-preservation-unsupported`, `revision-preservation-collision` (detail `ignore-rule-change` for D34), `revision-remote-head-moved`, `foreign-head-stale`, `revision-merged-after-effects`, `snapshot-signing-failed`, `snapshot-child-lost`, `handoff-disposition-required`, `design-return-lineage-changed`, `activation-pending`, `operation-conflict`, `revision-requires-activation`, `revision-snapshot-stale`, `revision-remote-activation-pending`, `remote-child-mismatch`, `reassess-requires-unfinalized`, `reassess-history-invalid`, `applicability-review-required`, `applicability-review-incomplete`, `applicability-review-stale`, `applicability-confirmation-version-changed`, `confirmation-unresolved`, `confirmation-not-applicable`, `confirmation-scope-invalid`, `reviewer-not-independent`. `snapshot-signing-failed`, `snapshot-child-lost` and `revision-workspace-unclean` also surface from the first-checkpoint snapshot (A2a) as workspace failures with the same reason |
 | MCP | each phase | Strict models for every new or changed tool in the phase that introduces it; error code mapping in `target_server.py` |
 | HTTP / Cockpit | C | `GET /api/changes/{id}/revision` (revision context); **Change requirements** on Change detail and group: explanatory view plus copy of `/design <change-id>` (N09 D6 copy pattern); hold and activation states rendered |
 
@@ -749,7 +823,10 @@ U3 (b) (D16); `_delivery_frontier` and
 `_publish_checkpoint_branch`, `_reconcile_change_checkpoint`, `DeliveryPendingStatePublication`; N09-A2 K1–K7,
 `require_pause_permits`, drain tokens and the start-site inventory (PR #357); N03 (as amended by #360) evaluator,
 identities, `applies_to`, confirmation ledger, `resolve_confirmation`, `confirmation_applies`, basis digest, D13
-`Resolve` registration and question rendering, and the L-row ledger replay;
+`Resolve` registration and question rendering, the shared `consent_generation` owner, and the L-row ledger
+replay; N02-C `run_remote_git` and `classify_write_readback` (`remote_git.py`) and `ChangeBranchPublisher`
+(`change_publication.py`: lock, reservation, operation store, readback; one new entry, D42);
+`capture_publication_attention` and `supersede_publication` (D43);
 the provider's `return_to_draft` draft-state operation (`ReturnChangePullRequestToDraft`); `FinalizationReportStore`
 retire; `DeliveryFinalizationInvalidationReceipt`; the N02 registry, `delivery-migrate`, `delivery-lc`;
 `Client(assemble_target_server(...))`, the Cockpit HTTP client and the E2E stack.
@@ -907,7 +984,7 @@ Added for Sol plan gate round 3 (§6):
   answer, including decline, cancel and a failed re-check, consumes the generation its sealed request state
   names. N04 does not rely on N03 D13's frontier-as-generation argument, which by its own text leaves declines,
   cancels and unapplied accepts unconsumed; if #360 replaces it with a shared generation, N04-B adopts that
-  owner instead of its own family (G19).
+  owner instead of its own family (G19). Superseded in round 4 by D44: #360 did so.
 - **D37 Identity-fenced capture per purpose** (finding 3): `revision`, `reassess` (hold bound to one
   `history_ref`) and `remote-child` (marker `pending`, candidate equal to T's package, E9); remote-child
   captures advance the marker's frontier fence and block automatic replacement until resolved or retired.
@@ -916,6 +993,31 @@ Added for Sol plan gate round 3 (§6):
 - **D39 Schema-1 intent upgrade after the pin** (finding 7): the child is built and pinned before a CAS
   replacement of the schema-1 intent, so a schema-2 intent never names an unbuilt child. Per-kind A0/A1
   carriers (finding 9) extend D31.
+
+Added for Sol plan gate round 4 (§6):
+
+- **D40 Journal-bound foreign-pending loader state** (finding 1). While an activation journal is unfinished,
+  the loader accepts any remote Change head as pending visibility only: local authority and branch stay the
+  journal's, nothing is fetched or adopted, and the activation's replay journals the head. Rejected:
+  requiring a journaled observation (a crash between the foreign push and the observation would quarantine
+  the Change) and loader writes (the loader stays a reader for activation state).
+- **D41 State-dependent marker permissions** (finding 2): `pending`, `resolving` and `replacing` each admit an
+  exact identity-bound set; `resolving` grants the resolving operation the same E2, E3 and E10 a hold-bound
+  activation has.
+- **D42 Per-head authorization records and an authorization-bound publisher entry** (findings 3, 4). Each
+  foreign head gets its own immutable observation, authorization, pin and publisher operation
+  (`<operation_id>-foreign-<F>`). The lease push is one new `ChangeBranchPublisher` entry reusing its lock,
+  reservation, operation store and N02-C readback; `publish` stays fast-forward only. Rejected: a lease flag
+  on `publish` (its stored operation freezes `expected_remote_head`, and every caller would gain a rewrite
+  path) and `supersede` (a successor branch and PR for a head the user chose to replace).
+- **D43 Merge after effects is contained, not superseded** (finding 5). I3's exception stays pre-effect.
+  Afterwards the activation stops remote writes, finishes locally and releases into the existing publication
+  attention, whose existing routes (`supersede_publication`, abandonment) resolve the merged PR. Rejected:
+  ending `superseded-by-merge` after A4 (the merged head never carried the revised authority, and A4 already
+  cleared finalization) and pushing the child to the merged PR's branch (it breaks the supersession
+  predecessor check, `_validate_supersession_predecessor`).
+- **D44 N03's shared consent generation** (re-pin to #360 `c6bcbbc25`): N04 registers two uses with its own
+  bindings and adds no family; supersedes D36's own family and closes G19.
 
 #### U1 — May reviewed applicability attribute legacy evidence?
 
@@ -998,7 +1100,7 @@ Ran on `ac3bf23f9` in the lane D worktree with `uv run --no-sync`; live state on
 | P8 | `…::test_s6…`: one reviewed commit after admission, then a revision | `Design package snapshot branch moved before replacement` after the contract and package authority were already rebound | Revision fails for every Change with reviewed work; it reproduces B1 (D4) |
 | P9 | Source reads on `ac3bf23f9` | D03 refusal `portfolio_application.py:894-902`, test `test_portfolio_application.py:14518`; in-place revision gate `:870-878` vs skill `w-design-session/SKILL.md:251` (S01); `_publish_delivery_state` skips with any handoff `:1701-1704`; quarantine refuses passive custody `workspace_snapshots.py:427-432`; Planning-return lineage `runtime_reads.py:596-621`, `runtime_receipts.py:258-283`; four-entry package rule `design_package.py:401-410`; registry bypasses `_require_change_mutable` (`delivery_admission.py:183-255` vs `runtime_support.py:59-85`); unrecognized records are not refused (`state_formats.py:711-747`), so a new family needs a format step | D1, D9, D14, D15, U3, §1.8 |
 
-N03-A…C and N02-C are not merged (N09-A2 merged in round 3); N04 uses their planned interfaces
+N03-A…C are not merged (N09-A2 merged in round 3, N02-C in round 4); N04 uses their planned interfaces
 ([G1](#5-verification-gaps)). Round 1
 re-read N09-A2's implementation in PR #357 (`feadd6777`) and N03's amendment in PR #360 (`9c06c97cd`), read only.
 Round 2 re-pinned both (`9a7fff990`: `repair_quarantined_delivery_state_snapshot` joined
@@ -1009,7 +1111,15 @@ Round 2 re-pinned both (`9a7fff990`: `repair_quarantined_delivery_state_snapshot
 `reset --hard` then `clean -fd`, no `-x`), D03's `recover_out_of_band_head` (`workspace_target_sync.py`;
 caller in `application_recovery.py` refuses a finalized Change and runs under
 `_operator_start(..., publishes_checkpoint=True)`), `ChangeDesignPackageSnapshotIntent` (schema 1) and the
-frontier model (`Literal[18]` on `dev`).
+frontier model (`Literal[18]` on `dev`). Round 4 merged `origin/dev` `2061047af` (N02-C), re-pinned #360 at
+`c6bcbbc25` (shared `consent_generation`, N03 D13 *Single use*, I11) and re-read `ChangeBranchPublisher`
+(`change_publication.py`: `_publish` `:346`, fast-forward refusal `:384`, plain push `_push_exact_head` `:609`,
+stored-operation replay `_validate_replay` `:1007`; `supersede`), `remote_git.py` (`run_remote_git`,
+`classify_write_readback`; no lease push exists in Delivery), the loader's remote head check
+(`_fetch_remote_snapshot_change_head`, `delivery_application_loader.py:727-760`), acceptance
+(`portfolio_application.py:692`: refuses without finalization), `capture_publication_attention`
+(`delivery_runtime.py:596`) and `supersede_publication` (`application_publication.py:586`: requires
+publication attention and the predecessor branch at its published head).
 
 | ID | Executed | Result | Premise settled |
 | --- | --- | --- | --- |
@@ -1182,19 +1292,24 @@ on top of it.
     `workspace_models.py` (`ChangeContinuationAction` kinds and `revision_operation_id`,
     `revision_hold.activation_operation_id`, `purpose` and `history_ref`, `remote_activation_pending` with
     `replacing` and `captures`, coordination v5);
-    `workspace_coordination.py` (participant helpers; exceptions E1–E3, E6–E8 and E10; E2 token kind)
-  - `revision_activation.py` also owns the foreign-head steps and the `RevisionConsentGeneration` store
-    (§1.6 Foreign Change head, §1.7 Consent generation), reused by N04-B
+    `workspace_coordination.py` (participant helpers; exceptions E1–E3, E6–E8 and E10; marker permissions per
+    state, D41; E2 token kind)
+  - `revision_activation.py` also owns the foreign-head and merge-after-effects steps and registers the two N04
+    uses of N03's `consent_generation` owner (§1.6 Foreign Change head, Merge after effects; §1.7 Consent
+    generation), reused by N04-B
+  - `change_publication.py` (`replace_foreign_head`, `ReplaceForeignChangeBranchHead`,
+    `_ForeignHeadReplacementOperation`, `ChangeBranchForeignHeadReplacementReceipt`; D42)
   - `portfolio_application.py` (`activate_revision`, `admit_delivery_change` refusal); `application_acquisition.py`
     (engine-action selection and execution, E3); `application_publication.py` (A1b provider call, A5 owner path);
     `application_readiness.py`, `work_items.py` (`revision-activation-pending`, `revision-snapshot-stale`,
     `revision-remote-activation-pending`); `application_models.py`
   - `delivery_application_loader.py` (`_is_unpublished_revision_activation_successor` before the remote-head
-    check, legacy detection, fresh-host verified activation child restore with the `restored` fence, and the
+    check with the foreign-pending classification (D40), legacy detection, fresh-host verified activation child
+    restore with the `restored` fence, and the
     durable replacement owner of resolution (i): intent, `replacing` replay, install)
   - `state_formats.py` (`revision_activation`, `revision_preservation`, `revision_generation`,
-    `revision_consent`, `remote_activation_replacement` families, coordination v5, action-receipt row, marker
-    step); `state_migration.py`;
+    `remote_activation_replacement` families, the widened `branch_publication` union and its receipt,
+    coordination v5, action-receipt row, marker step); `state_migration.py`;
     `serve/tools/src/owlbear_tools/delivery_diagnostics.py`
   - `owlbear_delivery/__init__.py`, `module_surface.json`, N02 fingerprint fixture
   - MCP `target_server.py`, `target_models.py` (`activate_revision`, `resolve_revision_foreign_head` with the
@@ -1204,6 +1319,7 @@ on top of it.
   - tests: new `serve/delivery/tests/test_revision_activation.py`; `test_source_bound_admission.py`,
     `test_portfolio_application.py` (including the D03 refusal test, rewritten to readmission),
     `test_change_workspace.py`, `test_delivery_state.py`, `test_checkpoint_publication_regressions.py`,
+    `test_change_publication.py`,
     `test_state_formats.py`, `test_state_migration.py`, `test_work_items.py`, `test_workspace_preservation.py`
     (or its current home), `test_delivery_application_loader.py` (or its current home); MCP and Cockpit tests as
     in A1; `tests/test_delivery_worktree_authority.py`
@@ -1277,8 +1393,16 @@ on top of it.
     refused. E6: under a `pending` marker only `remote-child` with the marker's child starts; E7: the D03
     containment route runs only while the marker records a divergence; E8: a quarantined-snapshot repair runs
     under a hold with no bound activation, is refused between A1 and A4, and after A4 republishes exactly the
-    `local.json` bytes. E10: under the hold only `resolve_revision_foreign_head` for the bound operation and its
-    latest observed F starts; one naming another head or operation is refused.
+    `local.json` bytes. E10: under the hold only `resolve_revision_foreign_head` for the bound operation and an
+    observed, unauthorized F equal to the live remote and PR heads starts; one naming another head or operation
+    is refused.
+  - Marker states (finding 2 of round 4), real bare remote: under `resolving` for a `remote-child` operation R,
+    (1) crash after R's A1, fresh process: `reconcile-revision-activation` with `revision_operation_id` = R is
+    acquired under E3 and completes (marker cleared); the same action naming another operation, a new claim and
+    a second `remote-child` are refused; (2) after R's A1 another writer pushes F over T: the observation is
+    journaled, `resolve_revision_foreign_head` for R runs under E10, and `replace_foreign_head` restores T with
+    a lease on F (the only remote-child branch write). Under `pending` E3 and E10 are refused; under
+    `replacing` every start is refused.
   - Operation identity (finding 6): legacy reconcile then `reassess` on the B1 shape produce two distinct
     operation IDs, journals and generation records; each identical request replays its own result; a
     `revision` repeated over an equal package pair at a later head gets a new ID.
@@ -1287,7 +1411,8 @@ on top of it.
     under different operation IDs, and C active; `legacy:` refs resolve only contract-named legacy directories.
   - Persisted action schema (finding 10): a v4 coordination and an action receipt holding a new kind are
     rejected by the predecessor format gate; old action receipts parse byte-identically; the N02 fingerprint
-    fixture records the widened `ChangeContinuationAction`, coordination v5 and the five new families.
+    fixture records the widened `ChangeContinuationAction`, coordination v5, the four new families and the
+    widened `branch_publication` union.
   - Legacy reconcile on a seeded B1 shape (branch snapshot of an older package, active package newer, remote
     snapshot of the active package): `revision-snapshot-stale`, then one action makes branch, local and remote
     agree; a fresh-host restore then succeeds.
@@ -1346,21 +1471,51 @@ on top of it.
     writer pushes F to the Change branch. (1) Formerly ready Change, PR ready at F: A1b journals
     `foreign-heads/<F>.json`, makes no provider write, readiness `revision-activation-pending` detail
     `revision-foreign-head`; `recover_out_of_band_head` is refused under the hold; `resolve_revision_foreign_head`
-    asks once through an elicitation-capable client; accept → F pinned locally, `foreign-head.json` written,
-    exactly one `return_to_draft` with `exact_head` = F, A5 pushes the child with a lease on F, the PR head is
+    asks once through an elicitation-capable client; accept → F pinned locally, `foreign-authorizations/<F>.json`
+    written, exactly one `return_to_draft` with `exact_head` = F, `replace_foreign_head` replaces F by the child
+    with a lease on F, the PR head is
     the child, A4 clears `ready` and `finalization` with `head-drift`, the pin still resolves to F. (2) Not
     ready: A5 readback finds F; same authorization; lease push. Crashes after the pin and before the authorizing
     transaction, after it, after the demotion and after the lease push each replay without a second fetch,
     question or provider call. Decline → nothing but the generation changes; the remote is returned to the
-    expected head externally → replay continues without authorization. A second foreign head F′ after
-    authorizing F → new observation and question; the lease on F fails and nothing is overwritten. A merged
-    PR at F before the push → `superseded-by-merge`.
+    expected head externally → replay continues without authorization.
+  - Foreign-head restart (finding 1 of round 4): with the remote at F, a fresh process on the same host after
+    each of: F pushed before its observation is journaled; the observation; the authorization before the
+    replacement push; and, for a crash after A4, the same three points. Each restart: the default loader makes
+    the Change available with its journal-bound local authority (base before A4, `local.json` after) and local
+    branch (expected head or child), readiness `revision-activation-pending` detail `revision-foreign-head`
+    naming F; F is not fetched into a branch or compared with local authority; health shows no
+    `remote-change-head-ahead`; replay then completes. A second clone without the journal keeps today's
+    diagnostic.
+  - Successive foreign heads (finding 3 of round 4): authorize F, then another writer pushes F′ before the
+    replacement push; the lease on F fails with `conflict` and nothing is overwritten; fresh-process restart;
+    F′ is observed and authorized by a second question; afterwards `foreign-heads/<F>.json`,
+    `foreign-authorizations/<F>.json`, `foreign-heads/<F′>.json` and `foreign-authorizations/<F′>.json` all
+    exist with their first bytes, both pins resolve, the publisher holds two operations
+    (`<op>-foreign-<F>`, `<op>-foreign-<F′>`) and the final push leases on F′.
+  - Merge after effects (finding 5 of round 4, merge-blocking falsifier): a ready Change; after A4 commits
+    (revised authority installed, `ready` and `finalization` cleared) the PR is merged at the finalized head;
+    fresh-process restart; A5 observes the merge: `merge-observed.json` written, no `superseded-by-merge`, no
+    branch push, lease push, provider call or state publication; the generation record and revised authority
+    are unchanged; `result.json` `merged-after-effects` and publication attention with the merged head;
+    `observe_acceptance` refuses and the Change is not completed; `supersede_publication` then publishes the
+    child on `owlbear/change/<id>+s1` and the state, and a second clone loads the revised authority. Variants:
+    merged after A3 before A4 (A4 completes; same result); merged at an authorized foreign head F before the
+    replacement push (no lease push; same result); merged observed at A1b before any Git effect →
+    `superseded-by-merge` with the old authority (I3 kept).
   - `remote-child`: T's tree differs from the computed child → `remote-child-mismatch`; the PR is merged →
     `change-attention`; both before the intent.
   - A remote Change branch not at the expected head at A0 → `revision-remote-head-moved` before the intent;
     `resolve_revision_foreign_head` with a stale F, another operation or no observation → `foreign-head-stale`
     or `activation-pending`, nothing written; a replayed foreign-head request state after a decline → the
     recorded `declined`, no pin, no provider write and no second elicitation.
+  - Publisher authorization (finding 4 of round 4), `test_change_publication.py` with a real bare remote:
+    `publish` with the remote at F still refuses non-fast-forward and pushes nothing; `replace_foreign_head`
+    without an authorization record, with an `authorization_id` of another head, with the remote at F′ or at
+    the expected head, or replayed with a different F or child → refused before any remote write (asserted by
+    the remote ref and the push count); a write timeout followed by a readback at the child returns the
+    receipt, at F a retry-safe failure, at F′ a conflict; an existing `_PublicationOperation` and supersession
+    operation parse byte-identically beside the new model.
   - Ready Change: the PR merged before A1b → `superseded-by-merge`, no Git effect, hold cleared; a
     `review-repair` invalidation present → `review-repair-open` before the intent.
   - Under the hold without the bound identity: snapshot intent, continuation acquisition, publication
@@ -1370,7 +1525,8 @@ on top of it.
     `prepare_revision_activation`.
 - **Inner loop:** `uv run pytest serve/delivery/tests/test_revision_activation.py -q -k "crash or replay"`.
 - **Closeout:** as A1, plus `uv run pytest serve/delivery/tests/test_delivery_state.py -q -k "revision or restore"`.
-- **LC:** full form: migration (coordination v5, the five new families, action-receipt row, marker), every live
+- **LC:** full form: migration (coordination v5, the four new families, the widened `branch_publication` union,
+  action-receipt row, marker), every live
   Change available; untouched legacy records (v18 frontiers, schema-1 receipts, v2 snapshots, legacy
   `revisions/` directories) load with unchanged bytes; on the copy, B1 shows `revision-snapshot-stale` (record,
   do not run on live); predecessor refuses; live hashes unchanged.
@@ -1449,10 +1605,12 @@ on top of it.
   - Consent replay (finding 2 of round 3), modern route with captured request states: decline, then resend
     the first round's state with an affirmative answer → the recorded `declined`, no ledger append, no receipt,
     no second elicitation (callback count 1); same after cancel, and after an accept refused at the re-check
-    (`frontier-stale`, `ledger-full`); an applied accept resent → its recorded confirmation, nothing written. A
-    new call after a decline asks again under the next sequence, and the old state replayed against that newer
-    open generation → `question-closed`, nothing written. Two concurrent first rounds for one subject → only
-    the latest generation can be answered.
+    (codes `frontier-changed`, `ledger-full`); an applied accept resent → its recorded confirmation, nothing
+    written. A new call after a decline asks again under the next sequence, and the old state replayed against
+    that newer open generation is re-asked by the SDK (the rendered question names the new `generation_id`),
+    never applied. Two concurrent first rounds for one subject render the same open generation; the first
+    answer consumes it and the other returns its disposition (N03 D13 *Concurrency*). The generation records
+    use `confirm-revision-criterion` with the §1.7 binding; no N04 generation family exists.
   - Legacy authority (finding 5 of round 3): a v18 frontier with schema-1 embedding receipts and a v2 snapshot
     load unchanged (stored bytes and digests), compare equal through the N row, and a Change holding them
     activates: the first write emits frontier 20 and the receipts' bytes and IDs stay unchanged; a v19 frontier
@@ -1475,7 +1633,7 @@ on top of it.
     `confirmation-unresolved`; a B1-style request resolved through the old caller-provenance route, present only
     in request history → `confirmation-unresolved`. Each checked before the intent, after the reset and after a
     fresh-host restore; activation and reassessment never append to the ledger (ledger bytes compared).
-  - Capture: `decline` or `cancel` → `declined`, ledger and receipts unchanged, the generation answered; no form
+  - Capture: `decline` or `cancel` → `declined`, ledger and receipts unchanged, the generation consumed; no form
     elicitation, or a legacy
     session without a back-channel → `channel-unavailable`; a `revision` scope naming the active version, another
     outcome's criterion or a criterion absent from the candidate → `confirmation-scope-invalid`, nothing asked;
@@ -1599,12 +1757,17 @@ Premises found false or incomplete on `ac3bf23f9`:
 7. Found in Sol round 3 (§6): `clean -fd` deletes entries a reverted ignore rule no longer covers (D34); an
    SDK-authenticated request state is not consumed by a decline, a cancel or an unapplied accept (D36); D03's
    out-of-band recovery cannot serve a finalized Change inside an activation (D35).
+8. Found in Sol round 4 (§6): the loader quarantines any remote Change head other than the snapshot's
+   (`delivery_application_loader.py:727-760`), so an activation waiting on a foreign head did not survive a
+   restart (D40); `ChangeBranchPublisher` has no non-fast-forward path and freezes `expected_remote_head` per
+   stored operation (`change_publication.py:384`, `:609`, `:1007`; D42); acceptance refuses a merged PR
+   without finalization (`portfolio_application.py:692`), so a merge after A4 cannot complete the Change (D43).
 
 ## 4. Progress
 
 | Phase | PR | Exact head | Proof | Challenges | Status |
 | --- | --- | --- | --- | --- | --- |
-| N04-P | #358 | — | Probes P1–P9; round-1 source re-reads (§6); round-2 dependency re-pins and source re-reads, P10 Git hook and signing probe (§6); round-3 merge of `origin/dev` `141795676`, #360 re-pin `f4d09d774` and source re-reads (§6) | Sol plan round 1: revision-required (10 findings: 8 high, 2 medium; all accepted, none rebutted) → revised; Sol plan round 2: revision-required (round-1 findings 5, 6, 7, 9, 10 resolved; 1–4 and 8 incomplete as 8 findings: 5 high, 3 medium; all accepted, none rebutted) → revised, A2 split; Sol plan round 3: revision-required (9 findings: 6 high, 3 medium; all accepted, none rebutted; G18 settled) → revised | in review |
+| N04-P | #358 | — | Probes P1–P9; round-1 source re-reads (§6); round-2 dependency re-pins and source re-reads, P10 Git hook and signing probe (§6); round-3 merge of `origin/dev` `141795676`, #360 re-pin `f4d09d774` and source re-reads (§6); round-4 merge of `origin/dev` `2061047af` (N02-C), #360 re-pin `c6bcbbc25` and source re-reads of the branch publisher, remote Git, loader head check, acceptance and supersession (§6) | Sol plan round 1: revision-required (10 findings: 8 high, 2 medium; all accepted, none rebutted) → revised; Sol plan round 2: revision-required (round-1 findings 5, 6, 7, 9, 10 resolved; 1–4 and 8 incomplete as 8 findings: 5 high, 3 medium; all accepted, none rebutted) → revised, A2 split; Sol plan round 3: revision-required (9 findings: 6 high, 3 medium; all accepted, none rebutted; G18 settled) → revised; Sol plan round 4: revision-required (5 high; all accepted, none rebutted; shared consent generation adopted, G19 closed) → revised | in review |
 | N04-A1 | — | — | — | — | — |
 | N04-A2a | — | — | — | — | — |
 | N04-A2b | — | — | — | — | — |
@@ -1616,7 +1779,7 @@ Premises found false or incomplete on `ac3bf23f9`:
 
 | ID | Claim | Why unproven | Evidence available | Owner | Blocks |
 | --- | --- | --- | --- | --- | --- |
-| G1 | N03-A…C (as amended by #360) and N02-C land with the interfaces this plan names (`evidence.py` fold, `applies_to`, confirmation ledger, `resolve_confirmation`, `confirmation_applies`, basis digest, D13 `Resolve` registration and both routes, schema-2 request-resolution receipts and the L row, bounded remote Git); N09-A2 merged (`141795676`) with K3 sites, `require_pause_permits`, drain tokens and the K4 digest | Not merged (N09-A2 merged) | Their plans; PR #360 `f4d09d774` read only; `dev` `141795676` | N04-A1 (re-check at start; a divergence stops for a plan revision) | N04-A1 start |
+| G1 | N03-A…C (as amended by #360) land with the interfaces this plan names (`evidence.py` fold, `applies_to`, confirmation ledger, `resolve_confirmation`, `confirmation_applies`, basis digest, D13 `Resolve` registration and both routes, the shared `consent_generation` owner with successor uses, schema-2 request-resolution receipts and the L row); N09-A2 merged (`141795676`) with K3 sites, `require_pause_permits`, drain tokens and the K4 digest; N02-C merged (`2061047af`) with `run_remote_git`, `classify_write_readback` and the bounded `ChangeBranchPublisher` | N03 not merged (N09-A2 and N02-C merged) | Their plans; PR #360 `c6bcbbc25` read only; `dev` `2061047af` | N04-A1 (re-check at start; a divergence stops for a plan revision) | N04-A1 start |
 | G2 | Every runtime-root recoverer can learn the package and candidate roots without a layout assumption | Tests construct coordinators with non-sibling package roots (`test_portfolio_application.py:851-925`) | P3 | N04-A1 | N04-A1 merge |
 | G3 | One `RuntimeTransaction` spanning package and runtime roots recovers from every crash point through every reader | Not executed for a cross-root commit | P3 (single-root package participants) | N04-A2b crash matrix | N04-A2b merge |
 | G4 | Three-component preservation (D16, D25, D30, D34) captures and restores divergent staged and working-tree content, full file and directory modes, symlinks, untracked files and empty directories, refuses ignored collisions and ignore-rule flips (scratch `check-ignore` evaluation) and leaves ignored entries verified in place, on macOS and Ubuntu file systems | Not implemented; D03 raw preservation refuses staged content and the commit quarantine flattens it (§6 round 1 finding 1, round 2 findings 1 and 6, round 3 findings 1 and 8) | Source reads; D03 preservation tests | N04-A2b falsifiers (§3.3) | N04-A2b merge |
@@ -1633,8 +1796,8 @@ Premises found false or incomplete on `ac3bf23f9`:
 | G15 | N03's ledger validation is structural (digest, append-only, ≤ 256, scope well-formed) and accepts an entry whose scope names candidate criterion versions and whose request is not in a binding | N03-A not merged; N03 §1.5 does not state whether the ledger checks scope against the admitted contract | N03 §1.5, I10, L row | N04-B start (re-check; if N03 validates scope against the active contract, the plan is revised before B) | N04-B start |
 | G16 | `_MAX_DESIGN_RETURN_WALK_ENTRIES` admits realistic retained worktrees | The bound is fixed at A2b start from the largest supported fixture | D03 bounds (`_MAX_PRESERVED_PATHS` = 256, file 16 MiB, total 64 MiB) | N04-A2b start | N04-A2b merge |
 | G17 | Whether Cockpit may capture candidate-scoped confirmations | N03 U2 is an open user decision | N03 U2 | User (N03 U2) | Nothing in N04-B; N04-C Cockpit copy only |
-| G18 | An activation whose A1b or A5 observes a foreign Change head after the intent has a recovery route | Settled in design in round 3 (D35, §1.6 Foreign Change head): observe and journal, user-only authorization under E10 with a consent generation, local pin, observed-head demotion and a lease push; not yet executed | §3.3 foreign-head scenarios | N04-A2b | N04-A2b merge |
-| G19 | The D13 `Resolve` dependency can seal `generation_id` in the SDK request state so that the boundary authenticates it with the method, tool and argument digest | N03-A not merged; N05 D14 needs the same capability; #360 is under review and may replace N03 D13's frontier-as-generation rule with a shared owner | N05 D14, N03 D13 *Single use* (#360 `f4d09d774`) | N04-A2b start (re-check; if sealing is unavailable, the generation ID becomes a server-issued required argument returned by the first round, and a shared #360 owner replaces `revision_consent`) | N04-A2b start |
+| G18 | An activation whose A1b or A5 observes a foreign Change head after the intent has a recovery route | Settled in design in round 3 (D35, §1.6 Foreign Change head): observe and journal, user-only authorization under E10 with a consent generation, local pin, observed-head demotion and a lease push; round 4 adds the restart-safe loader state (D40), per-head records and the authorization-bound publisher entry (D42) and merge containment (D43); not yet executed | §3.3 foreign-head scenarios | N04-A2b | N04-A2b merge |
+| G19 | Closed in round 4. The sealing premise is moot: N03 D13 *Single use* (#360 `c6bcbbc25`) carries `generation_id` in the rendered question, which the SDK boundary matches before applying an answer, and N04 uses that shared owner (D44) | — | N03 D13 *Single use*, I11 | Existence of the owner is G1 | Nothing |
 
 ## 6. Round Dispositions
 
@@ -1689,3 +1852,19 @@ were accepted with a noted scope difference.
 | 7 | MED: schema-1 upgrade wrote schema 2 before building the child | Confirmed from the plan text (step 7) | Accepted | §1.6 step 7 (build and pin, then CAS replacement); §1.8 v4 row; D39; §3.3 A2a crash checks around the replacement |
 | 8 | MED: nonempty directory modes omitted | Confirmed: the walk recorded only empty directories; Git keeps no directory modes; D03's receipt keeps only the worktree root's mode | Accepted | §1.6 Filesystem row and restore order; D34 note; §3.3 `0o700`/`0o750` falsifiers under two umasks; G4 |
 | 9 | MED: A0/A1 contradict the per-kind matrix | Confirmed: A0 always built a child and A1 always wrote a snapshot intent | Accepted | §1.5 E1; §1.6 A0, A1 rows and per-kind rows (A0 Git objects, A1 snapshot intent); carrier `origin`; D39 note; §3.3 per-kind assertions |
+
+Sol plan gate round 4 (on `de46bd872`): `revision-required`, 5 findings (all high); the A2a split, the legacy
+widenings and LC were accepted as coherent, and G19 and preservation calibration (G16) may remain phase-start
+gaps. First `origin/dev` `2061047af` (N02-C, PR #355) was merged into lane D and #360 re-pinned at `c6bcbbc25`:
+N03 D13 *Single use* and I11 now own one shared single-use `consent_generation` family with an N04 use
+`confirm-revision-criterion`, so N04's own `revision_consent` family is removed (D44) and G19 is closed (its
+sealing premise is moot because the rendered question carries `generation_id`). Each premise was re-read in
+source on lane D (`2061047af`). No finding was rebutted; one was accepted with a broader scope.
+
+| # | Finding | Premise check | Disposition | Plan change |
+| --- | --- | --- | --- | --- |
+| 1 | HIGH: foreign-head recovery does not survive a restart | Confirmed: `_fetch_remote_snapshot_change_head` (`delivery_application_loader.py:727-760`) raises the deferred or mismatch error for any remote head other than the snapshot's, so a restart while the remote stays at F (as E10 requires until authorization and publication) quarantined the Change; the round-3 loader accepted only the base head or the child | Accepted | §1.6 Loader foreign-pending classification (no fetch, compare or adoption of F; no loader write); per-kind loader row; D40; §3.3 restart test before and after authorization, before and after A4 |
+| 2 | HIGH: the `resolving` marker excludes required recovery | Confirmed from the plan text: E6 allowed only E2 once `resolving`, and the inventory admitted E6–E9 only, excluding E3 continuation acquisition and E10 for an interrupted `remote-child`; (ii) said A5 pushes no branch while §1.6 Foreign Change head could require a write | Accepted | §1.5 E6 and Marker permissions table (`pending`, `resolving`, `replacing`); inventory sentence; §1.6 (ii) and per-kind A5 row (the only remote-child branch write is `replace_foreign_head` over an authorized F); D41; §3.3 marker-state tests for E3 and E10 under `resolving` |
+| 3 | HIGH: successive authorizations reuse one receipt path | Confirmed: `foreign-head.json` was one R-class create-only path per operation, so F′ after F could not be authorized | Accepted | §1.4 rows; §1.5 E10; §1.6 A1b, steps 2–4 (`foreign-authorizations/<F>.json` per head, `authorization_id`); §1.8 `revision_activation`; D42; §3.3 F → F′ test through a fresh-process restart |
+| 4 | HIGH: the lease push has no compatible publication owner | Confirmed on `2061047af`: `_publish` refuses a remote that is not an ancestor (`change_publication.py:384`), `_push_exact_head` runs a plain push (`:609`), the stored operation freezes `expected_remote_head` (`_validate_replay`, `:1007`), and no lease push exists in Delivery; A2b bound A5 to one child-based operation ID | Accepted | §1.6 A5 row and Authorization-bound publisher entry (`replace_foreign_head`, per-head operation `<op>-foreign-<F>`, N02-C readback); §1.4 and §1.8 `branch_publication` union and receipt; §1.5 E2; §1.9 row; §1.10; D42; §3.3 paths and negative authorization tests |
+| 5 | HIGH: the merge exception extends beyond I3 | Confirmed: step 1 allowed `superseded-by-merge` before any *remote* effect, i.e. after A3 and A4, when A4 had installed the revised authority and cleared `finalization` and `ready`. Broader: after A4 no existing route completed the Change, since `observe_acceptance` refuses without finalization (`portfolio_application.py:692`) | Accepted | I3 (pre-effect only); §1.6 step 1 and Merge after effects (record, fence, release into the existing publication attention, existing `supersede_publication` or abandonment); loader rule; §1.9 state, detail and reason; D43; §3.3 after-A4 merge falsifier with variants |
