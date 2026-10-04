@@ -479,7 +479,7 @@ def test_contained_pending_replays_through_the_contained_path_and_rejects_an_ext
     assert (root / "current.json").read_bytes() == b"pointer"
     assert not (root / "transactions/report.yaml").exists()
     other = _contained_pending(tmp_path / "other")
-    manifest = other / "transactions/report.yaml"
+    manifest = tmp_path / "other/report/transactions/report.yaml"
     value = yaml.safe_load(manifest.read_bytes())
     value["unexpected"] = True
     manifest.write_text(yaml.safe_dump(value, sort_keys=True), encoding="utf-8")
