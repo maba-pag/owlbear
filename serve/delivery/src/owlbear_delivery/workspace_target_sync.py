@@ -349,7 +349,11 @@ class _TargetSyncMixin:
                 return previous_receipt
             self._require_target_sync_start(request, coordination)
         source_ref, target_ref, _target_branch = self._target_refs()
-        start = _TargetFetchStart(target_ref, self._resolve(target_ref, missing_ok=True), self._target_observations())
+        # Locked so the snapshot never mixes refs from another sync's half-applied transaction.
+        with self._target_sync_lock():
+            start = _TargetFetchStart(
+                target_ref, self._resolve(target_ref, missing_ok=True), self._target_observations()
+            )
         fetched_head, private_ref = self._fetch_target(source_ref, request)
         try:
             if fetched_head != request.expected_target:

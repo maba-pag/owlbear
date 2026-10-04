@@ -651,17 +651,20 @@ def test_overlapping_stale_fetches_keep_the_first_recorded_observation(tmp_path:
     assert manager.observed_target_head() == newest
 
 
-def test_stale_observation_is_recorded_only_under_the_target_sync_lock(tmp_path: Path) -> None:
+def test_stale_fetch_snapshot_and_recording_take_the_target_sync_lock(tmp_path: Path) -> None:
     repository, remote, initial = _repository(tmp_path)
     coordinator, manager = _change_workspace(tmp_path, repository)
     _reviewed_change(manager, "sync-locked")
     advanced = _advance_remote_target(tmp_path, remote)
     fetched = Event()
+    locked = Event()
     real_runner = workspace_target_sync.run_remote_git
+    lock_root = (coordinator.runtime_root / "coordination" / "target-sync-lock",)
 
     def signalling_runner(*arguments: Any, **options: Any) -> subprocess.CompletedProcess[bytes]:
         result = real_runner(*arguments, **options)
         fetched.set()
+        assert locked.wait(timeout=10)
         return result
 
     request = SyncChangeWithTarget(change_id="sync-locked", expected_target=initial, operation_id="sync-locked-1")
@@ -669,9 +672,13 @@ def test_stale_observation_is_recorded_only_under_the_target_sync_lock(tmp_path:
         patch.object(workspace_target_sync, "run_remote_git", side_effect=signalling_runner),
         ThreadPoolExecutor(max_workers=1) as executor,
     ):
-        with locked_roots((coordinator.runtime_root / "coordination" / "target-sync-lock",)):
+        with locked_roots(lock_root):
             running = executor.submit(manager.sync_with_target, request)
-            assert fetched.wait(timeout=10)
+            # The fetch-start snapshot waits for the lock, so the fetch has not begun.
+            assert not fetched.wait(timeout=0.3)
+        assert fetched.wait(timeout=10)
+        with locked_roots(lock_root):
+            locked.set()
             time.sleep(0.3)
             assert not running.done()
             assert _target_observation_refs(repository) == {}

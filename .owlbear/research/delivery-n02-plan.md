@@ -257,15 +257,19 @@ Agent-settled with probe evidence:
   and an overlapping stale fetch overwrote it). The engine target is the recording's head while the
   shared ref equals `<base>`, otherwise the shared ref. Each recording write and each engine move of the
   shared ref runs under the existing target-sync lock as one `update-ref --stdin` transaction,
-  compare-and-swapped on the shared value and on the recordings it replaces. A stale result replaces
+  compare-and-swapped on the shared value and on the recordings it replaces; the fetch-start snapshot of
+  the shared value and recordings is also read under that lock (local reads only), so it never mixes
+  refs from another sync's half-applied transaction. A stale result replaces
   exactly the recordings read before its fetch, or is dropped when the shared ref or that set changed
   (among overlapping fetches the first writer wins; a fetch that starts after a recording may replace
   it). An exact sync moves the shared ref, deletes only the recordings read before its fetch (older than
   its result) and carries one recorded after its fetch began to the new shared value, all in one
   transaction. If that transaction is refused because a ref changed concurrently, the exact sync replans
-  from the new state (at most three attempts; a concurrent shared-ref move keeps its value and the
-  receipt stays exact); a refusal with no such change raises before the merge and receipt, so progress
-  is never silently lost and the engine never keeps selecting a head the receipt superseded. Only
+  from the new state (at most three attempts, then it raises; a concurrent shared-ref move keeps its
+  value and the receipt stays exact); a refusal with no observable change (including an external Git
+  process briefly holding a ref lock) raises before the merge and receipt, and the sync can be retried,
+  so progress is never silently lost and a failed cleanup never leaves the engine selecting the head that
+  cleanup should have removed. Only
   `update-ref --stdin`, `for-each-ref` and `rev-parse` are used (all present in Git 2.43, the Ubuntu
   24.04 package); no reflog and no new object types. Rejected: the reflog marker (`git reflog write` is
   absent in Git 2.43, and its head ref and marker were two unlocked writes); re-fetching at the point of
@@ -277,8 +281,13 @@ Agent-settled with probe evidence:
   round. (2) Engine target reads take no lock and Git applies a multi-ref transaction ref by ref, so a
   read that overlaps a recording or exact-sync transaction can briefly miss a recording being replaced
   or carried and select the shared value instead; the next read after the transaction sees its result.
-  (3) A stale fetch that read the remote before an exact fetch but records after that exact fetch began
-  is carried as if newer; the next fetch replaces it, again one stale round.
+  (3) Overlapping fetches carry no record of when each read the remote: the first writer under the lock
+  wins, a stale fetch that read the remote before an exact fetch but records after that exact fetch
+  began is carried as if newer, and engine moves of the shared ref A→C→A between one fetch's start and
+  its lock are indistinguishable from no move, so that older fetch may still move or record. Each case
+  costs one stale round; the next fetch replaces the result. (4) Refs written in the round-3 format
+  `<sha256(target ref)>/<base>` are not read and conflict with the new names; none exist outside
+  disposable test repositories (no legacy support).
 - **D8 Bounded runner kills the process group** (P6): `subprocess.run(timeout=…)` returns on time
   but leaves the transport helper running; the runner starts Git in a new session and kills the
   group on timeout.
