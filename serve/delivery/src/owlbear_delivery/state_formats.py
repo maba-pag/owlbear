@@ -41,6 +41,9 @@ MIGRATIONS_ROOT: Final = "runtime/migrations"
 MIGRATION_JOURNAL: Final = "journal.json"
 CONTROLLER_LOCK: Final = "runtime/controller.lock"
 SUPPORTED_FORMAT: Final = 2
+# Registered format migrations in order (name, source, target); a copy runs every step from its observed
+# format. format-0-to-1 (N02-B): registered record rewrites and marker 1; format-1-to-2 (N03-A): marker only.
+FORMAT_MIGRATIONS: Final[tuple[tuple[str, int, int], ...]] = (("format-0-to-1", 0, 1), ("format-1-to-2", 1, 2))
 JOURNAL_SCHEMA_VERSION: Final = 1
 JOURNAL_STATES: Final = frozenset({"backed-up", "applying", "applied", "verified", "aborting"})
 # Runtime entries a fresh (never-written) workspace may hold besides locks and transients.
@@ -1097,6 +1100,20 @@ def format_marker_bytes(format_value: int = SUPPORTED_FORMAT) -> bytes:
     return json.dumps({"format": format_value}, sort_keys=True, separators=(",", ":")).encode() + b"\n"
 
 
+def format_migration_steps(source_format: int) -> tuple[str, ...]:
+    """Return the registered steps from ``source_format`` to the supported format, in order."""
+    steps: list[str] = []
+    current = source_format
+    for name, source, target in FORMAT_MIGRATIONS:
+        if source == current and target <= SUPPORTED_FORMAT:
+            steps.append(name)
+            current = target
+    if current != SUPPORTED_FORMAT:
+        message = f"no registered format migration leads from format {source_format} to {SUPPORTED_FORMAT}"
+        raise ValueError(message)
+    return tuple(steps)
+
+
 def record_tree_digest(workspace_root: Path, *, exclude_migrations: bool = False) -> dict[str, str]:
     """Return SHA-256 digests of every non-transient Delivery record file, for no-write proofs.
 
@@ -1137,6 +1154,7 @@ __all__ = [
     "DELIVERY_STATE_ROOT",
     "FAMILIES",
     "FORMAT_MARKER",
+    "FORMAT_MIGRATIONS",
     "JOURNAL_SCHEMA_VERSION",
     "JOURNAL_STATES",
     "MIGRATIONS_ROOT",
@@ -1158,6 +1176,7 @@ __all__ = [
     "classify_version",
     "config_capability",
     "format_marker_bytes",
+    "format_migration_steps",
     "record_tree_digest",
     "require_capability",
     "scan_capability",

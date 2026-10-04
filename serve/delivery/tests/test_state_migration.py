@@ -237,6 +237,8 @@ def test_first_migration_on_format_0_state_writes_only_the_marker(tmp_path: Path
     proposal = state_migration.propose(repository)
 
     assert refusal.locator == FORMAT_MARKER
+    assert (proposal.source_format, proposal.target_format) == (0, 2)
+    assert proposal.steps == ("format-0-to-1", "format-1-to-2")
     assert [(entry.locator, entry.before_sha256) for entry in proposal.entries] == [(FORMAT_MARKER, None)]
     assert record_tree_digest(repository) == pre
     journal = state_migration.apply(repository, proposal.migration_id)
@@ -286,6 +288,7 @@ def test_schema_17_frontier_is_rewritten_by_the_registered_rewrite_and_staged_by
     proposal = state_migration.propose(repository)
 
     staged = _migration_dir(repository, proposal.migration_id) / "stage/runtime/changes/change-a/frontier.json"
+    assert proposal.steps == ("format-0-to-1", "format-1-to-2")
     assert [entry.locator for entry in proposal.entries] == [
         "runtime/changes/change-a/frontier.json",
         FORMAT_MARKER,
@@ -1025,6 +1028,7 @@ def test_format_1_to_2_migration_changes_only_the_marker_and_keeps_every_change_
 
     proposal = state_migration.propose(repository)
 
+    assert (proposal.source_format, proposal.target_format, proposal.steps) == (1, 2, ("format-1-to-2",))
     assert [(entry.locator, entry.before_sha256) for entry in proposal.entries] == [(FORMAT_MARKER, pre[FORMAT_MARKER])]
     state_migration.apply(repository, proposal.migration_id)
     state_migration.verify(repository, proposal.migration_id)
