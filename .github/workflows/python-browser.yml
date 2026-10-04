@@ -1,0 +1,108 @@
+---
+name: Python browser
+
+"on":
+  pull_request:
+    branches:
+      - dev
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+    paths:
+      - .github/workflows/python-browser.yml
+      - .python-version
+      - conftest.py
+      - pyproject.toml
+      - uv.lock
+      - serve/browser/**
+      - serve/browser-mcp/**
+      - serve/web-content/**
+  workflow_dispatch:
+
+concurrency:
+  group: python-browser-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  browser:
+    name: Python browser tests
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout requested revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Fingerprint inputs
+        id: fingerprint
+        run: |
+          value="$(git ls-files -s -- .github/workflows/python-browser.yml .python-version conftest.py \
+            pyproject.toml uv.lock serve/browser serve/browser-mcp serve/web-content | sha256sum | cut -c1-40)"
+          echo "value=$value" >> "$GITHUB_OUTPUT"
+
+      - name: Look up passing result for identical inputs
+        id: reuse
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ci-pass
+          key: ci-pass-v1-python-browser-${{ steps.fingerprint.outputs.value }}
+          lookup-only: true
+
+      - name: Report reused result
+        if: steps.reuse.outputs.cache-hit == 'true'
+        run: echo "Reused a passing result for identical inputs; tests skipped." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Setup uv
+        if: steps.reuse.outputs.cache-hit != 'true'
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
+        with:
+          enable-cache: true
+          cache-suffix: python-browser
+          cache-dependency-glob: uv.lock
+          prune-cache: false
+
+      - name: Check uv runtime
+        if: steps.reuse.outputs.cache-hit != 'true'
+        run: python3 .github/scripts/check_uv_version.py
+
+      - name: Install pinned Python
+        if: steps.reuse.outputs.cache-hit != 'true'
+        run: uv python install
+
+      - name: Install locked browser packages
+        if: steps.reuse.outputs.cache-hit != 'true'
+        run: uv sync --locked --package owlbear-browser-mcp --group dev
+
+      - name: Install Chromium
+        if: steps.reuse.outputs.cache-hit != 'true'
+        run: uv run --no-sync playwright install --with-deps chromium
+
+      - name: Run browser-marked tests
+        if: steps.reuse.outputs.cache-hit != 'true'
+        run: uv run --no-sync pytest serve/browser serve/browser-mcp -m browser -n 4 --dist worksteal
+
+      - name: Record passing result
+        if: github.event_name == 'pull_request' && steps.reuse.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/ci-pass"
+          echo "$HEAD_SHA" > "$RUNNER_TEMP/ci-pass/head"
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+
+      - name: Save passing result
+        if: github.event_name == 'pull_request' && steps.reuse.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ci-pass
+          key: ci-pass-v1-python-browser-${{ steps.fingerprint.outputs.value }}
