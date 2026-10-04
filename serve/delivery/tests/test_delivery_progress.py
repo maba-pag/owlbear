@@ -833,11 +833,12 @@ def _pause_views(application: PortfolioApplication) -> set[tuple[bool, str | Non
     return {(view.pause_available, view.pause_unavailable_reason) for view in views}
 
 
-def _defer_accepted(application: PortfolioApplication) -> bool:
+def _pause_admitted(application: PortfolioApplication) -> str | None:
+    """Return the N09-A2 admission outcome: ``deferral`` (converted), ``request`` (draining) or None."""
     runtime = application._runtimes["change-a"]
     before = runtime.frontier_bytes()
     try:
-        application.set_change_intent(
+        result = application.set_change_intent(
             DeliveryChangeIntent(
                 change_id="change-a",
                 kind=DeliveryChangeIntentKind.DEFER,
@@ -848,38 +849,48 @@ def _defer_accepted(application: PortfolioApplication) -> bool:
     except RuntimeError, OSError:
         assert runtime.frontier_bytes() == before
         assert runtime.change_deferral() is None
-        return False
-    assert runtime.change_deferral() is not None
-    return True
+        return None
+    if runtime.change_deferral() is not None:
+        assert result.receipt == runtime.change_deferral()
+        return "deferral"
+    assert runtime.frontier_bytes() == before
+    assert result.receipt == application._coordinator.pause_request("change-a")
+    return "request"
 
 
 @pytest.mark.parametrize("fixture", sorted(_PAUSE_FIXTURES))
-def test_pause_availability_equals_defer_acceptance(tmp_path: Path, fixture: str) -> None:
-    application, state_root, expected = _PAUSE_FIXTURES[fixture](tmp_path)
+def test_pause_is_available_under_any_custody_and_drains_or_converts(tmp_path: Path, fixture: str) -> None:
+    """N09-A2 §1.11 K1: Pause admits under every custody; only drained custody converts at once."""
+    application, state_root, custody = _PAUSE_FIXTURES[fixture](tmp_path)
     before = _record_tree(state_root)
 
     observed = _pause_views(application)
 
     assert _record_tree(state_root) == before
-    assert observed == {(expected is None, expected)}
-    assert _defer_accepted(application) is (expected is None)
-    if expected is None:
+    assert observed == {(True, None)}
+    expected = "deferral" if custody is None else "request"
+    assert _pause_admitted(application) == expected
+    if expected == "deferral":
         assert _pause_views(application) == {(False, "change-inactive")}
+    else:
+        assert _pause_views(application) == {(False, "pause-requested")}
+        assert _group(application).pause_requested is True
+        assert application.get_change("change-a").pause_requested is True
 
 
-def test_unreadable_coordination_refuses_pause_like_defer(tmp_path: Path) -> None:
-    application, *_rest = _quiescent_planning(tmp_path)
+def test_unreadable_coordination_refuses_pause(tmp_path: Path) -> None:
+    application, state_root, _custody = _quiescent_planning(tmp_path)
     snapshot = application._delivery_snapshot(application._runtimes["change-a"])
-    with patch.object(application._workspace_manager, "show", side_effect=OSError("coordination unreadable")):
-        assert application._pause_unavailable_reason(snapshot) == "state-unavailable"
-        assert not _defer_accepted(application)
+    (state_root / "coordination/changes/change-a.json").write_bytes(b"{")
+    assert application._pause_unavailable_reason(snapshot) == "state-unavailable"
+    assert _pause_admitted(application) is None
 
 
-def test_unverified_recovery_exclusion_refuses_pause_like_defer(tmp_path: Path) -> None:
+def test_recovery_fence_does_not_refuse_pause_admission(tmp_path: Path) -> None:
     application, *_rest = _quiescent_planning(tmp_path)
     snapshot = application._delivery_snapshot(application._runtimes["change-a"])
     with patch.object(
         application._coordinator, "require_no_pending_recovery", side_effect=DeliveryWorkerExclusionRequiredError
     ):
-        assert application._pause_unavailable_reason(snapshot) == "recovery-required"
-        assert not _defer_accepted(application)
+        assert application._pause_unavailable_reason(snapshot) is None
+        assert _pause_admitted(application) == "deferral"

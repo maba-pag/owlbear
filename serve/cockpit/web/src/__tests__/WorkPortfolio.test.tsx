@@ -6281,12 +6281,16 @@ it("renders held custody neutrally and unknown issuer evidence as a decision", a
   expect(within(table).getByText("Needs your decision", { selector: "td [data-status-tone]" })).toBeInTheDocument();
 });
 
-const STEP_IN_PROGRESS = { pause_available: false, pause_unavailable_reason: "step-in-progress" } as const;
+const PAUSE_REQUESTED = {
+  pause_available: false,
+  pause_unavailable_reason: "pause-requested",
+  pause_requested: true,
+} as const;
 const PAUSE_AVAILABLE = { pause_available: true, pause_unavailable_reason: null } as const;
 
-it("offers Pause on every unfinished Change and disables it while a step holds custody", async () => {
+it("offers Pause on every unfinished Change, including one whose step holds custody", async () => {
   currentPortfolio = portfolio([
-    group({ items: [heldCard()], ...STEP_IN_PROGRESS }),
+    group({ items: [heldCard()], ...PAUSE_AVAILABLE }),
     group({
       change_id: "change-beta",
       title: "Quiescent change",
@@ -6298,27 +6302,41 @@ it("offers Pause on every unfinished Change and disables it while a step holds c
   renderPage();
 
   const held = await screen.findByTestId("change-pause-change-alpha");
-  const heldPause = within(held).getByText("Pause") as HTMLElement & { disabled: boolean };
-  expect(heldPause.disabled).toBe(true);
-  expect(held).toHaveTextContent("A step is in progress; Pause is available when it returns.");
-
-  const quiescent = screen.getByTestId("change-pause-change-beta");
-  fireEvent.click(within(quiescent).getByText("Pause"));
+  fireEvent.click(within(held).getByText("Pause"));
   const reason = await waitFor(() =>
-    requirePresent(namedPdsHost(quiescent, "p-input-text", "change-pause-reason-change-beta")),
+    requirePresent(namedPdsHost(held, "p-input-text", "change-pause-reason-change-alpha")),
   );
   inputValue(reason, "Hold for review");
-  const confirm = within(quiescent).getByText("Confirm pause") as HTMLElement & { disabled: boolean };
+  const confirm = within(held).getByText("Confirm pause") as HTMLElement & { disabled: boolean };
   await waitFor(() => expect(confirm.disabled).toBe(false));
   fireEvent.click(confirm);
   await waitFor(() =>
     expect(requests).toContainEqual({
-      url: "/api/changes/change-beta/defer",
+      url: "/api/changes/change-alpha/defer",
       method: "POST",
       body: { reason: "Hold for review", expected_frontier_digest: "a".repeat(64) },
     }),
   );
-  expect(requests.some((request) => request.url === "/api/changes/change-alpha/defer")).toBe(false);
+  expect(requests.some((request) => request.url === "/api/changes/change-beta/defer")).toBe(false);
+  expect(within(screen.getByTestId("change-pause-change-beta")).getByText("Pause")).toBeInTheDocument();
+});
+
+it("shows a recorded Pause request with Resume while the started step drains", async () => {
+  currentPortfolio = portfolio([group({ items: [heldCard()], ...PAUSE_REQUESTED })]);
+  renderPage();
+
+  const control = await screen.findByTestId("change-pause-change-alpha");
+  expect(within(control).getByTestId("pause-requested-change-alpha")).toHaveTextContent("Pause requested");
+  expect(within(control).queryByText("Pause")).not.toBeInTheDocument();
+  fireEvent.click(within(control).getByText("Resume"));
+  await waitFor(() =>
+    expect(requests).toContainEqual({
+      url: "/api/changes/change-alpha/resume",
+      method: "POST",
+      body: { expected_frontier_digest: "a".repeat(64) },
+    }),
+  );
+  expect(requests.some((request) => request.url.endsWith("/defer"))).toBe(false);
 });
 
 it("resumes a paused Change from its group header", async () => {
@@ -6342,16 +6360,21 @@ it("resumes a paused Change from its group header", async () => {
   );
 });
 
-it("offers Pause on an outcome detail and disables it while the Change holds custody", async () => {
+it("shows a recorded Pause request on an outcome detail with Resume", async () => {
   const held = heldCard();
-  currentPortfolio = portfolio([group({ items: [held], ...STEP_IN_PROGRESS })]);
-  currentDetail = detail({ card: held, readiness: held.readiness, ...STEP_IN_PROGRESS });
+  currentPortfolio = portfolio([group({ items: [held], ...PAUSE_REQUESTED })]);
+  currentDetail = detail({
+    card: held,
+    readiness: held.readiness,
+    pause_available: false,
+    pause_unavailable_reason: "pause-requested",
+  });
   renderPage("/delivery/change-alpha/outcome%3AOUT-001");
 
   const inspector = await screen.findByTestId("work-item-detail");
-  const pause = within(inspector).getByText("Pause") as HTMLElement & { disabled: boolean };
-  expect(pause.disabled).toBe(true);
-  expect(inspector).toHaveTextContent("A step is in progress; Pause is available when it returns.");
+  expect(within(inspector).getByTestId("pause-requested-change-alpha")).toHaveTextContent("Pause requested");
+  expect(within(inspector).queryByText("Pause")).not.toBeInTheDocument();
+  expect(within(inspector).getByText("Resume")).toBeInTheDocument();
   expect(within(inspector).queryByText("Abandon Change")).not.toBeInTheDocument();
 });
 
@@ -6457,9 +6480,9 @@ it.each([
   expectPauseOffered(within(screen.getByTestId("work-portfolio-table")).getByTestId("change-pause-change-alpha"));
 });
 
-it("keeps the Change-level Pause refusal when a filter hides the running item", async () => {
+it("keeps the Change-level Pause request when a filter hides the running item", async () => {
   const needsYou = group().items[1];
-  currentPortfolio = portfolio([group({ progress: null, items: [heldCard(), needsYou], ...STEP_IN_PROGRESS })]);
+  currentPortfolio = portfolio([group({ progress: null, items: [heldCard(), needsYou], ...PAUSE_REQUESTED })]);
   renderPage();
 
   await screen.findByTestId("work-portfolio-table");
@@ -6470,10 +6493,9 @@ it("keeps the Change-level Pause refusal when a filter hides the running item", 
   expect(table).toHaveTextContent("User controls");
   expect(table).not.toHaveTextContent("Delivery foundation");
 
-  await expectPauseRefused(
-    screen.getByTestId("change-pause-change-alpha"),
-    "A step is in progress; Pause is available when it returns.",
-  );
+  const control = screen.getByTestId("change-pause-change-alpha");
+  expect(within(control).getByTestId("pause-requested-change-alpha")).toHaveTextContent("Pause requested");
+  expect(within(control).queryByText("Pause")).not.toBeInTheDocument();
 });
 
 it("keeps Change-level Pause available when a filter shows only a held-looking item", async () => {

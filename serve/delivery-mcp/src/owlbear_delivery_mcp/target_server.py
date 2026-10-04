@@ -471,7 +471,7 @@ class TargetMCPAdapter:
         )
 
     async def set_change_intent(self, request: SetChangeIntentRequest) -> SetChangeIntentResponse:
-        """Apply one version-bound pause, resume, or abandon intent."""
+        """Apply one version-bound pause, resume, or abandon intent; Pause under custody drains first."""
         params = self._validate(SetChangeIntentParams, request)
         result = await asyncio.to_thread(
             self._call_model,

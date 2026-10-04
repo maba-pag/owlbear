@@ -27,6 +27,7 @@ from owlbear_delivery.change_workspace import (
     ChangeCoordination,
     ChangeDesignPackageSnapshotReceipt,
     ChangeFinalizationAttempt,
+    ChangePauseRequest,
     ChangeTargetSyncReceipt,
     ChangeWorkspaceManager,
     ChangeWorktreeAttentionCode,
@@ -527,6 +528,7 @@ class DeliveryChangeView(_ApplicationModel):
     readiness: DeliveryReadiness
     finalization_attempt: ChangeFinalizationAttempt | None = None
     continuation_action: ChangeContinuationAction | None = None
+    pause_requested: bool = False
 
 
 class DeliveryUnavailableChangeView(_ApplicationModel):
@@ -616,7 +618,7 @@ class DeliveryChangeIntentResult(_ApplicationModel):
     change_id: str = Field(min_length=1)
     kind: DeliveryChangeIntentKind
     frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
-    receipt: DeliveryChangeDeferral | DeliveryChangeAbandonment
+    receipt: DeliveryChangeDeferral | DeliveryChangeAbandonment | ChangePauseRequest
 
     @model_validator(mode="after")
     def _validate_receipt(self) -> DeliveryChangeIntentResult:
@@ -626,8 +628,10 @@ class DeliveryChangeIntentResult(_ApplicationModel):
         if self.kind is DeliveryChangeIntentKind.ABANDON and not isinstance(self.receipt, DeliveryChangeAbandonment):
             message = "abandon intent requires an abandonment receipt"
             raise ValueError(message)
-        if self.kind is not DeliveryChangeIntentKind.ABANDON and not isinstance(self.receipt, DeliveryChangeDeferral):
-            message = "defer or resume intent requires a deferral receipt"
+        if self.kind is not DeliveryChangeIntentKind.ABANDON and not isinstance(
+            self.receipt, DeliveryChangeDeferral | ChangePauseRequest
+        ):
+            message = "defer or resume intent requires a deferral receipt or Pause request"
             raise ValueError(message)
         return self
 

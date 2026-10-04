@@ -160,6 +160,7 @@ export const PAUSE_UNAVAILABLE_COPY: Record<ChangePauseUnavailableReason, string
   "recovery-required": "An interrupted step must be recovered first.",
   "state-unavailable": "Delivery cannot confirm this Change is idle, so Pause is unavailable.",
   "change-inactive": "This Change cannot be paused.",
+  "pause-requested": "Pause requested; the current step finishes first.",
 };
 
 /**

@@ -121,7 +121,8 @@ export type ChangePauseUnavailableReason =
   | "step-in-progress"
   | "recovery-required"
   | "state-unavailable"
-  | "change-inactive";
+  | "change-inactive"
+  | "pause-requested";
 export type FinalizationFailureCode =
   | "workspace-dirty"
   | "workspace-preflight-failed"
@@ -233,6 +234,8 @@ export interface ChangeGroupView {
   progress?: DeliveryProgress | null;
   pause_available?: boolean;
   pause_unavailable_reason?: ChangePauseUnavailableReason | null;
+  /** A Pause request waits for the started step to drain; new work is refused meanwhile. */
+  pause_requested?: boolean;
 }
 
 export interface NeedsCounts {

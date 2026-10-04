@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import ast
+import inspect
 import re
 import shlex
 from pathlib import Path
 from typing import NamedTuple
+
+from owlbear_delivery import ChangeWorkspaceManager, PortfolioCoordinator
 
 _REPO_ROOT = Path(__file__).parent.parent
 _SOURCE_ROOTS = tuple(sorted(path for path in (_REPO_ROOT / "serve").glob("*/src") if path.is_dir()))
@@ -1915,3 +1918,453 @@ def test_forbidden_git_admin_fixture_is_rejected_by_the_artifact_gate() -> None:
     violations = _git_admin_path_violations((_fixture_path("forbidden-git-admin.py"),))
 
     assert {int(violation.rsplit(":", maxsplit=1)[1]) for violation in violations} == {5, 9, 13, 17, 21, 25}
+
+
+# N09-A2 step 1 inventory (plan §1.11 K3/K7, §3.3): every public coordinator and workspace-manager
+# entry has exactly one Pause class, so a new custody or effect entry cannot appear unclassified.
+_DELIVERY_SOURCE = _REPO_ROOT / "serve/delivery/src/owlbear_delivery"
+_COORDINATOR_PAUSE_CLASSES: dict[str, frozenset[str]] = {
+    "pause-gated": frozenset(
+        {
+            "acquire",
+            "acquire_continuation_action",
+            "start_continuation_action",
+            "reserve_publication",
+            "start_direct_operation",
+            "start_pause_fenced",
+            "prepare_pause_fence",
+            "prepare_runtime_custody_guard",
+            "update",
+            "require_pause_permits",
+        }
+    ),
+    "completion": frozenset(
+        {
+            "finish_continuation_action",
+            "finish_direct_operation",
+            "release",
+            "release_publication",
+            "prepare_finalization_attention",
+            "prepare_finalization_completion",
+            "prepare_finalization_repair_release",
+            "prepare_recovery_release",
+            "record_recovery_intent",
+            "prepare_reviewed_boundary",
+            "prepare_pause_request_clear",
+            "record_verified_exclusion",
+            "forget_verified_exclusion",
+            "register",
+            "recover_pending_transactions",
+        }
+    ),
+    "pause-policy": frozenset({"record_pause_request", "clear_pause_request"}),
+    "token": frozenset({"drain_authority", "drain_permits", "current_drain_authority", "continuation_execution"}),
+    "lock": frozenset({"acquisition_lock", "publication_lock", "recovery_lock"}),
+    "read": frozenset(
+        {
+            "continuation_action_started",
+            "continuation_record_path",
+            "continuation_start_recorded",
+            "coordination_bytes",
+            "direct_operation_path",
+            "direct_operation_state",
+            "executing_continuation",
+            "find_registered",
+            "list_registered",
+            "pause_request",
+            "recovery_authority_digest",
+            "recovery_coordination_bytes",
+            "recovery_exclusions_verified",
+            "recovery_verification_recorded",
+            "require_continuation_access",
+            "require_no_pending_recovery",
+            "show",
+        }
+    ),
+}
+_MANAGER_PAUSE_CLASSES: dict[str, frozenset[str]] = {
+    "coordinator-fenced": frozenset(
+        {
+            "acquire",
+            "prepare_builder_handoff_acquisition",
+            "snapshot_design_package",
+            "sync_with_target",
+            "prepare_runtime_custody_guard",
+        }
+    ),
+    "application-gated": frozenset(
+        {
+            "adopt_external_head",
+            "promote_external_head",
+            "abort_target_sync_conflict",
+            "resolve_target_sync_conflict",
+            "recover_out_of_band_head",
+            "recover_publication_baseline",
+            "recover",
+        }
+    ),
+    "owner-completion": frozenset(
+        {
+            "capture_finalization_workspace",
+            "capture_preservation",
+            "capture_raw_preservation",
+            "capture_recovery_workspace",
+            "capture_recovery_workspace_metadata",
+            "cleanup",
+            "complete_reviewed",
+            "ensure",
+            "prepare_builder_handoff",
+            "prepare_finalization_boundary",
+            "prepare_finalization_repair_release",
+            "prepare_pause_request_clear",
+            "prepare_recovery_release",
+            "quarantine_dirty_worktree",
+            "record_reviewed",
+            "refresh_integration_target",
+            "release_writer_at_head",
+            "restart",
+            "restore_preservation",
+            "restore_raw_preservation",
+        }
+    ),
+    "pause-policy": frozenset({"record_pause_request", "clear_pause_request"}),
+    "read": frozenset(
+        {
+            "baseline_scope_kinds",
+            "inspect_retained",
+            "integration_context",
+            "list_retained",
+            "observe_worktree_activity",
+            "observed_change_head",
+            "observed_target_head",
+            "recovery_snapshot",
+            "repository_automation_paths",
+            "require_preservation_environment",
+            "reviewed_source_head",
+            "show",
+            "source_head",
+            "validate_finalization_head",
+            "validate_recovery",
+            "validate_writer_head",
+            "verify_dirty_worktree_quarantine",
+            "verify_preservation",
+            "worker_process_roots",
+        }
+    ),
+}
+_APPLICATION_PAUSE_GATED_ENTRIES = frozenset(
+    {
+        "adopt_external_head",
+        "adopt_external_head_after_acceptance_attention",
+        "promote_external_head",
+        "abort_target_sync_conflict",
+        "resolve_target_sync_conflict",
+        "prepare_review_repair",
+        "reconcile_finalization_head",
+        "recover_out_of_band_head",
+        "repair_target_sync_publication",
+        "recover_publication_baseline",
+        "recover_change_worktree",
+        "repair_quarantined_delivery_state_snapshot",
+    }
+)
+
+
+def _public_methods(owner: type) -> frozenset[str]:
+    return frozenset(
+        name for name, member in inspect.getmembers(owner) if not name.startswith("_") and inspect.isfunction(member)
+    )
+
+
+def _classified(classes: dict[str, frozenset[str]]) -> frozenset[str]:
+    names = [name for members in classes.values() for name in members]
+    assert len(names) == len(set(names)), "a method has more than one Pause class"
+    return frozenset(names)
+
+
+def test_every_coordinator_entry_has_one_pause_class() -> None:
+    methods = _public_methods(PortfolioCoordinator)
+
+    assert methods == _classified(_COORDINATOR_PAUSE_CLASSES)
+
+
+def test_every_workspace_manager_entry_has_one_pause_class() -> None:
+    methods = _public_methods(ChangeWorkspaceManager)
+
+    assert methods == _classified(_MANAGER_PAUSE_CLASSES)
+
+
+def test_operator_new_work_entries_start_pause_fenced_inside_their_checkpoint_lock() -> None:
+    """K3: each operator entry commits its Pause-fenced start under its checkpoint lock, before any effect."""
+    gated: set[str] = set()
+    for name in ("application_publication.py", "application_recovery.py", "application_lifecycle.py"):
+        tree = ast.parse((_DELIVERY_SOURCE / name).read_text(encoding="utf-8"), filename=name)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            for statement in (item for item in ast.walk(node) if isinstance(item, ast.With)):
+                entered = [
+                    item.context_expr.func.attr
+                    if isinstance(item.context_expr.func, ast.Attribute)
+                    else getattr(item.context_expr.func, "id", None)
+                    for item in statement.items
+                    if isinstance(item.context_expr, ast.Call)
+                ]
+                if "_operator_start" in entered:
+                    assert "locked_roots" in entered[: entered.index("_operator_start")], node.name
+                    gated.add(node.name)
+
+    assert gated == _APPLICATION_PAUSE_GATED_ENTRIES
+
+
+def test_every_frontier_writer_declares_its_pause_class() -> None:
+    """K7: a frontier write without its own declaration would inherit a stale or default class."""
+    undeclared: list[str] = []
+    for path in sorted(_DELIVERY_SOURCE.glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.FunctionDef) or node.name in {"_read", "_replace", "_replace_content"}:
+                continue
+            called = {
+                call.func.attr if isinstance(call.func, ast.Attribute) else getattr(call.func, "id", None)
+                for call in ast.walk(node)
+                if isinstance(call, ast.Call)
+            }
+            if called & {"_replace", "_replace_content"} and not called & {
+                "_require_change_mutable",
+                "_declare_mutation",
+            }:
+                undeclared.append(f"{path.name}:{node.name}")
+
+    assert undeclared == []
+
+
+# N09-A2 step 1 (c), (e), (f): provider entries, K2 authority sources, lock lifetime and finish markers.
+_APPLICATION_MODULES = (
+    "application_acquisition.py",
+    "application_lifecycle.py",
+    "application_publication.py",
+    "application_readiness.py",
+    "application_recovery.py",
+    "portfolio_application.py",
+)
+_PROVIDER_EFFECTS = frozenset(
+    {"publish", "update_generated_summary", "supersede", "mark_ready", "return_to_draft", "repair_quarantined_snapshot"}
+)
+_PAUSE_GATES = frozenset(
+    {
+        "_require_publication_drain",
+        "current_drain_authority",
+        "require_pause_permits",
+        "prepare_pause_fence",
+        "start_pause_fenced",
+        "start_direct_operation",
+        "drain_authority",
+        "_operator_start",
+        "_owner_drain_authority",
+        "_worker_drain_authority",
+        "_checkpoint_owner_authority",
+    }
+)
+_PROVIDER_EFFECT_ENTRIES = frozenset(
+    {
+        "_mark_change_ready_owned",
+        "_publish_checkpoint_branch",
+        "_publish_delivery_state",
+        "_publish_supersession",
+        "_reconcile_change_checkpoint",
+        "_reconcile_finalization_head_locked",
+        "_replay_review_repair",
+        "_return_publication_to_draft_before_head_change",
+        "prepare_review_repair",
+        "repair_quarantined_delivery_state_snapshot",
+    }
+)
+# K2 rows: each replay or owner entry enters exactly its row's token; replay tokens bind their own request.
+_K2_AUTHORITY_SOURCES: dict[str, str] = {
+    "submit_result": "_worker_drain_authority",
+    "transition_delivery": "_worker_drain_authority",
+    "settle_worker_invocation": "_worker_drain_authority",
+    "release_stuck_worker": "_worker_drain_authority",
+    "_settle_stalled_workers": "_worker_drain_authority",
+    "_replay_pending_state_publication": "_owner_drain_authority",
+    "sync_change_with_target": "_owner_drain_authority",
+    "mark_change_ready": "_owner_drain_authority",
+    "supersede_publication": "_owner_drain_authority",
+    "observe_acceptance": "_owner_drain_authority",
+    "_reconcile_awaiting_acceptance_change": "_owner_drain_authority",
+    "finalize_change": "_owner_drain_authority",
+    "_start_engine_owner": "_owner_drain_authority",
+    "reconcile_change_checkpoint": "_checkpoint_owner_authority",
+    "_reconcile_pending_checkpoint_locked": "_checkpoint_owner_authority",
+    "_acquire_candidate_writer": "drain_authority",
+}
+_TOKEN_FACTORIES = frozenset(
+    {"_worker_drain_authority", "_owner_drain_authority", "_checkpoint_owner_authority", "drain_authority"}
+)
+_DIRECT_AND_STANDALONE_ENTRIES = frozenset(
+    {
+        "sync_change_with_target",
+        "mark_change_ready",
+        "observe_acceptance",
+        "reconcile_change_checkpoint",
+        "reconcile_pending_checkpoints",
+        "supersede_publication",
+    }
+)
+_LOCK_SCOPED_CALLS = frozenset(
+    {
+        "start_direct_operation",
+        "_sync_change_with_target_owned",
+        "_finish_direct_operation",
+        "_owner_drain_authority",
+        "_checkpoint_owner_authority",
+        "_reconcile_change_checkpoint_with_failure_recording",
+        "_reconcile_pending_checkpoint_locked",
+        "_try_convert_pause_request",
+    }
+)
+_CHECKPOINT_LOCKS = frozenset({"_engine_checkpoint_lock", "locked_roots"})
+
+
+def _call_name(call: ast.Call) -> str | None:
+    return call.func.attr if isinstance(call.func, ast.Attribute) else getattr(call.func, "id", None)
+
+
+def _application_functions() -> dict[str, ast.FunctionDef]:
+    functions: dict[str, ast.FunctionDef] = {}
+    for module in _APPLICATION_MODULES:
+        tree = ast.parse((_DELIVERY_SOURCE / module).read_text(encoding="utf-8"), filename=module)
+        members = [
+            item
+            for node in tree.body
+            for item in (node.body if isinstance(node, ast.ClassDef) else (node,))
+            if isinstance(item, ast.FunctionDef)
+        ]
+        for node in members:
+            assert node.name not in functions or node.name == "__init__", f"duplicate entry {node.name}"
+            functions.setdefault(node.name, node)
+    return functions
+
+
+def _calls(node: ast.AST) -> set[str]:
+    return {name for call in ast.walk(node) if isinstance(call, ast.Call) and (name := _call_name(call))}
+
+
+def _provider_effect_functions(functions: dict[str, ast.FunctionDef]) -> set[str]:
+    return {
+        name
+        for name, node in functions.items()
+        for call in ast.walk(node)
+        if isinstance(call, ast.Call)
+        and isinstance(call.func, ast.Attribute)
+        and call.func.attr in _PROVIDER_EFFECTS
+        and "publisher" in ast.unparse(call.func.value)
+    }
+
+
+def test_every_provider_effect_entry_is_reached_only_through_a_pause_gate() -> None:
+    """(c) A provider or publication effect is reachable only via a token, lease or start fence (K3)."""
+    functions = _application_functions()
+    effects = _provider_effect_functions(functions)
+    calls = {name: _calls(node) for name, node in functions.items()}
+    callers = {name: {caller for caller, called in calls.items() if name in called} for name in functions}
+
+    def ungated_path(name: str, seen: frozenset[str]) -> tuple[str, ...] | None:
+        if calls[name] & _PAUSE_GATES:
+            return None
+        parents = callers[name] - seen
+        if not parents:
+            return (name,)
+        for parent in sorted(parents):
+            path = ungated_path(parent, seen | {name})
+            if path is not None:
+                return (*path, name)
+        return None
+
+    assert effects == _PROVIDER_EFFECT_ENTRIES
+    assert {name: path for name in sorted(effects) if (path := ungated_path(name, frozenset()))} == {}
+
+
+def test_every_k2_owner_entry_maps_to_one_authority_source() -> None:
+    """(e) Every drain token entry is a named K2 row; replay tokens bind the replaying owner's own request."""
+    functions = _application_functions()
+    users = {
+        name
+        for name, node in functions.items()
+        if name not in _TOKEN_FACTORIES | {"_operator_start"} and _calls(node) & _TOKEN_FACTORIES
+    }
+    operator_entries = {name for name, node in functions.items() if "_operator_start" in _calls(node)}
+
+    assert users - operator_entries == set(_K2_AUTHORITY_SOURCES)
+    for name, factory in _K2_AUTHORITY_SOURCES.items():
+        assert factory in _calls(functions[name]), name
+    for name, node in functions.items():
+        for call in (item for item in ast.walk(node) if isinstance(item, ast.Call)):
+            keywords = {keyword.arg: keyword.value for keyword in call.keywords}
+            if _call_name(call) == "_worker_drain_authority" and name != "_settle_stalled_workers":
+                assert "replay_digest" in keywords, name
+                assert "pending" not in ast.unparse(keywords["replay_digest"]), name
+            if _call_name(call) == "_owner_drain_authority" and "bound" in keywords:
+                assert name in {"_worker_drain_authority", "_replay_pending_state_publication"}, name
+
+
+def test_direct_and_standalone_entries_hold_their_checkpoint_lock_until_return() -> None:
+    """(f) Marker, lease, failure recording and conversion all run inside the entry's checkpoint lock (K5)."""
+    functions = _application_functions()
+    for name in sorted(_DIRECT_AND_STANDALONE_ENTRIES):
+        node = functions[name]
+        locks = [
+            statement
+            for statement in ast.walk(node)
+            if isinstance(statement, ast.With)
+            and any(
+                isinstance(item.context_expr, ast.Call) and _call_name(item.context_expr) in _CHECKPOINT_LOCKS
+                for item in statement.items
+            )
+        ]
+        assert locks, name
+        held = range(locks[0].lineno, locks[0].end_lineno + 1)
+        scoped = [
+            call for call in ast.walk(node) if isinstance(call, ast.Call) and _call_name(call) in _LOCK_SCOPED_CALLS
+        ]
+        assert scoped, name
+        assert [_call_name(call) for call in scoped if call.lineno not in held] == [], name
+
+
+def test_every_direct_entry_finishes_its_marker_before_returning() -> None:
+    """(f) A direct entry that starts or passes its marker finishes it on every normal return and on conflict."""
+    functions = _application_functions()
+    direct_entries = {name for name, node in functions.items() if "_direct_operation" in _calls(node)}
+    starters = {name for name, node in functions.items() if "start_direct_operation" in _calls(node)}
+
+    assert direct_entries == {"sync_change_with_target", "mark_change_ready"}
+    assert starters == {"mark_change_ready"}
+    for name in sorted(direct_entries):
+        node = functions[name]
+        starts = [
+            call.lineno
+            for call in ast.walk(node)
+            if isinstance(call, ast.Call)
+            and _call_name(call) in {"start_direct_operation", "_sync_change_with_target_owned"}
+        ]
+        finishes = [
+            call.lineno
+            for call in ast.walk(node)
+            if isinstance(call, ast.Call) and _call_name(call) == "_finish_direct_operation"
+        ]
+        assert starts, name
+        for statement in (item for item in ast.walk(node) if isinstance(item, ast.Return)):
+            if statement.lineno > min(starts):
+                assert any(min(starts) < line < statement.lineno for line in finishes), f"{name}:{statement.lineno}"
+    handlers = [
+        handler
+        for handler in ast.walk(functions["_sync_change_with_target_owned"])
+        if isinstance(handler, ast.ExceptHandler)
+        and handler.type is not None
+        and "ChangeTargetSyncConflictError" in ast.unparse(handler.type)
+    ]
+    assert handlers
+    assert "_finish_direct_operation" in _calls(handlers[0])
+    manager_source = (_DELIVERY_SOURCE / "workspace_target_sync.py").read_text(encoding="utf-8")
+    assert manager_source.count("start_direct_operation(") == 1
