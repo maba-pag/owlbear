@@ -207,6 +207,8 @@ class DeliveryPortfolioSnapshot(_ProjectionModel):
     frontier: DeliveryFrontier
     version: str = Field(pattern=r"^[0-9a-f]{64}$")
     publication_observation: PublicationPullRequestObservationReceipt | None = None
+    # The last read of the published pull request failed, unlike "no publication" (D8).
+    publication_unavailable: bool = False
     merge_facts: MergeFacts | None = None
 
     @classmethod
@@ -216,6 +218,8 @@ class DeliveryPortfolioSnapshot(_ProjectionModel):
         frontier_bytes: bytes,
         publication_observation: PublicationPullRequestObservationReceipt | None = None,
         merge_facts: MergeFacts | None = None,
+        *,
+        publication_unavailable: bool = False,
     ) -> DeliveryPortfolioSnapshot:
         """Validate one frontier read and bind its exact content digest."""
         return cls(
@@ -223,6 +227,7 @@ class DeliveryPortfolioSnapshot(_ProjectionModel):
             frontier=parse_delivery_frontier(frontier_bytes)[0],
             version=hashlib.sha256(frontier_bytes).hexdigest(),
             publication_observation=publication_observation,
+            publication_unavailable=publication_unavailable,
             merge_facts=merge_facts,
         )
 

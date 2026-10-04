@@ -196,10 +196,12 @@ def test_offer_binds_provider_facts_and_required_check_conclusions_only() -> Non
 
 
 def _memory_awaiting_merge(
-    tmp_path: Path, *, merge_state: str = "CLEAN"
+    tmp_path: Path, *, merge_state: str = "CLEAN", mark_ready: bool = True
 ) -> tuple[PortfolioApplication, object, InMemoryPublicationProvider, str, Path]:
     """Awaiting merge with a D1 provider whose target branch equals the proof target."""
-    application, runtime, _mock, state, head, state_root = _awaiting_acceptance_fixture(tmp_path, sync_target=True)
+    application, runtime, _mock, state, head, state_root = _awaiting_acceptance_fixture(
+        tmp_path, sync_target=True, mark_ready=mark_ready
+    )
     memory = InMemoryPublicationProvider()
     memory.add_repository(PublicationRepository(repository=_REPOSITORY, default_branch="main"))
     memory.pull_requests[(_REPOSITORY, 7)] = state["pull_request"].model_copy(
@@ -268,13 +270,15 @@ def _expire_caches(application: PortfolioApplication) -> None:
             cache[change_id] = (0.0, key, value)
 
 
-def test_expired_observation_is_reread_after_ready_and_a_provider_outage_is_a_distinct_wait(tmp_path: Path) -> None:
-    application, _runtime, _memory, _head, _state_root = _memory_awaiting_merge(tmp_path)
-    assert application.get_change("change-a").readiness.reason_code == "merge-approval-required"
+@pytest.mark.parametrize("ready", [True, False], ids=["awaiting-merge", "draft"])
+def test_expired_observation_is_reread_and_a_provider_outage_is_a_distinct_wait(tmp_path: Path, *, ready: bool) -> None:
+    application, _runtime, _memory, _head, _state_root = _memory_awaiting_merge(tmp_path, mark_ready=ready)
+    offered = "merge-approval-required" if ready else "ready"
+    assert application.get_change("change-a").readiness.reason_code == offered
     _expire_caches(application)
     original = InMemoryPublicationProvider.read_pull_request
     with patch.object(InMemoryPublicationProvider, "read_pull_request", autospec=True, side_effect=original) as reads:
-        assert application.get_change("change-a").readiness.reason_code == "merge-approval-required"
+        assert application.get_change("change-a").readiness.reason_code == offered
     assert reads.call_count >= 1
     _expire_caches(application)
     outage = PublicationProviderError(
@@ -282,9 +286,21 @@ def test_expired_observation_is_reread_after_ready_and_a_provider_outage_is_a_di
     )
     with patch.object(InMemoryPublicationProvider, "read_pull_request", side_effect=outage):
         readiness = application.get_change("change-a").readiness
+        acquired = _acquire(application)
 
-    assert (readiness.status, readiness.reason_code, readiness.merge_offer) == ("waiting", "provider-unavailable", None)
+    assert (readiness.status, readiness.reason_code, readiness.executable, readiness.merge_offer) == (
+        "waiting",
+        "provider-unavailable",
+        False,
+        None,
+    )
     assert readiness.progress == "waiting-for-service"
+    assert (acquired.kind, acquired.reason_code, acquired.engine_action) == ("waiting", "provider-unavailable", None)
+    _expire_caches(application)
+    recovered = application.get_change("change-a").readiness
+    assert (recovered.reason_code, recovered.executable) == (offered, not ready)
+    if not ready:
+        assert recovered.operation is WorkItemActionKind.MARK_READY
 
 
 def test_provider_without_merge_protocol_is_capability_unavailable(tmp_path: Path) -> None:

@@ -6,7 +6,7 @@ import os
 import subprocess
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from owlbear_delivery.application_models import (
     DeliveryEngineActionResult,
@@ -143,6 +143,10 @@ if TYPE_CHECKING:
         CompletionReceipt,
     )
     from owlbear_delivery.work_items import WorkItemDetail, WorkItemProjection
+
+# Cached in place of an observation so readiness and cache-only acquisition both see the outage (D8, I9).
+_PUBLICATION_READ_FAILED: Literal["provider-unavailable"] = "provider-unavailable"
+_PROVIDER_PUBLICATION_STEPS = frozenset({WorkItemActionKind.MARK_READY, WorkItemActionKind.OBSERVE_ACCEPTANCE})
 
 
 class _ReadinessViewsMixin:
@@ -1801,7 +1805,9 @@ class _ReadinessViewsMixin:
         return card.action
 
     @staticmethod
-    def _action_prerequisites(operation: WorkItemActionKind | None, workspace_reason: str | None) -> tuple[str, str]:
+    def _action_prerequisites(
+        operation: WorkItemActionKind | None, workspace_reason: str | None, *, provider_unavailable: bool
+    ) -> tuple[str, str]:
         if operation in {
             WorkItemActionKind.FINALIZE,
             WorkItemActionKind.RECONCILE_CHECKPOINT,
@@ -1812,6 +1818,8 @@ class _ReadinessViewsMixin:
             return ("unavailable" if workspace_reason == "workspace-inspection-failed" else "blocked"), workspace_reason
         if operation is None:
             return "waiting", "publication-wait"
+        if provider_unavailable and operation in _PROVIDER_PUBLICATION_STEPS:
+            return "waiting", "provider-unavailable"
         return "ready", "ready"
 
     @classmethod
@@ -1984,14 +1992,22 @@ class _ReadinessViewsMixin:
         elif card.needs is WorkItemNeed.YOU and not finalization:
             status, reason = cls._user_action_readiness(card, operation)
         else:
-            status, reason = cls._action_prerequisites(operation, workspace_reason)
+            status, reason = cls._action_prerequisites(
+                operation, workspace_reason, provider_unavailable=snapshot.publication_unavailable
+            )
         executable = status == "ready" and operation is not None
         prompt = cls._readiness_prompt(snapshot, card, reason, executable=executable)
         return DeliveryReadiness(
             status=status,
             operation=operation,
             executable=executable,
-            next_actor=WorkItemNextActor.AGENT if finalization else card.next_actor,
+            next_actor=(
+                WorkItemNextActor.NONE
+                if reason == "provider-unavailable"
+                else WorkItemNextActor.AGENT
+                if finalization
+                else card.next_actor
+            ),
             reason_code=reason,
             checks_state="passed" if frontier.finalization is not None else "not-run",
             basis=basis,
@@ -2228,14 +2244,16 @@ class _ReadinessViewsMixin:
         frontier = parse_delivery_frontier(frontier_bytes)[0]
         change_id = runtime.contract.change_id
         cached = self._publication_observation_cache.get(change_id)
-        observation = cached[2] if cached is not None and cached[1] == frontier.published_head else None
+        observed = cached[2] if cached is not None and cached[1] == frontier.published_head else None
         if observe_publication:
-            observation = self._publication_observation(change_id, frontier)
+            observed = self._publication_observation(change_id, frontier)
+        observation = observed if isinstance(observed, PublicationPullRequestObservationReceipt) else None
         return DeliveryPortfolioSnapshot.capture(
             runtime.contract,
             frontier_bytes,
             publication_observation=observation,
             merge_facts=self._merge_facts(change_id, frontier, observation, refresh=observe_publication),
+            publication_unavailable=observed == _PUBLICATION_READ_FAILED,
         )
 
     def _merge_facts(
@@ -2381,7 +2399,7 @@ class _ReadinessViewsMixin:
         self,
         change_id: str,
         frontier: DeliveryFrontier,
-    ) -> PublicationPullRequestObservationReceipt | None:
+    ) -> PublicationPullRequestObservationReceipt | Literal["provider-unavailable"] | None:
         publisher = self._draft_pull_request_publisher
         history = frontier.change_publication_history
         published_head = frontier.published_head
@@ -2394,7 +2412,7 @@ class _ReadinessViewsMixin:
         try:
             observation = publisher.observe_pull_request(ObserveChangePublicationPullRequest(change_id=change_id))
         except OSError, PublicationProviderError, RuntimeError, subprocess.SubprocessError, ValueError:
-            observation = None
+            observation = _PUBLICATION_READ_FAILED
         if isinstance(observation, PublicationPullRequestObservationReceipt):
             snapshot = observation.snapshot
             publication = history.current
@@ -2406,7 +2424,7 @@ class _ReadinessViewsMixin:
                 or snapshot.head_sha != published_head
             ):
                 observation = None
-        else:
+        elif observation != _PUBLICATION_READ_FAILED:
             observation = None
         self._publication_observation_cache[change_id] = (
             now + _PUBLICATION_OBSERVATION_CACHE_SECONDS,

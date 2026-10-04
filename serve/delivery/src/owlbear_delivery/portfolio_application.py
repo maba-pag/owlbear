@@ -230,7 +230,7 @@ class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _Publication
         self._runtime_snapshots: dict[str, DeliveryPortfolioSnapshot] = {}
         self._publication_observation_cache: dict[
             str,
-            tuple[float, str, PublicationPullRequestObservationReceipt | None],
+            tuple[float, str, PublicationPullRequestObservationReceipt | Literal["provider-unavailable"] | None],
         ] = {}
         self._merge_facts_cache: dict[str, tuple[float, str, MergeFacts]] = {}
         self._completed_cleanup_swept: set[str] = set()
