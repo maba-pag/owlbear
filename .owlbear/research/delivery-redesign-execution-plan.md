@@ -645,7 +645,7 @@ every new item exactly one lane.
 | N02-D | merged | #362 (`9000513f9`; integrity simplified 2026-10-04; Sol `implementation-sound` on the simplification; LC and both upgrade rehearsals (N02-C and D03 to N02-D, format 2) pass; H step done 2026-10-04 with the user: G3 host check passed (start, stop, restart; no autostart), live migrated 0 → 1 → 2 with the rehearsed proposal, pinned to `841b1cffb`, main checkout on `dev`, health healthy and all 3 Changes available and unchanged across a restart; freeze ended) |
 | N03-P | merged | #349 (plan gate `plan-sound`, round 6; D11 confirmed 2026-10-03; U1 decided (b) by the user 2026-10-03). History: #360 added a user-only confirmation boundary and opened U2; both were removed and U2 resolved on 2026-10-04 ([7](#7-decisions)) |
 | N03-A | merged | #363 (`82be4eb1c`; simplified 2026-10-04; Sol `implementation-sound` on the simplification delta; LC full form pass) |
-| N03-B | merged | #368 (`db086d273`; ecosystem pins; G4 host rehearsal kit prepared, reviewer dispatch by the lead) |
+| N03-B | merged | #368 (code head `2cba00bdb`; Sol `implementation-sound` round 1 and delta; G4 closed for the reviewer by host rehearsal) |
 | N03-C | — | — |
 | N04-P | re-plan | #358 closed as superseded; re-planned small under the 2026-10-04 process |
 | Later N04 phases | — | per the new N04-P |
