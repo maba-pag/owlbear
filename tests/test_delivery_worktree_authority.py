@@ -181,8 +181,24 @@ _SUBPROCESS_APIS = frozenset({"Popen", "check_call", "check_output", "run"})
 _SHELL_APIS = frozenset({"popen", "system"})
 _GIT_HELPER_NAME_PATTERN = re.compile(r"(?:^|_)git(?:_|$)", re.IGNORECASE)
 _GIT_CONTROL_KEYWORDS = frozenset(
-    {"check", "cmd", "command", "cwd", "env", "environment", "input", "input_bytes", "input_text", "shell"}
+    {
+        "check",
+        "cmd",
+        "command",
+        "cwd",
+        "env",
+        "environment",
+        "failure",
+        "input",
+        "input_bytes",
+        "input_text",
+        "kind",
+        "shell",
+        "timeout",
+    }
 )
+# Remote-tracking refs, plus the hashed per-operation private refs of target sync (N02 plan D7).
+_FETCH_DESTINATION_PREFIXES = ("refs/remotes/", "refs/owlbear/target-sync/")
 _GIT_UPDATE_HEAD_OK_KEYWORDS = frozenset({"update_head_ok"})
 _URL_SCHEME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")
 _UPDATE_HEAD_OK_FLAGS = frozenset({"--update-head-ok", "-u"})
@@ -839,10 +855,15 @@ class _FetchVisitor(ast.NodeVisitor):
 
     def _fetch_arguments(self, node: ast.Call) -> _FetchInvocation | None:
         if self._is_git_helper_call(node):
+            positional = tuple(
+                item
+                for argument in node.args
+                for item in (argument.elts if isinstance(argument, (ast.List, ast.Tuple)) else (argument,))
+            )
             command_index = next(
                 (
                     index
-                    for index, argument in enumerate(node.args)
+                    for index, argument in enumerate(positional)
                     if _resolved_literal(argument, self.bindings) == "fetch"
                 ),
                 None,
@@ -859,9 +880,9 @@ class _FetchVisitor(ast.NodeVisitor):
                 )
                 if command_keyword is None:
                     return None
-                command_arguments = list(node.args)
+                command_arguments = list(positional)
             else:
-                command_arguments = list(node.args[command_index + 1 :])
+                command_arguments = list(positional[command_index + 1 :])
             keyword_invocation = self._helper_keyword_arguments(node)
             command_arguments.extend(keyword_invocation.arguments)
             return _FetchInvocation(
@@ -933,7 +954,7 @@ class _FetchVisitor(ast.NodeVisitor):
         if _URL_SCHEME_PATTERN.match(shape):
             return
         destination = shape.rsplit(":", maxsplit=1)[1]
-        if not destination.startswith("refs/remotes/"):
+        if not destination.startswith(_FETCH_DESTINATION_PREFIXES):
             self.violations.append(f"fetch has an unsafe explicit destination at line {node.lineno}: {shape}")
 
     def _record_refspec_violations(self, node: ast.Call, invocation: _FetchInvocation) -> None:
@@ -1699,6 +1720,27 @@ def test_forbidden_fetch_aliases_are_rejected_by_the_fetch_gate() -> None:
         if "unsafe explicit destination" in violation
     } == {11, 18, 25, 31, 35, 52}
     assert any("unstructured shell command" in violation for violation in violations)
+
+
+def test_bounded_runner_fetch_vectors_are_checked_and_only_private_target_sync_refs_are_admitted(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "runner_fetch.py"
+    source.write_text(
+        "def fetch(repository, remote):\n"
+        '    run_remote_git(repository, ("fetch", "--refmap=", remote, "+refs/heads/m:refs/owlbear/target-sync/k"))\n'
+        '    run_remote_git(repository, ("fetch", "--refmap=", remote, "refs/heads/main:refs/heads/main"))\n'
+        '    run_remote_git(repository, ("fetch", "--refmap=", remote, "refs/heads/main:refs/owlbear/other/k"))\n'
+        '    run_remote_git(repository, ["fetch", remote, "refs/heads/main:refs/remotes/origin/main"])\n',
+        encoding="utf-8",
+    )
+
+    violations = _fetch_violations(source)
+
+    assert len(violations) == 3
+    assert sum("unsafe explicit destination at line 3" in violation for violation in violations) == 1
+    assert sum("unsafe explicit destination at line 4" in violation for violation in violations) == 1
+    assert sum("lacks an empty refmap at line 5" in violation for violation in violations) == 1
 
 
 def test_forbidden_keyword_fetch_refspec_is_rejected_by_the_fetch_gate() -> None:

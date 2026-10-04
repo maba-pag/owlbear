@@ -1819,6 +1819,27 @@ def test_f6_direct_sync_crashed_before_recording_replays_after_restart_then_conv
     assert _paused(reopened)
 
 
+# F6 crash replay (direct sync, N02-C): crash after the marker, at the unlocked fetch; restart, Pause, replay.
+def test_direct_sync_crashed_at_its_fetch_replays_after_restart_then_converts(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.IMPLEMENTATION})
+    target = _target_remote(application, tmp_path)
+    manager_type = type(application._workspace_manager)
+    with patch.object(manager_type, "_fetch_target", side_effect=_Crash), pytest.raises(_Crash):
+        application.sync_change_with_target("change-a", target, "sync-fetch-crash")
+    direct = _direct_operation("change-a", "sync-target", "sync-fetch-crash", target)
+    assert coordinator.direct_operation_state(direct) == "started"
+    assert coordinator.show("change-a").target_sync_receipt is None
+
+    reopened, reopened_coordinator, _manager = _reopen_portfolio(tmp_path, state_root, runtimes)
+    _pause_held(reopened)
+    receipt = reopened.sync_change_with_target("change-a", target, "sync-fetch-crash")
+
+    assert receipt.target_head == target
+    assert reopened._runtimes["change-a"].target_sync_receipt() == receipt
+    assert reopened_coordinator.direct_operation_state(direct) == "finished"
+    assert _paused(reopened)
+
+
 # F7 (ready-readback): a retained read-back journal completes with its original evidence under Pause or Resume.
 @pytest.mark.parametrize("ending", ["pause", "resume"])
 def test_f7_ready_readback_recovery_completes_under_pause(tmp_path: Path, ending: str) -> None:

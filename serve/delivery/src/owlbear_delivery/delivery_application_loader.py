@@ -79,6 +79,7 @@ from owlbear_delivery.portfolio_operating import (
     DeliveryHealthReason,
     DeliveryHealthResolution,
 )
+from owlbear_delivery.remote_git import RemoteGitError, RemoteGitFailed, read_remote_ref, run_remote_git
 from owlbear_delivery.runtime_transaction import (
     RuntimeTransaction,
     TransactionParticipant,
@@ -194,7 +195,6 @@ _CONFIG_LOCATOR = ".owlbear/delivery/config.json"
 _CONTROLLER_LOCKS: weakref.WeakKeyDictionary[PortfolioApplication, ControllerLock] = weakref.WeakKeyDictionary()
 
 
-_REMOTE_REF_MISSING = 2
 _RECOVERABLE_ADMISSION_ERRORS = frozenset(
     {
         DeliveryDiscoveryErrorCode.ADMISSION_UNAVAILABLE,
@@ -758,7 +758,7 @@ def _fetch_remote_snapshot_change_head(
                 else DeliveryHealthReason.REMOTE_STATE_RECONCILIATION
             ),
         )
-    result = _run_loader_git(
+    result = _run_loader_remote_git(
         repository,
         "fetch",
         "--no-tags",
@@ -766,7 +766,7 @@ def _fetch_remote_snapshot_change_head(
         "--refmap=",
         config.remote,
         f"refs/heads/{snapshot.branch}",
-        check=False,
+        failure="remote Change branch could not be fetched",
     )
     if result.returncode != 0:
         _bootstrap_failure("remote Change branch could not be fetched")
@@ -2304,23 +2304,12 @@ def _local_runtime_change_ids(runtime_root: Path) -> set[str]:
 
 
 def _remote_branch_head(repository: Path, remote: str, branch: str) -> str | None:
-    result = _run_loader_git(
-        repository,
-        "ls-remote",
-        "--exit-code",
-        "--heads",
-        remote,
-        f"refs/heads/{branch}",
-        check=False,
-    )
-    if result.returncode == _REMOTE_REF_MISSING:
-        return None
-    if result.returncode != 0:
-        _bootstrap_failure("remote Change branch could not be observed")
-    lines = result.stdout.decode(errors="replace").strip().splitlines()
-    if len(lines) != 1:
-        _bootstrap_failure("remote Change branch response is invalid")
-    return lines[0].split("\t", 1)[0]
+    try:
+        return read_remote_ref(repository, remote, f"refs/heads/{branch}")
+    except RemoteGitError as exc:
+        invalid = isinstance(exc, RemoteGitFailed) and exc.result is not None and not exc.retry_safe
+        detail = "remote Change branch response is invalid" if invalid else "remote Change branch could not be observed"
+        _bootstrap_failure(detail, exc)
 
 
 def _read_git_blob(repository: Path, revision: str, path: str) -> bytes:
@@ -2345,6 +2334,13 @@ def _run_loader_git(
         check=check,
         capture_output=True,
     )
+
+
+def _run_loader_remote_git(repository: Path, *arguments: str, failure: str) -> subprocess.CompletedProcess[bytes]:
+    try:
+        return run_remote_git(repository, arguments, kind="read")
+    except RemoteGitError as exc:
+        _bootstrap_failure(f"{failure}: {exc}", exc)
 
 
 def _canonical_model(model: BaseModel) -> bytes:
