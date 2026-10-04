@@ -25,7 +25,7 @@
 ### 1.1 Result
 
 - A Change whose exact reviewed head is published, ready and mergeable offers **Approve merge** in
-  Cockpit and the same bounded approval in the continuation chat. The offer shows repository, PR,
+  Cockpit. The offer shows repository, PR,
   exact reviewed head, target branch and head, proof and required-check summary, and merge method.
   The user approves in Cockpit (D14); the continuation chat shows the offer and points to Cockpit.
 - One approval authorizes one exact merge offer and sends at most one merge request. Immediately
@@ -772,6 +772,22 @@ Read side; no persisted format, effect or request (Q5).
 - **LC:** not applicable (no persisted format, loading or startup change).
 - **Size / risk:** M / medium (estimate: 450–600 product lines plus about 150 frontend, 400–600 test
   lines).
+- **Implementation notes (2026-10-04, N05-B1 build):**
+  - An open awaiting-merge PR at the finalized head is a readiness wait or block, never an executable
+    `observe-acceptance`; the engine reads acceptance once readiness sees the PR merged, closed or moved.
+    The card keeps **Check merge status**, so Cockpit's reconciliation and the explicit read stay reachable.
+  - `merge_block` adds `wrong-base`: I10 refuses a base other than the target, and 1.5 listed no value for it.
+  - `DeliveryContinuationResult` reports the readiness reason for a waiting engine result (D5); the
+    persisted engine label is unchanged.
+  - `DraftPullRequestPublisher.provider` (read-only property, outside the path list) serves the offer reads.
+  - The D11 `merge_method` allowlist in `tests/test_delivery_worktree_authority.py` gains `merge_offer.py`,
+    `workItems.ts` and `WorkItemDetail.tsx`, which show the offer's method (no acceptance or completion model).
+  - With an unchanged head, a sync to a new target clears finalization and ready without an invalidation
+    receipt (the receipt requires head drift and I7 forbids a new reason); a finalization without a
+    target-sync receipt counts as unproven against any target.
+  - Cleanup is skipped inside engine custody (the `observe-acceptance` engine action); the sweep cleans it.
+  - Progress: blocks only Delivery's merge has (capability, queue, stack, method) stay `ready-to-merge`;
+    `checks-running` maps to `waiting-for-service` because `checking` is a reserved key.
 
 ### 3.5 N05-B2 — Merge attempt, settlement and fence
 
