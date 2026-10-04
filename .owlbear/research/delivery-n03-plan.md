@@ -14,7 +14,9 @@
 > the open user decision [U2](#u2--which-clicks-and-answers-count-as-the-user-said-yes) (before N03-C
 > and N05-C). Round 2 defines D13's legacy and modern elicitation routes on the SDK's request-state
 > boundary (P16), binds the ledger append into request-resolution receipts for restart replay, and
-> widens U2 to Cockpit merge approval and retirement.
+> widens U2 to Cockpit merge approval and retirement. Round 3 makes every boundary answer single-use (D13
+> *Single use*), restates U2's applicability and cost, and drops the expectation that N06 adds a channel
+> or locator scheme (N06 D3).
 
 ## 1. Contract
 
@@ -57,7 +59,7 @@
 | R11 | Every changed persisted family registers a version owner; migrations run through the N02-B core; LC full form | Execution plan §1.3; N02 plan I2, I3, D3 |
 | R12 | Trust boundary documented: digests prove content integrity, not execution authenticity | #219 scope |
 | R13 | Support baseline (Python 3.14; macOS and Ubuntu); §1.4 mandatory companions for new statuses | Execution plan §1.1, §1.4 |
-| R14 | Waivers and `human-confirmed` evidence count only through a user confirmation captured on a channel the agent's tool surface cannot satisfy; caller-asserted provenance confers nothing; a declined or negative answer confirms nothing | PR #360 plan gate round 1; U7; V16 |
+| R14 | Waivers and `human-confirmed` evidence count only through a user confirmation captured on a channel the agent's tool surface cannot satisfy; caller-asserted provenance confers nothing; a declined or negative answer confirms nothing; an answer counts once, and re-sending it never records another confirmation | PR #360 plan gate rounds 1 and 3; U7; V16 |
 
 ### 1.3 Invariants
 
@@ -127,7 +129,7 @@ union discriminated by `schema_version`.
 | `environment` | `platform`: `macos`, `linux` or null; `labels`: ≤ 8, each matching `^[a-z0-9][a-z0-9.+_-]{0,63}(:[A-Za-z0-9.+_-]{1,64})?$` | Environment constraints that bound applicability |
 | `target_class` | null or `^[a-z0-9][a-z0-9-]{0,63}$` | Class of external target (`sharepoint`, `confluence`), never a hostname |
 | `provenance` | `machine-observed` or `human-confirmed` | Who established the result |
-| `confirmation_id` | null or sha256 | Required for `human-confirmed` and for `waived`; resolved in the Change's confirmation ledger and checked by the engine (I6). N06 adds channel `interaction` |
+| `confirmation_id` | null or sha256 | Required for `human-confirmed` and for `waived`; resolved in the Change's confirmation ledger and checked by the engine (I6) |
 | `locator` | null or ≤ 256 chars of `scheme:value`; scheme `path`, `ci-run`, `check-run`, `request` or `report`; no whitespace, no `://`, no `..` segment | Retained non-sensitive locator |
 | `summary` | null or ≤ 240 chars | Non-authoritative note (`171 passed`) |
 | `observation_id` (receipt) | sha256 | `_receipt_digest` over all other fields; `create` copies fields by attribute (P3 finding) |
@@ -157,7 +159,7 @@ the worker's honesty (R12).
 **Confirmation ledger** (portable representation, consumed by N04 and N06). `DeliveryUserConfirmation`
 (schema 1): `change_id`, `outcome_id`, `request_id`, `scope` (the request's `applies_to`), `decision`
 (`waive` or `keep-required` for kind `waive`; `passed` or `failed` for `confirm-check`), `channel`
-(`mcp-elicitation`; N06 adds `interaction`; U2 may add a Cockpit channel), `question_digest` (sha256 of the
+(`mcp-elicitation`; U2 may add `cockpit`; N06 adds none, N06 D3), `question_digest` (sha256 of the
 canonical JSON of the exact rendered `ElicitRequestFormParams`, the rendering the SDK pins its answer to,
 P16), `confirmed_at`, and `confirmation_id` (`_receipt_digest` over the rest).
 `DeliveryFrontier.confirmations` holds them for the whole Change, ≤ 256 entries (I8), `exclude_if` None,
@@ -331,9 +333,11 @@ collections, so one byte budget bounds `semantics`:
   → `(id, new version)` a `waived` or `human-confirmed` record stays `stale-acceptance-version` until the
   user confirms the new version through the boundary (D13); no reviewed applicability record transfers it.
   Same ID and version: the original confirmation still applies.
-- **N06** adds channel `interaction` to `DeliveryUserConfirmation` (same scope, decision and I6 rules) and the
-  `interaction:` locator scheme in its own format step; whether a Cockpit-hosted interaction counts as
-  user-only follows [U2](#u2--which-clicks-and-answers-count-as-the-user-said-yes);
+- **N06** adds no confirmation channel and no locator scheme (N06 D3). An interaction-linked request is an
+  ordinary scoped `confirm-check` request (§1.5) answered through N03's `answer` and the D13 boundary,
+  including its single-use rule; its ledger entry has channel `mcp-elicitation` (`cockpit` only if U2 adds
+  it), and the link lives in its scope, question digest and `confirmation_id`. Whether a Cockpit-hosted
+  confirmation counts as user-only follows [U2](#u2--which-clicks-and-answers-count-as-the-user-said-yes);
   assisted checks record `manual-procedure` or `command` results with `procedure_registration_digest` = handler
   digest, `target_class` and `environment`. `missing` with owner `assisted-check` is the gap N06 resolves.
 - **N05** may show the projection counts in **Approve merge**; it adds no evidence semantics. N05-C reuses
@@ -479,6 +483,32 @@ Engineering decision by the lead (PR #360 plan gate round 1):
       decision against the request kind. An answer therefore applies only to the request, criteria,
       versions and frontier it was asked for. Stdio carries no authentication, so no principal is bound
       (`request_state.py:394-405`); the per-process key stands in for it.
+  - *Single use* (PR #360 round 3). The boundary authenticates `request_state` but does not consume it: its
+    checks hold no one-time identity (`request_state.py:327-406`), so within the TTL the same state and
+    answer can be sent again, and the SDK pairs a re-sent answer with an identical rendering
+    (`resolve.py:607`). Every use of the boundary therefore follows one rule: the question renders a
+    server-owned generation that exists before it is asked; applying an answer consumes that generation in
+    the transaction that records its confirmation; a retry of a consumed generation returns the recorded
+    disposition and never records another confirmation; a new confirmation needs a new generation, i.e. a
+    new question the user answers.
+    - *Scoped requests: the frontier is the generation.* The question renders `expected_frontier_digest`,
+      the resolver asks only while it equals the current frontier digest, and an accepted answer resolves
+      the request and appends the ledger entry in one transaction under that CAS. The append consumes it:
+      the ledger is append-only and part of the frontier bytes (I10), so no later frontier has that digest
+      and the question never renders again.
+    - *A resolved request rejects a second answer.* `DeliveryRuntime.resolve_request` returns the request
+      for an identical resolution and raises `request is already resolved` for any other; a second
+      confirmation always differs, since `confirmation_id` covers `confirmed_at`. A new confirmation needs
+      a new scoped request, which is a new question.
+    - *Retry.* When the frontier no longer equals `expected_frontier_digest` and the named request is
+      resolved with a `confirmation_id`, the resolver asks nothing and the handler returns that resolution
+      and its ledger entry, writing nothing; otherwise the existing frontier conflict. A decline or cancel
+      writes nothing, so re-sending it renders the same question and returns `declined` again. An accepted
+      answer that was not applied (CAS lost to a concurrent write, `ledger-full`) consumed nothing: it was
+      never used, and it can still apply at most once, to the identical request and frontier, within the
+      TTL.
+    - *N05.* Merge approval can be renewed for an identical offer, so it binds its own generation record;
+      retirement and reply decisions use the same record (N05 D14).
   - *Concurrency.* No lock is held while the user answers, on either route; between modern rounds nothing
     is held at all. The answer applies under the existing `expected_frontier_digest` CAS; a changed frontier
     refuses, and a retry asks again.
@@ -512,28 +542,40 @@ evidence text; N04-P and N06-P plan against (b).
 
 Open user decision, required before N03-C and N05-C start. N03-A, N03-B and N05-B do not depend on it.
 
-- **What this is about.** Some Delivery steps happen only because you agreed to them: merging a finished
-  Change into its target branch, giving up on a merge that GitHub may still carry out, waiving an
-  acceptance criterion ([U1](#u1--may-a-user-waive-a-required-acceptance-criterion)(b)), and confirming a
-  check that only a person can do. The AI agents that do the work must never be able to give that
-  agreement for you. This decision is where your agreement may be given: only in the chat, or also by
-  clicking a button in Cockpit, the local Delivery web page.
-- **When it applies:**
-  - *Merge approval: every Delivery merge.* Each finished Change ends with exactly one approval before
-    Delivery merges its pull request, so this is the main path and you meet it on every Change.
-  - *Retiring a held merge: rare.* Only when GitHub's answer to a merge request was lost and Delivery's
-    automatic checks ran out (N05 U4).
-  - *Waivers and human-confirmed checks: occasional.* Only for Changes with a criterion that a machine
-    cannot prove.
-  - *Re-posting a pull-request reply whose outcome is unknown: rare* (N05 Y4). Chat-only under every
-    option, because Cockpit has no control for it.
+- **What this is about.** Some Delivery steps happen only because you agreed to them. The AI agents that
+  do the work must never be able to give that agreement for you. This decision is about where your
+  agreement may be given: only by answering a question in the chat, or also by clicking a button in
+  Cockpit, the local Delivery web page.
+- **When it applies, and how often:**
+  - *Approving a merge that Delivery carries out: every Change that Delivery merges, sometimes more than
+    once.* Before Delivery merges a finished Change's pull request into its target branch, you approve that
+    exact merge. You are asked again, with a new question, if you withdraw your approval, if GitHub refuses
+    the merge, or if the Change or its target branch moved and the Change had to be proved again. This is
+    the path you meet most often.
+  - *Merging the pull request yourself in GitHub: not covered.* You can always do this instead, under every
+    option. It needs no Delivery approval; Delivery notices the merge and completes the Change (N05 R4).
+  - *Retiring a held merge: rare.* Only when a merge request that Delivery already sent is stuck and
+    Delivery's automatic checks have run out: either GitHub's answer was lost, or GitHub still reports the
+    request as pending (N05 U4 and N05 §1.13). Retiring means Delivery stops pursuing that merge; it cannot
+    cancel the request in GitHub.
+  - *Waiving an acceptance criterion: whenever you choose to.* Under
+    [U1](#u1--may-a-user-waive-a-required-acceptance-criterion)(b) you may waive any criterion with an
+    explicit answer, including one that a machine could check; it then shows as waived, not as proved.
+    Agents may ask; only your answer waives. How often depends on you.
+  - *Confirming a check that only a person can do: occasional.* Only for criteria whose proof needs a
+    person, for example looking at a page in a browser and saying that it works (N06's prepared checks
+    ask this way too).
+  - *Deciding about a pull-request reply that may or may not have been posted: rare* (N05 Y4). Chat only
+    under every option, because Cockpit has no control for it.
 - **Status quo (as planned so far).** Agents can call every Delivery tool with any arguments, and today's
   tools accept an argument that simply says "the user confirmed". D13 replaces that: Delivery itself asks
   you a question inside the chat (an MCP elicitation, which VS Code shows as a small form), and only your
-  answer to that form counts; the agent cannot fill it in through its tools. This round applies D13 to
-  merge approval and retirement as well (N05 D14). The approved N05 plan also puts an **Approve merge**
-  button in Cockpit, and Cockpit's answer route today forwards whatever `provenance` the caller sends
-  (`routes/target_work.py:133-138`); N03-A refuses scoped answers there until this decision.
+  answer to that form counts; the agent cannot fill it in through its tools. Each answer counts once:
+  sending the same answer again never approves or waives a second time, and a new approval always needs a
+  new question that you answer (D13 *Single use*, N05 D14). D13 covers every case above. The approved N05
+  plan also puts an **Approve merge** button in Cockpit, and Cockpit's answer route today forwards
+  whatever `provenance` the caller sends (`routes/target_work.py:133-138`); N03-A refuses these answers
+  in Cockpit until this decision.
 - **Problem.** Agents in this workspace also have browser tools: they can open Cockpit and click its
   buttons, and they run as the same macOS or Ubuntu user as you. Cockpit's planned protections, a check
   that the request comes from Cockpit's own page (Origin) and a same-site session cookie, stop other
@@ -545,9 +587,10 @@ Open user decision, required before N03-C and N05-C start. N03-A, N03-B and N05-
     the shared target branch, which Delivery cannot undo. Confidence that it keeps agents out: low.
   - (b) *Only the chat answer counts.* Cockpit shows what is waiting (the merge offer with repository, PR,
     head, target and checks; the waiver's criteria) and says to answer in the chat. Pro: one rule that no
-    agent tool can satisfy; Cockpit gains no new authority. Con: every Delivery merge approval happens in
-    chat, not Cockpit; you need a chat running the Change at the moment you approve, and a Change waits
-    while no chat is open. Risk: it relies on VS Code showing the form to you instead of letting the model
+    agent tool can satisfy; Cockpit gains no new authority. Con: every approval of a merge that Delivery
+    carries out happens in chat, not Cockpit, including each renewed approval; you need a chat running the
+    Change at the moment you approve, and a Change waits while no chat is open (merging yourself in GitHub
+    stays possible). Risk: it relies on VS Code showing the form to you instead of letting the model
     answer it (G10, checked in N03-B's rehearsal); if that check fails, Delivery cannot take approvals at
     all and you merge in GitHub, which Delivery still observes and completes (N05 R4). Confidence that it
     keeps agents out: medium-high; that the chat cost is acceptable: medium.
@@ -560,16 +603,18 @@ Open user decision, required before N03-C and N05-C start. N03-A, N03-B and N05-
     least reversible effect. Risk: as (a) for every merge. Confidence: low.
 - **Recommendation: (b)**, confidence medium. It is the only option where "agents cannot approve for you"
   is enforced rather than requested, and a merge is the least reversible step Delivery takes. The honest
-  cost is that every Delivery merge is approved in the chat, not in Cockpit. If N03-B's rehearsal shows
-  that VS Code does not show the form reliably or that the chat round trip is too costly, (c) on macOS is
-  the next step; (a) only with its residual risk accepted explicitly.
+  cost is that every merge Delivery carries out is approved in the chat, not in Cockpit, and approved
+  again after each withdrawal, refusal or re-proof; merging yourself in GitHub is unaffected. If N03-B's
+  rehearsal shows that VS Code does not show the form reliably or that the chat round trip is too costly,
+  (c) on macOS is the next step; (a) only with its residual risk accepted explicitly.
 - **Effect.** N03-A builds the chat question under every option, and N05-C uses it for merge approval and
   retirement. (b): N03-C and N05-C keep Cockpit read-only for these actions (what is waiting, plus "answer
   in the chat"); this changes the approved Cockpit **Approve merge** button (execution plan §5 N05 result,
   N05 R1) to a display, and choosing (b) approves that change. (a): N03-C and N05-C add Cockpit controls
   behind the Origin and SameSite checks with channel `cockpit`, each with its negative scenarios.
   (c): a plan revision for the native presence helper first. (d): N05-C as (a), N03-C as (b). N06's
-  Cockpit-hosted interactions follow the same answer.
+  interaction confirmations are ordinary scoped requests and follow the same answer. Under every option
+  each answer counts once (D13 *Single use*).
 
 ## 2. Feasibility Probes
 
@@ -797,6 +842,13 @@ modules; paths starting with `mcp/` are relative to `site-packages/`.
     fresh call asks the user again, and accepting then records exactly one entry. A valid state whose
     answer was given for a different rendering (the frontier advanced between rounds) → the resolver
     refuses with the existing frontier conflict; nothing written.
+  - Single use (D13), modern route through the assembled server: capture the answering round's
+    `request_state` and accepted `input_responses` and re-send them in a raw `tools/call` within the TTL:
+    (1) right after the answer applied, and (2) after a later unrelated frontier write → no elicitation; the
+    original resolution and ledger entry returned; ledger length and frontier bytes unchanged. (3) Re-sending
+    a declined round → `declined`, nothing written. (4) A fresh call on the resolved request → no question,
+    the original resolution returned, no second entry. (5) Two concurrent continuation rounds carrying the
+    same answer → one ledger entry; the other returns it.
   - Replay tamper (§1.7 L row): a local ledger entry no schema-2 receipt binds, a receipt-bound entry
     absent locally or differing in one byte, a schema-1 receipt for a scoped answer, two entries reordered,
     or a lifecycle receipt anchored before the answer whose frontier holds the entry → the existing
@@ -949,7 +1001,7 @@ Applied in this PR's execution-plan edits (D11).
 
 | Phase | PR | Exact head | Proof | Challenges | Status |
 | --- | --- | --- | --- | --- | --- |
-| N03-P | #349 | — | Probes P1–P16 | Sol round 1: revision-required (observation binding, stored-byte upcast contract, confirmation applicability, bounded exclusions context, all-carried path) → revised; Sol round 2: revision-required (snapshot consumer serialization, confirmation retention through promotion, upgraded handoff receipt contract, MCP output owners) → revised; Sol round 3: revision-required (Planner lifecycle normalization, context budget) → consolidated comparison inventory; Sol round 4: revision-required (representation-only write publication) → revised; Sol round 5: revision-required (drained acknowledgment base) → revised; Sol round 6: `plan-sound`; user-decision revision #360: Sol round 1: revision-required (fabricated confirmation, Finalizer waiver admissibility, confirmation authority across revision) → confirmation boundary D13, ledger, U2 opened; Sol round 2: revision-required (elicitation route across protocols, ledger append missing from handoff replay, request-state premise) → D13 legacy and modern routes with registration (P16), receipt-bound ledger replay (L row), SDK boundary instead of a MAC; U2 widened to merge approval and retirement | approved (D11 confirmed 2026-10-03; U1 decided (b) 2026-10-03; U2 open before N03-C and N05-C) |
+| N03-P | #349 | — | Probes P1–P16 | Sol round 1: revision-required (observation binding, stored-byte upcast contract, confirmation applicability, bounded exclusions context, all-carried path) → revised; Sol round 2: revision-required (snapshot consumer serialization, confirmation retention through promotion, upgraded handoff receipt contract, MCP output owners) → revised; Sol round 3: revision-required (Planner lifecycle normalization, context budget) → consolidated comparison inventory; Sol round 4: revision-required (representation-only write publication) → revised; Sol round 5: revision-required (drained acknowledgment base) → revised; Sol round 6: `plan-sound`; user-decision revision #360: Sol round 1: revision-required (fabricated confirmation, Finalizer waiver admissibility, confirmation authority across revision) → confirmation boundary D13, ledger, U2 opened; Sol round 2: revision-required (elicitation route across protocols, ledger append missing from handoff replay, request-state premise) → D13 legacy and modern routes with registration (P16), receipt-bound ledger replay (L row), SDK boundary instead of a MAC; U2 widened to merge approval and retirement; Sol round 3: revision-required (renewed consent replayable within the request-state TTL, U2 applicability and cost) → D13 *Single use* (frontier as generation for scoped requests; N05 D14 generation record), U2 restated; N06 D3 cross-plan note applied (no `interaction` channel or locator) | approved (D11 confirmed 2026-10-03; U1 decided (b) 2026-10-03; U2 open before N03-C and N05-C) |
 | N03-A | — | — | — | — | — |
 | N03-B | — | — | — | — | — |
 | N03-C | — | — | — | — | — |
@@ -962,7 +1014,7 @@ Applied in this PR's execution-plan edits (D11).
 | G2 | Widening validators reject N03 content in every old-version instance | Prototype covered observation and review only | P3, P6 | N03-A tests | N03-A merge |
 | G3 | P8 lists every family whose fingerprint changes | Static scan; N02-A's fingerprint test is the authority | P8 | N03-A | N03-A merge |
 | G4 | A real reviewer detects an assembled-but-wrong Change from the shared basis | Semantic judgment; not provable by fixtures | Mechanical uncovered case automated in N03-A | N03-B host rehearsal | N03-B merge |
-| G5 | Human confirmation beyond MCP elicitation | Needs prepared interactions; a Cockpit channel needs U2 | `channel` is extensible (§1.5) | N06; U2 | Nothing in N03-A or N03-B |
+| G5 | Human confirmation beyond MCP elicitation | A Cockpit channel needs U2 | N06 links prepared interactions to ordinary scoped `confirm-check` requests answered through `answer`, with no new channel or locator (N06 D3); `channel` gains `cockpit` only under U2 | U2 | Nothing in N03-A or N03-B |
 | G6 | Evidence reuse after revision | Applicability is N04 | §1.4 survival rules | N04 | Nothing in N03 |
 | G7 | Live `delivery-action-readiness` can finalize | Its product merged via PR #316 (`364daf61`), but the record is unfinished: 10 schema-1 observations are `unknown`; 17 criteria need typed evidence | P1 | N10-M disposition | N10-M |
 | G8 | LC runs in CI | Needs Docker and a live copy | `delivery-lc` unit tests (N02-B) | Each phase | Nothing (recorded per phase) |
