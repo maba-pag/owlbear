@@ -10,14 +10,13 @@ import uuid
 from contextlib import contextmanager, suppress
 from datetime import UTC, datetime, timedelta
 from threading import Lock
-from typing import TYPE_CHECKING, Literal, Never, get_args
+from typing import TYPE_CHECKING, Literal, Never
 
 from owlbear_delivery.acceptance import (
     CompletionEvidence,
     CompletionPullRequestIdentity,
     CompletionReceipt,
 )
-from owlbear_delivery.acceptance_criteria import acceptance_criteria
 from owlbear_delivery.application_acquisition import (
     _AcquisitionMixin,
 )
@@ -49,8 +48,6 @@ from owlbear_delivery.application_models import (  # noqa: F401
     DeliveryCheckpointReconciliationResult,
     DeliveryClaimRecoveryResult,
     DeliveryClaimRecoveryStatus,
-    DeliveryConfirmationPlan,
-    DeliveryConfirmationResponse,
     DeliveryContinuationReason,
     DeliveryContinuationRequest,
     DeliveryContinuationResult,
@@ -120,12 +117,6 @@ from owlbear_delivery.change_workspace import (
     CoordinationConflictError,
     WorkspaceRecoverySnapshot,
 )
-from owlbear_delivery.consent_generation import (
-    ConsentGenerationStore,
-    DeliveryConsentDisposition,
-    DeliveryConsentGeneration,
-    consent_binding_digest,
-)
 from owlbear_delivery.delivery_admission import DeliveryAdmissionConflictError, DeliveryAdmissionReceipt
 from owlbear_delivery.delivery_contract_discovery import (
     DeliveryChangeObservation,
@@ -134,7 +125,6 @@ from owlbear_delivery.delivery_contract_discovery import (
     discover_persisted_changes,
 )
 from owlbear_delivery.delivery_runtime import (
-    MAX_LEDGER_CONFIRMATIONS,
     AdvanceDelivery,
     DeliveryAcceptanceAttentionReason,
     DeliveryAcceptanceWaitingError,
@@ -142,20 +132,16 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryChangeDeferral,
     DeliveryChangeStage,
     DeliveryConfirmationError,
-    DeliveryConfirmationRefusal,
     DeliveryMergedPullRequestLatch,
     DeliveryPlanCandidate,
     DeliveryRecoveryAttention,
     DeliveryRequest,
     DeliveryRequestKind,
-    DeliveryRequestResolution,
     DeliveryResultCandidate,
     DeliveryRuntime,
     DeliveryRuntimeConflictError,
-    DeliveryRuntimeReferenceError,
     DeliveryStage,
     DeliveryTaskDefinition,
-    DeliveryUserConfirmation,
     DeliveryWorkerRole,
     OutcomeAuthorityBinding,
     PublishDeliveryPlan,
@@ -221,58 +207,6 @@ if TYPE_CHECKING:
         VerifiedDesignPackage,
     )
     from owlbear_delivery.workspace_coordination import DrainAuthority
-
-
-def _refuse_confirmation(reason: DeliveryConfirmationRefusal, detail: str | None = None) -> Never:
-    raise DeliveryConfirmationError(reason, detail)
-
-
-_CONFIRMATION_REFUSALS: frozenset[str] = frozenset(get_args(DeliveryConfirmationRefusal.__value__))
-# Expected re-check refusals of an accepted answer; I/O and transaction failures are not among them.
-_ANSWER_RECHECK_REFUSALS = (DeliveryRuntimeConflictError, DeliveryRuntimeReferenceError, CoordinationConflictError)
-
-
-def _answer_refusal_code(runtime: DeliveryRuntime, error: Exception) -> str:
-    """Name why the lifecycle or custody re-check refused an accepted answer (D13 *Single use*)."""
-    if isinstance(error, DeliveryConfirmationError):
-        return error.reason
-    if isinstance(error, CoordinationConflictError):
-        return "custody-conflict"
-    if isinstance(error, DeliveryRuntimeReferenceError):
-        return "request-invalid"
-    states = (
-        (runtime.completion_bundle(), "change-completed"),
-        (runtime.change_abandonment(), "change-abandoned"),
-        (runtime.change_deferral(), "change-deferred"),
-        (runtime.change_disposition(), "change-attention"),
-        (runtime.active_claims() or None, "claim-active"),
-    )
-    return next((code for state, code in states if state is not None), "request-refused")
-
-
-def _raise_recorded_refusal(code: str) -> Never:
-    """Raise the typed refusal recorded for a re-check that consumed its generation."""
-    detail = f"the answered question was refused: {code}"
-    if code in _CONFIRMATION_REFUSALS:
-        raise DeliveryConfirmationError(code)  # type: ignore[arg-type]
-    if code == "custody-conflict":
-        raise CoordinationConflictError(detail)
-    if code == "request-invalid":
-        raise DeliveryRuntimeReferenceError(detail)
-    raise DeliveryRuntimeConflictError(detail)
-
-
-def _confirmation_binding_digest(request: DeliveryRequest, expected_frontier_digest: str) -> str:
-    """Bind one N03 question to its request, criteria versions, procedure and frontier version (D13)."""
-    scope = request.applies_to
-    return consent_binding_digest(
-        {
-            "outcome_id": request.outcome_id,
-            "request_id": request.request_id,
-            "applies_to": scope.model_dump(mode="json") if scope is not None else None,
-            "expected_frontier_digest": expected_frontier_digest,
-        }
-    )
 
 
 class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _PublicationMixin, _LifecycleMixin, _RecoveryMixin):
@@ -1536,8 +1470,17 @@ class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _Publication
             binding=binding,
         )
 
-    def answer(self, answer: DeliveryAnswer) -> DeliveryAnswerResult:  # noqa: C901, PLR0911
-        """Apply one version-bound request answer or requestless block evidence."""
+    def answer(  # noqa: C901, PLR0911
+        self,
+        answer: DeliveryAnswer,
+        *,
+        allow_user_only: bool = False,
+    ) -> DeliveryAnswerResult:
+        """Apply one version-bound request answer or requestless block evidence.
+
+        A waiver or person-only confirmation (a request scoped to acceptance criteria) is answered only
+        by the user in Cockpit, which passes ``allow_user_only``; agents' tools never do.
+        """
         with self._coordinator.acquisition_lock():
             runtime = self._runtime(answer.change_id, for_mutation=True)
             checkpoint_lock = (
@@ -1549,11 +1492,9 @@ class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _Publication
                 current_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
                 if answer.kind is DeliveryAnswerKind.REQUEST:
                     current = self._request(runtime, answer.request_id)
-                    if current.applies_to is not None:
-                        _refuse_confirmation(
-                            "confirmation-required",
-                            "a scoped request is answered only through the chat confirmation question",
-                        )
+                    if current.applies_to is not None and not allow_user_only:
+                        message = "a waiver or person-only confirmation request is answered by the user in Cockpit"
+                        raise DeliveryConfirmationError(message)
                     if current.kind is DeliveryRequestKind.DECISION and (
                         answer.resolution.selected_option_id is None or answer.resolution.response_text is not None
                     ):
@@ -1650,205 +1591,6 @@ class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _Publication
                     disposition=resolved,
                     frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
                 )
-
-    def prepare_request_confirmation(
-        self,
-        change_id: str,
-        request_id: str,
-        expected_frontier_digest: str,
-        *,
-        create: bool,
-    ) -> DeliveryConfirmationPlan:
-        """Return what the confirmation boundary renders this round; no lock is held while the user answers.
-
-        ``create`` is false for an answer-bearing round, which never creates a generation (D13).
-        """
-        plan = {"change_id": change_id, "request_id": request_id, "expected_frontier_digest": expected_frontier_digest}
-        with self._coordinator.acquisition_lock():
-            runtime = self._runtime(change_id, for_mutation=create)
-            with locked_roots((self._checkpoint_lock_root(change_id),)):
-                request = self._request(runtime, request_id)
-                scope = request.applies_to
-                if scope is None:
-                    return DeliveryConfirmationPlan(**plan, disposition="unscoped")
-                if create and request.resolution is not None:
-                    return DeliveryConfirmationPlan(**plan, disposition="resolved", request=request)
-                store = ConsentGenerationStore(self._target_root, change_id)
-                binding_digest = _confirmation_binding_digest(request, expected_frontier_digest)
-                latest = store.latest(scope.kind, request_id)
-                if latest is not None and latest[0].state == "open" and latest[0].binding_digest == binding_digest:
-                    generation = latest[0]
-                elif not create:
-                    return DeliveryConfirmationPlan(
-                        **plan,
-                        disposition="no-question",
-                        generation_id=latest[0].generation_id if latest is not None else None,
-                    )
-                elif hashlib.sha256(runtime.frontier_bytes()).hexdigest() != expected_frontier_digest:
-                    return DeliveryConfirmationPlan(**plan, disposition="frontier-changed")
-                else:
-                    generation, _content = store.create(
-                        use=scope.kind,
-                        subject_id=request_id,
-                        binding_digest=binding_digest,
-                        created_at=_timestamp(self._clock()),
-                    )
-                criteria = {criterion.ref: criterion for criterion in acceptance_criteria(runtime.contract)}
-                return DeliveryConfirmationPlan(
-                    **plan,
-                    disposition="ask",
-                    generation_id=generation.generation_id,
-                    request=request,
-                    criteria=tuple(criteria[ref] for ref in scope.acceptance if ref in criteria),
-                )
-
-    def apply_request_confirmation(
-        self,
-        change_id: str,
-        request_id: str,
-        expected_frontier_digest: str,
-        generation_id: str | None,
-        response: DeliveryConfirmationResponse | None,
-    ) -> DeliveryAnswerResult:
-        """Consume one consent generation with the first answer it receives; later answers replay it (I11)."""
-        with self._coordinator.acquisition_lock():
-            runtime = self._runtime(change_id, for_mutation=True)
-            with locked_roots((self._checkpoint_lock_root(change_id),)):
-                request = self._optional_request(runtime, request_id)
-                if request is not None and request.applies_to is None:
-                    _refuse_confirmation("question-closed", "the request asks for no confirmation")
-                use = request.applies_to.kind if request is not None and request.applies_to is not None else None
-                store = ConsentGenerationStore(self._target_root, change_id)
-                latest = None
-                for kind in (use,) if use is not None else ("waive", "confirm-check"):
-                    latest = latest or store.latest(kind, request_id)
-                generation_matches = (
-                    latest is not None
-                    and generation_id is not None
-                    and latest[0].generation_id == generation_id
-                    and (
-                        request is None
-                        or latest[0].binding_digest == _confirmation_binding_digest(request, expected_frontier_digest)
-                    )
-                )
-                if not generation_matches or latest is None:
-                    if generation_id is None and hashlib.sha256(runtime.frontier_bytes()).hexdigest() != (
-                        expected_frontier_digest
-                    ):
-                        self._fail("answer frontier changed")
-                    _refuse_confirmation("question-closed", "no open question matches this answer")
-                generation, content = latest
-                if generation.state == "answered" or response is None:
-                    return self._recorded_confirmation(change_id, runtime, generation)
-                return self._consume_confirmation(
-                    change_id, runtime, request, expected_frontier_digest, (generation, content), response
-                )
-
-    def _consume_confirmation(  # noqa: PLR0913, PLR0917 - one consumption binds the request, generation and answer.
-        self,
-        change_id: str,
-        runtime: DeliveryRuntime,
-        request: DeliveryRequest | None,
-        expected_frontier_digest: str,
-        generation_record: tuple[DeliveryConsentGeneration, bytes],
-        response: DeliveryConfirmationResponse,
-    ) -> DeliveryAnswerResult:
-        generation, content = generation_record
-        store = ConsentGenerationStore(self._target_root, change_id)
-
-        def refuse(code: str) -> None:
-            store.record_answer(generation, content, DeliveryConsentDisposition(outcome="refused", code=code))
-
-        if response.action != "accept":
-            outcome = "declined" if response.action == "decline" else "cancelled"
-            store.record_answer(generation, content, DeliveryConsentDisposition(outcome=outcome))
-            _refuse_confirmation("declined", f"the user {outcome} the question")
-        if hashlib.sha256(runtime.frontier_bytes()).hexdigest() != expected_frontier_digest:
-            refuse("frontier-changed")
-            self._fail("answer frontier changed")
-        if request is None or request.resolution is not None:
-            refuse("request-closed")
-            self._fail("the confirmed request is no longer open")
-        if len(runtime.confirmations()) >= MAX_LEDGER_CONFIRMATIONS:
-            refuse("ledger-full")
-            _refuse_confirmation("ledger-full")
-        if response.decision is None:  # pragma: no cover - the response model requires it on accept.
-            _refuse_confirmation("declined")
-        confirmation = DeliveryUserConfirmation.create(
-            change_id=change_id,
-            request=request,
-            decision=response.decision,
-            question_digest=response.question_digest,
-            generation_id=generation.generation_id,
-            confirmed_at=_timestamp(self._clock()),
-        )
-        resolution = DeliveryRequestResolution(
-            selected_option_id=confirmation.decision,
-            provenance="user-confirmed",
-            confirmation_id=confirmation.confirmation_id,
-        )
-        participant = store.answer_participant(
-            generation,
-            content,
-            DeliveryConsentDisposition(
-                outcome="accepted", confirmation_id=confirmation.confirmation_id, record_id=request.request_id
-            ),
-        )
-        try:
-            resolved = runtime.resolve_request(
-                request.request_id, resolution, confirmation=confirmation, consent_participant=participant
-            )
-        except _ANSWER_RECHECK_REFUSALS as error:
-            refuse(_answer_refusal_code(runtime, error))
-            raise
-        self._publish_delivery_state(
-            change_id,
-            runtime,
-            _checkpoint_operation_id("request-answer", change_id, request.request_id),
-        )
-        return DeliveryAnswerResult(
-            change_id=change_id,
-            kind=DeliveryAnswerKind.REQUEST,
-            request=resolved,
-            frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
-        )
-
-    def _recorded_confirmation(
-        self,
-        change_id: str,
-        runtime: DeliveryRuntime,
-        generation: DeliveryConsentGeneration,
-    ) -> DeliveryAnswerResult:
-        disposition = generation.disposition
-        if disposition is None:
-            _refuse_confirmation("question-closed", "the question was asked but not answered")
-        if disposition.outcome in {"declined", "cancelled"}:
-            _refuse_confirmation("declined", f"the user {disposition.outcome} this question")
-        if disposition.outcome == "refused":
-            if disposition.code in {"frontier-changed", "request-closed"}:
-                self._fail("answer frontier changed" if disposition.code == "frontier-changed" else "request closed")
-            _raise_recorded_refusal(disposition.code or "request-refused")
-        request = self._optional_request(runtime, generation.subject_id)
-        if request is None:
-            _refuse_confirmation("question-closed", "the confirmed request is no longer active")
-        return DeliveryAnswerResult(
-            change_id=change_id,
-            kind=DeliveryAnswerKind.REQUEST,
-            request=request,
-            frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
-        )
-
-    @staticmethod
-    def _optional_request(runtime: DeliveryRuntime, request_id: str) -> DeliveryRequest | None:
-        return next(
-            (
-                request
-                for binding in runtime.bindings()
-                for request in binding.requests
-                if request.request_id == request_id
-            ),
-            None,
-        )
 
     @staticmethod
     def _exact_task_scope(task: DeliveryTaskDefinition, worktree: Path) -> tuple[str, ...]:

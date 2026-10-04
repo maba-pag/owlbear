@@ -91,7 +91,6 @@ _CHANGE_RECORD_NAME_PATTERNS = {
     "$stage": re.compile(r"^stage-[0-9a-f]{32}$"),
     "$change": _CHANGE_ID,
     "$change.json": re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*\.json$"),
-    "$sequence.json": re.compile(r"^[0-9]{8}\.json$"),
 }
 # Interrupted RuntimeTransaction/write_contained temporaries: `.tmp-<24 hex>[-<destination>]`.
 _TRANSIENT_CHANGE_ENTRY = re.compile(r"^\.tmp-[0-9a-f]{24}(?:-[A-Za-z0-9][A-Za-z0-9._:-]{0,255})?$")
@@ -164,7 +163,6 @@ _CHANGE_RECORD_LAYOUT: dict[str, object] = {
             "$digest.json": "builder_handoff_change_intent_receipt",
         }
     },
-    "consent-generations": {"$sequence.json": "consent_generation"},
 }
 _CURRENT_CHANGE_RECORD_ENTRIES = frozenset(
     {
@@ -203,7 +201,6 @@ _CHANGE_RECORD_VERSIONS: dict[str, tuple[int, ...] | None] = {
     "builder_request_resolution_receipt": (1, 2),
     "builder_handoff_change_intent_head": (1,),
     "builder_handoff_change_intent_receipt": (1, 2),
-    "consent_generation": (1,),
     "claim_issuer": (1,),
 }
 _PULL_REQUEST_RECORDS = {
@@ -349,7 +346,6 @@ _SAFE_LOCATORS = {
     "builder_handoff_change_intent_receipt": (
         ".owlbear/delivery/runtime/changes/<redacted>/builder-handoff-change-intent-receipts/<opaque>/<opaque>.json"
     ),
-    "consent_generation": ".owlbear/delivery/runtime/changes/<redacted>/consent-generations/<opaque>.json",
     "finalization_report": ".owlbear/delivery/runtime/finalization-reports/<redacted>/reports/<opaque>.json",
     "finalization_report_pointer": ".owlbear/delivery/runtime/finalization-reports/<redacted>/current.json",
     "proof_attempt": ".owlbear/delivery/runtime/proof-attempts/<redacted>/attempts/<opaque>.json",

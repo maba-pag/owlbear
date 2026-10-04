@@ -88,11 +88,6 @@ from owlbear_delivery.completed_history import (
     CompletedHistoryStaleError,
     ReceiptCompletedChangeRecord,
 )
-from owlbear_delivery.consent_generation import (
-    ConsentGenerationStore,
-    DeliveryConsentDisposition,
-    DeliveryConsentGeneration,
-)
 from owlbear_delivery.delivery_admission import (
     DeliveryAdmissionConflictError,
     DeliveryAdmissionError,
@@ -187,7 +182,6 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryTaskDefinition,
     DeliveryTaskResult,
     DeliveryTransition,
-    DeliveryUserConfirmation,
     DeliveryWaivedResult,
     DeliveryWorkerRole,
     FinalizeDeliveryChange,
@@ -253,10 +247,10 @@ from owlbear_delivery.evidence import (
     DeliveryContextRefusal,
     DeliveryCriterionCoverage,
     DeliveryFinalizationSemantics,
-    confirmation_applies,
     evaluate_acceptance_evidence,
     finalization_basis_digest,
-    resolve_confirmation,
+    request_applies,
+    resolve_request,
 )
 from owlbear_delivery.finalization_reports import (
     FinalizationAttempt,
@@ -458,7 +452,6 @@ __all__ = [
     "CompletionReceiptBundle",
     "CompletionReceiptConflictError",
     "CompletionReceiptStore",
-    "ConsentGenerationStore",
     "CoordinationConflictError",
     "CreateDraftPublicationPullRequest",
     "CreateOrReconcileDraftPullRequest",
@@ -526,8 +519,6 @@ __all__ = [
     "DeliveryCompilationResult",
     "DeliveryConfirmationError",
     "DeliveryConfirmationScope",
-    "DeliveryConsentDisposition",
-    "DeliveryConsentGeneration",
     "DeliveryContextRefusal",
     "DeliveryContinuationReason",
     "DeliveryContinuationRequest",
@@ -624,7 +615,6 @@ __all__ = [
     "DeliveryTaskResult",
     "DeliveryTransition",
     "DeliveryUnavailableChangeView",
-    "DeliveryUserConfirmation",
     "DeliveryWaivedResult",
     "DeliveryWorkerActiveError",
     "DeliveryWorkerExclusionRequiredError",
@@ -749,7 +739,6 @@ __all__ = [
     "classify_publication_check",
     "close_delivery_application",
     "compile_delivery_contract",
-    "confirmation_applies",
     "derive_change_stage",
     "evaluate_acceptance_evidence",
     "failed_required_publication_checks",
@@ -765,5 +754,6 @@ __all__ = [
     "parse_delivery_state_snapshot",
     "parse_stored_delivery_frontier",
     "repair_missing_request_provenance",
-    "resolve_confirmation",
+    "request_applies",
+    "resolve_request",
 ]

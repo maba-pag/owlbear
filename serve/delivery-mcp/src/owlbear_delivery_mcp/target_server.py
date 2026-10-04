@@ -3,30 +3,18 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import inspect
 import json
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from functools import partial
-from typing import Annotated, Literal, Never, cast, get_args, get_origin, get_type_hints
+from typing import Annotated, Never, cast, get_args, get_origin, get_type_hints
 
 from mcp.server import MCPServer
-from mcp.server.elicitation import render_elicitation_schema
-from mcp.server.mcpserver.context import Context
 from mcp.server.mcpserver.exceptions import ToolError
-from mcp.server.mcpserver.resolve import (
-    AcceptedElicitation,
-    DeclinedElicitation,
-    Elicit,
-    ElicitationResult,
-    Resolve,
-)
 from mcp.server.mcpserver.utilities.func_metadata import FuncMetadata
 from mcp.types import ToolAnnotations
-from mcp_types import ElicitRequestFormParams
-from mcp_types.version import is_version_at_least
 from pydantic import BaseModel, BeforeValidator, ConfigDict, TypeAdapter, ValidationError, create_model
 
 from owlbear_delivery.change_workspace import (
@@ -40,15 +28,12 @@ from owlbear_delivery.change_workspace import (
 from owlbear_delivery.completed_history import CompletedHistoryError
 from owlbear_delivery.delivery_admission import DeliveryAdmissionRequest
 from owlbear_delivery.delivery_runtime import (
-    CONFIRMATION_DECISIONS,
     AdministrativeDeliveryMove,
     AdministrativeDeliveryMovePreview,
     AdministrativeDeliveryMoveResult,
     DeliveryAcceptanceEvidenceError,
-    DeliveryConfirmationError,
     DeliveryEvidenceGap,
     DeliveryPlanCandidate,
-    DeliveryRequestResolution,
 )
 from owlbear_delivery.design_package import DesignPackageResult
 from owlbear_delivery.diagnostics import classify_delivery_failure
@@ -56,7 +41,6 @@ from owlbear_delivery.draft_pull_request import MarkChangePullRequestReady
 from owlbear_delivery.finalization_reports import FinalizationReport, FinalizerSettlement, ReportFinalizationFailure
 from owlbear_delivery.portfolio_application import (
     DeliveryAnswer,
-    DeliveryAnswerKind,
     DeliveryAnswerResult,
     DeliveryChangeIntent,
     DeliveryChangeIntentResult,
@@ -64,8 +48,6 @@ from owlbear_delivery.portfolio_application import (
     DeliveryChangeView,
     DeliveryChangeWorktreeCleanup,
     DeliveryChangeWorktreeRecovery,
-    DeliveryConfirmationPlan,
-    DeliveryConfirmationResponse,
     DeliveryContinuationRequest,
     DeliveryContinuationResult,
     DeliveryDesignPut,
@@ -325,206 +307,6 @@ class DeliveryAppContext:
     application: PortfolioApplication
 
 
-# ---------------------------------------------------------------------------
-# Confirmation boundary (N03 D13): the user answers a form Delivery asks; no tool argument can.
-# ---------------------------------------------------------------------------
-
-_INPUT_REQUIRED_PROTOCOL = "2026-07-28"
-_DECISION_LABELS = {
-    "waive": "Waive this criterion (it is shown as waived, not proved)",
-    "keep-required": "Keep it required",
-    "passed": "I checked it and it works",
-    "failed": "I checked it and it does not work",
-}
-
-
-class _WaiveDecision(BaseModel):
-    """The user's decision on waiving the named acceptance criteria."""
-
-    decision: Literal["waive", "keep-required"]
-
-
-class _CheckDecision(BaseModel):
-    """The user's result of the named human check."""
-
-    decision: Literal["passed", "failed"]
-
-
-class _NoQuestion(BaseModel):
-    """Marker that this round asks the user nothing."""
-
-
-@dataclass(frozen=True)
-class DeliveryConfirmationRound:
-    """One round's server-owned question plan; never derived from tool arguments alone."""
-
-    plan: DeliveryConfirmationPlan | None
-    refusal: Literal["channel-unavailable"] | None = None
-    message: str | None = None
-    question_digest: str | None = None
-    failure: Exception | None = None
-
-
-@dataclass(frozen=True)
-class DeliveryConfirmationOutcome:
-    """The resolved boundary input injected into ``answer``: the plan and the user's response, if any."""
-
-    plan: DeliveryConfirmationPlan | None
-    refusal: Literal["channel-unavailable"] | None = None
-    response: DeliveryConfirmationResponse | None = None
-    failure: Exception | None = None
-
-
-def _channel_available(ctx: Context) -> bool:
-    """Require form elicitation and, on the legacy route, a back-channel for server requests."""
-    capabilities = ctx.client_capabilities
-    elicitation = capabilities.elicitation if capabilities is not None else None
-    if elicitation is None or (elicitation.form is None and elicitation.url is not None):
-        return False
-    version = ctx.protocol_version
-    modern = version is not None and is_version_at_least(version, _INPUT_REQUIRED_PROTOCOL)
-    return modern or bool(ctx.session.can_send_request)
-
-
-def _question_form(plan: DeliveryConfirmationPlan) -> type[BaseModel]:
-    scope = plan.request.applies_to if plan.request is not None else None
-    return _WaiveDecision if scope is not None and scope.kind == "waive" else _CheckDecision
-
-
-def _question_message(plan: DeliveryConfirmationPlan) -> str:
-    """Render every element the answer binds: Change, request, criteria versions, procedure, frontier, generation."""
-    request = plan.request
-    scope = request.applies_to if request is not None else None
-    if request is None or scope is None:  # pragma: no cover - only scoped plans are rendered.
-        message = "only a scoped request renders a confirmation question"
-        raise ValueError(message)
-    action = "waive" if scope.kind == "waive" else "confirm the human check of"
-    lines = [
-        f"Delivery asks you to {action} acceptance criteria. Only your answer here counts.",
-        f"Change: {plan.change_id}",
-        f"Outcome: {request.outcome_id}",
-        f"Request: {request.request_id} ({scope.kind})",
-        f"Summary: {request.summary}",
-        "Criteria:",
-        *(
-            f"- {criterion.acceptance_id} (version {criterion.acceptance_version}): {criterion.statement}"
-            for criterion in plan.criteria
-        ),
-        *(
-            f"- {reference.acceptance_id} (version {reference.acceptance_version}): not in the current contract"
-            for reference in scope.acceptance
-            if reference not in {criterion.ref for criterion in plan.criteria}
-        ),
-        f"Procedure: {scope.procedure}",
-        f"Frontier version: {plan.expected_frontier_digest}",
-        f"Question: {plan.generation_id}",
-        "Choices: " + "; ".join(f"{key} = {_DECISION_LABELS[key]}" for key in CONFIRMATION_DECISIONS[scope.kind]),
-    ]
-    return "\n".join(lines)
-
-
-def _question_digest(message: str, form: type[BaseModel]) -> str:
-    """Digest the exact rendered form parameters the SDK pins an answer to (P16)."""
-    params = ElicitRequestFormParams(message=message, requested_schema=render_elicitation_schema(form))
-    rendered = json.dumps(
-        params.model_dump(mode="json", by_alias=True, exclude_none=True), sort_keys=True, separators=(",", ":")
-    )
-    return hashlib.sha256(rendered.encode()).hexdigest()
-
-
-async def _confirmation_round(  # noqa: PLR0911, PLR0913, PLR0917 - a resolver receives each tool argument by name.
-    ctx: Context,
-    change_id: str,
-    kind: DeliveryAnswerKind,
-    request_id: str | None,
-    expected_frontier_digest: str,
-    resolution: DeliveryRequestResolution | None,
-    outcome_id: str | None,
-    block_id: str | None,
-    operator_note: str | None,
-    locators: tuple[str, ...],
-    expected_disposition_id: str | None,
-) -> DeliveryConfirmationRound:
-    """Plan this round under the owning lock, which is released before anything is asked (D13, I11)."""
-    try:
-        AnswerParams(
-            change_id=change_id,
-            kind=kind,
-            request_id=request_id,
-            expected_frontier_digest=expected_frontier_digest,
-            resolution=resolution,
-            outcome_id=outcome_id,
-            block_id=block_id,
-            operator_note=operator_note,
-            locators=locators,
-            expected_disposition_id=expected_disposition_id,
-        )
-    except ValidationError:
-        return DeliveryConfirmationRound(plan=None)
-    if kind is not DeliveryAnswerKind.REQUEST or request_id is None:
-        return DeliveryConfirmationRound(plan=None)
-    application = cast("DeliveryAppContext", ctx.request_context.lifespan_context).application
-    channel = _channel_available(ctx)
-    answer_round = bool(ctx.input_responses)
-    try:
-        plan = await asyncio.to_thread(
-            application.prepare_request_confirmation,
-            change_id,
-            request_id,
-            expected_frontier_digest,
-            create=channel and not answer_round,
-        )
-    except Exception as exc:
-        if classify_delivery_failure(exc) is None:
-            raise
-        # A typed Delivery refusal reaches the handler, which reports it with its own code.
-        return DeliveryConfirmationRound(plan=None, failure=exc)
-    if plan.disposition in {"unscoped", "resolved"}:
-        return DeliveryConfirmationRound(plan=plan)
-    if not channel:
-        return DeliveryConfirmationRound(plan=plan, refusal="channel-unavailable")
-    if plan.disposition != "ask":
-        return DeliveryConfirmationRound(plan=plan)
-    message = _question_message(plan)
-    return DeliveryConfirmationRound(
-        plan=plan, message=message, question_digest=_question_digest(message, _question_form(plan))
-    )
-
-
-def _reraise(failure: Exception) -> Never:
-    raise failure
-
-
-def _confirmation_ask(
-    round_plan: Annotated[DeliveryConfirmationRound, Resolve(_confirmation_round)],
-) -> object:
-    """Ask the rendered question, or nothing when this round has no open question to show."""
-    plan = round_plan.plan
-    if plan is None or plan.disposition != "ask" or round_plan.refusal is not None or round_plan.message is None:
-        return _NoQuestion()
-    return Elicit(round_plan.message, _question_form(plan))
-
-
-def confirmation_question(
-    round_plan: Annotated[DeliveryConfirmationRound, Resolve(_confirmation_round)],
-    answer: Annotated[ElicitationResult[BaseModel], Resolve(_confirmation_ask)],
-) -> DeliveryConfirmationOutcome:
-    """Combine the server-owned plan with the user's form answer; caller arguments confer nothing."""
-    outcome = DeliveryConfirmationOutcome(plan=round_plan.plan, refusal=round_plan.refusal, failure=round_plan.failure)
-    data = answer.data if isinstance(answer, AcceptedElicitation) else None
-    if isinstance(data, _NoQuestion) or round_plan.question_digest is None:
-        return outcome
-    if isinstance(answer, DeclinedElicitation):
-        response = DeliveryConfirmationResponse(action="decline", question_digest=round_plan.question_digest)
-    elif not isinstance(answer, AcceptedElicitation):
-        response = DeliveryConfirmationResponse(action="cancel", question_digest=round_plan.question_digest)
-    else:
-        response = DeliveryConfirmationResponse(
-            action="accept", decision=getattr(data, "decision", None), question_digest=round_plan.question_digest
-        )
-    return DeliveryConfirmationOutcome(plan=round_plan.plan, refusal=round_plan.refusal, response=response)
-
-
 class TargetMCPAdapter:
     """Validate and delegate the strict Delivery transport contract.
 
@@ -659,47 +441,28 @@ class TargetMCPAdapter:
         )
         return self._serialize(view)
 
-    async def answer(
-        self,
-        request: AnswerRequest,
-        confirmation: Annotated[DeliveryConfirmationOutcome | None, Resolve(confirmation_question)] = None,
-    ) -> DeliveryAnswerResponse:
-        """Apply one version-bound answer to a retained Delivery request.
-
-        A request scoped to acceptance criteria is answered only by the user through a chat question
-        that Delivery asks itself; for it the caller's ``resolution`` is ignored.
-        """
+    async def answer(self, request: AnswerRequest) -> DeliveryAnswerResponse:
+        """Apply one version-bound answer to a retained Delivery request."""
         params = self._validate(AnswerParams, request)
-        plan = confirmation.plan if confirmation is not None else None
-        if confirmation is not None and confirmation.failure is not None:
-            await asyncio.to_thread(self._call_raw, params, partial(_reraise, confirmation.failure))
-        if params.kind is DeliveryAnswerKind.REQUEST and plan is not None and plan.disposition != "unscoped":
-            result = await asyncio.to_thread(
-                self._call_model,
-                params,
-                lambda: self._confirmed_answer(params, confirmation),
-                DeliveryAnswerResult,
-            )
-        else:
-            result = await asyncio.to_thread(
-                self._call_model,
-                params,
-                lambda: self._application.answer(
-                    DeliveryAnswer(
-                        change_id=params.change_id,
-                        kind=params.kind,
-                        request_id=params.request_id,
-                        resolution=params.resolution,
-                        expected_frontier_digest=params.expected_frontier_digest,
-                        outcome_id=params.outcome_id,
-                        block_id=params.block_id,
-                        operator_note=params.operator_note,
-                        locators=params.locators,
-                        expected_disposition_id=params.expected_disposition_id,
-                    )
-                ),
-                DeliveryAnswerResult,
-            )
+        result = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.answer(
+                DeliveryAnswer(
+                    change_id=params.change_id,
+                    kind=params.kind,
+                    request_id=params.request_id,
+                    resolution=params.resolution,
+                    expected_frontier_digest=params.expected_frontier_digest,
+                    outcome_id=params.outcome_id,
+                    block_id=params.block_id,
+                    operator_note=params.operator_note,
+                    locators=params.locators,
+                    expected_disposition_id=params.expected_disposition_id,
+                )
+            ),
+            DeliveryAnswerResult,
+        )
         return DeliveryAnswerResponse(
             change_id=params.change_id,
             kind=result.kind,
@@ -707,35 +470,6 @@ class TargetMCPAdapter:
             binding=result.binding,
             disposition=result.disposition,
             frontier_digest=result.frontier_digest,
-        )
-
-    def _confirmed_answer(
-        self,
-        params: AnswerParams,
-        confirmation: DeliveryConfirmationOutcome | None,
-    ) -> DeliveryAnswerResult:
-        """Apply a scoped request answer only from the user's answer to the rendered question (D13)."""
-        if confirmation is None or confirmation.plan is None or params.request_id is None:
-            raise DeliveryConfirmationError("confirmation-required")  # noqa: EM101
-        plan = confirmation.plan
-        if confirmation.refusal is not None:
-            raise DeliveryConfirmationError(
-                confirmation.refusal,
-                "this chat cannot show Delivery's confirmation question; answer it in a chat that supports forms",
-            )
-        if plan.disposition == "resolved" and plan.request is not None:
-            return DeliveryAnswerResult(
-                change_id=params.change_id,
-                kind=DeliveryAnswerKind.REQUEST,
-                request=plan.request,
-                frontier_digest=plan.expected_frontier_digest,
-            )
-        return self._application.apply_request_confirmation(
-            params.change_id,
-            params.request_id,
-            params.expected_frontier_digest,
-            plan.generation_id,
-            confirmation.response,
         )
 
     async def set_change_intent(self, request: SetChangeIntentRequest) -> SetChangeIntentResponse:
@@ -1599,7 +1333,7 @@ def _validate_flat_model[ModelT: BaseModel](model: type[ModelT], payload: dict[s
         raise ToolError(str(diagnostic)) from None
 
 
-def _flatten_tool(adapter: TargetMCPAdapter, name: str) -> Callable[..., object]:  # noqa: C901
+def _flatten_tool(adapter: TargetMCPAdapter, name: str) -> Callable[..., object]:
     """Expose one adapter model as strict top-level MCP keyword arguments."""
     method = getattr(adapter, name)
     hints = get_type_hints(method, include_extras=True)
@@ -1643,21 +1377,8 @@ def _flatten_tool(adapter: TargetMCPAdapter, name: str) -> Callable[..., object]
         )
 
     async def flat_tool(**payload: object) -> object:
-        injected = {name: payload.pop(name) for name in tuple(payload) if name in injected_names}
         params = _validate_flat_model(request_annotation, payload)
-        return await method(params, **injected)
-
-    injected_names: set[str] = set()
-    for parameter_name in inspect.signature(method).parameters:
-        annotation = hints.get(parameter_name)
-        if parameter_name == "request" or not _is_server_injected(annotation):
-            continue
-        # Context and Resolve parameters stay out of the input schema; no caller can supply them (D13).
-        injected_names.add(parameter_name)
-        annotations[parameter_name] = annotation
-        parameters.append(
-            inspect.Parameter(parameter_name, inspect.Parameter.KEYWORD_ONLY, default=None, annotation=annotation)
-        )
+        return await method(params)
 
     flat_tool.__name__ = name
     flat_tool.__qualname__ = name
@@ -1669,16 +1390,6 @@ def _flatten_tool(adapter: TargetMCPAdapter, name: str) -> Callable[..., object]
         return_annotation=annotations["return"],
     )
     return flat_tool
-
-
-def _is_server_injected(annotation: object) -> bool:
-    """Return whether an adapter parameter is filled by the server (a Context or a Resolve marker)."""
-    if get_origin(annotation) is Annotated:
-        type_argument, *metadata = get_args(annotation)
-        if any(isinstance(item, Resolve) for item in metadata):
-            return True
-        annotation = type_argument
-    return isinstance(annotation, type) and issubclass(annotation, Context)
 
 
 def _parse_flat_field(annotation: object, value: object) -> object:

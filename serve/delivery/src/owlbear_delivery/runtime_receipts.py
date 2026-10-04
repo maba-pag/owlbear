@@ -26,7 +26,6 @@ from owlbear_delivery.runtime_models import (
     DeliveryRequest,
     DeliveryRequestKind,
     DeliveryStage,
-    DeliveryUserConfirmation,
     DeliveryWorkerRole,
     EngineWorkerDisposition,
     OutcomeAuthorityBinding,
@@ -35,10 +34,10 @@ from owlbear_delivery.runtime_models import (
     _DeliveryModel,
     _model_content,
     _normalize_frontier,
-    _omit_when_none,
     _receipt_digest,
     binding_has_n03_content,
     derive_change_stage,
+    retained_requests,
 )
 
 
@@ -325,7 +324,7 @@ class _DeliveryBuilderPlanPromotionReceipt(_DeliveryModel):
                 "recovery_attention": None,
                 "retry_diagnostic": None,
                 "block": None,
-                "requests": (),
+                "requests": retained_requests(self.source_binding.requests),
                 "retry_fingerprint": None,
                 "retry_count": 0,
             }
@@ -336,11 +335,7 @@ class _DeliveryBuilderPlanPromotionReceipt(_DeliveryModel):
 
 
 class _DeliveryBuilderRequestResolutionReceipt(_DeliveryModel):
-    """Immutable user answer bound to one exact local Builder or Planner pause.
-
-    Schema 2 binds the ledger confirmation of a scoped answer, which restart replay needs because a
-    retained handoff writes no pending publication.
-    """
+    """Immutable user answer bound to one exact local Builder pause."""
 
     schema_version: Literal[1, 2] = 2
     change_id: str = Field(min_length=1, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -350,17 +345,15 @@ class _DeliveryBuilderRequestResolutionReceipt(_DeliveryModel):
     builder_handoff_context: DeliveryBuilderHandoffContext
     resolved_request: DeliveryRequest
     updated_block: DeliveryBlock
-    confirmation: DeliveryUserConfirmation | None = Field(default=None, exclude_if=_omit_when_none)
 
     @model_validator(mode="after")
     def _validate_receipt(self) -> _DeliveryBuilderRequestResolutionReceipt:
+        _require_legacy_content(self.schema_version, (), self.resolved_request)
         context = self.builder_handoff_context
         resolution = self.resolved_request.resolution
         expected_note = None if resolution is None else resolution.response_text or resolution.selected_option_id
-        scoped = self.resolved_request.applies_to is not None
-        allowed_routes = {"same-task", "same-outcome-planner"} if scoped and self.schema_version != 1 else {"same-task"}
         if (
-            context.route not in allowed_routes
+            context.route != "same-task"
             or context.outcome_id != self.outcome_id
             or context.settlement_id != self.settlement_id
             or self.resolved_request.request_id != self.request_id
@@ -381,34 +374,7 @@ class _DeliveryBuilderRequestResolutionReceipt(_DeliveryModel):
         ):
             message = "Builder request resolution receipt does not match its exact handoff"
             raise ValueError(message)
-        self._validate_confirmation(scoped)
         return self
-
-    def _validate_confirmation(self, scoped: bool) -> None:  # noqa: FBT001 - one derived flag.
-        if self.schema_version == 1:
-            if scoped or self.confirmation is not None or self.resolved_request.has_n03_content:
-                message = "schema-1 Builder request resolution receipt cannot carry a scoped answer"
-                raise ValueError(message)
-            return
-        confirmation = self.confirmation
-        if not scoped:
-            if confirmation is not None:
-                message = "an unscoped request resolution binds no ledger confirmation"
-                raise ValueError(message)
-            return
-        resolution = self.resolved_request.resolution
-        if (
-            confirmation is None
-            or resolution is None
-            or confirmation.change_id != self.change_id
-            or confirmation.outcome_id != self.outcome_id
-            or confirmation.request_id != self.request_id
-            or confirmation.scope != self.resolved_request.applies_to
-            or confirmation.confirmation_id != resolution.confirmation_id
-            or confirmation.decision != resolution.selected_option_id
-        ):
-            message = "Builder request resolution receipt does not bind its exact ledger confirmation"
-            raise ValueError(message)
 
 
 class _DeliveryBuilderHandoffChangeIntentReceipt(_DeliveryModel):

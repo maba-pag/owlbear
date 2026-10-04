@@ -510,7 +510,6 @@ def _delivery_frontier(
             invalidated,
         ),
         operator_moves=current.frontier.operator_moves,
-        confirmations=current.frontier.confirmations,
     ), RevisionCarryForward(
         preserved_outcome_ids=preserved,
         invalidated_outcome_ids=tuple(dict.fromkeys(ordered_invalidated)),

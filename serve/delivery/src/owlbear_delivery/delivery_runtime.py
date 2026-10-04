@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
@@ -40,7 +39,6 @@ from owlbear_delivery.runtime_models import (  # noqa: F401
     _READABLE_LEGACY_FRONTIER_SCHEMA_VERSION,
     CONFIRMATION_DECISIONS,
     DELIVERY_TRANSITION_ADAPTER,
-    MAX_LEDGER_CONFIRMATIONS,
     PROOF_VERDICTS,
     REQUESTLESS_WORKER_SETTLEMENT_FAILURE_CODES,
     ActivateDeliveryClaim,
@@ -71,7 +69,6 @@ from owlbear_delivery.runtime_models import (  # noqa: F401
     DeliveryCheckpointTriggerKind,
     DeliveryCommandResult,
     DeliveryConfirmationError,
-    DeliveryConfirmationRefusal,
     DeliveryConfirmationScope,
     DeliveryEvidenceGap,
     DeliveryFinalization,
@@ -112,7 +109,6 @@ from owlbear_delivery.runtime_models import (  # noqa: F401
     DeliveryTaskDefinition,
     DeliveryTaskResult,
     DeliveryTransition,
-    DeliveryUserConfirmation,
     DeliveryWaivedResult,
     DeliveryWorkerRole,
     EngineWorkerDisposition,
@@ -214,27 +210,6 @@ if TYPE_CHECKING:
 
 
 _GUARD_RETRY_LIMIT = 8
-
-
-def _require_ledger_extension(previous: bytes, replacement: bytes) -> None:
-    """Refuse any frontier write that does not keep the confirmation ledger as an unchanged prefix (I10)."""
-    try:
-        before = json.loads(previous).get("confirmations") or []
-        after = json.loads(replacement).get("confirmations") or []
-    except (AttributeError, ValueError) as exc:
-        _reference("Delivery frontier bytes are invalid", exc)
-    if after[: len(before)] != before:
-        _conflict("Delivery confirmation ledger is append-only")
-
-
-def _with_confirmation(frontier: DeliveryFrontier, confirmation: DeliveryUserConfirmation | None) -> DeliveryFrontier:
-    """Append one boundary-built confirmation to the bounded ledger (I10)."""
-    if confirmation is None:
-        return frontier
-    ledger = frontier.confirmations or ()
-    if len(ledger) >= MAX_LEDGER_CONFIRMATIONS:
-        raise DeliveryConfirmationError("ledger-full")  # noqa: EM101
-    return frontier.model_copy(update={"confirmations": (*ledger, confirmation)})
 
 
 def _is_portable(frontier: DeliveryFrontier) -> bool:
@@ -767,10 +742,6 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
         """Return current outcome bindings in admitted authority order."""
         return self._read()[0].bindings
 
-    def confirmations(self) -> tuple[DeliveryUserConfirmation, ...]:
-        """Return the Change's append-only user confirmation ledger."""
-        return self._read()[0].confirmations or ()
-
     def record_checkpoint_branch_publication(
         self,
         expected: DeliveryCheckpointPublicationState,
@@ -1232,7 +1203,6 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
             completed_at=receipt.completed_at,
         )
         replacement = _model_content(frontier.model_copy(update={"change_completion": projection}))
-        _require_ledger_extension(previous, replacement)
         completion_participant = store.participant(receipt)
         display_participant = store.display_participant(display)
         frontier_participant = ReplacementTransactionParticipant(
@@ -1336,7 +1306,6 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
             request.exact_head,
         )
         replacement = _model_content(updated)
-        _require_ledger_extension(previous, replacement)
         frontier_participant = ReplacementTransactionParticipant(
             self._target_root,
             self._frontier_path.relative_to(self._target_root),
@@ -2319,19 +2288,11 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
         self,
         request_id: str,
         resolution: DeliveryRequestResolution,
-        *,
-        confirmation: DeliveryUserConfirmation | None = None,
-        consent_participant: ReplacementTransactionParticipant | None = None,
     ) -> DeliveryRequest:
-        """Persist one user answer and clear its same-stage block.
-
-        A scoped request accepts only a boundary-built confirmation, which is appended to the ledger
-        in the answer's transaction together with its consumed consent generation (D13, I10, I11).
-        """
+        """Persist one user answer and clear its same-stage block."""
         frontier, previous = self._read()
         _require_change_mutable(frontier, "resolve_request")
         binding, request = _find_request(frontier, request_id)
-        resolution = self._checked_resolution(request, resolution, confirmation)
         _require_no_active_change_claim(frontier, "request resolution")
         handoff_retained = any(item.builder_handoff_context is not None for item in frontier.bindings)
         if handoff_retained and (
@@ -2368,62 +2329,18 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
             request,
             resolved,
             cleared,
-            confirmation,
         )
-        planner_route = (
-            binding.builder_handoff_context is not None
-            and binding.builder_handoff_context.route == "same-outcome-planner"
-        )
-        if handoff_retained and (receipt_participant is None or planner_route):
+        if receipt_participant is None and handoff_retained:
             return_context = self._planner_handoff_pause_return_context(binding)
             if return_context is None:
                 _conflict("request resolution lacks the exact retained Builder handoff receipt")
             updated = updated.model_copy(update={"return_context": return_context})
-        replacement = _with_confirmation(_replace_binding(frontier, binding, updated), confirmation)
-        participants = tuple(
-            participant for participant in (receipt_participant, consent_participant) if participant is not None
+        self._replace(
+            previous,
+            _replace_binding(frontier, binding, updated),
+            additional_participants=(receipt_participant,) if receipt_participant is not None else (),
         )
-        self._replace(previous, replacement, additional_participants=participants)
         return resolved
-
-    def _checked_resolution(
-        self,
-        request: DeliveryRequest,
-        resolution: DeliveryRequestResolution,
-        confirmation: DeliveryUserConfirmation | None,
-    ) -> DeliveryRequestResolution:
-        if request.applies_to is not None:
-            return self._confirmed_resolution(request, resolution, confirmation)
-        if confirmation is not None or resolution.confirmation_id is not None:
-            _conflict("an unscoped request cannot record a user confirmation")
-        return resolution
-
-    def _confirmed_resolution(
-        self,
-        request: DeliveryRequest,
-        resolution: DeliveryRequestResolution,
-        confirmation: DeliveryUserConfirmation | None,
-    ) -> DeliveryRequestResolution:
-        if confirmation is None:
-            reason: DeliveryConfirmationRefusal = "confirmation-required"
-            raise DeliveryConfirmationError(
-                reason, "a scoped request is answered only through the user confirmation boundary"
-            )
-        if (
-            confirmation.change_id != self._contract.change_id
-            or confirmation.outcome_id != request.outcome_id
-            or confirmation.request_id != request.request_id
-            or confirmation.scope != request.applies_to
-        ):
-            _conflict("user confirmation does not match its scoped request")
-        expected = DeliveryRequestResolution(
-            selected_option_id=confirmation.decision,
-            provenance="user-confirmed",
-            confirmation_id=confirmation.confirmation_id,
-        )
-        if resolution != expected:
-            _conflict("a scoped request resolution must be the user-confirmed decision of its confirmation")
-        return expected
 
     def unblock(
         self,
@@ -2596,7 +2513,6 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
     ) -> None:
         """Transactionally replace frontier bytes and its local publication intent."""
         _consume_declared_mutation()
-        _require_ledger_extension(previous, replacement)
         participant = ReplacementTransactionParticipant(
             self._target_root,
             self._frontier_path.relative_to(self._target_root),
@@ -2788,7 +2704,6 @@ __all__ = [
     "DeliveryStage",
     "DeliveryTaskDefinition",
     "DeliveryTaskResult",
-    "DeliveryUserConfirmation",
     "FinalizeDeliveryChange",
     "OutcomeAuthorityBinding",
     "PrepareCompletedOutcomeRepair",

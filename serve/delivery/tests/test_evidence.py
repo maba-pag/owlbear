@@ -1,4 +1,4 @@
-"""Typed evidence records, the single coverage evaluator and confirmation applicability (N03-A)."""
+"""Typed evidence records, the single coverage evaluator and scoped-request applicability (N03-A)."""
 
 from __future__ import annotations
 
@@ -22,24 +22,24 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryRequest,
     DeliveryRequestKind,
     DeliveryRequestOption,
+    DeliveryRequestResolution,
     DeliveryReview,
     DeliveryReviewReceipt,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
-    DeliveryUserConfirmation,
     DeliveryWaivedResult,
     OutcomeAuthorityBinding,
 )
 from owlbear_delivery.evidence import (
     FINALIZATION_SEMANTICS_MAX_BYTES,
     DeliveryContextRefusal,
-    confirmation_applies,
     evaluate_acceptance_evidence,
     finalization_basis_digest,
     finalization_semantics_or_refusal,
     measure_semantics,
     observation_gaps,
-    resolve_confirmation,
+    request_applies,
+    resolve_request,
 )
 from owlbear_delivery.runtime_models import _receipt_digest
 from owlbear_delivery.target_contract import DeliveryContract, DeliveryOutcome, DeliveryPlanScope
@@ -153,29 +153,37 @@ _TASK = DeliveryTaskDefinition(
 )
 
 
-def _binding(results: tuple[DeliveryTaskResult, ...] = ()) -> OutcomeAuthorityBinding:
+def _binding(
+    results: tuple[DeliveryTaskResult, ...] = (),
+    requests: tuple[DeliveryRequest, ...] = (),
+) -> OutcomeAuthorityBinding:
     return OutcomeAuthorityBinding(
-        outcome_id="OUT-001", plan_scope_id="SCOPE-001", tasks=(_TASK,) if results else (), results=results
+        outcome_id="OUT-001",
+        plan_scope_id="SCOPE-001",
+        tasks=(_TASK,) if results else (),
+        results=results,
+        requests=requests,
     )
 
 
 def _frontier(
     results: tuple[DeliveryTaskResult, ...] = (),
-    confirmations: tuple[DeliveryUserConfirmation, ...] | None = None,
+    requests: tuple[DeliveryRequest, ...] = (),
 ) -> DeliveryFrontier:
-    return DeliveryFrontier(bindings=(_binding(results),), confirmations=confirmations)
+    return DeliveryFrontier(bindings=(_binding(results, requests),))
 
 
-def _confirmation(  # noqa: PLR0913
+def _scoped_request(  # noqa: PLR0913
     contract: DeliveryContract,
     *,
     kind: str,
-    decision: str,
+    decision: str | None,
     procedure: str = "manual check",
     acceptance: tuple[DeliveryAcceptanceRef, ...] | None = None,
     outcome_id: str = "OUT-001",
-) -> DeliveryUserConfirmation:
-    request = DeliveryRequest(
+) -> DeliveryRequest:
+    """Return a waiver or person-only request, resolved with ``decision`` as the user answered it in Cockpit."""
+    return DeliveryRequest(
         request_id=f"REQ-{kind}-{decision}",
         kind=DeliveryRequestKind.DECISION,
         outcome_id=outcome_id,
@@ -189,14 +197,7 @@ def _confirmation(  # noqa: PLR0913
             acceptance=acceptance or (_ref(contract, 0),),
             procedure=procedure,
         ),
-    )
-    return DeliveryUserConfirmation.create(
-        change_id=CHANGE,
-        request=request,
-        decision=decision,
-        question_digest="d" * 64,
-        generation_id="e" * 64,
-        confirmed_at=AT,
+        resolution=DeliveryRequestResolution(selected_option_id=decision) if decision is not None else None,
     )
 
 
@@ -235,12 +236,13 @@ def test_expected_failure_requires_a_nonzero_expected_status_and_success_forbids
 @pytest.mark.parametrize(
     ("changes", "message"),
     [
-        ({"provenance": "human-confirmed", "confirmation_id": "f" * 64}, "human-confirmed provenance applies"),
+        ({"provenance": "human-confirmed", "request_id": "REQ"}, "human-confirmed provenance applies"),
         (
             {"result": DeliveryManualProcedureResult(assessment="passed"), "provenance": "human-confirmed"},
-            "confirmation",
+            "resolved request",
         ),
-        ({"confirmation_id": "f" * 64}, "confirmation"),
+        ({"request_id": "REQ"}, "resolved request"),
+        ({"result": DeliveryWaivedResult(reason="Not needed.")}, "resolved request"),
         ({"locator": "https://example.com/report"}, "locator"),
         ({"locator": "path:../secret"}, "locator"),
         ({"locator": "path:has space"}, "locator"),
@@ -253,12 +255,7 @@ def test_observation_shape_rejects_untyped_or_unsafe_records(changes: dict[str, 
         _observation(**changes)
 
 
-def test_waiver_cites_its_own_confirmation_and_artifacts_need_a_locator() -> None:
-    with pytest.raises(ValidationError, match="its own confirmation"):
-        _observation(
-            result=DeliveryWaivedResult(reason="Not needed.", confirmation_id="f" * 64),
-            confirmation_id="e" * 64,
-        )
+def test_artifacts_need_a_locator() -> None:
     with pytest.raises(ValidationError, match="locator"):
         _observation(result={"kind": "artifact", "assessment": "passed"})
 
@@ -302,8 +299,7 @@ def test_frontier_18_and_finalization_2_reject_n03_content() -> None:
     with pytest.raises(ValidationError, match="schema 18 cannot carry"):
         DeliveryFrontier(
             schema_version=18,
-            bindings=(_binding(),),
-            confirmations=(_confirmation(contract, kind="waive", decision="waive"),),
+            bindings=(_binding(requests=(_scoped_request(contract, kind="waive", decision=None),)),),
         )
     with pytest.raises(ValidationError, match="schema-2 Delivery finalization"):
         DeliveryFinalizationReceipt.create(
@@ -369,95 +365,93 @@ def test_stale_versions_and_unknown_ids_never_cover_and_are_admissibility_gaps()
     assert [gap.reason for gap in observation_gaps(_legacy(), _frontier(), (), None)] == ["legacy-observation"]
 
 
-def test_applicable_waiver_satisfies_and_stays_shown_as_waived() -> None:
-    contract = _contract("One.")
-    confirmation = _confirmation(contract, kind="waive", decision="waive")
-    waiver = _observation(
-        procedure="manual check",
-        result=DeliveryWaivedResult(reason="User waived.", confirmation_id=confirmation.confirmation_id),
-        provenance="human-confirmed",
-        confirmation_id=confirmation.confirmation_id,
-        covers=(_ref(contract, 0),),
-    )
-    frontier = _frontier((_result(waiver),), (confirmation,))
+def _waiver(contract: DeliveryContract, request: DeliveryRequest, **changes: object) -> DeliveryObservationReceipt:
+    values: dict[str, object] = {
+        "procedure": "manual check",
+        "result": DeliveryWaivedResult(reason="User waived."),
+        "provenance": "human-confirmed",
+        "request_id": request.request_id,
+        "covers": (_ref(contract, 0),),
+    }
+    return _observation(**(values | changes))
 
-    assert resolve_confirmation(frontier, confirmation.confirmation_id) == confirmation
-    assert confirmation_applies(confirmation, waiver, "OUT-001") is None
+
+def test_waiver_citing_the_user_resolved_request_satisfies_and_stays_shown_as_waived() -> None:
+    contract = _contract("One.")
+    request = _scoped_request(contract, kind="waive", decision="waive")
+    waiver = _waiver(contract, request)
+    frontier = _frontier((_result(waiver),), (request,))
+
+    assert resolve_request(frontier, "OUT-001", request.request_id) == request
+    assert request_applies(request, waiver, "OUT-001") is None
     assert evaluate_acceptance_evidence(contract, frontier).criteria[0].status == "waived"
 
 
 @pytest.mark.parametrize(
-    "variant",
-    ["outcome", "criterion", "version", "procedure", "keep-required", "kind"],
+    ("variant", "reason"),
+    [
+        ("unanswered", "request-unresolved"),
+        ("outcome", "request-not-applicable"),
+        ("criterion", "request-not-applicable"),
+        ("version", "request-not-applicable"),
+        ("procedure", "request-not-applicable"),
+        ("keep-required", "request-not-applicable"),
+        ("kind", "request-not-applicable"),
+    ],
 )
-def test_inapplicable_confirmations_do_not_satisfy(variant: str) -> None:
+def test_waiver_citing_an_inapplicable_request_does_not_satisfy(variant: str, reason: str) -> None:
     contract = _contract("One.", "Two.")
     acceptance = {
         "criterion": (_ref(contract, 1),),
         "version": (DeliveryAcceptanceRef(acceptance_id="AC-001", acceptance_version=acceptance_version("Old.")),),
     }.get(variant)
-    confirmation = _confirmation(
+    request = _scoped_request(
         contract,
         kind="confirm-check" if variant == "kind" else "waive",
-        decision={"keep-required": "keep-required", "kind": "passed"}.get(variant, "waive"),
+        decision={"keep-required": "keep-required", "kind": "passed", "unanswered": None}.get(variant, "waive"),
         procedure="other check" if variant == "procedure" else "manual check",
         acceptance=acceptance,
         outcome_id="OUT-002" if variant == "outcome" else "OUT-001",
     )
-    waiver = _observation(
-        procedure="manual check",
-        result=DeliveryWaivedResult(reason="User waived.", confirmation_id=confirmation.confirmation_id),
-        provenance="human-confirmed",
-        confirmation_id=confirmation.confirmation_id,
-        covers=(_ref(contract, 0),),
-    )
-    frontier = _frontier((), (confirmation,))
+    waiver = _waiver(contract, request)
 
-    gaps = observation_gaps(waiver, frontier, acceptance_criteria(contract), "OUT-001")
+    gaps = observation_gaps(waiver, _frontier((), (request,)), acceptance_criteria(contract), "OUT-001")
 
-    assert [gap.reason for gap in gaps] == ["confirmation-not-applicable"]
-    assert evaluate_acceptance_evidence(contract, _frontier((_result(waiver),), (confirmation,))).criteria[
-        0
-    ].status == ("uncovered")
+    assert [gap.reason for gap in gaps] == [reason]
+    coverage = evaluate_acceptance_evidence(contract, _frontier((_result(waiver),), (request,)))
+    assert coverage.criteria[0].status == "uncovered"
 
 
-def test_human_confirmed_check_requires_the_matching_assessment_and_a_resolvable_entry() -> None:
+def test_person_only_check_requires_the_matching_answer_and_a_retained_request() -> None:
     contract = _contract("One.")
-    passed = _confirmation(contract, kind="confirm-check", decision="passed")
-    failed = _confirmation(contract, kind="confirm-check", decision="failed")
+    passed = _scoped_request(contract, kind="confirm-check", decision="passed")
+    failed = _scoped_request(contract, kind="confirm-check", decision="failed")
 
-    def manual(confirmation_id: str) -> DeliveryObservationReceipt:
+    def manual(request_id: str) -> DeliveryObservationReceipt:
         return _observation(
             procedure="manual check",
             result=DeliveryManualProcedureResult(assessment="passed"),
             provenance="human-confirmed",
-            confirmation_id=confirmation_id,
+            request_id=request_id,
             covers=(_ref(contract, 0),),
         )
 
     criteria = acceptance_criteria(contract)
     frontier = _frontier((), (passed, failed))
-    assert observation_gaps(manual(passed.confirmation_id), frontier, criteria, "OUT-001") == ()
-    assert [gap.reason for gap in observation_gaps(manual(failed.confirmation_id), frontier, criteria, "OUT-001")] == [
-        "confirmation-not-applicable"
+    assert observation_gaps(manual(passed.request_id), frontier, criteria, "OUT-001") == ()
+    assert [gap.reason for gap in observation_gaps(manual(failed.request_id), frontier, criteria, "OUT-001")] == [
+        "request-not-applicable"
     ]
-    assert [gap.reason for gap in observation_gaps(manual("f" * 64), frontier, criteria, "OUT-001")] == [
-        "confirmation-unresolved"
+    assert [gap.reason for gap in observation_gaps(manual("REQ-absent"), frontier, criteria, "OUT-001")] == [
+        "request-unresolved"
     ]
 
 
-def test_finalization_record_confirmation_must_belong_to_the_covered_outcome() -> None:
+def test_finalization_waiver_resolves_its_request_in_the_covered_outcome() -> None:
     contract = _contract("One.")
-    confirmation = _confirmation(contract, kind="waive", decision="waive")
-    waiver = _observation(
-        task_or_finalization_id="FIN",
-        procedure="manual check",
-        result=DeliveryWaivedResult(reason="User waived.", confirmation_id=confirmation.confirmation_id),
-        provenance="human-confirmed",
-        confirmation_id=confirmation.confirmation_id,
-        covers=(_ref(contract, 0),),
-    )
-    frontier = _frontier((), (confirmation,))
+    request = _scoped_request(contract, kind="waive", decision="waive")
+    waiver = _waiver(contract, request, task_or_finalization_id="FIN")
+    frontier = _frontier((), (request,))
 
     assert observation_gaps(waiver, frontier, acceptance_criteria(contract), None) == ()
     assert evaluate_acceptance_evidence(contract, frontier, (waiver,)).criteria[0].status == "waived"

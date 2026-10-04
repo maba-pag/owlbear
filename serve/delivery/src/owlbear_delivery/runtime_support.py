@@ -235,50 +235,6 @@ def _builder_request_resolution_receipt_path(
     )
 
 
-def _planner_request_resolution_receipt_path(
-    runtime_root: Path,
-    change_id: str,
-    builder_handoff_context: DeliveryBuilderHandoffContext,
-    request_id: str,
-) -> Path:
-    """Address one scoped Planner pause answer; a Planner handoff can pause more than once."""
-    identity = hashlib.sha256(f"{builder_handoff_context.settlement_id}\0{request_id}".encode()).hexdigest()
-    return runtime_root / "changes" / change_id / "builder-request-resolution-receipts" / f"{identity}.json"
-
-
-def _read_planner_request_resolution_receipt(
-    runtime_root: Path,
-    change_id: str,
-    request_id: str,
-    builder_handoff_context: DeliveryBuilderHandoffContext,
-) -> _DeliveryBuilderRequestResolutionReceipt | None:
-    """Read one scoped Planner pause answer, or ``None`` when no answer was bound."""
-    receipt_path = _planner_request_resolution_receipt_path(
-        runtime_root, change_id, builder_handoff_context, request_id
-    )
-    change_root = runtime_root / "changes" / change_id
-    if any(path.is_symlink() for path in (runtime_root / "changes", change_root, receipt_path.parent, receipt_path)):
-        _reference("Planner request resolution receipt path is unsafe")
-    try:
-        content = receipt_path.read_bytes()
-    except FileNotFoundError:
-        return None
-    except OSError as exc:
-        _reference("Planner request resolution receipt is unavailable", exc)
-    try:
-        receipt = _DeliveryBuilderRequestResolutionReceipt.model_validate_json(content, strict=True)
-    except (TypeError, ValueError) as exc:
-        _reference("Planner request resolution receipt is invalid", exc)
-    if (
-        receipt.change_id != change_id
-        or receipt.request_id != request_id
-        or receipt.builder_handoff_context != builder_handoff_context
-        or receipt.confirmation is None
-    ):
-        _reference("Planner request resolution receipt does not match its exact handoff")
-    return receipt
-
-
 def _builder_handoff_change_intent_directory(
     runtime_root: Path,
     change_id: str,

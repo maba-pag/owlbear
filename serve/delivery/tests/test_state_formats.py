@@ -703,7 +703,7 @@ def test_gate_reports_unrecognized_and_unreadable_records_without_refusing(tmp_p
 
 # Hand-authored tracked configuration has no product writer to round-trip; the remote-only snapshot family is
 # covered by the read-upcast and newer-version tests in test_delivery_state.
-_UNCOVERED_GOLDEN_KINDS: frozenset[str] = frozenset({"config", "consent_generation", "host", "host_local", "snapshot"})
+_UNCOVERED_GOLDEN_KINDS: frozenset[str] = frozenset({"config", "host", "host_local", "snapshot"})
 
 
 # ---------------------------------------------------------------------------

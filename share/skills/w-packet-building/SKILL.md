@@ -159,8 +159,9 @@ task ID, candidate commit, observation kind, exact `procedure`, a typed `result`
 result records the real `exit_status`; Delivery derives the verdict, and an expected-failure test
 records its `expected_exit_status`), the `covers` criterion IDs and versions from the context's
 `acceptance`, runner identity, and timezone-aware observation time. Record a gap that is not yours to
-close as a `missing` result with its owner instead of omitting it. Never author a `waived` or
-`human-confirmed` record without a ledger confirmation. Use `review_mode: task` in the review.
+close as a `missing` result with its owner instead of omitting it. Author a `waived` or
+`human-confirmed` record only with the `request_id` of a waiver or person-only check request the user
+answered in Cockpit; never answer such a request yourself. Use `review_mode: task` in the review.
 Serialize the returned receipt with
 `model_dump(mode="json")`; never calculate, copy, or invent `observation_id`. Any post-commit change
 invalidates the receipts and requires a successor commit plus fresh proof.

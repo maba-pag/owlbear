@@ -1,4 +1,4 @@
-"""Acceptance evidence evaluation, confirmation applicability and the finalization semantic basis.
+"""Acceptance evidence evaluation, scoped-request applicability and the finalization semantic basis.
 
 One pure evaluator (I7) serves ``publish_result``, ``finalize_change``, the finalization context and
 later projections. Digests here prove content integrity, not that a procedure actually ran (R12).
@@ -14,18 +14,16 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery.acceptance_criteria import DeliveryAcceptanceCriterion, acceptance_criteria
 from owlbear_delivery.runtime_models import (
+    AFFIRMATIVE_DECISIONS,
     PROOF_VERDICTS,
     DeliveryConfirmationScope,
     DeliveryEvidenceGap,
     DeliveryEvidenceGapReason,
     DeliveryFrontier,
     DeliveryLegacyObservationReceipt,
-    DeliveryManualProcedureResult,
-    DeliveryObservation,
     DeliveryObservationReceipt,
+    DeliveryRequest,
     DeliveryTaskResult,
-    DeliveryUserConfirmation,
-    DeliveryWaivedResult,
     _model_content,
 )
 from owlbear_delivery.target_contract import DeliveryCommitment
@@ -112,13 +110,12 @@ class DeliverySemanticsTaskAuthority(_EvidenceModel):
 
 
 class DeliverySemanticsConfirmation(_EvidenceModel):
-    """One ledger confirmation that carried task evidence cites or an exact-head record could cite."""
+    """One scoped request the user answered in Cockpit, which an exact-head record may cite."""
 
-    confirmation_id: str
+    request_id: str
     outcome_id: str
     scope: DeliveryConfirmationScope
     decision: str
-    channel: str
 
 
 class DeliveryFinalizationSemantics(_EvidenceModel):
@@ -145,76 +142,47 @@ class DeliveryContextRefusal(_EvidenceModel):
     budget_bytes: int = FINALIZATION_SEMANTICS_MAX_BYTES
 
 
-def resolve_confirmation(frontier: DeliveryFrontier, confirmation_id: str) -> DeliveryUserConfirmation | None:
-    """Return the ledger confirmation with this identity, or ``None``."""
+def resolve_request(frontier: DeliveryFrontier, outcome_id: str, request_id: str) -> DeliveryRequest | None:
+    """Return the request with this identity retained by the outcome, or ``None``."""
     return next(
-        (item for item in frontier.confirmations or () if item.confirmation_id == confirmation_id),
+        (
+            request
+            for binding in frontier.bindings
+            if binding.outcome_id == outcome_id
+            for request in binding.requests
+            if request.request_id == request_id
+        ),
         None,
     )
 
 
-def confirmation_applies(
-    confirmation: DeliveryUserConfirmation,
+def request_applies(
+    request: DeliveryRequest,
     observation: DeliveryObservationReceipt,
     outcome_id: str,
 ) -> DeliveryEvidenceGapReason | None:
-    """Return why a ledger confirmation does not authorize this record (I6), or ``None`` when it does."""
-    scope = confirmation.scope
-    covered = set(scope.acceptance)
-    if (
-        confirmation.outcome_id != outcome_id
-        or confirmation.change_id != observation.change_id
-        or scope.procedure != observation.procedure
-        or not set(observation.covers) <= covered
-    ):
-        return "confirmation-not-applicable"
-    result = observation.result
-    if result.kind == "waived":
-        affirmative = scope.kind == "waive" and confirmation.decision == "waive"
-    else:
-        assessment = getattr(result, "assessment", None)
-        affirmative = scope.kind == "confirm-check" and confirmation.decision == assessment
-    return None if affirmative else "confirmation-not-applicable"
+    """Return why a cited request does not authorize this record (I6), or ``None`` when it does.
 
-
-def _finalization_citable(
-    confirmation: DeliveryUserConfirmation,
-    criteria: tuple[DeliveryAcceptanceCriterion, ...],
-) -> bool:
-    """Return whether ``confirmation_applies`` admits it for an exact-head record a Finalizer could submit.
-
-    That record covers the current criterion versions of its scope in its outcome, uses its exact procedure
-    and carries the affirmative result for its kind: a waiver, or a passed manual assessment.
+    It authorizes only when the user resolved it, it is scoped to every criterion version the record
+    covers and to its procedure, and the user's decision matches the record's result.
     """
-    current = {criterion.ref: criterion for criterion in criteria}
-    scope = confirmation.scope
-    covers = tuple(
-        ref for ref in scope.acceptance if ref in current and current[ref].outcome_id == confirmation.outcome_id
-    )
-    if not covers:
-        return False
-    confirmation_id = confirmation.confirmation_id
-    result = (
-        DeliveryWaivedResult(reason="Waived by the user.", confirmation_id=confirmation_id)
-        if scope.kind == "waive"
-        else DeliveryManualProcedureResult(assessment="passed")
-    )
-    record = DeliveryObservationReceipt.create(
-        DeliveryObservation(
-            change_id=confirmation.change_id,
-            task_or_finalization_id=confirmation.request_id,
-            exact_commit="0" * 40,
-            observation_kind="user-confirmation",
-            procedure=scope.procedure,
-            result=result,
-            covers=covers,
-            provenance="human-confirmed",
-            confirmation_id=confirmation_id,
-            observer_or_runner_identity="user",
-            observed_at=confirmation.confirmed_at,
-        )
-    )
-    return confirmation_applies(confirmation, record, confirmation.outcome_id) is None
+    scope = request.applies_to
+    resolution = request.resolution
+    if resolution is None:
+        return "request-unresolved"
+    if (
+        scope is None
+        or request.outcome_id != outcome_id
+        or scope.procedure != observation.procedure
+        or not set(observation.covers) <= set(scope.acceptance)
+    ):
+        return "request-not-applicable"
+    decision = resolution.selected_option_id
+    if observation.result.kind == "waived":
+        affirmative = scope.kind == "waive" and decision == AFFIRMATIVE_DECISIONS["waive"]
+    else:
+        affirmative = scope.kind == "confirm-check" and decision == getattr(observation.result, "assessment", None)
+    return None if affirmative else "request-not-applicable"
 
 
 def observation_gaps(
@@ -225,7 +193,7 @@ def observation_gaps(
 ) -> tuple[DeliveryEvidenceGap, ...]:
     """Return why one submitted record is not admissible evidence for the current contract.
 
-    ``outcome_id`` is the result's outcome; ``None`` means a finalization record, whose confirmation
+    ``outcome_id`` is the result's outcome; ``None`` means a finalization record, whose cited request
     must belong to the outcome of every criterion it covers.
     """
     if isinstance(observation, DeliveryLegacyObservationReceipt):
@@ -250,28 +218,28 @@ def observation_gaps(
                     reason=reason,
                 )
             )
-    if observation.confirmation_id is not None:
-        reason = _confirmation_gap(observation, frontier, outcome_id, covered_outcomes)
+    if observation.request_id is not None:
+        reason = _request_gap(observation, frontier, outcome_id, covered_outcomes)
         if reason is not None:
             gaps.append(DeliveryEvidenceGap(observation_id=observation.observation_id, reason=reason))
     return tuple(gaps)
 
 
-def _confirmation_gap(
+def _request_gap(
     observation: DeliveryObservationReceipt,
     frontier: DeliveryFrontier,
     outcome_id: str | None,
     covered_outcomes: set[str],
 ) -> DeliveryEvidenceGapReason | None:
-    confirmation_id = observation.confirmation_id
-    confirmation = resolve_confirmation(frontier, confirmation_id) if confirmation_id is not None else None
-    if confirmation is None:
-        return "confirmation-unresolved"
     if outcome_id is None:
         if len(covered_outcomes) != 1:
-            return "confirmation-not-applicable"
+            return "request-not-applicable"
         outcome_id = next(iter(covered_outcomes))
-    return confirmation_applies(confirmation, observation, outcome_id)
+    request_id = observation.request_id
+    request = resolve_request(frontier, outcome_id, request_id) if request_id is not None else None
+    if request is None:
+        return "request-unresolved"
+    return request_applies(request, observation, outcome_id)
 
 
 def evaluate_acceptance_evidence(
@@ -339,7 +307,7 @@ def _record_status(
     if verdict not in {*PROOF_VERDICTS, "waived"}:
         return None
     covered_outcomes = {current[ref].outcome_id for ref in observation.covers if ref in current}
-    if _confirmation_gap(observation, frontier, outcome_id, covered_outcomes) is not None:
+    if _request_gap(observation, frontier, outcome_id, covered_outcomes) is not None:
         return None
     return "waived" if verdict == "waived" else "covered"
 
@@ -384,12 +352,6 @@ def build_finalization_semantics(
     results = tuple((binding, result) for binding in frontier.bindings for result in binding.results)
     digests = tuple(result_digest(result) for _binding, result in results)
     tasks = {task.task_id: task for binding in frontier.bindings for task in binding.tasks}
-    cited = {
-        observation.confirmation_id
-        for _binding, result in results
-        for observation in result.observations
-        if isinstance(observation, DeliveryObservationReceipt) and observation.confirmation_id is not None
-    }
     return DeliveryFinalizationSemantics(
         contract_digest=contract_digest,
         title=contract.title,
@@ -431,15 +393,16 @@ def build_finalization_semantics(
         ),
         confirmations=tuple(
             DeliverySemanticsConfirmation(
-                confirmation_id=item.confirmation_id,
-                outcome_id=item.outcome_id,
-                scope=item.scope,
-                decision=item.decision,
-                channel=item.channel,
+                request_id=request.request_id,
+                outcome_id=request.outcome_id,
+                scope=request.applies_to,
+                decision=request.resolution.selected_option_id,
             )
-            for item in frontier.confirmations or ()
-            if item.confirmation_id in cited
-            or (item.change_id == contract.change_id and _finalization_citable(item, criteria))
+            for binding in frontier.bindings
+            for request in binding.requests
+            if request.applies_to is not None
+            and request.resolution is not None
+            and request.resolution.selected_option_id is not None
         ),
         diff_base=diff_base,
         change_head=change_head,
@@ -493,12 +456,12 @@ __all__ = [
     "DeliverySemanticsTaskAuthority",
     "DeliverySemanticsTaskResult",
     "build_finalization_semantics",
-    "confirmation_applies",
     "evaluate_acceptance_evidence",
     "finalization_basis_digest",
     "finalization_semantics_or_refusal",
     "measure_semantics",
     "observation_gaps",
-    "resolve_confirmation",
+    "request_applies",
+    "resolve_request",
     "result_digest",
 ]

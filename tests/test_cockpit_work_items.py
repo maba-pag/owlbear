@@ -80,6 +80,7 @@ from owlbear_delivery import (
     RetryDelivery,
 )
 from owlbear_delivery.acceptance import CompletionPullRequestIdentity, CompletionReceiptConflictError
+from owlbear_delivery.acceptance_criteria import acceptance_criteria
 from owlbear_delivery.change_workspace import (
     ChangeTargetSyncAbortReceipt,
     ChangeTargetSyncConflictError,
@@ -91,7 +92,6 @@ from owlbear_delivery.completed_history import (
     CompletedChangePage,
     ReceiptCompletedChangeRecord,
 )
-from owlbear_delivery.consent_generation import ConsentGenerationStore
 from owlbear_delivery.delivery_application_loader import (
     DeliveryApplicationLoadError,
     DeliveryStartupConfig,
@@ -104,7 +104,13 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryChangeDispositionBusyError,
     DeliveryChangeDispositionConflictError,
     DeliveryChangeStage,
+    DeliveryFrontier,
+    DeliveryObservation,
+    DeliveryObservationReceipt,
+    DeliveryRequestResolution,
+    DeliveryWaivedResult,
 )
+from owlbear_delivery.evidence import evaluate_acceptance_evidence, observation_gaps
 from owlbear_delivery.finalization_reports import FinalizationFailureCode
 from owlbear_delivery.portfolio_operating import (
     DeliveryHealthDiagnostic,
@@ -442,7 +448,9 @@ class _DeliveryApplicationFake:
         self.calls.append(("get-change", (change_id,)))
         return SimpleNamespace(frontier_digest="a" * 64)
 
-    def answer(self, answer: DeliveryAnswer) -> dict[str, object]:
+    def answer(self, answer: DeliveryAnswer, *, allow_user_only: bool = False) -> dict[str, object]:
+        # Only the request route answers as the user; block and attention routes never do.
+        assert allow_user_only is (answer.kind is DeliveryAnswerKind.REQUEST)
         operation = {
             "request": "answer",
             "block": "clear",
@@ -4055,9 +4063,9 @@ def test_http_retry_diagnostic_is_blocked_and_projected(tmp_path: Path) -> None:
     assert _workspace_mutation_snapshot(launch.worktree_path) == before_workspace
 
 
-def test_http_answer_cannot_confirm_a_scoped_request(tmp_path: Path) -> None:
-    """Until U2 is answered a Cockpit click never counts as the user's confirmation; nothing is written."""
-    application, runtime, state_root = scoped_request_case(tmp_path)
+def test_http_answer_resolves_a_waiver_request_that_a_finalization_waiver_then_cites(tmp_path: Path) -> None:
+    """The user's Cockpit answer is the waiver; finalization evaluation accepts a record citing it."""
+    application, runtime, _state_root = scoped_request_case(tmp_path)
     before = runtime.frontier_bytes()
     with TestClient(assemble_target_app(application)) as client:
         response = client.post(
@@ -4068,10 +4076,27 @@ def test_http_answer_cannot_confirm_a_scoped_request(tmp_path: Path) -> None:
                 "expected_frontier_digest": hashlib.sha256(before).hexdigest(),
             },
         )
-    assert response.status_code == 409
-    diagnostic = response.json()
-    assert diagnostic["code"] == "ERR_DELIVERY_CONFIRMATION"
-    assert "channel-unavailable" in diagnostic["detail"]
-    assert runtime.frontier_bytes() == before
-    assert runtime.confirmations() == ()
-    assert ConsentGenerationStore(state_root, "change-a").latest("waive", SCOPED_REQUEST_ID) is None
+    assert response.status_code == 200, response.text
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=True)
+    (request,) = frontier.bindings[0].requests
+    assert request.resolution == DeliveryRequestResolution(selected_option_id="waive")
+    criterion = acceptance_criteria(runtime.contract)[0]
+    waiver = DeliveryObservationReceipt.create(
+        DeliveryObservation(
+            change_id="change-a",
+            task_or_finalization_id="finalize",
+            exact_commit="3" * 40,
+            observation_kind="user-waiver",
+            procedure="manual check",
+            result=DeliveryWaivedResult(reason="The user waived it in Cockpit."),
+            covers=(criterion.ref,),
+            provenance="human-confirmed",
+            request_id=SCOPED_REQUEST_ID,
+            observer_or_runner_identity="finalizer",
+            observed_at=datetime(2026, 10, 4, tzinfo=UTC),
+        )
+    )
+
+    assert observation_gaps(waiver, frontier, acceptance_criteria(runtime.contract), None) == ()
+    coverage = evaluate_acceptance_evidence(runtime.contract, frontier, (waiver,))
+    assert coverage.criteria[0].status == "waived"

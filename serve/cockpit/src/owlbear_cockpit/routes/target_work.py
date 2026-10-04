@@ -60,7 +60,6 @@ from owlbear_delivery.completed_history import (
 )
 from owlbear_delivery.delivery_runtime import (
     AdministrativeDeliveryMove,
-    DeliveryConfirmationError,
     DeliveryRequestResolution,
     DeliveryStage,
 )
@@ -144,20 +143,7 @@ class TargetCockpitService:
             resolution=resolution,
             expected_frontier_digest=body.expected_frontier_digest,
         )
-
-        def answer_unscoped() -> object:
-            try:
-                return self._application.answer(answer)
-            except DeliveryConfirmationError as exc:
-                # Until user decision U2, a Cockpit click never counts as the user's confirmation.
-                if exc.reason != "confirmation-required":
-                    raise
-                raise DeliveryConfirmationError(
-                    "channel-unavailable",  # noqa: EM101
-                    "Cockpit cannot confirm this request; answer the question Delivery asks in the chat",
-                ) from exc
-
-        return self._invoke(answer_unscoped)
+        return self._invoke(lambda: self._application.answer(answer, allow_user_only=True))
 
     def clear_block(
         self,

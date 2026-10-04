@@ -19,7 +19,6 @@ from pydantic import BaseModel, ValidationError
 import owlbear_tools.delivery_diagnostics as diagnostics
 from owlbear_delivery import delivery_runtime, state_formats
 from owlbear_delivery.change_workspace import ChangeContinuationAction, ChangeDirectOperation
-from owlbear_delivery.consent_generation import DeliveryConsentGeneration
 from owlbear_delivery.delivery_admission import DeliveryAdmissionReceipt
 from owlbear_delivery.delivery_runtime import (
     CompletedOutcomeRepairReceipt,
@@ -450,7 +449,6 @@ def _write_every_change_family(change: Path) -> dict[str, int]:
         change / "builder-request-resolution-receipts" / f"{digest}.json": v1,
         change / "builder-handoff-change-intent-receipts" / digest / "head.json": v1,
         change / "builder-handoff-change-intent-receipts" / digest / f"{other}.json": v1,
-        change / "consent-generations/00000001.json": v1,
     }
     for path, content in records.items():
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -485,7 +483,6 @@ def _write_every_change_family(change: Path) -> dict[str, int]:
         "builder_request_resolution_receipt": 1,
         "builder_handoff_change_intent_head": 1,
         "builder_handoff_change_intent_receipt": 1,
-        "consent_generation": 1,
     }
 
 
@@ -782,7 +779,6 @@ def test_change_record_versions_match_owner_models() -> None:
         "retry_outcome": (RetryAttemptOutcome,),
         "retry_repair_binding": (RetryRepairBinding,),
         "retry_owner_result": (RetryOwnerResult,),
-        "consent_generation": (DeliveryConsentGeneration,),
     }
     runtime_models = vars(delivery_runtime)
     owners |= {

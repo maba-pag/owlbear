@@ -33,25 +33,25 @@
   },
   "builder_handoff_change_intent_receipt": {
     "fingerprints": {
-      "owlbear_delivery.runtime_receipts:_DeliveryBuilderHandoffChangeIntentReceipt": "3dad721255dec60664104bf90088543b5b9f0e7e6fbb8bcc3d4779cdfed362d8"
+      "owlbear_delivery.runtime_receipts:_DeliveryBuilderHandoffChangeIntentReceipt": "1dbee913293902f7c9aed980a4662003907f11915122b5a907a9c498a80aa139"
     },
     "version": 2
   },
   "builder_invocation_receipt": {
     "fingerprints": {
-      "owlbear_delivery.runtime_receipts:_DeliveryBuilderInvocationSettlementReceipt": "97522389248b90e9d89adecd7c05ffa9f776730a78faf1f101d1ef358b0f2e47"
+      "owlbear_delivery.runtime_receipts:_DeliveryBuilderInvocationSettlementReceipt": "9fa4ea1158b14ba65d755ea12a96c7c72ed6612c4e35b14e2f572e3024818041"
     },
     "version": 2
   },
   "builder_plan_promotion_receipt": {
     "fingerprints": {
-      "owlbear_delivery.runtime_receipts:_DeliveryBuilderPlanPromotionReceipt": "52a328a6d27609a618df1d58365d76193fe0ff21e7f362c91e67b85c724883f7"
+      "owlbear_delivery.runtime_receipts:_DeliveryBuilderPlanPromotionReceipt": "2eb2a263a1f2fdc64330eb649b6d4b6b341de8da61c8538cbd49c322354e1201"
     },
     "version": 2
   },
   "builder_request_resolution_receipt": {
     "fingerprints": {
-      "owlbear_delivery.runtime_receipts:_DeliveryBuilderRequestResolutionReceipt": "124ee082f449a9e19a204114b67d3390436ab97dd0073f9d733e3af4dc10a1b1"
+      "owlbear_delivery.runtime_receipts:_DeliveryBuilderRequestResolutionReceipt": "5822e7015dfc417aa1435cea20098247228541926a2f5409f9e1cd79da197349"
     },
     "version": 2
   },
@@ -78,12 +78,6 @@
       "owlbear_delivery.delivery_application_loader:DeliveryStartupConfig": "f76e7f4730bd76a75d274896aa9fde4d0d05cb8074e62ded456aac2a19f2b77d"
     },
     "version": 2
-  },
-  "consent_generation": {
-    "fingerprints": {
-      "owlbear_delivery.consent_generation:DeliveryConsentGeneration": "2e3d81ccb0bc3365b4a2627e402501ef88dfb22c599240c44ecfec34b3d9840e"
-    },
-    "version": 1
   },
   "contract": {
     "fingerprints": {
@@ -123,7 +117,7 @@
   },
   "frontier": {
     "fingerprints": {
-      "owlbear_delivery.runtime_models:DeliveryFrontier": "e36accdfddadafa6e59d2fbd65c3951fffad147bf2d0aca69832f791f67816c1"
+      "owlbear_delivery.runtime_models:DeliveryFrontier": "14f5d2c890fc92540e3c4882ea83ac92fce8c525665d37fb2daaa189b2ab03c1"
     },
     "version": 19
   },
@@ -159,13 +153,13 @@
   },
   "planning_pause_receipt": {
     "fingerprints": {
-      "owlbear_delivery.runtime_receipts:_DeliveryPlanningPauseReplay": "05f8ffa1e7c18bae9fa19067bd92ba06c3dfb616d2ea7192dc3cec6beeb04901"
+      "owlbear_delivery.runtime_receipts:_DeliveryPlanningPauseReplay": "bb2f561babfe0ca53260af92340766cb1b480438e2a5dacd2c2fdd29a6d63355"
     },
     "version": 2
   },
   "planning_retry_receipt": {
     "fingerprints": {
-      "owlbear_delivery.runtime_receipts:_DeliveryPlanningRetrySettlementReceipt": "0896660f9bab818e811ec940c7f706f254aab5eeda840dbfdbcdf11e05cbac1a"
+      "owlbear_delivery.runtime_receipts:_DeliveryPlanningRetrySettlementReceipt": "b0e712dfd4a4cbd3cb745ca3d07ca40d573b5a881d617938a8afd2a4ffa82910"
     },
     "version": 2
   },
@@ -266,7 +260,7 @@
   },
   "result_receipt": {
     "fingerprints": {
-      "owlbear_delivery.runtime_models:DeliveryResultCandidate": "f900c83932f6979862a331e94dbc7e1cbcc38fc38bf36402db5a946d30f6e8f6"
+      "owlbear_delivery.runtime_models:DeliveryResultCandidate": "2fa1b8b5e02b530ba2d200d5e05a929adf430ec357d49cd04eb8a717d95144bb"
     },
     "version": null
   },
@@ -302,7 +296,7 @@
   },
   "snapshot": {
     "fingerprints": {
-      "owlbear_delivery.delivery_state:DeliveryStateSnapshot": "6bdaf001f7b2f4a62a646359c8109425584b254f2966775086d017057af8e720"
+      "owlbear_delivery.delivery_state:DeliveryStateSnapshot": "9fa230372b3d5bb48022f32e6c8b844529376d15c23bdf45894d17c9d8afee33"
     },
     "version": 3
   },

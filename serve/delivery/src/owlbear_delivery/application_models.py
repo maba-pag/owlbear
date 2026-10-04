@@ -716,40 +716,6 @@ class DeliveryAnswerResult(_ApplicationModel):
         return self
 
 
-class DeliveryConfirmationPlan(_ApplicationModel):
-    """What the confirmation boundary renders for one scoped request in one round (D13)."""
-
-    change_id: str = Field(min_length=1)
-    request_id: str = Field(min_length=1)
-    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
-    disposition: Literal["unscoped", "resolved", "ask", "no-question", "frontier-changed"]
-    generation_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
-    request: DeliveryRequest | None = None
-    criteria: tuple[DeliveryAcceptanceCriterion, ...] = ()
-
-    @model_validator(mode="after")
-    def _validate_plan(self) -> DeliveryConfirmationPlan:
-        if self.disposition == "ask" and (self.generation_id is None or self.request is None):
-            message = "a confirmation question renders one open generation and its scoped request"
-            raise ValueError(message)
-        return self
-
-
-class DeliveryConfirmationResponse(_ApplicationModel):
-    """The boundary's report of the user's answer to one rendered question."""
-
-    action: Literal["accept", "decline", "cancel"]
-    decision: Literal["waive", "keep-required", "passed", "failed"] | None = None
-    question_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
-
-    @model_validator(mode="after")
-    def _validate_response(self) -> DeliveryConfirmationResponse:
-        if (self.action == "accept") != (self.decision is not None):
-            message = "only an accepted confirmation carries the user's decision"
-            raise ValueError(message)
-        return self
-
-
 class DeliveryAcquisitionResult(_ApplicationModel):
     """Launchable task claims plus typed attention from one refresh."""
 

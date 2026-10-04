@@ -475,12 +475,11 @@ class DeliveryMissingResult(_DeliveryModel):
 
 
 class DeliveryWaivedResult(_DeliveryModel):
-    """An explicit user waiver; it applies only with a matching ledger confirmation."""
+    """An explicit user waiver; it applies only through the user-resolved request its observation cites."""
 
     kind: Literal["waived"] = "waived"
     owner: Literal["user"] = "user"
     reason: str = Field(min_length=1, max_length=240)
-    confirmation_id: str = Field(pattern=_SHA256)
 
     @property
     def verdict(self) -> DeliveryEvidenceVerdict:
@@ -523,7 +522,7 @@ class DeliveryObservation(_DeliveryModel):
     environment: DeliveryObservationEnvironment = DeliveryObservationEnvironment()
     target_class: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9-]{0,63}$")
     provenance: Literal["machine-observed", "human-confirmed"] = "machine-observed"
-    confirmation_id: str | None = Field(default=None, pattern=_SHA256)
+    request_id: str | None = Field(default=None, min_length=1)
     locator: str | None = Field(default=None, max_length=256)
     summary: str | None = Field(default=None, max_length=240)
     observer_or_runner_identity: str = Field(min_length=1)
@@ -539,12 +538,9 @@ class DeliveryObservation(_DeliveryModel):
         if self.provenance == "human-confirmed" and kind not in {"manual-procedure", "artifact", "waived"}:
             message = "human-confirmed provenance applies only to manual, artifact, or waived evidence"
             raise ValueError(message)
-        needs_confirmation = self.provenance == "human-confirmed" or kind == "waived"
-        if needs_confirmation != (self.confirmation_id is not None):
-            message = "a confirmation is cited exactly by human-confirmed or waived evidence"
-            raise ValueError(message)
-        if isinstance(self.result, DeliveryWaivedResult) and self.result.confirmation_id != self.confirmation_id:
-            message = "a waiver must cite its own confirmation"
+        needs_request = self.provenance == "human-confirmed" or kind == "waived"
+        if needs_request != (self.request_id is not None):
+            message = "a resolved request is cited exactly by human-confirmed or waived evidence"
             raise ValueError(message)
         if kind == "artifact" and self.locator is None:
             message = "artifact evidence requires a retained locator"
@@ -1052,7 +1048,6 @@ class DeliveryRequestResolution(_DeliveryModel):
     selected_option_id: str | None = None
     response_text: str | None = None
     provenance: Literal["user-confirmed"] | None = None
-    confirmation_id: str | None = Field(default=None, pattern=_SHA256, exclude_if=_omit_when_none)
 
     @model_validator(mode="after")
     def _require_answer(self) -> DeliveryRequestResolution:
@@ -1068,13 +1063,12 @@ class DeliveryRequestResolution(_DeliveryModel):
 CONFIRMATION_DECISIONS: Mapping[str, tuple[str, ...]] = MappingProxyType(
     {"waive": ("waive", "keep-required"), "confirm-check": ("passed", "failed")}
 )
-# The decision that makes a confirmation affirmative for each scope kind (I6).
+# The decision that makes a scoped request answer affirmative for each scope kind (I6).
 AFFIRMATIVE_DECISIONS: Mapping[str, str] = MappingProxyType({"waive": "waive", "confirm-check": "passed"})
-MAX_LEDGER_CONFIRMATIONS = 256
 
 
 class DeliveryConfirmationScope(_DeliveryModel):
-    """Exact criterion versions and procedure that a user confirmation may apply to."""
+    """Exact criterion versions and procedure that a user's answer to a scoped request applies to."""
 
     kind: Literal["waive", "confirm-check"]
     acceptance: tuple[DeliveryAcceptanceRef, ...] = Field(min_length=1, max_length=32)
@@ -1114,11 +1108,7 @@ class DeliveryRequest(_DeliveryModel):
 
     def _validate_confirmation_scope(self) -> None:
         scope = self.applies_to
-        confirmation_id = self.resolution.confirmation_id if self.resolution is not None else None
         if scope is None:
-            if confirmation_id is not None:
-                message = "only a scoped request resolution cites a user confirmation"
-                raise ValueError(message)
             return
         if self.kind != DeliveryRequestKind.DECISION or {option.option_id for option in self.options} != set(
             CONFIRMATION_DECISIONS[scope.kind]
@@ -1127,83 +1117,21 @@ class DeliveryRequest(_DeliveryModel):
             raise ValueError(message)
         resolution = self.resolution
         if resolution is not None and (
-            confirmation_id is None
-            or resolution.provenance != "user-confirmed"
-            or resolution.selected_option_id not in CONFIRMATION_DECISIONS[scope.kind]
+            resolution.selected_option_id not in CONFIRMATION_DECISIONS[scope.kind]
             or resolution.response_text is not None
         ):
-            message = "a scoped request resolution must be the user-confirmed decision of its ledger confirmation"
+            message = "a scoped request resolution must select one of its confirmation decisions"
             raise ValueError(message)
 
     @property
     def has_n03_content(self) -> bool:
         """Return whether this request holds content that only frontier 19 may carry."""
-        return self.applies_to is not None or (
-            self.resolution is not None and self.resolution.confirmation_id is not None
-        )
+        return self.applies_to is not None
 
 
-class DeliveryUserConfirmation(_DeliveryModel):
-    """One user decision captured through the confirmation boundary; the ledger is its only authority."""
-
-    schema_version: Literal[1] = 1
-    change_id: str = Field(min_length=1, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
-    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
-    request_id: str = Field(min_length=1)
-    scope: DeliveryConfirmationScope
-    decision: Literal["waive", "keep-required", "passed", "failed"]
-    channel: Literal["mcp-elicitation"] = "mcp-elicitation"
-    question_digest: str = Field(pattern=_SHA256)
-    generation_id: str = Field(pattern=_SHA256)
-    confirmed_at: datetime
-    confirmation_id: str = Field(pattern=_SHA256)
-
-    @classmethod
-    def create(  # noqa: PLR0913 - the confirmation binds every element of the answered question.
-        cls,
-        *,
-        change_id: str,
-        request: DeliveryRequest,
-        decision: str,
-        question_digest: str,
-        generation_id: str,
-        confirmed_at: datetime,
-    ) -> DeliveryUserConfirmation:
-        """Create one deterministic confirmation for an answered scoped request."""
-        if request.applies_to is None:
-            message = "only a scoped request can record a user confirmation"
-            raise ValueError(message)
-        values = {
-            "change_id": change_id,
-            "outcome_id": request.outcome_id,
-            "request_id": request.request_id,
-            "scope": request.applies_to,
-            "decision": decision,
-            "channel": "mcp-elicitation",
-            "question_digest": question_digest,
-            "generation_id": generation_id,
-            "confirmed_at": confirmed_at,
-        }
-        candidate = cls.model_construct(confirmation_id="0" * 64, schema_version=1, **values)
-        return cls(confirmation_id=_receipt_digest(candidate, "confirmation_id"), **values)
-
-    @model_validator(mode="after")
-    def _validate_confirmation(self) -> DeliveryUserConfirmation:
-        if self.decision not in CONFIRMATION_DECISIONS[self.scope.kind]:
-            message = "confirmation decision does not belong to its scope kind"
-            raise ValueError(message)
-        if self.confirmed_at.tzinfo is None:
-            message = "confirmation timestamp must include a timezone"
-            raise ValueError(message)
-        if self.confirmation_id != _receipt_digest(self, "confirmation_id"):
-            message = "user confirmation identity is invalid"
-            raise ValueError(message)
-        return self
-
-    @property
-    def affirmative(self) -> bool:
-        """Return whether the recorded decision is the affirmative one for its scope kind."""
-        return self.decision == AFFIRMATIVE_DECISIONS[self.scope.kind]
+def retained_requests(requests: tuple[DeliveryRequest, ...]) -> tuple[DeliveryRequest, ...]:
+    """Return the answered scoped requests that promotion keeps, since evidence may cite them."""
+    return tuple(request for request in requests if request.applies_to is not None and request.resolution is not None)
 
 
 class DeliveryBlock(_DeliveryModel):
@@ -1553,19 +1481,11 @@ class DeliveryFrontier(_DeliveryModel):
     change_disposition_resolution: DeliveryChangeDispositionResolution | None = None
     integration_attention: DeliveryIntegrationAttention | None = None
     integration_repair_claim: DeliveryActiveClaim | None = None
-    confirmations: tuple[DeliveryUserConfirmation, ...] | None = Field(
-        default=None, min_length=1, max_length=MAX_LEDGER_CONFIRMATIONS, exclude_if=_omit_when_none
-    )
 
     @model_validator(mode="after")
     def _validate_version_content(self) -> DeliveryFrontier:
-        confirmations = self.confirmations or ()
-        identities = tuple(item.confirmation_id for item in confirmations)
-        if len(identities) != len(set(identities)) or len({item.change_id for item in confirmations}) > 1:
-            message = "Delivery confirmation ledger entries must be unique and bind one Change"
-            raise ValueError(message)
         if self.schema_version == _READABLE_LEGACY_FRONTIER_SCHEMA_VERSION and frontier_has_n03_content(self):
-            message = "Delivery frontier schema 18 cannot carry schema-19 evidence or confirmations"
+            message = "Delivery frontier schema 18 cannot carry schema-19 evidence or scoped requests"
             raise ValueError(message)
         return self
 
@@ -1993,8 +1913,8 @@ type DeliveryEvidenceGapReason = Literal[
     "legacy-observation",
     "unknown-acceptance",
     "stale-acceptance-version",
-    "confirmation-unresolved",
-    "confirmation-not-applicable",
+    "request-unresolved",
+    "request-not-applicable",
     "review-basis-missing",
     "review-basis-stale",
     "review-observations-mismatch",
@@ -2024,26 +1944,15 @@ class DeliveryAcceptanceEvidenceError(DeliveryRuntimeConflictError):
         super().__init__(f"acceptance evidence is insufficient: {reasons}")
 
 
-type DeliveryConfirmationRefusal = Literal[
-    "confirmation-required", "declined", "channel-unavailable", "ledger-full", "question-closed"
-]
-
-
 class DeliveryConfirmationError(DeliveryRuntimeConflictError):
-    """A scoped request needs a user confirmation that the boundary did not provide."""
+    """A waiver or person-only confirmation request is answered only by the user in Cockpit."""
 
     code = "ERR_DELIVERY_CONFIRMATION"
     retry_safe = False
 
-    def __init__(self, reason: DeliveryConfirmationRefusal, detail: str | None = None) -> None:
-        self.reason = reason
-        super().__init__(f"{reason}: {detail}" if detail else reason)
-
 
 def frontier_has_n03_content(frontier: DeliveryFrontier) -> bool:
-    """Return whether a frontier holds evidence, requests, or confirmations that need schema 19."""
-    if frontier.confirmations is not None:
-        return True
+    """Return whether a frontier holds evidence or scoped requests that need schema 19."""
     finalization = frontier.finalization
     if finalization is not None and finalization.schema_version != _LEGACY_FINALIZATION_SCHEMA_VERSION:
         return True

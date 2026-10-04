@@ -361,14 +361,6 @@ RECORD_KINDS: Final[tuple[RecordKind, ...]] = (
         read_upcasts=((1, f"{_RUNTIME_RECEIPTS}:parse_builder_handoff_change_intent_receipt"),),
     ),
     _kind(
-        "consent_generation",
-        "consent_generation",
-        rf"{_CH}/consent-generations/[0-9]{{8}}\.json",
-        ("owlbear_delivery.consent_generation:DeliveryConsentGeneration",),
-        "M",
-        1,
-    ),
-    _kind(
         "claim_issuer",
         "claim_issuer",
         rf"{_CH}/claim-issuers/[A-Za-z0-9][A-Za-z0-9._-]{{0,127}}\.json",
@@ -638,7 +630,6 @@ NESTED_MODELS: Final[dict[str, str]] = {
     f"{_RUNTIME_MODELS}:DeliveryObservationReceipt": "frontier",
     f"{_RUNTIME_MODELS}:DeliveryLegacyObservation": "frontier",
     f"{_RUNTIME_MODELS}:DeliveryLegacyObservationReceipt": "frontier",
-    f"{_RUNTIME_MODELS}:DeliveryUserConfirmation": "frontier",
     f"{_RUNTIME_MODELS}:DeliveryReview": "frontier",
     f"{_RUNTIME_MODELS}:DeliveryReviewReceipt": "frontier",
     f"{_RUNTIME_MODELS}:DeliveryFinalization": "frontier",

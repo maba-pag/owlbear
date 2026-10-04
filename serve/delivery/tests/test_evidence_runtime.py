@@ -34,6 +34,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryRequest,
     DeliveryRequestKind,
     DeliveryRequestOption,
+    DeliveryRequestResolution,
     DeliveryReview,
     DeliveryReviewReceipt,
     DeliveryRuntime,
@@ -41,11 +42,9 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryStage,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
-    DeliveryUserConfirmation,
     DeliveryWaivedResult,
     FinalizeDeliveryChange,
     PublishDeliveryResult,
-    _require_ledger_extension,
 )
 from owlbear_delivery.evidence import (
     FINALIZATION_SEMANTICS_MAX_BYTES,
@@ -150,7 +149,7 @@ def _gaps(error: pytest.ExceptionInfo[DeliveryAcceptanceEvidenceError]) -> list[
         ("failed", "failed"),
         ("unknown", "unknown-acceptance"),
         ("stale", "stale-acceptance-version"),
-        ("unresolved", "confirmation-unresolved"),
+        ("unresolved", "request-unresolved"),
     ],
 )
 def test_result_with_inadmissible_evidence_is_refused_without_a_write(
@@ -172,7 +171,7 @@ def test_result_with_inadmissible_evidence_is_refused_without_a_write(
             "procedure": "manual check",
             "result": {"kind": "manual-procedure", "assessment": "passed"},
             "provenance": "human-confirmed",
-            "confirmation_id": "f" * 64,
+            "request_id": "REQ-absent",
             "covers": (criterion.ref,),
         },
     }[variant]
@@ -306,51 +305,53 @@ def test_full_carried_coverage_finalizes_with_zero_new_observations(tmp_path: Pa
     assert receipt.review.observation_ids == ()
 
 
-def _ledger_confirmation(
-    criterion: DeliveryAcceptanceCriterion, request_id: str, decision: str
-) -> DeliveryUserConfirmation:
-    request = DeliveryRequest(
+def _answered_waiver_request(
+    criterion: DeliveryAcceptanceCriterion,
+    request_id: str,
+    decision: str,
+    scope: DeliveryAcceptanceRef | None = None,
+) -> DeliveryRequest:
+    """Return a waiver request of the criterion's outcome as the user answered it in Cockpit."""
+    return DeliveryRequest(
         request_id=request_id,
         kind=DeliveryRequestKind.DECISION,
         outcome_id=criterion.outcome_id,
         summary="Waive the criterion",
         options=tuple(DeliveryRequestOption(option_id=item, label=item) for item in ("waive", "keep-required")),
-        applies_to=DeliveryConfirmationScope(kind="waive", acceptance=(criterion.ref,), procedure="manual check"),
-    )
-    return DeliveryUserConfirmation.create(
-        change_id="delivery-runtime",
-        request=request,
-        decision=decision,
-        question_digest="d" * 64,
-        generation_id="e" * 64,
-        confirmed_at=_AT,
+        applies_to=DeliveryConfirmationScope(
+            kind="waive", acceptance=(scope or criterion.ref,), procedure="manual check"
+        ),
+        resolution=DeliveryRequestResolution(selected_option_id=decision),
     )
 
 
-def test_finalizer_waiver_cites_an_applicable_ledger_confirmation_that_no_task_result_cites(tmp_path: Path) -> None:
-    runtime = _runtime(tmp_path, stages=_COMPLETED)
-    criteria = acceptance_criteria(runtime.contract)
-    waived = next(item for item in criteria if item.outcome_id == "OUT-001")
-    kept = next(item for item in criteria if item.outcome_id != "OUT-001")
-    applicable = _ledger_confirmation(waived, "waive-criterion", "waive")
-    declined = _ledger_confirmation(kept, "keep-criterion", "keep-required")
+def _store_requests(runtime: DeliveryRuntime, state_root: Path, *requests: DeliveryRequest) -> None:
     frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=True)
-    (tmp_path / "changes/delivery-runtime/frontier.json").write_bytes(
-        _canonical(frontier.model_copy(update={"schema_version": 19, "confirmations": (applicable, declined)}))
+    bindings = tuple(
+        binding.model_copy(
+            update={"requests": tuple(item for item in requests if item.outcome_id == binding.outcome_id)}
+        )
+        for binding in frontier.bindings
+    )
+    (state_root / "changes/delivery-runtime/frontier.json").write_bytes(
+        _canonical(frontier.model_copy(update={"schema_version": 19, "bindings": bindings}))
     )
 
-    # The Finalizer builds its waiver only from the shared semantics, as w-change-finalization Step 2 directs.
+
+def _finalize_with_waiver(
+    runtime: DeliveryRuntime, waived: DeliveryAcceptanceCriterion, listed_request_id: str
+) -> FinalizeDeliveryChange:
+    """Build the Finalizer's proof from the shared semantics, as w-change-finalization Step 2 directs."""
     semantics = _semantics(runtime)
-    (listed,) = semantics.confirmations
-    assert listed.confirmation_id == applicable.confirmation_id
+    listed = next(item for item in semantics.confirmations if item.request_id == listed_request_id)
     waiver = _observation(
         _HEAD,
         "finalize",
         procedure=listed.scope.procedure,
-        result=DeliveryWaivedResult(reason="The user waived it.", confirmation_id=listed.confirmation_id),
+        result=DeliveryWaivedResult(reason="The user waived it."),
         provenance="human-confirmed",
-        confirmation_id=listed.confirmation_id,
-        covers=listed.scope.acceptance,
+        request_id=listed.request_id,
+        covers=(waived.ref,),
     )
     rest = tuple(
         DeliveryAcceptanceRef(acceptance_id=item.acceptance_id, acceptance_version=item.acceptance_version)
@@ -358,24 +359,61 @@ def test_finalizer_waiver_cites_an_applicable_ledger_confirmation_that_no_task_r
         if item.status not in {"covered", "waived"} and item.acceptance_id != waived.acceptance_id
     )
     observations = (waiver, _observation(_HEAD, "finalize", covers=rest))
-
-    receipt = runtime.finalize_change(
-        FinalizeDeliveryChange(
-            operation_id="finalize",
-            exact_head=_HEAD,
-            observations=observations,
-            review=_review(semantics, observations),
-        ),
-        _AT,
+    return FinalizeDeliveryChange(
+        operation_id="finalize",
+        exact_head=_HEAD,
+        observations=observations,
+        review=_review(semantics, observations),
     )
 
-    assert receipt.observations == observations
+
+def test_finalizer_waiver_cites_the_request_the_user_answered(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path, stages=_COMPLETED)
+    criteria = acceptance_criteria(runtime.contract)
+    waived = next(item for item in criteria if item.outcome_id == "OUT-001")
+    kept = next(item for item in criteria if item.outcome_id != "OUT-001")
+    _store_requests(
+        runtime,
+        tmp_path,
+        _answered_waiver_request(waived, "waive-criterion", "waive"),
+        _answered_waiver_request(kept, "keep-criterion", "keep-required"),
+    )
+    proof = _finalize_with_waiver(runtime, waived, "waive-criterion")
+
+    receipt = runtime.finalize_change(proof, _AT)
+
+    assert receipt.observations == proof.observations
     stored = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=True)
     coverage = {
         item.acceptance_id: item.status for item in evaluate_acceptance_evidence(runtime.contract, stored).criteria
     }
     assert coverage[waived.acceptance_id] == "waived"
     assert set(coverage.values()) == {"covered", "waived"}
+
+
+@pytest.mark.parametrize("variant", ["criterion", "version", "keep-required"])
+def test_finalizer_waiver_citing_a_request_for_another_criterion_or_version_is_refused(
+    tmp_path: Path, variant: str
+) -> None:
+    runtime = _runtime(tmp_path, stages=_COMPLETED)
+    waived = next(item for item in acceptance_criteria(runtime.contract) if item.outcome_id == "OUT-001")
+    scope = {
+        "criterion": DeliveryAcceptanceRef(acceptance_id="AC-099", acceptance_version=waived.acceptance_version),
+        "version": DeliveryAcceptanceRef(
+            acceptance_id=waived.acceptance_id, acceptance_version=acceptance_version("an earlier statement")
+        ),
+    }.get(variant)
+    decision = "keep-required" if variant == "keep-required" else "waive"
+    _store_requests(runtime, tmp_path, _answered_waiver_request(waived, "waive-criterion", decision, scope))
+    proof = _finalize_with_waiver(runtime, waived, "waive-criterion")
+    before = runtime.frontier_bytes()
+
+    with pytest.raises(DeliveryAcceptanceEvidenceError) as raised:
+        runtime.finalize_change(proof, _AT)
+
+    assert "request-not-applicable" in _gaps(raised)
+    assert runtime.frontier_bytes() == before
+    assert runtime.finalization() is None
 
 
 @pytest.mark.parametrize("variant", ["task-review", "stale-basis", "mismatch", "missing-record", "failed-record"])
@@ -491,7 +529,7 @@ def test_a_real_oversized_finalization_context_is_refused_whole_and_finalization
     assert runtime.finalization() is None
 
 
-# --- Stored-byte contract and the append-only ledger ----------------------------------------------
+# --- Stored-byte contract ---------------------------------------------------------------------------
 
 
 def test_v18_frontier_reads_keep_its_bytes_and_the_first_mutation_stores_19(tmp_path: Path) -> None:
@@ -510,20 +548,6 @@ def test_v18_frontier_reads_keep_its_bytes_and_the_first_mutation_stores_19(tmp_
 
     assert json.loads(path.read_bytes())["schema_version"] == 19
     assert hashlib.sha256(path.read_bytes()).hexdigest() != hashlib.sha256(stored).hexdigest()
-
-
-def test_ledger_writes_only_extend_the_existing_prefix() -> None:
-    entry = {"confirmation_id": "a" * 64}
-    other = {"confirmation_id": "b" * 64}
-
-    def frontier(*entries: dict[str, str]) -> bytes:
-        return json.dumps({"confirmations": list(entries) or None}).encode()
-
-    _require_ledger_extension(frontier(entry), frontier(entry, other))
-    _require_ledger_extension(frontier(), frontier(entry))
-    for replacement in (frontier(), frontier(other), frontier(other, entry)):
-        with pytest.raises(DeliveryRuntimeConflictError, match="append-only"):
-            _require_ledger_extension(frontier(entry), replacement)
 
 
 def test_typed_results_keep_identity_through_task_result_round_trip(tmp_path: Path) -> None:

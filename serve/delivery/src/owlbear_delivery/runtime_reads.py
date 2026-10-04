@@ -49,6 +49,7 @@ from owlbear_delivery.runtime_models import (
     _reference,
     derive_change_stage,
     pause_mutation_class,
+    retained_requests,
 )
 from owlbear_delivery.runtime_receipts import (
     AdministrativeDeliveryMovePreview,
@@ -509,7 +510,7 @@ class _RuntimeReadsMixin:
                     "recovery_attention": None,
                     "retry_diagnostic": None,
                     "block": None,
-                    "requests": (),
+                    "requests": retained_requests(binding.requests),
                     "retry_fingerprint": None,
                     "retry_count": 0,
                 }
@@ -540,7 +541,7 @@ class _RuntimeReadsMixin:
                     "recovery_attention": None,
                     "retry_diagnostic": None,
                     "block": None,
-                    "requests": (),
+                    "requests": retained_requests(binding.requests),
                     "retry_fingerprint": None,
                     "retry_count": 0,
                 }

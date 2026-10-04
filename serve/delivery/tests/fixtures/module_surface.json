@@ -50,7 +50,6 @@
     "CompletionReceiptBundle",
     "CompletionReceiptConflictError",
     "CompletionReceiptStore",
-    "ConsentGenerationStore",
     "CoordinationConflictError",
     "CreateDraftPublicationPullRequest",
     "CreateOrReconcileDraftPullRequest",
@@ -119,8 +118,6 @@
     "DeliveryCompilationResult",
     "DeliveryConfirmationError",
     "DeliveryConfirmationScope",
-    "DeliveryConsentDisposition",
-    "DeliveryConsentGeneration",
     "DeliveryContextRefusal",
     "DeliveryContinuationReason",
     "DeliveryContinuationRequest",
@@ -217,7 +214,6 @@
     "DeliveryTaskResult",
     "DeliveryTransition",
     "DeliveryUnavailableChangeView",
-    "DeliveryUserConfirmation",
     "DeliveryWaivedResult",
     "DeliveryWorkerActiveError",
     "DeliveryWorkerExclusionRequiredError",
@@ -343,7 +339,6 @@
     "classify_publication_check",
     "close_delivery_application",
     "compile_delivery_contract",
-    "confirmation_applies",
     "derive_change_stage",
     "evaluate_acceptance_evidence",
     "failed_required_publication_checks",
@@ -359,7 +354,8 @@
     "parse_delivery_state_snapshot",
     "parse_stored_delivery_frontier",
     "repair_missing_request_provenance",
-    "resolve_confirmation"
+    "request_applies",
+    "resolve_request"
   ],
   "surfaces": {
     "portfolio_application": [
