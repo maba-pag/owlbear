@@ -1316,6 +1316,19 @@ class RepairParticipant(_MigrationModel):
     source: str | None = None
 
 
+class RepairFindingPrint(_MigrationModel):
+    """One classified finding as I9 compares it: ID, code, explicit locator and a digest of everything else."""
+
+    finding_id: str = Field(min_length=1)
+    code: str = Field(min_length=1)
+    locator: str = Field(min_length=1)
+    detail_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    def identity(self) -> tuple[str, str, str, str]:
+        """Return the fields in canonical order."""
+        return (self.finding_id, self.code, self.locator, self.detail_sha256)
+
+
 class RepairProposal(_MigrationModel):
     """Staged repair whose identity binds every path digest, the manifest set, the format and the release."""
 
@@ -1330,7 +1343,7 @@ class RepairProposal(_MigrationModel):
     entries: tuple[RepairEntry, ...] = Field(min_length=1)
     manifests: tuple[RepairManifest, ...] = ()
     participants: tuple[RepairParticipant, ...] = ()
-    findings: tuple[str, ...] = ()
+    findings: tuple[RepairFindingPrint, ...] = ()
 
     @property
     def migration_id(self) -> str:
@@ -1348,17 +1361,18 @@ def repair_proposal(  # noqa: PLR0913 - the identity binds each field explicitly
     entries: tuple[RepairEntry, ...],
     manifests: tuple[RepairManifest, ...] = (),
     participants: tuple[RepairParticipant, ...] = (),
-    findings: tuple[str, ...] = (),
+    findings: tuple[RepairFindingPrint, ...] = (),
     release: str | None = None,
 ) -> RepairProposal:
     """Build a proposal whose ID is the SHA-256 of its canonical identity."""
     release = controller_release() if release is None else release
+    findings = tuple(sorted(findings, key=RepairFindingPrint.identity))
     identity = {
         "entries": sorted(
             [entry.locator, entry.before_sha256 or "absent", entry.after_sha256 or "absent"] for entry in entries
         ),
         "finding_id": finding_id,
-        "findings": sorted(findings),
+        "findings": [list(item.identity()) for item in findings],
         "format": format_value,
         "manifests": [[manifest.locator, manifest.sha256] for manifest in manifests],
         "operation": operation,
@@ -1379,7 +1393,7 @@ def repair_proposal(  # noqa: PLR0913 - the identity binds each field explicitly
         entries=entries,
         manifests=manifests,
         participants=participants,
-        findings=tuple(sorted(findings)),
+        findings=findings,
     )
 
 
@@ -2062,7 +2076,7 @@ def _replay_manifests(
             pending = pending_from_backup(paths.workspace, manifest, _backup_bytes(paths, proposal, manifest.locator))
             _guard_write()
             try:
-                pending.replay(failure=_batch_hook(failure, index))
+                pending.replay(failure=_batch_hook(failure, index), guard=_guard_write)
             except (TransactionConflictError, TransactionPathError, TransactionManifestError, OSError) as exc:
                 raise _repair_error(
                     code="repair-corruption-stop", detail="a participant conflicts with the replay"
@@ -2086,7 +2100,7 @@ def _replay_manifests(
 
 
 type RepairCheck = Callable[[Path, RepairProposal], None]
-type RepairClassifier = Callable[[Path, str], tuple[str, ...]]
+type RepairClassifier = Callable[[Path, str], tuple[RepairFindingPrint, ...]]
 
 
 def verify_repair(  # noqa: PLR0913 - the I9 checks and test hooks are explicit keywords.
@@ -2101,7 +2115,7 @@ def verify_repair(  # noqa: PLR0913 - the I9 checks and test hooks are explicit 
     """Scoped offline verification bound to journal J, then archive and namespace cleanup (I3, I9).
 
     ``owner_check`` raises ``ValueError`` when the addressed owner still rejects its record;
-    ``classify`` returns finding IDs in the verification context bound to J.
+    ``classify`` returns complete finding fingerprints in the verification context bound to J.
     """
     paths = _Paths.of(workspace_root)
     with _repair_fence(paths, processes):
@@ -2122,10 +2136,10 @@ def verify_repair(  # noqa: PLR0913 - the I9 checks and test hooks are explicit 
         manifest = _verify_repair_backup(paths, proposal, journal)
         _require_journal_set(paths.workspace, journal)
         _require_repair_postcondition(paths, proposal, manifest, owner_check)
-        observed = tuple(sorted(classify(paths.workspace, proposal_id)))
-        expected = _expected_findings(proposal, set(observed))
+        observed = frozenset(classify(paths.workspace, proposal_id))
+        expected = _expected_findings(proposal, observed)
         if observed != expected:
-            added = sorted(set(observed) - set(expected))
+            added = sorted(item.finding_id for item in observed - expected)
             raise _repair_error(
                 code="repair-verify-mismatch",
                 detail="classification differs from the proposal-time findings minus the addressed one",
@@ -2137,16 +2151,20 @@ def verify_repair(  # noqa: PLR0913 - the I9 checks and test hooks are explicit 
         return _archive_repair(paths, journal, failure)
 
 
-def _expected_findings(proposal: RepairProposal, observed: set[str]) -> tuple[str, ...]:
-    """Proposal-time findings minus the addressed one and any finding located at a path this repair rewrote.
+def _expected_findings(
+    proposal: RepairProposal, observed: frozenset[RepairFindingPrint]
+) -> frozenset[RepairFindingPrint]:
+    """Proposal-time fingerprints minus the addressed finding and A2's resolved ones.
 
-    Only a finding at an affected path may resolve with the repair (a C03 replay of a C01 record); a new
-    finding or an unrelated disappearance still differs.
+    A2: only a finding that no longer appears at all and whose explicit locator is a path this repair
+    changed may resolve with it (a C03 replay of a C01 record). A fingerprint that changed under the same
+    ID, a new finding or any other disappearance still differs.
     """
     affected = {entry.locator for entry in proposal.entries if entry.before_sha256 != entry.after_sha256}
-    remaining = set(proposal.findings) - {proposal.finding_id}
-    resolved = {item for item in remaining - observed if item.split(":", 1)[-1] in affected}
-    return tuple(sorted(remaining - resolved))
+    remaining = {item for item in proposal.findings if item.finding_id != proposal.finding_id}
+    observed_ids = {item.finding_id for item in observed}
+    resolved = {item for item in remaining if item.finding_id not in observed_ids and item.locator in affected}
+    return frozenset(remaining - resolved)
 
 
 def _archived_repair(paths: _Paths, proposal_id: str) -> MigrationJournal | None:
@@ -2285,6 +2303,7 @@ __all__ = [
     "MigrationJournal",
     "MigrationProposal",
     "RepairEntry",
+    "RepairFindingPrint",
     "RepairManifest",
     "RepairParticipant",
     "RepairProposal",

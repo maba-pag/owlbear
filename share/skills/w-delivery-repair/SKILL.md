@@ -38,6 +38,10 @@ route and keep each one's owner and resume condition verbatim:
 | `environment` (C08) | Give the exact `setup/init.py` instruction for the named locator |
 | `contained` (C07) | Report the owner; the state stays preserved and refused |
 
+`classify` also lists `online_checks`: C06 conditions only a remote read detects (snapshot
+quarantine, local frontier mismatch, remote Change head mismatch, target-sync publication). They are
+not findings: name each check's tool and say Delivery reports the condition after startup.
+
 Never write request provenance, rehash a stored identity, or edit receipts, revisions, snapshots
 or package identities. Never treat a finding as resolved because a command was run; only a
 successful `verify` resolves it.

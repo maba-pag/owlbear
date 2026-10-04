@@ -11,6 +11,7 @@ import subprocess
 import sys
 import textwrap
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -36,6 +37,11 @@ import owlbear_delivery
 from owlbear_delivery import close_delivery_application, load_delivery_application, state_migration, state_repair
 from owlbear_delivery.delivery_runtime import DeliveryStage
 from owlbear_delivery.design_package import DesignPackageManifest, DesignPackageStore
+from owlbear_delivery.runtime_models import (
+    DeliveryChangeDisposition,
+    DeliveryChangeDispositionKind,
+    DeliveryChangeStage,
+)
 from owlbear_delivery.runtime_transaction import (
     MoveTransactionParticipant,
     ReplacementTransactionParticipant,
@@ -277,7 +283,7 @@ def test_c01_host_local_reset_is_proposed_confirmed_applied_verified_and_archive
 
     assert record_tree_digest(repository) == tree
     assert proposal.policy == "user-confirmed"
-    assert proposal.findings == (_C01,)
+    assert [item.finding_id for item in proposal.findings] == [_C01]
     assert [(entry.locator, entry.after_sha256) for entry in proposal.entries] == [
         ("runtime/host.local.json", hashlib.sha256(CANONICAL_HOST_LOCAL).hexdigest())
     ]
@@ -436,7 +442,7 @@ def test_two_startup_faults_are_repaired_one_verified_proposal_at_a_time(tmp_pat
     state_repair.verify(repository, first.proposal_id, processes=_none)
     assert _ids(state_repair.classify(repository)) == ["C02:runtime/host.json"]
     second = state_repair.propose(repository, "C02:runtime/host.json")
-    assert second.findings == ("C02:runtime/host.json",)
+    assert [item.finding_id for item in second.findings] == ["C02:runtime/host.json"]
     _apply(repository, second)
     state_repair.verify(repository, second.proposal_id, processes=_none)
 
@@ -506,6 +512,31 @@ def test_a_finding_new_after_apply_is_a_verify_mismatch_and_the_journal_stays_ap
 
     assert refused.locator is None or "admission" in refused.locator
     assert _live_journal(repository, proposal.proposal_id).state == "applied"  # type: ignore[union-attr]
+
+
+def test_a_changed_failure_at_the_same_finding_id_is_a_verify_mismatch(tmp_path: Path) -> None:
+    """I9 compares complete fingerprints: a replay leaving contract.json invalid in a new way is not 'unchanged'."""
+    repository = _repository(tmp_path, marked=False)
+    runtime = _delivery(repository) / "runtime"
+    contract = Path("changes/change-a/contract.json")
+    (runtime / contract).write_bytes(b"{}")
+    transaction = RuntimeTransaction(
+        runtime, "contract-rewrite", (ReplacementTransactionParticipant(runtime, contract, b"{}", b'{"a":1}'),)
+    )
+    with pytest.raises(_Pending):
+        transaction.commit(failure=_stop)
+    finding_id = "C07:runtime/changes/change-a/contract.json"
+    before = {finding.finding_id: finding for finding in state_repair.classify(repository).findings}
+    proposal = state_repair.propose(repository, "C03:transactions")
+    state_repair.apply(repository, proposal.proposal_id, processes=_none)
+
+    _refused("repair-verify-mismatch", lambda: state_repair.verify(repository, proposal.proposal_id, processes=_none))
+    assert _live_journal(repository, proposal.proposal_id).state == "applied"  # type: ignore[union-attr]
+    after = {finding.finding_id: finding for finding in state_repair.classify(repository).findings}
+    assert after[finding_id].code == before[finding_id].code
+    assert after[finding_id].fingerprint() != before[finding_id].fingerprint()
+    state_repair.abort(repository, proposal.proposal_id, processes=_none)
+    assert (runtime / contract).read_bytes() == b"{}"
 
 
 # ---------------------------------------------------------------------------
@@ -1330,6 +1361,79 @@ def test_a_controller_started_after_the_fence_scan_is_refused_before_the_next_wr
     assert (_delivery(repository) / "runtime/host.local.json").read_bytes() == CANONICAL_HOST_LOCAL
 
 
+class _UngatedController:
+    """An ungated controller as the process scan sees it: supported form, cwd in the workspace."""
+
+    pid = 4_000_000
+    name = "python3"
+
+    def __init__(self, cwd: Path) -> None:
+        self._cwd = cwd
+
+    @staticmethod
+    def cmdline() -> tuple[str, ...]:
+        return ("python3", "-m", "owlbear_delivery_mcp")
+
+    def cwd(self) -> Path:
+        return self._cwd
+
+
+class _StartsWhen:
+    """Process source of the pre-write guard: the controller appears once ``condition`` holds, until stopped."""
+
+    def __init__(self, repository: Path, condition: Callable[[], bool]) -> None:
+        self._repository, self._condition, self.stopped = repository, condition, False
+
+    def __call__(self) -> list[object]:
+        if self.stopped or not self._condition():
+            return []
+        return [_UngatedController(self._repository)]
+
+
+@pytest.mark.parametrize("point", ["second-participant", "move-source", "manifest-cleanup", "contained-cleanup"])
+def test_a_controller_started_between_replay_writes_is_refused_before_the_next_one(tmp_path: Path, point: str) -> None:
+    """A1: C03 rescans before every participant write, move-source removal and manifest cleanup of a replay."""
+    repository = _repository(tmp_path, marked=False)
+    runtime = _delivery(repository) / "runtime"
+    if point == "contained-cleanup":
+        manifest = _contained_manifest(repository)
+        report = manifest.parent.parent / "notes/report.json"
+        expected: dict[str, bytes | None] = {}
+        condition = report.exists
+    else:
+        host = (runtime / "host.json").read_bytes()
+        expected = _pending_runtime_and_packages(repository)
+        manifest = runtime / "transactions/repair-fixture-a.yaml"
+        source, moved = runtime / "notes/source.json", runtime / "notes/moved.json"
+        condition = {
+            "second-participant": (runtime / "notes/created.json").exists,
+            "move-source": moved.exists,
+            "manifest-cleanup": lambda: moved.exists() and not source.exists(),
+        }[point]
+    proposal = state_repair.propose(repository, "C03:transactions")
+    processes = _StartsWhen(repository, condition)
+
+    _refused(
+        "repair-controller-running",
+        lambda: state_repair.apply(repository, proposal.proposal_id, processes=processes),
+    )
+
+    assert manifest.exists()
+    assert _live_journal(repository, proposal.proposal_id).state == "applying"  # type: ignore[union-attr]
+    if point == "second-participant":
+        assert (runtime / "host.json").read_bytes() == host
+        assert not moved.exists()
+    elif point == "move-source":
+        assert source.read_bytes() == b'{"moved":true}\n'
+    processes.stopped = True
+    state_repair.resume(repository, proposal.proposal_id, processes=processes)
+    state_repair.verify(repository, proposal.proposal_id, processes=processes)
+    assert not manifest.exists()
+    assert _state(repository, expected) == expected
+    if point == "contained-cleanup":
+        assert report.read_bytes() == b'{"r":1}\n'
+
+
 def test_supported_forms_are_recognized_and_others_are_not() -> None:
     supported = (
         ("python3", "-m", "owlbear_delivery_mcp"),
@@ -1473,6 +1577,103 @@ def test_a_missing_change_worktree_routes_to_its_online_recovery_without_a_write
     assert [item.finding_id for item in state_repair.classify(repository, "change-a").findings] == []
     _refused("repair-not-supported", lambda: state_repair.propose(repository, "C06:worktrees/change-b"))
     assert record_tree_digest(repository) == tree
+
+
+def _recording_git(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, ...]]:
+    calls: list[tuple[str, ...]] = []
+    original = subprocess.run
+
+    def run(argv: tuple[str, ...], *args: object, **kwargs: object) -> object:
+        calls.append(tuple(str(item) for item in argv))
+        return original(argv, *args, **kwargs)  # type: ignore[call-overload]
+
+    monkeypatch.setattr(state_repair.subprocess, "run", run)
+    return calls
+
+
+def _no_remote_git(calls: list[tuple[str, ...]]) -> bool:
+    return not any({"fetch", "ls-remote", "push", "pull"} & set(call) for call in calls)
+
+
+def test_an_out_of_band_change_head_routes_to_its_online_recovery_without_a_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository = _repository(tmp_path)
+    coordination = json.loads((_delivery(repository) / "runtime/coordination/changes/change-b.json").read_bytes())
+    branch, reviewed = coordination["branch"], coordination["last_reviewed_commit"]
+    head_tree = _git(repository, "rev-parse", f"{reviewed}^{{tree}}")
+    moved = _git(repository, "commit-tree", head_tree, "-p", reviewed, "-m", "out of band")
+    _git(repository, "update-ref", f"refs/heads/{branch}", moved, reviewed)
+    tree = record_tree_digest(repository)
+    calls = _recording_git(monkeypatch)
+
+    report = state_repair.classify(repository)
+
+    assert [(item.finding_id, item.route, item.operation, item.scope) for item in report.findings] == [
+        ("C06:change-b/out-of-band-head", "online", "recover_out_of_band_head", "change-b")
+    ]
+    assert _no_remote_git(calls)
+    assert state_repair.classify(repository, "change-a").findings == ()
+    _refused("repair-not-supported", lambda: state_repair.propose(repository, "C06:change-b/out-of-band-head"))
+    assert record_tree_digest(repository) == tree
+    assert _git(repository, "rev-parse", f"refs/heads/{branch}") == moved
+    monkeypatch.undo()
+    application = load_delivery_application(_startup_config(), workspace_root=repository)
+    try:
+        reasons = {(item.change_id, item.reason) for item in application.delivery_health().diagnostics}
+    finally:
+        close_delivery_application(application)
+    assert ("change-b", "local-change-head-out-of-band") in reasons
+
+
+def test_an_unknown_publication_baseline_routes_to_its_online_recovery_without_a_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository = _repository(tmp_path)
+    frontier = _delivery(repository) / "runtime/changes/change-b/frontier.json"
+    payload = json.loads(frontier.read_bytes())
+    disposition = DeliveryChangeDisposition.create(
+        kind=DeliveryChangeDispositionKind.PUBLICATION_ATTENTION,
+        change_id="change-b",
+        entered_from=DeliveryChangeStage.BUILDING,
+        recorded_at=datetime(2026, 10, 4, tzinfo=UTC),
+        diagnostics=("publication-baseline-unavailable", f"exact-head:{'a' * 40}"),
+    )
+    payload["change_disposition"] = disposition.model_dump(mode="json")
+    frontier.write_bytes(json.dumps(payload).encode())
+    tree = record_tree_digest(repository)
+    calls = _recording_git(monkeypatch)
+
+    report = state_repair.classify(repository)
+
+    assert [(item.finding_id, item.route, item.operation, item.scope) for item in report.findings] == [
+        ("C06:change-b/publication-baseline", "online", "recover_publication_baseline", "change-b")
+    ]
+    assert _no_remote_git(calls)
+    _refused("repair-not-supported", lambda: state_repair.propose(repository, "C06:change-b/publication-baseline"))
+    assert record_tree_digest(repository) == tree
+
+
+def test_remote_only_attention_is_named_as_an_online_check_without_a_remote_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Snapshot quarantine, frontier mismatch, remote head mismatch and target-sync publication need remote reads."""
+    repository = _repository(tmp_path)
+    calls = _recording_git(monkeypatch)
+
+    report = state_repair.classify(repository)
+
+    assert report.findings == ()
+    assert {(check.condition, check.operation) for check in report.online_checks} == {
+        ("remote-snapshot-quarantined", "repair_quarantined_delivery_state_snapshot"),
+        ("local-frontier-mismatch", "repair_delivery_state_snapshot"),
+        ("remote-change-head-mismatch", "recover_out_of_band_head"),
+        ("target-sync-publication", "repair_target_sync_publication"),
+    }
+    assert all(check.reason.startswith("needs online check:") for check in report.online_checks)
+    assert _no_remote_git(calls)
+    shutil.rmtree(_delivery(repository) / "runtime/changes")
+    assert state_repair.classify(repository).online_checks == ()
 
 
 def test_an_explicit_unsupported_host_local_version_is_contained_before_any_proposal(tmp_path: Path) -> None:

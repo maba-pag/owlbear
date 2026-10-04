@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 
 _FINDINGS = "findings"
+_ONLINE_CHECKS = "online_checks"
 _INVALID_INVOCATION = 2
 _OFFLINE_COMMANDS = frozenset({"propose", "apply", "resume", "verify", "abort"})
 # I1: no running process is exempt, so the user keeps every controller stopped through the whole repair.
@@ -140,7 +141,11 @@ def _execute(args: argparse.Namespace, root: Path, repair: object, migration: ob
     if command == "classify":
         report = repair.classify(root, args.change_id)  # type: ignore[attr-defined]
         findings = [finding.as_dict() for finding in report.findings]
-        return (1 if findings else 0), {"status": _FINDINGS if findings else "healthy", _FINDINGS: findings}
+        return (1 if findings else 0), {
+            "status": _FINDINGS if findings else "healthy",
+            _FINDINGS: findings,
+            _ONLINE_CHECKS: [check.as_dict() for check in report.online_checks],
+        }
     if command == "propose":
         proposal = repair.propose(root, args.finding_id)  # type: ignore[attr-defined]
         return 0, _proposal_payload(proposal, migration.MIGRATION_STATE_ROOT)  # type: ignore[attr-defined]
@@ -158,13 +163,17 @@ def _text(payload: dict[str, object]) -> str:
     findings = payload.get(_FINDINGS)
     if not isinstance(findings, list):
         return json.dumps(payload, indent=2, sort_keys=True)
-    if not findings:
-        return "healthy: no findings"
-    return "\n".join(
+    lines = [
         f"{item['finding_id']}: {item['route']} -> {item['operation']} (owner: {item['owner']}; "
         f"resume: {item['resume_condition']})"
         for item in findings
+    ] or ["healthy: no findings"]
+    checks = payload.get(_ONLINE_CHECKS)
+    lines.extend(
+        f"online check {item['condition']}: online -> {item['operation']} ({item['reason']})"
+        for item in (checks if isinstance(checks, list) else [])
     )
+    return "\n".join(lines)
 
 
 def main(argv: list[str] | None = None) -> int:

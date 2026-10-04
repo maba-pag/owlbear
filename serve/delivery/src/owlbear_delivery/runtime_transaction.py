@@ -141,10 +141,13 @@ class PendingTransaction:
         """Return the manifest path under ``<manifest_root>/transactions``."""
         return self.manifest_root / "transactions" / self.name
 
-    def replay(self, *, failure: Callable[[str], None] | None = None) -> None:
-        """Publish exactly these verified participants and remove the manifest, as its owner's recovery does."""
+    def replay(self, *, failure: Callable[[str], None] | None = None, guard: Callable[[], None] | None = None) -> None:
+        """Publish exactly these verified participants and remove the manifest, as its owner's recovery does.
+
+        ``guard`` runs immediately before every participant write, move-source removal and manifest removal.
+        """
         if not self.contained:
-            self.transaction.recover(failure=failure)
+            self.transaction.recover(failure=failure, guard=guard)
             return
         root_fd = os.open(self.manifest_root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
         try:
@@ -160,9 +163,10 @@ class PendingTransaction:
                     is None
                 ):
                     return
-                self.transaction._publish_contained(root_fd, failure)  # noqa: SLF001 - the contained publish path.
+                self.transaction._publish_contained(root_fd, failure, guard)  # noqa: SLF001 - the contained path.
                 if failure:
                     failure("before-manifest-cleanup")
+                _before_write(guard)
                 with contained_directory(root_fd, Path("transactions")) as directory_fd:
                     os.unlink(self.name, dir_fd=directory_fd)
                     os.fsync(directory_fd)
@@ -216,17 +220,18 @@ class RuntimeTransaction:
                 failure("before-manifest-cleanup")
             self._cleanup()
 
-    def recover(self, *, failure: Callable[[str], None] | None = None) -> None:
-        """Deterministically complete a previously staged transaction."""
+    def recover(self, *, failure: Callable[[str], None] | None = None, guard: Callable[[], None] | None = None) -> None:
+        """Deterministically complete a previously staged transaction; ``guard`` precedes every write."""
         if state_is_read_only():
             if self._manifest_path.exists():
                 refuse_read_only_write()
             return
         with locked_roots(self._locked_roots()):
             if self._manifest_path.exists():
-                self._publish(failure)
+                self._publish(failure, guard)
                 if failure:
                     failure("before-manifest-cleanup")
+                _before_write(guard)
                 self._cleanup()
 
     def abort(self) -> None:
@@ -301,7 +306,9 @@ class RuntimeTransaction:
         if current not in allowed:
             raise TransactionConflictError
 
-    def _publish_contained(self, root_fd: int, failure: Callable[[str], None] | None) -> None:
+    def _publish_contained(
+        self, root_fd: int, failure: Callable[[str], None] | None, guard: Callable[[], None] | None = None
+    ) -> None:
         for index, participant in enumerate(self._participants):
             self._require_contained_root(root_fd)
             if isinstance(participant, MoveTransactionParticipant):
@@ -310,6 +317,7 @@ class RuntimeTransaction:
             replacement = isinstance(participant, ReplacementTransactionParticipant)
             content = participant.replacement_content if replacement else participant.content
             expected = participant.expected_content if replacement else None
+            _before_write(guard)
             write_contained(root_fd, participant.relative_path, content, expected=expected)
             if failure and index == 0:
                 failure("after-first-publication")
@@ -534,7 +542,7 @@ class RuntimeTransaction:
             "participants": [_participant_manifest(participant) for participant in self._participants],
         }
 
-    def _publish(self, failure: Callable[[str], None] | None) -> None:
+    def _publish(self, failure: Callable[[str], None] | None, guard: Callable[[], None] | None = None) -> None:
         for index, participant in enumerate(self._participants):
             destination = participant.destination()
             if isinstance(participant, MoveTransactionParticipant):
@@ -543,13 +551,13 @@ class RuntimeTransaction:
                     destination,
                     participant.expected_content,
                     participant.destination_content,
+                    guard,
                 )
                 if failure and index == 0:
                     failure("after-first-publication")
                 continue
-            destination.parent.mkdir(parents=True, exist_ok=True)
             if isinstance(participant, ReplacementTransactionParticipant):
-                _publish_replacement(destination, participant)
+                _publish_replacement(destination, participant, guard)
                 if failure and index == 0:
                     failure("after-first-publication")
                 continue
@@ -557,6 +565,8 @@ class RuntimeTransaction:
                 if destination.read_bytes() != participant.content:
                     raise TransactionConflictError
                 continue
+            _before_write(guard)
+            destination.parent.mkdir(parents=True, exist_ok=True)
             temporary = destination.with_name(f".tmp-{secrets.token_hex(12)}-{destination.name}")
             try:
                 with temporary.open("xb") as handle:
@@ -894,7 +904,14 @@ def _move_participant_from_manifest(
     return participant
 
 
-def _publish_replacement(destination: Path, participant: ReplacementTransactionParticipant) -> None:
+def _before_write(guard: Callable[[], None] | None) -> None:
+    if guard is not None:
+        guard()
+
+
+def _publish_replacement(
+    destination: Path, participant: ReplacementTransactionParticipant, guard: Callable[[], None] | None = None
+) -> None:
     if not destination.exists() or destination.read_bytes() not in (
         participant.expected_content,
         participant.replacement_content,
@@ -902,6 +919,7 @@ def _publish_replacement(destination: Path, participant: ReplacementTransactionP
         raise TransactionConflictError
     if destination.read_bytes() == participant.replacement_content:
         return
+    _before_write(guard)
     temporary = destination.with_name(f".tmp-{secrets.token_hex(12)}-{destination.name}")
     try:
         with temporary.open("xb") as handle:
@@ -920,6 +938,7 @@ def _publish_move(
     destination: Path,
     expected_content: bytes,
     destination_content: bytes,
+    guard: Callable[[], None] | None = None,
 ) -> None:
     if destination.exists():
         if destination.read_bytes() != destination_content:
@@ -927,11 +946,13 @@ def _publish_move(
         if source.exists():
             if source.read_bytes() != expected_content:
                 raise TransactionConflictError
+            _before_write(guard)
             source.unlink()
             _fsync_directory(source.parent)
         return
     if not source.exists() or source.read_bytes() != expected_content:
         raise TransactionConflictError
+    _before_write(guard)
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_name(f".tmp-{secrets.token_hex(12)}-{destination.name}")
     try:
@@ -944,6 +965,7 @@ def _publish_move(
     finally:
         with contextlib.suppress(FileNotFoundError):
             temporary.unlink()
+    _before_write(guard)
     source.unlink()
     _fsync_directory(source.parent)
 

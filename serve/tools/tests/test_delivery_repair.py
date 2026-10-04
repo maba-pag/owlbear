@@ -88,8 +88,19 @@ def test_cli_classifies_proposes_confirms_applies_and_verifies_from_fresh_proces
     )
     assert _json(repository, "verify", proposal_id)[1]["status"] == "verified"
     assert "precondition" not in _json(repository, "classify")[1]
-    assert _json(repository, "classify") == (0, {"status": "healthy", "findings": []})
-    assert _cli(repository, "classify", "--format", "text") == (0, "healthy: no findings\n")
+    code, healthy = _json(repository, "classify")
+    assert (code, healthy["status"], healthy["findings"]) == (0, "healthy", [])
+    checks = healthy["online_checks"]
+    assert [(item["condition"], item["operation"]) for item in checks] == [  # type: ignore[union-attr]
+        ("remote-snapshot-quarantined", "repair_quarantined_delivery_state_snapshot"),
+        ("local-frontier-mismatch", "repair_delivery_state_snapshot"),
+        ("remote-change-head-mismatch", "recover_out_of_band_head"),
+        ("target-sync-publication", "repair_target_sync_publication"),
+    ]
+    code, text = _cli(repository, "classify", "--format", "text")
+    lines = text.splitlines()
+    assert (code, lines[0], len(lines)) == (0, "healthy: no findings", 5)
+    assert all("online -> " in line and "needs online check:" in line for line in lines[1:])
 
 
 def test_cli_output_never_contains_a_record_value_or_an_absolute_path(tmp_path: Path) -> None:

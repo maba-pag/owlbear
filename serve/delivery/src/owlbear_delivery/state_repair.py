@@ -13,7 +13,7 @@ import hashlib
 import json
 import os
 import subprocess
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -61,6 +61,7 @@ from owlbear_delivery.state_migration import (
     MigrationError,
     MigrationJournal,
     RepairEntry,
+    RepairFindingPrint,
     RepairManifest,
     RepairParticipant,
     RepairProposal,
@@ -107,22 +108,61 @@ class RepairFinding:
     operation: str
     owner: str
     resume_condition: str
+    detail_sha256: str = ""
 
     def as_dict(self) -> dict[str, str]:
         """Return the finding as plain strings."""
         return asdict(self)
 
+    def fingerprint(self) -> RepairFindingPrint:
+        """I9's complete fingerprint: ID, code, explicit locator and a digest of every other field."""
+        rest = [
+            self.catalogue,
+            self.scope,
+            self.route,
+            self.operation,
+            self.owner,
+            self.resume_condition,
+            self.detail_sha256,
+        ]
+        return RepairFindingPrint(
+            finding_id=self.finding_id,
+            code=self.code,
+            locator=self.locator,
+            detail_sha256=_sha(json.dumps(rest, separators=(",", ":")).encode()),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class OnlineCheck:
+    """A C06 condition only a remote read detects: offline classification names its route, never its presence."""
+
+    condition: str
+    operation: str
+    owner: str
+    reason: str
+
+    def as_dict(self) -> dict[str, str]:
+        """Return the check as plain strings."""
+        return asdict(self)
+
 
 @dataclass(frozen=True, slots=True)
 class RepairReport:
-    """Every finding of one classification, in stable order."""
+    """Every finding of one classification, in stable order, and the C06 conditions it cannot decide offline."""
 
     findings: tuple[RepairFinding, ...] = ()
+    online_checks: tuple[OnlineCheck, ...] = ()
 
     @property
     def finding_ids(self) -> tuple[str, ...]:
         """Return the sorted finding IDs."""
         return tuple(sorted(finding.finding_id for finding in self.findings))
+
+    @property
+    def fingerprints(self) -> tuple[RepairFindingPrint, ...]:
+        """Return every finding's complete fingerprint (I9)."""
+        return tuple(finding.fingerprint() for finding in self.findings)
 
 
 def _finding(  # noqa: PLR0913, PLR0917 - every finding names each routing field explicitly (I8).
@@ -136,9 +176,19 @@ def _finding(  # noqa: PLR0913, PLR0917 - every finding names each routing field
     *,
     scope: str = "workspace",
     key: str | None = None,
+    detail: str = "",
 ) -> RepairFinding:
     return RepairFinding(
-        f"{catalogue}:{key or locator}", catalogue, code, scope, locator, route, operation, owner, resume_condition
+        f"{catalogue}:{key or locator}",
+        catalogue,
+        code,
+        scope,
+        locator,
+        route,
+        operation,
+        owner,
+        resume_condition,
+        _sha(detail.encode()),
     )
 
 
@@ -217,9 +267,46 @@ def classify(workspace_root: Path, change_id: str | None = None, *, verifying: s
     ]
     unique = {finding.finding_id: finding for finding in findings}
     selected = (
-        finding for finding in unique.values() if change_id is None or finding.scope in {"workspace", change_id}
+        _with_evidence(workspace, finding)
+        for finding in unique.values()
+        if change_id is None or finding.scope in {"workspace", change_id}
     )
-    return RepairReport(tuple(sorted(selected, key=lambda finding: finding.finding_id)))
+    return RepairReport(
+        tuple(sorted(selected, key=lambda finding: finding.finding_id)), _online_checks(workspace, change_id)
+    )
+
+
+_EVIDENCE_ENTRIES = 256
+_EVIDENCE_FILE_BYTES = 1 << 20
+
+
+def _with_evidence(workspace: _Workspace, finding: RepairFinding) -> RepairFinding:
+    """Bind the bytes a finding names into its fingerprint, so a changed failure at the same ID differs (I9)."""
+    evidence = _evidence(workspace.delivery / finding.locator)
+    return replace(finding, detail_sha256=_sha(f"{finding.detail_sha256}:{evidence}".encode()))
+
+
+def _evidence(path: Path) -> str:
+    """Digest of a regular record, or of the regular files directly in a directory; never follows a link."""
+    try:
+        if path.is_symlink():
+            return "link"
+        if path.is_file():
+            return _file_evidence(path)
+        if path.is_dir():
+            entries = sorted(path.iterdir())[:_EVIDENCE_ENTRIES]
+            listing = [[entry.name, _file_evidence(entry) if entry.is_file() else "other"] for entry in entries]
+            return _sha(json.dumps(listing).encode())
+    except OSError:
+        return "unreadable"
+    return "absent"
+
+
+def _file_evidence(path: Path) -> str:
+    if path.is_symlink():
+        return "link"
+    size = path.stat().st_size
+    return _sha(path.read_bytes()) if size <= _EVIDENCE_FILE_BYTES else f"size:{size}"
 
 
 def _newer(locator: str) -> RepairFinding:
@@ -448,10 +535,15 @@ def _head_blob(workspace: _Workspace, locator: str) -> bytes | None:
 
 
 def _git_blob(workspace: _Workspace, spec: str) -> bytes | None:
+    return _git_output(workspace, "cat-file", "blob", spec)
+
+
+def _git_output(workspace: _Workspace, *arguments: str) -> bytes | None:
+    """Run one local, read-only Git command; ``None`` when it fails."""
     try:
         git = resolve_git_executable()
         completed = subprocess.run(  # noqa: S603 - resolved Git executable and fixed argument vector.
-            (git, "-C", str(workspace.root), "cat-file", "blob", spec),
+            (git, "-C", str(workspace.root), *arguments),
             check=False,
             capture_output=True,
             timeout=_GIT_TIMEOUT_SECONDS,
@@ -573,6 +665,7 @@ def _change_findings(workspace: _Workspace, report: CapabilityReport) -> list[Re
             continue
         change_id = directory.name
         findings.extend(_frontier_finding(workspace, change_id))
+        findings.extend(_attention_findings(workspace, change_id))
         admission = f"runtime/changes/{change_id}/admission.json"
         try:
             content = workspace.read(admission)
@@ -666,6 +759,114 @@ def _frontier_finding(workspace: _Workspace, change_id: str) -> list[RepairFindi
     if scan_bytes_status(locator, content or b"") == "newer":
         return []
     return [_contained("frontier-invalid", locator, scope=change_id)]
+
+
+_ONLINE_OWNER = "Delivery MCP (/resolve-delivery-attention); the tool's own confirmation"
+_BASELINE_UNAVAILABLE = "publication-baseline-unavailable"
+
+
+def _attention_findings(workspace: _Workspace, change_id: str) -> list[RepairFinding]:
+    """C06 from the online owners' own local attention predicates; reads records and local Git only."""
+    try:
+        content = workspace.read(f"runtime/changes/{change_id}/frontier.json")
+        frontier = parse_delivery_frontier(content)[0] if content is not None else None
+    except OSError, TypeError, ValueError:
+        return []
+    if frontier is None:
+        return []
+    findings = []
+    disposition = frontier.change_disposition
+    # The work-item owner routes exactly this persisted diagnostic to publication-baseline recovery.
+    if disposition is not None and _BASELINE_UNAVAILABLE in disposition.diagnostics:
+        findings.append(
+            _finding(
+                "C06",
+                "publication-baseline-unknown",
+                f"runtime/changes/{change_id}/frontier.json",
+                "online",
+                "recover_publication_baseline",
+                f"{_ONLINE_OWNER}: confirmed_recovery",
+                "the controller starts with this Change's publication attention; the online recovery records the "
+                "confirmed baseline",
+                scope=change_id,
+                key=f"{change_id}/publication-baseline",
+                detail=disposition.disposition_id,
+            )
+        )
+    locator = f"runtime/coordination/changes/{change_id}.json"
+    coordination = _coordination(workspace.delivery / locator)
+    observed = _out_of_band_head(workspace, coordination) if coordination is not None else None
+    if observed is not None:
+        findings.append(
+            _finding(
+                "C06",
+                "local-change-head-out-of-band",
+                locator,
+                "online",
+                "recover_out_of_band_head",
+                f"{_ONLINE_OWNER}: confirmed_recovery",
+                "the controller starts with this Change's out-of-band head attention; recover_out_of_band_head "
+                "preserves the head once its remote-head check confirms it",
+                scope=change_id,
+                key=f"{change_id}/out-of-band-head",
+                detail=observed,
+            )
+        )
+    return findings
+
+
+def _out_of_band_head(workspace: _Workspace, coordination: ChangeCoordination) -> str | None:
+    """The readiness owner's local check: a branch head outside the reviewed boundary, no writer, no adoption."""
+    if coordination.writer is not None or coordination.external_head_adoption_receipt is not None:
+        return None
+    if coordination.branch.startswith("-"):
+        return None
+    try:
+        output = _git_output(workspace, "rev-parse", "--verify", "--quiet", f"{coordination.branch}^{{commit}}")
+    except _GitUnavailableError:
+        return None
+    observed = output.decode().strip() if output else None
+    return observed if observed and observed != coordination.last_reviewed_commit else None
+
+
+_REMOTE_ONLY = "; Delivery MCP reports it in delivery_health and get_change after startup"
+_ONLINE_CHECKS = (
+    OnlineCheck(
+        "remote-snapshot-quarantined",
+        "repair_quarantined_delivery_state_snapshot",
+        _ONLINE_OWNER,
+        "needs online check: only the remote Delivery-state snapshot inventory shows a quarantined snapshot"
+        + _REMOTE_ONLY,
+    ),
+    OnlineCheck(
+        "local-frontier-mismatch",
+        "repair_delivery_state_snapshot",
+        _ONLINE_OWNER,
+        "needs online check: the local frontier is compared with its remote snapshot" + _REMOTE_ONLY,
+    ),
+    OnlineCheck(
+        "remote-change-head-mismatch",
+        "recover_out_of_band_head",
+        _ONLINE_OWNER,
+        "needs online check: the remote Change branch is compared with its reviewed head" + _REMOTE_ONLY,
+    ),
+    OnlineCheck(
+        "target-sync-publication",
+        "repair_target_sync_publication",
+        _ONLINE_OWNER,
+        "needs online check: the remote Change head after a target sync is compared with the merged head"
+        + _REMOTE_ONLY,
+    ),
+)
+
+
+def _online_checks(workspace: _Workspace, change_id: str | None) -> tuple[OnlineCheck, ...]:
+    """Remote-only C06 conditions apply wherever a Change runtime exists; offline they stay undecided."""
+    changes = workspace.delivery / "runtime/changes"
+    if change_id is not None:
+        return _ONLINE_CHECKS if (changes / change_id / "frontier.json").is_file() else ()
+    present = changes.is_dir() and any((path / "frontier.json").is_file() for path in changes.iterdir())
+    return _ONLINE_CHECKS if present else ()
 
 
 def _single_missing_provenance(content: bytes) -> bool:
@@ -970,7 +1171,7 @@ def _build(workspace: _Workspace, finding_id: str) -> tuple[RepairProposal, dict
         entries=entries,
         manifests=manifests,
         participants=participants,
-        findings=report.finding_ids,
+        findings=report.fingerprints,
     )
     return proposal, staged
 
@@ -1015,8 +1216,8 @@ def owner_check(workspace_root: Path, proposal: RepairProposal) -> None:
                 raise ValueError(str(exc)) from exc
 
 
-def _verification_findings(workspace_root: Path, proposal_id: str) -> tuple[str, ...]:
-    return classify(workspace_root, verifying=proposal_id).finding_ids
+def _verification_findings(workspace_root: Path, proposal_id: str) -> tuple[RepairFindingPrint, ...]:
+    return classify(workspace_root, verifying=proposal_id).fingerprints
 
 
 def apply(
@@ -1075,6 +1276,7 @@ def abort(
 
 __all__ = [
     "CANONICAL_HOST_LOCAL",
+    "OnlineCheck",
     "RepairFinding",
     "RepairReport",
     "abort",
