@@ -88,7 +88,15 @@ def test_cockpit_from_checkout_code_refuses_a_pinned_workspace(tmp_path: Path) -
     pin = repository / ".owlbear/controller/pin.json"
     pin.parent.mkdir(parents=True)
     pin.write_text(
-        json.dumps({"schema_version": 1, "commit": "a" * 40, "previous": None, "release_sha256": "f" * 64}),
+        json.dumps(
+            {
+                "schema_version": 1,
+                "commit": "a" * 40,
+                "previous": None,
+                "release_sha256": "f" * 64,
+                "release_stat_sha256": "d" * 64,
+            }
+        ),
         encoding="utf-8",
     )
     digests = record_tree_digest(repository)

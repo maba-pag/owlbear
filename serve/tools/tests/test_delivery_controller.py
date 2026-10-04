@@ -363,6 +363,40 @@ def test_switch_records_previous_rolls_back_and_prune_keeps_current_and_previous
     assert delivery_controller.verify(layout)["verified"] is True
 
 
+def _unexpected_digest(_tree: Path) -> str:
+    msg = "an unchanged pinned release is not re-hashed at start"
+    raise AssertionError(msg)
+
+
+def test_an_unchanged_release_starts_without_rehashing_and_an_edit_with_restored_times_is_refused(
+    tmp_path: Path, source: tuple[Path, list[str]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository, commits = source
+    layout, _config = _workspace(tmp_path)
+    _install(layout, repository, commits[0])
+    _pin(layout, commits[0], first=True)
+    pinned = delivery_controller.current_pin(layout)
+    assert pinned is not None
+    release = layout.release(commits[0])
+    anchors = (pinned.release_sha256, pinned.release_stat_sha256)
+    with monkeypatch.context() as patched:
+        patched.setattr(release_integrity, "tree_digest", _unexpected_digest)
+        assert release_integrity.release_failures(release, *anchors) == []
+    assert delivery_controller.verify(layout)["fast_start"] is True
+    module = release / "serve/delivery/src/owlbear_delivery/state_formats.py"
+    times = module.stat()
+    module.chmod(0o644)
+    module.write_bytes(module.read_bytes().replace(b"Registry", b"registry", 1))
+    module.chmod(times.st_mode)
+    os.utime(module, ns=(times.st_atime_ns, times.st_mtime_ns))
+
+    failures = release_integrity.release_failures(release, *anchors)
+
+    assert failures == ["the release tree was modified after install (tree digest differs)"]
+    assert delivery_controller.verify(layout)["fast_start"] is False
+    assert delivery_controller.verify(layout)["verified"] is False
+
+
 def test_verify_detects_a_changed_interpreter_and_a_release_record_the_pin_does_not_name(
     tmp_path: Path, source: tuple[Path, list[str]]
 ) -> None:

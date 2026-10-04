@@ -45,7 +45,9 @@ CONTROLLER_ROOT: Final = ".owlbear/controller"
 CONTROLLER_PIN: Final = ".owlbear/controller/pin.json"
 CONTROLLER_RELEASES: Final = ".owlbear/controller/releases"
 PIN_SCHEMA_VERSION: Final = 1
-_PIN_KEYS: Final = frozenset({"schema_version", "commit", "previous", "pinned_at", "release_sha256"})
+_PIN_KEYS: Final = frozenset(
+    {"schema_version", "commit", "previous", "pinned_at", "release_sha256", "release_stat_sha256"}
+)
 _MAX_PIN_BYTES: Final = 4096
 _COMMIT: Final = re.compile(r"[0-9a-f]{40}")
 _SHA256: Final = re.compile(r"[0-9a-f]{64}")
@@ -1094,11 +1096,13 @@ class ControllerPin:
     """The workspace's pinned controller release (``.owlbear/controller/pin.json``) and its predecessor.
 
     ``release_sha256`` is the SHA-256 of the release's ``RELEASE.json``: the trust anchor that every pinned
-    start verifies outside the release tree (I6).
+    start verifies outside the release tree (I6). ``release_stat_sha256`` fingerprints the tree and
+    interpreter metadata that ``pin``/``switch`` verified, so an unchanged release is not re-hashed.
     """
 
     commit: str
     release_sha256: str
+    release_stat_sha256: str
     previous: str | None = None
 
 
@@ -1172,11 +1176,11 @@ def read_controller_pin(workspace_root: Path) -> ControllerPin | None:
     if previous is not None and (not isinstance(previous, str) or _COMMIT.fullmatch(previous) is None):
         msg = "pin.json names an invalid previous release"
         raise ControllerPinError(msg)
-    release_sha256 = payload.get("release_sha256")
-    if not isinstance(release_sha256, str) or _SHA256.fullmatch(release_sha256) is None:
-        msg = "pin.json does not name the release record digest"
+    release_sha256, release_stat = payload.get("release_sha256"), payload.get("release_stat_sha256")
+    if any(not isinstance(value, str) or _SHA256.fullmatch(value) is None for value in (release_sha256, release_stat)):
+        msg = "pin.json does not name the release record digest and fingerprint"
         raise ControllerPinError(msg)
-    return ControllerPin(commit, release_sha256, previous)
+    return ControllerPin(commit, release_sha256, release_stat, previous)
 
 
 def controller_pin_refusal(workspace_root: Path, code_file: Path) -> str | None:

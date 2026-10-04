@@ -949,7 +949,13 @@ def test_scan_stops_enumerating_a_directory_at_the_entry_bound(tmp_path: Path, m
 # ---------------------------------------------------------------------------
 
 _RELEASE = "a" * 40
-_PIN = {"schema_version": 1, "commit": _RELEASE, "previous": None, "release_sha256": "f" * 64}
+_PIN = {
+    "schema_version": 1,
+    "commit": _RELEASE,
+    "previous": None,
+    "release_sha256": "f" * 64,
+    "release_stat_sha256": "d" * 64,
+}
 
 
 def _pin(repository: Path, payload: object, *, release: bool = True) -> Path:
@@ -963,19 +969,22 @@ def _pin(repository: Path, payload: object, *, release: bool = True) -> Path:
     return module
 
 
-def _intact_release(repository: Path, *, interpreter: dict[str, str] | None = None) -> Path:
+def _intact_release(repository: Path, *, interpreter: dict[str, str] | None = None, fast: bool = True) -> Path:
     """Pin a fake release whose ``RELEASE.json`` matches its tree and (by default) this interpreter."""
     module = _pin(repository, _PIN)
     release = repository / ".owlbear/controller/releases" / _RELEASE
+    identity = interpreter or release_integrity.interpreter_identity()
     record = {
         "schema_version": 1,
         "commit": _RELEASE,
         "tree_sha256": release_integrity.tree_digest(release),
-        "interpreter": interpreter or release_integrity.interpreter_identity(),
+        "interpreter": identity,
     }
     content = json.dumps(record).encode()
     (release / release_integrity.RELEASE_FILE).write_bytes(content)
-    _pin(repository, {**_PIN, "release_sha256": hashlib.sha256(content).hexdigest()})
+    fingerprint = release_integrity.stat_fingerprint(release, identity["path"]) if fast else "d" * 64
+    pin = {**_PIN, "release_sha256": hashlib.sha256(content).hexdigest(), "release_stat_sha256": fingerprint}
+    (repository / ".owlbear/controller/pin.json").write_text(json.dumps(pin), encoding="utf-8")
     return module
 
 
@@ -1058,12 +1067,13 @@ def test_the_pinned_release_starts_and_holds_the_shared_lock(tmp_path: Path, mon
     assert not _exclusive_available(repository)
     close_delivery_application(application)
     assert _exclusive_available(repository)
+    monkeypatch.setattr(release_integrity, "_verified", set())
     monkeypatch.setattr(release_integrity, "tree_digest", _unexpected_digest)
     close_delivery_application(load_delivery_application(config, workspace_root=repository))
 
 
 def _unexpected_digest(_tree: Path) -> str:
-    msg = "a verified release is hashed once per process"
+    msg = "an unchanged pinned release is not re-hashed at start"
     raise AssertionError(msg)
 
 
@@ -1073,21 +1083,33 @@ def _modify_module(repository: Path) -> None:
 
 
 def _foreign_interpreter(repository: Path) -> None:
-    _intact_release(repository, interpreter={**release_integrity.interpreter_identity(), "sha256": "0" * 64})
+    identity = {**release_integrity.interpreter_identity(), "sha256": "0" * 64}
+    _intact_release(repository, interpreter=identity, fast=False)
 
 
 def _foreign_record(repository: Path) -> None:
-    _pin(repository, {**_PIN, "release_sha256": "e" * 64})
+    pin = json.loads((repository / ".owlbear/controller/pin.json").read_text(encoding="utf-8"))
+    (repository / ".owlbear/controller/pin.json").write_text(json.dumps({**pin, "release_sha256": "e" * 64}), "utf-8")
+
+
+def _restored_times(repository: Path) -> None:
+    module = repository / ".owlbear/controller/releases" / _RELEASE / "serve/delivery/src/owlbear_delivery/x.py"
+    module.write_text("# installed\n", encoding="utf-8")
+    _intact_release(repository)
+    times = module.stat()
+    module.write_text("# modified\n\n", encoding="utf-8")
+    os.utime(module, ns=(times.st_atime_ns, times.st_mtime_ns))
 
 
 @pytest.mark.parametrize(
     ("change", "reason"),
     [
         (_modify_module, "modified after install"),
+        (_restored_times, "modified after install"),
         (_foreign_interpreter, "is not the one recorded at install"),
         (_foreign_record, "differs from the release record named by the pin"),
     ],
-    ids=["modified-file", "other-interpreter", "record-not-pinned"],
+    ids=["modified-file", "restored-mtime", "other-interpreter", "record-not-pinned"],
 )
 def test_a_pinned_release_that_is_not_intact_is_refused_before_any_state_read(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change: Any, reason: str

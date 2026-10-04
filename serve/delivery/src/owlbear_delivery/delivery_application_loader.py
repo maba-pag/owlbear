@@ -2571,7 +2571,7 @@ def _require_pinned_code(paths: _DeliveryPaths) -> None:
         return
     release = paths.repository_root / CONTROLLER_RELEASES / pin.commit
     try:
-        require_release(release, pin.release_sha256)
+        require_release(release, pin.release_sha256, pin.release_stat_sha256)
     except ReleaseIntegrityError as exc:
         message = f"{CONTROLLER_RELEASE_INVALID}: controller release {pin.commit} is not intact: {exc}"
         locator = f"{CONTROLLER_RELEASES}/{pin.commit}"
