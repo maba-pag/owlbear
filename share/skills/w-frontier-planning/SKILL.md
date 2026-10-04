@@ -40,6 +40,12 @@ Each `DeliveryTaskDefinition` supplies `task_id`, `outcome_id`, `plan_scope_id`,
 inside the outcome, references stay within supplied authority, and proof names observable maintained
 or public boundaries.
 
+`DeliveryPlanContext.acceptance` lists the outcome's criteria by `acceptance_id` (`AC-NNN`, or
+`OUT-NNN.NN` in a legacy contract). Cover every criterion: at least one task's
+`acceptance_observations` entry cites its ID and the observable that proves it, for example
+`AC-002: the CLI exits 2 on an unknown flag`. For a criterion only a person can check, name that
+procedure so the Builder can ask the user to confirm it.
+
 Keep tracked generated outputs with the task that changes the inputs that determine them when the
 output is required for a runnable environment or repository validity. For a Python workspace,
 adding or removing a `serve/*` member or changing dependency-resolution inputs owns the resulting

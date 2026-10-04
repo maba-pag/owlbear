@@ -39,6 +39,9 @@ select a transition, or repair the claim.
   Design boundary without selecting `retry`, `return`, or `block`.
 - **Make evidence discriminating.** Name the authority, source, task boundary, dependency, or proof
   observation supporting the disposition.
+- **Check acceptance coverage.** Every criterion in the context's `acceptance` is cited by its ID in
+  some task's `acceptance_observations` with an observable proof; an uncited criterion or an ID
+  outside the context is a `finding`.
 - **Do not negotiate or mutate.** Return one advisory mapping; Planner owns repair, publication, and
   transition choice.
 

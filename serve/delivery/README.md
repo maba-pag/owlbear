@@ -135,6 +135,34 @@ Changed candidate or contract makes it historical. Current successful finalizati
 precedence and retires only the matching pointer; failed retirement cannot undo success, and exact
 finalization replay can reconcile it. Ordinary reads neither create reports nor retire pointers.
 
+## Acceptance Evidence
+
+Outcome acceptance items are authored as `AC-NNN: <statement>`. Delivery derives each criterion's
+`acceptance_id` and a content `acceptance_version`; contracts admitted before authored identities keep
+positional `OUT-NNN.NN` IDs. Builder results and finalization requests carry schema-2 observations
+with a typed `result` (a command's verdict is derived from its exit status and expectation), the
+criterion versions they cover, and machine-observed or human-confirmed provenance. One evaluator in
+`evidence.py` gives each criterion the status of the last typed record covering it (`covered`,
+`waived`, or `missing`). Without one it is `uncovered`, or `unknown` when the Change holds schema-1
+observations, which count for nothing and are never relabeled.
+
+`finalize_change` writes nothing and refuses with `ERR_DELIVERY_ACCEPTANCE_EVIDENCE` and bounded
+`gaps` unless every criterion is covered or waived and the finalization-mode review echoes the
+context's `basis_digest` and the request's ordered `observation_ids`. Carried task evidence counts, so
+a fully covered Change finalizes with no new observation. The finalization context gives the Finalizer
+and reviewer the same complete `semantics`, or a `semantics_refusal` that withholds it whole.
+
+A waiver or person-only check is a Decision Request scoped by `applies_to` to criterion versions and
+one procedure. Only the user answers it, in Cockpit; the MCP `answer` tool refuses it with
+`ERR_DELIVERY_CONFIRMATION`. A `waived` or `human-confirmed` record cites it by `request_id` and
+applies only when the request belongs to the outcome, holds the affirmative answer, and its scope
+names every covered criterion version and the record's procedure.
+
+**Trust boundary.** Delivery checks evidence structure and identity, not honesty. Receipt and basis
+digests prove content integrity, not that a procedure ran, that its output was read, or that a
+reviewer inspected the code. The fences catch honest agent mistakes; the independent finalization
+review is the semantic check of the assembled Change.
+
 ## Configuration
 
 The package reads no environment variables. Canonical MCP and Cockpit startup uses the tracked
