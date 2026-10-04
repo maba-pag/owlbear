@@ -1,5 +1,5 @@
 ---
-description: "Upgrade this workspace's pinned Delivery controller through the rehearsed procedure"
+description: "Upgrade this workspace's Delivery controller and migrate its Delivery state through the rehearsed procedure"
 agent: agent
 tools:
   - execute/runInTerminal
@@ -8,46 +8,59 @@ tools:
   - owlbear-delivery/get_change
   - vscode/askQuestions
 ---
-Upgrade the pinned Delivery controller of this workspace to ${input:revision:Release commit or ref}.
+Upgrade the Delivery controller of this workspace to ${input:revision:OwlBear commit or ref; empty for the latest commit of the checkout's branch}.
 
 The workspace is the primary checkout that Delivery manages; run every command from its root and pass
-`--project-root` with its absolute path. Read `.owlbear/controller/pin.json` once: `commit` is the current
-release, `previous` its rollback release. `NEW` below is
-`.owlbear/controller/releases/<new commit>/.venv/bin`. Stop at the first refusal, blocker or failed check
-and report it unchanged; never retry a mutating step blindly.
+`--project-root` with its absolute path. Stop at the first refusal, blocker or failed check and report it
+unchanged; never retry a mutating step blindly.
 
-1. **Install** while Delivery may still run: `delivery-controller install <revision>` from the current
-   release (`.owlbear/controller/releases/<current>/.venv/bin/delivery-controller`) or, on a workspace
-   that is not pinned yet, `uv run delivery-controller install <revision>` from a checkout that contains
-   the tool. It refuses a modified release and reuses an intact one. Report the resolved commit.
-2. **Online preflight:** call `delivery_health`, `list_changes` and `get_change` for every Change. Report
+Determine the mode once. **Pinned:** `.owlbear/controller/pin.json` exists. Read it once: `commit` is the
+current release, `previous` its rollback release, and `NEW/<tool>` is
+`.owlbear/controller/releases/<new commit>/.venv/bin/<tool>`. **Unpinned** (the default for consumer
+projects): Delivery runs from the OwlBear checkout that the `owlbear-delivery` entry of `.vscode/mcp.json`
+names with `--project` (`<owlbear>`), and `NEW/<tool>` is `uv --project <owlbear> run <tool>` once step 4
+has moved that checkout.
+
+1. **Install (pinned only)** while Delivery may still run: `delivery-controller install <revision>` from the
+   current release (`.owlbear/controller/releases/<current>/.venv/bin/delivery-controller`). In a consumer
+   project, first bring the revision into the OwlBear checkout (`git -C <owlbear> pull --ff-only`) and add
+   `--source <owlbear> --bundle-source <owlbear>/serve/cockpit/dist`; the revision is then that checkout's
+   `HEAD`. It refuses a modified release and reuses an intact one. Report the resolved commit.
+2. **Online check:** call `delivery_health`, `list_changes` and `get_change` for every Change. Report
    running claims, started or interrupted engine actions, pending checkpoints and pending publications.
    If any exists, ask the user to let the work finish or settle it; do not settle, release or repair
-   anything yourself.
+   anything yourself. If `owlbear-delivery` does not start because it refuses `state-migration-required`
+   (the checkout was already moved), skip this step and step 4 and rely on step 5.
 3. **Stop:** with `vscode/askQuestions`, ask the user to stop `owlbear-delivery` (*MCP: List Servers* →
    *Stop*) and Cockpit, and wait for the confirmation. Do not stop or kill processes yourself.
-4. **Offline preflight:** `NEW/delivery-controller --project-root <root> preflight`. Continue only when
+4. **Move the checkout (unpinned only):** require an empty `git -C <owlbear> status --porcelain`, record
+   `git -C <owlbear> rev-parse HEAD` as the old commit, then run `git -C <owlbear> pull --ff-only` (or
+   `git -C <owlbear> checkout <revision>` when one is given) and report the old and new commits. Every
+   project that uses this checkout now runs the new code; tell the user to run `/upgrade-delivery` in each
+   of them before starting its Delivery again.
+5. **Offline preflight:** `NEW/delivery-controller --project-root <root> preflight`. Continue only when
    `ready` is true; `controller-running` means a controller still runs.
-5. **Backup:** `NEW/delivery-controller --project-root <root> backup --destination <directory outside the
+6. **Backup:** `NEW/delivery-controller --project-root <root> backup --destination <directory outside the
    repository>` (for example `~/owlbear-delivery-backups/<UTC timestamp>`). Report the file and ref counts.
-6. **Migrate:** `NEW/delivery-migrate --project-root <root> propose`. On `migration-not-required` continue;
+7. **Migrate:** `NEW/delivery-migrate --project-root <root> propose`. On `migration-not-required` continue;
    otherwise show the entries, then run `apply <migration_id>` and `verify <migration_id>`, which must
    reach `verified`. Never run `abort` or `resume` without the user's decision.
-7. **Switch:** ask the user to confirm the switch from the current to the new release, then run
-   `NEW/delivery-controller --project-root <root> switch <new commit>` (`pin` when the workspace is not
-   pinned yet). Report the recorded `previous`.
-8. **Verify and prune while stopped:** run `NEW/delivery-controller --project-root <root> verify`, which
-   must report `verified` true for the release, its interpreter, the pin and the launchers. Then run
-   `NEW/delivery-controller --project-root <root> prune`, which keeps the current and previous releases
-   and refuses while a controller runs, so it belongs here, before the restart.
-9. **Restart and verify:** ask the user to start `owlbear-delivery` from *MCP: List Servers* and Cockpit
-   with `.owlbear/controller/bin/cockpit`. Then call `delivery_health`, which must be `healthy`, and
-   `list_changes`, and call `get_change` for every Change: each must be available and match its step-2
-   state.
-10. **Failure after the switch:** ask the user to stop both controllers, copy the state with another
-    `backup` to a second directory, and report. Offer `switch <previous>`; it succeeds only when the
-    previous release's own gate accepts the migrated state. Restoring the step-5 backup is the user's
-    decision; never restore, edit or delete Delivery state yourself.
+8. **Switch (pinned only):** ask the user to confirm the switch from the current to the new release, then
+   run `NEW/delivery-controller --project-root <root> switch <new commit>`. Report the recorded `previous`.
+9. **Verify and prune (pinned only) while stopped:** run `NEW/delivery-controller --project-root <root>
+   verify`, which must report `verified` true for the release, its interpreter, the pin and the launchers.
+   Then run `NEW/delivery-controller --project-root <root> prune`, which keeps the current and previous
+   releases and refuses while a controller runs, so it belongs here, before the restart.
+10. **Restart and verify:** ask the user to start `owlbear-delivery` from *MCP: List Servers* and Cockpit
+    (pinned: `.owlbear/controller/bin/cockpit`; unpinned: `uv run --project <owlbear> cockpit`). Then call
+    `delivery_health`, which must be `healthy`, and `list_changes`, and call `get_change` for every Change:
+    each must be available and match its step-2 state. In an unpinned workspace, remind the user to rerun
+    OwlBear setup from the project root to refresh copied files.
+11. **Failure after migration or switch:** ask the user to stop both controllers, copy the state with
+    another `backup` to a second directory, and report. Pinned: offer `switch <previous>`; it succeeds only
+    when the previous release's own gate accepts the migrated state. Unpinned: moving the checkout back to
+    the old commit is safe only when step 7 reported `migration-not-required`. Restoring the step-6 backup
+    is the user's decision; never restore, edit or delete Delivery state yourself.
 
 Never edit `pin.json`, launchers or release directories by hand, never run checkout code
 (`uv run python -m owlbear_delivery_mcp`, `uv run cockpit`) against a pinned workspace, and never call

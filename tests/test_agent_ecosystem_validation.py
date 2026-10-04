@@ -560,9 +560,13 @@ def test_upgrade_delivery_prompt_follows_the_rehearsed_upgrade_procedure() -> No
     )
     positions = [prompt.index(step) for step in steps]
     assert positions == sorted(positions)
+    unpinned = ("*Stop*", "git -C <owlbear> pull --ff-only` (or", "<root> preflight")
+    assert [prompt.index(step) for step in unpinned] == sorted(prompt.index(step) for step in unpinned)
+    assert "`NEW/<tool>` is `uv --project <owlbear> run <tool>`" in prompt
+    assert "safe only when step 7 reported `migration-not-required`" in prompt
     assert "Do not stop or kill processes yourself" in prompt
     assert "previous release's own gate accepts the migrated state" in prompt
-    assert "Restoring the step-5 backup is the user's decision" in prompt
+    assert "Restoring the step-6 backup is the user's decision" in prompt
     assert "never run checkout code" in prompt
     assert "upgrade-delivery" in (_REPO_ROOT / "share/WIRING.md").read_text(encoding="utf-8")
 

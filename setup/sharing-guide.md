@@ -160,4 +160,4 @@ organization agent registry as a complement to the local installation.
 | Cockpit opens the wrong workspace | Launch from the project root or pass the intended project directory to `uv --directory` |
 | Hook updates not taking effect after `git pull` | Re-run `init.py`; use `--replace-hooks` if local hook files differ and you want the seeded versions restored |
 | `uv` not found | Install uv using the [official installation guide](https://docs.astral.sh/uv/getting-started/installation/) |
-| Different owlbear checkout states between teammates | Use the same branch (`main` for consumer use or `dev` for OwlBear development), then `git pull` and rerun `init.py` to refresh copied runtime files |
+| Different owlbear checkout states between teammates | Use the same branch (`main` for consumer use or `dev` for OwlBear development), then run `/upgrade-delivery` in each project ([Upgrading OwlBear](operating-owlbear.md#upgrading-owlbear)) and rerun `init.py` to refresh copied runtime files |

@@ -10,6 +10,7 @@ the [sharing guide](sharing-guide.md).
 | --- | --- |
 | See what setup wrote into your project | [What Setup Creates](#what-setup-creates) |
 | Understand what `git pull` updates | [Shared vs Copied](#shared-vs-copied) |
+| Upgrade OwlBear and migrate Delivery state | [Upgrading OwlBear](#upgrading-owlbear) |
 | Replace seeded editor and lint configuration | [Refreshing Consumer Configs](#refreshing-consumer-configs) |
 | Remove OwlBear from a project | [Uninstalling](#uninstalling) |
 | Run, correct, publish, and accept a Change | [Delivery Workflow](#delivery-workflow) |
@@ -94,7 +95,9 @@ OwlBear uses two different update models:
 - **Copied runtime surfaces:** files under `seed/` are copied into your project by `init.py`; this includes `.owlbear/hooks/` and project-local editor/runtime configuration.
 
 This split is why `git pull` updates shared agents and skills immediately, while copied
-runtime files may need a later `init.py` run to refresh.
+runtime files may need a later `init.py` run to refresh. A pull also changes the Delivery code that
+the next MCP or Cockpit start runs, so update the checkout through
+[Upgrading OwlBear](#upgrading-owlbear) rather than a plain `git pull`.
 
 ## Refreshing Consumer Configs
 
@@ -118,6 +121,48 @@ uv run --project ../owlbear python ../owlbear/setup/init.py --refresh-configs
 
 `--refresh-configs` does not overwrite `.github/copilot-instructions.md`, hook files, or other
 project-specific files that are outside the refreshable set.
+
+## Upgrading OwlBear
+
+Delivery records its state format in `.owlbear/delivery/runtime/format.json`. A newer OwlBear may
+need a newer format: its Delivery MCP server and Cockpit then refuse to start with
+`state-migration-required` until the state is migrated, and an older OwlBear that has this check
+refuses newer state with `state-newer-than-controller`. Neither refusal changes your state. Upgrade
+from the project, in a VS Code chat:
+
+1. Run `/upgrade-delivery`, optionally naming an OwlBear commit or ref.
+
+   **Expected result:** the agent reports Delivery health and every Change, and asks you to let
+   running work finish first.
+2. When asked, stop `owlbear-delivery` (**MCP: List Servers** → **Stop**) and Cockpit.
+
+   **Expected result:** the agent moves the OwlBear checkout forward with `git pull --ff-only`, then
+   runs `delivery-controller preflight` and `backup` and `delivery-migrate` `propose`, `apply` and
+   `verify` from the new code. The backup is written to a directory outside the project.
+3. When asked, start `owlbear-delivery` and Cockpit again.
+
+   **Expected result:** the agent confirms that Delivery is healthy and that every Change is still
+   available.
+4. Rerun setup from the project root to refresh copied files:
+
+   ```shell
+   uv run --project ../owlbear python ../owlbear/setup/init.py
+   ```
+
+   **Expected result:** setup preserves your edits and existing Delivery configuration; see
+   [Refreshing Consumer Configs](#refreshing-consumer-configs) for the editor and lint files.
+
+The OwlBear checkout is shared: once it moves, every project that uses it runs the new code. Run
+`/upgrade-delivery` in each of them before starting its Delivery again. If a project's
+`owlbear-delivery` already refuses with `state-migration-required` because the checkout was pulled
+directly, run `/upgrade-delivery` there; it skips the online check and continues with the offline
+preflight.
+
+The upgrade refuses while a Delivery MCP server or Cockpit still runs for the project, and changes
+nothing. To go back after a migration, the backup has to be restored first, which is your decision;
+moving the checkout back alone is safe only when no migration was needed. The upgrade also leaves
+`.owlbear/controller/` (its lock) and `.owlbear/delivery-migrations/` (the migration journal and the
+previous bytes of the migrated records) in the project; keep both out of commits.
 
 ## Uninstalling
 
@@ -369,8 +414,24 @@ resolve the typed attention before acquiring work.
 ### Pinned controller releases
 
 The OwlBear development checkout runs Delivery from a pinned, immutable controller release so that
-new commits on `dev` never change the running controller. Consumer projects keep the
-`uv --project <owlbear clone>` entries that setup writes until consumer pinning ships.
+new commits on `dev` never change the running controller. Consumer projects run unpinned by default:
+the `uv --project <owlbear clone>` entries that setup writes start the checkout's code, and
+[Upgrading OwlBear](#upgrading-owlbear) moves it forward.
+
+Pinning is optional for a consumer project. It keeps Delivery on an installed release while the
+OwlBear checkout moves; each release holds a full OwlBear environment of about 1.3 GB. To opt in,
+upgrade first so the state is current, stop `owlbear-delivery` and Cockpit, and run from the project
+root:
+
+```shell
+uv --project ../owlbear run delivery-controller --project-root "$PWD" install HEAD \
+  --source ../owlbear --bundle-source ../owlbear/serve/cockpit/dist --pin
+```
+
+Then set the `owlbear-delivery` entry in `.vscode/mcp.json` to
+`"command": "${workspaceFolder}/.owlbear/controller/bin/delivery-mcp", "args": []`, start Cockpit
+with `.owlbear/controller/bin/cockpit`, and keep `.owlbear/controller/` out of commits. Rerunning
+setup keeps your edited entry.
 
 | Path | Content |
 | --- | --- |

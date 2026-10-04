@@ -12,7 +12,10 @@ Always start with the read-only bootstrap: run the fixed `delivery-diagnose insp
 the current project (optionally scoped with `--change-id`) with `PYTHONDONTWRITEBYTECODE=1`. If the
 installed entry is unavailable, invoke the source fallback exactly as
 `python -B serve/tools/src/owlbear_tools/delivery_diagnostics.py inspect`; do not run `uv sync`,
-setup, initialization, or lifecycle commands. If the terminal is unavailable, report unavailable;
+setup, initialization, or lifecycle commands. In a consumer project, run every command from the
+project root through the OwlBear checkout (`uv --project ../owlbear run --no-sync delivery-diagnose`,
+`delivery-repair` likewise) and prefix the fallback path with that checkout (`../owlbear/serve/...`).
+If the terminal is unavailable, report unavailable;
 do not substitute another tool. The tool declaration is not an automation-permission bypass and
 does not claim to prevent arbitrary shell use. Treat the inspection as structural evidence only.
 
