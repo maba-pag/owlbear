@@ -1172,7 +1172,7 @@ def upgrade_form(live: Path, previous: str, *, control: Path) -> dict[str, Any]:
     root = ("--project-root", str(live))
     report["offline_preflight"] = _cli(new / "delivery-controller", *root, "preflight")
     report["backup"] = _cli(new / "delivery-controller", *root, "backup", "--destination", "/lc-backup")
-    before = record_tree_digest(live)
+    before = record_tree_digest(live, exclude_migrations=True)
     report["migration"] = _migrate(new, live)
     after = record_tree_digest(live, exclude_migrations=True)
     report["changed_records"] = sorted(key for key in set(before) | set(after) if before.get(key) != after.get(key))
