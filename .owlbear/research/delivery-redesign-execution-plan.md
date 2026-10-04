@@ -648,7 +648,7 @@ every new item exactly one lane.
 | N03-A | merged | #363 (`82be4eb1c`; simplified 2026-10-04; Sol `implementation-sound` on the simplification delta; LC full form pass) |
 | N03-B | — | — |
 | N03-C | — | — |
-| N04-P | in review | re-plan PR (this branch `redesign/n04-p-replan`); #358 closed as superseded |
+| N04-P | in review | #369 (re-plan); #358 closed as superseded |
 | N04-A | — | — |
 | N04-B | — | — |
 | N04-C | — | — |

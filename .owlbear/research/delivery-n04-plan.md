@@ -357,7 +357,7 @@ fixed (execution plan §1.6). Durable tests are the scenarios below, no more.
 
 | Phase | PR | Head | Proof | Challenge | Status |
 | --- | --- | --- | --- | --- | --- |
-| N04-P | this PR | — | Probes P1–P6; docs only | Lead runs the plan gate | in review |
+| N04-P | #369 | `31dd70bd6` | Probes P1–P6; docs only; markdownlint 0 issues | Lead runs the plan gate | in review |
 | N04-A | — | — | — | — | — |
 | N04-B | — | — | — | — | — |
 | N04-C | — | — | — | — | — |
