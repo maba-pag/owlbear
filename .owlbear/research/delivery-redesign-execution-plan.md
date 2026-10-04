@@ -622,7 +622,7 @@ every new item exactly one lane.
 | N02-C | — | — |
 | N02-D | — | — |
 | N03-P | merged | #349 (plan gate `plan-sound`, round 6; D11 confirmed 2026-10-03; U1 decided (b) by the user 2026-10-03; #360 adds the confirmation boundary D13 with legacy and modern elicitation routes and opens U2, covering Cockpit merge approval and retirement, before N03-C and N05-C; #360 round 4 adds the shared single-use consent generation `consent_generation` (D13, I11) used by N03, N04, N05 and N06, so N05-B also needs N03-A) |
-| N03-A | in review | #363 (code head `c97a0eb1f`; every planned scenario has assembled proof except the ready-readback recovery variant; LC full form pass on `c9faf5200`, no persisted format changed since; format marker 2 taken first, §4.2) |
+| N03-A | in review | #363 (code head `8e2faf3cd`; Sol implementation round 1 `repair-required` repaired: a lifecycle or custody re-check that refuses an accepted answer now consumes its generation as `refused`, format-0 proposals run `format-0-to-1` then `format-1-to-2`, and finalization semantics list every ledger confirmation an exact-head record can cite; the ready-readback recovery variant and the anchored-lifecycle ledger tamper now have assembled proof; LC full form re-run on the code head; format marker 2 taken first, §4.2) |
 | N03-B | — | — |
 | N03-C | — | — |
 | N04-P | — | — |
