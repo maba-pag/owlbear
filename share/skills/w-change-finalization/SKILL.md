@@ -104,9 +104,13 @@ records its real `exit_status`; Delivery derives the verdict), the `covers` crit
 from `semantics`, the observer identity, and a timezone-aware observation time. Different checks may
 use different commands, tools, or evidence types; there is no target-bound profile or required step
 list. A failed check, dirty worktree, or changed head produces no finalization request. Do not mutate
-target refs, create another worktree, or author evidence for a different commit. Submit a `waived` or
-`human-confirmed` record only when it cites an applicable user confirmation already listed in
-`semantics.confirmations`; never invent one. When `semantics_refusal` is set, the context is withheld
+target refs, create another worktree, or author evidence for a different commit.
+`semantics.confirmations` lists every ledger user confirmation that carried evidence cites or that an
+exact-head record can cite, whether or not a task result used it. Submit a `waived` or
+`human-confirmed` record only when it cites one of them: its `outcome_id` owns every criterion the
+record `covers`, those criteria and versions are in its `scope.acceptance`, the record's `procedure`
+equals `scope.procedure`, and its `decision` is `waive` for a waiver or `passed` for a passed
+`human-confirmed` assessment. Never invent a confirmation. When `semantics_refusal` is set, the context is withheld
 as a whole; stop before any proof.
 
 ## Step 2a - Retain A Trusted Failure

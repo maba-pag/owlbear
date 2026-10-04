@@ -17,14 +17,23 @@ from serve.delivery.tests.test_delivery_runtime import (
     _task_result,
 )
 
-from owlbear_delivery.acceptance_criteria import DeliveryAcceptanceRef, acceptance_criteria, acceptance_version
+from owlbear_delivery.acceptance_criteria import (
+    DeliveryAcceptanceCriterion,
+    DeliveryAcceptanceRef,
+    acceptance_criteria,
+    acceptance_version,
+)
 from owlbear_delivery.delivery_runtime import (
     DeliveryAcceptanceEvidenceError,
     DeliveryCommandResult,
+    DeliveryConfirmationScope,
     DeliveryFrontier,
     DeliveryMissingResult,
     DeliveryObservation,
     DeliveryObservationReceipt,
+    DeliveryRequest,
+    DeliveryRequestKind,
+    DeliveryRequestOption,
     DeliveryReview,
     DeliveryReviewReceipt,
     DeliveryRuntime,
@@ -32,6 +41,8 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryStage,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
+    DeliveryUserConfirmation,
+    DeliveryWaivedResult,
     FinalizeDeliveryChange,
     PublishDeliveryResult,
     _require_ledger_extension,
@@ -293,6 +304,78 @@ def test_full_carried_coverage_finalizes_with_zero_new_observations(tmp_path: Pa
 
     assert receipt.observations == ()
     assert receipt.review.observation_ids == ()
+
+
+def _ledger_confirmation(
+    criterion: DeliveryAcceptanceCriterion, request_id: str, decision: str
+) -> DeliveryUserConfirmation:
+    request = DeliveryRequest(
+        request_id=request_id,
+        kind=DeliveryRequestKind.DECISION,
+        outcome_id=criterion.outcome_id,
+        summary="Waive the criterion",
+        options=tuple(DeliveryRequestOption(option_id=item, label=item) for item in ("waive", "keep-required")),
+        applies_to=DeliveryConfirmationScope(kind="waive", acceptance=(criterion.ref,), procedure="manual check"),
+    )
+    return DeliveryUserConfirmation.create(
+        change_id="delivery-runtime",
+        request=request,
+        decision=decision,
+        question_digest="d" * 64,
+        generation_id="e" * 64,
+        confirmed_at=_AT,
+    )
+
+
+def test_finalizer_waiver_cites_an_applicable_ledger_confirmation_that_no_task_result_cites(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path, stages=_COMPLETED)
+    criteria = acceptance_criteria(runtime.contract)
+    waived = next(item for item in criteria if item.outcome_id == "OUT-001")
+    kept = next(item for item in criteria if item.outcome_id != "OUT-001")
+    applicable = _ledger_confirmation(waived, "waive-criterion", "waive")
+    declined = _ledger_confirmation(kept, "keep-criterion", "keep-required")
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=True)
+    (tmp_path / "changes/delivery-runtime/frontier.json").write_bytes(
+        _canonical(frontier.model_copy(update={"schema_version": 19, "confirmations": (applicable, declined)}))
+    )
+
+    # The Finalizer builds its waiver only from the shared semantics, as w-change-finalization Step 2 directs.
+    semantics = _semantics(runtime)
+    (listed,) = semantics.confirmations
+    assert listed.confirmation_id == applicable.confirmation_id
+    waiver = _observation(
+        _HEAD,
+        "finalize",
+        procedure=listed.scope.procedure,
+        result=DeliveryWaivedResult(reason="The user waived it.", confirmation_id=listed.confirmation_id),
+        provenance="human-confirmed",
+        confirmation_id=listed.confirmation_id,
+        covers=listed.scope.acceptance,
+    )
+    rest = tuple(
+        DeliveryAcceptanceRef(acceptance_id=item.acceptance_id, acceptance_version=item.acceptance_version)
+        for item in semantics.coverage
+        if item.status not in {"covered", "waived"} and item.acceptance_id != waived.acceptance_id
+    )
+    observations = (waiver, _observation(_HEAD, "finalize", covers=rest))
+
+    receipt = runtime.finalize_change(
+        FinalizeDeliveryChange(
+            operation_id="finalize",
+            exact_head=_HEAD,
+            observations=observations,
+            review=_review(semantics, observations),
+        ),
+        _AT,
+    )
+
+    assert receipt.observations == observations
+    stored = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=True)
+    coverage = {
+        item.acceptance_id: item.status for item in evaluate_acceptance_evidence(runtime.contract, stored).criteria
+    }
+    assert coverage[waived.acceptance_id] == "waived"
+    assert set(coverage.values()) == {"covered", "waived"}
 
 
 @pytest.mark.parametrize("variant", ["task-review", "stale-basis", "mismatch", "missing-record", "failed-record"])

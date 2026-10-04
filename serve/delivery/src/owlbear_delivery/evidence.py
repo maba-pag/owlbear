@@ -20,9 +20,12 @@ from owlbear_delivery.runtime_models import (
     DeliveryEvidenceGapReason,
     DeliveryFrontier,
     DeliveryLegacyObservationReceipt,
+    DeliveryManualProcedureResult,
+    DeliveryObservation,
     DeliveryObservationReceipt,
     DeliveryTaskResult,
     DeliveryUserConfirmation,
+    DeliveryWaivedResult,
     _model_content,
 )
 from owlbear_delivery.target_contract import DeliveryCommitment
@@ -109,7 +112,7 @@ class DeliverySemanticsTaskAuthority(_EvidenceModel):
 
 
 class DeliverySemanticsConfirmation(_EvidenceModel):
-    """One ledger confirmation cited by carried task evidence."""
+    """One ledger confirmation that carried task evidence cites or an exact-head record could cite."""
 
     confirmation_id: str
     outcome_id: str
@@ -172,6 +175,46 @@ def confirmation_applies(
         assessment = getattr(result, "assessment", None)
         affirmative = scope.kind == "confirm-check" and confirmation.decision == assessment
     return None if affirmative else "confirmation-not-applicable"
+
+
+def _finalization_citable(
+    confirmation: DeliveryUserConfirmation,
+    criteria: tuple[DeliveryAcceptanceCriterion, ...],
+) -> bool:
+    """Return whether ``confirmation_applies`` admits it for an exact-head record a Finalizer could submit.
+
+    That record covers the current criterion versions of its scope in its outcome, uses its exact procedure
+    and carries the affirmative result for its kind: a waiver, or a passed manual assessment.
+    """
+    current = {criterion.ref: criterion for criterion in criteria}
+    scope = confirmation.scope
+    covers = tuple(
+        ref for ref in scope.acceptance if ref in current and current[ref].outcome_id == confirmation.outcome_id
+    )
+    if not covers:
+        return False
+    confirmation_id = confirmation.confirmation_id
+    result = (
+        DeliveryWaivedResult(reason="Waived by the user.", confirmation_id=confirmation_id)
+        if scope.kind == "waive"
+        else DeliveryManualProcedureResult(assessment="passed")
+    )
+    record = DeliveryObservationReceipt.create(
+        DeliveryObservation(
+            change_id=confirmation.change_id,
+            task_or_finalization_id=confirmation.request_id,
+            exact_commit="0" * 40,
+            observation_kind="user-confirmation",
+            procedure=scope.procedure,
+            result=result,
+            covers=covers,
+            provenance="human-confirmed",
+            confirmation_id=confirmation_id,
+            observer_or_runner_identity="user",
+            observed_at=confirmation.confirmed_at,
+        )
+    )
+    return confirmation_applies(confirmation, record, confirmation.outcome_id) is None
 
 
 def observation_gaps(
@@ -396,6 +439,7 @@ def build_finalization_semantics(
             )
             for item in frontier.confirmations or ()
             if item.confirmation_id in cited
+            or (item.change_id == contract.change_id and _finalization_citable(item, criteria))
         ),
         diff_base=diff_base,
         change_head=change_head,
