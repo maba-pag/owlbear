@@ -535,8 +535,9 @@ so implementation re-resolves paths after N01 moves code.
 | Later N04 phases | as the new N04-P splits them, each after the previous N04 phase |
 | N05-P | N02-P |
 | N05-A | N05-P, N01-P, N00-C; N05-P must list editable paths disjoint from every N01 phase's paths |
-| N05-B | N05-A, N01-C, N02-B |
-| N05-C | N05-B |
+| N05-B1 | N05-A, N01-C, N02-B |
+| N05-B2 | N05-B1 |
+| N05-C | N05-B2 |
 | N05-D (only if it stays small) | N05-C |
 | N06, N07 (every phase) | cut 2026-10-04 ([7](#7-decisions)) |
 | N08-P | N02-P |
@@ -554,8 +555,9 @@ so implementation re-resolves paths after N01 moves code.
 | N10-H | N10-A |
 | N10-M | N10-H; user authorization at the step |
 
-Format-marker order: N03-A and N05-B each add an N02 format step. Whichever merges second renumbers
-its migration onto the other's and reruns the LC full form.
+Format-marker order: N03-A's marker step (format 2) is merged; N05-B2 adds the next one. Whenever two
+unmerged phases add a format step, whichever merges second renumbers its migration onto the other's
+and reruns the LC full form.
 
 Package-level view (derived from the table):
 
@@ -611,11 +613,11 @@ phase.
 | 1 | N01-P, then N01-A | N00-C, N02-P, N09-P1, then N01-B | N01-A, N01-B merged |
 | 1b | N01-C | N05-P, then N05-A | N01-C merged |
 | 2 | N02-A … N02-D | N09-A1, N03-P, N08-P | N02-B merged |
-| 3 | N03-A … N03-C | N05-B … N05-D, N08-A, N09-A2 | N03 merged |
+| 3 | N03-A … N03-C | N05-B1, N05-B2, N05-C, N05-D, N08-A, N09-A2 | N03 merged |
 | 4 | N04-P, then its phases | N08-C, N09-P2, N10-P | N04, N05 and N08 merged |
 | 5 | N09-B, N09-C, N10-A, N10-H, N10-M | — | Programme complete |
 
-Stage 3 note (N05-P): N03 and N05-B…D list shared core modules (`application_readiness.py`,
+Stage 3 note (N05-P): N03 and N05-B1…D list shared core modules (`application_readiness.py`,
 `application_acquisition.py`, `work_items.py`, `workspace_models.py`), so the ready rule runs them
 sequentially where their editable paths overlap, despite the lane split.
 
@@ -651,7 +653,8 @@ every new item exactly one lane.
 | Later N04 phases | — | per the new N04-P |
 | N05-P | merged | #353 (plan gate `plan-sound`, round 12; F1–F8 confirmed 2026-10-03; U1 (a), U2 (b), U3 (a) + (e) by the user, U4 (b) decided 2026-10-03; U3 (e) revises programme §10.2). History: #360's F10 and F11 and U4 (b) retirement were removed on 2026-10-04 ([7](#7-decisions)) |
 | N05-A | merged | #356 (code head `a4951b044`; Sol `implementation-sound` round 2; Ubuntu CI exact head) |
-| N05-B | — | — |
+| N05-B1 | — | — (plan amended 2026-10-04: N05-B simplified and split, [7](#7-decisions)) |
+| N05-B2 | — | — |
 | N05-C | — | — |
 | N05-D | — | — (only if it stays small) |
 | N06-P | merged, then superseded | #359; superseded 2026-10-04 ([7](#7-decisions)) |
@@ -977,16 +980,17 @@ agent-assisted manual step, not by a product route.
   means automatic sync, refinalization and fresh review (U3 part 1 (a)). No GitHub merge API fences
   the target; Delivery checks parent and base after the merge and reports a difference as acceptance
   attention (U3 (e), programme §10.2 as revised).
-- An unknown merge response is read back before any retry. There is never a duplicate or
-  unapproved merge. A response still unknown after readback is exhausted shows attention; the user
-  checks GitHub and resolves it through existing routes (a merge is observed and completes;
-  otherwise abandon or defer).
+- One approval sends one merge request. An unknown response is read back, never re-sent; there is
+  never a duplicate or unapproved merge. A response still unknown after the automatic reads shows
+  one attention with the PR link; the user checks GitHub and resolves it through existing routes (a
+  merge is observed and completes; Check again reads once; otherwise abandon or defer).
 - Completion is observed exactly once, including merges done manually in GitHub.
 - The worktree of a completed Change is cleaned automatically when eligible; unexpected contents
   are preserved.
 - Waits are distinct: checks running, provider outage, pending user approval.
-- L1: fresh observations are fenced into the readiness basis. L2: a known-unmergeable PR shows its
-  real reason instead of `merge-approval-required`, which N05-B adds as a readiness reason (today
+- L1: readiness refreshes expired provider observations in every publication phase and reports a
+  provider outage as such. L2: a known-unmergeable PR shows its
+  real reason instead of `merge-approval-required`, which N05-B1 adds as a readiness reason (today
   it is only an engine-result reason).
 - Governance states that engine/provider publication is system work and that agents never push
   arbitrarily.
@@ -1003,14 +1007,16 @@ part), V12, V19; L1, L2; #225 (if built).
 - N05-P (merged #353; simplified 2026-10-04, N05 plan header).
 - N05-A: provider merge and readback adapter with fakes; revises the forbidden-effect gates that
   assert Delivery never merges into an allowlist (merged #356).
-- N05-B: approval identity and invalidation, engine merge action, readiness L1/L2, distinct waits,
-  exactly-once completion, automatic cleanup.
-- N05-C: Cockpit **Approve merge** with confirm, cancel and error states, stale-offer E2E, HTTP and
-  read-only MCP status, continuation prompt path, governance text; one smoke test on a disposable
-  repository (create PR, approve, merge at the exact head, observe completion).
+- N05-B1: merge offer, readiness L1/L2 and distinct waits, strict-proof target route for finalized
+  Changes, automatic cleanup and its sweep (read side, no format change).
+- N05-B2: one merge attempt per approval, approve-and-execute owner, settlement inside the acceptance
+  owner, post-merge parent and base check, owner fence, format step.
+- N05-C: Cockpit **Approve merge** with confirm, cancel and error states and the unknown-merge
+  attention, stale-offer E2E, HTTP approve route, continuation prompt path, governance text; one smoke
+  test on a disposable repository (create PR, approve, merge at the exact head, observe completion).
 - N05-D: #225 PR-feedback continuity, only if small.
 
-LC gate: full form from N05-B.
+LC gate: full form from N05-B2 (not applicable to N05-B1).
 
 ### N06 — Prepared interaction core and private local input
 
@@ -1178,6 +1184,12 @@ PR #364 (`r-challenger-protocol` Operating Context and Finding Quality):
 - **N05:** U4 (b) retirement (`retire_held_merge`) is removed; an unsettled merge shows attention
   and the user resolves it through existing routes. The multi-scenario real-GitHub rehearsal is
   replaced by one smoke test on a disposable repository that the agent creates and the user deletes.
+- **N05-B simplification (lead decision 2026-10-04):** one approval sends one merge request, recorded
+  in one `merge_attempt` record; settlement runs inside the acceptance owner with its existing retry
+  budget; an owner-level fence replaces guard threading; revocation, re-requests, the engine merge
+  action, new retry episodes and the held-state projection are cut; N05-B is split into N05-B1 (read
+  side) and N05-B2 (effect side, format step). Decisions A1–A7 and Q1–Q5 with reasons are in the
+  [N05 plan](delivery-n05-plan.md#18-decisions).
 - **V17, V22 and V23 dropped; N06 and N07 cut.** Person-only checks are ordinary Action Requests
   answered in Cockpit; V23 and B1's TASK-004 pilot are B1's own acceptance.
 - **N08:** N08-B cut; N08-C reduced to a documented consumer upgrade and migration.
