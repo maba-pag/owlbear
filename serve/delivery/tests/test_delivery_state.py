@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import subprocess
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import NamedTuple
@@ -79,6 +80,7 @@ from owlbear_delivery import (
     ReturnDelivery,
     SyncChangeWithTarget,
     WindowHostIdentity,
+    remote_git,
     state_migration,
 )
 from owlbear_delivery.acceptance import (
@@ -1441,6 +1443,225 @@ def test_state_publisher_exposes_response_unknown_and_replays_after_remote_push(
     replayed = _publish(publisher, runtime, manager, "state-response-unknown", "d" * 64, "state-unknown")
 
     assert replayed.snapshot_id == publisher.read_snapshot("state-response-unknown").snapshot_id
+
+
+def _state_branch_head(remote: Path) -> str | None:
+    head = _git(remote, "rev-parse", "--verify", "--quiet", "refs/heads/owlbear/delivery-state", check=False)
+    return head or None
+
+
+def test_state_push_accepted_after_its_lost_response_reads_back_success_without_a_second_push(
+    tmp_path: Path,
+    ext_remote,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    contract, _intent, _design = _contract("state-slow-accept")
+    runtime, manager, _worktree = _runtime(tmp_path, repository, "state-slow-accept", contract)
+    transport = ext_remote(remote)
+    transport.use(repository)
+    transport.slow_accepting_receive(2)
+    transport.modes("receive-pack", "detach")
+    monkeypatch.setattr(remote_git, "WRITE_TIMEOUT_SECONDS", 1.0)
+    publisher = DeliveryStatePublisher(repository, remote="origin", state_branch="owlbear/delivery-state")
+
+    try:
+        receipt = _publish(publisher, runtime, manager, "state-slow-accept", "a" * 64, "state-slow-accept-1")
+    finally:
+        transport.assert_exited("receive-pack", timeout=30)
+
+    assert receipt.expected_remote_head is None
+    assert receipt.published_head == _state_branch_head(remote)
+    assert len(transport.pids("receive-pack")) == 1
+    assert publisher.read_snapshot("state-slow-accept").snapshot_id == receipt.snapshot_id
+
+
+def test_hung_state_push_reads_back_an_unchanged_remote_as_retry_safe_without_a_second_push(
+    tmp_path: Path,
+    ext_remote,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    contract, _intent, _design = _contract("state-hung-push")
+    runtime, manager, _worktree = _runtime(tmp_path, repository, "state-hung-push", contract)
+    transport = ext_remote(remote)
+    transport.use(repository)
+    transport.modes("receive-pack", "hang", "pass")
+    monkeypatch.setattr(remote_git, "WRITE_TIMEOUT_SECONDS", 1.0)
+    publisher = DeliveryStatePublisher(repository, remote="origin", state_branch="owlbear/delivery-state")
+
+    started = time.monotonic()
+    with pytest.raises(DeliveryStatePublicationError, match="push failed") as raised:
+        _publish(publisher, runtime, manager, "state-hung-push", "b" * 64, "state-hung-push-1")
+
+    assert time.monotonic() - started < 15
+    assert type(raised.value) is DeliveryStatePublicationError
+    assert raised.value.retry_safe
+    assert len(transport.pids("receive-pack")) == 1
+    transport.assert_exited("receive-pack")
+    assert _state_branch_head(remote) is None
+
+    receipt = _publish(publisher, runtime, manager, "state-hung-push", "b" * 64, "state-hung-push-1")
+
+    assert receipt.published_head == _state_branch_head(remote)
+
+
+def test_state_push_readback_failure_is_response_unknown_and_keeps_the_pending_intent(
+    tmp_path: Path,
+    ext_remote,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    change_id = "state-readback-lost"
+    contract, intent, design = _contract(change_id)
+    state_root = tmp_path / "state"
+    package_store = DesignPackageStore(repository / ".owlbear/delivery/packages", repository)
+    package = package_store.create(change_id, intent, design)
+    contract_bytes = (
+        json.dumps(contract.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n"
+    ).encode()
+    package_store.publish_contract(change_id, package.package_id, contract_bytes, lambda *_content: None)
+    package = package_store.read_verified(change_id)
+    manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", PortfolioCoordinator(state_root), "main")
+    coordination = manager.ensure(change_id)
+    frontier_path = state_root / "changes" / change_id / "frontier.json"
+    frontier_path.parent.mkdir(parents=True, exist_ok=True)
+    frontier = DeliveryFrontier(bindings=(OutcomeAuthorityBinding(outcome_id="OUT-001", plan_scope_id="SCOPE-001"),))
+    frontier_path.write_bytes(_canonical_payload(frontier.model_dump(mode="json")))
+    runtime = DeliveryRuntime(state_root, contract, workspace_manager=manager)
+    snapshot = manager.snapshot_design_package(
+        change_id,
+        package.package_id,
+        {
+            "authority.json": package.authority_bytes,
+            "design.md": package.design_bytes,
+            "intent.md": package.intent_bytes,
+            "manifest.json": package.manifest.canonical_bytes(),
+        },
+        "readback-package",
+    )
+    _git(repository, "push", "origin", f"{snapshot.snapshot_head}:refs/heads/{coordination.branch}")
+    DeliveryStatePublisher(repository, remote=str(remote), state_branch="owlbear/delivery-state").publish(
+        change_id=change_id,
+        package_id=package.package_id,
+        coordination=manager.show(change_id),
+        runtime=runtime,
+        admission=_admission(runtime, manager, change_id),
+        operation_id="readback-state",
+        captured_at=datetime(2026, 8, 23, tzinfo=UTC),
+    )
+    fresh = tmp_path / "fresh"
+    _git(tmp_path, "clone", str(remote), str(fresh))
+    _git(fresh, "config", "url." + str(remote) + ".insteadOf", "https://github.com/example/project.git")
+    _git(fresh, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    config = DeliveryStartupConfig(
+        schema_version=2,
+        remote="origin",
+        target_branch="main",
+        github_repository="example/project",
+        delivery_state_branch="owlbear/delivery-state",
+    )
+    application = load_delivery_application(config, workspace_root=fresh)
+    launch = application.acquire_frontier_work().launch_packages[0]
+    published_before = _state_branch_head(remote)
+    transport = ext_remote(remote)
+    _git(fresh, "config", "--unset", "url." + str(remote) + ".insteadOf")
+    _git(fresh, "config", "protocol.ext.allow", "always")
+    _git(fresh, "config", "url." + transport.url + ".insteadOf", "https://github.com/example/project.git")
+    transport.modes("receive-pack", "arm-hang")
+    monkeypatch.setattr(remote_git, "WRITE_TIMEOUT_SECONDS", 1.0)
+    monkeypatch.setattr(remote_git, "READ_TIMEOUT_SECONDS", 1.0)
+
+    with pytest.raises(DeliveryStateResponseUnknownError, match="could not be observed") as raised:
+        application.transition_delivery(
+            change_id,
+            BlockDelivery(
+                action="block",
+                outcome_id=launch.outcome_id,
+                claim_id=launch.claim.claim_id,
+                block_id="readback-lost-block",
+                reason="The state push response and its readback are lost.",
+                unblock_condition="The remote state branch can be read back.",
+                expected_evidence=("Published state",),
+                locators=("test_delivery_state.py",),
+            ),
+        )
+
+    assert not raised.value.retry_safe
+    assert len(transport.pids("receive-pack")) == 1
+    transport.assert_exited("receive-pack")
+    transport.assert_exited("upload-pack")
+    pending_path = fresh / ".owlbear/delivery/runtime/changes" / change_id / "state-publication.json"
+    assert json.loads(pending_path.read_bytes())["status"] == "pending"
+    assert _state_branch_head(remote) == published_before
+
+    (transport.root / "armed").unlink()
+    transport.modes("receive-pack", "arm-hang", "pass")
+    restarted = load_delivery_application(config, workspace_root=fresh)
+    assert restarted.acquire_frontier_work().failures == ()
+    assert restarted.show_operator_context(change_id, "OUT-001").block is not None
+    assert _state_branch_head(remote) != published_before
+
+
+def test_loader_bootstrap_with_a_hung_remote_reports_retryable_unavailable_state_within_bound(
+    tmp_path: Path,
+    ext_remote,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _repository_path, remote, _initial = _repository(tmp_path)
+    fresh = tmp_path / "fresh"
+    _git(tmp_path, "clone", str(remote), str(fresh))
+    transport = ext_remote(remote)
+    transport.modes("upload-pack", "hang")
+    _git(fresh, "config", "protocol.ext.allow", "always")
+    _git(fresh, "config", "url." + transport.url + ".insteadOf", "https://github.com/example/project.git")
+    _git(fresh, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    monkeypatch.setattr(remote_git, "READ_TIMEOUT_SECONDS", 1.0)
+
+    started = time.monotonic()
+    application = load_delivery_application(
+        DeliveryStartupConfig(
+            schema_version=2,
+            remote="origin",
+            target_branch="main",
+            github_repository="example/project",
+            delivery_state_branch="owlbear/delivery-state",
+        ),
+        workspace_root=fresh,
+    )
+
+    assert time.monotonic() - started < 15
+    assert len(transport.pids("upload-pack")) == 1
+    transport.assert_exited("upload-pack")
+    diagnostics = application.delivery_health().diagnostics
+    assert any(
+        item.code == "remote-state-unavailable"
+        and item.retry_safe
+        and item.reason is DeliveryHealthReason.REMOTE_STATE_UNAVAILABLE
+        for item in diagnostics
+    ), diagnostics
+
+
+def test_loader_change_branch_observation_is_bounded(
+    tmp_path: Path,
+    ext_remote,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    contract, _intent, _design = _contract("loader-hung-branch")
+    runtime, manager, _worktree = _runtime(tmp_path, repository, "loader-hung-branch", contract)
+    snapshot = _snapshot(runtime, manager, "loader-hung-branch")
+    transport = ext_remote(remote)
+    transport.use(repository)
+    transport.modes("upload-pack", "hang")
+    monkeypatch.setattr(remote_git, "READ_TIMEOUT_SECONDS", 1.0)
+
+    started = time.monotonic()
+    with pytest.raises(DeliveryApplicationLoadError, match="remote Change branch could not be observed"):
+        _fetch_snapshot_change_head(snapshot, _startup_config(), repository)
+
+    assert time.monotonic() - started < 10
+    transport.assert_exited("upload-pack")
 
 
 def test_remote_state_bootstrap_reconstructs_fresh_clone(tmp_path: Path) -> None:  # noqa: PLR0915 - assembled restart proof.
