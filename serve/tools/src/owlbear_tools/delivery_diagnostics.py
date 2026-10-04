@@ -58,6 +58,18 @@ MIGRATION_REQUIRED_VERSIONS: dict[str, tuple[int, ...]] = {
 # Mirror of the registry's workspace format (``runtime/format.json``) and migration journal states.
 SUPPORTED_FORMAT = 1
 MIGRATION_JOURNAL_STATES = frozenset({"backed-up", "applying", "applied", "verified", "aborting"})
+# Mirror of the registry's journal kinds: version 1 is a migration, version 2 names ``repair``.
+MIGRATION_JOURNAL_KINDS = {1: "migration", 2: "repair"}
+_JOURNAL_V1_FIELDS = (
+    "schema_version",
+    "migration_id",
+    "state",
+    "source_format",
+    "target_format",
+    "backup_manifest_sha256",
+    "batches",
+)
+_JOURNAL_V2_EXTRA = ("kind", "confirmed", "retained", "steps")
 _MIGRATION_ID = re.compile(r"^[0-9a-f]{64}$")
 _JOURNAL_TEMPORARY = re.compile(r"^\.tmp-[0-9a-f]{24}$")
 
@@ -239,7 +251,7 @@ _RUNTIME_RECORD_VERSIONS: dict[str, tuple[int, ...] | None] = {
     "acceptance_cursor": (1,),
     "package_manifest": (1,),
     "package_authority": (2,),
-    "migration_journal": (1,),
+    "migration_journal": (1, 2),
 }
 # An unadmitted Design keeps an empty authority file.
 _EMPTY_RECORD_KINDS = frozenset({"package_authority"})
@@ -254,6 +266,7 @@ VERSION_UNINSPECTED_KINDS: dict[str, str] = {
     "lock": "locks are transient and never opened",
     "transaction": "pending transactions, temporaries and logs are opaque; listed by name and size only",
     "format_marker": "the workspace format is checked against SUPPORTED_FORMAT, not a schema_version",
+    "controller_process": "gated controller identity records are transient (class L) and never opened",
 }
 _VERSIONLESS_REQUIRED_FIELDS: dict[str, dict[str, type]] = {
     "result_receipt": {"candidate_id": str, "claim_id": str, "digest": str, "result": dict},
@@ -365,9 +378,11 @@ MAINTENANCE_PROMPT = """The offline inspection is structural evidence only. Revi
 diagnostic codes and the responsible Delivery owner before continuing the ordinary session.
 Do not infer healthy execution, user confirmation, provenance, worker termination, approval,
 or merge readiness from this report. Do not edit, delete, copy, unlock, recover, upgrade, or
-repair the inspected files. Supported repair and upgrade writes are a D07 route; if that route
-is unavailable, leave the state contained and request the responsible owner. Do not use Git,
-network, provider, process, or manual filesystem repair commands."""
+repair the inspected files by hand. Supported repair writes run only through `/repair-delivery`
+(`delivery-repair`: classify, a fenced proposal, the user's confirmation where its policy needs it,
+apply and verify); migrations through `delivery-migrate` and upgrades through `/upgrade-delivery`.
+Anything without such a route stays contained for its owner. Do not use Git, network, provider,
+process, or manual filesystem repair commands."""
 _ENTRY_LIMIT_MAINTENANCE_PROMPT = (
     "The 256-entry budget was exhausted, so this inspection is incomplete. Rerun the complete "
     "inspection one Change at a time with `delivery-diagnose inspect --project-root "
@@ -1830,12 +1845,18 @@ def _inspect_migration_journal(namespace_fd: int, name: str, inspection: _Inspec
             inspection.records[-1]["status"] = "malformed"
         inspection.diagnostic("MIGRATION_JOURNAL_MALFORMED")
         return
-    if schema != _RUNTIME_RECORD_VERSIONS["migration_journal"][-1]:  # type: ignore[index]
-        inspection.records[-1]["status"] = _version_status(schema, 1) if isinstance(schema, int) else "unsupported"
+    if schema not in _RUNTIME_RECORD_VERSIONS["migration_journal"]:  # type: ignore[operator]
+        inspection.records[-1]["status"] = _version_status(schema, 2) if isinstance(schema, int) else "unsupported"
         inspection.diagnostic("MIGRATION_JOURNAL_UNSUPPORTED")
         return
     state = value.get("state")
-    if state not in MIGRATION_JOURNAL_STATES or value.get("migration_id") != name:
+    kind_valid = ("kind" not in value) if schema == 1 else value.get("kind") == MIGRATION_JOURNAL_KINDS[schema]
+    if (
+        state not in MIGRATION_JOURNAL_STATES
+        or value.get("migration_id") != name
+        or not kind_valid
+        or not _journal_envelope_valid(value, content)  # type: ignore[arg-type]
+    ):
         inspection.records[-1]["status"] = "malformed"
         inspection.diagnostic("MIGRATION_JOURNAL_MALFORMED")
         return
@@ -1843,6 +1864,53 @@ def _inspect_migration_journal(namespace_fd: int, name: str, inspection: _Inspec
     inspection.records[-1]["status"] = "supported" if state == "verified" else str(state)
     if state != "verified":
         inspection.diagnostic("MIGRATION_INCOMPLETE")
+
+
+def _journal_envelope_valid(value: dict[str, object], content: bytes) -> bool:
+    """Mirror of ``state_formats.journal_envelope_valid``: the complete supported envelope in canonical bytes."""
+    fields = set(_JOURNAL_V1_FIELDS) if value.get("schema_version") == 1 else {*_JOURNAL_V1_FIELDS, *_JOURNAL_V2_EXTRA}
+    if set(value) != fields or content != (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode():
+        return False
+    formats = (value["source_format"], value["target_format"])
+    batches, digest = value["batches"], re.compile(r"[0-9a-f]{64}")
+    if not (
+        all(isinstance(item, int) and not isinstance(item, bool) and item >= 0 for item in formats)
+        and isinstance(value["backup_manifest_sha256"], str)
+        and digest.fullmatch(value["backup_manifest_sha256"])
+        and isinstance(batches, list)
+        and all(_journal_batch_valid(batch) for batch in batches)
+    ):
+        return False
+    if value["schema_version"] == 1:
+        return True
+    retained, confirmed, steps = value["retained"], value["confirmed"], value["steps"]
+    return bool(
+        batches == []
+        and formats[0] == formats[1]
+        and (confirmed is None or (isinstance(confirmed, str) and digest.fullmatch(confirmed)))
+        and isinstance(retained, list)
+        and all(
+            isinstance(item, dict)
+            and set(item) == {"migration_id", "sha256"}
+            and all(isinstance(item[key], str) and digest.fullmatch(item[key]) for key in item)
+            for item in retained
+        )
+        and isinstance(steps, list)
+        and all(isinstance(step, str) and step for step in steps)
+    )
+
+
+def _journal_batch_valid(batch: object) -> bool:
+    locators = batch.get("locators") if isinstance(batch, dict) else None
+    return bool(
+        isinstance(batch, dict)
+        and set(batch) == {"transaction_id", "locators"}
+        and isinstance(batch["transaction_id"], str)
+        and re.fullmatch(r"migration-[0-9a-f]{16}-[0-9]{4}", batch["transaction_id"])
+        and isinstance(locators, list)
+        and locators
+        and all(isinstance(locator, str) and locator for locator in locators)
+    )
 
 
 def _scan_runtime(delivery_fd: int, inspection: _Inspection, *, selected: str | None) -> None:

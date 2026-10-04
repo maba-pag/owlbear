@@ -93,6 +93,7 @@ not proof.
 | `upgrade-delivery` | Current agent directed by prompt | Prompt-defined N02-D procedure: install, online read-only preflight, user stop, offline preflight, backup, `delivery-migrate`, confirmed switch, user restart and verification through `delivery-controller` |
 | `address-pr-feedback` | Current agent directed by prompt | Loads `w-address-pr-feedback`; `start` evaluates and repairs external review threads, while `resume` publishes the fresh finalized head before replying and resolving threads |
 | `resolve-target-conflict` | Current agent directed by prompt | Loads `w-target-conflict-resolution`; resolves exact target merges in the managed Change worktree and hands off to finalization |
+| `repair-delivery` | Current agent directed by prompt | Loads `w-delivery-repair`; read-only `delivery-diagnose` bootstrap, then `delivery-repair` classification and fenced proposals under the confirmation policy while the user has stopped the controllers |
 | `resolve-delivery-attention` | Temporary recovery/exception prompt | Loads `w-delivery-attention-resolution`; binds one exact Change or Integration attention before interactive diagnosis; retire only after Cockpit and Delivery provide tested guided routes for all prompt-only recovery capabilities |
 | `test-curation` | `prompt` -> test-curator | Agent required-reading loads `w-test-curation` |
 | `kb-ingest` | `prompt` -> knowledge-ingestor | Agent required-reading loads `h-knowledge-ops` |
@@ -123,6 +124,7 @@ The named caller owns each on-demand condition and timing.
 | Builder or Finalizer post-result context | `h-process-observations` | A reviewed result exposes retry, return, block, review-finding, material divergence, or explicit process-learning need |
 | `resolve-delivery-attention` prompt | `w-delivery-attention-resolution` | One exact operator-required Delivery attention or blocked outcome needs interactive diagnosis or a user-selected remedy |
 | `resolve-target-conflict` prompt | `w-target-conflict-resolution` | One exact target merge needs managed-worktree resolution and Delivery-owned merge validation |
+| `repair-delivery` prompt | `w-delivery-repair` | Delivery refuses to start or the user asks for offline diagnosis and supported repair |
 
 ## Required Skill Consumers
 
