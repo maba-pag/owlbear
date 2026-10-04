@@ -539,6 +539,59 @@ def test_a_changed_failure_at_the_same_finding_id_is_a_verify_mismatch(tmp_path:
     assert (runtime / contract).read_bytes() == b"{}"
 
 
+def test_an_equal_sized_changed_failure_above_one_mebibyte_is_a_verify_mismatch(tmp_path: Path) -> None:
+    """A3: evidence hashes every byte, so different invalid bytes of the same size above 1 MiB still differ."""
+    repository = _repository(tmp_path, marked=False)
+    runtime = _delivery(repository) / "runtime"
+    contract = Path("changes/change-a/contract.json")
+    size = (1 << 20) + 4096
+    before, after = b"{}".ljust(size), b'{"a":1}'.ljust(size)
+    (runtime / contract).write_bytes(before)
+    transaction = RuntimeTransaction(
+        runtime, "contract-rewrite", (ReplacementTransactionParticipant(runtime, contract, before, after),)
+    )
+    with pytest.raises(_Pending):
+        transaction.commit(failure=_stop)
+    finding_id = "C07:runtime/changes/change-a/contract.json"
+    proposal = state_repair.propose(repository, "C03:transactions")
+    state_repair.apply(repository, proposal.proposal_id, processes=_none)
+    assert (runtime / contract).read_bytes() == after
+
+    _refused("repair-verify-mismatch", lambda: state_repair.verify(repository, proposal.proposal_id, processes=_none))
+
+    assert _live_journal(repository, proposal.proposal_id).state == "applied"  # type: ignore[union-attr]
+    proposed = {item.finding_id: item for item in proposal.findings}[finding_id]
+    observed = {item.finding_id: item for item in state_repair.classify(repository).fingerprints}[finding_id]
+    assert (proposed.evidence, observed.evidence) == ("complete", "complete")
+    assert (observed.code, observed.locator) == (proposed.code, proposed.locator)
+    assert observed != proposed
+    state_repair.abort(repository, proposal.proposal_id, processes=_none)
+    assert (runtime / contract).read_bytes() == before
+
+
+def test_a_directory_finding_past_the_entry_bound_is_incomplete_and_verify_refuses(tmp_path: Path) -> None:
+    """A3: an overflowing directory is never truncated; its finding is incomplete and verify fails closed."""
+    repository = _repository(tmp_path)
+    stray = _delivery(repository) / "packages/change-x"
+    stray.mkdir()
+    for index in range(300):
+        (stray / f"note-{index:03}.txt").write_bytes(b"0")
+    original = _corrupt_host_local(repository)
+    proposal = state_repair.propose(repository, _C01)
+    _apply(repository, proposal)
+
+    refused = _refused(
+        "repair-verify-mismatch", lambda: state_repair.verify(repository, proposal.proposal_id, processes=_none)
+    )
+
+    assert refused.locator == "C07:packages/change-x"
+    assert _live_journal(repository, proposal.proposal_id).state == "applied"  # type: ignore[union-attr]
+    proposed = {item.finding_id: item.evidence for item in proposal.findings}
+    assert proposed == {_C01: "complete", "C07:packages/change-x": "incomplete"}
+    state_repair.abort(repository, proposal.proposal_id, processes=_none)
+    assert (_delivery(repository) / "runtime/host.local.json").read_bytes() == original
+
+
 # ---------------------------------------------------------------------------
 # C03 transaction replay (engine replay)
 # ---------------------------------------------------------------------------

@@ -1323,10 +1323,11 @@ class RepairFindingPrint(_MigrationModel):
     code: str = Field(min_length=1)
     locator: str = Field(min_length=1)
     detail_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    evidence: Literal["complete", "incomplete"] = "complete"
 
-    def identity(self) -> tuple[str, str, str, str]:
+    def identity(self) -> tuple[str, str, str, str, str]:
         """Return the fields in canonical order."""
-        return (self.finding_id, self.code, self.locator, self.detail_sha256)
+        return (self.finding_id, self.code, self.locator, self.detail_sha256, self.evidence)
 
 
 class RepairProposal(_MigrationModel):
@@ -2137,6 +2138,13 @@ def verify_repair(  # noqa: PLR0913 - the I9 checks and test hooks are explicit 
         _require_journal_set(paths.workspace, journal)
         _require_repair_postcondition(paths, proposal, manifest, owner_check)
         observed = frozenset(classify(paths.workspace, proposal_id))
+        incomplete = sorted(item.finding_id for item in observed if item.evidence == "incomplete")
+        if incomplete:
+            raise _repair_error(
+                code="repair-verify-mismatch",
+                detail="a finding's evidence is incomplete, so it cannot be shown unchanged (A3)",
+                locator=incomplete[0],
+            )
         expected = _expected_findings(proposal, observed)
         if observed != expected:
             added = sorted(item.finding_id for item in observed - expected)

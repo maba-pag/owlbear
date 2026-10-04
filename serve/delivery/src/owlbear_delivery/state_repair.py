@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import stat
 import subprocess
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
@@ -45,6 +46,8 @@ from owlbear_delivery.runtime_transaction import (
 from owlbear_delivery.state_formats import (
     DELIVERY_STATE_ROOT,
     FORMAT_MARKER,
+    MAX_DEPTH,
+    MAX_RECORD_BYTES,
     MIGRATIONS_ROOT,
     TRANSACTION_ROOTS,
     CapabilityReport,
@@ -109,13 +112,14 @@ class RepairFinding:
     owner: str
     resume_condition: str
     detail_sha256: str = ""
+    evidence: Literal["complete", "incomplete"] = "complete"
 
     def as_dict(self) -> dict[str, str]:
         """Return the finding as plain strings."""
         return asdict(self)
 
     def fingerprint(self) -> RepairFindingPrint:
-        """I9's complete fingerprint: ID, code, explicit locator and a digest of every other field."""
+        """I9's complete fingerprint: ID, code, explicit locator, a digest of every other field and A3's evidence."""
         rest = [
             self.catalogue,
             self.scope,
@@ -130,6 +134,7 @@ class RepairFinding:
             code=self.code,
             locator=self.locator,
             detail_sha256=_sha(json.dumps(rest, separators=(",", ":")).encode()),
+            evidence=self.evidence,
         )
 
 
@@ -277,36 +282,70 @@ def classify(workspace_root: Path, change_id: str | None = None, *, verifying: s
 
 
 _EVIDENCE_ENTRIES = 256
-_EVIDENCE_FILE_BYTES = 1 << 20
+
+
+class _EvidenceIncompleteError(Exception):
+    """A3: the located bytes could not be read completely within their bounds."""
+
+
+@dataclass(slots=True)
+class _EvidenceBudget:
+    entries: int = 0
+    file_bytes: int = 0
 
 
 def _with_evidence(workspace: _Workspace, finding: RepairFinding) -> RepairFinding:
-    """Bind the bytes a finding names into its fingerprint, so a changed failure at the same ID differs (I9)."""
-    evidence = _evidence(workspace.delivery / finding.locator)
+    """Bind the bytes a finding names into its fingerprint, so a changed failure at the same ID differs (I9, A3)."""
+    try:
+        evidence = _sha(json.dumps(_evidence(workspace.delivery / finding.locator, 0, _EvidenceBudget())).encode())
+    except _EvidenceIncompleteError, OSError:
+        return replace(finding, evidence="incomplete")
     return replace(finding, detail_sha256=_sha(f"{finding.detail_sha256}:{evidence}".encode()))
 
 
-def _evidence(path: Path) -> str:
-    """Digest of a regular record, or of the regular files directly in a directory; never follows a link."""
+def _evidence(path: Path, depth: int, budget: _EvidenceBudget) -> object:
+    """A3: complete evidence of one path, never through a link; overflow raises instead of truncating."""
     try:
-        if path.is_symlink():
-            return "link"
-        if path.is_file():
-            return _file_evidence(path)
-        if path.is_dir():
-            entries = sorted(path.iterdir())[:_EVIDENCE_ENTRIES]
-            listing = [[entry.name, _file_evidence(entry) if entry.is_file() else "other"] for entry in entries]
-            return _sha(json.dumps(listing).encode())
-    except OSError:
-        return "unreadable"
-    return "absent"
-
-
-def _file_evidence(path: Path) -> str:
-    if path.is_symlink():
+        info = path.lstat()
+    except FileNotFoundError, NotADirectoryError:
+        return "absent"
+    if stat.S_ISLNK(info.st_mode):
         return "link"
-    size = path.stat().st_size
-    return _sha(path.read_bytes()) if size <= _EVIDENCE_FILE_BYTES else f"size:{size}"
+    if stat.S_ISREG(info.st_mode):
+        return _file_evidence(path, budget)
+    if not stat.S_ISDIR(info.st_mode):
+        return "other"
+    if depth >= MAX_DEPTH:
+        raise _EvidenceIncompleteError
+    names = []
+    with os.scandir(path) as entries:
+        for entry in entries:
+            budget.entries += 1
+            if budget.entries > _EVIDENCE_ENTRIES:
+                raise _EvidenceIncompleteError
+            names.append(entry.name)
+    return [[name, _evidence(path / name, depth + 1, budget)] for name in sorted(names)]
+
+
+def _file_evidence(path: Path, budget: _EvidenceBudget) -> str:
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_NONBLOCK", 0))
+    try:
+        info = os.fstat(descriptor)
+        size = info.st_size
+        if not stat.S_ISREG(info.st_mode) or budget.file_bytes + size > MAX_RECORD_BYTES:
+            raise _EvidenceIncompleteError
+        budget.file_bytes += size
+        digest, read = hashlib.sha256(), 0
+        while chunk := os.read(descriptor, min(1 << 20, size + 1 - read)):
+            digest.update(chunk)
+            read += len(chunk)
+            if read > size:
+                raise _EvidenceIncompleteError
+        if read != size:
+            raise _EvidenceIncompleteError
+        return digest.hexdigest()
+    finally:
+        os.close(descriptor)
 
 
 def _newer(locator: str) -> RepairFinding:

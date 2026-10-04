@@ -80,7 +80,12 @@ stopped, and retry the same command (`resume` after an interrupted `apply`).
 `repair-journal-open` names the journal that must finish first. After a crash or interruption run
 `delivery-repair resume <id>`, then `verify`; `delivery-repair abort <id>` restores the complete
 before-state from the backup when the user chooses to stop. `repair-corruption-stop` and
-`repair-verify-mismatch` preserve every copy: report them and stop.
+`repair-verify-mismatch` preserve every copy: report them and stop. A finding marked
+`evidence: incomplete` (its located bytes exceed the evidence bounds or cannot be read) always makes
+`verify` refuse `repair-verify-mismatch`; offer `abort` and report that finding's route.
+
+Proposals are release-local staging. Before the user upgrades OwlBear, finish (`verify`) or `abort`
+every applied repair with the current release, and propose any unapplied repair again afterwards.
 
 After each verified repair, classify again. Repeat Steps 1 to 3 for the next offline finding.
 

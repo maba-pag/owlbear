@@ -129,6 +129,23 @@ N08 owns V18 (Cockpit half) and the application half of V20. It keeps D03's V18/
   bytes). I9's expected set is the proposal-time findings minus the addressed one *and minus any finding
   whose locator is a path this repair changed and which no longer appears*; every other disappearance, and
   every new finding, is still `repair-verify-mismatch`.
+  **Amendment A3 (2026-10-04, N08-A implementation round 3; evidence completeness and overflow).** I9 found
+  fingerprint gaps three rounds running, so this is the one policy for the evidence a finding fingerprint
+  binds. Evidence is either complete or explicitly incomplete; it is never a size, a prefix or a truncated
+  listing. Evidence for a finding's explicit locator is read without following any link: a regular file is the
+  SHA-256 of all its bytes when its size is at most N02's per-record bound `MAX_RECORD_BYTES` (the gate's own
+  bound, so every record a complete capability scan accepted qualifies) and the read returns exactly the
+  `fstat` size; a directory is a bounded no-follow walk (at most 256 entries, N02's `MAX_DEPTH` levels and
+  `MAX_RECORD_BYTES` file bytes in total) that lists every entry's relative name with its type or complete file
+  digest; a link, an absent path or another file type is its type. Any exceeded bound (overflow), read error or
+  file whose bytes differ from its `fstat` size makes the evidence incomplete: the finding carries
+  `evidence: incomplete` in its fingerprint and in `classify` output. "Unchanged" cannot be established
+  without complete evidence, so repair `verify` refuses `repair-verify-mismatch` (naming the finding) whenever
+  any finding of its verification classification is `evidence: incomplete`; J stays `applied` and `abort`
+  remains available. A proposal-time incomplete finding that A2 resolves no longer appears and is not compared.
+  Proposal staging (`proposal.json`, `stage/`) is release-local and not an N02-registered record: before an
+  upgrade, an unapplied proposal is discarded and proposed again by the new release, and an applied repair is
+  finished (`verify`) or `abort`ed by the release that generated it.
 
 #### Journal states
 

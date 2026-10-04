@@ -5,6 +5,10 @@
 runs (stop Delivery MCP and Cockpit first). User-confirmed operations need ``--confirm`` with the
 exact proposal ID. Output never contains record values or absolute paths.
 
+Proposal staging is release-local, not a registered Delivery record: before upgrading, propose an
+unapplied proposal again with the new release, and finish (``verify``) or ``abort`` an applied repair
+with the release that generated it.
+
 Only the standard library is imported at module load: when Delivery itself cannot be imported, the
 command still reports a maintenance finding beside the stdlib inspector's findings (N08 I7).
 """
@@ -18,6 +22,7 @@ from pathlib import Path
 
 _FINDINGS = "findings"
 _ONLINE_CHECKS = "online_checks"
+_INCOMPLETE = " [evidence incomplete]"
 _INVALID_INVOCATION = 2
 _OFFLINE_COMMANDS = frozenset({"propose", "apply", "resume", "verify", "abort"})
 # I1: no running process is exempt, so the user keeps every controller stopped through the whole repair.
@@ -165,7 +170,7 @@ def _text(payload: dict[str, object]) -> str:
         return json.dumps(payload, indent=2, sort_keys=True)
     lines = [
         f"{item['finding_id']}: {item['route']} -> {item['operation']} (owner: {item['owner']}; "
-        f"resume: {item['resume_condition']})"
+        f"resume: {item['resume_condition']})" + (_INCOMPLETE if item.get("evidence") == "incomplete" else "")
         for item in findings
     ] or ["healthy: no findings"]
     checks = payload.get(_ONLINE_CHECKS)
