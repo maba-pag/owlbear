@@ -454,6 +454,19 @@ export interface DeliveryRequestResolution {
   response_text: string | null;
 }
 
+export interface DeliveryAcceptanceRef {
+  acceptance_id: string;
+  acceptance_version: string;
+}
+
+export type DeliveryConfirmationKind = "waive" | "confirm-check";
+
+export interface DeliveryConfirmationScope {
+  kind: DeliveryConfirmationKind;
+  acceptance: DeliveryAcceptanceRef[];
+  procedure: string;
+}
+
 export interface DeliveryRequest {
   request_id: string;
   kind: "decision" | "action";
@@ -461,6 +474,54 @@ export interface DeliveryRequest {
   summary: string;
   options: Array<{ option_id: string; label: string }>;
   resolution: DeliveryRequestResolution | null;
+  applies_to?: DeliveryConfirmationScope | null;
+}
+
+export type DeliveryCriterionStatus = "covered" | "waived" | "missing" | "uncovered" | "unknown";
+export type DeliveryEvidenceVerdict = "passed" | "expected-negative" | "failed" | "missing" | "waived";
+export type DeliveryAcceptanceIdentitySource = "authored" | "legacy-position";
+export type DeliveryFinalizationRules = "typed" | "legacy" | "none";
+
+export interface DeliveryEvidenceItem {
+  observation_id: string;
+  schema_version: 1 | 2;
+  source: "task" | "finalization";
+  task_or_finalization_id: string;
+  exact_commit: string;
+  observation_kind: string;
+  procedure: string;
+  verdict: DeliveryEvidenceVerdict | null;
+  owner: "agent" | "user" | "provider" | "assisted-check" | null;
+  reason: string | null;
+  provenance: "machine-observed" | "human-confirmed" | null;
+  request_id: string | null;
+  locator: string | null;
+  summary: string | null;
+  observed_at: string;
+}
+
+export interface DeliveryAcceptanceEvidence {
+  acceptance_id: string;
+  acceptance_version: string;
+  outcome_id: string;
+  statement: string;
+  identity_source: DeliveryAcceptanceIdentitySource;
+  status: DeliveryCriterionStatus;
+  decided_by: string | null;
+  evidence: DeliveryEvidenceItem[];
+  evidence_truncated: number;
+}
+
+export interface DeliveryEvidenceProjection {
+  change_id: string;
+  contract_digest: string;
+  frontier_digest: string;
+  finalization_id: string | null;
+  finalization_rules: DeliveryFinalizationRules;
+  criteria: DeliveryAcceptanceEvidence[];
+  unattributed: DeliveryEvidenceItem[];
+  unattributed_truncated: number;
+  counts: Record<DeliveryCriterionStatus, number>;
 }
 
 export interface DeliveryBlock {
@@ -767,6 +828,7 @@ export interface WorkItemDetailView {
   change_progress?: DeliveryProgress | null;
   pause_available?: boolean;
   pause_unavailable_reason?: ChangePauseUnavailableReason | null;
+  evidence?: DeliveryEvidenceProjection | null;
 }
 
 export interface WorkItemAvailableDetailResponse {

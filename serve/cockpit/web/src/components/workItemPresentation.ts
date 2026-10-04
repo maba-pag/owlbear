@@ -1,5 +1,10 @@
 import type {
   ChangePauseUnavailableReason,
+  DeliveryAcceptanceIdentitySource,
+  DeliveryConfirmationKind,
+  DeliveryCriterionStatus,
+  DeliveryEvidenceVerdict,
+  DeliveryFinalizationRules,
   DeliveryProgress,
   DeliveryReadinessChecksState,
   DeliveryReadinessReasonCode,
@@ -105,6 +110,47 @@ export const NEXT_ACTOR_LABELS: Record<WorkItemNextActor, string> = {
   agent: "Agent",
   dependency: "Dependency",
   none: "Nobody",
+};
+
+/** Delivery's evaluator decides each status; Cockpit only names it. */
+export const EVIDENCE_STATUS_LABELS: Record<DeliveryCriterionStatus, string> = {
+  covered: "Covered",
+  waived: "Waived by you",
+  missing: "Missing",
+  uncovered: "Uncovered",
+  unknown: "Unknown (legacy evidence)",
+};
+
+export const EVIDENCE_STATUS_TONES: Record<DeliveryCriterionStatus, WorkItemStatusTone> = {
+  covered: "complete",
+  waived: "neutral",
+  missing: "attention",
+  uncovered: "blocked",
+  unknown: "neutral",
+};
+
+export const EVIDENCE_VERDICT_LABELS: Record<DeliveryEvidenceVerdict, string> = {
+  passed: "Passed",
+  "expected-negative": "Expected failure observed",
+  failed: "Failed",
+  missing: "Missing",
+  waived: "Waived",
+};
+
+export const IDENTITY_SOURCE_LABELS: Record<DeliveryAcceptanceIdentitySource, string> = {
+  authored: "Authored identity",
+  "legacy-position": "Legacy position",
+};
+
+export const FINALIZATION_RULES_LABELS: Record<DeliveryFinalizationRules, string> = {
+  typed: "Finalized with typed evidence",
+  legacy: "Finalized under legacy rules",
+  none: "Not finalized",
+};
+
+export const CONFIRMATION_KIND_LABELS: Record<DeliveryConfirmationKind, string> = {
+  waive: "Waiver",
+  "confirm-check": "Person-only check",
 };
 
 export function readinessTone(status: DeliveryReadinessStatus): WorkItemStatusTone {
