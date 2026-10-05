@@ -25,6 +25,7 @@ from owlbear_delivery.delivery_runtime import (
 )
 from owlbear_delivery.delivery_state import DeliveryStatePublicationError
 from owlbear_delivery.design_package import DesignPackageConflictError
+from owlbear_delivery.finalization_reports import FinalizationReportError
 from owlbear_delivery.portfolio_application import (
     DeliveryRuntimeReconciliationError,
     PortfolioApplicationError,
@@ -108,6 +109,10 @@ def classify_delivery_failure(error: Exception) -> DeliveryFailureClassification
         )
     elif isinstance(error, DeliveryWorkerActiveError):
         classification = _classification(error, category=DeliveryFailureCategory.CONFLICT, retry_safe=True)
+    elif isinstance(error, FinalizationReportError):
+        classification = _classification(
+            error, category=DeliveryFailureCategory.CONFLICT, retry_safe=error.code.endswith("-unavailable")
+        )
     elif isinstance(
         error,
         (

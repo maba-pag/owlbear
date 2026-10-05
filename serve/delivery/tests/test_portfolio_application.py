@@ -7886,7 +7886,8 @@ def test_captured_readiness_agrees_across_public_reads(tmp_path: Path, *, dirty:
     assert context.readiness.executable is not dirty
     assert context.readiness.reason_code == ("workspace-dirty" if dirty else "ready")
     if dirty:
-        assert context.readiness.prompt is None
+        assert context.readiness.prompt is not None
+        assert context.readiness.prompt.startswith("/repair-delivery Diagnose Change change-a read-only")
     else:
         assert context.readiness.prompt == (
             "/continue-change change-a reread get_change and pass its readiness basis unchanged "
@@ -7924,7 +7925,11 @@ def test_captured_readiness_agrees_across_public_reads(tmp_path: Path, *, dirty:
         ("retry-backoff", False, None),
         ("retry-exhausted", False, "/inspect-change"),
         ("acceptance-wait", False, None),
-        ("retry-ledger-unavailable", False, None),
+        ("workspace-dirty", False, "/repair-delivery"),
+        ("workspace-preflight-failed", False, "/repair-delivery"),
+        ("workspace-inspection-failed", False, "/repair-delivery"),
+        ("retry-containment", False, "/repair-delivery"),
+        ("retry-ledger-unavailable", False, "/repair-delivery"),
     ],
 )
 def test_engine_action_prompt_is_applicable_to_final_readiness_state(

@@ -831,10 +831,12 @@ class _ReadinessViewsMixin:
         )
         merge = self._merge_decision(snapshot)
         basis, workspace_reason, readiness_guidance = self._capture_action_basis(snapshot, cards, basis, merge)
+        settled_attention = False
         if readiness_guidance is None:
             readiness_guidance = self._settled_attention_workspace_guidance(
                 snapshot.contract.change_id, workspace_reason
             )
+            settled_attention = readiness_guidance is not None
         try:
             reports = FinalizationReportStore(self._target_root, snapshot.contract.change_id).read()
         except FinalizationReportError:
@@ -858,6 +860,14 @@ class _ReadinessViewsMixin:
             for card, decision in zip(cards, decisions, strict=True)
         )
         decisions = self._with_worker_stall_readiness(snapshot, cards, decisions)
+        if settled_attention:
+            # Settled Finalizer attention names /inspect-change in its card guidance instead.
+            decisions = tuple(
+                decision.model_copy(update={"prompt": None})
+                if decision.reason_code in {"workspace-dirty", "workspace-preflight-failed"}
+                else decision
+                for decision in decisions
+            )
         pause_requested, pause_drained = self._pause_request_state(snapshot)
         if pause_requested:
             decisions = self._with_pause_request_readiness(snapshot, cards, decisions)
@@ -1897,6 +1907,11 @@ class _ReadinessViewsMixin:
             "engine-action-failed",
             "engine-action-incomplete",
             "engine-action-blocked",
+            "workspace-dirty",
+            "workspace-preflight-failed",
+            "workspace-inspection-failed",
+            "retry-containment",
+            "retry-ledger-unavailable",
         }:
             prompt = (
                 f"/repair-delivery Diagnose Change {change_id} read-only; preserve existing custody and journals. "
