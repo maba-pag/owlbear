@@ -29,7 +29,7 @@ from owlbear_delivery.remote_git import (
 )
 from owlbear_delivery.runtime_models import _FRONTIER_SCHEMA_VERSION, _READABLE_LEGACY_FRONTIER_SCHEMA_VERSION
 from owlbear_delivery.runtime_support import parse_stored_delivery_frontier
-from owlbear_delivery.target_contract import DeliveryContract
+from owlbear_delivery.target_contract import DeliveryContract, contract_canonical_bytes
 
 _READABLE_LEGACY_FRONTIER = _READABLE_LEGACY_FRONTIER_SCHEMA_VERSION
 
@@ -227,7 +227,7 @@ def _validate_snapshot_authority(snapshot: DeliveryStateSnapshot) -> None:
     if snapshot.admission.integration_target != snapshot.integration_target:
         message = "Delivery-state snapshot admission target does not match its Change"
         raise ValueError(message)
-    if snapshot.admission.contract_digest != hashlib.sha256(_canonical_bytes(snapshot.contract)).hexdigest():
+    if snapshot.admission.contract_digest != hashlib.sha256(contract_canonical_bytes(snapshot.contract)).hexdigest():
         message = "Delivery-state snapshot admission contract digest is invalid"
         raise ValueError(message)
     expected_bindings = tuple((scope.outcome_id, scope.scope_id) for scope in snapshot.contract.plan_scopes)

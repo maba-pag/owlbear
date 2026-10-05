@@ -188,6 +188,7 @@ from owlbear_delivery.runtime_transaction import (
     TransactionParticipant,
 )
 from owlbear_delivery.storage_io import state_is_read_only
+from owlbear_delivery.target_contract import contract_canonical_bytes
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -271,7 +272,7 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
             _conflict("runtime and workspace coordination must share one transaction root")
         self._contract = contract
         self._workspace_manager = workspace_manager
-        self._authority_digest = hashlib.sha256(_model_content(contract)).hexdigest()
+        self._authority_digest = hashlib.sha256(contract_canonical_bytes(contract)).hexdigest()
         self._frontier_path = self._target_root / "changes" / contract.change_id / "frontier.json"
         self._pending_publication_path = self._frontier_path.with_name("state-publication.json")
         self._validate_frontier(self._read()[0])

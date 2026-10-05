@@ -101,6 +101,8 @@ Settled by the planner (2026-10-05), each with one defensible answer in the oper
   affected host steps are rerun, and the N10-A regression gate (full suites on the exact head, §3.1 closeout) runs
   again on the final product-code head; a docs-only change needs no repeat. D6 refreshes the upgrade rehearsal
   when code changed. The evidence PR follows.
+  Applied 2026-10-05 to defect H1 (§3.2.1, PR #383; branch and title as named by the lead:
+  `redesign/n10h-fix-contract-digest`, `N10-H fix: non-ASCII contract authority digest`).
 - **D8 `/upgrade-delivery` unchanged.** N10-M runs the shipped prompt; this plan adds only the preconditions,
   the checkout alignment and the dispositions around it.
 - **D9 Abandonment by the user.** `frontier-serialization-contract` is abandoned by the user in Cockpit
@@ -382,6 +384,48 @@ engine-authored exceptional prompt in `readiness.prompt`, **K** Cockpit control,
   product-code head).
 - **LC:** not applicable. **Size / risk:** M / medium (one session with the user).
 
+#### 3.2.1 N10-H journey record
+
+Disposable project `~/owlbear-n10h/project` (repository `boecht/owlbear-n10h-20261005`), OwlBear clone
+`~/owlbear-n10h/owlbear` at `6815cd714`.
+
+| Step | Observed | Status |
+| --- | --- | --- |
+| 1 Design | First `admit_change` of Change `slug-rules` refused with `ERR_DELIVERY_PORTFOLIO: active package authority does not match the Delivery runtime` (`retry_safe` false). The contract contains `é`, `ß` and `→`. | Stopped; defect H1 (D7) |
+
+**Defect H1: non-ASCII contract digest (fix PR #383).**
+
+- *Cause:* the contract digest is the SHA-256 of the canonical UTF-8 bytes (`target_contract._canonical_json`,
+  `ensure_ascii=False`). Admission writes these bytes as `contract.json` and `authority.json` and records their digest
+  in the receipt. Four readers serialized the same contract again with `ensure_ascii` left on, which escapes
+  non-ASCII text: `DeliveryRuntime.authority_digest`, the snapshot admission check in `delivery_state`, and the
+  loader's local-versus-remote comparison and restore of `contract.json`. For `slug-rules` the bytes are 3,766
+  against 3,875 and the digests `ecf7aafb…` against `62c7ca7a…`. ASCII-only contracts produce identical bytes either
+  way, so the defect showed only with non-ASCII text.
+- *Effect:* `_validate_package_authority` refused after admission had already written the receipt, contract,
+  frontier, coordination, Change branch record and package authority (`refs/owlbear/packages/slug-rules` at
+  `79c734ce`); the Design package snapshot never ran. A retry on the old code is routed to revision activation
+  (`_revision_pending` compares the same mismatched digests) and refused with `change-not-paused`, without writes.
+  Startup does not complete the admission on either code version. Read-only views show the partial Change as
+  planning with an agent next; `/continue-change` must not be started before the admission completes.
+- *Fix:* `target_contract.contract_canonical_bytes` is the one contract serialization; the runtime, the snapshot
+  check and the loader use it. Persisted formats are unchanged. All live contracts and packages are ASCII
+  (read-only scan of 3 runtime contracts and 9 packages), so their digests and bytes are identical before and after.
+  The order of admission writes is kept: with the fix, a retried `admit_change` replays the recorded admission and
+  completes the snapshot.
+- *Recovery rehearsal* (copy of the project in `ubuntu:24.04` mounted at its absolute path, `origin` redirected by
+  `url.<mirror>.insteadOf` to a local bare mirror, no provider, the original unchanged): on `6815cd714` startup and a
+  supervisor tick change nothing and `admit_change` is refused `change-not-paused` with no record change; on the fix
+  `admit_change` replays (receipt `4a3619c3…`, contract digest and runtime digest both `ecf7aafb…`, package
+  `98b6f744…` unchanged), creates the Design package snapshot, publishes the Change branch and Delivery state to
+  the mirror, and a reload is healthy.
+- *Recovery route for the project:* after merge, run `/upgrade-delivery <merge commit>` from the project (the user
+  stops and restarts `owlbear-delivery` when asked; no migration is expected, both releases read format 3), then
+  the Designer retries `admit_change` for `slug-rules` with the same approved package. Resetting the disposable
+  state is not needed.
+- *Rerun after merge (D7):* step 1 from the admission retry, then the remaining steps; the N10-A regression gate on
+  the final product-code head.
+
 ### 3.3 N10-M — Live migration and programme closure
 
 - **Prerequisites:** N10-H; the user present and authorizing each step.
@@ -410,7 +454,7 @@ engine-authored exceptional prompt in `readiness.prompt`, **K** Cockpit control,
 | --- | --- | --- | --- | --- | --- |
 | N10-P | #374 | gate on `eb185eb3f` | Probes P1–P6; docs only; markdownlint on temporary copies | Sol plan gate round 1: revision-required, 3 findings fix-now, applied 2026-10-05; gate closed | merged |
 | N10-A | #382 | code `fddb6d02f` (R1 fix; before it `97f694ab2`); docs after | R1 delta `35160cca2..fddb6d02f`, own runs on `fddb6d02f`: the two updated prompt tests plus the settled-attention and workspace-reason tests (`-k`, 35 passed); the eight affected test files (`test_portfolio_application.py`, `test_delivery_progress.py`, `test_change_workspace.py`, `test_retry_ledger.py`, `test_recovery.py`, `test_worker_stall.py`, `test_target_server.py`, `tests/test_cockpit_work_items.py`) 1398 passed; scoped Ruff check and format clean; agent-ecosystem tests 70 passed; one `uv run test --changed --base origin/dev` (unsharded, 659 s): 3439 passed, 1 skipped, exit 0; Cockpit frontend not rerun (readiness shape unchanged); LC on `fddb6d02f` (live copy, `ubuntu:24.04`, volume `n00a-uv-cache`, 139 live records): upgrade form from `841b1cffb` passed with the same proposal (`runtime/format.json` `format-marker` `fbee38db…` → `f2a27400…`, step `format-2-to-3`), only that record changed, two healthy starts with 3 of 3 available, Cockpit 200 and bundle equal, `verify` true, rollback refused `state-newer-than-controller`; full form passed; `compare` after each `live_unchanged: true`; stages and bundles removed. Own runs on `97f694ab2`: cited node IDs collect (105, exit 0); journey test passed; V08 disposable check recorded (§3.1.1); `uv run test` (full): Python 2 failed, 4707 passed, 1 skipped in 883 s, the 2 failures are 30-s load timeouts of `test_delivery_state.py::test_change_intents_on_planner_pause_of_builder_planning_return_survive_default_loader_restart[historical-*]`, rerun alone 6 of 6 passed (7.3 s each); `npm test` 31 files, 373 passed; scoped Ruff clean on the three changed Python files; `npm run build` ok; `npm run test:e2e:work` 31 passed; agent-ecosystem tests 70 passed; no frontend file changed (Biome not applicable); LC on `56366028d` (code equal to `97f694ab2`; live copy, user authorization 2026-10-05; `ubuntu:24.04`, volume `n00a-uv-cache`; 139 live records): `run --form upgrade --previous 841b1cffb` passed (previous release healthy with 3 of 3 Changes available; preflight `migration-required`; proposal one entry `runtime/format.json` `format-marker` `fbee38db…` → `f2a27400…`, step `format-2-to-3`; applied and verified; only that record changed; switch pinned the candidate, previous `841b1cffb`; two MCP starts healthy with 3 of 3 available and an unchanged round trip; Cockpit 200 and bundle equal; checkout code `controller-not-pinned`; `verify` true; step-9 rollback `switch 841b1cffb` refused `release-refuses-state` / `state-newer-than-controller`); `run --form full --previous 841b1cffb` passed (unmigrated copy refused `state-migration-required` with hashes unchanged; migrated copy loads 3 of 3; previous release's gate hashes unchanged, synthetic newer state refused); `compare` after each: `live_unchanged: true`; stages and bundles removed | Sol implementation gate: pending (lead) | merged |
-| N10-H | — | — | — | — | — |
+| N10-H | fix #383 (defect H1) | code `4d126f887`; docs after | Own runs on `4d126f887`: new default-loader test (fails on `origin/dev` with `change-not-paused`, and without either the snapshot or the loader part), `test_delivery_state.py` and `test_target_contract.py` 125 passed, scoped Ruff clean, one `uv run test --changed --base origin/dev` (unsharded, 651.65 s) 3440 passed, 1 skipped, exit 0; live scan read-only: all 3 runtime contracts and 9 packages ASCII; recovery rehearsal on copies of the disposable project (§3.2.1); LC on `4d126f887` (live copy, user authorization 2026-10-05; `ubuntu:24.04`, volume `n00a-uv-cache`; 139 live records): upgrade form from `841b1cffb` passed with the N10-A proposal (`runtime/format.json` `format-marker` `fbee38db…` → `f2a27400…`, step `format-2-to-3`), only that record changed, two healthy starts with 3 of 3 available, Cockpit 200 and bundle equal, `verify` true, rollback refused `state-newer-than-controller`; full form passed; `compare` after each `live_unchanged: true`; stages removed | — | step 1 stopped; fix in review, then step 1 reruns from the admission retry (D7) |
 | N10-M | — | — | — | — | — |
 
 ## 5. Verification Gaps

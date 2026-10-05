@@ -193,7 +193,7 @@ def compile_delivery_contract(
             DeliverySourceBinding(source_name="design.md", sha256=_digest(design_bytes)),
         ),
     )
-    canonical_bytes = _canonical_json(contract)
+    canonical_bytes = contract_canonical_bytes(contract)
     return DeliveryCompilationResult(
         contract=contract,
         canonical_bytes=canonical_bytes,
@@ -664,7 +664,8 @@ def _diagnostic(
     return DeliveryCompilationDiagnostic(code=code, source_name=source_name, subject=subject, detail=detail)
 
 
-def _canonical_json(contract: DeliveryContract) -> bytes:
+def contract_canonical_bytes(contract: DeliveryContract) -> bytes:
+    """Return the admitted contract bytes whose SHA-256 is the contract digest."""
     payload = contract.model_dump(mode="json")
     return f"{json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(',', ':'))}\n".encode()
 
@@ -684,4 +685,5 @@ __all__ = [
     "DeliveryPlanScope",
     "DeliverySourceBinding",
     "compile_delivery_contract",
+    "contract_canonical_bytes",
 ]
