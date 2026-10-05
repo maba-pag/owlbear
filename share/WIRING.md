@@ -61,16 +61,16 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 
 Tool allowlists remain in agent frontmatter; they are not duplicated here.
 
-Orchestrator acquires and dispatches work, then forwards ordinary transitions and routes typed
-attention and admitted Change repair proposals. Before dispatching, it inspects running
-Planner/Builder/Finalizer claims in its entry scope (`/continue-change`: only that Change through
-`get_change`; `/orchestrate`: `list_changes`, then `get_change`) and asks once with `vscode/askQuestions`
+Orchestrator continues one selected Change through `/continue-change`: it acquires and dispatches at
+most one Change action at a time, then forwards ordinary transitions and routes typed attention and
+admitted Change repair proposals. Before dispatching, it inspects only that Change's running
+Planner/Builder/Finalizer claims through `get_change` and asks once with `vscode/askQuestions`
 whether each exact prior run was stopped. Only a confirmed stop uses one exact
 `release_stuck_worker` call. A `worker-stall-wait` needs no question and yields with its retry time
 or bounded process details. Delivery records each claim's issuing VS Code window PID and process
 start time, then settles a previous-session loss on acquisition only after that window is gone, no
 worktree write occurred for 30 seconds, and the worktree/Git-admin process guard passes. An
-MCP-server restart while the window is alive does not qualify. Orchestrator runs periodic memory
+MCP-server restart while the window is alive does not qualify. Orchestrator triggers no memory
 curation and has no repository write tools. Returned Planner/Builder no-results use
 `ended-without-result` only after dispatch return and owned mutators settle. `worker-host-lost` and
 `worker-released-stuck` are engine-only and never go through Orchestrator settlement. A lost or
@@ -83,16 +83,14 @@ not proof.
 | --- | --- | --- |
 | `ideate` | `prompt` -> designer in discovery mode | Agent required-reading loads `w-design-session`; selects or creates one target Design session |
 | `design` | `prompt` -> designer in direct design mode | Agent required-reading loads `w-design-session`; rehydrates the same target Design session |
-| `orchestrate` | `prompt` -> orchestrator | Agent required-reading loads `w-orchestration`; session-start stale-claim check precedes dispatch |
-| `continue-change` | `prompt` -> orchestrator | One selected Change; acquires and dispatches at most one Change action at a time |
+| `continue-change` | `prompt` -> orchestrator | The normal execution entry: one selected Change; session-start claim check, then acquires and dispatches at most one Change action at a time |
 | `challenge-plan_sol` | Current agent directed by `.github/prompts` | Dispatches a fresh unnamed read-only subagent with `GPT-6.1 Sol (copilot)`; caller reconciles evidence and owns the recommendation |
 | `challenge-implementation_sol` | Current agent directed by `.github/prompts` | Dispatches a fresh unnamed read-only subagent with `GPT-6.1 Sol (copilot)`; caller reconciles findings and owns the verdict |
-| `finalize-change` | `prompt` -> finalizer | Agent required-reading loads `w-change-finalization`; engine proof and exact reviewed finalization |
+| `finalize-change` | `prompt` -> finalizer | Exceptional fallback when the continuation host cannot dispatch Finalizer, and the `address-pr-feedback` handoff; agent required-reading loads `w-change-finalization`; engine proof and exact reviewed finalization |
 | `inspect-change` | built-in `ask` mode | Read-only Change diagnosis through `get_change` and `delivery_health` only; no mutation or host repair |
-| `release-stuck-worker` | `prompt` -> orchestrator | Claim from `get_change`; skip `worker-stall-wait`; confirm stop if needed; release once under the write/process guard |
 | `upgrade-delivery` | Current agent directed by prompt | Prompt-defined N02-D procedure: install, online read-only preflight, user stop, offline preflight, backup, `delivery-migrate`, confirmed switch, user restart and verification through `delivery-controller` |
 | `address-pr-feedback` | Current agent directed by prompt | Loads `w-address-pr-feedback`; `start` evaluates and repairs external review threads, while `resume` publishes the fresh finalized head before replying and resolving threads |
-| `resolve-target-conflict` | Current agent directed by prompt | Loads `w-target-conflict-resolution`; resolves exact target merges in the managed Change worktree and hands off to finalization |
+| `resolve-target-conflict` | Current agent directed by prompt | Loads `w-target-conflict-resolution`; resolves exact target merges in the managed Change worktree and hands off to `/continue-change` |
 | `repair-delivery` | Current agent directed by prompt | Loads `w-delivery-repair`; read-only `delivery-diagnose` bootstrap, then `delivery-repair` classification and fenced proposals under the confirmation policy while the user has stopped the controllers |
 | `resolve-delivery-attention` | Temporary recovery/exception prompt | Loads `w-delivery-attention-resolution`; binds one exact Change or Integration attention before interactive diagnosis; retire only after Cockpit and Delivery provide tested guided routes for all prompt-only recovery capabilities |
 | `test-curation` | `prompt` -> test-curator | Agent required-reading loads `w-test-curation` |
@@ -158,15 +156,15 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 | planner | orchestrator | An acquired Planning launch cannot produce a published task chain and worker-owned transition |
 | planner-challenger | planner | A proposed Delivery task chain cannot receive independent advisory evidence |
 | builder | orchestrator | Settled no-result preserves same-task work; unreturned/live work stays held |
-| finalizer | orchestrator | An issued finalization launch is dispatched intact; normal failures settle only with its actual stored report and issued identities, while success is recorded without another API call; if the capability is unavailable, the orchestrator reports the native `/finalize-change <change_id>` entry instead |
+| finalizer | orchestrator | An issued finalization launch is dispatched intact; normal failures settle only with its actual stored report and issued identities, while success is recorded without another API call; if the capability is unavailable, the orchestrator reports the exceptional `/finalize-change <change_id>` fallback instead |
 | repairer | orchestrator | A Change-specific engine-authored repair proposal cannot receive its bounded user interaction |
 | build-reviewer | builder | An exact-commit task result cannot receive advisory pass or finding evidence |
 | build-reviewer | finalizer | An exact finalization proof cannot receive advisory pass or finding evidence |
-| memory-curator | orchestrator | Scheduled memory housekeeping is unavailable; the failure is reported and does not stop independent Delivery acquisition |
 | Explore | designer, planner, orchestrator | Broad read-only orientation must be performed by the caller or omitted |
 
-`recover_claim` refusals report `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` and retain custody. The
-user-stopped release route is separate.
+`recover_claim` refusals report `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` and retain custody; the user
+recovers claims through Cockpit or `/resolve-delivery-attention`. The user-stopped release route is
+separate. No agent triggers `memory-curator`; the user runs it or reviews pending entries in Cockpit.
 
 The agent validator enforces ND3 metadata and frontmatter-to-`<agents>` alignment; see
 `h-agent-structure` for the nesting rules.

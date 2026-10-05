@@ -324,10 +324,11 @@ return:
 - Delivery contract: <commitment and outcome counts, dependency frontier, scope coverage>
 - Evidence: <challenge disposition, baseline commands, validation result, known limits>
 - Admission: <receipt ID, frontier IDs, checkpoint commit, and carry-forward result>
+- Next: /continue-change <change_id>
 ```
 
-Before admission, replace the final line with `Draft: <blocking finding and owning authority>` and do
-not imply that Delivery can begin.
+Before admission, replace the last two lines with `Draft: <blocking finding and owning authority>` and
+do not imply that Delivery can begin.
 
 ## Known Pitfalls
 

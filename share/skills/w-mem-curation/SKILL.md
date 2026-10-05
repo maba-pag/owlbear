@@ -6,7 +6,7 @@ user-invocable: false
 
 # Memory Curation
 
-> **Audience:** The `memory-curator` agent (periodic or manual dispatch). **When:** Orchestrator dispatches a curation cycle, or the user invokes manually for conflict resolution. **Why:** Turns raw `pending` agent reflections into scoped, quality-checked MCP entries that `recall_memory` surfaces.
+> **Audience:** The `memory-curator` agent (periodic or manual mode). **When:** The user requests a periodic curation pass (`Curate: Periodic curation`) or invokes the curator for conflict resolution. **Why:** Turns raw `pending` agent reflections into scoped, quality-checked MCP entries that `recall_memory` surfaces.
 
 Maintain institutional memory by turning raw agent learnings into scoped MCP memory entries. MCP memory is the canonical reviewed store; the retired VS Code `/memories/` store is not an inbox or fallback.
 
@@ -54,8 +54,8 @@ different memory store or direct Git command.
 
 **Mode detection:**
 
-- **Periodic mode** — dispatched by the orchestrator. Handle clear-cut entries only. Do not call `askQuestions`; defer conflicts and ordinary content or scope uncertainty.
-- **Manual mode** — invoked directly by the user. Resolve conflicts and uncertain scope through `askQuestions`.
+- **Periodic mode** — the request is `Curate: Periodic curation`. Handle clear-cut entries only. Do not call `askQuestions`; defer conflicts and ordinary content or scope uncertainty.
+- **Manual mode** — any other direct user request. Resolve conflicts and uncertain scope through `askQuestions`.
 
 Classify content before provenance or scope. Delete low-value content regardless of identity. For
 keep-worthy unfamiliar named provenance, require another reviewed non-pending entry or a readable

@@ -1,27 +1,26 @@
 ---
 name: w-orchestration
-description: "Workflow: Acquire Delivery work, dispatch bounded workers, and forward their transitions"
+description: "Workflow: Continue one Delivery Change, dispatch bounded workers, and forward their transitions"
 user-invocable: false
 ---
 
 # Delivery Orchestration
 
-Run the portfolio until acquisition is quiescent or bounded attention requires
-a user/operator. Delivery owns readiness, capacity, claims, identities, reviewer
+Continue one selected Change until its acquisition yields or bounded attention
+requires the user. Delivery owns readiness, capacity, claims, identities, reviewer
 policy, writer custody, transitions, provider-observed acceptance, and retained
 Integration attention. Orchestrator performs only the mechanical dispatch loop
 around that authority.
 
-Select the entry route first, then run only its session-start claim check before dispatch. A pre-existing
-running claim was not dispatched by this session and may belong to a prior run or another live chat; only
-the user can identify whether that exact run stopped.
+Run the session-start claim check before the first acquisition. A pre-existing running claim was not
+dispatched by this session and may belong to a prior run or another live chat; only the user can
+identify whether that exact run stopped.
 
 **Session-start stale-claim check.** For `/continue-change <change_id>`, call `get_change(change_id)` and
 inspect only that Change's running claims, revalidating them in the same coherent view. Do not call
-`list_changes` or inspect sibling Changes on this route. For `/orchestrate`, call `list_changes` once and
-inspect each listed Change's cards. For every Planner, Builder, or Finalizer card with
-`readiness.status == "running"`, call `get_change(change_id)` and revalidate that exact claim and its
-running readiness in the coherent view. Outcome claims are in `unresolved_outcomes[].active_claim`, with
+`list_changes` or inspect sibling Changes on this route. For every Planner, Builder, or Finalizer card
+with `readiness.status == "running"`, revalidate that exact claim and its running readiness in that
+coherent view. Outcome claims are in `unresolved_outcomes[].active_claim`, with
 readiness on the outcome's card; an active Finalizer is an unfinished `finalization_attempt.writer` with
 `kind: finalize`.
 Use the outcome claim's `worker_role` and `started_at`, or the Finalizer's `claimed_at`, to label
@@ -35,7 +34,7 @@ closed? Offer `stopped/closed`, `still running`, and `unsure`. For `stopped/clos
 `release_stuck_worker` exactly once with the copied identity and report its result unchanged. If it
 returns `ERR_DELIVERY_WORKER_ACTIVE`, preserve the returned retry time or process details and do
 not retry or dispatch a replacement in this cycle. For `still running` or `unsure`, leave the claim
-and its files unchanged and continue with other Changes. Never edit its worktree or dispatch a
+and its files unchanged. Never edit its worktree or dispatch a
 replacement for that claim while it remains unresolved. A `worker-stall-wait` readiness needs no question
 or manual settlement; report its retry time or bounded process details and let a later acquisition
 settle it when the guard passes.
@@ -52,10 +51,10 @@ prompt (or its bounded scan detail) and yield.
 
 ## Change Continuation Entry
 
-`/continue-change <change_id>` is the normal entry for one named Change and uses this section instead
-of the portfolio batch loop. `/orchestrate` remains the unchanged portfolio entry. A continuation
-session carries exactly one Change: never acquire, dispatch, recover, or report a sibling Change from
-it, and never fall back to `acquire_actions` when a continuation operation is unavailable.
+`/continue-change <change_id>` is the only execution entry. A continuation session carries exactly one
+Change: never acquire, dispatch, recover, or report a sibling Change from it. Several Changes run in
+separate continuation chats; Delivery enforces capacity and dependencies across them, and Cockpit
+shows the portfolio.
 
 ### Continuation Bindings
 
@@ -68,7 +67,8 @@ Before the first acquisition, require callable `get_change`, `acquire_change_act
 If a required binding remains unavailable or its focused search returns a tool error, report the
 exact missing operation and end the session without acquiring. A missing continuation operation is
 never a reason to call the underlying checkpoint, target-sync, mark-ready, acceptance, finalization,
-or transition operation directly.
+or transition operation directly. When Delivery MCP is unavailable or refuses to start, report that
+and name `/repair-delivery` as the user's next step.
 
 ### Continuation Observation
 
@@ -201,51 +201,9 @@ transitions and worker settlement results, preserved engine results and failure 
 retained custody statement when one applies, and the exact next user command when the engine authored
 one.
 
-## Step 1 - Acquire One Current Batch
-
-Before using a target operation, call it directly when a callable binding is already present; a
-deferred inventory listing does not override that binding. If a required target operation has no
-direct callable binding, load the target tools once with `tool_search` using:
-
-`OwlBear Delivery target portfolio list_changes acquire_actions delivery_health get_change
-transition_delivery settle_worker_invocation release_stuck_worker recover_claim
-recover_integration_repair_claim`
-
-Before calling `acquire_actions`, require callable bindings for `transition_delivery`,
-`settle_worker_invocation`, `recover_claim`, `recover_integration_repair_claim`, and
-`delivery_health`. Invoke any directly bound operation as granted; run one focused `tool_search` only
-for each operation with no direct callable binding. If any binding remains unavailable or its
-focused search returns a tool error, report the exact missing operation and end the session without
-acquisition. Transition, settlement, and recovery are required dispatch safety authority, not
-optional operations to discover after a claim has been acquired. `release_stuck_worker` is optional
-for normal acquisition. When the user explicitly identifies a stopped worker and Orchestrator needs
-this route, require its callable binding at the point of use; if it is not directly bound, run one
-focused `tool_search` for that exact operation. A missing release binding does not block ordinary
-acquisition and is never a reason to use `settle_worker_invocation` or `recover_claim` instead.
-
-Call `list_changes` for the session-start stale-claim check, bounded portfolio reporting, and final
-quiescence confirmation only. Call `acquire_actions` once for the current cycle. Its
-`DeliveryAcquisitionResult` is the sole source of task launch order,
-typed `integration_attention`, acquisition failures, and the optional `health_hint`. When
-`health_hint` is non-empty, immediately call `delivery_health` with `{}` and report its bounded
-diagnostics before dispatching any launch. Do not dispatch or recover a Change identified by those
-diagnostics; quarantined Changes have no actionable launch authority. Active claims remain occupied until the
-exact verified settlement or supported recovery completes. `recover_claim` does not accept timeout or caller
-confirmation as evidence. Without supported host-owned exclusion it returns
-`ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` with `retry_safe: false`, leaving custody and files unchanged.
-Closure must cover the invocation, descendant writers and outstanding tool jobs with no ability to
-resume, or enforce restart-durable exclusion from every managed filesystem, Git and mutation resource.
-Report the typed result unchanged. Do not filter for capacity, infer readiness, create identities,
-or reserve writer custody.
-
-Delivery may settle an earlier-session claim as `worker-host-lost` during acquisition only after its
-recorded issuing window process is gone and the write/process guard above passes. A
-`worker-stall-wait` readiness is a wait, not a launch: report `next_eligible_at` when present or the
-bounded process details when absent, then yield without calling a settlement or recovery operation.
-
 ## Step 2 - Dispatch Or Recover Each Launch
 
-Process `launch_packages` in returned order. For worker role `planner` or `builder`, dispatch exactly
+For an acquired launch with worker role `planner` or `builder`, dispatch exactly
 `launch.policy.worker_agent` and pass only the serialized `DeliveryLaunchPackage`. The selected
 agent's frontmatter owns its model. Do not substitute a role, agent, reviewer, worktree, branch, or
 source head.
@@ -269,7 +227,10 @@ Use `release_stuck_worker` only when the user explicitly states that the specifi
 was stopped. If that statement is ambiguous, ask which exact worker was stopped before mutating. Take
 `change_id`, `outcome_id`, `attempt_id`, and `claim_id` unchanged from the acquisition result or one
 fresh `get_change` view; for a Finalizer attempt, pass `outcome_id: null`. Never infer identity from
-conversation, elapsed time, or a worker's missing response. Call the tool once and report its result
+conversation, elapsed time, or a worker's missing response. Require a callable `release_stuck_worker`
+binding at this point of use; if it is not directly bound, run one focused `tool_search` for that
+exact operation. A missing release binding is never a reason to use `settle_worker_invocation` or
+`recover_claim` instead. Call the tool once and report its result
 unchanged. If it returns `ERR_DELIVERY_WORKER_ACTIVE`, report the returned retry time or process details
 unchanged and leave custody and files unchanged; do not retry or dispatch a replacement in the same
 cycle. This is a user decision consumed by Delivery's 30-second write and process guard, not a
@@ -283,12 +244,11 @@ Planner retries under the same bounded episode. Three failures exhaust the episo
 released Finalizer has no report, Delivery authors a `worker-ended` report with code
 `finalizer-ended-without-report` and `checks_state: unknown`; it is diagnostic history, not proof.
 
-An acquisition failure carrying attempt and claim IDs is not a worker dispatch result and uses the
-exact recovery route. Report recovery attention unchanged without interpreting Git, liveness, or
-custody. A failure without claim IDs is bounded acquisition attention and is not claim-recoverable by
-Orchestrator; it may still qualify for the Change repair route in Step 4 when it has an exact
-`change_id`. Do not report a recovery operation as unavailable unless its Step 1 focused search or
-an exact recovery call returned a recorded tool error.
+Orchestrator does not recover claims. Report claim-recovery attention unchanged without interpreting
+Git, liveness, or custody; the user recovers a claim through Cockpit **Recover claim** or
+`/resolve-delivery-attention`. `recover_claim` accepts neither timeout nor caller confirmation as
+evidence: without supported host-owned exclusion it returns `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED`
+with `retry_safe: false`, leaving custody and files unchanged.
 
 Only a verified completed recovery receipt or settlement receipt permits a later fresh acquisition;
 never interpret an error envelope as a completed operation. `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED`
@@ -385,7 +345,7 @@ For every other supported `DeliveryTransition`, call `transition_delivery` with 
 Immediately before either operation, if no directly callable binding exists, run one focused
 `tool_search` for that exact operation. If it remains unavailable or the search returns a tool error,
 retain the launch's exact change, outcome, attempt, and claim IDs, report the routing failure, and end
-the session after the current acquired batch. Do not redispatch Planner, Builder, or another agent to
+the session. Do not redispatch Planner, Builder, or another agent to
 echo, relay, reconstruct, or apply a result. A failed settlement call must be reconciled with
 `get_change` before any retry; it is not a reason to send its request through `transition_delivery`
 or attempt recovery without the Step 2 evidence.
@@ -400,61 +360,16 @@ uses this settlement; report the exact failure instead of forwarding or retrying
 
 ## Step 4 - Preserve Typed Integration Attention
 
-Do not call a local Integration or completion operation from the orchestration loop. Acquisition
-returns `integration_attention` as retained evidence for the owning attention or provider-acceptance
-workflow. For each acquisition `failure` or health diagnostic with an exact `change_id`, call
-`get_change` once. Dispatch the constrained `repairer` only when that view contains an
+Do not call a local Integration or completion operation from the continuation loop. Integration
+attention is retained evidence for the owning attention or provider-acceptance workflow. For a
+`repair-required` result or a health diagnostic of the selected Change, call `get_change` once.
+Dispatch the constrained `repairer` only when that view contains an
 engine-authored repair proposal; pass the serialized view unchanged and treat its bounded result as
 attention, never as a worker transition. A `stale` Repairer result is a clean re-entry requiring a
 fresh view; never replay the old answer or proposal. Do not create a repair claim, dispatch Builder
 for repair, or synthesize a repair result. A missing proposal, Integration attention, provider
 waiting state, or authority gap remains reported evidence. Never infer completion from work-item
 stages, worker prose, branch state, or cached results.
-
-Continue independent task work when possible, then report the exact attention as bounded action at
-the end of the cycle.
-
-## Step 5 - Run Periodic Housekeeping
-
-Count completed acquisition cycles from 1 within this orchestrator invocation. A completed cycle is
-a non-empty acquisition batch whose launches have been handled and whose worker transitions, exact
-settlements, or recovery results have been recorded. Do not count an empty acquisition, an acquisition failure, or
-an interrupted batch. Dispatch `memory-curator` after cycle 3, then after cycles 13, 23, and so on
-every tenth completed cycle thereafter, with exactly `Curate: Periodic curation`. This is
-non-Delivery housekeeping, not a launch package: provide no task, Change, outcome, attempt, or claim
-identity; do not call `transition_delivery` or `recover_claim` for it.
-
-The curator's successful Channel A result must use the `w-mem-curation` form
-`DONE | {P} promoted, {D} pruned`, adding reportable pending conflict or uncertainty IDs when
-present. If the dispatch binding is unavailable, the `runSubagent` invocation itself returns a
-tool-layer error, or capability dispatch fails before a child result exists, record a non-blocking
-housekeeping failure, report it separately, finish the current batch, and continue with the next
-acquisition cycle; do not use Delivery recovery. If the invocation completes but returns no result,
-a result without the curator's Channel A verdict, or a child report of its own internal failure,
-record a malformed housekeeping result, do not retry it, and continue acquisition. A scheduled
-attempt consumes its cadence slot regardless of its result.
-
-## Step 6 - Refresh
-
-Finish the current acquired batch, discard it, and call `acquire_actions` again. Continue
-independent changes when one outcome returns or blocks. Stop when launch packages are empty, or when
-a Delivery safety diagnostic requires user/operator action. A housekeeping failure is reported but
-does not stop independent Delivery acquisition.
-Non-empty `integration_attention` is bounded action, not quiescence.
-
-Before reporting portfolio quiescence after an empty acquisition, call `list_changes`. Quiescence
-requires that projection to be empty as well. If work items remain, report their identities and
-stages as bounded acquisition attention and stop; do not infer a launch or mutate their state.
-
-## Output
-
-Report forwarded transition and settlement identities, typed Integration attention, periodic
-housekeeping results,
-exact recovery and stopped-worker release results, unclaimed acquisition failures, bounded acquisition
-attention, and cycle
-count. Report quiescence
-only when both acquisition and the final work-item projection are empty. Do not translate those typed
-results into invented completion or scheduling state.
 
 ## Known Pitfalls
 

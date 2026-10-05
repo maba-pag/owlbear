@@ -321,9 +321,7 @@ it("presents Change-grouped Outcomes by work, progress, and status", async () =>
   expect(guidance).toHaveTextContent("Review 1 item that needs you");
   expect(guidance).toHaveTextContent("1 Work Item holds active custody; each Change shows its progress.");
   expect(guidance).not.toHaveTextContent("already working");
-  expect(within(guidance).getByTestId("portfolio-commands")).toHaveTextContent("/orchestrate");
-  expect(within(guidance).getByRole("button", { name: "Copy command /orchestrate" })).toBeInTheDocument();
-  expect(guidance).not.toHaveTextContent("Start /orchestrate");
+  expect(within(guidance).queryByTestId("portfolio-commands")).not.toBeInTheDocument();
   expect(table.compareDocumentPosition(guidance) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(screen.queryByText("Reviewed", { exact: true })).not.toBeInTheDocument();
 });

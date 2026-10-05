@@ -684,11 +684,10 @@ function guidanceCommands(guidance: PortfolioGuidance): string[] {
   switch (guidance.kind) {
     case "resume-design":
       return guidance.change_ids.map((changeId) => designCommand(changeId));
-    case "start-orchestration":
-    case "work-underway":
-      return ["/orchestrate"];
     case "create-change":
       return ["/ideate", "/design <change-id>"];
+    case "start-orchestration":
+    case "work-underway":
     case "intervene":
     case "wait":
       return [];
