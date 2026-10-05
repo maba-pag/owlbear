@@ -113,6 +113,10 @@ test.describe("assembled Delivery portfolio", () => {
     await normalizeSeedLifecycleStatuses(page);
   });
 
+  test.afterEach(async ({ page }) => {
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+  });
+
   test("wide workspace explains operating state and provides routed detail", async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto("/work");
