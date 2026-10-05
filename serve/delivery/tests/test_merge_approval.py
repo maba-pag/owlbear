@@ -461,6 +461,63 @@ def test_a_raced_merge_is_attention_never_completion(tmp_path: Path, merge, race
     assert (runtime.frontier_bytes(), _attempt(state_root)) == (frontier, attempt)
 
 
+_INTER_READ_FLIPS = {
+    "merged": InMemoryPublicationProvider.execute_pending_merges,
+    "target-advanced": _advance_target,
+    "closed": lambda memory: _update_pull_request(memory, state="closed"),
+    "moved-head": lambda memory: _update_pull_request(memory, head_sha=_OTHER),
+}
+
+
+_INTER_READ_EXPECTED = {
+    "merged": ("completed", MergeAttemptState.MERGED, MergeRace.NONE, None),
+    "target-advanced": ("attention", MergeAttemptState.MERGED, MergeRace.TARGET_ADVANCED, "identity-mismatch"),
+    "closed": ("attention", MergeAttemptState.CLOSED, None, "closed-unmerged"),
+    "moved-head": ("head-moved", MergeAttemptState.HEAD_CHANGED, None, None),
+}
+
+
+@pytest.mark.parametrize("path", ["background", "explicit"])
+@pytest.mark.parametrize("flip", sorted(_INTER_READ_FLIPS))
+def test_a_provider_change_between_the_settlement_and_acceptance_reads_settles_the_attempt_first(
+    tmp_path: Path, path: str, flip: str
+) -> None:
+    background, expected, race, reason = _INTER_READ_EXPECTED[flip]
+    application, runtime, memory, _head, state_root = _memory_awaiting_merge(tmp_path)
+    assert _approve(application).attempt.state is MergeAttemptState.PENDING
+    publisher = application._draft_pull_request_publisher
+    observe = publisher.observe_pull_request
+    flips = [_INTER_READ_FLIPS[flip]]
+
+    def flip_then_observe(request):
+        while flips:
+            flips.pop()(memory)
+        return observe(request)
+
+    with patch.object(publisher, "observe_pull_request", side_effect=flip_then_observe):
+        if path == "background":
+            status = application.reconcile_awaiting_acceptance(("change-a",))[0].status.value
+        else:
+            try:
+                status = "completed" if application.observe_acceptance("change-a").completion_id else None
+            except PortfolioApplicationError:
+                status = "refused"
+
+    completed = flip == "merged"
+    assert flips == []
+    assert status == (background if path == "background" or completed else "refused")
+    assert (_attempt(state_root).state, _attempt(state_root).race) == (expected, race)
+    assert len(_completions(state_root)) == int(completed)
+    assert (runtime.merged_pull_request_latch() is not None) is completed
+    assert (application._coordinator.show("change-a").worktree_cleanup is not None) is completed
+    if reason is not None:
+        assert runtime.change_disposition().acceptance_reason.value == reason
+    if race is MergeRace.TARGET_ADVANCED:
+        diagnostics = runtime.change_disposition().diagnostics
+        assert any(item.startswith("target-advanced-during-merge:") for item in diagnostics)
+    assert len(memory.merge_request_bodies) == 1
+
+
 @pytest.mark.asyncio
 async def test_an_unknown_merge_waits_for_the_user_and_check_again_reads_once(tmp_path: Path) -> None:
     application, runtime, memory, _head, state_root = _memory_awaiting_merge(tmp_path)

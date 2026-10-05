@@ -186,6 +186,28 @@ class _MergeMixin:
         if settled != attempt:
             store.write(settled, expected=attempt)
 
+    def _settle_for_acceptance_read(
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+        observation: PublicationPullRequestObservationReceipt,
+    ) -> bool:
+        """Settle again when the acceptance read left the attempt's open PR, then refuse a raced merge (D6, I4).
+
+        ``False`` keeps acceptance waiting: the attempt is still open although the read shows it ended.
+        """
+        store = MergeAttemptStore(self._target_root, change_id)
+        attempt = store.nonterminal()
+        snapshot = observation.snapshot
+        if attempt is not None and not (
+            snapshot.state == "open" and not snapshot.merged and snapshot.head_sha == attempt.head_sha
+        ):
+            self._settle_merge_for_acceptance(change_id)
+            if store.nonterminal() is not None:
+                return False
+        self._refuse_raced_merge(change_id, runtime, observation)
+        return True
+
     def _refuse_raced_merge(
         self,
         change_id: str,

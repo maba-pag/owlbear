@@ -534,17 +534,23 @@ class PortfolioApplication(
                 "No bound pull-request publication was found.",
                 code="ERR_DELIVERY_PUBLICATION_MISSING",
             )
-        self._refuse_raced_merge(change_id, runtime, observation)
-        outcome = self._classify_acceptance_observation(
-            change_id,
-            runtime,
-            observation,
-            _AcceptanceReconciliationAuthority(
-                exact_head=finalization.exact_head,
-                ready=ready,
-                target_branch=publisher.target_branch,
-            ),
-        )
+        if self._settle_for_acceptance_read(change_id, runtime, observation):
+            outcome = self._classify_acceptance_observation(
+                change_id,
+                runtime,
+                observation,
+                _AcceptanceReconciliationAuthority(
+                    exact_head=finalization.exact_head,
+                    ready=ready,
+                    target_branch=publisher.target_branch,
+                ),
+            )
+        else:
+            outcome = DeliveryAcceptanceReconciliationOutcome(
+                change_id=change_id,
+                status=DeliveryAcceptanceReconciliationStatus.WAITING,
+                detail="The merge request is not settled yet.",
+            )
         if outcome is not None:
             return outcome
         receipt = self._observe_acceptance_once(change_id, runtime, attempt_id=attempt_id, observation=observation)
@@ -756,8 +762,9 @@ class PortfolioApplication(
             observation = self._draft_pull_request_publisher.observe_pull_request(
                 ObserveChangePublicationPullRequest(change_id=change_id)
             )
-            if observation is not None:
-                self._refuse_raced_merge(change_id, runtime, observation)
+            if observation is not None and not self._settle_for_acceptance_read(change_id, runtime, observation):
+                message = "the merge request is not settled yet"
+                raise DeliveryAcceptanceWaitingError(message)
         if observation is None:
             message = "acceptance observation requires a bound pull request"
             raise PortfolioApplicationError(message)
