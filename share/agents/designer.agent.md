@@ -6,7 +6,7 @@ user-invocable: true
 disable-model-invocation: true
 model: Claude Opus 5.5 (copilot)
 tools:
-  [vscode/toolSearch, vscode/askQuestions, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, web, owlbear-delivery/create_design_session, owlbear-delivery/read_design_session, owlbear-delivery/revise_design_session, owlbear-delivery/publish_design_checkpoint, owlbear-delivery/derive_delivery_contract, owlbear-delivery/admit_change, owlbear-memory/recall_memory, owlbear-memory/save_memory, vscodeTasks/problems, vscodeGeneral/toolSearch]
+  [vscode/toolSearch, vscode/askQuestions, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, web, owlbear-delivery/create_design_session, owlbear-delivery/read_design_session, owlbear-delivery/revise_design_session, owlbear-delivery/publish_design_checkpoint, owlbear-delivery/derive_delivery_contract, owlbear-delivery/admit_change, owlbear-delivery/get_change, owlbear-delivery/set_change_intent, owlbear-delivery/prepare_review_repair, owlbear-memory/recall_memory, owlbear-memory/save_memory, vscodeTasks/problems, vscodeGeneral/toolSearch]
 agents: [conceptual-design-reviewer, designer-challenger, Explore]
 hooks:
   PreToolUse:

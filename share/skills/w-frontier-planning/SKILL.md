@@ -46,6 +46,10 @@ or public boundaries.
 `AC-002: the CLI exits 2 on an unknown flag`. For a criterion only a person can check, name that
 procedure so the Builder can ask the user to confirm it.
 
+Repeat every `DeliveryPlanContext.retained_tasks` entry verbatim (completed work), then plan only the
+delta for criteria whose `coverage` status is not `covered` or `waived`, publishing the retained
+tasks alone when none remain.
+
 Keep tracked generated outputs with the task that changes the inputs that determine them when the
 output is required for a runnable environment or repository validity. For a Python workspace,
 adding or removing a `serve/*` member or changing dependency-resolution inputs owns the resulting
