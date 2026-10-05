@@ -2091,6 +2091,7 @@ _MANAGER_PAUSE_CLASSES: dict[str, frozenset[str]] = {
             "baseline_scope_kinds",
             "inspect_retained",
             "integration_context",
+            "is_design_package_snapshot_child",
             "list_retained",
             "observe_worktree_activity",
             "observed_change_head",
@@ -2342,6 +2343,16 @@ def test_every_provider_effect_entry_is_reached_only_through_a_pause_gate() -> N
 
     assert effects == _PROVIDER_EFFECT_ENTRIES
     assert {name: path for name in sorted(effects) if (path := ungated_path(name, frozenset()))} == {}
+
+
+def test_revision_activation_writes_the_frontier_only_behind_the_revision_gate() -> None:
+    """Admission writes the frontier outside the runtime policy; its revision transaction runs behind I1."""
+    functions = _application_functions()
+    activation = functions["_activate_revision"]
+    lines = {_call_name(call): call.lineno for call in ast.walk(activation) if isinstance(call, ast.Call)}
+
+    assert {name for name, node in functions.items() if "activate_revision" in _calls(node)} == {"_activate_revision"}
+    assert lines["_require_revision_allowed"] < lines["activate_revision"]
 
 
 def test_every_k2_owner_entry_maps_to_one_authority_source() -> None:

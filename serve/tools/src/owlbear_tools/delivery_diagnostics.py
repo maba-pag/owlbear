@@ -81,6 +81,7 @@ _INVALID_INVOCATION = "ERR_INVALID_INVOCATION"
 _WINDOW_HOST_NAME_MAX_LENGTH = 256
 _CHANGE_RECORD_NAME_PATTERNS = {
     "$digest": re.compile(r"^[0-9a-f]{64}$"),
+    "$revision": re.compile(r"^[0-9a-f]{64}(?:-[0-9a-f]{64})?$"),
     "$digest.json": re.compile(r"^[0-9a-f]{64}\.json$"),
     "$digest.raw": re.compile(r"^[0-9a-f]{64}\.raw$"),
     "$attempt.json": re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}\.json$"),
@@ -118,7 +119,7 @@ _CHANGE_RECORD_LAYOUT: dict[str, object] = {
     "contract.json": "contract",
     "admission.json": "admission",
     "state-publication.json": "state_publication",
-    "revisions": {"$digest": _REVISION_LAYOUT},
+    "revisions": {"$revision": _REVISION_LAYOUT},
     "result-receipts": {"$outcome": {"$digest.json": "result_receipt"}},
     "claim-issuers": {"$claim_attempt.json": "claim_issuer"},
     "merge-attempts": {"$digest.json": "merge_attempt"},

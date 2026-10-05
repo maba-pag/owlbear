@@ -23,6 +23,7 @@ from owlbear_delivery import (
     DeliveryAcceptanceAttentionReason,
     DeliveryActiveClaim,
     DeliveryAdmissionReceipt,
+    DeliveryAdmissionRequest,
     DeliveryBlock,
     DeliveryBuilderInvocationSettlement,
     DeliveryChangeCompletion,
@@ -70,6 +71,7 @@ from owlbear_delivery import (
     DeliveryTaskResult,
     DeliveryWorkerExclusionRequiredError,
     DeliveryWorkerRole,
+    DesignPackageManifest,
     DesignPackageStore,
     OutcomeAuthorityBinding,
     PortfolioApplication,
@@ -117,6 +119,7 @@ from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
 from owlbear_delivery.git_executable import resolve_git_executable
 from owlbear_delivery.state_formats import format_marker_bytes
 from owlbear_delivery.target_contract import DeliverySourceBinding
+from owlbear_delivery.workspace_models import ChangeDesignPackageSnapshotReceipt, DesignPackageSnapshotEditedError
 
 _GIT = resolve_git_executable()
 
@@ -4572,3 +4575,157 @@ def test_target_sync_state_snapshot_is_restartable_after_branch_publication(tmp_
     assert _git(fresh, "rev-parse", f"refs/heads/owlbear/change/{change_id}") == sync_receipt.merged_head
     assert state_receipt.published_head == _git(fresh, "rev-parse", "refs/remotes/origin/owlbear/delivery-state")
     assert application.show_finalization_context(change_id).ready_for_finalization is False
+
+
+class _Crash(BaseException):
+    """A process death at one durable boundary; product handlers never catch it."""
+
+
+def _revision_sources(second: str) -> bytes:
+    blocks = (
+        "kind: commitment\nid: COM-001\nclass: agreed-path\nprovenance: restart test\nstatement: Keep launches.",
+        (
+            "kind: outcome\nid: OUT-001\ntitle: Launch\npromise: Make the launch observable.\n"
+            f'acceptance: ["AC-001: The launch is observable.", "{second}"]\ncommitments: [COM-001]\ndependencies: []'
+        ),
+    )
+    return (
+        "# Revision restart\n\n" + "".join(f"```yaml target-contract\n{block}\n```\n\n" for block in blocks)
+    ).encode()
+
+
+def _published_paused_revision(tmp_path: Path) -> tuple[PortfolioApplication, DeliveryStartupConfig, Path, object, str]:
+    """Admit, publish and Pause one Change through the default loader, then revise its package."""
+    repository, remote, _initial = _repository(tmp_path)
+    _git(repository, "config", "url." + str(remote) + ".insteadOf", "https://github.com/example/project.git")
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    config = DeliveryStartupConfig(
+        schema_version=2,
+        remote="origin",
+        target_branch="main",
+        github_repository="example/project",
+        delivery_state_branch="owlbear/delivery-state",
+    )
+    application = load_delivery_application(config, workspace_root=repository)
+    change_id = "revision-restart"
+
+    def authored_id() -> str:
+        package = application.read_design_session(change_id)
+        manifest = DesignPackageManifest.from_content(change_id, package.intent_bytes, package.design_bytes)
+        return hashlib.sha256(manifest.canonical_bytes()).hexdigest()
+
+    application.create_design_session(change_id, _revision_sources("AC-002: Retained."), b"# Architecture\n")
+    application.admit_delivery_change(
+        DeliveryAdmissionRequest(change_id=change_id, expected_package_id=authored_id(), active_claim_ids=())
+    )
+    runtime = application._runtimes[change_id]  # noqa: SLF001
+    application._publish_delivery_state(change_id, runtime, "revision-restart-first-state")  # noqa: SLF001
+    application.set_change_intent(
+        DeliveryChangeIntent(
+            change_id=change_id,
+            kind=DeliveryChangeIntentKind.DEFER,
+            expected_frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+            reason="Revise requirements",
+        )
+    )
+    assert runtime.change_deferral() is not None
+    assert runtime.pending_state_publication() is None
+    current = application.read_design_session(change_id)
+    application.revise_design_session(
+        change_id, current.package_id, _revision_sources("AC-002: Revised."), b"# Architecture\n"
+    )
+    coordination = application._coordinator.show(change_id)  # noqa: SLF001
+    request = DeliveryAdmissionRequest(
+        change_id=change_id,
+        expected_package_id=authored_id(),
+        active_claim_ids=(),
+        expected_frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+        expected_design_package_snapshot_receipt_id=coordination.design_package_snapshot.receipt_id,
+    )
+    return application, config, repository, request, coordination.last_reviewed_commit
+
+
+@pytest.mark.parametrize(
+    "boundary",
+    [
+        "after-contract",
+        "staged",
+        "committed",
+        "after-snapshot",
+        "after-activation",
+        "branch-pushed",
+        "branch-recorded",
+        "state-pushed",
+    ],
+)
+def test_revision_activation_crash_reloads_and_replays_to_one_snapshot(tmp_path: Path, boundary: str) -> None:
+    application, config, repository, request, reviewed = _published_paused_revision(tmp_path)
+    manager = application._workspace_manager  # noqa: SLF001
+    run_git = manager._run_git  # noqa: SLF001
+
+    def crash_before_snapshot_commit(*arguments: str, **options: object) -> object:
+        if arguments[:2] == ("commit", "--only"):
+            raise _Crash
+        return run_git(*arguments, **options)
+
+    crash = {
+        "after-contract": patch.object(manager, "snapshot_design_package", side_effect=_Crash),
+        "staged": patch.object(manager, "_run_git", side_effect=crash_before_snapshot_commit),
+        "committed": patch.object(ChangeDesignPackageSnapshotReceipt, "create", side_effect=_Crash),
+        "after-snapshot": patch("owlbear_delivery.delivery_admission._delivery_frontier", side_effect=_Crash),
+        "after-activation": patch.object(application, "_publish_delivery_state", side_effect=_Crash),
+        "branch-pushed": patch.object(DeliveryRuntime, "record_checkpoint_branch_publication", side_effect=_Crash),
+        "branch-recorded": patch.object(DeliveryStatePublisher, "publish", side_effect=_Crash),
+        "state-pushed": patch.object(DeliveryRuntime, "acknowledge_pending_publication", side_effect=_Crash),
+    }[boundary]
+    with crash, pytest.raises(_Crash):
+        application.admit_change(request)
+    close_delivery_application(application)
+
+    restarted = load_delivery_application(config, workspace_root=repository)
+    health = restarted.delivery_health()
+    assert {diagnostic.code for diagnostic in health.diagnostics} <= {"state-publication-pending"}, health
+    replayed = restarted.admit_change(request)
+    restarted.acquire_frontier_work()
+
+    head = restarted._coordinator.show(request.change_id).last_reviewed_commit  # noqa: SLF001
+    runtime = restarted._runtimes[request.change_id]  # noqa: SLF001
+    assert replayed.replayed is True
+    assert replayed.frontier.change_deferral is None
+    assert _git(repository, "rev-list", "--parents", "-n", "1", head).split()[1:] == [reviewed]
+    assert runtime.pending_state_publication() is None
+    assert restarted.delivery_health().status.value == "healthy"
+    close_delivery_application(restarted)
+
+
+@pytest.mark.parametrize("staged", [False, True])
+def test_revision_snapshot_replay_refuses_package_edits_made_after_interruption(
+    tmp_path: Path,
+    staged: bool,  # noqa: FBT001 - pytest parameter.
+) -> None:
+    application, config, repository, request, _reviewed = _published_paused_revision(tmp_path)
+    manager = application._workspace_manager  # noqa: SLF001
+    run_git = manager._run_git  # noqa: SLF001
+
+    def crash_before_snapshot_commit(*arguments: str, **options: object) -> object:
+        if arguments[:2] == ("commit", "--only"):
+            raise _Crash
+        return run_git(*arguments, **options)
+
+    with patch.object(manager, "_run_git", side_effect=crash_before_snapshot_commit), pytest.raises(_Crash):
+        application.admit_change(request)
+    worktree = application._coordinator.show(request.change_id).worktree_path  # noqa: SLF001
+    close_delivery_application(application)
+    relative = f".owlbear/delivery/packages/{request.change_id}/design.md"
+    (worktree / relative).write_bytes(b"# Designer edit\n")
+    if staged:
+        _git(worktree, "add", "-f", relative)
+
+    restarted = load_delivery_application(config, workspace_root=repository)
+    with pytest.raises(DesignPackageSnapshotEditedError) as refused:
+        restarted.admit_change(request)
+
+    assert refused.value.paths == (relative,)
+    assert (worktree / relative).read_bytes() == b"# Designer edit\n"
+    assert (_git(worktree, "show", f":{relative}") == "# Designer edit") is staged
+    close_delivery_application(restarted)

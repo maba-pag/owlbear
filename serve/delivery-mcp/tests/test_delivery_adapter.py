@@ -43,6 +43,7 @@ from owlbear_delivery.completed_history import (
     CompletedHistoryDiagnosticCode,
     CompletedHistoryMissingError,
 )
+from owlbear_delivery.delivery_admission import DeliveryRevisionError
 from owlbear_delivery.delivery_runtime import (
     AdministrativeDeliveryMove,
     AdministrativeDeliveryMovePreview,
@@ -1778,6 +1779,12 @@ async def test_named_runtime_catalog_and_integration_failures_preserve_diagnosti
             "admit_delivery_change",
             DeliveryAdmissionValidationError("authored Specification does not compile"),
             "ERR_DELIVERY_ADMISSION_VALIDATION",
+            False,
+        ),
+        (
+            "admit_delivery_change",
+            DeliveryRevisionError("change-not-paused", "Pause the Change before revising its requirements"),
+            "ERR_DELIVERY_REVISION",
             False,
         ),
         (

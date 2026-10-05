@@ -243,6 +243,19 @@ def _deferral_lifecycle_refusal(
     return None
 
 
+def checkpoint_for_snapshot(frontier: DeliveryFrontier, snapshot_head: str) -> DeliveryFrontier:
+    """Re-anchor a pending checkpoint to a package snapshot head, or queue an explicit one for it."""
+    pending = frontier.pending_checkpoint
+    if pending is not None:
+        return frontier.model_copy(update={"pending_checkpoint": _checkpoint_with_head(pending, snapshot_head)})
+    if frontier.published_head == snapshot_head:
+        return frontier
+    trigger = DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.EXPLICIT)
+    return frontier.model_copy(
+        update={"pending_checkpoint": DeliveryPendingCheckpoint(head=snapshot_head, triggers=(trigger,))}
+    )
+
+
 class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
     """Apply worker instructions and operator correction to one Delivery frontier."""
 
@@ -797,10 +810,7 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
             )
         ):
             _conflict("Design package snapshot no longer matches the checkpoint queue")
-        updated = frontier.model_copy(
-            update={"pending_checkpoint": _checkpoint_with_head(current, receipt.snapshot_head)}
-        )
-        self._replace(previous, updated)
+        self._replace(previous, checkpoint_for_snapshot(frontier, receipt.snapshot_head))
         return self.checkpoint_publication_state()
 
     def queue_admitted_design_checkpoint(self, reviewed_head: str) -> DeliveryCheckpointPublicationState:
@@ -844,9 +854,7 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
         elif frontier.published_head == reviewed_head:
             return self.checkpoint_publication_state()
         else:
-            updated = frontier.model_copy(
-                update={"pending_checkpoint": DeliveryPendingCheckpoint(head=reviewed_head, triggers=(trigger,))}
-            )
+            updated = checkpoint_for_snapshot(frontier, reviewed_head)
         self._replace(previous, updated)
         return self.checkpoint_publication_state()
 

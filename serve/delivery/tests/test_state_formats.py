@@ -405,6 +405,14 @@ def test_golden_d03_record_round_trips_byte_identically_through_its_strict_owner
     assert _owner_round_trip(kind, raw) == raw
 
 
+@pytest.mark.parametrize("key", ["a" * 64, f"{'a' * 64}-{'b' * 64}"], ids=["contract-key", "contract-frontier-key"])
+def test_revision_history_keys_classify_as_revision_records(key: str) -> None:
+    kind = classify_kind(f"runtime/changes/change-a/revisions/{key}/frontier.json")
+
+    assert kind is not None
+    assert kind.kind_id == "revision_record"
+
+
 def test_gate_classifies_every_golden_family_as_supported_without_writing(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     shutil.copytree(_GOLDEN, workspace / ".owlbear/delivery")

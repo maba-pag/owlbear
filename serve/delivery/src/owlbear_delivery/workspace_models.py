@@ -1897,6 +1897,18 @@ class ChangeWorktreeAttentionError(RuntimeError):
         super().__init__(f"Change worktree requires attention: {detail}")
 
 
+class DesignPackageSnapshotEditedError(RuntimeError):
+    """Package paths hold bytes an interrupted snapshot did not write; restoring them would lose edits."""
+
+    code = "ERR_DESIGN_PACKAGE_SNAPSHOT_EDITED"
+    retry_safe = False
+
+    def __init__(self, change_id: str, paths: tuple[str, ...]) -> None:
+        self.change_id = change_id
+        self.paths = paths
+        super().__init__(f"Design package paths changed after the interrupted snapshot: {', '.join(paths)}")
+
+
 class PublicationBaselineUnavailableError(RuntimeError):
     """A publication summary cannot be derived from known baseline authority."""
 

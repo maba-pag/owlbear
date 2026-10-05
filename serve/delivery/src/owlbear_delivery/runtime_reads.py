@@ -496,9 +496,14 @@ class _RuntimeReadsMixin:
         if binding.output != request.output:
             _conflict("advance output does not match the published claim output")
         if binding.stage == DeliveryStage.PLANNING:
-            destination = DeliveryStage.IMPLEMENTATION
             if binding.candidate is None or binding.candidate.output != request.output:
                 _conflict("Planning advance requires the published task-chain candidate")
+            completed = {result.task_id for result in binding.results}
+            destination = (
+                DeliveryStage.COMPLETED
+                if completed and completed == {task.task_id for task in binding.candidate.tasks}
+                else DeliveryStage.IMPLEMENTATION
+            )
             return binding.model_copy(
                 update={
                     "stage": destination,
@@ -610,9 +615,6 @@ class _RuntimeReadsMixin:
         binding: OutcomeAuthorityBinding,
         tasks: tuple[DeliveryTaskDefinition, ...],
     ) -> None:
-        handoff = binding.builder_handoff_context
-        if handoff is None or handoff.route != "same-outcome-planner":
-            return
         tasks_by_id = {task.task_id: task for task in tasks}
         completed_task_ids = {result.task_id for result in binding.results}
         if any(
@@ -621,6 +623,9 @@ class _RuntimeReadsMixin:
             if task.task_id in completed_task_ids
         ):
             _conflict("Planning return must preserve completed task definitions and results")
+        handoff = binding.builder_handoff_context
+        if handoff is None or handoff.route != "same-outcome-planner":
+            return
         original_task = tasks_by_id.get(handoff.original_task_id)
         if (
             original_task is None

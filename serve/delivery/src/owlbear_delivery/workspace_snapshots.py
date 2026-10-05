@@ -15,6 +15,7 @@ from owlbear_delivery.workspace_models import (
     ChangeCoordination,
     ChangeDesignPackageSnapshotIntent,
     ChangeDesignPackageSnapshotReceipt,
+    DesignPackageSnapshotEditedError,
     DirtyWorktreeQuarantineReceipt,
     PublicationLock,
     WorkspaceRecoverySnapshot,
@@ -29,6 +30,8 @@ if TYPE_CHECKING:
     from owlbear_delivery.runtime_transaction import (
         ReplacementTransactionParticipant,
     )
+
+DESIGN_PACKAGE_SNAPSHOT_SUBJECT = "chore: snapshot admitted Design package ({change_id}, {operation_id})"
 
 
 class _SnapshotMixin:
@@ -149,7 +152,7 @@ class _SnapshotMixin:
         *,
         lock: PublicationLock,
     ) -> ChangeDesignPackageSnapshotReceipt:
-        """Replace one exact package snapshot after an admitted Design revision."""
+        """Replace one exact package snapshot on the reviewed head after an admitted Design revision."""
         existing = coordination.design_package_snapshot
         if existing is None:
             _coordination_conflict("Design package snapshot replacement requires an existing snapshot")
@@ -158,15 +161,15 @@ class _SnapshotMixin:
         branch_head = self._resolve(coordination.branch)
         intent = coordination.design_package_snapshot_intent
         if intent is None:
-            if branch_head != existing.snapshot_head:
-                _workspace_failure("Design package snapshot branch moved before replacement")
+            if branch_head != coordination.last_reviewed_commit:
+                _workspace_failure("Design package snapshot requires the reviewed Change branch head")
             intent = ChangeDesignPackageSnapshotIntent.create(
                 operation_id=operation_id,
                 change_id=coordination.change_id,
                 package_id=package_id,
                 branch=coordination.branch,
                 worktree_path=coordination.worktree_path,
-                expected_head=existing.snapshot_head,
+                expected_head=coordination.last_reviewed_commit,
             )
             coordination = self._coordinator.update(
                 coordination.model_copy(update={"design_package_snapshot_intent": intent}),
@@ -174,6 +177,8 @@ class _SnapshotMixin:
             )
         elif intent.operation_id != operation_id or intent.package_id != package_id:
             _coordination_conflict("Design package snapshot replacement intent differs from the request")
+        elif branch_head == intent.expected_head:
+            self._restore_interrupted_package_paths(coordination, intent.expected_head, package_files)
         snapshot_head = self._commit_design_package_snapshot(coordination, intent, package_files, branch_head)
         receipt = ChangeDesignPackageSnapshotReceipt.create(
             operation_id=operation_id,
@@ -194,6 +199,50 @@ class _SnapshotMixin:
         )
         self._coordinator.update(updated, lock=lock)
         return receipt
+
+    def is_design_package_snapshot_child(self, intent: ChangeDesignPackageSnapshotIntent, head: str) -> bool:
+        """Return whether ``head`` is the intent's own snapshot commit, made before its receipt was stored."""
+        subject = DESIGN_PACKAGE_SNAPSHOT_SUBJECT.format(change_id=intent.change_id, operation_id=intent.operation_id)
+        return (
+            self._is_direct_child(intent.expected_head, head) and self._git("log", "-1", "--format=%s", head) == subject
+        )
+
+    def _restore_interrupted_package_paths(
+        self, coordination: ChangeCoordination, head: str, package_files: Mapping[str, bytes]
+    ) -> None:
+        """Undo package files an interrupted snapshot wrote or staged; refuse bytes it did not write."""
+        worktree = coordination.worktree_path
+        relative_paths = tuple(
+            f".owlbear/delivery/packages/{coordination.change_id}/{name}" for name in _DESIGN_PACKAGE_NAMES
+        )
+        status = self._run_git("status", "--porcelain=v1", "-z", "--untracked-files=all", cwd=worktree).stdout
+        dirty = self._dirty_paths(status)
+        if not dirty:
+            return
+        if not set(dirty) <= set(relative_paths):
+            _workspace_failure("Design package snapshot worktree changed outside its package paths")
+        tracked = set(self._git("ls-tree", "-r", "--name-only", head, "--", *relative_paths).splitlines())
+        existing = {
+            name: self._git_blob_bytes(head, relative_path) if relative_path in tracked else None
+            for name, relative_path in zip(_DESIGN_PACKAGE_NAMES, relative_paths, strict=True)
+        }
+        edited = tuple(
+            relative_path
+            for name, relative_path in zip(_DESIGN_PACKAGE_NAMES, relative_paths, strict=True)
+            if relative_path in dirty
+            and not {
+                self._read_optional_worktree_file(worktree / relative_path),
+                self._index_blob_bytes(worktree, relative_path),
+            }
+            <= {existing[name], package_files[name]}
+        )
+        if edited:
+            raise DesignPackageSnapshotEditedError(coordination.change_id, edited)
+        self._restore_worktree_files(worktree, relative_paths, existing)
+
+    def _index_blob_bytes(self, worktree: Path, relative_path: str) -> bytes | None:
+        result = self._run_git("cat-file", "blob", f":{relative_path}", cwd=worktree, check=False)
+        return result.stdout if result.returncode == 0 else None
 
     def _validate_design_package_snapshot_replay(
         self,
@@ -240,7 +289,9 @@ class _SnapshotMixin:
         try:
             self._write_design_package_files(worktree, relative_paths, package_files)
             self._git("add", "-f", "--", *relative_paths, cwd=worktree)
-            message = f"chore: snapshot admitted Design package ({coordination.change_id}, {intent.operation_id})"
+            message = DESIGN_PACKAGE_SNAPSHOT_SUBJECT.format(
+                change_id=coordination.change_id, operation_id=intent.operation_id
+            )
             result = self._run_git(
                 "commit",
                 "--only",
@@ -301,7 +352,9 @@ class _SnapshotMixin:
         }
         if not self._package_files_match_commit(branch_head, relative_paths, existing, package_files):
             _workspace_failure("Design package snapshot commit does not match its package")
-        message = f"chore: snapshot admitted Design package ({coordination.change_id}, {intent.operation_id})"
+        message = DESIGN_PACKAGE_SNAPSHOT_SUBJECT.format(
+            change_id=coordination.change_id, operation_id=intent.operation_id
+        )
         if self._git("log", "-1", "--format=%s", branch_head, cwd=coordination.worktree_path) != message:
             _workspace_failure("Design package snapshot branch commit is not replayable")
         return branch_head

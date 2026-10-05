@@ -25,7 +25,7 @@ from unittest.mock import Mock, patch, sentinel
 import pytest
 from pydantic import ValidationError
 from serve.delivery.tests.evidence_support import finalization_proof
-from serve.delivery.tests.test_delivery_state import _commit_corrupt_snapshot
+from serve.delivery.tests.test_delivery_state import _commit_corrupt_snapshot, _Crash
 from serve.delivery.tests.test_draft_pull_request import _Provider
 
 from owlbear_delivery import (
@@ -167,6 +167,7 @@ from owlbear_delivery.change_workspace import (
     PreservationPathProvenance,
     PreservationProvenanceEvidence,
 )
+from owlbear_delivery.delivery_admission import DeliveryRevisionError
 from owlbear_delivery.delivery_contract_discovery import (
     DeliveryDiscoveryErrorCode,
     contract_fingerprint,
@@ -215,7 +216,7 @@ from owlbear_delivery.recovery import (
 )
 from owlbear_delivery.runtime_models import _receipt_digest
 from owlbear_delivery.runtime_transaction import ReplacementTransactionParticipant, RuntimeTransaction
-from owlbear_delivery.state_formats import format_marker_bytes
+from owlbear_delivery.state_formats import classify_kind, format_marker_bytes
 from owlbear_delivery.storage_io import locked_roots
 from owlbear_delivery_github import GitHubCliPublicationProvider
 
@@ -14430,7 +14431,7 @@ def test_admitted_design_revision_is_rejected_without_package_mutation(tmp_path:
     )
     current = application.read_design_session("change-a")
 
-    with pytest.raises(PortfolioApplicationError, match="admitted Delivery Changes"):
+    with pytest.raises(DeliveryRevisionError, match="change-not-paused") as refused:
         application.revise_design_session(
             "change-a",
             current.package_id,
@@ -14438,16 +14439,18 @@ def test_admitted_design_revision_is_rejected_without_package_mutation(tmp_path:
             b"changed design\n",
         )
 
+    assert refused.value.code == "ERR_DELIVERY_REVISION"
     assert application.read_design_session("change-a") == current
 
 
-def test_returned_design_revision_is_allowed_for_quiescent_change(tmp_path: Path) -> None:
+def test_returned_design_revision_requires_pause(tmp_path: Path) -> None:
     application, runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.DESIGN},
     )
     runtime = runtimes["change-a"]
     current = application.read_design_session("change-a")
+    _change_intent(application, "change-a", DeliveryChangeIntentKind.DEFER, reason="Revise requirements")
 
     revised = application.revise_design_session(
         "change-a",
@@ -14458,7 +14461,7 @@ def test_returned_design_revision_is_allowed_for_quiescent_change(tmp_path: Path
 
     assert revised.package_id != current.package_id
     assert revised.intent_bytes == b"changed intent\n"
-    assert runtime.change_stage() is DeliveryChangeStage.DESIGN
+    assert runtime.change_stage() is DeliveryChangeStage.DEFERRED
 
 
 def _assert_composed_delivery_admission(
@@ -14551,7 +14554,9 @@ def test_design_compilation_and_admission_delegate_without_extra_mutation(tmp_pa
     )
 
     delivery_root = state_root / "changes/composed-delivery"
+    _change_intent(application, "composed-delivery", DeliveryChangeIntentKind.DEFER, reason="Revise requirements")
     admitted_bytes = _file_bytes(delivery_root)
+    admitted_bytes.pop("state-publication.json")
     changed_intent = intent.replace(b"Preserve source ownership.", b"Preserve revised source ownership.")
     package_root = tmp_path / "packages/composed-delivery"
     (package_root / "intent.md").write_bytes(changed_intent)
@@ -14569,9 +14574,15 @@ def test_design_compilation_and_admission_delegate_without_extra_mutation(tmp_pa
                 change_id="composed-delivery",
                 expected_package_id=_approved_package_id(application, "composed-delivery"),
                 active_claim_ids=("active-claim",),
+                expected_frontier_digest=hashlib.sha256((delivery_root / "frontier.json").read_bytes()).hexdigest(),
+                expected_design_package_snapshot_receipt_id=(
+                    _coordinator.show("composed-delivery").design_package_snapshot.receipt_id
+                ),
             )
         )
-    assert _file_bytes(delivery_root) == admitted_bytes
+    after_refusal = _file_bytes(delivery_root)
+    after_refusal.pop("state-publication.json")
+    assert after_refusal == admitted_bytes
 
     coordination_before_revision = _coordinator.show("composed-delivery")
     frontier_digest = hashlib.sha256((delivery_root / "frontier.json").read_bytes()).hexdigest()
@@ -14695,7 +14706,7 @@ dependencies: []
     assert set(tree_paths) >= package_paths
 
 
-def test_design_return_revised_admission_refuses_retained_builder_handoff(tmp_path: Path) -> None:
+def test_design_return_revision_refuses_retained_builder_handoff(tmp_path: Path) -> None:
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.PLANNING},
@@ -14710,79 +14721,303 @@ def test_design_return_revised_admission_refuses_retained_builder_handoff(tmp_pa
         target=DeliveryStage.DESIGN,
     )
     assert settled.builder_handoff_context is not None
-    assert any(binding.builder_handoff_context is not None for binding in runtime.bindings())
-
+    _change_intent(application, "change-a", DeliveryChangeIntentKind.DEFER, reason="Revise requirements")
+    assert runtime.change_deferral() is not None
     current = application.read_design_session("change-a")
-    revised_intent = b"""# change-a
+    package_before = _file_bytes(tmp_path / "packages" / "change-a")
 
-```yaml target-contract
-kind: commitment
-id: COM-001
-class: agreed-path
-provenance: regression test
-statement: Revised premise after Design return.
-```
+    with pytest.raises(DeliveryRevisionError, match="custody-retained"):
+        application.revise_design_session("change-a", current.package_id, b"revised intent\n", current.design_bytes)
 
-```yaml target-contract
-kind: outcome
-id: OUT-001
-title: Revised outcome
-promise: Revised promise.
-acceptance: ["AC-001: Revised acceptance."]
-commitments: [COM-001]
-dependencies: []
-```
-"""
-    application.revise_design_session("change-a", current.package_id, revised_intent, current.design_bytes)
+    assert _file_bytes(tmp_path / "packages" / "change-a") == package_before
 
-    coordination_before = coordinator.show("change-a")
-    assert coordination_before.builder_handoff is not None
-    assert coordination_before.writer is not None
-    assert coordination_before.writer.kind == "handoff"
-    snapshot = coordination_before.design_package_snapshot
-    delivery_root = state_root / "changes" / "change-a"
-    package_root = tmp_path / "packages" / "change-a"
-    worktree = coordination_before.worktree_path
-    repository = application._workspace_manager.repository
-    registry_before = _file_bytes(delivery_root)
-    frontier_before = runtime.frontier_bytes()
-    coordination_bytes_before = coordinator.coordination_bytes("change-a")
-    package_before = _file_bytes(package_root)
-    worktree_before = (
-        _workspace_content_snapshot(worktree),
-        _git(worktree, "rev-parse", "HEAD"),
-        _git(worktree, "status", "--porcelain=v1", "-z", "--untracked-files=all"),
+
+def _revision_intent(second: str = "AC-002: The report is retained.") -> bytes:
+    blocks = (
+        "kind: commitment\nid: COM-001\nclass: agreed-path\nprovenance: revision test\nstatement: Keep launches.",
+        "kind: commitment\nid: COM-002\nclass: agreed-path\nprovenance: revision test\nstatement: Keep reports.",
+        (
+            "kind: outcome\nid: OUT-001\ntitle: Launch\npromise: Make the launch observable.\n"
+            f'acceptance: ["AC-001: The launch is observable.", "{second}"]\ncommitments: [COM-001]\ndependencies: []'
+        ),
+        (
+            "kind: outcome\nid: OUT-002\ntitle: Report\npromise: Retain the report.\n"
+            'acceptance: ["AC-003: The report is complete."]\ncommitments: [COM-002]\ndependencies: []'
+        ),
     )
-    repository_refs_before = _git(repository, "show-ref")
-    request = DeliveryAdmissionRequest(
-        change_id="change-a",
-        expected_package_id=_approved_package_id(application, "change-a"),
+    return ("# change-r\n\n" + "".join(f"```yaml target-contract\n{block}\n```\n\n" for block in blocks)).encode()
+
+
+def _paused_revision_change(tmp_path: Path, *, pause: bool = True):
+    """Admit an authored Change with one completed and one pending OUT-001 task and a completed OUT-002."""
+    application, _runtimes, coordinator, state_root = _portfolio(tmp_path, {})
+    application.create_design_session("change-r", _revision_intent(), b"# Architecture\n")
+    admitted = application.admit_delivery_change(
+        DeliveryAdmissionRequest(
+            change_id="change-r",
+            expected_package_id=_approved_package_id(application, "change-r"),
+            active_claim_ids=(),
+        )
+    )
+    head = coordinator.show("change-r").last_reviewed_commit
+    launch, report = admitted.frontier.bindings
+    completed = _task().model_copy(update={"task_id": "TASK-001", "plan_scope_id": launch.plan_scope_id})
+    remaining = completed.model_copy(update={"task_id": "TASK-002", "dependency_ids": ("TASK-001",)})
+    reported = completed.model_copy(
+        update={
+            "task_id": "TASK-003",
+            "outcome_id": "OUT-002",
+            "plan_scope_id": report.plan_scope_id,
+            "commitment_ids": ("COM-002",),
+        }
+    )
+    digest = admitted.contract_digest
+    seeded = admitted.frontier.model_copy(
+        update={
+            "bindings": (
+                launch.model_copy(
+                    update={
+                        "stage": DeliveryStage.IMPLEMENTATION,
+                        "tasks": (completed, remaining),
+                        "results": (_task_result("RESULT-001", "change-r", digest, completed, head),),
+                    }
+                ),
+                report.model_copy(
+                    update={
+                        "stage": DeliveryStage.COMPLETED,
+                        "tasks": (reported,),
+                        "results": (_task_result("RESULT-003", "change-r", digest, reported, head),),
+                    }
+                ),
+            ),
+            "published_head": head,
+            "pending_checkpoint": None,
+        }
+    )
+    change_root = state_root / "changes/change-r"
+    (change_root / "frontier.json").write_bytes(_canonical(seeded))
+    (change_root / "state-publication.json").unlink()
+    if pause:
+        _change_intent(application, "change-r", DeliveryChangeIntentKind.DEFER, reason="Revise requirements")
+    return application, coordinator, state_root, seeded
+
+
+def _revision_request(application: PortfolioApplication) -> DeliveryAdmissionRequest:
+    """Return the request an agent can form: the package ID and the frontier digest from ``get_change``."""
+    return DeliveryAdmissionRequest(
+        change_id="change-r",
+        expected_package_id=_approved_package_id(application, "change-r"),
         active_claim_ids=(),
-        expected_frontier_digest=hashlib.sha256(frontier_before).hexdigest(),
-        expected_design_package_snapshot_receipt_id=(snapshot.receipt_id if snapshot is not None else None),
+        expected_frontier_digest=application.get_change("change-r").frontier_digest,
     )
+
+
+def test_paused_change_revision_replans_changed_outcome_and_replays(tmp_path: Path) -> None:
+    application, coordinator, state_root, seeded = _paused_revision_change(tmp_path)
+    before = coordinator.show("change-r")
+    current = application.read_design_session("change-r")
+    revised_intent = _revision_intent("AC-002: The report is revised.")
+    application.revise_design_session("change-r", current.package_id, revised_intent, current.design_bytes)
+    request = _revision_request(application)
+
+    activated = application.admit_change(request)
+    replayed = application.admit_change(request)
+
+    after = coordinator.show("change-r")
+    replanned, unchanged = activated.frontier.bindings
+    assert (activated.replayed, replayed.replayed) == (False, True)
+    assert unchanged == seeded.bindings[1]
+    assert replanned.stage is DeliveryStage.PLANNING
+    assert replanned.tasks == seeded.bindings[0].tasks[:1]
+    assert replanned.results == seeded.bindings[0].results
+    assert replanned.return_context is not None
+    assert replanned.return_context.locators == ("AC-002",)
+    assert _git(tmp_path / "repository", "rev-list", "--parents", "-n", "1", after.last_reviewed_commit).split()[
+        1:
+    ] == [before.last_reviewed_commit]
+    assert after.design_package_snapshot.package_id == application.read_design_session("change-r").package_id
+    assert activated.frontier.change_deferral is None
+    assert application._runtimes["change-r"].pending_state_publication() is not None
+    assert len(list((state_root / "changes/change-r/revisions").iterdir())) == 1
+    launches = application.acquire_frontier_work().launch_packages
+    assert [(launch.outcome_id, launch.claim.worker_role) for launch in launches] == [
+        ("OUT-001", DeliveryWorkerRole.PLANNER)
+    ]
+
+
+def test_cancelled_and_repeated_revisions_keep_distinct_history(tmp_path: Path) -> None:
+    application, coordinator, state_root, _seeded = _paused_revision_change(tmp_path)
+    original = application.read_design_session("change-r")
+    head = coordinator.show("change-r").last_reviewed_commit
+    revised = application.revise_design_session(
+        "change-r", original.package_id, _revision_intent("AC-002: Cancelled."), original.design_bytes
+    )
+    application.revise_design_session("change-r", revised.package_id, original.intent_bytes, original.design_bytes)
+
+    cancelled = application.admit_change(_revision_request(application))
+
+    assert cancelled.contract_bytes == original.authority_bytes
+    assert coordinator.show("change-r").last_reviewed_commit == head
+    assert application.read_design_session("change-r").package_id == original.package_id
+    _change_intent(application, "change-r", DeliveryChangeIntentKind.DEFER, reason="Revise again")
+    current = application.read_design_session("change-r")
+    application.revise_design_session(
+        "change-r", current.package_id, _revision_intent("AC-002: Revised again."), current.design_bytes
+    )
+
+    application.admit_change(_revision_request(application))
+
+    history = sorted(path.name for path in (state_root / "changes/change-r/revisions").iterdir())
+    assert len(history) == 2
+    assert {classify_kind(f"runtime/changes/change-r/revisions/{name}/frontier.json").kind_id for name in history} == {
+        "revision_record"
+    }
+    assert history[0].split("-")[0] == history[1].split("-")[0] == hashlib.sha256(original.authority_bytes).hexdigest()
+
+
+def test_cancel_interrupted_after_contract_publication_is_completed_by_resume(tmp_path: Path) -> None:
+    """Documented limit (N04 plan G6): the retry is refused until the user's Resume, which finishes the cancel."""
+    application, coordinator, state_root, seeded = _paused_revision_change(tmp_path)
+    original = application.read_design_session("change-r")
+    head = coordinator.show("change-r").last_reviewed_commit
+    revised = application.revise_design_session(
+        "change-r", original.package_id, _revision_intent("AC-002: Cancelled."), original.design_bytes
+    )
+    application.revise_design_session("change-r", revised.package_id, original.intent_bytes, original.design_bytes)
+    request = _revision_request(application)
+    publish = DeliveryAuthorityRegistry._publish_package_contract
+
+    def crash_after_publication(registry: DeliveryAuthorityRegistry, change_id: str, compiled: object) -> str:
+        publish(registry, change_id, compiled)
+        raise _Crash
 
     with (
         patch.object(
-            application._authority_registry,
-            "admit",
-            wraps=application._authority_registry.admit,
-        ) as registry_admit,
-        pytest.raises(DeliveryAdmissionConflictError, match="handoff or writer blocks admission"),
+            DeliveryAuthorityRegistry, "_publish_package_contract", autospec=True, side_effect=crash_after_publication
+        ),
+        pytest.raises(_Crash),
     ):
-        application.admit_delivery_change(request)
+        application.admit_change(request)
+    package_after_crash = _file_bytes(tmp_path / "packages/change-r")
+    with pytest.raises(DeliveryRuntimeConflictError, match="requires resumption"):
+        application.admit_change(request)
+    _change_intent(application, "change-r", DeliveryChangeIntentKind.RESUME)
 
-    registry_admit.assert_not_called()
-    assert _file_bytes(delivery_root) == registry_before
-    assert runtime.frontier_bytes() == frontier_before
-    assert coordinator.coordination_bytes("change-a") == coordination_bytes_before
-    assert _file_bytes(package_root) == package_before
-    assert (
-        _workspace_content_snapshot(worktree),
-        _git(worktree, "rev-parse", "HEAD"),
-        _git(worktree, "status", "--porcelain=v1", "-z", "--untracked-files=all"),
-    ) == worktree_before
-    assert _git(repository, "show-ref") == repository_refs_before
+    coordination = coordinator.show("change-r")
+    runtime = application._runtimes["change-r"]
+    assert _file_bytes(tmp_path / "packages/change-r") == package_after_crash
+    assert runtime.change_deferral() is None
+    assert [binding.stage for binding in runtime.bindings()] == [binding.stage for binding in seeded.bindings]
+    assert coordination.design_package_snapshot_intent is None
+    assert coordination.last_reviewed_commit == head
+    assert coordination.design_package_snapshot.package_id == original.package_id
+    assert application.read_design_session("change-r").package_id == original.package_id
+    assert not (state_root / "changes/change-r/revisions").exists()
+    assert application.acquire_frontier_work().launch_packages
+
+
+@pytest.mark.parametrize("child", ["snapshot", "unrelated"])
+def test_interrupted_revision_snapshot_reports_only_unrelated_head_drift(tmp_path: Path, child: str) -> None:
+    application, coordinator, _state_root, _seeded = _paused_revision_change(tmp_path)
+    current = application.read_design_session("change-r")
+    application.revise_design_session(
+        "change-r", current.package_id, _revision_intent("AC-002: The report is revised."), current.design_bytes
+    )
+    request = _revision_request(application)
+    crash = (
+        patch("owlbear_delivery.workspace_snapshots.ChangeDesignPackageSnapshotReceipt.create", side_effect=_Crash)
+        if child == "snapshot"
+        else patch.object(application._workspace_manager, "_commit_design_package_snapshot", side_effect=_Crash)
+    )
+    with crash, pytest.raises(_Crash):
+        application.admit_change(request)
+    coordination = coordinator.show("change-r")
+    observed = (
+        _git(tmp_path / "repository", "rev-parse", coordination.branch)
+        if child == "snapshot"
+        else _commit_local_descendant(coordination, "unrelated.txt")
+    )
+
+    codes = {diagnostic.code for diagnostic in application.delivery_health().diagnostics}
+
+    assert coordination.design_package_snapshot_intent is not None
+    assert observed != coordination.last_reviewed_commit
+    assert ("local-change-head-out-of-band" in codes) is (child == "unrelated")
+    if child == "snapshot":
+        assert application.admit_change(request).frontier.change_deferral is None
+
+
+@pytest.mark.parametrize("case", ["pause-pending", "change-terminal", "publication-pending", "reviewed-head-moved"])
+def test_requirement_revision_refusal_changes_nothing(tmp_path: Path, case: str) -> None:
+    application, coordinator, state_root, _seeded = _paused_revision_change(
+        tmp_path, pause=case in {"publication-pending", "reviewed-head-moved"}
+    )
+    change_root = state_root / "changes/change-r"
+    current = application.read_design_session("change-r")
+    revised = _revision_intent("AC-002: The report is revised.")
+    if case == "pause-pending":
+        assert application.acquire_frontier_work().launch_packages
+        _change_intent(application, "change-r", DeliveryChangeIntentKind.DEFER, reason="Revise requirements")
+    elif case == "change-terminal":
+        _change_intent(application, "change-r", DeliveryChangeIntentKind.ABANDON, reason="Stop")
+    else:
+        current = application.revise_design_session("change-r", current.package_id, revised, current.design_bytes)
+        application._replay_pending_state_publications("change-r")
+        if case == "publication-pending":
+            (change_root / "state-publication.json").write_bytes(
+                _canonical(DeliveryPendingStatePublication.pending("1" * 64, "2" * 64))
+            )
+        else:
+            _commit_local_descendant(coordinator.show("change-r"))
+    branch = coordinator.show("change-r").branch
+    repository = tmp_path / "repository"
+    before = (
+        _file_bytes(change_root),
+        coordinator.coordination_bytes("change-r"),
+        _file_bytes(tmp_path / "packages/change-r"),
+        _git(repository, "rev-parse", branch),
+    )
+
+    def refused_call() -> object:
+        if case in {"publication-pending", "reviewed-head-moved"}:
+            return application.admit_change(_revision_request(application))
+        return application.revise_design_session("change-r", current.package_id, revised, current.design_bytes)
+
+    with pytest.raises(DeliveryRevisionError, match=case) as refused:
+        refused_call()
+
+    assert refused.value.reason == case
+    assert before == (
+        _file_bytes(change_root),
+        coordinator.coordination_bytes("change-r"),
+        _file_bytes(tmp_path / "packages/change-r"),
+        _git(repository, "rev-parse", branch),
+    )
+
+
+def test_finalized_change_revision_requires_review_repair_and_clears_finalization(tmp_path: Path) -> None:
+    application, runtime, _provider, _state, _exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    current = application.read_design_session("change-a")
+    with pytest.raises(DeliveryRevisionError, match="change-finalized"):
+        application.revise_design_session("change-a", current.package_id, _revision_intent(), current.design_bytes)
+    application.prepare_review_repair("change-a")
+    _change_intent(application, "change-a", DeliveryChangeIntentKind.DEFER, reason="Revise requirements")
+    application.revise_design_session("change-a", current.package_id, _revision_intent(), current.design_bytes)
+
+    activated = application.admit_change(
+        DeliveryAdmissionRequest(
+            change_id="change-a",
+            expected_package_id=_approved_package_id(application, "change-a"),
+            active_claim_ids=(),
+            expected_frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+        )
+    )
+
+    assert activated.frontier.finalization is None
+    assert activated.frontier.finalization_invalidation is None
+    assert activated.frontier.ready is None
+    assert activated.frontier.change_deferral is None
+    assert {binding.stage for binding in activated.frontier.bindings} == {DeliveryStage.PLANNING}
 
 
 def test_admission_snapshots_design_before_initial_pull_request(tmp_path: Path) -> None:
@@ -15536,14 +15771,14 @@ def test_put_design_creates_replays_and_cas_revises_authored_package(tmp_path: P
         )
 
 
-def test_put_design_rejects_revision_of_admitted_change(tmp_path: Path) -> None:
+def test_put_design_rejects_revision_of_unpaused_admitted_change(tmp_path: Path) -> None:
     application, _runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.PLANNING},
     )
     current = application.read_design_session("change-a")
 
-    with pytest.raises(PortfolioApplicationError, match="admitted Delivery Changes cannot revise"):
+    with pytest.raises(DeliveryRevisionError, match="change-not-paused"):
         application.put_design(
             DeliveryDesignPut(
                 change_id="change-a",

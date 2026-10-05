@@ -371,9 +371,12 @@ class _ReadinessViewsMixin:
             if coordination.writer is not None or coordination.external_head_adoption_receipt is not None:
                 return None
             observed_head = self._workspace_manager.observed_change_head(change_id)
+            if observed_head == coordination.last_reviewed_commit:
+                return None
+            intent = coordination.design_package_snapshot_intent
+            if intent is not None and self._workspace_manager.is_design_package_snapshot_child(intent, observed_head):
+                return None
         except OSError, RuntimeError, subprocess.SubprocessError, ValueError:
-            return None
-        if observed_head == coordination.last_reviewed_commit:
             return None
         return DeliveryHealthDiagnostic(
             source="local-runtime",

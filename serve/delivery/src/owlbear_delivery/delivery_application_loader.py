@@ -104,6 +104,7 @@ from owlbear_delivery.storage_io import (
     acquire_controller_lock,
     read_only_state,
 )
+from owlbear_delivery.workspace_snapshots import DESIGN_PACKAGE_SNAPSHOT_SUBJECT
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -112,6 +113,7 @@ if TYPE_CHECKING:
     from owlbear_delivery.publication_provider import PublicationProvider
     from owlbear_delivery.target_contract import DeliveryContract
     from owlbear_delivery.worker_stall import WindowHostIdentity
+    from owlbear_delivery.workspace_models import ChangeDesignPackageSnapshotIntent
 
 
 class _LoaderModel(BaseModel):
@@ -567,7 +569,7 @@ def _restore_remote_snapshot(  # noqa: PLR0913, PLR0917 - restoration binds each
     workspace_manager.show(snapshot.change_id)
 
 
-def _validate_local_snapshot(
+def _validate_local_snapshot(  # noqa: C901 - one predicate per recognized local successor.
     snapshot: DeliveryStateSnapshot,
     config: DeliveryStartupConfig,
     paths: _DeliveryPaths,
@@ -579,38 +581,43 @@ def _validate_local_snapshot(
         package = package_store.read_verified(snapshot.change_id)
     except (OSError, RuntimeError, ValueError) as exc:
         _bootstrap_failure("local Delivery package cannot be reconciled with its remote snapshot", exc)
-    if package.package_id != snapshot.package_id:
-        _bootstrap_failure("local Delivery package differs from its remote snapshot")
     try:
         coordination = workspace_manager.show(snapshot.change_id)
     except (OSError, RuntimeError, ValueError) as exc:
         _bootstrap_failure("local Delivery coordination cannot be reconciled with its remote snapshot", exc)
-    if (
-        coordination.branch != snapshot.branch
-        or coordination.integration_target != snapshot.integration_target
-        or coordination.target_head != snapshot.target_head
-        or coordination.publication_base_head != snapshot.publication_base_head
-        or coordination.last_reviewed_commit != snapshot.last_reviewed_commit
-    ):
-        _bootstrap_failure("local Delivery coordination differs from its remote snapshot")
     relative_root = paths.runtime_root / "changes" / snapshot.change_id
-    expected = {
-        "contract.json": _canonical_model(snapshot.contract),
-        "frontier.json": _canonical_model(snapshot.frontier),
-        "admission.json": _canonical_model(snapshot.admission),
-    }
     frontier_bytes, canonical_frontier, frontier = _read_local_snapshot_frontier(relative_root / "frontier.json")
     local_pending_publication = _read_local_pending_publication(
         relative_root / "state-publication.json",
         frontier_bytes,
     )
+    # Successor recognition compares writable models: the snapshot frontier is normalized to 19 (N rows).
+    replay_snapshot = snapshot.model_copy(update={"frontier": normalize_frontier(snapshot.frontier)})
+    revision = _local_revision_state(
+        replay_snapshot, package.package_id, coordination, frontier, relative_root, paths.repository_root
+    )
+    if revision == "activated" and not local_pending_publication:
+        revision = None
+    if package.package_id != snapshot.package_id and revision is None:
+        _bootstrap_failure("local Delivery package differs from its remote snapshot")
+    if (
+        coordination.branch != snapshot.branch
+        or coordination.integration_target != snapshot.integration_target
+        or coordination.target_head != snapshot.target_head
+        or coordination.publication_base_head != snapshot.publication_base_head
+        or (coordination.last_reviewed_commit != snapshot.last_reviewed_commit and revision is None)
+    ):
+        _bootstrap_failure("local Delivery coordination differs from its remote snapshot")
+    expected = {
+        "contract.json": _canonical_model(snapshot.contract),
+        "frontier.json": _canonical_model(snapshot.frontier),
+        "admission.json": _canonical_model(snapshot.admission),
+    }
     if local_pending_publication and (
         coordination.builder_handoff is not None
         or any(binding.builder_handoff_context is not None for binding in frontier.bindings)
     ):
         _bootstrap_failure("local Builder handoff cannot be combined with portable state publication")
-    # Successor recognition compares writable models: the snapshot frontier is normalized to 19 (N rows).
-    replay_snapshot = snapshot.model_copy(update={"frontier": normalize_frontier(snapshot.frontier)})
     local_attention_successor = _is_unpublished_acceptance_attention_successor(
         replay_snapshot.frontier, frontier
     ) or _is_unpublished_target_sync_attention_successor(replay_snapshot.frontier, frontier)
@@ -632,16 +639,27 @@ def _validate_local_snapshot(
     )
     if local_claim_successor:
         _require_local_snapshot_branch(snapshot, paths.repository_root)
+    reviewed = coordination.last_reviewed_commit
+    pending = frontier.pending_checkpoint
+    # An activated revision may have pushed its snapshot head to the Change branch before its state.
+    revision_head = (
+        reviewed
+        if revision == "activated"
+        and (frontier.published_head == reviewed or (pending is not None and pending.head == reviewed))
+        else None
+    )
     _fetch_snapshot_change_head(
         snapshot,
         config,
         paths.repository_root,
         allow_local_branch=True,
-        allow_local_descendant=local_attention_successor or local_builder_handoff_successor,
+        allow_local_descendant=local_attention_successor or local_builder_handoff_successor or revision is not None,
+        pending_revision_head=revision_head,
     )
     if canonical_frontier != expected["frontier.json"] and not local_recoverable_successor:
         _bootstrap_failure("local Delivery runtime artifact differs from its remote snapshot: frontier.json")
-    _validate_local_snapshot_artifacts(relative_root, expected)
+    if revision != "activated":
+        _validate_local_snapshot_artifacts(relative_root, expected)
     try:
         completion = CompletionReceiptStore(paths.runtime_root).read_bundle(snapshot.change_id)
     except RuntimeError as exc:
@@ -679,6 +697,116 @@ def _read_local_pending_publication(path: Path, frontier_bytes: bytes) -> bool:
     )
 
 
+def _local_revision_state(  # noqa: PLR0911, PLR0913, PLR0917 - one exit per recognized activation state.
+    snapshot: DeliveryStateSnapshot,
+    package_id: str,
+    coordination: ChangeCoordination,
+    frontier: DeliveryFrontier,
+    relative_root: Path,
+    repository: Path,
+) -> Literal["paused", "activated"] | None:
+    """N04 §1.5 I6: recognize one durable step of a revision activation over a published paused Change."""
+    reviewed = coordination.last_reviewed_commit
+    if package_id == snapshot.package_id and reviewed == snapshot.last_reviewed_commit:
+        return None
+    try:
+        contract = (relative_root / "contract.json").read_bytes()
+        admission = (relative_root / "admission.json").read_bytes()
+    except OSError:
+        return None
+    state: Literal["paused", "activated"]
+    if contract == _canonical_model(snapshot.contract) and admission == _canonical_model(snapshot.admission):
+        if frontier.change_deferral is None:
+            return None
+        state = "paused"
+    elif _revision_history_matches(relative_root, snapshot):
+        state = "activated"
+    else:
+        return None
+    if reviewed != snapshot.last_reviewed_commit and not _package_snapshot_chain(
+        repository, snapshot.change_id, snapshot.last_reviewed_commit, reviewed
+    ):
+        return None
+    branch_head = _loader_git_output(
+        repository, "rev-parse", "--verify", f"refs/heads/{coordination.branch}^{{commit}}"
+    )
+    intent = coordination.design_package_snapshot_intent
+    if intent is not None:
+        if state == "activated" or intent.package_id != package_id or intent.expected_head != reviewed:
+            return None
+        return state if _interrupted_package_snapshot(repository, coordination, intent, branch_head) else None
+    receipt = coordination.design_package_snapshot
+    if reviewed != snapshot.last_reviewed_commit and (
+        receipt is None or receipt.package_id != package_id or branch_head != reviewed
+    ):
+        return None
+    return state
+
+
+def _revision_history_matches(relative_root: Path, snapshot: DeliveryStateSnapshot) -> bool:
+    """Require the revision history entry holding exactly the published contract, admission and frontier."""
+    contract = _canonical_model(snapshot.contract)
+    admission = _canonical_model(snapshot.admission)
+    for entry in (relative_root / "revisions").glob(f"{hashlib.sha256(contract).hexdigest()}-*"):
+        try:
+            if (entry / "contract.json").read_bytes() != contract or (
+                entry / "admission.json"
+            ).read_bytes() != admission:
+                continue
+            history = parse_delivery_frontier((entry / "frontier.json").read_bytes())[0]
+        except OSError, TypeError, ValueError:
+            continue
+        pending = history.pending_checkpoint
+        if pending is not None and pending.head == history.published_head:
+            history = history.model_copy(update={"pending_checkpoint": None})
+        if history == snapshot.frontier:
+            return True
+    return False
+
+
+def _package_snapshot_chain(repository: Path, change_id: str, base: str, head: str) -> bool:
+    """Return whether every first-parent commit from ``base`` to ``head`` is a package snapshot of the Change."""
+    listing = _loader_git_output(repository, "rev-list", "--first-parent", "--parents", f"{base}..{head}")
+    if not listing:
+        return False
+    prefix = DESIGN_PACKAGE_SNAPSHOT_SUBJECT.split("{operation_id}", 1)[0].format(change_id=change_id)
+    current = head
+    for line in listing.splitlines():
+        commit, *parents = line.split()
+        subject = _loader_git_output(repository, "log", "-1", "--format=%s", commit)
+        if commit != current or len(parents) != 1 or subject is None or not subject.startswith(prefix):
+            return False
+        current = parents[0]
+    return current == base
+
+
+def _interrupted_package_snapshot(
+    repository: Path,
+    coordination: ChangeCoordination,
+    intent: ChangeDesignPackageSnapshotIntent,
+    branch_head: str | None,
+) -> bool:
+    """Recognize package files written or staged on the intent head, or its commit made before the receipt."""
+    if branch_head == intent.expected_head:
+        worktree = coordination.worktree_path
+        changed = _loader_git_output(worktree, "diff", "--name-only", "HEAD")
+        untracked = _loader_git_output(worktree, "ls-files", "--others", "--exclude-standard")
+        if changed is None or untracked is None:
+            return False
+        package_paths = {
+            f".owlbear/delivery/packages/{coordination.change_id}/{name}"
+            for name in ("authority.json", "design.md", "intent.md", "manifest.json")
+        }
+        return set((changed + "\n" + untracked).split()) <= package_paths
+    if branch_head is None:
+        return False
+    parents = (_loader_git_output(repository, "rev-list", "--parents", "-n", "1", branch_head) or "").split()
+    subject = DESIGN_PACKAGE_SNAPSHOT_SUBJECT.format(change_id=coordination.change_id, operation_id=intent.operation_id)
+    return parents[1:] == [intent.expected_head] and (
+        _loader_git_output(repository, "log", "-1", "--format=%s", branch_head) == subject
+    )
+
+
 def _validate_local_snapshot_artifacts(
     relative_root: Path,
     expected: dict[str, bytes],
@@ -702,18 +830,21 @@ def _validate_local_snapshot_artifact(
     _bootstrap_failure(f"local Delivery runtime artifact differs from its remote snapshot: {name}")
 
 
-def _fetch_snapshot_change_head(
+def _fetch_snapshot_change_head(  # noqa: PLR0913 - each flag names one recognized local successor.
     snapshot: DeliveryStateSnapshot,
     config: DeliveryStartupConfig,
     repository: Path,
     *,
     allow_local_branch: bool = False,
     allow_local_descendant: bool = False,
+    pending_revision_head: str | None = None,
 ) -> tuple[str, bool]:
     """Fetch the remote Change branch or use the configured target for finalized authority."""
     remote_branch = _remote_branch_head(repository, config.remote, snapshot.branch)
     if remote_branch is not None:
-        return _fetch_remote_snapshot_change_head(snapshot, config, repository, remote_branch)
+        return _fetch_remote_snapshot_change_head(
+            snapshot, config, repository, remote_branch, pending_revision_head=pending_revision_head
+        )
     local_head = _local_snapshot_change_head(
         snapshot,
         repository,
@@ -735,9 +866,11 @@ def _fetch_remote_snapshot_change_head(
     config: DeliveryStartupConfig,
     repository: Path,
     remote_branch: str,
+    *,
+    pending_revision_head: str | None = None,
 ) -> tuple[str, bool]:
     """Validate and fetch one remote Change branch at its snapshot head."""
-    if remote_branch != snapshot.change_head:
+    if remote_branch not in {snapshot.change_head, pending_revision_head}:
         observed_local_head = _loader_git_output(
             repository,
             "rev-parse",

@@ -268,17 +268,40 @@ active_claim_ids=())`, binding admission to the exact approved authored package 
 Require the admission result contract bytes and digest to match the approved derivation. Record and
 report its persisted receipt ID, contract digest, frontier IDs, checkpoint commit, and carry-forward
 result. An identical retry must return `replayed: true` with the same contract, frontier, and receipt.
-Active target work blocks a semantic revision.
 
 Admission is also the first remote recovery boundary for the package. Delivery snapshots the
 verified `authority.json`, `design.md`, `intent.md`, and `manifest.json` into the managed Change
 branch before its initial publication checkpoint. Do not promise remote recovery for unadmitted
-draft revisions, and do not revise the admitted package in place; a semantic change requires a new
-or superseding Design Change.
+draft revisions.
 
 If the package changes after checkpoint, validation, or approval, discard pending approval and repeat
 challenge, baseline, checkpoint, validation, and approval against the new identity. Admission failure
 leaves the active package available for `/design` resume and publishes no partial target authority.
+
+## Revise An Admitted Change
+
+A requirement change on an admitted, nonterminal Change follows one route:
+
+1. **Pause.** Call `set_change_intent` with kind `defer` and wait until `get_change` shows the Change
+   deferred. A pending Pause request first lets started work drain.
+2. **Revise.** Rehydrate (Step 2), persist the revision (Step 3) and pass the same challenge,
+   baseline, checkpoint and validation gates as a first admission. Show the user the delta: changed,
+   new and removed `AC-NNN` criteria, the outcomes that return to Planning, and the confirmations
+   that stay valid or must be asked again.
+3. **Approve and activate.** After explicit approval, call `admit_change` with the approved
+   `expected_package_id` and the `expected_frontier_digest` that `get_change` reports. Activation
+   snapshots the package on the reviewed head and resumes the Change. Unchanged outcomes keep their
+   bindings and evidence; changed outcomes return to Planning with the completed work whose
+   commitments survive. After an interruption, repeat the identical request: it finishes the
+   activation and returns `replayed: true`.
+4. **Report** the receipt, contract digest, and preserved and invalidated outcomes.
+
+Refusals use `ERR_DELIVERY_REVISION` and name their reason: `change-not-paused` or `pause-pending`
+(Pause and wait), `change-finalized` (run `prepare_review_repair`, then Pause), `change-attention`
+(resolve it first), `custody-retained` (a worker, handoff or snapshot still holds the Change),
+`publication-pending` (retry after state publication succeeds), `reviewed-head-moved` (repair the
+branch first), and `change-terminal` or `change-merged` (start a successor Change). To drop a revision
+before activation, revise the package back to the approved bytes and activate it.
 
 ## Session Output
 

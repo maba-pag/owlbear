@@ -651,7 +651,7 @@ every new item exactly one lane.
 | N03-B | merged | #368 (code head `2cba00bdb`; Sol `implementation-sound` round 1 and delta; G4 closed for the reviewer by host rehearsal) |
 | N03-C | in review | #373 (code head `f00941962`; read-only evidence projection, no format change; Sol and cumulative N03 challenges' waiver-summary finding fixed; LC on `f227ba49d`: load form passed, full form `migration-not-required` (live already format 2), every live Change available, live unchanged) |
 | N04-P | merged | #369 (re-plan; plan gate: Sol round 1 `revision-required`, 5 findings accepted; round 2 `revision-required`, 1 bounded ordering correction accepted, gate ended; U1 settled (b) as D13 by the lead); #358 closed as superseded |
-| N04-A | — | — |
+| N04-A | in review | #376 (code head `53cfe8f44` after Sol round 1 repair: F1, F2, F4 fixed, F3 documented limit G6; Pause-gated revision activation, crash-injection replay at eight points; LC full form on the code head: live format 2 migrated on the copy to 3, every live Change available, live unchanged) |
 | N04-B | — | — |
 | N04-C | — | — |
 | N05-P | merged | #353 (plan gate `plan-sound`, round 12; F1–F8 confirmed 2026-10-03; U1 (a), U2 (b), U3 (a) + (e) by the user, U4 (b) decided 2026-10-03; U3 (e) revises programme §10.2). History: #360's F10 and F11 and U4 (b) retirement were removed on 2026-10-04 ([7](#7-decisions)) |

@@ -208,7 +208,7 @@ RECORD_KINDS: Final[tuple[RecordKind, ...]] = (
     _kind(
         "revision_record",
         "revision_record",
-        rf"{_CH}/revisions/{_D}/(?:contract|frontier|admission)\.json",
+        rf"{_CH}/revisions/{_D}(?:-{_D})?/(?:contract|frontier|admission)\.json",
         (),
         "H",
         None,

@@ -221,8 +221,12 @@ loader still accepts an absent baseline or local file for older or manually mana
 
 Authored `intent.md` and `design.md` remain local drafts until admission. When a Change is admitted,
 Delivery commits the verified `authority.json`, `design.md`, `intent.md`, and `manifest.json` to the
-managed `owlbear/change/<change-id>` branch before opening its first draft pull request. Later Design
-revisions are rejected for that Change; a semantic change starts a new or superseding Change.
+managed `owlbear/change/<change-id>` branch before opening its first draft pull request. A requirement
+change on an admitted, nonterminal Change is Pause, revise the package, approve, then `admit_change`:
+activation snapshots the revised package on the reviewed head, keeps the previous authority under
+`revisions/<contract digest>-<frontier digest>/`, resumes the Change and returns only changed outcomes
+to Planning. Completed, abandoned and merged Changes are immutable; further work starts a successor
+Change.
 
 Sparse semantic checkpoints are published to the configured `delivery_state_branch` at admission,
 meaningful task or Outcome progress, finalization, and acceptance. The managed Change branch is
