@@ -28,6 +28,7 @@ from owlbear_delivery.delivery_runtime import (
 )
 from owlbear_delivery.draft_pull_request import PublicationPullRequestObservationReceipt
 from owlbear_delivery.finalization_reports import FinalizationAttempt
+from owlbear_delivery.merge_offer import MergeBlock, MergeBlockReason, MergeFacts, MergeOffer
 from owlbear_delivery.recovery import MAX_RETRY_HISTORY_ATTEMPTS, DeliveryRetryAttemptView
 from owlbear_delivery.target_contract import DeliveryCommitment, DeliveryContract, DeliveryOutcome
 
@@ -206,6 +207,9 @@ class DeliveryPortfolioSnapshot(_ProjectionModel):
     frontier: DeliveryFrontier
     version: str = Field(pattern=r"^[0-9a-f]{64}$")
     publication_observation: PublicationPullRequestObservationReceipt | None = None
+    # The last read of the published pull request failed, unlike "no publication" (D8).
+    publication_unavailable: bool = False
+    merge_facts: MergeFacts | None = None
 
     @classmethod
     def capture(
@@ -213,6 +217,9 @@ class DeliveryPortfolioSnapshot(_ProjectionModel):
         contract: DeliveryContract,
         frontier_bytes: bytes,
         publication_observation: PublicationPullRequestObservationReceipt | None = None,
+        merge_facts: MergeFacts | None = None,
+        *,
+        publication_unavailable: bool = False,
     ) -> DeliveryPortfolioSnapshot:
         """Validate one frontier read and bind its exact content digest."""
         return cls(
@@ -220,6 +227,8 @@ class DeliveryPortfolioSnapshot(_ProjectionModel):
             frontier=parse_delivery_frontier(frontier_bytes)[0],
             version=hashlib.sha256(frontier_bytes).hexdigest(),
             publication_observation=publication_observation,
+            publication_unavailable=publication_unavailable,
+            merge_facts=merge_facts,
         )
 
     @model_validator(mode="after")
@@ -309,6 +318,11 @@ DeliveryReadinessReason = Literal[
     "retry-containment",
     "retry-ledger-unavailable",
     "worker-stall-wait",
+    "merge-approval-required",
+    "merge-checking",
+    "merge-blocked",
+    "checks-running",
+    "provider-unavailable",
 ]
 
 DeliveryProgress = Literal[
@@ -362,6 +376,8 @@ class DeliveryReadiness(_ProjectionModel):
     retry_history: tuple[DeliveryRetryAttemptView, ...] = Field(default=(), max_length=MAX_RETRY_HISTORY_ATTEMPTS)
     prompt: str | None = None
     progress: DeliveryProgress | None = None
+    merge_offer: MergeOffer | None = None
+    merge_block: MergeBlock | None = None
 
     @model_validator(mode="after")
     def _validate_action(self) -> DeliveryReadiness:
@@ -591,9 +607,50 @@ _DECISION_REASONS = frozenset(
 _SERVICE_RETRY_OPERATIONS = frozenset(
     {WorkItemActionKind.SYNC_TARGET, WorkItemActionKind.MARK_READY, WorkItemActionKind.OBSERVE_ACCEPTANCE}
 )
+# Awaiting-merge waits keep the card's merge-status check so Cockpit still observes a manual merge.
+_MERGE_WAIT_REASONS = frozenset(
+    {
+        "merge-approval-required",
+        "merge-checking",
+        "merge-blocked",
+        "checks-running",
+        "provider-unavailable",
+        "acceptance-wait",
+    }
+)
+_MERGE_PROGRESS: dict[str, DeliveryProgress] = {
+    "merge-approval-required": "ready-to-merge",
+    "merge-blocked": "needs-decision",
+    "checks-running": "waiting-for-service",
+    "merge-checking": "waiting-for-service",
+    "provider-unavailable": "waiting-for-service",
+    "target-sync-required": "waiting-for-chat",
+}
+# Blocks only Delivery's own merge has; the user can still merge in GitHub.
+_MERGE_IN_GITHUB_BLOCKS = frozenset(
+    {
+        MergeBlockReason.CAPABILITY_UNAVAILABLE,
+        MergeBlockReason.QUEUE_REQUIRED,
+        MergeBlockReason.STACKED,
+        MergeBlockReason.METHOD_NOT_ALLOWED,
+    }
+)
+_MERGE_BLOCK_STEPS: dict[MergeBlockReason, str] = {
+    MergeBlockReason.CONFLICTS: "The pull request has merge conflicts; synchronize the target before merging.",
+    MergeBlockReason.BEHIND: "The pull request is behind its target; synchronize the target before merging.",
+    MergeBlockReason.PROTECTION: "Branch protection blocks the merge; resolve it in GitHub, then merge there.",
+    MergeBlockReason.DRAFT: "The pull request is a draft in GitHub; mark it ready there or merge in GitHub.",
+    MergeBlockReason.CLOSED: "The pull request is closed in GitHub.",
+    MergeBlockReason.CHECKS_FAILED: "Required checks failed; fix them, then merge in GitHub.",
+    MergeBlockReason.QUEUE_REQUIRED: "The target only accepts queued merges; merge in GitHub.",
+    MergeBlockReason.STACKED: "The pull request is part of a stack; merge in GitHub.",
+    MergeBlockReason.WRONG_BASE: "The pull request targets another base branch; merge in GitHub or retarget it.",
+    MergeBlockReason.CAPABILITY_UNAVAILABLE: "Delivery cannot merge here; merge the pull request in GitHub.",
+    MergeBlockReason.METHOD_NOT_ALLOWED: "The repository disallows merge commits; merge in GitHub.",
+}
 
 
-def derive_delivery_progress(  # noqa: C901, PLR0911, PLR0913 - one branch per ordered mapping row.
+def derive_delivery_progress(  # noqa: C901, PLR0911, PLR0912, PLR0913 - one branch per ordered mapping row.
     readiness: DeliveryReadiness,
     card: WorkItemCardView,
     frontier: DeliveryFrontier,
@@ -624,6 +681,10 @@ def derive_delivery_progress(  # noqa: C901, PLR0911, PLR0913 - one branch per o
         if issuer_state is None or issuer_state == "alive":
             return None
         return "waiting-for-chat" if issuer_state == "gone" else "needs-decision"
+    if readiness.merge_block is not None and readiness.merge_block.reason in _MERGE_IN_GITHUB_BLOCKS:
+        return "ready-to-merge"
+    if reason in _MERGE_PROGRESS:
+        return _MERGE_PROGRESS[reason]
     awaiting_merge = (
         card.publication_phase is WorkItemPublicationPhase.AWAITING_MERGE
         and frontier.change_disposition is None
@@ -741,6 +802,10 @@ class WorkItemProjector:
                     "a failed attempt once no process uses its worktree and it stays unchanged for the quiet "
                     "period; preserve the worktree."
                 ),
+                "merge-approval-required": "Merge the pull request in GitHub; Delivery records completion afterward.",
+                "merge-checking": "GitHub is still computing mergeability; Delivery reads it again shortly.",
+                "checks-running": "Required checks are still running; merge in GitHub once they pass.",
+                "provider-unavailable": "GitHub could not be read; Delivery reads it again shortly.",
             }
             self._cards = tuple(
                 card.model_copy(
@@ -750,8 +815,15 @@ class WorkItemProjector:
                             decision.action
                             if decision.action is not None
                             else card.action
-                            if decision.reason_code == "design-attention"
-                            and card.action.kind is WorkItemActionKind.RESUME_DESIGN
+                            if (
+                                decision.reason_code == "design-attention"
+                                and card.action.kind is WorkItemActionKind.RESUME_DESIGN
+                            )
+                            or (
+                                decision.reason_code in _MERGE_WAIT_REASONS
+                                and card.publication_phase is WorkItemPublicationPhase.AWAITING_MERGE
+                                and card.action.kind is WorkItemActionKind.OBSERVE_ACCEPTANCE
+                            )
                             else WorkItemAction()
                         ),
                         "next_actor": decision.next_actor,
@@ -782,6 +854,13 @@ class WorkItemProjector:
     ) -> str:
         if guidance is not None:
             return guidance
+        if readiness.merge_block is not None:
+            return _MERGE_BLOCK_STEPS[readiness.merge_block.reason]
+        if (
+            readiness.reason_code == "target-sync-required"
+            and card.publication_phase is WorkItemPublicationPhase.AWAITING_MERGE
+        ):
+            return "The target moved after the proof; synchronize, re-finalize and re-review before merging."
         if readiness.reason_code == "retry-exhausted":
             owner = (
                 "Builder"

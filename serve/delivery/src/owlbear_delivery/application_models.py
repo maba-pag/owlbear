@@ -366,9 +366,13 @@ class DeliveryContinuationResult(_ApplicationModel):
             raise ValueError(message)
         if self.engine_result is not None:
             kinds = {"completed": "reconciled", "waiting": "human", "stale": "stale", "blocked": "unavailable"}
+            # L2 (D5): a waiting acceptance result reports current readiness, not its persisted label.
+            reason = (
+                self.readiness.reason_code if self.engine_result.kind == "waiting" else self.engine_result.reason_code
+            )
             if (
                 self.kind != kinds[self.engine_result.kind]
-                or self.reason_code != self.engine_result.reason_code
+                or self.reason_code != reason
                 or self.failure != self.engine_result.failure
             ):
                 message = "continuation must preserve the exact engine disposition and failure"

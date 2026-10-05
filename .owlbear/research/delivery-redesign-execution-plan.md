@@ -532,11 +532,13 @@ so implementation re-resolves paths after N01 moves code.
 | N03-C | N03-B |
 | N04-P (re-plan, 2026-10-04) | N03-P |
 | N04-A | N04-P, N03-C |
-| Later N04 phases | as the new N04-P splits them, each after the previous N04 phase |
+| N04-B | N04-A |
+| N04-C | N04-B |
 | N05-P | N02-P |
 | N05-A | N05-P, N01-P, N00-C; N05-P must list editable paths disjoint from every N01 phase's paths |
-| N05-B | N05-A, N01-C, N02-B |
-| N05-C | N05-B |
+| N05-B1 | N05-A, N01-C, N02-B |
+| N05-B2 | N05-B1 |
+| N05-C | N05-B2 |
 | N05-D (only if it stays small) | N05-C |
 | N06, N07 (every phase) | cut 2026-10-04 ([7](#7-decisions)) |
 | N08-P | N02-P |
@@ -554,8 +556,9 @@ so implementation re-resolves paths after N01 moves code.
 | N10-H | N10-A |
 | N10-M | N10-H; user authorization at the step |
 
-Format-marker order: N03-A and N05-B each add an N02 format step. Whichever merges second renumbers
-its migration onto the other's and reruns the LC full form.
+Format-marker order: N03-A's marker step (format 2) is merged; N05-B2 adds the next one. Whenever two
+unmerged phases add a format step, whichever merges second renumbers its migration onto the other's
+and reruns the LC full form.
 
 Package-level view (derived from the table):
 
@@ -611,11 +614,11 @@ phase.
 | 1 | N01-P, then N01-A | N00-C, N02-P, N09-P1, then N01-B | N01-A, N01-B merged |
 | 1b | N01-C | N05-P, then N05-A | N01-C merged |
 | 2 | N02-A … N02-D | N09-A1, N03-P, N08-P | N02-B merged |
-| 3 | N03-A … N03-C | N05-B … N05-D, N08-A, N09-A2 | N03 merged |
+| 3 | N03-A … N03-C | N05-B1, N05-B2, N05-C, N05-D, N08-A, N09-A2 | N03 merged |
 | 4 | N04-P, then its phases | N08-C, N09-P2, N10-P | N04, N05 and N08 merged |
 | 5 | N09-B, N09-C, N10-A, N10-H, N10-M | — | Programme complete |
 
-Stage 3 note (N05-P): N03 and N05-B…D list shared core modules (`application_readiness.py`,
+Stage 3 note (N05-P): N03 and N05-B1…D list shared core modules (`application_readiness.py`,
 `application_acquisition.py`, `work_items.py`, `workspace_models.py`), so the ready rule runs them
 sequentially where their editable paths overlap, despite the lane split.
 
@@ -645,13 +648,16 @@ every new item exactly one lane.
 | N02-D | merged | #362 (`9000513f9`; integrity simplified 2026-10-04; Sol `implementation-sound` on the simplification; LC and both upgrade rehearsals (N02-C and D03 to N02-D, format 2) pass; H step done 2026-10-04 with the user: G3 host check passed (start, stop, restart; no autostart), live migrated 0 → 1 → 2 with the rehearsed proposal, pinned to `841b1cffb`, main checkout on `dev`, health healthy and all 3 Changes available and unchanged across a restart; freeze ended) |
 | N03-P | merged | #349 (plan gate `plan-sound`, round 6; D11 confirmed 2026-10-03; U1 decided (b) by the user 2026-10-03). History: #360 added a user-only confirmation boundary and opened U2; both were removed and U2 resolved on 2026-10-04 ([7](#7-decisions)) |
 | N03-A | merged | #363 (`82be4eb1c`; simplified 2026-10-04; Sol `implementation-sound` on the simplification delta; LC full form pass) |
-| N03-B | — | — |
+| N03-B | merged | #368 (code head `2cba00bdb`; Sol `implementation-sound` round 1 and delta; G4 closed for the reviewer by host rehearsal) |
 | N03-C | — | — |
-| N04-P | re-plan | #358 closed as superseded; re-planned small under the 2026-10-04 process |
-| Later N04 phases | — | per the new N04-P |
+| N04-P | merged | #369 (re-plan; plan gate: Sol round 1 `revision-required`, 5 findings accepted; round 2 `revision-required`, 1 bounded ordering correction accepted, gate ended; U1 settled (b) as D13 by the lead); #358 closed as superseded |
+| N04-A | — | — |
+| N04-B | — | — |
+| N04-C | — | — |
 | N05-P | merged | #353 (plan gate `plan-sound`, round 12; F1–F8 confirmed 2026-10-03; U1 (a), U2 (b), U3 (a) + (e) by the user, U4 (b) decided 2026-10-03; U3 (e) revises programme §10.2). History: #360's F10 and F11 and U4 (b) retirement were removed on 2026-10-04 ([7](#7-decisions)) |
 | N05-A | merged | #356 (code head `a4951b044`; Sol `implementation-sound` round 2; Ubuntu CI exact head) |
-| N05-B | — | — |
+| N05-B1 | in review | #371 (code head `651afebcd`, Sol round 1 repaired; read side, no format change; LC not applicable) |
+| N05-B2 | — | — |
 | N05-C | — | — |
 | N05-D | — | — (only if it stays small) |
 | N06-P | merged, then superseded | #359; superseded 2026-10-04 ([7](#7-decisions)) |
@@ -663,7 +669,7 @@ every new item exactly one lane.
 | N09-P1 | merged | #351 (plan gate `plan-sound`, round 8; D9 re-split confirmed 2026-10-03; U1 decided (b) 2026-10-03) |
 | N09-A1 | merged | #354 (code head `3573866ac`; Sol `implementation-sound` round 3) |
 | N09-A2 | merged | #357 (code head `7a2d974b3`) |
-| N09-P2 | — | — |
+| N09-P2 | merged | #372 (Sol plan gate round 1 revision-required; F1 consumer-publication boundary and F2 Cockpit inventory rows fixed; gate ended after round 1 corrections (lead); U2 settled (a) by the lead 2026-10-04 → N09 plan D21) |
 | N09-B | — | — |
 | N09-C | — | — |
 | N10-P | — | — |
@@ -961,7 +967,18 @@ agent-assisted manual step, not by a product route.
 
 **Plan inputs:** the N03 plan (acceptance identities); N09-A2 (Pause); N02 (migration contract).
 
-**Phases:** set by the new N04-P. LC gate: full form where a persisted format changes.
+**Phases** ([N04 plan](delivery-n04-plan.md) §3):
+
+- N04-P (re-plan, 2026-10-04).
+- N04-A: revision activation: Pause-gated revision, package snapshot on the reviewed head, one authority
+  transaction that resumes the Change, replay and startup recognition, evidence and confirmations by
+  criterion version, Designer workflow and README.
+- N04-B: D03 Design-return readmission: preserve the retained Builder work under refs, reset to the
+  reviewed head, release the handoff, then readmit.
+- N04-C: Cockpit **Change requirements** control and operating guide.
+
+LC gate: load form for N04-A and N04-B (record schemas unchanged; revision-history path layout
+extended); not applicable to N04-C.
 
 ### N05 — Exact-head merge approval, completion and publication continuity
 
@@ -977,16 +994,17 @@ agent-assisted manual step, not by a product route.
   means automatic sync, refinalization and fresh review (U3 part 1 (a)). No GitHub merge API fences
   the target; Delivery checks parent and base after the merge and reports a difference as acceptance
   attention (U3 (e), programme §10.2 as revised).
-- An unknown merge response is read back before any retry. There is never a duplicate or
-  unapproved merge. A response still unknown after readback is exhausted shows attention; the user
-  checks GitHub and resolves it through existing routes (a merge is observed and completes;
-  otherwise abandon or defer).
+- One approval sends one merge request. An unknown response is read back, never re-sent; there is
+  never a duplicate or unapproved merge. A response still unknown after the automatic reads shows
+  one attention with the PR link; the user checks GitHub and resolves it through existing routes (a
+  merge is observed and completes; Check again reads once; otherwise abandon or defer).
 - Completion is observed exactly once, including merges done manually in GitHub.
 - The worktree of a completed Change is cleaned automatically when eligible; unexpected contents
   are preserved.
 - Waits are distinct: checks running, provider outage, pending user approval.
-- L1: fresh observations are fenced into the readiness basis. L2: a known-unmergeable PR shows its
-  real reason instead of `merge-approval-required`, which N05-B adds as a readiness reason (today
+- L1: readiness refreshes expired provider observations in every publication phase and reports a
+  provider outage as such. L2: a known-unmergeable PR shows its
+  real reason instead of `merge-approval-required`, which N05-B1 adds as a readiness reason (today
   it is only an engine-result reason).
 - Governance states that engine/provider publication is system work and that agents never push
   arbitrarily.
@@ -1003,14 +1021,17 @@ part), V12, V19; L1, L2; #225 (if built).
 - N05-P (merged #353; simplified 2026-10-04, N05 plan header).
 - N05-A: provider merge and readback adapter with fakes; revises the forbidden-effect gates that
   assert Delivery never merges into an allowlist (merged #356).
-- N05-B: approval identity and invalidation, engine merge action, readiness L1/L2, distinct waits,
-  exactly-once completion, automatic cleanup.
-- N05-C: Cockpit **Approve merge** with confirm, cancel and error states, stale-offer E2E, HTTP and
-  read-only MCP status, continuation prompt path, governance text; one smoke test on a disposable
-  repository (create PR, approve, merge at the exact head, observe completion).
+- N05-B1: merge offer, readiness L1/L2 and distinct waits, strict-proof target route for finalized
+  Changes (a sync to a new target invalidates finalization), one acceptance read per Check again,
+  automatic cleanup and its sweep (read side, no format change).
+- N05-B2: one merge attempt per approval, approve-and-execute owner, settlement inside the acceptance
+  owner, post-merge parent and base check, owner fence, format step.
+- N05-C: Cockpit **Approve merge** with confirm, cancel and error states and the unknown-merge
+  attention, stale-offer E2E, HTTP approve route, continuation prompt path, governance text; one smoke
+  test on a disposable repository (create PR, approve, merge at the exact head, observe completion).
 - N05-D: #225 PR-feedback continuity, only if small.
 
-LC gate: full form from N05-B.
+LC gate: full form from N05-B2 (not applicable to N05-B1).
 
 ### N06 — Prepared interaction core and private local input
 
@@ -1174,10 +1195,17 @@ PR #364 (`r-challenger-protocol` Operating Context and Finding Quality):
   `delivery-controller verify` on demand and inside pin/switch, `controller-not-pinned`, offline
   preflight, `/upgrade-delivery` and the H-step runbook stay (N02 plan §3.5).
 - **N04:** re-planned small ([5](#n04--same-change-requirement-revision-and-evidence-reuse)); PR #358
-  is superseded.
+  is superseded. Former N04 plan U1 decided (b) (N04 plan D13): a replanned outcome keeps completed
+  tasks and results whose commitments still exist and plans only the delta.
 - **N05:** U4 (b) retirement (`retire_held_merge`) is removed; an unsettled merge shows attention
   and the user resolves it through existing routes. The multi-scenario real-GitHub rehearsal is
   replaced by one smoke test on a disposable repository that the agent creates and the user deletes.
+- **N05-B simplification (lead decision 2026-10-04):** one approval sends one merge request, recorded
+  in one `merge_attempt` record; settlement runs inside the acceptance owner with its existing retry
+  budget; an owner-level fence replaces guard threading; revocation, re-requests, the engine merge
+  action, new retry episodes and the held-state projection are cut; N05-B is split into N05-B1 (read
+  side) and N05-B2 (effect side, format step). Decisions A1–A7 and Q1–Q5 with reasons are in the
+  [N05 plan](delivery-n05-plan.md#18-decisions).
 - **V17, V22 and V23 dropped; N06 and N07 cut.** Person-only checks are ordinary Action Requests
   answered in Cockpit; V23 and B1's TASK-004 pilot are B1's own acceptance.
 - **N08:** N08-B cut; N08-C reduced to a documented consumer upgrade and migration.

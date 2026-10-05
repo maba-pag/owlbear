@@ -233,6 +233,15 @@ class _PublicationMixin:
             raise
         except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
             self._fail("target synchronization could not be completed", exc)
+        finalization = runtime.finalization()
+        proof = runtime.target_sync_receipt()
+        if (
+            finalization is not None
+            and receipt.merged_head == finalization.exact_head
+            and (proof is None or proof.target_head != receipt.target_head)
+        ):
+            # Strict proof: a new target returns the PR to draft even when the Change head is unchanged.
+            self._return_publication_to_draft_before_head_change(change_id, runtime, operation_id)
         runtime.record_target_sync(receipt, _timestamp(self._clock()))
         self._publish_target_sync_branch(change_id, runtime, receipt.merged_head)
         self._publish_delivery_state(change_id, runtime, f"target-sync-{receipt.receipt_id}")
@@ -1263,6 +1272,7 @@ class _PublicationMixin:
             message = "checkpoint reconciliation limit must be positive"
             raise ValueError(message)
         self._reconcile_runtimes()
+        self._sweep_completed_change_worktrees()
         now = _timestamp(self._clock())
         pending_change_ids = tuple(
             change_id

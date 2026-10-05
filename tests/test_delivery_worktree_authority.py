@@ -95,6 +95,10 @@ _MERGE_METHOD_FILES = frozenset(
         "serve/delivery/src/owlbear_delivery/publication_provider.py",
         "serve/delivery-github/src/owlbear_delivery_github/github.py",
         "serve/delivery-github/src/owlbear_delivery_github/memory.py",
+        # N05-B1: the readiness merge offer names its method; it is no acceptance or completion model.
+        "serve/delivery/src/owlbear_delivery/merge_offer.py",
+        "serve/cockpit/web/src/api/workItems.ts",
+        "serve/cockpit/web/src/components/WorkItemDetail.tsx",
     }
 )
 _MERGE_METHOD_PROTECTED_MODELS = re.compile(r"(?:Acceptance|Latch|Completion|Observation|Evidence|PullRequest$)")

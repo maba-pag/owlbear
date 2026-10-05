@@ -50,6 +50,9 @@ invoke only the operation owned by that entry route.
   reviewer `source_agent` and no scope; discard malformed or low-signal candidates without repair.
 - **Submit only after pass.** Bind the reviewed commit to the exact task and authority through
   `submit_result`; never submit reviewer findings or unreviewed work.
+- **Record typed proof.** Cover criteria from Build context `acceptance`, let Delivery derive command
+  verdicts, record a gap another owner closes as `missing`, and ask for a waiver or person-only check
+  only through a scoped block request; never answer such a request yourself.
 
 </critical_rules>
 

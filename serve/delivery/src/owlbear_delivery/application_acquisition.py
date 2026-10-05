@@ -414,6 +414,11 @@ class _AcquisitionMixin:
         return f"continue-{hashlib.sha256(payload.encode()).hexdigest()}"
 
     @staticmethod
+    def _chat_reason(result: DeliveryEngineActionResult, readiness: DeliveryReadiness) -> str:
+        """L2 (D5): a waiting acceptance result shows current readiness, not its persisted label."""
+        return readiness.reason_code if result.kind == "waiting" else result.reason_code
+
+    @staticmethod
     def _engine_action_matches_readiness(
         action: ChangeContinuationAction,
         basis: DeliveryReadinessBasis,
@@ -473,7 +478,7 @@ class _AcquisitionMixin:
         return DeliveryContinuationResult(
             change_id=request.change_id,
             kind=kinds[result.kind],
-            reason_code=result.reason_code,
+            reason_code=self._chat_reason(result, readiness),
             readiness=readiness,
             engine_result=result,
             failure=result.failure,
@@ -507,7 +512,7 @@ class _AcquisitionMixin:
             return DeliveryContinuationResult(
                 change_id=request.change_id,
                 kind=kinds[result.kind],
-                reason_code=result.reason_code,
+                reason_code=self._chat_reason(result, readiness),
                 readiness=readiness,
                 engine_result=result,
                 failure=result.failure,
@@ -899,7 +904,8 @@ class _AcquisitionMixin:
             contract_fingerprint(runtime.contract) != action.contract_digest
             or hashlib.sha256(runtime.frontier_bytes()).hexdigest() != action.frontier_digest
             or head != action.exact_head
-            or self._workspace_manager.observed_target_head() != action.target_head
+            # A sync target may be the provider head; the exact fetch in the sync owner verifies it (U3(a)).
+            or (action.kind != "sync-target" and self._workspace_manager.observed_target_head() != action.target_head)
             or reason == "workspace-dirty"
         ):
             return DeliveryEngineActionResult(action=action, kind="stale", reason_code="readiness-changed")

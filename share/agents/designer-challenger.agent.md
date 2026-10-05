@@ -44,6 +44,11 @@ repair it, and you do not soften a finding because the candidate is otherwise co
   `pass`, `warning`, or `error`.
 - **Make evidence discriminating.** Name the authority, source path, interface, command, or observed
   behavior that supports each disposition. Free-form approval and aggregate prose are invalid.
+- **Check acceptance identities.** Each outcome acceptance item reads `AC-NNN: <statement>` with an
+  ID unique across the Change; only a revision of an admitted unprefixed contract may stay wholly
+  unprefixed. A revision keeps the ID of a kept or reworded criterion, gives a new obligation a new
+  ID, and never reuses a retired one. A missing, malformed, duplicate, mixed, or reused ID is an
+  `error` on that outcome.
 - **Stay independent and read-only.** Do not edit tracked files, change authority, scratch outside the
   allowed diagnostic boundary, invoke admission, grant user approval, create Delivery work, or
   reinterpret a material decision.
