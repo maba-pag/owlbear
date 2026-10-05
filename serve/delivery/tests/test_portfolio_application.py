@@ -14713,7 +14713,9 @@ dependencies: []
     assert set(tree_paths) >= package_paths
 
 
-@pytest.mark.parametrize("case", ["workspace-changed", "added-after-capture", "unmerged-index", "planning-route"])
+@pytest.mark.parametrize(
+    "case", ["workspace-changed", "added-after-capture", "unmerged-index", "planning-route", "dirty-submodule"]
+)
 def test_design_return_release_refusal_changes_nothing(tmp_path: Path, case: str) -> None:
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
@@ -14724,6 +14726,20 @@ def test_design_return_release_refusal_changes_nothing(tmp_path: Path, case: str
         application, runtimes, coordinator, state_root
     )
     worktree = builder.worktree_path
+    if case == "dirty-submodule":
+        child = tmp_path / "child"
+        child.mkdir()
+        _git(child, "init", "-q")
+        (child / "child.txt").write_text("committed child bytes\n", encoding="utf-8")
+        _git(child, "add", "child.txt")
+        _git(child, "-c", "user.name=Child", "-c", "user.email=child@example.invalid", "commit", "-q", "-m", "child")
+        _git(worktree, "-c", "protocol.file.allow=always", "submodule", "add", "-q", str(child), "sub")
+        _git(worktree, "commit", "-q", "-m", "add submodule")
+        _git(worktree, "config", "submodule.recurse", "true")
+        # A moved gitlink is all the parent capture records; the child edit beside it is not.
+        (worktree / "sub" / "child.txt").write_text("committed child move\n", encoding="utf-8")
+        _git(worktree / "sub", "-c", "user.name=Child", "-c", "user.email=child@example.invalid", "commit", "-qam", "m")
+        (worktree / "sub" / "child.txt").write_text("uncommitted child edit\n", encoding="utf-8")
     target = DeliveryStage.PLANNING if case == "planning-route" else DeliveryStage.DESIGN
     _return_builder(application, builder, target=target, unmerged=case == "unmerged-index")
     _change_intent(application, "change-a", DeliveryChangeIntentKind.DEFER, reason="Revise requirements")
@@ -14739,7 +14755,7 @@ def test_design_return_release_refusal_changes_nothing(tmp_path: Path, case: str
         run_git = manager._run_git
 
         def interrupt_reset(*arguments: str, **options: object) -> object:
-            if arguments[:2] == ("reset", "--hard"):
+            if arguments[2:4] == ("reset", "--hard"):
                 message = "interrupted reset"
                 raise RuntimeError(message)
             return run_git(*arguments, **options)

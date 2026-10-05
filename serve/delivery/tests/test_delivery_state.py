@@ -4944,7 +4944,7 @@ def _design_return_crash(application: PortfolioApplication, boundary: str) -> ob
     return {
         "before-quarantine-ref": crash_at(("commit-tree",)),
         "before-receipt": patch.object(DirtyWorktreeQuarantineReceipt, "create", side_effect=_Crash),
-        "after-capture": crash_at(("reset", "--hard")),
+        "after-capture": crash_at(("-c", "submodule.recurse=false", "reset", "--hard")),
         "after-reset": crash_at(("clean",)),
         "before-release": patch.object(PortfolioCoordinator, "_prepare_design_return_release", side_effect=_Crash),
     }[boundary]

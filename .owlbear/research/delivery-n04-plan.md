@@ -192,6 +192,10 @@ Order:
 
 1. Verify the worktree still matches the handoff metadata (`_capture_builder_handoff_metadata` against
    `metadata_fingerprint`); otherwise refuse `design-return-workspace-changed`.
+   Submodule work refuses the same reason before any capture write or reset, also on replay, because the
+   capture holds a submodule only as its gitlink: the user commits or removes it first (a gitlink path in the
+   index or handoff head that `status --ignore-submodules=none` reports), and the reset runs with
+   `submodule.recurse=false`.
 2. Capture without changing the worktree or the managed index (the index tree is written from a copy), in
    this order: the head under `refs/owlbear/attempts/<change>/<attempt>`; if dirty, the real index as a
    tree under `refs/owlbear/quarantine-index/<change>/<attempt>`, then the quarantine commit (child of the

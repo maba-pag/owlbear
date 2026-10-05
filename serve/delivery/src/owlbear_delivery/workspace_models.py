@@ -1508,6 +1508,11 @@ class DesignReturnWorkspaceError(PreservationFenceError):
         return cls("design-return-workspace-changed", "the Design-return worktree differs from its handoff or capture")
 
     @classmethod
+    def submodule_work(cls) -> Self:
+        """Refuse submodule work that a parent capture would hold only as a gitlink."""
+        return cls("design-return-workspace-changed", "the Design-return worktree has uncommitted submodule work")
+
+    @classmethod
     def unmerged_index(cls) -> Self:
         """Refuse an index with unmerged entries, which no tree can capture."""
         return cls("design-return-unmerged-index", "the Design-return index has unmerged entries")

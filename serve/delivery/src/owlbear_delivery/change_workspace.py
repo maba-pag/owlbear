@@ -33,6 +33,7 @@ from owlbear_delivery.workspace_coordination import (  # noqa: TC001
     PortfolioCoordinator,
 )
 from owlbear_delivery.workspace_models import (  # noqa: F401
+    _GIT_MODE_GITLINK,
     _INDEX_PATH_LENGTH_MASK,
     _MAX_PRESERVED_FILE_BYTES,
     _MAX_RESTORATION_STAGING_ARTIFACTS,
@@ -1323,15 +1324,38 @@ class ChangeWorkspaceManager(_WorktreeStateMixin, _PreservationMixin, _SnapshotM
         coordination = self._coordinator.show(change_id)
         if coordination.builder_handoff != handoff:
             _coordination_conflict("Design return release requires its exact retained Builder handoff")
+        worktree = coordination.worktree_path
+        self._refuse_unclean_design_return_submodules(worktree, handoff.branch_head)
         if not self._design_return_captured(coordination, handoff):
             self._capture_design_return(coordination, handoff, lock)
-        worktree = coordination.worktree_path
-        self._git("reset", "--hard", coordination.last_reviewed_commit, cwd=worktree)
+        self._git("-c", "submodule.recurse=false", "reset", "--hard", coordination.last_reviewed_commit, cwd=worktree)
         self._git("clean", "-fd", cwd=worktree)
         if self._worktree_change_paths(worktree):
             _workspace_failure("Design return release did not clean the managed worktree")
         self._require_worktree(change_id, worktree, coordination.branch, coordination.last_reviewed_commit)
         return self._coordinator._prepare_design_return_release(change_id, handoff, lock)  # noqa: SLF001
+
+    def _refuse_unclean_design_return_submodules(self, worktree: Path, branch_head: str) -> None:
+        """Refuse submodule work a parent capture would hold only as a gitlink (N04 §1.7)."""
+        gitlinks = {path for path, mode, _stage in self._index_entries(worktree) if mode == _GIT_MODE_GITLINK}
+        gitlinks.update(
+            path for path, mode, _object_id in self._head_entries(worktree, branch_head) if mode == _GIT_MODE_GITLINK
+        )
+        if not gitlinks:
+            return
+        status = self._preservation_git(
+            "--literal-pathspecs",
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--ignore-submodules=none",
+            "--untracked-files=all",
+            "--",
+            *sorted(gitlinks),
+            cwd=worktree,
+        ).stdout
+        if status:
+            raise DesignReturnWorkspaceError.submodule_work()
 
     def _design_return_captured(self, coordination: ChangeCoordination, handoff: ChangeBuilderHandoff) -> bool:
         """Recognize a complete Design-return capture; False when capture has not completed (N04 §1.7)."""
