@@ -821,7 +821,10 @@ class WorkItemProjector:
                     "a failed attempt once no process uses its worktree and it stays unchanged for the quiet "
                     "period; preserve the worktree."
                 ),
-                "merge-approval-required": "Merge the pull request in GitHub; Delivery records completion afterward.",
+                "merge-approval-required": (
+                    "Approve the merge in Cockpit, or merge the pull request in GitHub; Delivery records completion "
+                    "afterward."
+                ),
                 "merge-checking": "GitHub is still computing mergeability; Delivery reads it again shortly.",
                 "checks-running": "Required checks are still running; merge in GitHub once they pass.",
                 "provider-unavailable": "GitHub could not be read; Delivery reads it again shortly.",
@@ -843,7 +846,13 @@ class WorkItemProjector:
                                 decision.reason_code == "design-attention"
                                 and card.action.kind is WorkItemActionKind.RESUME_DESIGN
                             )
-                            or (
+                            else card.action.model_copy(update={"label": "Check again"})
+                            if (
+                                decision.reason_code == "merge-response-unknown"
+                                and card.action.kind is WorkItemActionKind.OBSERVE_ACCEPTANCE
+                            )
+                            else card.action
+                            if (
                                 decision.reason_code in _MERGE_WAIT_REASONS
                                 and card.publication_phase is WorkItemPublicationPhase.AWAITING_MERGE
                                 and card.action.kind is WorkItemActionKind.OBSERVE_ACCEPTANCE

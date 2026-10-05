@@ -23,6 +23,7 @@ from serve.delivery.tests.confirmation_support import (
     scoped_request_case,
 )
 from serve.delivery.tests.test_delivery_progress import _progress_portfolio
+from serve.delivery.tests.test_merge_offer import _memory_awaiting_merge
 from serve.delivery.tests.test_portfolio_application import (
     _assert_checkpoint_branch_operation,
     _assert_loader_observation_only,
@@ -117,6 +118,7 @@ from owlbear_delivery.delivery_runtime import (
 )
 from owlbear_delivery.evidence import evaluate_acceptance_evidence, observation_gaps
 from owlbear_delivery.finalization_reports import FinalizationFailureCode
+from owlbear_delivery.merge_approval import MergeAttemptStore
 from owlbear_delivery.portfolio_operating import (
     DeliveryHealthDiagnostic,
     DeliveryHealthStatus,
@@ -152,6 +154,7 @@ from owlbear_delivery.work_items import (
 )
 from owlbear_delivery.worker_stall import DeliveryWorkerActiveError
 from owlbear_delivery_github import GitHubCliPublicationProvider
+from owlbear_delivery_github.memory import InMemoryPublicationProvider
 
 
 class _LockOnlyPortfolioApplication(PortfolioApplication):
@@ -4133,3 +4136,38 @@ def test_http_answer_resolves_a_waiver_request_that_a_finalization_waiver_then_c
     assert observation_gaps(waiver, frontier, acceptance_criteria(runtime.contract), None) == ()
     coverage = evaluate_acceptance_evidence(runtime.contract, frontier, (waiver,))
     assert coverage.criteria[0].status == "waived"
+
+
+def test_http_approve_merge_sends_one_request_and_refuses_stale_busy_and_unverifiable_offers(tmp_path: Path) -> None:
+    application, _runtime, memory, head, state_root = _memory_awaiting_merge(tmp_path)
+    offer_id = application.get_change("change-a").readiness.merge_offer.offer_id
+    url = "/api/changes/change-a/approve-merge"
+    approval = {"offer_id": offer_id, "submission_id": "dialog-1"}
+    outage = PublicationProviderError(
+        PublicationProviderFailureCode.UNAVAILABLE, "read_pull_request", "down", retry_safe=True
+    )
+
+    with TestClient(assemble_target_app(application)) as client:
+        with patch.object(InMemoryPublicationProvider, "read_pull_request", side_effect=outage):
+            unavailable = client.post(url, json=approval)
+        stale = client.post(url, json={**approval, "offer_id": "0" * 64})
+        approved = client.post(url, json=approval)
+        retried = client.post(url, json=approval)
+        busy = client.post(url, json={**approval, "submission_id": "dialog-2"})
+        memory.execute_pending_merges()
+        observed = client.post("/api/changes/change-a/acceptance/observe")
+
+    assert (unavailable.status_code, unavailable.json()["code"]) == (503, "ERR_DELIVERY_MERGE_UNAVAILABLE")
+    assert (stale.status_code, stale.json()["code"]) == (409, "ERR_DELIVERY_MERGE_OFFER_STALE")
+    assert stale.json()["readiness"]["merge_offer"]["offer_id"] == offer_id
+    assert approved.status_code == 200, approved.text
+    assert (approved.json()["state"], approved.json()["pr_url"]) == (
+        "pending",
+        "https://github.com/example/project/pull/7",
+    )
+    assert retried.json() == approved.json()
+    assert (busy.status_code, busy.json()["code"]) == (409, "ERR_DELIVERY_MERGE_IN_PROGRESS")
+    assert observed.status_code == 200, observed.text
+    assert observed.json()["finalized_change_head"] == head
+    assert [json.loads(body)["sha"] for body in memory.merge_request_bodies] == [head]
+    assert len(MergeAttemptStore(state_root, "change-a").attempts()) == 1

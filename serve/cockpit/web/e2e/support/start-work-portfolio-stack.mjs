@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdtemp, rm, utimes } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -9,7 +9,21 @@ const root = resolve(import.meta.dirname, "../../../../..");
 const fixture = await mkdtemp(join(tmpdir(), "owlbear-work-portfolio-"));
 // Stuck-worker Changes live in their own workspace so the portfolio fixture's counts stay unchanged.
 const stuckFixture = await mkdtemp(join(tmpdir(), "owlbear-work-stuck-worker-"));
-const fixtures = [fixture, stuckFixture];
+// Merge-approval Changes talk to a fake `gh`; the spec drives fake GitHub through this fixed root.
+const mergeRoot = join(tmpdir(), "owlbear-work-merge-4177");
+await rm(mergeRoot, { recursive: true, force: true });
+const mergeFixture = join(mergeRoot, "workspace");
+const fakeGhBin = join(mergeRoot, "bin");
+const fakeGhState = join(mergeRoot, "fake-gh.json");
+await mkdir(mergeFixture, { recursive: true });
+await mkdir(fakeGhBin, { recursive: true });
+await writeFile(
+  join(fakeGhBin, "gh"),
+  `#!/bin/sh\nexec "${process.execPath}" "${resolve(import.meta.dirname, "fake-gh.mjs")}" "$@"\n`,
+  { mode: 0o755 },
+);
+const fakeGhEnv = { PATH: `${fakeGhBin}:${process.env.PATH}`, OWLBEAR_FAKE_GH_STATE: fakeGhState };
+const fixtures = [fixture, stuckFixture, mergeRoot];
 const servers = [];
 let activeWorker;
 
@@ -31,30 +45,35 @@ const timer = setInterval(() => {
   { detached: true, stdio: "ignore" },
 ).unref();
 
-async function run(command, arguments_) {
-  const process = spawn(command, arguments_, { cwd: root, stdio: "inherit" });
-  const [exitCode] = await once(process, "exit");
+async function run(command, arguments_, env = {}) {
+  const process_ = spawn(command, arguments_, { cwd: root, env: { ...process.env, ...env }, stdio: "inherit" });
+  const [exitCode] = await once(process_, "exit");
   if (exitCode !== 0) throw new Error(`${command} exited with ${exitCode ?? "no status"}`);
 }
 
-async function seed(workspace, ...options) {
-  await run("uv", [
-    "run",
-    "--project",
-    root,
-    "python",
-    resolve(import.meta.dirname, "seed-work-portfolio-delivery.py"),
-    "--workspace",
-    workspace,
-    ...options,
-  ]);
+async function seed(workspace, options = [], env = {}) {
+  await run(
+    "uv",
+    [
+      "run",
+      "--project",
+      root,
+      "python",
+      resolve(import.meta.dirname, "seed-work-portfolio-delivery.py"),
+      "--workspace",
+      workspace,
+      ...options,
+    ],
+    env,
+  );
 }
 
-function startCockpit(workspace, port) {
+function startCockpit(workspace, port, env = {}) {
   const server = spawn("uv", ["run", "--project", root, "--package", "owlbear-cockpit", "cockpit"], {
     cwd: workspace,
     env: {
       ...process.env,
+      ...env,
       COCKPIT_PORT: port,
       COCKPIT_NO_OPEN: "1",
     },
@@ -94,7 +113,8 @@ function cleanup() {
 
 try {
   await seed(fixture);
-  await seed(stuckFixture, "--stuck-workers");
+  await seed(stuckFixture, ["--stuck-workers"]);
+  await seed(mergeFixture, ["--merges", fakeGhState], fakeGhEnv);
 } catch (error) {
   await cleanup();
   throw error;
@@ -125,8 +145,10 @@ busyWorker.unref();
 servers.push(busyWorker);
 
 startCockpit(stuckFixture, "4176");
+startCockpit(mergeFixture, "4177", fakeGhEnv);
 try {
   await waitForLive("4176");
+  await waitForLive("4177");
 } catch (error) {
   await cleanup();
   throw error;

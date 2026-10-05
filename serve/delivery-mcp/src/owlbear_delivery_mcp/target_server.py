@@ -958,7 +958,7 @@ class TargetMCPAdapter:
         )
 
     async def observe_acceptance(self, request: ChangeRequest) -> dict[str, object]:
-        """Explicitly observe acceptance once; exhaustion permits one later read, not a budget reset."""
+        """Observe acceptance once (Check again): one read per call, never a budget reset; it never merges."""
         params = self._validate(ChangeParams, request)
         return await asyncio.to_thread(
             self._call,

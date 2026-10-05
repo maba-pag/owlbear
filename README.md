@@ -26,7 +26,8 @@ result through reviewed steps. Cockpit shows the current work and gives a person
 requests, recovery, publication, and completed history.
 
 OwlBear expects VS Code with GitHub Copilot and a Git project with a GitHub repository identity. A
-completed Delivery change becomes a pull request for a person to review and merge.
+completed Delivery change becomes a pull request that a person reviews and either approves for merge
+in Cockpit or merges in GitHub.
 
 The main terms are simple:
 

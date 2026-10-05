@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import platform
 import uuid
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, NoReturn
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
@@ -19,6 +20,7 @@ from owlbear_cockpit.target_models import (
     ActivityCounts,
     AdoptExternalHeadAfterAcceptanceAttentionBody,
     AnswerRequestBody,
+    ApproveMergeBody,
     BackwardMoveBody,
     BackwardMovePreviewBody,
     ChangeDispositionReasonBody,
@@ -34,6 +36,7 @@ from owlbear_cockpit.target_models import (
     DeliveryUnavailableChangeResponse,
     DesignWorkDetailResponse,
     ExternalHeadAdoptionResponse,
+    MergeApprovalResponse,
     NeedsCounts,
     PortfolioOperatingResponse,
     PublicationChecksObservationResponse,
@@ -54,6 +57,7 @@ from owlbear_cockpit.target_models import (
     WorkItemPublicationReconciliationResponse,
     WorkItemUnavailableDetailResponse,
 )
+from owlbear_delivery.application_merge import ERR_MERGE_UNAVAILABLE, DeliveryMergeError
 from owlbear_delivery.completed_history import (
     CompletedChangePage,
     CompletedChangeRecord,
@@ -64,6 +68,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryStage,
 )
 from owlbear_delivery.diagnostics import DeliveryFailureCategory, classify_delivery_failure
+from owlbear_delivery.merge_approval import ApproveChangeMerge, MergeApprovalResult
 from owlbear_delivery.portfolio_application import (
     DeliveryAnswer,
     DeliveryAnswerKind,
@@ -89,6 +94,10 @@ from owlbear_delivery.worker_stall import DeliveryWorkerActiveError
 if TYPE_CHECKING:
     from collections.abc import Callable
     from datetime import datetime
+
+# Approval provenance: the user approves in this Cockpit process (N05 D14).
+_APPROVAL_HOST_ID = (platform.node() or "cockpit")[:128]
+_APPROVAL_SESSION_ID = "cockpit"
 
 
 class TargetCockpitService:
@@ -263,6 +272,24 @@ class TargetCockpitService:
     def observe_acceptance(self, change_id: str) -> object:
         """Observe provider acceptance without merge authority."""
         return self._invoke(lambda: self._application.observe_acceptance(change_id))
+
+    def approve_merge(self, change_id: str, body: ApproveMergeBody) -> MergeApprovalResponse:
+        """Approve the exact offer the user confirmed; Delivery sends its single request (N05 D14)."""
+        request = ApproveChangeMerge(
+            change_id=change_id,
+            offer_id=body.offer_id,
+            submission_id=body.submission_id,
+            host_id=_APPROVAL_HOST_ID,
+            session_id=_APPROVAL_SESSION_ID,
+        )
+
+        def approve() -> MergeApprovalResult:
+            try:
+                return self._application.approve_merge(request)
+            except DeliveryMergeError as exc:
+                _merge_http_error(exc)
+
+        return MergeApprovalResponse.from_result(self._invoke(approve))
 
     def adopt_external_head_after_acceptance_attention(
         self,
@@ -643,6 +670,10 @@ def _register_publication_controls(router: APIRouter) -> None:  # noqa: C901
     def observe_acceptance(change_id: str, service: _TargetService) -> object:
         return service.observe_acceptance(change_id)
 
+    @router.post("/changes/{change_id}/approve-merge", response_model=MergeApprovalResponse)
+    def approve_merge(change_id: str, body: ApproveMergeBody, service: _TargetService) -> MergeApprovalResponse:
+        return service.approve_merge(change_id, body)
+
     @router.post(
         "/changes/{change_id}/acceptance/external-head/adopt",
         response_model=ExternalHeadAdoptionResponse,
@@ -814,6 +845,19 @@ def _http_status(category: DeliveryFailureCategory) -> int:
     if category is DeliveryFailureCategory.PROVIDER:
         return 502
     return 409
+
+
+def _merge_http_error(error: DeliveryMergeError) -> NoReturn:
+    """Stale and in-progress refusals are 409; an unverifiable offer is 503. Both carry the fresh readiness."""
+    unavailable = error.code == ERR_MERGE_UNAVAILABLE
+    content: dict[str, object] = {
+        "code": error.code,
+        "detail": str(error),
+        "authority": "delivery",
+        "retry_safe": unavailable,
+        "readiness": error.readiness.model_dump(mode="json") if error.readiness is not None else None,
+    }
+    raise HTTPException(status_code=503 if unavailable else 409, detail=content)
 
 
 def _http_error(

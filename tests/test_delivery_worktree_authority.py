@@ -101,6 +101,8 @@ _MERGE_METHOD_FILES = frozenset(
         "serve/cockpit/web/src/components/WorkItemDetail.tsx",
         # N05-B2: the merge attempt journals the approved method; it is no acceptance or completion model.
         "serve/delivery/src/owlbear_delivery/merge_approval.py",
+        # N05-C: the Approve merge dialog shows the offered method the user approves.
+        "serve/cockpit/web/src/components/MergeApprovalDialog.tsx",
     }
 )
 _MERGE_METHOD_PROTECTED_MODELS = re.compile(r"(?:Acceptance|Latch|Completion|Observation|Evidence|PullRequest$)")

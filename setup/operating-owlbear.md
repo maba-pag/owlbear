@@ -350,11 +350,19 @@ the finalized head is unchanged. Target synchronization, when required, merges o
 remote-tracking target into the managed Change worktree; it never updates the target branch or the
 user checkout.
 
-The user merges the pull request in GitHub. Delivery never merges, enables auto-merge, updates the
-target branch, or completes from local evidence. After the merge, read-only acceptance observation
-requires the exact repository, PR, base, finalized head, merged state, merge time, and provider-
-reported merge commit. Completed history preserves the finalized Change head and accepted merge
-commit as separate identities. An open or unmerged PR waits or is deferred; it cannot complete.
+When the PR is ready, mergeable and its required checks pass at the finalized head, and the proof
+target equals the current target branch head, Cockpit offers **Approve merge** with the repository,
+PR, exact head, target, proof and check summary and merge method. One approval sends one merge-commit
+request fenced to that exact head; Delivery never enables auto-merge, uses a merge queue, bypasses
+rules or updates the target branch. You can also merge the PR in GitHub yourself. If GitHub never
+confirms an approved merge, Cockpit shows the PR link with **Check again**, Pause and Abandon; Delivery
+never sends the request again. Engine and provider publication (Change branches, draft PRs, Delivery
+state) and an approved merge are system work: agents never run `git push`, `gh pr merge` or provider
+mutations directly, and no agent tool approves a merge. After the merge, read-only acceptance
+observation requires the exact repository, PR, base, finalized head, merged state, merge time, and
+provider-reported merge commit; it never completes from local evidence. Completed history preserves
+the finalized Change head and accepted merge commit as separate identities. An open or unmerged PR
+waits or is deferred; it cannot complete.
 
 Persisted Integration attention remains visible through the current attention surfaces. Use
 Cockpit or `/resolve-delivery-attention <change-id> <attention-id>` to inspect that exact attention.
