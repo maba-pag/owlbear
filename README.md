@@ -39,10 +39,10 @@ The main terms are simple:
 | Change | One approved piece of work tracked from design through review and publication |
 | Cockpit | The browser UI for seeing work and taking human-owned actions |
 
-The normal path is `/ideate` to refine the outcome, `/design` to approve the work package,
-`/orchestrate` to run currently eligible work across the portfolio, and
-`/finalize-change <change-id>` to prepare one reviewed Change for publication. The Delivery engine
-keeps the work ordered and reviewed; you decide when to approve, answer, recover, publish, or merge.
+The normal path is `/ideate` to refine the outcome, `/design` to approve the work package, and
+`/continue-change <change-id>` to plan, build, review, finalize, and publish that one Change; run the
+same prompt again after any stop. The Delivery engine keeps the work ordered and reviewed; you decide
+when to approve, answer, pause, recover, or merge.
 
 Current surface maturity is published on the consumer front door in
 [Status and expectations](README-consumer.md#status-and-expectations). The
