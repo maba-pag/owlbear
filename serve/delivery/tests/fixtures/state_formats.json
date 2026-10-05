@@ -133,6 +133,12 @@
     },
     "version": 1
   },
+  "merge_attempt": {
+    "fingerprints": {
+      "owlbear_delivery.merge_approval:MergeAttemptRecord": "6ebee85f2773f011cbb0939be07399778e7b9924d4b4db16884242ee1128d4e5"
+    },
+    "version": 1
+  },
   "migration_journal": {
     "fingerprints": {
       "owlbear_delivery.state_migration:MigrationJournal": "7c0a19eee5fe82f1daf74182ec195c1c56c1a8f6cda4050bf4087f5a4fe6f5c4"

@@ -536,8 +536,22 @@ _NEWER_STATE = {
         },
     ),
     "claim-issuer-2": ("runtime/changes/demo/claim-issuers/attempt-1.json", {"schema_version": 2, "window": None}),
-    "format-3": ("runtime/format.json", {"format": 3}),
+    "format-4": ("runtime/format.json", {"format": 4}),
 }
+
+
+def test_a_format_2_controller_refuses_state_with_merge_attempts(tmp_path: Path, monkeypatch) -> None:
+    """N05-B2 A1: an older controller reads an unknown merge attempt as unrecognized; only the marker refuses."""
+    attempt = next(path for locator, path in _golden_records() if "/merge-attempts/" in locator)
+    _write(tmp_path, "runtime/changes/change-a/merge-attempts/" + attempt.name, json.loads(attempt.read_bytes()))
+    _mark_format(tmp_path)
+    monkeypatch.setattr(state_formats, "SUPPORTED_FORMAT", 2)
+
+    report = scan_capability(tmp_path)
+
+    assert [(refusal.code, refusal.locator) for refusal in report.refusals] == [
+        ("state-newer-than-controller", "runtime/format.json")
+    ]
 
 
 @pytest.mark.parametrize("case", sorted(_NEWER_STATE))

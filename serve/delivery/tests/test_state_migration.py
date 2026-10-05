@@ -237,8 +237,8 @@ def test_first_migration_on_format_0_state_writes_only_the_marker(tmp_path: Path
     proposal = state_migration.propose(repository)
 
     assert refusal.locator == FORMAT_MARKER
-    assert (proposal.source_format, proposal.target_format) == (0, 2)
-    assert proposal.steps == ("format-0-to-1", "format-1-to-2")
+    assert (proposal.source_format, proposal.target_format) == (0, 3)
+    assert proposal.steps == ("format-0-to-1", "format-1-to-2", "format-2-to-3")
     assert [(entry.locator, entry.before_sha256) for entry in proposal.entries] == [(FORMAT_MARKER, None)]
     assert record_tree_digest(repository) == pre
     journal = state_migration.apply(repository, proposal.migration_id)
@@ -288,7 +288,7 @@ def test_schema_17_frontier_is_rewritten_by_the_registered_rewrite_and_staged_by
     proposal = state_migration.propose(repository)
 
     staged = _migration_dir(repository, proposal.migration_id) / "stage/runtime/changes/change-a/frontier.json"
-    assert proposal.steps == ("format-0-to-1", "format-1-to-2")
+    assert proposal.steps == ("format-0-to-1", "format-1-to-2", "format-2-to-3")
     assert [entry.locator for entry in proposal.entries] == [
         "runtime/changes/change-a/frontier.json",
         FORMAT_MARKER,
@@ -1018,17 +1018,23 @@ def _report_finalizer_attention(application: PortfolioApplication, change_id: st
     application.settle_finalizer_invocation(_finalizer_settlement(application, attempt, report))
 
 
-def test_format_1_to_2_migration_changes_only_the_marker_and_keeps_every_change_available(tmp_path: Path) -> None:
-    """N03-A: format 2 only gates the new record versions; no stored record is rewritten."""
+@pytest.mark.parametrize(
+    ("source", "steps"),
+    [(1, ("format-1-to-2", "format-2-to-3")), (2, ("format-2-to-3",))],
+)
+def test_marker_only_format_steps_change_only_the_marker_and_keep_every_change_available(
+    tmp_path: Path, source: int, steps: tuple[str, ...]
+) -> None:
+    """N03-A and N05-B2: formats 2 and 3 only gate new record versions; no stored record is rewritten."""
     repository = _seed(tmp_path)
     _write_config(repository)
-    (repository / ".owlbear/delivery" / FORMAT_MARKER).write_bytes(b'{"format":1}\n')
+    (repository / ".owlbear/delivery" / FORMAT_MARKER).write_bytes(f'{{"format":{source}}}\n'.encode())
     pre = record_tree_digest(repository)
     _assert_refused(repository, "state-migration-required")
 
     proposal = state_migration.propose(repository)
 
-    assert (proposal.source_format, proposal.target_format, proposal.steps) == (1, 2, ("format-1-to-2",))
+    assert (proposal.source_format, proposal.target_format, proposal.steps) == (source, 3, steps)
     assert [(entry.locator, entry.before_sha256) for entry in proposal.entries] == [(FORMAT_MARKER, pre[FORMAT_MARKER])]
     state_migration.apply(repository, proposal.migration_id)
     state_migration.verify(repository, proposal.migration_id)
