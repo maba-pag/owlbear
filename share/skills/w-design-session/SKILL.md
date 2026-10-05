@@ -298,7 +298,9 @@ A requirement change on an admitted, nonterminal Change follows one route:
 
 Refusals use `ERR_DELIVERY_REVISION` and name their reason: `change-not-paused` or `pause-pending`
 (Pause and wait), `change-finalized` (run `prepare_review_repair`, then Pause), `change-attention`
-(resolve it first), `custody-retained` (a worker, handoff or snapshot still holds the Change),
+(resolve it first), `custody-retained` (a worker, handoff or snapshot still holds the Change; for a
+retained Builder handoff the refusal and `get_change` `unresolved_outcomes[].builder_handoff` name its
+outcome and task: ask the user to Resume, let that worker finish the task, then Pause and revise again),
 `publication-pending` (retry after state publication succeeds), `reviewed-head-moved` (repair the
 branch first), and `change-terminal` or `change-merged` (start a successor Change). A Change paused
 after a Builder's Design return is released by the revision itself: its work is preserved under refs and

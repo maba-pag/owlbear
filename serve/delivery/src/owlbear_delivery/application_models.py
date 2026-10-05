@@ -524,6 +524,7 @@ class DeliveryUnresolvedOutcome(_ApplicationModel):
     block: DeliveryBlock | None = None
     active_claim: WorkItemClaimView | None = None
     recovery_attention: WorkItemRecoveryView | None = None
+    builder_handoff: DeliveryBuilderHandoffContext | None = None
 
 
 class DeliveryChangeView(_ApplicationModel):

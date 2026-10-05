@@ -14723,8 +14723,38 @@ dependencies: []
     assert set(tree_paths) >= package_paths
 
 
+def _retain_reviewed_same_task_handoff(application, builder) -> None:
+    """N10-H H7: a Builder commit retained by a same-task handoff, as while its person-only check is answered."""
+    worktree = builder.worktree_path
+    (worktree / "README.md").write_text("usage\n", encoding="utf-8")
+    _git(worktree, "add", "README.md")
+    _git(worktree, "commit", "-q", "-m", "docs: usage")
+    retry = RetryDelivery(
+        action="retry",
+        outcome_id=builder.outcome_id,
+        claim_id=builder.claim.claim_id,
+        attempt_id=builder.claim.attempt_id,
+        abandoned_commit=_git(worktree, "rev-parse", "HEAD"),
+    )
+    _settle_builder_handoff_attempt(
+        application,
+        builder.claim,
+        DeliveryBuilderInvocationSettlement(
+            change_id=builder.change_id,
+            outcome_id=builder.outcome_id,
+            claim_id=builder.claim.claim_id,
+            attempt_id=builder.claim.attempt_id,
+            task_id=builder.task_id,
+            expected_last_reviewed_commit=builder.last_reviewed_commit,
+            disposition="normal-return",
+            request=retry,
+        ),
+    )
+
+
 @pytest.mark.parametrize(
-    "case", ["workspace-changed", "added-after-capture", "unmerged-index", "planning-route", "dirty-submodule"]
+    "case",
+    ["workspace-changed", "added-after-capture", "unmerged-index", "planning-route", "dirty-submodule", "same-task"],
 )
 def test_design_return_release_refusal_changes_nothing(tmp_path: Path, case: str) -> None:
     application, runtimes, coordinator, state_root = _portfolio(
@@ -14751,7 +14781,10 @@ def test_design_return_release_refusal_changes_nothing(tmp_path: Path, case: str
         _git(worktree / "sub", "-c", "user.name=Child", "-c", "user.email=child@example.invalid", "commit", "-qam", "m")
         (worktree / "sub" / "child.txt").write_text("uncommitted child edit\n", encoding="utf-8")
     target = DeliveryStage.PLANNING if case == "planning-route" else DeliveryStage.DESIGN
-    _return_builder(application, builder, target=target, unmerged=case == "unmerged-index")
+    if case == "same-task":
+        _retain_reviewed_same_task_handoff(application, builder)
+    else:
+        _return_builder(application, builder, target=target, unmerged=case == "unmerged-index")
     _change_intent(application, "change-a", DeliveryChangeIntentKind.DEFER, reason="Revise requirements")
     current = application.read_design_session("change-a")
 
@@ -14782,11 +14815,18 @@ def test_design_return_release_refusal_changes_nothing(tmp_path: Path, case: str
     )
     reason = {
         "planning-route": "custody-retained",
+        "same-task": "custody-retained: OUT-001 retains a same-task Builder handoff for TASK-002; Resume the Change",
         "unmerged-index": "design-return-unmerged-index",
     }.get(case, "design-return-workspace-changed")
 
     with pytest.raises(DeliveryRevisionError, match=reason):
         revise()
+
+    if case == "same-task":
+        change = application.get_change("change-a")
+        (retained,) = (outcome for outcome in change.unresolved_outcomes if outcome.builder_handoff)
+        assert (retained.outcome_id, retained.builder_handoff.original_task_id) == ("OUT-001", "TASK-002")
+        assert retained.builder_handoff.route == "same-task"
 
     assert (
         runtime.frontier_bytes(),
