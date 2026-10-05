@@ -15,7 +15,12 @@ from owlbear_delivery.finalization_reports import FinalizationFailureCode, Repor
 from owlbear_delivery.merge_offer import MergeBlockReason
 from owlbear_delivery.portfolio_operating import DeliveryHealthReason
 from owlbear_delivery.runtime_models import DeliveryEvidenceVerdict
-from owlbear_delivery.work_items import ChangePauseUnavailableReason, DeliveryProgress, DeliveryReadinessReason
+from owlbear_delivery.work_items import (
+    ChangePauseUnavailableReason,
+    DeliveryProgress,
+    DeliveryReadinessReason,
+    WorkItemDetailView,
+)
 
 # Mined from #924: Cockpit source import boundary.
 # Mined from #1390: Cockpit excludes Delivery lifecycle and finalization routes.
@@ -140,6 +145,14 @@ def test_finalization_failure_typescript_parity(project_root: Path) -> None:
     assert set(re.findall(r'"([^"]+)"', category_union.group(1))) == set(
         get_args(ReportFinalizationFailure.model_fields["category"].annotation)
     )
+
+
+def test_work_item_detail_view_typescript_parity(project_root: Path) -> None:
+    """Every engine Work Item detail field, including the revision prompt, has a Cockpit mirror."""
+    api = (project_root / "serve/cockpit/web/src/api/workItems.ts").read_text()
+    interface = re.search(r"^export interface WorkItemDetailView \{\n(.*?)^\}", api, re.DOTALL | re.MULTILINE)
+    assert interface is not None
+    assert set(re.findall(r"^  (\w+)\??:", interface.group(1), re.MULTILINE)) == set(WorkItemDetailView.model_fields)
 
 
 def _collect_forbidden_imports(

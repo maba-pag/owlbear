@@ -282,6 +282,7 @@ Worker transitions keep correction finite and typed:
 | `recover_claim` requested | Requires supported host exclusion | Timeout/`confirmed_lost` do not release custody |
 | Earlier valid stage is required | User selects an invariant-checked backward move in Cockpit | Runtime resets only the selected outcome and its affected successors |
 | User pauses a Change | **Pause** in Cockpit (or `set_change_intent` `defer`) is accepted at any time; while a step is running it records a **Pause requested** state | The running step finishes and records its result; no new work starts. The Change then shows **Paused**. **Resume** clears a pending request or restores the prior stage. Pause never stops or releases a worker |
+| Requirements change on an admitted Change | **Change requirements** on the Change detail in Cockpit copies `/design <change-id> Change requirements:`; add the change and run it in Copilot Chat. Completed, abandoned and merged Changes offer no control: start a successor Change | The Designer pauses the Change, revises the package, shows the delta and activates it after your approval. Unchanged outcomes keep their bindings and evidence; changed outcomes return to Planning with their surviving completed work |
 
 The window-exit row also covers a prior-session Orchestrator restart, reload, or closed window. If the
 issuing window process remains alive, only the user can confirm whether its earlier run was stopped;

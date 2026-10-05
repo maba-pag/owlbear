@@ -75,6 +75,7 @@ from owlbear_delivery.draft_pull_request import (
     ObserveChangePublicationPullRequest,
     ReturnChangePullRequestToDraft,
 )
+from owlbear_delivery.evidence import evaluate_acceptance_evidence
 from owlbear_delivery.finalization_reports import (
     FinalizationReportError,
     FinalizationReportStore,
@@ -1389,6 +1390,9 @@ class _AcquisitionMixin:
             self._fail("active claim is not Planning work")
         launch = self._current_launch(change_id, runtime, binding)
         outcome = self._outcome(runtime, outcome_id)
+        completed = {result.task_id for result in binding.results}
+        frontier = parse_delivery_frontier(runtime.frontier_bytes())[0].model_copy(update={"finalization": None})
+        coverage = evaluate_acceptance_evidence(runtime.contract, frontier).criteria
         return DeliveryPlanContext(
             launch=launch,
             outcome=outcome,
@@ -1396,6 +1400,8 @@ class _AcquisitionMixin:
             requests=binding.requests,
             return_context=binding.return_context,
             acceptance=self._outcome_acceptance(runtime, outcome_id),
+            retained_tasks=tuple(task for task in binding.tasks if task.task_id in completed),
+            coverage=tuple(item for item in coverage if item.outcome_id == outcome_id),
         )
 
     def show_build_context(

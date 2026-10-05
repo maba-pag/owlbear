@@ -54,6 +54,7 @@ from owlbear_delivery import (
     DeliveryAcceptanceAttentionReason,
     DeliveryAcceptanceReconciliationOutcome,
     DeliveryAcceptanceReconciliationStatus,
+    DeliveryAcceptanceRef,
     DeliveryAcceptanceWaitingError,
     DeliveryAcquisitionFailure,
     DeliveryActionSelectionConflictError,
@@ -156,6 +157,7 @@ from owlbear_delivery import (
     RetryDelivery,
     ReturnDelivery,
     WorkspaceRecoverySnapshot,
+    acceptance_criteria,
     classify_publication_check,
     load_delivery_application,
     remote_git,
@@ -580,12 +582,14 @@ def _downstream_task() -> DeliveryTaskDefinition:
     )
 
 
-def _task_result(
+def _task_result(  # noqa: PLR0913 - revision fixtures name the criteria a result covers.
     result_id: str,
     change_id: str,
     authority_digest: str,
     task: DeliveryTaskDefinition,
     completed_commit: str,
+    *,
+    covers: tuple[DeliveryAcceptanceRef, ...] = (),
 ) -> DeliveryTaskResult:
     observed_at = datetime(2026, 8, 11, 12, tzinfo=UTC)
     observation = DeliveryObservationReceipt.create(
@@ -598,6 +602,7 @@ def _task_result(
             result=DeliveryCommandResult(exit_status=0),
             observer_or_runner_identity="pytest",
             observed_at=observed_at,
+            covers=covers,
         )
     )
     review = DeliveryReviewReceipt.create(
@@ -14802,7 +14807,7 @@ def _revision_intent(second: str = "AC-002: The report is retained.") -> bytes:
     return ("# change-r\n\n" + "".join(f"```yaml target-contract\n{block}\n```\n\n" for block in blocks)).encode()
 
 
-def _paused_revision_change(tmp_path: Path, *, pause: bool = True):
+def _paused_revision_change(tmp_path: Path, *, pause: bool = True, covered: bool = False):
     """Admit an authored Change with one completed and one pending OUT-001 task and a completed OUT-002."""
     application, _runtimes, coordinator, state_root = _portfolio(tmp_path, {})
     application.create_design_session("change-r", _revision_intent(), b"# Architecture\n")
@@ -14826,6 +14831,7 @@ def _paused_revision_change(tmp_path: Path, *, pause: bool = True):
         }
     )
     digest = admitted.contract_digest
+    covers = (acceptance_criteria(admitted.contract)[0].ref,) if covered else ()
     seeded = admitted.frontier.model_copy(
         update={
             "bindings": (
@@ -14833,7 +14839,7 @@ def _paused_revision_change(tmp_path: Path, *, pause: bool = True):
                     update={
                         "stage": DeliveryStage.IMPLEMENTATION,
                         "tasks": (completed, remaining),
-                        "results": (_task_result("RESULT-001", "change-r", digest, completed, head),),
+                        "results": (_task_result("RESULT-001", "change-r", digest, completed, head, covers=covers),),
                     }
                 ),
                 report.model_copy(
@@ -14897,6 +14903,67 @@ def test_paused_change_revision_replans_changed_outcome_and_replays(tmp_path: Pa
     assert [(launch.outcome_id, launch.claim.worker_role) for launch in launches] == [
         ("OUT-001", DeliveryWorkerRole.PLANNER)
     ]
+
+
+@pytest.mark.parametrize("revision", ["delta", "zero-delta"])
+def test_revision_replan_publishes_from_plan_context_alone(tmp_path: Path, revision: str) -> None:
+    application, _coordinator, _state_root, seeded = _paused_revision_change(tmp_path, covered=True)
+    current = application.read_design_session("change-r")
+    retained = '"AC-001: The launch is observable.", "AC-002: The report is retained."'
+    revised = (
+        _revision_intent("AC-002: The report is revised.")
+        if revision == "delta"
+        else _revision_intent().replace(retained.encode(), b'"AC-001: The launch is observable."')
+    )
+    application.revise_design_session("change-r", current.package_id, revised, current.design_bytes)
+    application.admit_change(_revision_request(application))
+    (planner,) = application.acquire_frontier_work().launch_packages
+
+    context = application.show_plan_context(
+        "change-r", planner.outcome_id, planner.claim.attempt_id, planner.claim.claim_id
+    ).model_dump(mode="json")
+
+    retained_tasks = tuple(
+        DeliveryTaskDefinition.model_validate_json(json.dumps(item)) for item in context["retained_tasks"]
+    )
+    open_ids = tuple(
+        item["acceptance_id"] for item in context["coverage"] if item["status"] not in {"covered", "waived"}
+    )
+    delta = tuple(
+        DeliveryTaskDefinition(
+            task_id=f"TASK-NEW-{acceptance_id}",
+            outcome_id=context["outcome"]["outcome_id"],
+            plan_scope_id=context["launch"]["plan_scope_id"],
+            title=f"Satisfy {acceptance_id}",
+            result="The revised criterion holds.",
+            commitment_ids=tuple(item["commitment_id"] for item in context["commitments"]),
+            dependency_ids=(),
+            required_outputs=("Revised behavior",),
+            maintained_surfaces=("serve/delivery/src/owlbear_delivery/portfolio_application.py",),
+            constraints=(),
+            exclusions=(),
+            acceptance_observations=(f"{acceptance_id}: the revised behavior is observable",),
+            proof_boundaries=("PortfolioApplication.show_plan_context",),
+        )
+        for acceptance_id in open_ids
+    )
+    candidate = application.publish_delivery_plan(
+        "change-r",
+        PublishDeliveryPlan(
+            outcome_id=planner.outcome_id, claim_id=planner.claim.claim_id, tasks=retained_tasks + delta
+        ),
+    )
+    advanced = application.transition_delivery(
+        "change-r",
+        AdvanceDelivery(
+            action="advance", outcome_id=planner.outcome_id, claim_id=planner.claim.claim_id, output=candidate.output
+        ),
+    )
+
+    assert retained_tasks == seeded.bindings[0].tasks[:1]
+    assert open_ids == (("AC-002",) if revision == "delta" else ())
+    assert advanced.stage is (DeliveryStage.IMPLEMENTATION if revision == "delta" else DeliveryStage.COMPLETED)
+    assert advanced.results == seeded.bindings[0].results
 
 
 def test_cancelled_and_repeated_revisions_keep_distinct_history(tmp_path: Path) -> None:

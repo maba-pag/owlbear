@@ -223,6 +223,9 @@ export function isContinuationPrompt(prompt: string | null | undefined, changeId
 
 export const CONTINUATION_PROMPT_HELP = "Run it in Copilot Chat. Copying does not start an agent.";
 
+export const REVISION_PROMPT_HELP =
+  "Copies a /design prompt. Add the requirement change and run it in Copilot Chat. Copying does not start an agent.";
+
 /** Copy for Delivery's own reason that the defer intent would refuse Pause. */
 export const PAUSE_UNAVAILABLE_COPY: Record<ChangePauseUnavailableReason, string> = {
   "finalizer-custody": "A Finalizer attempt holds this Change.",

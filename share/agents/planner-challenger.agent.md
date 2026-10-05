@@ -41,7 +41,8 @@ select a transition, or repair the claim.
   observation supporting the disposition.
 - **Check acceptance coverage.** Every criterion in the context's `acceptance` is cited by its ID in
   some task's `acceptance_observations` with an observable proof; an uncited criterion or an ID
-  outside the context is a `finding`.
+  outside the context is a `finding`. Retained completed tasks are history: their citations are not
+  findings; check the context's `coverage` instead and validate new tasks' citations normally.
 - **Do not negotiate or mutate.** Return one advisory mapping; Planner owns repair, publication, and
   transition choice.
 
