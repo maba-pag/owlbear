@@ -103,7 +103,9 @@
   approved target head or merged base ≠ approved target, it calls `capture_acceptance_attention`
   with `identity-mismatch` and diagnostic `target-advanced-during-merge:<approval_id>` or
   `scope-changed-during-merge:<approval_id>` (no enum or frontier change), never completion; this
-  also applies to a manual merge after an engine attempt (Q4). Detection reads only the merge
+  also applies to a manual merge while the engine attempt is nonterminal, which that merge settles
+  (Q4). After a terminal attempt the approval has ended, and a later manual merge is outside any
+  approval, like a manual merge without an attempt. Detection reads only the merge
   commit, parent 1 and merged base persisted on the attempt record, so a raced attempt never
   latches, completes or cleans up, and a repeated observation returns the recorded attention.
 - **I5 No inferred approval.** Only the user's Cockpit approval (HTTP `approve-merge`) creates an approval
@@ -127,7 +129,8 @@
 - **I11 Merge fence.** While a `MergeAttemptRecord` is nonterminal (`intent`, `released`,
   `pending`), readiness reports `merge-in-progress` or `merge-response-unknown` before any other
   reason, so acquisition selects no target sync, mark ready, finalization or worker; the owners of
-  target sync, mark ready, review-repair preparation and the external-head tools refuse with
+  target sync, mark ready, review-repair preparation, the external-head tools and the public
+  finalization reconciliation refuse with
   `merge-in-progress` under the checkpoint lock they already hold, before any effect
   ([1.12](#112-owner-fence)). Acceptance observation is exempt and settles the attempt first (I4).
   Abandon and defer stay allowed (Q3); neither settles the attempt.
@@ -213,8 +216,9 @@ Agent-settled with probe evidence:
   pending request's UUID and options on a repeated request (`409`) and `200` when already merged
   (P4). A `409` request is adopted only
   when its `expected_head_sha`, `merge_method`, `merge_action` and `bypass_rules` equal the approved
-  head, U1 method, `direct_merge` and `false`; a `409` with other or no options settles the single
-  request `refused/foreign-request` (S4): Delivery's request had no effect, and a foreign merge is
+  head, U1 method, `direct_merge` and `false`; a `409` whose successfully parsed options differ
+  settles the single request `refused/foreign-request` (S4); an option-less or incomplete `409` is
+  the adapter's `RESPONSE_UNKNOWN` (1.5) and settles only by readback (S8): Delivery's request had no effect, and a foreign merge is
   observed like a manual one. Rejected: synchronous `PUT …/merge` (no
   request identity; `405`/`409` only) and GraphQL `mergePullRequest` (synchronous, same head fence,
   no request identity). Neither API fences the base (P2, P4).
@@ -368,7 +372,10 @@ line gives its reason; later reviews do not reopen them.
   of an abandoned Change is not attributed to its proof (documented limit). Reason: they are the
   user's exits and take the checkpoint lock, so they never interleave with the request.
 - **Q4 Post-merge parent-1 and base check stays** (lead decision 2026-10-04) as `identity-mismatch`
-  acceptance attention, also for a manual merge after an engine attempt. Reason: strict proof,
+  acceptance attention, also for a manual merge while the engine attempt is nonterminal (the merge
+  then settles that attempt). After a terminal attempt (for example an S4 refusal) the approval has
+  ended; a later manual merge is the developer's own decision outside any approval, the same as a
+  manual merge without an attempt (plan challenge round 2, 2). Reason: strict proof,
   U3(e). A manual merge without an attempt is not checked against the proof target: it is the
   developer's or a collaborator's explicit decision outside any Delivery offer; strict proof (U3 part
   1 (a)) governs the offer and the engine merge, completion identity is the finalized head (programme
@@ -515,11 +522,11 @@ attention, latch, completion and cleanup run only after it.
 | S1 | PR merged at the approved head (released or not) | `merged`; merge commit, parent 1 and merged base persisted; `race` `target-advanced` when parent 1 ≠ approved target head, `scope-changed` when base ≠ approved target, else `none` | Acceptance completes once when `race` is `none`; otherwise `identity-mismatch` attention, no latch, completion or cleanup (I4, Q4) |
 | S2 | PR merged at another head | `head-changed` | Existing acceptance identity check records `identity-mismatch` attention; no completion or cleanup |
 | S3 | No `released` record | `not-sent` | The offer reappears; a new approval is needed |
-| S4 | The request's complete refusal (`400`, `403`, `405`, `422`), UUID result `failed` or `enqueued`, or a `409` with other or no options | `refused` with reason (`queue-required` for `enqueued`, `foreign-request` for the `409`) | Readiness shows the block; a new approval is needed |
+| S4 | The request's complete refusal (`400`, `403`, `405`, `422`), UUID result `failed` or `enqueued`, or a `409` whose parsed options differ from the approval's | `refused` with reason (`queue-required` for `enqueued`, `foreign-request` for the `409`) | Readiness shows the block; a new approval is needed |
 | S6 | PR closed unmerged (also with a pending UUID) | `closed` | Existing `CLOSED_UNMERGED` acceptance attention (Q2) |
 | S7 | PR open at another head (also with a pending UUID) | `head-changed` | Existing `HEAD_MOVED` finalization invalidation (Q2) |
 | S5 | UUID result `pending` with the approval's options | `pending` | Polled by the acceptance owner within its budget (D6) |
-| S8 | Anything else after release (UUID absent or `404`, read failed, PR open at the approved head) | stays `released` (unknown) | Automatic reads within the acceptance budget; then `merge-response-unknown` attention (1.13) |
+| S8 | Anything else after release (UUID absent or `404`, read failed, an option-less or incomplete `409` that the adapter reports as `RESPONSE_UNKNOWN`, PR open at the approved head) | stays `released` (unknown) | Automatic reads within the acceptance budget; then `merge-response-unknown` attention (1.13) |
 
 **Reply (N05-D).** The same entry rules apply to replies (D13, D16). A reply has no provider
 de-duplication; an unknown reply is reposted once (Y4), accepting a possible duplicate comment.
@@ -549,9 +556,12 @@ N05-A proved the launcher half on both platforms (#356); N05-D adds the reply co
 `_require_no_merge_in_flight(change_id)` reads the attempt store and raises `merge-in-progress`
 while an attempt is nonterminal (A3). The application owners of target sync
 (`sync_change_with_target`), mark ready (`mark_change_ready`), review-repair preparation
-(`prepare_review_repair`) and the external-head tools (`adopt_external_head`,
-`promote_external_head`) call it first under the per-Change checkpoint lock they already hold,
-before any provider, Git or frontier effect. `approve_merge` writes `intent`, `released` and the
+(`prepare_review_repair`), the external-head tools (`adopt_external_head`,
+`promote_external_head`) and the public finalization reconciliation
+(`reconcile_finalization_head`) call it first under the per-Change checkpoint lock they already hold,
+before any provider, Git or frontier effect. Acceptance's internal head reconciliation
+(`_reconcile_finalization_head_locked` from the acceptance owner) stays exempt: it runs after
+settlement, which has already made a moved-head attempt terminal (S7). `approve_merge` writes `intent`, `released` and the
 response under the same lock, so a concurrent own process either sees the attempt and refuses, or
 finishes first and makes the approval's fresh offer stale. Readiness reports `merge-in-progress` or
 `merge-response-unknown` before any other reason, so acquisition never reaches these owners as
@@ -805,7 +815,8 @@ Effect side (Q5).
   - `application_readiness.py` [A]: `merge-in-progress` and `merge-response-unknown` before other
     reasons, `merge_attempt` summary (1.13)
   - `application_publication.py` [A]: fence call in `sync_change_with_target`, `mark_change_ready`,
-    `prepare_review_repair`, `adopt_external_head`, `promote_external_head` (1.12)
+    `prepare_review_repair`, `adopt_external_head`, `promote_external_head`,
+    `reconcile_finalization_head` (1.12)
   - `work_items.py`: the two reasons, the summary and the attention text (1.13); `merge-approval-required`
     guidance still names only merge in GitHub
   - `state_formats.py`, `state_migration.py` [N02]: `merge_attempt` registration, marker-only format
@@ -841,13 +852,13 @@ Effect side (Q5).
     then `HEAD_MOVED`) and a pending UUID with a moved head (→ `head-changed`, S7 over S5); each
     terminal case lifts the owner fence.
   - Post-merge race, parametrized target advance (parent 1) and retarget (base), including a manual
-    merge after an engine attempt (Q4) → `identity-mismatch` attention with its diagnostic; no latch,
+    merge while an engine attempt is nonterminal (Q4) → `identity-mismatch` attention with its diagnostic; no latch,
     completion receipt or cleanup; a second observation returns the same attention and writes nothing.
   - Unknown beyond the budget, assembled (default loader, `Client(assemble_target_server(...))`):
     lost response and failing reads until `ACCEPTANCE_WAIT` → `merge-response-unknown`, actor you,
     summary with the PR URL, no further automatic read; Check again → one read, still unknown;
     restart; the fake merges; Check again → one read → S1 → one completion.
-  - Fence, one parametrized test over the five owners of 1.12 with a nonterminal attempt →
+  - Fence, one parametrized test over the six owners of 1.12 with a nonterminal attempt →
     `merge-in-progress`, empty provider, Git and frontier effect logs.
   - Abandon while unknown → succeeds, no request, the attempt stays `released`.
   - Crash proofs at the four outcome-changing boundaries: (a) before the `released` record →
@@ -1026,6 +1037,17 @@ Plan challenge round 1 (2026-10-04), Sol on `3936d4f8d`: revision-required; lead
    is unchanged (I1, 1.6, 3.4).
 5. Fixed: the obsolete reply-decision contract left 1.4 and 1.5 (D13, Y4); N05-B1 and N05-B2 guidance
    names only merge in GitHub until N05-C ships the dialog (3.4, 3.5, 3.6).
+
+Plan challenge round 2 on the N05-B2 part (2026-10-04), Sol on `4a270e807`: revision-required; lead
+dispositions, applied as N05-B2's first commit:
+
+1. Fixed: public `reconcile_finalization_head` joins the owner fence (I11, 1.12, 3.5); acceptance's
+   internal reconciliation stays exempt after settlement.
+2. Fixed as a wording narrowing: Q4's post-merge check covers a manual merge only while the engine
+   attempt is nonterminal; after a terminal attempt a manual merge is outside any approval (I4, Q4, 3.5).
+   The proposed acceptance-time check for terminal attempts is rejected (round 1, finding 2).
+3. Fixed: an option-less or incomplete `409` is the adapter's `RESPONSE_UNKNOWN` and settles by S8;
+   only parsed foreign options settle S4 (D2, 1.11).
 
 ## 5. Verification Gaps
 

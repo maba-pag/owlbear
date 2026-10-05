@@ -656,7 +656,7 @@ every new item exactly one lane.
 | N04-C | — | — |
 | N05-P | merged | #353 (plan gate `plan-sound`, round 12; F1–F8 confirmed 2026-10-03; U1 (a), U2 (b), U3 (a) + (e) by the user, U4 (b) decided 2026-10-03; U3 (e) revises programme §10.2). History: #360's F10 and F11 and U4 (b) retirement were removed on 2026-10-04 ([7](#7-decisions)) |
 | N05-A | merged | #356 (code head `a4951b044`; Sol `implementation-sound` round 2; Ubuntu CI exact head) |
-| N05-B1 | in review | #371 (code head `651afebcd`, Sol round 1 repaired; read side, no format change; LC not applicable) |
+| N05-B1 | merged | #371 |
 | N05-B2 | — | — |
 | N05-C | — | — |
 | N05-D | — | — (only if it stays small) |
