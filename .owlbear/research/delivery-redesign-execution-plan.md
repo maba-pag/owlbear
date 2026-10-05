@@ -665,7 +665,7 @@ every new item exactly one lane.
 | N08-P | merged | #350 (plan gate `plan-sound`, round 7; amends N02-B abort (N02 D10); D11 confirmed 2026-10-03; U1–U3 decided (a) 2026-10-03) |
 | N08-A | merged | #361 (code head `286046c76`; N08 plan amendments A1–A3) |
 | N08-B | cut 2026-10-04 | — |
-| N08-C | — | — (minimal scope, 2026-10-04) |
+| N08-C | in review | #370 (docs, prompts and prompt test `3c32de0ad`; `delivery-migrate` process scan and seed ignore rules `504bd8406`; Sol challenge repair `3cf0977ed` (older-controller online check, named pinned revision); consumer upgrade rehearsal from formats 1 and 0 passes, format 0 also by the revised prompt literally; `origin/dev` `66871ee92` merged as `1799056ad`; LC upgrade rehearsal `841b1cffb` → `1799056ad` on a live copy passed (`migration-not-required`, every Change available, rollback switch healthy), `delivery-migrate apply` refused under a stand-in controller, live unchanged) |
 | N09-P1 | merged | #351 (plan gate `plan-sound`, round 8; D9 re-split confirmed 2026-10-03; U1 decided (b) 2026-10-03) |
 | N09-A1 | merged | #354 (code head `3573866ac`; Sol `implementation-sound` round 3) |
 | N09-A2 | merged | #357 (code head `7a2d974b3`) |

@@ -59,6 +59,8 @@ def run(argv: list[str] | None = None) -> tuple[int, dict[str, object]]:
     try:
         if args.command == "propose":
             return 0, _proposal_payload(state_migration.propose(root))
+        # Controllers older than the lock take none; the lock alone cannot prove that none runs.
+        state_migration.require_no_controller_process(root)
         if args.command == "abort":
             result = state_migration.abort(root, args.migration_id)
             return 0, {**_journal_payload(result.journal), "namespace_removed": result.namespace_removed}

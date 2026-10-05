@@ -241,6 +241,8 @@ detailed correction, publication, acceptance, or recovery procedure.
 | Instructions ignored | `chat.instructionsFilesLocations` missing | Check `.vscode/settings.json`; verify `*.instructions.md` files exist in the registered directory |
 | MCP server fails to start | Missing dependency or `uv` not on PATH | Run `uv --version` to confirm installation; check MCP server logs in VS Code Output panel |
 | `owlbear-delivery` reports `ERR_DELIVERY_STARTUP_UNCONFIGURED` | `.owlbear/delivery/config.json` is absent from the project root | Re-run `init.py`; setup recreates the file only when it is missing |
+| `owlbear-delivery` refuses to start with `state-migration-required` | The OwlBear checkout moved to a release that needs a newer Delivery state format | Run `/upgrade-delivery` from the project; see [Upgrading OwlBear](operating-owlbear.md#upgrading-owlbear) |
+| `owlbear-delivery` refuses to start with `state-newer-than-controller` | The OwlBear checkout is older than the project's Delivery state | Move the checkout forward with `/upgrade-delivery`; going back needs the upgrade backup restored first |
 | Delivery reports that remote Delivery-state snapshots are unavailable | The configured `delivery_state_branch` cannot be read from the configured remote | Verify remote access and the tracked branch name, then retry from the project root; do not copy hidden refs or ignored runtime files |
 | Delivery reports that local state differs from a remote snapshot | Local runtime, package, or Change coordination no longer matches the last published checkpoint | Preserve the local checkout and remote branches, inspect the typed Change attention in Cockpit, and resolve the exact divergence before acquisition |
 | `uv run cockpit` says the command is missing | Command was run from the consumer project without `--project` | Use `uv run --project ../owlbear cockpit` from the project root |
@@ -256,6 +258,7 @@ raw LLM request/response payloads.
 | You want to... | Go to |
 | --- | --- |
 | Know exactly what setup wrote, and how to undo it | [Operating OwlBear](operating-owlbear.md) |
+| Upgrade OwlBear and migrate Delivery state | [Upgrading OwlBear](operating-owlbear.md#upgrading-owlbear) |
 | Run, correct, publish, and accept changes | [Delivery Workflow](operating-owlbear.md#delivery-workflow) |
 | Add project-local agents, instructions, or MCP servers | [Project-Specific Customization](operating-owlbear.md#project-specific-customization) |
 | Set a teammate up on the same installation | [Sharing guide](sharing-guide.md) |
