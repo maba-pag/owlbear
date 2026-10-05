@@ -31,6 +31,7 @@ import {
 } from "../api/workItems";
 import CopyCommand from "./CopyCommand";
 import { SectionCard, StatusChip } from "./DeliveryPrimitives";
+import MergeApprovalDialog from "./MergeApprovalDialog";
 import {
   CONFIRMATION_KIND_LABELS,
   CONTINUATION_PROMPT_HELP,
@@ -97,6 +98,7 @@ interface WorkItemDetailProps {
   isObservingPublicationChecks: boolean;
   onObservePublicationChecks: () => Promise<Error | null>;
   onObserveAcceptance: () => Promise<Error | null>;
+  onApproveMerge: (offerId: string, submissionId: string) => Promise<Error | null>;
   onAdoptExternalHeadAfterAcceptanceAttention: (
     expectedDispositionId: string,
     expectedHead: string,
@@ -1109,7 +1111,7 @@ function ReadinessAttempt({ attempt }: { attempt: NonNullable<DeliveryReadiness[
   );
 }
 
-/** Read-only merge offer; approval is not available in this phase, so no control is rendered. */
+/** Merge offer summary; the Approve merge control renders beside it. */
 function MergeOfferSummary({ offer }: { offer: MergeOffer }) {
   const checks = offer.check_summary;
   const proof = offer.proof;
@@ -1141,9 +1143,11 @@ function MergeOfferSummary({ offer }: { offer: MergeOffer }) {
 function ReadinessSection({
   readiness,
   changeId,
+  children,
 }: {
   readiness: DeliveryReadiness | null | undefined;
   changeId: string;
+  children?: ReactNode;
 }) {
   if (!readiness) return null;
   return (
@@ -1178,6 +1182,7 @@ function ReadinessSection({
         </p>
       ) : null}
       {readiness.merge_offer ? <MergeOfferSummary offer={readiness.merge_offer} /> : null}
+      {children}
       {readiness.merge_attempt ? (
         <p className="mt-static-xs text-sm leading-relaxed" data-testid="merge-attempt">
           <a
@@ -2358,7 +2363,17 @@ export default function WorkItemDetail(
           </dl>
         </div>
         <ActionFeedback error={props.actionError} result={props.actionResult} />
-        <ReadinessSection readiness={props.detail.item.readiness} changeId={card.change_id} />
+        <ReadinessSection readiness={props.detail.item.readiness} changeId={card.change_id}>
+          <MergeApprovalDialog
+            offer={
+              props.detail.item.readiness?.reason_code === "merge-approval-required"
+                ? (props.detail.item.readiness.merge_offer ?? null)
+                : null
+            }
+            pendingAction={props.pendingAction}
+            onApproveMerge={props.onApproveMerge}
+          />
+        </ReadinessSection>
         <ChangePauseSection {...available} />
         <BlockSection {...available} />
         <RequestsSection {...available} />

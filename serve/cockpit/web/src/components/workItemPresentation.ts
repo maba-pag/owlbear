@@ -76,7 +76,7 @@ export const READINESS_REASON_LABELS: Record<DeliveryReadinessReasonCode, string
   "worker-stall-wait":
     "The VS Code window that ran this worker closed. Delivery records a failed attempt once no process uses " +
     "the worktree and it has stayed unchanged for 30 seconds.",
-  "merge-approval-required": "Merge the pull request in GitHub.",
+  "merge-approval-required": "Approve the merge below, or merge the pull request in GitHub.",
   "merge-checking": "GitHub is still computing mergeability.",
   "merge-blocked": "The pull request cannot be merged as offered; the next step is shown below.",
   "checks-running": "Required checks are still running.",

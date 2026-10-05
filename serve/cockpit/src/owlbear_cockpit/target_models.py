@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from owlbear_delivery.delivery_runtime import DeliveryChangeStage, DeliveryStage
+from owlbear_delivery.merge_approval import MergeAttemptState
 from owlbear_delivery.portfolio_operating import (
     DeliveryHealthHeadRelation,
     DeliveryHealthReason,
@@ -39,6 +40,7 @@ if TYPE_CHECKING:
         ChangeTargetSyncReceipt,
     )
     from owlbear_delivery.draft_pull_request import PublicationCheckObservationReceipt
+    from owlbear_delivery.merge_approval import MergeApprovalResult
     from owlbear_delivery.portfolio_application import (
         DeliveryAcceptanceReconciliationOutcome,
         DeliveryChangePublicationSupersessionReceipt,
@@ -491,6 +493,35 @@ class SupersedePublicationBody(_TargetHTTPModel):
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
+class ApproveMergeBody(_TargetHTTPModel):
+    """The exact offer the user approved in the dialog; a retried POST repeats ``submission_id``."""
+
+    offer_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    submission_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+class MergeApprovalResponse(_TargetHTTPModel):
+    """The approval's attempt after its single request, and the completion when acceptance completed."""
+
+    approval_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    state: MergeAttemptState
+    refusal_reason: str | None = None
+    pr_url: str = Field(min_length=1)
+    completion_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+    @classmethod
+    def from_result(cls, result: MergeApprovalResult) -> MergeApprovalResponse:
+        """Convert one application approval result into the HTTP transport shape."""
+        attempt = result.attempt
+        return cls(
+            approval_id=attempt.approval_id,
+            state=attempt.state,
+            refusal_reason=attempt.refusal_reason,
+            pr_url=attempt.pr_url,
+            completion_id=result.completion_id,
+        )
+
+
 class ContinuationAcquisitionBody(_TargetHTTPModel):
     """Observed basis, host capabilities, and provenance for one continuation attempt."""
 
@@ -677,6 +708,7 @@ __all__ = [
     "ActivityCounts",
     "AdoptExternalHeadAfterAcceptanceAttentionBody",
     "AnswerRequestBody",
+    "ApproveMergeBody",
     "BackwardMoveBody",
     "BackwardMovePreviewBody",
     "ChangeDispositionReasonBody",
@@ -688,6 +720,7 @@ __all__ = [
     "ConfirmLostClaimBody",
     "DesignWorkDetailResponse",
     "ExternalHeadAdoptionResponse",
+    "MergeApprovalResponse",
     "NeedsCounts",
     "PortfolioChangeLifecycleStatusResponse",
     "PortfolioOperatingResponse",
