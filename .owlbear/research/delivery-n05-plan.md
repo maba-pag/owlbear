@@ -875,6 +875,31 @@ Effect side (Q5).
   Change available, the previous release refuses (N02 D3 oracle), live hashes unchanged.
 - **Size / risk:** M / high (estimate: 650–800 product lines, 700–900 test lines; external effect,
   crash replay, format step).
+- **Implementation notes (2026-10-05, N05-B2 build):**
+  - Settlement makes its own fresh merge-evidence read (plus the UUID read while the PR is open at the
+    approved head) right before the acceptance PR read; the race check runs right after that read. A
+    retargeted PR no longer matches its bound publication, so the acceptance read refuses it: the attempt
+    still settles `merged`/`scope-changed`, but no observation exists to carry the `scope-changed`
+    attention; the existing publication-identity refusal shows instead (never completion, latch or
+    cleanup). Check again is one read set (evidence, UUID when pending, acceptance read).
+  - `approve_merge` observes acceptance after releasing the approval's checkpoint lock (re-taking the
+    flock in one process deadlocks, D10); a later read completes when that one cannot.
+  - The fence raises `DeliveryMergeError` (a `PortfolioApplicationError`) with `ERR_DELIVERY_MERGE_IN_PROGRESS`.
+    A moved head at approval is `ERR_DELIVERY_MERGE_OFFER_STALE`; a provider outage or a retargeted PR
+    whose bound publication read refuses is `ERR_DELIVERY_MERGE_UNAVAILABLE`.
+  - Readiness skips the fence for abandoned and completed Changes; the attempt summary carries the PR URL.
+  - Crash (c) is the approval's own `merged` settlement before its acceptance observation. A crash inside
+    an acceptance observation leaves that acceptance retry attempt reserved, so later reads stop at
+    `retry-containment` (D03 behavior, independent of N05-B2; reported to the lead).
+  - The unknown-merge test checks again through `Client(assemble_target_server(...))` with the memory
+    provider injected below the application; the default loader builds the `gh` provider, which N05-C
+    fakes. Companions outside the listed paths: `test_delivery_progress.py` (reason table),
+    `test_state_migration.py` (steps), the golden attempt record and owner fingerprint.
+  - LC finding: the offline inspector flagged a migration-required format only at format 0, while the
+    gate refuses any older format with runtime records; the first full form from a non-zero format (2)
+    failed on that mismatch. The inspector now mirrors the gate (`delivery_diagnostics.py`, one case).
+    The full form also counted the journal of the earlier (N03-A) migration as a changed record, since
+    it compared a tree with journals against one without; it now compares both without (`delivery_lc.py`).
 
 ### 3.6 N05-C — Adapters, Cockpit approval, continuation path and governance
 
@@ -1019,8 +1044,8 @@ plan's status table, a companion that the ready rule does not block.
 | N05-P | #353 | — | Probes P1–P16 | Sol round 1: revision-required (stack scope, execution-time target race in U3, pending/unknown reconciliation, renewable consent, no-repair handoff, 409 option validation) → revised; Sol round 2: revision-required (execution scope policy, successor ledger accounting, outstanding-reply reconciliation, complete repair map, fence owner/ordering) → revised; Sol round 3: revision-required (reply non-execution authority, expiry ≠ refusal, fence lock-entry contract) → consolidated settlement contract; Sol round 4: revision-required (request-series settlement, repost decision replay, guard helper scope) → revised; consistency pass (D6/§1.4/§1.5 aligned with §1.11–§1.12); Sol round 5: revision-required (EOF-safe effect entry) → revised; Sol round 6: revision-required (EOF oracle vs release record) → revised; Sol round 7: revision-required (head drift vs pending series) → revised; Sol round 8: revision-required (held-state user exit) → revised; Sol round 9: blocked (U4 non-merging retirement) + 3 fix-now → revised; U4 pending; Sol round 10: revision-required (exhausted M7 hold) → revised; Sol round 11: revision-required (M1 vs observed manual merge) → revised; Sol round 12: `plan-sound`; user-decision revision #360 (history; its D14 boundary, consent records and U4 (b) retirement were removed on 2026-10-04): Sol round 1: revision-required (raced M2 completion, A-R rehearsal split and ownership, unbounded execution interval) → revised; Sol round 2: revision-required (A-R does not discriminate execution-time rules) → ordered pending-then-change step with stop-and-ask; lead's deferred item: D14 moves approval, retirement and reply decisions onto N03 D13 (F10); Sol round 3: revision-required (renewed merge consent replayable within the request-state TTL) → single-use consent generation (D14, D4, `merge_consent`); Sol round 4 (N03 finding, cross-plan): a declined or cancelled question stayed replayable with an affirmative answer → D14 moves onto N03's shared `consent_generation` family (N03 D13 *Single use*), `merge_consent` removed, N05-B needs N03-A (F11) | approved (execution-plan amendments confirmed 2026-10-03; U1–U4 decided 2026-10-03; N03 U2 open before N05-C) |
 | N05-A | #356 | `a4951b044` | Ubuntu CI run 37147328711 exact head: 3953 passed, 3 skipped (no launcher skips); macOS focused launcher/provider/authority 149 passed; `test --changed --py` 3955 passed; real-gh recorder 409 formats captured; parser mutation fails 7 tests | Sol implementation round 1: repair-required (real-gh 409 parsing, merge-call ownership gate, typed pre-release failures) → repaired; round 2: `implementation-sound` | merged |
 | Smoke (3.3) | — | — | — | — | — |
-| N05-B1 | #371 | `651afebcd` | `uv run test --changed` 3310 passed (580 s), Cockpit 364 passed; earlier at `ffbe5a62c`: build, Biome, ruff clean; `test:e2e:work` 27 passed | Sol implementation round 1 on `2353ca7d3`: repair-required. (1) Rejected, documented limit G15: cleanup does not preserve ignored files. (2) Fixed: a failed PR read in the draft phase projected an executable `mark-ready`; now `waiting/provider-unavailable`, acquisition agrees | in review |
-| N05-B2 | — | — | — | — | — |
+| N05-B1 | #371 | `651afebcd` | `uv run test --changed` 3310 passed (580 s), Cockpit 364 passed; earlier at `ffbe5a62c`: build, Biome, ruff clean; `test:e2e:work` 27 passed | Sol implementation round 1 on `2353ca7d3`: repair-required. (1) Rejected, documented limit G15: cleanup does not preserve ignored files. (2) Fixed: a failed PR read in the draft phase projected an executable `mark-ready`; now `waiting/provider-unavailable`, acquisition agrees | merged |
+| N05-B2 | #375 | `19ccc28d9` | `uv run test --changed` at `644a923cf`: 3680 passed, 3 companion expectations failed → fixed in `b10076c79`, rerun passed; Cockpit 367 passed; diagnostics/LC/migration 316 passed at `19ccc28d9`; build, Biome, ruff clean; `test:e2e:work` 27 passed; LC full form (Docker, previous `841b1cffb`) passed at `19ccc28d9` after two LC-tool findings fixed here | — | in review |
 | N05-C | — | — | — | — | — |
 | N05-D | — | — | — | — | — |
 
