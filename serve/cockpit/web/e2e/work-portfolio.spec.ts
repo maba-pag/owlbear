@@ -1,3 +1,7 @@
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 
@@ -1265,5 +1269,157 @@ test.describe("assembled stuck-worker release", () => {
     const resumed = await stuckWorkerDetail(page, "stuck-busy-e2e");
     expect(resumed.item.active_claim).toEqual(claim);
     expect(resumed.item.pause_unavailable_reason).toBeNull();
+  });
+});
+
+const MERGE_ORIGIN = "http://127.0.0.1:4177";
+// The stack seeds this fixture through the default loader with this fake `gh` first on PATH.
+const FAKE_GH_STATE = join(tmpdir(), "owlbear-work-merge-4177", "fake-gh.json");
+const FAKE_GH = resolve(process.cwd(), "e2e/support/fake-gh.mjs");
+
+type FakeGhCall = { method: string; endpoint: string; body: Record<string, unknown> | null };
+type FakeGhState = { pulls: Record<string, { number: number; head: string }> };
+
+function fakeGh(...arguments_: string[]): void {
+  execFileSync(process.execPath, [FAKE_GH, ...arguments_], {
+    env: { ...process.env, OWLBEAR_FAKE_GH_STATE: FAKE_GH_STATE },
+  });
+}
+
+function pullNumber(changeId: string): number {
+  const state = JSON.parse(readFileSync(FAKE_GH_STATE, "utf8")) as FakeGhState;
+  return requirePresent(Object.values(state.pulls).find((pull) => pull.head === `owlbear/change/${changeId}`)).number;
+}
+
+function mergeRequests(changeId: string): FakeGhCall[] {
+  const endpoint = `/pulls/${pullNumber(changeId)}/merge-async`;
+  return readFileSync(`${FAKE_GH_STATE}.calls.jsonl`, "utf8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line) as FakeGhCall)
+    .filter((call) => call.method === "PUT" && call.endpoint.endsWith(endpoint));
+}
+
+async function openMergeChange(page: Page, changeId: string): Promise<Locator> {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`${MERGE_ORIGIN}/delivery/${changeId}/publication`);
+  const detail = page.getByTestId("work-item-detail");
+  await expect(detail.getByTestId("delivery-readiness")).toBeVisible();
+  return detail;
+}
+
+async function openApproveMerge(page: Page, detail: Locator): Promise<Locator> {
+  // Readiness caches provider facts for 15 seconds; detail polling shows the current offer after that.
+  await expect(detail.getByTestId("merge-offer")).toBeVisible({ timeout: 30_000 });
+  await detail.getByRole("button", { name: "Approve merge" }).click();
+  const modal = page.locator("p-modal").filter({ hasText: "Delivery cannot undo the merge." });
+  await expect(modal).toBeVisible();
+  return modal;
+}
+
+function mergeResponse(page: Page, path: string) {
+  return page.waitForResponse((response) => response.request().method() === "POST" && response.url().endsWith(path));
+}
+
+test.describe("assembled merge approval", () => {
+  test.describe.configure({ mode: "serial" });
+
+  test("refuses an offer that changed while the dialog was open and sends no merge request", async ({ page }) => {
+    const detail = await openMergeChange(page, "merge-stale-e2e");
+    const modal = await openApproveMerge(page, detail);
+    fakeGh("__move-head", String(pullNumber("merge-stale-e2e")), "f".repeat(40));
+
+    const approval = mergeResponse(page, "/approve-merge");
+    await modal.getByRole("button", { name: "Approve merge" }).click();
+    expect((await approval).status()).toBe(409);
+
+    await expect(modal.getByRole("alert")).toContainText("ERR_DELIVERY_MERGE_OFFER_STALE");
+    await expect(modal.getByRole("alert")).toContainText("nothing was merged");
+    expect(mergeRequests("merge-stale-e2e")).toEqual([]);
+    await modal.getByRole("button", { name: "Cancel" }).click();
+    await expect(modal).not.toBeVisible();
+  });
+
+  test("shows an unknown merge with its PR link and checks again only when asked", async ({ page }) => {
+    const detail = await openMergeChange(page, "merge-unknown-e2e");
+    const number = pullNumber("merge-unknown-e2e");
+    await expect(detail.locator('[data-readiness-reason="merge-response-unknown"]')).toContainText(
+      "GitHub has not confirmed this merge.",
+    );
+    await expect(detail.getByTestId("merge-attempt").getByRole("link")).toHaveAttribute(
+      "href",
+      `https://github.com/example/project/pull/${number}`,
+    );
+    await expect(detail.getByRole("button", { name: "Approve merge" })).toHaveCount(0);
+    await expect(
+      detail.getByTestId("change-pause-merge-unknown-e2e").getByText("Pause", { exact: true }),
+    ).toBeVisible();
+    expect(mergeRequests("merge-unknown-e2e")).toHaveLength(1);
+
+    const stillUnknown = mergeResponse(page, "/acceptance/observe");
+    await detail.getByRole("button", { name: "Check again" }).click();
+    expect((await stillUnknown).status()).toBe(409);
+    await expect(detail.locator('[data-readiness-reason="merge-response-unknown"]')).toBeVisible();
+
+    fakeGh("__merge", String(number));
+    // Cockpit's background acceptance reconciliation can briefly hold the Change lock; the user clicks again.
+    const refusals: string[] = [];
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const merged = mergeResponse(page, "/acceptance/observe");
+      await detail.getByRole("button", { name: "Check again" }).click();
+      const observed = await merged;
+      if (observed.status() === 200) break;
+      refusals.push(await observed.text());
+    }
+    expect(refusals.length, refusals.join("\n")).toBeLessThan(3);
+
+    const completed = await page.request.get(`${MERGE_ORIGIN}/api/work-items/completed/merge-unknown-e2e`);
+    expect(completed.status()).toBe(200);
+    expect(mergeRequests("merge-unknown-e2e")).toHaveLength(1);
+    fakeGh("__restore-target");
+  });
+
+  test("abandons a Change whose merge is unknown without another merge request", async ({ page }) => {
+    const detail = await openMergeChange(page, "merge-abandon-e2e");
+    await expect(detail.locator('[data-readiness-reason="merge-response-unknown"]')).toBeVisible();
+
+    await detail.getByText("Change lifecycle").click();
+    await inputValue(detail.locator('p-input-text[name="change-disposition-reason"]'), "Merge outcome unknown");
+    await detail.getByRole("button", { name: "Abandon Change" }).click();
+    const modal = page.locator("p-modal").filter({ hasText: "Confirm Change abandonment" });
+    const abandoned = mergeResponse(page, "/abandon");
+    await modal.getByRole("button", { name: "Confirm abandon Change" }).click();
+    expect((await abandoned).status()).toBe(200);
+
+    expect(mergeRequests("merge-abandon-e2e")).toHaveLength(1);
+  });
+
+  test("approves the exact offer once in the dialog and Delivery records completion", async ({ page }) => {
+    const detail = await openMergeChange(page, "merge-approve-e2e");
+    const cancelled = await openApproveMerge(page, detail);
+    await cancelled.getByRole("button", { name: "Cancel" }).click();
+    await expect(cancelled).not.toBeVisible();
+    expect(mergeRequests("merge-approve-e2e")).toEqual([]);
+
+    const modal = await openApproveMerge(page, detail);
+    await expect(modal.getByTestId("merge-approval-offer")).toContainText("merge");
+    const approval = mergeResponse(page, "/approve-merge");
+    await modal.getByRole("button", { name: "Approve merge" }).click();
+    const response = await approval;
+    expect(response.status()).toBe(200);
+    const result = (await response.json()) as { state: string; completion_id: string | null };
+    expect(result.state).toBe("merged");
+    expect(result.completion_id).not.toBeNull();
+
+    const [request] = mergeRequests("merge-approve-e2e");
+    expect(mergeRequests("merge-approve-e2e")).toHaveLength(1);
+    expect(request.body).toEqual({
+      sha: expect.stringMatching(/^[0-9a-f]{40}$/),
+      merge_method: "merge",
+      merge_action: "direct_merge",
+      bypass_rules: false,
+    });
+    const completed = await page.request.get(`${MERGE_ORIGIN}/api/work-items/completed/merge-approve-e2e`);
+    expect(completed.status()).toBe(200);
   });
 });
