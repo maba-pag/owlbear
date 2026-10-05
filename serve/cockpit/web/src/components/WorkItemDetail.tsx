@@ -11,6 +11,9 @@ import {
 import { type ReactNode, useEffect, useState } from "react";
 import {
   type BackwardMovePreview,
+  type DeliveryConfirmationScope,
+  type DeliveryCriterionStatus,
+  type DeliveryEvidenceItem,
   type DeliveryReadiness,
   type DeliveryRequest,
   type DeliveryRequestResolution,
@@ -29,9 +32,15 @@ import {
 import CopyCommand from "./CopyCommand";
 import { SectionCard, StatusChip } from "./DeliveryPrimitives";
 import {
+  CONFIRMATION_KIND_LABELS,
   CONTINUATION_PROMPT_HELP,
   changePauseUnavailableMessage,
   DELIVERY_PROGRESS_LABELS,
+  EVIDENCE_STATUS_LABELS,
+  EVIDENCE_STATUS_TONES,
+  EVIDENCE_VERDICT_LABELS,
+  FINALIZATION_RULES_LABELS,
+  IDENTITY_SOURCE_LABELS,
   isContinuationPrompt,
   MERGE_BLOCK_LABELS,
   NEXT_ACTOR_LABELS,
@@ -212,6 +221,39 @@ function RequestControl({
   );
 }
 
+function RequestScope({
+  scope,
+  detail,
+}: {
+  scope: DeliveryConfirmationScope;
+  detail: WorkItemAvailableDetailResponse;
+}) {
+  const statements = new Map(
+    (detail.item.evidence?.criteria ?? []).map((criterion) => [criterion.acceptance_id, criterion.statement]),
+  );
+  return (
+    <dl
+      className="mt-static-xs grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md text-sm"
+      data-testid={`request-scope-${scope.kind}`}
+    >
+      <dt className="text-contrast-medium">Applies to</dt>
+      <dd>{CONFIRMATION_KIND_LABELS[scope.kind]}</dd>
+      <dt className="text-contrast-medium">Criteria</dt>
+      <dd>
+        <ul className="grid gap-1">
+          {scope.acceptance.map((reference) => (
+            <li key={reference.acceptance_id}>
+              <code>{reference.acceptance_id}</code> {statements.get(reference.acceptance_id) ?? ""}
+            </li>
+          ))}
+        </ul>
+      </dd>
+      <dt className="text-contrast-medium">Procedure</dt>
+      <dd className="break-words">{scope.procedure}</dd>
+    </dl>
+  );
+}
+
 function RequestsSection({ detail, pendingAction, onAnswerRequest }: WorkItemDetailProps) {
   if (detail.item.card.scope !== "outcome") return null;
   const requests = detail.item.requests;
@@ -228,6 +270,7 @@ function RequestsSection({ detail, pendingAction, onAnswerRequest }: WorkItemDet
               <strong className="text-sm">{request.summary}</strong>
               <PTag compact>{REQUEST_KIND_LABELS[request.kind]}</PTag>
             </div>
+            {request.applies_to ? <RequestScope scope={request.applies_to} detail={detail} /> : null}
             <RequestControl request={request} pending={pendingAction !== null} onAnswer={onAnswerRequest} />
           </article>
         ))}
@@ -907,6 +950,93 @@ function SemanticDetail({ detail }: Pick<WorkItemDetailProps, "detail">) {
         </code>
       </details>
     </>
+  );
+}
+
+function EvidenceRecord({ item }: { item: DeliveryEvidenceItem }) {
+  const facts = [
+    item.verdict ? EVIDENCE_VERDICT_LABELS[item.verdict] : "Legacy record",
+    item.owner ? `owner: ${item.owner}` : null,
+    item.reason,
+    item.summary,
+  ].filter(Boolean);
+  return (
+    <li className="text-xs text-contrast-medium">
+      {facts.join(" · ")} · <code>{item.procedure}</code>
+      {item.request_id ? (
+        <>
+          {" "}
+          · request <code>{item.request_id}</code>
+        </>
+      ) : null}
+      {item.locator ? (
+        <>
+          {" "}
+          · <code data-testid="evidence-locator">{item.locator}</code>
+        </>
+      ) : null}{" "}
+      · <code title={item.exact_commit}>{item.exact_commit.slice(0, 12)}</code>
+    </li>
+  );
+}
+
+function EvidenceSummary({ detail }: Pick<WorkItemDetailProps, "detail">) {
+  const evidence = detail.item.evidence;
+  if (!evidence) return null;
+  const counts = (Object.keys(EVIDENCE_STATUS_LABELS) as DeliveryCriterionStatus[])
+    .filter((status) => evidence.counts[status] > 0)
+    .map((status) => `${evidence.counts[status]} ${EVIDENCE_STATUS_LABELS[status].toLowerCase()}`)
+    .join(", ");
+  const unattributed = evidence.unattributed.length + evidence.unattributed_truncated;
+  return (
+    <details data-testid="evidence-summary">
+      <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">
+        Acceptance evidence ({counts || "no criteria"})
+      </summary>
+      <p className="mt-static-sm text-xs text-contrast-medium">
+        {FINALIZATION_RULES_LABELS[evidence.finalization_rules]}
+      </p>
+      <ol className="mt-static-sm grid gap-static-md text-sm text-primary">
+        {evidence.criteria.map((criterion) => (
+          <li key={criterion.acceptance_id} data-testid={`evidence-${criterion.acceptance_id}`}>
+            <div className="flex flex-wrap items-start justify-between gap-static-xs">
+              <span>
+                <code title={IDENTITY_SOURCE_LABELS[criterion.identity_source]}>{criterion.acceptance_id}</code>{" "}
+                {criterion.statement}
+              </span>
+              <StatusChip
+                label={EVIDENCE_STATUS_LABELS[criterion.status]}
+                tone={EVIDENCE_STATUS_TONES[criterion.status]}
+              />
+            </div>
+            {criterion.evidence.length > 0 ? (
+              <ul className="mt-static-xs grid gap-1">
+                {criterion.evidence.map((item) => (
+                  <EvidenceRecord key={item.observation_id} item={item} />
+                ))}
+              </ul>
+            ) : null}
+            {criterion.evidence_truncated > 0 ? (
+              <p className="mt-1 text-xs text-contrast-medium">
+                {criterion.evidence_truncated} earlier record(s) not shown
+              </p>
+            ) : null}
+          </li>
+        ))}
+      </ol>
+      {unattributed > 0 ? (
+        <div className="mt-static-sm">
+          <p className="text-xs font-semibold text-contrast-medium">
+            Records without a current criterion ({unattributed})
+          </p>
+          <ul className="mt-static-xs grid gap-1">
+            {evidence.unattributed.map((item) => (
+              <EvidenceRecord key={item.observation_id} item={item} />
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </details>
   );
 }
 
@@ -2222,6 +2352,7 @@ export default function WorkItemDetail(
         <PublicationSection {...available} />
         <CourseChangesSection detail={props.detail} />
         <SemanticDetail detail={props.detail} />
+        <EvidenceSummary detail={props.detail} />
         <ClaimSection {...available} />
         <ExceptionalStateSection detail={props.detail} />
         <BackwardMoveSection {...available} />

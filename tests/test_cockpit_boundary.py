@@ -9,9 +9,12 @@ from typing import get_args
 
 import pytest
 
+from owlbear_delivery.acceptance_criteria import DeliveryAcceptanceCriterion
+from owlbear_delivery.evidence import DeliveryCriterionStatus, DeliveryFinalizationRules
 from owlbear_delivery.finalization_reports import FinalizationFailureCode, ReportFinalizationFailure
 from owlbear_delivery.merge_offer import MergeBlockReason
 from owlbear_delivery.portfolio_operating import DeliveryHealthReason
+from owlbear_delivery.runtime_models import DeliveryEvidenceVerdict
 from owlbear_delivery.work_items import ChangePauseUnavailableReason, DeliveryProgress, DeliveryReadinessReason
 
 # Mined from #924: Cockpit source import boundary.
@@ -56,6 +59,33 @@ def test_merge_block_reason_typescript_parity(project_root: Path) -> None:
     assert labels is not None
     keys = set(re.findall(r'^\s*"?([a-z-]+)"?:', labels.group(1), re.MULTILINE))
     assert keys == expected
+
+
+@pytest.mark.parametrize(
+    ("type_name", "labels", "values"),
+    [
+        ("DeliveryCriterionStatus", "EVIDENCE_STATUS_LABELS", get_args(DeliveryCriterionStatus.__value__)),
+        ("DeliveryEvidenceVerdict", "EVIDENCE_VERDICT_LABELS", get_args(DeliveryEvidenceVerdict.__value__)),
+        (
+            "DeliveryAcceptanceIdentitySource",
+            "IDENTITY_SOURCE_LABELS",
+            get_args(DeliveryAcceptanceCriterion.model_fields["identity_source"].annotation),
+        ),
+        ("DeliveryFinalizationRules", "FINALIZATION_RULES_LABELS", get_args(DeliveryFinalizationRules.__value__)),
+    ],
+)
+def test_evidence_projection_typescript_parity(
+    project_root: Path, type_name: str, labels: str, values: tuple[str, ...]
+) -> None:
+    """Every evidence status, verdict, identity source and finalization rule has a Cockpit type and label."""
+    api = (project_root / "serve/cockpit/web/src/api/workItems.ts").read_text()
+    union = re.search(rf"export type {type_name}\s*=\s*(.*?);", api, re.DOTALL)
+    assert union is not None
+    assert set(re.findall(r'"([^"]+)"', union.group(1))) == set(values)
+    presentation = (project_root / "serve/cockpit/web/src/components/workItemPresentation.ts").read_text()
+    mapping = re.search(rf"{labels}[^=]*=\s*\{{(.*?)\}};", presentation, re.DOTALL)
+    assert mapping is not None
+    assert set(re.findall(r'^\s*"?([a-z-]+)"?:', mapping.group(1), re.MULTILINE)) == set(values)
 
 
 def test_delivery_readiness_reason_typescript_parity(project_root: Path) -> None:

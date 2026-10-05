@@ -654,6 +654,12 @@ test.describe("assembled Delivery portfolio", () => {
     const detail = page.getByTestId("work-item-detail");
     await expect(detail.getByRole("heading", { name: "Publish operator guide" })).toBeVisible();
     await expect(detail).toContainText("Delivery task evidence");
+    const evidence = detail.getByTestId("evidence-summary");
+    await evidence.locator("summary").click();
+    await expect(evidence).toContainText("Acceptance evidence (1 covered)");
+    await expect(evidence.getByTestId("evidence-OUT-005.01")).toContainText("Covered");
+    await expect(evidence.getByTestId("evidence-locator")).toHaveText("path:reports/assembled-cockpit.txt");
+    await expect(evidence.getByRole("link")).toHaveCount(0);
     await page.reload();
     await expect(detail.getByRole("heading", { name: "Publish operator guide" })).toBeVisible();
     await expect(page.getByTestId("desktop-product-navigation").getByLabel("Delivery")).toHaveAttribute(

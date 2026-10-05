@@ -19,6 +19,7 @@ from owlbear_delivery.acceptance import (
     CompletionReceipt,
     CompletionReceiptStore,
 )
+from owlbear_delivery.acceptance_criteria import acceptance_criteria
 from owlbear_delivery.change_workspace import ChangeWorkspaceManager, PortfolioCoordinator
 from owlbear_delivery.delivery_admission import DeliveryAdmissionReceipt
 from owlbear_delivery.delivery_application_loader import (
@@ -133,8 +134,15 @@ def _task(outcome_id: str, index: int) -> DeliveryTaskDefinition:
     )
 
 
-def _result(contract: DeliveryContract, task: DeliveryTaskDefinition, head: str) -> DeliveryTaskResult:
+def _result(
+    contract: DeliveryContract,
+    task: DeliveryTaskDefinition,
+    head: str,
+    *,
+    covers: bool = False,
+) -> DeliveryTaskResult:
     observed_at = datetime(2026, 8, 11, 12, tzinfo=UTC)
+    refs = tuple(item.ref for item in acceptance_criteria(contract) if item.outcome_id == task.outcome_id)
     observation = DeliveryObservationReceipt.create(
         DeliveryObservation(
             change_id=contract.change_id,
@@ -143,6 +151,8 @@ def _result(contract: DeliveryContract, task: DeliveryTaskDefinition, head: str)
             observation_kind="playwright",
             procedure="Assembled Cockpit fixture validation",
             result=DeliveryCommandResult(exit_status=0),
+            covers=refs if covers else (),
+            locator="path:reports/assembled-cockpit.txt" if covers else None,
             observer_or_runner_identity="work-portfolio-e2e",
             observed_at=observed_at,
         )
@@ -228,7 +238,7 @@ def _current_bindings(contract: DeliveryContract, head: str) -> tuple[OutcomeAut
             plan_scope_id="SCOPE-005",
             stage=DeliveryStage.COMPLETED,
             tasks=(completed_task,),
-            results=(_result(contract, completed_task, head),),
+            results=(_result(contract, completed_task, head, covers=True),),
         ),
         OutcomeAuthorityBinding(
             outcome_id="OUT-006",

@@ -649,7 +649,7 @@ every new item exactly one lane.
 | N03-P | merged | #349 (plan gate `plan-sound`, round 6; D11 confirmed 2026-10-03; U1 decided (b) by the user 2026-10-03). History: #360 added a user-only confirmation boundary and opened U2; both were removed and U2 resolved on 2026-10-04 ([7](#7-decisions)) |
 | N03-A | merged | #363 (`82be4eb1c`; simplified 2026-10-04; Sol `implementation-sound` on the simplification delta; LC full form pass) |
 | N03-B | merged | #368 (code head `2cba00bdb`; Sol `implementation-sound` round 1 and delta; G4 closed for the reviewer by host rehearsal) |
-| N03-C | — | — |
+| N03-C | in review | #373 (code head `f00941962`; read-only evidence projection, no format change; Sol and cumulative N03 challenges' waiver-summary finding fixed; LC on `f227ba49d`: load form passed, full form `migration-not-required` (live already format 2), every live Change available, live unchanged) |
 | N04-P | merged | #369 (re-plan; plan gate: Sol round 1 `revision-required`, 5 findings accepted; round 2 `revision-required`, 1 bounded ordering correction accepted, gate ended; U1 settled (b) as D13 by the lead); #358 closed as superseded |
 | N04-A | — | — |
 | N04-B | — | — |

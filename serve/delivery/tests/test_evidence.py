@@ -25,6 +25,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryRequestResolution,
     DeliveryReview,
     DeliveryReviewReceipt,
+    DeliveryStage,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
     DeliveryWaivedResult,
@@ -32,7 +33,12 @@ from owlbear_delivery.delivery_runtime import (
 )
 from owlbear_delivery.evidence import (
     FINALIZATION_SEMANTICS_MAX_BYTES,
+    MAX_CRITERION_EVIDENCE,
+    MAX_UNATTRIBUTED_EVIDENCE,
     DeliveryContextRefusal,
+    DeliveryEvidenceCounts,
+    DeliveryEvidenceProjection,
+    build_evidence_projection,
     evaluate_acceptance_evidence,
     finalization_basis_digest,
     finalization_semantics_or_refusal,
@@ -91,11 +97,11 @@ def _observation(**changes: object) -> DeliveryObservationReceipt:
     return DeliveryObservationReceipt.create(DeliveryObservation(**values))
 
 
-def _legacy() -> DeliveryLegacyObservationReceipt:
+def _legacy(task_or_finalization_id: str = "TASK-001") -> DeliveryLegacyObservationReceipt:
     values = {
         "schema_version": 1,
         "change_id": CHANGE,
-        "task_or_finalization_id": "TASK-001",
+        "task_or_finalization_id": task_or_finalization_id,
         "step_id": None,
         "exact_commit": COMMIT,
         "observation_kind": "pytest",
@@ -106,6 +112,20 @@ def _legacy() -> DeliveryLegacyObservationReceipt:
     }
     candidate = DeliveryLegacyObservationReceipt.model_construct(observation_id="0" * 64, **values)
     return DeliveryLegacyObservationReceipt(observation_id=_receipt_digest(candidate, "observation_id"), **values)
+
+
+def _legacy_review() -> DeliveryReviewReceipt:
+    values = {
+        "schema_version": 1,
+        "exact_commit": COMMIT,
+        "author_id": "finalizer",
+        "reviewer_id": "build-reviewer",
+        "disposition": "pass",
+        "evidence": ("Reviewed.",),
+        "reviewed_at": AT,
+    }
+    candidate = DeliveryReviewReceipt.model_construct(review_id="0" * 64, **values)
+    return DeliveryReviewReceipt(review_id=_receipt_digest(candidate, "review_id"), **values)
 
 
 def _review(observations: tuple[str, ...] | None = None, **changes: object) -> DeliveryReviewReceipt:
@@ -499,3 +519,111 @@ def test_semantics_are_complete_within_budget_and_refused_whole_above_it(monkeyp
     assert finalization_semantics_or_refusal(
         contract, frontier, contract_digest="a" * 64, change_head="1" * 40, diff_base=None
     ) == DeliveryContextRefusal(code="finalization-basis-unavailable")
+
+
+# --- Projection (N03-C) --------------------------------------------------------------------------
+
+
+def _project(contract: DeliveryContract, frontier: DeliveryFrontier) -> DeliveryEvidenceProjection:
+    return build_evidence_projection(contract, frontier, contract_digest="a" * 64, frontier_digest="b" * 64)
+
+
+def test_projection_shows_each_evaluator_status_with_its_latest_records_first() -> None:
+    contract = _contract("One.", "Two.", "Three.", "Four.")
+    one, two, three = (_ref(contract, index) for index in range(3))
+    request = _scoped_request(contract, kind="waive", decision="waive", acceptance=(three,))
+    earlier = _observation(covers=(one,), result=DeliveryMissingResult(owner="agent", reason="Not yet."))
+    passed = _observation(covers=(one,), summary="171 passed")
+    missing = _observation(
+        covers=(two,),
+        result=DeliveryMissingResult(owner="assisted-check", reason="Needs a browser."),
+        locator="path:reports/two.txt",
+    )
+    waiver = _waiver(contract, request, covers=(three,))
+    support = _observation(summary="supporting check")
+    frontier = _frontier((_result(earlier, passed, missing, waiver, support),), (request,))
+
+    projection = _project(contract, frontier)
+
+    statuses = [view.status for view in projection.criteria]
+    assert statuses == ["covered", "missing", "waived", "uncovered"]
+    assert statuses == [item.status for item in evaluate_acceptance_evidence(contract, frontier).criteria]
+    assert projection.counts == DeliveryEvidenceCounts(covered=1, missing=1, waived=1, uncovered=1)
+    first, second, third, _fourth = projection.criteria
+    assert [item.observation_id for item in first.evidence] == [passed.observation_id, earlier.observation_id]
+    assert first.decided_by == passed.observation_id
+    assert (second.evidence[0].owner, second.evidence[0].locator) == ("assisted-check", "path:reports/two.txt")
+    assert (third.evidence[0].verdict, third.evidence[0].request_id) == ("waived", request.request_id)
+    assert [item.observation_id for item in projection.unattributed] == [support.observation_id]
+    assert (projection.finalization_rules, projection.finalization_id) == ("none", None)
+
+
+def test_legacy_change_shows_unknown_and_its_schema_one_records_unattributed() -> None:
+    contract = _contract("One.")
+    legacy = _legacy()
+
+    projection = _project(contract, _frontier((_result(legacy),)))
+
+    assert [view.status for view in projection.criteria] == ["unknown"]
+    assert projection.criteria[0].identity_source == "authored"
+    (item,) = projection.unattributed
+    assert (item.observation_id, item.observation_schema, item.verdict, item.summary) == (
+        legacy.observation_id,
+        1,
+        None,
+        "exit:0",
+    )
+
+
+def test_records_beyond_the_caps_truncate_latest_first_with_a_count() -> None:
+    contract = _contract("One.")
+    covering = tuple(_observation(covers=(_ref(contract, 0),), summary=str(index)) for index in range(18))
+    supporting = tuple(_observation(summary=f"support {index}") for index in range(66))
+
+    projection = _project(contract, _frontier((_result(*covering, *supporting),)))
+
+    (criterion,) = projection.criteria
+    assert len(criterion.evidence) == MAX_CRITERION_EVIDENCE
+    assert criterion.evidence_truncated == 2
+    assert criterion.evidence[0].summary == "17"
+    assert len(projection.unattributed) == MAX_UNATTRIBUTED_EVIDENCE
+    assert projection.unattributed_truncated == 2
+    assert projection.unattributed[0].summary == "support 65"
+
+
+@pytest.mark.parametrize("schema", [3, 2])
+def test_finalized_change_derives_statuses_from_its_finalization_receipt(schema: int) -> None:
+    contract = _contract("One.")
+    if schema == 3:
+        proof = _observation(task_or_finalization_id="FIN", covers=(_ref(contract, 0),))
+        review = _review((proof.observation_id,))
+    else:
+        proof = _legacy("FIN")
+        review = _legacy_review()
+    finalization = DeliveryFinalizationReceipt.create(
+        DeliveryFinalization(
+            schema_version=schema,
+            operation_id="FIN",
+            change_id=CHANGE,
+            exact_head=COMMIT,
+            authority_digest="a" * 64,
+            result_digests=("b" * 64,),
+            observations=(proof,),
+            review=review,
+            finalized_at=AT,
+        )
+    )
+    binding = _binding((_result(_observation()),)).model_copy(update={"stage": DeliveryStage.COMPLETED})
+    frontier = DeliveryFrontier(bindings=(binding,), finalization=finalization)
+
+    projection = _project(contract, frontier)
+
+    assert projection.finalization_id == finalization.finalization_id
+    if schema == 3:
+        assert projection.finalization_rules == "typed"
+        assert projection.criteria[0].status == "covered"
+        assert projection.criteria[0].evidence[0].source == "finalization"
+    else:
+        assert projection.finalization_rules == "legacy"
+        assert projection.criteria[0].status == "unknown"
+        assert projection.unattributed[0].source == "finalization"
