@@ -989,7 +989,8 @@ class PortfolioApplication(
                 "the Change retains worker, handoff or snapshot custody"
                 if handoff is None or design_return
                 else f"{handoff.outcome_id} retains a {handoff.route} Builder handoff for {handoff.original_task_id}; "
-                "Resume the Change, let the waiting worker finish that task, then Pause and revise",
+                "Resume the Change and continue it until that task is settled (Cockpit shows its next step), "
+                "then Pause and revise",
             )
         elif activation and runtime.pending_state_publication() is not None:
             refusal = ("publication-pending", "the current Delivery state is not published yet")
