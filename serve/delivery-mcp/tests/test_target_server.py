@@ -1399,6 +1399,10 @@ async def test_registered_default_loader_contains_failed_finalizer_before_checks
         assert reported.structured_content is not None
         assert reported.structured_content["request"]["checks_state"] == "not-run"
         assert reported.structured_content["request"]["code"] == "workspace-dirty"
+        conflicting = await client.call_tool(
+            "report_finalization_failure",
+            failure.model_copy(update={"checks_state": "unknown"}).model_dump(mode="json"),
+        )
         current_basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
         stopped = await client.call_tool(
             "acquire_change_action",
@@ -1411,6 +1415,11 @@ async def test_registered_default_loader_contains_failed_finalizer_before_checks
             },
         )
     assert not stopped.is_error
+    assert conflicting.is_error
+    assert (_registered_diagnostic(conflicting)["code"], _registered_diagnostic(conflicting)["retry_safe"]) == (
+        "diagnostic-conflict",
+        False,
+    )
     assert stopped.structured_content is not None
     assert stopped.structured_content["kind"] == "busy", stopped.structured_content
     assert stopped.structured_content["reason_code"] == "active-custody"
