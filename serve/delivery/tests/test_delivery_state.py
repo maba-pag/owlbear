@@ -4895,6 +4895,11 @@ def test_design_return_readmission_preserves_builder_work_across_restart(tmp_pat
     assert _git(repository, "show", f"{index}:staged.txt") == "staged Builder bytes"
     assert _git(repository, "show", f"{quarantine}:staged.txt") == "unstaged Builder bytes"
     assert _git(repository, "show", f"{quarantine}:untracked.txt") == "untracked Builder bytes"
+    close_delivery_application(application)
+    application = load_delivery_application(config, workspace_root=repository)
+    health = application.delivery_health()
+    assert health.status.value == "healthy", health
+    runtime = application._runtimes[change_id]  # noqa: SLF001
 
     activated = application.admit_change(
         DeliveryAdmissionRequest(
