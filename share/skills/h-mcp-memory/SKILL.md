@@ -143,24 +143,20 @@ was applied; this policy does not add feedback receipts or retry machinery.
 
 ### Curation trigger, visibility, and failure handling
 
-- `memory-curator` is the owner. The existing orchestrator trigger remains
-  after completed acquisition cycle 3, then cycles 13, 23, and every tenth
-  completed cycle thereafter. Manual curation is available at any time.
-- This cadence is opportunistic, not an eventual-processing SLA. Short
-  invocations may perform no automatic curation, and no durable due state or
-  age scheduler is implied.
+- `memory-curator` is the owner. No Delivery or continuation step triggers it:
+  the user runs `memory-curator` with `Curate: Periodic curation` or reviews
+  pending entries in Cockpit's Memory tab. Manual curation is available at any
+  time.
+- Curation is opportunistic, not an eventual-processing SLA. No durable due
+  state or age scheduler is implied.
 - The pending backlog is visible through
   `list_memories(states=["pending"])`, including `created_at`; the operator is
   responsible for manually invoking the curator when pending age, volume, or
   conflict cost warrants attention. Pending entries remain unreviewed and
   recall-invisible until curation.
-- A missing curation binding, tool-layer error, or pre-result dispatch failure
-  is non-blocking housekeeping attention: report it, finish the current batch,
-  and continue independent acquisition without Delivery recovery. A curator
-  child failure or malformed verdict is reported without retry and does not stop
-  unrelated acquisition. A batch-commit error
-  follows the existing `git status`/staged-diff inspection rule before an
-  operator retry.
+- A curator child failure or malformed verdict is reported without retry. A
+  batch-commit error follows the existing `git status`/staged-diff inspection
+  rule before an operator retry.
 
 ### Minimum measurement plan
 
@@ -173,7 +169,7 @@ fixture or lightweight event record must capture:
    with a complete batch over eligible attempts; keep `didnt_use` separate from
    tool failure and `factually_wrong`.
 2. **Pending age and curation latency:** pending `created_at`, curation
-   trigger (`cycle-3`, later cadence, or `manual`), curation start/end,
+   trigger (`periodic` or `manual`), curation start/end,
    entry action (`promoted`, `pruned`, or `deferred`), and failure/re-entry
    reason. Report oldest, median, and high-percentile pending age and the
    created-to-curated latency.

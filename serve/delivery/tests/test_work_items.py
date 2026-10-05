@@ -557,7 +557,7 @@ def test_completed_outcomes_project_ready_for_finalization() -> None:
         WorkItemActionKind.FINALIZE,
     )
     assert card.action.label == "Finalize Change"
-    assert card.action.command == "/finalize-change portfolio-change"
+    assert card.action.command is None
     assert detail.publication is not None
     assert detail.publication.phase == WorkItemPublicationPhase.READY_FOR_FINALIZATION
 
@@ -645,7 +645,7 @@ def test_head_drift_projects_exact_finalization_invalidation() -> None:
     assert card.progress.label == "Head drift observed"
     assert card.action.kind == WorkItemActionKind.FINALIZE
     assert card.action.label == "Re-finalize Change"
-    assert card.action.command == "/finalize-change portfolio-change"
+    assert card.action.command is None
     assert detail.publication is not None
     assert detail.publication.invalidated_expected_head == finalization.exact_head
     assert detail.publication.invalidated_observed_head == "4" * 40

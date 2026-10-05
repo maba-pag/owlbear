@@ -1239,20 +1239,12 @@ class WorkItemProjector:
         elif phase == WorkItemPublicationPhase.FINALIZATION_INVALIDATED:
             needs, headline, next_actor = WorkItemNeed.NONE, "Finalization invalidated", WorkItemNextActor.AGENT
             next_step, progress = "Re-finalize the current Change head", "Head drift observed"
-            action = WorkItemAction(
-                kind=WorkItemActionKind.FINALIZE,
-                label="Re-finalize Change",
-                command=f"/finalize-change {self._snapshot.contract.change_id}",
-            )
+            action = WorkItemAction(kind=WorkItemActionKind.FINALIZE, label="Re-finalize Change")
         elif phase == WorkItemPublicationPhase.READY_FOR_FINALIZATION:
             needs, headline, next_actor = WorkItemNeed.NONE, None, WorkItemNextActor.AGENT
             next_step, progress = "Finalize the reviewed Change", "Ready for finalization"
             action = (
-                WorkItemAction(
-                    kind=WorkItemActionKind.FINALIZE,
-                    label="Finalize Change",
-                    command=f"/finalize-change {self._snapshot.contract.change_id}",
-                )
+                WorkItemAction(kind=WorkItemActionKind.FINALIZE, label="Finalize Change")
                 if self._finalization_action_available()
                 else WorkItemAction()
             )

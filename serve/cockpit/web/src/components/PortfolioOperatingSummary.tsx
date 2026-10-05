@@ -32,7 +32,9 @@ function Guidance({ guidance }: { guidance: PortfolioGuidance }) {
     case "resume-design":
       return <>Continue Design for: {guidance.change_ids.join(", ")}.</>;
     case "start-orchestration":
-      return <>Process {countLabel(guidance.work_count, "queued work item")}.</>;
+      return (
+        <>Copy the continuation prompt of each ready Change ({countLabel(guidance.work_count, "queued work item")}).</>
+      );
     case "work-underway":
       return (
         <>
