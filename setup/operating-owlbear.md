@@ -371,8 +371,9 @@ Change is active. It does not consume an execution slot, but a later attempt con
 outcome's retry budget without an actionable request or unblock path. Once the other claims end,
 the supported exit is abandoning the whole Change; do not reset the reservation manually.
 
-Use `/repair-delivery` for bounded read-only diagnosis when normal Delivery inspection is
-unavailable. It is not a repair or custody-release command. If the current working directory is
+Use `/repair-delivery` when normal Delivery inspection is unavailable. It starts with read-only
+diagnosis and applies only supported, fenced repairs with the controllers stopped and under their
+confirmation policy; it never releases custody or repairs unknown state. If the current working directory is
 missing or access is denied, the offline diagnostic returns `ROOT_UNAVAILABLE`, unknown pending
 effects and exit status 2 without writes. Unknown pending effects must not be read as no effects.
 

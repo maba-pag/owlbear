@@ -88,8 +88,9 @@ genuine Design packages visible. Completed history remains a separate surface.
 | Admitted Change without an actionable runtime | Admission remains visible with `actionable_runtime=false` and the generic `runtime_unavailable` diagnostic; it is never recast as unadmitted Design. |
 
 The Delivery MCP operation inventory includes the read-only `delivery_health` projection. Current
-runtime readers accept only the current persisted schema; unsupported state is a startup failure and
-requires a fresh current workspace. `delivery_health` reports remote evidence plus local
+runtime readers accept only the current persisted schema; older registered state is refused at
+startup with `state-migration-required` and is migrated through `/upgrade-delivery`, while unknown
+state is refused and diagnosed through `/repair-delivery`. `delivery_health` reports remote evidence plus local
 reconciliation; it does not mutate or repair persisted state. `list_work_items` remains a pure list
 and does not become a health response.
 
