@@ -1430,10 +1430,14 @@ class ChangeWorkspaceManager(_WorktreeStateMixin, _PreservationMixin, _SnapshotM
         coordination = self._coordinator.show(change_id)
         worktree = coordination.worktree_path
         paths: list[str] = []
-        for line in self._git("-c", "core.quotePath=false", "clean", "-nd", cwd=worktree).splitlines():
+        environment = {**os.environ, "LC_ALL": "C"}
+        listing = self._git("-c", "core.quotePath=false", "clean", "-nd", cwd=worktree, environment=environment)
+        for line in listing.splitlines():
+            if line.startswith("Would skip repository "):
+                continue
             entry = line.removeprefix("Would remove ")
             if entry == line:
-                continue
+                raise DesignReturnWorkspaceError.workspace_changed()
             if not entry.endswith("/"):
                 paths.append(entry)
                 continue
