@@ -63,7 +63,9 @@ without behavior change).
   and committed work stays preserved for the same-task handoff.
 - A permitted local `implementation` finding repair uses another explicit scoped commit, reruns
   affected proof, and requires fresh review of the cumulative task result.
-- Never push. The user pushes manually.
+- Never push, merge, or run provider mutations directly (`git push`, `gh pr merge`, `gh api` writes).
+  Delivery publishes Change branches, draft pull requests and its state as system work, and merges
+  only after the user approves the exact head in Cockpit. Otherwise the user pushes manually.
 
 An admitted Delivery package snapshot is a Delivery-owned commit on the exact managed Change
 branch. Local `refs/owlbear/packages/*` checkpoints are not remote backup and must not replace that

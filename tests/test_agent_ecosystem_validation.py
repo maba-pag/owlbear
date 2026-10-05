@@ -116,6 +116,7 @@ _TARGET_ROLE_TOOLS = {
         "release_stuck_worker",
         "recover_claim",
         "recover_integration_repair_claim",
+        "observe_acceptance",
     },
     "repairer": {"get_change", "repair", "answer"},
     "finalizer": {
@@ -1313,3 +1314,20 @@ def test_memory_learning_loop_policy_is_sampled_and_opportunistic() -> None:
     assert "Assessment coverage" in content
     assert "Pending age and curation latency" in content
     assert "Useful or harmful recall" in content
+
+
+def test_continuation_shows_merge_offers_and_checks_an_unknown_merge_only_on_an_answer() -> None:
+    """N05 D14, 1.13: no agent approves a merge; Check again is one user-answered read."""
+    orchestration = " ".join((_SKILLS_ROOT / "w-orchestration/SKILL.md").read_text(encoding="utf-8").split())
+    section = orchestration[orchestration.index("### Merge Offer And Unknown Merge") :]
+    section = section[: section.index("###", 4)]
+    prompt = " ".join((_PROMPTS_ROOT / "continue-change.prompt.md").read_text(encoding="utf-8").split())
+
+    assert "No agent tool approves a merge; only the user approves, in Cockpit." in section
+    assert "**Approve merge** in Cockpit or merge the PR in GitHub, and stop" in section
+    assert "options **Check again** and **Not now**" in section
+    assert "Each Check again answer makes exactly one `observe_acceptance(change_id)` call" in section
+    assert "never loop on it, and never request a merge" in section
+    assert "one `observe_acceptance` call per Check again answer" in prompt
+    for agent in _AGENTS_ROOT.glob("*.agent.md"):
+        assert not [tool for tool in _frontmatter(agent).get("tools", ()) if "approve" in str(tool)], agent.name

@@ -2038,6 +2038,8 @@ async def test_live_registry_is_exact_and_annotated_from_assembled_tools() -> No
 
     assert set(tools) == DELIVERY_TOOLS
     assert set(tools).isdisjoint(EXCLUDED_TOOLS)
+    # N05 D14: only the user approves a merge, in Cockpit; no agent tool approves or merges.
+    assert not [name for name in tools if "approve" in name or "merge" in name]
     for name, tool in tools.items():
         assert tool.annotations is not None
         assert tool.annotations.read_only_hint is (name in READ_TOOLS)

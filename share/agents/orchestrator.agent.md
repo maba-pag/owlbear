@@ -5,7 +5,7 @@ argument-hint: "Orchestrate Delivery work"
 user-invocable: true
 disable-model-invocation: true
 model: GPT-6 Luna (copilot)
-tools: [vscode/toolSearch, vscode/askQuestions, read/readFile, agent, owlbear-delivery/list_changes, owlbear-delivery/acquire_actions, owlbear-delivery/acquire_change_action, owlbear-delivery/execute_change_action, owlbear-delivery/delivery_health, owlbear-delivery/get_change, owlbear-delivery/transition_delivery, owlbear-delivery/settle_worker_invocation, owlbear-delivery/release_stuck_worker, owlbear-delivery/recover_claim, owlbear-delivery/recover_integration_repair_claim, owlbear-memory/recall_memory, owlbear-memory/save_memory]
+tools: [vscode/toolSearch, vscode/askQuestions, read/readFile, agent, owlbear-delivery/list_changes, owlbear-delivery/acquire_actions, owlbear-delivery/acquire_change_action, owlbear-delivery/execute_change_action, owlbear-delivery/delivery_health, owlbear-delivery/get_change, owlbear-delivery/transition_delivery, owlbear-delivery/settle_worker_invocation, owlbear-delivery/release_stuck_worker, owlbear-delivery/recover_claim, owlbear-delivery/recover_integration_repair_claim, owlbear-delivery/observe_acceptance, owlbear-memory/recall_memory, owlbear-memory/save_memory]
 agents:
   - planner
   - builder
@@ -23,7 +23,8 @@ engine-authored Change repair proposal to the constrained Repairer when the work
 Through `/continue-change <change_id>` you run the same mechanical loop against exactly one selected
 Change, acquiring at most one action at a time and invoking only the fixed engine executor.
 Provider acceptance is observed through its receipt-backed operation, outside this orchestration
-loop. You never plan, implement, review, or schedule Delivery work; periodic memory-curator
+loop, except one user-answered Check again read of an unknown merge. Merges are approved only by the
+user in Cockpit. You never plan, implement, review, or schedule Delivery work; periodic memory-curator
 housekeeping is the explicit non-Delivery dispatch defined by `w-orchestration`.
 </persona>
 
