@@ -1327,6 +1327,7 @@ class ChangeWorkspaceManager(_WorktreeStateMixin, _PreservationMixin, _SnapshotM
             self._capture_design_return(coordination, handoff, lock)
         worktree = coordination.worktree_path
         self._git("reset", "--hard", coordination.last_reviewed_commit, cwd=worktree)
+        self._require_design_return_clean_preserved(change_id, handoff)
         self._git("clean", "-fd", cwd=worktree)
         if self._worktree_change_paths(worktree):
             _workspace_failure("Design return release did not clean the managed worktree")
@@ -1348,9 +1349,10 @@ class ChangeWorkspaceManager(_WorktreeStateMixin, _PreservationMixin, _SnapshotM
                 and not self._worktree_change_paths(coordination.worktree_path)
             )
         index_ref = f"refs/owlbear/quarantine-index/{change_id}/{attempt_id}"
-        index_tree = self._run_git("rev-parse", "--verify", "--quiet", index_ref, check=False).stdout
+        index_tree = self._git("rev-parse", "--verify", "--quiet", index_ref, check=False)
         if preserved != handoff.branch_head or not index_tree:
             _workspace_failure("Design return quarantine receipt lacks its preservation refs")
+        self._require_design_return_index(coordination, index_tree, branch_head)
         try:
             self._prepare_dirty_worktree_quarantine(
                 coordination=coordination,
@@ -1360,6 +1362,7 @@ class ChangeWorkspaceManager(_WorktreeStateMixin, _PreservationMixin, _SnapshotM
                 operation_id=f"design-return-{handoff.settlement_id}",
                 attempt_id=attempt_id,
                 claim_id=handoff.original_writer.claim_id,
+                index_tree=index_tree,
             )
         except CoordinationConflictError:
             raise
@@ -1390,7 +1393,9 @@ class ChangeWorkspaceManager(_WorktreeStateMixin, _PreservationMixin, _SnapshotM
             _workspace_failure("attempt history ref names another rejected head")
         if not self._worktree_change_paths(worktree):
             return
-        self._preserve_index_tree(worktree, f"refs/owlbear/quarantine-index/{change_id}/{attempt_id}")
+        index_tree = self._preserve_index_tree(worktree, f"refs/owlbear/quarantine-index/{change_id}/{attempt_id}")
+        if not self._quarantine_paths(worktree, handoff.branch_head, index_tree):
+            return  # Only staged differences: the index tree ref holds them all.
         self._prepare_dirty_worktree_quarantine(
             coordination=coordination,
             worktree=worktree,
@@ -1400,7 +1405,52 @@ class ChangeWorkspaceManager(_WorktreeStateMixin, _PreservationMixin, _SnapshotM
             attempt_id=attempt_id,
             claim_id=handoff.original_writer.claim_id,
             lock=lock,
+            index_tree=index_tree,
         )
+
+    def _require_design_return_index(self, coordination: ChangeCoordination, captured: str, branch_head: str) -> None:
+        """Refuse an index that is neither the captured tree nor, after the reset, the reviewed tree."""
+        worktree = coordination.worktree_path
+        try:
+            if self._preservation_git("ls-files", "--unmerged", cwd=worktree).stdout:
+                raise DesignReturnWorkspaceError.unmerged_index()
+            current = self._managed_index_tree(worktree)
+        except DesignReturnWorkspaceError:
+            raise
+        except RuntimeError as exc:
+            raise DesignReturnWorkspaceError.workspace_changed() from exc
+        allowed = {captured}
+        if branch_head == coordination.last_reviewed_commit:
+            allowed.add(self._git("rev-parse", f"{branch_head}^{{tree}}"))
+        if current not in allowed:
+            raise DesignReturnWorkspaceError.workspace_changed()
+
+    def _require_design_return_clean_preserved(self, change_id: str, handoff: ChangeBuilderHandoff) -> None:
+        """Refuse before ``clean`` would delete a path the capture refs lack, e.g. one only the Builder ignored."""
+        coordination = self._coordinator.show(change_id)
+        worktree = coordination.worktree_path
+        paths: list[str] = []
+        for line in self._git("-c", "core.quotePath=false", "clean", "-nd", cwd=worktree).splitlines():
+            entry = line.removeprefix("Would remove ")
+            if entry == line:
+                continue
+            if not entry.endswith("/"):
+                paths.append(entry)
+                continue
+            listed = self._run_git(
+                "--literal-pathspecs", "ls-files", "--others", "--exclude-standard", "-z", "--", entry, cwd=worktree
+            ).stdout
+            paths.extend(os.fsdecode(path) for path in listed.split(b"\0") if path)
+        if not paths:
+            return
+        receipt = coordination.dirty_worktree_quarantine
+        captured = receipt.quarantine_commit if receipt is not None else handoff.branch_head
+        try:
+            self._verify_worktree_paths_match_commit(
+                worktree, coordination.last_reviewed_commit, tuple(sorted(paths)), captured
+            )
+        except RuntimeError as exc:
+            raise DesignReturnWorkspaceError.workspace_changed() from exc
 
     def _reject_unpromoted_adoption_restart(
         self,

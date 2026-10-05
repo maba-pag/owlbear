@@ -93,6 +93,7 @@ from owlbear_delivery.acceptance import (
     CompletionReceipt,
 )
 from owlbear_delivery.change_workspace import ChangeWorkspaceManager
+from owlbear_delivery.delivery_admission import DeliveryRevisionError
 from owlbear_delivery.delivery_application_loader import (
     DeliveryApplicationLoadError,
     DeliveryStartupConfig,
@@ -4741,9 +4742,14 @@ def _authored_package_id(application: PortfolioApplication, change_id: str) -> s
     return hashlib.sha256(manifest.canonical_bytes()).hexdigest()
 
 
-def _published_design_return(tmp_path: Path) -> tuple[PortfolioApplication, DeliveryStartupConfig, Path, object, str]:
-    """Publish one authored Change, return its Builder to Design with committed, staged, unstaged and untracked work,
-    then Pause it."""
+def _published_design_return(
+    tmp_path: Path, variant: str = "mixed"
+) -> tuple[PortfolioApplication, DeliveryStartupConfig, Path, object, str]:
+    """Publish one authored Change, return its Builder to Design with committed and ``variant`` work, then Pause it.
+
+    ``mixed``: staged, unstaged and untracked; ``staged-only``: staged bytes over unchanged worktree bytes (plus an
+    untracked file in ``staged-only-untracked``); ``ignored``: a committed ignore rule hiding an uncaptured file.
+    """
     repository, remote, _initial = _repository(tmp_path)
     _git(repository, "config", "url." + str(remote) + ".insteadOf", "https://github.com/example/project.git")
     _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
@@ -4796,13 +4802,23 @@ def _published_design_return(tmp_path: Path) -> tuple[PortfolioApplication, Deli
     builder = application.acquire_frontier_work().launch_packages[0]
     worktree = builder.worktree_path
     (worktree / "committed.txt").write_text("committed Builder bytes\n", encoding="utf-8")
-    _git(worktree, "add", "committed.txt")
+    if variant == "ignored":
+        (worktree / ".gitignore").write_text("secret.log\n", encoding="utf-8")
+    _git(worktree, "add", "committed.txt", *([".gitignore"] if variant == "ignored" else []))
     _git(worktree, "commit", "-m", "Builder work")
     branch_head = _git(worktree, "rev-parse", "HEAD")
-    (worktree / "staged.txt").write_text("staged Builder bytes\n", encoding="utf-8")
-    _git(worktree, "add", "staged.txt")
-    (worktree / "staged.txt").write_text("unstaged Builder bytes\n", encoding="utf-8")
-    (worktree / "untracked.txt").write_text("untracked Builder bytes\n", encoding="utf-8")
+    if variant == "mixed":
+        (worktree / "staged.txt").write_text("staged Builder bytes\n", encoding="utf-8")
+        _git(worktree, "add", "staged.txt")
+        (worktree / "staged.txt").write_text("unstaged Builder bytes\n", encoding="utf-8")
+    if variant.startswith("staged-only"):
+        (worktree / "product.txt").write_text("staged Builder bytes\n", encoding="utf-8")
+        _git(worktree, "add", "product.txt")
+        (worktree / "product.txt").write_text("baseline\n", encoding="utf-8")
+    if variant == "ignored":
+        (worktree / "secret.log").write_text("ignored Builder bytes\n", encoding="utf-8")
+    if variant != "staged-only":
+        (worktree / "untracked.txt").write_text("untracked Builder bytes\n", encoding="utf-8")
     application.settle_worker_invocation(
         DeliveryBuilderInvocationSettlement(
             change_id=change_id,
@@ -4839,34 +4855,25 @@ def _published_design_return(tmp_path: Path) -> tuple[PortfolioApplication, Deli
 
 
 @pytest.mark.parametrize(
-    "boundary", [None, "before-quarantine-ref", "before-receipt", "after-capture", "after-reset", "before-release"]
+    ("variant", "boundary"),
+    [
+        *(("mixed", boundary) for boundary in (None, "before-quarantine-ref", "before-receipt")),
+        *(("mixed", boundary) for boundary in ("after-capture", "after-reset", "before-release")),
+        ("staged-only", None),
+        ("staged-only-untracked", "before-receipt"),
+    ],
 )
-def test_design_return_readmission_preserves_builder_work_across_restart(tmp_path: Path, boundary: str | None) -> None:
-    application, config, repository, builder, branch_head = _published_design_return(tmp_path)
+def test_design_return_readmission_preserves_builder_work_across_restart(
+    tmp_path: Path, variant: str, boundary: str | None
+) -> None:
+    application, config, repository, builder, branch_head = _published_design_return(tmp_path, variant)
     change_id, worktree, attempt_id = builder.change_id, builder.worktree_path, builder.claim.attempt_id
     revised = _revision_sources("AC-002: Revised.")
     if boundary is not None:
-        manager = application._workspace_manager  # noqa: SLF001
-        run_git = manager._run_git  # noqa: SLF001
-
-        def crash_at(command: tuple[str, ...]) -> object:
-            def run(*arguments: str, **options: object) -> object:
-                if arguments[: len(command)] == command:
-                    raise _Crash
-                return run_git(*arguments, **options)
-
-            return patch.object(manager, "_run_git", side_effect=run)
-
-        crash = {
-            "before-quarantine-ref": crash_at(("commit-tree",)),
-            "before-receipt": patch.object(DirtyWorktreeQuarantineReceipt, "create", side_effect=_Crash),
-            "after-capture": crash_at(("reset", "--hard")),
-            "after-reset": crash_at(("clean",)),
-            "before-release": patch.object(PortfolioCoordinator, "_prepare_design_return_release", side_effect=_Crash),
-        }[boundary]
-        package_id = application.read_design_session(change_id).package_id
-        with crash, pytest.raises(_Crash):
-            application.revise_design_session(change_id, package_id, revised, b"# Architecture\n")
+        with _design_return_crash(application, boundary), pytest.raises(_Crash):
+            application.revise_design_session(
+                change_id, application.read_design_session(change_id).package_id, revised, b"# Architecture\n"
+            )
         close_delivery_application(application)
         application = load_delivery_application(config, workspace_root=repository)
         health = application.delivery_health()
@@ -4892,9 +4899,13 @@ def test_design_return_readmission_preserves_builder_work_across_restart(tmp_pat
     )
     assert _git(repository, "rev-parse", attempt) == branch_head
     assert _git(repository, "show", f"{attempt}:committed.txt") == "committed Builder bytes"
-    assert _git(repository, "show", f"{index}:staged.txt") == "staged Builder bytes"
-    assert _git(repository, "show", f"{quarantine}:staged.txt") == "unstaged Builder bytes"
-    assert _git(repository, "show", f"{quarantine}:untracked.txt") == "untracked Builder bytes"
+    if variant == "mixed":
+        assert _git(repository, "show", f"{index}:staged.txt") == "staged Builder bytes"
+        assert _git(repository, "show", f"{quarantine}:staged.txt") == "unstaged Builder bytes"
+    else:
+        assert _git(repository, "show", f"{index}:product.txt") == "staged Builder bytes"
+    if variant != "staged-only":
+        assert _git(repository, "show", f"{quarantine}:untracked.txt") == "untracked Builder bytes"
     close_delivery_application(application)
     application = load_delivery_application(config, workspace_root=repository)
     health = application.delivery_health()
@@ -4919,4 +4930,85 @@ def test_design_return_readmission_preserves_builder_work_across_restart(tmp_pat
     assert [(launch.outcome_id, launch.claim.worker_role) for launch in launches] == [
         ("OUT-001", DeliveryWorkerRole.PLANNER)
     ]
+    close_delivery_application(application)
+
+
+def _design_return_crash(application: PortfolioApplication, boundary: str) -> object:
+    manager = application._workspace_manager  # noqa: SLF001
+    run_git = manager._run_git  # noqa: SLF001
+
+    def crash_at(command: tuple[str, ...]) -> object:
+        def run(*arguments: str, **options: object) -> object:
+            if arguments[: len(command)] == command:
+                raise _Crash
+            return run_git(*arguments, **options)
+
+        return patch.object(manager, "_run_git", side_effect=run)
+
+    return {
+        "before-quarantine-ref": crash_at(("commit-tree",)),
+        "before-receipt": patch.object(DirtyWorktreeQuarantineReceipt, "create", side_effect=_Crash),
+        "after-capture": crash_at(("reset", "--hard")),
+        "after-reset": crash_at(("clean",)),
+        "before-release": patch.object(PortfolioCoordinator, "_prepare_design_return_release", side_effect=_Crash),
+    }[boundary]
+
+
+def _revise_design_return(application: PortfolioApplication, change_id: str) -> object:
+    package_id = application.read_design_session(change_id).package_id
+    return application.revise_design_session(
+        change_id, package_id, _revision_sources("AC-002: Revised."), b"# Architecture\n"
+    )
+
+
+def _design_return_custody(application: PortfolioApplication, repository: Path, worktree: Path) -> tuple[object, ...]:
+    change_id = "design-return"
+    return (
+        _git(worktree, "ls-files", "--stage"),
+        _git(repository, "for-each-ref", "refs/owlbear"),
+        application._coordinator.show(change_id),  # noqa: SLF001
+        application._runtimes[change_id].frontier_bytes(),  # noqa: SLF001
+    )
+
+
+def test_design_return_replay_refuses_an_index_restaged_after_capture(tmp_path: Path) -> None:
+    application, config, repository, builder, _branch_head = _published_design_return(tmp_path)
+    change_id, worktree = builder.change_id, builder.worktree_path
+    with _design_return_crash(application, "after-capture"), pytest.raises(_Crash):
+        _revise_design_return(application, change_id)
+    (worktree / "staged.txt").write_text("restaged bytes\n", encoding="utf-8")
+    _git(worktree, "add", "staged.txt")
+    (worktree / "staged.txt").write_text("unstaged Builder bytes\n", encoding="utf-8")
+    close_delivery_application(application)
+    application = load_delivery_application(config, workspace_root=repository)
+    health = application.delivery_health()
+    changed = "the Design-return worktree differs from its handoff or capture"
+    assert [(item.change_id, item.detail) for item in health.diagnostics] == [(change_id, changed)]
+    before = _design_return_custody(application, repository, worktree)
+
+    with pytest.raises(DeliveryRevisionError, match="design-return-workspace-changed"):
+        _revise_design_return(application, change_id)
+
+    assert _design_return_custody(application, repository, worktree) == before
+    assert _git(worktree, "show", ":staged.txt") == "restaged bytes"
+    close_delivery_application(application)
+
+
+@pytest.mark.parametrize("boundary", [None, "after-capture"])
+def test_design_return_release_refuses_before_cleaning_an_uncaptured_ignored_file(
+    tmp_path: Path, boundary: str | None
+) -> None:
+    application, config, repository, builder, _branch_head = _published_design_return(tmp_path, "ignored")
+    change_id, worktree = builder.change_id, builder.worktree_path
+    if boundary is not None:
+        with _design_return_crash(application, boundary), pytest.raises(_Crash):
+            _revise_design_return(application, change_id)
+        close_delivery_application(application)
+        application = load_delivery_application(config, workspace_root=repository)
+
+    with pytest.raises(DeliveryRevisionError, match="design-return-workspace-changed"):
+        _revise_design_return(application, change_id)
+
+    assert (worktree / "secret.log").read_text(encoding="utf-8") == "ignored Builder bytes\n"
+    assert application._coordinator.show(change_id).builder_handoff is not None  # noqa: SLF001
     close_delivery_application(application)
