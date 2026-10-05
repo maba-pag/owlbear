@@ -4,6 +4,7 @@ import {
   abortWorkItemTargetSync,
   adoptExternalHeadAfterAcceptanceAttention,
   answerWorkItemRequest,
+  approveWorkItemMerge,
   type ChangeGroupView,
   type CompletedChangePage,
   type CompletedChangeRecord,
@@ -18,6 +19,7 @@ import {
   discardAbandonedTargetSyncAndCleanup,
   isUnavailableDetail,
   listCompletedChanges,
+  type MergeApprovalResponse,
   markWorkItemPublicationReady,
   moveWorkItemBackward,
   observeWorkItemAcceptance,
@@ -710,6 +712,16 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
     observePublicationChecks,
     observeAcceptance: () =>
       mutate("acceptance-observe", () => observeWorkItemAcceptance(identity.changeId), "GitHub acceptance observed."),
+    approveMerge: (offerId: string, submissionId: string) =>
+      mutate(
+        "merge-approve",
+        () => approveWorkItemMerge(identity.changeId, offerId, submissionId),
+        mergeApprovalMessage,
+      ).then((error) => {
+        // A refused offer carries no effect; the refreshed detail shows the current offer or its reason.
+        if (error instanceof WorkItemApiError && error.status !== 502) polling.refetch();
+        return error;
+      }),
     adoptExternalHeadAfterAcceptanceAttention: (
       expectedDispositionId: string,
       expectedHead: string,
@@ -858,6 +870,27 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
 
 export function workItemIdentity(item: WorkItemCardView): string {
   return `${item.change_id}:${item.item_key}`;
+}
+
+const MERGE_STATE_MESSAGES: Record<Exclude<MergeApprovalResponse["state"], "merged" | "refused">, string> = {
+  intent: "GitHub has not confirmed the merge yet; Delivery checks it again.",
+  released: "GitHub has not confirmed the merge yet; Delivery checks it again.",
+  pending: "GitHub accepted the merge request and is merging; Delivery records the result shortly.",
+  "not-sent": "No merge request was sent.",
+  "head-changed": "The pull request head changed; this approval merged nothing.",
+  closed: "The pull request was closed; this approval merged nothing.",
+};
+
+function mergeApprovalMessage(result: MergeApprovalResponse): string {
+  if (result.state === "merged") {
+    return result.completion_id
+      ? "Merged in GitHub; Delivery recorded completion."
+      : "Merged in GitHub; Delivery records completion on its next check.";
+  }
+  if (result.state === "refused") {
+    return `GitHub refused the merge (${result.refusal_reason ?? "no reason given"}); nothing was merged.`;
+  }
+  return MERGE_STATE_MESSAGES[result.state];
 }
 
 /** Change-level Pause and Resume for portfolio groups, using the existing defer and resume intents. */

@@ -27,7 +27,7 @@ The main public areas are:
 | Operational Delivery | Acquisition, typed contexts, transitions, host-loss settlement, and stopped-worker release |
 | Work projection | Portfolio work items with dependency readiness, typed attention, requests, blocks, task progress, and bounded Delivery health diagnostics |
 | Coordination | Per-Change writer custody under `runtime/coordination/changes`, one shared execution budget, warm worktrees, and reviewed source boundaries |
-| Publication and acceptance | Change-branch checkpoints, draft pull-request reconciliation, review-repair preparation, finalization, acceptance observation, and publication supersession |
+| Publication and acceptance | Change-branch checkpoints, draft pull-request reconciliation, review-repair preparation, finalization, exact-head merge approval (only through Cockpit's `approve-merge` route; no MCP tool approves), acceptance observation, and publication supersession |
 | Completed history | Receipt-backed completed Change projections plus read-only Git-backed historical package search |
 | Integration attention | Typed Integration attention and exact repair-claim recovery remain current public operations |
 

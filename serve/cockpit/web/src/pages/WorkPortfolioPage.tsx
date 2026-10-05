@@ -369,6 +369,7 @@ function SelectedWorkItemDetail({
           isObservingPublicationChecks={selectedDetail.isObservingPublicationChecks}
           onObservePublicationChecks={selectedDetail.observePublicationChecks}
           onObserveAcceptance={selectedDetail.observeAcceptance}
+          onApproveMerge={selectedDetail.approveMerge}
           onAdoptExternalHeadAfterAcceptanceAttention={selectedDetail.adoptExternalHeadAfterAcceptanceAttention}
           onResolveAttention={selectedDetail.resolveAttention}
           onSupersedePublication={selectedDetail.supersedePublication}

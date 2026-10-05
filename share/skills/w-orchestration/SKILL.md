@@ -175,6 +175,21 @@ When the selected Change's action is `resume-design`, report its complete engine
 `readiness.prompt` unchanged for that same Change. Do not replace it with a bare command, create
 another Change identity, restate design content, or treat the handoff as approval.
 
+### Merge Offer And Unknown Merge
+
+No agent tool approves a merge; only the user approves, in Cockpit.
+
+- Reason `merge-approval-required`: show `readiness.merge_offer` (repository and PR, exact head, target
+  branch and head, required-check and proof summary, merge method), tell the user to approve it with
+  **Approve merge** in Cockpit or merge the PR in GitHub, and stop. Never ask for the approval in chat
+  or claim one.
+- Reason `merge-response-unknown` (`human`): show "GitHub has not confirmed this merge. It may still
+  run." with `readiness.merge_attempt.pr_url`, then ask one question with the options **Check again**
+  and **Not now**. Each Check again answer makes exactly one `observe_acceptance(change_id)` call;
+  report its result, re-observe with `get_change`, and ask again only while the reason stays
+  `merge-response-unknown`. Not now stops. Never call it without an answer, never loop on it, and never
+  request a merge.
+
 ### Continuation Refresh And Output
 
 After a `release_stuck_worker` result, report it and stop the current cycle; do not reacquire or

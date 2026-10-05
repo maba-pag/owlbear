@@ -1164,6 +1164,27 @@ export function observeWorkItemAcceptance(changeId: string): Promise<unknown> {
   );
 }
 
+/** The approval's attempt after Delivery sent its single request (N05 D14). */
+export interface MergeApprovalResponse {
+  approval_id: string;
+  state: "intent" | "released" | "pending" | "merged" | "refused" | "not-sent" | "head-changed" | "closed";
+  refusal_reason: string | null;
+  pr_url: string;
+  completion_id: string | null;
+}
+
+/** A retried POST repeats `submissionId`, so Delivery returns the same attempt and sends nothing again. */
+export function approveWorkItemMerge(
+  changeId: string,
+  offerId: string,
+  submissionId: string,
+): Promise<MergeApprovalResponse> {
+  return controlRequest(`/api/changes/${encodeURIComponent(changeId)}/approve-merge`, "ERR_WORK_ITEM_MERGE_APPROVE", {
+    offer_id: offerId,
+    submission_id: submissionId,
+  });
+}
+
 export function adoptExternalHeadAfterAcceptanceAttention(
   changeId: string,
   expectedDispositionId: string,

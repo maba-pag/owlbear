@@ -32,7 +32,9 @@ import {
   quietCard,
   readiness,
   renderPage,
+  requestUrl,
   requirePresent,
+  response,
   selectValue,
   unavailableChange,
 } from "./workPortfolioHarness";
@@ -523,39 +525,35 @@ it("labels every continuation readiness reason without blanking a new engine sta
   }
 }, 60_000);
 
-it("renders an awaiting-merge offer as read-only readiness", async () => {
-  const offer: NonNullable<DeliveryReadiness["merge_offer"]> = {
-    offer_id: "9".repeat(64),
-    repository: "owlbear/example",
-    number: 42,
-    node_id: "PR_example_42",
-    title: "Merge approval example",
-    head_sha: "a".repeat(40),
-    base_branch: "main",
-    target_head: "b".repeat(40),
-    finalization_id: "c".repeat(64),
-    ready_receipt_id: "d".repeat(64),
-    merge_method: "merge",
-    stack_size: 1,
-    required_checks: [{ name: "build", conclusion: "success" }],
-    check_summary: {
-      required_passed: 2,
-      required_pending: 1,
-      required_failed: 0,
-      optional_failed: 1,
-    },
-    proof: {
-      observation_count: 3,
-      review_id: "e".repeat(64),
-      proof_target: "f".repeat(40),
-    },
-  };
-  const state = readiness({
-    status: "waiting",
-    next_actor: "you",
-    reason_code: "merge-approval-required",
-    merge_offer: offer,
-  });
+const MERGE_OFFER: NonNullable<DeliveryReadiness["merge_offer"]> = {
+  offer_id: "9".repeat(64),
+  repository: "owlbear/example",
+  number: 42,
+  node_id: "PR_example_42",
+  title: "Merge approval example",
+  head_sha: "a".repeat(40),
+  base_branch: "main",
+  target_head: "b".repeat(40),
+  finalization_id: "c".repeat(64),
+  ready_receipt_id: "d".repeat(64),
+  merge_method: "merge",
+  stack_size: 1,
+  required_checks: [{ name: "build", conclusion: "success" }],
+  check_summary: {
+    required_passed: 2,
+    required_pending: 1,
+    required_failed: 0,
+    optional_failed: 1,
+  },
+  proof: {
+    observation_count: 3,
+    review_id: "e".repeat(64),
+    proof_target: "f".repeat(40),
+  },
+};
+
+function renderMergeReadiness(overrides: Partial<DeliveryReadiness>) {
+  const state = readiness({ status: "waiting", next_actor: "you", ...overrides });
   const item = publicationCardForChecks({ publication_phase: "awaiting-merge", readiness: state });
   fixtureState.currentPortfolio = portfolio([group({ lifecycle: "awaiting-merge", items: [item] })]);
   fixtureState.currentDetail = detail({
@@ -564,6 +562,36 @@ it("renders an awaiting-merge offer as read-only readiness", async () => {
     publication: publicationForChecks("awaiting-merge"),
   });
   renderPage(`/delivery/change-alpha/${item.item_key}`);
+}
+
+function answerApproveMerge(payload: unknown, status: number) {
+  const harnessFetch = globalThis.fetch;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (!requestUrl(input).endsWith("/approve-merge")) return harnessFetch(input, init);
+      fixtureState.requests.push({
+        url: requestUrl(input),
+        method: init?.method ?? "GET",
+        body: JSON.parse(init?.body as string),
+      });
+      return response(payload, status);
+    }),
+  );
+}
+
+function approvalRequests() {
+  return fixtureState.requests.filter(({ url }) => url.endsWith("/approve-merge"));
+}
+
+async function openApproveMerge(): Promise<HTMLElement> {
+  const inspector = await screen.findByTestId("work-item-detail");
+  fireEvent.click(within(inspector).getByText("Approve merge"));
+  return screen.getByRole("alertdialog");
+}
+
+it("shows the exact merge offer in the Approve merge dialog and Cancel sends nothing", async () => {
+  renderMergeReadiness({ reason_code: "merge-approval-required", merge_offer: MERGE_OFFER });
 
   const inspector = await screen.findByTestId("work-item-detail");
   expect(inspector.querySelector('[data-readiness-reason="merge-approval-required"]')).toHaveTextContent(
@@ -573,7 +601,78 @@ it("renders an awaiting-merge offer as read-only readiness", async () => {
   expect(summary).toHaveTextContent("owlbear/example#42");
   expect(summary).toHaveTextContent("Merge approval example");
   expect(summary).toHaveTextContent("2 passed, 1 pending, 0 failed; 1 optional failed");
-  expect(within(inspector).queryByRole("button", { name: /approve|merge/i })).not.toBeInTheDocument();
+  const dialog = await openApproveMerge();
+  expect(dialog).toHaveTextContent("merges this pull request into main in GitHub");
+  expect(dialog).toHaveTextContent("Delivery cannot undo the merge.");
+  const offer = within(dialog).getByTestId("merge-approval-offer");
+  expect(offer).toHaveTextContent("a".repeat(40));
+  expect(offer).toHaveTextContent(`main at ${"b".repeat(40)}`);
+  expect(offer).toHaveTextContent("merge");
+  expect(offer).toHaveTextContent("3 observations");
+  fireEvent.click(within(dialog).getByText("Cancel"));
+
+  await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+  expect(approvalRequests()).toEqual([]);
+});
+
+it("approves the shown offer with one submission identity and reports the merge", async () => {
+  renderMergeReadiness({ reason_code: "merge-approval-required", merge_offer: MERGE_OFFER });
+  answerApproveMerge(
+    {
+      approval_id: "1".repeat(64),
+      state: "merged",
+      refusal_reason: null,
+      pr_url: "https://github.com/owlbear/example/pull/42",
+      completion_id: "2".repeat(64),
+    },
+    200,
+  );
+
+  const dialog = await openApproveMerge();
+  fireEvent.click(within(dialog).getByText("Approve merge"));
+
+  expect(await screen.findByText("Merged in GitHub; Delivery recorded completion.")).toBeInTheDocument();
+  const [request] = approvalRequests();
+  expect(approvalRequests()).toHaveLength(1);
+  expect(request.body).toEqual({ offer_id: MERGE_OFFER.offer_id, submission_id: expect.any(String) });
+  expect((request.body as { submission_id: string }).submission_id).toMatch(/^cockpit-merge-[0-9a-f-]{36}$/);
+  expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+});
+
+it("keeps the dialog open on a stale offer, merges nothing and blocks re-approval of the old offer", async () => {
+  renderMergeReadiness({ reason_code: "merge-approval-required", merge_offer: MERGE_OFFER });
+  answerApproveMerge(
+    {
+      code: "ERR_DELIVERY_MERGE_OFFER_STALE",
+      detail: "the merge offer changed since it was shown; review the current offer",
+      authority: "delivery",
+      retry_safe: false,
+      readiness: null,
+    },
+    409,
+  );
+
+  const dialog = await openApproveMerge();
+  fireEvent.click(within(dialog).getByText("Approve merge"));
+
+  const alert = await within(dialog).findByRole("alert");
+  expect(alert).toHaveTextContent("ERR_DELIVERY_MERGE_OFFER_STALE");
+  expect(alert).toHaveTextContent("The offer changed since you opened it, so nothing was merged.");
+  fireEvent.click(within(dialog).getByText("Approve merge"));
+  await waitFor(() => expect(screen.getByRole("alertdialog")).toBeInTheDocument());
+  expect(approvalRequests()).toHaveLength(1);
+});
+
+it.each([
+  { reason_code: "merge-blocked" as const, merge_block: { reason: "conflicts" as const, detail: null } },
+  { reason_code: "checks-running" as const },
+  { reason_code: "merge-checking" as const },
+])("offers no Approve merge control for $reason_code", async (overrides) => {
+  renderMergeReadiness(overrides);
+
+  const inspector = await screen.findByTestId("work-item-detail");
+  expect(inspector.querySelector(`[data-readiness-reason="${overrides.reason_code}"]`)).toBeInTheDocument();
+  expect(within(inspector).queryByText("Approve merge")).not.toBeInTheDocument();
 });
 
 it("renders the GitHub next step for a blocked merge offer", async () => {
