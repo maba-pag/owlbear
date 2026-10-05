@@ -4736,6 +4736,45 @@ def test_revision_snapshot_replay_refuses_package_edits_made_after_interruption(
     close_delivery_application(restarted)
 
 
+def test_non_ascii_first_admission_replays_after_restart_and_publishes(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    _git(repository, "config", "url." + str(remote) + ".insteadOf", "https://github.com/example/project.git")
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    config = DeliveryStartupConfig(
+        schema_version=2,
+        remote="origin",
+        target_branch="main",
+        github_repository="example/project",
+        delivery_state_branch="owlbear/delivery-state",
+    )
+    application = load_delivery_application(config, workspace_root=repository)
+    change_id = "slug-rules"
+    sources = _revision_sources("AC-002: Straße → strasse, Café → cafe.")
+    application.create_design_session(change_id, sources, b"# Architecture\n")
+    request = DeliveryAdmissionRequest(
+        change_id=change_id, expected_package_id=_authored_package_id(application, change_id), active_claim_ids=()
+    )
+    # N10-H: the package authority check refused after the admission authority was written.
+    with patch.object(application, "_validate_package_authority", side_effect=_Crash), pytest.raises(_Crash):
+        application.admit_change(request)
+    assert application._coordinator.show(change_id).design_package_snapshot is None  # noqa: SLF001
+    close_delivery_application(application)
+
+    restarted = load_delivery_application(config, workspace_root=repository)
+    assert restarted.admit_change(request).replayed is True
+    assert not restarted.read_design_session(change_id).authority_bytes.isascii()
+    runtime = restarted._runtimes[change_id]  # noqa: SLF001
+    restarted._publish_delivery_state(change_id, runtime, "non-ascii-first-state")  # noqa: SLF001
+    assert runtime.pending_state_publication() is None
+    close_delivery_application(restarted)
+
+    reloaded = load_delivery_application(config, workspace_root=repository)
+    health = reloaded.delivery_health()
+    assert health.status.value == "healthy", health.model_dump_json()
+    assert reloaded._coordinator.show(change_id).design_package_snapshot is not None  # noqa: SLF001
+    close_delivery_application(reloaded)
+
+
 def _authored_package_id(application: PortfolioApplication, change_id: str) -> str:
     package = application.read_design_session(change_id)
     manifest = DesignPackageManifest.from_content(change_id, package.intent_bytes, package.design_bytes)

@@ -104,6 +104,7 @@ from owlbear_delivery.storage_io import (
     acquire_controller_lock,
     read_only_state,
 )
+from owlbear_delivery.target_contract import contract_canonical_bytes
 from owlbear_delivery.workspace_snapshots import DESIGN_PACKAGE_SNAPSHOT_SUBJECT
 
 if TYPE_CHECKING:
@@ -609,7 +610,7 @@ def _validate_local_snapshot(  # noqa: C901 - one predicate per recognized local
     ):
         _bootstrap_failure("local Delivery coordination differs from its remote snapshot")
     expected = {
-        "contract.json": _canonical_model(snapshot.contract),
+        "contract.json": contract_canonical_bytes(snapshot.contract),
         "frontier.json": _canonical_model(snapshot.frontier),
         "admission.json": _canonical_model(snapshot.admission),
     }
@@ -715,7 +716,7 @@ def _local_revision_state(  # noqa: PLR0911, PLR0913, PLR0917 - one exit per rec
     except OSError:
         return None
     state: Literal["paused", "activated"]
-    if contract == _canonical_model(snapshot.contract) and admission == _canonical_model(snapshot.admission):
+    if contract == contract_canonical_bytes(snapshot.contract) and admission == _canonical_model(snapshot.admission):
         if frontier.change_deferral is None:
             return None
         state = "paused"
@@ -745,7 +746,7 @@ def _local_revision_state(  # noqa: PLR0911, PLR0913, PLR0917 - one exit per rec
 
 def _revision_history_matches(relative_root: Path, snapshot: DeliveryStateSnapshot) -> bool:
     """Require the revision history entry holding exactly the published contract, admission and frontier."""
-    contract = _canonical_model(snapshot.contract)
+    contract = contract_canonical_bytes(snapshot.contract)
     admission = _canonical_model(snapshot.admission)
     for entry in (relative_root / "revisions").glob(f"{hashlib.sha256(contract).hexdigest()}-*"):
         try:
@@ -2431,8 +2432,9 @@ def _restore_local_change_branch(
 def _restore_runtime_snapshot(snapshot: DeliveryStateSnapshot, runtime_root: Path) -> None:
     """Atomically recreate one Change's startup and terminal evidence files."""
     relative_root = Path("changes") / snapshot.change_id
+    contract = contract_canonical_bytes(snapshot.contract)
     participants = (
-        TransactionParticipant(runtime_root, relative_root / "contract.json", _canonical_model(snapshot.contract)),
+        TransactionParticipant(runtime_root, relative_root / "contract.json", contract),
         TransactionParticipant(runtime_root, relative_root / "frontier.json", _canonical_model(snapshot.frontier)),
         TransactionParticipant(runtime_root, relative_root / "admission.json", _canonical_model(snapshot.admission)),
     )
