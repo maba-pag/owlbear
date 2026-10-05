@@ -998,7 +998,11 @@ class PortfolioCoordinator:
         replacement: ChangeCoordination,
     ) -> None:
         if existing.builder_handoff is not None and existing != replacement:
-            _coordination_conflict("workspace update cannot mutate retained Builder handoff custody")
+            receipt_added = existing.dirty_worktree_quarantine is None and existing == replacement.model_copy(
+                update={"dirty_worktree_quarantine": None}
+            )
+            if not receipt_added:
+                _coordination_conflict("workspace update cannot mutate retained Builder handoff custody")
         action = existing.continuation_action
         receipt = replacement.target_sync_receipt
         conflict = replacement.target_sync_conflict
@@ -1352,3 +1356,20 @@ class PortfolioCoordinator:
             _coordination_conflict("Builder handoff does not match the exact settlement, task, and workspace")
         claimed = coordination.model_copy(update={"writer": writer, "builder_handoff": None})
         return _replacement(self._state_root, self._coordination_path(change_id), previous, claimed)
+
+    def _prepare_design_return_release(
+        self,
+        change_id: str,
+        handoff: ChangeBuilderHandoff,
+        lock: PublicationLock,
+    ) -> ReplacementTransactionParticipant:
+        """Prepare the exact retained Design-return handoff release for its runtime transaction (N04 §1.7)."""
+        self._require_publication_lock(lock, change_id)
+        self.require_no_pending_recovery(change_id)
+        coordination, previous = self._read_coordination(change_id)
+        if coordination.builder_handoff != handoff or coordination.writer != handoff.original_writer.model_copy(
+            update={"kind": "handoff"}
+        ):
+            _coordination_conflict("Design return release does not match its retained Builder handoff")
+        released = coordination.model_copy(update={"writer": None, "builder_handoff": None})
+        return _replacement(self._state_root, self._coordination_path(change_id), previous, released)

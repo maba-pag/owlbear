@@ -192,6 +192,10 @@ Order:
 
 1. Verify the worktree still matches the handoff metadata (`_capture_builder_handoff_metadata` against
    `metadata_fingerprint`); otherwise refuse `design-return-workspace-changed`.
+   Submodule work refuses the same reason before any capture write or reset, also on replay, because the
+   capture holds a submodule only as its gitlink: the user commits or removes it first (a gitlink path in the
+   index or handoff head that `status --ignore-submodules=none` reports), and the reset runs with
+   `submodule.recurse=false`.
 2. Capture without changing the worktree or the managed index (the index tree is written from a copy), in
    this order: the head under `refs/owlbear/attempts/<change>/<attempt>`; if dirty, the real index as a
    tree under `refs/owlbear/quarantine-index/<change>/<attempt>`, then the quarantine commit (child of the
@@ -199,7 +203,7 @@ Order:
    through `_prepare_dirty_worktree_quarantine` extended to passive Design-return custody. The receipt is
    therefore stored only when every preservation ref exists. Unmerged index entries refuse
    `design-return-unmerged-index`.
-3. Reset branch and worktree to the reviewed head and `clean -fd` (ignored files stay in place). Reset is
+3. Reset branch and worktree to the reviewed head and `clean -fd` (ignored files are not preserved, G8). Reset is
    refused until capture is complete: the attempt ref and, for dirty content, the index ref, quarantine ref
    and receipt.
 4. One transaction: frontier (binding released; pending publication marker) and coordination (`writer` and
@@ -224,6 +228,47 @@ the worktree matches the handoff metadata or passes the quarantine check above a
 The released `return_context.preserved_commit` is carried into the revised binding (§1.6). The readiness
 prompt in `_design_attention_prompt` drops the "re-admission is unavailable" text and points to the §1.1
 route.
+
+**Build notes (N04-B, 2026-10-05, lead-approved deviations; each is the smallest fix a §3.2 scenario
+needs because the stated premise was false):**
+
+- The coordination model and `_validate_coordination_ownership_update` refused any quarantine receipt
+  beside a retained Builder handoff; both now allow exactly that addition (receipt bound to the handoff
+  writer), so step 2 can store its receipt before release.
+- `_prepare_dirty_worktree_quarantine` called `coordinator.update()` without the publication lock that
+  the release already holds (self-deadlock); it now takes the held lock through.
+- The status read in `_worktree_change_paths` refreshed the managed index and so changed the handoff
+  metadata fingerprint; it now runs with `GIT_OPTIONAL_LOCKS=0`.
+- The released frontier's pending publication marker takes its base from the last acknowledged
+  publication marker: the handoff states were never published, so the remote still holds that state.
+- A clean handoff (unreviewed commits only) stores no receipt. Release and startup accept one more
+  captured state: branch at the reviewed head, worktree clean, attempt ref at the handoff head.
+- `_replanned_binding` carries `preserved_commit` from a Design-stage binding's return context;
+  `DeliveryRevisionError` gains `design-return-workspace-changed` and `design-return-unmerged-index`
+  (raised from the manager's `DesignReturnWorkspaceError`).
+- The coordination release is a private coordinator participant (`_prepare_design_return_release`); the
+  new manager entry `release_design_return` is classified in the Pause inventory of
+  `tests/test_delivery_worktree_authority.py`.
+
+**Repair notes (N04-B Sol round 1, 2026-10-05, lead fix-now; no new records, capture order unchanged):**
+
+- Recognition of a complete capture also fences the index: unmerged entries refuse
+  `design-return-unmerged-index`; an index tree other than the `quarantine-index` tree (or, once the branch is
+  at the reviewed head, the reviewed tree) refuses `design-return-workspace-changed` without recapture.
+- Before `clean -fd`, the release listed what `clean -nd` would remove and required each path in the capture;
+  removed in round 2 (see below).
+- A stage-only path (worktree bytes equal to the handoff head, staged bytes different) is held by the
+  `quarantine-index` tree: it is left out of the quarantine commit and accepted by the replay subset check
+  only when that tree changes it; with only such paths no quarantine commit or receipt is written.
+
+**Repair notes (N04-B Sol round 2, 2026-10-05, lead dispositions):**
+
+- Rejected and simplified: the round-1 pre-clean check is removed. It could not see ignored bytes that
+  `reset --hard` overwrites at a path the reviewed head tracks, and ignored content is disposable by
+  repository convention (as N05 G15); the limit is G8.
+- Fix-now: `revise_design_session` replays the pending Delivery-state publication (the release's, also when
+  retrying an already released handoff) and refuses `publication-pending` with the package untouched until
+  it is acknowledged, because package replacement clears the authority that publication validates.
 
 ### 1.8 Change requirements control (N04-C)
 
@@ -268,6 +313,10 @@ Settled by the planner (2026-10-04), each with one defensible answer in the oper
   Completed tasks and results whose commitments still exist survive, and the Planner plans only the delta,
   as a return to Planning already does (§1.6). Reason: execution plan §5 N04 requires that observations
   covering unchanged criteria still count; resetting the outcome would discard them.
+- **D14 A Design-returned outcome's completed work is cleared at release** (lead decision 2026-10-05).
+  The release clears that outcome's tasks and results, as the claim-held return to Design does: a Design
+  return declares that outcome's Design wrong. D13 governs revisions without a Design return. The work
+  itself stays recoverable under the attempt, index and quarantine refs.
 
 ## 2. Feasibility Probes
 
@@ -395,7 +444,7 @@ fixed (execution plan §1.6). Durable tests are the scenarios below, no more.
 | --- | --- | --- | --- | --- | --- |
 | N04-P | #369 | revision of `f4303e9d3` | Probes P1–P6; docs only; markdownlint 0 issues | Sol round 1 `revision-required`, all lead-dispositioned fix-now and applied: F1 snapshot crash inside step 3 recognized and replayed (§1.5); F2 partial release resumed through the quarantine owner, `preserved_commit` carried (§1.7); F3 confirmations kept whole, evaluator scopes them (§1.6, D8); F4 completed-work preservation and zero-delta completion via the return-to-Planning rule (§1.6); F5 new history key recognized, D11 reworded. U1 settled by the lead as D13. Sol round 2 `revision-required`, one finding, lead fix-now, applied: capture ordering (attempt and index refs before the receipt, no reset before complete capture) and partial-capture startup recognition (§1.7, §3.2). Plan gate ends here (lead: no round 3, local ordering clarification) | in review |
 | N04-A | #376 | round 1 code `53cfe8f44` (round 0 `28a4b0334`) | Round 0: focused Delivery, state-format, diagnostics, MCP, worktree-authority and agent-ecosystem suites 1333 passed; `test --changed --base origin/dev` scope (71 files, 3711 tests; whole run projected past the 900 s limit, so sharded with the union asserted): 3710 passed, 1 failure in untouched `test_delivery_runtime.py` (`.git` snapshot race, unrelated) passed on rerun alone; Ubuntu CI on the code head green; scoped ruff clean; LC full form (live format 2, previous `841b1cffb`): unmigrated copy refused `state-migration-required`, copy migrated 2 → 3 (`runtime/format.json` only, verified), all 3 live Changes load, newer format refused, live unchanged. G1: all five crash points load and replay to one snapshot (the "nothing else" half rests on the existing loader refusals). G2: the package ID does change; the loader predicate covers it. Deviations in the PR body. Round 1 (code `53cfe8f44`, then a test-only classification commit): focused revision and out-of-band tests 27 passed, and the six new checks fail with each fix neutralized; sharded `test --changed --base origin/dev` scope (71 targets, 3719 tests): 3717 passed, 2 failures in this round's own tests (cancel-limit expectation, manager read-entry classification), both corrected and rerun alone (1 and 54 passed); scoped ruff clean; LC full form on `53cfe8f44` (previous `841b1cffb`): `passed`, same outcomes as round 0, `live_unchanged` 139 records | Sol round 1 `repair-required` on `768c43847`, four findings, all lead-dispositioned; repairs (F1) fix-now, applied: the loader accepts the remote Change branch at the activated revision's own snapshot head while its publication is pending, and replay accepts a remote snapshot already holding the current published projection; crashes after branch push, after bookkeeping and after state push replay to one snapshot. (F2) fix-now, applied: the interrupted-snapshot restore refuses package bytes it did not write (`ERR_DESIGN_PACKAGE_SNAPSHOT_EDITED`, paths named, bytes intact). (F3) documented limit G6, tested. (F4) fix-now, applied: the out-of-band head exemption covers only the intent's own snapshot child | in review |
-| N04-B | — | — | — | — | — |
+| N04-B | #378 | code head `4b1b2bb8b` (round-2 review F1 repair; round 2 repair `18f3aaa96`; round 1 repair `a101b3630`, `376a83177`; round 0 code `4bc74a57a`: feature `db50217d9`, restart-after-release test `4bc74a57a`) | Inner loop: the six readmission scenarios (`test_design_return_readmission_preserves_builder_work_across_restart`: no crash and crashes before the quarantine ref, before the receipt, after capture, after `reset --hard`, before the release transaction, each with default-loader restart; restart again after the release) and four refusals (`test_design_return_release_refusal_changes_nothing`: worktree changed, file added after capture, unmerged index, Planning-route handoff) pass; focused Delivery and authority selection 209 passed; `test --changed --base origin/dev` scope (19 paths, 57 targets) sharded in four with the union asserted, because the whole run exceeds the 900 s limit: 572 + 766 + 1017 + 1071 passed, 1 skipped, 0 failed; agent-ecosystem 70 passed; scoped ruff check and format clean; LC: full form on `4bc74a57a` (previous `841b1cffb`) `passed`: unmigrated copy refused `state-migration-required`, copy migrated 2 → 3 (`runtime/format.json` only, verified), all 3 live Changes load, newer format refused, `live_unchanged` 139 records, stage removed. Round 1 (code `376a83177`): Design-return selection of `test_delivery_state.py` 11 passed (readmission now 8 cases with `staged-only` and `staged-only-untracked` variants; `test_design_return_replay_refuses_an_index_restaged_after_capture`; `test_design_return_release_refuses_before_cleaning_an_uncaptured_ignored_file` without and after an interruption before the reset) and each new check fails with its fix neutralized (index 1, clean 2, stage-only 2 failures); portfolio refusal and readiness selection 5 passed; `test --changed --base origin/dev` scope (20 paths, 57 targets) sharded in four with the union asserted: 572 + 771 + 1017 + 1071 passed, 1 skipped, 0 failed; scoped ruff check and format clean; LC full form on `a101b3630` (previous `841b1cffb`; the later `376a83177` only changes the pre-clean listing, not startup): `passed`, same outcomes as round 0, `live_unchanged` 139 records, stage removed. Round 2 (code `18f3aaa96`): Design-return selection of `test_delivery_state.py` 10 passed (the ignored-file test removed; `test_design_return_revision_waits_for_its_release_publication`: with publication unavailable, revise refuses `publication-pending` with package bytes and ID unchanged, also after a restart with publication still unavailable; once it succeeds the replay publishes, the revision lands and readmission launches OUT-001 with the preserved commit), and it fails with the refusal neutralized (`DID NOT RAISE`); portfolio refusal and readiness selection 5 passed; `test --changed --base origin/dev` scope (20 paths, 57 targets) sharded in four with the union asserted: 572 + 770 + 1017 + 1071 passed, 1 skipped, 0 failed; scoped ruff check and format clean; LC not rerun: round 2 changes neither loading nor the persisted format (release and revise paths only). Round-2 review F1 repair (code `4b1b2bb8b`): new `dirty-submodule` case of `test_design_return_release_refusal_changes_nothing` (active submodule, moved and committed child HEAD plus an uncommitted child edit, `submodule.recurse=true`): revise refuses `design-return-workspace-changed` with frontier, coordination, worktree bytes (child edit included), index, refs and package unchanged; with the refusal neutralized it fails (release fails after capture and reset), and with the refusal and `submodule.recurse=false` both neutralized the release completes without refusal (the finding's path); Design-return selection (`test_portfolio_application.py`, `test_delivery_state.py`, `test_change_workspace.py`, `-k "design_return or design_revision or revise_design or return_to_design"`) 18 passed; `test --changed --base origin/dev` scope (20 paths, 57 targets) sharded in four with the union asserted: 573 + 770 + 1017 + 1071 passed, 1 skipped, 0 failed; scoped ruff check and format clean; LC not needed (no loading or format change) | Sol round 1 `repair-required` on `3eaa5041a`, three findings, all lead fix-now, applied (§1.7 repair notes). F1: capture-replay recognition fences the index (captured tree, or the reviewed tree once the branch is reset; unmerged or other refuses, no recapture). F2: refuse before `clean -fd` would delete a path the capture refs lack (`clean -nd` listing). F3: stage-only paths held by the `quarantine-index` tree in the completeness check. Sol round 2 on `e858d6619`: F1 and F3 repairs confirmed; two new findings. A (`reset --hard` can overwrite ignored bytes at a path the reviewed head tracks) rejected and simplified by the lead: ignored content is disposable by convention (as N05 G15), so the round-1 pre-clean check and its test are removed and the limit is G8. B (a failed release publication strands the revision) fixed: revise refuses `publication-pending` with the package untouched until the pending publication is acknowledged. Sol round-2 delta review (`e858d6619..18f3aaa96`) `repair-required`, one finding, lead fix-now, applied: F1 submodule work could be lost (the capture holds a submodule only as its gitlink, and `reset --hard` honors `submodule.recurse`); the release now refuses `design-return-workspace-changed` before any capture write or reset, also on replay, when a gitlink path in the index or handoff head is dirty or moved, and resets with `submodule.recurse=false` | in review |
 | N04-C | — | — | — | — | — |
 
 ## 5. Verification Gaps
@@ -404,7 +453,9 @@ fixed (execution plan §1.6). Durable tests are the scenarios below, no more.
 | --- | --- | --- | --- | --- | --- |
 | G1 | The startup predicates (§1.5), including the interrupted-snapshot row, accept every intermediate state and nothing else | Not built; P5 is a source read | Loader comparisons on `d0223e0a1` | N04-A crash-injection tests | N04-A merge |
 | G2 | `_publish_package_contract` changes the package ID the loader compares | Not probed; the predicate for step 2 covers either answer | `DesignPackageStore.revise` clears generated authority | N04-A first check | N04-A merge |
-| G3 | The released Design return publishes as a portable state accepted by the remote snapshot comparison | Not built | `settle_builder_invocation` portability rule; P6 | N04-B | N04-B merge |
+| G3 | The released Design return publishes as a portable state accepted by the remote snapshot comparison | Built in N04-B | `test_design_return_readmission_preserves_builder_work_across_restart`: after the release no publication is pending, the default loader restarts healthy at every crash boundary, and activation follows | N04-B | none |
 | G4 | A real Designer chat follows the revised `w-design-session` route | No host run | Skill text only | N10-H host journey | N10 only |
 | G5 | A Builder of a replanned outcome cites a retained confirmation instead of asking again | Workflow behavior | Engine accepts it (N04-A scenario) | N10-H | N10 only |
 | G6 | A cancel interrupted after `_publish_package_contract` completes its activation on retry | Accepted limit (N04-A F3): the package then matches the admitted authority and its snapshot, so no durable record marks the revision; the retry takes ordinary admission, which refuses the paused Change (`requires resumption`) without mutation | `test_cancel_interrupted_after_contract_publication_is_completed_by_resume`: the user's Resume returns the Change to normal with no snapshot intent, history entry or snapshot change | User Resume | none |
+| G7 | A crash inside `git reset --hard` of a Design-return release resumes | Accepted limit (lead 2026-10-05): a half-reset worktree matches neither the handoff metadata nor the capture, so the release refuses it (`design-return-workspace-changed`); no bytes are lost, all are under the attempt, index and quarantine refs | Crash before and after the reset are tested; inside it is not injectable | Manual repair (reset the worktree to the reviewed head) | none |
+| G8 | Ignored files are preserved by the Design-return release | Accepted limit (lead, Sol round 2): files ignored only under ignore rules the Builder committed may be removed by `clean` or overwritten by `reset` (ignored content is disposable by convention; same as N05 G15). Committed, staged, unstaged and untracked non-ignored bytes are always captured before reset | `test_design_return_readmission_preserves_builder_work_across_restart` (committed, staged, unstaged, untracked, stage-only) | none | none |

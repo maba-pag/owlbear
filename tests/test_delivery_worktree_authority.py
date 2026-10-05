@@ -2059,6 +2059,8 @@ _MANAGER_PAUSE_CLASSES: dict[str, frozenset[str]] = {
             "recover_out_of_band_head",
             "recover_publication_baseline",
             "recover",
+            # N04-B: reached only from revise_design_session behind the paused-Change revision gate.
+            "release_design_return",
         }
     ),
     "owner-completion": frozenset(

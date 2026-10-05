@@ -516,6 +516,8 @@ class _SnapshotMixin:
         operation_id: str,
         attempt_id: str,
         claim_id: str,
+        lock: PublicationLock | None = None,
+        index_tree: str | None = None,
     ) -> DirtyWorktreeQuarantineReceipt:
         current = self._coordinator.show(coordination.change_id)
         existing_receipt = current.dirty_worktree_quarantine
@@ -538,10 +540,10 @@ class _SnapshotMixin:
                 existing_receipt.paths,
                 existing_receipt.operation_id,
             )
-            self._verify_worktree_matches_quarantine(worktree, existing_receipt)
+            self._verify_worktree_matches_quarantine(worktree, existing_receipt, index_tree)
             return existing_receipt
 
-        paths = self._worktree_change_paths(worktree)
+        paths = self._quarantine_paths(worktree, branch_head, index_tree)
         receipt_base_head = branch_head
         existing = self._resolve(quarantine_ref, missing_ok=True)
         if existing is None:
@@ -568,7 +570,7 @@ class _SnapshotMixin:
             )
             if not self._quarantine_base_matches_current(coordination, branch_head, replay_receipt):
                 _workspace_failure("dirty worktree quarantine base moved outside the recoverable restart state")
-            self._verify_worktree_matches_quarantine(worktree, replay_receipt)
+            self._verify_worktree_matches_quarantine(worktree, replay_receipt, index_tree)
             receipt_base_head = quarantine_base
         receipt = DirtyWorktreeQuarantineReceipt.create(
             operation_id=operation_id,
@@ -582,7 +584,7 @@ class _SnapshotMixin:
             quarantine_commit=quarantine_commit,
             paths=paths,
         )
-        self._coordinator.update(current.model_copy(update={"dirty_worktree_quarantine": receipt}))
+        self._coordinator.update(current.model_copy(update={"dirty_worktree_quarantine": receipt}), lock=lock)
         return receipt
 
     def verify_dirty_worktree_quarantine(
@@ -634,12 +636,14 @@ class _SnapshotMixin:
         )
 
     def _worktree_change_paths(self, worktree: Path) -> tuple[str, ...]:
+        # No optional locks: an index refresh would change a retained handoff's metadata fingerprint.
         status = self._run_git(
             "status",
             "--porcelain=v1",
             "-z",
             "--untracked-files=all",
             cwd=worktree,
+            environment={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
         ).stdout
         if status and not status.endswith(b"\0"):
             _workspace_failure("Git returned an unterminated dirty worktree status")
@@ -666,9 +670,13 @@ class _SnapshotMixin:
         self,
         worktree: Path,
         receipt: DirtyWorktreeQuarantineReceipt,
+        index_tree: str | None = None,
     ) -> None:
         current_paths = self._worktree_change_paths(worktree)
-        if not set(current_paths).issubset(receipt.paths):
+        held = set(receipt.paths)
+        if index_tree is not None:
+            held.update(self._quarantine_commit_paths(index_tree, receipt.base_head))
+        if not set(current_paths).issubset(held):
             _workspace_failure("dirty worktree changed after quarantine preservation")
         if not current_paths:
             return
@@ -800,3 +808,35 @@ class _SnapshotMixin:
         if len(parents) != _COMMIT_PARENT_COUNT:
             _workspace_failure("quarantine commit does not have exactly one parent")
         return parents[1]
+
+    def _quarantine_paths(self, worktree: Path, base_head: str, index_tree: str | None) -> tuple[str, ...]:
+        """Return the dirty paths a quarantine commit holds; with ``index_tree`` stage-only paths stay in that tree."""
+        paths = self._worktree_change_paths(worktree)
+        if index_tree is None or not paths:
+            return paths
+        changed = self._quarantine_commit_paths(self._worktree_tree(worktree, base_head, paths), base_head)
+        if not set(paths) - set(changed) <= set(self._quarantine_commit_paths(index_tree, base_head)):
+            _workspace_failure("dirty path is held neither by its worktree bytes nor by the index tree")
+        return changed
+
+    def _managed_index_tree(self, worktree: Path) -> str:
+        """Write the managed index as a tree from a private copy, leaving the managed index untouched."""
+        content = self._read_managed_index(self._resolve_managed_index(worktree))
+        index_fd, index_path = tempfile.mkstemp(prefix="owlbear-design-return-index-")
+        os.close(index_fd)
+        try:
+            Path(index_path).write_bytes(content)
+            environment = {**os.environ, "GIT_INDEX_FILE": index_path, "GIT_OPTIONAL_LOCKS": "0"}
+            return self._git("write-tree", cwd=worktree, environment=environment)
+        finally:
+            Path(index_path).unlink(missing_ok=True)
+
+    def _preserve_index_tree(self, worktree: Path, index_ref: str) -> str:
+        """Store the managed index as a tree under ``index_ref`` (create-or-equal) and return that tree."""
+        tree = self._managed_index_tree(worktree)
+        existing = self._run_git("rev-parse", "--verify", "--quiet", index_ref, check=False).stdout.decode().strip()
+        if not existing:
+            self._git("update-ref", index_ref, tree, "0" * 40)
+        elif existing != tree:
+            _workspace_failure("Design return index ref names another index tree")
+        return tree

@@ -2050,9 +2050,9 @@ class _ReadinessViewsMixin:
             f"/inspect-change {change_id} Inspect the existing verified intent, Design and persisted return "
             f"evidence read-only. {evidence} Settlement only cleared the Builder claim and "
             "retained a passive workspace handoff; it does not approve or admit a Design revision or grant access "
-            "to the managed worktree. Re-admission is unavailable while this handoff is retained; its correction "
-            "is separate D04 work. Preserve the worktree. Only read-only inspection, defer or abandon is "
-            "supported here; user approval does not bypass the retained-handoff admission fence."
+            "to the managed worktree. To revise the Design, Pause the Change, then revise its package with "
+            f"/design {change_id}: the revision first preserves the retained work under refs and resets the worktree "
+            "to its reviewed head; the user then approves and admits the revision. Do not edit the managed worktree."
         )
 
     def _worktree_cleanup_view(

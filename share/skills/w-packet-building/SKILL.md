@@ -283,7 +283,9 @@ required `unblock_condition` and `expected_evidence` fields. Every Build block i
 For a normal Builder return, Orchestrator uses `settle_worker_invocation` for `retry`, `block`, or
 `return` to Planning or Design; it validates exact workspace custody and persists any bounded request
 or return context. A Design return creates only a passive handoff and human-owned `/design` attention;
-it does not approve or admit a revision. Do not use a raw `transition_delivery` fallback.
+it does not approve or admit a revision. When the paused Change's Design is revised, the engine
+preserves the retained work under refs and resets the worktree to its reviewed head before readmission.
+Do not use a raw `transition_delivery` fallback.
 
 On a passing Build result, call `submit_result` with the unchanged `change_id`, `outcome_id`,
 `claim_id`, and exact `DeliveryTaskResult`. Require the returned `kind: submitted` result to preserve

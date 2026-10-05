@@ -81,6 +81,8 @@ type DeliveryRevisionReason = Literal[
     "custody-retained",
     "publication-pending",
     "reviewed-head-moved",
+    "design-return-workspace-changed",
+    "design-return-unmerged-index",
 ]
 
 
@@ -551,6 +553,8 @@ def _replanned_binding(
     """Keep completed work whose commitments survive (D13) and the answered scoped requests (D8)."""
     if previous is None:
         return planning.model_copy(update={"return_context": context})
+    if previous.stage == DeliveryStage.DESIGN and previous.return_context is not None:
+        context = context.model_copy(update={"preserved_commit": previous.return_context.preserved_commit})
     completed = {result.task_id for result in previous.results}
     kept = {
         task.task_id: task

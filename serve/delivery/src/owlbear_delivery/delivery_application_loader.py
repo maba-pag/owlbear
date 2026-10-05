@@ -1120,6 +1120,15 @@ def _validate_local_builder_handoff_workspace(
             _bootstrap_failure("active Builder handoff branch differs from its captured descendant")
         return active_head
 
+    if (
+        context.route == "same-outcome-design"
+        and coordination.builder_handoff.branch_head == context.branch_head
+        and workspace_manager._design_return_captured(coordination, coordination.builder_handoff)  # noqa: SLF001
+    ):
+        # N04 §1.7: a captured Design return keeps its handoff head under the attempt ref until its release.
+        if not _loader_git_is_ancestor(paths.repository_root, snapshot.change_head, context.branch_head):
+            _bootstrap_failure("local Design return capture does not descend from its remote Change head")
+        return context.branch_head
     metadata = workspace_manager._capture_builder_handoff_metadata(coordination)  # noqa: SLF001
     local_branch_head = _loader_git_output(
         paths.repository_root,

@@ -116,6 +116,7 @@ from owlbear_delivery.change_workspace import (
     ChangePauseRequestedError,
     ChangeWriter,
     CoordinationConflictError,
+    DesignReturnWorkspaceError,
     WorkspaceRecoverySnapshot,
 )
 from owlbear_delivery.delivery_admission import (
@@ -918,15 +919,40 @@ class PortfolioApplication(
         """Replace authored Design bytes for one exact package identity."""
         self._reconcile_runtimes()
         runtime = self._runtimes.get(change_id)
+        if runtime is not None and self._require_revision_allowed(
+            change_id, runtime, activation=False, allow_design_return=True
+        ):
+            try:
+                runtime.release_design_return()
+            except DesignReturnWorkspaceError as exc:
+                raise DeliveryRevisionError(exc.reason, str(exc)) from exc
         if runtime is not None:
             self._require_revision_allowed(change_id, runtime, activation=False)
+            # Package replacement clears its authority, after which a pending state publication can never publish.
+            self._replay_pending_state_publications(change_id)
+            if runtime.pending_state_publication() is not None:
+                refusal: tuple[DeliveryRevisionReason, str] = (
+                    "publication-pending",
+                    "the Delivery state is not published yet; retry once publication succeeds",
+                )
+                raise DeliveryRevisionError(*refusal)
         return self._package_store.revise(change_id, expected_package_id, intent_bytes, design_bytes)
 
-    def _require_revision_allowed(self, change_id: str, runtime: DeliveryRuntime, *, activation: bool) -> None:
-        """Refuse a requirement revision unless the admitted Change is paused, quiescent and nonterminal (I1)."""
+    def _require_revision_allowed(
+        self, change_id: str, runtime: DeliveryRuntime, *, activation: bool, allow_design_return: bool = False
+    ) -> bool:
+        """Refuse a requirement revision unless the admitted Change is paused, quiescent and nonterminal (I1).
+
+        With ``allow_design_return`` a retained Design-route handoff is accepted; returns whether one is retained.
+        """
         frontier = parse_delivery_frontier(runtime.frontier_bytes())[0]
         coordination = self._coordinator.show(change_id)
         action = coordination.continuation_action
+        design_return = allow_design_return and any(
+            binding.builder_handoff_context is not None
+            and binding.builder_handoff_context.route == "same-outcome-design"
+            for binding in frontier.bindings
+        )
         refusal: tuple[DeliveryRevisionReason, str] | None = None
         if frontier.change_completion is not None or frontier.change_abandonment is not None:
             refusal = ("change-terminal", "a terminal Change is immutable; start a successor Change")
@@ -941,13 +967,16 @@ class PortfolioApplication(
         elif frontier.change_disposition is not None:
             refusal = ("change-attention", "resolve the Change attention first")
         elif (
-            any(
-                binding.active_claim is not None or binding.builder_handoff_context is not None
-                for binding in frontier.bindings
+            any(binding.active_claim is not None for binding in frontier.bindings)
+            or (
+                not design_return
+                and (
+                    any(binding.builder_handoff_context is not None for binding in frontier.bindings)
+                    or coordination.writer is not None
+                    or coordination.builder_handoff is not None
+                )
             )
             or frontier.integration_repair_claim is not None
-            or coordination.writer is not None
-            or coordination.builder_handoff is not None
             or (action is not None and action.finished_at is None)
             or (not activation and coordination.design_package_snapshot_intent is not None)
         ):
@@ -956,6 +985,7 @@ class PortfolioApplication(
             refusal = ("publication-pending", "the current Delivery state is not published yet")
         if refusal is not None:
             raise DeliveryRevisionError(*refusal)
+        return design_return
 
     def publish_design_checkpoint(self, change_id: str) -> DesignCheckpointResult:
         """Checkpoint one verified active package without touching product refs."""
