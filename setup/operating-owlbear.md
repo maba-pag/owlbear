@@ -237,14 +237,22 @@ with deterministic outcomes, dependencies, commitments, and proof boundaries.
 
 ### Delivery
 
-After admission, invoke `/orchestrate`. Before dispatching, Orchestrator revalidates existing running
-Planner/Builder/Finalizer claims in its entry scope: `/continue-change` reads only its Change with
-`get_change`, while `/orchestrate` lists Changes. It asks once whether each
-exact prior run was stopped or closed; only a confirmed stop is released, while `worker-stall-wait`
-needs no question. Portfolio cycles then acquire a bounded ordered set of launch packages, dispatch
-only the worker named by each package, and forward the worker's transition unchanged. Tasks execute
-sequentially in the managed Change worktree and their promoted commits advance the Change branch
-directly.
+Admission ends with the continuation prompt `/continue-change <change-id>`. Run it in Copilot Chat;
+Cockpit's **Copy continuation prompt** copies the same prompt for a Change that is
+**Waiting for chat to resume**. Copying does not start an agent. One continuation chat carries exactly
+one Change: it reads the Change, acquires its next action from Delivery, and dispatches only that
+action: a Planner or Builder launch, the issued finalization, or an engine action that publishes a
+checkpoint, synchronizes with the target, marks the pull request ready, or observes acceptance. It
+repeats for the same Change until Delivery yields because the step needs you, waits for a service or
+another Change, or the Change is complete. After an interruption, run the same prompt again; it
+resumes from Delivery's recorded state. For several Changes, use one chat per Change: Delivery
+enforces the shared execution capacity and dependencies across them, and Cockpit shows the portfolio.
+
+Before its first acquisition, the chat checks the Change's running Planner, Builder, or Finalizer
+claims and asks once whether each exact prior run was stopped or closed; only a confirmed stop is
+released, while `worker-stall-wait` needs no question. The chat forwards each worker's transition
+unchanged. Tasks execute sequentially in the managed Change worktree and their promoted commits
+advance the Change branch directly.
 
 - Planning reads one typed plan context, publishes one independently reviewed task chain, and
   returns `advance`, `retry`, `return`, or `block`.
@@ -254,11 +262,37 @@ directly.
   repair, choose transitions, or mutate lifecycle state.
 
 Expected outcome: outcomes move through Planning and Build under one shared execution budget, with
-exact per-Change writer custody, without Orchestrator scheduling judgment or conversation-derived authority.
+exact per-Change writer custody, without scheduling judgment in the chat or conversation-derived
+authority. Cockpit shows each Change's progress, such as **Needs your decision**,
+**Waiting for another Change**, **Paused**, **Ready to merge**, and **Completed**, with its requests,
+**Pause** and **Resume**, and the **Acceptance evidence** for its criteria.
 
-For exact ended invocations, Orchestrator uses the typed `settle_worker_invocation` route for retries,
-Builder request pauses/returns and report-backed Finalizer failures. Successful submitted/finalized
-results already have their owner receipt and are not transitioned twice.
+For exact ended invocations, the continuation chat (the `orchestrator` agent) uses the typed
+`settle_worker_invocation` route for retries, Builder request pauses/returns and report-backed
+Finalizer failures. Successful submitted/finalized results already have their owner receipt and are
+not transitioned twice.
+
+To change the requirements of an admitted Change that is not complete, run `/design <change-id>` and
+describe the change. The Designer pauses the Change, revises its package, shows you the delta, and
+activates the revision after your approval: unchanged outcomes keep their bindings and evidence, and
+changed outcomes return to Planning. Then continue with `/continue-change <change-id>`. Completed,
+abandoned, and merged Changes cannot be revised; start a successor Change instead.
+
+### Exceptional Entries
+
+Normal work needs only `/ideate`, `/design`, and `/continue-change`. Delivery, Cockpit, or the
+continuation chat names one of these prompts when a step falls outside the normal path; run it with
+the arguments shown there.
+
+| Prompt | When to use it | Where it is offered |
+| --- | --- | --- |
+| `/resolve-target-conflict <change-id>` | Merging the target into the Change branch has a conflict, or the pull request has merge conflicts | Cockpit's target-conflict and publication actions; afterwards run `/continue-change <change-id>` |
+| `/address-pr-feedback <change-id>` | A reviewer left feedback on the published pull request: `start` repairs it, `resume` publishes and replies | You start it after external review; Cockpit's review-repair action names it |
+| `/resolve-delivery-attention <change-id> <attention-id>` | Delivery reports typed attention or a health diagnostic for a Change | The command on that attention in Cockpit, and Cockpit's health panel |
+| `/inspect-change <change-id>` | A read-only explanation of a Change, for example after retries are exhausted or when readiness is unavailable | The readiness prompt of that Change |
+| `/finalize-change <change-id>` | The continuation chat cannot dispatch the Finalizer in this host | The continuation chat names it; `/address-pr-feedback start` hands off to it |
+| `/repair-delivery [change-id]` | Delivery MCP is unavailable or refuses to start, or an activation failed or custody is retained | The continuation chat and the readiness prompt name it |
+| `/upgrade-delivery [commit]` | Upgrading OwlBear and migrating this project's Delivery state | Maintenance; see [Upgrading OwlBear](#upgrading-owlbear) |
 
 ### Correction And Recovery
 
@@ -273,7 +307,7 @@ Worker transitions keep correction finite and typed:
 | Planner/Builder no-result | `ended-without-result` after return + settled jobs | Preserve; same task after backoff |
 | Issuing VS Code window ended | Recorded PID/start time is gone; no writes for 30 seconds and no live process in the worktree or Git admin directory | Auto `worker-host-lost`; preserve work |
 | Write/process guard incomplete | `worker-stall-wait`; retry time for recent writes or process/scan details when unresolved | Yield; no question or replacement |
-| Stopped chat with live window | User confirms the exact run stopped; Cockpit "Release stuck worker" or `/release-stuck-worker` | One guarded `worker-released-stuck`; no same-cycle replacement |
+| Stopped chat with live window | User confirms the exact run stopped: Cockpit **Release stuck worker**, or the question `/continue-change` asks when it starts | One guarded `worker-released-stuck`; no same-cycle replacement |
 | Planning-stage premise failed | Planning worker returns `return` with evidence, target and source boundary | Runtime persists typed successor context; Design reopen is currently manual through `/design` |
 | Implementation Builder requests `block` or `return` | Orchestrator settles the exact ended invocation, preserving work and completed results | Genuine request-bearing block settles the pause and gates reacquisition until answered. Planning return permits lineage-preserving replan; Design return supplies complete Designer attention, not automatic revision/admission. Raw unsupervised transitions remain refused |
 | Retry episode is exhausted | Responsible agent receives bounded read-only diagnosis with the failure history | Nonterminal blocking prevents automatic redispatch; no fabricated user request, clear-block reset or fresh allowance is offered |
@@ -299,9 +333,10 @@ guard is still running; without a time, the prompt reports active process names 
 detail. Yield without settling or recovering. Restarting the MCP server while the issuing window is
 alive does not trigger automatic settlement.
 
-When the user states that a specific worker chat was stopped, use Cockpit's "Release stuck worker"
-action or `/release-stuck-worker` with the exact active claim identity. At Orchestrator session start,
-ask once about each exact `running` claim; do not ask about `worker-stall-wait`. This is a user
+When the user states that a specific worker chat was stopped, use Cockpit's **Release stuck worker**
+action, or answer `stopped/closed` to the question `/continue-change` asks for that exact active claim.
+When a continuation chat starts, it asks once about each exact `running` claim of its Change; it does
+not ask about `worker-stall-wait`. This is a user
 decision, not a process command. Delivery applies the same 30-second no-write and worktree/Git-admin
 process guard. If it returns `ERR_DELIVERY_WORKER_ACTIVE`, a retry time means the write guard is
 pending; otherwise report the active process or bounded observation details unchanged. Custody and
@@ -343,8 +378,10 @@ effects and exit status 2 without writes. Unknown pending effects must not be re
 
 ### Publication, Acceptance, And Completed History
 
-When every outcome is complete and the reviewed source boundary is current, run
-`/finalize-change <change-id>` for the exact Change head. Delivery publishes or reconciles a draft
+When every outcome is complete and the reviewed source boundary is current, the same continuation chat
+finalizes the exact Change head: it dispatches the issued finalization, which collects fresh evidence
+and an independent review. If this host cannot dispatch the Finalizer, the chat names
+`/finalize-change <change-id>` instead. Delivery publishes or reconciles a draft
 pull request for the Change branch, observes the required checks, and marks the PR ready only when
 the finalized head is unchanged. Target synchronization, when required, merges only the configured
 remote-tracking target into the managed Change worktree; it never updates the target branch or the
@@ -352,7 +389,8 @@ user checkout.
 
 When the PR is ready, mergeable and its required checks pass at the finalized head, and the proof
 target equals the current target branch head, Cockpit offers **Approve merge** with the repository,
-PR, exact head, target, proof and check summary and merge method. One approval sends one merge-commit
+PR, exact head, target, proof and check summary and merge method. The continuation chat shows the same
+offer and stops; only you approve, in Cockpit. One approval sends one merge-commit
 request fenced to that exact head; Delivery never enables auto-merge, uses a merge queue, bypasses
 rules or updates the target branch. You can also merge the PR in GitHub yourself. If GitHub never
 confirms an approved merge, Cockpit shows the PR link with **Check again**, Pause and Abandon; Delivery
@@ -387,7 +425,7 @@ of receipt-backed history.
   authority. Completed-history search reads current receipt-backed runtime records only.
 
 ```text
-/ideate -> /design -> explicit admission -> /orchestrate -> /finalize-change <change-id>
+/ideate -> /design -> explicit admission -> /continue-change <change-id> (repeat after any stop)
 Specification: read/revise -> checkpoint -> derive -> validate -> approve/admit
 Delivery: acquire -> plan/build -> publish -> worker transition
 Correction: returned end/no-result -> settlement -> same-task retry after backoff
@@ -395,8 +433,8 @@ Correction: returned end/no-result -> settlement -> same-task retry after backof
 Recovery: prior-session window exit -> automatic 30-second write/process guard; live-window stopped chat -> one user-directed release
 Wait: worker-stall-wait -> yield with retry time or process details
   | exhausted episode -> agent-owned read-only diagnosis
-Publication: finalize-change -> checkpoint -> draft PR -> finalized head -> ready PR
-Acceptance: user merges PR -> observe merged evidence -> completed lookup
+Publication: finalize -> checkpoint -> draft PR -> finalized head -> ready PR
+Acceptance: Approve merge in Cockpit (or merge in GitHub) -> observe merged evidence -> completed lookup
 ```
 
 ## Portability and recovery

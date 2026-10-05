@@ -199,17 +199,20 @@ After verification, prove the installation with one small outcome:
    **Expected result:** the Designer records a refined outcome and asks the next bounded question
    when more detail is needed.
 2. Continue with `/design`, review the proposed work, and approve admission. When it succeeds,
-   note the returned lowercase, hyphenated Change ID, for example `improve-search`.
+   note the returned lowercase, hyphenated Change ID, for example `improve-search`, and the next
+   prompt, `/continue-change improve-search`.
 
   **Expected result:** one approved Change is admitted, its verified package is backed up on the
   managed Change branch, its initial checkpoint is queued or published, and its ID is available
   for later commands. The remote recovery guarantee begins at this boundary; earlier drafts remain
   local.
-3. Run `/orchestrate` after admission. It acquires currently eligible work across the portfolio;
-  Planning and Build then proceed in order.
+3. Run `/continue-change improve-search` in Copilot Chat. It continues only that Change: Planning,
+  Build, finalization, and publication proceed in order until the chat stops for you or the pull
+  request is ready.
 
-   **Expected result:** the Change advances through currently eligible Planning and Build work, or
-   Cockpit shows a typed request or block that needs your action.
+   **Expected result:** the Change advances through Planning and Build, or the chat stops and
+   Cockpit shows a typed request or block that needs your action. After you act, run the same
+   prompt again.
 4. Launch Cockpit from the project root and confirm the Change is visible.
 
    ```shell
@@ -217,15 +220,18 @@ After verification, prove the installation with one small outcome:
    ```
 
    **Expected result:** Cockpit opens at `http://127.0.0.1:8420`, reads the current project, and
-   shows the Change, its current stage, and the next available action.
-5. Run `/finalize-change improve-search` after the Change is complete, then review and merge the
-  pull request in GitHub.
+   shows the Change, its progress, and the next available action, such as
+   **Copy continuation prompt**.
+5. When Cockpit shows **Ready to merge**, review the pull request and approve it with
+  **Approve merge**, or merge it in GitHub.
 
-   **Expected result:** Delivery prepares the exact reviewed Change for publication; GitHub remains
-   the place where a person reviews and merges the pull request.
+   **Expected result:** an approval merges only the exact reviewed head. After the merge, Delivery
+   observes it on GitHub and the Change shows **Completed**.
 
 If a worker returns a request or block, answer the request or clear the requestless block in Cockpit
-and then resume the named workflow. Do not edit `.owlbear` Delivery state by hand.
+and then run `/continue-change <change-id>` again. Do not edit `.owlbear` Delivery state by hand.
+Other prompts handle exceptions; see
+[Exceptional entries](operating-owlbear.md#exceptional-entries).
 
 Use the [Delivery workflow reference](operating-owlbear.md#delivery-workflow) when you need the
 detailed correction, publication, acceptance, or recovery procedure.

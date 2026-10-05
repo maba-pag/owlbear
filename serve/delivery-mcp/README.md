@@ -59,9 +59,9 @@ pull-request acceptance.
 
 Delivery startup isolates malformed or identity-mismatched per-Change state as bounded attention so
 valid Changes can continue to operate. Quarantined Changes are omitted from acquisition and dispatch
-but remain visible through the Cockpit health section and the read-only `delivery_health` tool. The
-orchestrator calls `delivery_health` with `{}` only when `acquire_frontier_work` returns a non-empty
-health hint; healthy acquisitions remain quiet. Global workspace, Git, configuration, and
+but remain visible through the Cockpit health section and the read-only `delivery_health` tool. A
+non-empty `health_hint` from `acquire_actions` points to `delivery_health`, which takes `{}`;
+healthy acquisitions remain quiet. Global workspace, Git, configuration, and
 unsupported persisted-state failures still fail closed at startup. Readers canonicalize one prior
 frontier/snapshot schema while preserving predecessor identity evidence; unrelated malformed state
 remains quarantined. Health never repairs persisted state. The read-only

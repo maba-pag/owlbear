@@ -135,7 +135,8 @@ Cockpit projects current Delivery state and user-owned controls without becoming
 | --- | --- |
 | Outcome portfolio | Admitted outcomes, dependencies, Planning/Build stages, task progress, and explicit per-Change admission/runtime status from `PortfolioApplication` |
 | Actionable attention | Typed requests, requestless blocks, long-idle claims, revision attention, publication and target-sync attention, and acceptance attention |
-| User controls | Answer requests, clear blocks, release workers, request recovery, move backward, observe acceptance |
+| Acceptance evidence | Each acceptance criterion's status and evidence records from Delivery's evidence projection |
+| User controls | Copy continuation prompt, Pause and Resume, answer requests, clear blocks, release workers, request recovery, move backward, approve merge, observe acceptance |
 | Completed history | Bounded list, semantic search, and exact completed-change lookup |
 | Startup authority | Tracked `.owlbear/delivery/config.json` and validated canonical Delivery roots |
 
@@ -158,13 +159,14 @@ Delivery read, so an already-running Cockpit can see newly admitted Changes with
 restart. Polling does not reload the full application, use SSE, or replace persisted Delivery
 authority.
 
-The assembled FastAPI inventory preserves 22 POST routes for user-owned controls:
+The assembled FastAPI inventory preserves 27 POST routes for user-owned controls:
 
 | Control family | Preserved operations | Routes |
 | --- | --- | ---: |
+| Continuation | Acquire the selected Change's next action; execute an acquired engine action | 2 |
 | Requests and outcomes | Answer/clear; release stopped worker; request recovery; move backward | 6 |
-| Publication and acceptance | Reconcile acceptance; reconcile a publication; mark ready; observe acceptance; observe publication checks; resolve attention; supersede a publication; defer; resume | 9 |
-| Target and worktree | Sync with target; abort or resolve a target conflict; abandon a Change; clean up abandoned or completed worktrees; recover a worktree | 7 |
+| Publication and acceptance | Reconcile acceptance; reconcile a publication; mark ready; observe acceptance; approve merge; adopt an external head; observe publication checks; resolve attention; supersede a publication; defer; resume | 11 |
+| Target and worktree | Sync with target; abort or resolve a target conflict; abandon a Change; clean up abandoned or completed worktrees, or discard a target merge and clean up; recover a worktree | 8 |
 
 These controls remain Cockpit user authority and continue to use the Delivery domain methods and
 locks. Cockpit does not schedule work, choose worker transitions, interpret reviewer evidence, or

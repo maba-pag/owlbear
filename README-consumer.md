@@ -13,27 +13,26 @@ tools, or your GitHub workflow.
 
 ## What it looks like
 
-You work in Copilot Chat. Four commands cover the normal loop:
+You work in Copilot Chat. Three prompts cover the normal loop:
 
 ```text
 /ideate                       Refine a rough idea, one question at a time.
 /design                       Turn it into an approved work package. You approve it.
-/orchestrate                  Run the work that is currently eligible: plan, build, review, repeat.
-/finalize-change my-change    Collect evidence and open the pull request.
+/continue-change my-change    Plan, build, review, and publish it. Run it again after any stop.
 ```
 
 ```mermaid
 flowchart LR
     A[Rough idea] -->|/ideate| B[Refined outcome]
     B -->|/design| C[Approved change]
-    C -->|/orchestrate| D[Plan, build, review]
-    D -->|/finalize-change| E[Pull request]
-    E -->|you merge| F[Completed history]
+    C -->|/continue-change| D[Plan, build, review, pull request]
+    D -->|you approve the merge| E[Completed history]
 ```
 
-Between those commands, a browser view called Cockpit shows what is in flight, what is waiting on
-you, and what already completed. When a step needs a decision or gets stuck, it stops and asks
-there instead of guessing.
+While a chat runs, a browser view called Cockpit shows what is in flight, what is waiting on you, and
+what already completed. When a step needs a decision or gets stuck, it stops and asks there instead
+of guessing. When the pull request is ready, you approve the merge in Cockpit or merge it in GitHub.
+A few other prompts handle exceptions; Cockpit or the chat names them when they are needed.
 
 ![Cockpit delivery portfolio: one change in Design, portfolio counters for work that needs you, is
 blocked, running, or ready, and the exact next command to run](share/diagrams/cockpit-delivery.png)
@@ -129,9 +128,11 @@ and [Troubleshooting](setup/setup-guide.md#troubleshooting).
 Prove the installation with one small outcome:
 
 1. `/ideate` — describe what you want. Answer the questions it asks.
-2. `/design` — review the proposed work and approve it. Note the Change ID it returns, for example
-   `improve-search`.
-3. `/orchestrate` — the work is planned, built, and reviewed in order. Repeat until it stops.
+2. `/design` — review the proposed work and approve it. It returns the Change ID and the prompt to
+   run next, for example `/continue-change improve-search`.
+3. `/continue-change improve-search` — the work is planned, built, reviewed, and published as a
+   pull request, in order. When the chat stops to wait for you, act in Cockpit, then run the same
+   prompt again.
 4. Open Cockpit from the project root to watch progress, or to answer whatever it is waiting for:
 
    ```shell
@@ -139,8 +140,8 @@ Prove the installation with one small outcome:
    ```
 
    It opens at `http://127.0.0.1:8420` and reads the project you launched it from.
-5. `/finalize-change improve-search` — OwlBear opens the pull request. You review and merge it on
-   GitHub.
+5. When Cockpit shows **Ready to merge**, review the pull request and approve it with
+   **Approve merge**, or merge it in GitHub yourself.
 
 The full walkthrough with expected output at each step is in
 [First successful workflow](setup/setup-guide.md#first-successful-workflow).

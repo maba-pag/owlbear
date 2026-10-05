@@ -196,7 +196,8 @@ tracked baseline:
 {"execution_capacity": 2, "claim_timeout_seconds": 1800}
 ```
 
-An active Planner or Builder claim is checked lazily during the next `acquire_frontier_work()` call;
+An active Planner or Builder claim is checked lazily during the next acquisition
+(`acquire_change_action()` or `acquire_frontier_work()`);
 `claim_timeout_seconds` (3600 seconds by default) identifies elapsed claims but is not proof that a
 worker stopped. `recover_claim` remains separate and refuses with
 `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` without supported host exclusion. At the next acquisition,
