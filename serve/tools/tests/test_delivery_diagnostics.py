@@ -1261,6 +1261,7 @@ _JOURNAL_CASES = {
     [
         ("fresh", [], []),
         ("format-0-with-records", ["FORMAT_MIGRATION_REQUIRED"], ["state-migration-required"]),
+        ("format-previous-with-records", ["FORMAT_MIGRATION_REQUIRED"], ["state-migration-required"]),
         ("format-4", ["FORMAT_UNSUPPORTED"], ["state-newer-than-controller"]),
         ("journal-applied", ["MIGRATION_INCOMPLETE"], ["state-migration-incomplete"]),
         ("journal-verified", [], []),
@@ -1281,6 +1282,8 @@ def test_inspector_mirrors_the_gate_format_and_journal_classification(
     runtime = root / ".owlbear/delivery/runtime"
     if case in {"fresh", "format-0-with-records"}:
         (runtime / "format.json").unlink()
+    elif case == "format-previous-with-records":
+        (runtime / "format.json").write_bytes(state_formats.format_marker_bytes(state_formats.SUPPORTED_FORMAT - 1))
     elif case == "format-4":
         (runtime / "format.json").write_text('{"format":4}\n', encoding="utf-8")
     elif case == "namespace-file":

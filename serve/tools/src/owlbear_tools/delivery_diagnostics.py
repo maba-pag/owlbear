@@ -1794,8 +1794,10 @@ def _inspect_format_marker(runtime_fd: int, inspection: _Inspection) -> None:
 
 
 def _require_format_for_runtime_records(inspection: _Inspection) -> None:
-    """Mirror the gate: format 0 is accepted only while no runtime record exists yet."""
-    if inspection.format_marker_present and inspection.observed_format != 0:
+    """Mirror the gate: an older format is accepted only while no runtime record exists yet."""
+    if inspection.format_marker_present and (
+        inspection.observed_format is None or inspection.observed_format >= SUPPORTED_FORMAT
+    ):
         return
     if any(inspection.counts[key] for key in ("frontier", "change_records", "coordination", "runtime_records")):
         inspection.diagnostic("FORMAT_MIGRATION_REQUIRED")
