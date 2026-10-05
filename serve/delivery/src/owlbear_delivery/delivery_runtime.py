@@ -2297,6 +2297,54 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
             )
             return result
 
+    def release_design_return(self) -> OutcomeAuthorityBinding:
+        """Preserve and release one retained Design-return handoff into a plain Design return (N04 §1.7)."""
+        manager = self._require_workspace()
+        with manager._coordinator.publication_lock(self._contract.change_id) as lock:  # noqa: SLF001
+            frontier, previous = self._read()
+            _require_change_mutable(frontier, "release_design_return")
+            _require_no_active_change_claim(frontier, "Design return release")
+            binding = next((item for item in frontier.bindings if item.builder_handoff_context is not None), None)
+            context = binding.builder_handoff_context if binding is not None else None
+            handoff = manager.show(self._contract.change_id).builder_handoff
+            if (
+                binding is None
+                or context is None
+                or context.route != "same-outcome-design"
+                or handoff is None
+                or handoff.settlement_id != context.settlement_id
+                or handoff.branch_head != context.branch_head
+                or handoff.metadata_fingerprint != context.metadata_fingerprint
+            ):
+                _conflict("Design return release requires one exact retained Design-route handoff")
+            participant = manager.release_design_return(self._contract.change_id, handoff, lock)
+            # A Design return declares the outcome's Design wrong: its tasks and results go, as in a claim-held return.
+            released = binding.model_copy(
+                update={"tasks": (), "results": (), "builder_handoff_context": None, "block": None}
+            )
+            # The handoff was never published; the remote still holds the last acknowledged state.
+            marker = (
+                DeliveryPendingStatePublication.model_validate_json(
+                    self._pending_publication_path.read_bytes(), strict=True
+                )
+                if self._pending_publication_path.is_file()
+                else None
+            )
+            base = (
+                self.publication_base_digest(previous)
+                if marker is None
+                else marker.frontier_digest
+                if marker.status == "acknowledged"
+                else marker.base_frontier_digest
+            )
+            self._replace_content(
+                previous,
+                _model_content(_replace_binding(frontier, binding, released)),
+                base_frontier_digest=base,
+                additional_participants=(participant,),
+            )
+            return released
+
     def resolve_request(
         self,
         request_id: str,

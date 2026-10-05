@@ -3231,7 +3231,7 @@ def _seed_two_task_builder(application, runtimes, coordinator, state_root):
     return completed_task, original_task, first_result, builder
 
 
-def _return_builder(application, builder, *, target: DeliveryStage = DeliveryStage.PLANNING):
+def _return_builder(application, builder, *, target: DeliveryStage = DeliveryStage.PLANNING, unmerged: bool = False):
     committed = builder.worktree_path / "preserved-builder-commit.txt"
     committed.write_text("committed Builder bytes\n", encoding="utf-8")
     _git(builder.worktree_path, "add", committed.name)
@@ -3244,6 +3244,15 @@ def _return_builder(application, builder, *, target: DeliveryStage = DeliverySta
     product.write_text("unstaged Builder bytes\n", encoding="utf-8")
     untracked = builder.worktree_path / "untracked.txt"
     untracked.write_text("untracked Builder bytes\n", encoding="utf-8")
+    if unmerged:
+        blob = _git(builder.worktree_path, "hash-object", "-w", untracked.name)
+        subprocess.run(  # noqa: S603
+            ("git", "-C", str(builder.worktree_path), "update-index", "--index-info"),  # noqa: S607
+            input="".join(f"100644 {blob} {stage}\tconflicted.txt\n" for stage in (1, 2, 3)),
+            check=True,
+            text=True,
+        )
+        (builder.worktree_path / "conflicted.txt").write_text("conflicted Builder bytes\n", encoding="utf-8")
     before_workspace = _workspace_content_snapshot(builder.worktree_path)
     reason = (
         "The admitted Design lacks the premise for the retained task."
@@ -3602,9 +3611,7 @@ def test_builder_return_to_design_routes_to_human_and_releases_capacity(tmp_path
     assert f"Completed boundary: {settled.return_context.completed_boundary}" in readiness.prompt
     assert "does not approve or admit" in readiness.prompt
     assert "managed worktree" in readiness.prompt
-    assert "Re-admission is unavailable while this handoff is retained" in readiness.prompt
-    assert "separate D04 work" in readiness.prompt
-    assert "Only read-only inspection, defer or abandon" in readiness.prompt
+    assert "Pause the Change, then revise its package with /design change-a" in readiness.prompt
 
     continuation = application.acquire_change_action(_continuation_request(application, "change-a"))
     assert continuation.kind == "human"
@@ -14706,7 +14713,8 @@ dependencies: []
     assert set(tree_paths) >= package_paths
 
 
-def test_design_return_revision_refuses_retained_builder_handoff(tmp_path: Path) -> None:
+@pytest.mark.parametrize("case", ["workspace-changed", "added-after-capture", "unmerged-index", "planning-route"])
+def test_design_return_release_refusal_changes_nothing(tmp_path: Path, case: str) -> None:
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.PLANNING},
@@ -14715,21 +14723,51 @@ def test_design_return_revision_refuses_retained_builder_handoff(tmp_path: Path)
     _completed_task, _original_task, _first_result, builder = _seed_two_task_builder(
         application, runtimes, coordinator, state_root
     )
-    settled, _branch_head, _workspace_before_return, _reason = _return_builder(
-        application,
-        builder,
-        target=DeliveryStage.DESIGN,
-    )
-    assert settled.builder_handoff_context is not None
+    worktree = builder.worktree_path
+    target = DeliveryStage.PLANNING if case == "planning-route" else DeliveryStage.DESIGN
+    _return_builder(application, builder, target=target, unmerged=case == "unmerged-index")
     _change_intent(application, "change-a", DeliveryChangeIntentKind.DEFER, reason="Revise requirements")
-    assert runtime.change_deferral() is not None
     current = application.read_design_session("change-a")
-    package_before = _file_bytes(tmp_path / "packages" / "change-a")
 
-    with pytest.raises(DeliveryRevisionError, match="custody-retained"):
-        application.revise_design_session("change-a", current.package_id, b"revised intent\n", current.design_bytes)
+    def revise() -> object:
+        return application.revise_design_session("change-a", current.package_id, b"revised intent\n", b"design\n")
 
-    assert _file_bytes(tmp_path / "packages" / "change-a") == package_before
+    if case == "workspace-changed":
+        (worktree / "untracked.txt").write_text("changed after the handoff\n", encoding="utf-8")
+    if case == "added-after-capture":
+        manager = application._workspace_manager
+        run_git = manager._run_git
+
+        def interrupt_reset(*arguments: str, **options: object) -> object:
+            if arguments[:2] == ("reset", "--hard"):
+                message = "interrupted reset"
+                raise RuntimeError(message)
+            return run_git(*arguments, **options)
+
+        with patch.object(manager, "_run_git", side_effect=interrupt_reset), pytest.raises(RuntimeError, match="reset"):
+            revise()
+        assert coordinator.show("change-a").dirty_worktree_quarantine is not None
+        (worktree / "added.txt").write_text("added after capture\n", encoding="utf-8")
+    before = (
+        runtime.frontier_bytes(),
+        coordinator.show("change-a"),
+        _workspace_content_snapshot(worktree),
+        _file_bytes(tmp_path / "packages" / "change-a"),
+    )
+    reason = {
+        "planning-route": "custody-retained",
+        "unmerged-index": "design-return-unmerged-index",
+    }.get(case, "design-return-workspace-changed")
+
+    with pytest.raises(DeliveryRevisionError, match=reason):
+        revise()
+
+    assert (
+        runtime.frontier_bytes(),
+        coordinator.show("change-a"),
+        _workspace_content_snapshot(worktree),
+        _file_bytes(tmp_path / "packages" / "change-a"),
+    ) == before
 
 
 def _revision_intent(second: str = "AC-002: The report is retained.") -> bytes:

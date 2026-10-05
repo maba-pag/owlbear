@@ -516,6 +516,7 @@ class _SnapshotMixin:
         operation_id: str,
         attempt_id: str,
         claim_id: str,
+        lock: PublicationLock | None = None,
     ) -> DirtyWorktreeQuarantineReceipt:
         current = self._coordinator.show(coordination.change_id)
         existing_receipt = current.dirty_worktree_quarantine
@@ -582,7 +583,7 @@ class _SnapshotMixin:
             quarantine_commit=quarantine_commit,
             paths=paths,
         )
-        self._coordinator.update(current.model_copy(update={"dirty_worktree_quarantine": receipt}))
+        self._coordinator.update(current.model_copy(update={"dirty_worktree_quarantine": receipt}), lock=lock)
         return receipt
 
     def verify_dirty_worktree_quarantine(
@@ -634,12 +635,14 @@ class _SnapshotMixin:
         )
 
     def _worktree_change_paths(self, worktree: Path) -> tuple[str, ...]:
+        # No optional locks: an index refresh would change a retained handoff's metadata fingerprint.
         status = self._run_git(
             "status",
             "--porcelain=v1",
             "-z",
             "--untracked-files=all",
             cwd=worktree,
+            environment={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
         ).stdout
         if status and not status.endswith(b"\0"):
             _workspace_failure("Git returned an unterminated dirty worktree status")
@@ -800,3 +803,20 @@ class _SnapshotMixin:
         if len(parents) != _COMMIT_PARENT_COUNT:
             _workspace_failure("quarantine commit does not have exactly one parent")
         return parents[1]
+
+    def _preserve_index_tree(self, worktree: Path, index_ref: str) -> None:
+        """Store the managed index as a tree under ``index_ref``, written from a copy (create-or-equal)."""
+        content = self._read_managed_index(self._resolve_managed_index(worktree))
+        index_fd, index_path = tempfile.mkstemp(prefix="owlbear-design-return-index-")
+        os.close(index_fd)
+        try:
+            Path(index_path).write_bytes(content)
+            environment = {**os.environ, "GIT_INDEX_FILE": index_path, "GIT_OPTIONAL_LOCKS": "0"}
+            tree = self._git("write-tree", cwd=worktree, environment=environment)
+        finally:
+            Path(index_path).unlink(missing_ok=True)
+        existing = self._run_git("rev-parse", "--verify", "--quiet", index_ref, check=False).stdout.decode().strip()
+        if not existing:
+            self._git("update-ref", index_ref, tree, "0" * 40)
+        elif existing != tree:
+            _workspace_failure("Design return index ref names another index tree")

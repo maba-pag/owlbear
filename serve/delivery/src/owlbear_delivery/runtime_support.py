@@ -91,7 +91,11 @@ def _require_change_mutable(
         _conflict("completed Delivery Change is terminal")
     if frontier.change_abandonment is not None:
         _conflict("abandoned Delivery Change is terminal")
-    if frontier.change_deferral is not None and operation not in {"resume_change", "abandon_change"}:
+    if frontier.change_deferral is not None and operation not in {
+        "resume_change",
+        "abandon_change",
+        "release_design_return",
+    }:
         _conflict("deferred Delivery Change requires resumption before mutation")
     if (
         frontier.change_disposition is not None

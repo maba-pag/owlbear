@@ -65,6 +65,7 @@ from owlbear_delivery.workspace_models import (  # noqa: F401
     ChangeWorktreeCleanupIntent,
     ChangeWriter,
     CoordinationConflictError,
+    DesignReturnWorkspaceError,
     DirtyWorktreeQuarantineReceipt,
     FinalizerAcquisition,
     IntegrationContext,
@@ -1310,6 +1311,96 @@ class ChangeWorkspaceManager(_WorktreeStateMixin, _PreservationMixin, _SnapshotM
                 coordination.last_reviewed_commit,
             )
             return self._coordinator.release(change_id, coordination.writer.claim_id)
+
+    def release_design_return(
+        self, change_id: str, handoff: ChangeBuilderHandoff, lock: PublicationLock
+    ) -> ReplacementTransactionParticipant:
+        """Capture one retained Design-return handoff under refs, reset to the reviewed head, prepare release.
+
+        Capture order (N04 §1.7): attempt ref, index tree ref, quarantine ref, receipt; reset only after it.
+        """
+        self._coordinator._require_publication_lock(lock, change_id)  # noqa: SLF001
+        coordination = self._coordinator.show(change_id)
+        if coordination.builder_handoff != handoff:
+            _coordination_conflict("Design return release requires its exact retained Builder handoff")
+        if not self._design_return_captured(coordination, handoff):
+            self._capture_design_return(coordination, handoff, lock)
+        worktree = coordination.worktree_path
+        self._git("reset", "--hard", coordination.last_reviewed_commit, cwd=worktree)
+        self._git("clean", "-fd", cwd=worktree)
+        if self._worktree_change_paths(worktree):
+            _workspace_failure("Design return release did not clean the managed worktree")
+        self._require_worktree(change_id, worktree, coordination.branch, coordination.last_reviewed_commit)
+        return self._coordinator._prepare_design_return_release(change_id, handoff, lock)  # noqa: SLF001
+
+    def _design_return_captured(self, coordination: ChangeCoordination, handoff: ChangeBuilderHandoff) -> bool:
+        """Recognize a complete Design-return capture; False when capture has not completed (N04 §1.7)."""
+        change_id = coordination.change_id
+        attempt_id = handoff.original_writer.attempt_id
+        preserved = self._resolve(f"refs/owlbear/attempts/{change_id}/{attempt_id}", missing_ok=True)
+        branch_head = self._resolve(coordination.branch)
+        receipt = coordination.dirty_worktree_quarantine
+        if receipt is None:
+            # A clean handoff needs no receipt: it is captured once its head is preserved and the branch reset.
+            return (
+                preserved == handoff.branch_head
+                and branch_head == coordination.last_reviewed_commit
+                and not self._worktree_change_paths(coordination.worktree_path)
+            )
+        index_ref = f"refs/owlbear/quarantine-index/{change_id}/{attempt_id}"
+        index_tree = self._run_git("rev-parse", "--verify", "--quiet", index_ref, check=False).stdout
+        if preserved != handoff.branch_head or not index_tree:
+            _workspace_failure("Design return quarantine receipt lacks its preservation refs")
+        try:
+            self._prepare_dirty_worktree_quarantine(
+                coordination=coordination,
+                worktree=coordination.worktree_path,
+                branch_head=branch_head,
+                quarantine_ref=f"refs/owlbear/quarantine/{change_id}/{attempt_id}",
+                operation_id=f"design-return-{handoff.settlement_id}",
+                attempt_id=attempt_id,
+                claim_id=handoff.original_writer.claim_id,
+            )
+        except CoordinationConflictError:
+            raise
+        except RuntimeError as exc:
+            raise DesignReturnWorkspaceError.workspace_changed() from exc
+        return True
+
+    def _capture_design_return(
+        self, coordination: ChangeCoordination, handoff: ChangeBuilderHandoff, lock: PublicationLock
+    ) -> None:
+        """Preserve head, index and worktree without changing the worktree or the managed index."""
+        change_id = coordination.change_id
+        attempt_id = handoff.original_writer.attempt_id
+        try:
+            metadata = self._capture_builder_handoff_metadata(coordination)
+        except PreservationFenceError as exc:
+            raise DesignReturnWorkspaceError.workspace_changed() from exc
+        if metadata.fingerprint != handoff.metadata_fingerprint or metadata.branch_head != handoff.branch_head:
+            raise DesignReturnWorkspaceError.workspace_changed()
+        worktree = coordination.worktree_path
+        if self._preservation_git("ls-files", "--unmerged", cwd=worktree).stdout:
+            raise DesignReturnWorkspaceError.unmerged_index()
+        attempt_ref = f"refs/owlbear/attempts/{change_id}/{attempt_id}"
+        preserved = self._resolve(attempt_ref, missing_ok=True)
+        if preserved is None:
+            self._git("update-ref", attempt_ref, handoff.branch_head, "0" * 40)
+        elif preserved != handoff.branch_head:
+            _workspace_failure("attempt history ref names another rejected head")
+        if not self._worktree_change_paths(worktree):
+            return
+        self._preserve_index_tree(worktree, f"refs/owlbear/quarantine-index/{change_id}/{attempt_id}")
+        self._prepare_dirty_worktree_quarantine(
+            coordination=coordination,
+            worktree=worktree,
+            branch_head=handoff.branch_head,
+            quarantine_ref=f"refs/owlbear/quarantine/{change_id}/{attempt_id}",
+            operation_id=f"design-return-{handoff.settlement_id}",
+            attempt_id=attempt_id,
+            claim_id=handoff.original_writer.claim_id,
+            lock=lock,
+        )
 
     def _reject_unpromoted_adoption_restart(
         self,

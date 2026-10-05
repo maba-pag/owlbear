@@ -300,8 +300,12 @@ Refusals use `ERR_DELIVERY_REVISION` and name their reason: `change-not-paused` 
 (Pause and wait), `change-finalized` (run `prepare_review_repair`, then Pause), `change-attention`
 (resolve it first), `custody-retained` (a worker, handoff or snapshot still holds the Change),
 `publication-pending` (retry after state publication succeeds), `reviewed-head-moved` (repair the
-branch first), and `change-terminal` or `change-merged` (start a successor Change). To drop a revision
-before activation, revise the package back to the approved bytes and activate it.
+branch first), and `change-terminal` or `change-merged` (start a successor Change). A Change paused
+after a Builder's Design return is released by the revision itself: its work is preserved under refs and
+the worktree reset. `design-return-workspace-changed` or `design-return-unmerged-index` means the retained
+worktree no longer matches its handoff or holds an unmerged index; report it and do not touch the
+worktree. To drop a revision before activation, revise the package back to the approved bytes and
+activate it.
 
 ## Session Output
 

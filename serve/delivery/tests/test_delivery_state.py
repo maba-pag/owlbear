@@ -119,7 +119,11 @@ from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
 from owlbear_delivery.git_executable import resolve_git_executable
 from owlbear_delivery.state_formats import format_marker_bytes
 from owlbear_delivery.target_contract import DeliverySourceBinding
-from owlbear_delivery.workspace_models import ChangeDesignPackageSnapshotReceipt, DesignPackageSnapshotEditedError
+from owlbear_delivery.workspace_models import (
+    ChangeDesignPackageSnapshotReceipt,
+    DesignPackageSnapshotEditedError,
+    DirtyWorktreeQuarantineReceipt,
+)
 
 _GIT = resolve_git_executable()
 
@@ -4729,3 +4733,185 @@ def test_revision_snapshot_replay_refuses_package_edits_made_after_interruption(
     assert (worktree / relative).read_bytes() == b"# Designer edit\n"
     assert (_git(worktree, "show", f":{relative}") == "# Designer edit") is staged
     close_delivery_application(restarted)
+
+
+def _authored_package_id(application: PortfolioApplication, change_id: str) -> str:
+    package = application.read_design_session(change_id)
+    manifest = DesignPackageManifest.from_content(change_id, package.intent_bytes, package.design_bytes)
+    return hashlib.sha256(manifest.canonical_bytes()).hexdigest()
+
+
+def _published_design_return(tmp_path: Path) -> tuple[PortfolioApplication, DeliveryStartupConfig, Path, object, str]:
+    """Publish one authored Change, return its Builder to Design with committed, staged, unstaged and untracked work,
+    then Pause it."""
+    repository, remote, _initial = _repository(tmp_path)
+    _git(repository, "config", "url." + str(remote) + ".insteadOf", "https://github.com/example/project.git")
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    config = DeliveryStartupConfig(
+        schema_version=2,
+        remote="origin",
+        target_branch="main",
+        github_repository="example/project",
+        delivery_state_branch="owlbear/delivery-state",
+    )
+    application = load_delivery_application(config, workspace_root=repository)
+    change_id = "design-return"
+    application.create_design_session(change_id, _revision_sources("AC-002: Retained."), b"# Architecture\n")
+    admitted = application.admit_delivery_change(
+        DeliveryAdmissionRequest(
+            change_id=change_id, expected_package_id=_authored_package_id(application, change_id), active_claim_ids=()
+        )
+    )
+    runtime = application._runtimes[change_id]  # noqa: SLF001
+    application._publish_delivery_state(change_id, runtime, "design-return-first-state")  # noqa: SLF001
+    task = DeliveryTaskDefinition(
+        task_id="TASK-001",
+        outcome_id="OUT-001",
+        plan_scope_id=admitted.frontier.bindings[0].plan_scope_id,
+        title="Implement the launch",
+        result="Make the launch observable.",
+        commitment_ids=("COM-001",),
+        dependency_ids=(),
+        required_outputs=("Launch implementation",),
+        maintained_surfaces=("serve/delivery",),
+        constraints=("Use the reviewed branch.",),
+        exclusions=("Do not rewrite target history.",),
+        acceptance_observations=("The launch is observable.",),
+        proof_boundaries=("DeliveryRuntime.transition",),
+    )
+    # Seed the planned outcome through the runtime writer so its publication marker stays exact.
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=True)
+    seeded = frontier.model_copy(
+        update={
+            "bindings": (
+                frontier.bindings[0].model_copy(update={"stage": DeliveryStage.IMPLEMENTATION, "tasks": (task,)}),
+            ),
+            "pending_checkpoint": None,
+            "published_head": application._coordinator.show(change_id).last_reviewed_commit,  # noqa: SLF001
+        }
+    )
+    runtime._replace_content(runtime.frontier_bytes(), _model_content(seeded))  # noqa: SLF001
+    application._publish_delivery_state(change_id, runtime, "design-return-seeded-state")  # noqa: SLF001
+    assert runtime.pending_state_publication() is None
+    builder = application.acquire_frontier_work().launch_packages[0]
+    worktree = builder.worktree_path
+    (worktree / "committed.txt").write_text("committed Builder bytes\n", encoding="utf-8")
+    _git(worktree, "add", "committed.txt")
+    _git(worktree, "commit", "-m", "Builder work")
+    branch_head = _git(worktree, "rev-parse", "HEAD")
+    (worktree / "staged.txt").write_text("staged Builder bytes\n", encoding="utf-8")
+    _git(worktree, "add", "staged.txt")
+    (worktree / "staged.txt").write_text("unstaged Builder bytes\n", encoding="utf-8")
+    (worktree / "untracked.txt").write_text("untracked Builder bytes\n", encoding="utf-8")
+    application.settle_worker_invocation(
+        DeliveryBuilderInvocationSettlement(
+            change_id=change_id,
+            outcome_id="OUT-001",
+            claim_id=builder.claim.claim_id,
+            attempt_id=builder.claim.attempt_id,
+            task_id=builder.task_id,
+            expected_last_reviewed_commit=builder.last_reviewed_commit,
+            disposition="normal-return",
+            request=ReturnDelivery(
+                action="return",
+                outcome_id="OUT-001",
+                claim_id=builder.claim.claim_id,
+                target=DeliveryStage.DESIGN,
+                reason="The admitted Design lacks the launch premise.",
+                locators=("design.md",),
+                preserved_commit=branch_head,
+                attempt_id=builder.claim.attempt_id,
+            ),
+        ),
+        host_id=builder.claim.owner_id,
+        session_id=builder.claim.process_id,
+    )
+    application.set_change_intent(
+        DeliveryChangeIntent(
+            change_id=change_id,
+            kind=DeliveryChangeIntentKind.DEFER,
+            expected_frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+            reason="Revise requirements",
+        )
+    )
+    assert runtime.change_deferral() is not None
+    return application, config, repository, builder, branch_head
+
+
+@pytest.mark.parametrize(
+    "boundary", [None, "before-quarantine-ref", "before-receipt", "after-capture", "after-reset", "before-release"]
+)
+def test_design_return_readmission_preserves_builder_work_across_restart(tmp_path: Path, boundary: str | None) -> None:
+    application, config, repository, builder, branch_head = _published_design_return(tmp_path)
+    change_id, worktree, attempt_id = builder.change_id, builder.worktree_path, builder.claim.attempt_id
+    revised = _revision_sources("AC-002: Revised.")
+    if boundary is not None:
+        manager = application._workspace_manager  # noqa: SLF001
+        run_git = manager._run_git  # noqa: SLF001
+
+        def crash_at(command: tuple[str, ...]) -> object:
+            def run(*arguments: str, **options: object) -> object:
+                if arguments[: len(command)] == command:
+                    raise _Crash
+                return run_git(*arguments, **options)
+
+            return patch.object(manager, "_run_git", side_effect=run)
+
+        crash = {
+            "before-quarantine-ref": crash_at(("commit-tree",)),
+            "before-receipt": patch.object(DirtyWorktreeQuarantineReceipt, "create", side_effect=_Crash),
+            "after-capture": crash_at(("reset", "--hard")),
+            "after-reset": crash_at(("clean",)),
+            "before-release": patch.object(PortfolioCoordinator, "_prepare_design_return_release", side_effect=_Crash),
+        }[boundary]
+        package_id = application.read_design_session(change_id).package_id
+        with crash, pytest.raises(_Crash):
+            application.revise_design_session(change_id, package_id, revised, b"# Architecture\n")
+        close_delivery_application(application)
+        application = load_delivery_application(config, workspace_root=repository)
+        health = application.delivery_health()
+        assert health.status.value == "healthy", health
+
+    application.revise_design_session(
+        change_id, application.read_design_session(change_id).package_id, revised, b"# Architecture\n"
+    )
+
+    runtime = application._runtimes[change_id]  # noqa: SLF001
+    coordination = application._coordinator.show(change_id)  # noqa: SLF001
+    released = runtime.show_binding("OUT-001")
+    assert (released.stage, released.tasks, released.results) == (DeliveryStage.DESIGN, (), ())
+    assert released.builder_handoff_context is None
+    assert released.return_context is not None
+    assert released.return_context.preserved_commit == branch_head
+    assert (coordination.writer, coordination.builder_handoff) == (None, None)
+    assert runtime.pending_state_publication() is None
+    assert _git(worktree, "rev-parse", "HEAD") == builder.last_reviewed_commit
+    assert _git(worktree, "status", "--porcelain", "--untracked-files=all") == ""
+    attempt, index, quarantine = (
+        f"refs/owlbear/{kind}/{change_id}/{attempt_id}" for kind in ("attempts", "quarantine-index", "quarantine")
+    )
+    assert _git(repository, "rev-parse", attempt) == branch_head
+    assert _git(repository, "show", f"{attempt}:committed.txt") == "committed Builder bytes"
+    assert _git(repository, "show", f"{index}:staged.txt") == "staged Builder bytes"
+    assert _git(repository, "show", f"{quarantine}:staged.txt") == "unstaged Builder bytes"
+    assert _git(repository, "show", f"{quarantine}:untracked.txt") == "untracked Builder bytes"
+
+    activated = application.admit_change(
+        DeliveryAdmissionRequest(
+            change_id=change_id,
+            expected_package_id=_authored_package_id(application, change_id),
+            active_claim_ids=(),
+            expected_frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+            expected_design_package_snapshot_receipt_id=coordination.design_package_snapshot.receipt_id,
+        )
+    )
+
+    replanned = activated.frontier.bindings[0]
+    assert replanned.stage is DeliveryStage.PLANNING
+    assert replanned.return_context is not None
+    assert replanned.return_context.preserved_commit == branch_head
+    launches = application.acquire_frontier_work().launch_packages
+    assert [(launch.outcome_id, launch.claim.worker_role) for launch in launches] == [
+        ("OUT-001", DeliveryWorkerRole.PLANNER)
+    ]
+    close_delivery_application(application)

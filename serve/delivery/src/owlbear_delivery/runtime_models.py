@@ -2043,6 +2043,7 @@ _NORMAL_CHANGE_MUTATIONS = frozenset(
         "resolve_request",
         "unblock",
         "administrative_move",
+        "release_design_return",
         "defer_change",
         "resume_change",
         "abandon_change",
@@ -2108,6 +2109,7 @@ _PAUSE_GATED_MUTATIONS = frozenset(
         "unblock",
         "administrative_move",
         "resolve_change_disposition",
+        "release_design_return",
     }
 )
 

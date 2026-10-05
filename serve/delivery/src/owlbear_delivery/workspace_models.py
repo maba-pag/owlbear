@@ -1493,6 +1493,26 @@ class PreservationFenceError(RuntimeError):
     code = "ERR_WORKSPACE_PRESERVATION_FENCE"
 
 
+class DesignReturnWorkspaceError(PreservationFenceError):
+    """A retained Design-return worktree cannot be released as captured (N04 §1.7)."""
+
+    def __init__(
+        self, reason: Literal["design-return-workspace-changed", "design-return-unmerged-index"], message: str
+    ) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+    @classmethod
+    def workspace_changed(cls) -> Self:
+        """Refuse a worktree that no longer matches its handoff metadata or its capture."""
+        return cls("design-return-workspace-changed", "the Design-return worktree differs from its handoff or capture")
+
+    @classmethod
+    def unmerged_index(cls) -> Self:
+        """Refuse an index with unmerged entries, which no tree can capture."""
+        return cls("design-return-unmerged-index", "the Design-return index has unmerged entries")
+
+
 class PublicationLease(_WorkspaceModel):
     """Expiring custody for one exact Change publication attempt."""
 
@@ -1644,12 +1664,12 @@ class ChangeCoordination(_WorkspaceModel):
         if self.writer != expected_writer or self.last_reviewed_commit != handoff.last_reviewed_commit:
             message = "Builder handoff does not match its retained workspace custody"
             raise ValueError(message)
+        # A Design-return release stores its quarantine receipt (bound to this writer) before it releases (N04 §1.7).
         if any(
             (
                 self.publication_lease,
                 self.worktree_cleanup_intent,
                 self.worktree_cleanup,
-                self.dirty_worktree_quarantine,
                 self.target_sync_conflict,
                 self.external_head_adoption_intent,
             )
