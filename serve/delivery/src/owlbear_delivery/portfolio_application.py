@@ -953,6 +953,10 @@ class PortfolioApplication(
             and binding.builder_handoff_context.route == "same-outcome-design"
             for binding in frontier.bindings
         )
+        handoff = next(
+            (binding.builder_handoff_context for binding in frontier.bindings if binding.builder_handoff_context),
+            None,
+        )
         refusal: tuple[DeliveryRevisionReason, str] | None = None
         if frontier.change_completion is not None or frontier.change_abandonment is not None:
             refusal = ("change-terminal", "a terminal Change is immutable; start a successor Change")
@@ -980,7 +984,14 @@ class PortfolioApplication(
             or (action is not None and action.finished_at is None)
             or (not activation and coordination.design_package_snapshot_intent is not None)
         ):
-            refusal = ("custody-retained", "the Change retains worker, handoff or snapshot custody")
+            refusal = (
+                "custody-retained",
+                "the Change retains worker, handoff or snapshot custody"
+                if handoff is None or design_return
+                else f"{handoff.outcome_id} retains a {handoff.route} Builder handoff for {handoff.original_task_id}; "
+                "Resume the Change and continue it until that task is settled (Cockpit shows its next step), "
+                "then Pause and revise",
+            )
         elif activation and runtime.pending_state_publication() is not None:
             refusal = ("publication-pending", "the current Delivery state is not published yet")
         if refusal is not None:
@@ -1376,15 +1387,18 @@ class PortfolioApplication(
                 block=outcome_detail.block if outcome_detail.block and not outcome_detail.block.resolved else None,
                 active_claim=outcome_detail.active_claim,
                 recovery_attention=outcome_detail.recovery_attention,
+                builder_handoff=handoff,
             )
             for card in items
             if card.scope is WorkItemScope.OUTCOME
             for outcome_detail in (projector.show_view(card.item_key),)
+            for handoff in (runtime.show_binding(card.work_item_id).builder_handoff_context,)
             if (
                 any(request.resolution is None for request in outcome_detail.requests)
                 or (outcome_detail.block is not None and not outcome_detail.block.resolved)
                 or outcome_detail.active_claim is not None
                 or outcome_detail.recovery_attention is not None
+                or handoff is not None
             )
         )
         return DeliveryChangeView(
