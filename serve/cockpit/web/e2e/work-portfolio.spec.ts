@@ -1075,6 +1075,14 @@ test.describe("assembled Delivery portfolio", () => {
     await expect(detail.getByTestId("readiness-prompt")).toHaveText(copied);
     await expect(detail.getByTestId("readiness-progress")).toHaveText("Waiting for chat to resume");
     await expect(detail.getByTestId("change-pause-work-e2e").getByText("Pause", { exact: true })).toBeVisible();
+    const requirements = detail.getByRole("button", { name: "Change requirements" });
+    await expect(requirements).toHaveAccessibleDescription(
+      /run it in Copilot Chat\. Copying does not start an agent\.$/,
+    );
+    await requirements.click();
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe("/design work-e2e Change requirements:");
     await returnToPortfolio(page, trigger);
 
     const control = page.getByTestId("change-pause-publication-e2e");

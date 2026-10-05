@@ -97,6 +97,9 @@ _TARGET_ROLE_TOOLS = {
         "publish_design_checkpoint",
         "derive_delivery_contract",
         "admit_change",
+        "get_change",
+        "set_change_intent",
+        "prepare_review_repair",
     },
     "planner": {"show_plan_context", "publish_delivery_plan"},
     "builder": {
@@ -1196,6 +1199,14 @@ _FINALIZER = "share/agents/finalizer.agent.md"
         (
             "share/agents/planner-challenger.agent.md",
             "an uncited criterion or an ID outside the context is a `finding`",
+        ),
+        (
+            "share/agents/planner-challenger.agent.md",
+            "Retained completed tasks are history: their citations are not findings",
+        ),
+        (
+            "share/skills/w-frontier-planning/SKILL.md",
+            "Repeat every `DeliveryPlanContext.retained_tasks` entry verbatim",
         ),
         ("share/agents/designer-challenger.agent.md", "Each outcome acceptance item reads `AC-NNN: <statement>`"),
         ("serve/delivery/README.md", "digests prove content integrity, not that a procedure ran"),

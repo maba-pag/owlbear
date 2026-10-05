@@ -73,7 +73,12 @@ from owlbear_delivery.draft_pull_request import (
     GeneratedPullRequestSummaryReceipt,
     PullRequestReadyReceipt,
 )
-from owlbear_delivery.evidence import DeliveryContextRefusal, DeliveryEvidenceProjection, DeliveryFinalizationSemantics
+from owlbear_delivery.evidence import (
+    DeliveryContextRefusal,
+    DeliveryCriterionCoverage,
+    DeliveryEvidenceProjection,
+    DeliveryFinalizationSemantics,
+)
 from owlbear_delivery.portfolio_operating import (
     DeliveryHealthDiagnostic,
     DeliveryHealthStatus,
@@ -740,6 +745,9 @@ class DeliveryPlanContext(_ApplicationModel):
     requests: tuple[DeliveryRequest, ...]
     return_context: DeliveryReturnContext | None = None
     acceptance: tuple[DeliveryAcceptanceCriterion, ...] = ()
+    # A published plan must repeat these completed task definitions unchanged.
+    retained_tasks: tuple[DeliveryTaskDefinition, ...] = ()
+    coverage: tuple[DeliveryCriterionCoverage, ...] = ()
 
 
 class DeliveryBuildContext(_ApplicationModel):
