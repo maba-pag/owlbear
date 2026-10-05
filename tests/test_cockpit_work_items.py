@@ -2928,6 +2928,7 @@ def test_list_and_detail_preserve_known_unavailable_change_projection() -> None:
                 "progress": None,
                 "merge_offer": None,
                 "merge_block": None,
+                "merge_attempt": None,
             },
         },
     ]
