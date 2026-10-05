@@ -1,0 +1,351 @@
+# Delivery N10 — Regression Matrix, Host Journey and Live Migration
+
+> **Package:** N10 of the
+> [execution plan](delivery-redesign-execution-plan.md#n10--regression-matrix-host-journey-and-live-migration),
+> reduced 2026-10-04.
+> **Planned on:** `origin/dev` `66871ee92` (N09-P2 and N05-B1 merged; N03-C, N04-A–C, N05-B2–D, N08-C,
+> N09-B and N09-C not merged). Live Delivery is pinned to release `841b1cffb` (format 2); N05-B2 adds the
+> next format step. Live state was not read; probes were read-only source and test inventory. Rebased on
+> `origin/dev` `9b77ddadd` (N03-C #373 and N08-C #370 merged); their planned citations resolve at N10-A start (D4).
+> **Status:** N10-P plan gate closed 2026-10-05. Sol plan gate round 1 on `eb185eb3f`: revision-required,
+> three documentation-level findings, all accepted fix-now and applied (U3 option (c) removed, D7 regression gate,
+> V08 proof); the gate ends with these corrections. Plan decisions U1 and U2 settled (D13, D14). Product code is unchanged by
+> this phase. Reviews work in the execution plan's
+> [operating context](delivery-redesign-execution-plan.md#19-operating-context).
+
+## 1. Contract
+
+### 1.1 Result
+
+- **N10-A:** every remaining V-scenario (V01–V24 without V17, V22 and V23), U1–U8 and programme §14.5 has
+  named proof on the exact candidate (P23). Existing maintained tests carry almost all of it (§1.7); the one
+  new durable test is an assembled V01 journey. The full suites pass on the candidate, and the candidate
+  passes the upgrade rehearsal from the live release.
+- **N10-H:** one real VS Code / Copilot journey with the user on a disposable project, from design through
+  completion (P24, host half), recorded in a docs-only PR.
+- **N10-M:** the live controller is upgraded to the final release through `/upgrade-delivery`, the three
+  live Changes are disposed of (§3.3), B1 continues, the programme issues are closed with evidence, and the
+  programme and execution plan are marked complete in a docs-only PR.
+
+### 1.2 Requirements
+
+| ID | Requirement | Source |
+| --- | --- | --- |
+| R1 | The remaining V-matrix passes as regression on the exact candidate | Execution plan §5 N10, §6; programme §13; P23 |
+| R2 | U1–U8 and programme §14.5 have proof or a recorded, accepted limit | Programme §1.1, §14.5; execution plan §6 |
+| R3 | One host journey, design through completion, on a disposable project on macOS | Execution plan §5 N10, §1.1; P24; V01 "separate actual Copilot smoke" |
+| R4 | Every verification gap of N01–N09 owned by N10 is closed or recorded (§1.9) | Execution plan §1.7 item 5 |
+| R5 | The live controller is upgraded to the final release through the rehearsed procedure | Execution plan §1.3, §5 N10; [N02 plan](delivery-n02-plan.md) §3.5 |
+| R6 | `delivery-action-readiness` completes or is observed; `frontier-serialization-contract` is abandoned through the supported route and PR #314 closed after the user confirms; B1 is reconciled once and continues | Execution plan §2.6, §5 N10, §7 |
+| R7 | Issues #213, #215, #216 and #218–#222 (and #225 if N05-D is built) are closed with evidence | Execution plan §6 |
+| R8 | Programme section 0 and the execution plan are marked complete | Execution plan §5 N10 |
+
+### 1.3 Invariants
+
+- **I1 No new mechanism.** N10 adds one test and documentation. A product defect found in any N10 phase is
+  fixed by a normal fix PR with proof and the implementation gate, never inside an evidence PR.
+- **I2 Disposable until N10-M.** N10-A and N10-H use disposable state and repositories only. Live writes
+  happen only in N10-M, with the user present and authorizing each step (execution plan §1.3).
+- **I3 Supported routes only.** Live state changes only through `/upgrade-delivery`, Cockpit controls,
+  Delivery tools and `delivery-repair` proposals; never by editing records, refs, the pin or launchers.
+- **I4 Evidence proves its own boundary.** An automated test is not host evidence; a host observation is
+  not regression proof ([challenger protocol](../../share/skills/r-challenger-protocol/SKILL.md)). A host gap is
+  recorded only to the boundary actually observed (an alive-window interruption is not unknown-issuer evidence).
+
+### 1.4 Existing owners to reuse
+
+- Assembled tests: the default loader; `Client(assemble_target_server(...))` (Delivery MCP tests); the Cockpit
+  HTTP test client (`tests/test_cockpit_work_items.py`); the memory publication and merge provider of
+  `owlbear_delivery_github` (N05-A); N05-B2's `approve_merge` and N05-C's HTTP approve route.
+- Upgrade: `share/prompts/upgrade-delivery.prompt.md`, `delivery-controller`, `delivery-migrate`,
+  `delivery-lc run --form upgrade` and the N02-D H-step runbook, including its checkout-collisions check
+  ([N02 plan](delivery-n02-plan.md) §3.5).
+- Repair: `/repair-delivery`, `delivery-diagnose`, `delivery-repair` (N08-A).
+- Dispositions: Cockpit **Abandon Change** (`set_change_intent` abandon) and **Clean abandoned worktree**;
+  `get_change`, `show_operator_context` and the evidence projection (N03-C); Pause and `/design` revision (N04).
+- Disposable project: `setup/setup-guide.md` and `setup/init.py` (consumer default, unpinned).
+
+### 1.5 Exclusions
+
+- A test per V-scenario or per criterion; a second Cockpit journey E2E beside N05-C's approve E2E; real-GitHub
+  scenarios beyond N05-C's smoke test (N05 plan G1, documented limit).
+- B1's TASK-004 managed-device pilot (V23, B1's own acceptance) and B1's work after its reconciliation.
+- Host runs on Ubuntu (host acceptance is macOS; Ubuntu is proven by CI, execution plan §1.1).
+- Broader automatic recovery and physical worker exclusion (D03 bounded recovery).
+
+### 1.6 Decisions
+
+Settled by the planner (2026-10-05), each with one defensible answer in the operating context:
+
+- **D1 Cite, do not duplicate.** Each V-scenario cites the maintained tests that already exercise it (§1.7);
+  N10-A runs the full suites on the exact candidate, which is the regression (P23). No per-V test files.
+- **D2 One new durable test: the assembled V01 journey.** The engine journey exists in two halves that do not
+  meet: `test_continuation_plans_builds_and_finalizes_via_existing_result_routes` stops at
+  `engine-owner-unavailable` (no publisher attached) and `test_continuation_publishes_syncs_finalizes_and_observes_acceptance`
+  starts from a Completed outcome with a fixture checkpoint and a manual merge (P3). No test runs one Change
+  across every stage handoff through the registered MCP and HTTP surfaces with the approval. A seam between
+  phases is shared, easy to regress and hard to notice, so this is the one place a durable test earns its cost.
+- **D3 Route audit, not a test.** Programme §14.5 requires every supported failure to resume automatically or
+  expose one working prompt or control. N10-A records, for every `DeliveryReadinessReason` on the candidate,
+  its route; existing tests already pin the progress mapping and prompt applicability. Only a reason without
+  a route is a defect and gets a fix with one test.
+- **D4 Planned citations resolve at N10-A start.** Rows that cite a scenario of an unmerged phase (marked
+  *planned*) are replaced by that phase's merged node IDs. A phase that merged without its planned scenario is
+  a gap of that phase, repaired by a fix PR of its package, not rebuilt in N10-A.
+- **D5 macOS host only.** N10-H runs on macOS (execution plan §1.1); Ubuntu is covered by CI on the exact heads.
+- **D6 N10-A carries the upgrade rehearsal.** N10-A is the last product phase, so its closeout runs
+  `delivery-lc run --form upgrade --previous 841b1cffb…` on its candidate. N10-M reuses it when only
+  documentation changed since (N02 runbook rule), otherwise reruns it.
+- **D7 N10-H defects.** A defect found in the host journey stops that step. It is fixed in a fix PR
+  (`redesign/n10-h-fix-<slug>`, `N10-H: fix <defect>`, normal proof and implementation gate). After merge the
+  affected host steps are rerun, and the N10-A regression gate (full suites on the exact head, §3.1 closeout) runs
+  again on the final product-code head; a docs-only change needs no repeat. D6 refreshes the upgrade rehearsal
+  when code changed. The evidence PR follows.
+- **D8 `/upgrade-delivery` unchanged.** N10-M runs the shipped prompt; this plan adds only the preconditions,
+  the checkout alignment and the dispositions around it.
+- **D9 Abandonment by the user.** `frontier-serialization-contract` is abandoned by the user in Cockpit
+  (**Abandon Change**, reason naming N02-A #348 and #215). Abandonment does not close the PR (no provider
+  close exists, P5); the agent closes PR #314 with a comment after the user confirms.
+- **D10 B1 through supported routes.** The reconciliation is diagnosis plus existing routes (§3.3 step 5).
+  A blocker without a route stops N10-M's B1 step and becomes a fix PR; nothing is edited by hand.
+- **D11 U8 is a process requirement.** "Three model-capability tiers" is satisfied by execution plan §1.6
+  (Opus leads, Luna for bounded slices, Sol challenges); it has no product proof.
+- **D12 Issue closure.** The agent posts closure comments and closes issues only with the user's
+  authorization at N10-M step 6; #218 was already authorized (N09 plan U1 (b)).
+
+Settled by the lead with the user (2026-10-05):
+
+- **D13 Host journey scope (was U1, option (a)).** The single N10-H journey also covers an interruption, a
+  person-only check answered in Cockpit and one requirement change before completion (§3.2 steps 3–5).
+  Requirement revision has no other host proof.
+- **D14 Disposable repository (was U2, option (a)).** The agent creates a private repository
+  (`<user>/owlbear-n10h-<date>`) before N10-H; the user deletes it afterwards (precedent N05 U2 (b)).
+- **D15 `delivery-action-readiness` is observed, not continued (Sol gate finding 1).** The default N10-M
+  outcome is a recorded observation of the migrated unfinished record (R6 "completes or is observed"). No
+  Planner, Builder or Finalizer is acquired for it and no evidence is added: never use Delivery to implement
+  Delivery (execution plan §1.1). Abandonment stays an optional user decision at the step (U3).
+- **D16 V08 boundary (Sol gate finding 3).** Maintained tests prove the V08 parts on real owners (§1.7); none
+  reports a `proof-mutation` diagnostic through the application. N10-A runs one disposable negative check for the
+  complete boundary (§3.1) and records it; no durable test.
+
+### 1.7 Acceptance map: V-scenarios
+
+Prefixes: `D:` `serve/delivery/tests/`, `M:` `serve/delivery-mcp/tests/`, `G:` `serve/delivery-github/tests/`,
+`T:` `serve/tools/tests/`, `C:` `serve/cockpit/tests/`, `R:` `tests/`, `E:` `serve/cockpit/web/e2e/`.
+*Planned* names a scenario of an unmerged phase's plan (D4).
+
+| V | Required result (programme §13) | Delivered by | Existing proof (node IDs) | N10-A | N10-H |
+| --- | --- | --- | --- | --- | --- |
+| V01 | One Change through plan, build, review, finalize, publish, approve merge, completion with only prompt, form and approval user actions | D02, N05, N09 | `D:test_portfolio_application.py::test_continuation_plans_builds_and_finalizes_via_existing_result_routes`, `::test_continuation_publishes_syncs_finalizes_and_observes_acceptance`; `E:work-portfolio.spec.ts` "copies the continuation prompt and pauses then resumes a quiescent Change"; *planned* N05-C HTTP approve-merge and approve E2E → **Completed** | Assembled journey test (D2, §3.1) | Required: the host journey (§3.2) |
+| V02 | Dirty completed-task worktree: card and acquisition agree on recovery, not finalization | D01, D03 | `D:test_portfolio_application.py::test_captured_readiness_agrees_across_public_reads`, `::test_loader_composed_engine_preflight_contains_workspace_variants`, `::test_settled_dirty_finalizer_attention_stays_blocked_after_workspace_cleanup` | — | — |
+| V03 | Finalizer fails before tests: checks not run, repair or containment, never blind refinalization | D03, N03-A | `M:test_target_server.py::test_registered_default_loader_contains_failed_finalizer_before_checks`; `R:test_cockpit_work_items.py::test_http_finalizer_handoff_contains_failure_before_checks`; `D:test_portfolio_application.py::test_finalization_attention_replays_only_its_report_and_rejects_new_diagnostics`; `D:test_evidence_runtime.py::test_uncovered_criterion_refuses_finalization_even_when_every_task_check_passed` | — | Observed (nested Finalizer, N03 G4) |
+| V04 | Two sessions on one Change: one owner, the second is busy | D02 | `D:test_portfolio_application.py::test_continuation_concurrent_sessions_grant_one_owner`; `R:test_cockpit_work_items.py::test_continuation_execution_preserves_typed_busy_failure`; `D:test_change_workspace.py::test_publication_lease_rejects_concurrent_owner_and_allows_expired_takeover` | — | — |
+| V05 | Two Changes, limited capacity, shared target | D02, D03, N02-C, N05-B1 | `D:test_portfolio_application.py::test_execution_capacity_allows_independent_builders_and_planners`, `::test_selected_acquisition_leaves_sibling_claims_unchanged`, `::test_selected_acquisition_honors_capacity_and_returns_source_failure`, `::test_application_binds_target_sync_receipt_and_invalidates_finalization`; `D:test_change_publication.py::test_slow_target_fetch_of_one_change_does_not_block_another_changes_merge` | — | — |
+| V06 | Formatting drift: preserve with proven ownership, otherwise contain unchanged | D03 | `D:test_change_workspace.py::test_preservation_restores_only_proven_disposable_paths`, `::test_preservation_requires_trusted_exact_path_provenance_before_copying`; `D:test_portfolio_application.py::test_dirty_build_recovery_exclusion_required_preserves_bytes_and_custody` | — | — |
+| V07 | Drift after proposal, foreign, staged or private files: no overwrite or publication | D03 | `D:test_change_workspace.py::test_preservation_rejects_foreign_dirty_path_before_private_capture`, `::test_private_path_policy_remains_conservative_for_dirty_paths`, `::test_quarantine_replay_rejects_changed_bytes_after_preservation`, `::test_recovery_workspace_rejects_path_drift_before_content_read` | — | — |
+| V08 | Proof command mutates files: no pass, bounded diagnostic, no repeat | D03 | Parts on real owners: `D:test_finalization_reports.py::test_proof_attempt_store_binds_registered_owner_observation_and_replays` (owner-observed attempt with distinct before/after fingerprints persists; replay and restart never re-observe); `D:test_portfolio_application.py::test_proof_procedure_repair_accepts_only_exact_owner_attempt` (proof-procedure repair binds only the exact owner attempt); `D:test_recovery.py::test_completed_outcome_repair_replays_with_retry_authority_and_preserves_result` (proof-procedure repair refused without a `proof-mutation` diagnostic); `D:test_portfolio_application.py::test_continuation_failure_retains_custody_and_blocks_success_and_mutations` (a failed attempt cannot finalize, across restart; maintained-check category); `D:test_portfolio_application.py::test_settled_finalizer_retries_stop_at_three_attempts_without_recovery` (retries across sessions are bounded). Uncovered: a `proof-mutation` report through `report_finalization_failure` and the `application_lifecycle` fingerprint checks | Disposable check (D16, §3.1) | — |
+| V09 | Repeated failure across sessions exhausts a durable budget; siblings stay runnable | D03 | `D:test_portfolio_application.py::test_settled_planner_retries_exhaust_after_three_exact_attempts`, `::test_ended_without_result_builder_attempts_share_one_exhausting_budget`, `::test_worker_budget_survives_resolved_blocks_and_leaves_sibling_runnable`; `D:test_retry_ledger.py::test_semantic_identity_aliases_and_restart_persistence` | — | — |
+| V10 | Worker past its lease may still write: contained, no cleanup or replacement | D03 | `D:test_recovery.py::test_absent_host_still_writing_descendant_stays_contained_across_restarts` and its MCP (`M:test_target_server.py::test_registered_absent_host_still_writing_descendant_stays_contained_across_restarts`) and HTTP (`R:test_cockpit_work_items.py::test_http_absent_host_still_writing_descendant_stays_contained_across_restarts`) twins; `D:test_worker_stall.py::test_leftover_process_blocks_confirmed_release_without_a_retry_time` | — | Observed (interruption, N09 G1; G9 only if unknown-issuer evidence occurs, I4) |
+| V11 | Target advances during final verification: old proof not reused, fresh review and approval | D03, N05-B1, N05-B2 | `D:test_portfolio_application.py::test_continuation_finalizer_rejects_target_drift_without_releasing_custody`, `::test_application_binds_target_sync_receipt_and_invalidates_finalization`; `D:test_merge_offer.py::test_newer_provider_target_routes_a_finalized_change_through_sync_and_fresh_proof`; `G:test_merge_provider.py::test_memory_rules_failure_and_strict_target_advance_fail_without_merging`; *planned* N05-B2 "offer invalid at execution" and "post-merge race" | Resolve *planned* | — |
+| V12 | Push or merge applied but response lost: readback, no duplicate | D02, D03, N02-C, N05-A, N05-B2 | `D:test_change_publication.py::test_adopts_exact_reviewed_remote_head_after_lost_push_response`; `D:test_delivery_state.py::test_state_push_accepted_after_its_lost_response_reads_back_success_without_a_second_push`; `D:test_draft_pull_request.py::test_reconciles_lost_create_response_without_creating_second_pr`; `D:test_portfolio_application.py::test_engine_mark_ready_replays_lost_response_and_acceptance_waits_without_merge`; `G:test_merge_provider.py::test_memory_lost_response_applies_the_effect_and_readback_finds_it`; *planned* N05-B2 crash (b) and the assembled unknown-merge case | Resolve *planned* | — |
+| V13 | Quarantine or restore fails midway: no false success, evidence kept | D03 | `D:test_change_workspace.py::test_nonterminal_recovery_restore_fsync_failure_cannot_publish_success`, `::test_quarantine_replays_after_receipt_persistence_failure`, `::test_cleanup_replays_persisted_intent_after_receipt_write_failure`, `::test_nonterminal_recovery_capture_failure_keeps_bytes_and_replays` | — | — |
+| V14 | Requirement change with old code and proof: prior authority kept, coherent activation, only affected work replanned | N04-A, N04-B | `D:test_source_bound_admission.py::test_revision_preserves_unchanged_binding_and_invalidates_changed_dependents`; *planned* N04-A first positive scenario, N04-B readmission | Resolve *planned* | Observed: requirement change (D13, N04 G4) |
+| V15 | New request ID, unchanged proven claim: evidence reused, no new human exercise | N03-A, N04-A, N03-C | `D:test_evidence.py::test_stale_versions_and_unknown_ids_never_cover_and_are_admissibility_gaps`; `D:test_acceptance_criteria.py::test_identity_survives_revision_while_the_version_changes_with_the_statement`; `D:test_evidence_runtime.py::test_full_carried_coverage_finalizes_with_zero_new_observations`; *planned* N04-A evidence scenario (retained confirmation), N03-C projection (UI fixture) | Resolve *planned* | Observed: retained confirmation (D13, N04 G5) |
+| V16 | Revised target not covered: exact missing claim shown, no silent waiver | N03-A, N03-C, N04-A | `D:test_evidence_runtime.py::test_uncovered_criterion_refuses_finalization_even_when_every_task_check_passed`; `M:test_confirmation_boundary.py::test_registered_finalize_refusal_carries_the_exact_bounded_gaps`, `::test_mcp_answer_refuses_a_waiver_or_person_only_request`; *planned* N03-C projection (missing with owner, uncovered), N04-A changed criterion uncovered | Resolve *planned* | — |
+| V18 | Invalid state while the UI loads: Change visible, maintenance entry works (reduced: N08-B cut) | D03, N08-A | `D:test_portfolio_application.py::test_known_corrupt_change_remains_visible_without_relaxing_parser`; `R:test_cockpit_work_items.py::test_list_and_detail_preserve_known_unavailable_change_projection`, `::test_http_and_offline_diagnostics_bound_an_unknown_change_without_mutation`; `T:test_delivery_diagnostics.py::test_standalone_cli_degraded_and_unsupported_exit_one`; `D:test_state_repair.py::test_c02_restores_a_tampered_admitted_package_and_the_portfolio_lists_again` | — | Observed: refused start visible (N08 G1) |
+| V19 | Approve merge, then head change or protection failure: no unapproved merge, reason shown | N05-A, N05-B1, N05-B2, N05-C | `G:test_merge_provider.py::test_memory_head_fence_fails_a_request_after_a_push`, `::test_memory_draft_or_closed_pull_request_is_refused`; `D:test_merge_offer.py::test_known_unmergeable_pull_request_never_yields_an_offer`; `R:test_delivery_worktree_authority.py::test_frozen_merge_body_is_direct_and_never_bypasses_rules`; *planned* N05-B2 "offer invalid at execution", N05-C stale-offer E2E and dialog | Resolve *planned* | — |
+| V20 | Unknown corruption or missing provenance: preserved, diagnosed, never blessed | D03, N02-B, N03-A, N08-A | `D:test_state_migration.py::test_frontier_invalid_at_its_declared_version_is_corruption_and_never_synthesized`, `::test_third_digest_stops_resume_and_abort_as_corruption_preserving_both_copies`; `D:test_state_repair.py::test_no_repair_path_writes_request_provenance`; `D:test_delivery_runtime.py::test_repair_missing_request_provenance_rejects_wrong_or_multiple_defects`; `D:test_recovery.py::test_recovery_caller_cannot_supply_forged_evidence` | — | — |
+| V21 | Crash after each revision or migration step: old version or replayed new one | N02-B, N08-A, N04-A, N04-B | `D:test_state_migration.py::test_crash_at_each_apply_boundary_refuses_start_and_resume_converges`; `D:test_state_repair.py::test_c03_crash_then_fresh_process_resume_reaches_the_exact_after_state`; `D:test_change_workspace.py::test_snapshot_design_package_replays_after_commit_before_receipt`; *planned* N04-A crash injection (after step 2, inside and after step 3, after step 4), N04-B interruptions | Resolve *planned* | — |
+| V24 | Upgrade with active work or unsupported downgrade: drained or fenced, refused or safely reverted | N02-A–D, N05-B2 | `T:test_delivery_controller.py::test_preflight_blocks_exactly_the_d6_custody_shapes_and_changes_nothing`, `::test_switch_records_previous_rolls_back_and_prune_keeps_current_and_previous`; `D:test_state_migration.py::test_n02a_refuses_the_migrated_format_1_workspace_with_unchanged_hashes`; `T:test_delivery_lc.py::test_full_form_downgrade_refuses_exactly_the_records_of_a_family_version_the_previous_release_lacks`; `C:test_target_context_startup.py::test_cockpit_refuses_newer_state_with_the_typed_loader_detail`; live: N02-D H step (#362, #367); *planned* N05-B2 downgrade fixture | Upgrade rehearsal (D6) | — (live in N10-M) |
+
+**Count (21 scenarios).** Proven on `dev` today: 12 (V02–V07, V09, V10, V13, V18, V20, V24). Proven once a
+planned phase merges, N10-A only resolves the citations: 7 (V11, V12, V14, V15, V16, V19, V21). N10-A adds proof:
+2 (V01 durable journey; V08 disposable check, D16). Needs N10-H host evidence: 1 (V01); N10-H also observes V03,
+V10, V14, V15 and V18 (D13).
+
+### 1.8 Acceptance map: U1–U8, programme §14.5 and execution plan §6
+
+| Criterion | Proof | N10 phase |
+| --- | --- | --- |
+| U1 Actions through a Cockpit control or a complete chat prompt | N09-A1 progress and **Copy continuation prompt** (#354); `D:test_portfolio_application.py::test_engine_action_prompt_is_applicable_to_final_readiness_state`; `D:test_delivery_progress.py::test_every_readiness_reason_has_an_explicit_progress_mapping`; N09-B removal of `/orchestrate` and card commands (planned) | N10-A route audit (D3); N10-H uses only prompts and controls |
+| U2 User never runs tests, edits files, repairs JSON or operates Git | By construction (agents prove, Delivery owns custody); N09-B capability inventory | N10-H records every user action and checks that each is a prompt, form, control or approval |
+| U3 Agents prepare; humans decide, authenticate, confirm | N03 scoped requests answered in Cockpit: `R:test_cockpit_work_items.py::test_http_answer_resolves_a_waiver_request_that_a_finalization_waiver_then_cites`, `M:test_confirmation_boundary.py::test_mcp_answer_refuses_a_waiver_or_person_only_request` | N10-H person-only check (D13) |
+| U4 Resume from persisted evidence | `D:test_portfolio_application.py::test_continuation_finalizer_survives_restart_and_completes_exactly_once`, `::test_builder_ended_without_result_reacquires_same_task_with_preserved_work_and_history`; `D:test_worker_stall.py::test_host_lost_quiet_builder_settles_and_resumes_same_task_with_preserved_work` | N10-A journey restarts once; N10-H interruption |
+| U5 Responsible handler and bounded path for every failure | Retry exhaustion and containment tests (V09, V10); progress mapping test | N10-A route audit (D3) |
+| U6 Repeated evidence only for an uncovered or invalidated claim | V15 row | N10-H step 5 (D13) |
+| U7 Approval is not certification; nothing dropped to pass | `D:test_evidence_runtime.py::test_uncovered_criterion_refuses_finalization_even_when_every_task_check_passed`; waivers only through a user-resolved request (`D:test_evidence.py::test_waiver_citing_an_inapplicable_request_does_not_satisfy`) | — |
+| U8 Three model tiers | Execution plan §1.6 (D11) | — |
+| §14.5 Start, resume, answer, approve, see completion without tests or file edits | V01 row | N10-A journey; N10-H |
+| §14.5 / §6 Every supported failure resumes or exposes one working prompt or control | Route audit over readiness reasons (D3) | N10-A |
+| §6 Live Changes migrated or disposed of; B1 continues; final release pinned | — | N10-M |
+| §6 Issues closed with evidence | #216, #221 drafts (N00-A); #218 (N09 U1 (b)); #213 (N04); #215, #220 (N02); #219, #222 (N03); #225 (N05-D, if built) | N10-M step 6 |
+| §6 Documentation matches shipped behavior | N09-C (P22) | N10-H follows the shipped setup guide and prompts |
+| §6 No `fix-now` finding open | Each phase's gate | Each N10 phase |
+
+### 1.9 Verification gaps of N01–N09 owned by N10
+
+| Gap | Claim | Closed by |
+| --- | --- | --- |
+| N03 G4 (= N09 G11) | A real host dispatches the nested Finalizer and `build-reviewer` under `/continue-change` and finalizes | N10-H step 6 |
+| N03 G7 | Live `delivery-action-readiness` can finalize (17 criteria need typed evidence) | N10-M step 4: recorded observation (D15) or user abandonment (U3); never finalized through Delivery |
+| N04 G4 | A real Designer chat follows the revised `w-design-session` route | N10-H step 5 (D13) |
+| N04 G5 | A Builder of a replanned outcome cites a retained confirmation instead of asking again | N10-H step 5 (D13) |
+| N08 G1 | VS Code shows a refused Delivery MCP start clearly enough to run `/repair-delivery` | N10-H step 8 |
+| N09 G1 | An `alive` issuer with a held claim may have no running worker; Cockpit never shows it as working | N10-H step 3 |
+| N09 G2 | The copied `/continue-change <id>` prompt binds the right Change in Copilot Chat | N10-H steps 2 and 3 |
+| N09 G5 | #218 closed with evidence | N10-M step 6 (agent, N09 U1 (b)) |
+| N09 G9 | `needs-decision` for unknown issuer evidence does not lead the user to release a live worker | N10-H step 3 only if `needs-decision` for unknown issuer evidence appears; otherwise recorded open with engine proof only (I4) |
+| N02 G3 | VS Code restart and autostart with the launcher | Closed by the N02-D H step 0 (2026-10-04); nothing in N10 |
+| N06 G11 | LC exercises interaction records | Void: N06 cut 2026-10-04 |
+
+N01 and N05 name no gap owned by N10; N05's real-GitHub evidence is N05-C's smoke test (N05 plan §3.3).
+
+### 1.10 Accepted limits carried to completion
+
+Documented limits, not N10 work: no physical worker exclusion, so unknown or live workers stay contained and may
+hold capacity (D03); N05 G1 (real GitHub beyond one merge), G2 (base or stack change after the final read is
+detected after the merge), G14 (supersession of a moved or merged predecessor) and G15 (ignored files in a
+completed worktree are not preserved by cleanup); N08 §3.3 (package corruption makes `list_changes` raise, a
+garbage transaction manifest stops Cockpit untyped, a malformed coordination record shows no diagnostic; each is
+routed by `/repair-delivery`); N09 G3 (**Working**, **Checking** and **Repairing** are never emitted); N02 G6 and
+N08 G6 (memory-store versioning is outside the programme).
+
+### 1.11 User decisions
+
+Plan decisions U1 and U2 (not the programme criteria of §1.8) were settled on 2026-10-05 as D13 and D14.
+
+Decided at the N10-M step (execution plan §7); recommendations for the lead to present then:
+
+- **U3 — `delivery-action-readiness`.** Its product merged via PR #316 (`364daf61`); the record is unfinished
+  (Implementation, 4 of 5 results, schema-1 evidence). *Default (D15):* after the upgrade the agent records its
+  readiness and evidence projection and leaves the record as observed. *Option:* the user abandons it in Cockpit
+  with the reason "product merged via PR #316 (`364daf61`); record unfinished". Continuing it through Delivery is
+  not an option (execution plan §1.1). *Recommendation:* the default unless the user wants the record terminal.
+- **U4 — `frontier-serialization-contract`.** Abandon (its scope shipped with N02-A, #348) and close PR #314:
+  the user confirms at the step (D9).
+- **U5 — B1.** The user confirms each user-only action of the reconciliation (§3.3 step 5).
+
+## 2. Feasibility Probes
+
+Read-only, on `origin/dev` `66871ee92` in lane D; logs in `.owlbear/scratch/n10p-*.log` (unversioned).
+
+| ID | Executed | Result | Premise settled |
+| --- | --- | --- | --- |
+| P1 | `git grep` of test functions in the Delivery, Delivery MCP, GitHub provider, tools and Cockpit suites and the root Delivery tests; keyword grouping per V-scenario | 1,912 test functions; every V-scenario except V01 has direct maintained tests (§1.7); no test names a V-scenario | D1 |
+| P2 | Package plans N01–N09: every verification gap and decision naming N10 | 11 items (§1.9); none in N01 or N05 | R4 |
+| P3 | Bodies of `test_continuation_plans_builds_and_finalizes_via_existing_result_routes` and `test_continuation_publishes_syncs_finalizes_and_observes_acceptance` | The first ends at `waiting/engine-owner-unavailable` without a publisher; the second starts at stage Completed with a fixture checkpoint and simulates a manual merge; neither runs through MCP or HTTP | D2 |
+| P4 | `test_every_readiness_reason_has_an_explicit_progress_mapping`, `test_engine_action_prompt_is_applicable_to_final_readiness_state` | Progress mapping and prompt applicability are pinned; no test asserts that every non-executable reason has a route | D3 |
+| P5 | Source read of abandonment (`WorkItemDetail.tsx` **Abandon Change**, provider modules) | Abandonment is a Delivery intent; no provider call closes a PR; **Clean abandoned worktree** refuses a dirty worktree without discarding content | D9; §3.3 step 3 |
+| P6 | `share/prompts/upgrade-delivery.prompt.md` | Steps 1–10 cover install, online and offline preflight, backup, migration, switch, verify, prune, restart and failure; no format-specific step | D8 |
+
+## 3. Phases
+
+### 3.1 N10-A — Matrix and gap fixes
+
+- **Prerequisites:** N10-P, N09-C, the last N04 phase (execution plan §4.2).
+- **Editable paths:** new `tests/test_delivery_journey.py` (re-resolve: root tests already combine Delivery MCP
+  and Cockpit HTTP); this plan (planned citations, route audit, progress); execution plan status row. Only if the
+  route audit finds a reason without a route: its owning module and one test, or a fix PR in the owning package.
+- **Companions:** none (no readiness reason, action, status or frontier writer is added).
+- **First step:** resolve every *planned* citation of §1.7 to merged node IDs (D4).
+- **Positive scenario (the journey, one test):** a disposable repository with a local bare remote, the memory
+  provider and the default loader. Agent side through `Client(assemble_target_server(...))`: `admit_change` of an
+  approved package, `acquire_change_action` → Planner, `publish_delivery_plan` and `transition_delivery` advance,
+  `acquire_change_action` → Builder, a commit and `submit_result`; then a fresh loader (restart, U4);
+  `acquire_change_action` → Finalizer, `finalize_change`; `execute_change_action` for each engine action until
+  readiness is `merge-approval-required`. User side through the Cockpit HTTP client: the detail shows the offer;
+  approve merge; the provider merges at the exact head; acceptance completes; the detail shows **Completed**; a
+  further `acquire_change_action` is `terminal`. The only user-side calls are reads and the approval.
+- **Negative scenarios:** none durable; V04, V11, V12 and V19 negatives are cited in §1.7.
+- **V08 disposable check (D16; record only, not committed):** a scratch script in the lane over a disposable
+  repository and the real application: acquire the Finalizer, note the workspace fingerprint, change a tracked
+  file as a mutating proof command would, then `report_finalization_failure` with `category=proof-mutation`,
+  `code=proof-mutated-worktree`, a registered `procedure_id`, the before and after fingerprints and the path.
+  Expected: the report persists and replays; a stale `proof_fingerprint_after` is `diagnostic-conflict`; readiness
+  is not passed and `finalize_change` is refused; after `settle_worker_invocation` and a fresh application,
+  `acquire_change_action` acquires no new Finalizer while the mutated workspace stands. Record the commands and
+  results in this plan; a failure is a D03 defect fixed by a fix PR (I1).
+- **Route audit (D3):** for every `DeliveryReadinessReason` (the `_EXPECTED` table of
+  `D:test_delivery_progress.py` is the list), record its route: automatic (system actor), continuation prompt,
+  engine-authored exceptional prompt, Cockpit control or genuine user request. Record the table in this plan.
+- **Inner loop:** `env -u PYTHONPATH uv --directory <lane> run pytest tests/test_delivery_journey.py -q -n0`.
+- **Closeout:** every §1.7 node ID collected (`pytest --collect-only -q` over the expanded IDs; none missing);
+  the V08 disposable check recorded; full `uv run test` once; `npm --prefix serve/cockpit/web run build` and
+  `run test:e2e:work`; scoped Ruff; triggered CI on the exact head; Sol implementation gate. This closeout's full
+  suites are the regression gate that D7 repeats after an N10-H product fix.
+- **LC:** upgrade form on a fresh copy, `--previous 841b1cffb…` (full SHA from the live `pin.json`) and the
+  candidate (D6); the proposal's (path, before digest) set is recorded on the PR for N10-M.
+- **Size / risk:** S / medium.
+
+### 3.2 N10-H — Host journey
+
+- **Prerequisites:** N10-A; D13 and D14; the agent has created the private disposable repository (D14); the user
+  present.
+- **Setup:** macOS; a disposable project with a tiny Python module (`slugify` with pytest) in the D14 repository;
+  OwlBear from a clone at the N10-A merge commit outside every checkout; `setup/init.py` per
+  `setup/setup-guide.md` (consumer default, unpinned); one VS Code window for the project. The main checkout's
+  live Delivery is not touched. The Change has two criteria: `AC-001` slug rules (automated) and `AC-002` a README
+  usage note confirmed by the user (person-only).
+- **Editable paths:** this plan (journey record, progress, gaps); execution plan status row. Kit and logs in the
+  lane scratch directory.
+
+| Step | User does | Expected | Closes |
+| --- | --- | --- | --- |
+| 1 Design | `/design`, answers, approves | Admission output names `/continue-change <id>` | J01, J02; N09 R15 |
+| 2 Start | **Copy continuation prompt** in Cockpit, pastes it into a new chat | Planner (with challenger), then Builder of the same Change; Cockpit shows progress | V01; N09 G2 |
+| 3 Interrupt | Stops the chat while the Builder holds its claim; later **Release stuck worker** (or closes the window); pastes the same prompt | Cockpit shows neutral custody, never working; release refused while the worktree changes, accepted when quiet; the same task resumes with preserved work | U4, J08; N09 G1; V10. N09 G9 only if `needs-decision` for unknown issuer evidence appears (I4) |
+| 4 Confirm | Answers the `AC-002` request in Cockpit | Recorded with provenance; the agent never answers it | U3 |
+| 5 Revise | **Change requirements**, pastes `/design <id> Change requirements:` with a change to `AC-001`, approves the delta | Pause, revision, delta, activation; only the `AC-001` work is replanned; `AC-002` is not asked again | V14, V15, U6; N04 G4, G5 |
+| 6 Finalize | Nothing | Nested Finalizer and `build-reviewer` under `/continue-change`; finalization covers both criteria | N03 G4, N09 G11 |
+| 7 Merge | **Approve merge** in Cockpit | One merge at the exact head; **Completed**; worktree cleaned | V01, J05–J07 |
+| 8 Refused start | Stops `owlbear-delivery`; the agent backs up and writes a newer format marker to the disposable state; the user starts the server, then runs `/repair-delivery` | VS Code shows the typed refusal; `/repair-delivery` names the upgrade route; marker restored, start healthy | N08 G1 |
+
+- **Evidence:** per step the observed result, the list of user actions (U2: each a prompt, form, control or
+  approval), the disposable PR link and the final Cockpit state; recorded in this plan and the docs-only PR. Each
+  gap is closed only to the boundary the step actually observed (I4).
+- **Failure:** stop the step; D7 (fix PR, rerun the affected steps, repeat the N10-A regression gate on the final
+  product-code head).
+- **LC:** not applicable. **Size / risk:** M / medium (one session with the user).
+
+### 3.3 N10-M — Live migration and programme closure
+
+- **Prerequisites:** N10-H; the user present and authorizing each step.
+- **Preconditions:** `F` is `origin/dev` after the N10-H merge; the N10-A regression gate passed on the final
+  product-code head (D7); the upgrade rehearsal passed for `F` or for its code head when later commits change only
+  documentation (D6); its proposal set is at hand; the user confirms no
+  Delivery work runs; `git -C $LIVE fetch origin`. `LIVE=/Users/GGN7H9Q/Projects/owlbear-dev`.
+- **Editable paths:** this plan; execution plan §1.2, §2.6, §4.4 and header status; programme section 0 status.
+
+| Step | Action | Expected | On failure |
+| --- | --- | --- | --- |
+| 0 Facts (read-only) | `delivery_health`, `list_changes`, `get_change` for the three Changes through the running `841b1cffb` controller; GitHub reads of PRs #312, #314, #316 and the issues of R7 | Healthy; three Changes available; no running claim, started action, pending checkpoint or publication | Let work settle; never settle it from this procedure |
+| 1 Upgrade | `/upgrade-delivery F` in the main checkout chat (its steps 1–9); the N02 runbook `collisions` check before its step 4 | Proposal equals the rehearsed set: the format 2 → 3 marker of N05-B2 plus only registered rewrites; `verified`; `switch` records `previous` `841b1cffb`; restart healthy; three Changes available and equal to step 0 | Different proposal: stop before `apply`, rehearse again. After the marker: prompt step 10; `switch 841b1cffb` is refused (it reads format ≤ 2, N02 D3); fix forward or restoring the backup is the user's decision (N02 runbook rollback) |
+| 2 Align the checkout | `collisions` prints nothing, then `git -C $LIVE merge --ff-only origin/dev` | Prompts and skills in the checkout match `F` (agents read them from the checkout); no live effect | A collision: move it aside with the user (runbook step 1a) |
+| 3 `frontier-serialization-contract` | The agent shows its state and N02-A's delivery of its scope (#348, #215); the user confirms (U4) and abandons it in Cockpit; the agent closes PR #314 with a comment; optionally **Clean abandoned worktree** | `get_change`: abandoned; PR #314 closed; a dirty worktree is refused and stays retained | The user declines: stop; §6 completion stays open |
+| 4 `delivery-action-readiness` | The agent reads `get_change` and the evidence projection after the upgrade and records them (D15). The user may instead choose abandonment in Cockpit (U3) | Recorded observation of the migrated unfinished record, or abandoned with the reason naming PR #316 (`364daf61`); no Planner, Builder or Finalizer acquired for it | Unreadable after the upgrade: stop and report; repair only through `/repair-delivery` |
+| 5 B1 reconciliation | The agent reads `get_change`, `show_operator_context` and the evidence projection and maps each blocker to an existing route: an open request answered in Cockpit; Pause and `/design` revision then activation (N04) for revised requirements; a `delivery-repair` proposal for a recognized state defect; **Release stuck worker** for a stale claim. The user confirms each user-only action (U5) | B1 shows an executable next action for `/continue-change macos-managed-browser-authentication`, or one genuine user request in Cockpit; B1 continues as its own work | A blocker without a route: stop; fix PR (D10); never edit state |
+| 6 Issues | The agent verifies each issue's evidence and, with the user's authorization (D12), posts closure comments and closes them | R7 issues closed; #225 open with its reason if N05-D was not built | — |
+| 7 Record | Docs-only PR: this plan, execution plan §1.2 (pinned to `F`), §2.6, §4.4 rows and header status, programme section 0: complete | Programme closed (R8) | — |
+
+- **LC:** the step-1 migration is the rehearsed upgrade (D6). **Size / risk:** S / high (live state).
+
+## 4. Progress
+
+| Phase | PR | Head | Proof | Challenge | Status |
+| --- | --- | --- | --- | --- | --- |
+| N10-P | #374 | gate on `eb185eb3f` | Probes P1–P6; docs only; markdownlint on temporary copies | Sol plan gate round 1: revision-required, 3 findings fix-now, applied 2026-10-05; gate closed | merged |
+| N10-A | — | — | — | — | — |
+| N10-H | — | — | — | — | — |
+| N10-M | — | — | — | — | — |
+
+## 5. Verification Gaps
+
+| ID | Claim | Why unproven | Evidence now | Owner | Blocks |
+| --- | --- | --- | --- | --- | --- |
+| G1 | Every *planned* citation of §1.7 exists as a merged test | Its phase is not merged | The phase plans' scenarios | N10-A first step (D4) | N10-A merge |
+| G2 | Every readiness reason has a route (§14.5) | Not audited | P4 | N10-A route audit | N10-A merge |
+| G3 | The live dispositions match the live facts (PR states, B1 blockers) | Live state not read in P | Execution plan §2.6; N03 plan P1 | N10-M step 0 | N10-M |
+| G4 | The rehearsed upgrade matches `F` | `F` does not exist yet | N02-D rehearsals | N10-A LC, rerun in N10-M if code changed (D6) | N10-M step 1 |
+| G5 | The host journey generalizes beyond one Change, one project and macOS | One session by design | CI on Ubuntu; automated matrix | Documented limit | Nothing |
+| G6 | B1 completes after reconciliation | B1's own acceptance (V23, its pilot) | — | B1 | Nothing |
+| G7 | V08 complete boundary: a mutating proof yields a persisted `proof-mutation` diagnostic, no finalization and no repeat in a fresh session | No maintained test reports `proof-mutation` through the application | Parts on real owners (§1.7 V08) | N10-A disposable check (D16) | N10-A merge |
