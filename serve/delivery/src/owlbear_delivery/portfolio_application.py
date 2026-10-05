@@ -24,6 +24,7 @@ from owlbear_delivery.application_lifecycle import (
     _ACCEPTANCE_DRAIN_MUTATIONS,
     _LifecycleMixin,
 )
+from owlbear_delivery.application_merge import _MergeMixin
 
 # Consumer import surface kept at this module path.
 from owlbear_delivery.application_models import (  # noqa: F401
@@ -210,7 +211,9 @@ if TYPE_CHECKING:
     from owlbear_delivery.workspace_coordination import DrainAuthority
 
 
-class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _PublicationMixin, _LifecycleMixin, _RecoveryMixin):
+class PortfolioApplication(
+    _ReadinessViewsMixin, _AcquisitionMixin, _PublicationMixin, _LifecycleMixin, _RecoveryMixin, _MergeMixin
+):
     """Compose Delivery runtimes, source packages, and warm workspace custody."""
 
     def __init__(
@@ -523,6 +526,7 @@ class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _Publication
         ready = runtime.ready_receipt()
         if finalization is None or ready is None:
             return self._reconciliation_skipped_outcome(change_id, "Awaiting-merge authority is incomplete.")
+        self._settle_merge_for_acceptance(change_id)
         observation = publisher.observe_pull_request(ObserveChangePublicationPullRequest(change_id=change_id))
         if observation is None:
             return self._reconciliation_skipped_outcome(
@@ -530,6 +534,7 @@ class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _Publication
                 "No bound pull-request publication was found.",
                 code="ERR_DELIVERY_PUBLICATION_MISSING",
             )
+        self._refuse_raced_merge(change_id, runtime, observation)
         outcome = self._classify_acceptance_observation(
             change_id,
             runtime,
@@ -747,9 +752,12 @@ class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _Publication
             message = "acceptance observation requires the reconciled final checkpoint"
             raise PortfolioApplicationError(message)
         if observation is None:
+            self._settle_merge_for_acceptance(change_id)
             observation = self._draft_pull_request_publisher.observe_pull_request(
                 ObserveChangePublicationPullRequest(change_id=change_id)
             )
+            if observation is not None:
+                self._refuse_raced_merge(change_id, runtime, observation)
         if observation is None:
             message = "acceptance observation requires a bound pull request"
             raise PortfolioApplicationError(message)

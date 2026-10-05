@@ -166,6 +166,7 @@ class _PublicationMixin:
             operation_id=operation_id,
         )
         with self._engine_checkpoint_lock(change_id):
+            self._require_no_merge_in_flight(change_id)
             self._require_target_sync_change_mutable(runtime)
             self._require_no_review_repair(runtime, "target synchronization")
             if runtime.change_disposition() is not None:
@@ -279,6 +280,7 @@ class _PublicationMixin:
             locked_roots((self._checkpoint_lock_root(change_id),)),
             self._operator_start(change_id, f"adopt:{operation_id}", *_ADOPTION_WRITES),
         ):
+            self._require_no_merge_in_flight(change_id)
             self._require_external_head_adoption_change_mutable(runtime)
             self._require_no_review_repair(runtime, "external Change head adoption")
             if runtime.change_disposition() is not None:
@@ -413,6 +415,7 @@ class _PublicationMixin:
             locked_roots((self._checkpoint_lock_root(change_id),)),
             self._operator_start(change_id, f"promote:{operation_id}", "record_external_head_promotion"),
         ):
+            self._require_no_merge_in_flight(change_id)
             self._require_external_head_promotion_change_mutable(runtime)
             self._require_no_review_repair(runtime, "external Change head promotion")
             if runtime.change_disposition() is not None:
@@ -855,6 +858,7 @@ class _PublicationMixin:
             raise PortfolioApplicationError(message)
         runtime = self._runtime(change_id, for_mutation=True)
         with self._engine_checkpoint_lock(change_id):
+            self._require_no_merge_in_flight(change_id)
             if runtime.change_disposition() is not None:
                 message = "pull-request readiness requires current Change attention resolution"
                 raise PortfolioApplicationError(message)
@@ -994,6 +998,7 @@ class _PublicationMixin:
             locked_roots((self._checkpoint_lock_root(change_id),)),
             self._operator_start(change_id, "review-repair", "prepare_review_repair"),
         ):
+            self._require_no_merge_in_flight(change_id)
             authority = self._review_repair_authority(runtime)
             observation = self._observe_review_repair_pull_request(change_id, publisher, authority)
             replayed = self._replay_review_repair(change_id, publisher, authority, observation)
@@ -1184,6 +1189,7 @@ class _PublicationMixin:
             locked_roots((self._checkpoint_lock_root(change_id),)),
             self._operator_start(change_id, "finalization-head-reconciliation", *_FINALIZATION_HEAD_WRITES),
         ):
+            self._require_no_merge_in_flight(change_id)
             before_frontier = runtime.frontier_bytes()
             before_coordination = self._workspace_manager.show(change_id)
             result = self._reconcile_finalization_head_locked(change_id, runtime)

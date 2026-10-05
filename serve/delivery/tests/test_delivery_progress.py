@@ -598,6 +598,8 @@ _EXPECTED: dict[str, tuple[str, WorkItemActionKind | None, bool, str | None, Del
     "merge-blocked": ("blocked", None, False, None, "needs-decision"),
     "checks-running": ("waiting", None, False, None, "waiting-for-service"),
     "provider-unavailable": ("waiting", None, False, None, "waiting-for-service"),
+    "merge-in-progress": ("waiting", None, False, None, "waiting-for-service"),
+    "merge-response-unknown": ("blocked", None, False, None, "needs-decision"),
 }
 
 

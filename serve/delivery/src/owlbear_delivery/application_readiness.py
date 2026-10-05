@@ -77,6 +77,7 @@ from owlbear_delivery.finalization_reports import (
     FinalizationReportStore,
     FinalizerSettlementReceipt,
 )
+from owlbear_delivery.merge_approval import MergeAttemptStore
 from owlbear_delivery.merge_offer import MergeDecision, MergeFacts, MergeOfferAuthority, decide_merge
 from owlbear_delivery.portfolio_operating import (
     DeliveryHealthDiagnostic,
@@ -121,6 +122,7 @@ from owlbear_delivery.work_items import (
     DeliveryProgress,
     DeliveryReadiness,
     DeliveryReadinessBasis,
+    MergeAttemptSummary,
     WorkItemAction,
     WorkItemActionKind,
     WorkItemActivityState,
@@ -841,6 +843,11 @@ class _ReadinessViewsMixin:
         )
         decisions = tuple(
             self._with_merge_readiness(snapshot, card, decision, merge, workspace_reason)
+            for card, decision in zip(cards, decisions, strict=True)
+        )
+        attempt = self._merge_attempt_readiness(snapshot)
+        decisions = tuple(
+            self._with_merge_attempt_readiness(snapshot, card, decision, attempt)
             for card, decision in zip(cards, decisions, strict=True)
         )
         decisions = tuple(
@@ -2395,6 +2402,74 @@ class _ReadinessViewsMixin:
         updated = decision.model_copy(update=updates)
         return updated.model_copy(
             update={"prompt": cls._readiness_prompt(snapshot, card, updated.reason_code, executable=updated.executable)}
+        )
+
+    def _merge_attempt_readiness(
+        self, snapshot: DeliveryPortfolioSnapshot
+    ) -> tuple[Literal["merge-in-progress", "merge-response-unknown"], MergeAttemptSummary | None] | None:
+        """I11, 1.13: an unsettled approval is in progress until the acceptance episode stops, then unknown."""
+        change_id = snapshot.contract.change_id
+        frontier = snapshot.frontier
+        if frontier.change_abandonment is not None or frontier.change_completion is not None:
+            return None
+        try:
+            attempt = MergeAttemptStore(self._target_root, change_id).nonterminal()
+        except OSError, ValueError:
+            return "merge-in-progress", None
+        if attempt is None:
+            return None
+        summary = MergeAttemptSummary(
+            approval_id=attempt.approval_id,
+            state=attempt.state.value,
+            approved_head=attempt.head_sha,
+            pr_url=attempt.pr_url,
+        )
+        finalization = frontier.finalization
+        try:
+            episode = (
+                None
+                if finalization is None
+                else RetryLedger(self._target_root, change_id, clock=self._clock).episode(
+                    RetryEpisodeKey.engine(
+                        change_id,
+                        "observe-acceptance",
+                        finalization.exact_head,
+                        self._workspace_manager.observed_target_head(),
+                        finalization.finalization_id,
+                    )
+                )
+            )
+        except OSError, RetryLedgerConflictError, RetryLedgerCorruptError, RuntimeError, ValueError:
+            episode = None
+        stopped = episode is not None and episode.stop_code is RetryStopCode.ACCEPTANCE_WAIT
+        return ("merge-response-unknown" if stopped else "merge-in-progress"), summary
+
+    @classmethod
+    def _with_merge_attempt_readiness(
+        cls,
+        snapshot: DeliveryPortfolioSnapshot,
+        card: WorkItemCardView,
+        decision: DeliveryReadiness,
+        attempt: tuple[str, MergeAttemptSummary | None] | None,
+    ) -> DeliveryReadiness:
+        """The merge fence wins over every other reason; only Pause, Abandon and Check again stay (Q3)."""
+        if attempt is None or (card.scope is not WorkItemScope.CHANGE_PUBLICATION and not decision.executable):
+            return decision
+        reason, summary = attempt
+        unknown = reason == "merge-response-unknown"
+        return decision.model_copy(
+            update={
+                "status": "blocked" if unknown else "waiting",
+                "operation": None,
+                "executable": False,
+                "action": None,
+                "next_actor": WorkItemNextActor.YOU if unknown else WorkItemNextActor.NONE,
+                "reason_code": reason,
+                "merge_offer": None,
+                "merge_block": None,
+                "merge_attempt": summary,
+                "prompt": cls._readiness_prompt(snapshot, card, reason, executable=False),
+            }
         )
 
     def _publication_observation(
