@@ -368,7 +368,11 @@ class _ReadinessViewsMixin:
         """Report a clean local Change head that has no Delivery adoption evidence."""
         try:
             coordination = self._workspace_manager.show(change_id)
-            if coordination.writer is not None or coordination.external_head_adoption_receipt is not None:
+            if (
+                coordination.writer is not None
+                or coordination.external_head_adoption_receipt is not None
+                or coordination.design_package_snapshot_intent is not None
+            ):
                 return None
             observed_head = self._workspace_manager.observed_change_head(change_id)
         except OSError, RuntimeError, subprocess.SubprocessError, ValueError:

@@ -5,37 +5,58 @@ import json
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from owlbear_delivery import (
+    ActivateDeliveryClaim,
+    AdvanceDelivery,
+    ChangeTargetSyncReceipt,
+    DeliveryAcceptanceRef,
+    DeliveryActiveClaim,
     DeliveryAdmissionConflictError,
     DeliveryAdmissionRequest,
     DeliveryAuthorityRegistry,
-    DeliveryBlock,
+    DeliveryChangeDeferral,
+    DeliveryChangePublicationHistory,
+    DeliveryChangePublicationIdentity,
+    DeliveryChangeStage,
     DeliveryCheckpointTrigger,
     DeliveryCheckpointTriggerKind,
     DeliveryCommandResult,
+    DeliveryConfirmationScope,
+    DeliveryContract,
     DeliveryFrontier,
+    DeliveryManualProcedureResult,
     DeliveryObservation,
     DeliveryObservationReceipt,
-    DeliveryOutputKind,
-    DeliveryOutputReference,
     DeliveryPendingCheckpoint,
+    DeliveryPendingStatePublication,
     DeliveryRequest,
     DeliveryRequestKind,
+    DeliveryRequestOption,
     DeliveryRequestResolution,
+    DeliveryReturnContext,
     DeliveryReview,
     DeliveryReviewReceipt,
     DeliveryRuntime,
+    DeliveryRuntimeConflictError,
     DeliveryStage,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
+    DeliveryWorkerRole,
     DesignPackageManifest,
     DesignPackageStore,
     OutcomeAuthorityBinding,
+    PublishDeliveryPlan,
 )
+from owlbear_delivery.acceptance_criteria import acceptance_criteria
+from owlbear_delivery.evidence import evaluate_acceptance_evidence, observation_gaps
 from owlbear_delivery.git_executable import resolve_git_executable
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 _GIT = resolve_git_executable()
 
@@ -311,7 +332,27 @@ def test_rejected_package_validation_cannot_publish_during_later_recovery(
     assert not list((active_root / "transactions").glob("*.yaml"))
 
 
-def test_revision_preserves_unchanged_binding_and_invalidates_changed_dependents(
+def _write_revision(active_root: Path, contract_bytes: bytes, intent: bytes, design: bytes) -> None:
+    package_root = active_root / "source-bound-change"
+    (package_root / "intent.md").write_bytes(intent)
+    (package_root / "design.md").write_bytes(design)
+    manifest = DesignPackageManifest.from_content("source-bound-change", intent, design, contract_bytes)
+    (package_root / "manifest.json").write_bytes(manifest.canonical_bytes())
+
+
+def _activate(
+    registry: DeliveryAuthorityRegistry,
+    package_store: DesignPackageStore,
+    frontier_bytes: bytes,
+    snapshot_head: str = "4" * 40,
+):
+    request = _request(package_store).model_copy(
+        update={"expected_frontier_digest": hashlib.sha256(frontier_bytes).hexdigest()}
+    )
+    return registry.activate_revision(request, snapshot=lambda: snapshot_head, base_frontier_digest="0" * 64)
+
+
+def test_revision_replans_changed_outcomes_and_keeps_change_state(
     repository: Path,
     tmp_path: Path,
 ) -> None:
@@ -352,13 +393,6 @@ def test_revision_preserves_unchanged_binding_and_invalidates_changed_dependents
                 stage=DeliveryStage.IMPLEMENTATION,
                 tasks=(task,),
                 results=(result,),
-                output=DeliveryOutputReference(
-                    output_id=f"OUTPUT-{index:03}",
-                    claim_id=f"CLAIM-{index:03}",
-                    stage=DeliveryStage.PLANNING,
-                    kind=DeliveryOutputKind.PLANNING,
-                    digest=f"{index}" * 64,
-                ),
             )
         )
     pending = DeliveryPendingCheckpoint(
@@ -375,176 +409,297 @@ def test_revision_preserves_unchanged_binding_and_invalidates_changed_dependents
             ),
         ),
     )
+    publication = DeliveryChangePublicationIdentity(
+        change_id="source-bound-change", repository="example/project", number=7, node_id="PR_7", head_sha="2" * 40
+    )
     populated = DeliveryFrontier(
         bindings=tuple(populated_bindings),
         published_head="2" * 40,
         pending_checkpoint=pending,
+        change_publication_history=DeliveryChangePublicationHistory(
+            change_id="source-bound-change", publications=(publication,)
+        ),
+        target_sync_receipt=ChangeTargetSyncReceipt.create(
+            operation_id="sync-1",
+            change_id="source-bound-change",
+            integration_target="product",
+            expected_target="5" * 40,
+            target_head="5" * 40,
+            change_head_before="1" * 40,
+            merged_head="2" * 40,
+            merge_commit=True,
+        ),
+        change_deferral=DeliveryChangeDeferral.create(
+            change_id="source-bound-change",
+            prior_stage=DeliveryChangeStage.BUILDING,
+            deferred_at=datetime(2026, 8, 11, 13, tzinfo=UTC),
+            reason="Revise the requirements",
+        ),
     )
     delivery_root = target_root / "changes/source-bound-change"
-    (delivery_root / "frontier.json").write_bytes(_canonical(populated))
+    populated_bytes = _canonical(populated)
+    (delivery_root / "frontier.json").write_bytes(populated_bytes)
+    _write_revision(active_root, first.contract_bytes, *_sources(first_statement="Change the first result behavior."))
 
-    revised_intent, revised_design = _sources(first_statement="Change the first result behavior.")
-    package_root = active_root / "source-bound-change"
-    (package_root / "intent.md").write_bytes(revised_intent)
-    manifest = DesignPackageManifest.from_content(
-        "source-bound-change",
-        revised_intent,
-        revised_design,
-        first.contract_bytes,
-    )
-    (package_root / "manifest.json").write_bytes(manifest.canonical_bytes())
-
-    revised = registry.admit(_request(package_store))
+    revised = _activate(registry, package_store, populated_bytes)
 
     assert revised.carry_forward is not None
     assert revised.carry_forward.preserved_outcome_ids == ("OUT-003",)
     assert revised.carry_forward.invalidated_outcome_ids == ("OUT-001", "OUT-002")
     bindings = {binding.outcome_id: binding for binding in revised.frontier.bindings}
-    assert bindings["OUT-001"].task_ids == bindings["OUT-001"].result_ids == ()
-    assert bindings["OUT-002"].task_ids == bindings["OUT-002"].result_ids == ()
-    assert bindings["OUT-001"].stage == bindings["OUT-002"].stage == DeliveryStage.PLANNING
-    assert bindings["OUT-001"].output is bindings["OUT-002"].output is None
-    assert bindings["OUT-001"].tasks == bindings["OUT-002"].tasks == ()
-    assert bindings["OUT-001"].results == bindings["OUT-002"].results == ()
     assert bindings["OUT-003"] == populated.bindings[2]
-    assert revised.frontier.published_head == "2" * 40
-    assert revised.frontier.pending_checkpoint is not None
-    assert revised.frontier.pending_checkpoint.head is None
-    assert revised.frontier.pending_checkpoint.triggers == (pending.triggers[0], pending.triggers[2])
-    revision_root = delivery_root / "revisions" / first.contract_digest
-    assert {path.name for path in revision_root.iterdir()} == {
-        "admission.json",
-        "contract.json",
-        "frontier.json",
-    }
+    for outcome_id, previous in zip(("OUT-001", "OUT-002"), populated.bindings[:2], strict=True):
+        assert bindings[outcome_id].stage is DeliveryStage.PLANNING
+        assert bindings[outcome_id].tasks == previous.tasks
+        assert bindings[outcome_id].results == previous.results
+        assert bindings[outcome_id].return_context == DeliveryReturnContext(
+            target=DeliveryStage.PLANNING,
+            reason="requirement revision",
+            locators=(outcome_id,),
+            source_boundary=revised.contract_digest,
+        )
+    unchanged = {"bindings", "pending_checkpoint", "change_deferral", "finalization_invalidation"}
+    assert revised.frontier.model_dump(exclude=unchanged) == populated.model_dump(exclude=unchanged)
+    assert revised.frontier.change_deferral is None
+    assert revised.frontier.pending_checkpoint == DeliveryPendingCheckpoint(
+        head="4" * 40, triggers=(pending.triggers[0], pending.triggers[2])
+    )
+    history = delivery_root / "revisions" / f"{first.contract_digest}-{hashlib.sha256(populated_bytes).hexdigest()}"
+    assert (history / "frontier.json").read_bytes() == populated_bytes
+    assert (history / "contract.json").read_bytes() == first.contract_bytes
+    marker = DeliveryPendingStatePublication.model_validate_json(
+        (delivery_root / "state-publication.json").read_bytes()
+    )
+    assert marker == DeliveryPendingStatePublication.pending(
+        "0" * 64, hashlib.sha256((delivery_root / "frontier.json").read_bytes()).hexdigest()
+    )
+    assert registry.admit(
+        _request(package_store).model_copy(
+            update={"expected_frontier_digest": hashlib.sha256(populated_bytes).hexdigest()}
+        )
+    ).replayed
 
 
-def test_revision_rejects_active_claims_before_mutation(repository: Path, tmp_path: Path) -> None:
+def test_revision_rejects_active_claims_and_direct_admission_before_mutation(repository: Path, tmp_path: Path) -> None:
     active_root = tmp_path / "active"
     target_root = tmp_path / "target"
     package_store = DesignPackageStore(active_root, repository)
     package_store.create("source-bound-change", *_sources())
     registry = DeliveryAuthorityRegistry(target_root, package_store, integration_target="product")
     first = registry.admit(_request(package_store))
-    changed_intent, changed_design = _sources(first_statement="Changed behavior.")
-    package_root = active_root / "source-bound-change"
-    (package_root / "intent.md").write_bytes(changed_intent)
-    manifest = DesignPackageManifest.from_content(
-        "source-bound-change",
-        changed_intent,
-        changed_design,
-        first.contract_bytes,
-    )
-    (package_root / "manifest.json").write_bytes(manifest.canonical_bytes())
+    _write_revision(active_root, first.contract_bytes, *_sources(first_statement="Changed behavior."))
+    frontier_bytes = _canonical(first.frontier)
+    snapshots: list[str] = []
 
     with pytest.raises(DeliveryAdmissionConflictError, match="active claims block"):
-        registry.admit(
-            DeliveryAdmissionRequest(
-                change_id="source-bound-change",
-                expected_package_id=_request(package_store).expected_package_id,
-                active_claim_ids=("active-claim",),
-            )
+        registry.activate_revision(
+            _request(package_store).model_copy(
+                update={
+                    "active_claim_ids": ("active-claim",),
+                    "expected_frontier_digest": hashlib.sha256(frontier_bytes).hexdigest(),
+                }
+            ),
+            snapshot=lambda: snapshots.append("called") or "4" * 40,
+            base_frontier_digest="0" * 64,
         )
+    with pytest.raises(DeliveryAdmissionConflictError, match="only through revision activation"):
+        registry.admit(_request(package_store))
 
+    assert snapshots == []
     assert (target_root / "changes/source-bound-change/contract.json").read_bytes() == first.contract_bytes
+    assert not (target_root / "changes/source-bound-change/revisions").exists()
+    assert package_store.read_verified("source-bound-change").authority_bytes == first.contract_bytes
 
 
-def test_revision_can_carry_forward_one_confirmed_unresolved_gate(repository: Path, tmp_path: Path) -> None:
+def _evidence_sources(
+    second: str = "AC-002: The second criterion holds.", *, extra: bool = False
+) -> tuple[bytes, bytes]:
+    acceptance = ", ".join(
+        f'"{item}"'
+        for item in ("AC-001: The first criterion holds.", second, *(("AC-004: Optional.",) if extra else ()))
+    )
+    intent = f"""# Source-Bound Change
+
+{_commitment("COM-001", "Keep the first result stable.")}
+```yaml target-contract
+kind: outcome
+id: OUT-001
+title: Result OUT-001
+promise: Deliver OUT-001.
+acceptance: [{acceptance}]
+commitments: [COM-001]
+dependencies: []
+```
+
+{_commitment("COM-003", "Keep the independent result stable.")}
+{_outcome("OUT-003", "COM-003")}
+"""
+    return intent.encode(), b"# Source-Bound Architecture\n"
+
+
+def _task(task_id: str, outcome_id: str, scope_id: str, commitments: tuple[str, ...], dependencies=()):
+    return DeliveryTaskDefinition(
+        task_id=task_id,
+        outcome_id=outcome_id,
+        plan_scope_id=scope_id,
+        title=f"Produce {task_id}",
+        result=f"Result {task_id}",
+        commitment_ids=commitments,
+        dependency_ids=dependencies,
+        required_outputs=("Reviewed commit",),
+        maintained_surfaces=("serve/delivery",),
+        constraints=(),
+        exclusions=(),
+        acceptance_observations=("Result is bound",),
+        proof_boundaries=("Delivery runtime",),
+    )
+
+
+def _seeded_revision(  # noqa: PLR0913 - one admitted, seeded and activated revision.
+    repository: Path,
+    tmp_path: Path,
+    tasks: tuple[DeliveryTaskDefinition, ...],
+    completed: int,
+    revised_sources: tuple[bytes, bytes],
+    *,
+    initial_sources: tuple[bytes, bytes] | None = None,
+    seed: Callable[[OutcomeAuthorityBinding, DeliveryContract], OutcomeAuthorityBinding] = lambda binding, _: binding,
+):
+    """Admit evidence sources, seed OUT-001 with ``completed`` results, then activate ``revised_sources``."""
     active_root = tmp_path / "active"
     target_root = tmp_path / "target"
     package_store = DesignPackageStore(active_root, repository)
-    package_store.create("source-bound-change", *_sources())
+    package_store.create("source-bound-change", *(initial_sources or _evidence_sources()))
     registry = DeliveryAuthorityRegistry(target_root, package_store, integration_target="product")
     first = registry.admit(_request(package_store))
-    delivery_root = target_root / "changes/source-bound-change"
-    request = DeliveryRequest(
-        request_id="REQ-001",
-        kind=DeliveryRequestKind.ACTION,
-        outcome_id="OUT-001",
-        summary="Complete the revised pilot.",
-        resolution=DeliveryRequestResolution(
-            response_text="Use the approved SharePoint and Confluence targets.",
-            provenance="user-confirmed",
+    results = tuple(
+        _task_result(f"RESULT-{task.task_id}", "source-bound-change", first.contract_digest, task, "1" * 40)
+        for task in tasks[:completed]
+    )
+    binding = seed(
+        first.frontier.bindings[0].model_copy(
+            update={"stage": DeliveryStage.IMPLEMENTATION, "tasks": tasks, "results": results}
         ),
+        first.contract,
     )
-    sibling_request = DeliveryRequest(
-        request_id="REQ-SIBLING",
-        kind=DeliveryRequestKind.ACTION,
-        outcome_id="OUT-001",
-        summary="Retain sibling evidence.",
-        resolution=DeliveryRequestResolution(
-            response_text="Sibling evidence was reviewed.",
-            provenance="user-confirmed",
-        ),
+    frontier_bytes = _canonical(first.frontier.model_copy(update={"bindings": (binding, *first.frontier.bindings[1:])}))
+    (target_root / "changes/source-bound-change/frontier.json").write_bytes(frontier_bytes)
+    _write_revision(active_root, first.contract_bytes, *revised_sources)
+    revised = _activate(registry, package_store, frontier_bytes)
+    return revised, DeliveryRuntime(target_root, revised.contract)
+
+
+@pytest.mark.parametrize(
+    ("revised_commitment", "kept"),
+    [("COM-001", ("TASK-001", "TASK-002", "TASK-003")), ("COM-009", ("TASK-002",))],
+    ids=["commitments-survive", "commitment-removed"],
+)
+def test_replanned_outcome_keeps_completed_work_whose_commitments_survive(
+    repository: Path, tmp_path: Path, revised_commitment: str, kept: tuple[str, ...]
+) -> None:
+    tasks = (
+        _task("TASK-001", "OUT-001", "SCOPE-001", ("COM-001",)),
+        _task("TASK-002", "OUT-001", "SCOPE-001", ()),
+        _task("TASK-003", "OUT-001", "SCOPE-001", (), ("TASK-001",)),
+        _task("TASK-004", "OUT-001", "SCOPE-001", ()),
     )
-    blocked = first.frontier.bindings[0].model_copy(
-        update={
-            "stage": DeliveryStage.IMPLEMENTATION,
-            "block": DeliveryBlock(
-                block_id="BLOCK-001",
-                reason="The prior Jira pilot cannot be reused.",
-                unblock_condition="Complete the old Jira pilot.",
-                expected_evidence=("old pilot",),
-                locators=("REQ-001",),
-                request_id="REQ-001",
-                resolution_note="Revise the acceptance contract.",
-                resolution_locators=("REQ-001",),
-            ),
-            "requests": (request, sibling_request),
+    intent, design = _evidence_sources("AC-002: The second criterion changed.")
+    intent = intent.replace(b"COM-001", revised_commitment.encode())
+
+    revised, _runtime = _seeded_revision(repository, tmp_path, tasks, 3, (intent, design))
+
+    binding = revised.frontier.bindings[0]
+    assert binding.stage is DeliveryStage.PLANNING
+    assert binding.task_ids == kept
+    assert tuple(result.task_id for result in binding.results) == kept
+    assert binding.return_context is not None
+    assert binding.return_context.locators == ("AC-002",)
+
+
+def test_replanned_outcome_planning_preserves_completed_tasks_and_completes_without_delta(
+    repository: Path, tmp_path: Path
+) -> None:
+    completed = _task("TASK-001", "OUT-001", "SCOPE-001", ("COM-001",))
+    _revised, runtime = _seeded_revision(
+        repository, tmp_path, (completed,), 1, _evidence_sources(), initial_sources=_evidence_sources(extra=True)
+    )
+    claim = DeliveryActiveClaim(
+        attempt_id="attempt-1",
+        claim_id="claim-1",
+        owner_id="owner",
+        process_id="process",
+        started_at="2026-08-11T12:00:00+00:00",
+        worker_role=DeliveryWorkerRole.PLANNER,
+    )
+    runtime.activate_claim(ActivateDeliveryClaim(outcome_id="OUT-001", claim=claim))
+    added = _task("TASK-002", "OUT-001", "SCOPE-001", ())
+    for tasks in ((completed.model_copy(update={"title": "Altered"}), added), (added,)):
+        with pytest.raises(DeliveryRuntimeConflictError, match="preserve completed task definitions"):
+            runtime.publish_plan(PublishDeliveryPlan(outcome_id="OUT-001", claim_id="claim-1", tasks=tasks))
+
+    candidate = runtime.publish_plan(PublishDeliveryPlan(outcome_id="OUT-001", claim_id="claim-1", tasks=(completed,)))
+    advanced = runtime.transition(
+        AdvanceDelivery(action="advance", outcome_id="OUT-001", claim_id="claim-1", output=candidate.output)
+    )
+
+    assert advanced.stage is DeliveryStage.COMPLETED
+    assert advanced.task_ids == ("TASK-001",)
+    assert tuple(result.task_id for result in advanced.results) == ("TASK-001",)
+
+
+def test_revision_keeps_unchanged_criterion_evidence_and_scoped_confirmation(repository: Path, tmp_path: Path) -> None:
+    task = _task("TASK-001", "OUT-001", "SCOPE-001", ("COM-001",))
+    confirmed = {
+        "result": DeliveryManualProcedureResult(assessment="passed"),
+        "provenance": "human-confirmed",
+        "request_id": "REQ-CONFIRM",
+    }
+
+    def record(procedure: str, covers: tuple[DeliveryAcceptanceRef, ...], **changes: object):
+        values: dict[str, object] = {
+            "change_id": "source-bound-change",
+            "task_or_finalization_id": task.task_id,
+            "exact_commit": "1" * 40,
+            "observation_kind": "pytest",
+            "procedure": procedure,
+            "result": DeliveryCommandResult(exit_status=0),
+            "observer_or_runner_identity": "pytest",
+            "observed_at": datetime(2026, 8, 11, 12, tzinfo=UTC),
+            "covers": covers,
         }
-    )
-    frontier = first.frontier.model_copy(update={"bindings": (blocked, *first.frontier.bindings[1:])})
-    frontier_bytes = _canonical(frontier)
-    frontier_digest = hashlib.sha256(frontier_bytes).hexdigest()
-    history_path = delivery_root / "revisions" / frontier_digest / "frontier.json"
-    history_path.parent.mkdir(parents=True, exist_ok=True)
-    history_path.write_bytes(frontier_bytes)
-    (delivery_root / "frontier.json").write_bytes(frontier_bytes)
+        return DeliveryObservationReceipt.create(DeliveryObservation(**(values | changes)))
 
-    revised_intent, revised_design = _sources(first_statement="Change the first result behavior.")
-    package_root = active_root / "source-bound-change"
-    (package_root / "intent.md").write_bytes(revised_intent)
-    manifest = DesignPackageManifest.from_content(
-        "source-bound-change",
-        revised_intent,
-        revised_design,
-        first.contract_bytes,
-    )
-    (package_root / "manifest.json").write_bytes(manifest.canonical_bytes())
-    revised_request = _request(package_store).model_copy(
-        update={
-            "expected_frontier_digest": hashlib.sha256(frontier_bytes).hexdigest(),
-            "preserve_unresolved_outcome_ids": ("OUT-001",),
-        }
+    def seed(binding: OutcomeAuthorityBinding, contract: DeliveryContract) -> OutcomeAuthorityBinding:
+        first, second = (criterion.ref for criterion in acceptance_criteria(contract)[:2])
+        request = DeliveryRequest(
+            request_id="REQ-CONFIRM",
+            kind=DeliveryRequestKind.DECISION,
+            outcome_id="OUT-001",
+            summary="Confirm both criteria",
+            options=tuple(DeliveryRequestOption(option_id=item, label=item) for item in ("passed", "failed")),
+            applies_to=DeliveryConfirmationScope(kind="confirm-check", acceptance=(first, second), procedure="manual"),
+            resolution=DeliveryRequestResolution(selected_option_id="passed", provenance="user-confirmed"),
+        )
+        observations = (record("uv run pytest", (first,)), record("manual", (first, second), **confirmed))
+        (result,) = binding.results
+        return binding.model_copy(
+            update={"results": (result.model_copy(update={"observations": observations}),), "requests": (request,)}
+        )
+
+    revised, runtime = _seeded_revision(
+        repository, tmp_path, (task,), 1, _evidence_sources("AC-002: The second criterion changed."), seed=seed
     )
 
-    revised = registry.admit(revised_request)
-    replayed = registry.admit(revised_request)
-
-    carried = {binding.outcome_id: binding for binding in revised.frontier.bindings}["OUT-001"]
-    assert replayed.replayed is True
-    assert replayed.frontier == revised.frontier
-    assert revised.carry_forward is not None
-    assert revised.carry_forward.carried_forward_outcome_ids == ("OUT-001",)
-    assert carried.stage is DeliveryStage.PLANNING
-    assert carried.block is not None
-    assert carried.block.resolved is False
-    assert "Jira" not in carried.block.reason
-    assert "Jira" not in carried.block.unblock_condition
-    assert carried.requests[0].resolution is not None
-    assert carried.requests[0].resolution.provenance == "user-confirmed"
-    assert carried.requests[1].request_id == "REQ-SIBLING"
-    fresh_request = carried.requests[-1]
-    assert fresh_request.request_id == carried.block.request_id
-    assert fresh_request.resolution is None
-    assert "OUT-001" not in DeliveryRuntime(target_root, revised.contract).claimable_outcome_ids()
-
-    runtime = DeliveryRuntime(target_root, revised.contract)
-    resolved = runtime.resolve_request(
-        fresh_request.request_id,
-        DeliveryRequestResolution(response_text="The revised pilot is complete.", provenance="user-confirmed"),
+    criteria = acceptance_criteria(runtime.contract)
+    coverage = evaluate_acceptance_evidence(runtime.contract, revised.frontier).criteria
+    reconfirmation = observation_gaps(
+        record("manual", (criteria[1].ref,), **confirmed), revised.frontier, criteria, "OUT-001"
     )
 
-    assert resolved.request_id == fresh_request.request_id
-    assert runtime.show_binding("OUT-001").block is not None
-    assert runtime.show_binding("OUT-001").block.resolved is True
+    assert revised.frontier.bindings[0].requests[0].request_id == "REQ-CONFIRM"
+    assert {item.acceptance_id: item.status for item in coverage} == {
+        "AC-001": "covered",
+        "AC-002": "uncovered",
+        "AC-003": "uncovered",
+    }
+    assert [gap.reason for gap in reconfirmation] == ["request-not-applicable"]

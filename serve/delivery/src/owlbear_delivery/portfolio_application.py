@@ -118,7 +118,12 @@ from owlbear_delivery.change_workspace import (
     CoordinationConflictError,
     WorkspaceRecoverySnapshot,
 )
-from owlbear_delivery.delivery_admission import DeliveryAdmissionConflictError, DeliveryAdmissionReceipt
+from owlbear_delivery.delivery_admission import (
+    DeliveryAdmissionConflictError,
+    DeliveryAdmissionReceipt,
+    DeliveryRevisionError,
+    DeliveryRevisionReason,
+)
 from owlbear_delivery.delivery_contract_discovery import (
     DeliveryChangeObservation,
     DeliveryDiscoveryRootError,
@@ -141,7 +146,6 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryResultCandidate,
     DeliveryRuntime,
     DeliveryRuntimeConflictError,
-    DeliveryStage,
     DeliveryTaskDefinition,
     DeliveryWorkerRole,
     OutcomeAuthorityBinding,
@@ -914,21 +918,44 @@ class PortfolioApplication(
         """Replace authored Design bytes for one exact package identity."""
         self._reconcile_runtimes()
         runtime = self._runtimes.get(change_id)
-        if runtime is not None and not self._admitted_design_revision_allowed(runtime):
-            self._fail("admitted Delivery Changes cannot revise their Design package")
+        if runtime is not None:
+            self._require_revision_allowed(change_id, runtime, activation=False)
         return self._package_store.revise(change_id, expected_package_id, intent_bytes, design_bytes)
 
-    @staticmethod
-    def _admitted_design_revision_allowed(runtime: DeliveryRuntime) -> bool:
-        """Allow revision only for a quiescent Change with an explicit Design return."""
-        return (
-            runtime.change_stage() is DeliveryChangeStage.DESIGN
-            and any(binding.stage is DeliveryStage.DESIGN for binding in runtime.bindings())
-            and not runtime.active_claims()
-            and runtime.change_disposition() is None
-            and runtime.integration_repair_claim() is None
-            and runtime.finalization() is None
-        )
+    def _require_revision_allowed(self, change_id: str, runtime: DeliveryRuntime, *, activation: bool) -> None:
+        """Refuse a requirement revision unless the admitted Change is paused, quiescent and nonterminal (I1)."""
+        frontier = parse_delivery_frontier(runtime.frontier_bytes())[0]
+        coordination = self._coordinator.show(change_id)
+        action = coordination.continuation_action
+        refusal: tuple[DeliveryRevisionReason, str] | None = None
+        if frontier.change_completion is not None or frontier.change_abandonment is not None:
+            refusal = ("change-terminal", "a terminal Change is immutable; start a successor Change")
+        elif frontier.merged_pull_request_latch is not None:
+            refusal = ("change-merged", "the Change pull request is merged; start a successor Change")
+        elif frontier.finalization is not None or frontier.ready is not None:
+            refusal = ("change-finalized", "run prepare_review_repair, then Pause the Change")
+        elif coordination.pause_request is not None:
+            refusal = ("pause-pending", "wait until the Pause request becomes a deferral")
+        elif frontier.change_deferral is None:
+            refusal = ("change-not-paused", "Pause the Change before revising its requirements")
+        elif frontier.change_disposition is not None:
+            refusal = ("change-attention", "resolve the Change attention first")
+        elif (
+            any(
+                binding.active_claim is not None or binding.builder_handoff_context is not None
+                for binding in frontier.bindings
+            )
+            or frontier.integration_repair_claim is not None
+            or coordination.writer is not None
+            or coordination.builder_handoff is not None
+            or (action is not None and action.finished_at is None)
+            or (not activation and coordination.design_package_snapshot_intent is not None)
+        ):
+            refusal = ("custody-retained", "the Change retains worker, handoff or snapshot custody")
+        elif activation and runtime.pending_state_publication() is not None:
+            refusal = ("publication-pending", "the current Delivery state is not published yet")
+        if refusal is not None:
+            raise DeliveryRevisionError(*refusal)
 
     def publish_design_checkpoint(self, change_id: str) -> DesignCheckpointResult:
         """Checkpoint one verified active package without touching product refs."""
@@ -942,6 +969,9 @@ class PortfolioApplication(
     def admit_delivery_change(self, request: DeliveryAdmissionRequest) -> DeliveryAdmissionResult:
         """Admit source-bound Delivery authority through the owning registry."""
         self._reconcile_runtimes()
+        runtime = self._runtimes.get(request.change_id)
+        if runtime is not None and self._revision_pending(request.change_id, runtime):
+            return self._activate_revision(request, runtime)
         with self._coordinator.acquisition_lock():
             runtime = self._runtimes.get(request.change_id)
             if runtime is not None:
@@ -990,6 +1020,84 @@ class PortfolioApplication(
                 self._reconcile_change_checkpoint(request.change_id, runtime)
             self._reconcile_runtimes()
             return result.model_copy(update={"frontier": parse_delivery_frontier(runtime.frontier_bytes())[0]})
+
+    def _revision_pending(self, change_id: str, runtime: DeliveryRuntime) -> bool:
+        """Return whether the active package differs from the admitted authority or its branch snapshot."""
+        coordination = self._coordinator.find_registered(change_id)
+        if coordination is None:
+            return False
+        package = self._package_store.read_verified(change_id)
+        compiled = compile_delivery_contract(change_id, package.intent_bytes, package.design_bytes)
+        snapshot = coordination.design_package_snapshot
+        return (compiled.digest is not None and compiled.digest != runtime.authority_digest) or (
+            snapshot is not None
+            and (snapshot.package_id != package.package_id or coordination.design_package_snapshot_intent is not None)
+        )
+
+    def _activate_revision(
+        self, request: DeliveryAdmissionRequest, runtime: DeliveryRuntime
+    ) -> DeliveryAdmissionResult:
+        """§1.5: publish the contract, snapshot on the reviewed head, then one authority transaction."""
+        change_id = request.change_id
+        with self._coordinator.acquisition_lock(), locked_roots((self._checkpoint_lock_root(change_id),)):
+            self._replay_pending_state_publications(change_id)
+            self._require_revision_allowed(change_id, runtime, activation=True)
+            coordination = self._coordinator.show(change_id)
+            if request.expected_frontier_digest is None:
+                message = "requirement revision requires the expected frontier digest"
+                raise DeliveryAdmissionConflictError(message)
+            if coordination.design_package_snapshot_intent is None:
+                try:
+                    self._workspace_manager.reviewed_source_head(change_id)
+                except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
+                    moved = DeliveryRevisionError(
+                        "reviewed-head-moved", "the Change branch or worktree differs from its reviewed head"
+                    )
+                    raise moved from exc
+            result = self._authority_registry.activate_revision(
+                request,
+                snapshot=lambda: self._revision_snapshot_head(request),
+                base_frontier_digest=runtime.published_projection_digest(runtime.frontier_bytes()),
+            )
+            runtime = DeliveryRuntime(self._target_root, result.contract, workspace_manager=self._workspace_manager)
+            with self._runtime_reconciliation_lock:
+                self._runtimes = {**self._runtimes, change_id: runtime}
+            try:
+                if self._change_branch_publisher is not None and self._draft_pull_request_publisher is not None:
+                    self._reconcile_change_checkpoint(change_id, runtime)
+                else:
+                    self._publish_delivery_state(
+                        change_id, runtime, _checkpoint_operation_id("revision", change_id, result.contract_digest)
+                    )
+            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                _logger.warning("Revised Change %s kept its state publication pending: %s", change_id, exc)
+        self._reconcile_runtimes()
+        return result.model_copy(update={"frontier": parse_delivery_frontier(runtime.frontier_bytes())[0]})
+
+    def _revision_snapshot_head(self, request: DeliveryAdmissionRequest) -> str:
+        """Return the reviewed head carrying the active package, committing a snapshot when it differs."""
+        package = self._package_store.read_verified(request.change_id)
+        coordination = self._coordinator.show(request.change_id)
+        receipt = coordination.design_package_snapshot
+        if (
+            coordination.design_package_snapshot_intent is None
+            and receipt is not None
+            and receipt.package_id == package.package_id
+        ):
+            return coordination.last_reviewed_commit
+        return self._workspace_manager.snapshot_design_package(
+            request.change_id,
+            package.package_id,
+            {
+                "authority.json": package.authority_bytes,
+                "design.md": package.design_bytes,
+                "intent.md": package.intent_bytes,
+                "manifest.json": package.manifest.canonical_bytes(),
+            },
+            _checkpoint_operation_id("package", request.change_id, package.package_id),
+            request.expected_design_package_snapshot_receipt_id
+            or (receipt.receipt_id if receipt is not None else None),
+        ).snapshot_head
 
     def admit_change(self, request: DeliveryAdmissionRequest) -> DeliveryAdmissionResult:
         """Admit one exact approved Design version as executable Delivery authority."""
