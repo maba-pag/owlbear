@@ -882,6 +882,11 @@ Effect side (Q5).
     still settles `merged`/`scope-changed`, but no observation exists to carry the `scope-changed`
     attention; the existing publication-identity refusal shows instead (never completion, latch or
     cleanup). Check again is one read set (evidence, UUID when pending, acceptance read).
+  - Sol implementation round 1 (fixed): GitHub's asynchronous merge can finish between the settlement read
+    and the acceptance read, so the acceptance read could complete (or raise attention) while the attempt
+    stayed `pending` and the parent-1/base check never ran. When the acceptance read no longer shows the
+    attempt's PR open at the approved head, settlement now reads again before the race check and any
+    classification, latch, completion or cleanup; if the attempt is still open, acceptance waits.
   - `approve_merge` observes acceptance after releasing the approval's checkpoint lock (re-taking the
     flock in one process deadlocks, D10); a later read completes when that one cannot.
   - The fence raises `DeliveryMergeError` (a `PortfolioApplicationError`) with `ERR_DELIVERY_MERGE_IN_PROGRESS`.
@@ -1045,7 +1050,7 @@ plan's status table, a companion that the ready rule does not block.
 | N05-A | #356 | `a4951b044` | Ubuntu CI run 37147328711 exact head: 3953 passed, 3 skipped (no launcher skips); macOS focused launcher/provider/authority 149 passed; `test --changed --py` 3955 passed; real-gh recorder 409 formats captured; parser mutation fails 7 tests | Sol implementation round 1: repair-required (real-gh 409 parsing, merge-call ownership gate, typed pre-release failures) → repaired; round 2: `implementation-sound` | merged |
 | Smoke (3.3) | — | — | — | — | — |
 | N05-B1 | #371 | `651afebcd` | `uv run test --changed` 3310 passed (580 s), Cockpit 364 passed; earlier at `ffbe5a62c`: build, Biome, ruff clean; `test:e2e:work` 27 passed | Sol implementation round 1 on `2353ca7d3`: repair-required. (1) Rejected, documented limit G15: cleanup does not preserve ignored files. (2) Fixed: a failed PR read in the draft phase projected an executable `mark-ready`; now `waiting/provider-unavailable`, acquisition agrees | merged |
-| N05-B2 | #375 | `19ccc28d9` | `uv run test --changed` at `644a923cf`: 3680 passed, 3 companion expectations failed → fixed in `b10076c79`, rerun passed; Cockpit 367 passed; diagnostics/LC/migration 316 passed at `19ccc28d9`; build, Biome, ruff clean; `test:e2e:work` 27 passed; LC full form (Docker, previous `841b1cffb`) passed at `19ccc28d9` after two LC-tool findings fixed here | — | in review |
+| N05-B2 | #375 | `b79f01eb6` | `uv run test --changed` at `644a923cf`: 3680 passed, 3 companion expectations failed → fixed in `b10076c79`, rerun passed; Cockpit 367 passed; diagnostics/LC/migration 316 passed at `19ccc28d9`; build, Biome, ruff clean; `test:e2e:work` 27 passed; LC full form (Docker, previous `841b1cffb`) passed at `19ccc28d9` after two LC-tool findings fixed here; round-1 repair at `b79f01eb6`: merge/offer tests 81 passed (new inter-read test fails all 8 cases with the fix disabled), `test --changed` 3693 passed (574 s), Cockpit 367 passed, ruff clean; LC not rerun (no format or loader change) | Sol implementation round 1 on `b92536267`: repair-required. (1) Fixed: an asynchronous merge finishing between the settlement read and the acceptance read completed (or raised attention) while the attempt stayed `pending` and skipped the parent-1/base check; the acceptance read now re-settles first and waits while the attempt stays open | in review |
 | N05-C | — | — | — | — | — |
 | N05-D | — | — | — | — | — |
 
