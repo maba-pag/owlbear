@@ -50,6 +50,7 @@ import {
   READINESS_CHECKS_LABELS,
   READINESS_REASON_LABELS,
   READINESS_STATUS_LABELS,
+  REVISION_PROMPT_HELP,
   readinessTone,
   workItemStatus,
   workItemStatusLabel,
@@ -475,6 +476,9 @@ function ChangePauseSection(props: WorkItemDetailProps) {
         onPause={props.onDeferChange}
         onResume={props.onResumeChange}
       />
+      {item.revision_prompt ? (
+        <CopyCommand command={item.revision_prompt} label="Change requirements" helper={REVISION_PROMPT_HELP} />
+      ) : null}
     </section>
   );
 }

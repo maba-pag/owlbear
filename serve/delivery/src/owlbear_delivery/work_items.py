@@ -609,6 +609,7 @@ class WorkItemDetailView(_ProjectionModel):
     pause_available: bool = False
     pause_unavailable_reason: ChangePauseUnavailableReason | None = "state-unavailable"
     evidence: DeliveryEvidenceProjection | None = None
+    revision_prompt: str | None = None
 
     @model_validator(mode="after")
     def _validate_pause(self) -> WorkItemDetailView:
@@ -980,6 +981,7 @@ class WorkItemProjector:
                 pause_available=self._pause_unavailable_reason is None,
                 pause_unavailable_reason=self._pause_unavailable_reason,
                 evidence=self.evidence(),
+                revision_prompt=self._revision_prompt(),
             )
         outcome_id = card.work_item_id
         outcome = self._outcomes[outcome_id]
@@ -1007,7 +1009,19 @@ class WorkItemProjector:
             pause_available=self._pause_unavailable_reason is None,
             pause_unavailable_reason=self._pause_unavailable_reason,
             evidence=self.evidence(outcome_id),
+            revision_prompt=self._revision_prompt(),
         )
+
+    def _revision_prompt(self) -> str | None:
+        """Return the Designer prompt for a requirement change; terminal and merged Changes need a successor."""
+        frontier = self._snapshot.frontier
+        if (
+            frontier.change_completion is not None
+            or frontier.change_abandonment is not None
+            or frontier.merged_pull_request_latch is not None
+        ):
+            return None
+        return f"/design {self._snapshot.contract.change_id} Change requirements:"
 
     def _project_cards(self) -> tuple[WorkItemCardView, ...]:
         cards = tuple(

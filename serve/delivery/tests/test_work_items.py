@@ -12,6 +12,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryActiveClaim,
     DeliveryBlock,
     DeliveryChangeAbandonment,
+    DeliveryChangeCompletion,
     DeliveryChangeDeferral,
     DeliveryChangeDisposition,
     DeliveryChangeDispositionKind,
@@ -945,6 +946,9 @@ def test_deferred_change_projects_paused_outcomes_and_resume_action() -> None:
     assert all(item.next_actor == WorkItemNextActor.NONE for item in group.items[:2])
     assert group.items[-1].action.kind == WorkItemActionKind.RESUME_CHANGE
     assert group.items[-1].action.command is None
+    prompt = "/design portfolio-change Change requirements:"
+    assert projector.show_view("outcome:OUT-001").revision_prompt == prompt
+    assert projector.show_view("publication").revision_prompt == prompt
 
 
 def test_abandoned_change_projects_terminal_publication_without_action() -> None:
@@ -967,6 +971,7 @@ def test_abandoned_change_projects_terminal_publication_without_action() -> None
     assert projector.publication_phase() == WorkItemPublicationPhase.ABANDONED
     assert group.items[-1].next_step == "Change abandoned"
     assert group.items[-1].action.kind == WorkItemActionKind.NONE
+    assert projector.show_view("publication").revision_prompt is None
 
 
 def test_ready_pull_request_waits_for_user_merge_without_merge_control() -> None:
@@ -1050,16 +1055,17 @@ def test_merged_latch_projects_distinct_finalized_and_accepted_heads() -> None:
         accepted_merge_commit="7" * 40,
         merged_at=datetime(2026, 8, 11, 16, tzinfo=UTC),
     )
-    projector = WorkItemProjector(
-        _snapshot(
-            (_binding("OUT-001", DeliveryStage.COMPLETED), _binding("OUT-002", DeliveryStage.COMPLETED)),
-            frontier_updates={
-                "finalization": finalization,
-                "published_head": finalization.exact_head,
-                "ready": ready,
-                "merged_pull_request_latch": merged,
-            },
-        )
+    bindings = (_binding("OUT-001", DeliveryStage.COMPLETED), _binding("OUT-002", DeliveryStage.COMPLETED))
+    merged_updates: dict[str, object] = {
+        "finalization": finalization,
+        "published_head": finalization.exact_head,
+        "ready": ready,
+        "merged_pull_request_latch": merged,
+    }
+    projector = WorkItemProjector(_snapshot(bindings, frontier_updates=merged_updates))
+    completion = DeliveryChangeCompletion(completion_id="8" * 64, completed_at=datetime(2026, 8, 11, 17, tzinfo=UTC))
+    completed = WorkItemProjector(
+        _snapshot(bindings, frontier_updates={**merged_updates, "change_completion": completion})
     )
 
     detail = projector.show_view("publication")
@@ -1069,3 +1075,5 @@ def test_merged_latch_projects_distinct_finalized_and_accepted_heads() -> None:
     assert detail.publication.finalized_head == finalization.exact_head
     assert detail.publication.accepted_merge_commit == "7" * 40
     assert detail.publication.finalized_head != detail.publication.accepted_merge_commit
+    assert detail.revision_prompt is None
+    assert completed.show_view("publication").revision_prompt is None

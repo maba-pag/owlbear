@@ -840,6 +840,7 @@ export interface WorkItemDetailView {
   pause_available?: boolean;
   pause_unavailable_reason?: ChangePauseUnavailableReason | null;
   evidence?: DeliveryEvidenceProjection | null;
+  revision_prompt?: string | null;
 }
 
 export interface WorkItemAvailableDetailResponse {
