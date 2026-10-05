@@ -671,7 +671,7 @@ every new item exactly one lane.
 | N09-A2 | merged | #357 (code head `7a2d974b3`) |
 | N09-P2 | merged | #372 (Sol plan gate round 1 revision-required; F1 consumer-publication boundary and F2 Cockpit inventory rows fixed; gate ended after round 1 corrections (lead); U2 settled (a) by the lead 2026-10-04 → N09 plan D21) |
 | N09-B | in review | #379 (code head `28d7ca8e6`; `/orchestrate` and `/release-stuck-worker` retired, `/continue-change` the only execution entry; grep gate empty; ecosystem tests and validators pass; no new operation, reason or record; LC not applicable) |
-| N09-C | — | — |
+| N09-C | in review | #381 (docs `0a5068a14`; journey rewritten around `/continue-change` with one exceptional-entries table; consumer-projection grep for `/orchestrate` and `/release-stuck-worker` empty; markdownlint and ecosystem tests pass) |
 | N10-P | merged | #374 ([N10 plan](delivery-n10-plan.md): acceptance map; plan decisions U1 (a), U2 (a) settled 2026-10-05; Sol plan gate round 1 on `eb185eb3f` revision-required, three findings fix-now applied (U3 option (c) removed, N10-A regression gate after an N10-H product fix, V08 proof with one N10-A disposable check); gate closed) |
 | N10-A | — | — |
 | N10-H | — | — |
