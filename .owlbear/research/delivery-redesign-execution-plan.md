@@ -672,7 +672,7 @@ every new item exactly one lane.
 | N09-P2 | merged | #372 (Sol plan gate round 1 revision-required; F1 consumer-publication boundary and F2 Cockpit inventory rows fixed; gate ended after round 1 corrections (lead); U2 settled (a) by the lead 2026-10-04 → N09 plan D21) |
 | N09-B | — | — |
 | N09-C | — | — |
-| N10-P | in review | [N10 plan](delivery-n10-plan.md): acceptance map (13 V-scenarios proven on `dev`, 7 pending planned phases, V01 needs N10-A and N10-H); U1, U2 open |
+| N10-P | in review | #374 ([N10 plan](delivery-n10-plan.md): acceptance map (13 V-scenarios proven on `dev`, 7 pending planned phases, V01 needs N10-A and N10-H; U1, U2 open) |
 | N10-A | — | — |
 | N10-H | — | — |
 | N10-M | — | — |

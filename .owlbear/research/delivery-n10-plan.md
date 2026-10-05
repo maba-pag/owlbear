@@ -313,7 +313,7 @@ Read-only, on `origin/dev` `66871ee92` in lane D; logs in `.owlbear/scratch/n10p
 
 | Phase | PR | Head | Proof | Challenge | Status |
 | --- | --- | --- | --- | --- | --- |
-| N10-P | — | — | Probes P1–P6; docs only; markdownlint on temporary copies | — | in review |
+| N10-P | #374 | — | Probes P1–P6; docs only; markdownlint on temporary copies | — | in review |
 | N10-A | — | — | — | — | — |
 | N10-H | — | — | — | — | — |
 | N10-M | — | — | — | — | — |
