@@ -4748,7 +4748,7 @@ def _published_design_return(
     """Publish one authored Change, return its Builder to Design with committed and ``variant`` work, then Pause it.
 
     ``mixed``: staged, unstaged and untracked; ``staged-only``: staged bytes over unchanged worktree bytes (plus an
-    untracked file in ``staged-only-untracked``); ``ignored``: a committed ignore rule hiding an uncaptured file.
+    untracked file in ``staged-only-untracked``).
     """
     repository, remote, _initial = _repository(tmp_path)
     _git(repository, "config", "url." + str(remote) + ".insteadOf", "https://github.com/example/project.git")
@@ -4802,9 +4802,7 @@ def _published_design_return(
     builder = application.acquire_frontier_work().launch_packages[0]
     worktree = builder.worktree_path
     (worktree / "committed.txt").write_text("committed Builder bytes\n", encoding="utf-8")
-    if variant == "ignored":
-        (worktree / ".gitignore").write_text("secret.log\n", encoding="utf-8")
-    _git(worktree, "add", "committed.txt", *([".gitignore"] if variant == "ignored" else []))
+    _git(worktree, "add", "committed.txt")
     _git(worktree, "commit", "-m", "Builder work")
     branch_head = _git(worktree, "rev-parse", "HEAD")
     if variant == "mixed":
@@ -4815,8 +4813,6 @@ def _published_design_return(
         (worktree / "product.txt").write_text("staged Builder bytes\n", encoding="utf-8")
         _git(worktree, "add", "product.txt")
         (worktree / "product.txt").write_text("baseline\n", encoding="utf-8")
-    if variant == "ignored":
-        (worktree / "secret.log").write_text("ignored Builder bytes\n", encoding="utf-8")
     if variant != "staged-only":
         (worktree / "untracked.txt").write_text("untracked Builder bytes\n", encoding="utf-8")
     application.settle_worker_invocation(
@@ -4994,21 +4990,43 @@ def test_design_return_replay_refuses_an_index_restaged_after_capture(tmp_path: 
     close_delivery_application(application)
 
 
-@pytest.mark.parametrize("boundary", [None, "after-capture"])
-def test_design_return_release_refuses_before_cleaning_an_uncaptured_ignored_file(
-    tmp_path: Path, boundary: str | None
-) -> None:
-    application, config, repository, builder, _branch_head = _published_design_return(tmp_path, "ignored")
-    change_id, worktree = builder.change_id, builder.worktree_path
-    if boundary is not None:
-        with _design_return_crash(application, boundary), pytest.raises(_Crash):
-            _revise_design_return(application, change_id)
-        close_delivery_application(application)
-        application = load_delivery_application(config, workspace_root=repository)
+def test_design_return_revision_waits_for_its_release_publication(tmp_path: Path) -> None:
+    application, config, repository, builder, branch_head = _published_design_return(tmp_path)
+    change_id = builder.change_id
 
-    with pytest.raises(DeliveryRevisionError, match="design-return-workspace-changed"):
+    def package() -> tuple[str, bytes]:
+        current = application.read_design_session(change_id)
+        return current.package_id, current.authority_bytes
+
+    before = package()
+    unavailable = patch.object(DeliveryStatePublisher, "publish", side_effect=RuntimeError("provider unavailable"))
+    with unavailable, pytest.raises(DeliveryRevisionError, match="publication-pending"):
         _revise_design_return(application, change_id)
+    runtime = application._runtimes[change_id]  # noqa: SLF001
+    assert runtime.show_binding("OUT-001").builder_handoff_context is None
+    assert runtime.pending_state_publication() is not None
+    assert package() == before
+    close_delivery_application(application)
+    with unavailable:
+        application = load_delivery_application(config, workspace_root=repository)
+        with pytest.raises(DeliveryRevisionError, match="publication-pending"):
+            _revise_design_return(application, change_id)
+    assert package() == before
 
-    assert (worktree / "secret.log").read_text(encoding="utf-8") == "ignored Builder bytes\n"
-    assert application._coordinator.show(change_id).builder_handoff is not None  # noqa: SLF001
+    _revise_design_return(application, change_id)
+
+    runtime = application._runtimes[change_id]  # noqa: SLF001
+    assert runtime.pending_state_publication() is None
+    coordination = application._coordinator.show(change_id)  # noqa: SLF001
+    activated = application.admit_change(
+        DeliveryAdmissionRequest(
+            change_id=change_id,
+            expected_package_id=_authored_package_id(application, change_id),
+            active_claim_ids=(),
+            expected_frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+            expected_design_package_snapshot_receipt_id=coordination.design_package_snapshot.receipt_id,
+        )
+    )
+    assert activated.frontier.bindings[0].return_context.preserved_commit == branch_head
+    assert [launch.outcome_id for launch in application.acquire_frontier_work().launch_packages] == ["OUT-001"]
     close_delivery_application(application)

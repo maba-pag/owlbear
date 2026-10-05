@@ -926,9 +926,16 @@ class PortfolioApplication(
                 runtime.release_design_return()
             except DesignReturnWorkspaceError as exc:
                 raise DeliveryRevisionError(exc.reason, str(exc)) from exc
-            self._replay_pending_state_publications(change_id)
         if runtime is not None:
             self._require_revision_allowed(change_id, runtime, activation=False)
+            # Package replacement clears its authority, after which a pending state publication can never publish.
+            self._replay_pending_state_publications(change_id)
+            if runtime.pending_state_publication() is not None:
+                refusal: tuple[DeliveryRevisionReason, str] = (
+                    "publication-pending",
+                    "the Delivery state is not published yet; retry once publication succeeds",
+                )
+                raise DeliveryRevisionError(*refusal)
         return self._package_store.revise(change_id, expected_package_id, intent_bytes, design_bytes)
 
     def _require_revision_allowed(

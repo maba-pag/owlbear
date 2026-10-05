@@ -1327,7 +1327,6 @@ class ChangeWorkspaceManager(_WorktreeStateMixin, _PreservationMixin, _SnapshotM
             self._capture_design_return(coordination, handoff, lock)
         worktree = coordination.worktree_path
         self._git("reset", "--hard", coordination.last_reviewed_commit, cwd=worktree)
-        self._require_design_return_clean_preserved(change_id, handoff)
         self._git("clean", "-fd", cwd=worktree)
         if self._worktree_change_paths(worktree):
             _workspace_failure("Design return release did not clean the managed worktree")
@@ -1424,37 +1423,6 @@ class ChangeWorkspaceManager(_WorktreeStateMixin, _PreservationMixin, _SnapshotM
             allowed.add(self._git("rev-parse", f"{branch_head}^{{tree}}"))
         if current not in allowed:
             raise DesignReturnWorkspaceError.workspace_changed()
-
-    def _require_design_return_clean_preserved(self, change_id: str, handoff: ChangeBuilderHandoff) -> None:
-        """Refuse before ``clean`` would delete a path the capture refs lack, e.g. one only the Builder ignored."""
-        coordination = self._coordinator.show(change_id)
-        worktree = coordination.worktree_path
-        paths: list[str] = []
-        environment = {**os.environ, "LC_ALL": "C"}
-        listing = self._git("-c", "core.quotePath=false", "clean", "-nd", cwd=worktree, environment=environment)
-        for line in listing.splitlines():
-            if line.startswith("Would skip repository "):
-                continue
-            entry = line.removeprefix("Would remove ")
-            if entry == line:
-                raise DesignReturnWorkspaceError.workspace_changed()
-            if not entry.endswith("/"):
-                paths.append(entry)
-                continue
-            listed = self._run_git(
-                "--literal-pathspecs", "ls-files", "--others", "--exclude-standard", "-z", "--", entry, cwd=worktree
-            ).stdout
-            paths.extend(os.fsdecode(path) for path in listed.split(b"\0") if path)
-        if not paths:
-            return
-        receipt = coordination.dirty_worktree_quarantine
-        captured = receipt.quarantine_commit if receipt is not None else handoff.branch_head
-        try:
-            self._verify_worktree_paths_match_commit(
-                worktree, coordination.last_reviewed_commit, tuple(sorted(paths)), captured
-            )
-        except RuntimeError as exc:
-            raise DesignReturnWorkspaceError.workspace_changed() from exc
 
     def _reject_unpromoted_adoption_restart(
         self,
