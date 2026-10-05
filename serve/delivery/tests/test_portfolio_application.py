@@ -14876,7 +14876,7 @@ def test_cancelled_and_repeated_revisions_keep_distinct_history(tmp_path: Path) 
 
 
 def test_cancel_interrupted_after_contract_publication_is_completed_by_resume(tmp_path: Path) -> None:
-    """Documented limit (N04 plan gaps): the retry replays ordinary admission and the user's Resume finishes it."""
+    """Documented limit (N04 plan G6): the retry is refused until the user's Resume, which finishes the cancel."""
     application, coordinator, state_root, seeded = _paused_revision_change(tmp_path)
     original = application.read_design_session("change-r")
     head = coordinator.show("change-r").last_reviewed_commit
@@ -14898,13 +14898,14 @@ def test_cancel_interrupted_after_contract_publication_is_completed_by_resume(tm
         pytest.raises(_Crash),
     ):
         application.admit_change(request)
-    retried = application.admit_change(request)
+    package_after_crash = _file_bytes(tmp_path / "packages/change-r")
+    with pytest.raises(DeliveryRuntimeConflictError, match="requires resumption"):
+        application.admit_change(request)
     _change_intent(application, "change-r", DeliveryChangeIntentKind.RESUME)
 
     coordination = coordinator.show("change-r")
     runtime = application._runtimes["change-r"]
-    assert retried.replayed is True
-    assert retried.frontier.change_deferral is not None
+    assert _file_bytes(tmp_path / "packages/change-r") == package_after_crash
     assert runtime.change_deferral() is None
     assert [binding.stage for binding in runtime.bindings()] == [binding.stage for binding in seeded.bindings]
     assert coordination.design_package_snapshot_intent is None
