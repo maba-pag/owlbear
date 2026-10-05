@@ -966,6 +966,36 @@ Effect side (Q5).
   `uv run pytest tests/test_agent_ecosystem_validation.py -q`.
 - **LC:** full form (execution plan §5 N05: full form from N05-B2 on); no format change expected.
 - **Size / risk:** M / medium.
+- **Implementation notes (2026-10-05, N05-C build):**
+  - `POST /api/changes/{change_id}/approve-merge` takes `offer_id` and the dialog's `submission_id`; the
+    approval's host is the Cockpit machine name and its session `cockpit`. `DeliveryMergeError` maps to `409`
+    (stale, in progress) or `503` (unavailable), each with the fresh readiness; a provider error keeps the
+    existing `502` mapping (the attempt stays `released` and settles by readback).
+  - The dialog keeps the offer under review. Each opening mints `cockpit-merge-<uuid>`, repeated on a retried
+    POST; a stale refusal disables re-approval of that offer. The detail reports the attempt state.
+  - An unknown merge's acceptance control is labelled **Check again** (`work_items.py`).
+  - The continuation skill shows a merge offer and stops; on `merge-response-unknown` it asks Check again /
+    Not now and calls `observe_acceptance` once per Check again answer. Orchestrator gains the
+    `observe_acceptance` tool; `tests/test_agent_ecosystem_validation.py` pins its tool map (companion outside
+    the listed paths), and `WorkPortfolioPage.tsx` wires the new prop.
+  - Default-loader proof of the unknown merge (deferred from B2): the work E2E stack starts a third Cockpit
+    (port 4177) on a merge fixture seeded through `load_delivery_application` with `e2e/support/fake-gh.mjs`
+    first on `PATH`. Its four Changes cover the stale offer, Check again then a manual merge, Abandon while
+    unknown, and Cancel then approve. Tests drive the fake with `__move-head`, `__merge` and
+    `__restore-target` (the fixtures share one target branch, so a merge would otherwise make later offers
+    stale). The smoke test reuses the fixture's public-owner lifecycle helpers.
+  - Smoke finding, fixed here (`github.py`, outside the listed paths): GitHub Free refuses
+    `rules/branches/{branch}` on a private repository with `403` ("Upgrade to GitHub Pro"), so the merge facts
+    were unreadable and readiness stayed `provider-unavailable`; no merge was ever offered. A `403` on that
+    read now means no rules (none can apply on that plan; GitHub still enforces any rule at merge time, S4).
+    The first smoke repository stopped there with its PR open and no merge request.
+  - The portfolio E2E describe releases its `/api/work-items` route after each test: with the third Cockpit
+    running, a poll in flight at test end failed an existing completed-history test (`route.fetch: Test ended`).
+  - Found, not changed here: after `mark_change_ready`, readiness keeps the pre-ready (draft) PR observation
+    for its 15-second cache lifetime, so the offer shows `merge-blocked/draft` until it expires (B1 cache). The
+    generated PR body still says "merge this pull request in GitHub" (`application_support.py`); changing it
+    rewrites every published PR summary. The awaiting-merge publication card headline still reads "Merge pull
+    request in GitHub" (`work_items.py` `_awaiting_merge_state`); the readiness detail carries the control.
 
 ### 3.7 N05-D — PR-feedback continuity (#225)
 
@@ -1048,11 +1078,11 @@ plan's status table, a companion that the ready rule does not block.
 | --- | --- | --- | --- | --- | --- |
 | N05-P | #353 | — | Probes P1–P16 | Sol round 1: revision-required (stack scope, execution-time target race in U3, pending/unknown reconciliation, renewable consent, no-repair handoff, 409 option validation) → revised; Sol round 2: revision-required (execution scope policy, successor ledger accounting, outstanding-reply reconciliation, complete repair map, fence owner/ordering) → revised; Sol round 3: revision-required (reply non-execution authority, expiry ≠ refusal, fence lock-entry contract) → consolidated settlement contract; Sol round 4: revision-required (request-series settlement, repost decision replay, guard helper scope) → revised; consistency pass (D6/§1.4/§1.5 aligned with §1.11–§1.12); Sol round 5: revision-required (EOF-safe effect entry) → revised; Sol round 6: revision-required (EOF oracle vs release record) → revised; Sol round 7: revision-required (head drift vs pending series) → revised; Sol round 8: revision-required (held-state user exit) → revised; Sol round 9: blocked (U4 non-merging retirement) + 3 fix-now → revised; U4 pending; Sol round 10: revision-required (exhausted M7 hold) → revised; Sol round 11: revision-required (M1 vs observed manual merge) → revised; Sol round 12: `plan-sound`; user-decision revision #360 (history; its D14 boundary, consent records and U4 (b) retirement were removed on 2026-10-04): Sol round 1: revision-required (raced M2 completion, A-R rehearsal split and ownership, unbounded execution interval) → revised; Sol round 2: revision-required (A-R does not discriminate execution-time rules) → ordered pending-then-change step with stop-and-ask; lead's deferred item: D14 moves approval, retirement and reply decisions onto N03 D13 (F10); Sol round 3: revision-required (renewed merge consent replayable within the request-state TTL) → single-use consent generation (D14, D4, `merge_consent`); Sol round 4 (N03 finding, cross-plan): a declined or cancelled question stayed replayable with an affirmative answer → D14 moves onto N03's shared `consent_generation` family (N03 D13 *Single use*), `merge_consent` removed, N05-B needs N03-A (F11) | approved (execution-plan amendments confirmed 2026-10-03; U1–U4 decided 2026-10-03; N03 U2 open before N05-C) |
 | N05-A | #356 | `a4951b044` | Ubuntu CI run 37147328711 exact head: 3953 passed, 3 skipped (no launcher skips); macOS focused launcher/provider/authority 149 passed; `test --changed --py` 3955 passed; real-gh recorder 409 formats captured; parser mutation fails 7 tests | Sol implementation round 1: repair-required (real-gh 409 parsing, merge-call ownership gate, typed pre-release failures) → repaired; round 2: `implementation-sound` | merged |
-| Smoke (3.3) | — | — | — | — | — |
+| Smoke (3.3) | N05-C | `ee74f72ad` | Run 1 `boecht/owlbear-merge-smoke-20261005030104` at `0c94abdf9`: no offer (`provider-unavailable`, rules read `403` on GitHub Free; fixed in N05-C), no merge request, PR #1 open. Run 2 `boecht/owlbear-merge-smoke-20261005030543`: `OWLBEAR_MERGE_SMOKE_REPO=… uv run pytest serve/delivery-github/tests/test_merge_smoke.py -q -n0 -s -p no:cacheprovider` passed (89 s); PR #1; `approve-merge` `200` `pending`; acceptance `200`, completion `71056e46…`; merge `1f3162bde` parents `[eaddc3892, 9830ca4b1]` (target, approved head); GitHub `merged: true` | — | done; both repositories left for the user to delete |
 | N05-B1 | #371 | `651afebcd` | `uv run test --changed` 3310 passed (580 s), Cockpit 364 passed; earlier at `ffbe5a62c`: build, Biome, ruff clean; `test:e2e:work` 27 passed | Sol implementation round 1 on `2353ca7d3`: repair-required. (1) Rejected, documented limit G15: cleanup does not preserve ignored files. (2) Fixed: a failed PR read in the draft phase projected an executable `mark-ready`; now `waiting/provider-unavailable`, acquisition agrees | merged |
 | N05-B2 | #375 | `b79f01eb6` | `uv run test --changed` at `644a923cf`: 3680 passed, 3 companion expectations failed → fixed in `b10076c79`, rerun passed; Cockpit 367 passed; diagnostics/LC/migration 316 passed at `19ccc28d9`; build, Biome, ruff clean; `test:e2e:work` 27 passed; LC full form (Docker, previous `841b1cffb`) passed at `19ccc28d9` after two LC-tool findings fixed here; round-1 repair at `b79f01eb6`: merge/offer tests 81 passed (new inter-read test fails all 8 cases with the fix disabled), `test --changed` 3693 passed (574 s), Cockpit 367 passed, ruff clean; LC not rerun (no format or loader change) | Sol implementation round 1 on `b92536267`: repair-required. (1) Fixed: an asynchronous merge finishing between the settlement read and the acceptance read completed (or raised attention) while the attempt stayed `pending` and skipped the parent-1/base check; the acceptance read now re-settles first and waits while the attempt stays open | in review |
-| N05-C | — | — | — | — | — |
-| N05-D | — | — | — | — | — |
+| N05-C | #377 | `5c299b2be` | At code head `ee74f72ad`: `uv run test --changed --base origin/dev` hit the 900 s session limit after 3102 passed (Cockpit Vitest 372 passed); sharded union of the same 64 files 1029 + 1 skipped (smoke) / 1169 / 1363 passed = all 3562 items; build, Biome, Ruff clean; boundary/authority/package 78 passed; `test:e2e:work` failed twice in an existing completed-history test (route callback in flight at test end) → `5c299b2be` releases the route after each test → 31 passed; smoke (3.3) passed on the second repository; LC not applicable (no format or loader change) | — | in review |
+| N05-D | — | — | — | — | not built: 3.7 is not small (M, medium-high risk; two persisted families with a format step and LC full form, three MCP tools, reply custody Y1–Y4, G12/G13 proof). #225 stays open; lead decides. The package closeout listed under N05-D (full `uv run test`, cumulative Sol challenge) still needs an owner |
 
 Plan challenge round 1 (2026-10-04), Sol on `3936d4f8d`: revision-required; lead dispositions:
 
@@ -1087,11 +1117,11 @@ dispositions, applied as N05-B2's first commit:
 | G2 | The target, the PR's `base` or its stack cannot change between the final read and background execution | No GitHub merge API fences the base or the stack; `base` is editable without a head change; `dev` has no up-to-date rule (P1, P2, P4) | Accepted residual risk (U3(e), programme §10.2 revised 2026-10-03): post-merge parent-1 and base check (D9, I4); a stack join in that window is outside the operating context, and a stacked execution the check does not expose is a documented limit | N05-B2 (detection) | Nothing |
 | G4 | Merge-queue and up-to-date-required targets behave as designed | This repository has neither (P1) | Memory-provider scenarios | N05-B1 | Nothing |
 | G5 | N05-B2's marker-only step 2 → 3 composes with any other format step | N03-A's step (format 2) is merged; N05-B2's does not exist yet | N02 D3 linear chain; whichever step merges later renumbers (F6) and reruns the LC full form | N05-B2 | N05-B2 merge |
-| G6 | The fake `gh` used in E2E matches real GitHub responses | Fake fidelity | P10; smoke test (3.3) | N05-C | Nothing |
+| G6 | The fake `gh` used in E2E matches real GitHub responses | Fake fidelity | P10; smoke test (3.3): one real exact-head merge passed; it did not compare the fake's `409`/unknown paths with GitHub, and it found the rules-read `403` the fake never returned | N05-C (partial; rest documented limit) | Nothing |
 | G7 | Marker-based reply dedupe survives edited or deleted replies | Not exercised | Read-back design (D13) | N05-D | Nothing |
 | G8 | A 15-second observation cache is fresh enough under rate limits | Not measured | P8; existing constant `application_support.py:143` | N05-B1 | Nothing |
 | G9 | The cleanup sweep stays cheap with many completed Changes | Not measured | Bounded supervisor `limit` | N05-B1 | Nothing |
-| G10 | `deleteBranchOnMerge` does not disturb completion or later reads | Only manual merges observed so far | Existing completions after manual merges; the smoke test (3.3) | N05-C | Nothing |
+| G10 | `deleteBranchOnMerge` does not disturb completion or later reads | Only manual merges observed so far; the smoke repository had `delete_branch_on_merge: false` | Existing completions after manual merges | Documented limit | Nothing |
 | G11 | The per-Change checkpoint lock excludes a concurrent approval or fenced owner and is released when its process dies | Not exercised for merge; no subprocess test is planned (A3, A5) | `locked_roots` uses `flock` (`storage_io.py:122`), relied on by every checkpoint owner; N05-B2 thread concurrency test | Documented limit | Nothing |
 | G12 | No `gh` request precedes a durable release record, and every sent request is the complete frozen body (D16; rows S3, Y1); a recorded group identifies live reply transport after controller death (row Y4) | Upstream `--input -` sends stdin EOF as an empty body (v2.65.0 `api.go`, `http.go`) | N05-A launcher EOF falsifier passed on macOS and Ubuntu (#356); `openUserFile` sends a regular file with `Content-Length` | N05-D controller-death test (macOS and Ubuntu, local HTTP recorder) | N05-D engine replies (else replies stay manual) |
 | G13 | A complete GitHub `4xx` error or GraphQL `errors` with null `data` for a reply mutation means it did not execute (row Y3) | Provider semantics, not a documented guarantee | `_execute` already treats write timeouts as response-unknown (`github.py:859-866`) | N05-D | Nothing: without proof, row Y3 is dropped and such replies stay `unknown` |

@@ -658,8 +658,8 @@ every new item exactly one lane.
 | N05-A | merged | #356 (code head `a4951b044`; Sol `implementation-sound` round 2; Ubuntu CI exact head) |
 | N05-B1 | merged | #371 |
 | N05-B2 | in review | #375 (code head `b79f01eb6`; Sol round 1 repair-required → fixed; LC full form passed at `19ccc28d9`; `test --changed` + companion reruns; `test:e2e:work` 27 passed) |
-| N05-C | — | — |
-| N05-D | — | — (only if it stays small) |
+| N05-C | in review | #377 (head `5c299b2be`; `test --changed` sharded union 3561 passed + 1 skipped, Cockpit 372, `test:e2e:work` 31 passed; smoke test passed on a disposable private repository; LC not applicable) |
+| N05-D | not built | — (not small per N05 plan 3.7; #225 stays open; lead decides) |
 | N06-P | merged, then superseded | #359; superseded 2026-10-04 ([7](#7-decisions)) |
 | N06-A … N07-B | cut 2026-10-04 | — |
 | N08-P | merged | #350 (plan gate `plan-sound`, round 7; amends N02-B abort (N02 D10); D11 confirmed 2026-10-03; U1–U3 decided (a) 2026-10-03) |
