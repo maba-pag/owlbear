@@ -92,6 +92,9 @@ After each verified repair, classify again. Repeat Steps 1 to 3 for the next off
 ## Step 4 - Restart and Report
 
 Ask the user to restart Delivery MCP and Cockpit. Report the verified repairs, every remaining
-finding with its route, owner and resume condition, and the backup locations. Use only finding IDs,
+finding with its route, owner and resume condition, and the backup locations. When `classify` finds
+nothing for a Change that Cockpit shows blocked (a dirty or moved managed worktree, an unreadable
+workspace, retry containment), say no offline repair applies and the card's reason is the blocker;
+for a dirty worktree the user cleans it or abandons the Change. Use only finding IDs,
 codes, Delivery-root-relative locators and proposal IDs; never raw record values, absolute paths,
 exception text or log lines.
