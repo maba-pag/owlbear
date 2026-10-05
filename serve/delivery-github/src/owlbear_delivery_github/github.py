@@ -134,6 +134,7 @@ _STRICT_CHECKS_RULE_TYPE = "required_status_checks"
 # gh 2.102.0 prints `gh: <message> (HTTP 409)`, or `gh: HTTP 409` when the body has no top-level message.
 _HTTP_STATUS_PATTERN = re.compile(r"^gh: (?:HTTP (\d{3})|.*\(HTTP (\d{3})\))$", re.MULTILINE)
 _HTTP_NOT_FOUND = 404
+_HTTP_FORBIDDEN = 403
 _HTTP_CONFLICT = 409
 _MERGE_REFUSALS = {
     400: PublicationMergeRefusalReason.CLOSED_OR_DRAFT,
@@ -773,11 +774,15 @@ class GitHubCliPublicationProvider:
         return response
 
     def _read_branch_rules(self, repository: str, branch: str, operation: str) -> tuple[_BranchRule, ...]:
-        payload = self._rest(
+        # GitHub Free refuses rule reads on private repositories (403); no ruleset can apply there.
+        payload = self._rest_or_absent(
             operation,
             "GET",
             f"{_repository_endpoint(repository)}/rules/branches/{_branch_path(branch)}?per_page=100",
+            absent_status=_HTTP_FORBIDDEN,
         )
+        if payload is None:
+            return ()
         try:
             rules = _BRANCH_RULES.validate_python(payload)
         except ValidationError as exc:
@@ -1238,10 +1243,12 @@ class GitHubCliPublicationProvider:
             arguments = (*arguments, "--input", "-")
         return self._execute(operation, arguments, body, write=write)
 
-    def _rest_or_absent(self, operation: str, method: str, endpoint: str) -> _JsonValue | None:
+    def _rest_or_absent(
+        self, operation: str, method: str, endpoint: str, *, absent_status: int = _HTTP_NOT_FOUND
+    ) -> _JsonValue | None:
         completed = self._run(operation, _rest_arguments(method, endpoint), None, write=False)
         if completed.returncode != 0:
-            if _http_status(completed.stderr) == _HTTP_NOT_FOUND:
+            if _http_status(completed.stderr) == absent_status:
                 return None
             self._raise_command_failure(operation, completed.stderr.decode(errors="replace"), write=False)
         payload = _json_or_none(completed.stdout)

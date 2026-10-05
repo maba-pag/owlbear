@@ -267,6 +267,22 @@ def test_merge_settings_fail_closed_without_permissions_or_method_fields() -> No
     assert settings.execution_scope_enforced is False
 
 
+def test_merge_settings_read_no_rules_where_the_plan_refuses_rule_reads() -> None:
+    refusal = b"gh: Upgrade to GitHub Pro or make this repository public to enable this feature. (HTTP 403)\n"
+    provider, _, _ = _github(
+        _completed({"full_name": _REPOSITORY, "allow_merge_commit": True, "permissions": {"push": True}}),
+        _completed({"message": "Upgrade to GitHub Pro"}, returncode=1, stderr=refusal),
+        _completed({"full_name": _REPOSITORY}),
+        _completed({"message": "Server Error"}, returncode=1, stderr=b"gh: Server Error (HTTP 500)\n"),
+    )
+
+    settings = provider.read_merge_settings(_REPOSITORY, "main")
+
+    assert (settings.rule_types, settings.queue_required, settings.viewer_can_push) == ((), False, True)
+    with pytest.raises(PublicationProviderError):
+        provider.read_merge_settings(_REPOSITORY, "main")
+
+
 def test_branch_head_reads_one_encoded_branch() -> None:
     provider, runner, _ = _github(_completed({"name": "release/2026", "commit": {"sha": _TARGET}}))
 
