@@ -639,12 +639,22 @@ def _validate_local_snapshot(  # noqa: C901 - one predicate per recognized local
     )
     if local_claim_successor:
         _require_local_snapshot_branch(snapshot, paths.repository_root)
+    reviewed = coordination.last_reviewed_commit
+    pending = frontier.pending_checkpoint
+    # An activated revision may have pushed its snapshot head to the Change branch before its state.
+    revision_head = (
+        reviewed
+        if revision == "activated"
+        and (frontier.published_head == reviewed or (pending is not None and pending.head == reviewed))
+        else None
+    )
     _fetch_snapshot_change_head(
         snapshot,
         config,
         paths.repository_root,
         allow_local_branch=True,
         allow_local_descendant=local_attention_successor or local_builder_handoff_successor or revision is not None,
+        pending_revision_head=revision_head,
     )
     if canonical_frontier != expected["frontier.json"] and not local_recoverable_successor:
         _bootstrap_failure("local Delivery runtime artifact differs from its remote snapshot: frontier.json")
@@ -820,18 +830,21 @@ def _validate_local_snapshot_artifact(
     _bootstrap_failure(f"local Delivery runtime artifact differs from its remote snapshot: {name}")
 
 
-def _fetch_snapshot_change_head(
+def _fetch_snapshot_change_head(  # noqa: PLR0913 - each flag names one recognized local successor.
     snapshot: DeliveryStateSnapshot,
     config: DeliveryStartupConfig,
     repository: Path,
     *,
     allow_local_branch: bool = False,
     allow_local_descendant: bool = False,
+    pending_revision_head: str | None = None,
 ) -> tuple[str, bool]:
     """Fetch the remote Change branch or use the configured target for finalized authority."""
     remote_branch = _remote_branch_head(repository, config.remote, snapshot.branch)
     if remote_branch is not None:
-        return _fetch_remote_snapshot_change_head(snapshot, config, repository, remote_branch)
+        return _fetch_remote_snapshot_change_head(
+            snapshot, config, repository, remote_branch, pending_revision_head=pending_revision_head
+        )
     local_head = _local_snapshot_change_head(
         snapshot,
         repository,
@@ -853,9 +866,11 @@ def _fetch_remote_snapshot_change_head(
     config: DeliveryStartupConfig,
     repository: Path,
     remote_branch: str,
+    *,
+    pending_revision_head: str | None = None,
 ) -> tuple[str, bool]:
     """Validate and fetch one remote Change branch at its snapshot head."""
-    if remote_branch != snapshot.change_head:
+    if remote_branch not in {snapshot.change_head, pending_revision_head}:
         observed_local_head = _loader_git_output(
             repository,
             "rev-parse",

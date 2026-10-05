@@ -25,7 +25,7 @@ from unittest.mock import Mock, patch, sentinel
 import pytest
 from pydantic import ValidationError
 from serve.delivery.tests.evidence_support import finalization_proof
-from serve.delivery.tests.test_delivery_state import _commit_corrupt_snapshot
+from serve.delivery.tests.test_delivery_state import _commit_corrupt_snapshot, _Crash
 from serve.delivery.tests.test_draft_pull_request import _Provider
 
 from owlbear_delivery import (
@@ -14873,6 +14873,77 @@ def test_cancelled_and_repeated_revisions_keep_distinct_history(tmp_path: Path) 
         "revision_record"
     }
     assert history[0].split("-")[0] == history[1].split("-")[0] == hashlib.sha256(original.authority_bytes).hexdigest()
+
+
+def test_cancel_interrupted_after_contract_publication_is_completed_by_resume(tmp_path: Path) -> None:
+    """Documented limit (N04 plan gaps): the retry replays ordinary admission and the user's Resume finishes it."""
+    application, coordinator, state_root, seeded = _paused_revision_change(tmp_path)
+    original = application.read_design_session("change-r")
+    head = coordinator.show("change-r").last_reviewed_commit
+    revised = application.revise_design_session(
+        "change-r", original.package_id, _revision_intent("AC-002: Cancelled."), original.design_bytes
+    )
+    application.revise_design_session("change-r", revised.package_id, original.intent_bytes, original.design_bytes)
+    request = _revision_request(application)
+    publish = DeliveryAuthorityRegistry._publish_package_contract
+
+    def crash_after_publication(registry: DeliveryAuthorityRegistry, change_id: str, compiled: object) -> str:
+        publish(registry, change_id, compiled)
+        raise _Crash
+
+    with (
+        patch.object(
+            DeliveryAuthorityRegistry, "_publish_package_contract", autospec=True, side_effect=crash_after_publication
+        ),
+        pytest.raises(_Crash),
+    ):
+        application.admit_change(request)
+    retried = application.admit_change(request)
+    _change_intent(application, "change-r", DeliveryChangeIntentKind.RESUME)
+
+    coordination = coordinator.show("change-r")
+    runtime = application._runtimes["change-r"]
+    assert retried.replayed is True
+    assert retried.frontier.change_deferral is not None
+    assert runtime.change_deferral() is None
+    assert [binding.stage for binding in runtime.bindings()] == [binding.stage for binding in seeded.bindings]
+    assert coordination.design_package_snapshot_intent is None
+    assert coordination.last_reviewed_commit == head
+    assert coordination.design_package_snapshot.package_id == original.package_id
+    assert application.read_design_session("change-r").package_id == original.package_id
+    assert not (state_root / "changes/change-r/revisions").exists()
+    assert application.acquire_frontier_work().launch_packages
+
+
+@pytest.mark.parametrize("child", ["snapshot", "unrelated"])
+def test_interrupted_revision_snapshot_reports_only_unrelated_head_drift(tmp_path: Path, child: str) -> None:
+    application, coordinator, _state_root, _seeded = _paused_revision_change(tmp_path)
+    current = application.read_design_session("change-r")
+    application.revise_design_session(
+        "change-r", current.package_id, _revision_intent("AC-002: The report is revised."), current.design_bytes
+    )
+    request = _revision_request(application)
+    crash = (
+        patch("owlbear_delivery.workspace_snapshots.ChangeDesignPackageSnapshotReceipt.create", side_effect=_Crash)
+        if child == "snapshot"
+        else patch.object(application._workspace_manager, "_commit_design_package_snapshot", side_effect=_Crash)
+    )
+    with crash, pytest.raises(_Crash):
+        application.admit_change(request)
+    coordination = coordinator.show("change-r")
+    observed = (
+        _git(tmp_path / "repository", "rev-parse", coordination.branch)
+        if child == "snapshot"
+        else _commit_local_descendant(coordination, "unrelated.txt")
+    )
+
+    codes = {diagnostic.code for diagnostic in application.delivery_health().diagnostics}
+
+    assert coordination.design_package_snapshot_intent is not None
+    assert observed != coordination.last_reviewed_commit
+    assert ("local-change-head-out-of-band" in codes) is (child == "unrelated")
+    if child == "snapshot":
+        assert application.admit_change(request).frontier.change_deferral is None
 
 
 @pytest.mark.parametrize("case", ["pause-pending", "change-terminal", "publication-pending", "reviewed-head-moved"])

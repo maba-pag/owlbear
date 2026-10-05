@@ -1752,6 +1752,7 @@ class _PublicationMixin:
                 change_id,
                 pending,
                 current_frontier_digest=current_digest,
+                published_frontier_digest=runtime.published_projection_digest(runtime.frontier_bytes()),
             )
             bound = pending.transition_request_digest or pending.base_frontier_digest
             with self._owner_drain_authority(
@@ -1878,8 +1879,9 @@ class _PublicationMixin:
         change_id: str,
         pending: DeliveryPendingStatePublication,
         current_frontier_digest: str | None = None,
+        published_frontier_digest: str | None = None,
     ) -> str:
-        """Return the remote state head only when its snapshot matches the pending base."""
+        """Return the remote state head only when its snapshot matches the pending base or current state."""
         publisher = self._delivery_state_publisher
         if publisher is None:
             self._fail("pending Delivery-state publication has no configured publisher")
@@ -1891,6 +1893,6 @@ class _PublicationMixin:
         if inventory.remote_head is None or snapshot is None:
             self._fail("remote Delivery snapshot is unavailable for pending replay")
         remote_digest = hashlib.sha256(_canonical_model_bytes(snapshot.frontier)).hexdigest()
-        if remote_digest not in {pending.base_frontier_digest, current_frontier_digest}:
+        if remote_digest not in {pending.base_frontier_digest, current_frontier_digest, published_frontier_digest}:
             self._fail("remote Delivery snapshot no longer matches the pending publication base")
         return inventory.remote_head

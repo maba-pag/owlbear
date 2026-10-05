@@ -15,6 +15,7 @@ from owlbear_delivery.workspace_models import (
     ChangeCoordination,
     ChangeDesignPackageSnapshotIntent,
     ChangeDesignPackageSnapshotReceipt,
+    DesignPackageSnapshotEditedError,
     DirtyWorktreeQuarantineReceipt,
     PublicationLock,
     WorkspaceRecoverySnapshot,
@@ -177,7 +178,7 @@ class _SnapshotMixin:
         elif intent.operation_id != operation_id or intent.package_id != package_id:
             _coordination_conflict("Design package snapshot replacement intent differs from the request")
         elif branch_head == intent.expected_head:
-            self._restore_interrupted_package_paths(coordination, intent.expected_head)
+            self._restore_interrupted_package_paths(coordination, intent.expected_head, package_files)
         snapshot_head = self._commit_design_package_snapshot(coordination, intent, package_files, branch_head)
         receipt = ChangeDesignPackageSnapshotReceipt.create(
             operation_id=operation_id,
@@ -199,8 +200,17 @@ class _SnapshotMixin:
         self._coordinator.update(updated, lock=lock)
         return receipt
 
-    def _restore_interrupted_package_paths(self, coordination: ChangeCoordination, head: str) -> None:
-        """Undo package files an interrupted snapshot wrote or staged on its expected head."""
+    def is_design_package_snapshot_child(self, intent: ChangeDesignPackageSnapshotIntent, head: str) -> bool:
+        """Return whether ``head`` is the intent's own snapshot commit, made before its receipt was stored."""
+        subject = DESIGN_PACKAGE_SNAPSHOT_SUBJECT.format(change_id=intent.change_id, operation_id=intent.operation_id)
+        return (
+            self._is_direct_child(intent.expected_head, head) and self._git("log", "-1", "--format=%s", head) == subject
+        )
+
+    def _restore_interrupted_package_paths(
+        self, coordination: ChangeCoordination, head: str, package_files: Mapping[str, bytes]
+    ) -> None:
+        """Undo package files an interrupted snapshot wrote or staged; refuse bytes it did not write."""
         worktree = coordination.worktree_path
         relative_paths = tuple(
             f".owlbear/delivery/packages/{coordination.change_id}/{name}" for name in _DESIGN_PACKAGE_NAMES
@@ -216,7 +226,23 @@ class _SnapshotMixin:
             name: self._git_blob_bytes(head, relative_path) if relative_path in tracked else None
             for name, relative_path in zip(_DESIGN_PACKAGE_NAMES, relative_paths, strict=True)
         }
+        edited = tuple(
+            relative_path
+            for name, relative_path in zip(_DESIGN_PACKAGE_NAMES, relative_paths, strict=True)
+            if relative_path in dirty
+            and not {
+                self._read_optional_worktree_file(worktree / relative_path),
+                self._index_blob_bytes(worktree, relative_path),
+            }
+            <= {existing[name], package_files[name]}
+        )
+        if edited:
+            raise DesignPackageSnapshotEditedError(coordination.change_id, edited)
         self._restore_worktree_files(worktree, relative_paths, existing)
+
+    def _index_blob_bytes(self, worktree: Path, relative_path: str) -> bytes | None:
+        result = self._run_git("cat-file", "blob", f":{relative_path}", cwd=worktree, check=False)
+        return result.stdout if result.returncode == 0 else None
 
     def _validate_design_package_snapshot_replay(
         self,

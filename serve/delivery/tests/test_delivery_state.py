@@ -119,7 +119,7 @@ from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
 from owlbear_delivery.git_executable import resolve_git_executable
 from owlbear_delivery.state_formats import format_marker_bytes
 from owlbear_delivery.target_contract import DeliverySourceBinding
-from owlbear_delivery.workspace_models import ChangeDesignPackageSnapshotReceipt
+from owlbear_delivery.workspace_models import ChangeDesignPackageSnapshotReceipt, DesignPackageSnapshotEditedError
 
 _GIT = resolve_git_executable()
 
@@ -4645,7 +4645,19 @@ def _published_paused_revision(tmp_path: Path) -> tuple[PortfolioApplication, De
     return application, config, repository, request, coordination.last_reviewed_commit
 
 
-@pytest.mark.parametrize("boundary", ["after-contract", "staged", "committed", "after-snapshot", "after-activation"])
+@pytest.mark.parametrize(
+    "boundary",
+    [
+        "after-contract",
+        "staged",
+        "committed",
+        "after-snapshot",
+        "after-activation",
+        "branch-pushed",
+        "branch-recorded",
+        "state-pushed",
+    ],
+)
 def test_revision_activation_crash_reloads_and_replays_to_one_snapshot(tmp_path: Path, boundary: str) -> None:
     application, config, repository, request, reviewed = _published_paused_revision(tmp_path)
     manager = application._workspace_manager  # noqa: SLF001
@@ -4662,6 +4674,9 @@ def test_revision_activation_crash_reloads_and_replays_to_one_snapshot(tmp_path:
         "committed": patch.object(ChangeDesignPackageSnapshotReceipt, "create", side_effect=_Crash),
         "after-snapshot": patch("owlbear_delivery.delivery_admission._delivery_frontier", side_effect=_Crash),
         "after-activation": patch.object(application, "_publish_delivery_state", side_effect=_Crash),
+        "branch-pushed": patch.object(DeliveryRuntime, "record_checkpoint_branch_publication", side_effect=_Crash),
+        "branch-recorded": patch.object(DeliveryStatePublisher, "publish", side_effect=_Crash),
+        "state-pushed": patch.object(DeliveryRuntime, "acknowledge_pending_publication", side_effect=_Crash),
     }[boundary]
     with crash, pytest.raises(_Crash):
         application.admit_change(request)
@@ -4680,4 +4695,37 @@ def test_revision_activation_crash_reloads_and_replays_to_one_snapshot(tmp_path:
     assert _git(repository, "rev-list", "--parents", "-n", "1", head).split()[1:] == [reviewed]
     assert runtime.pending_state_publication() is None
     assert restarted.delivery_health().status.value == "healthy"
+    close_delivery_application(restarted)
+
+
+@pytest.mark.parametrize("staged", [False, True])
+def test_revision_snapshot_replay_refuses_package_edits_made_after_interruption(
+    tmp_path: Path,
+    staged: bool,  # noqa: FBT001 - pytest parameter.
+) -> None:
+    application, config, repository, request, _reviewed = _published_paused_revision(tmp_path)
+    manager = application._workspace_manager  # noqa: SLF001
+    run_git = manager._run_git  # noqa: SLF001
+
+    def crash_before_snapshot_commit(*arguments: str, **options: object) -> object:
+        if arguments[:2] == ("commit", "--only"):
+            raise _Crash
+        return run_git(*arguments, **options)
+
+    with patch.object(manager, "_run_git", side_effect=crash_before_snapshot_commit), pytest.raises(_Crash):
+        application.admit_change(request)
+    worktree = application._coordinator.show(request.change_id).worktree_path  # noqa: SLF001
+    close_delivery_application(application)
+    relative = f".owlbear/delivery/packages/{request.change_id}/design.md"
+    (worktree / relative).write_bytes(b"# Designer edit\n")
+    if staged:
+        _git(worktree, "add", "-f", relative)
+
+    restarted = load_delivery_application(config, workspace_root=repository)
+    with pytest.raises(DesignPackageSnapshotEditedError) as refused:
+        restarted.admit_change(request)
+
+    assert refused.value.paths == (relative,)
+    assert (worktree / relative).read_bytes() == b"# Designer edit\n"
+    assert (_git(worktree, "show", f":{relative}") == "# Designer edit") is staged
     close_delivery_application(restarted)
