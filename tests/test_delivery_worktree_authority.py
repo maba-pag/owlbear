@@ -2089,6 +2089,7 @@ _MANAGER_PAUSE_CLASSES: dict[str, frozenset[str]] = {
             "baseline_scope_kinds",
             "inspect_retained",
             "integration_context",
+            "is_design_package_snapshot_child",
             "list_retained",
             "observe_worktree_activity",
             "observed_change_head",
