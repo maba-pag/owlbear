@@ -73,7 +73,7 @@ from owlbear_delivery.draft_pull_request import (
     GeneratedPullRequestSummaryReceipt,
     PullRequestReadyReceipt,
 )
-from owlbear_delivery.evidence import DeliveryContextRefusal, DeliveryFinalizationSemantics
+from owlbear_delivery.evidence import DeliveryContextRefusal, DeliveryEvidenceProjection, DeliveryFinalizationSemantics
 from owlbear_delivery.portfolio_operating import (
     DeliveryHealthDiagnostic,
     DeliveryHealthStatus,
@@ -535,6 +535,7 @@ class DeliveryChangeView(_ApplicationModel):
     finalization_attempt: ChangeFinalizationAttempt | None = None
     continuation_action: ChangeContinuationAction | None = None
     pause_requested: bool = False
+    evidence: DeliveryEvidenceProjection | None = None
 
 
 class DeliveryUnavailableChangeView(_ApplicationModel):
@@ -887,6 +888,7 @@ class DeliveryOperatorContext(_ApplicationModel):
     recovery_attention: DeliveryOperatorRecoveryAttention | None = None
     retry_diagnostic: DeliveryRetryDiagnostic | None = None
     integration_attention: DeliveryOperatorIntegrationAttention | None = None
+    evidence: DeliveryEvidenceProjection | None = None
 
 
 class DeliveryIntegrationRepairRecoveryResult(_ApplicationModel):

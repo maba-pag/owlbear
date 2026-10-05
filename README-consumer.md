@@ -174,9 +174,10 @@ See [Uninstalling](setup/operating-owlbear.md#uninstalling) for exactly what is 
 ## Status and expectations
 
 OwlBear has no numbered releases. The rolling `main` branch is the supported consumer surface.
-`git pull` in the OwlBear checkout updates the shared agents, skills, instructions, and prompts
-immediately; rerun setup when you also want refreshed copied files. For a reproducible workspace,
-pin the checkout to a reviewed commit and record that commit with your project.
+To update, run `/upgrade-delivery` in each project instead of a plain `git pull`: it moves the
+OwlBear checkout forward, migrates the project's Delivery state and checks every Change. Then rerun
+setup to refresh copied files. To stay on a reviewed commit, name it: `/upgrade-delivery <commit>`.
+See [Upgrading OwlBear](setup/operating-owlbear.md#upgrading-owlbear).
 
 | Surface | Status | What it does |
 | --- | --- | --- |
@@ -191,7 +192,7 @@ pin the checkout to a reviewed commit and record that commit with your project.
 | You want to... | Go to |
 | --- | --- |
 | Every setup option, verification detail, and fix | [Setup guide](setup/setup-guide.md) |
-| Daily operation, recovery, uninstall, and customization | [Operating OwlBear](setup/operating-owlbear.md) |
+| Daily operation, upgrades, recovery, uninstall, and customization | [Operating OwlBear](setup/operating-owlbear.md) |
 | Share one installation with teammates | [Sharing guide](setup/sharing-guide.md) |
 | Understand the packages and tool servers | [Package map](serve/README.md) |
 | Configure the Browser capability | [Browser MCP guide](serve/browser-mcp/README.md) |

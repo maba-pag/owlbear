@@ -1245,6 +1245,7 @@ class PortfolioApplication(_ReadinessViewsMixin, _AcquisitionMixin, _Publication
             unresolved_outcomes=unresolved_outcomes,
             readiness=detail.readiness,
             pause_requested=coordination.pause_request is not None,
+            evidence=projector.evidence(),
         )
 
     def set_change_intent(self, intent: DeliveryChangeIntent) -> DeliveryChangeIntentResult:
