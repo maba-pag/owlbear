@@ -16,7 +16,7 @@ from serve.delivery.tests.test_portfolio_application import (
 )
 
 from owlbear_delivery.git_executable import resolve_git_executable
-from owlbear_delivery.state_formats import FORMAT_MARKER
+from owlbear_delivery.state_formats import FORMAT_MARKER, SUPPORTED_FORMAT, format_marker_bytes
 from owlbear_tools import delivery_lc
 from owlbear_tools.delivery_lc import Mount, isolation_failures
 
@@ -706,12 +706,24 @@ def test_full_form_migrates_the_copy_and_meets_the_rollback_downgrade_oracle(tmp
         [FORMAT_MARKER, _COORDINATION]
     )
     assert report["proposal"]["source_format"] == 0  # type: ignore[index]
-    assert report["proposal"]["steps"] == ["format-0-to-1", "format-1-to-2"]  # type: ignore[index]
+    assert report["proposal"]["steps"] == ["format-0-to-1", "format-1-to-2", "format-2-to-3"]  # type: ignore[index]
     assert report["previous_gate_before"]["refusals"] == []  # type: ignore[index]
     assert ["state-newer-than-controller", FORMAT_MARKER] in report["previous_gate_after"]["refusals"]  # type: ignore[index]
     assert "previous_load" not in report
     assert report["migrated"]["load"]["unavailable"] == []  # type: ignore[index]
     assert ["state-newer-than-controller", FORMAT_MARKER] in report["synthetic_newer"]  # type: ignore[operator]
+
+
+def test_full_form_from_an_older_format_ignores_the_journals_of_earlier_migrations(tmp_path: Path) -> None:
+    live, previous = _live_with_previous_gate(tmp_path, _N02A_GATE)
+    assert delivery_lc.full_form(live, previous, previous_load=_unexpected_previous_load)["passed"] is True
+    (live / ".owlbear/delivery" / FORMAT_MARKER).write_bytes(format_marker_bytes(SUPPORTED_FORMAT - 1))
+
+    report = delivery_lc.full_form(live, previous, previous_load=_unexpected_previous_load)
+
+    assert report["passed"] is True, json.dumps(report, indent=1)
+    assert report["changed_records"] == [FORMAT_MARKER]
+    assert report["unmigrated"]["inspector"]["diagnostic_codes"] == ["FORMAT_MIGRATION_REQUIRED"]  # type: ignore[index]
 
 
 def test_full_form_rollback_needs_the_previous_release_to_load_every_change(tmp_path: Path) -> None:

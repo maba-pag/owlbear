@@ -99,6 +99,8 @@ _MERGE_METHOD_FILES = frozenset(
         "serve/delivery/src/owlbear_delivery/merge_offer.py",
         "serve/cockpit/web/src/api/workItems.ts",
         "serve/cockpit/web/src/components/WorkItemDetail.tsx",
+        # N05-B2: the merge attempt journals the approved method; it is no acceptance or completion model.
+        "serve/delivery/src/owlbear_delivery/merge_approval.py",
     }
 )
 _MERGE_METHOD_PROTECTED_MODELS = re.compile(r"(?:Acceptance|Latch|Completion|Observation|Evidence|PullRequest$)")
@@ -117,6 +119,12 @@ _ALLOWED_CAPABILITY_LINES = frozenset(
             'return f"{_repository_endpoint(repository)}/pulls/{number}/merge-async"',
         ),
         ("serve/delivery-github/src/owlbear_delivery_github/github.py", '_QUEUE_RULE_TYPE = "merge_queue"'),
+        # N05-B2: the registry path of merge attempts, a record family rather than a merge route.
+        ("serve/delivery/src/owlbear_delivery/state_formats.py", 'rf"{_CH}/merge-attempts/{_D}\\.json",'),
+        (
+            "serve/tools/src/owlbear_tools/delivery_diagnostics.py",
+            '"merge_attempt": ".owlbear/delivery/runtime/changes/<redacted>/merge-attempts/<opaque>.json",',
+        ),
     }
 )
 _MERGE_ROUTE_FUNCTION = "_merge_async_endpoint"
@@ -125,8 +133,10 @@ _MERGE_ROUTE_CALLERS = frozenset({"request_merge", "read_merge_request"})
 _EFFECT_TRANSPORT = "_rest_effect"
 _ALLOWED_PROVIDER_EFFECTS = frozenset({"request_merge"})
 _MERGE_REQUEST_OPERATION = "request_merge"
-# (repository path, qualified scope) of the only production callers; N05-B adds its engine owner.
-_MERGE_REQUEST_CALL_OWNERS: frozenset[tuple[str, str]] = frozenset()
+# (repository path, qualified scope) of the only production callers: the N05-B2 approval owner.
+_MERGE_REQUEST_CALL_OWNERS: frozenset[tuple[str, str]] = frozenset(
+    {("serve/delivery/src/owlbear_delivery/application_merge.py", "_MergeMixin._send_merge_request")}
+)
 _FROZEN_BODY = {
     "bypass_rules": "False",
     "merge_action": "'direct_merge'",

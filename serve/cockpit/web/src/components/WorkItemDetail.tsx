@@ -1178,6 +1178,19 @@ function ReadinessSection({
         </p>
       ) : null}
       {readiness.merge_offer ? <MergeOfferSummary offer={readiness.merge_offer} /> : null}
+      {readiness.merge_attempt ? (
+        <p className="mt-static-xs text-sm leading-relaxed" data-testid="merge-attempt">
+          <a
+            className="font-medium text-primary underline decoration-contrast-low underline-offset-2"
+            href={readiness.merge_attempt.pr_url}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Open the pull request in GitHub
+          </a>{" "}
+          (approved head {readiness.merge_attempt.approved_head.slice(0, 12)})
+        </p>
+      ) : null}
       {readiness.prompt ? (
         <pre
           className="mt-static-xs whitespace-pre-wrap break-words rounded-md bg-contrast-low p-static-xs text-xs"

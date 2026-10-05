@@ -81,6 +81,10 @@ export const READINESS_REASON_LABELS: Record<DeliveryReadinessReasonCode, string
   "merge-blocked": "The pull request cannot be merged as offered; the next step is shown below.",
   "checks-running": "Required checks are still running.",
   "provider-unavailable": "GitHub could not be read; Delivery will read it again shortly.",
+  "merge-in-progress": "GitHub is merging the pull request; Delivery records the result shortly.",
+  "merge-response-unknown":
+    "GitHub has not confirmed this merge. It may still run. Check the PR in GitHub: merge it there, " +
+    "Check again, or Pause or Abandon the Change.",
 };
 
 export const MERGE_BLOCK_LABELS: Record<MergeBlockReason, string> = {

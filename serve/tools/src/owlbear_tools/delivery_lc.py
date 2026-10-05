@@ -877,6 +877,7 @@ def full_form(
 
     report: dict[str, Any] = {"form": "full", "previous": previous, "target_format": SUPPORTED_FORMAT}
     pre = record_tree_digest(live)
+    pre_records = record_tree_digest(live, exclude_migrations=True)
     report["previous_gate_before"] = _previous_gate(live, previous, live)
     report["unmigrated"] = _read_phase(live)
     report["unmigrated_hashes_unchanged"] = record_tree_digest(live) == pre
@@ -896,7 +897,7 @@ def full_form(
         report["passed"] = False
         return report
     post = record_tree_digest(live, exclude_migrations=True)
-    report["changed_records"] = sorted(k for k in set(pre) | set(post) if pre.get(k) != post.get(k))
+    report["changed_records"] = sorted(k for k in set(pre_records) | set(post) if pre_records.get(k) != post.get(k))
     report["migrated"] = _read_phase(live)
     report["migrated_versions"] = _record_versions(live)
     migrated_hashes = record_tree_digest(live)

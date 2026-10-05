@@ -57,7 +57,7 @@ MIGRATION_REQUIRED_VERSIONS: dict[str, tuple[int, ...]] = {
     "frontier": (17,),
 }
 # Mirror of the registry's workspace format (``runtime/format.json``) and migration journal states.
-SUPPORTED_FORMAT = 2
+SUPPORTED_FORMAT = 3
 MIGRATION_JOURNAL_STATES = frozenset({"backed-up", "applying", "applied", "verified", "aborting"})
 # Mirror of the registry's journal kinds: version 1 is a migration, version 2 names ``repair``.
 MIGRATION_JOURNAL_KINDS = {1: "migration", 2: "repair"}
@@ -121,6 +121,7 @@ _CHANGE_RECORD_LAYOUT: dict[str, object] = {
     "revisions": {"$digest": _REVISION_LAYOUT},
     "result-receipts": {"$outcome": {"$digest.json": "result_receipt"}},
     "claim-issuers": {"$claim_attempt.json": "claim_issuer"},
+    "merge-attempts": {"$digest.json": "merge_attempt"},
     "action-receipts": {
         "$operation": {
             "intent.json": "action_intent",
@@ -202,6 +203,7 @@ _CHANGE_RECORD_VERSIONS: dict[str, tuple[int, ...] | None] = {
     "builder_handoff_change_intent_head": (1,),
     "builder_handoff_change_intent_receipt": (1, 2),
     "claim_issuer": (1,),
+    "merge_attempt": (1,),
 }
 _PULL_REQUEST_RECORDS = {
     "operations": "pull_request_operation",
@@ -321,6 +323,7 @@ _SAFE_LOCATORS = {
     "recovery_receipt": ".owlbear/delivery/runtime/changes/<redacted>/recovery-receipts/<opaque>/receipt.json",
     "retry_ledger": ".owlbear/delivery/runtime/changes/<redacted>/retry-ledger/current.json",
     "claim_issuer": ".owlbear/delivery/runtime/changes/<redacted>/claim-issuers/<opaque>.json",
+    "merge_attempt": ".owlbear/delivery/runtime/changes/<redacted>/merge-attempts/<opaque>.json",
     "retry_attempt": ".owlbear/delivery/runtime/changes/<redacted>/retry-ledger/attempts/<opaque>.json",
     "retry_outcome": ".owlbear/delivery/runtime/changes/<redacted>/retry-ledger/outcomes/<opaque>.json",
     "retry_repair_binding": ".owlbear/delivery/runtime/changes/<redacted>/retry-ledger/repair-bindings/<opaque>.json",
@@ -1791,8 +1794,10 @@ def _inspect_format_marker(runtime_fd: int, inspection: _Inspection) -> None:
 
 
 def _require_format_for_runtime_records(inspection: _Inspection) -> None:
-    """Mirror the gate: format 0 is accepted only while no runtime record exists yet."""
-    if inspection.format_marker_present and inspection.observed_format != 0:
+    """Mirror the gate: an older format is accepted only while no runtime record exists yet."""
+    if inspection.format_marker_present and (
+        inspection.observed_format is None or inspection.observed_format >= SUPPORTED_FORMAT
+    ):
         return
     if any(inspection.counts[key] for key in ("frontier", "change_records", "coordination", "runtime_records")):
         inspection.diagnostic("FORMAT_MIGRATION_REQUIRED")

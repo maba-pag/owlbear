@@ -32,6 +32,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryTaskDefinition,
     DeliveryTaskResult,
 )
+from owlbear_delivery.merge_approval import MergeAttemptRecord
 from owlbear_delivery.portfolio_application import DeliveryEngineActionResult
 from owlbear_delivery.recovery import (
     RecoveryEvidence,
@@ -70,7 +71,7 @@ def _root(tmp_path: Path) -> Path:
         '{"schema_version":2,"remote":"origin","target_branch":"dev","github_repository":"safe/project"}\n',
         encoding="utf-8",
     )
-    (delivery / "runtime/format.json").write_text('{"format":2}\n', encoding="utf-8")
+    (delivery / "runtime/format.json").write_text('{"format":3}\n', encoding="utf-8")
     return tmp_path
 
 
@@ -449,6 +450,7 @@ def _write_every_change_family(change: Path) -> dict[str, int]:
         change / "builder-request-resolution-receipts" / f"{digest}.json": v1,
         change / "builder-handoff-change-intent-receipts" / digest / "head.json": v1,
         change / "builder-handoff-change-intent-receipts" / digest / f"{other}.json": v1,
+        change / "merge-attempts" / f"{digest}.json": v1,
     }
     for path, content in records.items():
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -457,6 +459,7 @@ def _write_every_change_family(change: Path) -> dict[str, int]:
         "contract": 1,
         "admission": 1,
         "claim_issuer": 1,
+        "merge_attempt": 1,
         "state_publication": 1,
         "revision_record": 3,
         "result_receipt": 1,
@@ -764,6 +767,7 @@ def test_change_record_versions_match_owner_models() -> None:
         "contract": (DeliveryContract,),
         "admission": (DeliveryAdmissionReceipt,),
         "claim_issuer": (DeliveryClaimIssuer,),
+        "merge_attempt": (MergeAttemptRecord,),
         "state_publication": (DeliveryPendingStatePublication,),
         "result_receipt": (DeliveryResultCandidate,),
         "action_intent": (ChangeContinuationAction,),
@@ -1257,7 +1261,8 @@ _JOURNAL_CASES = {
     [
         ("fresh", [], []),
         ("format-0-with-records", ["FORMAT_MIGRATION_REQUIRED"], ["state-migration-required"]),
-        ("format-3", ["FORMAT_UNSUPPORTED"], ["state-newer-than-controller"]),
+        ("format-previous-with-records", ["FORMAT_MIGRATION_REQUIRED"], ["state-migration-required"]),
+        ("format-4", ["FORMAT_UNSUPPORTED"], ["state-newer-than-controller"]),
         ("journal-applied", ["MIGRATION_INCOMPLETE"], ["state-migration-incomplete"]),
         ("journal-verified", [], []),
         ("journal-newer", ["MIGRATION_JOURNAL_UNSUPPORTED"], ["state-newer-than-controller"]),
@@ -1277,8 +1282,10 @@ def test_inspector_mirrors_the_gate_format_and_journal_classification(
     runtime = root / ".owlbear/delivery/runtime"
     if case in {"fresh", "format-0-with-records"}:
         (runtime / "format.json").unlink()
-    elif case == "format-3":
-        (runtime / "format.json").write_text('{"format":3}\n', encoding="utf-8")
+    elif case == "format-previous-with-records":
+        (runtime / "format.json").write_bytes(state_formats.format_marker_bytes(state_formats.SUPPORTED_FORMAT - 1))
+    elif case == "format-4":
+        (runtime / "format.json").write_text('{"format":4}\n', encoding="utf-8")
     elif case == "namespace-file":
         (runtime / "migrations").write_text("not a directory\n", encoding="utf-8")
     elif case.startswith("journal-"):

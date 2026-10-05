@@ -105,7 +105,9 @@ export type DeliveryReadinessReasonCode =
   | "merge-checking"
   | "merge-blocked"
   | "checks-running"
-  | "provider-unavailable";
+  | "provider-unavailable"
+  | "merge-in-progress"
+  | "merge-response-unknown";
 
 export type MergeBlockReason =
   | "conflicts"
@@ -123,6 +125,14 @@ export type MergeBlockReason =
 export interface MergeBlock {
   reason: MergeBlockReason;
   detail: string | null;
+}
+
+/** The one unsettled merge approval of a Change and the pull request to check in GitHub. */
+export interface MergeAttemptSummary {
+  approval_id: string;
+  state: "intent" | "released" | "pending";
+  approved_head: string;
+  pr_url: string;
 }
 
 export interface MergeOffer {
@@ -256,6 +266,7 @@ export interface DeliveryReadiness {
   progress?: DeliveryProgress | null;
   merge_offer?: MergeOffer | null;
   merge_block?: MergeBlock | null;
+  merge_attempt?: MergeAttemptSummary | null;
 }
 
 export interface WorkItemCardView {

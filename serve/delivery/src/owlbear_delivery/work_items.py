@@ -325,6 +325,8 @@ DeliveryReadinessReason = Literal[
     "merge-blocked",
     "checks-running",
     "provider-unavailable",
+    "merge-in-progress",
+    "merge-response-unknown",
 ]
 
 DeliveryProgress = Literal[
@@ -360,6 +362,15 @@ def _require_pause_consistency(available: bool, reason: ChangePauseUnavailableRe
         raise ValueError(message)
 
 
+class MergeAttemptSummary(_ProjectionModel):
+    """The one unsettled merge approval of a Change, with the pull request to check in GitHub (1.13)."""
+
+    approval_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    state: Literal["intent", "released", "pending"]
+    approved_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    pr_url: str = Field(min_length=1)
+
+
 class DeliveryReadiness(_ProjectionModel):
     """Application-owned eligibility for one supported action at a captured basis."""
 
@@ -380,6 +391,7 @@ class DeliveryReadiness(_ProjectionModel):
     progress: DeliveryProgress | None = None
     merge_offer: MergeOffer | None = None
     merge_block: MergeBlock | None = None
+    merge_attempt: MergeAttemptSummary | None = None
 
     @model_validator(mode="after")
     def _validate_action(self) -> DeliveryReadiness:
@@ -619,6 +631,8 @@ _MERGE_WAIT_REASONS = frozenset(
         "checks-running",
         "provider-unavailable",
         "acceptance-wait",
+        "merge-in-progress",
+        "merge-response-unknown",
     }
 )
 _MERGE_PROGRESS: dict[str, DeliveryProgress] = {
@@ -628,6 +642,8 @@ _MERGE_PROGRESS: dict[str, DeliveryProgress] = {
     "merge-checking": "waiting-for-service",
     "provider-unavailable": "waiting-for-service",
     "target-sync-required": "waiting-for-chat",
+    "merge-in-progress": "waiting-for-service",
+    "merge-response-unknown": "needs-decision",
 }
 # Blocks only Delivery's own merge has; the user can still merge in GitHub.
 _MERGE_IN_GITHUB_BLOCKS = frozenset(
@@ -809,6 +825,11 @@ class WorkItemProjector:
                 "merge-checking": "GitHub is still computing mergeability; Delivery reads it again shortly.",
                 "checks-running": "Required checks are still running; merge in GitHub once they pass.",
                 "provider-unavailable": "GitHub could not be read; Delivery reads it again shortly.",
+                "merge-in-progress": "GitHub is merging the pull request; Delivery records the result shortly.",
+                "merge-response-unknown": (
+                    "GitHub has not confirmed this merge. It may still run. Check the PR in GitHub: merge it there, "
+                    "Check again, or Pause or Abandon the Change."
+                ),
             }
             self._cards = tuple(
                 card.model_copy(

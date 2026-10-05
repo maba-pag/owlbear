@@ -599,6 +599,33 @@ it("renders the GitHub next step for a blocked merge offer", async () => {
   );
 });
 
+it("renders an unknown merge as attention with the pull request link and no merge control", async () => {
+  const prUrl = "https://github.com/owlbear/example/pull/42";
+  const state = readiness({
+    status: "blocked",
+    next_actor: "you",
+    reason_code: "merge-response-unknown",
+    merge_attempt: { approval_id: "1".repeat(64), state: "released", approved_head: "a".repeat(40), pr_url: prUrl },
+  });
+  const item = publicationCardForChecks({ publication_phase: "awaiting-merge", readiness: state });
+  fixtureState.currentPortfolio = portfolio([group({ lifecycle: "awaiting-merge", items: [item] })]);
+  fixtureState.currentDetail = detail({
+    card: item,
+    readiness: state,
+    publication: publicationForChecks("awaiting-merge"),
+  });
+  renderPage(`/delivery/change-alpha/${item.item_key}`);
+
+  const inspector = await screen.findByTestId("work-item-detail");
+  expect(inspector.querySelector('[data-readiness-reason="merge-response-unknown"]')).toHaveTextContent(
+    READINESS_REASON_LABELS["merge-response-unknown"],
+  );
+  const attempt = within(inspector).getByTestId("merge-attempt");
+  expect(within(attempt).getByRole("link", { name: /pull request/i })).toHaveAttribute("href", prUrl);
+  expect(attempt).toHaveTextContent("a".repeat(12));
+  expect(within(inspector).queryByRole("button", { name: /approve|merge/i })).not.toBeInTheDocument();
+});
+
 it("gives every new merge readiness reason a distinct non-empty label", () => {
   const reasons: DeliveryReadinessReasonCode[] = [
     "merge-approval-required",
@@ -606,6 +633,8 @@ it("gives every new merge readiness reason a distinct non-empty label", () => {
     "merge-blocked",
     "checks-running",
     "provider-unavailable",
+    "merge-in-progress",
+    "merge-response-unknown",
   ];
   const labels = reasons.map((reason) => READINESS_REASON_LABELS[reason]);
 

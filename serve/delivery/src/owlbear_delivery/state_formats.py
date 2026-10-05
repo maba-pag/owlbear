@@ -59,10 +59,15 @@ _LAUNCHER_HINT: Final = (
     "start Delivery through .owlbear/controller/bin/delivery-mcp or .owlbear/controller/bin/cockpit, "
     "or change the pin with delivery-controller switch"
 )
-SUPPORTED_FORMAT: Final = 2
+SUPPORTED_FORMAT: Final = 3
 # Registered format migrations in order (name, source, target); a copy runs every step from its observed
-# format. format-0-to-1 (N02-B): registered record rewrites and marker 1; format-1-to-2 (N03-A): marker only.
-FORMAT_MIGRATIONS: Final[tuple[tuple[str, int, int], ...]] = (("format-0-to-1", 0, 1), ("format-1-to-2", 1, 2))
+# format. format-0-to-1 (N02-B): registered record rewrites and marker 1; format-1-to-2 (N03-A) and
+# format-2-to-3 (N05-B2, merge attempts an older controller must not act on): marker only.
+FORMAT_MIGRATIONS: Final[tuple[tuple[str, int, int], ...]] = (
+    ("format-0-to-1", 0, 1),
+    ("format-1-to-2", 1, 2),
+    ("format-2-to-3", 2, 3),
+)
 # Version 2 journals carry an explicit operation ``kind`` (``repair``); migration journals keep
 # version 1 bytes so every N02 release still reads retained migration history (N08 I3, D3).
 JOURNAL_SCHEMA_VERSION: Final = 2
@@ -379,6 +384,14 @@ RECORD_KINDS: Final[tuple[RecordKind, ...]] = (
         rf"{_CH}/claim-issuers/[A-Za-z0-9][A-Za-z0-9._-]{{0,127}}\.json",
         ("owlbear_delivery.worker_stall:DeliveryClaimIssuer",),
         "R",
+        1,
+    ),
+    _kind(
+        "merge_attempt",
+        "merge_attempt",
+        rf"{_CH}/merge-attempts/{_D}\.json",
+        ("owlbear_delivery.merge_approval:MergeAttemptRecord",),
+        "M",
         1,
     ),
     _kind(
