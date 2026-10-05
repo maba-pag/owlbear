@@ -38,7 +38,6 @@ def test_recovery_workflows_require_host_exclusion_not_caller_confirmation() -> 
         assert "host-owned" in content
         assert "confirmed_lost=true" not in content
     workflow = paths[0].read_text()
-    assert "descendant writers and outstanding tool jobs" in workflow
     assert "Read-only diagnosis remains available" in workflow
 
 
@@ -105,17 +104,12 @@ _TARGET_ROLE_TOOLS = {
         "submit_result",
     },
     "orchestrator": {
-        "list_changes",
-        "acquire_actions",
         "acquire_change_action",
         "execute_change_action",
-        "delivery_health",
         "get_change",
         "transition_delivery",
         "settle_worker_invocation",
         "release_stuck_worker",
-        "recover_claim",
-        "recover_integration_repair_claim",
         "observe_acceptance",
     },
     "repairer": {"get_change", "repair", "answer"},
@@ -528,19 +522,6 @@ def test_inspect_change_prompt_uses_effective_read_only_allowlist() -> None:
     assert "raw Git" in content
 
 
-def test_release_stuck_worker_prompt_has_minimal_allowlist() -> None:
-    path = _PROMPTS_ROOT / "release-stuck-worker.prompt.md"
-    assert path.is_file()
-    metadata = _frontmatter(path)
-
-    assert metadata["agent"] == "orchestrator"
-    assert metadata["tools"] == [
-        "owlbear-delivery/get_change",
-        "owlbear-delivery/release_stuck_worker",
-    ]
-    assert _PROMPT_VALIDATOR.validate_prompt(path) == []
-
-
 def test_upgrade_delivery_prompt_follows_the_rehearsed_upgrade_procedure() -> None:
     path = _PROMPTS_ROOT / "upgrade-delivery.prompt.md"
     metadata = _frontmatter(path)
@@ -687,7 +668,7 @@ def test_target_conflict_skill_separates_precommit_and_postcommit_checks() -> No
     assert "worktree is clean" in postcommit_text
     assert "MERGE_HEAD` is gone" in postcommit_text
     assert "exactly two parents" in content
-    assert "/finalize-change <change-id>" in content
+    assert "/continue-change <change-id>" in content
 
 
 def _assert_finalizer_settlement_schema(finalizer_settlement: dict[str, Any]) -> None:
@@ -831,24 +812,6 @@ async def test_orchestration_transition_envelope_matches_registered_field() -> N
     }
     for value in ("planner-change", "advance", "OUT-001", "planner-claim", "planner-output", "planning", "a" * 64):
         assert value not in rejected_text
-
-
-def test_orchestration_housekeeping_failure_does_not_stop_acquisition() -> None:
-    """Optional curation failures remain visible without stopping Delivery work."""
-    content = (_SKILLS_ROOT / "w-orchestration/SKILL.md").read_text(encoding="utf-8")
-    step_start = content.index("## Step 5 - Run Periodic Housekeeping")
-    step_end = content.index("## Step 6 - Refresh")
-    housekeeping = " ".join(content[step_start:step_end].split())
-    refresh_end = content.index("## Output")
-    refresh = " ".join(content[step_end:refresh_end].split())
-
-    assert "non-blocking housekeeping failure" in housekeeping
-    assert "continue with the next" in housekeeping
-    assert "finish the current batch" in housekeeping
-    assert "do not use Delivery recovery" in housekeeping
-    assert "housekeeping failure is reported but" in refresh
-    assert "does not stop independent Delivery acquisition" in refresh
-    assert "stop after the current batch" not in housekeeping
 
 
 @pytest.mark.asyncio
@@ -998,16 +961,14 @@ def test_memory_curator_required_skill_falls_back_to_shared_root() -> None:
     assert "owlbear-memory/commit_memory_batch" in agent
 
 
-def _assert_session_start_claim_guidance(orchestration: str, orchestrate_prompt: str) -> None:
+def _assert_session_start_claim_guidance(orchestration: str) -> None:
     session_start_begin = orchestration.index("**Session-start stale-claim check.**")
     session_start_end = orchestration.index("## Change Continuation Entry")
     session_start = orchestration[session_start_begin:session_start_end]
 
-    assert "Select the entry route first" in orchestration[:session_start_begin]
     assert "For `/continue-change <change_id>`, call `get_change(change_id)` and" in session_start
     assert "inspect only that Change's running claims" in session_start
     assert "Do not call `list_changes` or inspect sibling Changes on this route." in session_start
-    assert "For `/orchestrate`, call `list_changes` once and" in session_start
     assert 'readiness.status == "running"' in session_start
     assert "call `get_change(change_id)`" in session_start
     assert "Ask once per revalidated running claim through `vscode/askQuestions`" in session_start
@@ -1025,11 +986,6 @@ def _assert_session_start_claim_guidance(orchestration: str, orchestrate_prompt:
     assert "vscode/askQuestions" in _frontmatter(_AGENTS_ROOT / "orchestrator.agent.md")["tools"]
     orchestrator_agent = (_AGENTS_ROOT / "orchestrator.agent.md").read_text(encoding="utf-8")
     assert "`/continue-change <change_id>` inspects only that Change" in orchestrator_agent
-    assert "`/orchestrate` inspects all listed Changes from one" in orchestrator_agent
-    assert "session-start stale-claim check" in orchestrate_prompt
-    assert "portfolio scope" in orchestrate_prompt
-    assert "inspect `list_changes` once" in orchestrate_prompt
-    assert "`worker-stall-wait` needs no question" in orchestrate_prompt
 
 
 def _assert_stopped_worker_release_guidance() -> None:
@@ -1041,15 +997,13 @@ def _assert_stopped_worker_release_guidance() -> None:
     ]
     finalization = " ".join((_SKILLS_ROOT / "w-change-finalization/SKILL.md").read_text(encoding="utf-8").split())
     finalizer = " ".join((_AGENTS_ROOT / "finalizer.agent.md").read_text(encoding="utf-8").split())
-    release_prompt = " ".join((_PROMPTS_ROOT / "release-stuck-worker.prompt.md").read_text(encoding="utf-8").split())
-    orchestrate_prompt = (_PROMPTS_ROOT / "orchestrate.prompt.md").read_text(encoding="utf-8")
     operator_guide = (_REPO_ROOT / "setup/operating-owlbear.md").read_text(encoding="utf-8")
     delivery_readme = (_REPO_ROOT / "serve/delivery/README.md").read_text(encoding="utf-8")
     delivery_mcp = " ".join((_REPO_ROOT / "serve/delivery-mcp/README.md").read_text(encoding="utf-8").split())
     cockpit_readme = (_REPO_ROOT / "serve/cockpit/README.md").read_text(encoding="utf-8")
     wiring = " ".join((_REPO_ROOT / "share/WIRING.md").read_text(encoding="utf-8").split())
 
-    _assert_session_start_claim_guidance(orchestration, orchestrate_prompt)
+    _assert_session_start_claim_guidance(orchestration)
 
     assert "`worker-host-lost` and `worker-released-stuck` are engine-only dispositions" in orchestration
     assert "never send either through `settle_worker_invocation`" in orchestration
@@ -1063,30 +1017,18 @@ def _assert_stopped_worker_release_guidance() -> None:
     ) in finalization
     assert "not an observation, proof, or finalization receipt" in finalization
     assert "`finalizer-ended-without-report` has `checks_state: unknown` and is not proof" in finalizer
-    assert "ask them to" in release_prompt
-    assert "release_stuck_worker` exactly once" in release_prompt
-    assert "`reason_code` is `worker-stall-wait`, do not ask or release" in release_prompt
-    assert "no worktree writes for 30" in release_prompt
-    assert "no live same-user process with a cwd or open file" in release_prompt
-    assert "MCP server while the issuing VS Code window remains alive" in release_prompt
     assert "no same-cycle replacement" in operator_guide
     assert "window-exit row" in operator_guide
     assert "Recorded PID/start time is gone" in operator_guide
     assert "no writes for 30 seconds" in operator_guide
-    assert "`/continue-change` reads only its Change with\n`get_change`, while `/orchestrate` lists Changes" in (
-        operator_guide
-    )
     assert "Before dispatching from either entry route" not in operator_guide
     assert "Before either entry route" not in wiring
     assert "ERR_DELIVERY_WORKER_ACTIVE" in operator_guide
     assert "release_stuck_worker" in delivery_readme
     assert "release_stuck_worker" in delivery_mcp
     assert "Release stuck worker" in cockpit_readme
-    assert "release-stuck-worker" in wiring
     for content in (
         orchestration,
-        release_prompt,
-        orchestrate_prompt,
         operator_guide,
         delivery_readme,
         delivery_mcp,
@@ -1116,7 +1058,6 @@ def test_worker_settlement_guidance_matches_native_contract() -> None:
     attention = " ".join(
         (_SKILLS_ROOT / "w-delivery-attention-resolution/SKILL.md").read_text(encoding="utf-8").split()
     )
-    orchestrate_prompt = (_PROMPTS_ROOT / "orchestrate.prompt.md").read_text(encoding="utf-8")
     operator_guide = (_REPO_ROOT / "setup/operating-owlbear.md").read_text(encoding="utf-8")
     delivery_readme = (_REPO_ROOT / "serve/delivery/README.md").read_text(encoding="utf-8")
     delivery_mcp_readme = " ".join((_REPO_ROOT / "serve/delivery-mcp/README.md").read_text(encoding="utf-8").split())
@@ -1198,7 +1139,6 @@ def test_worker_settlement_guidance_matches_native_contract() -> None:
     assert "preserves and cleans a dirty worktree automatically" not in packet
     assert "releases stale custody" not in attention
     assert "quarantine evidence" not in attention
-    assert "recover exact failed launches" not in orchestrate_prompt
     assert "recovers exact failed claims" not in wiring
     assert "dispatch failure instead triggers the matching exact claim recovery" not in wiring
     assert "ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED" in wiring
@@ -1304,13 +1244,9 @@ def test_memory_learning_loop_policy_is_sampled_and_opportunistic() -> None:
     assert "Validate the optional `memory_candidate` against `h-memory-structure`" in finalization
     assert "Preserve reviewer memory provenance" in finalizer
     assert "not an idempotency key" in content
-    orchestration_text = " ".join(orchestration.split())
-    assert "cycle 3, then after cycles 13, 23" in orchestration_text
-    assert "record a non-blocking housekeeping failure" in orchestration_text
-    assert "record a malformed housekeeping result" in orchestration_text
+    assert "No Delivery or continuation step triggers it" in guidance
     assert "opportunistic, not an eventual-processing SLA" in guidance
     assert 'list_memories(states=["pending"])' in guidance
-    assert "non-blocking housekeeping attention" in guidance
     assert "Assessment coverage" in content
     assert "Pending age and curation latency" in content
     assert "Useful or harmful recall" in content

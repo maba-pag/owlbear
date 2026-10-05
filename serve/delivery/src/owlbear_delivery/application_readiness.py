@@ -1796,9 +1796,7 @@ class _ReadinessViewsMixin:
     @classmethod
     def _captured_action(cls, frontier: DeliveryFrontier, card: WorkItemCardView) -> WorkItemAction:
         if card.scope is WorkItemScope.CHANGE_PUBLICATION and cls._supports_finalization(frontier):
-            return WorkItemAction(
-                kind=WorkItemActionKind.FINALIZE, label="Finalize Change", command=f"/finalize-change {card.change_id}"
-            )
+            return WorkItemAction(kind=WorkItemActionKind.FINALIZE, label="Finalize Change")
         if card.action.kind is WorkItemActionKind.FINALIZE or (
             card.scope is WorkItemScope.OUTCOME
             and card.stage is not None

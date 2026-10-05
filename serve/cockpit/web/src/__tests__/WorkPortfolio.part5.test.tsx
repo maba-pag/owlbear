@@ -45,7 +45,7 @@ it("maps every coherent engine readiness response to its portfolio state and con
   const finalizeAction = {
     kind: "finalize" as const,
     label: "Finalize Change",
-    command: "/finalize-change change-alpha",
+    command: null,
   };
   // Engine target-sync prerequisite: named operation with a label but no caller-runnable command.
   const syncTargetAction = {
@@ -61,7 +61,7 @@ it("maps every coherent engine readiness response to its portfolio state and con
     chip: string;
     reason: string;
     actor: string;
-    command: string | null;
+    copyLabel: string | null;
   }
   // Each case is one response the engine can actually compose: status, operation,
   // executable, action and card facts stay mutually consistent.
@@ -85,6 +85,7 @@ it("maps every coherent engine readiness response to its portfolio state and con
         next_actor: "agent",
         reason_code: "ready",
         action: finalizeAction,
+        prompt: "/continue-change change-alpha reread get_change and pass its readiness basis unchanged.",
       }),
       lifecycle: "publication",
       publication: {
@@ -94,7 +95,7 @@ it("maps every coherent engine readiness response to its portfolio state and con
       chip: "Ready",
       reason: "Delivery reports this operation is eligible now.",
       actor: "Agent",
-      command: finalizeAction.command,
+      copyLabel: "Copy continuation prompt",
     },
     {
       item: card({
@@ -116,7 +117,7 @@ it("maps every coherent engine readiness response to its portfolio state and con
       chip: "Running",
       reason: "An active operation retains Change custody.",
       actor: "Agent",
-      command: null,
+      copyLabel: null,
     },
     {
       item: card({
@@ -150,7 +151,7 @@ it("maps every coherent engine readiness response to its portfolio state and con
       chip: "Waiting",
       reason: "A dependency has not completed yet.",
       actor: "Dependency",
-      command: null,
+      copyLabel: null,
     },
     {
       item: card({
@@ -173,7 +174,7 @@ it("maps every coherent engine readiness response to its portfolio state and con
       chip: "Blocked",
       reason: "This Change is paused.",
       actor: "You",
-      command: null,
+      copyLabel: null,
     },
     {
       item: publicationCardForChecks({
@@ -197,7 +198,7 @@ it("maps every coherent engine readiness response to its portfolio state and con
       chip: "Unavailable",
       reason: "Managed workspace readiness could not be observed.",
       actor: "Agent",
-      command: null,
+      copyLabel: null,
     },
     {
       item: publicationCardForChecks({
@@ -233,7 +234,7 @@ it("maps every coherent engine readiness response to its portfolio state and con
       chip: "Ready",
       reason: "The Change must be synchronized with its integration target first.",
       actor: "Agent",
-      command: null,
+      copyLabel: null,
     },
     {
       item: card({
@@ -263,7 +264,7 @@ it("maps every coherent engine readiness response to its portfolio state and con
       chip: "Complete",
       reason: "This Change reached a terminal state.",
       actor: "Nobody",
-      command: null,
+      copyLabel: null,
     },
   ];
 
@@ -292,13 +293,10 @@ it("maps every coherent engine readiness response to its portfolio state and con
     expect(inspector.querySelector(`[data-readiness-actor="${scenario.state.next_actor}"]`)).toHaveTextContent(
       `Next: ${scenario.actor}`,
     );
-    if (scenario.command) {
+    if (scenario.copyLabel) {
       expect(within(inspector).queryByTestId("readiness-not-executable")).not.toBeInTheDocument();
-      expect(
-        within(inspector).getByRole("button", {
-          name: `Copy command ${scenario.command}`,
-        }),
-      ).toBeInTheDocument();
+      expect(within(inspector).getByRole("button", { name: scenario.copyLabel })).toBeInTheDocument();
+      expect(within(inspector).queryByRole("button", { name: /^Copy command/ })).not.toBeInTheDocument();
     } else {
       expect(within(inspector).getByTestId("readiness-not-executable")).toHaveTextContent(
         "Delivery offers no runnable operation for this Work Item right now.",
@@ -310,11 +308,11 @@ it("maps every coherent engine readiness response to its portfolio state and con
   }
 });
 
-it("offers the finalize command only while engine readiness is executable", async () => {
+it("offers the continuation prompt only while engine readiness is executable", async () => {
   const executableAction = {
     kind: "finalize" as const,
     label: "Finalize the reviewed Change",
-    command: "/finalize-change change-alpha",
+    command: null,
   };
   fixtureState.currentDetail = detail({
     card: publicationCardForChecks({
@@ -336,11 +334,8 @@ it("offers the finalize command only while engine readiness is executable", asyn
   });
   renderPage("/delivery/change-alpha/publication");
   const executableInspector = await screen.findByTestId("work-item-detail");
-  expect(
-    within(executableInspector).getByRole("button", {
-      name: `Copy command ${executableAction.command}`,
-    }),
-  ).toBeInTheDocument();
+  expect(within(executableInspector).getByRole("button", { name: "Copy continuation prompt" })).toBeInTheDocument();
+  expect(within(executableInspector).queryByRole("button", { name: /^Copy command/ })).not.toBeInTheDocument();
   expect(within(executableInspector).queryByTestId("readiness-not-executable")).not.toBeInTheDocument();
   const prompt = within(executableInspector).getByTestId("readiness-prompt");
   expect(prompt.tagName).toBe("PRE");
@@ -366,9 +361,7 @@ it("offers the finalize command only while engine readiness is executable", asyn
   await waitFor(
     () =>
       expect(
-        screen.queryByRole("button", {
-          name: `Copy command ${executableAction.command}`,
-        }),
+        within(screen.getByTestId("work-item-detail")).queryByRole("button", { name: "Copy continuation prompt" }),
       ).not.toBeInTheDocument(),
     { timeout: 6000 },
   );

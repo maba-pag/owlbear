@@ -1370,7 +1370,7 @@ function ExternalHeadAdoptionSection(props: WorkItemDetailProps) {
             </PHeading>
             <p className="text-sm">
               The exact open pull-request head will become the new Change head. Finalization and pull-request readiness
-              will be cleared; run `/finalize-change` again afterward.
+              will be cleared; run the continuation prompt again afterward.
             </p>
             <dl className="grid gap-static-xs break-all text-sm">
               <dt className="font-semibold">Finalized head</dt>
@@ -2137,7 +2137,7 @@ function PublicationSection(props: WorkItemDetailProps) {
             </ul>
           ) : null}
           <p className="mt-static-xs text-sm text-contrast-medium">
-            Resolve the condition, then run `/finalize-change` again.
+            Resolve the condition, then run the continuation prompt again.
           </p>
         </section>
       ) : null}
