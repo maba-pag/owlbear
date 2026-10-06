@@ -11,6 +11,7 @@ import type {
   DeliveryReadinessStatus,
   DeliveryWorkerRole,
   MergeBlockReason,
+  WorkItemActionKind,
   WorkItemCardView,
   WorkItemNextActor,
   WorkItemPublicationPhase,
@@ -222,11 +223,26 @@ export function isContinuationPrompt(prompt: string | null | undefined, changeId
   return typeof prompt === "string" && prompt.startsWith(`/continue-change ${changeId} `);
 }
 
-/** The Change's next step: the continuation prompt Delivery offers on one of its cards, if any. */
+const CONTINUATION_OPERATIONS: ReadonlySet<WorkItemActionKind> = new Set([
+  "start-orchestration",
+  "finalize",
+  "reconcile-checkpoint",
+  "sync-target",
+  "mark-ready",
+  "observe-acceptance",
+]);
+
+/** The Change's next step: the first executable agent continuation prompt among its cards, if any. */
 export function changeContinuationPrompt(items: WorkItemCardView[], changeId: string): string | null {
   for (const item of items) {
-    const prompt = item.readiness?.prompt;
-    if (item.action.kind === "start-orchestration" && isContinuationPrompt(prompt, changeId)) return prompt;
+    const readiness = item.readiness;
+    if (
+      readiness?.executable &&
+      readiness.operation &&
+      CONTINUATION_OPERATIONS.has(readiness.operation) &&
+      isContinuationPrompt(readiness.prompt, changeId)
+    )
+      return readiness.prompt;
   }
   return null;
 }

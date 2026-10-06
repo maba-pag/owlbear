@@ -3459,7 +3459,7 @@ def test_builder_handoff_defer_resume_receipts_are_exact_and_replayable(tmp_path
     )
 
     before_duplicate_resume = runtime.frontier_bytes()
-    with pytest.raises(DeliveryRuntimeConflictError, match="not deferred"):
+    with pytest.raises(DeliveryRuntimeConflictError, match="not paused"):
         runtime.resume_change()
     assert runtime.frontier_bytes() == before_duplicate_resume
 

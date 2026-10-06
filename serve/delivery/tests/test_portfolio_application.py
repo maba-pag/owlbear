@@ -8372,7 +8372,7 @@ def test_settled_dirty_finalizer_attention_stays_blocked_after_workspace_cleanup
     assert publication.action.kind.value == "none"
     assert "/inspect-change change-a" in publication.next_step
     assert "read-only" in publication.next_step
-    assert "defer or abandon" in publication.next_step.lower()
+    assert "pause or abandon" in publication.next_step.lower()
     assert "supported repair" in publication.next_step
     assert "private-material.txt" not in publication.next_step
     assert "private payload" not in publication.next_step

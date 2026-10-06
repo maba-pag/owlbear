@@ -818,7 +818,7 @@ class _ReadinessViewsMixin:
         return (
             "Settled Finalizer attention retains dirty or stale workspace evidence. Preserve its failure "
             "report, settlement receipt, and retry history; workspace cleanup or a changed fingerprint "
-            "does not authorize retry. Defer or abandon this Change until a supported repair is available. "
+            "does not authorize retry. Pause or abandon this Change until a supported repair is available. "
             f"Inspect read-only with /inspect-change {change_id}."
         )
 

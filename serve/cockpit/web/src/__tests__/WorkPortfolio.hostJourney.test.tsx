@@ -10,6 +10,7 @@ import {
   group,
   installWorkPortfolioHarness,
   portfolio,
+  publicationCardForChecks,
   readiness,
   renderPage,
 } from "./workPortfolioHarness";
@@ -89,6 +90,41 @@ it("puts the Change's continuation prompt before Change requirements on a siblin
   expect(continuation.compareDocumentPosition(requirements) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
   fireEvent.click(continuation);
+  await waitFor(() => expect(writeText).toHaveBeenCalledWith(CONTINUATION_PROMPT));
+});
+
+it("offers the publication continuation prompt once a resumed Change's outcomes are complete", async () => {
+  const writeText = mockClipboard();
+  const done = card({
+    stage: "completed",
+    activity: { state: "idle", worker_role: null, started_at: null, task_id: null },
+    readiness: readiness({ status: "complete", reason_code: "outcome-complete", progress: "completed" }),
+  });
+  const publication = publicationCardForChecks({
+    readiness: readiness({
+      status: "ready",
+      operation: "finalize",
+      executable: true,
+      reason_code: "ready",
+      action: { kind: "finalize", label: "Finalize Change", command: null },
+      prompt: CONTINUATION_PROMPT,
+    }),
+  });
+  fixtureState.currentPortfolio = portfolio([group({ items: [done, publication] })]);
+  fixtureState.currentDetail = detail({
+    card: done,
+    readiness: done.readiness,
+    revision_prompt: "/design change-alpha Change requirements:",
+  });
+  renderPage("/delivery/change-alpha/outcome%3AOUT-001");
+
+  const inspector = await screen.findByTestId("work-item-detail");
+  const continuations = within(inspector).getAllByRole("button", { name: "Copy continuation prompt" });
+  expect(continuations).toHaveLength(1);
+  const requirements = within(inspector).getByRole("button", { name: "Change requirements" });
+  expect(continuations[0].compareDocumentPosition(requirements) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+  fireEvent.click(continuations[0]);
   await waitFor(() => expect(writeText).toHaveBeenCalledWith(CONTINUATION_PROMPT));
 });
 
