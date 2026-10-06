@@ -113,6 +113,18 @@ class TestFromAC_NavigateSchemeCheck:
             await navigate(ctx, url)
         page.goto.assert_awaited_once_with(url, wait_until="domcontentloaded")
 
+    @pytest.mark.asyncio
+    async def test_public_hostname_outside_allowlist_is_rejected(self) -> None:
+        """A public host that passes SSRF checks is still refused unless allowlisted."""
+        ctx = _make_ctx([_ALLOWED_HOST])
+        page = ctx.request_context.lifespan_context.page
+        with (
+            patch("socket.getaddrinfo", return_value=_addr4("93.184.216.34")),
+            pytest.raises(ToolError, match="Domain not in allowlist"),
+        ):
+            await navigate(ctx, "https://another.example.com/")
+        page.goto.assert_not_awaited()
+
 
 # ---------------------------------------------------------------------------
 # Trusted internal destinations
