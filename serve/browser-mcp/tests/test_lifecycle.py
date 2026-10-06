@@ -121,17 +121,39 @@ async def test_macos_omitted_mode_uses_managed_edge_profile_and_ignores_override
     launcher = _FakeLauncher(calls)
     with (
         patch.object(server_module.sys, "platform", "darwin"),
-        patch.dict(server_module.os.environ, {"PLAYWRIGHT_USER_DATA_DIR": "/private/daily"}, clear=False),
+        patch.dict(server_module.os.environ, {"PLAYWRIGHT_USER_DATA_DIR": "/private/daily"}, clear=True),
         patch.object(server_module, "PlaywrightLauncher", return_value=launcher) as launcher_factory,
     ):
         async with app_lifespan(mcp) as context:
             assert context.browser_mode is BrowserMode.MANAGED_EDGE
-            assert (await browser_status(SimpleNamespace(request_context=SimpleNamespace(lifespan_context=context))))[
-                "startup_state"
-            ] == "ready"
+            status = await browser_status(SimpleNamespace(request_context=SimpleNamespace(lifespan_context=context)))
+            assert status == {
+                "browser_mode": "managed-edge",
+                "ownership": "per-user-owned",
+                "startup_state": "ready",
+                "startup_reason": None,
+                "visible_authentication": "available",
+                "latest_acquisition_status": None,
+                "startup_diagnostic": None,
+            }
 
     assert launcher_factory.call_args.kwargs["mode"] is BrowserMode.MANAGED_EDGE
     assert launcher_factory.call_args.kwargs["user_data_dir"].endswith("/.owlbear/edge-profile")
+
+
+@pytest.mark.asyncio
+async def test_non_macos_omitted_mode_uses_chromium_profile() -> None:
+    launcher = _FakeLauncher([])
+    with (
+        patch.object(server_module.sys, "platform", "linux"),
+        patch.dict(server_module.os.environ, {}, clear=True),
+        patch.object(server_module, "PlaywrightLauncher", return_value=launcher) as launcher_factory,
+    ):
+        async with app_lifespan(mcp) as context:
+            assert context.browser_mode is BrowserMode.CHROMIUM
+
+    assert launcher_factory.call_args.kwargs["mode"] is BrowserMode.CHROMIUM
+    assert launcher_factory.call_args.kwargs["user_data_dir"].endswith("/.owlbear/chromium-profile")
 
 
 @pytest.mark.asyncio
