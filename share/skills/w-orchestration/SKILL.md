@@ -59,12 +59,12 @@ shows the portfolio.
 ### Continuation Bindings
 
 Before the first acquisition, require callable `get_change`, `acquire_change_action`, and
-`execute_change_action` bindings. Invoke any directly bound operation as granted; run one focused
-`tool_search` only for an operation with no direct callable binding:
+`execute_change_action` bindings. Invoke any directly bound operation as granted; for an operation
+with no direct callable binding, run one `tool_search` with the exact OwlBear Delivery query from the
+MCP Tool Bootstrap table in `owlbear-system.instructions.md` (the OwlBear Memory query for
+`recall_memory` and `save_memory`). Never shorten or rewrite that query.
 
-`OwlBear Delivery get_change acquire_change_action execute_change_action`
-
-If a required binding remains unavailable or its focused search returns a tool error, report the
+If a required binding remains unavailable or that search returns a tool error, report the
 exact missing operation and end the session without acquiring. A missing continuation operation is
 never a reason to call the underlying checkpoint, target-sync, mark-ready, acceptance, finalization,
 or transition operation directly. When Delivery MCP is unavailable or refuses to start, report that
@@ -228,8 +228,8 @@ was stopped. If that statement is ambiguous, ask which exact worker was stopped 
 `change_id`, `outcome_id`, `attempt_id`, and `claim_id` unchanged from the acquisition result or one
 fresh `get_change` view; for a Finalizer attempt, pass `outcome_id: null`. Never infer identity from
 conversation, elapsed time, or a worker's missing response. Require a callable `release_stuck_worker`
-binding at this point of use; if it is not directly bound, run one focused `tool_search` for that
-exact operation. A missing release binding is never a reason to use `settle_worker_invocation` or
+binding at this point of use; if it is not directly bound, run one `tool_search` with the exact
+OwlBear Delivery bootstrap query. A missing release binding is never a reason to use `settle_worker_invocation` or
 `recover_claim` instead. Call the tool once and report its result
 unchanged. If it returns `ERR_DELIVERY_WORKER_ACTIVE`, report the returned retry time or process details
 unchanged and leave custody and files unchanged; do not retry or dispatch a replacement in the same
@@ -342,8 +342,8 @@ do not rebuild a bare `/design <change_id>` command or omit its recorded context
 
 For every other supported `DeliveryTransition`, call `transition_delivery` with outer
 `change_id=launch.change_id` and the returned transition as `transition` byte-for-structure unchanged.
-Immediately before either operation, if no directly callable binding exists, run one focused
-`tool_search` for that exact operation. If it remains unavailable or the search returns a tool error,
+Immediately before either operation, if no directly callable binding exists, run one `tool_search`
+with the exact OwlBear Delivery bootstrap query. If it remains unavailable or the search returns a tool error,
 retain the launch's exact change, outcome, attempt, and claim IDs, report the routing failure, and end
 the session. Do not redispatch Planner, Builder, or another agent to
 echo, relay, reconstruct, or apply a result. A failed settlement call must be reconciled with

@@ -5,7 +5,7 @@ argument-hint: "Challenge Design: change_id={change_id}, identities=[change, com
 user-invocable: false
 disable-model-invocation: true
 model: GPT-6.1 Sol (copilot)
-tools: [vscode/toolSearch, read/problems, read/readFile, read/viewImage, search, web, owlbear-memory/recall_memory]
+tools: [vscode/toolSearch, read/problems, read/readFile, read/viewImage, search, web, owlbear-delivery/read_design_session, owlbear-delivery/derive_delivery_contract, owlbear-memory/recall_memory]
 agents: []
 hooks:
   PreToolUse:
@@ -36,7 +36,9 @@ repair it, and you do not soften a finding because the candidate is otherwise co
 - **Follow `r-challenger-protocol`** for read-only evidence boundaries and caller routing.
 - **Use canonical memory identity `designer-challenger`.** Recall with that exact name; return any
   qualified learning as `memory_candidate` for Designer to save.
-- **Challenge the supplied immutable revision.** Compare its named digest and every declared entity
+- **Challenge the supplied immutable revision.** Verify its package ID with `read_design_session` and
+  its contract digest with `derive_delivery_contract`; a mismatch is an `error` on the change
+  identity. Compare every declared entity
   with current source, generated or public contracts, normal workflows, ownership, and plausible
   omissions; do not silently substitute newer authority.
 - **Return complete typed evidence.** Emit exactly one source-grounded `{disposition, evidence}` entry

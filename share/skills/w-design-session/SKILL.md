@@ -231,7 +231,8 @@ outcomes, dependencies, known limits, and proof coverage before approval.
 Run these gates against one unchanged package ID:
 
 1. Call `derive_delivery_contract(change_id)` and require a contract with no compiler diagnostics.
-2. Call a fresh read-only designer challenger. Require one source-grounded
+2. Call a fresh read-only designer challenger with the change ID, unchanged package ID, contract
+  digest, and declared entity IDs. Require one source-grounded
   `{disposition, evidence}` entry using `pass`, `warning`, or `error` for the change identity and
   every commitment, outcome, and task-plan scope. Free-form approval is invalid.
 3. Run proportionate clean baselines: affected builds or typechecks, generated-contract checks,
