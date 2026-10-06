@@ -369,7 +369,7 @@ class MemoryEngine:
             )
 
     def delete_agent(self, agent: str) -> AgentDeleteResult:
-        """Remove an agent from scopes while preserving historical provenance."""
+        """Remove an agent from scopes, preserving reviewed orphans as tombstones."""
         if not agent.strip():
             msg = "agent must not be empty"
             raise ValidationError(msg)
@@ -378,12 +378,31 @@ class MemoryEngine:
             originals = self.get_entries()
             updated_entries: list[MemoryEntry] = []
             deleted_entries: list[MemoryEntry] = []
+            soft_deleted = 0
+            scopes_updated = 0
             for entry in originals:
                 if agent not in entry.scope_agents:
                     continue
                 scope_agents = [name for name in entry.scope_agents if name != agent]
                 if not scope_agents:
-                    deleted_entries.append(entry)
+                    if entry.state == MemoryState.PENDING:
+                        deleted_entries.append(entry)
+                        continue
+
+                    if entry.state == MemoryState.DELETED:
+                        scopes_updated += 1
+                    else:
+                        soft_deleted += 1
+                    updated_entries.append(
+                        MemoryEntry.model_validate(
+                            {
+                                **entry.model_dump(),
+                                "state": MemoryState.DELETED,
+                                "scope_agents": scope_agents,
+                                "updated_at": self._now_iso(),
+                            }
+                        )
+                    )
                     continue
                 updated_entries.append(
                     MemoryEntry.model_validate(
@@ -394,11 +413,12 @@ class MemoryEngine:
                         }
                     )
                 )
+                scopes_updated += 1
 
             self._write_agent_lifecycle_changes(originals, updated_entries, deleted_entries)
             return AgentDeleteResult(
-                entries_deleted=len(deleted_entries),
-                scopes_updated=len(updated_entries),
+                entries_deleted=len(deleted_entries) + soft_deleted,
+                scopes_updated=scopes_updated,
             )
 
     def record_factually_wrong(
