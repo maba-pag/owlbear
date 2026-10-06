@@ -17,6 +17,10 @@ class ConcurrencyError(Exception):
     """Raised when optimistic concurrency validation fails."""
 
 
+class MemoryBusyError(ConcurrencyError):
+    """Raised when the memory writer lock cannot be acquired before its deadline."""
+
+
 class ValidationError(Exception):
     """Raised when user input or payload validation fails."""
 
