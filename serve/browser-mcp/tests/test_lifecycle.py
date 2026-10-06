@@ -218,8 +218,11 @@ async def test_startup_failure_reports_bounded_reason(error: Exception, reason: 
 
 @pytest.mark.asyncio
 async def test_registered_browser_status_contract() -> None:
-    async with Client(mcp) as client:
-        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+    calls: list[str] = []
+    launcher = _FakeLauncher(calls)
+    with patch.object(server_module, "PlaywrightLauncher", return_value=launcher):
+        async with Client(mcp) as client:
+            tools = {tool.name: tool for tool in (await client.list_tools()).tools}
     tool = tools["browser_status"]
     assert tool.annotations.read_only_hint is True
     assert tool.annotations.idempotent_hint is True
@@ -233,6 +236,7 @@ async def test_registered_browser_status_contract() -> None:
         "latest_acquisition_status",
         "startup_diagnostic",
     }
+    assert calls == ["launch", "page-create", "page", "launcher"]
 
 
 @pytest.mark.asyncio

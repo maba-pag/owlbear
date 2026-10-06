@@ -113,10 +113,21 @@ def test_mcp_serialization_redacts_all_acquisition_url_surfaces() -> None:
 
 @pytest.mark.asyncio
 async def test_acquire_schema_does_not_advertise_removed_diagnostic_html_option() -> None:
-    async with Client(mcp) as client:
-        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+    launcher = MagicMock()
+    page = MagicMock()
+    page.close = AsyncMock()
+    launcher.launch = AsyncMock()
+    launcher.page = AsyncMock(return_value=page)
+    launcher.close = AsyncMock()
+    with patch("owlbear_browser_mcp.server.PlaywrightLauncher", return_value=launcher):
+        async with Client(mcp) as client:
+            tools = {tool.name: tool for tool in (await client.list_tools()).tools}
 
     assert "include_diagnostic_html" not in tools["acquire"].input_schema["properties"]
+    launcher.launch.assert_awaited_once()
+    launcher.page.assert_awaited_once()
+    page.close.assert_awaited_once()
+    launcher.close.assert_awaited_once()
 
 
 @pytest.mark.asyncio
