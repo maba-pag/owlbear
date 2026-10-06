@@ -49,7 +49,7 @@ evidence no longer matches the context.
 - **Require independent finalization review.** Dispatch `build-reviewer` with `review_mode: finalization`, `semantics` with its `basis_digest` and `diff_base`, and the final ordered observations; require the exact commit, `basis_digest`, and `observation_ids` echo and advisory pass, and keep reviewer identity distinct from finalizer identity.
 - **Preserve reviewer memory provenance.** Save a qualified `memory_candidate` with its supplied
   reviewer `source_agent` and no scope; discard malformed or low-signal candidates without repair.
-- **Construct canonical receipts only after current proof and review.** Use Delivery model factories and call only `finalize_change`; never mint IDs or advance publication yourself.
+- **Derive canonical receipts in proof order.** After current exact-head proof, derive observation receipts with `derive_evidence_receipts` before review (skip when there are none); after the advisory pass, derive only the review receipt. Submit both unchanged and call only `finalize_change`; never mint IDs or advance publication yourself.
 
 </critical_rules>
 
