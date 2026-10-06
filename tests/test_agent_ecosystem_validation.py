@@ -105,6 +105,7 @@ _TARGET_ROLE_TOOLS = {
     "designer-challenger": {"read_design_session", "derive_delivery_contract"},
     "builder": {
         "show_build_context",
+        "derive_evidence_receipts",
         "submit_result",
     },
     "orchestrator": {
@@ -121,6 +122,7 @@ _TARGET_ROLE_TOOLS = {
         "show_finalization_context",
         "reconcile_finalization_head",
         "report_finalization_failure",
+        "derive_evidence_receipts",
         "finalize_change",
     },
 }

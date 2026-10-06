@@ -5,7 +5,7 @@ argument-hint: "Build Delivery Launch: {serialized DeliveryLaunchPackage}"
 user-invocable: false
 disable-model-invocation: true
 model: GPT-6 Luna (copilot)
-tools: [vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search, owlbear-delivery/show_build_context, owlbear-delivery/submit_result, owlbear-memory/assess_memories, owlbear-memory/recall_memory, owlbear-memory/save_memory]
+tools: [vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search, owlbear-delivery/show_build_context, owlbear-delivery/derive_evidence_receipts, owlbear-delivery/submit_result, owlbear-memory/assess_memories, owlbear-memory/recall_memory, owlbear-memory/save_memory]
 agents: [build-reviewer]
 hooks:
   SessionStart:

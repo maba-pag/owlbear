@@ -33,7 +33,9 @@ from owlbear_delivery.delivery_runtime import (
     AdministrativeDeliveryMoveResult,
     DeliveryAcceptanceEvidenceError,
     DeliveryEvidenceGap,
+    DeliveryObservationReceipt,
     DeliveryPlanCandidate,
+    DeliveryReviewReceipt,
 )
 from owlbear_delivery.design_package import DesignPackageResult
 from owlbear_delivery.diagnostics import classify_delivery_failure
@@ -105,6 +107,9 @@ from owlbear_delivery_mcp.target_models import (
     DeliveryPlanPublication,
     DeliveryPublicationSupersessionResponse,
     DeliveryStateSnapshotRepairResponse,
+    DerivedEvidenceReceiptsResponse,
+    DeriveEvidenceReceiptsParams,
+    DeriveEvidenceReceiptsRequest,
     EmptyParams,
     EmptyRequest,
     ExecuteChangeActionRequest,
@@ -222,6 +227,7 @@ DELIVERY_OPERATION_NAMES = (
     "show_plan_context",
     "show_build_context",
     "show_finalization_context",
+    "derive_evidence_receipts",
     "report_finalization_failure",
     "publish_delivery_plan",
     "submit_result",
@@ -270,6 +276,7 @@ _DELIVERY_READS = frozenset(
         "show_plan_context",
         "show_build_context",
         "show_finalization_context",
+        "derive_evidence_receipts",
         "show_integration_attention",
         "observe_change_publication_checks",
         "list_completed_changes",
@@ -750,6 +757,17 @@ class TargetMCPAdapter:
             DeliveryFinalizationContext,
         )
         return self._serialize(context)
+
+    async def derive_evidence_receipts(self, request: DeriveEvidenceReceiptsRequest) -> DerivedEvidenceReceiptsResponse:
+        """Return canonical observation and review receipts without reading or changing Delivery state."""
+        params = self._validate(DeriveEvidenceReceiptsParams, request)
+        try:
+            return DerivedEvidenceReceiptsResponse(
+                observations=tuple(DeliveryObservationReceipt.create(item) for item in params.observations),
+                review=DeliveryReviewReceipt.create(params.review) if params.review is not None else None,
+            )
+        except ValidationError as exc:
+            self._raise("ERR_TARGET_PARAM_VALIDATION", str(exc), self._authority(params), retry_safe=False)
 
     async def report_finalization_failure(self, request: ReportFinalizationFailureParams) -> dict[str, object]:
         """Persist one bounded finalization diagnostic without granting proof authority."""
