@@ -472,7 +472,8 @@ Disposable project `~/owlbear-n10h/project` (repository `boecht/owlbear-n10h-202
   ancestry check; both checks use it. Divergent (sibling) results, a result not below the head and a reviewed head
   not below the head are still refused. No other consumer depends on the order. Nothing persisted changes.
 - *Recovery route for the project:* after merge, `/upgrade-delivery <merge commit>` from the project (no
-  migration), then `/continue-change slug-rules`; readiness proceeds to finalization.
+  migration; its unpinned step now fetches before checking out a named revision, which it previously did not),
+  then `/continue-change slug-rules`; readiness proceeds to finalization.
 
 ### 3.3 N10-M — Live migration and programme closure
 
