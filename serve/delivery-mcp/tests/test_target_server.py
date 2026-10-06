@@ -3675,6 +3675,30 @@ def test_entry_point_prints_one_refusal_line_for_newer_state_format(tmp_path: Pa
     )
     assert lines[0].endswith("(field=state_version, retry_safe=false)")
     assert "Traceback" not in completed.stderr
+    assert completed.stdout == ""
+
+
+def test_entry_point_escapes_line_breaks_in_diagnostic_fields(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    diagnostic = DeliveryStartupDiagnostic("ERR_DELIVERY_STARTUP_INVALID", "bad\r\nkey", "unexpected\nconfiguration")
+    failure = ExceptionGroup("unhandled errors in a TaskGroup", [diagnostic])
+
+    def _run() -> None:
+        raise failure
+
+    monkeypatch.setattr(live_main.mcp, "run", _run)
+
+    with pytest.raises(SystemExit) as exc_info:
+        live_main.main()
+
+    captured = capsys.readouterr()
+    assert exc_info.value.code == 1
+    assert captured.out == ""
+    assert captured.err == (
+        "Delivery MCP refused to start: ERR_DELIVERY_STARTUP_INVALID: bad\\r\\nkey "
+        "(field=unexpected\\nconfiguration, retry_safe=false)\n"
+    )
 
 
 def test_entry_point_keeps_non_diagnostic_startup_failures(monkeypatch: pytest.MonkeyPatch) -> None:

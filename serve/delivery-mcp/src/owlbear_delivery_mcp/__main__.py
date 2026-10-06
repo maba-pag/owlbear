@@ -36,11 +36,16 @@ def _leaves(group: BaseExceptionGroup) -> Iterator[DeliveryStartupDiagnostic]:
 def _refuse(diagnostics: tuple[DeliveryStartupDiagnostic, ...]) -> None:
     for diagnostic in diagnostics:
         retry_safe = str(diagnostic.retry_safe).lower()
-        sys.stderr.write(
+        line = (
             f"Delivery MCP refused to start: {diagnostic.code}: {diagnostic.detail} "
-            f"(field={diagnostic.field}, retry_safe={retry_safe})\n"
+            f"(field={diagnostic.field}, retry_safe={retry_safe})"
         )
+        sys.stderr.write(_one_line(line) + "\n")
     sys.exit(1)
+
+
+def _one_line(text: str) -> str:
+    return "".join(char.encode("unicode_escape").decode() if char.isspace() and char != " " else char for char in text)
 
 
 if __name__ == "__main__":
