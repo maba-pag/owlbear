@@ -1154,9 +1154,15 @@ class _WorktreeStateMixin:
         ancestors = (coordination.last_reviewed_commit, *promoted_commits)
         if any(not self._is_ancestor(commit, head, cwd=self._repository) for commit in ancestors):
             return "workspace-preflight-failed"
-        if any(
-            not self._is_ancestor(predecessor, successor, cwd=self._repository)
-            for predecessor, successor in pairwise(promoted_commits)
-        ):
+        if not self._promoted_chain_is_linear(promoted_commits):
             return "workspace-preflight-failed"
         return None
+
+    def _promoted_chain_is_linear(self, promoted_commits: tuple[str, ...]) -> bool:
+        # Frontier bindings list results per outcome, not in build order.
+        depths = {commit: int(self._git("rev-list", "--count", commit)) for commit in promoted_commits}
+        chain = sorted(depths, key=depths.__getitem__)
+        return all(
+            self._is_ancestor(predecessor, successor, cwd=self._repository)
+            for predecessor, successor in pairwise(chain)
+        )
