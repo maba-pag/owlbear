@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import subprocess
+import sys
 import threading
 import time
 from datetime import UTC, datetime, timedelta
@@ -62,6 +63,7 @@ from serve.delivery.tests.test_worker_stall import _HOST as _PROGRESS_HOST
 from serve.delivery.tests.test_worker_stall import _iso as _progress_iso
 from serve.delivery.tests.test_worker_stall import _real_now as _progress_now
 
+import owlbear_delivery_mcp.__main__ as live_main
 import owlbear_delivery_mcp.server as live_server
 from owlbear_delivery import (
     AdministrativeDeliveryMove,
@@ -3644,6 +3646,74 @@ async def test_lifespan_refuses_newer_state_with_typed_detail_and_releases_the_l
     assert exc_info.value.detail.startswith("state-newer-than-controller")
     assert "runtime/changes/change-a/frontier.json" in exc_info.value.detail
     acquire_controller_lock(repository / ".owlbear/delivery/runtime", exclusive=True).release()
+
+
+def test_entry_point_prints_one_refusal_line_for_newer_state_format(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    path = repository / ".owlbear/delivery/config.json"
+    path.parent.mkdir(parents=True)
+    _write_config(path, _config())
+    runtime_root = repository / ".owlbear/delivery/runtime"
+    runtime_root.mkdir()
+    runtime_root.joinpath("format.json").write_bytes(format_marker_bytes(4))
+
+    completed = subprocess.run(
+        (sys.executable, "-m", "owlbear_delivery_mcp"),
+        cwd=repository,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=60,
+    )
+
+    assert completed.returncode == 1
+    lines = completed.stderr.splitlines()
+    assert len(lines) == 1, completed.stderr
+    assert lines[0].startswith(
+        "Delivery MCP refused to start: ERR_DELIVERY_STATE_VERSION: state-newer-than-controller: "
+    )
+    assert lines[0].endswith("(field=state_version, retry_safe=false)")
+    assert "Traceback" not in completed.stderr
+    assert completed.stdout == ""
+
+
+def test_entry_point_escapes_line_breaks_in_diagnostic_fields(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    diagnostic = DeliveryStartupDiagnostic("ERR_DELIVERY_STARTUP_INVALID", "bad\r\nkey", "unexpected\nconfiguration")
+    failure = ExceptionGroup("unhandled errors in a TaskGroup", [diagnostic])
+
+    def _run() -> None:
+        raise failure
+
+    monkeypatch.setattr(live_main.mcp, "run", _run)
+
+    with pytest.raises(SystemExit) as exc_info:
+        live_main.main()
+
+    captured = capsys.readouterr()
+    assert exc_info.value.code == 1
+    assert captured.out == ""
+    assert captured.err == (
+        "Delivery MCP refused to start: ERR_DELIVERY_STARTUP_INVALID: bad\\r\\nkey "
+        "(field=unexpected\\nconfiguration, retry_safe=false)\n"
+    )
+
+
+def test_entry_point_keeps_non_diagnostic_startup_failures(monkeypatch: pytest.MonkeyPatch) -> None:
+    diagnostic = DeliveryStartupDiagnostic("ERR_DELIVERY_STARTUP_INVALID", "invalid", "remote")
+    failure = ExceptionGroup("unhandled errors in a TaskGroup", [diagnostic, OSError("broken pipe")])
+
+    def _run() -> None:
+        raise failure
+
+    monkeypatch.setattr(live_main.mcp, "run", _run)
+
+    with pytest.raises(ExceptionGroup) as exc_info:
+        live_main.main()
+
+    assert exc_info.value is failure
 
 
 @pytest.mark.asyncio
