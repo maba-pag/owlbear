@@ -11,6 +11,7 @@
 
 **Execution status:** D01, D02 and D03 are complete; D03 merged with PR #326 as `881b500f` and is
 live. Remaining work and its status are in [the execution plan](delivery-redesign-execution-plan.md).
+**The programme is complete (2026-10-06, N10-M):** live Delivery runs the final release `d25349567`.
 
 **Simplification 2026-10-04:** the lead simplified the remaining programme under the user's
 authorization ([execution plan §7](delivery-redesign-execution-plan.md#7-decisions)). Every remaining
@@ -30,7 +31,7 @@ execute this programme.
 
 ## 0. Direct Implementation Decision
 
-> Historical. Superseded by [the execution plan](delivery-redesign-execution-plan.md).
+> Historical. Superseded by [the execution plan](delivery-redesign-execution-plan.md). Complete on 2026-10-06.
 
 ### D03 Current Checkpoint: 2026-09-29
 

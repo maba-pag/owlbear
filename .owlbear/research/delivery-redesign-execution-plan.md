@@ -16,6 +16,9 @@
 > user's authorization ([7](#7-decisions)): every remaining phase works in the
 > [operating context](#19-operating-context); V17, V22 and V23 are dropped from the programme, N06 and
 > N07 are cut, N08-B is cut, and the user-only confirmation machinery of PR #360 is removed.
+> **Complete on 2026-10-06** with N10-M: live Delivery runs the final release `d25349567` (format 3), the
+> pre-redesign Changes are disposed of, and the programme issues are closed with evidence (#225 stays open,
+> N05-D not built). N10-N follow-ups remain as ordinary work.
 
 | Document | Role once this plan is approved |
 | --- | --- |
@@ -125,7 +128,8 @@ the user present and the explicit authorization described in that package.
 - **The main checkout `/Users/GGN7H9Q/Projects/owlbear-dev` runs live Delivery from a pinned release.**
   The freeze ended on 2026-10-04 with the N02-D H step: live state was migrated to format 2 (backup
   `~/owlbear-backups/n02d-20261004-123545`), the workspace is pinned to release `841b1cffb`, and the
-  main checkout is on `dev`. `.vscode/mcp.json` and Cockpit start the pinned release through
+  main checkout is on `dev`. N10-M (2026-10-06) migrated it to format 3 and pinned the final release
+  `d25349567` (`previous` `841b1cffb`; backup `~/owlbear-backups/n10m-20261006-111349`). `.vscode/mcp.json` and Cockpit start the pinned release through
   `.owlbear/controller/bin/`, so pulling or checking out code there no longer changes live behavior;
   live code changes only through `/upgrade-delivery`. Starting the checkout's own code against this
   workspace is refused (`controller-not-pinned`).
@@ -434,7 +438,10 @@ Every remaining phase, plan and review works in this context (lead decision 2026
 
 ### 2.6 Live state and open items
 
-- **Live Delivery** (main checkout, `.owlbear/delivery/runtime/changes`):
+- **Live Delivery** (main checkout, `.owlbear/delivery/runtime/changes`). Dispositions applied by N10-M on
+  2026-10-06 ([N10 plan](delivery-n10-plan.md) §3.3.1): `delivery-action-readiness` and
+  `frontier-serialization-contract` abandoned with cleaned worktrees, PR #314 closed; B1 waits on its
+  managed-Mac pilot request. Before N10-M:
   - `delivery-action-readiness`: product merged via PR #316 (merge commit `364daf61`). The live record is
     unfinished (Implementation, 4 of 5 results, schema-1 evidence, not finalized); N10-M disposes of it.
   - `frontier-serialization-contract`: issue #215, open PR #314. This is a Delivery fix, so under
@@ -444,7 +451,8 @@ Every remaining phase, plan and review works in this context (lead decision 2026
     by an agent-assisted manual step and continues it.
   - The `.vscode/mcp.json` registration of `owlbear-delivery` was restored on 2026-09-13. The
     programme's "intentionally removed" note is stale.
-- **Open Delivery issues and their allocation:**
+- **Open Delivery issues and their allocation** (N10-M closed #213, #215, #216, #219–#222 with evidence;
+  #218 was closed earlier; #225 stays open):
   - #213 Design re-entry → N04
   - #215 strict frontier round-trip → N02
   - #216 fence expired claims and #221 retry convergence → covered by D03; verify and propose
@@ -675,8 +683,8 @@ every new item exactly one lane.
 | N10-P | merged | #374 ([N10 plan](delivery-n10-plan.md): acceptance map; plan decisions U1 (a), U2 (a) settled 2026-10-05; Sol plan gate round 1 on `eb185eb3f` revision-required, three findings fix-now applied (U3 option (c) removed, N10-A regression gate after an N10-H product fix, V08 proof with one N10-A disposable check); gate closed) |
 | N10-A | merged | #382 (code head `fddb6d02f`; [N10 plan](delivery-n10-plan.md) §3.1.1: all 21 V-scenarios proven on the candidate, planned citations resolved, assembled V01 journey test, V08 disposable check found and fixed an untyped `report_finalization_failure` refusal at MCP; route audit: all 43 reasons routed after R1 (lead decision 2026-10-05, option (b)): `workspace-dirty`, `workspace-preflight-failed` without settled Finalizer attention, `workspace-inspection-failed`, `retry-containment` and `retry-ledger-unavailable` expose the read-only `/repair-delivery` diagnosis prompt; accepted limit: a dirty finished worktree has no automatic preservation-and-resume route (option (c) not built, I1); on `97f694ab2` full Python suite 4707 passed, 1 skipped, 2 load timeouts passing alone, `npm test` 373 passed, build ok, `test:e2e:work` 31 passed; on `fddb6d02f` `test --changed` 3439 passed, 1 skipped; LC upgrade and full form from `841b1cffb` on a live copy passed on both code heads: format 2 → 3 (marker only), every live Change available, the previous release refuses the migrated state, live unchanged) |
 | N10-H | merged | fixes #383 (H1, non-ASCII contract digest), #384 (H7, actionable `custody-retained` refusal), #385 (H12, finalization preflight build order; F1 `/upgrade-delivery` fetches first), #386 (H2, H10, H11 agent findings), #387 (H4, H6, H8, H13 Cockpit findings), #388 (H15, one-line startup refusal); no format change; journey steps 1–8 complete ([N10 plan](delivery-n10-plan.md) §3.2.1); D7 gate passed on `b4514b34b` (pytest 4740 passed, 1 skipped; vitest 379 passed; build ok; `test:e2e:work` 31 passed; LC passed with the N10-A proposal); H9 and H14 to N10-N; evidence docs PR |
-| N10-M | — | — |
-| N10-N | planned | after N10-M; follow-ups from the host journey ([N10 plan](delivery-n10-plan.md) §3.4): H9 read-only receipts tool, H14 Change-branch deletion decision; does not block programme closure |
+| N10-M | done 2026-10-06 | record PR ([N10 plan](delivery-n10-plan.md) §3.3.1): live upgraded with the rehearsed proposal (format 2 → 3, marker only), pinned to `d25349567`, `previous` `841b1cffb`, health healthy and the three Changes unchanged across the upgrade; main checkout fast-forwarded to `d25349567`; `frontier-serialization-contract` and `delivery-action-readiness` abandoned with cleaned worktrees, PR #314 closed; B1 waits on its pilot request; #213, #215, #216, #219–#222 closed with evidence, #225 open |
+| N10-N | planned | after N10-M; follow-ups ([N10 plan](delivery-n10-plan.md) §3.4): H9 read-only receipts tool, H14 Change-branch deletion decision, M1 abandon feedback and M2 abandon control without a publication card; ordinary work after programme closure |
 
 ## 5. Packages
 
