@@ -674,8 +674,9 @@ every new item exactly one lane.
 | N09-C | merged | #381 (docs `0a5068a14`; journey rewritten around `/continue-change` with one exceptional-entries table; consumer-projection grep for `/orchestrate` and `/release-stuck-worker` empty; markdownlint and ecosystem tests pass) |
 | N10-P | merged | #374 ([N10 plan](delivery-n10-plan.md): acceptance map; plan decisions U1 (a), U2 (a) settled 2026-10-05; Sol plan gate round 1 on `eb185eb3f` revision-required, three findings fix-now applied (U3 option (c) removed, N10-A regression gate after an N10-H product fix, V08 proof with one N10-A disposable check); gate closed) |
 | N10-A | merged | #382 (code head `fddb6d02f`; [N10 plan](delivery-n10-plan.md) §3.1.1: all 21 V-scenarios proven on the candidate, planned citations resolved, assembled V01 journey test, V08 disposable check found and fixed an untyped `report_finalization_failure` refusal at MCP; route audit: all 43 reasons routed after R1 (lead decision 2026-10-05, option (b)): `workspace-dirty`, `workspace-preflight-failed` without settled Finalizer attention, `workspace-inspection-failed`, `retry-containment` and `retry-ledger-unavailable` expose the read-only `/repair-delivery` diagnosis prompt; accepted limit: a dirty finished worktree has no automatic preservation-and-resume route (option (c) not built, I1); on `97f694ab2` full Python suite 4707 passed, 1 skipped, 2 load timeouts passing alone, `npm test` 373 passed, build ok, `test:e2e:work` 31 passed; on `fddb6d02f` `test --changed` 3439 passed, 1 skipped; LC upgrade and full form from `841b1cffb` on a live copy passed on both code heads: format 2 → 3 (marker only), every live Change available, the previous release refuses the migrated state, live unchanged) |
-| N10-H | in progress | fix #383 (code `4d126f887`): step 1 stopped by defect H1, a non-ASCII contract digest that refused the first admission; one canonical contract serialization, no format change, LC upgrade rehearsal from `841b1cffb`; after merge step 1 reruns from the admission retry and the N10-A regression gate repeats (D7; [N10 plan](delivery-n10-plan.md) §3.2.1); fix #384 (code `1ec148a15`): defect H7, a revision refused `custody-retained` by a retained same-task Builder handoff that neither the refusal nor `get_change` named; option B (the refusal names outcome, task, route and the way on; `get_change` lists the handoff), N04 G9 accepted limit, no format change, LC not applicable; after merge the revision step reruns from Resume |
+| N10-H | merged | fixes #383 (H1, non-ASCII contract digest), #384 (H7, actionable `custody-retained` refusal), #385 (H12, finalization preflight build order; F1 `/upgrade-delivery` fetches first), #386 (H2, H10, H11 agent findings), #387 (H4, H6, H8, H13 Cockpit findings), #388 (H15, one-line startup refusal); no format change; journey steps 1–8 complete ([N10 plan](delivery-n10-plan.md) §3.2.1); D7 gate passed on `b4514b34b` (pytest 4740 passed, 1 skipped; vitest 379 passed; build ok; `test:e2e:work` 31 passed; LC passed with the N10-A proposal); H9 and H14 to N10-N; evidence docs PR |
 | N10-M | — | — |
+| N10-N | planned | after N10-M; follow-ups from the host journey ([N10 plan](delivery-n10-plan.md) §3.4): H9 read-only receipts tool, H14 Change-branch deletion decision; does not block programme closure |
 
 ## 5. Packages
 
@@ -1126,6 +1127,8 @@ Reduced 2026-10-04 ([7](#7-decisions)).
 - N10-H: host journey, with the user present. Its docs-only PR records the evidence.
 - N10-M: live migration and activation; explicit user authorization. Its docs-only PR records the
   evidence and closes the programme.
+- N10-N: follow-ups from the host journey (H9 receipts tool, H14 Change-branch deletion), after N10-M; it does
+  not block programme closure.
 
 ## 6. Programme Completion
 
