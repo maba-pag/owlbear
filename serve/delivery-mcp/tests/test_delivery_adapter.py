@@ -891,6 +891,13 @@ def _requests() -> dict[str, dict[str, object]]:
         },
         "publish_design_checkpoint": change,
         "derive_delivery_contract": change,
+        "derive_evidence_receipts": {
+            "observations": [
+                {key: value for key, value in observation.items() if key != "observation_id"}
+                for observation in _result()["observations"]  # type: ignore[union-attr]
+            ],
+            "review": {key: value for key, value in _result()["review"].items() if key != "review_id"},  # type: ignore[union-attr]
+        },
         "admit_delivery_change": {
             "change_id": CHANGE,
             "expected_package_id": DIGEST,
@@ -1201,6 +1208,15 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
 
     result = await getattr(adapter, operation_name)(_requests()[operation_name])
 
+    if operation_name == "derive_evidence_receipts":
+        # N10-N N1: stateless; the receipts are the ones the result fixture builds with `.create()`.
+        assert application.calls == []
+        expected = _result()
+        assert result.model_dump(mode="json") == {
+            "observations": expected["observations"],
+            "review": expected["review"],
+        }
+        return
     assert [call[0] for call in application.calls] == [operation_name]
     call_args = {
         "show_operator_context": (CHANGE, "OUT-001"),
@@ -1682,6 +1698,7 @@ def test_delivery_operation_names_annotations_and_prohibited_methods_are_exact()
         "show_plan_context",
         "show_build_context",
         "show_finalization_context",
+        "derive_evidence_receipts",
         "show_integration_attention",
         "observe_change_publication_checks",
         "list_completed_changes",

@@ -404,6 +404,11 @@ provider-reported merge commit; it never completes from local evidence. Complete
 the finalized Change head and accepted merge commit as separate identities. An open or unmerged PR
 waits or is deferred; it cannot complete.
 
+Delivery keeps each Change branch (`owlbear/change/<change-id>`) locally and on the remote after
+completion or abandonment; the local branch keeps the reviewed commits reachable even when the remote
+branch is gone. To remove merged remote branches, enable the GitHub repository setting
+**Automatically delete head branches**; Delivery tolerates that deletion.
+
 Persisted Integration attention remains visible through the current attention surfaces. Use
 Cockpit or `/resolve-delivery-attention <change-id> <attention-id>` to inspect that exact attention.
 New Integration repair claims, candidates, reviews, and admissions are not created by the current

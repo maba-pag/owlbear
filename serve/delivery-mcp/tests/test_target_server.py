@@ -103,10 +103,15 @@ from owlbear_delivery.delivery_application_loader import (
 from owlbear_delivery.delivery_contract_discovery import contract_fingerprint
 from owlbear_delivery.delivery_runtime import (
     BlockDelivery,
+    DeliveryCommandResult,
+    DeliveryObservation,
+    DeliveryObservationReceipt,
     DeliveryRequest,
     DeliveryRequestKind,
     DeliveryRequestOption,
     DeliveryResultCandidate,
+    DeliveryReview,
+    DeliveryReviewReceipt,
     PublishDeliveryResult,
 )
 from owlbear_delivery.finalization_reports import FinalizationFailureCode, FinalizationReportStore
@@ -1651,6 +1656,7 @@ DELIVERY_TOOLS = {
     "show_plan_context",
     "show_build_context",
     "show_finalization_context",
+    "derive_evidence_receipts",
     "report_finalization_failure",
     "publish_delivery_plan",
     "submit_result",
@@ -1698,6 +1704,7 @@ READ_TOOLS = {
     "show_plan_context",
     "show_build_context",
     "show_finalization_context",
+    "derive_evidence_receipts",
     "show_integration_attention",
     "observe_change_publication_checks",
     "list_completed_changes",
@@ -2089,6 +2096,69 @@ async def test_registered_tool_invokes_strict_adapter_once() -> None:
     assert set(tools) == DELIVERY_TOOLS
     assert result.structured_content == {"result": []}
     assert application.calls == ["list_work_items"]
+
+
+@pytest.mark.asyncio
+async def test_registered_derive_evidence_receipts_returns_canonical_receipts_without_delivery_state() -> None:
+    application = _RecordingApplication()
+    observed_at = datetime(2026, 10, 6, 12, tzinfo=UTC)
+    observation = DeliveryObservation(
+        change_id="change-a",
+        task_or_finalization_id="finalize-one",
+        exact_commit="b" * 40,
+        observation_kind="pytest",
+        procedure="maintained check",
+        result=DeliveryCommandResult(exit_status=0),
+        observer_or_runner_identity="finalizer",
+        observed_at=observed_at,
+    )
+    receipt = DeliveryObservationReceipt.create(observation)
+    review = DeliveryReview(
+        review_mode="finalization",
+        basis_digest="e" * 64,
+        observation_ids=(receipt.observation_id,),
+        exact_commit="b" * 40,
+        author_id="finalizer",
+        reviewer_id="build-reviewer",
+        evidence=("The exact head satisfies finalization authority.",),
+        reviewed_at=observed_at,
+    )
+    carried_only = review.model_copy(update={"observation_ids": ()})
+    refusals = (
+        {},
+        {"review": review.model_copy(update={"reviewer_id": "finalizer"}).model_dump(mode="json")},
+        {
+            "observations": [
+                observation.model_copy(update={"observed_at": observed_at.replace(tzinfo=None)}).model_dump(mode="json")
+            ]
+        },
+    )
+
+    async with Client(assemble_target_server(application)) as client:  # type: ignore[arg-type]
+        tool = {tool.name: tool for tool in (await client.list_tools()).tools}["derive_evidence_receipts"]
+        observations = await client.call_tool(
+            "derive_evidence_receipts", {"observations": [observation.model_dump(mode="json")]}
+        )
+        reviewed = await client.call_tool("derive_evidence_receipts", {"review": review.model_dump(mode="json")})
+        carried = await client.call_tool("derive_evidence_receipts", {"review": carried_only.model_dump(mode="json")})
+        refused = [await client.call_tool("derive_evidence_receipts", arguments) for arguments in refusals]
+
+    assert tool.annotations is not None
+    assert tool.annotations.read_only_hint is True
+    assert observations.structured_content == {"observations": [receipt.model_dump(mode="json")], "review": None}
+    assert reviewed.structured_content == {
+        "observations": [],
+        "review": DeliveryReviewReceipt.create(review).model_dump(mode="json"),
+    }
+    assert carried.structured_content == {
+        "observations": [],
+        "review": DeliveryReviewReceipt.create(carried_only).model_dump(mode="json"),
+    }
+    for result in refused:
+        assert result.is_error
+        assert result.structured_content is None
+        assert _registered_diagnostic(result)["code"] == "ERR_TARGET_PARAM_VALIDATION"
+    assert application.calls == []
 
 
 @pytest.mark.asyncio

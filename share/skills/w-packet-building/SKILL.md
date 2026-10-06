@@ -153,8 +153,8 @@ every task. For Python workspace resolution changes, run `uv lock` before the co
 after generation so post-commit checks cannot silently rewrite the candidate.
 
 Rerun every Task-required observation against that exact candidate commit; pre-commit proof does
-not bind a commit and cannot support publication. For each passing observation, construct
-`DeliveryObservationReceipt.create(DeliveryObservation(...))` with the launch change ID, context
+not bind a commit and cannot support publication. For each passing observation, prepare a
+`DeliveryObservation` with the launch change ID, context
 task ID, candidate commit, observation kind, exact `procedure`, a typed `result` (a `command`
 result records the real `exit_status`; Delivery derives the verdict, and an expected-failure test
 records its `expected_exit_status`), the `covers` criterion IDs and versions from the context's
@@ -175,9 +175,9 @@ only a person can make, block with a Decision `request` whose `applies_to` names
 `ERR_DELIVERY_CONFIRMATION`. A resumed claim cites the answered request by `request_id` from a
 `waived` record, or a `human-confirmed` manual or artifact record, whose `covers` lie in that scope
 and whose `procedure` equals it; `keep-required` or `failed` confirms nothing.
-Serialize the returned receipt with
-`model_dump(mode="json")`; never calculate, copy, or invent `observation_id`. Any post-commit change
-invalidates the receipts and requires a successor commit plus fresh proof.
+Keep these observation values for Step 3, which obtains their receipts; never calculate, copy, or
+invent `observation_id`. Any post-commit change
+invalidates the observations and requires a successor commit plus fresh proof.
 
 For a local review finding, retain the same launch, worktree, and configured reviewer. Preserve the
 rejected commit, create a bounded repair commit, rerun affected proof, and supply prior evidence to
@@ -193,10 +193,11 @@ the candidate and inspect its complete diff with read-only Git; a caller summary
 read does not satisfy exact-commit evidence. Require the reviewer to echo the exact commit and return
 disposition `pass | finding`, matching `finding_boundary`, and non-empty evidence.
 
-On `pass`, construct `DeliveryReviewReceipt.create(DeliveryReview(...))` with the echoed candidate
+On `pass`, call `derive_evidence_receipts` once with the Step 2 observations and a `DeliveryReview`
+with the echoed candidate
 commit, `launch.claim.owner_id` as author, `launch.policy.reviewer_agent` as reviewer, the returned
-review evidence unchanged, and a timezone-aware review time. Serialize the returned receipt with
-`model_dump(mode="json")`; never calculate, copy, or invent `review_id`. Reject a pass that echoes a
+review evidence unchanged, and a timezone-aware review time. Submit the returned observation and
+review receipts unchanged; never calculate, copy, or invent `review_id`. Reject a pass that echoes a
 different commit, lacks evidence, or cannot produce an independent canonical receipt.
 
 ### Triage Review Findings Before Repair

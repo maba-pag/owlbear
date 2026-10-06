@@ -100,9 +100,9 @@ Read `semantics` from the context and plan coverage before running proof: its `c
 acceptance criteria carried task evidence already covers or waives. A `covered` or `waived` criterion
 needs no new observation; each `missing`, `uncovered`, or `unknown` criterion needs exact-head
 evidence. Choose its procedure from the criterion statement and the task `acceptance_observations`
-and `proof_boundaries` in `semantics.task_authority`. Capture schema-2 `DeliveryObservationReceipt`s
+and `proof_boundaries` in `semantics.task_authority`. Capture schema-2 `DeliveryObservation`s
 for the exact `change_head` only for criteria that are not yet covered; when carried evidence covers
-every criterion, no new observation is required. Each receipt names the exact `procedure`, a typed
+every criterion, no new observation is required. Each observation names the exact `procedure`, a typed
 `result` (a `command` result records its real `exit_status`; Delivery derives the verdict), the
 `covers` criterion IDs and versions from `semantics`, the observer identity, and a timezone-aware
 observation time. Different checks may use different commands, tools, or evidence types; there is no
@@ -123,6 +123,9 @@ request yourself; the `answer` tool refuses it. When `semantics_refusal` is set,
 as a whole; stop before any proof and never request, reconstruct, or review a partial context. Report
 `independent-review-unavailable` with `checks_state: not-run` (Step 2a) and return `review_failed`;
 for `finalization-context-oversized` the remedy is a requirement change or split, not a retry.
+When every new observation passes, call `derive_evidence_receipts` once with those `DeliveryObservation`
+values in their final order (skip the call when there is none) and keep the returned receipts unchanged;
+they carry the `observation_id`s the review must cite. Never compute receipts or IDs yourself.
 
 ## Step 2a - Retain A Trusted Failure
 
@@ -191,23 +194,24 @@ candidates without repair. Memory handling must not change the review or Deliver
 
 ## Step 4 - Construct Exact Evidence
 
-Only after observations and review pass, use the core Delivery models to construct values in memory:
+Only after observations and review pass, construct values from Delivery's receipts:
 
-- the observation receipts the reviewer reviewed, unchanged and in the reviewed order, each built once
-  with `DeliveryObservationReceipt.create(DeliveryObservation(...))` from the exact `procedure`, its
-  typed `result`, the `covers` criterion references, and the exact Change head;
-- one `DeliveryReviewReceipt.create(DeliveryReview(...))` with `review_mode: finalization`, the
-  `basis_digest` from `semantics`, the ordered `observation_ids` of the submitted receipts, the exact
-  reviewer evidence, the finalizer as `author_id`, and the independent reviewer as `reviewer_id`;
+- the observation receipts returned in Step 2 and reviewed in Step 3, unchanged and in the reviewed
+  order, each from the exact `procedure`, its typed `result`, the `covers` criterion references, and
+  the exact Change head;
+- one review receipt returned by `derive_evidence_receipts` for a `DeliveryReview` with
+  `review_mode: finalization`, the `basis_digest` from `semantics`, the ordered `observation_ids` of
+  the submitted receipts (`[]` when there is none), the exact reviewer evidence, the finalizer as
+  `author_id`, and the independent reviewer as `reviewer_id`; send only the review in that call;
 - one `FinalizeDeliveryChange` containing the operation ID, exact head, canonical observations (none
   when carried evidence covers every criterion), and canonical review.
 
 Under an issued attempt, the operation ID is exactly `attempt.writer.attempt_id` and the exact head
 is exactly `attempt.exact_head`; every observation binds that same operation ID and head.
 
-Use a timezone-aware timestamp and serialize model output with `model_dump(mode="json")`. Never
-calculate, copy, or invent observation or review IDs. Never use free-form evidence to replace the
-typed observations or exact reviewer response.
+Use timezone-aware timestamps and pass the returned receipts unchanged. Never calculate, copy, or
+invent observation or review IDs. Never use free-form evidence to replace the typed observations or
+exact reviewer response.
 
 ## Step 5 - Re-check And Finalize
 

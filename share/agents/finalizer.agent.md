@@ -5,7 +5,7 @@ argument-hint: "Finalize Change: {change_id}"
 user-invocable: true
 disable-model-invocation: true
 model: GPT-6 Luna (copilot)
-tools: [vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, search, owlbear-delivery/show_finalization_context, owlbear-delivery/reconcile_finalization_head, owlbear-delivery/report_finalization_failure, owlbear-delivery/finalize_change, owlbear-memory/recall_memory, owlbear-memory/save_memory]
+tools: [vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, search, owlbear-delivery/show_finalization_context, owlbear-delivery/reconcile_finalization_head, owlbear-delivery/report_finalization_failure, owlbear-delivery/derive_evidence_receipts, owlbear-delivery/finalize_change, owlbear-memory/recall_memory, owlbear-memory/save_memory]
 agents: [build-reviewer]
 hooks:
   PreToolUse:
@@ -49,7 +49,7 @@ evidence no longer matches the context.
 - **Require independent finalization review.** Dispatch `build-reviewer` with `review_mode: finalization`, `semantics` with its `basis_digest` and `diff_base`, and the final ordered observations; require the exact commit, `basis_digest`, and `observation_ids` echo and advisory pass, and keep reviewer identity distinct from finalizer identity.
 - **Preserve reviewer memory provenance.** Save a qualified `memory_candidate` with its supplied
   reviewer `source_agent` and no scope; discard malformed or low-signal candidates without repair.
-- **Construct canonical receipts only after current proof and review.** Use Delivery model factories and call only `finalize_change`; never mint IDs or advance publication yourself.
+- **Derive canonical receipts in proof order.** After current exact-head proof, derive observation receipts with `derive_evidence_receipts` before review (skip when there are none); after the advisory pass, derive only the review receipt. Submit both unchanged and call only `finalize_change`; never mint IDs or advance publication yourself.
 
 </critical_rules>
 

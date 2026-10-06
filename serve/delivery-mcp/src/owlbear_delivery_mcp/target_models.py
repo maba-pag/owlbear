@@ -34,6 +34,8 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryChangeStage,
     DeliveryIntegrationAttentionCode,
     DeliveryIntegrationAttentionDisposition,
+    DeliveryObservation,
+    DeliveryObservationReceipt,
     DeliveryOperatorMove,
     DeliveryOutputReference,
     DeliveryPlanCandidate,
@@ -42,6 +44,8 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryRequestResolution,
     DeliveryRetryDiagnostic,
     DeliveryReturnContext,
+    DeliveryReview,
+    DeliveryReviewReceipt,
     DeliveryStage,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
@@ -437,6 +441,27 @@ class RepairTargetSyncPublicationParams(ChangeParams):
     expected_merged_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     target_sync_operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+class DeriveEvidenceReceiptsParams(_TargetProtocolModel):
+    """Validate observation and review content whose canonical receipts a worker submits."""
+
+    observations: tuple[DeliveryObservation, ...] = ()
+    review: DeliveryReview | None = None
+
+    @model_validator(mode="after")
+    def _validate_content(self) -> DeriveEvidenceReceiptsParams:
+        if not self.observations and self.review is None:
+            message = "deriving evidence receipts requires an observation or a review"
+            raise ValueError(message)
+        return self
+
+
+class DerivedEvidenceReceiptsResponse(_TargetProtocolModel):
+    """Canonical receipts, in request order, to pass unchanged to review and submission."""
+
+    observations: tuple[DeliveryObservationReceipt, ...] = ()
+    review: DeliveryReviewReceipt | None = None
 
 
 class RepairDeliveryStateSnapshotParams(ChangeParams):
@@ -1263,6 +1288,10 @@ type ShowCompletedRequest = Annotated[
     ShowCompletedParams,
     BeforeValidator(partial(_parse_json_model, ShowCompletedParams)),
 ]
+type DeriveEvidenceReceiptsRequest = Annotated[
+    DeriveEvidenceReceiptsParams,
+    BeforeValidator(partial(_parse_json_model, DeriveEvidenceReceiptsParams)),
+]
 type TransitionDeliveryRequest = Annotated[
     TransitionDeliveryParams,
     BeforeValidator(partial(_parse_json_model, TransitionDeliveryParams)),
@@ -1321,6 +1350,9 @@ __all__ = [
     "DeliveryStartupConfig",
     "DeliveryStartupDiagnostic",
     "DeliveryStateSnapshotRepairResponse",
+    "DeriveEvidenceReceiptsParams",
+    "DeriveEvidenceReceiptsRequest",
+    "DerivedEvidenceReceiptsResponse",
     "EmptyParams",
     "EmptyRequest",
     "ExecuteChangeActionRequest",
