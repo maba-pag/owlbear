@@ -4083,8 +4083,25 @@ def test_finalization_rejects_divergent_promoted_task_history(tmp_path: Path) ->
     exact_head = _git(coordination.worktree_path, "rev-parse", "HEAD")
     manager.record_reviewed(coordination.change_id, exact_head)
 
-    with pytest.raises(RuntimeError, match="not an ancestor"):
+    with pytest.raises(RuntimeError, match="linear chain"):
         manager.validate_finalization_head(coordination.change_id, exact_head, (first, second))
+    assert manager.capture_finalization_workspace(coordination.change_id, (first, second))[4] == (
+        "workspace-preflight-failed"
+    )
+
+
+def test_finalization_accepts_linear_promoted_commits_listed_out_of_build_order(tmp_path: Path) -> None:
+    repository, _initial = _repository(tmp_path)
+    _coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("reopened-outcome")
+    first = _commit_new_file(coordination.worktree_path, "first.txt", "first\n", "OUT-001 first task")
+    other = _commit_new_file(coordination.worktree_path, "other.txt", "other\n", "OUT-002 task")
+    reopened = _commit_new_file(coordination.worktree_path, "again.txt", "again\n", "OUT-001 reopened task")
+    manager.record_reviewed(coordination.change_id, reopened)
+    frontier_order = (first, reopened, other)
+
+    assert manager.capture_finalization_workspace(coordination.change_id, frontier_order)[4] is None
+    manager.validate_finalization_head(coordination.change_id, reopened, frontier_order)
 
 
 def test_workspace_recovery_requires_and_preserves_exact_reviewed_head(tmp_path: Path) -> None:

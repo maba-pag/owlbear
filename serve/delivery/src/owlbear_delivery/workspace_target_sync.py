@@ -6,7 +6,6 @@ import hashlib
 import os
 import secrets
 from collections.abc import Callable
-from itertools import pairwise
 from typing import TYPE_CHECKING, Literal, NamedTuple, Never
 
 from owlbear_delivery.remote_git import run_remote_git
@@ -1370,8 +1369,8 @@ class _TargetSyncMixin:
             exact_head,
         )
         self._require_clean_worktree(coordination.worktree_path)
-        for predecessor, successor in pairwise(promoted_commits):
-            self._require_ancestor(predecessor, successor)
         for promoted_commit in promoted_commits:
             self._require_ancestor(promoted_commit, exact_head)
+        if not self._promoted_chain_is_linear(promoted_commits):
+            _workspace_failure("reviewed Task commits do not form one linear chain")
         return coordination

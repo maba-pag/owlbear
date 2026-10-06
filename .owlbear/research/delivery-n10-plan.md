@@ -459,6 +459,22 @@ Disposable project `~/owlbear-n10h/project` (repository `boecht/owlbear-n10h-202
 - *Rerun after merge (D7):* the revision step from Resume; the N10-A regression gate on the final product-code
   head.
 
+**Defect H12: finalization preflight required frontier listing order to be build order.**
+
+- *Observed:* Change `slug-rules`, build order `63856f3` (OUT-001 T1) → `f5e4bc3` (OUT-002) → design snapshot
+  `2f78a5e` (revision reopened OUT-001) → `f65f788` (OUT-001 T2, head). The worktree was clean and every result
+  reviewed, but readiness stayed `workspace-preflight-failed` ("Managed workspace preflight did not pass.").
+- *Cause:* callers pass the promoted result commits in frontier binding order (per outcome:
+  `63856f3, f65f788, f5e4bc3`). `_captured_finalization_guard` and `validate_finalization_head` checked
+  `pairwise` ancestry in that order, so `f65f788 → f5e4bc3` failed. Any multi-outcome Change where an
+  earlier-listed outcome gets a task after a later-listed one hits this.
+- *Fix:* one helper `_promoted_chain_is_linear` orders the commits by `git rev-list --count` before the pairwise
+  ancestry check; both checks use it. Divergent (sibling) results, a result not below the head and a reviewed head
+  not below the head are still refused. No other consumer depends on the order. Nothing persisted changes.
+- *Recovery route for the project:* after merge, `/upgrade-delivery <merge commit>` from the project (no
+  migration; its unpinned step now fetches before checking out a named revision, which it previously did not),
+  then `/continue-change slug-rules`; readiness proceeds to finalization.
+
 ### 3.3 N10-M — Live migration and programme closure
 
 - **Prerequisites:** N10-H; the user present and authorizing each step.

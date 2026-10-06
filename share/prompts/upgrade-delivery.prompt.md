@@ -43,7 +43,8 @@ has moved that checkout.
    *Stop*) and Cockpit, and wait for the confirmation. Do not stop or kill processes yourself.
 4. **Move the checkout (unpinned only):** require an empty `git -C <owlbear> status --porcelain`, record
    `git -C <owlbear> rev-parse HEAD` as the old commit, then run `git -C <owlbear> pull --ff-only` (or
-   `git -C <owlbear> checkout <revision>` when one is given) and report the old and new commits. Every
+   `git -C <owlbear> fetch` followed by `git -C <owlbear> checkout <revision>` when one is given) and report
+   the old and new commits. Every
    project that uses this checkout now runs the new code; tell the user to run `/upgrade-delivery` in each
    of them before starting its Delivery again.
 5. **Offline preflight:** `NEW/delivery-controller --project-root <root> preflight`. Continue only when
