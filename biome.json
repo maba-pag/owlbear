@@ -17,6 +17,7 @@
       "!serve/cockpit/web/public",
       "!**/scratch",
       "!**/worktrees",
+      "!**/.owlbear/controller",
       "!**/.owlbear/delivery/packages",
       "!**/.owlbear/delivery/runtime",
       "!**/.owlbear/legacy",
