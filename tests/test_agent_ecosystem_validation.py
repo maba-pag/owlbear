@@ -346,20 +346,20 @@ def test_agent_validator_checks_mcp_configuration_keys(tmp_path: Path, monkeypat
     assert any("MCP servers have no validator registry: ['ddgs']" in error for error in errors)
 
 
-def test_agent_validator_checks_explicit_tool_search_queries(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    system_instructions = tmp_path / "owlbear-system.instructions.md"
-    monkeypatch.setattr(_AGENT_VALIDATOR, "_SYSTEM_INSTRUCTIONS", system_instructions)
-    monkeypatch.setattr(
-        _AGENT_VALIDATOR,
-        "_tool_search_queries",
-        lambda: ((system_instructions, "OwlBear Delivery acquire_frontier_work"),),
+def test_agent_validator_rejects_multi_name_tool_search_queries(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """tool_search returns only the closest few matches, so many-name queries missed get_change."""
+    (tmp_path / "SKILL.md").write_text(
+        "Run `tool_search` for `OwlBear Delivery list_changes get_change acquire_change_action`.\n", encoding="utf-8"
     )
+    monkeypatch.setattr(_AGENT_VALIDATOR, "_INSTRUCTION_ROOTS", ())
+    monkeypatch.setattr(_AGENT_VALIDATOR, "_SKILL_ROOTS", (tmp_path,))
 
-    errors = _AGENT_VALIDATOR._check_tool_search_queries(  # noqa: SLF001
-        {"owlbear-delivery": frozenset({"acquire_frontier_work", "transition_delivery"})}
-    )
+    errors = _AGENT_VALIDATOR._check_tool_search_queries()  # noqa: SLF001
 
-    assert any("exhaustive Delivery bootstrap query is missing tools" in error for error in errors)
+    assert len(errors) == 1
+    assert "search the exact operation name instead" in errors[0]
 
 
 def test_agent_validator_rejects_malformed_frontmatter_and_missing_sections(tmp_path: Path) -> None:
@@ -1283,13 +1283,13 @@ def test_continuation_shows_merge_offers_and_checks_an_unknown_merge_only_on_an_
         assert not [tool for tool in _frontmatter(agent).get("tools", ()) if "approve" in str(tool)], agent.name
 
 
-def test_continuation_loads_tools_with_the_canonical_bootstrap_queries() -> None:
-    """N10-H H2: ad-hoc focused queries missed get_change; continuation uses the bootstrap table."""
+def test_continuation_loads_each_missing_tool_by_exact_name() -> None:
+    """Many-name bootstrap queries returned no continuation tools; search one exact name each."""
     orchestration = " ".join((_SKILLS_ROOT / "w-orchestration/SKILL.md").read_text(encoding="utf-8").split())
     start = orchestration.index("### Continuation Bindings")
     bindings = orchestration[start : orchestration.index("### Continuation Observation")]
 
-    assert "MCP Tool Bootstrap table in `owlbear-system.instructions.md`" in bindings
-    assert "Never shorten or rewrite that query" in bindings
+    assert "one `tool_search` whose query is exactly that operation name" in bindings
+    assert "Never combine several names in one query" in bindings
     assert "`OwlBear Delivery " not in orchestration
-    assert "focused `tool_search`" not in orchestration
+    assert _AGENT_VALIDATOR._check_tool_search_queries() == []  # noqa: SLF001
