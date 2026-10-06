@@ -13453,7 +13453,7 @@ def test_delivery_loader_composes_validated_owners_from_authorized_root(tmp_path
     assert application.list_work_items() == ()
     assert not (runtime_root / "capacity.json").exists()
     assert not (runtime_root / "capacity-ledger.json").exists()
-    assert application._execution_capacity == 3
+    assert application._execution_capacity == 8
     assert application._claim_timeout == timedelta(hours=1)
     assert not (repository / ".owlbear/target").exists()
     assert not (repository / ".owlbear/worktrees").exists()

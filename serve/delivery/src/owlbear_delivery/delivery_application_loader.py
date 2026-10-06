@@ -135,7 +135,7 @@ class DeliveryHostConfig(_LoaderModel):
     """Host-local limits and timeout for Delivery work."""
 
     schema_version: Literal[1]
-    execution_capacity: int = Field(default=3, gt=0)
+    execution_capacity: int = Field(default=8, gt=0)
     claim_timeout_seconds: int = Field(default=60 * 60, gt=0)
 
 
