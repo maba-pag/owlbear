@@ -1222,6 +1222,27 @@ def test_finalization_and_proof_guidance_pins_each_procedure_step(relative_path:
     assert phrase in content
 
 
+def test_user_invoked_finalization_phase_gate_admits_only_supported_phases() -> None:
+    finalization = " ".join((_SKILLS_ROOT / "w-change-finalization/SKILL.md").read_text(encoding="utf-8").split())
+    step_zero = finalization[
+        finalization.index("## Step 0 - Resolve Current Authority") : finalization.index(
+            "## Step 0a - Bind One Issued Finalization Attempt"
+        )
+    ]
+    gate = step_zero[
+        step_zero.index("For a user-invoked attempt, proceed only when") : step_zero.index(
+            "Normally its Change head equals"
+        )
+    ]
+
+    assert (
+        "For a user-invoked attempt, proceed only when the phase is `ready-for-finalization`, "
+        "`finalization-invalidated`, or `review-repair` and the context reports `ready_for_finalization`."
+    ) in gate
+    assert "`pull-request-draft`" not in gate
+    assert "`awaiting-merge`" not in gate
+
+
 def test_memory_audit_rescoping_requires_corroborated_agent_names() -> None:
     """Manual review cannot infer named scope from an entry's own provenance."""
     prompt = (_PROMPTS_ROOT / "memory-audit.prompt.md").read_text(encoding="utf-8")
