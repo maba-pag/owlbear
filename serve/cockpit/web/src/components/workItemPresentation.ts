@@ -59,6 +59,7 @@ export const READINESS_REASON_LABELS: Record<DeliveryReadinessReasonCode, string
   "request-action": "An open request needs an answer first.",
   "change-paused": "This Change is paused.",
   "change-terminal": "This Change reached a terminal state.",
+  "outcome-complete": "This outcome is complete.",
   "task-incomplete": "Planned tasks are not complete yet.",
   "workspace-inspection-failed": "Managed workspace readiness could not be observed.",
   "workspace-dirty": "Managed workspace preflight is blocked by local changes.",
@@ -221,6 +222,15 @@ export function isContinuationPrompt(prompt: string | null | undefined, changeId
   return typeof prompt === "string" && prompt.startsWith(`/continue-change ${changeId} `);
 }
 
+/** The Change's next step: the continuation prompt Delivery offers on one of its cards, if any. */
+export function changeContinuationPrompt(items: WorkItemCardView[], changeId: string): string | null {
+  for (const item of items) {
+    const prompt = item.readiness?.prompt;
+    if (item.action.kind === "start-orchestration" && isContinuationPrompt(prompt, changeId)) return prompt;
+  }
+  return null;
+}
+
 export const CONTINUATION_PROMPT_HELP = "Run it in Copilot Chat. Copying does not start an agent.";
 
 export const REVISION_PROMPT_HELP =
@@ -266,7 +276,7 @@ const PUBLICATION_PHASE_LABELS: Record<WorkItemPublicationPhase, string> = {
   "pull-request-draft": "Delivery ready state not recorded",
   "awaiting-merge": "Awaiting merge",
   "acceptance-observed": "Acceptance observed",
-  deferred: "Change deferred",
+  deferred: "Change paused",
   abandoned: "Change abandoned",
 };
 

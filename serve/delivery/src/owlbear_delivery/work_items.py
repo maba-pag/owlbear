@@ -305,6 +305,7 @@ DeliveryReadinessReason = Literal[
     "request-action",
     "change-paused",
     "change-terminal",
+    "outcome-complete",
     "task-incomplete",
     "workspace-inspection-failed",
     "workspace-dirty",
@@ -1044,7 +1045,7 @@ class WorkItemProjector:
         abandoned = self._snapshot.frontier.change_abandonment is not None
         if paused or abandoned:
             needs = WorkItemNeed.NONE
-            headline = "Change deferred" if paused else "Change abandoned"
+            headline = "Change paused" if paused else "Change abandoned"
             next_actor = WorkItemNextActor.NONE
             next_step = headline
             activity = WorkItemActivity(state=WorkItemActivityState.IDLE)
@@ -1214,11 +1215,11 @@ class WorkItemProjector:
                 stage=None,
                 publication_phase=self._publication_phase(),
                 needs=WorkItemNeed.YOU,
-                needs_headline="Change is deferred",
+                needs_headline="Change is paused",
                 next_actor=WorkItemNextActor.YOU,
-                next_step="Resume the deferred Change",
+                next_step="Resume the paused Change",
                 activity=WorkItemActivity(state=WorkItemActivityState.IDLE),
-                progress=WorkItemProgress(kind=WorkItemProgressKind.PUBLICATION, label="Change deferred"),
+                progress=WorkItemProgress(kind=WorkItemProgressKind.PUBLICATION, label="Change paused"),
                 action=WorkItemAction(
                     kind=WorkItemActionKind.RESUME_CHANGE,
                     label="Resume Change",

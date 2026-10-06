@@ -392,7 +392,11 @@ it("offers read-only inspection for an unavailable Change without controls", asy
   expect(prompt.tagName).toBe("PRE");
   expect(prompt).toHaveTextContent("/repair-delivery Diagnose Change change-alpha read-only.");
   expect(prompt.querySelector("a, button")).toBeNull();
-  expect(within(inspector).queryByRole("button")).not.toBeInTheDocument();
+  expect(
+    within(inspector)
+      .getAllByRole("button")
+      .map((button) => button.textContent),
+  ).toEqual(["Copy prompt"]);
 });
 
 it.each([

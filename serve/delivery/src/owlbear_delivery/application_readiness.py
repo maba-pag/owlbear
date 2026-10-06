@@ -2011,7 +2011,7 @@ class _ReadinessViewsMixin:
         elif frontier.change_deferral is not None:
             status, reason = ("ready" if operation else "blocked"), "change-paused"
         elif card.scope is WorkItemScope.OUTCOME and card.stage is not None and card.stage.value == "completed":
-            status, reason = "complete", "change-terminal"
+            status, reason = "complete", "outcome-complete"
         elif card.needs is WorkItemNeed.DEPENDENCY:
             status, reason = "waiting", "dependency-wait"
         elif card.needs is WorkItemNeed.YOU and not finalization:

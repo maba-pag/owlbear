@@ -29,6 +29,7 @@ import type {
   WorkItemNeed,
 } from "../api/workItems";
 import CompletedHistoryWorkspace from "../components/CompletedHistoryWorkspace";
+import CopyCommand from "../components/CopyCommand";
 import DesignWorkDetail from "../components/DesignWorkDetail";
 import DesignWorkSection from "../components/DesignWorkSection";
 import { designCommand, designWorkTitle } from "../components/designWorkPresentation";
@@ -38,6 +39,8 @@ import WorkPortfolioTable from "../components/WorkPortfolioTable";
 import { WorkspaceHeader } from "../components/WorkspaceHeader";
 import { WorkspaceViewCount } from "../components/WorkspaceViewHeader";
 import {
+  CONTINUATION_PROMPT_HELP,
+  changeContinuationPrompt,
   changePauseUnavailableMessage,
   READINESS_CHECKS_LABELS,
   READINESS_REASON_LABELS,
@@ -72,7 +75,7 @@ const CHANGE_STAGE_LABELS: Record<PortfolioChangeStage, string> = {
   "awaiting-merge": "Awaiting merge",
   "publication-attention": "Publication attention",
   "acceptance-attention": "Acceptance attention",
-  deferred: "Deferred",
+  deferred: "Paused",
   abandoned: "Abandoned",
   completed: "Completed",
 };
@@ -321,10 +324,12 @@ function SelectedWorkItemDetail({
   identity,
   onChanged,
   onClose,
+  continuationPrompt,
 }: {
   identity: WorkItemIdentity;
   onChanged: () => void;
   onClose: () => void;
+  continuationPrompt: string | null;
 }) {
   const selectedDetail = useWorkItemDetail(identity, onChanged);
   if (selectedDetail.detail.data)
@@ -383,6 +388,7 @@ function SelectedWorkItemDetail({
           onDiscardAbandonedTargetSync={selectedDetail.discardAbandonedTargetSync}
           onCleanupCompletedChange={selectedDetail.cleanupCompletedChange}
           onRecoverChangeWorktree={selectedDetail.recoverChangeWorktree}
+          changeContinuationPrompt={continuationPrompt}
         />
       </>
     );
@@ -390,7 +396,12 @@ function SelectedWorkItemDetail({
   return <EmptyDetail error={selectedDetail.detail.error} retry={selectedDetail.retry} onClose={onClose} />;
 }
 
-function SelectedDetail(props: { identity: WorkItemIdentity; onChanged: () => void; onClose: () => void }) {
+function SelectedDetail(props: {
+  identity: WorkItemIdentity;
+  onChanged: () => void;
+  onClose: () => void;
+  continuationPrompt: string | null;
+}) {
   if (props.identity.itemKey === "design") {
     return <SelectedDesignDetail changeId={props.identity.changeId} onClose={props.onClose} />;
   }
@@ -457,10 +468,17 @@ function EmptyPortfolioState({ filtered }: { filtered: boolean }) {
   );
 }
 
+function attentionCommand(diagnostic: DeliveryHealthDiagnostic): string {
+  return diagnostic.change_id ? `/resolve-delivery-attention ${diagnostic.change_id}` : "/resolve-delivery-attention";
+}
+
+function healthCommand(diagnostic: DeliveryHealthDiagnostic): string | null {
+  if (diagnostic.reason === "remote-state-version-unsupported" || diagnostic.resolution === "retry") return null;
+  return attentionCommand(diagnostic);
+}
+
 function healthNextStep(diagnostic: DeliveryHealthDiagnostic): string {
-  const command = diagnostic.change_id
-    ? `/resolve-delivery-attention ${diagnostic.change_id}`
-    : "/resolve-delivery-attention";
+  const command = attentionCommand(diagnostic);
   if (diagnostic.reason === "remote-state-version-unsupported") {
     return [
       "A newer Delivery controller wrote this Change's remote state. Upgrade this controller before",
@@ -485,9 +503,13 @@ function HealthDiagnosticDetails({ diagnostic }: { diagnostic: DeliveryHealthDia
     ["Observed remote head", diagnostic.observed_head],
     ["Observed local head", diagnostic.observed_local_head],
   ].filter((entry): entry is [string, string] => entry[1] !== null);
+  const command = healthCommand(diagnostic);
   return (
     <>
       <p className="mt-1 text-xs text-contrast-medium">Next: {healthNextStep(diagnostic)}</p>
+      {command ? (
+        <CopyCommand className="mt-1" command={command} label="Copy prompt" helper={CONTINUATION_PROMPT_HELP} />
+      ) : null}
       <p className="mt-1 text-xs text-contrast-medium">Resolution: {diagnostic.resolution.replace("-", " ")}</p>
       {heads.length > 0 || diagnostic.head_relation ? (
         <dl className="mt-static-sm grid gap-static-xs text-xs md:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
@@ -743,6 +765,9 @@ export default function WorkPortfolioPage() {
   const deferredNeeds = useDeferredValue(needsFilter);
   const selected = parseSelection(location.pathname);
   const selectedIdentity = selected ? `${selected.changeId}:${selected.itemKey}` : null;
+  const selectedGroup = selected ? portfolio.groups.find((group) => group.change_id === selected.changeId) : undefined;
+  const selectedContinuationPrompt =
+    selected && selectedGroup ? changeContinuationPrompt(selectedGroup.items, selected.changeId) : null;
   const lastTrigger = useRef<HTMLElement | null>(null);
   const lastTriggerIdentity = useRef<string | null>(null);
   const restoreFocusAfterClose = useRef(false);
@@ -1131,7 +1156,13 @@ export default function WorkPortfolioPage() {
       >
         <div className="min-w-0 max-w-full p-static-lg">
           {selected ? (
-            <SelectedDetail key={selectedIdentity} identity={selected} onChanged={retry} onClose={closeInspector} />
+            <SelectedDetail
+              key={selectedIdentity}
+              identity={selected}
+              onChanged={retry}
+              onClose={closeInspector}
+              continuationPrompt={selectedContinuationPrompt}
+            />
           ) : null}
         </div>
       </PFlyout>

@@ -1248,6 +1248,18 @@ def test_runtime_rejects_mismatched_coordination_recovery_root(tmp_path: Path) -
     assert not (state_root / "other").exists()
 
 
+def test_completed_outcome_of_open_change_reports_outcome_complete(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
+
+    readiness = application.show_work_item_view("change-a", "outcome:OUT-001").card.readiness
+    publication = application.show_work_item_view("change-a", "publication").card.readiness
+
+    assert readiness is not None
+    assert (readiness.status, readiness.reason_code) == ("complete", "outcome-complete")
+    assert publication is not None
+    assert publication.reason_code != "change-terminal"
+
+
 def test_engine_action_custody_survives_restart_and_fences_runtime(tmp_path: Path) -> None:
     application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
     basis = application.get_change("change-a").readiness.basis
