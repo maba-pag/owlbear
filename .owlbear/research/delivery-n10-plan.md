@@ -386,12 +386,24 @@ engine-authored exceptional prompt in `readiness.prompt`, **K** Cockpit control,
 
 #### 3.2.1 N10-H journey record
 
-Disposable project `~/owlbear-n10h/project` (repository `boecht/owlbear-n10h-20261005`), OwlBear clone
-`~/owlbear-n10h/owlbear` at `6815cd714`.
+Disposable project `~/owlbear-n10h/project` (repository `boecht/owlbear-n10h-20261005`, journey PR
+`boecht/owlbear-n10h-20261005#2`), OwlBear clone `~/owlbear-n10h/owlbear` at `6815cd714` for step 1, then at each
+fix merge before the step it unblocked: `9faf73796` (#383), `18c062a8b` (#384), `df9c3e88d` (#385) and, for the
+step-8 rerun, `b4514b34b` (#388; it also carries #386 and #387, which were not installed before the merge). For each
+upgrade the agent stopped the project's Delivery server and Cockpit; the user started `owlbear-delivery` from
+**MCP: List Servers** and relaunched Cockpit (`COCKPIT_PORT=8431 uv run --project ../owlbear cockpit`). These
+restarts belong to the fix upgrades (D7), not to the journey steps.
 
 | Step | Observed | Status |
 | --- | --- | --- |
-| 1 Design | First `admit_change` of Change `slug-rules` refused with `ERR_DELIVERY_PORTFOLIO: active package authority does not match the Delivery runtime` (`retry_safe` false). The contract contains `é`, `ß` and `→`. | Stopped; defect H1 (D7) |
+| 1 Design | First `admit_change` of Change `slug-rules` refused with `ERR_DELIVERY_PORTFOLIO: active package authority does not match the Delivery runtime` (`retry_safe` false). The contract contains `é`, `ß` and `→`. After #383 the admission retry replayed (`replayed: true`, receipt `4a3619c3…`, contract `ecf7aafb…`) and its output named `/continue-change slug-rules`; draft journey PR #2 published (head `80be5bca`); Cockpit showed both outcomes ready. *User:* `/design slug-rules`, answers, approval; the admission retry prompt in the design chat. | Passed after fix H1 (#383); closes J01, J02, N09 R15 |
+| 2 Start | **Copy continuation prompt** copied `/continue-change slug-rules reread get_change and pass its readiness basis unchanged to acquire_change_action; …`. The chat ran the OUT-001 Planner (plan challenger `pass`), then a Builder of the same Change; Cockpit raw data `running` / `active-custody`. *User:* copy, paste into a new chat. | Passed; N09 G2 with step 3; V01 continues to step 7 |
+| 3 Interrupt | The user stopped the chat while the OUT-001 Builder held its claim, before it wrote anything. Cockpit raw data stayed `running` / `active-custody` and its totals counted the item under `working`; the card wording was not conclusively observed. **Release stuck worker** was accepted after its confirmations ("Stuck worker released. The attempt was recorded as failed; its work is preserved."); both items ready, progress **Waiting for chat to resume**. The first resume chats stopped at tool loading (H2); the next acquired once: a Builder for the same `OUT-001-T1` with the released attempt (`worker-released-stuck`) in its context. No `needs-decision` for unknown issuer evidence appeared. *User:* stop, **Release stuck worker** and its confirmations, paste the same prompt. | Passed; closes U4, J08, N09 G2; V10 to the quiet-release boundary (refusal while the worktree changes not observed); N09 G1 open (wording not observed); N09 G9 open (I4) |
+| 4 Confirm | OUT-001 complete. The OUT-002 Builder committed the README (27 tests passed, review passed) and returned a confirmation request for AC-002 instead of claiming it; Cockpit showed **Needs your decision** (H4, H5). *User:* answered `passed` in Cockpit. | Passed; closes U3 |
+| 5 Revise | First attempt (clone `9faf73796`): D-004 option A confirmed; the Designer paused the Change (H6) and `revise_design_session` was refused `custody-retained` (H7). After #384: Resume; the continuation prompt of the OUT-002 card (after a wrong copy, H8) resumed its Builder on `f5e4bc3` without asking AC-002 again; OUT-002 completed and the Change finalized (step 6). Rerun on the finalized Change: `prepare_review_repair`, Pause, `revise_design_session`, derive, challenge (H11), repair, second challenge, checkpoint, approval, `admit_change`; no `custody-retained`; only OUT-001 returned to planning, OUT-002 stayed completed; the Planner kept T1 and added T2 (plan review passed); the Builder committed `f65f788` (31 tests, review passed; H9, H10). *User:* **Change requirements**, `/design slug-rules Change requirements:` with the new AC-001 text, D-004 answer, Resume, the continuation prompt, approval of the revision. | Passed after fix H7 (#384); closes V14, V15, U6, N04 G4, G5 |
+| 6 Finalize | At `f5e4bc3` (before the revision) the continuation chat's nested Finalizer and its independent reviewer passed, `finalize_change` accepted, and the engine marked journey PR #2 ready (one `stale` reconcile retry). After the revision readiness stayed `workspace-preflight-failed` (H12; its prompt had no copy button, H13). After #385 the nested Finalizer under `/continue-change` finalized `f65f788`, covering both criteria, and the engine marked PR #2 ready. *User:* the continuation prompt. | Passed after fix H12 (#385); closes N03 G4, N09 G11; V03 observed |
+| 7 Merge | Cockpit offered **Approve merge** (`merge-approval-required`). One merge `4c9183f` at exact head `f65f788`; **Completed**; 1 completed, 0 unfinished, no pending transaction, health healthy; Change worktree removed; Change branch kept (H14). *User:* **Approve merge**. | Passed; closes V01, J05–J07 |
+| 8 Refused start | Clone `df9c3e88d`, marker 4: VS Code's MCP output (server stderr, "Process exited with code 1") showed the typed `ERR_DELIVERY_STATE_VERSION` / `state-newer-than-controller` (`.owlbear/delivery/runtime/format.json`, `retry_safe` false) under about 90 lines of traceback (H15). `/repair-delivery` inspect reported `FORMAT_UNSUPPORTED` (format `newer`) and classify routed to `/upgrade-delivery` (user-reported; the transcript ends at classify). Marker restored, state identical to the backup, restart healthy, `slug-rules` in history. Rerun after #388 (clone `b4514b34b`): each of two starts wrote one stderr line and no traceback; marker restored to 3, state identical to the backup; Cockpit health healthy, 1 completed, 0 unfinished. *User:* start `owlbear-delivery` from **MCP: List Servers**, `/repair-delivery`. | Passed after fix H15 (#388); closes N08 G1 |
 
 **Defect H1: non-ASCII contract digest (fix PR #383).**
 
@@ -426,6 +438,33 @@ Disposable project `~/owlbear-n10h/project` (repository `boecht/owlbear-n10h-202
 - *Rerun after merge (D7):* step 1 from the admission retry, then the remaining steps; the N10-A regression gate on
   the final product-code head.
 
+**Defect H2: continuation loaded Delivery tools with a shortened query (fix PR #386).**
+
+- *Observed:* step 3; the resume chat's focused `tool_search` returned `transition_delivery` but not `get_change`,
+  and the first resume attempts stopped there.
+- *Fix:* `w-orchestration` Continuation Bindings use the canonical bootstrap query of `owlbear-system.instructions.md`
+  §4 (the Memory query for memory tools) and never shorten it; test
+  `test_continuation_loads_tools_with_the_canonical_bootstrap_queries`. Two other skills keep custom queries; no
+  failure was observed there, so they were left unchanged.
+
+**H3: memory recall for the journey's agents (not a defect).** Unrecognized agents get only `*` memories; project
+memories are pending.
+
+**Defect H4: a completed outcome said the Change had ended (fix PR #387).**
+
+- *Observed:* step 4; the completed OUT-001 card read "This Change reached a terminal state." while the Change
+  continued.
+- *Fix:* readiness reason `outcome-complete` ("This outcome is complete."); `change-terminal` stays for terminal
+  Changes. Projected only; no persisted schema change.
+
+**H5: the confirmation answer offered no note field (not a defect).** Answers refuse notes by contract.
+
+**Defect H6: a paused Change was called "deferred" (fix PR #387).**
+
+- *Observed:* step 5; Cockpit progress said "Change deferred" while the status said "Paused".
+- *Fix:* "paused" / "Pause" in Cockpit labels and in Delivery guidance and refusal messages; machine values (`defer`
+  intent, `deferred` status, endpoints, reason codes) are unchanged.
+
 **Defect H7: revision refused by a retained same-task handoff, without a visible way on (fix PR #384).**
 
 - *Observed* (clone at `9faf73796`): Change `slug-rules`, OUT-001 (AC-001) complete. The OUT-002 Builder committed
@@ -459,9 +498,41 @@ Disposable project `~/owlbear-n10h/project` (repository `boecht/owlbear-n10h-202
 - *Rerun after merge (D7):* the revision step from Resume; the N10-A regression gate on the final product-code
   head.
 
-**Defect H12: finalization preflight required frontier listing order to be build order.**
+**Defect H8: after Resume the Change offered the wrong prompt first (fix PR #387).**
 
-- *Observed:* Change `slug-rules`, build order `63856f3` (OUT-001 T1) → `f5e4bc3` (OUT-002) → design snapshot
+- *Observed:* step 5; the user copied **Change requirements** from the Change section instead of the continuation
+  prompt on the OUT-002 card, and stopped that chat.
+- *Fix:* the Change section offers **Copy continuation prompt** before **Change requirements** for the Change's
+  executable continuation (orchestration or publication operation); hidden while paused and not duplicated.
+
+**H9: workers import Delivery models to build receipt IDs (deferred to N10-N).**
+
+- *Observed:* step 5; the Builder and the Finalizer imported Delivery's Python models from the clone to compute
+  `observation_id` and `review_id`. The skills prescribe `DeliveryObservationReceipt.create` and
+  `DeliveryReviewReceipt.create` but not how a worker in a consumer project reaches them.
+- *Options:* A, the server derives the IDs (not sufficient alone: the finalization review must cite observation IDs
+  before `finalize_change`); B, a read-only tool returns the canonical receipts through the same `.create()` paths;
+  C, document a `uv --project` command (fragile root discovery; the read-only terminal guard must allow it).
+- *Decision:* option B, in N10-N (§3.4).
+
+**Defect H10: the read-only terminal guard denied `git branch --show-current` (fix PR #386).**
+
+- *Observed:* three agents hit the guard and used `git rev-parse --abbrev-ref HEAD` instead.
+- *Fix:* the guard (hook and seed copy, identical) allows `git branch` without arguments, `--show-current` and
+  `--list <patterns>`; every other branch form stays denied; tests in `tests/test_write_guard_hooks.py`.
+
+**Defect H11: `designer-challenger` could not verify the package it challenged (fix PR #386).**
+
+- *Observed:* step 5 rerun; without a read tool it could not check the package ID and contract digest and returned
+  `warning` for the Change identity.
+- *Fix:* it gains the read-only `read_design_session` and `derive_delivery_contract`; `w-design-session` passes the
+  Change ID.
+- *Review finding rejected:* these reads may complete a pending transaction. Recovery only rolls forward
+  journaled crash-interrupted transactions, as every existing package reader does; it changes no Delivery decision.
+
+**Defect H12: finalization preflight required frontier listing order to be build order (fix PR #385).**
+
+- *Observed* (clone `18c062a8b`): Change `slug-rules`, build order `63856f3` (OUT-001 T1) → `f5e4bc3` (OUT-002) → design snapshot
   `2f78a5e` (revision reopened OUT-001) → `f65f788` (OUT-001 T2, head). The worktree was clean and every result
   reviewed, but readiness stayed `workspace-preflight-failed` ("Managed workspace preflight did not pass.").
 - *Cause:* callers pass the promoted result commits in frontier binding order (per outcome:
@@ -474,8 +545,20 @@ Disposable project `~/owlbear-n10h/project` (repository `boecht/owlbear-n10h-202
 - *Recovery route for the project:* after merge, `/upgrade-delivery <merge commit>` from the project (no
   migration; its unpinned step now fetches before checking out a named revision, which it previously did not),
   then `/continue-change slug-rules`; readiness proceeds to finalization.
+- *Review:* no code defects; finding F1 (fix-now): the unpinned `/upgrade-delivery` step checked out a named revision
+  without fetching it, so the route above would fail after Delivery was stopped; the prompt now fetches first.
 
-**Defect H15: a refused Delivery MCP start buried its typed diagnostic under a traceback.**
+**Defect H13: blocked readiness prompts had no copy button (fix PR #387).**
+
+- *Observed:* at H12 the publication card showed its `/repair-delivery` prompt without a copy button.
+- *Fix:* every readiness prompt and the health `/resolve-delivery-attention` command has a copy button (copy-only;
+  the read-only unavailable view offers no Delivery operation).
+
+**H14: the Change branch stays after completion (observation; N10-N).** After step 7
+`owlbear/change/slug-rules` remains locally and on the remote. Delivery never deletes Change branches and the design
+does not require it; whether it should is decided in N10-N (§3.4).
+
+**Defect H15: a refused Delivery MCP start buried its typed diagnostic under a traceback (fix PR #388).**
 
 - *Observed:* step 8 (refused start), format marker 4 against a controller that supports 3. The VS Code MCP output
   showed about 90 lines of `ExceptionGroup` traceback; the typed `DeliveryStartupDiagnostic`
@@ -487,9 +570,13 @@ Disposable project `~/owlbear-n10h/project` (repository `boecht/owlbear-n10h-202
   `Delivery MCP refused to start: <code>: <detail> (field=<field>, retry_safe=false)`. Any other failure, including
   a group that mixes a diagnostic with another error, is re-raised with its traceback. The diagnostic payload, setup
   guide wording and `/repair-delivery` are unchanged; the other OwlBear MCP servers have no startup diagnostic type.
-  Nothing persisted changes.
-- *Recovery route for the project:* none needed; the refusal and its route were already correct. After merge,
-  step 8 reruns with the one-line output.
+  Nothing persisted changes. Review repair: line breaks inside diagnostic fields are escaped, so the refusal stays
+  one line.
+- *Recovery route for the project:* none needed; the refusal and its route were already correct.
+- *Rerun (D7, clone `b4514b34b`, 2026-10-06):* each of two starts wrote exactly one stderr line and no traceback:
+  `Delivery MCP refused to start: ERR_DELIVERY_STATE_VERSION: state-newer-than-controller: Delivery state format 4
+  is not supported by this controller (supported: 3) (.owlbear/delivery/runtime/format.json) (field=state_version,
+  retry_safe=false)`.
 
 ### 3.3 N10-M — Live migration and programme closure
 
@@ -513,14 +600,24 @@ Disposable project `~/owlbear-n10h/project` (repository `boecht/owlbear-n10h-202
 
 - **LC:** the step-1 migration is the rehearsed upgrade (D6). **Size / risk:** S / high (live state).
 
+### 3.4 N10-N — Follow-ups from the host journey
+
+- **Status:** planned.
+- **Purpose:** settle the two N10-H follow-ups that need a decision rather than a journey fix.
+- **Scope:** H9 option B, a read-only Delivery tool that returns canonical observation and review receipts with
+  their IDs, so workers no longer import Delivery models; H14, whether Delivery deletes the Change branch after
+  completion.
+- **Prerequisites:** N10-M. N10-N follows programme closure (R8, N10-M step 7) and does not block it.
+
 ## 4. Progress
 
 | Phase | PR | Head | Proof | Challenge | Status |
 | --- | --- | --- | --- | --- | --- |
 | N10-P | #374 | gate on `eb185eb3f` | Probes P1–P6; docs only; markdownlint on temporary copies | Sol plan gate round 1: revision-required, 3 findings fix-now, applied 2026-10-05; gate closed | merged |
 | N10-A | #382 | code `fddb6d02f` (R1 fix; before it `97f694ab2`); docs after | R1 delta `35160cca2..fddb6d02f`, own runs on `fddb6d02f`: the two updated prompt tests plus the settled-attention and workspace-reason tests (`-k`, 35 passed); the eight affected test files (`test_portfolio_application.py`, `test_delivery_progress.py`, `test_change_workspace.py`, `test_retry_ledger.py`, `test_recovery.py`, `test_worker_stall.py`, `test_target_server.py`, `tests/test_cockpit_work_items.py`) 1398 passed; scoped Ruff check and format clean; agent-ecosystem tests 70 passed; one `uv run test --changed --base origin/dev` (unsharded, 659 s): 3439 passed, 1 skipped, exit 0; Cockpit frontend not rerun (readiness shape unchanged); LC on `fddb6d02f` (live copy, `ubuntu:24.04`, volume `n00a-uv-cache`, 139 live records): upgrade form from `841b1cffb` passed with the same proposal (`runtime/format.json` `format-marker` `fbee38db…` → `f2a27400…`, step `format-2-to-3`), only that record changed, two healthy starts with 3 of 3 available, Cockpit 200 and bundle equal, `verify` true, rollback refused `state-newer-than-controller`; full form passed; `compare` after each `live_unchanged: true`; stages and bundles removed. Own runs on `97f694ab2`: cited node IDs collect (105, exit 0); journey test passed; V08 disposable check recorded (§3.1.1); `uv run test` (full): Python 2 failed, 4707 passed, 1 skipped in 883 s, the 2 failures are 30-s load timeouts of `test_delivery_state.py::test_change_intents_on_planner_pause_of_builder_planning_return_survive_default_loader_restart[historical-*]`, rerun alone 6 of 6 passed (7.3 s each); `npm test` 31 files, 373 passed; scoped Ruff clean on the three changed Python files; `npm run build` ok; `npm run test:e2e:work` 31 passed; agent-ecosystem tests 70 passed; no frontend file changed (Biome not applicable); LC on `56366028d` (code equal to `97f694ab2`; live copy, user authorization 2026-10-05; `ubuntu:24.04`, volume `n00a-uv-cache`; 139 live records): `run --form upgrade --previous 841b1cffb` passed (previous release healthy with 3 of 3 Changes available; preflight `migration-required`; proposal one entry `runtime/format.json` `format-marker` `fbee38db…` → `f2a27400…`, step `format-2-to-3`; applied and verified; only that record changed; switch pinned the candidate, previous `841b1cffb`; two MCP starts healthy with 3 of 3 available and an unchanged round trip; Cockpit 200 and bundle equal; checkout code `controller-not-pinned`; `verify` true; step-9 rollback `switch 841b1cffb` refused `release-refuses-state` / `state-newer-than-controller`); `run --form full --previous 841b1cffb` passed (unmigrated copy refused `state-migration-required` with hashes unchanged; migrated copy loads 3 of 3; previous release's gate hashes unchanged, synthetic newer state refused); `compare` after each: `live_unchanged: true`; stages and bundles removed | Sol implementation gate: pending (lead) | merged |
-| N10-H | fix #383 (defect H1); fix #384 (defect H7) | H1 code `4d126f887`; H7 code `1ec148a15`; docs after | Own runs on `4d126f887`: new default-loader test (fails on `origin/dev` with `change-not-paused`, and without either the snapshot or the loader part), `test_delivery_state.py` and `test_target_contract.py` 125 passed, scoped Ruff clean, one `uv run test --changed --base origin/dev` (unsharded, 651.65 s) 3440 passed, 1 skipped, exit 0; live scan read-only: all 3 runtime contracts and 9 packages ASCII; recovery rehearsal on copies of the disposable project (§3.2.1); LC on `4d126f887` (live copy, user authorization 2026-10-05; `ubuntu:24.04`, volume `n00a-uv-cache`; 139 live records): upgrade form from `841b1cffb` passed with the N10-A proposal (`runtime/format.json` `format-marker` `fbee38db…` → `f2a27400…`, step `format-2-to-3`), only that record changed, two healthy starts with 3 of 3 available, Cockpit 200 and bundle equal, `verify` true, rollback refused `state-newer-than-controller`; full form passed; `compare` after each `live_unchanged: true`; stages removed. H7, own runs on `1ec148a15`: `test_design_return_release_refusal_changes_nothing` 6 passed, its new `same-task` case fails with the `origin/dev` sources (message does not match); scoped Ruff check and format clean; agent-ecosystem tests 70 passed; one `uv run test --changed --base origin/dev` (unsharded, 578.77 s) 3441 passed, 1 skipped, exit 0; journey frontier read-only: OUT-002 holds the `same-task` handoff for TASK-002-01 and the Change is deferred, the state the new case covers; LC not applicable (no persisted or loading change); no journey-copy run | — | step 1 stopped; fix in review, then step 1 reruns from the admission retry (D7); H7 fix #384 in review, then the revision step reruns from Resume (§3.2.1) |
+| N10-H | fix #383 (H1); #384 (H7); #385 (H12, F1); #386 (H2, H10, H11); #387 (H4, H6, H8, H13); #388 (H15); evidence docs (this PR) | H1 code `4d126f887` (merge `9faf73796`); H7 code `1ec148a15` (merge `18c062a8b`); #385 merge `df9c3e88d`; #386 merge `9be502144`; #387 `904a11e6e`, `c42b5144b` (merge `8749f8982`); #388 `038ad17b9` (merge `b4514b34b`); final product-code head `b4514b34b`; docs after | Own runs on `4d126f887`: new default-loader test (fails on `origin/dev` with `change-not-paused`, and without either the snapshot or the loader part), `test_delivery_state.py` and `test_target_contract.py` 125 passed, scoped Ruff clean, one `uv run test --changed --base origin/dev` (unsharded, 651.65 s) 3440 passed, 1 skipped, exit 0; live scan read-only: all 3 runtime contracts and 9 packages ASCII; recovery rehearsal on copies of the disposable project (§3.2.1); LC on `4d126f887` (live copy, user authorization 2026-10-05; `ubuntu:24.04`, volume `n00a-uv-cache`; 139 live records): upgrade form from `841b1cffb` passed with the N10-A proposal (`runtime/format.json` `format-marker` `fbee38db…` → `f2a27400…`, step `format-2-to-3`), only that record changed, two healthy starts with 3 of 3 available, Cockpit 200 and bundle equal, `verify` true, rollback refused `state-newer-than-controller`; full form passed; `compare` after each `live_unchanged: true`; stages removed. H7, own runs on `1ec148a15`: `test_design_return_release_refusal_changes_nothing` 6 passed, its new `same-task` case fails with the `origin/dev` sources (message does not match); scoped Ruff check and format clean; agent-ecosystem tests 70 passed; one `uv run test --changed --base origin/dev` (unsharded, 578.77 s) 3441 passed, 1 skipped, exit 0; journey frontier read-only: OUT-002 holds the `same-task` handoff for TASK-002-01 and the Change is deferred, the state the new case covers; LC not applicable (no persisted or loading change); no journey-copy run. #385: builder changed-scope pytest 3442 passed, 1 skipped; CI green. #386: builder 187 focused tests passed; review reran 188 passed, scoped Ruff clean, new tests fail on the baseline. #387: builder vitest 118 passed, Biome clean, build ok, Ruff clean; re-review vitest 62 passed, pytest 772 passed. #388: subprocess test against a format-4 workspace (exit 1, one stderr line, no traceback, empty stdout), mixed-group propagation and multiline-escaping tests; `test_target_server.py` 132 passed; review measured 92 stderr lines before, one after. D7 regression gate on `b4514b34b` (lane d, 2026-10-06): `uv run test` pytest 4740 passed, 1 skipped, 0 failed (703.41 s, 10 workers), vitest 32 files, 379 passed; `npm run build` ok; `npm run test:e2e:work` 31 passed. LC on `b4514b34b` (live copy, `ubuntu:24.04`, volume `n00a-uv-cache`, 139 live records): upgrade form from `841b1cffb` passed with the N10-A proposal (`runtime/format.json` `format-marker` `fbee38db…` → `f2a27400…`, step `format-2-to-3`), only that record changed, two healthy starts with 3 of 3 available, Cockpit 200 and bundle equal, checkout controller refused `controller-not-pinned`, `verify` true, rollback refused `state-newer-than-controller`; full form passed; `compare` after each `live_unchanged: true`; stages removed | #384: independent review, one finding fix-now (refusal wording for an exhausted handoff), reworded. #385: independent review, no code defects; F1 fix-now applied. #386: Sol, one finding (H11 reads may complete pending transaction recovery) rejected (§3.2.1). #387: Sol on `904a11e6e`, two findings fix-now (publication continuation prompts; residual "deferred" wording), repaired in `c42b5144b`, re-review accepted. #388: independent review, one repair (line breaks escaped) | merged; journey complete (§3.2.1); evidence docs (this PR) |
 | N10-M | — | — | — | — | — |
+| N10-N | — | — | — | — | planned |
 
 ## 5. Verification Gaps
 
@@ -529,7 +626,7 @@ Disposable project `~/owlbear-n10h/project` (repository `boecht/owlbear-n10h-202
 | G1 | Every *planned* citation of §1.7 exists as a merged test | Closed by N10-A: resolved to merged node IDs; 105 cited IDs collect (§3.1.1) | — | N10-A (D4) | Nothing |
 | G2 | Every readiness reason has a route (§14.5) | Closed by N10-A R1 (b): the five reasons without a route now expose the `/repair-delivery` read-only diagnosis prompt (43 of 43 routed); the dirty finished worktree without automatic resume is an accepted limit (§1.10) | Route table (§3.1.1); the two updated prompt tests | N10-A | Nothing |
 | G3 | The live dispositions match the live facts (PR states, B1 blockers) | Live state not read in P | Execution plan §2.6; N03 plan P1 | N10-M step 0 | N10-M |
-| G4 | The rehearsed upgrade matches `F` | `F` does not exist yet; N10-A rehearsed `841b1cffb` → `56366028d` and, after R1, → `fddb6d02f` (same proposal: `runtime/format.json` `format-marker` `fbee38db…` → `f2a27400…`, step `format-2-to-3`; §4 N10-A row) | N02-D rehearsals; N10-A LC | N10-A LC, rerun in N10-M if code changed (D6) | N10-M step 1 |
+| G4 | The rehearsed upgrade matches `F` | `F` does not exist yet; N10-A rehearsed `841b1cffb` → `56366028d` and, after R1, → `fddb6d02f` (same proposal: `runtime/format.json` `format-marker` `fbee38db…` → `f2a27400…`, step `format-2-to-3`; §4 N10-A row); the N10-H D7 LC rehearsed `841b1cffb` → `b4514b34b` with the same proposal (§4 N10-H row); N10-M reuses it if `F` differs from `b4514b34b` only in documentation (D6) | N02-D rehearsals; N10-A LC; N10-H LC | N10-A LC, rerun in N10-M if code changed (D6) | N10-M step 1 |
 | G5 | The host journey generalizes beyond one Change, one project and macOS | One session by design | CI on Ubuntu; automated matrix | Documented limit | Nothing |
 | G6 | B1 completes after reconciliation | B1's own acceptance (V23, its pilot) | — | B1 | Nothing |
 | G7 | V08 complete boundary: a mutating proof yields a persisted `proof-mutation` diagnostic, no finalization and no repeat in a fresh session | Closed by the N10-A disposable check (§3.1.1); its typed-refusal defect fixed | Recorded run; no durable test (D16) | N10-A | Nothing |
