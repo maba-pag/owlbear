@@ -33,8 +33,6 @@ _TODOS_RE = re.compile(r"\btodos\b")
 _RESOLVE_URI = "resolveMemoryFileUri"
 _MANAGE_TODO_LIST = "manage_todo_list"
 _TOOL_SEARCH_QUERY_RE = re.compile(r'`"?(OwlBear (?:Delivery|Memory)\s+[^`"]+)"?`')
-_TOOL_SEARCH_IGNORED_WORDS = frozenset({"portfolio", "target"})
-_MIN_TOOL_SEARCH_PARTS = 3
 _REQUIRED_AGENT_TOOLS = frozenset({"vscode/toolSearch"})
 _MCP_SERVER_MODULES: dict[str, tuple[str, str]] = {
     "owlbear-browser": ("owlbear_browser_mcp.server", "mcp"),
@@ -75,7 +73,6 @@ _BANNED_TOOL_NAMES: frozenset[str] = frozenset({"todos", "todo", "manage_todo_li
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _MCP_CONFIG_PATHS = (_REPO_ROOT / "seed/.vscode/mcp.json", _REPO_ROOT / ".vscode/mcp.json")
 _CANONICAL_MCP_CONFIG = _MCP_CONFIG_PATHS[0]
-_SYSTEM_INSTRUCTIONS = _REPO_ROOT / "share/instructions/owlbear-system.instructions.md"
 _AGENT_ROOTS = (_REPO_ROOT / "share" / "agents", _REPO_ROOT / ".owlbear" / "agents")
 _INSTRUCTION_ROOTS = (_REPO_ROOT / "share" / "instructions", _REPO_ROOT / ".owlbear" / "instructions")
 _SKILL_ROOTS = (_REPO_ROOT / "share" / "skills", _REPO_ROOT / ".owlbear" / "skills")
@@ -465,44 +462,25 @@ def _tool_search_queries() -> tuple[tuple[Path, str], ...]:
     return tuple(queries)
 
 
-def _check_tool_search_queries(registries: dict[str, frozenset[str]]) -> list[str]:
-    """Validate exact MCP names in explicit Delivery and Memory search queries."""
-    errors: list[str] = []
-    for path, query in _tool_search_queries():
-        parts = query.split()
-        if len(parts) < _MIN_TOOL_SEARCH_PARTS:
-            errors.append(f"{path}: MCP tool-search query has no tool names: {query!r}")
-            continue
-        server_name = f"owlbear-{parts[1].lower()}"
-        available = registries.get(server_name)
-        if available is None:
-            errors.append(f"{path}: MCP tool-search query names unknown server '{server_name}'")
-            continue
-        names = tuple(
-            name for name in parts[2:] if not (server_name == "owlbear-delivery" and name in _TOOL_SEARCH_IGNORED_WORDS)
-        )
-        unknown = sorted(set(names) - available)
-        if unknown:
-            errors.append(f"{path}: {server_name} tool-search query names unavailable tools: {unknown}")
-        if path == _SYSTEM_INSTRUCTIONS and server_name == "owlbear-delivery":
-            missing = sorted(available - set(names))
-            if missing:
-                errors.append(f"{path}: exhaustive Delivery bootstrap query is missing tools: {missing}")
-            if len(names) != len(set(names)):
-                errors.append(f"{path}: exhaustive Delivery bootstrap query contains duplicate tools")
-    return errors
+def _check_tool_search_queries() -> list[str]:
+    """Reject multi-name MCP search queries; tool_search returns only the closest few matches."""
+    return [
+        f"{path}: multi-name MCP tool-search query can omit the needed operation; "
+        f"search the exact operation name instead: {query[:80]!r}"
+        for path, query in _tool_search_queries()
+    ]
 
 
 def _check_mcp_surface(agent_files: list[Path]) -> tuple[frozenset[str], list[str]]:
     """Validate configuration, live grants, and explicit MCP bootstrap queries."""
     configured_servers, errors = _validate_mcp_configuration()
+    errors.extend(_check_tool_search_queries())
     try:
         registries = _load_live_mcp_tool_registries()
     except (AttributeError, ImportError, RuntimeError) as exc:
         errors.append(f"MCP live registry discovery failed: {exc}")
         return configured_servers, errors
     errors.extend(_check_live_mcp_grants(agent_files, configured_servers, registries))
-    errors.extend(_check_tool_search_queries(registries))
     return configured_servers, errors
 
 

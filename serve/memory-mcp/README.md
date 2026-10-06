@@ -68,7 +68,7 @@ stale     ──[resolve*]──► approved    [delete: soft → deleted]
 | `curate_memory` | Mutate fields + auto-promote `pending→curated` (when scope provided) or auto-downgrade `approved→curated`; raises `TransitionError` for contested/disputed/stale (use resolve first) |
 | `delete_memory` | Hard-delete pending (file removed); soft-delete curated/approved/contested/disputed/stale (state→deleted) |
 | `rename_agent_memories` | Rewrite every matching `source_agent` and `scope_agents` reference after an agent rename |
-| `delete_agent_memories` | Preserve historical provenance, remove the retired role from scopes, and physically delete entries left without an audience |
+| `delete_agent_memories` | Preserve historical provenance and remove the retired role from scopes; hard-delete pending orphans and tombstone reviewed orphans for the normal commit/purge flow |
 | `approve_memory` | Promote `curated→approved`; user-initiated only (not exposed to any agent) |
 | `assess_memories` | Process batch assessment submissions; increments counters for `outstanding`/`unremarkable`/`didnt_use`, delegates `factually_wrong` to confirmation cycle; returns per-entry `{entry_id, success}` or `{entry_id, success=False, error}` results |
 | `commit_memory_batch` | Commit non-pending memory entries for one explicit `curation` or `review` session and return the commit SHA or a no-op result |
@@ -110,8 +110,9 @@ definition, and named scope needs that evidence or explicit user confirmation du
 
 Rename memory references with `rename_agent_memories`. When deleting an agent,
 `delete_agent_memories` preserves immutable source provenance, removes the retired identity from
-relevance scopes, and deletes only entries left without an audience. No aliases or retired role
-names remain in active relevance scope.
+relevance scopes. Pending entries left without an audience are hard-deleted; reviewed entries become
+`deleted` tombstones that must be committed before they are purged. No aliases or retired role names
+remain in active relevance scope.
 
 ## Configuration
 
@@ -127,12 +128,13 @@ owlbear-memory/commit_memory_batch(session_type="curation")
 owlbear-memory/commit_memory_batch(session_type="review")
 ```
 
-The operation validates every existing memory entry before staging, stages only non-pending entries and tracked hard-deletions of pending entries or purged tombstones, and returns the commit SHA or a no-op result when there is nothing to commit. Invalid entries, staged pending entries, and physical deletion of live reviewed entries fail the batch without creating a commit. The lower-level `git.py` module remains an internal implementation detail.
+The operation validates every existing memory entry and checks tracked deletions before staging, then stages only non-pending entries and tracked hard-deletions of pending entries or purged tombstones. A reviewed entry must first be soft-deleted and committed as a tombstone, then purged. Invalid entries, staged pending entries, and physical deletion before that tombstone checkpoint fail without staging or creating a commit; restore the file from HEAD with the command in the error, soft-delete it, commit the batch, then purge. The operation returns the commit SHA or a no-op result when there is nothing to commit. The lower-level `git.py` module remains an internal implementation detail.
 
 If Git or a commit hook fails, the MCP error begins with `memory batch commit failed` and includes
 the failed command, exit status, and captured `stderr` (falling back to `stdout`). Captured output
 is tail-bounded to 4,096 characters and marked as diagnostic text. The operation does not restore
-the Git index after a failure, so memory paths may remain staged; inspect staging before retrying.
+the Git index after a Git or commit-hook failure, so memory paths may remain staged; inspect staging
+before retrying. Validation failures leave the index untouched.
 The command-line entry point uses the same bounded diagnostic formatter.
 
 ## Dependencies

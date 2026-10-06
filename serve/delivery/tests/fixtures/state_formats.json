@@ -123,7 +123,7 @@
   },
   "host": {
     "fingerprints": {
-      "owlbear_delivery.delivery_application_loader:DeliveryHostConfig": "3bbcbfeb55e00c2a952ad12597af1934b4f10f3637941ba6b772915ad50e0607"
+      "owlbear_delivery.delivery_application_loader:DeliveryHostConfig": "9b5317aefc4750bbdb353f681dbc384a802012490f35919527d46fd85ca7d942"
     },
     "version": 1
   },

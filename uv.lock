@@ -1685,14 +1685,12 @@ name = "owlbear-browser"
 version = "0.1.0"
 source = { editable = "serve/browser" }
 dependencies = [
-    { name = "lxml" },
     { name = "owlbear-web-content" },
     { name = "playwright" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "lxml", specifier = ">=6.1.1" },
     { name = "owlbear-web-content", editable = "serve/web-content" },
     { name = "playwright", specifier = ">=1.60.0" },
 ]

@@ -16,8 +16,6 @@ from urllib.parse import (
     urlunparse,
 )
 
-from lxml import html
-
 
 class AcquisitionStatus(StrEnum):
     """Enumerate successful and terminal browser acquisition outcomes."""
@@ -76,16 +74,9 @@ class Diagnostics:
 
     stage: str
     details: dict[str, Any] = field(default_factory=dict)
-    html: str | None = None
-    include_diagnostic_html: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "details", redact_diagnostics(self.details))
-        if self.html is not None:
-            if not self.include_diagnostic_html:
-                object.__setattr__(self, "html", None)
-            else:
-                object.__setattr__(self, "html", _sanitize_diagnostic_html(self.html))
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,6 +99,10 @@ class AcquisitionSuccess:
             raise ValueError("success results must have success status")  # noqa: EM101, TRY003
         if not self.markdown.strip() or self.fetched_at.tzinfo is not UTC:
             raise ValueError("success results require non-empty Markdown and a UTC timestamp")  # noqa: EM101, TRY003
+        object.__setattr__(self, "requested_url", redact_url(self.requested_url))
+        object.__setattr__(self, "canonical_url", redact_url(self.canonical_url))
+        object.__setattr__(self, "redirect_chain", tuple(redact_url(url) for url in self.redirect_chain))
+        object.__setattr__(self, "discovered_links", tuple(redact_url(url) for url in self.discovered_links))
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,16 +179,16 @@ _SENSITIVE_QUERY_KEYS = frozenset(
     }
 )
 _CORRELATION_QUERY_KEYS = frozenset({"state", "sessionstate", "nonce"})
-_DIAGNOSTIC_HTML_LIMIT = 100_000
-_REMOVED_HTML_ELEMENTS = {"base", "embed", "iframe", "link", "object", "script", "style"}
 
 
 def redact_url(value: str) -> str:
     """Redact URL credentials, preserve document identity, and mark correlation values.
 
-    Userinfo and fragments are removed. Exact credential/callback query keys are replaced with
-    ``[REDACTED]``; ``state``, ``session_state``, and ``nonce`` become ``[CORRELATION]``. Other
-    query bytes remain unchanged so ordinary document identity is stable.
+    Userinfo and fragments are removed. Exact credential/callback query keys and keys ending in
+    ``token``, ``secret``, ``signature``, ``password``, ``credential``, or ``assertion`` are
+    replaced with
+    ``%5BREDACTED%5D``; ``state``, ``session_state``, and ``nonce`` become ``%5BCORRELATION%5D``.
+    Other query bytes and paths remain unchanged so ordinary document identity is stable.
     """
     parsed = urlparse(value)
     if not parsed.scheme or not parsed.netloc:
@@ -210,7 +205,9 @@ def redact_url(value: str) -> str:
         replacement = None
         if normalized_key in _CORRELATION_QUERY_KEYS:
             replacement = "%5BCORRELATION%5D"
-        elif normalized_key in _SENSITIVE_QUERY_KEYS:
+        elif normalized_key in _SENSITIVE_QUERY_KEYS or normalized_key.endswith(
+            ("token", "secret", "signature", "password", "credential", "assertion")
+        ):
             replacement = "%5BREDACTED%5D"
         if replacement is None:
             redacted_parts.append(part)
@@ -247,25 +244,3 @@ def redact_diagnostics(value: Any) -> Any:  # noqa: ANN401
             return "[REDACTED]"
         return redacted_url
     return value
-
-
-def _sanitize_diagnostic_html(value: str) -> str:
-    """Keep bounded, non-executable markup for internal diagnostic callers."""
-    root = html.fragment_fromstring(value, create_parent=True)
-    for element in root.iter():
-        if element.tag in _REMOVED_HTML_ELEMENTS:
-            element.drop_tree()
-            continue
-        for name, attribute in list(element.attrib.items()):
-            if (
-                name.lower().startswith("on")
-                or (name.lower() in {"href", "src", "action"} and attribute.strip().lower().startswith("javascript:"))
-                or _SENSITIVE.search(name)
-            ):
-                del element.attrib[name]
-        if element.text and _SENSITIVE.search(element.text):
-            element.text = "[REDACTED]"
-        if element.tail and _SENSITIVE.search(element.tail):
-            element.tail = "[REDACTED]"
-    serialized = "".join(html.tostring(child, encoding="unicode", method="html") for child in root)
-    return serialized[:_DIAGNOSTIC_HTML_LIMIT]

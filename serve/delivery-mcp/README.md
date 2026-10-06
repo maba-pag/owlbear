@@ -38,7 +38,7 @@ The server exposes these operation groups:
 | Area | Tools |
 | --- | --- |
 | Design | `create_design_session`, `put_design`, `read_design_session`, `revise_design_session`, `publish_design_checkpoint`, `derive_delivery_contract`, `admit_change` |
-| Portfolio | `list_work_items`, `list_changes`, `get_change`, `answer`, `set_change_intent`, `delivery_health`, `propose_quarantined_delivery_state_snapshot_repair`, `repair_stranded_frontier`, `repair_quarantined_delivery_state_snapshot`, `repair`, `repair_delivery_state_snapshot`, `recover_out_of_band_head`, `repair_target_sync_publication`, `list_retained_change_worktrees`, `show_work_item`, `show_work_item_view`, `show_operator_context`, `preview_administrative_move`, `administrative_move`, `acquire_actions`, `acquire_change_action`, `execute_change_action`, `show_plan_context`, `show_build_context`, `show_finalization_context`, `report_finalization_failure` |
+| Portfolio | `list_work_items`, `list_changes`, `get_change`, `answer`, `set_change_intent`, `delivery_health`, `propose_quarantined_delivery_state_snapshot_repair`, `repair_stranded_frontier`, `repair_quarantined_delivery_state_snapshot`, `repair`, `repair_delivery_state_snapshot`, `recover_out_of_band_head`, `repair_target_sync_publication`, `list_retained_change_worktrees`, `show_work_item`, `show_work_item_view`, `show_operator_context`, `preview_administrative_move`, `administrative_move`, `acquire_actions`, `acquire_change_action`, `execute_change_action`, `show_plan_context`, `show_build_context`, `show_finalization_context`, `derive_evidence_receipts`, `report_finalization_failure` |
 | Delivery | `publish_delivery_plan`, `submit_result`, `finalize_change`, `mark_change_ready` |
 | Delivery | `prepare_review_repair`, `reconcile_finalization_head`, `reconcile_change_checkpoint` |
 | Delivery | `sync_change_with_target`, `adopt_external_head`, `promote_external_head`, `abort_target_sync_conflict` |
@@ -127,7 +127,7 @@ directory, so no Delivery environment variable is required.
 
 The workspace root determines the repository and the canonical `.owlbear/delivery/packages`,
 `.owlbear/delivery/runtime`, and `.owlbear/delivery/worktrees` locations. Delivery uses one shared
-`execution_capacity` budget for active Planner and Builder outcome claims, defaulting to `3`. Each
+`execution_capacity` budget for active Planner and Builder outcome claims, defaulting to `8`. Each
 Change retains exact Build writer custody; `writer_capacity` is never an active admission limit. The
 optional host-local settings file is described in the [core Delivery configuration reference](../delivery/README.md#configuration).
 Agent frontmatter owns model selection; Delivery owns the fixed Planner, Builder, and reviewer
@@ -141,7 +141,7 @@ version `2` plus `remote`, `target_branch`, `github_repository`, and `delivery_s
 defaults the remote to `origin`, uses `main` for non-interactive target selection, writes
 `owlbear/delivery-state` as the state-branch default, and infers the GitHub repository from the
 remote. Setup also seeds the trackable `.owlbear/delivery/runtime/host.json` baseline with schema
-version `1`, `execution_capacity: 3`, and `claim_timeout_seconds: 3600` (60
+version `1`, `execution_capacity: 8`, and `claim_timeout_seconds: 3600` (60
 minutes), preserving an existing file on rerun. The optional ignored
 `.owlbear/delivery/runtime/host.local.json` may contain `execution_capacity` and/or
 `claim_timeout_seconds` for one host;

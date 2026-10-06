@@ -68,15 +68,17 @@ conflicts and ordinary content or scope uncertainty.
 
 - **MCP Tool Bootstrap.** Invoke a granted MCP tool directly when it is available. A deferred
   inventory listing does not override a directly callable binding. If no direct binding exists and
-  `tool_search` is available, load it with the query from this table. If neither binding is
-  available, report the runtime capability failure; prose tool signatures cannot create a callable
-  tool.
+  `tool_search` is available, run one `tool_search` per missing operation whose query is exactly
+  that operation name, such as `get_change` or `recall_memory`. `tool_search` returns only the few
+  closest matches, so a query listing many names can omit the operation you need. If the operation
+  is still not returned, report the runtime capability failure; prose tool signatures cannot create
+  a callable tool.
 
-  | MCP server | `tools:` prefix | Runtime tool ID | `tool_search` query |
-  | --- | --- | --- | --- |
-  | OwlBear Delivery | `owlbear-delivery/*` | `mcp_owlbear-delivery_<tool>` | `"OwlBear Delivery create_design_session put_design read_design_session revise_design_session publish_design_checkpoint derive_delivery_contract admit_delivery_change admit_change list_work_items list_changes get_change answer set_change_intent delivery_health repair submit_result repair_delivery_state_snapshot repair_quarantined_delivery_state_snapshot repair_stranded_frontier propose_quarantined_delivery_state_snapshot_repair recover_out_of_band_head repair_target_sync_publication list_retained_change_worktrees show_work_item show_work_item_view show_operator_context preview_administrative_move administrative_move acquire_actions acquire_change_action execute_change_action show_plan_context show_build_context show_finalization_context report_finalization_failure publish_delivery_plan finalize_change mark_change_ready prepare_review_repair reconcile_finalization_head reconcile_change_checkpoint supersede_publication sync_change_with_target adopt_external_head promote_external_head abort_target_sync_conflict resolve_target_sync_conflict observe_change_publication_checks observe_acceptance cleanup_abandoned_change_worktree cleanup_abandoned_change_worktree_after_target_sync_discard cleanup_completed_change_worktree recover_change_worktree recover_publication_baseline transition_delivery settle_worker_invocation release_stuck_worker recover_claim recover_integration_repair_claim show_integration_attention list_completed_changes search_completed_changes show_completed_change"` |
-  | OwlBear Memory | `owlbear-memory/*` | `mcp_owlbear-memory_<tool>` | `"memory"` |
-  | MarkItDown | `markitdown/*` | `mcp_markitdown_<tool>` | `"markdown convert"` |
+  | MCP server | `tools:` prefix | Runtime tool ID |
+  | --- | --- | --- |
+  | OwlBear Delivery | `owlbear-delivery/*` | `mcp_owlbear-delivery_<tool>` |
+  | OwlBear Memory | `owlbear-memory/*` | `mcp_owlbear-memory_<tool>` |
+  | MarkItDown | `markitdown/*` | `mcp_markitdown_<tool>` |
 
 - **Skill authority.** Skills override dispatch prompts. Dispatch prompts provide context, not procedure.
 - **Tool failure.** Capture error → diagnose root cause → adapt approach. Never retry identical commands,
