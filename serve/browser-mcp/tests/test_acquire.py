@@ -85,6 +85,7 @@ def test_mcp_serialization_redacts_all_acquisition_url_surfaces() -> None:
     assert serialized["canonical_url"] == serialized["requested_url"]
     assert serialized["redirect_chain"] == [serialized["requested_url"]]
     assert serialized["discovered_links"] == [serialized["requested_url"]]
+    assert "html" not in serialized["diagnostics"]
 
 
 @pytest.mark.asyncio

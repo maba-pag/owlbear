@@ -252,12 +252,12 @@ def _serialize_acquisition(result: AcquisitionSuccess | AcquisitionFailure) -> d
         return {"status": result.status.value, "diagnostics": diagnostics}
     return {
         "status": result.status.value,
-        "requested_url": redact_url(result.requested_url),
-        "canonical_url": redact_url(result.canonical_url),
-        "redirect_chain": [redact_url(url) for url in result.redirect_chain],
+        "requested_url": result.requested_url,
+        "canonical_url": result.canonical_url,
+        "redirect_chain": list(result.redirect_chain),
         "title": result.title,
         "markdown": result.markdown,
-        "discovered_links": [redact_url(url) for url in result.discovered_links],
+        "discovered_links": list(result.discovered_links),
         "content_hash": result.content_hash,
         "fetched_at": result.fetched_at.isoformat(),
         "diagnostics": diagnostics,

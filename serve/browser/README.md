@@ -68,13 +68,18 @@ provide their own user interaction and cancellation policy; the package does not
 managed-SSO workflow or concurrent session ownership model. See the maintained
 [acquisition tests](tests/test_acquisition.py) for the exercised synthetic behavior.
 
+`AcquisitionSuccess` applies URL redaction at construction: userinfo and fragments are removed;
+values for exact sensitive keys and normalized keys ending in `token`, `secret`, `signature`,
+`password`, `credential`, or `assertion` become `%5BREDACTED%5D`; `state`, `session_state`, and `nonce` values
+become `%5BCORRELATION%5D`. The `code` key is exact-match only. Other query bytes and paths remain
+for document identity. Diagnostic URLs with secret-like paths are replaced in full.
+
 ## Dependencies
 
 | Package | Purpose |
 | --- | --- |
 | `playwright` | Chromium browser automation and persistent contexts |
 | `owlbear-web-content` | Shared HTML-to-Markdown extraction (workspace package) |
-| `lxml` | Direct HTML parsing for diagnostic sanitization |
 
 > **First-time setup:** From a consumer project using a sibling OwlBear checkout, install Chromium
 > with `uv run --project ../owlbear playwright install chromium`.
