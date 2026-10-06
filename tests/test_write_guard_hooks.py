@@ -172,6 +172,12 @@ class TestReadOnlyTerminalGuard:
             "git update-ref HEAD HEAD^",
             "git -c alias.move=reset move --hard HEAD^",
             "git diff --output=tracked.patch HEAD^ HEAD",
+            "git branch feature",
+            "git branch -D feature",
+            "git branch -m renamed",
+            "git branch --list -d feature",
+            "git branch --show-current feature",
+            "git branch --set-upstream-to=origin/dev",
             "chmod u+w tracked.py",
             "printf changed > tracked.py",
             "pytest &> tracked.log",
@@ -189,11 +195,17 @@ class TestReadOnlyTerminalGuard:
 
         assert _is_denied(result)
 
-    def test_allows_read_only_proof_command(self, deny_writes_module: types.ModuleType) -> None:
-        payload = {
-            "tool_name": "execute/runInTerminal",
-            "tool_input": {"command": "git rev-parse --verify HEAD && uv run pytest tests/test_contract.py -q"},
-        }
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "git rev-parse --verify HEAD && uv run pytest tests/test_contract.py -q",
+            "git branch --show-current",
+            "git -C /tmp/proof branch",
+            "git branch --list 'redesign/*'",
+        ],
+    )
+    def test_allows_read_only_proof_command(self, deny_writes_module: types.ModuleType, command: str) -> None:
+        payload = {"tool_name": "execute/runInTerminal", "tool_input": {"command": command}}
 
         result = _invoke(
             deny_writes_module,

@@ -102,6 +102,7 @@ _TARGET_ROLE_TOOLS = {
         "prepare_review_repair",
     },
     "planner": {"show_plan_context", "publish_delivery_plan"},
+    "designer-challenger": {"read_design_session", "derive_delivery_contract"},
     "builder": {
         "show_build_context",
         "submit_result",
@@ -1278,3 +1279,15 @@ def test_continuation_shows_merge_offers_and_checks_an_unknown_merge_only_on_an_
     assert "one `observe_acceptance` call per Check again answer" in prompt
     for agent in _AGENTS_ROOT.glob("*.agent.md"):
         assert not [tool for tool in _frontmatter(agent).get("tools", ()) if "approve" in str(tool)], agent.name
+
+
+def test_continuation_loads_tools_with_the_canonical_bootstrap_queries() -> None:
+    """N10-H H2: ad-hoc focused queries missed get_change; continuation uses the bootstrap table."""
+    orchestration = " ".join((_SKILLS_ROOT / "w-orchestration/SKILL.md").read_text(encoding="utf-8").split())
+    start = orchestration.index("### Continuation Bindings")
+    bindings = orchestration[start : orchestration.index("### Continuation Observation")]
+
+    assert "MCP Tool Bootstrap table in `owlbear-system.instructions.md`" in bindings
+    assert "Never shorten or rewrite that query" in bindings
+    assert "`OwlBear Delivery " not in orchestration
+    assert "focused `tool_search`" not in orchestration
