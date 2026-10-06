@@ -82,7 +82,7 @@ may remain staged. Inspect `git status` and the staged diff before retrying.
 | `curate_memory` | Curator mutation and code-managed state transition tool | `entry_id`, optional mutable fields, `scope_agents` |
 | `delete_memory` | Lifecycle-aware deletion with hard/soft semantics | `entry_id` |
 | `rename_agent_memories` | Rewrite provenance and scopes after an agent rename | `old_name`, `new_name` |
-| `delete_agent_memories` | Remove retired scope references and delete entries left without an audience | `agent` |
+| `delete_agent_memories` | Remove retired scope references, hard-delete pending orphans, and tombstone reviewed orphans | `agent` |
 | `approve_memory` | Promote `curated -> approved` | `entry_id` |
 
 ## Assessment and curation policy
@@ -354,8 +354,9 @@ it, while `*` is anonymous provenance rather than a named identity.
     `rename_agent_memories(old_name="old", new_name="new")`. The new name must already resolve from
     the active agent locations. Provenance and every matching relevance scope are rewritten.
 - When deleting an agent, call `delete_agent_memories(agent="name")`. Historical `source_agent`
-    provenance remains unchanged. The retired name is removed from relevance scopes, and entries
-    left with no audience are physically deleted.
+    provenance remains unchanged. The retired name is removed from relevance scopes; pending entries
+    left without an audience are hard-deleted, while reviewed entries become `deleted` tombstones
+    that must be committed before purge.
 - Both operations attempt to restore original entries if a multi-file write fails, but recovery can
     be `complete`, `partial`, or `uncertain`. Inspect the `LifecycleRecoveryError` diagnostics instead
     of assuming every original entry was restored. A process interruption during the operation or its
