@@ -475,6 +475,22 @@ Disposable project `~/owlbear-n10h/project` (repository `boecht/owlbear-n10h-202
   migration; its unpinned step now fetches before checking out a named revision, which it previously did not),
   then `/continue-change slug-rules`; readiness proceeds to finalization.
 
+**Defect H15: a refused Delivery MCP start buried its typed diagnostic under a traceback.**
+
+- *Observed:* step 8 (refused start), format marker 4 against a controller that supports 3. The VS Code MCP output
+  showed about 90 lines of `ExceptionGroup` traceback; the typed `DeliveryStartupDiagnostic`
+  (`ERR_DELIVERY_STATE_VERSION`, `state-newer-than-controller`) appeared only as its last line.
+- *Cause:* `app_lifespan` raises the diagnostic inside the SDK's stdio task group; `__main__` called `mcp.run()`
+  directly, so the interpreter printed the whole exception group.
+- *Fix:* `__main__.main()` catches a startup diagnostic, alone or as the only leaves of an exception group, writes
+  one stderr line per diagnostic and exits 1:
+  `Delivery MCP refused to start: <code>: <detail> (field=<field>, retry_safe=false)`. Any other failure, including
+  a group that mixes a diagnostic with another error, is re-raised with its traceback. The diagnostic payload, setup
+  guide wording and `/repair-delivery` are unchanged; the other OwlBear MCP servers have no startup diagnostic type.
+  Nothing persisted changes.
+- *Recovery route for the project:* none needed; the refusal and its route were already correct. After merge,
+  step 8 reruns with the one-line output.
+
 ### 3.3 N10-M — Live migration and programme closure
 
 - **Prerequisites:** N10-H; the user present and authorizing each step.
