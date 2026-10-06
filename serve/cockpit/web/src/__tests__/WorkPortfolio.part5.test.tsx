@@ -1183,12 +1183,31 @@ it("resumes a paused Change from its group header", async () => {
   );
 });
 
+it("shows the paused lifecycle note on an outcome detail", async () => {
+  const paused = card({
+    readiness: readiness({ status: "blocked", reason_code: "change-paused", progress: "paused" }),
+    activity: { state: "idle", worker_role: null, started_at: null, task_id: null },
+  });
+  fixtureState.currentPortfolio = portfolio([group({ lifecycle: "deferred", progress: "paused", items: [paused] })]);
+  fixtureState.currentDetail = detail({
+    card: paused,
+    change_progress: "paused",
+    abandon_available: true,
+  });
+  renderPage("/delivery/change-alpha/outcome%3AOUT-001");
+
+  const inspector = await screen.findByTestId("work-item-detail");
+  expect(within(inspector).getByText("Abandon Change")).toBeInTheDocument();
+  expect(within(inspector).getByText("This Change is paused and retains its worktree.")).toBeInTheDocument();
+});
+
 it("shows a recorded Pause request on an outcome detail with Resume", async () => {
   const held = heldCard();
   fixtureState.currentPortfolio = portfolio([group({ items: [held], ...PAUSE_REQUESTED })]);
   fixtureState.currentDetail = detail({
     card: held,
     readiness: held.readiness,
+    abandon_available: true,
     pause_available: false,
     pause_unavailable_reason: "pause-requested",
   });
@@ -1198,7 +1217,7 @@ it("shows a recorded Pause request on an outcome detail with Resume", async () =
   expect(within(inspector).getByTestId("pause-requested-change-alpha")).toHaveTextContent("Pause requested");
   expect(within(inspector).queryByText("Pause")).not.toBeInTheDocument();
   expect(within(inspector).getByText("Resume")).toBeInTheDocument();
-  expect(within(inspector).queryByText("Abandon Change")).not.toBeInTheDocument();
+  expect(within(inspector).getByText("Abandon Change")).toBeInTheDocument();
 });
 
 it.each(PAUSE_REFUSALS)("disables group Pause for Delivery reason %s", async (reason, message) => {

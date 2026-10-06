@@ -288,9 +288,8 @@ function ChangeDispositionSection(props: WorkItemDetailProps) {
   const [reason, setReason] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [actionFailed, setActionFailed] = useState(false);
-  if (props.detail.item.card.scope !== "change-publication") return null;
   const phase = props.detail.item.publication?.phase;
-  if (phase === "abandoned") return null;
+  if (props.detail.item.abandon_available !== true) return null;
   const canSubmit = reason.trim().length > 0 && props.pendingAction === null;
   const abandon = async () => {
     const error = await props.onAbandonChange(reason.trim());
@@ -312,7 +311,9 @@ function ChangeDispositionSection(props: WorkItemDetailProps) {
         <p className="text-sm text-contrast-medium">
           Use only when the Change should leave its current delivery path. Abandonment is permanent.
         </p>
-        {phase === "deferred" ? <p className="text-sm">This Change is paused and retains its worktree.</p> : null}
+        {props.detail.item.change_progress === "paused" || phase === "deferred" ? (
+          <p className="text-sm">This Change is paused and retains its worktree.</p>
+        ) : null}
         <PInputText
           compact
           name="change-disposition-reason"
