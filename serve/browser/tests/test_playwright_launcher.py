@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+from dataclasses import fields
 from pathlib import Path
 from unittest.mock import patch
 
@@ -59,13 +61,14 @@ class _FakePlaywrightManager:
 
 
 @pytest.mark.asyncio
-async def test_managed_edge_uses_owned_profile_and_stable_edge() -> None:
+async def test_managed_edge_uses_fixed_profile_and_stable_edge(monkeypatch: pytest.MonkeyPatch) -> None:
     context = _FakeContext()
     browser_type = _FakeBrowserType(context)
     playwright = _FakePlaywright(browser_type)
     profile = Path("edge-profile")
+    monkeypatch.setenv("PLAYWRIGHT_USER_DATA_DIR", str(profile))
     launcher = PlaywrightLauncher(
-        user_data_dir=str(profile),
+        user_data_dir=os.environ["PLAYWRIGHT_USER_DATA_DIR"],
         mode=BrowserMode.MANAGED_EDGE,
         headless=True,
     )
@@ -78,13 +81,18 @@ async def test_managed_edge_uses_owned_profile_and_stable_edge() -> None:
 
     assert browser_type.calls == [
         (
-            str(profile),
+            str(Path.home() / ".owlbear" / "edge-profile"),
             {"headless": False, "channel": "msedge", "chromium_sandbox": True},
         )
     ]
     assert launcher.capabilities.mode is BrowserMode.MANAGED_EDGE
     assert launcher.capabilities.owned_persistent_profile is True
     assert launcher.capabilities.visible_manual_auth is True
+    assert {field.name for field in fields(launcher.capabilities)} == {
+        "mode",
+        "owned_persistent_profile",
+        "visible_manual_auth",
+    }
 
     await launcher.close()
     assert context.closed is True

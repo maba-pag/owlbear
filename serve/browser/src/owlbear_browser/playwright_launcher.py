@@ -136,7 +136,10 @@ class PlaywrightLauncher:
     ) -> None:
         self._sso_ext_path = sso_ext_path
         self._mode = BrowserMode(mode)
-        self._user_data_dir = user_data_dir or str(Path.home() / ".owlbear" / "browser-profile")
+        if self._mode is BrowserMode.MANAGED_EDGE:
+            self._user_data_dir = str(Path.home() / ".owlbear" / "edge-profile")
+        else:
+            self._user_data_dir = user_data_dir or str(Path.home() / ".owlbear" / "browser-profile")
         if max_pending_pages < 1:
             msg = "max_pending_pages must be at least 1"
             raise ValueError(msg)
