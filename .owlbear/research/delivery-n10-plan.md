@@ -12,7 +12,7 @@
 > V08 proof); the gate ends with these corrections. Plan decisions U1 and U2 settled (D13, D14). Product code is unchanged by
 > this phase. Reviews work in the execution plan's
 > [operating context](delivery-redesign-execution-plan.md#19-operating-context).
-> **N10-M complete 2026-10-06** (§3.3.1); N10-N planned (§3.4).
+> **N10-M complete 2026-10-06** (§3.3.1); N10-N planned (§3.4: H9 receipts tool, H14 branches kept).
 
 ## 1. Contract
 
@@ -628,12 +628,74 @@ confirmed at its step. Logs in `.owlbear/scratch/n10m-*.log` (main checkout, unv
 
 ### 3.4 N10-N — Follow-ups from the host journey
 
-- **Status:** planned.
+- **Status:** planned 2026-10-06 (this section is the package plan; merging it approves it). One implementation
+  phase, N10-N-A.
 - **Purpose:** settle the two N10-H follow-ups that need a decision rather than a journey fix.
-- **Scope:** H9 option B, a read-only Delivery tool that returns canonical observation and review receipts with
-  their IDs, so workers no longer import Delivery models; H14, whether Delivery deletes the Change branch after
-  completion; M1 and M2 (§3.3.1), Cockpit's abandon feedback and an abandon control for every unfinished Change.
-- **Prerequisites:** N10-M. N10-N follows programme closure (R8, N10-M step 7) and does not block it.
+- **Scope:** H9 and H14. M1 and M2 (§3.3.1) are not N10-N: the user runs them as ordinary Changes (user decision
+  2026-10-06, after programme closure).
+- **Prerequisites:** N10-M (merged #390).
+
+**Decisions (lead, 2026-10-06):**
+
+- **N1 H9 option B: one stateless read-only tool, `derive_evidence_receipts`.** Input: `observations` (ordered
+  `DeliveryObservation` values, schema 2) and an optional `review` (`DeliveryReview`); at least one of them.
+  Output: `observations` built by `DeliveryObservationReceipt.create` and `review` built by
+  `DeliveryReviewReceipt.create` (or null), in input order, serialized with `model_dump(mode="json")`. The tool
+  reads no Change state, writes nothing and is annotated `_READ`; it has no application method, Cockpit route or
+  persisted record. Invalid content (for example a naive timestamp, a review whose author is its reviewer, a
+  schema-2 review without `review_mode`) is refused by the existing model validation with the target server's
+  typed validation error and returns no receipt. `submit_result` and `finalize_change` keep validating every
+  receipt identity unchanged, so the tool adds no trust: a wrong receipt is refused there as today.
+- **N2 Finalization ordering.** The finalization review must cite the ordered observation IDs, so the Finalizer derives
+  its new observations at the end of its proof step (one call, skipped when carried evidence covers every criterion
+  and there is no new observation), passes those receipts unchanged to its reviewer, and after the review derives only
+  the review receipt with the returned `observation_id`s in the same order (`observation_ids: []` when there are
+  none). The tool never infers or fills `observation_ids`. A Builder may send its observations and task review in one
+  call (a task review cites no observation IDs).
+- **N3 Skills and grants.** `w-packet-building` (Steps 2 and 3) and `w-change-finalization` (end of Step 2 for
+  observations, Step 3 passes them unchanged, Step 4 for the review) replace the in-memory `.create()` construction
+  with the tool, pass the returned receipts unchanged, and keep "never calculate, copy, or invent" the IDs. `builder`
+  and `finalizer` gain the tool; the canonical bootstrap query of `owlbear-system.instructions.md` §4 names it
+  (`w-orchestration` uses that query unchanged, H2). Plan gate round 1 (Sol, 2026-10-06): `revision-required`, three
+  findings accepted fix-now and applied (real merge in the H14 proof, zero-observation finalization, observation
+  derivation before review).
+- **N4 H14: Delivery keeps Change branches.** After completion, as after abandonment, Delivery deletes neither the
+  local nor the remote Change branch. Reasons: a user may merge the PR in GitHub with squash or rebase, and then the
+  local Change branch is the only local ref that keeps the reviewed commits reachable for completed history's exact
+  heads; deleting the remote branch is a provider mutation that would need its own fence, readback and lost-response
+  replay, a new mechanism (I1); GitHub's built-in repository setting **Automatically delete head branches** already
+  removes merged remote branches. N10-N-A proves that Delivery tolerates that setting and documents it.
+
+#### 3.4.1 N10-N-A — Receipts tool and branch-retention proof
+
+- **Editable paths:** `serve/delivery-mcp/src/owlbear_delivery_mcp/target_server.py`, `target_models.py`;
+  `serve/delivery-mcp/README.md`; `serve/delivery-mcp/tests/test_target_server.py`, `test_delivery_adapter.py`;
+  `share/agents/builder.agent.md`, `finalizer.agent.md`; `share/skills/w-packet-building/SKILL.md`,
+  `w-change-finalization/SKILL.md`; `share/instructions/owlbear-system.instructions.md`;
+  `tests/test_agent_ecosystem_validation.py`; `tests/test_delivery_journey.py`; `setup/operating-owlbear.md`; this
+  plan and the execution plan status row. Only if the H14 proof fails: the smallest owning Delivery fix with its test.
+- **Companions:** registry names and annotations, adapter request factories and tool lists in the Delivery MCP
+  tests, agent grant expectations, bootstrap query, README tool table.
+- **First discriminating check:** a registered-server test that the tool's receipts equal
+  `DeliveryObservationReceipt.create` and `DeliveryReviewReceipt.create` of the same inputs, and that a review whose
+  author is its reviewer is refused with no receipt.
+- **Positive scenarios:** (a) the V01 journey test builds the Builder's and the Finalizer's receipts only through the
+  registered tool (finalization per N2), and `submit_result` and `finalize_change` accept them, so the tool's output is
+  the canonical identity end to end; a review-only call with `observation_ids: []` returns the same receipt as
+  `DeliveryReviewReceipt.create` (zero-observation finalization); (b) the journey, parametrized, deletes the Change
+  branch from the remote right after the merge, as **Automatically delete head branches** does, before acceptance
+  reconciliation. The memory provider's merge SHA is synthetic and absent from Git, while a completed snapshot's
+  loader check requires the accepted merge commit on the target (`delivery_application_loader.py`), so the journey's
+  provider creates a real merge commit on the bare remote's target and reports that SHA. Expected: acceptance
+  completes, the completed record and the portfolio counts equal the undeleted run, the local Change branch still
+  names the finalized head, and a fresh loader reports healthy with the Change completed.
+- **Negative scenarios:** an empty request, a naive timestamp and a non-independent review are refused with the typed
+  validation error and no receipt; the registry lists the tool as read-only; the adapter's delegation test asserts the
+  tool makes zero application calls.
+- **Proof:** the affected Delivery MCP tests and `tests/test_delivery_journey.py`; agent-ecosystem tests; one
+  `uv run test --changed --base origin/dev`; scoped Ruff check and format. LC not applicable (no persisted, format or
+  loading change); a conditional H14 loader fix would make it applicable. Sol implementation gate on the exact head.
+- **Size / risk:** S / low.
 
 ## 4. Progress
 
@@ -643,7 +705,7 @@ confirmed at its step. Logs in `.owlbear/scratch/n10m-*.log` (main checkout, unv
 | N10-A | #382 | code `fddb6d02f` (R1 fix; before it `97f694ab2`); docs after | R1 delta `35160cca2..fddb6d02f`, own runs on `fddb6d02f`: the two updated prompt tests plus the settled-attention and workspace-reason tests (`-k`, 35 passed); the eight affected test files (`test_portfolio_application.py`, `test_delivery_progress.py`, `test_change_workspace.py`, `test_retry_ledger.py`, `test_recovery.py`, `test_worker_stall.py`, `test_target_server.py`, `tests/test_cockpit_work_items.py`) 1398 passed; scoped Ruff check and format clean; agent-ecosystem tests 70 passed; one `uv run test --changed --base origin/dev` (unsharded, 659 s): 3439 passed, 1 skipped, exit 0; Cockpit frontend not rerun (readiness shape unchanged); LC on `fddb6d02f` (live copy, `ubuntu:24.04`, volume `n00a-uv-cache`, 139 live records): upgrade form from `841b1cffb` passed with the same proposal (`runtime/format.json` `format-marker` `fbee38db…` → `f2a27400…`, step `format-2-to-3`), only that record changed, two healthy starts with 3 of 3 available, Cockpit 200 and bundle equal, `verify` true, rollback refused `state-newer-than-controller`; full form passed; `compare` after each `live_unchanged: true`; stages and bundles removed. Own runs on `97f694ab2`: cited node IDs collect (105, exit 0); journey test passed; V08 disposable check recorded (§3.1.1); `uv run test` (full): Python 2 failed, 4707 passed, 1 skipped in 883 s, the 2 failures are 30-s load timeouts of `test_delivery_state.py::test_change_intents_on_planner_pause_of_builder_planning_return_survive_default_loader_restart[historical-*]`, rerun alone 6 of 6 passed (7.3 s each); `npm test` 31 files, 373 passed; scoped Ruff clean on the three changed Python files; `npm run build` ok; `npm run test:e2e:work` 31 passed; agent-ecosystem tests 70 passed; no frontend file changed (Biome not applicable); LC on `56366028d` (code equal to `97f694ab2`; live copy, user authorization 2026-10-05; `ubuntu:24.04`, volume `n00a-uv-cache`; 139 live records): `run --form upgrade --previous 841b1cffb` passed (previous release healthy with 3 of 3 Changes available; preflight `migration-required`; proposal one entry `runtime/format.json` `format-marker` `fbee38db…` → `f2a27400…`, step `format-2-to-3`; applied and verified; only that record changed; switch pinned the candidate, previous `841b1cffb`; two MCP starts healthy with 3 of 3 available and an unchanged round trip; Cockpit 200 and bundle equal; checkout code `controller-not-pinned`; `verify` true; step-9 rollback `switch 841b1cffb` refused `release-refuses-state` / `state-newer-than-controller`); `run --form full --previous 841b1cffb` passed (unmigrated copy refused `state-migration-required` with hashes unchanged; migrated copy loads 3 of 3; previous release's gate hashes unchanged, synthetic newer state refused); `compare` after each: `live_unchanged: true`; stages and bundles removed | Sol implementation gate: pending (lead) | merged |
 | N10-H | fix #383 (H1); #384 (H7); #385 (H12, F1); #386 (H2, H10, H11); #387 (H4, H6, H8, H13); #388 (H15); evidence docs (this PR) | H1 code `4d126f887` (merge `9faf73796`); H7 code `1ec148a15` (merge `18c062a8b`); #385 merge `df9c3e88d`; #386 merge `9be502144`; #387 `904a11e6e`, `c42b5144b` (merge `8749f8982`); #388 `038ad17b9` (merge `b4514b34b`); final product-code head `b4514b34b`; docs after | Own runs on `4d126f887`: new default-loader test (fails on `origin/dev` with `change-not-paused`, and without either the snapshot or the loader part), `test_delivery_state.py` and `test_target_contract.py` 125 passed, scoped Ruff clean, one `uv run test --changed --base origin/dev` (unsharded, 651.65 s) 3440 passed, 1 skipped, exit 0; live scan read-only: all 3 runtime contracts and 9 packages ASCII; recovery rehearsal on copies of the disposable project (§3.2.1); LC on `4d126f887` (live copy, user authorization 2026-10-05; `ubuntu:24.04`, volume `n00a-uv-cache`; 139 live records): upgrade form from `841b1cffb` passed with the N10-A proposal (`runtime/format.json` `format-marker` `fbee38db…` → `f2a27400…`, step `format-2-to-3`), only that record changed, two healthy starts with 3 of 3 available, Cockpit 200 and bundle equal, `verify` true, rollback refused `state-newer-than-controller`; full form passed; `compare` after each `live_unchanged: true`; stages removed. H7, own runs on `1ec148a15`: `test_design_return_release_refusal_changes_nothing` 6 passed, its new `same-task` case fails with the `origin/dev` sources (message does not match); scoped Ruff check and format clean; agent-ecosystem tests 70 passed; one `uv run test --changed --base origin/dev` (unsharded, 578.77 s) 3441 passed, 1 skipped, exit 0; journey frontier read-only: OUT-002 holds the `same-task` handoff for TASK-002-01 and the Change is deferred, the state the new case covers; LC not applicable (no persisted or loading change); no journey-copy run. #385: builder changed-scope pytest 3442 passed, 1 skipped; CI green. #386: builder 187 focused tests passed; review reran 188 passed, scoped Ruff clean, new tests fail on the baseline. #387: builder vitest 118 passed, Biome clean, build ok, Ruff clean; re-review vitest 62 passed, pytest 772 passed. #388: subprocess test against a format-4 workspace (exit 1, one stderr line, no traceback, empty stdout), mixed-group propagation and multiline-escaping tests; `test_target_server.py` 132 passed; review measured 92 stderr lines before, one after. D7 regression gate on `b4514b34b` (lane d, 2026-10-06): `uv run test` pytest 4740 passed, 1 skipped, 0 failed (703.41 s, 10 workers), vitest 32 files, 379 passed; `npm run build` ok; `npm run test:e2e:work` 31 passed. LC on `b4514b34b` (live copy, `ubuntu:24.04`, volume `n00a-uv-cache`, 139 live records): upgrade form from `841b1cffb` passed with the N10-A proposal (`runtime/format.json` `format-marker` `fbee38db…` → `f2a27400…`, step `format-2-to-3`), only that record changed, two healthy starts with 3 of 3 available, Cockpit 200 and bundle equal, checkout controller refused `controller-not-pinned`, `verify` true, rollback refused `state-newer-than-controller`; full form passed; `compare` after each `live_unchanged: true`; stages removed | #384: independent review, one finding fix-now (refusal wording for an exhausted handoff), reworded. #385: independent review, no code defects; F1 fix-now applied. #386: Sol, one finding (H11 reads may complete pending transaction recovery) rejected (§3.2.1). #387: Sol on `904a11e6e`, two findings fix-now (publication continuation prompts; residual "deferred" wording), repaired in `c42b5144b`, re-review accepted. #388: independent review, one repair (line breaks escaped) | merged; journey complete (§3.2.1); evidence docs (this PR) |
 | N10-M | record (this PR) | live pinned to `d25349567` (format 3) | §3.3.1: rehearsed proposal applied and verified; three Changes unchanged across the upgrade; two abandoned with cleaned worktrees, B1 waiting on its pilot request; 24 cited issue tests (85 cases) passed on `d25349567`; seven issues closed with evidence | — | complete 2026-10-06 |
-| N10-N | — | — | — | — | planned |
+| N10-N | — | — | — | — | planned (§3.4, N10-N-A) |
 
 ## 5. Verification Gaps
 
