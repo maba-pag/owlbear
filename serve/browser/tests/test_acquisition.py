@@ -163,12 +163,13 @@ async def test_acquire_reports_missing_content_selector() -> None:
             result = await BrowserContentFetcher(context).acquire(
                 AcquisitionRequest(
                     f"http://127.0.0.1:{server.server_port}/page",
-                    content_selector="#missing",
+                    content_selector='a[href="https://example.test/cb?code=abc123#private"]',
                     readiness_timeout_ms=200,
                 )
             )
             await browser.close()
         assert result.status is AcquisitionStatus.SELECTOR_NOT_FOUND
+        assert result.diagnostics.details == {"selector": "content_selector"}
     finally:
         server.shutdown()
         server.server_close()
@@ -236,9 +237,13 @@ async def test_acquire_reports_unsupported_target_at_public_boundary() -> None:
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch()
         context = await browser.new_context()
-        result = await BrowserContentFetcher(context).acquire(AcquisitionRequest("file:///tmp/page.html"))
+        fetcher = BrowserContentFetcher(context)
+        result = await fetcher.acquire(AcquisitionRequest("file:///tmp/page.html"))
+        relative = await fetcher.acquire(AcquisitionRequest("/cb?code=abc123#private"))
         await browser.close()
     assert result.status is AcquisitionStatus.UNSUPPORTED_TARGET
+    assert relative.status is AcquisitionStatus.UNSUPPORTED_TARGET
+    assert relative.diagnostics.details == {"reason": "unsupported_url"}
 
 
 @pytest.mark.asyncio

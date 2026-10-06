@@ -57,7 +57,7 @@ class BrowserContentFetcher:
         if parsed_request_url.scheme.lower() not in {"http", "https"} or not parsed_request_url.netloc:
             return AcquisitionFailure(
                 AcquisitionStatus.UNSUPPORTED_TARGET,
-                Diagnostics("validation", {"url": request.url}),
+                Diagnostics("validation", {"reason": "unsupported_url"}),
             )
         page = self._pending_page or await self._context.new_page()
         self._pending_page = None
@@ -97,7 +97,7 @@ class BrowserContentFetcher:
                 if request.content_selector and await region.count() == 0:
                     return AcquisitionFailure(
                         AcquisitionStatus.SELECTOR_NOT_FOUND,
-                        Diagnostics("selection", {"selector": request.content_selector}),
+                        Diagnostics("selection", {"selector": "content_selector"}),
                     )
                 if request.readiness_selector:
                     await page.wait_for_selector(request.readiness_selector, timeout=request.readiness_timeout_ms)
@@ -122,13 +122,13 @@ class BrowserContentFetcher:
                     if request.content_selector and not previous_text.strip():
                         return AcquisitionFailure(
                             AcquisitionStatus.SELECTOR_NOT_FOUND,
-                            Diagnostics("selection", {"selector": request.content_selector}),
+                            Diagnostics("selection", {"selector": "content_selector"}),
                         )
                     raise TimeoutError  # noqa: TRY301
             except Exception as error:  # noqa: BLE001
                 return AcquisitionFailure(
                     AcquisitionStatus.CONTENT_NOT_READY,
-                    Diagnostics("readiness", {"error": type(error).__name__, "selector": request.readiness_selector}),
+                    Diagnostics("readiness", {"error": type(error).__name__, "selector": "readiness_selector"}),
                 )
 
             final_url = page.url
@@ -182,7 +182,7 @@ class BrowserContentFetcher:
             if await region.count() == 0:
                 return AcquisitionFailure(
                     AcquisitionStatus.SELECTOR_NOT_FOUND,
-                    Diagnostics("selection", {"selector": request.content_selector}),
+                    Diagnostics("selection", {"selector": "content_selector"}),
                 )
             rendered_html = await region.first.inner_html()
             if not rendered_html.strip():
