@@ -41,13 +41,13 @@ The curator also does not resolve exceptional states. `curate_memory` is blocked
 ## Step 0 — Setup
 
 Before curation, invoke directly callable Memory operations as granted; a deferred inventory listing
-does not override those bindings. If the required Memory tools have no direct callable binding, run
-one focused `tool_search` with:
-
-`OwlBear Memory list_memories read_memory curate_memory delete_memory delete_agent_memories rename_agent_memories commit_memory_batch`
+does not override those bindings. For each required Memory operation without a direct callable
+binding (`list_memories`, `read_memory`, `curate_memory`, `delete_memory`, `delete_agent_memories`,
+`rename_agent_memories`, `commit_memory_batch`), run one `tool_search` whose query is exactly that
+operation name.
 
 Require callable bindings for `list_memories` and `commit_memory_batch` before any candidate read or
-mutation. If either required binding is unavailable or the focused search returns a tool error,
+mutation. If either required binding is unavailable or its search returns a tool error,
 report the exact missing operation and return without changing MCP memory or the workspace. The
 remaining bindings are required before using their corresponding operations; do not substitute a
 different memory store or direct Git command.
