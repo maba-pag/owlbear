@@ -521,6 +521,14 @@ def test_projector_carries_change_pause_availability_and_fails_closed_by_default
         default.model_validate({**default.model_dump(), "pause_available": True})
 
 
+def test_change_without_terminal_record_projects_abandon_available_for_every_detail() -> None:
+    projector = WorkItemProjector(
+        _snapshot((_binding("OUT-001", DeliveryStage.PLANNING), _binding("OUT-002", DeliveryStage.PLANNING)))
+    )
+
+    assert all(projector.show_view(item_key).abandon_available for item_key in ("outcome:OUT-001", "outcome:OUT-002"))
+
+
 def test_completed_outcome_progress_and_detail_contain_result_evidence() -> None:
     projector = WorkItemProjector(
         _snapshot(
@@ -949,6 +957,10 @@ def test_deferred_change_projects_paused_outcomes_and_resume_action() -> None:
     prompt = "/design portfolio-change Change requirements:"
     assert projector.show_view("outcome:OUT-001").revision_prompt == prompt
     assert projector.show_view("publication").revision_prompt == prompt
+    assert all(
+        projector.show_view(item_key).abandon_available
+        for item_key in ("outcome:OUT-001", "outcome:OUT-002", "publication")
+    )
 
 
 def test_abandoned_change_projects_terminal_publication_without_action() -> None:
@@ -972,6 +984,10 @@ def test_abandoned_change_projects_terminal_publication_without_action() -> None
     assert group.items[-1].next_step == "Change abandoned"
     assert group.items[-1].action.kind == WorkItemActionKind.NONE
     assert projector.show_view("publication").revision_prompt is None
+    assert all(
+        not projector.show_view(item_key).abandon_available
+        for item_key in ("outcome:OUT-001", "outcome:OUT-002", "publication")
+    )
 
 
 def test_ready_pull_request_waits_for_user_merge_without_merge_control() -> None:
@@ -1077,3 +1093,7 @@ def test_merged_latch_projects_distinct_finalized_and_accepted_heads() -> None:
     assert detail.publication.finalized_head != detail.publication.accepted_merge_commit
     assert detail.revision_prompt is None
     assert completed.show_view("publication").revision_prompt is None
+    assert all(
+        not completed.show_view(item_key).abandon_available
+        for item_key in ("outcome:OUT-001", "outcome:OUT-002", "publication")
+    )

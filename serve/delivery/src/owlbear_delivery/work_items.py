@@ -607,6 +607,7 @@ class WorkItemDetailView(_ProjectionModel):
     publication: WorkItemPublicationView | None = None
     readiness: DeliveryReadiness | None = None
     change_progress: DeliveryProgress | None = None
+    abandon_available: bool = False
     pause_available: bool = False
     pause_unavailable_reason: ChangePauseUnavailableReason | None = "state-unavailable"
     evidence: DeliveryEvidenceProjection | None = None
@@ -969,6 +970,8 @@ class WorkItemProjector:
     def show_view(self, item_key: str) -> WorkItemDetailView:
         """Return semantic and operator detail for one scope-qualified key."""
         card = next(item for item in self._cards if item.item_key == item_key)
+        frontier = self._snapshot.frontier
+        abandon_available = frontier.change_completion is None and frontier.change_abandonment is None
         if card.scope == WorkItemScope.CHANGE_PUBLICATION:
             return WorkItemDetailView(
                 snapshot_version=self._snapshot.version,
@@ -979,6 +982,7 @@ class WorkItemProjector:
                 publication=self._publication_view(),
                 readiness=card.readiness,
                 change_progress=self._change_progress,
+                abandon_available=abandon_available,
                 pause_available=self._pause_unavailable_reason is None,
                 pause_unavailable_reason=self._pause_unavailable_reason,
                 evidence=self.evidence(),
@@ -1007,6 +1011,7 @@ class WorkItemProjector:
             retry_diagnostic=binding.retry_diagnostic,
             readiness=card.readiness,
             change_progress=self._change_progress,
+            abandon_available=abandon_available,
             pause_available=self._pause_unavailable_reason is None,
             pause_unavailable_reason=self._pause_unavailable_reason,
             evidence=self.evidence(outcome_id),
