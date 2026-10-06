@@ -96,7 +96,7 @@ def _require_change_mutable(
         "abandon_change",
         "release_design_return",
     }:
-        _conflict("deferred Delivery Change requires resumption before mutation")
+        _conflict("paused Delivery Change requires resumption before mutation")
     if (
         frontier.change_disposition is not None
         and not allow_attention

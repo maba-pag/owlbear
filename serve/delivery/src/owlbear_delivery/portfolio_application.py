@@ -965,7 +965,7 @@ class PortfolioApplication(
         elif frontier.finalization is not None or frontier.ready is not None:
             refusal = ("change-finalized", "run prepare_review_repair, then Pause the Change")
         elif coordination.pause_request is not None:
-            refusal = ("pause-pending", "wait until the Pause request becomes a deferral")
+            refusal = ("pause-pending", "wait until the Pause request takes effect")
         elif frontier.change_deferral is None:
             refusal = ("change-not-paused", "Pause the Change before revising its requirements")
         elif frontier.change_disposition is not None:

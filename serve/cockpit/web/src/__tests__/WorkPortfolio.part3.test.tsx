@@ -236,9 +236,9 @@ it("posts reasoned Change dispositions and resumes a deferred Change", async () 
     title: "Change publication",
     stage: null,
     needs: "you",
-    needs_headline: "Change is deferred",
+    needs_headline: "Change is paused",
     next_actor: "you",
-    next_step: "Resume the deferred Change",
+    next_step: "Resume the paused Change",
     activity: {
       state: "idle",
       worker_role: null,
@@ -247,7 +247,7 @@ it("posts reasoned Change dispositions and resumes a deferred Change", async () 
     },
     progress: {
       kind: "publication",
-      label: "Change deferred",
+      label: "Change paused",
       done: null,
       total: null,
     },

@@ -311,7 +311,8 @@ export default function WorkPortfolioTable({
               <strong className="font-semibold text-primary">
                 {group.outcome_completed} of {group.outcome_total}
               </strong>{" "}
-              outcomes <span aria-hidden="true">·</span> {group.lifecycle.replace(/-/g, " ")}
+              outcomes <span aria-hidden="true">·</span>{" "}
+              {group.lifecycle === "deferred" ? "paused" : group.lifecycle.replace(/-/g, " ")}
             </span>
             {group.progress ? (
               <StatusChip

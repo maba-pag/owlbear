@@ -578,6 +578,7 @@ _EXPECTED: dict[str, tuple[str, WorkItemActionKind | None, bool, str | None, Del
     "request-action": ("ready", WorkItemActionKind.ANSWER_REQUEST, True, None, "needs-decision"),
     "change-paused": ("blocked", None, False, "change_deferral", "paused"),
     "change-terminal": ("complete", None, False, "change_completion", "completed"),
+    "outcome-complete": ("complete", None, False, None, "completed"),
     "task-incomplete": ("waiting", None, False, None, None),
     "workspace-inspection-failed": ("unavailable", None, False, None, None),
     "workspace-dirty": ("blocked", None, False, None, None),

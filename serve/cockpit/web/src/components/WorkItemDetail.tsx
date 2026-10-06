@@ -121,6 +121,8 @@ interface WorkItemDetailProps {
   onDiscardAbandonedTargetSync: (targetHead: string, operationId: string) => Promise<Error | null>;
   onCleanupCompletedChange: (completionId: string) => Promise<Error | null>;
   onRecoverChangeWorktree: (recoveryReviewedHead: string) => Promise<Error | null>;
+  /** The Change's continuation prompt from its portfolio cards; the Change's next step. */
+  changeContinuationPrompt?: string | null;
 }
 
 const WORKER_ROLE_LABELS: Record<DeliveryWorkerRole, string> = {
@@ -461,14 +463,20 @@ function ChangePauseSection(props: WorkItemDetailProps) {
   const item = props.detail.item;
   const phase = item.publication?.phase;
   if (item.change_progress === "completed" || phase === "abandoned") return null;
+  const paused = item.change_progress === "paused" || phase === "deferred";
+  const continuation = props.changeContinuationPrompt;
+  const showContinuation = !paused && continuation && continuation !== item.readiness?.prompt;
   return (
     <section aria-labelledby="change-pause-heading" className="grid gap-static-xs">
       <PHeading id="change-pause-heading" tag="h3" size="sm">
         Change
       </PHeading>
+      {showContinuation ? (
+        <CopyCommand command={continuation} label="Copy continuation prompt" helper={CONTINUATION_PROMPT_HELP} />
+      ) : null}
       <ChangePauseControl
         changeId={item.card.change_id}
-        paused={item.change_progress === "paused" || phase === "deferred"}
+        paused={paused}
         pauseRequested={item.pause_unavailable_reason === "pause-requested"}
         unavailableMessage={changePauseUnavailableMessage(item)}
         pendingAction={props.pendingAction}
@@ -1054,7 +1062,7 @@ const PUBLICATION_PHASE_LABELS: Record<WorkItemPublicationPhase, string> = {
   "pull-request-draft": "Delivery ready state not recorded",
   "awaiting-merge": "Awaiting merge in GitHub",
   "acceptance-observed": "Acceptance observed",
-  deferred: "Change deferred",
+  deferred: "Change paused",
   abandoned: "Change abandoned",
 };
 
@@ -1208,11 +1216,11 @@ function ReadinessSection({
           <code>{readiness.prompt}</code>
         </pre>
       ) : null}
-      {isContinuationPrompt(readiness.prompt, changeId) ? (
+      {readiness.prompt ? (
         <CopyCommand
           className="mt-static-xs"
           command={readiness.prompt}
-          label="Copy continuation prompt"
+          label={isContinuationPrompt(readiness.prompt, changeId) ? "Copy continuation prompt" : "Copy prompt"}
           helper={CONTINUATION_PROMPT_HELP}
         />
       ) : null}

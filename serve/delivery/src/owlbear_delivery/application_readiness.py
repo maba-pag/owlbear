@@ -818,7 +818,7 @@ class _ReadinessViewsMixin:
         return (
             "Settled Finalizer attention retains dirty or stale workspace evidence. Preserve its failure "
             "report, settlement receipt, and retry history; workspace cleanup or a changed fingerprint "
-            "does not authorize retry. Defer or abandon this Change until a supported repair is available. "
+            "does not authorize retry. Pause or abandon this Change until a supported repair is available. "
             f"Inspect read-only with /inspect-change {change_id}."
         )
 
@@ -2011,7 +2011,7 @@ class _ReadinessViewsMixin:
         elif frontier.change_deferral is not None:
             status, reason = ("ready" if operation else "blocked"), "change-paused"
         elif card.scope is WorkItemScope.OUTCOME and card.stage is not None and card.stage.value == "completed":
-            status, reason = "complete", "change-terminal"
+            status, reason = "complete", "outcome-complete"
         elif card.needs is WorkItemNeed.DEPENDENCY:
             status, reason = "waiting", "dependency-wait"
         elif card.needs is WorkItemNeed.YOU and not finalization:

@@ -236,7 +236,7 @@ def _deferral_lifecycle_refusal(
     if frontier.change_abandonment is not None or is_change_terminal(frontier):
         return "change-inactive"
     try:
-        _require_no_active_change_claim(frontier, "Change deferral")
+        _require_no_active_change_claim(frontier, "Change Pause")
     except DeliveryRuntimeConflictError:
         return "step-in-progress"
     if derive_change_stage(frontier) in {DeliveryChangeStage.DEFERRED, DeliveryChangeStage.ABANDONED}:
@@ -414,11 +414,11 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
             return frontier.change_deferral
         _require_change_mutable(frontier, "defer_change")
         if frontier.change_abandonment is not None or is_change_terminal(frontier):
-            _conflict("terminal Delivery Change cannot be deferred")
-        _require_no_active_change_claim(frontier, "Change deferral")
+            _conflict("terminal Delivery Change cannot be paused")
+        _require_no_active_change_claim(frontier, "Change Pause")
         prior_stage = derive_change_stage(frontier)
         if prior_stage in {DeliveryChangeStage.DEFERRED, DeliveryChangeStage.ABANDONED}:
-            _conflict("Change is not eligible for deferral")
+            _conflict("Change is not eligible for Pause")
         deferral = DeliveryChangeDeferral.create(
             change_id=self._contract.change_id,
             prior_stage=prior_stage,
@@ -458,7 +458,7 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
         _require_change_mutable(frontier, "resume_change")
         deferral = frontier.change_deferral
         if deferral is None:
-            _conflict("Delivery Change is not deferred")
+            _conflict("Delivery Change is not paused")
         _require_no_active_change_claim(frontier, "Change resume")
         replacement = frontier.model_copy(update={"change_deferral": None})
         participants = self._builder_handoff_change_intent_participants(

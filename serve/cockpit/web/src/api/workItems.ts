@@ -87,6 +87,7 @@ export type DeliveryReadinessReasonCode =
   | "request-action"
   | "change-paused"
   | "change-terminal"
+  | "outcome-complete"
   | "task-incomplete"
   | "workspace-inspection-failed"
   | "workspace-dirty"
