@@ -226,7 +226,7 @@ def test_reads_repository_and_unique_pull_request_through_fixed_get_vectors() ->
     assert pull_request.number == 7
     assert runner.calls[0][0][-1] == "repos/example/project"
     assert runner.calls[1][0][-1] == (
-        "repos/example/project/pulls?state=all&head=example%3Aowlbear%2Fchange%2Fexample&base=main&per_page=100"
+        "repos/example/project/pulls?state=open&head=example%3Aowlbear%2Fchange%2Fexample&base=main&per_page=100"
     )
     assert runner.calls[2][0][-1] == "repos/example/project/pulls/7"
     assert all(call[1] is None and call[2] == 12.5 for call in runner.calls)
@@ -309,12 +309,8 @@ def test_reads_merged_pull_request_with_fixed_graphql_evidence() -> None:
     )
 
 
-def test_find_pull_request_returns_enriched_merged_public_model() -> None:
-    provider, runner = _provider(
-        _completed([{"number": 7}]),
-        _completed(_merged_pull_response()),
-        _completed(_merged_graphql_response()),
-    )
+def test_find_pull_request_lists_only_open_pull_requests() -> None:
+    provider, runner = _provider(_completed([]))
 
     pull_request = provider.find_pull_request(
         FindPublicationPullRequest(
@@ -324,14 +320,10 @@ def test_find_pull_request_returns_enriched_merged_public_model() -> None:
         )
     )
 
-    assert pull_request is not None
-    assert pull_request.merged is True
-    assert pull_request.merge_commit_sha == _MERGE_OID
-    assert [call[0][-1] for call in runner.calls[:2]] == [
-        "repos/example/project/pulls?state=all&head=example%3Aowlbear%2Fchange%2Fexample&base=main&per_page=100",
-        "repos/example/project/pulls/7",
+    assert pull_request is None
+    assert [call[0][-1] for call in runner.calls] == [
+        "repos/example/project/pulls?state=open&head=example%3Aowlbear%2Fchange%2Fexample&base=main&per_page=100",
     ]
-    assert json.loads(runner.calls[2][1] or b"")["operationName"] == "ReadMergedPullRequest"
 
 
 @pytest.mark.parametrize(
