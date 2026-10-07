@@ -42,15 +42,15 @@ async with PlaywrightLauncher() as launcher:
 
 ## Configuration
 
-The Python API does not read environment variables. `PlaywrightLauncher()` defaults to Chromium;
-pass `mode=BrowserMode.MANAGED_EDGE` to launch Microsoft Edge with the fixed
-`~/.owlbear/edge-profile`. Managed Edge ignores `user_data_dir`. Chromium accepts a dedicated
-`user_data_dir` and defaults to `~/.owlbear/browser-profile` when none is supplied. The Browser MCP's
-`BROWSER_MODE` and `PLAYWRIGHT_USER_DATA_DIR` behavior is documented in the
-[Browser MCP guide](../browser-mcp/README.md#configuration).
+`PlaywrightLauncher()` defaults to Chromium; pass `mode=BrowserMode.MANAGED_EDGE` to launch
+Microsoft Edge with the fixed `~/.owlbear/edge-profile`. Managed Edge ignores `user_data_dir`.
+Chromium accepts a dedicated `user_data_dir` and defaults to `~/.owlbear/browser-profile` when none
+is supplied. The Browser MCP's `BROWSER_MODE` and `PLAYWRIGHT_USER_DATA_DIR` behavior is documented
+in the [Browser MCP guide](../browser-mcp/README.md#configuration).
 
-The optional SSO extension is a Chromium launch aid only. Finding it does not establish that SSO
-works or that any target is authenticated.
+In Chromium mode, extension discovery reads `SSO_EXTENSION_PATH` when set, then uses
+`LOCALAPPDATA` on Windows to locate the bundled Microsoft SSO extension. The optional extension is
+a launch aid only: finding it does not establish that SSO works or that any target is authenticated.
 
 ## Dependencies
 
