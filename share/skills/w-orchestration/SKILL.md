@@ -203,7 +203,8 @@ one.
 ## Step 2 - Dispatch Or Recover Each Launch
 
 For an acquired launch with worker role `planner` or `builder`, dispatch exactly
-`launch.policy.worker_agent` and pass only the serialized `DeliveryLaunchPackage`. The selected
+`launch.policy.worker_agent` and pass only the serialized `DeliveryLaunchPackage`, copied verbatim
+from the acquisition result; never retype, abbreviate, or reconstruct a field. The selected
 agent's frontmatter owns its model. Do not substitute a role, agent, reviewer, worktree, branch, or
 source head.
 
@@ -353,9 +354,11 @@ For an ended Planner/Builder dispatch, identity mismatch or malformed/schema-inv
 `ended-without-result` under Step 2, with launch identities; publish no substitute. A dispatch that
 has not returned during the current session is not settled by Orchestrator. Step 2 permits one
 `release_stuck_worker` call after an explicit user stop; previous-session loss is handled by Delivery
-at acquisition. A rejected `transition_delivery`
-call for worker-output schema validation after the invocation ended and its owned work settled also
-uses this settlement; report the exact failure instead of forwarding or retrying the invalid transition.
+at acquisition. A rejected `transition_delivery` or `settle_worker_invocation` call whose refusal
+names the worker's own payload (schema or a field the stage does not accept), after the invocation
+ended and its owned work settled, also uses this settlement once `get_change` shows the same claim
+still active; report the exact failure instead of forwarding, rewriting, or retrying the invalid
+result. An unknown, transport, or authority failure is not such a refusal and stays contained.
 
 ## Step 4 - Preserve Typed Integration Attention
 

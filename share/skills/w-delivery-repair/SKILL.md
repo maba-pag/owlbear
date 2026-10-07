@@ -15,9 +15,9 @@ preserved and diagnosed, never repaired by hand.
 
 Run `delivery-diagnose inspect` first (the prompt names the exact command and its source fallback).
 Then run `delivery-repair classify --format json` for the project, adding `--change-id` when the
-user named a Change. Prefer the installed entry; when it is unavailable use
-`uv run --no-sync delivery-repair` from the OwlBear checkout. Never run `uv sync`, setup or lifecycle
-commands from this workflow.
+user named a Change. Run it through the uv-managed environment as `uv run --no-sync delivery-repair`
+from the OwlBear checkout; a bare shell entry may not be on `PATH`. Never run `uv sync`, setup or
+lifecycle commands from this workflow.
 
 If `classify` returns the `C09` maintenance finding (Delivery cannot be imported), report it with
 the inspector's diagnostic codes and stop: platform defects follow the maintenance route, not this

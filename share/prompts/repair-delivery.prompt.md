@@ -9,11 +9,12 @@ Change (optional): ${input:change:Native Change ID to scope the diagnosis, or le
 Read and follow `../skills/w-delivery-repair/SKILL.md`.
 
 Always start with the read-only bootstrap: run the fixed `delivery-diagnose inspect` operation for
-the current project (optionally scoped with `--change-id`) with `PYTHONDONTWRITEBYTECODE=1`. If the
-installed entry is unavailable, invoke the source fallback exactly as
-`python -B serve/tools/src/owlbear_tools/delivery_diagnostics.py inspect`; do not run `uv sync`,
-setup, initialization, or lifecycle commands. In a consumer project, run every command from the
-project root through the OwlBear checkout (`uv --project ../owlbear run --no-sync delivery-diagnose`,
+the current project (optionally scoped with `--change-id`) through the uv-managed environment as
+`PYTHONDONTWRITEBYTECODE=1 uv run --no-sync delivery-diagnose inspect`. If that entry is unavailable,
+invoke the source fallback exactly as
+`uv run --no-sync python -B serve/tools/src/owlbear_tools/delivery_diagnostics.py inspect`; do not run
+`uv sync`, setup, initialization, or lifecycle commands. In a consumer project, run every command from
+the project root through the OwlBear checkout (`uv --project ../owlbear run --no-sync delivery-diagnose`,
 `delivery-repair` likewise) and prefix the fallback path with that checkout (`../owlbear/serve/...`).
 If the terminal is unavailable, report unavailable;
 do not substitute another tool. The tool declaration is not an automation-permission bypass and
