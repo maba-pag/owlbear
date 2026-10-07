@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from owlbear_delivery.acceptance import CompletionReceiptConflictError, CompletionReceiptStore
 from owlbear_delivery.acceptance_criteria import acceptance_criteria, is_authored_contract
 from owlbear_delivery.delivery_runtime import (
     DeliveryFrontier,
@@ -213,6 +214,8 @@ class DeliveryAuthorityRegistry:
                 message = f"Design package changed before admission: {request.change_id}"
                 raise DeliveryAdmissionConflictError(message)
             current = self._read_current(request.change_id)
+            if current is None or current.is_partial:
+                self._require_no_completed_history(request.change_id)
             if (current is None or current.is_partial) and not is_authored_contract(compiled.contract):
                 message = "first admission requires an AC-NNN identity on every acceptance item"
                 raise DeliveryAdmissionValidationError(
@@ -313,6 +316,16 @@ class DeliveryAuthorityRegistry:
                 message = f"Delivery authority changed during revision activation: {request.change_id}"
                 raise DeliveryAdmissionConflictError(message) from exc
             return _delivery_result(compiled, frontier, receipt, carry_forward, replayed=resumed)
+
+    def _require_no_completed_history(self, change_id: str) -> None:
+        """Completed Changes are immutable history; new work under their ID needs a successor Change."""
+        try:
+            completed = CompletionReceiptStore(self._target_root).read_bundle(change_id) is not None
+        except CompletionReceiptConflictError:
+            completed = True
+        if completed:
+            message = f"Change ID already has completed history; start a successor Change: {change_id}"
+            raise DeliveryAdmissionConflictError(message)
 
     def _revision_recorded(self, change_id: str, frontier_digest: str) -> bool:
         """Recognize a replayed request whose activation already moved that frontier into history."""

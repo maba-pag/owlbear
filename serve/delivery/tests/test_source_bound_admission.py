@@ -51,6 +51,13 @@ from owlbear_delivery import (
     OutcomeAuthorityBinding,
     PublishDeliveryPlan,
 )
+from owlbear_delivery.acceptance import (
+    CompletionDisplayMetadata,
+    CompletionEvidence,
+    CompletionPullRequestIdentity,
+    CompletionReceipt,
+    CompletionReceiptStore,
+)
 from owlbear_delivery.acceptance_criteria import acceptance_criteria
 from owlbear_delivery.evidence import evaluate_acceptance_evidence, observation_gaps
 from owlbear_delivery.git_executable import resolve_git_executable
@@ -173,6 +180,67 @@ def test_admission_rejects_stale_approved_package_before_publication(
         )
 
     assert not (target_root / "changes/source-bound-change").exists()
+
+
+def _retain_completion(target_root: Path, change_id: str) -> dict[Path, bytes]:
+    digest = hashlib.sha256(change_id.encode()).hexdigest()
+    receipt = CompletionReceipt.create(
+        CompletionEvidence(
+            change_id=change_id,
+            finalization_receipt_id=digest,
+            finalized_change_head=digest[:40],
+            repository_identity="example/project",
+            pull_request_identity=CompletionPullRequestIdentity(number=7, node_id="PR_node_7"),
+            accepted_target_ref="product",
+            accepted_merge_commit=digest[-40:],
+            merged_at=datetime(2026, 8, 11, 12, tzinfo=UTC),
+            acceptance_observation_id=digest,
+            check_observation_ids=(digest,),
+            review_receipt_ids=(digest,),
+            completed_at=datetime(2026, 8, 11, 13, tzinfo=UTC),
+        )
+    )
+    display = CompletionDisplayMetadata.create(
+        change_id=change_id,
+        completion_id=receipt.completion_id,
+        title="Earlier delivery",
+        outcome_titles=("Earlier result",),
+        outcome_promises=("Deliver the earlier result.",),
+    )
+    store = CompletionReceiptStore(target_root)
+    retained = {}
+    for participant in (store.participant(receipt), store.display_participant(display)):
+        destination = participant.destination()
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(participant.content)
+        retained[destination] = participant.content
+    return retained
+
+
+@pytest.mark.parametrize("malformed", [False, True])
+def test_first_admission_refuses_change_id_with_completed_history(
+    repository: Path,
+    tmp_path: Path,
+    *,
+    malformed: bool,
+) -> None:
+    active_root = tmp_path / "active"
+    target_root = tmp_path / "target"
+    package_store = DesignPackageStore(active_root, repository)
+    package_store.create("source-bound-change", *_sources())
+    retained = _retain_completion(target_root, "source-bound-change")
+    if malformed:
+        display = target_root / "completions/source-bound-change/display.json"
+        display.unlink()
+        del retained[display]
+    registry = DeliveryAuthorityRegistry(target_root, package_store, integration_target="product")
+
+    with pytest.raises(DeliveryAdmissionConflictError, match="already has completed history"):
+        registry.admit(_request(package_store))
+
+    assert not (target_root / "changes/source-bound-change").exists()
+    assert not _git(repository, "for-each-ref", "refs/owlbear/packages/source-bound-change")
+    assert {path: path.read_bytes() for path in retained} == retained
 
 
 def _canonical(model: DeliveryFrontier) -> bytes:
