@@ -4,6 +4,21 @@
 
 External repos and resources studied during OwlBear development.
 
+## OwlBear Distribution Under the Agent Host
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| VS Code agent plugins | <https://code.visualstudio.com/docs/copilot/customization/agent-plugins> | Plugin components, install sources, `chat.pluginLocations`, update behavior | [distribution research](../research/owlbear-distribution-agent-host.md) | 2026-10-07 |
+| VS Code Agent Host | <https://code.visualstudio.com/docs/agents/concepts/agent-host> | Agent Host MCP and customization sources | [distribution research](../research/owlbear-distribution-agent-host.md) | 2026-10-07 |
+| VS Code customization overview | <https://code.visualstudio.com/docs/agent-customization/overview> | Deprecated location settings and migrations | [distribution research](../research/owlbear-distribution-agent-host.md) | 2026-10-07 |
+| VS Code prompt files | <https://code.visualstudio.com/docs/copilot/customization/prompt-files> | Prompt files not loaded by Agent Host | [distribution research](../research/owlbear-distribution-agent-host.md) | 2026-10-07 |
+| VS Code MCP servers and configuration | <https://code.visualstudio.com/docs/agents/reference/mcp-configuration> | Portable `.mcp.json`, `cwd` default, forwarding | [distribution research](../research/owlbear-distribution-agent-host.md) | 2026-10-07 |
+| VS Code agent harnesses | <https://code.visualstudio.com/docs/agents/concepts/agent-harnesses> | Folder versus worktree isolation | [distribution research](../research/owlbear-distribution-agent-host.md) | 2026-10-07 |
+| VS Code hooks | <https://code.visualstudio.com/docs/agent-customization/hooks> | Harness-specific hooks; agent-scoped hooks Local only | [distribution research](../research/owlbear-distribution-agent-host.md) | 2026-10-07 |
+| Agent Plugins spec 1.0.0 | <https://github.com/agentplugins/agent-plugins-spec/blob/main/spec/1.0.0.md> | MCP `cwd` rules, placeholders, `PLUGIN_DATA` | [distribution research](../research/owlbear-distribution-agent-host.md) | 2026-10-07 |
+| Copilot CLI plugin reference | <https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-plugin-reference> | Marketplace `ref`/`sha` pins, auto-update, precedence | [distribution research](../research/owlbear-distribution-agent-host.md) | 2026-10-07 |
+| GitHub custom agents configuration | <https://docs.github.com/en/copilot/reference/custom-agents-configuration> | Agent frontmatter without `hooks` | [distribution research](../research/owlbear-distribution-agent-host.md) | 2026-10-07 |
+
 ## GitHub Review and Cloud Instructions
 
 | Source | URL | What | Where Used | Date |
