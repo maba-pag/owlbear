@@ -244,7 +244,8 @@ export function changeProgressReadiness(
       readiness.reason_code === "engine-action-pending" ||
       readiness.reason_code === "worker-stall-wait",
   );
-  return held ?? matching[0] ?? null;
+  // Any runnable step means running the prompt helps now, whichever card Delivery ranks first.
+  return held ?? matching.find((readiness) => readiness.executable) ?? matching[0] ?? null;
 }
 
 /** The Change advances only after the user runs its prompt in a new chat, and nothing says to wait first. */

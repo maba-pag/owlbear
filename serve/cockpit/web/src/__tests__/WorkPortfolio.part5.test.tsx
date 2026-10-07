@@ -1132,7 +1132,7 @@ it("tells the user to wait, not to run the prompt, while a closed worker's claim
   const held = { ...stalled, item_key: "outcome:OUT-002", work_item_id: "OUT-002", title: "Stalled outcome" };
   fixtureState.currentPortfolio = portfolio([group({ progress: "waiting-for-chat", items: [ready, held] })]);
   fixtureState.currentDetail = detail({ card: ready, readiness: ready.readiness, change_progress: "waiting-for-chat" });
-  renderPage("/delivery/change-alpha/outcome%3AOUT-001");
+  const { unmount: unmount2 } = renderPage("/delivery/change-alpha/outcome%3AOUT-001");
 
   table = await screen.findByTestId("work-portfolio-table");
   expect(within(table).getByTestId("change-progress-change-alpha")).toHaveTextContent(
@@ -1141,6 +1141,19 @@ it("tells the user to wait, not to run the prompt, while a closed worker's claim
   expect(screen.getByTestId("portfolio-activity-run-prompt")).toHaveTextContent("0Run prompt");
   const inspector = await screen.findByTestId("work-item-detail");
   expect(within(inspector).getByTestId("change-progress")).toHaveTextContent(`Wait until ${time}, then run prompt`);
+  unmount2();
+
+  // A backed-off outcome listed first must not hide a sibling the prompt can start now.
+  const backedOff = {
+    ...held,
+    readiness: { ...stalled.readiness, reason_code: "retry-backoff" as const },
+  };
+  fixtureState.currentPortfolio = portfolio([group({ progress: "waiting-for-chat", items: [backedOff, ready] })]);
+  renderPage();
+
+  table = await screen.findByTestId("work-portfolio-table");
+  expect(within(table).getByTestId("change-progress-change-alpha")).toHaveTextContent("Run prompt in Copilot Chat");
+  expect(screen.getByTestId("portfolio-activity-run-prompt")).toHaveTextContent("1Run prompt");
 });
 
 it("renders held custody neutrally and unknown issuer evidence as a decision", async () => {
