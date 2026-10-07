@@ -672,7 +672,11 @@ def _validate_local_snapshot(  # noqa: C901 - one predicate per recognized local
     if revision != "activated":
         _validate_local_snapshot_artifacts(relative_root, expected)
     try:
-        completion = CompletionReceiptStore(paths.runtime_root).read_bundle(snapshot.change_id)
+        completion = (
+            None
+            if frontier.change_completion is None
+            else CompletionReceiptStore(paths.runtime_root).read_bundle(snapshot.change_id)
+        )
     except RuntimeError as exc:
         _bootstrap_failure("local completion evidence cannot be reconciled with its remote snapshot", exc)
     if completion != snapshot.completion:
@@ -2468,7 +2472,9 @@ def _restore_runtime_snapshot(snapshot: DeliveryStateSnapshot, runtime_root: Pat
         TransactionParticipant(runtime_root, relative_root / "admission.json", _canonical_model(snapshot.admission)),
     )
     completion_store = CompletionReceiptStore(runtime_root)
-    existing_completion = completion_store.read_bundle(snapshot.change_id)
+    existing_completion = (
+        None if snapshot.frontier.change_completion is None else completion_store.read_bundle(snapshot.change_id)
+    )
     if existing_completion != snapshot.completion:
         if existing_completion is not None:
             _bootstrap_failure("local completion evidence differs from its remote snapshot")

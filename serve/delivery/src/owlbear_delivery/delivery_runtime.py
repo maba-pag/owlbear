@@ -1250,7 +1250,10 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
         return receipt
 
     def completion_bundle(self) -> CompletionReceiptBundle | None:
-        """Return the immutable completion evidence for this Change, if present."""
+        """Return completion evidence only when this Change's frontier records its completion."""
+        frontier, _previous = self._read()
+        if frontier.change_completion is None:
+            return None
         return CompletionReceiptStore(self._target_root).read_bundle(self._contract.change_id)
 
     def finalize_change(
