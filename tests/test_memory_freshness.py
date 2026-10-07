@@ -12,8 +12,10 @@ import pytest
 from owlbear_memory import MemoryEngine
 
 
-def _rewrite_in_place(path: str, content: bytes, mtime_ns: int) -> None:
-    target = Path(path)
+def _rewrite_in_place(memory_dir: str, entry_id: str, content: bytes, mtime_ns: int) -> None:
+    memory_dir_path = Path(memory_dir)
+    entry = MemoryEngine(memory_dir_path).get_entry(entry_id)
+    target = memory_dir_path / f"{entry.id}.md"
     with target.open("r+b") as entry_file:
         entry_file.write(content)
         entry_file.truncate()
@@ -40,7 +42,7 @@ def test_get_entries_refreshes_after_external_in_place_rewrite(tmp_path: Path) -
     context = multiprocessing.get_context("spawn")
     process = context.Process(
         target=_rewrite_in_place,
-        args=(str(entry_path), content, original_stat.st_mtime_ns + 2_000_000_000),
+        args=(str(tmp_path), entry.id, content, original_stat.st_mtime_ns + 2_000_000_000),
     )
 
     process.start()
