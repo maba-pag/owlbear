@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -29,6 +30,8 @@ _MAX_ANCESTRY = 32
 _CREATE_TIME_TOLERANCE_SECONDS = 1.0
 _MAX_REPORTED_NAMES = 5
 _MAX_REPORTED_NAME_LENGTH = 32
+# macOS's sealed, read-only system volume; /System/Volumes holds the writable data and other volumes.
+_SEALED_SYSTEM_ROOT: Path | None = Path("/System") if sys.platform == "darwin" else None
 _ATTEMPT_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _CHANGE_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _logger = logging.getLogger(__name__)
@@ -159,6 +162,10 @@ class ProcessView(Protocol):
         """Return the regular files currently open by the process."""
         ...
 
+    def executable(self) -> Path | None:
+        """Return the executable path, if any."""
+        ...
+
     def has_live_children(self) -> bool:
         """Return whether any non-zombie child process exists."""
         ...
@@ -235,6 +242,25 @@ def _worktree_cwd_blocks(process: ProcessView, roots: tuple[Path, ...]) -> bool:
         return True
 
 
+def _is_sealed_system_binary(process: ProcessView) -> bool:
+    """Whether the executable lies on the sealed system volume, which only OS updates can write."""
+    if _SEALED_SYSTEM_ROOT is None:
+        return False
+    try:
+        executable = process.executable()
+    except ProcessVanishedError:
+        raise
+    except ProcessObservationError:
+        return False
+    return (
+        executable is not None
+        and executable.is_absolute()
+        and ".." not in executable.parts
+        and executable.is_relative_to(_SEALED_SYSTEM_ROOT)
+        and not executable.is_relative_to(_SEALED_SYSTEM_ROOT / "Volumes")
+    )
+
+
 def _blocks(process: ProcessView, roots: tuple[Path, ...]) -> bool:
     """Judge readable evidence first; raise ``ProcessObservationError`` only when no worktree link is established."""
     unreadable: ProcessObservationError | None = None
@@ -255,6 +281,9 @@ def _blocks(process: ProcessView, roots: tuple[Path, ...]) -> bool:
     except ProcessObservationError as exc:
         unreadable = exc
     if unreadable is not None:
+        # Hardened OS daemons deny open-file reads even to their owner; a readable outside cwd suffices.
+        if cwd is not None and _is_sealed_system_binary(process):
+            return False
         raise unreadable
     return False
 
@@ -301,6 +330,14 @@ class _PsutilProcessView:
             return tuple(Path(item.path) for item in self._process.open_files())
         except (psutil.Error, OSError) as exc:
             raise _observation_error(exc) from exc
+
+    def executable(self) -> Path | None:
+        self._require_owner()
+        try:
+            executable = self._process.exe()
+        except (psutil.Error, OSError) as exc:
+            raise _observation_error(exc) from exc
+        return Path(executable) if executable else None
 
     def has_terminal(self) -> bool:
         try:
