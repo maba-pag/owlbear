@@ -672,7 +672,11 @@ def _validate_local_snapshot(  # noqa: C901 - one predicate per recognized local
     if revision != "activated":
         _validate_local_snapshot_artifacts(relative_root, expected)
     try:
-        completion = CompletionReceiptStore(paths.runtime_root).read_bundle(snapshot.change_id)
+        completion = (
+            None
+            if frontier.change_completion is None
+            else CompletionReceiptStore(paths.runtime_root).read_bundle(snapshot.change_id)
+        )
     except RuntimeError as exc:
         _bootstrap_failure("local completion evidence cannot be reconciled with its remote snapshot", exc)
     if completion != snapshot.completion:
