@@ -31,6 +31,7 @@ from owlbear_delivery.application_merge import (
     DeliveryMergeError,
 )
 from owlbear_delivery.application_models import (
+    DeliveryActionBusyError,
     DeliveryChangeIntent,
     DeliveryChangeIntentKind,
     PortfolioApplicationError,
@@ -776,3 +777,33 @@ def test_check_again_reads_without_extending_the_approval_window(tmp_path: Path)
     with _counted_reads() as reads, pytest.raises(DeliveryAcceptanceWaitingError):
         application.observe_acceptance("change-a")
     assert reads.call_count > 0
+
+
+def test_an_observation_interrupted_after_the_merge_settles_recovers_after_a_restart(tmp_path: Path) -> None:
+    application, runtime, memory, _head, state_root = _memory_awaiting_merge(tmp_path)
+    now = [_START]
+    _with_clock(application, now)
+    _approve(application)
+    memory.execute_pending_merges()
+
+    with (
+        patch.object(PortfolioApplication, "_observe_acceptance_once", side_effect=_Crash),
+        pytest.raises(_Crash),
+    ):
+        application.reconcile_awaiting_acceptance(("change-a",))
+    assert (_attempt(state_root).state, runtime.completion_receipt()) == (MergeAttemptState.MERGED, None)
+    reopened = _reopen_with_providers(tmp_path, application, runtime, state_root, now)
+    now[0] = _START + timedelta(seconds=31)
+
+    assert reopened.reconcile_awaiting_acceptance(("change-a",))[0].status.value == "completed"
+    assert (len(_completions(state_root)), len(memory.merge_request_bodies)) == (1, 1)
+
+
+def test_retained_custody_skips_only_that_change_in_the_acceptance_batch(tmp_path: Path) -> None:
+    application, *_ = _memory_awaiting_merge(tmp_path)
+    busy = DeliveryActionBusyError("selected Change retains engine action custody: continue-1")
+
+    with patch.object(application, "_runtime", side_effect=busy):
+        outcome = application._reconcile_awaiting_acceptance_change("change-a")
+
+    assert (outcome.status.value, outcome.code) == ("skipped", "ERR_DELIVERY_RECONCILIATION_BUSY")

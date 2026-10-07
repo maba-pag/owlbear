@@ -435,7 +435,12 @@ class PortfolioApplication(
         self,
         change_id: str,
     ) -> DeliveryAcceptanceReconciliationOutcome:
-        runtime = self._runtime(change_id, for_mutation=True)
+        try:
+            runtime = self._runtime(change_id, for_mutation=True)
+        except (DeliveryRuntimeConflictError, DeliveryWorkerExclusionRequiredError) as exc:
+            return self._reconciliation_skipped_outcome(
+                change_id, str(exc) or "Change custody is retained.", code="ERR_DELIVERY_RECONCILIATION_BUSY"
+            )
         try:
             with locked_roots((self._checkpoint_lock_root(change_id),), blocking=False):
                 if not self._is_acceptance_reconciliation_eligible(runtime):
@@ -728,6 +733,12 @@ class PortfolioApplication(
                     reason_code=RetryStopCode.ACCEPTANCE_WAIT.value,
                     stop_code=RetryStopCode.ACCEPTANCE_WAIT,
                 )
+            # Callers hold the checkpoint lock, so a pending read of this approval was interrupted.
+            for orphan in ledger.pending_attempts():
+                if orphan.key == key:
+                    ledger.record_failure(
+                        orphan.attempt_id, failure_code="acceptance-interrupted", now=orphan.reserved_at
+                    )
         else:
             key = RetryEpisodeKey.engine(
                 change_id,
