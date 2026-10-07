@@ -278,18 +278,17 @@ async def commit_memory_batch(ctx: Context, *, session_type: str) -> dict[str, A
         msg = f"memory batch commit failed: {detail}"
         raise ToolError(msg) from exc
 
-    if not result.commit_sha:
-        return {
-            "session_type": session_type,
-            "commit_sha": None,
-            "committed": False,
-            "hint": "No memory changes to commit.",
-        }
+    committed = result.commit_sha is not None
+    hint = "Reviewed memory changes committed." if committed else "No memory changes to commit."
+    deferred_deletions = list(result.deferred_deletions)
+    if deferred_deletions:
+        hint += " Curate the surviving pending entry before retrying the batch commit."
     return {
         "session_type": session_type,
         "commit_sha": result.commit_sha,
-        "committed": True,
-        "hint": "Reviewed memory changes committed.",
+        "committed": committed,
+        "deferred_deletions": deferred_deletions,
+        "hint": hint,
     }
 
 
