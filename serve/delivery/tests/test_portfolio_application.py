@@ -48,7 +48,11 @@ from owlbear_delivery import (
     ChangeWorktreeAttentionError,
     ChangeWriter,
     CompletedHistoryCatalog,
+    CompletionDisplayMetadata,
+    CompletionEvidence,
+    CompletionPullRequestIdentity,
     CompletionReceipt,
+    CompletionReceiptStore,
     CoordinationConflictError,
     CreateOrReconcileDraftPullRequest,
     DeliveryAcceptanceAttentionReason,
@@ -11631,6 +11635,55 @@ def test_change_worktree_cleanup_requires_terminal_authority(tmp_path: Path) -> 
 
     with pytest.raises(PortfolioApplicationError, match="requires an abandoned or completed Change"):
         application.cleanup_change_worktree("change-a")
+
+
+def test_abandoned_readmitted_change_cleans_up_beside_an_earlier_completion(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    coordination = application._workspace_manager.show("change-a")
+    application.abandon_change("change-a", "User stopped the Change")
+    digest = hashlib.sha256(b"change-a").hexdigest()
+    completed_at = datetime(2026, 8, 11, 13, tzinfo=UTC)
+    earlier = CompletionReceipt.create(
+        CompletionEvidence(
+            change_id="change-a",
+            finalization_receipt_id=digest,
+            finalized_change_head=digest[:40],
+            repository_identity="example/project",
+            pull_request_identity=CompletionPullRequestIdentity(number=7, node_id="PR_node_7"),
+            accepted_target_ref="main",
+            accepted_merge_commit=digest[-40:],
+            merged_at=completed_at,
+            acceptance_observation_id=digest,
+            check_observation_ids=(digest,),
+            review_receipt_ids=(digest,),
+            completed_at=completed_at,
+        )
+    )
+    display = CompletionDisplayMetadata.create(
+        change_id="change-a",
+        completion_id=earlier.completion_id,
+        title="Earlier delivery",
+        outcome_titles=("Earlier result",),
+        outcome_promises=("Deliver the earlier result.",),
+    )
+    store = CompletionReceiptStore(runtimes["change-a"]._target_root)
+    for participant in (store.participant(earlier), store.display_participant(display)):
+        participant.destination().parent.mkdir(parents=True, exist_ok=True)
+        participant.destination().write_bytes(participant.content)
+
+    row = application.list_retained_change_worktrees()[0]
+    assert row.cleanup_eligible is True
+    assert row.cleanup_blocked_reason is None
+    assert runtimes["change-a"].completion_receipt() is None
+
+    application.cleanup_abandoned_change_worktree("change-a")
+
+    assert not coordination.worktree_path.exists()
+    assert application.list_retained_change_worktrees() == ()
+    assert store.read_bundle("change-a") is not None
 
 
 def test_abandoned_change_worktree_cleanup_surfaces_lost_worktree_attention(tmp_path: Path) -> None:
