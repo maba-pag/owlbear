@@ -44,15 +44,6 @@ class WorkItemStage(StrEnum):
     COMPLETED = "completed"
 
 
-class WorkItemAttention(StrEnum):
-    """Orthogonal attention state for one work item."""
-
-    USER = "user"
-    AGENT = "agent"
-    WAITING = "waiting"
-    NONE = "none"
-
-
 class WorkItemScope(StrEnum):
     """Production Work Item scopes."""
 
@@ -185,7 +176,6 @@ class WorkItemProjection(_ProjectionModel):
     title: str
     promise: str
     stage: WorkItemStage
-    attention: WorkItemAttention
     dependency_ready: bool
     commitment_ids: tuple[str, ...] = ()
     dependency_ids: tuple[str, ...] = ()
@@ -1928,17 +1918,6 @@ class WorkItemProjector:
     def _compatibility_projection(self, card: WorkItemCardView) -> WorkItemProjection:
         outcome = self._outcomes.get(card.work_item_id)
         binding = self._bindings.get(card.work_item_id)
-        attention = {
-            WorkItemNeed.YOU: WorkItemAttention.USER,
-            WorkItemNeed.DEPENDENCY: WorkItemAttention.WAITING,
-            WorkItemNeed.NONE: WorkItemAttention.AGENT
-            if card.activity.state
-            in {
-                WorkItemActivityState.READY,
-                WorkItemActivityState.WORKING,
-            }
-            else WorkItemAttention.NONE,
-        }[card.needs]
         return WorkItemProjection(
             work_item_id=card.work_item_id,
             change_id=card.change_id,
@@ -1948,7 +1927,6 @@ class WorkItemProjector:
             if outcome is not None
             else "Publish the reviewed Change and observe its user-merged pull request.",
             stage=card.stage or WorkItemStage.COMPLETED,
-            attention=attention,
             dependency_ready=card.needs != WorkItemNeed.DEPENDENCY,
             commitment_ids=outcome.commitment_ids if outcome is not None else (),
             dependency_ids=outcome.dependency_ids if outcome is not None else (),

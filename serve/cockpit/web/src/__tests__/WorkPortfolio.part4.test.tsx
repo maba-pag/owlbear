@@ -892,7 +892,7 @@ it("renders engine readiness without recomputing eligibility", async () => {
   const readinessPanel = within(inspector).getByTestId("delivery-readiness");
   expect(within(readinessPanel).getByTestId("readiness-status")).toHaveTextContent("Blocked");
   expect(within(readinessPanel).getByTestId("readiness-checks-state")).toHaveTextContent("Checks: Not run");
-  expect(readinessPanel).toHaveTextContent("Managed workspace preflight is blocked by local changes.");
+  expect(readinessPanel).toHaveTextContent("Reason: workspace-dirty");
   expect(within(readinessPanel).getByTestId("readiness-not-executable")).toBeInTheDocument();
   expect(readinessPanel).toHaveTextContent("1".repeat(40));
 });

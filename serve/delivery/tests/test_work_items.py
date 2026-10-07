@@ -65,7 +65,6 @@ from owlbear_delivery.work_items import (
     WorkItemAction,
     WorkItemActionKind,
     WorkItemActivityState,
-    WorkItemAttention,
     WorkItemNeed,
     WorkItemNextActor,
     WorkItemProjector,
@@ -375,7 +374,6 @@ def test_design_return_is_user_owned_and_not_projected_as_planning() -> None:
     assert card.action.command == "/design portfolio-change"
     assert card.progress.label == "Returned to Design"
     detail = projector.show("OUT-001")
-    assert detail.projection.attention == WorkItemAttention.USER
     assert detail.return_context == return_context
     assert projector.group_view().lifecycle == "in-delivery"
 
@@ -1031,14 +1029,14 @@ def test_ready_pull_request_waits_for_user_merge_without_merge_control() -> None
             "ready",
             WorkItemNextActor.AGENT,
             WorkItemActionKind.SYNC_TARGET,
-            (WorkItemNeed.NONE, None, WorkItemActivityState.READY, "Target sync needed", WorkItemAttention.AGENT),
+            (WorkItemNeed.NONE, None, WorkItemActivityState.READY, "Target sync needed"),
         ),
         (
             "checks-running",
             "waiting",
             WorkItemNextActor.NONE,
             None,
-            (WorkItemNeed.NONE, None, WorkItemActivityState.IDLE, "Awaiting merge in GitHub", WorkItemAttention.NONE),
+            (WorkItemNeed.NONE, None, WorkItemActivityState.IDLE, "Awaiting merge in GitHub"),
         ),
         (
             "merge-approval-required",
@@ -1050,7 +1048,6 @@ def test_ready_pull_request_waits_for_user_merge_without_merge_control() -> None
                 "Merge pull request in GitHub",
                 WorkItemActivityState.IDLE,
                 "Awaiting merge in GitHub",
-                WorkItemAttention.USER,
             ),
         ),
     ],
@@ -1085,9 +1082,8 @@ def test_awaiting_merge_ownership_follows_final_readiness(reason, status, next_a
     projector = WorkItemProjector(snapshot, (done, done, publication))
 
     card = projector.group_view().items[-1]
-    attention = projector.list_items()[-1].attention
 
-    assert (card.needs, card.needs_headline, card.activity.state, card.progress.label, attention) == expected
+    assert (card.needs, card.needs_headline, card.activity.state, card.progress.label) == expected
     assert card.next_actor is next_actor
 
 

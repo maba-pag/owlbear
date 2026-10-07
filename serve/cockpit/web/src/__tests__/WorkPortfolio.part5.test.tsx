@@ -7,7 +7,7 @@ import type {
   WorkItemAvailableDetailResponse,
   WorkItemCardView,
 } from "../api/workItems";
-import { MERGE_BLOCK_LABELS, READINESS_REASON_LABELS, workItemStatus } from "../components/workItemPresentation";
+import { MERGE_BLOCK_LABELS, workItemStatus } from "../components/workItemPresentation";
 import {
   CONTINUATION_PROMPT,
   card,
@@ -60,7 +60,6 @@ it("maps every coherent engine readiness response to its portfolio state and con
     lifecycle: ChangeGroupView["lifecycle"];
     publication: PublicationView | null;
     chip: string;
-    reason: string;
     actor: string;
     copyLabel: string | null;
   }
@@ -94,7 +93,6 @@ it("maps every coherent engine readiness response to its portfolio state and con
         ready_for_finalization: true,
       },
       chip: "Ready",
-      reason: "Delivery reports this operation is eligible now.",
       actor: "Agent",
       copyLabel: "Copy continuation prompt",
     },
@@ -116,7 +114,6 @@ it("maps every coherent engine readiness response to its portfolio state and con
       lifecycle: "in-delivery",
       publication: null,
       chip: "Running",
-      reason: "An active operation retains Change custody.",
       actor: "Agent",
       copyLabel: null,
     },
@@ -150,7 +147,6 @@ it("maps every coherent engine readiness response to its portfolio state and con
       lifecycle: "in-delivery",
       publication: null,
       chip: "Waiting",
-      reason: "A dependency has not completed yet.",
       actor: "Dependency",
       copyLabel: null,
     },
@@ -173,7 +169,6 @@ it("maps every coherent engine readiness response to its portfolio state and con
       lifecycle: "deferred",
       publication: null,
       chip: "Blocked",
-      reason: "This Change is paused.",
       actor: "You",
       copyLabel: null,
     },
@@ -197,7 +192,6 @@ it("maps every coherent engine readiness response to its portfolio state and con
       lifecycle: "publication",
       publication: publicationForChecks("ready-for-finalization"),
       chip: "Unavailable",
-      reason: "Managed workspace readiness could not be observed.",
       actor: "Agent",
       copyLabel: null,
     },
@@ -233,7 +227,6 @@ it("maps every coherent engine readiness response to its portfolio state and con
       lifecycle: "publication",
       publication: publicationForChecks("ready-for-finalization"),
       chip: "Ready",
-      reason: "The Change must be synchronized with its integration target first.",
       actor: "Agent",
       copyLabel: null,
     },
@@ -263,7 +256,6 @@ it("maps every coherent engine readiness response to its portfolio state and con
       lifecycle: "in-delivery",
       publication: null,
       chip: "Complete",
-      reason: "This Change reached a terminal state.",
       actor: "Nobody",
       copyLabel: null,
     },
@@ -289,7 +281,7 @@ it("maps every coherent engine readiness response to its portfolio state and con
     const inspector = await screen.findByTestId("work-item-detail");
     expect(within(inspector).getByTestId("readiness-status")).toHaveTextContent(scenario.chip);
     expect(inspector.querySelector(`[data-readiness-reason="${scenario.state.reason_code}"]`)).toHaveTextContent(
-      scenario.reason,
+      scenario.state.reason_code,
     );
     expect(inspector.querySelector(`[data-readiness-actor="${scenario.state.next_actor}"]`)).toHaveTextContent(
       `Next: ${scenario.actor}`,
@@ -428,7 +420,7 @@ it.each([
   }
 });
 
-it("labels every continuation readiness reason without blanking a new engine state", async () => {
+it("shows every continuation readiness reason code under Details", async () => {
   const continuationReasons: DeliveryReadinessReasonCode[] = [
     "design-attention",
     "builder-transition-contained",
@@ -451,9 +443,6 @@ it("labels every continuation readiness reason without blanking a new engine sta
     "retry-ledger-unavailable",
     "worker-stall-wait",
   ];
-  expect(new Set(continuationReasons.map((reason) => READINESS_REASON_LABELS[reason])).size).toBe(
-    continuationReasons.length,
-  );
 
   const retryCondition = "Wait until the retained attempt can be safely inspected.";
   const containedBuilderAttention: NonNullable<WorkItemAvailableDetailResponse["item"]["recovery_attention"]> = {
@@ -501,9 +490,7 @@ it("labels every continuation readiness reason without blanking a new engine sta
 
     const inspector = await screen.findByTestId("work-item-detail");
     const rendered = inspector.querySelector(`[data-readiness-reason="${reason}"]`);
-    expect(rendered).toHaveTextContent(READINESS_REASON_LABELS[reason]);
-    expect(rendered?.textContent?.trim()).not.toBe("");
-    expect(rendered).not.toHaveTextContent(READINESS_REASON_LABELS.ready);
+    expect(rendered).toHaveTextContent(reason);
     if (designAttention) {
       expect(inspector.querySelector('[data-readiness-actor="you"]')).toHaveTextContent("Next: You");
     }
@@ -593,7 +580,7 @@ it("shows the exact merge offer in the Approve merge dialog and Cancel sends not
 
   const inspector = await screen.findByTestId("work-item-detail");
   expect(inspector.querySelector('[data-readiness-reason="merge-approval-required"]')).toHaveTextContent(
-    READINESS_REASON_LABELS["merge-approval-required"],
+    "merge-approval-required",
   );
   const summary = within(inspector).getByTestId("merge-offer");
   expect(summary).toHaveTextContent("owlbear/example#42");
@@ -732,28 +719,12 @@ it("renders an unknown merge as attention with the pull request link and no merg
 
   const inspector = await screen.findByTestId("work-item-detail");
   expect(inspector.querySelector('[data-readiness-reason="merge-response-unknown"]')).toHaveTextContent(
-    READINESS_REASON_LABELS["merge-response-unknown"],
+    "merge-response-unknown",
   );
   const attempt = within(inspector).getByTestId("merge-attempt");
   expect(within(attempt).getByRole("link", { name: /pull request/i })).toHaveAttribute("href", prUrl);
   expect(attempt).toHaveTextContent("a".repeat(12));
   expect(within(inspector).queryByRole("button", { name: /approve|merge/i })).not.toBeInTheDocument();
-});
-
-it("gives every new merge readiness reason a distinct non-empty label", () => {
-  const reasons: DeliveryReadinessReasonCode[] = [
-    "merge-approval-required",
-    "merge-checking",
-    "merge-blocked",
-    "checks-running",
-    "provider-unavailable",
-    "merge-in-progress",
-    "merge-response-unknown",
-  ];
-  const labels = reasons.map((reason) => READINESS_REASON_LABELS[reason]);
-
-  expect(labels.every((label) => label.trim().length > 0)).toBe(true);
-  expect(new Set(labels).size).toBe(reasons.length);
 });
 
 it.each([
@@ -786,29 +757,26 @@ it("renders durable retry readiness metadata", async () => {
   expect(inspector).toHaveTextContent("2026-08-04T00:00:02Z");
 });
 
-it.each([
-  ["retry-exhausted", "Automatic retries are exhausted; Delivery offers no action to reset this budget."],
-  [
-    "retry-containment",
-    "A prior attempt has no authoritative outcome. Preserve custody; no caller action can retry or release it.",
-  ],
-] as const)("shows no expected actor or prompt for %s", async (reason, explanation) => {
-  fixtureState.currentDetail = detail({
-    readiness: readiness({
-      status: "blocked",
-      reason_code: reason,
-      next_actor: "none",
-      prompt: null,
-      stop_reason: reason,
-    }),
-  });
-  renderPage("/delivery/change-alpha/outcome%3AOUT-001");
+it.each(["retry-exhausted", "retry-containment"] as const)(
+  "shows no expected actor or prompt for %s",
+  async (reason) => {
+    fixtureState.currentDetail = detail({
+      readiness: readiness({
+        status: "blocked",
+        reason_code: reason,
+        next_actor: "none",
+        prompt: null,
+        stop_reason: reason,
+      }),
+    });
+    renderPage("/delivery/change-alpha/outcome%3AOUT-001");
 
-  const inspector = await screen.findByTestId("work-item-detail");
-  expect(inspector.querySelector('[data-readiness-actor="none"]')).toHaveTextContent("Next: Nobody");
-  expect(inspector.querySelector(`[data-readiness-reason="${reason}"]`)).toHaveTextContent(explanation);
-  expect(screen.queryByTestId("readiness-prompt")).not.toBeInTheDocument();
-});
+    const inspector = await screen.findByTestId("work-item-detail");
+    expect(inspector.querySelector('[data-readiness-actor="none"]')).toHaveTextContent("Next: Nobody");
+    expect(inspector.querySelector(`[data-readiness-reason="${reason}"]`)).toHaveTextContent(reason);
+    expect(screen.queryByTestId("readiness-prompt")).not.toBeInTheDocument();
+  },
+);
 
 it("renders the bounded attempt history of an exhausted retry episode", async () => {
   fixtureState.currentDetail = detail({
@@ -920,7 +888,7 @@ it("exposes the coordination status behind an unreadable Change record", async (
   expect(diagnostics).toHaveTextContent("coordination-unavailable");
   expect(diagnostics).toHaveTextContent("Coordination record: unreadable");
   expect(inspector.querySelector('[data-readiness-reason="coordination-unavailable"]')).toHaveTextContent(
-    "This Change has no readable coordination record.",
+    "coordination-unavailable",
   );
   expect(within(inspector).queryByRole("button")).not.toBeInTheDocument();
 });
@@ -936,7 +904,7 @@ it("lists engine-reported unavailable Changes that no operating status covers", 
   expect(issues).toHaveTextContent("1 Change unavailable to Delivery.");
   const row = issues.querySelector('[data-delivery-unavailable="quarantined-change"]') as HTMLElement;
   expect(row).toHaveTextContent("Quarantined work");
-  expect(row).toHaveTextContent("Delivery could not compose this Change runtime.");
+  expect(row).toHaveTextContent("Delivery cannot read this Change's state; diagnose it before continuing.");
   expect(row).toHaveTextContent("Read-only inspection only. Checks: Unknown.");
 });
 

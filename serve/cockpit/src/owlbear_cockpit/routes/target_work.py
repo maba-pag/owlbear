@@ -14,9 +14,6 @@ from fastapi.responses import JSONResponse
 from owlbear_cockpit.deps import get_target_context
 from owlbear_cockpit.target_models import (
     AbandonChangeBody,
-    AcceptanceReconciliationOutcomeResponse,
-    AcceptanceReconciliationRequest,
-    AcceptanceReconciliationResponse,
     ActivityCounts,
     AdoptExternalHeadAfterAcceptanceAttentionBody,
     AnswerRequestBody,
@@ -312,16 +309,6 @@ class TargetCockpitService:
         """Observe provider checks at the current exact published Change head."""
         receipt = self._invoke(lambda: self._application.observe_change_publication_checks(change_id))
         return PublicationChecksObservationResponse.from_receipt(receipt)
-
-    def reconcile_acceptance(
-        self,
-        change_ids: tuple[str, ...] | None,
-    ) -> AcceptanceReconciliationResponse:
-        """Reconcile visible awaiting-merge Changes as one isolated batch."""
-        outcomes = self._invoke(lambda: self._application.reconcile_awaiting_acceptance(change_ids))
-        return AcceptanceReconciliationResponse(
-            outcomes=tuple(AcceptanceReconciliationOutcomeResponse.from_result(item) for item in outcomes),
-        )
 
     def resolve_attention(self, change_id: str, body: ResolveChangeAttentionBody) -> object:
         """Resolve one exact Change attention record without restoring provider authority."""
@@ -642,16 +629,6 @@ def _register_outcome_controls(router: APIRouter) -> None:
 
 
 def _register_publication_controls(router: APIRouter) -> None:  # noqa: C901
-    @router.post(
-        "/work-items/acceptance/reconcile",
-        response_model=AcceptanceReconciliationResponse,
-    )
-    def reconcile_acceptance(
-        body: AcceptanceReconciliationRequest,
-        service: _TargetService,
-    ) -> AcceptanceReconciliationResponse:
-        return service.reconcile_acceptance(tuple(body.change_ids) if body.change_ids is not None else None)
-
     @router.post(
         "/changes/{change_id}/publication/reconcile",
         response_model=WorkItemPublicationReconciliationResponse,

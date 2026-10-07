@@ -213,6 +213,10 @@ export function unavailableChange(changeId: string, title: string | null = null)
         workspace_fingerprint: null,
         diagnostic_sequence: null,
       },
+      progress: situation("needs-attention", {
+        headline: "Delivery cannot read this Change's state; diagnose it before continuing.",
+        waiting_on: "you",
+      }),
     }),
   };
 }

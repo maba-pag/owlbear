@@ -378,7 +378,7 @@ async def test_v01_one_change_runs_from_admission_to_completion_through_mcp_and_
     async with Client(assemble_target_server(application)) as client:
         steps, finalized = await _agent_finalizes_and_publishes(client, application, head)
 
-    # The user side: Cockpit reads, one approval, and the page's automatic acceptance reconciliation.
+    # The user side: Cockpit reads and one approval; the checkpoint supervisor then reconciles acceptance.
     with TestClient(assemble_target_app(application)) as cockpit:
         detail = cockpit.get(f"/api/changes/{CHANGE_ID}/work-items/publication")
         assert detail.status_code == 200, detail.text
@@ -394,8 +394,7 @@ async def test_v01_one_change_runs_from_admission_to_completion_through_mcp_and_
         memory.execute_pending_merges()
         if github_deletes_head_branch:
             _git(remote, "update-ref", "-d", f"refs/heads/{CHANGE_BRANCH}")
-        reconciled = cockpit.post("/api/work-items/acceptance/reconcile", json={"change_ids": [CHANGE_ID]})
-        assert reconciled.status_code == 200, reconciled.text
+        reconciled = application.reconcile_awaiting_acceptance((CHANGE_ID,))
         completed = cockpit.get(f"/api/work-items/completed/{CHANGE_ID}")
         portfolio = cockpit.get("/api/work-items")
 
@@ -409,7 +408,7 @@ async def test_v01_one_change_runs_from_admission_to_completion_through_mcp_and_
     assert completed.status_code == 200, completed.text
     record = completed.json()
     assert (record["record_kind"], record["finalized_change_head"]) == ("completion-receipt", finalized)
-    assert [outcome["completion_id"] for outcome in reconciled.json()["outcomes"]] == [record["completion_id"]]
+    assert [outcome.completion_id for outcome in reconciled] == [record["completion_id"]]
     operating = portfolio.json()["operating"]
     assert (operating["unfinished_change_count"], operating["completed_change_count"]) == (0, 1)
     async with Client(assemble_target_server(application)) as client:

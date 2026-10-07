@@ -315,6 +315,16 @@ Step 2 implementation notes (deviations decided during the cutover):
 - Cockpit's frontend acceptance schedule and its banner are removed; the backend reconcile route
   stays until step 3.
 
+Step 3 implementation notes:
+
+- `WorkItemProjection.attention` and `WorkItemAttention` are removed; `list_work_items` keeps the
+  projection without it.
+- Reserved progress keys were already gone after step 2.
+- `READINESS_REASON_LABELS` is removed. Details shows the raw `reason_code`; the unavailable Change
+  row shows the engine progress headline.
+- The Cockpit route `POST /api/work-items/acceptance/reconcile` and its HTTP models are removed;
+  the checkpoint supervisor remains the sole acceptance reconciler.
+
 Constraints: derived once in Delivery (N09 I1, I4); local chats under the execution plan; Delivery is
 not used to implement Delivery.
 

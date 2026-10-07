@@ -44,7 +44,6 @@ import {
   changeContinuationPrompt,
   changePauseUnavailableMessage,
   READINESS_CHECKS_LABELS,
-  READINESS_REASON_LABELS,
 } from "../components/workItemPresentation";
 import {
   useChangeIntent,
@@ -648,7 +647,9 @@ function DeliveryIssuesSection({
                 </Link>
                 <span className="text-xs text-contrast-medium">Delivery</span>
               </div>
-              <p className="mt-1 font-medium text-primary">{READINESS_REASON_LABELS[change.readiness.reason_code]}</p>
+              <p className="mt-1 font-medium text-primary">
+                {change.readiness.progress?.headline ?? "Delivery cannot read this Change's state."}
+              </p>
               <p className="mt-1 text-xs text-contrast-medium">
                 Read-only inspection only. Checks: {READINESS_CHECKS_LABELS[change.readiness.checks_state]}.
               </p>
