@@ -216,11 +216,21 @@ class MemoryEngine:
         msg = f"Entry not found: {entry_id}"
         raise NotFoundError(msg)
 
-    def approve(self, entry_id: str, expected_updated_at: str) -> MemoryEntry:
+    def approve(
+        self,
+        entry_id: str,
+        expected_updated_at: str | None = None,
+        *,
+        expected_revision: str | None = None,
+    ) -> MemoryEntry:
         """Transition curated entry to approved after OCC check."""
         with self._lock:
             entry = self.get_entry(entry_id)
-            self._validate_occ(entry, expected_updated_at)
+            self._validate_revision(
+                entry,
+                expected_updated_at=expected_updated_at,
+                expected_revision=expected_revision,
+            )
 
             if entry.state != MemoryState.CURATED:
                 msg = f"approve() not allowed from state {entry.state}"
@@ -271,11 +281,22 @@ class MemoryEngine:
             _LOGGER.info("Auto-transitioned entry %s to stale via slot-efficiency", entry.id)
             return self._write_updated_entry(updated)
 
-    def edit(self, entry_id: str, fields: EditPayload, expected_updated_at: str) -> MemoryEntry:
+    def edit(
+        self,
+        entry_id: str,
+        fields: EditPayload,
+        expected_updated_at: str | None = None,
+        *,
+        expected_revision: str | None = None,
+    ) -> MemoryEntry:
         """Apply field updates with state-machine and OCC constraints."""
         with self._lock:
             entry = self.get_entry(entry_id)
-            self._validate_occ(entry, expected_updated_at)
+            self._validate_revision(
+                entry,
+                expected_updated_at=expected_updated_at,
+                expected_revision=expected_revision,
+            )
 
             if entry.state == MemoryState.DELETED:
                 msg = "edit() not allowed from state deleted"
@@ -306,11 +327,21 @@ class MemoryEngine:
             updated = MemoryEntry.model_validate(data)
             return self._write_updated_entry(updated)
 
-    def delete(self, entry_id: str, expected_updated_at: str) -> MemoryEntry:
+    def delete(
+        self,
+        entry_id: str,
+        expected_updated_at: str | None = None,
+        *,
+        expected_revision: str | None = None,
+    ) -> MemoryEntry:
         """Hard-delete pending entries; soft-delete curated/approved entries."""
         with self._lock:
             entry = self.get_entry(entry_id)
-            self._validate_occ(entry, expected_updated_at)
+            self._validate_revision(
+                entry,
+                expected_updated_at=expected_updated_at,
+                expected_revision=expected_revision,
+            )
 
             if entry.state == MemoryState.DELETED:
                 msg = "delete() not allowed from state deleted"
@@ -543,6 +574,29 @@ class MemoryEngine:
                 approved_at=None,
             )
             return self._write_updated_entry(entry)
+
+    def _validate_revision(
+        self,
+        entry: MemoryEntry,
+        *,
+        expected_updated_at: str | None,
+        expected_revision: str | None,
+    ) -> None:
+        """Validate exactly one optimistic concurrency token before mutation."""
+        if (expected_updated_at is None) == (expected_revision is None):
+            msg = "exactly one of expected_updated_at or expected_revision must be provided"
+            raise ValidationError(msg)
+
+        if expected_revision is not None:
+            current_revision = entry.revision
+            if current_revision != expected_revision:
+                msg = (
+                    f"Revision check failed for entry {entry.id}: expected revision "
+                    f"{expected_revision!r}, current revision {current_revision!r}"
+                )
+                raise ConcurrencyError(msg)
+        elif expected_updated_at is not None:
+            self._validate_occ(entry, expected_updated_at)
 
     def _validate_occ(self, entry: MemoryEntry, expected_updated_at: str) -> None:
         if entry.updated_at != expected_updated_at:

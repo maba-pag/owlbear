@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import enum
+import hashlib
+import json
 import re
 from datetime import datetime
 
@@ -92,6 +94,23 @@ class MemoryEntry(BaseModel):
     updated_at: str
     approved_at: str | None = None
     contested_by_task: str | None = None
+
+    @property
+    def revision(self) -> str:
+        """Return a stable, unpersisted token for the entry's editable content."""
+        serialized = json.dumps(
+            {
+                "title": self.title,
+                "content": self.content,
+                "categories": self.categories,
+                "confidence": self.confidence,
+                "scope_agents": self.scope_agents,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+        return hashlib.sha256(serialized).hexdigest()[:16]
 
     @field_validator("scope_agents")
     @classmethod

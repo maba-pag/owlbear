@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+import re
+from functools import partial
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 from owlbear_memory import LifecycleRecoveryError, MemoryEngine, storage
-from owlbear_memory.models import MemoryEntry
+from owlbear_memory.errors import ConcurrencyError, ValidationError
+from owlbear_memory.models import MemoryEntry, MemoryState
 
 _VALID_ID = "550e8400-e29b-41d4-a716-446655440000"
 
@@ -26,6 +31,170 @@ def _valid_entry_data() -> dict:
         "updated_at": "2026-01-01T00:00:00+00:00",
         "approved_at": None,
     }
+
+
+def test_memory_entry_revision_is_unpersisted_sha256_digest() -> None:
+    entry = MemoryEntry(**_valid_entry_data())
+    serialized = json.dumps(
+        {
+            "title": entry.title,
+            "content": entry.content,
+            "categories": entry.categories,
+            "confidence": entry.confidence,
+            "scope_agents": entry.scope_agents,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+
+    assert re.fullmatch(r"[0-9a-f]{16}", entry.revision) is not None
+    assert entry.revision == hashlib.sha256(serialized).hexdigest()[:16]
+    assert "revision" not in entry.model_dump()
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement"),
+    [
+        ("title", "Changed title"),
+        ("content", "Changed content"),
+        ("categories", ["pitfall"]),
+        ("confidence", 0.8),
+        ("scope_agents", ["other-agent"]),
+    ],
+)
+def test_memory_entry_revision_changes_for_each_content_field(field: str, replacement: object) -> None:
+    entry = MemoryEntry(**_valid_entry_data())
+    changed = MemoryEntry.model_validate({**entry.model_dump(), field: replacement})
+
+    assert changed.revision != entry.revision
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement"),
+    [
+        ("categories", ["pitfall", "domain-knowledge"]),
+        ("scope_agents", ["second", "first"]),
+    ],
+)
+def test_memory_entry_revision_preserves_list_order(field: str, replacement: list[str]) -> None:
+    data = {
+        **_valid_entry_data(),
+        "categories": ["domain-knowledge", "pitfall"],
+        "scope_agents": ["first", "second"],
+    }
+    entry = MemoryEntry(**data)
+    changed = MemoryEntry.model_validate({**entry.model_dump(), field: replacement})
+
+    assert changed.revision != entry.revision
+
+
+def test_engine_revision_survives_reads_approval_and_assessment(tmp_path: Path) -> None:
+    engine = MemoryEngine(tmp_path)
+    entry = engine.save(
+        title="Revision entry",
+        content="Stable content",
+        categories=["domain-knowledge"],
+        confidence=0.9,
+        source_agent="test-agent",
+        scope_agents=[],
+    )
+    initial_revision = entry.revision
+    entry_path = tmp_path / f"{entry.id}.md"
+
+    assert engine.get_entry(entry.id).revision == initial_revision
+    assert MemoryEngine(tmp_path).get_entry(entry.id).revision == initial_revision
+    assert "revision:" not in entry_path.read_text(encoding="utf-8")
+
+    curated = engine.edit(entry.id, {"scope_agents": ["test-agent"]}, expected_revision=initial_revision)
+    curated_revision = curated.revision
+    with patch.object(
+        engine,
+        "_now_iso",
+        side_effect=["2026-02-01T00:00:00+00:00", "2026-02-02T00:00:00+00:00"],
+    ):
+        approved = engine.approve(entry.id, expected_revision=curated_revision)
+        assessed = engine.record_assessment(entry.id, "outstanding", expected_updated_at=approved.updated_at)
+
+    assert curated.state == MemoryState.CURATED
+    assert approved.state == MemoryState.APPROVED
+    assert approved.updated_at != curated.updated_at
+    assert approved.revision == curated_revision
+    assert assessed.outstanding_count == 1
+    assert assessed.updated_at != approved.updated_at
+    assert assessed.revision == curated_revision
+    assert MemoryEngine(tmp_path).get_entry(entry.id).revision == curated_revision
+
+
+@pytest.mark.parametrize("operation", ["approve", "edit", "delete"])
+def test_revision_mutations_reject_stale_tokens_without_writing(tmp_path: Path, operation: str) -> None:
+    engine = MemoryEngine(tmp_path)
+    entry = engine.save(
+        title="Revision entry",
+        content="Initial content",
+        categories=["domain-knowledge"],
+        confidence=0.9,
+        source_agent="test-agent",
+        scope_agents=[],
+    )
+    stale_revision = entry.revision
+    if operation == "approve":
+        current = engine.edit(entry.id, {"scope_agents": ["test-agent"]}, expected_revision=stale_revision)
+    else:
+        current = engine.edit(entry.id, {"content": "Current content"}, expected_revision=stale_revision)
+    entry_path = tmp_path / f"{entry.id}.md"
+    previous_bytes = entry_path.read_bytes()
+    if operation == "approve":
+        invoke_mutation = partial(engine.approve, entry.id, expected_revision=stale_revision)
+    elif operation == "edit":
+        invoke_mutation = partial(engine.edit, entry.id, {"title": "Rejected title"}, expected_revision=stale_revision)
+    else:
+        invoke_mutation = partial(engine.delete, entry.id, expected_revision=stale_revision)
+
+    with pytest.raises(ConcurrencyError) as exc_info:
+        invoke_mutation()
+
+    message = str(exc_info.value)
+    assert entry.id in message
+    assert f"expected revision {stale_revision!r}" in message
+    assert f"current revision {current.revision!r}" in message
+    assert entry_path.read_bytes() == previous_bytes
+
+
+@pytest.mark.parametrize("operation", ["approve", "edit", "delete"])
+@pytest.mark.parametrize("argument_case", ["none", "both"])
+def test_revision_mutations_require_exactly_one_token(
+    tmp_path: Path,
+    operation: str,
+    argument_case: str,
+) -> None:
+    engine = MemoryEngine(tmp_path)
+    entry = engine.save(
+        title="Revision entry",
+        content="Initial content",
+        categories=["domain-knowledge"],
+        confidence=0.9,
+        source_agent="test-agent",
+        scope_agents=[],
+    )
+    tokens = (
+        {"expected_updated_at": entry.updated_at, "expected_revision": entry.revision}
+        if argument_case == "both"
+        else {}
+    )
+    entry_path = tmp_path / f"{entry.id}.md"
+    previous_bytes = entry_path.read_bytes()
+    if operation == "approve":
+        invoke_mutation = partial(engine.approve, entry.id, **tokens)
+    elif operation == "edit":
+        invoke_mutation = partial(engine.edit, entry.id, {}, **tokens)
+    else:
+        invoke_mutation = partial(engine.delete, entry.id, **tokens)
+
+    with pytest.raises(ValidationError):
+        invoke_mutation()
+
+    assert entry_path.read_bytes() == previous_bytes
 
 
 def test_load_counts_malformed_files_without_raising(tmp_path: Path) -> None:
