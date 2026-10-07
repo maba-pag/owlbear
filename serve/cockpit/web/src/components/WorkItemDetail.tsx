@@ -552,14 +552,20 @@ function elapsedAge(startedAt: string): string {
 }
 
 function ClaimSection({ detail, pendingAction, actionError, onReleaseStuckWorker }: WorkItemDetailProps) {
-  const claim = detail.item.active_claim;
+  const outcomeClaim = detail.item.active_claim;
+  const finalizer = detail.item.held_finalizer;
+  const claim = outcomeClaim
+    ? { ...outcomeClaim, role: WORKER_ROLE_LABELS[outcomeClaim.worker_role] }
+    : finalizer
+      ? { ...finalizer, role: "Finalizer", continuation: true, task_id: null }
+      : null;
   const [confirmTarget, setConfirmTarget] = useState<{ attemptId: string; claimId: string } | null>(null);
   const [actionFailed, setActionFailed] = useState(false);
   if (!claim) return null;
   const readiness = detail.item.card.readiness ?? detail.item.readiness;
   // A stall wait belongs to Delivery's automatic window-loss settlement, not to a user release.
   const releasable =
-    (claim.worker_role === "planner" || claim.worker_role === "builder") &&
+    (finalizer !== null || outcomeClaim?.worker_role === "planner" || outcomeClaim?.worker_role === "builder") &&
     Boolean(claim.attempt_id && claim.claim_id) &&
     readiness?.status === "running";
   // Polling may replace the claim; the dialog only ever confirms the claim it was opened for.
@@ -583,7 +589,7 @@ function ClaimSection({ detail, pendingAction, actionError, onReleaseStuckWorker
       <dl className="mt-static-sm grid gap-static-xs text-sm">
         <div className="flex justify-between gap-static-sm">
           <dt>Role</dt>
-          <dd>{WORKER_ROLE_LABELS[claim.worker_role]}</dd>
+          <dd>{claim.role}</dd>
         </div>
         <div className="flex justify-between gap-static-sm">
           <dt>Started</dt>

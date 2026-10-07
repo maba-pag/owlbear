@@ -651,7 +651,12 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
     releaseStuckWorker: (attemptId: string, claimId: string) =>
       mutate(
         "release-stuck",
-        () => releaseStuckWorker(identity.changeId, currentDetail().item.card.work_item_id, attemptId, claimId),
+        () => {
+          const card = currentDetail().item.card;
+          // The publication card holds only the Change's Finalizer, which Delivery names by a null outcome.
+          const outcomeId = card.scope === "change-publication" ? null : card.work_item_id;
+          return releaseStuckWorker(identity.changeId, outcomeId, attemptId, claimId);
+        },
         "Stuck worker released. The attempt was recorded as failed; its work is preserved.",
       ),
     previewBackward: async (target: WorkItemStage) => {

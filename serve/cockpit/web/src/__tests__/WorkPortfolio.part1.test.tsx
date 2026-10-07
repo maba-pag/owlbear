@@ -12,6 +12,8 @@ import {
   installWorkPortfolioHarness,
   namedPdsHost,
   portfolio,
+  publicationCardForChecks,
+  publicationForChecks,
   readiness,
   renderPage,
   requirePresent,
@@ -1091,6 +1093,45 @@ it.each([
     vi.useRealTimers();
   }
 });
+
+it.each(["running", "worker-stall-wait"] as const)(
+  "releases a held Finalizer from the publication card only while it runs (%s)",
+  async (state) => {
+    fixtureState.currentDetail = detail({
+      card: publicationCardForChecks(),
+      publication: publicationForChecks("ready-for-finalization"),
+      held_finalizer: {
+        attempt_id: "finalizer-attempt",
+        claim_id: "finalizer-claim",
+        owner_id: "vscode-host",
+        process_id: "chat-session",
+        started_at: "2026-10-02T12:00:00Z",
+      },
+      readiness:
+        state === "running"
+          ? readiness({ status: "running", reason_code: "active-custody" })
+          : readiness({ status: "waiting", reason_code: "worker-stall-wait" }),
+    });
+    renderPage("/delivery/change-alpha/publication");
+
+    const inspector = await screen.findByTestId("work-item-detail");
+    expect(inspector).toHaveTextContent("Active claim");
+    expect(inspector).toHaveTextContent("Finalizer");
+    if (state === "worker-stall-wait") {
+      expect(within(inspector).queryByText("Release stuck worker")).not.toBeInTheDocument();
+      return;
+    }
+    fireEvent.click(within(inspector).getByText("Release stuck worker"));
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByText("Confirm release"));
+    await waitFor(() =>
+      expect(fixtureState.requests).toContainEqual({
+        url: "/api/changes/change-alpha/workers/release-stuck",
+        method: "POST",
+        body: { outcome_id: null, attempt_id: "finalizer-attempt", claim_id: "finalizer-claim" },
+      }),
+    );
+  },
+);
 
 it("offers stuck-worker release only for running claims", async () => {
   fixtureState.currentDetail = detail({

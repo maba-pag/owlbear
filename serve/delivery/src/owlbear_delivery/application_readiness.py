@@ -17,6 +17,7 @@ from owlbear_delivery.application_models import (
     DeliveryRuntimeReconciliationError,
     DeliveryUnavailableChangeView,
     PortfolioReadView,
+    _held_finalizer_prompt,
     _operator_claim,
     _operator_recovery_attention,
     _worker_stall_prompt,
@@ -128,6 +129,7 @@ from owlbear_delivery.work_items import (
     WorkItemActivityState,
     WorkItemCardView,
     WorkItemDetailView,
+    WorkItemHeldFinalizerView,
     WorkItemNeed,
     WorkItemNextActor,
     WorkItemProjector,
@@ -860,6 +862,9 @@ class _ReadinessViewsMixin:
             for card, decision in zip(cards, decisions, strict=True)
         )
         decisions = self._with_worker_stall_readiness(snapshot, cards, decisions)
+        held_finalizer = self._held_finalizer_view(snapshot.contract.change_id)
+        if held_finalizer is not None:
+            decisions = self._with_held_finalizer_prompt(snapshot, cards, decisions)
         if settled_attention:
             # Settled Finalizer attention names /inspect-change in its card guidance instead.
             decisions = tuple(
@@ -881,6 +886,7 @@ class _ReadinessViewsMixin:
             change_progress=("paused" if pause_drained else self._change_activity_progress(snapshot, cards, decisions)),
             pause_unavailable_reason=self._pause_unavailable_reason(snapshot),
             pause_requested=pause_requested,
+            held_finalizer=held_finalizer,
         )
 
     def _pause_request_state(self, snapshot: DeliveryPortfolioSnapshot) -> tuple[bool, bool]:
@@ -1317,6 +1323,38 @@ class _ReadinessViewsMixin:
                 )
             )
         return tuple(updated)
+
+    def _held_finalizer_view(self, change_id: str) -> WorkItemHeldFinalizerView | None:
+        try:
+            attempt = self._active_finalizer_writer_attempt(change_id)
+        except OSError, RuntimeError, ValueError:
+            return None
+        if attempt is None:
+            return None
+        writer = attempt.writer
+        return WorkItemHeldFinalizerView(
+            attempt_id=writer.attempt_id,
+            claim_id=writer.claim_id,
+            owner_id=writer.actor_id,
+            process_id=writer.process_id,
+            started_at=writer.claimed_at,
+        )
+
+    @staticmethod
+    def _with_held_finalizer_prompt(
+        snapshot: DeliveryPortfolioSnapshot,
+        cards: tuple[WorkItemCardView, ...],
+        decisions: tuple[DeliveryReadiness, ...],
+    ) -> tuple[DeliveryReadiness, ...]:
+        """Point custody held by an unfinished Finalizer at its stopped-run route, not offline diagnosis."""
+        change_id = snapshot.contract.change_id
+        return tuple(
+            decision.model_copy(update={"prompt": _held_finalizer_prompt(change_id)})
+            if card.scope is WorkItemScope.CHANGE_PUBLICATION
+            and (decision.status, decision.reason_code) == ("running", "active-custody")
+            else decision
+            for card, decision in zip(cards, decisions, strict=True)
+        )
 
     def _with_retry_readiness(  # noqa: C901, PLR0912 - maps one persisted policy to the shared readiness contract.
         self,
