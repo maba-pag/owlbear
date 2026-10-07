@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import time
 from datetime import UTC, datetime, timedelta
@@ -91,6 +92,7 @@ from owlbear_delivery.acceptance import (
     CompletionEvidence,
     CompletionPullRequestIdentity,
     CompletionReceipt,
+    CompletionReceiptStore,
 )
 from owlbear_delivery.change_workspace import ChangeWorkspaceManager
 from owlbear_delivery.delivery_admission import DeliveryRevisionError
@@ -1441,6 +1443,39 @@ def test_loader_claim_successor_never_allows_advanced_branch(tmp_path: Path) -> 
         match="local Change branch differs from Delivery-state snapshot",
     ):
         _require_local_snapshot_branch(snapshot, repository)
+
+
+@pytest.mark.parametrize("remote_branch", ["present", "deleted"])
+def test_builder_claim_commit_survives_default_loader_restart(tmp_path: Path, remote_branch: str) -> None:
+    change_id = "builder-claim-restart"
+    restart = _builder_return_restart_fixture(tmp_path, change_id)
+    launch = restart.application.acquire_frontier_work().launch_packages[0]
+    assert launch.claim.worker_role is DeliveryWorkerRole.BUILDER
+    _git(restart.fresh, "config", "user.name", "Delivery State Test")
+    _git(restart.fresh, "config", "user.email", "delivery-state@example.invalid")
+    branch_head = _commit_descendant(launch.worktree_path, "unsubmitted.txt", "unsubmitted Builder work")
+    if remote_branch == "deleted":
+        _git(restart.remote, "update-ref", "-d", f"refs/heads/{launch.branch}")
+
+    restarted = _healthy_restart(restart)
+
+    with patch.object(restarted, "_clock", return_value="1970-01-02T00:00:00Z"):
+        settled = restarted.settle_worker_invocation(
+            DeliveryBuilderInvocationSettlement(
+                change_id=change_id,
+                outcome_id=launch.outcome_id,
+                claim_id=launch.claim.claim_id,
+                attempt_id=launch.claim.attempt_id,
+                task_id=launch.task_id,
+                expected_last_reviewed_commit=launch.last_reviewed_commit,
+                disposition="ended-without-result",
+            ),
+            host_id=launch.claim.owner_id,
+            session_id=launch.claim.process_id,
+        )
+    assert settled.active_claim is None
+    assert settled.builder_handoff_context is not None
+    assert settled.builder_handoff_context.branch_head == branch_head
 
 
 def test_state_publisher_exposes_response_unknown_and_replays_after_remote_push(tmp_path: Path) -> None:
@@ -4471,6 +4506,114 @@ def test_loader_reconciles_a_legacy_local_frontier_with_its_legacy_remote_snapsh
     frontier_path.write_bytes(migrated)
     assert remote_state_reasons() == []
     assert _git(remote, "rev-parse", "refs/heads/owlbear/delivery-state") == legacy_head
+
+
+def _retain_earlier_completion(runtime_root: Path, change_id: str) -> None:
+    digest = hashlib.sha256(change_id.encode()).hexdigest()
+    completed_at = datetime(2026, 8, 11, 13, tzinfo=UTC)
+    receipt = CompletionReceipt.create(
+        CompletionEvidence(
+            change_id=change_id,
+            finalization_receipt_id=digest,
+            finalized_change_head=digest[:40],
+            repository_identity="example/project",
+            pull_request_identity=CompletionPullRequestIdentity(number=7, node_id="PR_node_7"),
+            accepted_target_ref="main",
+            accepted_merge_commit=digest[-40:],
+            merged_at=completed_at,
+            acceptance_observation_id=digest,
+            check_observation_ids=(digest,),
+            review_receipt_ids=(digest,),
+            completed_at=completed_at,
+        )
+    )
+    display = CompletionDisplayMetadata.create(
+        change_id=change_id,
+        completion_id=receipt.completion_id,
+        title="Earlier delivery",
+        outcome_titles=("Earlier result",),
+        outcome_promises=("Deliver the earlier result.",),
+    )
+    store = CompletionReceiptStore(runtime_root)
+    for participant in (store.participant(receipt), store.display_participant(display)):
+        destination = participant.destination()
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(participant.content)
+
+
+def test_readmitted_change_id_publishes_and_restarts_without_earlier_completion(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    _git(repository, "config", "url." + str(remote) + ".insteadOf", "https://github.com/example/project.git")
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    change_id = "readmitted-change"
+    contract, intent, design = _contract(change_id)
+    runtime_root = repository / ".owlbear/delivery/runtime"
+    package_store = DesignPackageStore(
+        repository / ".owlbear/delivery/packages", repository, transaction_root=runtime_root
+    )
+    package = package_store.create(change_id, intent, design)
+    contract_bytes = _canonical_payload(contract.model_dump(mode="json"))
+    package_store.publish_contract(change_id, package.package_id, contract_bytes, lambda *_content: None)
+    package = package_store.read_verified(change_id)
+    change_root = runtime_root / "changes" / change_id
+    change_root.mkdir(parents=True)
+    (change_root / "contract.json").write_bytes(contract_bytes)
+    manager = ChangeWorkspaceManager(
+        repository, repository / ".owlbear/delivery/worktrees", PortfolioCoordinator(runtime_root), "main", "origin"
+    )
+    coordination = manager.ensure(change_id)
+    frontier = DeliveryFrontier(bindings=(OutcomeAuthorityBinding(outcome_id="OUT-001", plan_scope_id="SCOPE-001"),))
+    (change_root / "frontier.json").write_bytes(_canonical_payload(frontier.model_dump(mode="json")))
+    _retain_earlier_completion(runtime_root, change_id)
+    runtime = DeliveryRuntime(runtime_root, contract, workspace_manager=manager)
+    package_snapshot = manager.snapshot_design_package(
+        change_id,
+        package.package_id,
+        {
+            "authority.json": package.authority_bytes,
+            "design.md": package.design_bytes,
+            "intent.md": package.intent_bytes,
+            "manifest.json": package.manifest.canonical_bytes(),
+        },
+        "readmitted-package",
+    )
+    _git(repository, "push", "origin", f"{package_snapshot.snapshot_head}:refs/heads/{coordination.branch}")
+    admission = _admission(runtime, manager, change_id)
+    (change_root / "admission.json").write_bytes(_canonical_payload(admission.model_dump(mode="json")))
+    publisher = DeliveryStatePublisher(repository, remote="origin", state_branch="owlbear/delivery-state")
+
+    published = publisher.publish(
+        change_id=change_id,
+        package_id=package.package_id,
+        coordination=manager.show(change_id),
+        runtime=runtime,
+        admission=admission,
+        operation_id="readmitted-initial",
+        captured_at=datetime(2026, 8, 23, tzinfo=UTC),
+    )
+    config = DeliveryStartupConfig(
+        schema_version=2,
+        remote="origin",
+        target_branch="main",
+        github_repository="example/project",
+        delivery_state_branch="owlbear/delivery-state",
+    )
+    (runtime_root / "format.json").write_bytes(format_marker_bytes())
+    health = load_delivery_application(config, workspace_root=repository).delivery_health()
+
+    snapshot_path = f".owlbear/delivery/state/{change_id}/snapshot.json"
+    stored = json.loads(publisher._git_blob(published.published_head, snapshot_path))  # noqa: SLF001
+    assert stored["completion"] is None
+    assert stored["frontier"]["change_completion"] is None
+    assert [item.reason for item in health.diagnostics if item.source == "remote-state"] == []
+    assert CompletionReceiptStore(runtime_root).read_bundle(change_id) is not None
+
+    shutil.rmtree(change_root)
+    restored = load_delivery_application(config, workspace_root=repository).delivery_health()
+
+    assert [item.reason for item in restored.diagnostics if item.source == "remote-state"] == []
+    assert (change_root / "frontier.json").read_bytes() == _canonical_payload(stored["frontier"])
+    assert CompletionReceiptStore(runtime_root).read_bundle(change_id) is not None
 
 
 def test_target_sync_state_snapshot_is_restartable_after_branch_publication(tmp_path: Path) -> None:

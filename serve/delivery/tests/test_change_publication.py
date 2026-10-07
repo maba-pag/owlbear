@@ -2371,6 +2371,7 @@ def test_pre_push_timeout_releases_reservation_for_new_operation(tmp_path: Path)
         "authentication-failure",
         "rate-limit",
         "remote-rejection",
+        "remote-server-error",
         "pre-write-timeout",
         "post-write-timeout",
     ],
@@ -2415,6 +2416,7 @@ def test_publication_incidents_preserve_checkout_and_classify_exact_operation(  
         "authentication-failure": PublicationProviderFailureCode.AUTHENTICATION_REQUIRED,
         "rate-limit": PublicationProviderFailureCode.RATE_LIMITED,
         "remote-rejection": PublicationProviderFailureCode.CONFLICT,
+        "remote-server-error": PublicationProviderFailureCode.UNAVAILABLE,
         "pre-write-timeout": PublicationProviderFailureCode.TIMEOUT,
         "post-write-timeout": PublicationProviderFailureCode.RESPONSE_UNKNOWN,
     }
@@ -2423,6 +2425,7 @@ def test_publication_incidents_preserve_checkout_and_classify_exact_operation(  
         "authentication-failure": False,
         "rate-limit": True,
         "remote-rejection": False,
+        "remote-server-error": True,
         "pre-write-timeout": True,
         "post-write-timeout": False,
     }
@@ -2432,6 +2435,7 @@ def test_publication_incidents_preserve_checkout_and_classify_exact_operation(  
         "authentication-failure",
         "rate-limit",
         "remote-rejection",
+        "remote-server-error",
     }:
         original_run = publisher._run_git
         diagnostics = {
@@ -2439,6 +2443,7 @@ def test_publication_incidents_preserve_checkout_and_classify_exact_operation(  
             "authentication-failure": "Authentication failed",
             "rate-limit": "rate limit exceeded",
             "remote-rejection": "remote rejected",
+            "remote-server-error": "!\tHEAD:refs/heads/branch\t[remote rejected] (Internal Server Error)",
         }
 
         def reject_push(*arguments: str) -> subprocess.CompletedProcess[bytes]:

@@ -38,6 +38,7 @@ from owlbear_delivery.publication_provider import (
     SetPublicationPullRequestDraftState,
     UpdatePublicationPullRequest,
 )
+from owlbear_delivery_github.memory import InMemoryPublicationProvider
 
 _HEAD = "1" * 40
 
@@ -933,3 +934,103 @@ def test_rejects_symlinked_leaf_state_before_provider_write(tmp_path: Path, kind
 
     assert exc_info.value.code is PublicationProviderFailureCode.INVALID_RESPONSE
     assert provider.create_calls == 0
+
+
+class _LostCreateMemoryProvider(InMemoryPublicationProvider):
+    def create_draft_pull_request(self, request: CreateDraftPublicationPullRequest) -> PublicationPullRequest:
+        super().create_draft_pull_request(request)
+        raise PublicationProviderError(
+            PublicationProviderFailureCode.RESPONSE_UNKNOWN,
+            "create_draft_pull_request",
+            "response lost",
+            retry_safe=False,
+        )
+
+
+def _memory_provider(
+    *pull_requests: PublicationPullRequest,
+    provider: InMemoryPublicationProvider | None = None,
+) -> InMemoryPublicationProvider:
+    provider = provider or InMemoryPublicationProvider()
+    provider.add_repository(PublicationRepository(repository="example/project", default_branch="main"))
+    for pull_request in pull_requests:
+        provider.pull_requests[(pull_request.repository, pull_request.number)] = pull_request
+    return provider
+
+
+def _branch_pull_request(number: int, **updates: object) -> PublicationPullRequest:
+    values: dict[str, object] = {
+        "repository": "example/project",
+        "number": number,
+        "node_id": f"PR_node_{number}",
+        "head_branch": "owlbear/change/change-a",
+        "head_sha": "9" * 40,
+        "base_branch": "main",
+        "title": "Change A, earlier delivery",
+        "body": "Earlier delivery.\n\n<!-- owlbear-change:change-a -->",
+        "draft": False,
+        "state": "closed",
+        "merged": True,
+        "merge_commit_sha": "8" * 40,
+        "merged_at": datetime(2026, 9, 1, tzinfo=UTC),
+    }
+    values.update(updates)
+    return PublicationPullRequest.model_validate(values)
+
+
+_CLOSED_UNMERGED = {"merged": False, "merge_commit_sha": None, "merged_at": None}
+
+
+@pytest.mark.parametrize("earlier_updates", [{}, _CLOSED_UNMERGED], ids=["merged", "closed-unmerged"])
+def test_redelivered_change_publishes_new_draft_beside_earlier_closed_pr(
+    tmp_path: Path,
+    earlier_updates: dict[str, object],
+) -> None:
+    earlier = _branch_pull_request(204, **earlier_updates)
+    provider = _memory_provider(earlier)
+    publisher = _publisher(tmp_path, provider)
+    observe = ObserveChangePublicationPullRequest(change_id="change-a")
+
+    assert publisher.observe_pull_request(observe) is None
+    receipt = publisher.publish(_request())
+    observation = publisher.observe_pull_request(observe)
+
+    assert (receipt.number, receipt.head_sha) == (205, _HEAD)
+    assert publisher.publish(_request()) == receipt
+    assert observation is not None
+    assert (observation.snapshot.number, observation.snapshot.merged) == (205, False)
+    assert provider.pull_requests[("example/project", 204)] == earlier
+
+
+def test_lost_create_response_reconciles_new_draft_beside_earlier_merged_pr(tmp_path: Path) -> None:
+    provider = _memory_provider(_branch_pull_request(204), provider=_LostCreateMemoryProvider())
+
+    receipt = _publisher(tmp_path, provider).publish(_request())
+
+    created = provider.pull_requests[("example/project", 205)]
+    assert (receipt.number, receipt.node_id, receipt.head_sha) == (205, created.node_id, _HEAD)
+    assert created.draft
+    assert len(provider.pull_requests) == 2
+
+
+@pytest.mark.parametrize(
+    "open_updates",
+    [{"head_sha": _HEAD}, {"draft": True, "head_sha": "7" * 40}],
+    ids=["open-non-draft", "foreign-head-draft"],
+)
+def test_open_mismatched_pr_still_conflicts_beside_earlier_merged_pr(
+    tmp_path: Path,
+    open_updates: dict[str, object],
+) -> None:
+    provider = _memory_provider(
+        _branch_pull_request(204),
+        _branch_pull_request(205, state="open", **_CLOSED_UNMERGED, **open_updates),
+    )
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        _publisher(tmp_path, provider).publish(_request())
+
+    assert exc_info.value.code is PublicationProviderFailureCode.CONFLICT
+    assert str(exc_info.value) == "provider pull request does not match the draft publication identity"
+    assert len(provider.pull_requests) == 2
+    assert not (tmp_path / "pull-requests/receipts/change-a.json").exists()

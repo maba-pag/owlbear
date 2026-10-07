@@ -7,15 +7,18 @@ import CopyCommand from "./CopyCommand";
 import { StatusChip, WorkRow } from "./DeliveryPrimitives";
 import {
   CONTINUATION_PROMPT_HELP,
-  DELIVERY_PROGRESS_LABELS,
+  changeProgressReadiness,
   isContinuationPrompt,
   PROGRESS_STAGE_LABELS,
+  progressLabel,
   progressTone,
   workItemStatus,
 } from "./workItemPresentation";
 
 interface WorkPortfolioTableProps {
   groups: ChangeGroupView[];
+  /** Unfiltered cards of a Change; filtering must not change what its progress says. */
+  changeItems?: (changeId: string) => WorkItemCardView[];
   selected: WorkItemIdentity | null;
   emptyMessage?: string;
   onSelect: (identity: WorkItemIdentity, trigger: HTMLElement) => void;
@@ -287,6 +290,7 @@ function PublicationGate({ group, selected, onSelect }: GroupTableProps) {
 
 export default function WorkPortfolioTable({
   groups,
+  changeItems = (changeId) => groups.find((group) => group.change_id === changeId)?.items ?? [],
   selected,
   emptyMessage,
   onSelect,
@@ -316,7 +320,10 @@ export default function WorkPortfolioTable({
             </span>
             {group.progress ? (
               <StatusChip
-                label={DELIVERY_PROGRESS_LABELS[group.progress]}
+                label={progressLabel(
+                  group.progress,
+                  changeProgressReadiness(changeItems(group.change_id), group.progress),
+                )}
                 tone={progressTone(group.progress)}
                 testId={`change-progress-${group.change_id}`}
               />

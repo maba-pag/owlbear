@@ -490,11 +490,11 @@ class GitHubCliPublicationProvider:
         )
 
     def find_pull_request(self, request: FindPublicationPullRequest) -> PublicationPullRequest | None:
-        """Find the unique pull request for one exact head/base identity."""
+        """Find the unique open pull request for one exact head/base identity."""
         owner, _ = request.repository.split("/", maxsplit=1)
         query = urlencode(
             {
-                "state": "all",
+                "state": "open",
                 "head": f"{owner}:{request.head_branch}",
                 "base": request.base_branch,
                 "per_page": 100,

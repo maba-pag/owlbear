@@ -52,6 +52,7 @@ function Guidance({ guidance }: { guidance: PortfolioGuidance }) {
 interface PortfolioHeaderSummaryProps {
   operating: PortfolioOperatingView;
   totals: WorkItemPortfolioTotals;
+  runPromptCount: number;
   needsFilter: WorkItemNeed | "";
   onNeedsFilter: (value: WorkItemNeed | "") => void;
 }
@@ -114,10 +115,10 @@ function AttentionMetric({ count, filter, icon, label, selected, onSelect }: Att
   );
 }
 
-function ActivityMetric({ count, icon, label }: { count: number; icon: "play" | "list"; label: string }) {
+function ActivityMetric({ count, icon, label }: { count: number; icon: "play" | "list" | "chat"; label: string }) {
   return (
     <span
-      data-testid={`portfolio-activity-${label.toLowerCase()}`}
+      data-testid={`portfolio-activity-${label.toLowerCase().replace(/\s+/g, "-")}`}
       className={[
         "inline-flex items-center gap-1.5 whitespace-nowrap tabular-nums",
         count === 0 ? "text-contrast-medium" : "text-primary",
@@ -130,7 +131,13 @@ function ActivityMetric({ count, icon, label }: { count: number; icon: "play" | 
   );
 }
 
-export function PortfolioHeaderSummary({ operating, totals, needsFilter, onNeedsFilter }: PortfolioHeaderSummaryProps) {
+export function PortfolioHeaderSummary({
+  operating,
+  totals,
+  runPromptCount,
+  needsFilter,
+  onNeedsFilter,
+}: PortfolioHeaderSummaryProps) {
   const designCount = operating.statuses.filter((status) => status.stage === "design").length;
   const deliveryCount = operating.statuses.filter(
     (status) => status.admission === "admitted" && status.stage !== "design",
@@ -185,6 +192,7 @@ export function PortfolioHeaderSummary({ operating, totals, needsFilter, onNeeds
             selected={needsFilter === "dependency"}
             onSelect={onNeedsFilter}
           />
+          <ActivityMetric count={runPromptCount} icon="chat" label="Run prompt" />
         </section>
         <section className="flex items-center gap-static-md" aria-label="Activity">
           <ActivityMetric count={runningCount} icon="play" label="Running" />

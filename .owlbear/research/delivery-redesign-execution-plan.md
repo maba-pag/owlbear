@@ -1086,7 +1086,8 @@ rehearsal for C.
   proof.
 - Cockpit uses the programme section 4.2 labels: **Copy continuation prompt**, and **Pause/Resume**
   as policy state.
-- Cockpit shows the section 4.3 progress descriptions, including **Waiting for chat to resume**.
+- Cockpit shows the section 4.3 progress descriptions, including **Run prompt in Copilot Chat**
+  (revised 2026-10-07 from **Waiting for chat to resume**).
 - Memory curation no longer blocks acquisition (#218): verified fixed on `dev` by PR #308 (N09
   plan D10); N09-A1 records the closure evidence.
 - WIRING, operating docs, setup guide and READMEs are reconciled (P22).

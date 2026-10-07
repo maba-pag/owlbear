@@ -49,6 +49,7 @@ from owlbear_delivery import (
     PublishDeliveryResult,
     RetryDelivery,
     change_workspace,
+    worker_stall,
 )
 from owlbear_delivery.delivery_runtime import DeliveryEngineBuilderSettlement, DeliveryEnginePlanningSettlement
 from owlbear_delivery.diagnostics import DeliveryFailureCategory, classify_delivery_failure
@@ -528,6 +529,13 @@ class _FakeProcess:
     failure: str | None = None
     create_time: float | None = _ISSUED.timestamp() - 3600
     argv: tuple[str, ...] | None = ()
+    exe: Path | None = None
+
+    def executable(self) -> Path | None:
+        if self.failure == "unreadable" or self.exe == Path("unreadable"):
+            message = "executable unreadable"
+            raise ProcessObservationError(message)
+        return self.exe
 
     def cmdline(self) -> tuple[str, ...]:
         if self.argv is None:
@@ -623,6 +631,39 @@ def test_process_guard_classifies_leftover_processes(tmp_path: Path, case: str) 
     assert probe.active_processes((roots["W"], roots["A"]), issued_after=issued_after) == (
         (fake.name,) if blocks else ()
     )
+
+
+_DAEMON = Path("/System/Library/Frameworks/ClassKit.framework/Versions/A/progressd")
+_SEALED_CASES = {
+    "sealed-daemon-files-unreadable-new": ("elsewhere", "files-unreadable", _DAEMON, Path("/System"), False),
+    "sealed-root-unavailable": ("elsewhere", "files-unreadable", _DAEMON, None, True),
+    "data-volume-binary": ("elsewhere", "files-unreadable", Path("/System/Volumes/Data/tmp/w"), Path("/System"), True),
+    "parent-escape": ("elsewhere", "files-unreadable", Path("/System/../Users/w/node"), Path("/System"), True),
+    "user-binary": ("elsewhere", "files-unreadable", Path("/usr/local/bin/node"), Path("/System"), True),
+    "executable-unreadable": ("elsewhere", "files-unreadable", Path("unreadable"), Path("/System"), True),
+    "cwd-unreadable": (None, "unreadable", _DAEMON, Path("/System"), True),
+    "cwd-inside-worktree": ("worktree", "files-unreadable", _DAEMON, Path("/System"), True),
+}
+
+
+@pytest.mark.parametrize("case", sorted(_SEALED_CASES))
+def test_process_guard_exempts_only_sealed_system_daemons_outside_the_worktree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, case: str
+) -> None:
+    working, failure, exe, sealed_root, blocks = _SEALED_CASES[case]
+    monkeypatch.setattr(worker_stall, "_SEALED_SYSTEM_ROOT", sealed_root)
+    worktree = tmp_path / "worktree"
+    process = _FakeProcess(
+        "progressd",
+        working=None if working is None else tmp_path / working,
+        failure=failure,
+        create_time=_NEW,
+        exe=exe,
+    )
+
+    names = ProcessTableWorktreeProbe(lambda: iter((process,))).active_processes((worktree,), issued_after=_ISSUED)
+
+    assert names == (("progressd",) if blocks else ())
 
 
 class _FakePsutilProcess:

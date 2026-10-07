@@ -59,6 +59,9 @@ from owlbear_delivery.target_contract import (
 )
 from owlbear_delivery.work_items import (
     DeliveryPortfolioSnapshot,
+    DeliveryReadiness,
+    DeliveryReadinessBasis,
+    WorkItemAction,
     WorkItemActionKind,
     WorkItemActivityState,
     WorkItemAttention,
@@ -521,6 +524,14 @@ def test_projector_carries_change_pause_availability_and_fails_closed_by_default
         default.model_validate({**default.model_dump(), "pause_available": True})
 
 
+def test_change_without_terminal_record_projects_abandon_available_for_every_detail() -> None:
+    projector = WorkItemProjector(
+        _snapshot((_binding("OUT-001", DeliveryStage.PLANNING), _binding("OUT-002", DeliveryStage.PLANNING)))
+    )
+
+    assert all(projector.show_view(item_key).abandon_available for item_key in ("outcome:OUT-001", "outcome:OUT-002"))
+
+
 def test_completed_outcome_progress_and_detail_contain_result_evidence() -> None:
     projector = WorkItemProjector(
         _snapshot(
@@ -949,6 +960,10 @@ def test_deferred_change_projects_paused_outcomes_and_resume_action() -> None:
     prompt = "/design portfolio-change Change requirements:"
     assert projector.show_view("outcome:OUT-001").revision_prompt == prompt
     assert projector.show_view("publication").revision_prompt == prompt
+    assert all(
+        projector.show_view(item_key).abandon_available
+        for item_key in ("outcome:OUT-001", "outcome:OUT-002", "publication")
+    )
 
 
 def test_abandoned_change_projects_terminal_publication_without_action() -> None:
@@ -972,6 +987,10 @@ def test_abandoned_change_projects_terminal_publication_without_action() -> None
     assert group.items[-1].next_step == "Change abandoned"
     assert group.items[-1].action.kind == WorkItemActionKind.NONE
     assert projector.show_view("publication").revision_prompt is None
+    assert all(
+        not projector.show_view(item_key).abandon_available
+        for item_key in ("outcome:OUT-001", "outcome:OUT-002", "publication")
+    )
 
 
 def test_ready_pull_request_waits_for_user_merge_without_merge_control() -> None:
@@ -1000,6 +1019,74 @@ def test_ready_pull_request_waits_for_user_merge_without_merge_control() -> None
     assert card.action.label == "Check merge status"
     assert detail.publication is not None
     assert detail.publication.pull_request_number == 42
+
+
+@pytest.mark.parametrize(
+    ("reason", "status", "next_actor", "operation", "expected"),
+    [
+        (
+            "target-sync-required",
+            "ready",
+            WorkItemNextActor.AGENT,
+            WorkItemActionKind.SYNC_TARGET,
+            (WorkItemNeed.NONE, None, WorkItemActivityState.READY, "Target sync needed", WorkItemAttention.AGENT),
+        ),
+        (
+            "checks-running",
+            "waiting",
+            WorkItemNextActor.NONE,
+            None,
+            (WorkItemNeed.NONE, None, WorkItemActivityState.IDLE, "Awaiting merge in GitHub", WorkItemAttention.NONE),
+        ),
+        (
+            "merge-approval-required",
+            "waiting",
+            WorkItemNextActor.YOU,
+            None,
+            (
+                WorkItemNeed.YOU,
+                "Merge pull request in GitHub",
+                WorkItemActivityState.IDLE,
+                "Awaiting merge in GitHub",
+                WorkItemAttention.USER,
+            ),
+        ),
+    ],
+)
+def test_awaiting_merge_ownership_follows_final_readiness(reason, status, next_actor, operation, expected) -> None:
+    finalization = _finalization()
+    snapshot = _snapshot(
+        (_binding("OUT-001", DeliveryStage.COMPLETED), _binding("OUT-002", DeliveryStage.COMPLETED)),
+        frontier_updates={
+            "finalization": finalization,
+            "published_head": finalization.exact_head,
+            "ready": _ready(finalization),
+        },
+    )
+    executable = operation is not None
+    publication = DeliveryReadiness(
+        status=status,
+        reason_code=reason,
+        operation=operation,
+        executable=executable,
+        next_actor=next_actor,
+        basis=DeliveryReadinessBasis(),
+        action=WorkItemAction(kind=operation, label="Synchronize target") if executable else None,
+    )
+    done = DeliveryReadiness(
+        status="complete",
+        reason_code="ready",
+        executable=False,
+        next_actor=WorkItemNextActor.NONE,
+        basis=DeliveryReadinessBasis(),
+    )
+    projector = WorkItemProjector(snapshot, (done, done, publication))
+
+    card = projector.group_view().items[-1]
+    attention = projector.list_items()[-1].attention
+
+    assert (card.needs, card.needs_headline, card.activity.state, card.progress.label, attention) == expected
+    assert card.next_actor is next_actor
 
 
 def test_conflicting_ready_pull_request_keeps_status_check_and_resolution_prompt() -> None:
@@ -1077,3 +1164,7 @@ def test_merged_latch_projects_distinct_finalized_and_accepted_heads() -> None:
     assert detail.publication.finalized_head != detail.publication.accepted_merge_commit
     assert detail.revision_prompt is None
     assert completed.show_view("publication").revision_prompt is None
+    assert all(
+        not completed.show_view(item_key).abandon_available
+        for item_key in ("outcome:OUT-001", "outcome:OUT-002", "publication")
+    )

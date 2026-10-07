@@ -1111,6 +1111,7 @@ def test_http_portfolio_and_detail_carry_progress_without_writing_records(tmp_pa
     assert groups["change-a"]["progress"] is None
     assert groups["change-a"]["items"][0]["readiness"]["progress"] is None
     assert groups["change-a"]["items"][0]["next_step"] == "Claimed by Planner"
+    assert held.json()["item"]["abandon_available"] is True
     assert groups["change-b"]["progress"] == "waiting-for-change"
     # N09-A2: Pause is admissible under custody; the request drains the running step first.
     assert (groups["change-a"]["pause_available"], groups["change-a"]["pause_unavailable_reason"]) == (True, None)

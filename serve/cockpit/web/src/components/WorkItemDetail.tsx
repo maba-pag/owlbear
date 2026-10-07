@@ -36,7 +36,6 @@ import {
   CONFIRMATION_KIND_LABELS,
   CONTINUATION_PROMPT_HELP,
   changePauseUnavailableMessage,
-  DELIVERY_PROGRESS_LABELS,
   EVIDENCE_STATUS_LABELS,
   EVIDENCE_STATUS_TONES,
   EVIDENCE_VERDICT_LABELS,
@@ -46,6 +45,7 @@ import {
   MERGE_BLOCK_LABELS,
   NEXT_ACTOR_LABELS,
   PROGRESS_STAGE_LABELS,
+  progressLabel,
   progressTone,
   READINESS_CHECKS_LABELS,
   READINESS_REASON_LABELS,
@@ -123,6 +123,8 @@ interface WorkItemDetailProps {
   onRecoverChangeWorktree: (recoveryReviewedHead: string) => Promise<Error | null>;
   /** The Change's continuation prompt from its portfolio cards; the Change's next step. */
   changeContinuationPrompt?: string | null;
+  /** Readiness behind the Change's progress, chosen from all of its portfolio cards. */
+  changeProgressReadiness?: DeliveryReadiness | null;
 }
 
 const WORKER_ROLE_LABELS: Record<DeliveryWorkerRole, string> = {
@@ -288,9 +290,8 @@ function ChangeDispositionSection(props: WorkItemDetailProps) {
   const [reason, setReason] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [actionFailed, setActionFailed] = useState(false);
-  if (props.detail.item.card.scope !== "change-publication") return null;
   const phase = props.detail.item.publication?.phase;
-  if (phase === "abandoned") return null;
+  if (props.detail.item.abandon_available !== true) return null;
   const canSubmit = reason.trim().length > 0 && props.pendingAction === null;
   const abandon = async () => {
     const error = await props.onAbandonChange(reason.trim());
@@ -312,7 +313,9 @@ function ChangeDispositionSection(props: WorkItemDetailProps) {
         <p className="text-sm text-contrast-medium">
           Use only when the Change should leave its current delivery path. Abandonment is permanent.
         </p>
-        {phase === "deferred" ? <p className="text-sm">This Change is paused and retains its worktree.</p> : null}
+        {props.detail.item.change_progress === "paused" || phase === "deferred" ? (
+          <p className="text-sm">This Change is paused and retains its worktree.</p>
+        ) : null}
         <PInputText
           compact
           name="change-disposition-reason"
@@ -1128,26 +1131,37 @@ function MergeOfferSummary({ offer }: { offer: MergeOffer }) {
   const checks = offer.check_summary;
   const proof = offer.proof;
   return (
-    <dl className="mt-static-xs grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md text-xs" data-testid="merge-offer">
-      <IdentityRow label="Pull request" value={`${offer.repository}#${offer.number} ${offer.title}`} />
-      <IdentityRow label="Head" value={offer.head_sha.slice(0, 12)} />
-      <IdentityRow label="Target" value={`${offer.base_branch} at ${offer.target_head.slice(0, 12)}`} />
-      <IdentityRow label="Merge method" value={offer.merge_method} />
-      <IdentityRow
-        label="Required checks"
-        value={
-          `${checks.required_passed} passed, ${checks.required_pending} pending, ` +
-          `${checks.required_failed} failed; ${checks.optional_failed} optional failed`
-        }
-      />
-      <IdentityRow
-        label="Proof"
-        value={
-          `${proof.observation_count} observations, review ${proof.review_id.slice(0, 12)}, ` +
-          `proof target ${proof.proof_target.slice(0, 12)}`
-        }
-      />
-    </dl>
+    <>
+      <dl
+        className="mt-static-xs grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md text-xs"
+        data-testid="merge-offer"
+      >
+        <IdentityRow label="Pull request" value={`${offer.repository}#${offer.number} ${offer.title}`} />
+        <IdentityRow label="Head" value={offer.head_sha.slice(0, 12)} />
+        <IdentityRow label="Target" value={`${offer.base_branch} at ${offer.target_head.slice(0, 12)}`} />
+        <IdentityRow label="Merge method" value={offer.merge_method} />
+        <IdentityRow
+          label="Required checks"
+          value={
+            `${checks.required_passed} passed, ${checks.required_pending} pending, ` +
+            `${checks.required_failed} failed; ${checks.optional_failed} optional failed`
+          }
+        />
+        <IdentityRow
+          label="Proof"
+          value={
+            `${proof.observation_count} observations, review ${proof.review_id.slice(0, 12)}, ` +
+            `proof target ${proof.proof_target.slice(0, 12)}`
+          }
+        />
+      </dl>
+      {proof.proof_target !== offer.target_head ? (
+        <p className="mt-static-xs text-sm" data-testid="merge-offer-target-drift">
+          {offer.base_branch} moved since the proof ({proof.proof_target.slice(0, 12)} to{" "}
+          {offer.target_head.slice(0, 12)}). The proof does not cover the newer commits.
+        </p>
+      ) : null}
+    </>
   );
 }
 
@@ -1167,7 +1181,7 @@ function ReadinessSection({
       <div className="flex flex-wrap items-center gap-static-xs">
         {readiness.progress ? (
           <StatusChip
-            label={DELIVERY_PROGRESS_LABELS[readiness.progress]}
+            label={progressLabel(readiness.progress, readiness)}
             tone={progressTone(readiness.progress)}
             testId="readiness-progress"
           />
@@ -1182,6 +1196,9 @@ function ReadinessSection({
         </span>
         <span className="text-xs text-contrast-medium" data-readiness-actor={readiness.next_actor}>
           Next: {NEXT_ACTOR_LABELS[readiness.next_actor]}
+          {readiness.next_actor === "agent" && isContinuationPrompt(readiness.prompt, changeId)
+            ? ", after you run the prompt"
+            : ""}
         </span>
       </div>
       <p className="mt-static-xs text-sm leading-relaxed" data-readiness-reason={readiness.reason_code}>
@@ -1792,7 +1809,8 @@ function TargetSyncSection(props: WorkItemDetailProps) {
         Change maintenance
       </h4>
       <p className="mt-static-xs text-sm text-contrast-medium">
-        Bring the latest integration target into the Change before continuing delivery.
+        Bring the latest integration target into the Change before continuing delivery. If that changes the Change head,
+        the Change must be finalized again by running its prompt in Copilot Chat before it can merge.
       </p>
       <PButton
         className="mt-static-sm"
@@ -2369,7 +2387,13 @@ export default function WorkItemDetail(
             {props.detail.item.change_progress ? (
               <>
                 <dt className="text-contrast-medium">Change</dt>
-                <dd data-testid="change-progress">{DELIVERY_PROGRESS_LABELS[props.detail.item.change_progress]}</dd>
+                <dd data-testid="change-progress">
+                  {progressLabel(
+                    props.detail.item.change_progress,
+                    props.changeProgressReadiness ??
+                      (card.readiness?.progress === props.detail.item.change_progress ? card.readiness : null),
+                  )}
+                </dd>
               </>
             ) : null}
           </dl>

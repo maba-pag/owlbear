@@ -23,7 +23,7 @@ and gives Pause/Resume the programme's policy semantics. It is split into two ph
     engine-authored `/continue-change <change-id> …` prompt and says to run it in Copilot Chat.
     No control labelled *Start* copies text, and no copy reports that an agent launched.
   - Delivery projects one programme §4.3 progress description per Work Item and per Change,
-    including **Waiting for chat to resume**. The Change value follows the active or next eligible
+    including **Run prompt in Copilot Chat** (was *Waiting for chat to resume*; revised 2026-10-07). The Change value follows the active or next eligible
     outcome, not the first card. **Working**, **Checking** and **Repairing** need dispatch evidence;
     A1 has none, so a held claim shows neutral custody (*Claimed by Builder*). Cockpit renders the
     projection; it computes none of it.
@@ -44,7 +44,7 @@ and gives Pause/Resume the programme's policy semantics. It is split into two ph
 | R1 | **Copy continuation prompt** copies a complete prompt and explicitly says to run it in Copilot Chat | Programme §4.2 (`change-continuation-delivery-redesign.md:859`); execution plan §5 N09 (`:1122`); §14.4 *Copilot host integration* (`:1606`) |
 | R2 | Never label clipboard copying **Start** or report that an agent launched | §4.2 (`:859`); V17 presentation half (no fake launch) |
 | R3 | Show the §4.3 progress descriptions as projections, not a second editable lifecycle stored in Cockpit | §4.3 (`:880`); execution plan `:1124` |
-| R4 | Do not say **Working** without evidence of a current dispatch; with no host running say **Waiting for chat to resume**; a retry time does not imply an agent will start | §4.3 (`:882`); §6 (`:997`); §10.3 (`:1215`) |
+| R4 | Do not say **Working** without evidence of a current dispatch; with no host running say **Run prompt in Copilot Chat** (was **Waiting for chat to resume**; programme §4.3 revised 2026-10-07); a retry time does not imply an agent will start | §4.3 (`:882`); §6 (`:997`); §10.3 (`:1215`) |
 | R5 | **Pause/Resume** is policy state, not a request to terminate an unknown live process; Pause prevents new work and drains or cancels existing work according to ownership | §4.2 (`:863`); execution plan `:1122-1123` |
 | R6 | Settle Pause semantics versus the existing Defer | Execution plan §5 N09 *P must settle* |
 | R7 | Memory curation does not block acquisition (#218) | Execution plan `:416`, `:1125`; issue #218 |
@@ -103,7 +103,7 @@ New `DeliveryProgress` literal in `work_items.py` (keys) and Cockpit labels (`wo
 | `ready-to-merge` | Ready to merge | A1 (N05 may refine, see G8) |
 | `completed` | Completed | A1 |
 | `paused` | Paused | A1 (deferral); A2 (drained request) |
-| `waiting-for-chat` | Waiting for chat to resume | A1 |
+| `waiting-for-chat` | Run prompt in Copilot Chat (was *Waiting for chat to resume*; revised 2026-10-07) | A1 |
 
 Fields: `DeliveryReadiness.progress: DeliveryProgress | None = None` (every card, therefore also
 `get_change().readiness`, which stays card-level), plus `ChangeGroupView.progress` and

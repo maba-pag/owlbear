@@ -48,7 +48,11 @@ from owlbear_delivery import (
     ChangeWorktreeAttentionError,
     ChangeWriter,
     CompletedHistoryCatalog,
+    CompletionDisplayMetadata,
+    CompletionEvidence,
+    CompletionPullRequestIdentity,
     CompletionReceipt,
+    CompletionReceiptStore,
     CoordinationConflictError,
     CreateOrReconcileDraftPullRequest,
     DeliveryAcceptanceAttentionReason,
@@ -11633,6 +11637,55 @@ def test_change_worktree_cleanup_requires_terminal_authority(tmp_path: Path) -> 
         application.cleanup_change_worktree("change-a")
 
 
+def test_abandoned_readmitted_change_cleans_up_beside_an_earlier_completion(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    coordination = application._workspace_manager.show("change-a")
+    application.abandon_change("change-a", "User stopped the Change")
+    digest = hashlib.sha256(b"change-a").hexdigest()
+    completed_at = datetime(2026, 8, 11, 13, tzinfo=UTC)
+    earlier = CompletionReceipt.create(
+        CompletionEvidence(
+            change_id="change-a",
+            finalization_receipt_id=digest,
+            finalized_change_head=digest[:40],
+            repository_identity="example/project",
+            pull_request_identity=CompletionPullRequestIdentity(number=7, node_id="PR_node_7"),
+            accepted_target_ref="main",
+            accepted_merge_commit=digest[-40:],
+            merged_at=completed_at,
+            acceptance_observation_id=digest,
+            check_observation_ids=(digest,),
+            review_receipt_ids=(digest,),
+            completed_at=completed_at,
+        )
+    )
+    display = CompletionDisplayMetadata.create(
+        change_id="change-a",
+        completion_id=earlier.completion_id,
+        title="Earlier delivery",
+        outcome_titles=("Earlier result",),
+        outcome_promises=("Deliver the earlier result.",),
+    )
+    store = CompletionReceiptStore(runtimes["change-a"]._target_root)
+    for participant in (store.participant(earlier), store.display_participant(display)):
+        participant.destination().parent.mkdir(parents=True, exist_ok=True)
+        participant.destination().write_bytes(participant.content)
+
+    row = application.list_retained_change_worktrees()[0]
+    assert row.cleanup_eligible is True
+    assert row.cleanup_blocked_reason is None
+    assert runtimes["change-a"].completion_receipt() is None
+
+    application.cleanup_abandoned_change_worktree("change-a")
+
+    assert not coordination.worktree_path.exists()
+    assert application.list_retained_change_worktrees() == ()
+    assert store.read_bundle("change-a") is not None
+
+
 def test_abandoned_change_worktree_cleanup_surfaces_lost_worktree_attention(tmp_path: Path) -> None:
     application, _runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,
@@ -16399,6 +16452,73 @@ def test_acquisition_replays_pending_state_when_remote_matches_current_frontier(
     assert acquisition.failures == ()
     assert runtimes["change-a"].pending_state_publication() is None
     assert state_publisher.publish.call_count == 2
+
+
+def _fail_first_state_publication(application: PortfolioApplication, state_publisher: Mock) -> None:
+    application._delivery_state_publisher = state_publisher
+    launch = application.acquire_frontier_work().launch_packages[0]
+    with pytest.raises(DeliveryStatePublicationError, match="state unavailable"):
+        application.transition_delivery(
+            "change-a",
+            BlockDelivery(
+                action="block",
+                outcome_id=launch.outcome_id,
+                claim_id=launch.claim.claim_id,
+                block_id="block-first-publication",
+                reason="Remote state is temporarily unavailable.",
+                unblock_condition="Remote state publication succeeds.",
+                expected_evidence=("Published state",),
+                locators=("test_portfolio_application.py",),
+            ),
+        )
+
+
+def test_acquisition_replays_first_state_publication_without_remote_snapshot(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    state_publisher = Mock()
+    state_publisher.publish.side_effect = [
+        DeliveryStatePublicationError("state unavailable", retry_safe=True),
+        object(),
+    ]
+    state_publisher.read_snapshot_inventory.return_value = Mock(
+        remote_head="remote-head",
+        snapshots=(),
+        diagnostics=(),
+    )
+    _fail_first_state_publication(application, state_publisher)
+
+    acquisition = application.acquire_frontier_work()
+
+    assert acquisition.failures == ()
+    assert runtimes["change-a"].pending_state_publication() is None
+    assert state_publisher.publish.call_count == 2
+    assert state_publisher.publish.call_args.kwargs["expected_remote_head"] == "remote-head"
+
+
+def test_acquisition_retains_pending_state_when_remote_snapshot_is_quarantined(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    state_publisher = Mock()
+    state_publisher.publish.side_effect = [DeliveryStatePublicationError("state unavailable", retry_safe=True)]
+    state_publisher.read_snapshot_inventory.return_value = Mock(
+        remote_head="remote-head",
+        snapshots=(),
+        diagnostics=(Mock(change_id="change-a"),),
+    )
+    _fail_first_state_publication(application, state_publisher)
+
+    acquisition = application.acquire_frontier_work()
+
+    assert [failure.detail for failure in acquisition.failures] == [
+        "remote Delivery snapshot is unavailable for pending replay"
+    ]
+    assert runtimes["change-a"].pending_state_publication() is not None
+    assert state_publisher.publish.call_count == 1
 
 
 def test_acquisition_reanchors_pending_publication_after_authority_revision(tmp_path: Path) -> None:
