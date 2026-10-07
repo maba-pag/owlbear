@@ -24,6 +24,9 @@ from owlbear_memory.errors import (
     ConcurrencyError as MemoryConcurrencyError,
 )
 from owlbear_memory.errors import (
+    DuplicateEntryError as MemoryDuplicateEntryError,
+)
+from owlbear_memory.errors import (
     NotFoundError as MemoryNotFoundError,
 )
 from owlbear_memory.errors import (
@@ -93,6 +96,15 @@ def handle_memory_not_found(_request: Request, exc: MemoryNotFoundError) -> JSON
     return JSONResponse(
         status_code=404,
         content=_error_envelope("MEM_NOT_FOUND", str(exc)),
+    )
+
+
+@app.exception_handler(MemoryDuplicateEntryError)
+def handle_memory_duplicate_entry(_request: Request, exc: MemoryDuplicateEntryError) -> JSONResponse:
+    """Map failed duplicate repair to a conflict envelope."""
+    return JSONResponse(
+        status_code=409,
+        content=_error_envelope("MEM_DUPLICATE_ID", str(exc)),
     )
 
 
