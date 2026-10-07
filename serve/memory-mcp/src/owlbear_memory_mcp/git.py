@@ -108,7 +108,9 @@ def _staged_paths(repo_dir: Path, memory_root: Path) -> tuple[str, ...]:
     """Return paths already staged under the memory root."""
     return tuple(
         path
-        for path in _nul_paths(_git(repo_dir, "diff", "--cached", "--name-only", "-z", "--", str(memory_root)))
+        for path in _nul_paths(
+            _git(repo_dir, "diff", "--cached", "--no-renames", "--name-only", "-z", "--", str(memory_root))
+        )
         if Path(path).suffix == ".md"
     )
 
@@ -394,7 +396,8 @@ def _commit_batch_locked(memory_dir: Path, repo_dir: Path, *, session_type: str)
     staged_paths = _staged_paths(repo_dir, memory_root)
     _reject_staged_pending_entries(repo_dir, staged_paths)
 
-    deletion_paths = set(_deleted_paths(repo_dir, memory_root))
+    unstaged_deletions = set(_deleted_paths(repo_dir, memory_root))
+    deletion_paths = set(unstaged_deletions)
     deletion_paths.update(relative_path for relative_path in staged_paths if not (repo_dir / relative_path).exists())
     entries_by_id = {entry.id: entry for entry, _ in entries.values()}
     deferred_paths = _validate_deleted_entries(repo_dir, deletion_paths, entries_by_id)
@@ -413,7 +416,7 @@ def _commit_batch_locked(memory_dir: Path, repo_dir: Path, *, session_type: str)
             continue
         _git(repo_dir, "add", "--", relative_path)
 
-    for relative_path in sorted(deletion_paths):
+    for relative_path in sorted(unstaged_deletions - set(deferred_paths)):
         _git(repo_dir, "add", "-u", "--", relative_path)
 
     _recheck_snapshot(memory_dir, repo_dir, commit_paths, entries)

@@ -407,6 +407,45 @@ def test_batch_commits_duplicate_deletion_when_survivor_is_non_pending(tmp_path:
     assert not tracked_path.exists()
 
 
+def test_batch_commits_staged_rename_source_for_repaired_duplicate(tmp_path: Path) -> None:
+    memory_dir = _init_memory_repository(tmp_path)
+    tracked_path = _write_entry(memory_dir, state=MemoryState.APPROVED)
+    tracked = storage.read_entry_strict(tracked_path)
+    tracked_relative = str(tracked_path.relative_to(tmp_path))
+    _git(tmp_path, "add", "--", tracked_relative)
+    _git(tmp_path, "commit", "-m", "initial memory")
+
+    survivor_path = memory_dir / "newer-copy.md"
+    storage.write_entry(
+        survivor_path,
+        tracked.model_copy(
+            update={
+                "title": "Newer approved copy",
+                "content": "Newer memory content.",
+                "updated_at": "2026-08-30T00:00:00+00:00",
+            }
+        ),
+        memory_dir=memory_dir,
+    )
+    survivor_relative = str(survivor_path.relative_to(tmp_path))
+    engine = MemoryEngine(memory_dir)
+    current = engine.get_entry(tracked.id)
+    engine.edit(tracked.id, {"content": "Mutated survivor content."}, current.updated_at)
+    assert not tracked_path.exists()
+
+    _git(tmp_path, "add", "--", tracked_relative, survivor_relative)
+    staged_names = _git(tmp_path, "diff", "--cached", "--name-status")
+    assert f"{tracked_relative}\t{survivor_relative}" in staged_names
+
+    result = commit_batch(memory_dir, session_type="curation")
+
+    head_paths = _git(tmp_path, "ls-tree", "-r", "--name-only", "HEAD", "--", ".owlbear/memory").splitlines()
+    assert result.commit_sha == _git(tmp_path, "rev-parse", "HEAD")
+    assert head_paths == [survivor_relative]
+    assert _read_head_entry(tmp_path, survivor_relative).id == tracked.id
+    assert tracked_relative not in _git(tmp_path, "diff", "--cached", "--name-only")
+
+
 def test_batch_defers_duplicate_deletion_when_survivor_is_pending(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
