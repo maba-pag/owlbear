@@ -148,7 +148,6 @@ class AppContext:
     allowlist: DomainAllowlist
     launcher: PlaywrightLauncher | None = None
     page: Any = None
-    last_content: str = ""
     browser_diagnostic: str | None = None
 
 
@@ -252,12 +251,12 @@ def _serialize_acquisition(result: AcquisitionSuccess | AcquisitionFailure) -> d
         return {"status": result.status.value, "diagnostics": diagnostics}
     return {
         "status": result.status.value,
-        "requested_url": redact_url(result.requested_url),
-        "canonical_url": redact_url(result.canonical_url),
-        "redirect_chain": [redact_url(url) for url in result.redirect_chain],
+        "requested_url": result.requested_url,
+        "canonical_url": result.canonical_url,
+        "redirect_chain": list(result.redirect_chain),
         "title": result.title,
         "markdown": result.markdown,
-        "discovered_links": [redact_url(url) for url in result.discovered_links],
+        "discovered_links": list(result.discovered_links),
         "content_hash": result.content_hash,
         "fetched_at": result.fetched_at.isoformat(),
         "diagnostics": diagnostics,
@@ -299,9 +298,18 @@ async def acquire(  # noqa: PLR0913
     return _serialize_acquisition(result)
 
 
+def _require_page(ctx: Context) -> Any:  # noqa: ANN401 - Playwright page objects are external runtime values.
+    """Return the live lifespan page or raise a typed unavailable error."""
+    app_ctx = ctx.request_context.lifespan_context
+    if not isinstance(app_ctx, AppContext) or app_ctx.launcher is None or app_ctx.page is None:
+        raise ToolError(_browser_unavailable_message(app_ctx))
+    return app_ctx.page
+
+
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=True, destructive_hint=False))
 async def navigate(ctx: Context, url: str) -> str:
     """Navigate the browser to *url*."""
+    page = _require_page(ctx)
     app_ctx = ctx.request_context.lifespan_context
     await _check_ssrf(url, allowlist=app_ctx.allowlist)
     try:
@@ -309,99 +317,48 @@ async def navigate(ctx: Context, url: str) -> str:
     except PermissionError as exc:
         raise ToolError(str(exc)) from exc
 
-    if isinstance(app_ctx, AppContext):
-        if app_ctx.launcher is None:
-            raise ToolError(_browser_unavailable_message(app_ctx))
-        if app_ctx.page is not None:
-            try:
-                await app_ctx.page.goto(url, wait_until="domcontentloaded")
-            except AuthenticationRequired as exc:
-                msg = f"SSO session expired or authentication required: {exc}"
-                raise ToolError(msg) from exc
-            content = extract_content(await app_ctx.page.content(), url)
-            app_ctx.last_content = content
-            return content
-        return url  # dry-run: allowlist passed, no live page
-
-    # Non-AppContext (SimpleNamespace from tests, etc.): only access page if
-    # explicitly set — avoids awaiting auto-generated MagicMock attributes.
-    if "page" in vars(app_ctx):
-        page = app_ctx.page
-        if page is not None:
-            await page.goto(url)
-            return url
-        raise ToolError(_MSG_NO_PAGE)
-
-    return url  # Raw MagicMock or context without explicit page — allowlist passed
+    try:
+        await page.goto(url, wait_until="domcontentloaded")
+    except AuthenticationRequired as exc:
+        msg = f"SSO session expired or authentication required: {exc}"
+        raise ToolError(msg) from exc
+    return extract_content(await page.content(), url)
 
 
-@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=True))
 async def click(ctx: Context, selector: str) -> str:
     """Click the element identified by *selector*."""
-    app_ctx = ctx.request_context.lifespan_context
-    page = getattr(app_ctx, "page", None)
-    if page is not None:
-        await page.locator(selector).click()
-    else:
-        raise ToolError(_browser_unavailable_message(app_ctx))
+    page = _require_page(ctx)
+    await page.locator(selector).click()
     return selector
 
 
-@mcp.tool(
-    name="type",
-    annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False),
-)
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=True, destructive_hint=False))
 async def type_input(ctx: Context, selector: str, text: str) -> str:
-    """Type *text* into the element identified by *selector*."""
-    app_ctx = ctx.request_context.lifespan_context
-    page = getattr(app_ctx, "page", None)
-    if page is not None:
-        await page.locator(selector).fill(text)
-    else:
-        raise ToolError(_browser_unavailable_message(app_ctx))
-    return f"{selector}:{text}"
+    """Fill *text* into the element identified by *selector*."""
+    page = _require_page(ctx)
+    await page.locator(selector).fill(text)
+    return selector
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=True, destructive_hint=False))
 async def select(ctx: Context, selector: str, value: str) -> str:
     """Select *value* in the element identified by *selector*."""
-    app_ctx = ctx.request_context.lifespan_context
-    page = getattr(app_ctx, "page", None)
-    if page is not None:
-        await page.locator(selector).select_option(value)
-    else:
-        raise ToolError(_browser_unavailable_message(app_ctx))
+    page = _require_page(ctx)
+    await page.locator(selector).select_option(value)
     return f"{selector}:{value}"
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False))
 async def read_text(ctx: Context) -> str:
-    """Read the visible text content of the current page.
-
-    Returns the last cached content when no browser session is intentionally active.
-    Raises a browser-unavailable error when browser startup failed.
-    """
-    app_ctx = ctx.request_context.lifespan_context
-    page = getattr(app_ctx, "page", None)
-    if page is not None:
-        html = await page.content()
-        return extract_content(html, page.url)
-    if isinstance(app_ctx, AppContext) and app_ctx.browser_diagnostic:
-        raise ToolError(_browser_unavailable_message(app_ctx))
-    return getattr(app_ctx, "last_content", "")
+    """Read the visible text content of the current page."""
+    page = _require_page(ctx)
+    html = await page.content()
+    return extract_content(html, page.url)
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False))
 async def snapshot(ctx: Context) -> str:
-    """Take an accessibility snapshot of the current page as Markdown.
-
-    Returns the last cached content when no browser session is intentionally active.
-    Raises a browser-unavailable error when browser startup failed.
-    """
-    app_ctx = ctx.request_context.lifespan_context
-    page = getattr(app_ctx, "page", None)
-    if page is not None:
-        return await page.locator("body").aria_snapshot()
-    if isinstance(app_ctx, AppContext) and app_ctx.browser_diagnostic:
-        raise ToolError(_browser_unavailable_message(app_ctx))
-    return getattr(app_ctx, "last_content", "")
+    """Take an ARIA accessibility snapshot of the current page in YAML."""
+    page = _require_page(ctx)
+    return await page.locator("body").aria_snapshot()

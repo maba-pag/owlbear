@@ -1,4 +1,4 @@
-"""SSRF pre-flight regression tests for navigate().
+"""SSRF preflight regression tests for navigate().
 
 The security boundary requires:
   - _check_ssrf(url) called BEFORE allowlist.check(url) in navigate()
@@ -18,14 +18,13 @@ DNS is mocked via ``socket.getaddrinfo``.  The implementation must use
 from __future__ import annotations
 
 import socket
-from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
 from owlbear_browser_mcp.allowlist import DomainAllowlist
-from owlbear_browser_mcp.server import navigate
+from owlbear_browser_mcp.server import AppContext, navigate
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -38,11 +37,14 @@ _UNALLOWLISTED_HOST = "blocked.example.com"
 def _make_ctx(domains: list[str] | None = None) -> MagicMock:
     """Return a mock ctx backed by a real DomainAllowlist.
 
-    Uses SimpleNamespace without a ``page`` attribute so navigate() reaches
-    the dry-run return path when the SSRF check passes.
+    A fake live page lets navigate() reach the browser only after preflight passes.
     """
     allowlist = DomainAllowlist(domains=domains if domains is not None else [_ALLOWED_HOST])
-    app_ctx = SimpleNamespace(allowlist=allowlist)
+    page = MagicMock()
+    page.goto = AsyncMock()
+    page.content = AsyncMock(return_value="<html><body><main>Rendered page</main></body></html>")
+    page.url = f"https://{_ALLOWED_HOST}/"
+    app_ctx = AppContext(allowlist=allowlist, launcher=MagicMock(), page=page)
     ctx = MagicMock()
     ctx.request_context.lifespan_context = app_ctx
     return ctx
@@ -106,8 +108,22 @@ class TestFromAC_NavigateSchemeCheck:
         """Wildcard testing mode permits public hosts after SSRF validation."""
         url = "https://another.example.com/"
         ctx = _make_ctx(["*"])
+        page = ctx.request_context.lifespan_context.page
         with patch("socket.getaddrinfo", return_value=_addr4("93.184.216.34")):
-            assert await navigate(ctx, url) == url
+            await navigate(ctx, url)
+        page.goto.assert_awaited_once_with(url, wait_until="domcontentloaded")
+
+    @pytest.mark.asyncio
+    async def test_public_hostname_outside_allowlist_is_rejected(self) -> None:
+        """A public host that passes SSRF checks is still refused unless allowlisted."""
+        ctx = _make_ctx([_ALLOWED_HOST])
+        page = ctx.request_context.lifespan_context.page
+        with (
+            patch("socket.getaddrinfo", return_value=_addr4("93.184.216.34")),
+            pytest.raises(ToolError, match="Domain not in allowlist"),
+        ):
+            await navigate(ctx, "https://another.example.com/")
+        page.goto.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
@@ -123,16 +139,20 @@ class TestFromAC_NavigateTrustedInternal:
         """An exact hostname approval permits a synthetic private destination."""
         url = f"https://{_ALLOWED_HOST}/internal"
         ctx = _make_ctx([_ALLOWED_HOST])
+        page = ctx.request_context.lifespan_context.page
         with patch("socket.getaddrinfo", return_value=_addr4("10.0.0.7")):
-            assert await navigate(ctx, url) == url
+            await navigate(ctx, url)
+        page.goto.assert_awaited_once_with(url, wait_until="domcontentloaded")
 
     @pytest.mark.asyncio
     async def test_exact_allowlisted_hostname_allows_mapped_private_ip(self) -> None:
         """IPv4-mapped private results use the same exact-host approval."""
         url = f"https://{_ALLOWED_HOST}/internal"
         ctx = _make_ctx([_ALLOWED_HOST])
+        page = ctx.request_context.lifespan_context.page
         with patch("socket.getaddrinfo", return_value=_addr6("::ffff:10.0.0.7")):
-            assert await navigate(ctx, url) == url
+            await navigate(ctx, url)
+        page.goto.assert_awaited_once_with(url, wait_until="domcontentloaded")
 
     @pytest.mark.asyncio
     async def test_empty_allowlist_does_not_allow_private_ip(self) -> None:
@@ -167,11 +187,13 @@ class TestFromAC_NavigateIPBlocklist:
     async def test_blocks_loopback_127_0_0_1(self) -> None:
         """An unallowlisted hostname resolving to 127.0.0.1 must raise ToolError."""
         ctx = _make_ctx([_UNALLOWLISTED_HOST])
+        page = ctx.request_context.lifespan_context.page
         with (
             patch("socket.getaddrinfo", return_value=_addr4("127.0.0.1")),
             pytest.raises(ToolError),
         ):
             await navigate(ctx, f"https://{_ALLOWED_HOST}/")
+        page.goto.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_blocks_loopback_127_x_non_zero(self) -> None:
@@ -282,6 +304,7 @@ class TestFromAC_NavigateIPBlocklist:
         ):
             await navigate(ctx, url)
         mock_dns.assert_not_called()
+        ctx.request_context.lifespan_context.page.goto.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_blocks_reserved_ip(self) -> None:
@@ -361,19 +384,22 @@ class TestFromAC_NavigatePassthrough:
     async def test_allowed_domain_dns_is_resolved(self) -> None:
         """Public IP for an allowed domain: SSRF check passes and DNS was called."""
         ctx = _make_ctx()
+        page = ctx.request_context.lifespan_context.page
         with patch("socket.getaddrinfo", return_value=_addr4("93.184.216.34")) as mock_dns:
             result = await navigate(ctx, f"https://{_ALLOWED_HOST}/page")
         mock_dns.assert_called()
         assert result is not None
+        page.goto.assert_awaited_once_with(f"https://{_ALLOWED_HOST}/page", wait_until="domcontentloaded")
 
     @pytest.mark.asyncio
-    async def test_allowed_domain_https_returns_url(self) -> None:
-        """navigate() returns a non-empty result for an allowed HTTPS URL with public IP.
+    async def test_allowed_domain_https_reaches_live_page(self) -> None:
+        """navigate() reaches the live page for an allowed URL with a public IP.
 
         This also acts as a regression guard: the SSRF check must not block public IPs.
         """
         ctx = _make_ctx()
+        page = ctx.request_context.lifespan_context.page
         with patch("socket.getaddrinfo", return_value=_addr4("93.184.216.34")) as mock_dns:
-            result = await navigate(ctx, f"https://{_ALLOWED_HOST}/index.html")
+            await navigate(ctx, f"https://{_ALLOWED_HOST}/index.html")
         mock_dns.assert_called()
-        assert result == f"https://{_ALLOWED_HOST}/index.html"
+        page.goto.assert_awaited_once_with(f"https://{_ALLOWED_HOST}/index.html", wait_until="domcontentloaded")

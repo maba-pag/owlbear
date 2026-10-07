@@ -43,16 +43,24 @@ with exact hostnames before using the project against production or sensitive si
 | `acquire` | Acquire one rendered page and return its structured success or failure result |
 | `navigate` | Navigate to a URL and return the page's normalized Markdown content |
 | `click` | Click an element identified by CSS selector |
-| `type` | Type text into an input field identified by CSS selector |
+| `type_input` | Fill an input field identified by CSS selector |
 | `select` | Select an option in a `<select>` element by value |
 | `read_text` | Return the current page's normalized Markdown content without navigating |
 | `snapshot` | Return the current page's Playwright ARIA accessibility snapshot in YAML |
 
+Interactive tools require a live browser session and raise a browser-unavailable error otherwise;
+`type_input` never echoes typed text, and `snapshot` returns YAML.
+
 `acquire` accepts a URL, optional readiness/content selectors, and bounded navigation/readiness
 timeouts. It does not accept arbitrary browser actions, scripts, credentials, session inputs, or
 diagnostic-HTML options. Its failure status and redacted diagnostics are returned as part of the
-structured result rather than being converted into a generic transport error. Successful URL fields
-are redacted for credentials and sensitive query values before they cross the MCP boundary.
+structured result rather than being converted into a generic transport error. The shared contract
+applies URL redaction when constructing `AcquisitionSuccess`: userinfo and fragments are removed;
+values for exact sensitive keys and normalized keys ending in `token`, `secret`, `signature`,
+`password`, `credential`, or `assertion` become `%5BREDACTED%5D`; `state`, `session_state`, and `nonce` values
+become `%5BCORRELATION%5D`. The `code` key is exact-match only, and other query bytes and paths
+remain for document identity. Diagnostic URLs with secret-like paths are replaced in full; MCP
+serialization projects the already-redacted fields.
 
 ## Configuration
 

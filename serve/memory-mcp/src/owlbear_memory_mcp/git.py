@@ -141,7 +141,9 @@ def _validate_deleted_entries(repo_dir: Path, deletion_paths: set[str]) -> None:
         if entry.state not in {MemoryState.PENDING, MemoryState.DELETED}:
             message = (
                 "memory batch validation failed: physical deletion is only allowed for "
-                f"pending or deleted entries {relative_path}"
+                f"pending or deleted entries {relative_path}; HEAD state is {entry.state}. "
+                f"Restore the file from HEAD with `git restore --source=HEAD -- {relative_path}`, "
+                "soft-delete it, commit the batch, then purge."
             )
             raise ValueError(message)
 
@@ -187,6 +189,10 @@ def commit_batch(memory_dir: Path, *, session_type: str) -> str:
     staged_paths = _staged_paths(repo_dir, memory_root)
     _reject_staged_pending_entries(repo_dir, staged_paths)
 
+    deletion_paths = set(_deleted_paths(repo_dir, memory_root))
+    deletion_paths.update(relative_path for relative_path in staged_paths if not (repo_dir / relative_path).exists())
+    _validate_deleted_entries(repo_dir, deletion_paths)
+
     commit_paths: set[str] = set()
     for file_path, entry in entries.items():
         if entry.state == MemoryState.PENDING:
@@ -195,9 +201,6 @@ def commit_batch(memory_dir: Path, *, session_type: str) -> str:
         _git(repo_dir, "add", "--", relative_path)
         commit_paths.add(relative_path)
 
-    deletion_paths = set(_deleted_paths(repo_dir, memory_root))
-    deletion_paths.update(relative_path for relative_path in staged_paths if not (repo_dir / relative_path).exists())
-    _validate_deleted_entries(repo_dir, deletion_paths)
     for relative_path in sorted(deletion_paths):
         _git(repo_dir, "add", "-u", "--", relative_path)
         commit_paths.add(relative_path)

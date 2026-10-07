@@ -135,7 +135,7 @@ class DeliveryHostConfig(_LoaderModel):
     """Host-local limits and timeout for Delivery work."""
 
     schema_version: Literal[1]
-    execution_capacity: int = Field(default=3, gt=0)
+    execution_capacity: int = Field(default=8, gt=0)
     claim_timeout_seconds: int = Field(default=60 * 60, gt=0)
 
 
@@ -638,8 +638,13 @@ def _validate_local_snapshot(  # noqa: C901 - one predicate per recognized local
         or local_checkpoint_successor
         or local_pending_publication
     )
+    builder_claim_successor = local_claim_successor and _has_builder_writer_claim(frontier, coordination)
     if local_claim_successor:
-        _require_local_snapshot_branch(snapshot, paths.repository_root)
+        _require_local_snapshot_branch(
+            snapshot,
+            paths.repository_root,
+            allow_descendant=builder_claim_successor,
+        )
     reviewed = coordination.last_reviewed_commit
     pending = frontier.pending_checkpoint
     # An activated revision may have pushed its snapshot head to the Change branch before its state.
@@ -654,7 +659,12 @@ def _validate_local_snapshot(  # noqa: C901 - one predicate per recognized local
         config,
         paths.repository_root,
         allow_local_branch=True,
-        allow_local_descendant=local_attention_successor or local_builder_handoff_successor or revision is not None,
+        allow_local_descendant=(
+            local_attention_successor
+            or local_builder_handoff_successor
+            or builder_claim_successor
+            or revision is not None
+        ),
         pending_revision_head=revision_head,
     )
     if canonical_frontier != expected["frontier.json"] and not local_recoverable_successor:
@@ -940,16 +950,35 @@ def _local_snapshot_change_head(
     return None
 
 
-def _require_local_snapshot_branch(snapshot: DeliveryStateSnapshot, repository: Path) -> None:
-    """Require one active local snapshot branch to remain at its reviewed head."""
+def _require_local_snapshot_branch(
+    snapshot: DeliveryStateSnapshot,
+    repository: Path,
+    *,
+    allow_descendant: bool = False,
+) -> None:
+    """Require one active local snapshot branch at its reviewed head, or past it for Builder custody."""
     local_head = _local_snapshot_change_head(
         snapshot,
         repository,
         allow_local_branch=True,
-        allow_local_descendant=False,
+        allow_local_descendant=allow_descendant,
     )
     if local_head != snapshot.change_head:
         _bootstrap_failure("local Change branch differs from Delivery-state snapshot")
+
+
+def _has_builder_writer_claim(frontier: DeliveryFrontier, coordination: ChangeCoordination) -> bool:
+    """Recognize a recorded Builder writer whose active claim may commit past the reviewed head."""
+    writer = coordination.writer
+    if writer is None or writer.kind != "build":
+        return False
+    return any(
+        binding.active_claim is not None
+        and binding.active_claim.worker_role == DeliveryWorkerRole.BUILDER
+        and binding.active_claim.claim_id == writer.claim_id
+        and binding.active_claim.attempt_id == writer.attempt_id
+        for binding in frontier.bindings
+    )
 
 
 def _is_unpublished_claim_successor(
