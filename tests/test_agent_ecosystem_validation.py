@@ -1446,11 +1446,16 @@ def test_pr_feedback_resume_requires_finalized_head_and_preserves_unmapped_fixes
         resume.index("Call Delivery `reconcile_change_checkpoint`"),
         resume.index("bound PR head to equal the finalized head"),
         resume.index("Read the trailer map at that exact finalized head"),
+        resume.index("Re-evaluate every unresolved bound-PR thread that is unmapped or reopened"),
+        resume.index("Any thread judged `fix` stays unresolved and unreplied"),
+        resume.index("Run the shared reply and resolve procedure for all awaiting mapped threads"),
     ]
 
     assert positions == sorted(positions)
-    assert "thread needs a new fix but has no mapped commit" in resume
-    assert "leave it unresolved and unreplied" in resume
+    assert "Do not prepare review repair or edit during `resume`" in resume
+    assert "Retain the classification and evidence for every non-fix thread" in resume
+    assert "re-evaluated non-fix threads" in resume
+    assert "verified PR head with `commit=none` when unmapped" in resume
     assert "next_command: /address-pr-feedback <change-id>" in resume
 
 
@@ -1564,6 +1569,14 @@ def test_pr_feedback_phase_routing_precedes_mutation_and_fences_finalized_phases
     assert "`authority-gap: change-not-finalized`" in step0
     assert "the exact Delivery/provider error" in step0
     assert "`/address-pr-feedback <change-id>`" in step0
+
+    step1_start = content.index("## Step 1 - Bind The Change And Pull Request")
+    step1_end = content.index("## Step 2 - Critically Triage Every Thread", step1_start)
+    step1 = _normalize_contract_text(content[step1_start:step1_end])
+    assert "retain its observed head" in step1
+    assert "do not reject a stale PR head before Step 0's `reconcile_change_checkpoint`" in step1
+    assert "require exact equality with `finalized_head` only afterward" in step1
+    assert "`prepare_review_repair` validates the expected head" in step1
 
 
 def test_pr_feedback_prompt_mode_is_optional_derived_and_next_commands_are_mode_free() -> None:

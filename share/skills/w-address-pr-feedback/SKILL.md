@@ -38,7 +38,9 @@ An unresolved bound-PR thread is `awaiting` when it is mapped by a `Review-Threa
 reachable from the exact finalized head and has no viewer-authored marker reply for its newest
 mapped commit, or has a settled marker reply for it. A mapped thread is `reopened` when every
 viewer-authored marker reply for its newest mapped commit is unsettled; reopened threads do not
-select `resume` and are triaged in `start`.
+select `resume` by themselves. If another awaiting mapped thread selects `resume`, reopened threads
+are re-evaluated in its Resume Order; when no awaiting thread selects `resume`, they are triaged in
+`start`.
 
 If `mode` is omitted, use the derived phase (`start-reentry` accepts `start`). If it is supplied,
 accept only `start` or `resume` and require it to match the derived phase. Refuse any other value or
@@ -71,8 +73,11 @@ post, resolve, edit, or otherwise mutate while deriving the phase. Do not use a 
    ```
 
    Require exactly one open pull request, the expected repository, managed branch, target branch,
-   and current head identity. A closed or merged pull request, missing PR, multiple matches, or
-   head mismatch is a bounded stop; do not repair it through another branch or PR.
+   and retain its observed head. A closed or merged pull request, missing PR, multiple matches, or
+   repository/branch/target mismatch is a bounded stop; do not repair it through another branch or
+   PR. For finalized phases, do not reject a stale PR head before Step 0's
+   `reconcile_change_checkpoint`; require exact equality with `finalized_head` only afterward.
+   In `review-repair`, `prepare_review_repair` validates the expected head before thread inspection.
 For a finalized phase, continue with the comment and trailer reads below to derive `resume` or
 first-entry `start`. For `review-repair`, stop after binding the exact PR here; defer viewer,
 comment, and trailer reads until `prepare_review_repair` succeeds in Step 2.
@@ -276,13 +281,15 @@ uses the managed worktree's `HEAD`, while finalized phases use the exact `finali
    the Change head. Call Delivery `reconcile_change_checkpoint` before thread triage or mutation.
    Require publication to succeed and the bound PR head to equal the finalized head; otherwise
    stop with the exact error and `/address-pr-feedback <change-id>`.
-2. Read the trailer map at that exact finalized head. If an unresolved thread needs a new fix but
-   has no mapped commit, leave it unresolved and unreplied and report
-   `next_command: /address-pr-feedback <change-id>`; do not invent a commit or reply as if it were
-   repaired.
-3. Process only unresolved bound-PR threads whose current repair commit is mapped. Use the shared
-   reply and resolve procedure below. A thread whose marker replies for its newest mapped commit
-   are all unsettled is reopened and belongs in `start`, not this `resume` pass.
+2. Read the trailer map at that exact finalized head.
+3. Re-evaluate every unresolved bound-PR thread that is unmapped or reopened using Step 2's
+   classification criteria. Do not prepare review repair or edit during `resume`. Any thread judged
+   `fix` stays unresolved and unreplied; report `next_command: /address-pr-feedback <change-id>`.
+   Retain the classification and evidence for every non-fix thread for the reply step.
+4. Run the shared reply and resolve procedure for all awaiting mapped threads and all re-evaluated
+   non-fix threads. A re-evaluated thread uses its current key: newest mapped repair commit when
+   mapped, or the verified PR head with `commit=none` when unmapped. Resolve only after its settled
+   current-key viewer marker is observed.
 
 ### No-Fix First-Entry Start
 
