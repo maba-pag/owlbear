@@ -342,6 +342,7 @@ export function detail(
       block: null,
       requests: [],
       active_claim: null,
+      held_finalizer: null,
       return_context: null,
       operator_moves: [],
       recovery_attention: null,
@@ -691,7 +692,11 @@ export function installFetch() {
             409,
           );
         }
-        fixtureState.currentDetail = detail({ ...fixtureState.currentDetail.item, active_claim: null });
+        fixtureState.currentDetail = detail({
+          ...fixtureState.currentDetail.item,
+          active_claim: null,
+          held_finalizer: null,
+        });
         return response({});
       }
       if (method === "POST" && url.endsWith("/move-backward/preview")) {
