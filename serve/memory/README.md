@@ -164,7 +164,8 @@ Raises `ValueError` on containment or symlink violations.
 | Exception | Raised when |
 | --- | --- |
 | `NotFoundError` | An entry file does not exist |
-| `ConcurrencyError` | Optimistic concurrency validation fails (caller use) |
+| `ConcurrencyError` | A stale optimistic-concurrency token does not match the freshly loaded entry |
+| `MemoryBusyError` | The writer lock cannot be acquired before its deadline; a `ConcurrencyError` subtype |
 | `ValidationError` | User input or payload validation fails (caller use) |
 | `TransitionError` | A memory state transition is not permitted (caller use) |
 | `LifecycleRollbackFailure` | Describes a failed rollback for one affected entry, including its ID, path, and exception |
@@ -269,8 +270,19 @@ string. The universal `*` member is allowed; an empty list is allowed for pendin
 
 All mutation methods (`approve`, `resolve`, `edit`, `delete`) accept `expected_updated_at` (str).
 `record_factually_wrong` and `record_assessment` also accept `expected_updated_at` but it is optional (`str | None`); pass `None` to skip the OCC check.
-If a non-`None` value does not match the on-disk `entry.updated_at`, `ConcurrencyError` is
-raised. `save()` creates new entries and does not require an OCC token.
+Before a mutation, the engine reloads under the writer lock. If a non-`None` token does not match
+the freshly loaded entry's `updated_at`, `ConcurrencyError` is raised and the mutation does not
+overwrite the newer entry; callers should reload and resolve the stale update. `save()` creates
+new entries and does not require an OCC token.
+
+#### Writer model
+
+Use `MemoryEngine` for coordinated entry writes; the Memory MCP batch commit uses the same lock.
+It is an exclusive advisory `flock` on the resolved memory directory, serializes same-process
+engines and other processes, and is re-entrant on the owning thread. One bounded deadline covers
+in-process and cross-process contention (30 seconds by default). A timeout raises
+`MemoryBusyError`, a `ConcurrencyError` subtype. Reads stay lock-free; low-level `storage` writes
+do not acquire this lock. No lock file or second locking protocol is used.
 
 #### Lenient Read
 
@@ -304,6 +316,25 @@ An unchanged call is bounded to one directory scan and one metadata stat per `.m
 (100 stats for this store), or O(n) metadata operations; entry contents are not read. The
 timing includes the returned-list copy and is an observation from this machine, not a
 portable latency guarantee.
+
+### Batch commit integration
+
+The Memory MCP batch operation holds the same writer lock from its fresh snapshot and validation
+through `git commit`. It stages only validated non-pending memory entries and permitted tracked
+deletions; unrelated staged paths remain staged and are not committed. Before committing, it
+rechecks working-tree bytes and staged blobs against the snapshot. Afterwards it verifies both the
+complete committed path set and each committed blob.
+
+A tracked duplicate-copy deletion is allowed when another file still carries the ID. If that
+survivor is pending, the deletion remains unstaged and is reported in `deferred_deletions`; the MCP
+result includes that field and the CLI prints a `note: deferred duplicate deletions: ...` line.
+Curate the survivor, then run the batch again to commit the deferred removal. Other reviewed entries
+must be soft-deleted and committed as tombstones before their files are purged.
+
+Pre-commit recheck failures, later validation failures, and Git or hook failures can leave memory
+paths staged; the operation does not restore the index. A post-commit verification failure is
+reported after `HEAD` may have moved and does not reset Git state. Inspect `git status`, the staged
+diff, and `git show --stat HEAD` before retrying. See the [Memory MCP batch-commit contract](../memory-mcp/README.md#batch-commits).
 
 ---
 
