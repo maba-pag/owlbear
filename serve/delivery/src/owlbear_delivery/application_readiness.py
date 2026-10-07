@@ -78,7 +78,7 @@ from owlbear_delivery.finalization_reports import (
     FinalizationReportStore,
     FinalizerSettlementReceipt,
 )
-from owlbear_delivery.merge_approval import MergeAttemptStore
+from owlbear_delivery.merge_approval import MergeAttemptStore, merge_response_overdue
 from owlbear_delivery.merge_offer import MergeDecision, MergeFacts, MergeOfferAuthority, decide_merge
 from owlbear_delivery.portfolio_operating import (
     DeliveryHealthDiagnostic,
@@ -2461,7 +2461,7 @@ class _ReadinessViewsMixin:
     def _merge_attempt_readiness(
         self, snapshot: DeliveryPortfolioSnapshot
     ) -> tuple[Literal["merge-in-progress", "merge-response-unknown"], MergeAttemptSummary | None] | None:
-        """I11, 1.13: an unsettled approval is in progress until the acceptance episode stops, then unknown."""
+        """I11, 1.13: an unsettled approval is in progress until its response deadline passes, then unknown."""
         change_id = snapshot.contract.change_id
         frontier = snapshot.frontier
         if frontier.change_abandonment is not None or frontier.change_completion is not None:
@@ -2478,25 +2478,8 @@ class _ReadinessViewsMixin:
             approved_head=attempt.head_sha,
             pr_url=attempt.pr_url,
         )
-        finalization = frontier.finalization
-        try:
-            episode = (
-                None
-                if finalization is None
-                else RetryLedger(self._target_root, change_id, clock=self._clock).episode(
-                    RetryEpisodeKey.engine(
-                        change_id,
-                        "observe-acceptance",
-                        finalization.exact_head,
-                        self._workspace_manager.observed_target_head(),
-                        finalization.finalization_id,
-                    )
-                )
-            )
-        except OSError, RetryLedgerConflictError, RetryLedgerCorruptError, RuntimeError, ValueError:
-            episode = None
-        stopped = episode is not None and episode.stop_code is RetryStopCode.ACCEPTANCE_WAIT
-        return ("merge-response-unknown" if stopped else "merge-in-progress"), summary
+        overdue = merge_response_overdue(attempt, self._clock())
+        return ("merge-response-unknown" if overdue else "merge-in-progress"), summary
 
     @classmethod
     def _with_merge_attempt_readiness(

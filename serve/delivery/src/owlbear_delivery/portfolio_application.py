@@ -162,6 +162,7 @@ from owlbear_delivery.draft_pull_request import (
     PullRequestReadyReceipt,
     ReadChangePublicationCheckObservations,
 )
+from owlbear_delivery.merge_approval import MergeAttemptStore, merge_observation_expired
 from owlbear_delivery.publication_provider import (
     PublicationProviderError,
     PublicationPullRequest,
@@ -434,7 +435,12 @@ class PortfolioApplication(
         self,
         change_id: str,
     ) -> DeliveryAcceptanceReconciliationOutcome:
-        runtime = self._runtime(change_id, for_mutation=True)
+        try:
+            runtime = self._runtime(change_id, for_mutation=True)
+        except (DeliveryRuntimeConflictError, DeliveryWorkerExclusionRequiredError) as exc:
+            return self._reconciliation_skipped_outcome(
+                change_id, str(exc) or "Change custody is retained.", code="ERR_DELIVERY_RECONCILIATION_BUSY"
+            )
         try:
             with locked_roots((self._checkpoint_lock_root(change_id),), blocking=False):
                 if not self._is_acceptance_reconciliation_eligible(runtime):
@@ -713,21 +719,42 @@ class PortfolioApplication(
             message = "acceptance observation requires awaiting-merge authority"
             raise PortfolioApplicationError(message)
         change_id = runtime.contract.change_id
-        key = RetryEpisodeKey.engine(
-            change_id,
-            "observe-acceptance",
-            finalization.exact_head,
-            self._workspace_manager.observed_target_head(),
-            finalization.finalization_id,
-        )
         ledger = runtime.retry_ledger(clock=self._clock)
-        episode = ledger.episode(key)
+        attempt = MergeAttemptStore(self._target_root, change_id).observed()
+        if attempt is not None:
+            key = RetryEpisodeKey.merge_observation(
+                change_id, attempt.head_sha, attempt.finalization_id, attempt.approval_id
+            )
+            automatic = not explicit
+            if automatic and merge_observation_expired(attempt, self._clock()):
+                return RetryReservation(
+                    episode_id=key.identity,
+                    allowed=False,
+                    reason_code=RetryStopCode.ACCEPTANCE_WAIT.value,
+                    stop_code=RetryStopCode.ACCEPTANCE_WAIT,
+                )
+            # Callers hold the checkpoint lock, so a pending read of this approval was interrupted.
+            for orphan in ledger.pending_attempts():
+                if orphan.key == key:
+                    ledger.record_failure(
+                        orphan.attempt_id, failure_code="acceptance-interrupted", now=orphan.reserved_at
+                    )
+        else:
+            key = RetryEpisodeKey.engine(
+                change_id,
+                "observe-acceptance",
+                finalization.exact_head,
+                self._workspace_manager.observed_target_head(),
+                finalization.finalization_id,
+            )
+            episode = ledger.episode(key)
+            automatic = not (explicit and episode is not None and episode.stop_code is RetryStopCode.ACCEPTANCE_WAIT)
         try:
             return ledger.reserve(
                 key,
                 failure_class=RetryFailureClass.ACCEPTANCE,
                 now=self._clock(),
-                automatic=not (explicit and episode is not None and episode.stop_code is RetryStopCode.ACCEPTANCE_WAIT),
+                automatic=automatic,
                 fence=self._coordinator.prepare_pause_fence(change_id, "provider", "observe-acceptance"),
             )
         except RetryLedgerConflictError:
