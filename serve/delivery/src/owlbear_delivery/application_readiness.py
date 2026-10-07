@@ -20,6 +20,7 @@ from owlbear_delivery.application_models import (
     _held_finalizer_prompt,
     _operator_claim,
     _operator_recovery_attention,
+    _target_sync_conflict_prompt,
     _worker_stall_prompt,
     _WorkerStall,
 )
@@ -38,6 +39,7 @@ from owlbear_delivery.application_support import (
 from owlbear_delivery.change_workspace import (
     ChangeContinuationAction,
     ChangeCoordination,
+    ChangeTargetSyncConflictError,
     ChangeWorktreeAttentionCode,
     RetainedChangeWorktree,
 )
@@ -865,6 +867,17 @@ class _ReadinessViewsMixin:
         held_finalizer = self._held_finalizer_view(snapshot.contract.change_id)
         if held_finalizer is not None:
             decisions = self._with_held_finalizer_prompt(snapshot, cards, decisions)
+        if (
+            workspace_reason == "engine-action-failed"
+            and self._retained_target_sync_conflict(snapshot.contract.change_id) is not None
+        ):
+            prompt = _target_sync_conflict_prompt(snapshot.contract.change_id)
+            decisions = tuple(
+                decision.model_copy(update={"prompt": prompt})
+                if decision.reason_code == "engine-action-failed"
+                else decision
+                for decision in decisions
+            )
         if settled_attention:
             # Settled Finalizer attention names /inspect-change in its card guidance instead.
             decisions = tuple(
@@ -1675,6 +1688,11 @@ class _ReadinessViewsMixin:
                         "The publication owner has a recorded provider/readback failure; no exact authoritative "
                         "publication readback is available. Preserve custody and journals; the publication owner "
                         "must resolve this condition before resume; do not retry or release custody."
+                    )
+                elif recorded.failure.code == ChangeTargetSyncConflictError.code:
+                    guidance = (
+                        "Target synchronization stopped on a preserved merge conflict. Resolve or abort it with "
+                        f"/resolve-target-conflict {action.change_id}; that exit releases this engine action."
                     )
                 else:
                     state = (
