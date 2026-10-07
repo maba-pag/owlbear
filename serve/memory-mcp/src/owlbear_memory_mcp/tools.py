@@ -248,6 +248,8 @@ async def save_memory(  # noqa: PLR0913
             scope_agents=[],
             source_agent=source_agent,
         )
+    except ConcurrencyError as exc:
+        raise ToolError(str(exc)) from exc
     except ValidationError as exc:
         raise ToolError(_teaching_validation_message(exc)) from exc
     hint = "Saved as pending and unscoped. The memory curator assigns relevance scope before promotion."
@@ -558,7 +560,7 @@ async def rename_agent_memories(ctx: Context, *, old_name: str, new_name: str) -
     engine = _engine_from_ctx(ctx)
     try:
         result = engine.rename_agent(old_name, new_name)
-    except (LifecycleRecoveryError, ValidationError) as exc:
+    except (ConcurrencyError, LifecycleRecoveryError, ValidationError) as exc:
         raise ToolError(str(exc)) from exc
     if result["entries_updated"] == 0:
         msg = f"No memory references found for agent {old_name!r}."
@@ -574,7 +576,7 @@ async def delete_agent_memories(ctx: Context, *, agent: str) -> dict[str, int]:
     engine = _engine_from_ctx(ctx)
     try:
         result = engine.delete_agent(agent)
-    except (LifecycleRecoveryError, ValidationError) as exc:
+    except (ConcurrencyError, LifecycleRecoveryError, ValidationError) as exc:
         raise ToolError(str(exc)) from exc
     if result["entries_deleted"] == 0 and result["scopes_updated"] == 0:
         msg = f"No memory references found for agent {agent!r}."
