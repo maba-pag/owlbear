@@ -20,11 +20,13 @@ predecessor, the next same-task Builder must triage its work before edits. Use f
 predecessor crashed or its chat was stopped without returning a transition. An unsettled dispatch or
 owned mutator that may still run remains contained and does not permit a replacement claim.
 
-Require one serialized `DeliveryLaunchPackage` whose policy and claim roles are `builder`, whose
-task IDs match, and whose writer identity matches the claim attempt, claim, owner, and process. Call
-`show_build_context` with the launch change, outcome, attempt, and claim IDs. Require the returned
-`DeliveryBuildContext.launch` to equal the supplied launch and the context task to match its task,
-outcome, and plan-scope identities.
+Require one launch reference whose `worker_role` is `builder` and whose `change_id`, `outcome_id`,
+`attempt_id`, `claim_id`, and `task_id` are present. Call `show_build_context` with exactly those
+change, outcome, attempt, and claim IDs; never search for or substitute another claim when it
+refuses. Use the returned `DeliveryBuildContext.launch` as the launch for every later step. Require
+its change, outcome, attempt, claim, role, and task identities to equal the reference, its policy and
+claim roles to be `builder`, its writer identity to match the claim attempt, claim, owner, and
+process, and the context task to match its task, outcome, and plan-scope identities.
 
 For this custody read, inspect the actual callable tool definitions before declaring a capability
 failure. Use a directly bound `show_build_context` as granted even if a separate discovery inventory

@@ -159,6 +159,15 @@ def _worker_stall_prompt(change_id: str, stall: _WorkerStall) -> str:
     )
 
 
+def _held_finalizer_prompt(change_id: str) -> str:
+    return (
+        f"/continue-change {change_id} A Finalizer attempt holds this Change. If that exact Finalizer chat has "
+        "stopped, confirm it when the continuation asks, or use Release in Cockpit; Delivery records a failed "
+        "attempt once no process uses the worktree and it stays unchanged. While it may still run, do not edit "
+        "the worktree or dispatch a replacement."
+    )
+
+
 def _operator_claim(claim: DeliveryActiveClaim | None) -> DeliveryOperatorClaim | None:
     if claim is None:
         return None

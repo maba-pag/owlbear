@@ -473,6 +473,16 @@ class WorkItemClaimView(_ProjectionModel):
     task_id: str | None = None
 
 
+class WorkItemHeldFinalizerView(_ProjectionModel):
+    """Exact unfinished Finalizer attempt identity holding Change custody, not evidence that it still runs."""
+
+    attempt_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
+    owner_id: str = Field(min_length=1)
+    process_id: str = Field(min_length=1)
+    started_at: str = Field(min_length=1)
+
+
 class WorkItemRecoveryView(_ProjectionModel):
     """Bounded recovery state without workspace custody paths."""
 
@@ -600,6 +610,7 @@ class WorkItemDetailView(_ProjectionModel):
     block: DeliveryBlock | None = None
     requests: tuple[DeliveryRequest, ...] = ()
     active_claim: WorkItemClaimView | None = None
+    held_finalizer: WorkItemHeldFinalizerView | None = None
     return_context: DeliveryReturnContext | None = None
     operator_moves: tuple[DeliveryOperatorMove, ...] = ()
     recovery_attention: WorkItemRecoveryView | None = None
@@ -747,11 +758,13 @@ class WorkItemProjector:
         change_progress: DeliveryProgress | None = None,
         pause_unavailable_reason: ChangePauseUnavailableReason | None = "state-unavailable",
         pause_requested: bool = False,
+        held_finalizer: WorkItemHeldFinalizerView | None = None,
     ) -> None:
         self._snapshot = snapshot
         self._change_progress = change_progress
         self._pause_unavailable_reason = pause_unavailable_reason
         self._pause_requested = pause_requested
+        self._held_finalizer = held_finalizer
         self._outcomes = {item.outcome_id: item for item in snapshot.contract.outcomes}
         self._bindings = {item.outcome_id: item for item in snapshot.frontier.bindings}
         self._cards = self._project_cards()
@@ -1019,6 +1032,7 @@ class WorkItemProjector:
                 change_title=self._snapshot.contract.title,
                 card=card,
                 promise="Publish the reviewed Change and observe its user-merged pull request.",
+                held_finalizer=self._held_finalizer,
                 operator_moves=self._snapshot.frontier.operator_moves,
                 publication=self._publication_view(),
                 readiness=card.readiness,

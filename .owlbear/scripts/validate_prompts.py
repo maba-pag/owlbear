@@ -112,8 +112,8 @@ def validate_prompt(prompt_file: Path) -> list[str]:
         errors.append(f"{prompt_file}: tools must be a list of non-empty strings when declared")
 
     if prompt_file.name == "inspect-change.prompt.md":
-        if metadata.get("mode") != "ask":
-            errors.append(f"{prompt_file}: inspect-change must use built-in ask mode")
+        if agent != "agent" or "mode" in metadata:
+            errors.append(f"{prompt_file}: inspect-change must use agent: agent so its tools allowlist applies")
         if tools != list(_INSPECT_CHANGE_TOOLS):
             errors.append(f"{prompt_file}: inspect-change tools must be exactly the read-only allowlist")
 

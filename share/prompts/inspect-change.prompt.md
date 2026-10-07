@@ -1,6 +1,6 @@
 ---
 description: "Inspect one Delivery Change through a read-only readiness projection"
-mode: ask
+agent: agent
 tools:
   - owlbear-delivery/get_change
   - owlbear-delivery/delivery_health
@@ -8,10 +8,11 @@ tools:
 
 Inspect: ${input:change_id:Native Change ID}
 
-Use only the explicitly allowed `owlbear-delivery/get_change` and
-`owlbear-delivery/delivery_health` tools. Explain the returned state: completed work, whether
+Call `owlbear-delivery/get_change` for this Change ID, then `owlbear-delivery/delivery_health`.
+If either tool is deferred, load it with one tool search whose query is exactly `get_change` or
+`delivery_health`; call no other tool. Explain the returned state: completed work, whether
 finalization checks ran, current blockers with any readiness `retry_history` failure codes, and
-supported interactions. Treat unavailable or blocked
-state as diagnostic only. Do not use terminal, edit, dispatch, Delivery mutation, checkout repair,
-raw Git, or user-run verification instructions. If the effective host exposes any other tool or
-cannot enforce this read-only surface, report that inspection is unavailable rather than proceeding.
+supported interactions. Treat unavailable or blocked state as diagnostic only. Do not use terminal,
+edit, dispatch, Delivery mutation, checkout repair, raw Git, or user-run verification instructions.
+If either Delivery tool remains uncallable, report that inspection is unavailable rather than
+proceeding.

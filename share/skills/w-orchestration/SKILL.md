@@ -75,6 +75,12 @@ Call `get_change(change_id)` once per continuation cycle. Pass its returned `rea
 unchanged as `expected_basis`. Do not edit, complete, reorder, recompute, or infer basis fields; the
 engine compares the observed basis exactly and answers `stale` when it no longer matches.
 
+When the host writes any tool or worker response to a file and returns only its path, copy that
+path verbatim into the read; never retype it. If the read reports that the file does not exist,
+compare the attempted path with the returned path character by character and retry once with the
+exact returned path. If that read also fails, report the exact path and error and yield without
+acquiring or settling. Never substitute an earlier, inferred, or reconstructed response.
+
 Declare `capabilities` truthfully for this session only:
 
 - `planner` and `builder` only while their dispatch bindings are callable here;
@@ -98,7 +104,7 @@ strictly what it carries and nothing else:
 
 | Acquired field | The only permitted action |
 | --- | --- |
-| `launch` | Dispatch `launch.policy.worker_agent` with only the serialized `DeliveryLaunchPackage`, then apply Steps 2 and 3 unchanged |
+| `launch` | Dispatch `launch.policy.worker_agent` with only the launch reference defined in Step 2, then apply Steps 2 and 3 unchanged |
 | `finalization` | Dispatch `finalizer` with only the serialized `DeliveryFinalizationLaunch`; its `attempt` is the issued finalization identity and its `context` is the retained pre-acquisition context |
 | `engine_action` | Call `execute_change_action` once with exactly `change_id` and `engine_action.operation_id` |
 
@@ -203,9 +209,22 @@ one.
 ## Step 2 - Dispatch Or Recover Each Launch
 
 For an acquired launch with worker role `planner` or `builder`, dispatch exactly
-`launch.policy.worker_agent` and pass only the serialized `DeliveryLaunchPackage`. The selected
-agent's frontmatter owns its model. Do not substitute a role, agent, reviewer, worktree, branch, or
-source head.
+`launch.policy.worker_agent` and pass only this launch reference, copied verbatim from the acquired
+launch:
+
+```yaml
+change_id: <launch.change_id>
+outcome_id: <launch.outcome_id>
+attempt_id: <launch.claim.attempt_id>
+claim_id: <launch.claim.claim_id>
+worker_role: <launch.claim.worker_role>
+task_id: <launch.task_id or null>
+```
+
+Never retype or serialize the full `DeliveryLaunchPackage`; the worker loads the authoritative launch
+from its Delivery context operation, which refuses a reference that does not name the active claim.
+The selected agent's frontmatter owns its model. Do not substitute a role, agent, reviewer, worktree,
+branch, or source head. Settlement still uses the acquired launch held by Orchestrator.
 
 Treat `dispatch_failure` as a no-result outcome; settle it with `settle_worker_invocation` and
 `disposition: ended-without-result`, using only the acquired launch identities. Never forward it to

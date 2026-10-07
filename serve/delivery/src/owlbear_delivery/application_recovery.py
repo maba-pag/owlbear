@@ -585,6 +585,7 @@ class _RecoveryMixin:
                 self._raise_finalizer_settlement_conflict(
                     "Finalizer attempt is already settled with different authority"
                 )
+            self._reconcile_retry_results_fail_closed(runtime)
             return prior
         attempt = self._active_finalizer_writer_attempt(change_id)
         if attempt is None or attempt.writer.attempt_id != attempt_id or attempt.writer.claim_id != claim_id:
@@ -638,7 +639,10 @@ class _RecoveryMixin:
                 session_id=attempt.writer.process_id,
             )
             evidence = self._finalizer_settlement_evidence(runtime, settlement, coordination, attempt)
-            return self._publish_finalizer_settlement(runtime, settlement, attempt, evidence, lock)
+            receipt = self._publish_finalizer_settlement(runtime, settlement, attempt, evidence, lock)
+        # Readiness requires the settled failure, not only its owner result, once attention exists.
+        self._reconcile_retry_results_fail_closed(runtime)
+        return receipt
 
     def _stalled_finalizer_report(
         self, coordination: ChangeCoordination, attempt: ChangeFinalizationAttempt

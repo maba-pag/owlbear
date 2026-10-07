@@ -812,6 +812,13 @@ export interface WorkItemDetailView {
     worker_role: DeliveryWorkerRole;
     task_id: string | null;
   } | null;
+  held_finalizer: {
+    attempt_id: string;
+    claim_id: string;
+    owner_id: string;
+    process_id: string;
+    started_at: string;
+  } | null;
   return_context: {
     target: WorkItemStage;
     reason: string;

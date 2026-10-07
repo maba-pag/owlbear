@@ -12,11 +12,13 @@ transition unchanged for Orchestrator to route through the native Delivery opera
 
 ## Step 0 - Validate Launch And Context
 
-Require one serialized `DeliveryLaunchPackage` whose policy role is `planner`, whose task ID is
-absent, and whose claim role and identities match the launch. Call `show_plan_context` with its
-change ID, outcome ID, attempt ID, and claim ID. Require the returned `DeliveryPlanContext.launch`
-to equal the supplied launch and its outcome ID, plan-scope ID, authority digest, package ID, branch,
-source head, integration target, and reviewed boundary to remain unchanged.
+Require one launch reference whose `worker_role` is `planner`, whose `task_id` is null, and whose
+`change_id`, `outcome_id`, `attempt_id`, and `claim_id` are present. Call `show_plan_context` with
+exactly those IDs; never search for or substitute another claim when it refuses. Use the returned
+`DeliveryPlanContext.launch` as the launch for every later step. Require its change, outcome,
+attempt, claim, and role identities to equal the reference, its task ID to be absent, and its
+outcome ID, plan-scope ID, authority digest, package ID, branch, source head, integration target,
+and reviewed boundary to remain unchanged.
 
 Do not infer or repair malformed launch identity. Once the supplied identity is structurally valid,
 any context conflict or local planning failure publishes nothing and returns `RetryDelivery` using
