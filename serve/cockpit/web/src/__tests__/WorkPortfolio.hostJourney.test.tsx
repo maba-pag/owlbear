@@ -13,6 +13,7 @@ import {
   publicationCardForChecks,
   readiness,
   renderPage,
+  situation,
 } from "./workPortfolioHarness";
 
 installWorkPortfolioHarness();
@@ -27,7 +28,7 @@ it("says a completed outcome of an open Change is complete, not that the Change 
   const done = card({
     stage: "completed",
     activity: { state: "idle", worker_role: null, started_at: null, task_id: null },
-    readiness: readiness({ status: "complete", reason_code: "outcome-complete", progress: "completed" }),
+    readiness: readiness({ status: "complete", reason_code: "outcome-complete", progress: situation("done") }),
   });
   fixtureState.currentPortfolio = portfolio([group({ items: [done] })]);
   fixtureState.currentDetail = detail({ card: done, readiness: done.readiness });
@@ -56,7 +57,12 @@ it("copies a blocked repair prompt with one click", async () => {
   const writeText = mockClipboard();
   const prompt = "/repair-delivery Diagnose Change change-alpha read-only; preserve existing custody and journals.";
   const blocked = card({
-    readiness: readiness({ status: "blocked", reason_code: "retry-exhausted", prompt, progress: "needs-decision" }),
+    readiness: readiness({
+      status: "blocked",
+      reason_code: "retry-exhausted",
+      prompt,
+      progress: situation("needs-attention"),
+    }),
   });
   fixtureState.currentPortfolio = portfolio([group({ items: [blocked] })]);
   fixtureState.currentDetail = detail({ card: blocked, readiness: blocked.readiness });
@@ -98,7 +104,7 @@ it("offers the publication continuation prompt once a resumed Change's outcomes 
   const done = card({
     stage: "completed",
     activity: { state: "idle", worker_role: null, started_at: null, task_id: null },
-    readiness: readiness({ status: "complete", reason_code: "outcome-complete", progress: "completed" }),
+    readiness: readiness({ status: "complete", reason_code: "outcome-complete", progress: situation("done") }),
   });
   const publication = publicationCardForChecks({
     readiness: readiness({

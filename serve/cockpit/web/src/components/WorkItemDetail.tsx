@@ -47,6 +47,7 @@ import {
   PROGRESS_STAGE_LABELS,
   progressLabel,
   progressTone,
+  progressWaitLine,
   READINESS_CHECKS_LABELS,
   READINESS_REASON_LABELS,
   READINESS_STATUS_LABELS,
@@ -123,8 +124,6 @@ interface WorkItemDetailProps {
   onRecoverChangeWorktree: (recoveryReviewedHead: string) => Promise<Error | null>;
   /** The Change's continuation prompt from its portfolio cards; the Change's next step. */
   changeContinuationPrompt?: string | null;
-  /** Readiness behind the Change's progress, chosen from all of its portfolio cards. */
-  changeProgressReadiness?: DeliveryReadiness | null;
 }
 
 const WORKER_ROLE_LABELS: Record<DeliveryWorkerRole, string> = {
@@ -313,7 +312,7 @@ function ChangeDispositionSection(props: WorkItemDetailProps) {
         <p className="text-sm text-contrast-medium">
           Use only when the Change should leave its current delivery path. Abandonment is permanent.
         </p>
-        {props.detail.item.change_progress === "paused" || phase === "deferred" ? (
+        {props.detail.item.change_progress?.situation === "paused" || phase === "deferred" ? (
           <p className="text-sm">This Change is paused and retains its worktree.</p>
         ) : null}
         <PInputText
@@ -465,8 +464,9 @@ export function ChangePauseControl(props: ChangePauseControlProps) {
 function ChangePauseSection(props: WorkItemDetailProps) {
   const item = props.detail.item;
   const phase = item.publication?.phase;
-  if (item.change_progress === "completed" || phase === "abandoned") return null;
-  const paused = item.change_progress === "paused" || phase === "deferred";
+  const situation = item.change_progress?.situation;
+  if (situation === "done" || situation === "abandoned" || phase === "abandoned") return null;
+  const paused = situation === "paused" || phase === "deferred";
   const continuation = props.changeContinuationPrompt;
   const showContinuation = !paused && continuation && continuation !== item.readiness?.prompt;
   return (
@@ -1182,39 +1182,24 @@ function ReadinessSection({
   children?: ReactNode;
 }) {
   if (!readiness) return null;
+  const progress = readiness.progress;
+  const timing = progress ? progressWaitLine(progress) : null;
   return (
     <SectionCard dataTestId="delivery-readiness" ariaLabel="Delivery readiness" className="p-static-sm">
-      <div className="flex flex-wrap items-center gap-static-xs">
-        {readiness.progress ? (
-          <StatusChip
-            label={progressLabel(readiness.progress, readiness)}
-            tone={progressTone(readiness.progress)}
-            testId="readiness-progress"
-          />
-        ) : null}
-        <StatusChip
-          label={READINESS_STATUS_LABELS[readiness.status]}
-          tone={readinessTone(readiness.status)}
-          testId="readiness-status"
-        />
-        <span className="text-xs text-contrast-medium" data-testid="readiness-checks-state">
-          Checks: {READINESS_CHECKS_LABELS[readiness.checks_state]}
-        </span>
-        <span className="text-xs text-contrast-medium" data-readiness-actor={readiness.next_actor}>
-          Next: {NEXT_ACTOR_LABELS[readiness.next_actor]}
-          {readiness.next_actor === "agent" && isContinuationPrompt(readiness.prompt, changeId)
-            ? ", after you run the prompt"
-            : ""}
-        </span>
-      </div>
-      <p className="mt-static-xs text-sm leading-relaxed" data-readiness-reason={readiness.reason_code}>
-        {READINESS_REASON_LABELS[readiness.reason_code]}
-      </p>
-      {readiness.merge_block ? (
-        <p className="mt-static-xs text-sm leading-relaxed" data-testid="merge-block">
-          {MERGE_BLOCK_LABELS[readiness.merge_block.reason]}
-          {readiness.merge_block.detail ? ` (${readiness.merge_block.detail})` : ""}
-        </p>
+      {progress ? (
+        <div className="grid gap-static-xs" data-situation={progress.situation}>
+          <div className="flex flex-wrap items-center gap-static-xs">
+            <StatusChip label={progressLabel(progress)} tone={progressTone(progress)} testId="readiness-progress" />
+            {timing ? (
+              <span className="text-xs text-contrast-medium" data-testid="readiness-timing">
+                {timing}
+              </span>
+            ) : null}
+          </div>
+          <p className="text-sm leading-relaxed" data-testid="readiness-headline">
+            {progress.headline}
+          </p>
+        </div>
       ) : null}
       {readiness.merge_offer ? <MergeOfferSummary offer={readiness.merge_offer} /> : null}
       {children}
@@ -1247,43 +1232,71 @@ function ReadinessSection({
           helper={CONTINUATION_PROMPT_HELP}
         />
       ) : null}
-      {!readiness.executable ? (
-        <p className="mt-static-xs text-xs text-contrast-medium" data-testid="readiness-not-executable">
-          Delivery offers no runnable operation for this Work Item right now.
-        </p>
-      ) : null}
-      {readiness.reason_code === "worker-stall-wait" && !readiness.next_eligible_at ? (
-        <p className="mt-static-xs text-xs text-contrast-medium" data-testid="worker-stall-no-eligible-time">
-          No eligible time yet: processes still use this worker's worktree, or it cannot be observed safely. The
-          readiness prompt names any such processes.
-        </p>
-      ) : null}
-      <dl className="mt-static-xs grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md text-xs">
-        <IdentityRow label="Automatic attempts" value={readiness.attempts ?? null} />
-        <IdentityRow label="Next eligible at" value={readiness.next_eligible_at ?? null} />
-        <IdentityRow label="Stop reason" value={readiness.stop_reason ?? null} />
-        <ReadinessBasisRows basis={readiness.basis} />
-      </dl>
-      {readiness.last_attempt ? <ReadinessAttempt attempt={readiness.last_attempt} /> : null}
-      {readiness.retry_history?.length ? (
-        <div className="mt-static-sm border-t border-contrast-low pt-static-sm" data-testid="readiness-retry-history">
-          <strong className="text-sm">Attempt history</strong>
-          <ol className="mt-static-xs text-xs">
-            {readiness.retry_history.map((attempt) => (
-              <li key={attempt.ordinal}>
-                {attempt.ordinal}. {attempt.kind} {attempt.status}
-                {attempt.failure_code ? (
-                  <>
-                    {" "}
-                    <code>{attempt.failure_code}</code>
-                  </>
-                ) : null}
-                {attempt.observed_at ? ` at ${attempt.observed_at}` : null}
-              </li>
-            ))}
-          </ol>
+      <details className="mt-static-sm border-t border-contrast-low pt-static-xs" data-testid="readiness-details">
+        <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">Details</summary>
+        <div className="mt-static-xs flex flex-wrap items-center gap-static-xs">
+          <StatusChip
+            label={READINESS_STATUS_LABELS[readiness.status]}
+            tone={readinessTone(readiness.status)}
+            testId="readiness-status"
+          />
+          <span className="text-xs text-contrast-medium" data-testid="readiness-checks-state">
+            Checks: {READINESS_CHECKS_LABELS[readiness.checks_state]}
+          </span>
+          <span className="text-xs text-contrast-medium" data-readiness-actor={readiness.next_actor}>
+            Next: {NEXT_ACTOR_LABELS[readiness.next_actor]}
+            {readiness.next_actor === "agent" && isContinuationPrompt(readiness.prompt, changeId)
+              ? ", after you run the prompt"
+              : ""}
+          </span>
         </div>
-      ) : null}
+        <p className="mt-static-xs text-sm leading-relaxed" data-readiness-reason={readiness.reason_code}>
+          {READINESS_REASON_LABELS[readiness.reason_code]}
+        </p>
+        {readiness.merge_block ? (
+          <p className="mt-static-xs text-sm leading-relaxed" data-testid="merge-block">
+            {MERGE_BLOCK_LABELS[readiness.merge_block.reason]}
+            {readiness.merge_block.detail ? ` (${readiness.merge_block.detail})` : ""}
+          </p>
+        ) : null}
+        {!readiness.executable ? (
+          <p className="mt-static-xs text-xs text-contrast-medium" data-testid="readiness-not-executable">
+            Delivery offers no runnable operation for this Work Item right now.
+          </p>
+        ) : null}
+        {readiness.reason_code === "worker-stall-wait" && !readiness.next_eligible_at ? (
+          <p className="mt-static-xs text-xs text-contrast-medium" data-testid="worker-stall-no-eligible-time">
+            No eligible time yet: processes still use this worker's worktree, or it cannot be observed safely. The
+            readiness prompt names any such processes.
+          </p>
+        ) : null}
+        <dl className="mt-static-xs grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md text-xs">
+          <IdentityRow label="Automatic attempts" value={readiness.attempts ?? null} />
+          <IdentityRow label="Next eligible at" value={readiness.next_eligible_at ?? null} />
+          <IdentityRow label="Stop reason" value={readiness.stop_reason ?? null} />
+          <ReadinessBasisRows basis={readiness.basis} />
+        </dl>
+        {readiness.last_attempt ? <ReadinessAttempt attempt={readiness.last_attempt} /> : null}
+        {readiness.retry_history?.length ? (
+          <div className="mt-static-sm border-t border-contrast-low pt-static-sm" data-testid="readiness-retry-history">
+            <strong className="text-sm">Attempt history</strong>
+            <ol className="mt-static-xs text-xs">
+              {readiness.retry_history.map((attempt) => (
+                <li key={attempt.ordinal}>
+                  {attempt.ordinal}. {attempt.kind} {attempt.status}
+                  {attempt.failure_code ? (
+                    <>
+                      {" "}
+                      <code>{attempt.failure_code}</code>
+                    </>
+                  ) : null}
+                  {attempt.observed_at ? ` at ${attempt.observed_at}` : null}
+                </li>
+              ))}
+            </ol>
+          </div>
+        ) : null}
+      </details>
     </SectionCard>
   );
 }
@@ -1794,35 +1807,48 @@ function TargetSyncConflictSection(props: WorkItemDetailProps) {
   );
 }
 
+const TARGET_SYNC_COPY: Record<"required" | "optional", string> = {
+  required:
+    "The pull request cannot merge until the latest integration target is in the Change. If that changes the Change " +
+    "head, the Change must be finalized again by running its prompt in Copilot Chat before it can merge.",
+  optional:
+    "The target has moved since this Change was verified. You can merge now, or update it first; updating returns " +
+    "the pull request to draft, requires finalizing again and may raise conflicts.",
+};
+
 function TargetSyncSection(props: WorkItemDetailProps) {
   const publication = props.detail.item.publication;
+  const availability = props.detail.item.readiness?.progress?.target_sync;
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [actionFailed, setActionFailed] = useState(false);
-  if (
-    !publication ||
-    publication.attention ||
-    ["deferred", "abandoned", "acceptance-observed"].includes(publication.phase)
-  )
-    return null;
+  if (!publication || !availability || availability === "unnecessary") return null;
+  if (availability === "unavailable")
+    return (
+      <p className="border-t border-contrast-low pt-static-sm text-sm text-contrast-medium" data-testid="target-sync">
+        Updating the Change from its target is unavailable while Delivery or an agent holds it.
+      </p>
+    );
   const run = async () => {
     const error = await props.onSyncTarget();
     setActionFailed(error !== null);
     if (!error) setConfirmOpen(false);
   };
   return (
-    <section className="border-t border-contrast-low pt-static-sm" aria-labelledby="target-sync-heading">
+    <section
+      className="border-t border-contrast-low pt-static-sm"
+      aria-labelledby="target-sync-heading"
+      data-testid="target-sync"
+      data-target-sync={availability}
+    >
       <h4 id="target-sync-heading" className="text-xs font-semibold uppercase text-contrast-medium">
-        Change maintenance
+        {availability === "required" ? "Update required" : "Change maintenance"}
       </h4>
-      <p className="mt-static-xs text-sm text-contrast-medium">
-        Bring the latest integration target into the Change before continuing delivery. If that changes the Change head,
-        the Change must be finalized again by running its prompt in Copilot Chat before it can merge.
-      </p>
+      <p className="mt-static-xs text-sm text-contrast-medium">{TARGET_SYNC_COPY[availability]}</p>
       <PButton
         className="mt-static-sm"
         type="button"
         compact
-        variant="secondary"
+        variant={availability === "required" ? "primary" : "secondary"}
         disabled={props.pendingAction !== null || props.isObservingPublicationChecks}
         onClick={() => {
           setActionFailed(false);
@@ -2394,11 +2420,13 @@ export default function WorkItemDetail(
               <>
                 <dt className="text-contrast-medium">Change</dt>
                 <dd data-testid="change-progress">
-                  {progressLabel(
-                    props.detail.item.change_progress,
-                    props.changeProgressReadiness ??
-                      (card.readiness?.progress === props.detail.item.change_progress ? card.readiness : null),
-                  )}
+                  {progressLabel(props.detail.item.change_progress)}
+                  <span className="text-contrast-medium"> · {props.detail.item.change_progress.headline}</span>
+                  {progressWaitLine(props.detail.item.change_progress) ? (
+                    <span className="block text-xs text-contrast-medium">
+                      {progressWaitLine(props.detail.item.change_progress)}
+                    </span>
+                  ) : null}
                 </dd>
               </>
             ) : null}

@@ -428,7 +428,7 @@ test.describe("assembled Delivery portfolio", () => {
     inspected = await inspect(page, "Publication");
     await expect(inspected.detail).toContainText("Ready for finalization");
     await expect(inspected.detail).toContainText("Finalize the reviewed Change");
-    await expect(inspected.detail.getByTestId("publication-readiness-status")).toHaveText("Run prompt in Copilot Chat");
+    await expect(inspected.detail.getByTestId("publication-readiness-status")).toHaveText("Ready for next step");
     await expect(
       inspected.detail.locator('section[aria-labelledby="work-publication-heading"] [data-section-tone="neutral"]'),
     ).toBeVisible();
@@ -1058,7 +1058,7 @@ test.describe("assembled Delivery portfolio", () => {
     await page.goto("/delivery");
 
     const row = (await visibleRows(page)).filter({ hasText: "Build operator controls" });
-    await expect(row.getByText("Run prompt in Copilot Chat", { exact: true })).toBeVisible();
+    await expect(row.getByText("Ready for next step", { exact: true })).toBeVisible();
     const copy = row.getByRole("button", { name: "Copy continuation prompt" });
     await expect(copy).toHaveAccessibleDescription("Run it in Copilot Chat. Copying does not start an agent.");
     await copy.click();
@@ -1073,7 +1073,7 @@ test.describe("assembled Delivery portfolio", () => {
 
     const { detail, trigger } = await inspect(page, "Build operator controls");
     await expect(detail.getByTestId("readiness-prompt")).toHaveText(copied);
-    await expect(detail.getByTestId("readiness-progress")).toHaveText("Run prompt in Copilot Chat");
+    await expect(detail.getByTestId("readiness-progress")).toHaveText("Ready for next step");
     await expect(detail.getByTestId("change-pause-work-e2e").getByText("Pause", { exact: true })).toBeVisible();
     const requirements = detail.getByRole("button", { name: "Change requirements" });
     await expect(requirements).toHaveAccessibleDescription(
@@ -1087,13 +1087,13 @@ test.describe("assembled Delivery portfolio", () => {
 
     const control = page.getByTestId("change-pause-publication-e2e");
     const progress = page.getByTestId("change-progress-publication-e2e");
-    await expect(progress).toHaveText("Run prompt in Copilot Chat");
+    await expect(progress).toHaveText("Ready for next step");
     await control.getByText("Pause", { exact: true }).click();
     await inputValue(control.locator('p-input-text[name="change-pause-reason-publication-e2e"]'), "Hold for review");
     await control.getByText("Confirm pause", { exact: true }).click();
     await expect(progress).toHaveText("Paused");
     await control.getByText("Resume", { exact: true }).click();
-    await expect(progress).toHaveText("Run prompt in Copilot Chat");
+    await expect(progress).toHaveText("Ready for next step");
     await expect(page.getByLabel("Change publication for Publication release")).toContainText("Ready for finalization");
   });
 

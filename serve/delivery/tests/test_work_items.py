@@ -59,6 +59,7 @@ from owlbear_delivery.target_contract import (
 )
 from owlbear_delivery.work_items import (
     DeliveryPortfolioSnapshot,
+    DeliveryProgress,
     DeliveryReadiness,
     DeliveryReadinessBasis,
     WorkItemAction,
@@ -499,13 +500,14 @@ def test_dependency_and_active_claim_are_independent_axes() -> None:
 
 
 def test_projector_carries_change_activity_and_continuation_next_step() -> None:
+    progress = DeliveryProgress(situation="ready-for-next-step", headline="Run the prompt.", waiting_on="you")
     projector = WorkItemProjector(
         _snapshot((_binding("OUT-001", DeliveryStage.PLANNING), _binding("OUT-002", DeliveryStage.PLANNING))),
-        change_progress="waiting-for-chat",
+        change_progress=progress,
     )
 
-    assert projector.group_view().progress == "waiting-for-chat"
-    assert projector.show_view("outcome:OUT-002").change_progress == "waiting-for-chat"
+    assert projector.group_view().progress == progress
+    assert projector.show_view("outcome:OUT-002").change_progress == progress
     assert projector.group_view().items[0].next_step == "Run the continuation prompt in Copilot Chat"
     assert WorkItemProjector(projector._snapshot).group_view().progress is None  # noqa: SLF001
 

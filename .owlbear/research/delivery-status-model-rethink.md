@@ -303,6 +303,18 @@ availability and transport still need substantive work.
 3. **Remove** only display fields whose consumers are gone: compatibility `attention`, reserved
    progress keys, and Cockpit's duplicated reason copy.
 
+Step 2 implementation notes (deviations decided during the cutover):
+
+- The action stays the existing card `action`; progress carries situation, headline, `waiting_on`,
+  `waiting_on_id`, `since`, `next_eligible_at` and `target_sync`, with no separate merge sub-state.
+- A publication wait for another Change maps to waiting-on-dependency (waiting on a Change), not
+  Waiting on GitHub.
+- A worker stall reads Waiting on Delivery while processes are active, then Ready for next step with
+  `next_eligible_at` once eligible.
+- Sync is hidden when unnecessary and shown as a note when unavailable.
+- Cockpit's frontend acceptance schedule and its banner are removed; the backend reconcile route
+  stays until step 3.
+
 Constraints: derived once in Delivery (N09 I1, I4); local chats under the execution plan; Delivery is
 not used to implement Delivery.
 

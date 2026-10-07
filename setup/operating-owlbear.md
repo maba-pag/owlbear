@@ -239,7 +239,7 @@ with deterministic outcomes, dependencies, commitments, and proof boundaries.
 
 Admission ends with the continuation prompt `/continue-change <change-id>`. Run it in Copilot Chat;
 Cockpit's **Copy continuation prompt** copies the same prompt for a Change that is
-**Run prompt in Copilot Chat**. Copying does not start an agent. One continuation chat carries exactly
+**Ready for next step**. Copying does not start an agent. One continuation chat carries exactly
 one Change: it reads the Change, acquires its next action from Delivery, and dispatches only that
 action: a Planner or Builder launch, the issued finalization, or an engine action that publishes a
 checkpoint, synchronizes with the target, marks the pull request ready, or observes acceptance. It
@@ -263,9 +263,12 @@ advance the Change branch directly.
 
 Expected outcome: outcomes move through Planning and Build under one shared execution budget, with
 exact per-Change writer custody, without scheduling judgment in the chat or conversation-derived
-authority. Cockpit shows each Change's progress, such as **Needs your decision**,
-**Waiting for another Change**, **Paused**, **Ready to merge**, and **Completed**, with its requests,
-**Pause** and **Resume**, and the **Acceptance evidence** for its criteria.
+authority. Cockpit shows each Change's situation, such as **Ready for next step**,
+**With an agent**, **Your decision**, **Waiting on GitHub**, **Waiting on another Change**,
+**Needs attention**, **Paused**, and **Done**, with a one-line headline, who it waits on and since
+when, its requests, **Pause** and **Resume**, and the **Acceptance evidence** for its criteria.
+Technical detail stays under **Details**; **Merge latest target into Change** appears only when
+Delivery says an update is required or optional.
 
 For exact ended invocations, the continuation chat (the `orchestrator` agent) uses the typed
 `settle_worker_invocation` route for retries, Builder request pauses/returns and report-backed

@@ -26,7 +26,6 @@ import {
   observeWorkItemPublicationChecks,
   type PublicationChecksObservationResponse,
   previewWorkItemBackward,
-  reconcileWorkItemAcceptance,
   reconcileWorkItemPublication,
   recoverWorkItemChange,
   releaseStuckWorker,
@@ -91,20 +90,6 @@ const EMPTY_HISTORY: CompletedChangePage = {
   next_cursor: null,
 };
 
-const ACCEPTANCE_RECONCILIATION_INTERVAL_MS = 30_000;
-const ACCEPTANCE_RECONCILIATION_MAX_BACKOFF_MS = 5 * 60_000;
-
-function acceptanceChangeIds(portfolio: WorkItemPortfolioResponse): string[] {
-  return portfolio.groups
-    .filter(
-      (group) =>
-        group.lifecycle === "awaiting-merge" &&
-        group.items.some((item) => item.scope === "change-publication" && item.action.kind === "observe-acceptance"),
-    )
-    .map((group) => group.change_id)
-    .sort();
-}
-
 export function useWorkPortfolio(paused = false) {
   const [portfolio, setPortfolio] = useState<WorkItemPortfolioResponse | null>(null);
   const [error, setError] = useState<Error | null>(null);
@@ -130,141 +115,6 @@ export function useWorkPortfolio(paused = false) {
     error,
     isLoading: polling.isFetching && portfolio === null,
     retry: polling.refetch,
-  };
-}
-
-export function useAcceptanceReconciliation(
-  portfolio: WorkItemPortfolioResponse,
-  onChanged: () => void,
-  paused = false,
-): {
-  providerError: Error | null;
-  providerChangeIds: string[];
-  isRetrying: boolean;
-  retry: () => void;
-} {
-  const changeIds = acceptanceChangeIds(portfolio);
-  const changeIdsKey = changeIds.join("\u0000");
-  const changeIdsRef = useRef(changeIds);
-  const onChangedRef = useRef(onChanged);
-  const [providerError, setProviderError] = useState<Error | null>(null);
-  const [providerChangeIds, setProviderChangeIds] = useState<string[]>([]);
-  const [isRetrying, setIsRetrying] = useState(false);
-  const [retryNonce, setRetryNonce] = useState(0);
-  const providerFailureCountRef = useRef(0);
-  changeIdsRef.current = changeIds;
-  onChangedRef.current = onChanged;
-
-  useEffect(() => {
-    const reconciliationKey = `${changeIdsKey}\u0000${retryNonce}`;
-    if (!changeIdsKey) providerFailureCountRef.current = 0;
-    if (paused || !reconciliationKey.split("\u0000", 1)[0]) {
-      setProviderError(null);
-      setProviderChangeIds([]);
-      setIsRetrying(false);
-      return;
-    }
-
-    let active = true;
-    let inFlight = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let controller: AbortController | null = null;
-
-    const clearTimer = () => {
-      if (timer !== null) {
-        clearTimeout(timer);
-        timer = null;
-      }
-    };
-
-    const isVisible = () => document.visibilityState === "visible";
-
-    const scheduleNext = () => {
-      if (!active || !isVisible() || changeIdsRef.current.length === 0) return;
-      const delay = Math.min(
-        ACCEPTANCE_RECONCILIATION_INTERVAL_MS * 2 ** providerFailureCountRef.current,
-        ACCEPTANCE_RECONCILIATION_MAX_BACKOFF_MS,
-      );
-      timer = setTimeout(() => {
-        timer = null;
-        void poll();
-      }, delay);
-    };
-
-    const poll = async () => {
-      if (!active || !isVisible() || inFlight || changeIdsRef.current.length === 0) return;
-      inFlight = true;
-      controller = new AbortController();
-      const requestedIds = [...changeIdsRef.current];
-      let providerUnavailable = false;
-      try {
-        const result = await reconcileWorkItemAcceptance(requestedIds, controller.signal);
-        const unavailable = result.outcomes.filter((outcome) => outcome.status === "provider-unavailable");
-        providerUnavailable = unavailable.length > 0;
-        if (providerUnavailable) {
-          const affectedIds = unavailable.map((outcome) => outcome.change_id);
-          const detail = unavailable.map((outcome) => outcome.detail).find((value): value is string => Boolean(value));
-          setProviderChangeIds(affectedIds);
-          setProviderError(new Error(detail ?? "The provider was unavailable while checking GitHub acceptance."));
-        } else {
-          setProviderChangeIds([]);
-          setProviderError(null);
-        }
-        if (result.outcomes.some((outcome) => outcome.status !== "waiting")) {
-          onChangedRef.current();
-        }
-      } catch (caught: unknown) {
-        if (!(caught instanceof DOMException && caught.name === "AbortError")) {
-          providerUnavailable = true;
-          setProviderChangeIds(requestedIds);
-          setProviderError(
-            caught instanceof Error
-              ? caught
-              : new Error("The provider was unavailable while checking GitHub acceptance."),
-          );
-        }
-      } finally {
-        inFlight = false;
-        controller = null;
-        if (active) {
-          setIsRetrying(false);
-          providerFailureCountRef.current = providerUnavailable ? Math.min(providerFailureCountRef.current + 1, 4) : 0;
-          scheduleNext();
-        }
-      }
-    };
-
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        clearTimer();
-        controller?.abort();
-        return;
-      }
-      void poll();
-    };
-
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    if (isVisible()) void poll();
-
-    return () => {
-      active = false;
-      clearTimer();
-      controller?.abort();
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-    };
-  }, [changeIdsKey, paused, retryNonce]);
-
-  return {
-    providerError,
-    providerChangeIds,
-    isRetrying,
-    retry: () => {
-      providerFailureCountRef.current = 0;
-      setProviderError(null);
-      setProviderChangeIds([]);
-      setIsRetrying(true);
-      setRetryNonce((value) => value + 1);
-    },
   };
 }
 
