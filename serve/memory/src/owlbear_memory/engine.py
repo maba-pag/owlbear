@@ -1,8 +1,9 @@
-"""Memory engine with state transitions, OCC, and mtime-based caching."""
+"""Memory engine with state transitions, OCC, and stat-signature caching."""
 
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -75,27 +76,37 @@ class AgentDeleteResult(TypedDict):
     scopes_updated: int
 
 
-class MtimeScanCache:
-    """Track directory mtime so callers can skip unnecessary reparsing."""
+class _StatSignatureCache:
+    """Track entry-file metadata so unchanged stores skip unnecessary reparsing."""
 
     def __init__(self, memory_dir: Path) -> None:
         self._memory_dir = memory_dir
-        self._last_mtime_ns: int | None = None
+        self._last_signature: tuple[tuple[str, int, int, int], ...] | None = None
 
     def has_changed(self) -> bool:
-        """Return True on first call and when directory mtime changes."""
-        current = self._memory_dir.stat().st_mtime_ns
-        if self._last_mtime_ns is None:
-            self._last_mtime_ns = current
-            return True
-        if current != self._last_mtime_ns:
-            self._last_mtime_ns = current
-            return True
-        return False
+        """Return True on first call or when an entry-file signature changes."""
+        current = self._current_signature()
+        if current == self._last_signature:
+            return False
+        self._last_signature = current
+        return True
 
     def invalidate(self) -> None:
         """Force the next change check to request a reload."""
-        self._last_mtime_ns = None
+        self._last_signature = None
+
+    def _current_signature(self) -> tuple[tuple[str, int, int, int], ...]:
+        signature: list[tuple[str, int, int, int]] = []
+        with os.scandir(self._memory_dir) as entries:
+            for entry in entries:
+                if not entry.name.endswith(".md"):
+                    continue
+                try:
+                    metadata = entry.stat(follow_symlinks=False)
+                except FileNotFoundError:
+                    continue
+                signature.append((entry.name, metadata.st_ino, metadata.st_size, metadata.st_mtime_ns))
+        return tuple(sorted(signature))
 
 
 class MemoryEngine:
@@ -109,7 +120,7 @@ class MemoryEngine:
     ) -> None:
         self._memory_dir = Path(memory_dir)
         self._memory_dir.mkdir(parents=True, exist_ok=True)
-        self._cache = MtimeScanCache(self._memory_dir)
+        self._cache = _StatSignatureCache(self._memory_dir)
         self._entries: list[MemoryEntry] = []
         self._id_to_path: dict[str, Path] = {}
         self._lock = RLock()
@@ -171,7 +182,7 @@ class MemoryEngine:
         return list(self._entries)
 
     def get_entries(self) -> list[MemoryEntry]:
-        """Return cached entries, reparsing only when directory mtime changes."""
+        """Return cached entries, reparsing only when an entry-file signature changes."""
         with self._lock:
             if self._cache.has_changed():
                 try:

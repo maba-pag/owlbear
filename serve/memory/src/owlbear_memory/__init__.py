@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from owlbear_memory.engine import MemoryEngine, MtimeScanCache, check_slot_efficiency, compute_score
+from owlbear_memory.engine import MemoryEngine, check_slot_efficiency, compute_score
 from owlbear_memory.errors import (
     ConcurrencyError,
     LifecycleRecoveryError,
@@ -25,7 +25,6 @@ __all__ = [
     "MemoryEntry",
     "MemoryHealth",
     "MemoryState",
-    "MtimeScanCache",
     "NotFoundError",
     "TransitionError",
     "ValidationError",

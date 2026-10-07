@@ -184,8 +184,8 @@ inspect all diagnostic fields. Process interruption should be treated as `uncert
 ### `MemoryEngine`
 
 Orchestrates storage primitives with state-machine enforcement, optimistic concurrency
-control (OCC), and mtime-based caching. This is the primary entry point for consumers
-that need to read or mutate memory entries.
+control (OCC), and per-file stat-signature freshness checks. This is the primary entry point
+for consumers that need to read or mutate memory entries.
 
 ```python
 engine = MemoryEngine(memory_dir)  # memory_dir created if absent
@@ -226,7 +226,7 @@ string. The universal `*` member is allowed; an empty list is allowed for pendin
 
 | Method | Signature | Notes |
 | --- | --- | --- |
-| `get_entries()` | `() → list[MemoryEntry]` | Reparsed only when directory mtime changes |
+| `get_entries()` | `() → list[MemoryEntry]` | Reparsed when an entry file's name, inode, size, or `mtime_ns` changes |
 | `get_entry(id)` | `(str) → MemoryEntry` | Raises `NotFoundError` |
 | `save(...)` | `(title, content, categories, confidence, source_agent, scope_agents) → MemoryEntry` | Creates pending entry; initializes `score = confidence`, all counters to `0`; no OCC |
 | `approve(id, expected_updated_at)` | `(str, str) → MemoryEntry` | curated → approved; raises `TransitionError` / `ConcurrencyError` |
@@ -278,16 +278,22 @@ raised. `save()` creates new entries and does not require an OCC token.
 files in `engine.parse_errors`. When duplicate UUIDs are found across files, the entry
 with the later `updated_at` (parsed chronologically) is kept and a warning is logged.
 
-### `MtimeScanCache`
+### Read freshness
 
-Lightweight directory-mtime tracker. `has_changed()` returns `True` on first call and
-whenever the directory `mtime_ns` differs from the last recorded value.
+Before each `get_entries()` call, the engine scans the memory directory once and records
+the name, inode, size, and `mtime_ns` of each `.md` entry. A changed signature triggers the
+existing full parse; an unchanged signature returns cached entries without opening or
+parsing entry files. This detects in-place rewrites that preserve the inode and directory
+mtime but change file size or `mtime_ns`. `load()` remains the explicit force refresh.
+Reads do not acquire the writer lock or write to the memory directory.
 
-```python
-cache = MtimeScanCache(memory_dir)
-cache.has_changed()  # True (first call)
-cache.has_changed()  # False (mtime unchanged)
-```
+The per-call cost was measured on a temporary filesystem store containing 100 synthetic
+entries. After warming the engine with one `get_entries()` call, 1,000 repeated calls were
+timed with `time.perf_counter_ns()`: median 0.195 ms, p95 0.230 ms, and maximum 0.489 ms.
+An unchanged call is bounded to one directory scan and one metadata stat per `.md` entry
+(100 stats for this store), or O(n) metadata operations; entry contents are not read. The
+timing includes the returned-list copy and is an observation from this machine, not a
+portable latency guarantee.
 
 ---
 
