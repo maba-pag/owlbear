@@ -236,7 +236,7 @@ string. The universal `*` member is allowed; an empty list is allowed for pendin
 | `record_assessment(entry_id, bucket, expected_updated_at)` | `(str, str, str \| None) → MemoryEntry` | Increments the specified counter (`outstanding`, `unremarkable`, or `didnt_use`); recomputes `score` via `compute_score`; calls `try_stale_transition` when slot-efficiency threshold exceeded. Raises `TransitionError` (non-voteable state), `ConcurrencyError` (OCC mismatch), `ValidationError` (invalid bucket). `expected_updated_at` optional — pass `None` to skip OCC check. |
 | `edit(id, fields, expected_updated_at)` | `(str, EditPayload, str) → MemoryEntry` | State-machine rules apply; contested/disputed/stale preserve their state while fields are updated; deleted entries are blocked; raises `TransitionError` / `ConcurrencyError` |
 | `delete(id, expected_updated_at)` | `(str, str) → MemoryEntry` | Hard-delete for pending, soft-delete for curated/approved/contested/disputed/stale; raises `TransitionError` / `ConcurrencyError` |
-| `try_stale_transition(entry)` | `(MemoryEntry) → MemoryEntry` | Calls `check_slot_efficiency`; when True and state in {approved, curated, contested}, writes state=stale with refreshed updated_at. Returns unchanged entry (no error) when predicate is False or state is ineligible. No OCC. Logs INFO on transition. |
+| `try_stale_transition(entry)` | `(MemoryEntry) → MemoryEntry` | Reloads under the writer lock and checks the passed entry's `updated_at`; raises `ConcurrencyError` if stale, even when no transition would occur. Returns unchanged entry when the predicate is False or state is ineligible; otherwise eligible entries become stale. |
 | `load()` | `() → list[MemoryEntry]` | Force full reparse; skips malformed files (lenient) |
 
 #### State Machine
@@ -263,12 +263,13 @@ string. The universal `*` member is allowed; an empty list is allowed for pendin
 | `stale` | `delete` | `deleted` | Soft-delete |
 | `contested`/`disputed`/`stale` | `edit` | (unchanged) | Field update only; preserves the exceptional state |
 | any | `approve`/`edit`/`delete` when `deleted` | — | Raises `TransitionError` |
-| `approved`/`curated`/`contested` | `try_stale_transition` (auto) | `stale` | Fires when `check_slot_efficiency` returns True; no OCC |
-| `stale`/`disputed`/`deleted`/`pending` | `try_stale_transition` | (unchanged) | Predicate False or ineligible state — no-op, no error |
+| `approved`/`curated`/`contested` | `try_stale_transition` (auto) | `stale` | After the OCC check, fires when `check_slot_efficiency` returns True |
+| any | `try_stale_transition` | (unchanged) | After the OCC check, no-op when the predicate is False or the state is ineligible |
 
 #### OCC
 
-All mutation methods (`approve`, `resolve`, `edit`, `delete`) accept `expected_updated_at` (str).
+Explicit lifecycle mutations (`approve`, `resolve`, `edit`, `delete`) accept `expected_updated_at` (str);
+`try_stale_transition(entry)` uses the passed entry's `updated_at` as its OCC token.
 `record_factually_wrong` and `record_assessment` also accept `expected_updated_at` but it is optional (`str | None`); pass `None` to skip the OCC check.
 Before a mutation, the engine reloads under the writer lock. If a non-`None` token does not match
 the freshly loaded entry's `updated_at`, `ConcurrencyError` is raised and the mutation does not
