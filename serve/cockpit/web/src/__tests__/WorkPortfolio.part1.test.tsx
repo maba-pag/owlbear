@@ -707,11 +707,7 @@ it("shows a refused retry as a blocked non-executable current exception", async 
   expect(within(readinessView).getByTestId("readiness-status")).toHaveTextContent("Blocked");
   expect(within(readinessView).getByText("Next: Nobody")).toBeInTheDocument();
   expect(within(readinessView).getByTestId("readiness-not-executable")).toBeInTheDocument();
-  expect(
-    within(readinessView).getByText(
-      "The worker retry was refused; its claim remains held until host worker-exclusion is verified.",
-    ),
-  ).toBeInTheDocument();
+  expect(within(readinessView).getByText("retry-transition-contained")).toBeInTheDocument();
   expect(within(readinessView).getByTestId("readiness-prompt")).toHaveTextContent("Make no MCP calls");
   expect(inspector).toHaveTextContent("Retry refused");
   expect(inspector).toHaveTextContent(

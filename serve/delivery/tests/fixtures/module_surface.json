@@ -326,7 +326,6 @@
     "UpdatePublicationPullRequest",
     "VerifiedDesignPackage",
     "WindowHostIdentity",
-    "WorkItemAttention",
     "WorkItemDetail",
     "WorkItemProjection",
     "WorkItemProjector",

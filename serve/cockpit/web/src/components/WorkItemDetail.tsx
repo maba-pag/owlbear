@@ -49,7 +49,6 @@ import {
   progressTone,
   progressWaitLine,
   READINESS_CHECKS_LABELS,
-  READINESS_REASON_LABELS,
   READINESS_STATUS_LABELS,
   REVISION_PROMPT_HELP,
   readinessTone,
@@ -1250,8 +1249,8 @@ function ReadinessSection({
               : ""}
           </span>
         </div>
-        <p className="mt-static-xs text-sm leading-relaxed" data-readiness-reason={readiness.reason_code}>
-          {READINESS_REASON_LABELS[readiness.reason_code]}
+        <p className="mt-static-xs text-xs text-contrast-medium" data-readiness-reason={readiness.reason_code}>
+          Reason: <code>{readiness.reason_code}</code>
         </p>
         {readiness.merge_block ? (
           <p className="mt-static-xs text-sm leading-relaxed" data-testid="merge-block">
