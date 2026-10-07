@@ -239,7 +239,7 @@ with deterministic outcomes, dependencies, commitments, and proof boundaries.
 
 Admission ends with the continuation prompt `/continue-change <change-id>`. Run it in Copilot Chat;
 Cockpit's **Copy continuation prompt** copies the same prompt for a Change that is
-**Waiting for chat to resume**. Copying does not start an agent. One continuation chat carries exactly
+**Run prompt in Copilot Chat**. Copying does not start an agent. One continuation chat carries exactly
 one Change: it reads the Change, acquires its next action from Delivery, and dispatches only that
 action: a Planner or Builder launch, the issued finalization, or an engine action that publishes a
 checkpoint, synchronizes with the target, marks the pull request ready, or observes acceptance. It
@@ -389,9 +389,11 @@ the finalized head is unchanged. Target synchronization, when required, merges o
 remote-tracking target into the managed Change worktree; it never updates the target branch or the
 user checkout.
 
-When the PR is ready, mergeable and its required checks pass at the finalized head, and the proof
-target equals the current target branch head, Cockpit offers **Approve merge** with the repository,
-PR, exact head, target, proof and check summary and merge method. The continuation chat shows the same
+When the PR is ready, mergeable and its required checks pass at the finalized head, Cockpit offers
+**Approve merge** with the repository, PR, exact head, target, proof and check summary and merge
+method. If the target branch moved after the proof, the offer stays and says so: it names the proof
+target and the current target, and approving merges commits the proof did not cover. Conflicts and an
+up-to-date requirement still route to target synchronization. The continuation chat shows the same
 offer and stops; only you approve, in Cockpit. One approval sends one merge-commit
 request fenced to that exact head; Delivery never enables auto-merge, uses a merge queue, bypasses
 rules or updates the target branch. You can also merge the PR in GitHub yourself. If GitHub never

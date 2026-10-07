@@ -598,9 +598,15 @@ it("shows the exact merge offer in the Approve merge dialog and Cancel sends not
   expect(summary).toHaveTextContent("owlbear/example#42");
   expect(summary).toHaveTextContent("Merge approval example");
   expect(summary).toHaveTextContent("2 passed, 1 pending, 0 failed; 1 optional failed");
+  expect(within(inspector).getByTestId("merge-offer-target-drift")).toHaveTextContent(
+    `main moved since the proof (${"f".repeat(12)} to ${"b".repeat(12)})`,
+  );
   const dialog = await openApproveMerge();
   expect(dialog).toHaveTextContent("merges this pull request into main in GitHub");
   expect(dialog).toHaveTextContent("Delivery cannot undo the merge.");
+  expect(within(dialog).getByTestId("merge-approval-target-drift")).toHaveTextContent(
+    "The proof does not cover the commits between",
+  );
   const offer = within(dialog).getByTestId("merge-approval-offer");
   expect(offer).toHaveTextContent("a".repeat(40));
   expect(offer).toHaveTextContent(`main at ${"b".repeat(40)}`);
@@ -610,6 +616,17 @@ it("shows the exact merge offer in the Approve merge dialog and Cancel sends not
 
   await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
   expect(approvalRequests()).toEqual([]);
+});
+
+it("states no target drift when the offer was proven against the current target", async () => {
+  const current = { ...MERGE_OFFER, proof: { ...MERGE_OFFER.proof, proof_target: MERGE_OFFER.target_head } };
+  renderMergeReadiness({ reason_code: "merge-approval-required", merge_offer: current });
+
+  const inspector = await screen.findByTestId("work-item-detail");
+  expect(within(inspector).getByTestId("merge-offer")).toBeInTheDocument();
+  expect(within(inspector).queryByTestId("merge-offer-target-drift")).not.toBeInTheDocument();
+  const dialog = await openApproveMerge();
+  expect(within(dialog).queryByTestId("merge-approval-target-drift")).not.toBeInTheDocument();
 });
 
 it("approves the shown offer with one submission identity and reports the merge", async () => {
@@ -1031,8 +1048,9 @@ it("copies the engine continuation prompt from a row without navigating or start
 
   const table = await screen.findByTestId("work-portfolio-table");
   const row = within(table).getAllByText("Delivery foundation")[0].closest("[data-work-item]") as HTMLElement;
-  expect(within(row).getByText("Waiting for chat to resume", { selector: "[data-status-tone]" })).toBeVisible();
-  expect(within(table).getByTestId("change-progress-change-alpha")).toHaveTextContent("Waiting for chat to resume");
+  expect(within(row).getByText("Run prompt in Copilot Chat", { selector: "[data-status-tone]" })).toBeVisible();
+  expect(within(table).getByTestId("change-progress-change-alpha")).toHaveTextContent("Run prompt in Copilot Chat");
+  expect(screen.getByTestId("portfolio-activity-run-prompt")).toHaveTextContent("1Run prompt");
   const copy = within(row).getByRole("button", { name: "Copy continuation prompt" });
   expect(copy).toHaveAccessibleDescription("Run it in Copilot Chat. Copying does not start an agent.");
   expect(within(table).queryByRole("link", { name: "Copy continuation prompt" })).not.toBeInTheDocument();
@@ -1076,10 +1094,66 @@ it("shows the continuation copy, progress and Change activity in detail", async 
   renderPage("/delivery/change-alpha/outcome%3AOUT-001");
 
   const inspector = await screen.findByTestId("work-item-detail");
-  expect(within(inspector).getByTestId("readiness-progress")).toHaveTextContent("Waiting for chat to resume");
-  expect(within(inspector).getByTestId("change-progress")).toHaveTextContent("Waiting for chat to resume");
+  expect(within(inspector).getByTestId("readiness-progress")).toHaveTextContent("Run prompt in Copilot Chat");
+  expect(within(inspector).getByTestId("change-progress")).toHaveTextContent("Run prompt in Copilot Chat");
+  expect(within(inspector).getByTestId("delivery-readiness")).toHaveTextContent(
+    "Next: Agent, after you run the prompt",
+  );
   fireEvent.click(within(inspector).getByRole("button", { name: "Copy continuation prompt" }));
   await waitFor(() => expect(writeText).toHaveBeenCalledWith(CONTINUATION_PROMPT));
+});
+
+it("tells the user to wait, not to run the prompt, while a closed worker's claim is settling", async () => {
+  const later = new Date(Date.now() + 60 * 60 * 1000);
+  const time = later.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const stalled = continuationCard({
+    readiness: readiness({
+      status: "waiting",
+      reason_code: "worker-stall-wait",
+      executable: false,
+      operation: null,
+      action: null,
+      progress: "waiting-for-chat",
+      next_eligible_at: later.toISOString(),
+    }),
+  });
+  fixtureState.currentPortfolio = portfolio([group({ progress: "waiting-for-chat", items: [stalled] })]);
+  const { unmount } = renderPage();
+
+  let table = await screen.findByTestId("work-portfolio-table");
+  expect(within(table).getByTestId("change-progress-change-alpha")).toHaveTextContent(
+    `Wait until ${time}, then run prompt`,
+  );
+  expect(screen.getByTestId("portfolio-activity-run-prompt")).toHaveTextContent("0Run prompt");
+  unmount();
+
+  // Delivery's Change progress follows the held step even when a ready sibling is listed first.
+  const ready = continuationCard();
+  const held = { ...stalled, item_key: "outcome:OUT-002", work_item_id: "OUT-002", title: "Stalled outcome" };
+  fixtureState.currentPortfolio = portfolio([group({ progress: "waiting-for-chat", items: [ready, held] })]);
+  fixtureState.currentDetail = detail({ card: ready, readiness: ready.readiness, change_progress: "waiting-for-chat" });
+  const { unmount: unmount2 } = renderPage("/delivery/change-alpha/outcome%3AOUT-001");
+
+  table = await screen.findByTestId("work-portfolio-table");
+  expect(within(table).getByTestId("change-progress-change-alpha")).toHaveTextContent(
+    `Wait until ${time}, then run prompt`,
+  );
+  expect(screen.getByTestId("portfolio-activity-run-prompt")).toHaveTextContent("0Run prompt");
+  const inspector = await screen.findByTestId("work-item-detail");
+  expect(within(inspector).getByTestId("change-progress")).toHaveTextContent(`Wait until ${time}, then run prompt`);
+  unmount2();
+
+  // A backed-off outcome listed first must not hide a sibling the prompt can start now.
+  const backedOff = {
+    ...held,
+    readiness: { ...stalled.readiness, reason_code: "retry-backoff" as const },
+  };
+  fixtureState.currentPortfolio = portfolio([group({ progress: "waiting-for-chat", items: [backedOff, ready] })]);
+  renderPage();
+
+  table = await screen.findByTestId("work-portfolio-table");
+  expect(within(table).getByTestId("change-progress-change-alpha")).toHaveTextContent("Run prompt in Copilot Chat");
+  expect(screen.getByTestId("portfolio-activity-run-prompt")).toHaveTextContent("1Run prompt");
 });
 
 it("renders held custody neutrally and unknown issuer evidence as a decision", async () => {

@@ -6,6 +6,7 @@ import type {
   DeliveryEvidenceVerdict,
   DeliveryFinalizationRules,
   DeliveryProgress,
+  DeliveryReadiness,
   DeliveryReadinessChecksState,
   DeliveryReadinessReasonCode,
   DeliveryReadinessStatus,
@@ -196,7 +197,7 @@ export const DELIVERY_PROGRESS_LABELS: Record<DeliveryProgress, string> = {
   "ready-to-merge": "Ready to merge",
   completed: "Completed",
   paused: "Paused",
-  "waiting-for-chat": "Waiting for chat to resume",
+  "waiting-for-chat": "Run prompt in Copilot Chat",
 };
 
 const DELIVERY_PROGRESS_TONES: Record<DeliveryProgress, WorkItemStatusTone> = {
@@ -211,11 +212,49 @@ const DELIVERY_PROGRESS_TONES: Record<DeliveryProgress, WorkItemStatusTone> = {
   "ready-to-merge": "ready",
   completed: "complete",
   paused: "neutral",
-  "waiting-for-chat": "neutral",
+  "waiting-for-chat": "ready",
 };
 
 export function progressTone(progress: DeliveryProgress): WorkItemStatusTone {
   return DELIVERY_PROGRESS_TONES[progress];
+}
+
+/** Nothing runs until the user starts a chat; a held or backed-off step says when that helps. */
+export function progressLabel(progress: DeliveryProgress, readiness?: DeliveryReadiness | null): string {
+  if (progress === "waiting-for-chat" && readiness && !readiness.executable) {
+    const eligible = readiness.next_eligible_at ? new Date(readiness.next_eligible_at) : null;
+    if (eligible && eligible.getTime() > Date.now()) {
+      const time = eligible.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      return `Wait until ${time}, then run prompt`;
+    }
+    if (readiness.reason_code === "worker-stall-wait") return "Waiting for worker cleanup";
+  }
+  return DELIVERY_PROGRESS_LABELS[progress];
+}
+
+/** The readiness behind the Change's progress; held custody wins, as in Delivery's Change activity choice. */
+export function changeProgressReadiness(
+  items: WorkItemCardView[],
+  progress: DeliveryProgress,
+): DeliveryReadiness | null {
+  const matching = items.flatMap((item) => (item.readiness?.progress === progress ? [item.readiness] : []));
+  const held = matching.find(
+    (readiness) =>
+      readiness.status === "running" ||
+      readiness.reason_code === "engine-action-pending" ||
+      readiness.reason_code === "worker-stall-wait",
+  );
+  // Any runnable step means running the prompt helps now, whichever card Delivery ranks first.
+  return held ?? matching.find((readiness) => readiness.executable) ?? matching[0] ?? null;
+}
+
+/** The Change advances only after the user runs its prompt in a new chat, and nothing says to wait first. */
+export function changeAwaitsPrompt(group: { progress?: DeliveryProgress | null; items: WorkItemCardView[] }): boolean {
+  return (
+    group.progress === "waiting-for-chat" &&
+    progressLabel(group.progress, changeProgressReadiness(group.items, group.progress)) ===
+      DELIVERY_PROGRESS_LABELS["waiting-for-chat"]
+  );
 }
 
 /** Only the engine-authored `/continue-change <this Change> …` prompt is a continuation prompt. */
@@ -315,7 +354,7 @@ function publicationStatus(item: WorkItemCardView): WorkItemStatusPresentation |
   const phaseLabel = PUBLICATION_PHASE_LABELS[item.publication_phase];
   const progress = item.readiness?.progress;
   if (progress) {
-    const label = DELIVERY_PROGRESS_LABELS[progress];
+    const label = progressLabel(progress, item.readiness);
     return { label, tone: progressTone(progress), detail: distinctDetail(label, phaseLabel) };
   }
   // Engine readiness owns the reported state; the lifecycle phase is identified separately.
@@ -351,7 +390,7 @@ export function workItemStatus(item: WorkItemCardView): WorkItemStatusPresentati
   if (publication) return publication;
   const progress = item.readiness?.progress;
   if (progress) {
-    const label = DELIVERY_PROGRESS_LABELS[progress];
+    const label = progressLabel(progress, item.readiness);
     return { label, tone: progressTone(progress), detail: distinctDetail(label, item.needs_headline) };
   }
   if (item.readiness) {

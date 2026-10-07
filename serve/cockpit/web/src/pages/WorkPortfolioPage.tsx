@@ -22,6 +22,7 @@ import { Link, useLocation, useNavigate } from "react-router";
 import type {
   ChangeGroupView,
   DeliveryHealthDiagnostic,
+  DeliveryReadiness,
   DeliveryUnavailableChangeResponse,
   PortfolioChangeLifecycleStatus,
   PortfolioChangeStage,
@@ -40,8 +41,10 @@ import { WorkspaceHeader } from "../components/WorkspaceHeader";
 import { WorkspaceViewCount } from "../components/WorkspaceViewHeader";
 import {
   CONTINUATION_PROMPT_HELP,
+  changeAwaitsPrompt,
   changeContinuationPrompt,
   changePauseUnavailableMessage,
+  changeProgressReadiness,
   READINESS_CHECKS_LABELS,
   READINESS_REASON_LABELS,
 } from "../components/workItemPresentation";
@@ -325,11 +328,13 @@ function SelectedWorkItemDetail({
   onChanged,
   onClose,
   continuationPrompt,
+  progressReadiness,
 }: {
   identity: WorkItemIdentity;
   onChanged: () => void;
   onClose: () => void;
   continuationPrompt: string | null;
+  progressReadiness: DeliveryReadiness | null;
 }) {
   const selectedDetail = useWorkItemDetail(identity, onChanged);
   if (selectedDetail.detail.data)
@@ -389,6 +394,7 @@ function SelectedWorkItemDetail({
           onCleanupCompletedChange={selectedDetail.cleanupCompletedChange}
           onRecoverChangeWorktree={selectedDetail.recoverChangeWorktree}
           changeContinuationPrompt={continuationPrompt}
+          changeProgressReadiness={progressReadiness}
         />
       </>
     );
@@ -401,6 +407,7 @@ function SelectedDetail(props: {
   onChanged: () => void;
   onClose: () => void;
   continuationPrompt: string | null;
+  progressReadiness: DeliveryReadiness | null;
 }) {
   if (props.identity.itemKey === "design") {
     return <SelectedDesignDetail changeId={props.identity.changeId} onClose={props.onClose} />;
@@ -410,12 +417,14 @@ function SelectedDetail(props: {
 
 function PortfolioWorkspace({
   groups,
+  allGroups,
   selected,
   emptyMessage,
   onSelect,
   onChanged,
 }: {
   groups: ChangeGroupView[];
+  allGroups: ChangeGroupView[];
   selected: WorkItemIdentity | null;
   emptyMessage?: string;
   onSelect: (identity: WorkItemIdentity, trigger: HTMLElement) => void;
@@ -425,6 +434,7 @@ function PortfolioWorkspace({
   return (
     <WorkPortfolioTable
       groups={groups}
+      changeItems={(changeId) => allGroups.find((group) => group.change_id === changeId)?.items ?? []}
       selected={selected}
       emptyMessage={emptyMessage}
       onSelect={onSelect}
@@ -1008,6 +1018,7 @@ export default function WorkPortfolioPage() {
             <PortfolioHeaderSummary
               operating={portfolio.operating}
               totals={portfolio.totals}
+              runPromptCount={portfolio.groups.filter(changeAwaitsPrompt).length}
               needsFilter={needsFilter}
               onNeedsFilter={setNeedsFilter}
             />
@@ -1108,6 +1119,7 @@ export default function WorkPortfolioPage() {
                 {filteredGroups.length > 0 ? (
                   <PortfolioWorkspace
                     groups={filteredGroups}
+                    allGroups={portfolio.groups}
                     selected={selected}
                     onChanged={retry}
                     onSelect={(identity, trigger) => {
@@ -1162,6 +1174,9 @@ export default function WorkPortfolioPage() {
               onChanged={retry}
               onClose={closeInspector}
               continuationPrompt={selectedContinuationPrompt}
+              progressReadiness={
+                selectedGroup?.progress ? changeProgressReadiness(selectedGroup.items, selectedGroup.progress) : null
+              }
             />
           ) : null}
         </div>
