@@ -16401,6 +16401,73 @@ def test_acquisition_replays_pending_state_when_remote_matches_current_frontier(
     assert state_publisher.publish.call_count == 2
 
 
+def _fail_first_state_publication(application: PortfolioApplication, state_publisher: Mock) -> None:
+    application._delivery_state_publisher = state_publisher
+    launch = application.acquire_frontier_work().launch_packages[0]
+    with pytest.raises(DeliveryStatePublicationError, match="state unavailable"):
+        application.transition_delivery(
+            "change-a",
+            BlockDelivery(
+                action="block",
+                outcome_id=launch.outcome_id,
+                claim_id=launch.claim.claim_id,
+                block_id="block-first-publication",
+                reason="Remote state is temporarily unavailable.",
+                unblock_condition="Remote state publication succeeds.",
+                expected_evidence=("Published state",),
+                locators=("test_portfolio_application.py",),
+            ),
+        )
+
+
+def test_acquisition_replays_first_state_publication_without_remote_snapshot(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    state_publisher = Mock()
+    state_publisher.publish.side_effect = [
+        DeliveryStatePublicationError("state unavailable", retry_safe=True),
+        object(),
+    ]
+    state_publisher.read_snapshot_inventory.return_value = Mock(
+        remote_head="remote-head",
+        snapshots=(),
+        diagnostics=(),
+    )
+    _fail_first_state_publication(application, state_publisher)
+
+    acquisition = application.acquire_frontier_work()
+
+    assert acquisition.failures == ()
+    assert runtimes["change-a"].pending_state_publication() is None
+    assert state_publisher.publish.call_count == 2
+    assert state_publisher.publish.call_args.kwargs["expected_remote_head"] == "remote-head"
+
+
+def test_acquisition_retains_pending_state_when_remote_snapshot_is_quarantined(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    state_publisher = Mock()
+    state_publisher.publish.side_effect = [DeliveryStatePublicationError("state unavailable", retry_safe=True)]
+    state_publisher.read_snapshot_inventory.return_value = Mock(
+        remote_head="remote-head",
+        snapshots=(),
+        diagnostics=(Mock(change_id="change-a"),),
+    )
+    _fail_first_state_publication(application, state_publisher)
+
+    acquisition = application.acquire_frontier_work()
+
+    assert [failure.detail for failure in acquisition.failures] == [
+        "remote Delivery snapshot is unavailable for pending replay"
+    ]
+    assert runtimes["change-a"].pending_state_publication() is not None
+    assert state_publisher.publish.call_count == 1
+
+
 def test_acquisition_reanchors_pending_publication_after_authority_revision(tmp_path: Path) -> None:
     application, runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,
