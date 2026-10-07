@@ -2372,6 +2372,7 @@ def test_pre_push_timeout_releases_reservation_for_new_operation(tmp_path: Path)
         "rate-limit",
         "remote-rejection",
         "remote-server-error",
+        "policy-rejection",
         "pre-write-timeout",
         "post-write-timeout",
     ],
@@ -2417,6 +2418,7 @@ def test_publication_incidents_preserve_checkout_and_classify_exact_operation(  
         "rate-limit": PublicationProviderFailureCode.RATE_LIMITED,
         "remote-rejection": PublicationProviderFailureCode.CONFLICT,
         "remote-server-error": PublicationProviderFailureCode.UNAVAILABLE,
+        "policy-rejection": PublicationProviderFailureCode.CONFLICT,
         "pre-write-timeout": PublicationProviderFailureCode.TIMEOUT,
         "post-write-timeout": PublicationProviderFailureCode.RESPONSE_UNKNOWN,
     }
@@ -2426,6 +2428,7 @@ def test_publication_incidents_preserve_checkout_and_classify_exact_operation(  
         "rate-limit": True,
         "remote-rejection": False,
         "remote-server-error": True,
+        "policy-rejection": False,
         "pre-write-timeout": True,
         "post-write-timeout": False,
     }
@@ -2436,6 +2439,7 @@ def test_publication_incidents_preserve_checkout_and_classify_exact_operation(  
         "rate-limit",
         "remote-rejection",
         "remote-server-error",
+        "policy-rejection",
     }:
         original_run = publisher._run_git
         diagnostics = {
@@ -2443,7 +2447,17 @@ def test_publication_incidents_preserve_checkout_and_classify_exact_operation(  
             "authentication-failure": "Authentication failed",
             "rate-limit": "rate limit exceeded",
             "remote-rejection": "remote rejected",
-            "remote-server-error": "!\tHEAD:refs/heads/branch\t[remote rejected] (Internal Server Error)",
+            "remote-server-error": (
+                "remote: Internal Server Error        \n"
+                "remote: Request ID DEC8:238C1F:24CDBD1:238745E:6AC66161        \n"
+                "error: failed to push some refs to 'https://github.com/example/repo.git'\n"
+                f"!\t{'a' * 40}:refs/heads/owlbear/change/{change_id}\t[remote rejected] (Internal Server Error)\n"
+            ),
+            "policy-rejection": (
+                "remote: error: GH013: Repository rule violations found for refs/heads/owlbear/change/x.\n"
+                f"!\t{'a' * 40}:refs/heads/owlbear/change/{change_id}\t[remote rejected] (push declined due to "
+                "repository rule violations)\n"
+            ),
         }
 
         def reject_push(*arguments: str) -> subprocess.CompletedProcess[bytes]:

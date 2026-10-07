@@ -2026,6 +2026,61 @@ def test_engine_finished_action_requires_original_journal_before_advancing(tmp_p
     assert provider.set_pull_request_draft_state.call_count == 1
 
 
+@pytest.mark.parametrize("retry_safe", [True, False])
+def test_checkpoint_publication_failure_releases_custody_only_when_retry_safe(
+    tmp_path: Path, *, retry_safe: bool
+) -> None:
+    now = {"value": "2026-08-04T00:00:00Z"}
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path, {"change-a": DeliveryStage.COMPLETED}, clock=lambda: now["value"]
+    )
+    runtime = runtimes["change-a"]
+    head = coordinator.show("change-a").last_reviewed_commit
+    _set_checkpoint(
+        runtime,
+        state_root,
+        DeliveryPendingCheckpoint(
+            head=head,
+            triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK),),
+        ),
+    )
+    provider, remote = _attach_engine_publication(application, tmp_path)
+    action = _engine_action(application)
+    assert action.kind == "reconcile-checkpoint"
+    failure = PublicationProviderError(
+        PublicationProviderFailureCode.UNAVAILABLE if retry_safe else PublicationProviderFailureCode.CONFLICT,
+        "publish_change_branch",
+        "remote server failed the Change branch push without changing it",
+        retry_safe=retry_safe,
+    )
+
+    with patch.object(application._change_branch_publisher, "publish", side_effect=failure):
+        failed = _execute_engine(application, action)
+
+    assert failed.kind == "blocked"
+    assert failed.reason_code == "engine-action-failed"
+    assert failed.failure.pre_effect_retryable is retry_safe
+    assert runtime.checkpoint_publication_state().pending_checkpoint is not None
+    assert provider.create_calls == 0
+    if not retry_safe:
+        assert coordinator.show("change-a").continuation_action == action
+        assert "Automatic retry is unavailable" in failed.failure.retry_condition
+        return
+    assert "pending checkpoint remains durable" in failed.failure.retry_condition
+    assert coordinator.show("change-a").continuation_action.finished_at is not None
+    assert application._execution_occupancy() == 0
+
+    now["value"] = "2026-08-04T00:10:00Z"
+    following = _engine_action(application)
+
+    assert following.kind == "sync-target"
+    published = runtime.checkpoint_publication_state().published_head
+    assert published is not None
+    assert provider.create_calls <= 1
+    assert _git(remote, "rev-parse", "refs/heads/owlbear/change/change-a") == published
+    _git(remote, "merge-base", "--is-ancestor", head, published)
+
+
 @pytest.mark.parametrize("interrupted", [False, True])
 def test_engine_failure_retains_exact_action_without_retry_or_release(tmp_path: Path, *, interrupted: bool) -> None:
     application, runtime, provider, _state, _head, state_root = _awaiting_acceptance_fixture(tmp_path, mark_ready=False)
@@ -16473,7 +16528,10 @@ def _fail_first_state_publication(application: PortfolioApplication, state_publi
         )
 
 
-def test_acquisition_replays_first_state_publication_without_remote_snapshot(tmp_path: Path) -> None:
+@pytest.mark.parametrize("remote_head", ["remote-head", None])
+def test_acquisition_replays_first_state_publication_without_remote_snapshot(
+    tmp_path: Path, remote_head: str | None
+) -> None:
     application, runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.PLANNING},
@@ -16484,7 +16542,7 @@ def test_acquisition_replays_first_state_publication_without_remote_snapshot(tmp
         object(),
     ]
     state_publisher.read_snapshot_inventory.return_value = Mock(
-        remote_head="remote-head",
+        remote_head=remote_head,
         snapshots=(),
         diagnostics=(),
     )
@@ -16495,7 +16553,7 @@ def test_acquisition_replays_first_state_publication_without_remote_snapshot(tmp
     assert acquisition.failures == ()
     assert runtimes["change-a"].pending_state_publication() is None
     assert state_publisher.publish.call_count == 2
-    assert state_publisher.publish.call_args.kwargs["expected_remote_head"] == "remote-head"
+    assert state_publisher.publish.call_args.kwargs["expected_remote_head"] == remote_head
 
 
 def test_acquisition_retains_pending_state_when_remote_snapshot_is_quarantined(tmp_path: Path) -> None:

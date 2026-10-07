@@ -120,6 +120,7 @@ from owlbear_delivery.delivery_runtime import (
 from owlbear_delivery.delivery_state import parse_delivery_state_snapshot
 from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
 from owlbear_delivery.git_executable import resolve_git_executable
+from owlbear_delivery.publication_provider import PublicationProviderError, PublicationProviderFailureCode
 from owlbear_delivery.state_formats import format_marker_bytes
 from owlbear_delivery.target_contract import DeliverySourceBinding
 from owlbear_delivery.workspace_models import (
@@ -4916,6 +4917,44 @@ def test_non_ascii_first_admission_replays_after_restart_and_publishes(tmp_path:
     assert health.status.value == "healthy", health.model_dump_json()
     assert reloaded._coordinator.show(change_id).design_package_snapshot is not None  # noqa: SLF001
     close_delivery_application(reloaded)
+
+
+def test_admission_returns_committed_authority_when_checkpoint_publication_fails(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    _git(repository, "config", "url." + str(remote) + ".insteadOf", "https://github.com/example/project.git")
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    config = DeliveryStartupConfig(
+        schema_version=2,
+        remote="origin",
+        target_branch="main",
+        github_repository="example/project",
+        delivery_state_branch="owlbear/delivery-state",
+    )
+    application = load_delivery_application(config, workspace_root=repository)
+    change_id = "admitted-offline"
+    application.create_design_session(change_id, _revision_sources("AC-002: Admitted."), b"# Architecture\n")
+    request = DeliveryAdmissionRequest(
+        change_id=change_id, expected_package_id=_authored_package_id(application, change_id), active_claim_ids=()
+    )
+    outage = PublicationProviderError(
+        PublicationProviderFailureCode.UNAVAILABLE,
+        "publish_change_branch",
+        "remote server failed the Change branch push without changing it",
+        retry_safe=True,
+    )
+
+    with (
+        patch.object(application, "_change_branch_publisher", Mock()),
+        patch.object(application, "_draft_pull_request_publisher", Mock()),
+        patch.object(application, "_reconcile_change_checkpoint", side_effect=outage) as reconcile,
+    ):
+        admitted = application.admit_delivery_change(request)
+
+    assert reconcile.call_count == 1
+    assert admitted.replayed is False
+    assert admitted.frontier.pending_checkpoint is not None
+    assert application.admit_delivery_change(request).replayed is True
+    close_delivery_application(application)
 
 
 def _authored_package_id(application: PortfolioApplication, change_id: str) -> str:

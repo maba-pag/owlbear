@@ -1058,7 +1058,10 @@ class PortfolioApplication(
             else:
                 runtime.queue_admitted_design_checkpoint(snapshot.snapshot_head)
             if self._change_branch_publisher is not None and self._draft_pull_request_publisher is not None:
-                self._reconcile_change_checkpoint(request.change_id, runtime)
+                try:
+                    self._reconcile_change_checkpoint(request.change_id, runtime)
+                except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                    _logger.warning("Admitted Change %s kept its checkpoint pending: %s", request.change_id, exc)
             self._reconcile_runtimes()
             return result.model_copy(update={"frontier": parse_delivery_frontier(runtime.frontier_bytes())[0]})
 
