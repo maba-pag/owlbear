@@ -46,6 +46,7 @@ from owlbear_delivery.change_workspace import (
     ChangeCoordination,
     ChangeFinalizationAttempt,
     ChangePauseRequestedError,
+    ChangeTargetSyncConflictError,
     ChangeTargetSyncStaleError,
     ChangeWriter,
     CoordinationConflictError,
@@ -766,6 +767,26 @@ class _AcquisitionMixin:
         if self._read_engine_intent(request) != result.action:
             raise DeliveryRuntimeReconciliationError(request.change_id, "continuation result lacks its original intent")
         return result
+
+    def _retained_target_sync_conflict(self, change_id: str) -> ChangeContinuationAction | None:
+        """Return the unfinished engine sync whose exact recorded result is a preserved target conflict."""
+        try:
+            action = self._coordinator.show(change_id).continuation_action
+            if action is None or action.finished_at is not None or action.kind != "sync-target":
+                return None
+            result = self._read_engine_result(
+                ExecuteDeliveryChangeAction(change_id=change_id, operation_id=action.operation_id)
+            )
+        except OSError, RuntimeError, ValueError:
+            return None
+        if (
+            result is None
+            or result.kind != "blocked"
+            or result.failure is None
+            or result.failure.code != ChangeTargetSyncConflictError.code
+        ):
+            return None
+        return action
 
     def execute_change_action(self, request: ExecuteDeliveryChangeAction) -> DeliveryEngineActionResult:
         """Execute the fixed retained owner once, or return its exact durable result."""

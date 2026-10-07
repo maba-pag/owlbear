@@ -679,6 +679,30 @@ class PortfolioCoordinator:
             return True
         return _coordination_conflict("continuation start remained concurrent")
 
+    def release_target_sync_conflict_action(self, action: ChangeContinuationAction) -> None:
+        """Hand one conflicted engine sync's retained custody to its preserved-conflict exit; journals remain."""
+        self.require_no_pending_recovery(action.change_id)
+        for _attempt in range(_OCC_RETRY_LIMIT):
+            coordination, previous = self._read_coordination(action.change_id)
+            if coordination.continuation_action != action or action.finished_at is not None:
+                _coordination_conflict("target-sync conflict custody does not match the retained action")
+            try:
+                self._commit(
+                    f"release-{action.operation_id}",
+                    (
+                        _replacement(
+                            self._state_root,
+                            self._coordination_path(action.change_id),
+                            previous,
+                            coordination.model_copy(update={"continuation_action": None}),
+                        ),
+                    ),
+                )
+            except TransactionConflictError:
+                continue
+            return
+        _coordination_conflict("target-sync conflict custody release remained concurrent")
+
     def finish_continuation_action(
         self, action: ChangeContinuationAction, result: bytes, finished_at: str, *, release: bool
     ) -> None:

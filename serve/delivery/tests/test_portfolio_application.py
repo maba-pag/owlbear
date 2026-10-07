@@ -5593,6 +5593,60 @@ def test_engine_target_fetch_drift_is_stale_then_syncs_exact_target(tmp_path: Pa
     assert _execute_engine(application, fresh) == synchronized
 
 
+@pytest.mark.parametrize("exit_kind", ["resolve", "abort"])
+def test_engine_target_sync_conflict_exit_releases_retained_engine_custody(tmp_path: Path, exit_kind: str) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
+    runtime = runtimes["change-a"]
+    head = _commit_reviewed_head(
+        application, coordinator.show("change-a"), "product.txt", "Change implementation\n", "Change edit"
+    )
+    _set_checkpoint(
+        runtime,
+        state_root,
+        DeliveryPendingCheckpoint(
+            head=head,
+            triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK),),
+        ),
+    )
+    _provider, remote = _attach_engine_publication(application, tmp_path)
+    assert _execute_engine(application, _engine_action(application)).kind == "completed"
+    stale = _engine_action(application)
+    target = _advance_remote_target(tmp_path, remote, product="Competing target edit\n")
+    assert _execute_engine(application, stale).kind == "stale"
+    action = _engine_action(application)
+    assert action.target_head == target
+    blocked = _execute_engine(application, action)
+    assert blocked.kind == "blocked", blocked
+    assert blocked.failure.code == "ERR_TARGET_SYNC_CONFLICT"
+    readiness = application.get_change("change-a").readiness
+    assert readiness.reason_code == "engine-action-failed"
+    assert readiness.prompt.startswith("/resolve-target-conflict change-a ")
+    disposition_id = runtime.change_disposition().disposition_id
+    worktree = Path(coordinator.show("change-a").worktree_path)
+    intent = coordinator.continuation_record_path("change-a", action.operation_id)
+    result = coordinator.continuation_record_path("change-a", action.operation_id, result=True)
+    journals = (intent.read_bytes(), result.read_bytes())
+
+    if exit_kind == "resolve":
+        (worktree / "product.txt").write_text("Change implementation\nCompeting target edit\n")
+        _git(worktree, "add", "product.txt")
+        receipt = application.resolve_target_sync_conflict("change-a", disposition_id, target, action.operation_id)
+        assert receipt.target_head == target
+        assert _git(worktree, "rev-parse", "HEAD") == receipt.merged_head
+    else:
+        application.abort_target_sync_conflict("change-a", disposition_id, target, action.operation_id)
+        assert _git(worktree, "rev-parse", "HEAD") == action.exact_head
+
+    assert coordinator.show("change-a").continuation_action is None
+    assert (intent.read_bytes(), result.read_bytes()) == journals
+    assert runtime.change_disposition() is None
+    assert application.get_change("change-a").readiness.reason_code != "engine-action-failed"
+    assert _execute_engine(application, action) == blocked
+    following = application.acquire_change_action(_continuation_request(application))
+    assert following.kind != "unavailable", following
+    assert following.engine_action is None or following.engine_action.operation_id != action.operation_id
+
+
 def test_engine_exact_sync_after_remote_rewind_selects_the_rewound_target(tmp_path: Path) -> None:
     application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
     _set_checkpoint(
