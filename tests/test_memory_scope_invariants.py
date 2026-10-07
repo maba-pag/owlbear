@@ -12,7 +12,7 @@ from owlbear_memory import MemoryCategory, MemoryEngine, MemoryEntry
 from pydantic import ValidationError as PydanticValidationError
 
 from owlbear_cockpit.routes.memory import EditRequest
-from owlbear_memory_mcp.tools import curate_memory
+from owlbear_memory_mcp.tools import curate_memory, read_memory
 
 
 def _entry_data(scope_agents: list[str]) -> dict[str, object]:
@@ -53,9 +53,10 @@ async def test_mcp_curate_rejects_blank_scope_before_engine_edit(tmp_path: Path)
     )
     ctx = MagicMock()
     ctx.request_context.lifespan_context = SimpleNamespace(engine=engine)
+    revision = (await read_memory(ctx, entry_id=entry.id))["revision"]
 
     with pytest.raises(ToolError, match="scope_agents"):
-        await curate_memory(ctx, entry_id=entry.id, scope_agents=[" "])
+        await curate_memory(ctx, entry_id=entry.id, revision=revision, scope_agents=[" "])
 
 
 def test_cockpit_edit_request_rejects_blank_scope_member() -> None:

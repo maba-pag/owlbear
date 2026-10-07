@@ -165,6 +165,7 @@ def _validate_limit(limit: int | None) -> int | None:
 def _entry_to_dict(entry: MemoryEntry) -> dict[str, object]:
     return {
         "id": entry.id,
+        "revision": entry.revision,
         "title": entry.title,
         "categories": [str(category) for category in entry.categories],
         "confidence": entry.confidence,
@@ -188,6 +189,10 @@ def _load_entry_or_raise(engine: MemoryEngine, entry_id: str) -> MemoryEntry:
     except NotFoundError as exc:
         msg = f"entry not found: {entry_id}"
         raise ToolError(msg) from exc
+
+
+def _stale_revision_error(exc: ConcurrencyError) -> ToolError:
+    return ToolError(f"Entry changed since it was read: {exc}. Re-read before retrying.")
 
 
 def _metadata_dict(entry: MemoryEntry) -> dict[str, object]:
@@ -421,6 +426,7 @@ async def _update_entry(  # noqa: C901, PLR0912, PLR0913
     ctx: Context,
     *,
     current: MemoryEntry,
+    revision: str,
     title: str | None = None,
     content: str | None = None,
     categories: list[MemoryCategory | str] | None = None,
@@ -470,16 +476,18 @@ async def _update_entry(  # noqa: C901, PLR0912, PLR0913
         updated = engine.edit(
             current.id,
             payload,
-            expected_updated_at=current.updated_at,
+            expected_revision=revision,
         )
-    except (TransitionError, NotFoundError, ConcurrencyError) as exc:
+    except ConcurrencyError as exc:
+        raise _stale_revision_error(exc) from exc
+    except (TransitionError, NotFoundError) as exc:
         raise ToolError(str(exc)) from exc
     except ValidationError as exc:
         raise ToolError(_teaching_validation_message(exc)) from exc
     return _entry_to_dict(updated)
 
 
-async def _delete_entry(ctx: Context, *, entry_id: str) -> dict[str, Any]:
+async def _delete_entry(ctx: Context, *, entry_id: str, revision: str) -> dict[str, Any]:
     """Delete an entry.
 
     Pending entries are hard-deleted from disk; curated and approved entries
@@ -493,8 +501,10 @@ async def _delete_entry(ctx: Context, *, entry_id: str) -> dict[str, Any]:
         raise ToolError(msg)
 
     try:
-        deleted = engine.delete(current.id, expected_updated_at=current.updated_at)
-    except (TransitionError, NotFoundError, ConcurrencyError) as exc:
+        deleted = engine.delete(current.id, expected_revision=revision)
+    except ConcurrencyError as exc:
+        raise _stale_revision_error(exc) from exc
+    except (TransitionError, NotFoundError) as exc:
         raise ToolError(str(exc)) from exc
 
     if current.state == MemoryState.PENDING:
@@ -511,6 +521,7 @@ async def curate_memory(  # noqa: PLR0913
     ctx: Context,
     *,
     entry_id: str,
+    revision: str,
     title: str | None = None,
     content: str | None = None,
     categories: list[MemoryCategory | str] | None = None,
@@ -523,6 +534,7 @@ async def curate_memory(  # noqa: PLR0913
     updated = await _update_entry(
         ctx,
         current=current,
+        revision=revision,
         title=title,
         content=content,
         categories=categories,
@@ -538,11 +550,11 @@ async def curate_memory(  # noqa: PLR0913
     return _with_hint(updated, hint)
 
 
-async def delete_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]:
+async def delete_memory(ctx: Context, *, entry_id: str, revision: str) -> dict[str, Any]:
     """Compatibility alias for delete semantics."""
     engine = _engine_from_ctx(ctx)
     current = _load_entry_or_raise(engine, entry_id)
-    deleted = await _delete_entry(ctx, entry_id=entry_id)
+    deleted = await _delete_entry(ctx, entry_id=entry_id, revision=revision)
     if current.state == MemoryState.PENDING:
         hint = "Hard-delete applied: pending entry removed and never committed."
     else:
@@ -582,22 +594,24 @@ async def delete_agent_memories(ctx: Context, *, agent: str) -> dict[str, int]:
     return dict(result)
 
 
-async def _approve_entry(ctx: Context, *, entry_id: str) -> dict[str, Any]:
+async def _approve_entry(ctx: Context, *, entry_id: str, revision: str) -> dict[str, Any]:
     """Promote a curated entry to approved."""
     engine = _engine_from_ctx(ctx)
     current = _load_entry_or_raise(engine, entry_id)
 
     try:
-        updated = engine.approve(current.id, expected_updated_at=current.updated_at)
-    except (TransitionError, NotFoundError, ConcurrencyError) as exc:
+        updated = engine.approve(current.id, expected_revision=revision)
+    except ConcurrencyError as exc:
+        raise _stale_revision_error(exc) from exc
+    except (TransitionError, NotFoundError) as exc:
         raise ToolError(str(exc)) from exc
 
     return _entry_to_dict(updated)
 
 
-async def approve_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]:
+async def approve_memory(ctx: Context, *, entry_id: str, revision: str) -> dict[str, Any]:
     """Compatibility alias for approving curated memory entries."""
-    approved = await _approve_entry(ctx, entry_id=entry_id)
+    approved = await _approve_entry(ctx, entry_id=entry_id, revision=revision)
     return _with_hint(approved, "Entry approved. Now visible to scoped agents.")
 
 

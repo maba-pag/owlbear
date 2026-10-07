@@ -14,6 +14,7 @@ from owlbear_memory_mcp.tools import (
     _recognized_agent_names,
     curate_memory,
     delete_agent_memories,
+    read_memory,
     rename_agent_memories,
     save_memory,
 )
@@ -162,16 +163,20 @@ def test_delete_agent_soft_deletes_reviewed_entries_left_without_audience(
 async def test_scope_syntax_accepts_mixed_values_and_rejects_blank_members(tmp_path: Path) -> None:
     engine = MemoryEngine(tmp_path / ".owlbear/memory")
     entry_id = _save(engine, source="writer", scope=[])
+    ctx = _make_ctx(engine)
+    revision = (await read_memory(ctx, entry_id=entry_id))["revision"]
 
     updated = await curate_memory(
-        _make_ctx(engine),
+        ctx,
         entry_id=entry_id,
+        revision=revision,
         scope_agents=["builder", "*"],
     )
 
     assert updated["scope_agents"] == ["builder", "*"]
+    revision = (await read_memory(ctx, entry_id=entry_id))["revision"]
     with pytest.raises(ToolError, match="non-empty strings"):
-        await curate_memory(_make_ctx(engine), entry_id=entry_id, scope_agents=[""])
+        await curate_memory(ctx, entry_id=entry_id, revision=revision, scope_agents=[""])
 
 
 @pytest.mark.asyncio
