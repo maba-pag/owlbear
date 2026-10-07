@@ -473,7 +473,8 @@ the `uv --project <owlbear clone>` entries that setup writes start the checkout'
 [Upgrading OwlBear](#upgrading-owlbear) moves it forward.
 
 Pinning is optional for a consumer project. It keeps Delivery on an installed release while the
-OwlBear checkout moves; each release holds a full OwlBear environment of about 1.3 GB. To opt in,
+OwlBear checkout moves; each release holds a controller-only environment (Delivery MCP, Cockpit and
+the maintenance tools, without knowledge or browser packages) of about 90 MB. To opt in,
 upgrade first so the state is current, stop `owlbear-delivery` and Cockpit, and run from the project
 root:
 
@@ -488,7 +489,7 @@ with `.owlbear/controller/bin/cockpit`. Rerunning setup keeps your edited entry.
 
 | Path | Content |
 | --- | --- |
-| `.owlbear/controller/releases/<commit>/` | Read-only `git archive` of the commit, its locked `.venv`, the Cockpit bundle and `RELEASE.json` (commit, supported format, interpreter identity, tree digest) |
+| `.owlbear/controller/releases/<commit>/` | Read-only `git archive` of the commit, its locked controller-only `.venv`, the Cockpit bundle and `RELEASE.json` (commit, supported format, interpreter identity, tree digest) |
 | `.owlbear/controller/pin.json` | Pinned release `commit`, its `previous` (rollback) release and the digest of its `RELEASE.json` |
 | `.owlbear/controller/bin/delivery-mcp`, `bin/cockpit` | Generated launchers; `.vscode/mcp.json` starts `owlbear-delivery` through `bin/delivery-mcp` |
 
@@ -497,6 +498,9 @@ On a pinned workspace every controller whose code is not the pinned release refu
 `uv run python -m owlbear_delivery_mcp` from the checkout. Start Cockpit with
 `.owlbear/controller/bin/cockpit`. A clone without a release shows `owlbear-delivery` as failed to
 start until `uv run delivery-controller install --pin <commit>` installs and pins one.
+
+Install refuses a release whose Delivery MCP server, Cockpit app or maintenance commands cannot be
+imported from its own environment.
 
 Release integrity protects against accidental and ordinary-tool changes: editor saves, Git commands
 in the wrong directory, interrupted installs, package-manager writes and restores. Install seals
@@ -512,6 +516,9 @@ install, online preflight, stop, offline `preflight`, `backup`, migration, `swit
 exclusively and refuse while any controller runs. `switch <previous>` rolls back only when that
 release's own gate accepts the current state; otherwise restoring the backup is your decision.
 `verify` detects a release modified after install. `prune` keeps the current and previous releases.
+The upgrade builds the new release with the current release's `delivery-controller` and reuses an
+intact installed release, so a change to the installer applies from the upgrade after the one that
+activates it.
 
 ---
 
