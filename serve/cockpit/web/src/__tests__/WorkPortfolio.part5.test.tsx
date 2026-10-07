@@ -36,6 +36,7 @@ import {
   requirePresent,
   response,
   selectValue,
+  situation,
   unavailableChange,
 } from "./workPortfolioHarness";
 
@@ -1043,13 +1044,19 @@ it("does not duplicate an unavailable Change already carried by an operating sta
 it("copies the engine continuation prompt from a row without navigating or starting an agent", async () => {
   const writeText = vi.fn().mockResolvedValue(undefined);
   Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
-  fixtureState.currentPortfolio = portfolio([group({ progress: "waiting-for-chat", items: [continuationCard()] })]);
+  fixtureState.currentPortfolio = portfolio([
+    group({ progress: continuationCard().readiness?.progress, items: [continuationCard()] }),
+  ]);
   renderPage();
 
   const table = await screen.findByTestId("work-portfolio-table");
   const row = within(table).getAllByText("Delivery foundation")[0].closest("[data-work-item]") as HTMLElement;
-  expect(within(row).getByText("Run prompt in Copilot Chat", { selector: "[data-status-tone]" })).toBeVisible();
-  expect(within(table).getByTestId("change-progress-change-alpha")).toHaveTextContent("Run prompt in Copilot Chat");
+  expect(within(row).getByText("Ready for next step", { selector: "[data-status-tone]" })).toBeVisible();
+  expect(within(row).getByText("Run the prompt in Copilot Chat to start the step.")).toBeVisible();
+  expect(within(table).getByTestId("change-progress-change-alpha")).toHaveTextContent("Ready for next step");
+  expect(within(table).getByTestId("change-headline-change-alpha")).toHaveTextContent(
+    "Run the prompt in Copilot Chat to start the step.",
+  );
   expect(screen.getByTestId("portfolio-activity-run-prompt")).toHaveTextContent("1Run prompt");
   const copy = within(row).getByRole("button", { name: "Copy continuation prompt" });
   expect(copy).toHaveAccessibleDescription("Run it in Copilot Chat. Copying does not start an agent.");
@@ -1074,7 +1081,12 @@ it.each([
   ["/continue-change change-alphabet reread get_change and pass its readiness basis unchanged."],
 ])("never labels %s as this Change's continuation prompt", async (prompt) => {
   const other = continuationCard({
-    readiness: readiness({ status: "blocked", reason_code: "retry-exhausted", prompt, progress: "needs-decision" }),
+    readiness: readiness({
+      status: "blocked",
+      reason_code: "retry-exhausted",
+      prompt,
+      progress: situation("needs-attention"),
+    }),
   });
   fixtureState.currentPortfolio = portfolio([group({ items: [other] })]);
   fixtureState.currentDetail = detail({ card: other, readiness: other.readiness });
@@ -1089,13 +1101,17 @@ it("shows the continuation copy, progress and Change activity in detail", async 
   const writeText = vi.fn().mockResolvedValue(undefined);
   Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
   const ready = continuationCard();
-  fixtureState.currentPortfolio = portfolio([group({ progress: "waiting-for-chat", items: [ready] })]);
-  fixtureState.currentDetail = detail({ card: ready, readiness: ready.readiness, change_progress: "waiting-for-chat" });
+  const progress = ready.readiness?.progress;
+  fixtureState.currentPortfolio = portfolio([group({ progress, items: [ready] })]);
+  fixtureState.currentDetail = detail({ card: ready, readiness: ready.readiness, change_progress: progress });
   renderPage("/delivery/change-alpha/outcome%3AOUT-001");
 
   const inspector = await screen.findByTestId("work-item-detail");
-  expect(within(inspector).getByTestId("readiness-progress")).toHaveTextContent("Run prompt in Copilot Chat");
-  expect(within(inspector).getByTestId("change-progress")).toHaveTextContent("Run prompt in Copilot Chat");
+  expect(within(inspector).getByTestId("readiness-progress")).toHaveTextContent("Ready for next step");
+  expect(within(inspector).getByTestId("readiness-headline")).toHaveTextContent(
+    "Run the prompt in Copilot Chat to start the step.",
+  );
+  expect(within(inspector).getByTestId("change-progress")).toHaveTextContent("Ready for next step");
   expect(within(inspector).getByTestId("delivery-readiness")).toHaveTextContent(
     "Next: Agent, after you run the prompt",
   );
@@ -1106,6 +1122,10 @@ it("shows the continuation copy, progress and Change activity in detail", async 
 it("tells the user to wait, not to run the prompt, while a closed worker's claim is settling", async () => {
   const later = new Date(Date.now() + 60 * 60 * 1000);
   const time = later.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const restart = situation("ready-for-next-step", {
+    headline: "The VS Code window running this worker closed; run the prompt in Copilot Chat to restart the step.",
+    next_eligible_at: later.toISOString(),
+  });
   const stalled = continuationCard({
     readiness: readiness({
       status: "waiting",
@@ -1113,46 +1133,38 @@ it("tells the user to wait, not to run the prompt, while a closed worker's claim
       executable: false,
       operation: null,
       action: null,
-      progress: "waiting-for-chat",
+      progress: restart,
       next_eligible_at: later.toISOString(),
     }),
   });
-  fixtureState.currentPortfolio = portfolio([group({ progress: "waiting-for-chat", items: [stalled] })]);
+  fixtureState.currentPortfolio = portfolio([group({ progress: restart, items: [stalled] })]);
   const { unmount } = renderPage();
 
   let table = await screen.findByTestId("work-portfolio-table");
-  expect(within(table).getByTestId("change-progress-change-alpha")).toHaveTextContent(
-    `Wait until ${time}, then run prompt`,
-  );
+  expect(within(table).getByTestId("change-progress-change-alpha")).toHaveTextContent("Ready for next step");
   expect(screen.getByTestId("portfolio-activity-run-prompt")).toHaveTextContent("0Run prompt");
   unmount();
 
   // Delivery's Change progress follows the held step even when a ready sibling is listed first.
   const ready = continuationCard();
   const held = { ...stalled, item_key: "outcome:OUT-002", work_item_id: "OUT-002", title: "Stalled outcome" };
-  fixtureState.currentPortfolio = portfolio([group({ progress: "waiting-for-chat", items: [ready, held] })]);
-  fixtureState.currentDetail = detail({ card: ready, readiness: ready.readiness, change_progress: "waiting-for-chat" });
+  fixtureState.currentPortfolio = portfolio([group({ progress: restart, items: [ready, held] })]);
+  fixtureState.currentDetail = detail({ card: ready, readiness: ready.readiness, change_progress: restart });
   const { unmount: unmount2 } = renderPage("/delivery/change-alpha/outcome%3AOUT-001");
 
   table = await screen.findByTestId("work-portfolio-table");
-  expect(within(table).getByTestId("change-progress-change-alpha")).toHaveTextContent(
-    `Wait until ${time}, then run prompt`,
-  );
   expect(screen.getByTestId("portfolio-activity-run-prompt")).toHaveTextContent("0Run prompt");
   const inspector = await screen.findByTestId("work-item-detail");
-  expect(within(inspector).getByTestId("change-progress")).toHaveTextContent(`Wait until ${time}, then run prompt`);
+  expect(within(inspector).getByTestId("change-progress")).toHaveTextContent(`not before ${time}`);
   unmount2();
 
-  // A backed-off outcome listed first must not hide a sibling the prompt can start now.
-  const backedOff = {
-    ...held,
-    readiness: { ...stalled.readiness, reason_code: "retry-backoff" as const },
-  };
-  fixtureState.currentPortfolio = portfolio([group({ progress: "waiting-for-chat", items: [backedOff, ready] })]);
+  // Once the eligible time passes, the same situation asks for the prompt.
+  const now = situation("ready-for-next-step", { next_eligible_at: new Date(Date.now() - 1000).toISOString() });
+  fixtureState.currentPortfolio = portfolio([group({ progress: now, items: [held, ready] })]);
   renderPage();
 
   table = await screen.findByTestId("work-portfolio-table");
-  expect(within(table).getByTestId("change-progress-change-alpha")).toHaveTextContent("Run prompt in Copilot Chat");
+  expect(within(table).getByTestId("change-progress-change-alpha")).toHaveTextContent("Ready for next step");
   expect(screen.getByTestId("portfolio-activity-run-prompt")).toHaveTextContent("1Run prompt");
 });
 
@@ -1163,7 +1175,7 @@ it("renders held custody neutrally and unknown issuer evidence as a decision", a
     title: "Completed outcome",
     stage: "completed",
     activity: { state: "idle", worker_role: null, started_at: null, task_id: null },
-    readiness: readiness({ status: "complete", reason_code: "change-terminal", progress: "completed" }),
+    readiness: readiness({ status: "complete", reason_code: "change-terminal", progress: situation("done") }),
   });
   fixtureState.currentPortfolio = portfolio([group({ progress: null, items: [completedFirst, heldCard()] })]);
   const { unmount } = renderPage();
@@ -1176,13 +1188,14 @@ it("renders held custody neutrally and unknown issuer evidence as a decision", a
   expect(within(table).queryByTestId("change-progress-change-alpha")).not.toBeInTheDocument();
   unmount();
 
+  const decision = situation("your-decision");
   fixtureState.currentPortfolio = portfolio([
-    group({ progress: "needs-decision", items: [completedFirst, heldCard("needs-decision")] }),
+    group({ progress: decision, items: [completedFirst, heldCard(decision)] }),
   ]);
   renderPage();
   table = await screen.findByTestId("work-portfolio-table");
-  expect(within(table).getByTestId("change-progress-change-alpha")).toHaveTextContent("Needs your decision");
-  expect(within(table).getByText("Needs your decision", { selector: "td [data-status-tone]" })).toBeInTheDocument();
+  expect(within(table).getByTestId("change-progress-change-alpha")).toHaveTextContent("Your decision");
+  expect(within(table).getByText("Your decision", { selector: "td [data-status-tone]" })).toBeInTheDocument();
 });
 
 it("offers Pause on every unfinished Change, including one whose step holds custody", async () => {
@@ -1191,7 +1204,7 @@ it("offers Pause on every unfinished Change, including one whose step holds cust
     group({
       change_id: "change-beta",
       title: "Quiescent change",
-      progress: "waiting-for-chat",
+      progress: continuationCard().readiness?.progress,
       items: [continuationCard({ change_id: "change-beta" })],
       ...PAUSE_AVAILABLE,
     }),
@@ -1238,10 +1251,12 @@ it("shows a recorded Pause request with Resume while the started step drains", a
 
 it("resumes a paused Change from its group header", async () => {
   const paused = card({
-    readiness: readiness({ status: "blocked", reason_code: "change-paused", progress: "paused" }),
+    readiness: readiness({ status: "blocked", reason_code: "change-paused", progress: situation("paused") }),
     activity: { state: "idle", worker_role: null, started_at: null, task_id: null },
   });
-  fixtureState.currentPortfolio = portfolio([group({ lifecycle: "deferred", progress: "paused", items: [paused] })]);
+  fixtureState.currentPortfolio = portfolio([
+    group({ lifecycle: "deferred", progress: situation("paused"), items: [paused] }),
+  ]);
   renderPage();
 
   const control = await screen.findByTestId("change-pause-change-alpha");
@@ -1259,13 +1274,15 @@ it("resumes a paused Change from its group header", async () => {
 
 it("shows the paused lifecycle note on an outcome detail", async () => {
   const paused = card({
-    readiness: readiness({ status: "blocked", reason_code: "change-paused", progress: "paused" }),
+    readiness: readiness({ status: "blocked", reason_code: "change-paused", progress: situation("paused") }),
     activity: { state: "idle", worker_role: null, started_at: null, task_id: null },
   });
-  fixtureState.currentPortfolio = portfolio([group({ lifecycle: "deferred", progress: "paused", items: [paused] })]);
+  fixtureState.currentPortfolio = portfolio([
+    group({ lifecycle: "deferred", progress: situation("paused"), items: [paused] }),
+  ]);
   fixtureState.currentDetail = detail({
     card: paused,
-    change_progress: "paused",
+    change_progress: situation("paused"),
     abandon_available: true,
   });
   renderPage("/delivery/change-alpha/outcome%3AOUT-001");

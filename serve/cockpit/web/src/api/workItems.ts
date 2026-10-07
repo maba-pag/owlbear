@@ -134,6 +134,7 @@ export interface MergeAttemptSummary {
   state: "intent" | "released" | "pending";
   approved_head: string;
   pr_url: string;
+  released_at?: string | null;
 }
 
 export interface MergeOffer {
@@ -163,20 +164,34 @@ export interface MergeOffer {
   };
 }
 
-/** Engine-projected programme progress; Cockpit only maps keys to labels. */
-export type DeliveryProgress =
-  | "preparing"
-  | "working"
-  | "checking"
-  | "repairing"
-  | "needs-decision"
-  | "needs-sign-in"
-  | "waiting-for-service"
-  | "waiting-for-change"
-  | "ready-to-merge"
-  | "completed"
+/** Engine-projected situation; Cockpit only maps keys to labels and tones. */
+export type DeliverySituation =
+  | "with-agent"
+  | "ready-for-next-step"
+  | "your-decision"
+  | "waiting-on-github"
+  | "waiting-on-delivery"
+  | "waiting-on-dependency"
+  | "retrying-automatically"
+  | "needs-attention"
+  | "pausing"
   | "paused"
-  | "waiting-for-chat";
+  | "abandoned"
+  | "done";
+export type DeliveryWaitingOn = "you" | "agent" | "delivery" | "github" | "outcome" | "change" | "none";
+export type TargetSyncAvailability = "required" | "optional" | "unavailable" | "unnecessary";
+
+/** The one user-facing situation Delivery derives; Cockpit renders it without reconstruction. */
+export interface DeliveryProgress {
+  situation: DeliverySituation;
+  headline: string;
+  waiting_on: DeliveryWaitingOn;
+  waiting_on_id?: string | null;
+  since?: string | null;
+  next_eligible_at?: string | null;
+  target_sync?: TargetSyncAvailability | null;
+}
+
 /** Delivery's own reason that the defer intent would refuse Pause; Cockpit only maps keys to copy. */
 export type ChangePauseUnavailableReason =
   | "finalizer-custody"
@@ -432,26 +447,6 @@ export interface WorkItemPortfolioResponse {
   totals: WorkItemPortfolioTotals;
   operating: PortfolioOperatingView;
   health: DeliveryHealthResponse;
-}
-
-export type AcceptanceReconciliationStatus =
-  | "completed"
-  | "waiting"
-  | "head-moved"
-  | "attention"
-  | "provider-unavailable"
-  | "skipped";
-
-export interface AcceptanceReconciliationOutcome {
-  change_id: string;
-  status: AcceptanceReconciliationStatus;
-  code: string | null;
-  detail: string | null;
-  completion_id: string | null;
-}
-
-export interface AcceptanceReconciliationResponse {
-  outcomes: AcceptanceReconciliationOutcome[];
 }
 
 export interface DesignWorkDetailResponse {
@@ -1211,18 +1206,6 @@ export function adoptExternalHeadAfterAcceptanceAttention(
       adopted_head: adoptedHead,
       operation_id: operationId,
     },
-  );
-}
-
-export function reconcileWorkItemAcceptance(
-  changeIds: string[],
-  signal?: AbortSignal,
-): Promise<AcceptanceReconciliationResponse> {
-  return controlRequest(
-    "/api/work-items/acceptance/reconcile",
-    "ERR_WORK_ITEM_ACCEPTANCE_RECONCILE",
-    { change_ids: changeIds },
-    signal,
   );
 }
 

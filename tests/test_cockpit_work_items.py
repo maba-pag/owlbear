@@ -1108,19 +1108,22 @@ def test_http_portfolio_and_detail_carry_progress_without_writing_records(tmp_pa
 
     assert portfolio.status_code == held.status_code == waiting.status_code == 200
     groups = {group["change_id"]: group for group in portfolio.json()["groups"]}
-    assert groups["change-a"]["progress"] is None
-    assert groups["change-a"]["items"][0]["readiness"]["progress"] is None
+    assert groups["change-a"]["progress"]["situation"] == "with-agent"
+    assert groups["change-a"]["items"][0]["readiness"]["progress"] == groups["change-a"]["progress"]
     assert groups["change-a"]["items"][0]["next_step"] == "Claimed by Planner"
     assert held.json()["item"]["abandon_available"] is True
-    assert groups["change-b"]["progress"] == "waiting-for-change"
+    assert (groups["change-b"]["progress"]["situation"], groups["change-b"]["progress"]["waiting_on"]) == (
+        "waiting-on-dependency",
+        "change",
+    )
     # N09-A2: Pause is admissible under custody; the request drains the running step first.
     assert (groups["change-a"]["pause_available"], groups["change-a"]["pause_unavailable_reason"]) == (True, None)
     assert (groups["change-b"]["pause_available"], groups["change-b"]["pause_unavailable_reason"]) == (True, None)
     assert (held.json()["item"]["pause_available"], held.json()["item"]["pause_unavailable_reason"]) == (True, None)
-    assert held.json()["item"]["change_progress"] is None
+    assert held.json()["item"]["change_progress"] == groups["change-a"]["progress"]
     assert held.json()["item"]["card"]["readiness"]["status"] == "running"
     waiting_item = waiting.json()["item"]
-    assert waiting_item["change_progress"] == "waiting-for-change"
+    assert waiting_item["change_progress"] == groups["change-b"]["progress"]
     assert (waiting_item["pause_available"], waiting_item["pause_unavailable_reason"]) == (True, None)
     assert waiting_item["card"]["readiness"]["action"]["label"] == "Copy continuation prompt"
     assert waiting_item["card"]["readiness"]["prompt"].startswith("/continue-change change-b ")
@@ -1164,9 +1167,13 @@ def test_http_pause_requests_drain_under_custody_and_pauses_a_quiescent_change(t
     groups = {group["change_id"]: group for group in portfolio["groups"]}
     assert groups["change-a"]["pause_requested"] is True
     assert groups["change-b"]["pause_requested"] is False
+    assert groups["change-a"]["progress"]["situation"] == "pausing"
     assert paused.status_code == resumed.status_code == 200
-    assert (paused_view["change_progress"], paused_view["card"]["readiness"]["progress"]) == ("paused", "paused")
-    assert resumed_view["change_progress"] == "waiting-for-chat"
+    assert (
+        paused_view["change_progress"]["situation"],
+        paused_view["card"]["readiness"]["progress"]["situation"],
+    ) == ("paused", "paused")
+    assert resumed_view["change_progress"]["situation"] == "ready-for-next-step"
 
 
 def test_http_direct_mark_ready_lost_to_pause_is_a_typed_no_effect_refusal(tmp_path: Path) -> None:

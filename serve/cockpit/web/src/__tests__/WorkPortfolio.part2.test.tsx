@@ -10,9 +10,11 @@ import {
   namedPdsHost,
   portfolio,
   publicationForChecks,
+  readiness,
   renderPage,
   requirePresent,
   selectValue,
+  situation,
 } from "./workPortfolioHarness";
 
 installWorkPortfolioHarness();
@@ -433,6 +435,7 @@ it("syncs the Change with the target and shows the latest sync receipt", async (
   });
   fixtureState.currentDetail = detail({
     card: publicationCard,
+    readiness: readiness({ progress: situation("ready-for-next-step", { target_sync: "required" }) }),
     promise: "Publish the reviewed Change.",
     acceptance: [],
     commitments: [],
@@ -1004,51 +1007,4 @@ it("keeps conflict guidance and merge-status control for a ready conflicted pull
       body: null,
     }),
   );
-});
-
-it("surfaces acceptance-reconciliation provider failure with an immediate retry", async () => {
-  const publicationCard = card({
-    item_key: "publication",
-    work_item_id: "change-alpha",
-    scope: "change-publication",
-    title: "Change publication",
-    stage: null,
-    needs: "you",
-    needs_headline: "Merge pull request in GitHub",
-    next_actor: "you",
-    next_step: "Merge pull request in GitHub",
-    activity: {
-      state: "idle",
-      worker_role: null,
-      started_at: null,
-      task_id: null,
-    },
-    progress: {
-      kind: "publication",
-      label: "Awaiting merge in GitHub",
-      done: null,
-      total: null,
-    },
-    action: {
-      kind: "observe-acceptance",
-      label: "Check merge status",
-      command: null,
-    },
-  });
-  fixtureState.currentPortfolio = portfolio([group({ lifecycle: "awaiting-merge", items: [publicationCard] })]);
-  fixtureState.acceptanceReconciliationProviderUnavailable = true;
-  renderPage();
-
-  const alert = await screen.findByRole("alert");
-  expect(alert).toHaveTextContent("GitHub acceptance checks are unavailable for change-alpha.");
-  expect(alert).toHaveTextContent("GitHub acceptance provider unavailable");
-
-  fixtureState.acceptanceReconciliationProviderUnavailable = false;
-  fireEvent.click(within(alert).getByText("Retry acceptance check"));
-  await waitFor(() =>
-    expect(screen.queryByText("GitHub acceptance checks are unavailable for change-alpha.")).not.toBeInTheDocument(),
-  );
-  expect(
-    fixtureState.requests.filter((request) => request.url === "/api/work-items/acceptance/reconcile"),
-  ).toHaveLength(2);
 });

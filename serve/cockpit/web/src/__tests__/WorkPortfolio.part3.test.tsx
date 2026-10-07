@@ -12,9 +12,13 @@ import {
   portfolio,
   publicationCardForChecks,
   publicationForChecks,
+  readiness,
   renderPage,
   requirePresent,
+  situation,
 } from "./workPortfolioHarness";
+
+const OPTIONAL_SYNC = readiness({ progress: situation("your-decision", { target_sync: "optional" }) });
 
 installWorkPortfolioHarness();
 
@@ -1097,6 +1101,7 @@ it("disables publication-check observation while another publication action is p
   const publicationCard = publicationCardForChecks();
   fixtureState.currentDetail = detail({
     card: publicationCard,
+    readiness: OPTIONAL_SYNC,
     publication: publicationForChecks("awaiting-merge"),
   });
   fixtureState.currentPortfolio = portfolio([
@@ -1126,6 +1131,7 @@ it("disables publication actions while publication-check observation is pending"
   const publicationCard = publicationCardForChecks();
   fixtureState.currentDetail = detail({
     card: publicationCard,
+    readiness: OPTIONAL_SYNC,
     publication: publicationForChecks("awaiting-merge"),
   });
   fixtureState.currentPortfolio = portfolio([
@@ -1151,4 +1157,27 @@ it("disables publication actions while publication-check observation is pending"
     fixtureState.pendingPublicationChecksObservation = false;
     fixtureState.pendingPublicationChecksRelease = null;
   }
+});
+
+it.each([
+  ["required", "Update required", true],
+  ["optional", "You can merge now, or update it first", true],
+  ["unavailable", "unavailable while Delivery or an agent holds it", false],
+  ["unnecessary", null, false],
+] as const)("follows Delivery's %s target-sync availability", async (availability, copy, offered) => {
+  const publicationCard = publicationCardForChecks();
+  fixtureState.currentDetail = detail({
+    card: publicationCard,
+    readiness: readiness({ progress: situation("your-decision", { target_sync: availability }) }),
+    publication: publicationForChecks("awaiting-merge"),
+  });
+  fixtureState.currentPortfolio = portfolio([
+    group({ lifecycle: "awaiting-merge", outcome_completed: 2, items: [publicationCard] }),
+  ]);
+  renderPage("/delivery/change-alpha/publication");
+  const inspector = await screen.findByTestId("work-item-detail");
+
+  if (copy === null) expect(within(inspector).queryByTestId("target-sync")).not.toBeInTheDocument();
+  else expect(within(inspector).getByTestId("target-sync")).toHaveTextContent(copy);
+  expect(within(inspector).queryByText("Merge latest target into Change") !== null).toBe(offered);
 });

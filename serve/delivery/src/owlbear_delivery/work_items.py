@@ -330,20 +330,36 @@ DeliveryReadinessReason = Literal[
     "merge-response-unknown",
 ]
 
-DeliveryProgress = Literal[
-    "preparing",
-    "working",
-    "checking",
-    "repairing",
-    "needs-decision",
-    "needs-sign-in",
-    "waiting-for-service",
-    "waiting-for-change",
-    "ready-to-merge",
-    "completed",
+DeliverySituation = Literal[
+    "with-agent",
+    "ready-for-next-step",
+    "your-decision",
+    "waiting-on-github",
+    "waiting-on-delivery",
+    "waiting-on-dependency",
+    "retrying-automatically",
+    "needs-attention",
+    "pausing",
     "paused",
-    "waiting-for-chat",
+    "abandoned",
+    "done",
 ]
+DeliveryWaitingOn = Literal["you", "agent", "delivery", "github", "outcome", "change", "none"]
+TargetSyncAvailability = Literal["required", "optional", "unavailable", "unnecessary"]
+
+
+class DeliveryProgress(_ProjectionModel):
+    """The one user-facing situation Delivery derives from final readiness; Cockpit reconstructs nothing."""
+
+    situation: DeliverySituation
+    headline: str = Field(min_length=1)
+    waiting_on: DeliveryWaitingOn
+    waiting_on_id: str | None = None
+    since: str | None = None
+    next_eligible_at: str | None = None
+    # Change publication scope only: whether merging the latest target into the Change is offered.
+    target_sync: TargetSyncAvailability | None = None
+
 
 DeliveryIssuerState = Literal["alive", "gone", "unknown"]
 
@@ -370,6 +386,7 @@ class MergeAttemptSummary(_ProjectionModel):
     state: Literal["intent", "released", "pending"]
     approved_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     pr_url: str = Field(min_length=1)
+    released_at: str | None = None
 
 
 class DeliveryReadiness(_ProjectionModel):
@@ -630,12 +647,44 @@ class WorkItemDetailView(_ProjectionModel):
         return self
 
 
-_DECISION_REASONS = frozenset(
-    {"request-action", "design-attention", "retry-exhausted", "settled-attention-target-drift"}
-)
-_SERVICE_RETRY_OPERATIONS = frozenset(
-    {WorkItemActionKind.SYNC_TARGET, WorkItemActionKind.MARK_READY, WorkItemActionKind.OBSERVE_ACCEPTANCE}
-)
+_START_VERBS: dict[WorkItemActionKind, str] = {
+    WorkItemActionKind.START_ORCHESTRATION: "continue this Change",
+    WorkItemActionKind.FINALIZE: "finalize this Change",
+    WorkItemActionKind.RECONCILE_CHECKPOINT: "publish the pending checkpoint",
+    WorkItemActionKind.SYNC_TARGET: "bring the latest target into this Change",
+    WorkItemActionKind.MARK_READY: "mark the pull request ready",
+    WorkItemActionKind.OBSERVE_ACCEPTANCE: "check the merge",
+}
+# One plain sentence per condition Delivery cannot continue from on its own; Details keep the specifics.
+_ATTENTION_HEADLINES: dict[str, str] = {
+    "builder-transition-contained": "A Builder handoff was refused and its custody is kept; inspect the Change.",
+    "retry-transition-contained": "A worker retry was refused and its claim is kept; inspect the Change.",
+    "finalization-failed": "Finalization failed and its custody is kept; inspect the Change.",
+    "claim-activation-failed": "Delivery could not start the selected step; inspect the Change.",
+    "coordination-unavailable": "Delivery cannot read who holds this Change; inspect the Change.",
+    "execution-occupancy-unavailable": "Delivery cannot read which steps are running; inspect the Change.",
+    "engine-action-blocked": "A retained Delivery step has records that cannot be verified; inspect the Change.",
+    "engine-action-interrupted": "A Delivery step stopped without a recorded result; inspect the Change.",
+    "engine-action-failed": "A Delivery step failed; inspect the Change.",
+    "engine-action-incomplete": "A Delivery step left an unfinished checkpoint; inspect the Change.",
+    "claim-custody-unreconciled": "A Builder claim's custody is unreconciled; inspect the Change.",
+    "runtime-unavailable": "Delivery cannot read this Change; inspect the Change.",
+    "workspace-inspection-failed": "Delivery cannot inspect this Change's worktree.",
+    "workspace-dirty": "This Change's worktree has local changes; commit or remove them.",
+    "workspace-preflight-failed": "This Change's worktree did not pass its preflight check.",
+    "report-store-unavailable": "Delivery cannot read this Change's finalization reports.",
+    "retry-exhausted": "Automatic retries are used up; inspect the Change to decide how to continue.",
+    "retry-containment": "A previous attempt has no recorded outcome; inspect the Change.",
+    "retry-ledger-unavailable": "Delivery cannot read its retry records; inspect the Change.",
+    "settled-attention-target-drift": "The target moved after a failed verification; inspect the Change.",
+    "merge-blocked": "GitHub reports the pull request cannot merge; open it to check.",
+}
+_GITHUB_WAITS: dict[str, str] = {
+    "checks-running": "Required checks are running in GitHub.",
+    "merge-checking": "GitHub is working out whether the pull request can merge.",
+    "provider-unavailable": "GitHub could not be read; Delivery reads it again shortly.",
+    "merge-in-progress": "GitHub is merging the pull request.",
+}
 # Awaiting-merge waits keep the card's merge-status check so Cockpit still observes a manual merge.
 _MERGE_WAIT_REASONS = frozenset(
     {
@@ -649,16 +698,6 @@ _MERGE_WAIT_REASONS = frozenset(
         "merge-response-unknown",
     }
 )
-_MERGE_PROGRESS: dict[str, DeliveryProgress] = {
-    "merge-approval-required": "ready-to-merge",
-    "merge-blocked": "needs-decision",
-    "checks-running": "waiting-for-service",
-    "merge-checking": "waiting-for-service",
-    "provider-unavailable": "waiting-for-service",
-    "target-sync-required": "waiting-for-chat",
-    "merge-in-progress": "waiting-for-service",
-    "merge-response-unknown": "needs-decision",
-}
 # Blocks only Delivery's own merge has; the user can still merge in GitHub.
 _MERGE_IN_GITHUB_BLOCKS = frozenset(
     {
@@ -683,67 +722,263 @@ _MERGE_BLOCK_STEPS: dict[MergeBlockReason, str] = {
 }
 
 
-def derive_delivery_progress(  # noqa: C901, PLR0911, PLR0912, PLR0913 - one branch per ordered mapping row.
+_SYNC_BLOCKS = frozenset({MergeBlockReason.CONFLICTS, MergeBlockReason.BEHIND})
+_SETTLED_PHASES = frozenset(
+    {
+        WorkItemPublicationPhase.DEFERRED,
+        WorkItemPublicationPhase.ABANDONED,
+        WorkItemPublicationPhase.ACCEPTANCE_OBSERVED,
+    }
+)
+_SYNC_HELD_SITUATIONS = frozenset({"with-agent", "pausing", "needs-attention", "waiting-on-delivery"})
+
+
+def _progress(
+    situation: DeliverySituation, headline: str, waiting_on: DeliveryWaitingOn, **fields: str | None
+) -> DeliveryProgress:
+    return DeliveryProgress(situation=situation, headline=headline, waiting_on=waiting_on, **fields)
+
+
+def derive_delivery_progress(  # noqa: PLR0913 - each keyword is one piece of read-only evidence.
     readiness: DeliveryReadiness,
     card: WorkItemCardView,
     frontier: DeliveryFrontier,
     *,
     issuer_state: DeliveryIssuerState | None = None,
+    holder: str | None = None,
     at_capacity: bool = False,
+    pause_requested: bool = False,
     pause_drained: bool = False,
-) -> DeliveryProgress | None:
-    """Map one final readiness and supplied evidence to its programme progress; None keeps D01 rendering.
+    merged_unrecorded: bool = False,
+    dependency_id: str | None = None,
+    request: DeliveryRequest | None = None,
+) -> DeliveryProgress:
+    """Map one final readiness and supplied evidence to its single user-facing situation (R3-R6).
 
-    ``issuer_state`` is the claim-issuing window evidence for a running Planner, Builder or Finalizer
-    custody, or None when no such custody applies. ``at_capacity`` reports that other Changes fill the
-    execution capacity. ``pause_drained`` reports a Pause request whose custody has drained (M3).
-    Active-work keys are never emitted: no input proves a current dispatch.
+    ``issuer_state`` is the claim-issuing window evidence for running Planner, Builder or Finalizer custody,
+    and ``holder`` names that role. ``at_capacity`` reports that other Changes fill the execution capacity.
+    ``pause_requested`` and ``pause_drained`` report a Pause request and whether its custody has drained (M3).
+    ``merged_unrecorded`` reports a pull request GitHub merged whose completion Delivery has not recorded yet.
+    ``dependency_id`` names the first incomplete Outcome a dependent Outcome waits on, and ``request`` is the
+    card's open request, absent when a block stops the step.
+    No situation claims that work is running: custody is only "with an agent".
     """
-    reason = readiness.reason_code
+    progress = (
+        _lifecycle_progress(readiness, frontier, pause_requested=pause_requested, pause_drained=pause_drained)
+        or _custody_progress(readiness, card, issuer_state, holder)
+        or _merge_progress(readiness, card, frontier, merged_unrecorded=merged_unrecorded)
+        or _step_progress(readiness, card, at_capacity=at_capacity, dependency_id=dependency_id, request=request)
+    )
+    if card.scope is WorkItemScope.CHANGE_PUBLICATION:
+        return progress.model_copy(update={"target_sync": _target_sync_availability(readiness, card, progress)})
+    return progress
+
+
+def _lifecycle_progress(
+    readiness: DeliveryReadiness, frontier: DeliveryFrontier, *, pause_requested: bool, pause_drained: bool
+) -> DeliveryProgress | None:
     if frontier.change_completion is not None:
-        return "completed"
+        return _progress("done", "This Change is done.", "none")
     if frontier.change_abandonment is not None:
-        return None
+        return _progress("abandoned", "This Change was abandoned.", "none")
     if readiness.status == "complete":
-        return "completed"
+        return _progress("done", "This Outcome is complete.", "none")
     if frontier.change_deferral is not None or pause_drained:
-        return "paused"
-    if reason in {"worker-stall-wait", "engine-action-pending"}:
-        return "waiting-for-chat"
-    if readiness.status == "running":
-        if issuer_state is None or issuer_state == "alive":
-            return None
-        return "waiting-for-chat" if issuer_state == "gone" else "needs-decision"
-    if readiness.merge_block is not None and readiness.merge_block.reason in _MERGE_IN_GITHUB_BLOCKS:
-        return "ready-to-merge"
-    if reason in _MERGE_PROGRESS:
-        return _MERGE_PROGRESS[reason]
+        return _progress("paused", "Paused. Resume the Change to continue.", "you")
+    if pause_requested and (readiness.status == "running" or readiness.reason_code == "change-paused"):
+        return _progress("pausing", "Pause requested; the current step finishes first.", "agent")
+    return None
+
+
+def _worker_stall_progress(readiness: DeliveryReadiness) -> DeliveryProgress:
+    if readiness.next_eligible_at is None:
+        return _progress(
+            "waiting-on-delivery",
+            "The VS Code window running this worker closed; Delivery waits for its processes to stop.",
+            "delivery",
+        )
+    return _progress(
+        "ready-for-next-step",
+        "The VS Code window running this worker closed; run the prompt in Copilot Chat to restart the step.",
+        "you",
+        next_eligible_at=readiness.next_eligible_at,
+    )
+
+
+def _custody_progress(
+    readiness: DeliveryReadiness,
+    card: WorkItemCardView,
+    issuer_state: DeliveryIssuerState | None,
+    holder: str | None,
+) -> DeliveryProgress | None:
+    if readiness.reason_code == "engine-action-pending":
+        return _progress("ready-for-next-step", "Run the prompt in Copilot Chat to resume the retained step.", "you")
+    if readiness.reason_code == "worker-stall-wait":
+        return _worker_stall_progress(readiness)
+    if readiness.status != "running":
+        return None
+    if issuer_state == "gone":
+        return _progress(
+            "ready-for-next-step",
+            "The VS Code window holding this step closed; run the prompt in Copilot Chat to resume it.",
+            "you",
+        )
+    if issuer_state == "unknown":
+        return _progress(
+            "needs-attention", "Delivery cannot tell whether the agent holding this step is still running.", "you"
+        )
+    role = card.activity.worker_role
+    name = holder or (role.value.capitalize() if role is not None else "An agent")
+    return _progress("with-agent", f"{name} holds this step.", "agent", since=card.activity.started_at)
+
+
+def _merge_progress(  # noqa: PLR0911 - one return per merge situation.
+    readiness: DeliveryReadiness, card: WorkItemCardView, frontier: DeliveryFrontier, *, merged_unrecorded: bool
+) -> DeliveryProgress | None:
+    reason = readiness.reason_code
+    since = readiness.merge_attempt.released_at if readiness.merge_attempt is not None else None
+    if merged_unrecorded:
+        return _progress("waiting-on-delivery", "Merged in GitHub. Delivery is recording the result.", "delivery")
+    block = readiness.merge_block
+    if block is not None:
+        step = _MERGE_BLOCK_STEPS[block.reason]
+        if block.reason in _MERGE_IN_GITHUB_BLOCKS:
+            return _progress("your-decision", step, "you")
+        return _progress("ready-for-next-step" if block.reason in _SYNC_BLOCKS else "needs-attention", step, "you")
+    if reason == "merge-approval-required":
+        offer = readiness.merge_offer
+        target = f" into {offer.base_branch}" if offer is not None else ""
+        return _progress("your-decision", f"Ready to merge{target}. Approve here or merge in GitHub.", "you")
+    if reason in _GITHUB_WAITS:
+        return _progress("waiting-on-github", _GITHUB_WAITS[reason], "github", since=since)
+    if reason == "merge-response-unknown":
+        return _progress(
+            "needs-attention",
+            "GitHub has not confirmed the merge for 10 minutes; open the pull request to check.",
+            "you",
+            since=since,
+        )
+    if reason == "target-sync-required":
+        return _progress(
+            "ready-for-next-step", "Run the prompt in Copilot Chat to bring the latest target into this Change.", "you"
+        )
+    return _awaiting_merge_progress(readiness, card, frontier)
+
+
+def _awaiting_merge_progress(
+    readiness: DeliveryReadiness, card: WorkItemCardView, frontier: DeliveryFrontier
+) -> DeliveryProgress | None:
+    reason = readiness.reason_code
     awaiting_merge = (
         card.publication_phase is WorkItemPublicationPhase.AWAITING_MERGE
         and frontier.change_disposition is None
         and card.action.kind is WorkItemActionKind.OBSERVE_ACCEPTANCE
-        and card.action.command is None
+        and reason in {"ready", "request-action"}
     )
-    if reason in _DECISION_REASONS and not (awaiting_merge and reason == "request-action"):
-        return "needs-decision"
-    if awaiting_merge or reason == "acceptance-wait":
-        return "ready-to-merge"
+    if not awaiting_merge and reason != "acceptance-wait":
+        return None
+    if card.action.command is not None:
+        return _progress(
+            "ready-for-next-step", "Run the prompt in Copilot Chat to resolve the conflict with the target.", "you"
+        )
+    if reason == "acceptance-wait":
+        return _progress("your-decision", "Merge the pull request in GitHub, then Check again.", "you")
+    return _progress("your-decision", "Merge the pull request in GitHub; Delivery records the result.", "you")
+
+
+def _step_progress(  # noqa: C901, PLR0911 - one return per readiness reason group.
+    readiness: DeliveryReadiness,
+    card: WorkItemCardView,
+    *,
+    at_capacity: bool,
+    dependency_id: str | None,
+    request: DeliveryRequest | None,
+) -> DeliveryProgress:
+    reason = readiness.reason_code
+    if reason == "request-action":
+        return _request_progress(request)
+    if reason == "design-attention":
+        return _progress("your-decision", "Review the returned Design and decide how to continue.", "you")
+    if reason == "retry-backoff":
+        return _retry_progress(readiness)
+    if reason == "checkpoint-pending" and not readiness.executable:
+        return _progress("waiting-on-delivery", "Delivery is publishing the pending checkpoint.", "delivery")
+    if readiness.executable and readiness.action is not None:
+        if readiness.next_actor is WorkItemNextActor.AGENT and at_capacity:
+            return _progress(
+                "waiting-on-dependency",
+                "Other Changes use every execution slot; this Change continues when one frees up.",
+                "change",
+            )
+        if readiness.next_actor is WorkItemNextActor.AGENT:
+            verb = _START_VERBS.get(readiness.action.kind, "continue")
+            return _progress("ready-for-next-step", f"Run the prompt in Copilot Chat to {verb}.", "you")
+        return _progress("ready-for-next-step", f"Next: {readiness.action.label or 'continue'}.", "you")
+    if reason == "review-repair":
+        return _progress(
+            "ready-for-next-step", "Review asked for changes; run the prompt in Copilot Chat to repair them.", "you"
+        )
+    if reason == "dependency-wait":
+        headline = f"Waiting for {dependency_id} to complete." if dependency_id else "Waiting for another Outcome."
+        return _progress("waiting-on-dependency", headline, "outcome", waiting_on_id=dependency_id)
+    if reason in {"publication-wait", "task-incomplete"}:
+        # No operation exists on this card yet; another scope of the same Change holds the next step.
+        if card.scope is WorkItemScope.CHANGE_PUBLICATION:
+            return _progress("waiting-on-dependency", "Waiting for this Change's Outcomes to complete.", "outcome")
+        return _progress("waiting-on-dependency", "Waiting for this Change's current step to finish.", "change")
+    if reason == "change-paused":
+        return _progress("paused", "Paused. Resume the Change to continue.", "you")
+    return _progress(
+        "needs-attention",
+        _ATTENTION_HEADLINES.get(reason, "Delivery cannot continue this step on its own; inspect the Change."),
+        "you",
+    )
+
+
+def _retry_progress(readiness: DeliveryReadiness) -> DeliveryProgress:
+    if readiness.operation is WorkItemActionKind.OBSERVE_ACCEPTANCE:
+        return _progress(
+            "retrying-automatically",
+            "Delivery checks GitHub again automatically.",
+            "delivery",
+            next_eligible_at=readiness.next_eligible_at,
+        )
+    return _progress(
+        "ready-for-next-step",
+        "The last attempt failed; run the prompt in Copilot Chat again once the retry time passes.",
+        "you",
+        next_eligible_at=readiness.next_eligible_at,
+    )
+
+
+def _request_progress(request: DeliveryRequest | None) -> DeliveryProgress:
+    """Decision requests are choices; action requests and blocks are things to fix (D5)."""
+    if request is None:
+        return _progress("needs-attention", "A block stops this step; add the evidence it asks for.", "you")
+    if request.kind.value == "decision":
+        return _progress("your-decision", f"Decide: {request.summary}", "you")
+    return _progress("needs-attention", f"Action needed: {request.summary}", "you")
+
+
+def _target_sync_availability(
+    readiness: DeliveryReadiness, card: WorkItemCardView, progress: DeliveryProgress
+) -> TargetSyncAvailability:
+    """U3 and owner guards: required to continue, optional after a moved target, else not offered."""
+    if progress.situation in {"done", "abandoned", "paused"} or card.publication_phase in _SETTLED_PHASES:
+        return "unnecessary"
     if (
-        reason == "publication-wait"
-        or (reason == "checkpoint-pending" and not readiness.executable)
-        or (reason == "retry-backoff" and readiness.operation in _SERVICE_RETRY_OPERATIONS)
+        readiness.merge_attempt is not None
+        or progress.situation in _SYNC_HELD_SITUATIONS
+        or readiness.reason_code == "review-repair"
     ):
-        return "waiting-for-service"
-    if (
-        reason == "ready"
-        and readiness.status == "ready"
-        and readiness.executable
-        and readiness.next_actor is WorkItemNextActor.AGENT
-    ):
-        return "waiting-for-change" if at_capacity else "waiting-for-chat"
-    if reason in {"retry-backoff", "review-repair", "target-sync-required"}:
-        return "waiting-for-chat"
-    return None
+        return "unavailable"
+    block = readiness.merge_block
+    if readiness.reason_code == "target-sync-required" or (block is not None and block.reason in _SYNC_BLOCKS):
+        return "required"
+    offer = readiness.merge_offer
+    if offer is not None and offer.proof.proof_target != offer.target_head:
+        return "optional"
+    return "unnecessary"
 
 
 class WorkItemProjector:
