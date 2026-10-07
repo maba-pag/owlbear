@@ -346,6 +346,9 @@ const PUBLICATION_PHASE_LABELS: Record<WorkItemPublicationPhase, string> = {
 
 function publicationStatus(item: WorkItemCardView): WorkItemStatusPresentation | null {
   if (item.scope !== "change-publication" || !item.publication_phase) return null;
+  // Delivery's composed situation is the one answer; phase-specific copy is only a fallback.
+  const progress = item.readiness?.progress;
+  if (progress) return progressStatus(progress);
   if (item.action.kind === "resolve-attention" || item.action.kind === "adopt-external-head") {
     return {
       label: "Publication attention",
@@ -361,8 +364,6 @@ function publicationStatus(item: WorkItemCardView): WorkItemStatusPresentation |
     };
   }
   const phaseLabel = PUBLICATION_PHASE_LABELS[item.publication_phase];
-  const progress = item.readiness?.progress;
-  if (progress) return progressStatus(progress);
   // Engine readiness owns the reported state; the lifecycle phase is identified separately.
   if (item.readiness) {
     const label = READINESS_STATUS_LABELS[item.readiness.status];

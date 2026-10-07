@@ -973,7 +973,11 @@ def _target_sync_availability(
     ):
         return "unavailable"
     block = readiness.merge_block
-    if readiness.reason_code == "target-sync-required" or (block is not None and block.reason in _SYNC_BLOCKS):
+    if (
+        readiness.reason_code == "target-sync-required"
+        or (readiness.executable and readiness.operation is WorkItemActionKind.SYNC_TARGET)
+        or (block is not None and block.reason in _SYNC_BLOCKS)
+    ):
         return "required"
     offer = readiness.merge_offer
     if offer is not None and offer.proof.proof_target != offer.target_head:

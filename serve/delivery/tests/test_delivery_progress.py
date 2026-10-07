@@ -787,6 +787,14 @@ def test_merge_blocks_select_situation_and_target_sync(
     assert (progress.situation, progress.target_sync) == (situation, target_sync)
 
 
+def test_pre_finalization_sync_prerequisite_is_required() -> None:
+    """Production keeps reason ``ready`` and swaps in the executable sync action (``_card_readiness``)."""
+    readiness = _readiness("ready", "ready", operation=WorkItemActionKind.SYNC_TARGET, executable=True)
+    publication = _publication(publication_phase=WorkItemPublicationPhase.READY_FOR_FINALIZATION)
+    progress = derive_delivery_progress(readiness, publication, _FRONTIER)
+    assert (progress.situation, progress.target_sync) == ("ready-for-next-step", "required")
+
+
 def test_merge_attempt_waits_on_github_since_release_and_holds_target_sync() -> None:
     attempt = MergeAttemptSummary(
         approval_id="a" * 64,

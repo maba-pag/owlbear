@@ -7,7 +7,7 @@ import type {
   WorkItemAvailableDetailResponse,
   WorkItemCardView,
 } from "../api/workItems";
-import { MERGE_BLOCK_LABELS, READINESS_REASON_LABELS } from "../components/workItemPresentation";
+import { MERGE_BLOCK_LABELS, READINESS_REASON_LABELS, workItemStatus } from "../components/workItemPresentation";
 import {
   CONTINUATION_PROMPT,
   card,
@@ -754,6 +754,17 @@ it("gives every new merge readiness reason a distinct non-empty label", () => {
 
   expect(labels.every((label) => label.trim().length > 0)).toBe(true);
   expect(new Set(labels).size).toBe(reasons.length);
+});
+
+it.each([
+  [{ action: { kind: "resolve-attention", label: "Resolve" } }],
+  [{ publication_phase: "pull-request-draft", needs: "you" }],
+] as const)("lets Delivery's situation outrank publication phase copy (%o)", (overrides) => {
+  const progress = situation("needs-attention", { headline: "Engine headline for this publication." });
+  const status = workItemStatus(publicationCardForChecks({ ...overrides, readiness: readiness({ progress }) }));
+
+  expect(status.label).toBe("Needs attention");
+  expect(status.detail).toBe("Engine headline for this publication.");
 });
 
 it("renders durable retry readiness metadata", async () => {

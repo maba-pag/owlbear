@@ -9943,6 +9943,8 @@ def test_known_corrupt_change_remains_visible_without_relaxing_parser(tmp_path: 
     assert view.kind == "unavailable"
     assert view.readiness.basis.frontier_digest is None
     assert view.readiness.action is None
+    assert view.readiness.progress is not None
+    assert (view.readiness.progress.situation, view.readiness.progress.waiting_on) == ("needs-attention", "you")
     assert application.show_work_item_view("change-a", "publication") == view
     listing = application.list_changes()
     assert listing.unavailable_changes == (view,)
