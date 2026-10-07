@@ -87,7 +87,7 @@ not proof.
 | `challenge-plan_sol` | Current agent directed by `.github/prompts` | Dispatches a fresh unnamed read-only subagent with `GPT-6.1 Sol (copilot)`; caller reconciles evidence and owns the recommendation |
 | `challenge-implementation_sol` | Current agent directed by `.github/prompts` | Dispatches a fresh unnamed read-only subagent with `GPT-6.1 Sol (copilot)`; caller reconciles findings and owns the verdict |
 | `finalize-change` | `prompt` -> finalizer | Exceptional fallback when the continuation host cannot dispatch Finalizer, and the `address-pr-feedback` handoff; agent required-reading loads `w-change-finalization`; engine proof and exact reviewed finalization |
-| `inspect-change` | built-in `ask` mode | Read-only Change diagnosis through `get_change` and `delivery_health` only; no mutation or host repair |
+| `inspect-change` | `agent` with a two-tool allowlist | Read-only Change diagnosis through `get_change` and `delivery_health` only (exact-name tool search allowed for deferred bindings); no mutation or host repair |
 | `upgrade-delivery` | Current agent directed by prompt | Prompt-defined N02-D procedure: install, online read-only preflight, user stop, offline preflight, backup, `delivery-migrate`, confirmed switch, user restart and verification through `delivery-controller` |
 | `address-pr-feedback` | Current agent directed by prompt | Loads `w-address-pr-feedback`; `start` evaluates and repairs external review threads, while `resume` publishes the fresh finalized head before replying and resolving threads |
 | `resolve-target-conflict` | Current agent directed by prompt | Loads `w-target-conflict-resolution`; resolves exact target merges in the managed Change worktree and hands off to `/continue-change` |

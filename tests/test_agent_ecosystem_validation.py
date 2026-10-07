@@ -518,13 +518,15 @@ def test_inspect_change_prompt_uses_effective_read_only_allowlist() -> None:
     path = _PROMPTS_ROOT / "inspect-change.prompt.md"
     metadata = _frontmatter(path)
 
-    assert metadata["mode"] == "ask"
+    assert metadata["agent"] == "agent"
+    assert "mode" not in metadata
     assert metadata["tools"] == [
         "owlbear-delivery/get_change",
         "owlbear-delivery/delivery_health",
     ]
-    content = path.read_text(encoding="utf-8")
-    assert "cannot enforce this read-only surface" in content
+    content = " ".join(path.read_text(encoding="utf-8").split())
+    assert "query is exactly `get_change` or `delivery_health`; call no other tool" in content
+    assert "remains uncallable, report that inspection is unavailable" in content
     assert "raw Git" in content
 
 
@@ -578,7 +580,7 @@ def test_prompt_validator_rejects_inspect_change_allowlist_drift(tmp_path: Path)
         "inspect-change",
         """---
 description: Inspect a Change
-mode: ask
+agent: agent
 tools:
   - owlbear-delivery/get_change
   - owlbear-delivery/repair
