@@ -47,6 +47,8 @@ _REMOTE_GIT_KINDS: dict[str, RemoteGitKind] = {"fetch": "read", "ls-remote": "re
 _LS_REMOTE_MISSING = 2
 _PUBLICATION_LEASE_DURATION = timedelta(minutes=10)
 _REMOTE_REF_FIELD_COUNT = 2
+# Hosting providers report their own 5xx failures through a "[remote rejected]" push status.
+_PROVIDER_SERVER_ERRORS = ("internal server error", "bad gateway", "service unavailable", "gateway timeout")
 
 
 class _PublicationModel(BaseModel):
@@ -668,6 +670,13 @@ class ChangeBranchPublisher:
                 PublicationProviderFailureCode.RATE_LIMITED,
                 request,
                 "Change branch push was rate limited",
+                retry_safe=True,
+            )
+        if any(marker in diagnostics for marker in _PROVIDER_SERVER_ERRORS):
+            self._failure(
+                PublicationProviderFailureCode.UNAVAILABLE,
+                request,
+                "Change branch push hit a provider server error without changing the remote",
                 retry_safe=True,
             )
         if "pre-receive hook declined" in diagnostics or "remote rejected" in diagnostics:
