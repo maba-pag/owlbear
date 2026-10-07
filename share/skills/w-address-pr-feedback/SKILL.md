@@ -149,10 +149,13 @@ Process `fix` threads in a stable order. For each thread:
    thread; repair or stop with the failure evidence.
 4. Create exactly one commit for this thread using explicit owned paths and the scoped mechanics in
    `r-workspace-governance`. Do not amend, squash, rebase, or combine this commit with another
-   actionable thread. Use a message that identifies the bounded review repair, for example:
+   actionable thread. The message passed to `commit-owned` must end with one
+   `Review-Thread: <thread node ID>` trailer line per thread addressed by this commit, for example:
 
    ```text
    fix: address PR feedback <short-slug> (<change-id>, address-pr-feedback)
+
+   Review-Thread: <thread node ID>
    ```
 
 5. Record the full commit SHA and proof result in the thread record before moving to the next
@@ -160,8 +163,8 @@ Process `fix` threads in a stable order. For each thread:
 
 One commit per thread means one commit per independent review conversation that warrants a code
 change. If two threads are demonstrably duplicates of the same defect, keep one repair commit,
-classify the second as `duplicate`, and reference the first commit in its reply rather than making
-an empty or duplicate commit.
+include one trailer for each thread on that same repair commit, classify the second as `duplicate`,
+and reference the first commit in its reply rather than making an empty or duplicate commit.
 
 A clean commit does not by itself authorize publication or acceptance. The repaired branch remains
 unpublished until the normal finalization and checkpoint publication steps.
@@ -199,10 +202,22 @@ resumed invocation:
    head and no active review-repair invalidation. Call Delivery `reconcile_change_checkpoint` to
    publish the new Change head and update the existing PR. Verify the repaired commit is the current
    PR head before changing any thread.
+   Rebuild the thread-to-commit map from trailers at this finalized head before any thread action.
+   Set `<worktree>` to the managed worktree and `<head>` to the exact finalized head. This reads all
+   reachable commits without a target-branch range and emits the full commit SHA plus its
+   comma-separated `Review-Thread` values:
+
+   ```text
+   git -C <worktree> log --format='%H%x09%(trailers:key=Review-Thread,valueonly,separator=%x2C)' <head>
+   ```
+
+   Keep only trailer IDs matching review-thread IDs from this bound pull request. `git log` lists
+   newest commits first; when a thread appears in multiple commits, use its first (newest) full SHA.
 3. Use `gh api graphql` mutations, never a GitHub MCP server, to reply to each eligible thread.
-   For a repaired thread, include the full commit SHA and URL when available, the accepted problem
-   and fix, and the focused proof that passed. For `no-change`, `duplicate`, or `stale`, include
-   the recorded evidence and decision. Keep the reply on the original thread.
+   For a repaired thread, use its commit from the trailer map and include the full commit SHA and URL
+   when available, the accepted problem and fix, and the focused proof that passed. For `no-change`,
+   `duplicate`, or `stale`, include the recorded evidence and decision. Keep the reply on the original
+   thread.
 
    Pass the reply as a GraphQL variable so review text is not interpolated into the query:
 

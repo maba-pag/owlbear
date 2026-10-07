@@ -5,6 +5,8 @@ from __future__ import annotations
 import importlib.util
 import json
 import re
+import shlex
+import subprocess
 import sys
 import types
 from pathlib import Path
@@ -651,6 +653,100 @@ user-invocable: false
 
     assert _SKILL_VALIDATOR.validate_skill(valid_dir) == []
     assert _SKILL_VALIDATOR.validate_skill(invalid_dir)
+
+
+def _review_thread_readback_command(content: str) -> str:
+    step_start = content.index("## Step 6 - Publish Then Reply And Resolve Threads")
+    step_end = content.index("## Output Template", step_start)
+    step = content[step_start:step_end]
+    code_blocks = re.findall(r"```[^\n]*\n(.*?)\n[ \t]*```", step, flags=re.DOTALL)
+    commands = [block.strip() for block in code_blocks if block.strip().startswith("git -C <worktree> log --format=")]
+    assert len(commands) == 1
+    return commands[0]
+
+
+def test_pr_feedback_skill_records_and_reads_review_thread_trailers() -> None:
+    content = (_SKILLS_ROOT / "w-address-pr-feedback/SKILL.md").read_text(encoding="utf-8")
+    step4_start = content.index("## Step 4 - Repair One Thread At A Time")
+    step4_end = content.index("## Step 5 - Hand Off To Finalization", step4_start)
+    step4 = " ".join(content[step4_start:step4_end].split())
+    step6_start = content.index("## Step 6 - Publish Then Reply And Resolve Threads")
+    step6_end = content.index("## Output Template", step6_start)
+    step6 = " ".join(content[step6_start:step6_end].split())
+    command = _review_thread_readback_command(content)
+
+    assert (
+        "The message passed to `commit-owned` must end with one `Review-Thread: <thread node ID>` "
+        "trailer line per thread addressed by this commit"
+    ) in step4
+    assert "include one trailer for each thread on that same repair commit" in step4
+    assert command == (
+        "git -C <worktree> log --format='%H%x09%(trailers:key=Review-Thread,valueonly,separator=%x2C)' <head>"
+    )
+    assert step6.count(command) == 1
+    assert content.count(command) == 1
+    assert ".." not in command
+    assert "Keep only trailer IDs matching review-thread IDs from this bound pull request" in step6
+    assert "when a thread appears in multiple commits, use its first (newest) full SHA" in step6
+
+
+def test_pr_feedback_readback_maps_bound_threads_to_newest_commit(tmp_path: Path) -> None:
+    content = (_SKILLS_ROOT / "w-address-pr-feedback/SKILL.md").read_text(encoding="utf-8")
+    repository = tmp_path / "review-repair"
+    repository.mkdir()
+
+    def git(*args: str) -> str:
+        result = subprocess.run(  # noqa: S603
+            ["git", *args],  # noqa: S607
+            cwd=repository,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return result.stdout.strip()
+
+    git("init", "--quiet")
+    git("config", "user.name", "OwlBear Test")
+    git("config", "user.email", "test@example.invalid")
+    git("config", "commit.gpgsign", "false")
+
+    def commit(message: str, state: str) -> str:
+        (repository / "state.txt").write_text(state, encoding="utf-8")
+        git("add", "state.txt")
+        git("commit", "--quiet", "-m", message)
+        return git("rev-parse", "HEAD")
+
+    thread_one = "PRRT_thread_one"
+    thread_two = "PRRT_thread_two"
+    oldest_sha = commit(
+        f"Repair both threads\n\nFirst repair paragraph.\n\nReview-Thread: {thread_one}\nReview-Thread: {thread_two}",
+        "first",
+    )
+    newest_one_sha = commit(
+        "Refine first thread\n\nSecond repair paragraph.\n\nReview-Thread: " + thread_one,
+        "second",
+    )
+    commit("Unmapped change\n\nNo review-thread trailer.", "third")
+    commit(
+        "Unrelated thread\n\nOutside the bound pull request.\n\nReview-Thread: PRRT_unrelated",
+        "fourth",
+    )
+
+    command = _review_thread_readback_command(content)
+    command = command.replace("<worktree>", shlex.quote(str(repository))).replace("<head>", "HEAD")
+    result = subprocess.run(  # noqa: S603
+        shlex.split(command), check=True, capture_output=True, text=True
+    )
+    bound_threads = {thread_one, thread_two}
+    thread_commits: dict[str, str] = {}
+    for row in result.stdout.splitlines():
+        commit_sha, _, trailer_values = row.partition("\t")
+        assert re.fullmatch(r"[0-9a-f]{40}", commit_sha)
+        for thread_id in trailer_values.split(","):
+            if thread_id in bound_threads:
+                thread_commits.setdefault(thread_id, commit_sha)
+
+    assert thread_commits == {thread_one: newest_one_sha, thread_two: oldest_sha}
 
 
 def test_target_conflict_skill_separates_precommit_and_postcommit_checks() -> None:
