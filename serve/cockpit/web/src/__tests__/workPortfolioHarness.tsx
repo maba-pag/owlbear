@@ -346,6 +346,7 @@ export function detail(
       operator_moves: [],
       recovery_attention: null,
       retry_diagnostic: null,
+      abandon_available: true,
       ...overrides,
       publication: publication || null,
     },

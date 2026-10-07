@@ -838,6 +838,7 @@ export interface WorkItemDetailView {
   publication: WorkItemPublicationView | null;
   readiness?: DeliveryReadiness | null;
   change_progress?: DeliveryProgress | null;
+  abandon_available?: boolean;
   pause_available?: boolean;
   pause_unavailable_reason?: ChangePauseUnavailableReason | null;
   evidence?: DeliveryEvidenceProjection | null;

@@ -337,9 +337,46 @@ it("keeps Change abandonment confirmation open when abandonment fails", async ()
   expect(within(dialog).getByText("Confirm Change abandonment")).toBeInTheDocument();
 });
 
-it("does not show Change disposition controls on an Outcome detail", async () => {
-  fixtureState.currentDetail = detail();
-  fixtureState.currentPortfolio = portfolio();
+it("allows abandonment from an Outcome detail when Delivery projects it as available", async () => {
+  fixtureState.currentDetail = detail({ abandon_available: true });
+  fixtureState.currentPortfolio = portfolio([group()]);
+  renderPage("/delivery/change-alpha/outcome%3AOUT-001");
+
+  const inspector = await screen.findByTestId("work-item-detail");
+  const abandonButton = within(inspector).getByText("Abandon Change");
+  expect(within(inspector).getAllByText("Abandon Change")).toHaveLength(1);
+  const reason = await waitFor(() => {
+    const element = namedPdsHost(inspector, "p-input-text", "change-disposition-reason");
+    expect(element).not.toBeNull();
+    return requirePresent(element);
+  });
+  inputValue(reason, "  Stop this Change  ");
+  fireEvent.change(
+    reason,
+    new CustomEvent("change", {
+      detail: { value: "  Stop this Change  " },
+      bubbles: true,
+    }),
+  );
+  fireEvent.click(abandonButton);
+  fireEvent.click(await screen.findByText("Confirm abandon Change"));
+
+  await waitFor(() =>
+    expect(fixtureState.requests).toContainEqual({
+      url: "/api/changes/change-alpha/abandon",
+      method: "POST",
+      body: {
+        confirmed_abandonment: true,
+        reason: "Stop this Change",
+        expected_frontier_digest: "a".repeat(64),
+      },
+    }),
+  );
+});
+
+it("does not show abandonment on an Outcome detail when Delivery marks it unavailable", async () => {
+  fixtureState.currentDetail = detail({ abandon_available: false });
+  fixtureState.currentPortfolio = portfolio([group()]);
   renderPage("/delivery/change-alpha/outcome%3AOUT-001");
 
   const inspector = await screen.findByTestId("work-item-detail");
@@ -374,6 +411,7 @@ it("does not show Change disposition controls for an abandoned Change", async ()
   });
   fixtureState.currentDetail = detail({
     card: publicationCard,
+    abandon_available: false,
     publication: {
       phase: "abandoned",
       finalization_id: null,
@@ -427,6 +465,7 @@ it("confirms discard and cleanup for an abandoned target-sync conflict from Chan
   });
   fixtureState.currentDetail = detail({
     card: publicationCard,
+    abandon_available: false,
     publication: {
       phase: "abandoned",
       finalization_id: null,
@@ -653,6 +692,7 @@ it("confirms and recovers a missing Change worktree from its exact reviewed head
   });
   fixtureState.currentDetail = detail({
     card: publicationCard,
+    abandon_available: false,
     publication: {
       phase: "abandoned",
       finalization_id: null,
@@ -704,6 +744,7 @@ it("keeps missing worktree recovery confirmation open when recovery fails", asyn
   });
   fixtureState.currentDetail = detail({
     card: publicationCard,
+    abandon_available: false,
     publication: {
       phase: "abandoned",
       finalization_id: null,
