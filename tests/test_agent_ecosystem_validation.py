@@ -676,8 +676,8 @@ def test_pr_feedback_skill_records_and_reads_review_thread_trailers() -> None:
     command = _review_thread_readback_command(content)
 
     assert (
-        "The message passed to `commit-owned` must end with one `Review-Thread: <thread node ID>` "
-        "trailer line per thread addressed by this commit"
+        "The message passed to `commit-owned` must end with one `Review-Thread: "
+        "<thread node ID>` trailer line per thread addressed by this commit"
     ) in step4
     assert "include one trailer for each thread on that same repair commit" in step4
     assert command == (
@@ -961,6 +961,10 @@ async def test_declared_mcp_tools_exist_in_live_registries() -> None:
             if tool.startswith("owlbear-delivery/")
         }
         assert declared == expected
+
+
+def _normalize_contract_text(content: str) -> str:
+    return " ".join(content.split())
 
 
 def test_retired_delivery_operations_are_absent_from_active_customization_prose() -> None:
@@ -1410,3 +1414,174 @@ def test_continuation_loads_each_missing_tool_by_exact_name() -> None:
     assert "Never combine several names in one query" in bindings
     assert "`OwlBear Delivery " not in orchestration
     assert _AGENT_VALIDATOR._check_tool_search_queries() == []  # noqa: SLF001
+
+
+def test_pr_feedback_start_reentry_prepares_and_maps_before_triage() -> None:
+    content = (_SKILLS_ROOT / "w-address-pr-feedback/SKILL.md").read_text(encoding="utf-8")
+    reentry_start = content.index("### Start Re-entry")
+    reentry_end = content.index("### First-Entry Start", reentry_start)
+    reentry = _normalize_contract_text(content[reentry_start:reentry_end])
+    positions = [
+        reentry.index("call Delivery `prepare_review_repair` first"),
+        reentry.index("Stop on any refusal"),
+        reentry.index("a clean worktree"),
+        reentry.index("descending from the recorded reviewed head"),
+        reentry.index("Read the trailer map at this worktree `HEAD`"),
+        reentry.index("For each unresolved bound-PR thread"),
+    ]
+
+    assert positions == sorted(positions)
+    assert "mapped, non-reopened thread classified as `fix` with its recorded commit" in reentry
+    assert "create no new commit for it" in reentry
+    assert "Re-triage every reopened thread" in reentry
+
+
+def test_pr_feedback_resume_requires_finalized_head_and_preserves_unmapped_fixes() -> None:
+    content = (_SKILLS_ROOT / "w-address-pr-feedback/SKILL.md").read_text(encoding="utf-8")
+    resume_start = content.index("### Resume Order")
+    resume_end = content.index("### No-Fix First-Entry Start", resume_start)
+    resume = _normalize_contract_text(content[resume_start:resume_end])
+    positions = [
+        resume.index("current finalization with no review-repair invalidation"),
+        resume.index("Call Delivery `reconcile_change_checkpoint`"),
+        resume.index("bound PR head to equal the finalized head"),
+        resume.index("Read the trailer map at that exact finalized head"),
+    ]
+
+    assert positions == sorted(positions)
+    assert "thread needs a new fix but has no mapped commit" in resume
+    assert "leave it unresolved and unreplied" in resume
+    assert "next_command: /address-pr-feedback <change-id>" in resume
+
+
+def test_pr_feedback_reply_requires_settled_viewer_marker_and_never_retries_uncertain() -> None:
+    content = (_SKILLS_ROOT / "w-address-pr-feedback/SKILL.md").read_text(encoding="utf-8")
+    reply_start = content.index("### Shared Reply And Resolve Procedure")
+    reply_end = content.index("## Output Template", reply_start)
+    reply = _normalize_contract_text(content[reply_start:reply_end])
+
+    assert "<!-- owlbear-pr-feedback thread=<thread-id> head=<head-sha> commit=<repair-sha-or-none> -->" in reply
+    assert "Obtain the viewer login with `gh api user --jq .login`" in reply
+    assert "settled only when no comment by another author follows it in `createdAt` order" in reply
+    assert "Before every post, after any uncertain response, and before resolving, read all pages" in reply
+    assert "with `author.login` and `createdAt`" in reply
+    assert "For a mapped thread the current key is its newest mapped repair commit" in reply
+    assert "for an unmapped thread the current key is the verified PR head with `commit=none`" in reply
+    assert "An unsettled marker" in reply
+    assert "do not retry or resolve in this run" in reply
+    assert "report the exact provider error as `reply-uncertain`" in reply
+
+
+def test_pr_feedback_resolution_requires_settled_reply_and_successful_provider_result() -> None:
+    content = (_SKILLS_ROOT / "w-address-pr-feedback/SKILL.md").read_text(encoding="utf-8")
+    reply_start = content.index("### Shared Reply And Resolve Procedure")
+    reply_end = content.index("## Output Template", reply_start)
+    reply = _normalize_contract_text(content[reply_start:reply_end])
+
+    assert "Resolve only after a fresh all-page comment read shows a settled viewer-authored marker" in reply
+    assert "resolveReviewThread(input:" in reply
+    assert "require the result to show `isResolved: true`" in reply
+    assert "If the marker is absent or unsettled" in reply
+    assert "the resolve mutation fails or does not return" in reply
+    assert "leave the thread unresolved" in reply
+    assert "retain its repair commit" in reply
+    assert "report the exact provider error" in reply
+
+
+def test_pr_feedback_no_fix_start_replies_without_preparing() -> None:
+    content = (_SKILLS_ROOT / "w-address-pr-feedback/SKILL.md").read_text(encoding="utf-8")
+    start_start = content.index("### No-Fix First-Entry Start")
+    start_end = content.index("### Shared Reply And Resolve Procedure", start_start)
+    no_fix = _normalize_contract_text(content[start_start:start_end])
+
+    assert "when no new repair commit was created" in no_fix
+    assert "checkpoint and verified that the PR head equals `finalized_head`" in no_fix
+    assert "Do not call `prepare_review_repair`" in no_fix
+    assert "use the shared procedure" in no_fix
+    assert "report `next_command: none`" in no_fix
+    assert "any repair commit" in no_fix
+    assert "without replying or resolving" in no_fix
+    assert "/finalize-change <change-id>" in no_fix
+
+
+def test_pr_feedback_preserves_existing_workflow_rules() -> None:
+    skill = (_SKILLS_ROOT / "w-address-pr-feedback/SKILL.md").read_text(encoding="utf-8")
+    prompt = (_PROMPTS_ROOT / "address-pr-feedback.prompt.md").read_text(encoding="utf-8")
+    combined = _normalize_contract_text(skill + prompt).lower()
+
+    for required in (
+        "one commit per thread means one commit per independent review conversation",
+        "never run preparation in `resume`",
+        "reply always precedes resolve",
+        "never mark it ready or merge it",
+        "never a github mcp server",
+        "the review is external evidence, not delivery authority",
+    ):
+        assert required in combined
+
+    step5_start = skill.index("## Step 5 - Hand Off To Finalization")
+    step6_start = skill.index("## Step 6 - Publish Then Reply And Resolve Threads")
+    handoff = _normalize_contract_text(skill[step5_start:step6_start])
+    assert "After all eligible repairs" in handoff
+    assert "Report `/finalize-change <change-id>`" in handoff
+
+
+def test_pr_feedback_output_reports_phase_mapping_reopen_and_reply_state() -> None:
+    content = (_SKILLS_ROOT / "w-address-pr-feedback/SKILL.md").read_text(encoding="utf-8")
+    output_start = content.index("## Output Template")
+    output = content[output_start:]
+
+    assert 'phase: "start-reentry | start | resume"' in output
+    assert 'mapped_commit_source: "trailer | new | none"' in output
+    assert 'reopened: "true | false"' in output
+    assert 'reply_state: "posted | already-posted | uncertain | failed | not-attempted"' in output
+    yaml_block = re.search(r"```yaml\n(.*?)\n```", output, flags=re.DOTALL)
+    assert yaml_block is not None
+    report = yaml.safe_load(yaml_block.group(1))
+    thread = report["threads"][0]
+    assert thread["mapped_commit_source"] == "trailer | new | none"
+    assert thread["reopened"] == "true | false"
+    assert thread["reply_state"] == "posted | already-posted | uncertain | failed | not-attempted"
+
+
+def test_pr_feedback_phase_routing_precedes_mutation_and_fences_finalized_phases() -> None:
+    content = (_SKILLS_ROOT / "w-address-pr-feedback/SKILL.md").read_text(encoding="utf-8")
+    step0_start = content.index("## Step 0 - Derive The Phase Before Mutation")
+    step0_end = content.index("## Step 1 - Bind The Change And Pull Request", step0_start)
+    step0 = _normalize_contract_text(content[step0_start:step0_end])
+    positions = [
+        step0.index("Gather read-only Delivery and PR identity"),
+        step0.index("| Publication phase is `review-repair` | `start-reentry` |"),
+        step0.index("| A current finalization exists"),
+        step0.index("For either derived finalized phase"),
+        step0.index("call Delivery `reconcile_change_checkpoint`"),
+    ]
+
+    assert positions == sorted(positions)
+    assert "An unresolved bound-PR thread is `awaiting`" in step0
+    assert "A mapped thread is `reopened`" in step0
+    assert "Every other state" in step0
+    assert "`authority-gap: change-not-finalized`" in step0
+    assert "the exact Delivery/provider error" in step0
+    assert "`/address-pr-feedback <change-id>`" in step0
+
+
+def test_pr_feedback_prompt_mode_is_optional_derived_and_next_commands_are_mode_free() -> None:
+    prompt = (_PROMPTS_ROOT / "address-pr-feedback.prompt.md").read_text(encoding="utf-8")
+    skill = (_SKILLS_ROOT / "w-address-pr-feedback/SKILL.md").read_text(encoding="utf-8")
+    normalized_prompt = _normalize_contract_text(prompt)
+    normalized_skill = _normalize_contract_text(skill)
+    output_start = skill.index("## Output Template")
+    output = skill[output_start:]
+
+    assert "Optional mode (omit to derive it" in normalized_prompt
+    assert "An omitted mode is derived" in normalized_prompt
+    assert "Refuse any other value or mismatch before mutation" in normalized_skill
+    assert "`/address-pr-feedback <change-id>`" in normalized_skill
+    assert (
+        'next_command: "/finalize-change <change-id> | /address-pr-feedback <change-id> | none"'
+        in _normalize_contract_text(output)
+    )
+    next_command = re.search(r"^next_command: (.+)$", output, flags=re.MULTILINE)
+    assert next_command is not None
+    assert "mode=" not in next_command.group(1)
