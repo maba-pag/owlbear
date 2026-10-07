@@ -274,6 +274,7 @@ def test_process_mutation_waits_for_lock_and_rechecks_fresh_token(tmp_path: Path
 
     if make_token_stale:
         assert outcome[0] == "conflict"
+        assert _directory_snapshot(tmp_path) == held_snapshot
         assert MemoryEngine(tmp_path).get_entry(entry.id).content == "Holder edit"
     else:
         assert outcome[0] == "success"
