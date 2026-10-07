@@ -47,7 +47,8 @@ worktree or Git admin directory. An MCP-server restart while the issuing window 
 not trigger host loss. The process guard ignores a terminal-attached idle shell whose only link is its
 worktree cwd and which has no live children; open files still block. While the guard is unmet, `worker-stall-wait`
 with `next_eligible_at` indicates the write guard; without a time, report the process names in the
-prompt (or its bounded scan detail) and yield.
+prompt (or its bounded scan detail) and yield. Do not inspect the managed worktree meanwhile: Git
+commands such as `git status` and `git diff` can update Git metadata and restart the quiet period.
 
 ## Change Continuation Entry
 

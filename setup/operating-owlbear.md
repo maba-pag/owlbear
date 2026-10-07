@@ -331,8 +331,10 @@ has its cwd or an open file under the managed worktree or Git admin directory. A
 shell whose only link is its worktree cwd and which has no live child is ignored; open files still block. If the
 guard is incomplete, readiness reports `worker-stall-wait`: a `next_eligible_at` means the write
 guard is still running; without a time, the prompt reports active process names or bounded scan
-detail. Yield without settling or recovering. Restarting the MCP server while the issuing window is
-alive does not trigger automatic settlement.
+detail. Yield without settling or recovering. During `worker-stall-wait`, avoid Git commands against
+the managed worktree: commands such as `git status` and `git diff` can update Git metadata and restart
+the quiet period. Restarting the MCP server while the issuing window is alive does not trigger
+automatic settlement.
 
 When the user states that a specific worker chat was stopped, use Cockpit's **Release stuck worker**
 action, or answer `stopped/closed` to the question `/continue-change` asks for that exact active claim.
