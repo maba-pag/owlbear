@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import RLock
@@ -14,6 +15,7 @@ from uuid import uuid4
 from owlbear_memory import storage
 from owlbear_memory.errors import (
     ConcurrencyError,
+    DuplicateEntryError,
     LifecycleRecoveryError,
     LifecycleRollbackFailure,
     NotFoundError,
@@ -38,6 +40,230 @@ _LOGGER = logging.getLogger(__name__)
 OUTSTANDING_BOOST = 0.1
 UNREMARKABLE_PENALTY = 0.01
 STALE_THRESHOLD = 50
+_DUPLICATE_COPY_THRESHOLD = 2
+
+
+@dataclass(slots=True)
+class _DuplicateRepairContext:
+    memory_dir: Path
+    candidates: list[tuple[Path, MemoryEntry]]
+    used_candidate_paths: set[Path]
+    existing_ids: set[str]
+
+
+def _read_entries_by_id(memory_dir: Path) -> tuple[int, dict[str, list[tuple[Path, MemoryEntry]]]]:
+    parse_errors = 0
+    entries_by_id: dict[str, list[tuple[Path, MemoryEntry]]] = {}
+    for file_path in sorted(memory_dir.glob("*.md")):
+        entry = storage.read_entry(file_path)
+        if entry is None:
+            parse_errors += 1
+            continue
+        entries_by_id.setdefault(entry.id, []).append((file_path, entry))
+    return parse_errors, entries_by_id
+
+
+def _select_canonical_copy(
+    memory_dir: Path,
+    entry_id: str,
+    copies: list[tuple[Path, MemoryEntry]],
+) -> tuple[Path, MemoryEntry]:
+    latest_updated_at = max(datetime.fromisoformat(entry.updated_at) for _, entry in copies)
+    newest_copies = [
+        (path, entry) for path, entry in copies if datetime.fromisoformat(entry.updated_at) == latest_updated_at
+    ]
+    canonical_path = f"{entry_id}.md"
+    named_copy = next(
+        (copy for copy in newest_copies if copy[0].relative_to(memory_dir).as_posix() == canonical_path),
+        None,
+    )
+    if named_copy is not None:
+        return named_copy
+    return min(newest_copies, key=lambda copy: copy[0].relative_to(memory_dir).as_posix())
+
+
+def _relative_paths(memory_dir: Path, paths: list[Path]) -> tuple[str, ...]:
+    return tuple(sorted(path.relative_to(memory_dir).as_posix() for path in paths))
+
+
+def _matches_repair_copy(candidate: MemoryEntry, source: MemoryEntry, marked_title: str) -> bool:
+    return (
+        candidate.state == MemoryState.PENDING
+        and candidate.approved_at is None
+        and candidate.contested_by_task is None
+        and candidate.outstanding_count == 0
+        and candidate.unremarkable_count == 0
+        and candidate.didnt_use_count == 0
+        and candidate.score == candidate.confidence
+        and candidate.title == marked_title
+        and candidate.content == source.content
+        and candidate.categories == source.categories
+        and candidate.confidence == source.confidence
+        and candidate.source_agent == source.source_agent
+        and candidate.scope_agents == source.scope_agents
+        and candidate.created_at == source.created_at
+    )
+
+
+def _find_reusable_repair_copy(
+    entry_id: str,
+    source: MemoryEntry,
+    marked_title: str,
+    candidates: list[tuple[Path, MemoryEntry]],
+    used_paths: set[Path],
+) -> tuple[Path, MemoryEntry] | None:
+    return next(
+        (
+            (path, entry)
+            for path, entry in candidates
+            if path not in used_paths and entry.id != entry_id and _matches_repair_copy(entry, source, marked_title)
+        ),
+        None,
+    )
+
+
+def _next_updated_at(previous_updated_at: str) -> str:
+    now = datetime.now(UTC)
+    previous = datetime.fromisoformat(previous_updated_at)
+    if now <= previous:
+        now = previous + timedelta(microseconds=1)
+    return now.isoformat()
+
+
+def _write_repair_copy(
+    memory_dir: Path,
+    source: MemoryEntry,
+    marked_title: str,
+    existing_ids: set[str],
+) -> tuple[Path, MemoryEntry]:
+    while True:
+        new_id = str(uuid4())
+        new_path = memory_dir / f"{new_id}.md"
+        if new_id not in existing_ids and not new_path.exists():
+            break
+
+    repaired = source.model_copy(
+        update={
+            "id": new_id,
+            "title": marked_title,
+            "state": MemoryState.PENDING,
+            "approved_at": None,
+            "contested_by_task": None,
+            "outstanding_count": 0,
+            "unremarkable_count": 0,
+            "didnt_use_count": 0,
+            "score": source.confidence,
+            "scope_agents": list(source.scope_agents),
+            "updated_at": _next_updated_at(source.updated_at),
+        }
+    )
+    storage.write_entry(new_path, repaired, memory_dir=memory_dir)
+    existing_ids.add(new_id)
+    return new_path, repaired
+
+
+def _prepare_duplicate_group(
+    entry_id: str,
+    copies: list[tuple[Path, MemoryEntry]],
+    canonical: tuple[Path, MemoryEntry],
+    repair_context: _DuplicateRepairContext,
+) -> tuple[str, tuple[str, ...], list[Path]]:
+    canonical_path, canonical_entry = canonical
+    duplicate_paths = [path for path, _ in copies if path != canonical_path]
+    error_paths = _relative_paths(repair_context.memory_dir, [path for path, _ in copies])
+    try:
+        for old_path, old_entry in copies:
+            if old_path == canonical_path or old_entry == canonical_entry:
+                continue
+
+            marked_title = f"[Recovered duplicate ID {entry_id}] {old_entry.title}"
+            repair_copy = _find_reusable_repair_copy(
+                entry_id,
+                old_entry,
+                marked_title,
+                repair_context.candidates,
+                repair_context.used_candidate_paths,
+            )
+            if repair_copy is None:
+                repair_copy = _write_repair_copy(
+                    repair_context.memory_dir,
+                    old_entry,
+                    marked_title,
+                    repair_context.existing_ids,
+                )
+                repair_context.candidates.append(repair_copy)
+
+            repair_context.used_candidate_paths.add(repair_copy[0])
+            _LOGGER.warning(
+                "Repaired duplicate UUID %s from %s as %s",
+                entry_id,
+                old_path.relative_to(repair_context.memory_dir).as_posix(),
+                repair_copy[1].id,
+            )
+    except Exception as error:
+        raise DuplicateEntryError(entry_id, error_paths) from error
+    return entry_id, error_paths, duplicate_paths
+
+
+def _prepare_duplicate_repairs(
+    memory_dir: Path,
+    entries_by_id: dict[str, list[tuple[Path, MemoryEntry]]],
+) -> list[tuple[str, tuple[str, ...], list[Path]]]:
+    canonical_copies = {
+        entry_id: _select_canonical_copy(memory_dir, entry_id, copies) for entry_id, copies in entries_by_id.items()
+    }
+    scheduled_deletions = {
+        path
+        for entry_id, copies in entries_by_id.items()
+        for path, _ in copies
+        if path != canonical_copies[entry_id][0]
+    }
+    repair_context = _DuplicateRepairContext(
+        memory_dir=memory_dir,
+        candidates=[
+            (path, entry)
+            for copies in entries_by_id.values()
+            for path, entry in copies
+            if entry.state == MemoryState.PENDING and path not in scheduled_deletions
+        ],
+        used_candidate_paths=set(),
+        existing_ids=set(entries_by_id),
+    )
+    plans: list[tuple[str, tuple[str, ...], list[Path]]] = []
+    for entry_id, copies in entries_by_id.items():
+        if len(copies) < _DUPLICATE_COPY_THRESHOLD:
+            continue
+        plans.append(
+            _prepare_duplicate_group(
+                entry_id,
+                copies,
+                canonical_copies[entry_id],
+                repair_context,
+            )
+        )
+    return plans
+
+
+def _delete_duplicate_sources(
+    memory_dir: Path,
+    plans: list[tuple[str, tuple[str, ...], list[Path]]],
+) -> None:
+    for entry_id, error_paths, duplicate_paths in plans:
+        for path in duplicate_paths:
+            try:
+                storage.delete_entry(path, memory_dir=memory_dir)
+            except Exception as error:
+                raise DuplicateEntryError(entry_id, error_paths) from error
+
+
+def repair_duplicate_ids(memory_dir: Path | str) -> None:
+    """Repair duplicate IDs; callers must hold writer_lock for ``memory_dir``."""
+    directory = Path(memory_dir)
+    _, entries_by_id = _read_entries_by_id(directory)
+    if not any(len(copies) >= _DUPLICATE_COPY_THRESHOLD for copies in entries_by_id.values()):
+        return
+    plans = _prepare_duplicate_repairs(directory, entries_by_id)
+    _delete_duplicate_sources(directory, plans)
 
 
 def compute_score(confidence: float, outstanding_count: int, unremarkable_count: int) -> float:
@@ -131,6 +357,7 @@ class MemoryEngine:
     def _writer(self) -> Iterator[None]:
         with writer_lock(self._memory_dir, timeout=self._writer_lock_timeout), self._lock:
             try:
+                repair_duplicate_ids(self._memory_dir)
                 self._load_from_disk()
             except Exception:
                 self._cache.invalidate()
@@ -150,32 +377,18 @@ class MemoryEngine:
         return self._load_from_disk()
 
     def _load_from_disk(self) -> list[MemoryEntry]:
-        self.parse_errors = 0
+        self.parse_errors, entries_by_id = _read_entries_by_id(self._memory_dir)
         by_id: dict[str, MemoryEntry] = {}
         id_to_path: dict[str, Path] = {}
 
-        for file_path in sorted(self._memory_dir.glob("*.md")):
-            entry = storage.read_entry(file_path)
-            if entry is None:
-                self.parse_errors += 1
-                continue
-
-            current = by_id.get(entry.id)
-            if current is None:
-                by_id[entry.id] = entry
-                id_to_path[entry.id] = file_path
-                continue
-
-            if self._parse_iso_datetime(entry.updated_at) > self._parse_iso_datetime(current.updated_at):
-                _LOGGER.warning("Duplicate UUID %s found in %s; keeping later updated_at", entry.id, file_path)
-                by_id[entry.id] = entry
-                id_to_path[entry.id] = file_path
-            else:
-                _LOGGER.warning(
-                    "Duplicate UUID %s found in %s; keeping existing later updated_at",
-                    entry.id,
-                    file_path,
-                )
+        for entry_id, copies in entries_by_id.items():
+            canonical_path, canonical_entry = _select_canonical_copy(self._memory_dir, entry_id, copies)
+            by_id[entry_id] = canonical_entry
+            id_to_path[entry_id] = canonical_path
+            if len(copies) > 1:
+                for path, _ in copies:
+                    if path != canonical_path:
+                        _LOGGER.warning("Duplicate UUID %s found in %s", entry_id, path)
 
         self._entries = list(by_id.values())
         self._id_to_path = id_to_path

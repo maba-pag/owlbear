@@ -276,7 +276,17 @@ raised. `save()` creates new entries and does not require an OCC token.
 
 `get_entries()` and `load()` skip unparseable files and track the count of skipped
 files in `engine.parse_errors`. When duplicate UUIDs are found across files, the entry
-with the later `updated_at` (parsed chronologically) is kept and a warning is logged.
+with the latest `updated_at` is canonical. Ties prefer `<id>.md`, then the lexicographically
+first relative path. Reads and `health()` report or select duplicates without writing.
+
+Before every mutation, the engine reloads under the writer lock and repairs duplicate IDs.
+Identical copies are removed. Each differing copy is preserved as a new pending entry with a
+`[Recovered duplicate ID <id>]` title prefix, reset assessment counters, and its original
+content, provenance, and scope. The canonical file keeps the original ID. If repair cannot
+complete, `DuplicateEntryError` names the ID and relative paths and the triggering mutation
+does not run. A partial repair keeps any new entries already written and leaves remaining
+duplicate source files for a later retry. `repair_duplicate_ids(memory_dir)` is exported for
+batch operations; callers must hold `writer_lock` for that directory.
 
 ### Read freshness
 

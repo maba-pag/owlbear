@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from owlbear_memory.engine import MemoryEngine, check_slot_efficiency, compute_score
+from owlbear_memory.engine import MemoryEngine, check_slot_efficiency, compute_score, repair_duplicate_ids
 from owlbear_memory.errors import (
     ConcurrencyError,
+    DuplicateEntryError,
     LifecycleRecoveryError,
     LifecycleRollbackFailure,
     MemoryBusyError,
@@ -17,6 +18,7 @@ from owlbear_memory.writer_lock import writer_lock
 
 __all__ = [
     "ConcurrencyError",
+    "DuplicateEntryError",
     "LifecycleRecoveryError",
     "LifecycleRollbackFailure",
     "MemoryBusyError",
@@ -30,6 +32,7 @@ __all__ = [
     "ValidationError",
     "check_slot_efficiency",
     "compute_score",
+    "repair_duplicate_ids",
     "validate_scope_agents",
     "writer_lock",
 ]

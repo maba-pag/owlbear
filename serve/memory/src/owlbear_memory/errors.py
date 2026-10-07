@@ -29,6 +29,15 @@ class TransitionError(Exception):
     """Raised when a memory state transition is not allowed."""
 
 
+class DuplicateEntryError(Exception):
+    """Raised when duplicate entry repair cannot complete safely."""
+
+    def __init__(self, entry_id: str, paths: tuple[str, ...]) -> None:
+        self.entry_id = entry_id
+        self.paths = paths
+        super().__init__(f"Duplicate entry ID {entry_id} in memory paths: {', '.join(paths)}")
+
+
 @dataclass(frozen=True, slots=True)
 class LifecycleRollbackFailure:
     """Describe a failed rollback for one affected memory entry."""
