@@ -183,7 +183,10 @@ def test_init_creates_delivery_policy_without_runtime_selection_artifacts(
         "owlbear-browser",
         "markitdown",
     }
-    assert mcp["servers"]["owlbear-browser"]["env"] == {"BROWSER_ALLOWED_DOMAINS": "*"}
+    browser_env = mcp["servers"]["owlbear-browser"]["env"]
+    assert browser_env["BROWSER_ALLOWED_DOMAINS"] == "*"
+    assert "BROWSER_MODE" not in browser_env
+    assert "PLAYWRIGHT_USER_DATA_DIR" not in browser_env
     for server_name in (
         "owlbear-delivery",
         "owlbear-knowledge",

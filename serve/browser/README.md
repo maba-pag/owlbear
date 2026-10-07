@@ -1,16 +1,16 @@
 # owlbear-browser — Browser Content Fetcher
 
-Authenticated web content extraction via Playwright and Edge CDP. Launches a persistent Chromium
-profile; a dedicated OwlBear profile is created by default, while an existing profile can be passed
-when a logged-in session is required.
+Authenticated web content extraction via Playwright. The Browser MCP selects stable Microsoft Edge
+by default on macOS and Chromium elsewhere, using an OwlBear-owned persistent profile. It never
+reads, copies, or controls the operator's daily Edge profile.
 
 **Use this guide when:** you need to extend the alpha authenticated page acquisition or its cleaned
 content extraction API.
 
 Package map: [serve/README.md](../README.md) · Project README: [README.md](../../README.md)
 
-**Status:** Alpha. Authenticated acquisition is implemented, but Browser still needs
-real-world validation across the target sites and session environments.
+**Status:** Alpha. Launch mechanics are implemented; authentication must be confirmed for each
+target. Browser readiness or extension presence does not prove that sign-in succeeded.
 
 ---
 
@@ -34,16 +34,23 @@ async with PlaywrightLauncher() as launcher:
 | --- | --- |
 | `BrowserContentFetcher` | Async fetcher backed by a Playwright `BrowserContext` |
 | `PlaywrightLauncher` | Manages Playwright browser lifecycle |
+| `BrowserMode` | Selects Chromium or managed Edge |
 | `extract_content(html, url)` | Clean raw HTML to plain text via trafilatura |
-| `find_sso_extension()` | Locate the Edge SSO extension for authenticated sessions |
+| `find_sso_extension()` | Locate the optional Microsoft SSO extension used by Chromium |
 | `AuthenticationRequired` | Raised when a page requires login and no session is available |
 | `SSOExtensionNotFoundError` | Raised when the SSO extension cannot be found |
 
 ## Configuration
 
-No environment variables. The `PlaywrightLauncher` accepts an optional `user_data_dir` path
-pointing to an existing browser profile directory. If the default dedicated profile has no session,
-the visible browser can be used for manual login.
+The Python API does not read environment variables. `PlaywrightLauncher()` defaults to Chromium;
+pass `mode=BrowserMode.MANAGED_EDGE` to launch Microsoft Edge with the fixed
+`~/.owlbear/edge-profile`. Managed Edge ignores `user_data_dir`. Chromium accepts a dedicated
+`user_data_dir` and defaults to `~/.owlbear/browser-profile` when none is supplied. The Browser MCP's
+`BROWSER_MODE` and `PLAYWRIGHT_USER_DATA_DIR` behavior is documented in the
+[Browser MCP guide](../browser-mcp/README.md#configuration).
+
+The optional SSO extension is a Chromium launch aid only. Finding it does not establish that SSO
+works or that any target is authenticated.
 
 ## Dependencies
 
@@ -53,5 +60,7 @@ the visible browser can be used for manual login.
 | `trafilatura` | HTML-to-text extraction |
 | `lxml` | HTML parsing (trafilatura dependency) |
 
-> **First-time setup:** From a consumer project using a sibling OwlBear checkout, install Chromium
-> with `uv run --project ../owlbear playwright install chromium`.
+> **First-time setup:** From a consumer project using a sibling OwlBear checkout, install Playwright
+> Chromium with `uv run --project ../owlbear playwright install chromium` only when selecting
+> Chromium mode or running Cockpit browser-backed tests. Managed Edge uses stable Microsoft Edge
+> already installed on macOS.
