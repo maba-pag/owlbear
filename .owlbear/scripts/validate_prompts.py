@@ -18,7 +18,7 @@ _PROMPT_ROOTS = (_REPO_ROOT / "share" / "prompts", _REPO_ROOT / ".owlbear" / "pr
 _AGENT_ROOTS = (_REPO_ROOT / "share" / "agents", _REPO_ROOT / ".owlbear" / "agents")
 _SKILL_ROOTS = (_REPO_ROOT / "share" / "skills", _REPO_ROOT / ".owlbear" / "skills")
 _BUILTIN_AGENTS = frozenset({"agent", "Explore", "General Purpose"})
-_INSPECT_CHANGE_TOOLS = ("owlbear-delivery/get_change", "owlbear-delivery/delivery_health")
+_INSPECT_CHANGE_TOOLS = ("owlbear-delivery/get_change", "owlbear-delivery/delivery_health", "read/readFile")
 _BARE_SKILL_REFERENCE = re.compile(r"`([hwr]-[a-z0-9-]+)`")
 _RELATIVE_SKILL_REFERENCE = re.compile(r"((?:\.\./)+skills/[a-z0-9-]+/SKILL\.md)")
 
