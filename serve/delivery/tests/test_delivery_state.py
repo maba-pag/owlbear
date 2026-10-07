@@ -1443,6 +1443,39 @@ def test_loader_claim_successor_never_allows_advanced_branch(tmp_path: Path) -> 
         _require_local_snapshot_branch(snapshot, repository)
 
 
+@pytest.mark.parametrize("remote_branch", ["present", "deleted"])
+def test_builder_claim_commit_survives_default_loader_restart(tmp_path: Path, remote_branch: str) -> None:
+    change_id = "builder-claim-restart"
+    restart = _builder_return_restart_fixture(tmp_path, change_id)
+    launch = restart.application.acquire_frontier_work().launch_packages[0]
+    assert launch.claim.worker_role is DeliveryWorkerRole.BUILDER
+    _git(restart.fresh, "config", "user.name", "Delivery State Test")
+    _git(restart.fresh, "config", "user.email", "delivery-state@example.invalid")
+    branch_head = _commit_descendant(launch.worktree_path, "unsubmitted.txt", "unsubmitted Builder work")
+    if remote_branch == "deleted":
+        _git(restart.remote, "update-ref", "-d", f"refs/heads/{launch.branch}")
+
+    restarted = _healthy_restart(restart)
+
+    with patch.object(restarted, "_clock", return_value="1970-01-02T00:00:00Z"):
+        settled = restarted.settle_worker_invocation(
+            DeliveryBuilderInvocationSettlement(
+                change_id=change_id,
+                outcome_id=launch.outcome_id,
+                claim_id=launch.claim.claim_id,
+                attempt_id=launch.claim.attempt_id,
+                task_id=launch.task_id,
+                expected_last_reviewed_commit=launch.last_reviewed_commit,
+                disposition="ended-without-result",
+            ),
+            host_id=launch.claim.owner_id,
+            session_id=launch.claim.process_id,
+        )
+    assert settled.active_claim is None
+    assert settled.builder_handoff_context is not None
+    assert settled.builder_handoff_context.branch_head == branch_head
+
+
 def test_state_publisher_exposes_response_unknown_and_replays_after_remote_push(tmp_path: Path) -> None:
     repository, remote, _initial = _repository(tmp_path)
     contract, _intent, _design = _contract("state-response-unknown")

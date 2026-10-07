@@ -127,7 +127,7 @@ directory, so no Delivery environment variable is required.
 
 The workspace root determines the repository and the canonical `.owlbear/delivery/packages`,
 `.owlbear/delivery/runtime`, and `.owlbear/delivery/worktrees` locations. Delivery uses one shared
-`execution_capacity` budget for active Planner and Builder outcome claims, defaulting to `3`. Each
+`execution_capacity` budget for active Planner and Builder outcome claims, defaulting to `8`. Each
 Change retains exact Build writer custody; `writer_capacity` is never an active admission limit. The
 optional host-local settings file is described in the [core Delivery configuration reference](../delivery/README.md#configuration).
 Agent frontmatter owns model selection; Delivery owns the fixed Planner, Builder, and reviewer
@@ -141,7 +141,7 @@ version `2` plus `remote`, `target_branch`, `github_repository`, and `delivery_s
 defaults the remote to `origin`, uses `main` for non-interactive target selection, writes
 `owlbear/delivery-state` as the state-branch default, and infers the GitHub repository from the
 remote. Setup also seeds the trackable `.owlbear/delivery/runtime/host.json` baseline with schema
-version `1`, `execution_capacity: 3`, and `claim_timeout_seconds: 3600` (60
+version `1`, `execution_capacity: 8`, and `claim_timeout_seconds: 3600` (60
 minutes), preserving an existing file on rerun. The optional ignored
 `.owlbear/delivery/runtime/host.local.json` may contain `execution_capacity` and/or
 `claim_timeout_seconds` for one host;

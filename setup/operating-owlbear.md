@@ -29,7 +29,7 @@ Running `init.py` writes the following files into your project directory:
 | `.vscode/settings.json` | Points VS Code at OwlBear agents, skills, and instructions, and carries the seeded Copilot workspace settings | Merged (OwlBear keys as defaults; your existing keys are preserved) |
 | `.vscode/mcp.json` | Registers 5 MCP servers (4 OwlBear stdio, including Browser access seeded for wildcard testing, + markitdown) | Merged (OwlBear servers as defaults; your existing servers are preserved) |
 | `.owlbear/delivery/config.json` | Declares the Git remote, pull-request target branch, exact GitHub `owner/name` identity, and remote Delivery-state branch | Tracked in Git; exact schema-1 policy is migrated once and schema-2 project edits are preserved on rerun |
-| `.owlbear/delivery/runtime/host.json` | Shows the tracked baseline for the shared execution budget and the 60-minute claim timeout | Seeded with `execution_capacity: 3`; existing values are preserved on rerun |
+| `.owlbear/delivery/runtime/host.json` | Shows the tracked baseline for the shared execution budget and the 60-minute claim timeout | Seeded with `execution_capacity: 8`; existing values are preserved on rerun |
 | `.owlbear/delivery/runtime/host.local.json` | Optional per-host overrides for any `host.json` setting | Not seeded; ignored by Git and preserved when present |
 | `.owlbear/install-manifest.json` | Records seed paths created or merged by setup, their installed digests, claimed settings/MCP values, and setup-created directories for conservative uninstall | Rewritten atomically on each successful setup; removed when uninstall completes unchanged |
 | `.owlbear/hooks/allow-stances-only.py` | Restricts ideation agents to approved stance outputs | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
@@ -63,7 +63,7 @@ The seeded Browser MCP entry uses `BROWSER_ALLOWED_DOMAINS: "*"` for local testi
 exact hostnames before using Browser against production or sensitive sites.
 
 For a fresh workspace, `init.py` writes tracked Delivery configuration and the visible default
-`host.json` with one shared execution budget for Planner and Builder claims (`execution_capacity: 3`).
+`host.json` with one shared execution budget for Planner and Builder claims (`execution_capacity: 8`).
 Builds retain exact per-Change writer custody; there is no separate global `writer_capacity` limit.
 Create `host.local.json` only for machine-specific execution or timeout overrides; it is ignored and
 is not synced to other hosts. Setup does not create mutable Delivery runtime state, worktrees, verification
