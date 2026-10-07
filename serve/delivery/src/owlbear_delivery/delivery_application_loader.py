@@ -638,11 +638,12 @@ def _validate_local_snapshot(  # noqa: C901 - one predicate per recognized local
         or local_checkpoint_successor
         or local_pending_publication
     )
+    builder_claim_successor = local_claim_successor and _has_builder_writer_claim(frontier, coordination)
     if local_claim_successor:
         _require_local_snapshot_branch(
             snapshot,
             paths.repository_root,
-            allow_descendant=_has_builder_writer_claim(frontier, coordination),
+            allow_descendant=builder_claim_successor,
         )
     reviewed = coordination.last_reviewed_commit
     pending = frontier.pending_checkpoint
@@ -658,7 +659,12 @@ def _validate_local_snapshot(  # noqa: C901 - one predicate per recognized local
         config,
         paths.repository_root,
         allow_local_branch=True,
-        allow_local_descendant=local_attention_successor or local_builder_handoff_successor or revision is not None,
+        allow_local_descendant=(
+            local_attention_successor
+            or local_builder_handoff_successor
+            or builder_claim_successor
+            or revision is not None
+        ),
         pending_revision_head=revision_head,
     )
     if canonical_frontier != expected["frontier.json"] and not local_recoverable_successor:

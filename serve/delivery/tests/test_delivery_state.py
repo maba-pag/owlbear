@@ -1443,7 +1443,8 @@ def test_loader_claim_successor_never_allows_advanced_branch(tmp_path: Path) -> 
         _require_local_snapshot_branch(snapshot, repository)
 
 
-def test_builder_claim_commit_survives_default_loader_restart(tmp_path: Path) -> None:
+@pytest.mark.parametrize("remote_branch", ["present", "deleted"])
+def test_builder_claim_commit_survives_default_loader_restart(tmp_path: Path, remote_branch: str) -> None:
     change_id = "builder-claim-restart"
     restart = _builder_return_restart_fixture(tmp_path, change_id)
     launch = restart.application.acquire_frontier_work().launch_packages[0]
@@ -1451,6 +1452,8 @@ def test_builder_claim_commit_survives_default_loader_restart(tmp_path: Path) ->
     _git(restart.fresh, "config", "user.name", "Delivery State Test")
     _git(restart.fresh, "config", "user.email", "delivery-state@example.invalid")
     branch_head = _commit_descendant(launch.worktree_path, "unsubmitted.txt", "unsubmitted Builder work")
+    if remote_branch == "deleted":
+        _git(restart.remote, "update-ref", "-d", f"refs/heads/{launch.branch}")
 
     restarted = _healthy_restart(restart)
 
