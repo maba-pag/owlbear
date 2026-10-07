@@ -34,14 +34,23 @@ later deduplicates and assigns relevance scope. Reviewers remain mutation-free a
 
 1. `list_memories(states=["pending"])` to find candidates
 2. `read_memory(entry_id=...)` for full content
-3. `curate_memory(...)` to edit/promote with scope
-4. `delete_memory(entry_id=...)` for noise/duplicates
+3. `curate_memory(entry_id=..., revision=..., scope_agents=[...])` to edit/promote with scope
+4. `delete_memory(entry_id=..., revision=...)` for noise/duplicates
 
 ### User approval flow
 
 1. Curator leaves entries in `curated`
 2. User runs the memory audit prompt for guided review
 3. Approved entries become highest-trust retrieval candidates
+
+## Revision-bound mutations
+
+`approve_memory`, `curate_memory`, and `delete_memory` require a `revision` from the current
+`read_memory` or `list_memories` result. It is a 16-character lowercase hex token derived from
+`title`, `content`, `categories`, `confidence`, and `scope_agents`; `state`, assessment counters,
+and timestamps do not affect it. A stale revision is refused with a tool error naming the expected
+and current revisions and instructing the caller to re-read before retrying. Re-read the entry and
+retry with its new revision.
 
 ### Exceptional-state resolution
 
@@ -74,16 +83,16 @@ may remain staged. Inspect `git status` and the staged diff before retrying.
 | Tool | Description | Key parameters |
 | --- | --- | --- |
 | `save_memory` | Create a new `pending` memory entry; scope is assigned later by curation | `title`, `content`, `categories`, `confidence`, `source_agent` |
-| `list_memories` | List metadata filtered by state/category/scope | `states`, `categories`, `scope_agents` |
+| `list_memories` | List metadata filtered by state/category/scope; each entry includes its revision | `states`, `categories`, `scope_agents` |
 | `recall_memory` | Recall scoped identity-bearing memory blocks for agent pre-flight | `agent`, `categories`, `limit` |
-| `read_memory` | Read one full memory entry by ID | `entry_id` |
+| `read_memory` | Read one full memory entry by ID, including its revision | `entry_id` |
 | `assess_memories` | Record whether recalled entries were useful for a substantive task attempt | `task_id`, `assessments` |
 | `commit_memory_batch` | Commit reviewed non-pending entries for one curation or review session | `session_type` (`curation` or `review`) |
-| `curate_memory` | Curator mutation and code-managed state transition tool | `entry_id`, optional mutable fields, `scope_agents` |
-| `delete_memory` | Lifecycle-aware deletion with hard/soft semantics | `entry_id` |
+| `curate_memory` | Curator mutation and code-managed state transition tool | `entry_id`, required `revision`, optional mutable fields, `scope_agents` |
+| `delete_memory` | Lifecycle-aware deletion with hard/soft semantics | `entry_id`, required `revision` |
 | `rename_agent_memories` | Rewrite provenance and scopes after an agent rename | `old_name`, `new_name` |
 | `delete_agent_memories` | Remove retired scope references, hard-delete pending orphans, and tombstone reviewed orphans | `agent` |
-| `approve_memory` | Promote `curated -> approved` | `entry_id` |
+| `approve_memory` | Promote `curated -> approved` | `entry_id`, required `revision` |
 
 ## Assessment and curation policy
 
@@ -244,7 +253,7 @@ Default behavior (when `states` is omitted): includes every non-deleted state.
 | `categories` | list[str] \| null | `null` | Optional category filter |
 | `scope_agents` | list[str] \| null | `null` | Optional agent-scope filter |
 
-Returns: metadata entries (no `content`) with fields including `id`, `title`, `categories`, `confidence`, `state`, `scope_agents`, `source_agent`, `created_at`, `updated_at`, `approved_at`.
+Returns: metadata entries (no `content`) with fields including `id`, `revision`, `title`, `categories`, `confidence`, `state`, `scope_agents`, `source_agent`, `created_at`, `updated_at`, `approved_at`.
 
 ## read_memory
 
@@ -321,6 +330,7 @@ Curator update tool for content edits and lifecycle transitions.
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
 | `entry_id` | str | (required) | Entry identifier |
+| `revision` | str | (required) | Current revision from `read_memory` or `list_memories` |
 | `title` | str \| null | `null` | Replace title |
 | `content` | str \| null | `null` | Replace markdown body |
 | `categories` | list[str] \| null | `null` | Replace categories |
@@ -370,6 +380,7 @@ Curator-only lifecycle mutation.
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
 | `entry_id` | str | (required) | Entry identifier |
+| `revision` | str | (required) | Current revision from `read_memory` or `list_memories` |
 
 Behavior:
 
@@ -386,6 +397,7 @@ Approves a curated entry.
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
 | `entry_id` | str | (required) | Entry identifier |
+| `revision` | str | (required) | Current revision from `read_memory` or `list_memories` |
 
 Behavior:
 
@@ -425,8 +437,8 @@ save_memory(
 
 ```text
 list_memories(states=["pending"], categories=["tool-usage"])
-read_memory(entry_id="...")
-curate_memory(entry_id="...", scope_agents=["builder", "build-reviewer"])
+entry = read_memory(entry_id="...")
+curate_memory(entry_id=entry["id"], revision=entry["revision"], scope_agents=["builder", "build-reviewer"])
 ```
 
 ```text
@@ -446,8 +458,10 @@ assess_memories(
 ```
 
 ```text
-delete_memory(entry_id="...")
-approve_memory(entry_id="...")
+pending = read_memory(entry_id="...")
+delete_memory(entry_id=pending["id"], revision=pending["revision"])
+curated = read_memory(entry_id="...")
+approve_memory(entry_id=curated["id"], revision=curated["revision"])
 rename_agent_memories(old_name="old-reviewer", new_name="build-reviewer")
 delete_agent_memories(agent="retired-agent")
 ```
@@ -476,7 +490,7 @@ All tools raise `ToolError` (surfaced as MCP error responses) for invalid operat
 | Error | Trigger | Example |
 | --- | --- | --- |
 | Entry not found | Invalid `entry_id` | `read_memory(entry_id="nonexistent")` |
-| Invalid state transition | Wrong source state | `approve_memory` on a `pending` entry |
+| Invalid state transition | Wrong source state | `approve_memory(entry_id=..., revision=entry["revision"])` on a `pending` entry |
 | Deleted entry access | Reading a soft-deleted entry | `read_memory` on `state=deleted` |
 | Validation failure | Bad confidence, empty title, invalid category | `save_memory(confidence=0.5, ...)` |
 | Blank or unknown agent | Not an error; returns universal-only guidance | `recall_memory(agent="")` or `recall_memory(agent="unknown-role")` |

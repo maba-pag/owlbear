@@ -229,12 +229,12 @@ string. The universal `*` member is allowed; an empty list is allowed for pendin
 | `get_entries()` | `() → list[MemoryEntry]` | Reparsed only when directory mtime changes |
 | `get_entry(id)` | `(str) → MemoryEntry` | Raises `NotFoundError` |
 | `save(...)` | `(title, content, categories, confidence, source_agent, scope_agents) → MemoryEntry` | Creates pending entry; initializes `score = confidence`, all counters to `0`; no OCC |
-| `approve(id, expected_updated_at)` | `(str, str) → MemoryEntry` | curated → approved; raises `TransitionError` / `ConcurrencyError` |
+| `approve(id, expected_updated_at=None, *, expected_revision=None)` | `(str, str \| None) → MemoryEntry` | curated → approved; exactly one OCC token; raises `TransitionError` / `ConcurrencyError` |
 | `resolve(id, expected_updated_at)` | `(str, str) → MemoryEntry` | contested/disputed/stale → approved; sets `approved_at`; raises `TransitionError` / `ConcurrencyError` |
 | `record_factually_wrong(id, task_id, expected_updated_at)` | `(str, str, str \| None) → MemoryEntry` | approved/curated → contested (stores `contested_by_task`, clears `approved_at`); contested + same `task_id` → no-op; contested + different `task_id` → disputed; raises `ValidationError` (empty/whitespace `task_id`), `TransitionError` (non-voteable state), `ConcurrencyError` (OCC mismatch, evaluated before state guard) |
 | `record_assessment(entry_id, bucket, expected_updated_at)` | `(str, str, str \| None) → MemoryEntry` | Increments the specified counter (`outstanding`, `unremarkable`, or `didnt_use`); recomputes `score` via `compute_score`; calls `try_stale_transition` when slot-efficiency threshold exceeded. Raises `TransitionError` (non-voteable state), `ConcurrencyError` (OCC mismatch), `ValidationError` (invalid bucket). `expected_updated_at` optional — pass `None` to skip OCC check. |
-| `edit(id, fields, expected_updated_at)` | `(str, EditPayload, str) → MemoryEntry` | State-machine rules apply; contested/disputed/stale preserve their state while fields are updated; deleted entries are blocked; raises `TransitionError` / `ConcurrencyError` |
-| `delete(id, expected_updated_at)` | `(str, str) → MemoryEntry` | Hard-delete for pending, soft-delete for curated/approved/contested/disputed/stale; raises `TransitionError` / `ConcurrencyError` |
+| `edit(id, fields, expected_updated_at=None, *, expected_revision=None)` | `(str, EditPayload, str \| None) → MemoryEntry` | State-machine rules apply; exactly one OCC token; contested/disputed/stale preserve their state while fields are updated; deleted entries are blocked; raises `TransitionError` / `ConcurrencyError` |
+| `delete(id, expected_updated_at=None, *, expected_revision=None)` | `(str, str \| None) → MemoryEntry` | Hard-delete for pending, soft-delete for curated/approved/contested/disputed/stale; exactly one OCC token; raises `TransitionError` / `ConcurrencyError` |
 | `try_stale_transition(entry)` | `(MemoryEntry) → MemoryEntry` | Calls `check_slot_efficiency`; when True and state in {approved, curated, contested}, writes state=stale with refreshed updated_at. Returns unchanged entry (no error) when predicate is False or state is ineligible. No OCC. Logs INFO on transition. |
 | `load()` | `() → list[MemoryEntry]` | Force full reparse; skips malformed files (lenient) |
 
@@ -271,6 +271,11 @@ All mutation methods (`approve`, `resolve`, `edit`, `delete`) accept `expected_u
 `record_factually_wrong` and `record_assessment` also accept `expected_updated_at` but it is optional (`str | None`); pass `None` to skip the OCC check.
 If a non-`None` value does not match the on-disk `entry.updated_at`, `ConcurrencyError` is
 raised. `save()` creates new entries and does not require an OCC token.
+
+For `approve`, `edit` (the engine operation behind MCP `curate_memory`), and `delete`, the engine
+also accepts `expected_revision`; each call must supply exactly one token. Cockpit uses
+`expected_updated_at`, while the MCP adapter uses `revision` as `expected_revision`. Both token
+forms are validated by the same `MemoryEngine` against the current entry before mutation.
 
 #### Lenient Read
 

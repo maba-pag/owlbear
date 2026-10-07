@@ -62,18 +62,27 @@ stale     ──[resolve*]──► approved    [delete: soft → deleted]
 | Tool | Description |
 | --- | --- |
 | `save_memory` | Create an unscoped `pending` entry from self-reported provenance; recognition is not authorization |
-| `list_memories` | List metadata sorted by curation priority; filters: `states`, `categories`, `scope_agents` |
-| `read_memory` | Read one full entry by `entry_id`; errors on deleted entries |
+| `list_memories` | List metadata sorted by curation priority, including each entry's `revision`; filters: `states`, `categories`, `scope_agents` |
+| `read_memory` | Read one full entry by `entry_id`, including its `revision`; errors on deleted entries |
 | `recall_memory` | Identity-bearing markdown blocks scoped to one agent (`## title`, entry ID, and body; contested entries add `State: contested` and an available `Challenge task:` reference); three-pool slot allocation (explore, challenge, regular) with final sort by `(state_rank, -score, id)`; constants `SLOT_EXPLORE=2`, `SLOT_CHALLENGE=2`; default limit 20 |
-| `curate_memory` | Mutate fields + auto-promote `pending→curated` (when scope provided) or auto-downgrade `approved→curated`; raises `TransitionError` for contested/disputed/stale (use resolve first) |
-| `delete_memory` | Hard-delete pending (file removed); soft-delete curated/approved/contested/disputed/stale (state→deleted) |
+| `curate_memory` | Requires `revision`; mutates fields, promotes `pending→curated` when scope is provided, or downgrades `approved→curated`; raises `TransitionError` for contested/disputed/stale |
+| `delete_memory` | Requires `revision`; hard-deletes pending entries and soft-deletes curated/approved/contested/disputed/stale entries |
 | `rename_agent_memories` | Rewrite every matching `source_agent` and `scope_agents` reference after an agent rename |
 | `delete_agent_memories` | Preserve historical provenance and remove the retired role from scopes; hard-delete pending orphans and tombstone reviewed orphans for the normal commit/purge flow |
-| `approve_memory` | Promote `curated→approved`; user-initiated only (not exposed to any agent) |
+| `approve_memory` | Requires `revision` to promote `curated→approved`; user-initiated only (not exposed to any agent) |
 | `assess_memories` | Process batch assessment submissions; increments counters for `outstanding`/`unremarkable`/`didnt_use`, delegates `factually_wrong` to confirmation cycle; returns per-entry `{entry_id, success}` or `{entry_id, success=False, error}` results |
 | `commit_memory_batch` | Commit non-pending memory entries for one explicit `curation` or `review` session and return the commit SHA or a no-op result |
 
 All mutating tools return a `hint` field describing the transition or action taken.
+
+## Revision-bound mutations
+
+`approve_memory`, `curate_memory`, and `delete_memory` require a `revision` from the current
+`read_memory` or `list_memories` result. The 16-character lowercase hex token covers `title`,
+`content`, `categories`, `confidence`, and `scope_agents`; it does not depend on `state`, assessment
+counters, or timestamps. If the entry changed after it was read, the server refuses the mutation
+with a tool error naming the expected and current revisions and instructing the caller to re-read
+before retrying. Re-read the entry and retry with its new revision.
 
 ## Entry Schema
 
