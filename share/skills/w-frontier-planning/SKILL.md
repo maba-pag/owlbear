@@ -19,8 +19,9 @@ to equal the supplied launch and its outcome ID, plan-scope ID, authority digest
 source head, integration target, and reviewed boundary to remain unchanged.
 
 Do not infer or repair malformed launch identity. Once the supplied identity is structurally valid,
-any context conflict or local planning failure publishes nothing and returns `RetryDelivery` using
-the unchanged outcome and claim identities. A normal Planner return with this retry is settled by
+any context conflict or local planning failure publishes nothing and returns `RetryDelivery` with
+only `action`, the unchanged `outcome_id` and `claim_id`, and `failure_code`; Planning settlement
+refuses `attempt_id` and `abandoned_commit`. A normal Planner return with this retry is settled by
 Orchestrator through `settle_worker_invocation` using the exact launch identity; Planner returns the
 `RetryDelivery` unchanged and never calls the settlement operation itself. Settlement records the
 completed attempt without publishing a plan; fresh acquisition owns any later attempt.

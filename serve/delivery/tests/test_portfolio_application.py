@@ -7928,7 +7928,7 @@ def test_captured_readiness_agrees_across_public_reads(tmp_path: Path, *, dirty:
         ("engine-action-incomplete", False, "/repair-delivery"),
         ("engine-action-blocked", False, "/repair-delivery"),
         ("coordination-unavailable", False, "/repair-delivery"),
-        ("active-custody", False, "/repair-delivery"),
+        ("active-custody", False, "/continue-change"),
         ("claim-activation-failed", False, "/repair-delivery"),
         ("claim-custody-unreconciled", False, "/repair-delivery"),
         ("dependency-wait", False, None),
@@ -7956,6 +7956,16 @@ def test_engine_action_prompt_is_applicable_to_final_readiness_state(
     else:
         assert prompt is not None
         assert prompt.startswith(prompt_prefix)
+
+
+def test_active_custody_prompt_offers_conditional_routes_without_claiming_closure() -> None:
+    prompt = PortfolioApplication._engine_action_prompt("change-a", "active-custody", executable=False)
+    assert prompt == (
+        "/continue-change change-a An active claim holds this Change; wait while its worker chat runs. "
+        "If that exact worker returned or was stopped, answer its stopped-run question here or use Release "
+        "stuck worker in Cockpit; if unsure, leave it. Do not retry, rewrite worker output, or dispatch a "
+        "replacement while the claim is held."
+    )
 
 
 def test_continuation_activation_failure_fallback_clears_runnable_prompt(tmp_path: Path) -> None:

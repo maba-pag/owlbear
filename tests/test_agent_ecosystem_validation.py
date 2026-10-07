@@ -484,7 +484,8 @@ def test_repair_delivery_prompt_bootstraps_read_only_then_routes_through_the_rep
     assert "../skills/w-delivery-repair/SKILL.md" in prompt
     assert "delivery-diagnose inspect" in prompt
     assert "PYTHONDONTWRITEBYTECODE=1" in prompt
-    assert "python -B serve/tools/src/owlbear_tools/delivery_diagnostics.py inspect" in prompt
+    assert "PYTHONDONTWRITEBYTECODE=1 uv run --no-sync delivery-diagnose inspect" in prompt
+    assert "uv run --no-sync python -B serve/tools/src/owlbear_tools/delivery_diagnostics.py inspect" in prompt
     assert "terminal is unavailable" in prompt
     assert "do not substitute another tool" in prompt
     assert "automation-permission bypass" in prompt
@@ -1048,6 +1049,16 @@ def _assert_stopped_worker_release_guidance() -> None:
         assert "issuer lock" not in normalized
         assert "quiet-worktree check" not in normalized
         assert ".owlbear/delivery/runtime/hosts/" not in normalized
+
+
+def test_worker_result_refusals_route_through_launch_bound_settlement() -> None:
+    planning = " ".join((_SKILLS_ROOT / "w-frontier-planning/SKILL.md").read_text(encoding="utf-8").split())
+    orchestration = " ".join((_SKILLS_ROOT / "w-orchestration/SKILL.md").read_text(encoding="utf-8").split())
+
+    assert "Planning settlement refuses `attempt_id` and `abandoned_commit`" in planning
+    assert "copied verbatim from the acquisition result; never retype" in orchestration
+    assert "A rejected `transition_delivery` or `settle_worker_invocation` call whose refusal" in orchestration
+    assert "An unknown, transport, or authority failure is not such a refusal and stays contained" in orchestration
 
 
 def test_worker_settlement_guidance_matches_native_contract() -> None:

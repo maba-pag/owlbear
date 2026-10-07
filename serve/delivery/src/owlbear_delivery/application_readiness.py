@@ -1899,8 +1899,14 @@ class _ReadinessViewsMixin:
                 "infer termination."
             )
         prompt: str | None = None
-        if reason in {
-            "active-custody",
+        if reason == "active-custody":
+            prompt = (
+                f"/continue-change {change_id} An active claim holds this Change; wait while its worker chat runs. "
+                "If that exact worker returned or was stopped, answer its stopped-run question here or use Release "
+                "stuck worker in Cockpit; if unsure, leave it. Do not retry, rewrite worker output, or dispatch a "
+                "replacement while the claim is held."
+            )
+        elif reason in {
             "claim-activation-failed",
             "claim-custody-unreconciled",
             "coordination-unavailable",
