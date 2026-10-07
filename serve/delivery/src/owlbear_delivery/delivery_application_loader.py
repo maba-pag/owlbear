@@ -2472,7 +2472,9 @@ def _restore_runtime_snapshot(snapshot: DeliveryStateSnapshot, runtime_root: Pat
         TransactionParticipant(runtime_root, relative_root / "admission.json", _canonical_model(snapshot.admission)),
     )
     completion_store = CompletionReceiptStore(runtime_root)
-    existing_completion = completion_store.read_bundle(snapshot.change_id)
+    existing_completion = (
+        None if snapshot.frontier.change_completion is None else completion_store.read_bundle(snapshot.change_id)
+    )
     if existing_completion != snapshot.completion:
         if existing_completion is not None:
             _bootstrap_failure("local completion evidence differs from its remote snapshot")

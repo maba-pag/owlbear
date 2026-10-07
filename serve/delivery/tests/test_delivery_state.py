@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import time
 from datetime import UTC, datetime, timedelta
@@ -4605,6 +4606,13 @@ def test_readmitted_change_id_publishes_and_restarts_without_earlier_completion(
     assert stored["completion"] is None
     assert stored["frontier"]["change_completion"] is None
     assert [item.reason for item in health.diagnostics if item.source == "remote-state"] == []
+    assert CompletionReceiptStore(runtime_root).read_bundle(change_id) is not None
+
+    shutil.rmtree(change_root)
+    restored = load_delivery_application(config, workspace_root=repository).delivery_health()
+
+    assert [item.reason for item in restored.diagnostics if item.source == "remote-state"] == []
+    assert (change_root / "frontier.json").read_bytes() == _canonical_payload(stored["frontier"])
     assert CompletionReceiptStore(runtime_root).read_bundle(change_id) is not None
 
 
