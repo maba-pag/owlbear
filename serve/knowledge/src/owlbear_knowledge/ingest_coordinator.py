@@ -17,6 +17,7 @@ from owlbear_knowledge.protocols.enrichment import EnrichmentPurgeResult
 from owlbear_knowledge.protocols.failures import KnowledgeFailure, KnowledgeFailureStage, KnowledgeOperationError
 from owlbear_knowledge.protocols.graph import EvidenceInvalidationResult
 from owlbear_knowledge.protocols.ingest import (
+    IngestAcquisitionFailure,
     IngestDocument,
     IngestRequest,
     IngestResult,
@@ -28,9 +29,11 @@ from owlbear_knowledge.protocols.ingest import (
     RefreshResult,
 )
 from owlbear_knowledge.protocols.sources import (
+    FetchTransport,
     SourceDeletionInfo,
     SourceHealth,
     SourceHealthReport,
+    SourceKind,
     SourceState,
     SourceStore,
     SourceUpdate,
@@ -71,7 +74,7 @@ class IngestCoordinator:
 
         started_at = datetime.now(tz=UTC)
 
-        documents_processed = 0
+        documents_processed = len(request.acquisition_failures)
         documents_created = 0
         documents_replaced = 0
         documents_unchanged = 0
@@ -79,7 +82,7 @@ class IngestCoordinator:
         chunks_replaced = 0
         chunks_enqueued = 0
         content_results: list[ContentIngestResult] = []
-        errors: list[KnowledgeFailure] = []
+        errors = [failure.failure for failure in request.acquisition_failures]
 
         for document in request.documents:
             documents_processed += 1
@@ -87,9 +90,6 @@ class IngestCoordinator:
             if isinstance(outcome, KnowledgeFailure):
                 errors.append(outcome)
                 continue
-            if outcome is None:
-                continue
-
             state, content_result, created_chunks, replaced_chunks, enqueued_chunks = outcome
             chunks_created += created_chunks
             chunks_replaced += replaced_chunks
@@ -105,18 +105,15 @@ class IngestCoordinator:
 
         completed_at = datetime.now(tz=UTC)
         successes = documents_created + documents_replaced + documents_unchanged
-        failures = documents_processed - successes
+        failures = len(errors)
 
-        if failures == 0:
-            health = SourceHealth.OK
-        elif successes == 0 and documents_processed > 0:
-            health = SourceHealth.FAILED
-        else:
-            health = SourceHealth.DEGRADED
+        health = SourceHealth.OK if failures == 0 else SourceHealth.DEGRADED if successes else SourceHealth.FAILED
 
+        failure_codes = ",".join(sorted({failure.code for failure in errors}))
         message = (
-            f"processed={documents_processed}, succeeded={successes}, failed={failures}, "
-            f"created={documents_created}, replaced={documents_replaced}, unchanged={documents_unchanged}"
+            f"processed={documents_processed}, succeeded={successes}, failed={failures}, failure_codes={failure_codes}"
+            if failures
+            else None
         )
         self._sources.record_health(
             request.source_id,
@@ -243,7 +240,7 @@ class IngestCoordinator:
         document: IngestDocument,
         *,
         scope: str,
-    ) -> tuple[ContentIngestState, ContentIngestResult, int, int, int] | KnowledgeFailure | None:
+    ) -> tuple[ContentIngestState, ContentIngestResult, int, int, int] | KnowledgeFailure:
         """Run ingest and cascade actions for one document."""
         try:
             content_result = await self._content.ingest(
@@ -294,8 +291,13 @@ class IngestCoordinator:
             logger.exception("Failed to process document during ingest")
             return exc.failure
         except RuntimeError, ValueError, LookupError, TypeError, AttributeError, KeyError:
-            logger.exception("Failed to process document during ingest")
-            return None
+            logger.warning("Failed to process document during ingest")
+            return KnowledgeFailure(
+                stage=KnowledgeFailureStage.PERSISTENCE,
+                code="processing_failed",
+                retryable=False,
+                message="Document processing failed",
+            )
         else:
             return outcome
 
@@ -316,12 +318,18 @@ class IngestCoordinator:
         sources_refreshed = 0
 
         for source in filtered_sources:
+            if source.kind is SourceKind.URL_LIST and source.fetch_method is FetchTransport.BROWSER:
+                failure = KnowledgeFailure(
+                    stage=KnowledgeFailureStage.ACQUISITION,
+                    code="agent_capture_required",
+                    retryable=False,
+                    message="Browser capture is required for this source",
+                )
+                errors.append(self._refresh_error(source.id, failure))
+                continue
+
             try:
                 fetch_result = await self._fetcher.fetch_source(source)
-                errors.extend(
-                    self._refresh_error(source.id, self._fetch_failure(fetch_error))
-                    for fetch_error in fetch_result.errors
-                )
                 mapped_documents = tuple(
                     IngestDocument(
                         title=document.title,
@@ -332,28 +340,35 @@ class IngestCoordinator:
                     )
                     for document in fetch_result.documents
                 )
+                acquisition_failures = tuple(
+                    IngestAcquisitionFailure(
+                        uri=fetch_error.uri,
+                        failure=self._fetch_failure(fetch_error),
+                    )
+                    for fetch_error in fetch_result.errors
+                )
 
-                if not mapped_documents and fetch_result.errors:
+                if not mapped_documents and not acquisition_failures:
                     continue
 
-                if mapped_documents:
-                    ingest_result = await self.ingest(
-                        IngestRequest(
-                            source_id=source.id,
-                            documents=mapped_documents,
-                            enrich=source.enrich,
-                        )
+                ingest_result = await self.ingest(
+                    IngestRequest(
+                        source_id=source.id,
+                        documents=mapped_documents,
+                        acquisition_failures=acquisition_failures,
+                        enrich=source.enrich,
                     )
-                    ingest_results.append(ingest_result)
-                    errors.extend(self._refresh_error(source.id, failure) for failure in ingest_result.errors)
+                )
+                ingest_results.append(ingest_result)
+                errors.extend(self._refresh_error(source.id, failure) for failure in ingest_result.errors)
 
-                    successful_documents = (
-                        ingest_result.documents_created
-                        + ingest_result.documents_replaced
-                        + ingest_result.documents_unchanged
-                    )
-                    if ingest_result.errors and successful_documents == 0:
-                        continue
+                successful_documents = (
+                    ingest_result.documents_created
+                    + ingest_result.documents_replaced
+                    + ingest_result.documents_unchanged
+                )
+                if successful_documents == 0:
+                    continue
 
                 refreshed_at = datetime.now(tz=UTC)
                 self._sources.update_source(

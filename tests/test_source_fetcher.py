@@ -230,6 +230,42 @@ class TestCompositeSourceFetcher:
         assert len(result.errors) == 0
 
     @pytest.mark.asyncio
+    async def test_url_list_browser_requires_agent_capture_without_http(
+        self,
+        tmp_path: Path,
+        mock_factory: MagicMock,
+    ) -> None:
+        url = "https://example.com/page"
+        source = _make_source(
+            SourceKind.URL_LIST,
+            UrlListConfig(urls=(url,)),
+            fetch_method=FetchTransport.BROWSER,
+        )
+        response_fetcher_factory = MagicMock(return_value=MagicMock())
+        fetcher = CompositeSourceFetcher(
+            workspace_root=tmp_path,
+            content_fetcher_factory=mock_factory,
+            http_response_fetcher_factory=response_fetcher_factory,
+        )
+
+        with patch(
+            "owlbear_knowledge.source_fetcher.intake.read_url",
+            new_callable=AsyncMock,
+            return_value=_intake_result("page content", url),
+        ) as read_url:
+            result = await fetcher.fetch_source(source)
+
+        assert result.documents == ()
+        assert len(result.errors) == 1
+        failure = result.errors[0].failure
+        assert failure is not None
+        assert failure.stage is KnowledgeFailureStage.ACQUISITION
+        assert failure.code == "agent_capture_required"
+        assert failure.retryable is False
+        response_fetcher_factory.assert_not_called()
+        read_url.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_url_list_failed_url_captured_as_fetch_error(self, composite: CompositeSourceFetcher) -> None:
         url = "https://bad.example.com/missing"
         source = _url_source((url,))

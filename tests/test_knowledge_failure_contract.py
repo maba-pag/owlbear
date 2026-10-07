@@ -31,6 +31,7 @@ from owlbear_knowledge.protocols.failures import (
 )
 from owlbear_knowledge.protocols.fetcher import FetchedDocument, FetchError, FetchResult
 from owlbear_knowledge.protocols.ingest import (
+    IngestAcquisitionFailure,
     IngestDocument,
     IngestRequest,
     IngestResult,
@@ -38,10 +39,15 @@ from owlbear_knowledge.protocols.ingest import (
 )
 from owlbear_knowledge.protocols.query import QueryRequest
 from owlbear_knowledge.protocols.sources import (
+    AuthenticatedWebConfig,
     ConfiguredSourceRecord,
     FetchTransport,
+    FileGlobConfig,
+    InlineConfig,
+    SourceConfig,
     SourceHealth,
     SourceKind,
+    SourceRegistration,
     SourceState,
     UrlListConfig,
 )
@@ -184,6 +190,7 @@ async def _failing_resolver(_hostname: str, _port: int) -> list[tuple[int, int, 
 
 def test_failure_code_literal_is_complete_and_protocol_is_public() -> None:
     assert get_args(KnowledgeFailureCode) == (
+        "agent_capture_required",
         "url_rejected",
         "dns_failure",
         "transport_failure",
@@ -193,6 +200,7 @@ def test_failure_code_literal_is_complete_and_protocol_is_public() -> None:
         "unsupported_media_type",
         "content_boundary_missing",
         "extraction_failed",
+        "processing_failed",
         "persistence_failed",
         "embedding_failed",
         "embedding_dependency_missing",
@@ -206,6 +214,250 @@ def test_failure_code_literal_is_complete_and_protocol_is_public() -> None:
     )
     assert issubclass(KnowledgeFailure, BoundaryModel)
     assert KnowledgeFailureStage.QUERY.value == "query"
+
+
+@pytest.mark.parametrize(
+    ("kind", "fetch_method", "config"),
+    [
+        (SourceKind.URL_LIST, FetchTransport.HTTP, UrlListConfig(urls=("https://fixture.example",))),
+        (SourceKind.URL_LIST, FetchTransport.BROWSER, UrlListConfig(urls=("https://fixture.example",))),
+        (SourceKind.FILE_GLOB, FetchTransport.FILESYSTEM, FileGlobConfig(patterns=("*.md",))),
+        (SourceKind.INLINE, FetchTransport.NONE, InlineConfig()),
+        (
+            SourceKind.AUTHENTICATED_WEB,
+            FetchTransport.BROWSER,
+            AuthenticatedWebConfig(base_url="https://fixture.example", auth_profile="fixture"),
+        ),
+    ],
+)
+def test_source_registration_accepts_supported_kind_transport_pairs(
+    kind: SourceKind,
+    fetch_method: FetchTransport,
+    config: SourceConfig,
+) -> None:
+    registration = SourceRegistration(
+        name="Fixture source",
+        kind=kind,
+        fetch_method=fetch_method,
+        config=config,
+    )
+
+    assert registration.kind is kind
+    assert registration.fetch_method is fetch_method
+
+
+@pytest.mark.parametrize(
+    ("kind", "fetch_method", "config", "accepted"),
+    [
+        (
+            SourceKind.URL_LIST,
+            FetchTransport.FILESYSTEM,
+            UrlListConfig(urls=("https://user:secret@fixture.example",)),
+            "http, browser",
+        ),
+        (SourceKind.FILE_GLOB, FetchTransport.HTTP, FileGlobConfig(patterns=("*.md",)), "filesystem"),
+        (SourceKind.INLINE, FetchTransport.BROWSER, InlineConfig(), "none"),
+    ],
+)
+def test_source_registration_rejects_unsupported_transport_without_echoing_config(
+    kind: SourceKind,
+    fetch_method: FetchTransport,
+    config: SourceConfig,
+    accepted: str,
+) -> None:
+    with pytest.raises(ValueError, match=f"{kind.value} sources accept fetch transports: {accepted}") as caught:
+        SourceRegistration(
+            name="Fixture source",
+            kind=kind,
+            fetch_method=fetch_method,
+            config=config,
+        )
+
+    message = str(caught.value)
+    assert f"{kind.value} sources accept fetch transports: {accepted}" in message
+    assert "secret" not in message
+
+
+def test_ingest_request_requires_a_document_or_acquisition_failure() -> None:
+    with pytest.raises(ValueError, match="At least one document or acquisition failure"):
+        IngestRequest(source_id="source-1")
+
+    failure = _failure(KnowledgeFailureStage.ACQUISITION, "timeout", retryable=True)
+    request = IngestRequest(
+        source_id="source-1",
+        acquisition_failures=(IngestAcquisitionFailure(uri="https://fixture.example/a", failure=failure),),
+    )
+
+    assert request.documents == ()
+    assert request.acquisition_failures[0].failure == failure
+
+
+@pytest.mark.asyncio
+async def test_browser_url_list_refresh_requires_capture_without_side_effects() -> None:
+    source = _source().model_copy(update={"fetch_method": FetchTransport.BROWSER})
+    fetcher = MagicMock(name="fetcher")
+    fetcher.fetch_source = AsyncMock()
+    content = MagicMock(name="content")
+    content.ingest = AsyncMock()
+    coordinator, sources = _coordinator(source, content=content, fetcher=fetcher)
+
+    result = await coordinator.refresh(RefreshRequest())
+
+    assert result.sources_refreshed == 0
+    assert len(result.errors) == 1
+    assert result.errors[0].failure == KnowledgeFailure(
+        stage=KnowledgeFailureStage.ACQUISITION,
+        code="agent_capture_required",
+        retryable=False,
+        message="Browser capture is required for this source",
+    )
+    fetcher.fetch_source.assert_not_awaited()
+    content.ingest.assert_not_awaited()
+    sources.record_health.assert_not_called()
+    sources.update_source.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_refresh_records_failed_health_for_all_acquisition_failures() -> None:
+    url_a = "https://user:secret@fixture.example/a"
+    url_b = "https://user:secret@fixture.example/b"
+    source = _source(url_a)
+    failures = (
+        _failure(KnowledgeFailureStage.ACQUISITION, "timeout", retryable=True, message="Request timed out"),
+        _failure(KnowledgeFailureStage.ACQUISITION, "http_status", retryable=False, message="Status 503"),
+    )
+    fetcher = MagicMock(name="fetcher")
+    fetcher.fetch_source = AsyncMock(
+        return_value=FetchResult(
+            errors=(
+                FetchError(uri=url_a, error=failures[0].message, failure=failures[0]),
+                FetchError(uri=url_b, error=failures[1].message, failure=failures[1]),
+            )
+        )
+    )
+    content = MagicMock(name="content")
+    content.ingest = AsyncMock()
+    coordinator, sources = _coordinator(source, content=content, fetcher=fetcher)
+
+    result = await coordinator.refresh(RefreshRequest())
+
+    assert result.sources_refreshed == 0
+    assert len(result.ingest_results) == 1
+    ingest_result = result.ingest_results[0]
+    assert ingest_result.documents_processed == 2
+    assert ingest_result.errors == failures
+    assert [error.failure for error in result.errors] == list(failures)
+    assert len(result.errors) == 2
+    report = sources.record_health.call_args.args[1]
+    assert report.health is SourceHealth.FAILED
+    assert report.message == "processed=2, succeeded=0, failed=2, failure_codes=http_status,timeout"
+    assert report.checked_at == ingest_result.completed_at
+    assert "secret" not in report.message
+    assert all("secret" not in error.error for error in result.errors)
+    content.ingest.assert_not_awaited()
+    sources.update_source.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_refresh_degrades_health_when_acquisition_and_document_succeed() -> None:
+    connection = sqlite3.connect(":memory:")
+    try:
+        content = _content_store(db=connection)
+        content.ensure_tables()
+        source = _source()
+        failure = _failure(KnowledgeFailureStage.ACQUISITION, "timeout", retryable=True)
+        fetcher = MagicMock(name="fetcher")
+        fetcher.fetch_source = AsyncMock(
+            return_value=FetchResult(
+                documents=(FetchedDocument(title="Fixture", text="content", uri=source.config.urls[0]),),
+                errors=(FetchError(uri=source.config.urls[0], error=failure.message, failure=failure),),
+            )
+        )
+        coordinator, sources = _coordinator(source, content=content, fetcher=fetcher)
+
+        result = await coordinator.refresh(RefreshRequest())
+
+        assert result.sources_refreshed == 1
+        assert len(result.errors) == 1
+        assert result.errors[0].failure == failure
+        ingest_result = result.ingest_results[0]
+        assert ingest_result.documents_created == 1
+        report = sources.record_health.call_args.args[1]
+        assert report.health is SourceHealth.DEGRADED
+        assert report.message == "processed=2, succeeded=1, failed=1, failure_codes=timeout"
+        assert report.checked_at == ingest_result.completed_at
+        sources.update_source.assert_called_once()
+    finally:
+        connection.close()
+
+
+@pytest.mark.asyncio
+async def test_ingest_success_records_ok_health_without_last_error() -> None:
+    connection = sqlite3.connect(":memory:")
+    try:
+        content = _content_store(db=connection)
+        content.ensure_tables()
+        source = _source()
+        coordinator, sources = _coordinator(source, content=content)
+
+        result = await coordinator.ingest(
+            IngestRequest(
+                source_id=source.id,
+                documents=(
+                    IngestDocument(title="First", text="first content"),
+                    IngestDocument(title="Second", text="second content"),
+                ),
+            )
+        )
+
+        assert result.documents_created == 2
+        report = sources.record_health.call_args.args[1]
+        assert report.health is SourceHealth.OK
+        assert report.message is None
+        assert report.checked_at == result.completed_at
+    finally:
+        connection.close()
+
+
+@pytest.mark.parametrize(
+    ("error_type", "error_message"),
+    [
+        (RuntimeError, "runtime sentinel"),
+        (ValueError, "value sentinel"),
+        (LookupError, "lookup sentinel"),
+        (TypeError, "type sentinel"),
+        (AttributeError, "attribute sentinel"),
+        (KeyError, "key sentinel"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_untyped_document_failures_are_redacted_and_counted(
+    error_type: type[Exception],
+    error_message: str,
+) -> None:
+    source = _source()
+    content = MagicMock(name="content")
+    content.ingest = AsyncMock(side_effect=error_type(error_message))
+    coordinator, sources = _coordinator(source, content=content)
+
+    result = await coordinator.ingest(
+        IngestRequest(
+            source_id=source.id,
+            documents=(
+                IngestDocument(title="First", text="first content"),
+                IngestDocument(title="Second", text="second content"),
+            ),
+        )
+    )
+
+    assert result.documents_processed == 2
+    assert len(result.errors) == 2
+    assert all(failure.code == "processing_failed" for failure in result.errors)
+    assert all(failure.message == "Document processing failed" for failure in result.errors)
+    assert all(error_message not in failure.message for failure in result.errors)
+    report = sources.record_health.call_args.args[1]
+    assert report.health is SourceHealth.FAILED
+    assert report.message == "processed=2, succeeded=0, failed=2, failure_codes=processing_failed"
 
 
 @pytest.mark.asyncio
@@ -482,6 +734,7 @@ async def test_refresh_preserves_partial_success_and_zero_document_noop() -> Non
             source_id=source.id,
             documents_processed=1,
             documents_created=1,
+            errors=(fetch_failure,),
             started_at=_NOW,
             completed_at=_NOW,
         )
@@ -498,7 +751,7 @@ async def test_refresh_preserves_partial_success_and_zero_document_noop() -> Non
     fetcher.fetch_source = AsyncMock(return_value=FetchResult())
     noop = await coordinator.refresh(RefreshRequest())
 
-    assert noop.sources_refreshed == 1
+    assert noop.sources_refreshed == 0
     assert noop.errors == ()
-    sources.update_source.assert_called_once()
+    sources.update_source.assert_not_called()
     coordinator.ingest.assert_awaited_once()

@@ -19,6 +19,7 @@ class KnowledgeFailureStage(StrEnum):
 
 
 KnowledgeFailureCode = Literal[
+    "agent_capture_required",
     "url_rejected",
     "dns_failure",
     "transport_failure",
@@ -28,6 +29,7 @@ KnowledgeFailureCode = Literal[
     "unsupported_media_type",
     "content_boundary_missing",
     "extraction_failed",
+    "processing_failed",
     "persistence_failed",
     "embedding_failed",
     "embedding_dependency_missing",
