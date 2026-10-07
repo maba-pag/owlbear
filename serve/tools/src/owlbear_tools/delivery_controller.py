@@ -1,6 +1,6 @@
 """``delivery-controller``: install, pin and switch immutable Delivery controller releases (N02 D1).
 
-A release is ``.owlbear/controller/releases/<commit>/``: ``git archive <commit>``, a locked
+A release is ``.owlbear/controller/releases/<commit>/``: ``git archive <commit>``, a locked controller-only
 ``uv sync --compile-bytecode`` environment, the Cockpit bundle and ``RELEASE.json`` (commit, supported
 format, interpreter identity, tree digest), then made read-only. ``pin`` and ``switch`` write the generated
 launchers ``bin/delivery-mcp`` and ``bin/cockpit`` and commit ``pin.json`` (with the digest of
@@ -69,6 +69,8 @@ _RECORD_FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
 _MAX_RECORD_BYTES = 64 << 20
 _WRITE_BITS = stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH
 _CLEAN_ENVIRONMENT = ("VIRTUAL_ENV", "PYTHONPATH", "PYTHONHOME", "UV_PROJECT_ENVIRONMENT", "CONDA_PREFIX")
+# The packages a release runs: Delivery MCP, Cockpit and the maintenance CLIs (N08 D7).
+_CONTROLLER_PACKAGES = ("owlbear-delivery-mcp", "owlbear-cockpit", "owlbear-tools")
 _PROBE = """
 import json, os, sys
 import owlbear_delivery, owlbear_delivery_mcp, owlbear_cockpit, owlbear_tools
@@ -77,6 +79,11 @@ try:
     supported = state_formats.SUPPORTED_FORMAT
 except ImportError:
     supported = None
+else:
+    # A pinnable release loads its entry modules, so a dependency missing from its environment fails install.
+    import owlbear_delivery_mcp.server, owlbear_cockpit.main
+    import owlbear_tools.delivery_controller, owlbear_tools.delivery_migration, owlbear_tools.delivery_repair
+    import owlbear_tools.delivery_diagnostics
 print(json.dumps({"modules": [m.__file__ for m in (owlbear_delivery, owlbear_delivery_mcp, owlbear_cockpit,
     owlbear_tools)], "supported_format": supported, "python": sys.version.split()[0],
     "interpreter": os.path.realpath(sys.executable)}))
@@ -173,11 +180,13 @@ def _run(arguments: list[str], *, cwd: Path | None = None, failure: str) -> subp
 
 
 class UvNodeToolchain:
-    """``uv sync --locked --compile-bytecode`` and the pinned-Node Cockpit build."""
+    """Controller-only ``uv sync --locked --no-dev --compile-bytecode`` and the pinned-Node Cockpit build."""
 
     def sync(self, tree: Path) -> None:
-        """Create the release environment exactly from ``uv.lock``."""
-        _run(["uv", "sync", "--locked", "--compile-bytecode", "--no-progress"], cwd=tree, failure="sync-failed")
+        """Create the release environment exactly from ``uv.lock``, limited to the controller packages."""
+        packages = [argument for package in _CONTROLLER_PACKAGES for argument in ("--package", package)]
+        arguments = ["uv", "sync", "--locked", "--no-dev", "--compile-bytecode", "--no-progress", *packages]
+        _run(arguments, cwd=tree, failure="sync-failed")
 
     def build_bundle(self, tree: Path) -> None:
         """Build the bundle with the Node version pinned by ``.nvmrc``; refuse any other Node."""
