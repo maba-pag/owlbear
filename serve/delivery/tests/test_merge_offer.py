@@ -11,8 +11,6 @@ import pytest
 from serve.delivery.tests.test_portfolio_application import (
     _awaiting_acceptance_fixture,
     _continuation_request,
-    _engine_action,
-    _execute_engine,
     _git,
     _reopen_portfolio,
 )
@@ -155,11 +153,12 @@ _AUTHORITY = MergeOfferAuthority(
         (_pull_request("BLOCKED"), _facts(_check(conclusion=None)), "checks-running", None),
         (_pull_request(), MergeFacts(capable=False), "merge-blocked", MergeBlockReason.CAPABILITY_UNAVAILABLE),
         (_pull_request(), None, "provider-unavailable", None),
-        (_pull_request(), _facts().model_copy(update={"target_head": "f" * 40}), "target-sync-required", None),
+        (_pull_request(), _facts(), "target-sync-required", None),
     ],
 )
 def test_known_unmergeable_pull_request_never_yields_an_offer(pull_request, facts, reason, block) -> None:
-    decision = decide_merge(_AUTHORITY, pull_request, facts)
+    authority = _AUTHORITY.model_copy(update={"proof_target": None}) if reason == "target-sync-required" else _AUTHORITY
+    decision = decide_merge(authority, pull_request, facts)
 
     assert decision is not None
     assert (decision.reason, decision.block.reason if decision.block else None) == (reason, block)
@@ -193,6 +192,18 @@ def test_offer_binds_provider_facts_and_required_check_conclusions_only() -> Non
     assert decide_merge(_AUTHORITY, _pull_request("CLEAN", title="Renamed"), rerun).offer.offer_id == offer.offer_id
     neutral = _facts(_check("unit", conclusion="neutral"))
     assert decide_merge(_AUTHORITY, _pull_request(), neutral).offer.offer_id != offer.offer_id
+
+
+def test_moved_target_stays_offerable_and_reports_both_targets() -> None:
+    """U3 (b), amended 2026-10-07: the offer binds the current target and keeps the proof target visible."""
+    moved = "f" * 40
+    offer = decide_merge(_AUTHORITY, _pull_request(), _facts().model_copy(update={"target_head": moved})).offer
+
+    assert offer is not None
+    assert (offer.target_head, offer.proof.proof_target) == (moved, _TARGET)
+    assert offer.offer_id != decide_merge(_AUTHORITY, _pull_request(), _facts()).offer.offer_id
+    behind = decide_merge(_AUTHORITY, _pull_request("BEHIND"), _facts().model_copy(update={"target_head": moved}))
+    assert (behind.reason, behind.block.reason, behind.offer) == ("merge-blocked", MergeBlockReason.BEHIND, None)
 
 
 def _memory_awaiting_merge(
@@ -315,7 +326,7 @@ def test_provider_without_merge_protocol_is_capability_unavailable(tmp_path: Pat
 
 
 @pytest.mark.parametrize("head_changes", [True, False])
-def test_newer_provider_target_routes_a_finalized_change_through_sync_and_fresh_proof(
+def test_newer_provider_target_keeps_the_finalized_offer_with_its_proof_target(
     tmp_path: Path, *, head_changes: bool
 ) -> None:
     application, runtime, memory, head, _state_root = _memory_awaiting_merge(tmp_path)
@@ -339,21 +350,18 @@ def test_newer_provider_target_routes_a_finalized_change_through_sync_and_fresh_
     memory.set_branch_head(_REPOSITORY, "main", target)
     application._merge_facts_cache.clear()
 
-    readiness = application.get_change("change-a").readiness
-    assert (readiness.reason_code, readiness.operation, readiness.basis.target_head) == (
-        "target-sync-required",
-        WorkItemActionKind.SYNC_TARGET,
-        target,
+    view = application.get_change("change-a")
+    readiness = view.readiness
+    assert (readiness.reason_code, readiness.next_actor, readiness.executable) == (
+        "merge-approval-required",
+        WorkItemNextActor.YOU,
+        False,
     )
-    action = _engine_action(application)
-    assert (action.kind, action.target_head) == ("sync-target", target)
-    synchronized = _execute_engine(application, action)
-
-    assert synchronized.kind == "completed", synchronized
-    assert memory.pull_requests[(_REPOSITORY, 7)].draft is True
-    assert (runtime.finalization(), runtime.ready_receipt()) == (None, None)
-    assert (synchronized.target_sync.merged_head != head) is head_changes
-    assert application.get_change("change-a").readiness.merge_offer is None
+    assert (readiness.merge_offer.target_head, readiness.merge_offer.proof.proof_target) == (target, proof_target)
+    assert view.detail.card.next_step.startswith(f"Proven against main at {proof_target[:12]}; main is now at")
+    acquired = _acquire(application)
+    assert (acquired.kind, acquired.reason_code, acquired.engine_action) == ("waiting", "merge-approval-required", None)
+    assert (runtime.finalization() is not None, runtime.ready_receipt() is not None) == (True, True)
 
 
 def _with_clock(application: PortfolioApplication, now: list[datetime]) -> None:

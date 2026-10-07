@@ -836,7 +836,7 @@ class WorkItemProjector:
                     "Check again, or Pause or Abandon the Change."
                 ),
             }
-            self._cards = tuple(
+            overlaid = tuple(
                 card.model_copy(
                     update={
                         "readiness": decision,
@@ -878,7 +878,41 @@ class WorkItemProjector:
                 )
                 for card, decision, guidance_item in zip(self._cards, readiness, guidance, strict=True)
             )
+            self._cards = tuple(
+                self._with_readiness_ownership(card, updated)
+                for card, updated in zip(self._cards, overlaid, strict=True)
+            )
         self._items = {card.work_item_id: self._compatibility_projection(card) for card in self._cards}
+
+    def _with_readiness_ownership(self, card: WorkItemCardView, updated: WorkItemCardView) -> WorkItemCardView:
+        """Drop the awaiting-merge card's phase-default user ownership when readiness names another owner."""
+        readiness = updated.readiness
+        if (
+            readiness is None
+            or readiness.next_actor is WorkItemNextActor.YOU
+            or updated.needs is not WorkItemNeed.YOU
+            or card.publication_phase is not WorkItemPublicationPhase.AWAITING_MERGE
+            or card.action.kind is not WorkItemActionKind.OBSERVE_ACCEPTANCE
+            or card.action.command is not None
+            or self._snapshot.frontier.change_disposition is not None
+        ):
+            return updated
+        agent_step = readiness.next_actor is WorkItemNextActor.AGENT and readiness.executable
+        sync_step = agent_step and readiness.operation is WorkItemActionKind.SYNC_TARGET
+        return updated.model_copy(
+            update={
+                "needs": WorkItemNeed.NONE,
+                "needs_headline": None,
+                "activity": WorkItemActivity(
+                    state=WorkItemActivityState.READY if agent_step else WorkItemActivityState.IDLE
+                ),
+                "progress": (
+                    updated.progress.model_copy(update={"label": "Target sync needed"})
+                    if sync_step
+                    else updated.progress
+                ),
+            }
+        )
 
     @staticmethod
     def _readiness_next_step(
@@ -891,11 +925,18 @@ class WorkItemProjector:
             return guidance
         if readiness.merge_block is not None:
             return _MERGE_BLOCK_STEPS[readiness.merge_block.reason]
+        offer = readiness.merge_offer
+        if offer is not None and offer.proof.proof_target != offer.target_head:
+            return (
+                f"Proven against {offer.base_branch} at {offer.proof.proof_target[:12]}; {offer.base_branch} is now "
+                f"at {offer.target_head[:12]}. Approve the merge in Cockpit, or merge the pull request in GitHub; "
+                "Delivery records completion afterward."
+            )
         if (
             readiness.reason_code == "target-sync-required"
             and card.publication_phase is WorkItemPublicationPhase.AWAITING_MERGE
         ):
-            return "The target moved after the proof; synchronize, re-finalize and re-review before merging."
+            return "Delivery has no recorded proof target; synchronize the target and re-finalize before merging."
         if readiness.reason_code == "retry-exhausted":
             owner = (
                 "Builder"

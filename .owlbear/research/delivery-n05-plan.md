@@ -76,9 +76,11 @@
   required checks' names and conclusions at that head, merge method and stack facts (I10). Check
   observation IDs are not bound: they digest `observed_at`, so every fresh read mints a new one
   (A7). The proof target is `frontier.target_sync_receipt.target_head` (the finalization has no
-  target field; from N05-B1 any later sync to a new target invalidates finalization, 3.4); an offer exists only while it equals
-  the provider's current target branch head (`read_branch_head`), not the local remote-tracking ref
-  the readiness basis reads without a fetch (U3(a), A7).
+  target field; from N05-B1 any later sync to a new target invalidates finalization, 3.4). The offer
+  binds the provider's current target branch head (`read_branch_head`), not the local remote-tracking
+  ref the readiness basis reads without a fetch (A7). Since the 2026-10-07 U3 amendment (b), a proof
+  target that differs from that head keeps the offer and is reported beside it; only a finalized
+  Change without a recorded proof target routes to target sync.
 - **I2 Fenced request.** Every merge request carries the approved head as GitHub's `sha` fence,
   `merge_action: "direct_merge"` and `bypass_rules: false`. Delivery never enables auto-merge,
   updates a PR branch through the provider, enqueues into a merge queue or bypasses rules.
@@ -260,7 +262,7 @@ Agent-settled with probe evidence:
   itself (mark ready reads checks, acceptance reads the PR, `approve_merge` recomputes the offer).
 - **D9 L2 classification.** Mergeability `UNKNOWN` → `merge-checking` (bounded re-read; GitHub
   computes it lazily, P3); `CONFLICTING`/`DIRTY` → `merge-blocked/conflicts` → target sync route;
-  `BEHIND` → `merge-blocked/behind` → target sync route (U3(a)); `BLOCKED` →
+  `BEHIND` → `merge-blocked/behind` → target sync route; `BLOCKED` →
   `merge-blocked/protection` (act in GitHub); draft or closed → their block; failed required
   checks → `checks-failed`; pending required checks → `checks-running`.
   Only `CLEAN`, `HAS_HOOKS`, or `UNSTABLE` with no failed required check are offerable. After a
@@ -470,6 +472,18 @@ execution-scope race of I10.** Consequences:
 - This revises programme §10.2, recorded with the old text, revision and reason in the
   [programme](change-continuation-delivery-redesign.md#102-merge-approval-is-a-bounded-user-action)
   and approved by the user on 2026-10-03.
+
+**Amendment (2026-10-07), by the user in chat after a status-quo, problem, options and pro/con
+briefing: part 1 changes from (a) to (b); part 2 (e) is unchanged.** Reason: (a) assumed re-proof
+runs automatically, but since automatic dispatch was removed every re-proof needs a user-started
+chat (sync, finalize with independent review, mark ready). `dev` advances many times a day and has
+no up-to-date rule, so the offer expired before the user saw it and merges moved to GitHub without
+any Delivery offer. Under (b) a moved target keeps the offer: `offer_id` binds the current target,
+the offer reports the finalized proof target separately, and Cockpit states that the proof does not
+cover the newer target commits. Conflicts, `BEHIND`, failed or pending required checks and the D9
+post-merge comparison are unchanged; a finalized Change without a recorded proof target still
+syncs. Path-scoped carry-forward (c) was rejected because a target commit outside the Change's
+paths can still break it.
 
 **U4 — Exit from an unsettled merge** (decided 2026-10-03: (b); reversed 2026-10-04 by the lead,
 [execution plan §7](delivery-redesign-execution-plan.md#7-decisions)). The 2026-10-03 contract (b), a
@@ -718,7 +732,8 @@ Read side; no persisted format, effect or request (Q5).
     provider's target branch head; L2 classification)
   - `application_readiness.py` [A]: `_publication_observation`, `_delivery_snapshot` (D8);
     `_capture_action_basis` and `_supports_finalization` (U3(a) `target-sync-required` for a
-    finalized Change, compared against `read_branch_head`); awaiting-merge readiness with the offer
+    finalized Change, compared against `read_branch_head`; since the 2026-10-07 U3 amendment only
+    without a recorded proof target); awaiting-merge readiness with the offer
     and the B1 reasons; `_action_prerequisites`; `_engine_action_prompt`
   - `application_acquisition.py` [A]: the chat-facing reason comes from readiness, not the persisted
     `merge-approval-required` label (L2, D5); replay mapping; `_engine_action_preflight` does not
@@ -754,10 +769,10 @@ Read side; no persisted format, effect or request (Q5).
     fields equal provider facts; a
     second read with a new check observation (new `observed_at`) yields the same `offer_id`.
   - Finalized Change, local remote-tracking ref stale, provider target head newer →
-    `target-sync-required` → acquire and execute the `sync-target` action (preflight not stale; the
-    fetch checks the provider target) → PR back to draft, finalization and ready invalidated →
-    refinalize and re-review before any new offer; parametrized over a changed and an unchanged
-    candidate head.
+    `waiting/merge-approval-required` with the offer bound to the newer target and the proof target
+    reported beside it; finalization and ready stay recorded and acquisition waits (U3 amended
+    2026-10-07; the earlier sync, refinalize and re-review route applies only without a recorded
+    proof target). Parametrized over a changed and an unchanged candidate head.
   - Automatic acceptance reads exhausted with the PR open → Check again reads once and waits;
     restart; manual merge at the finalized head; Check again → one read, completion once; automatic
     reconciliation makes no read throughout.

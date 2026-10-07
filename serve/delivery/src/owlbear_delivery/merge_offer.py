@@ -188,7 +188,8 @@ def decide_merge(  # noqa: C901, PLR0911, PLR0912 - one ordered row per classifi
         return _blocked(MergeBlockReason.STACKED, f"stack of {evidence.stack.size} pull requests")
     if evidence.base_branch != authority.target_branch:
         return _blocked(MergeBlockReason.WRONG_BASE, f"base {evidence.base_branch}")
-    if authority.proof_target != facts.target_head:
+    # U3 (b), amended 2026-10-07: a moved target stays offerable; the offer shows both targets.
+    if authority.proof_target is None:
         return MergeDecision(reason="target-sync-required", target_head=facts.target_head)
     if not settings.viewer_can_push:
         return _blocked(MergeBlockReason.CAPABILITY_UNAVAILABLE, "no push permission")
@@ -255,7 +256,7 @@ def decide_merge(  # noqa: C901, PLR0911, PLR0912 - one ordered row per classifi
         proof=MergeProofSummary(
             observation_count=authority.observation_count,
             review_id=authority.review_id,
-            proof_target=facts.target_head,
+            proof_target=authority.proof_target,
         ),
     )
     return MergeDecision(reason="merge-approval-required", offer=offer)

@@ -67,11 +67,18 @@ it("summarizes all current Change phases and nonzero operating states", () => {
   const onNeedsFilter = vi.fn();
 
   render(
-    <PortfolioHeaderSummary operating={operating} totals={totals} needsFilter="you" onNeedsFilter={onNeedsFilter} />,
+    <PortfolioHeaderSummary
+      operating={operating}
+      totals={totals}
+      runPromptCount={2}
+      needsFilter="you"
+      onNeedsFilter={onNeedsFilter}
+    />,
   );
 
   expect(screen.getByRole("region", { name: "Portfolio inventory" })).toHaveTextContent("4Changes2Design·2Delivery");
-  expect(screen.getByRole("region", { name: "Attention" })).toHaveTextContent("1Needs you1Blocked");
+  expect(screen.getByRole("region", { name: "Attention" })).toHaveTextContent("1Needs you1Blocked2Run prompt");
+  expect(screen.getByTestId("portfolio-activity-run-prompt")).not.toHaveClass("text-error");
   expect(screen.getByRole("region", { name: "Activity" })).toHaveTextContent("1Running1Ready");
 
   const needsYou = screen.getByRole("button", {
