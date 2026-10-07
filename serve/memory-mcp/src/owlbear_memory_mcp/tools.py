@@ -261,7 +261,7 @@ async def commit_memory_batch(ctx: Context, *, session_type: str) -> dict[str, A
     """Commit non-pending memory entries through the state-aware Git helper."""
     memory_dir = _memory_dir_from_ctx(ctx)
     try:
-        commit_sha = commit_batch(memory_dir, session_type=session_type)
+        result = commit_batch(memory_dir, session_type=session_type)
     except ValueError as exc:
         raise ToolError(str(exc)) from exc
     except subprocess.CalledProcessError as exc:
@@ -278,7 +278,7 @@ async def commit_memory_batch(ctx: Context, *, session_type: str) -> dict[str, A
         msg = f"memory batch commit failed: {detail}"
         raise ToolError(msg) from exc
 
-    if not commit_sha:
+    if not result.commit_sha:
         return {
             "session_type": session_type,
             "commit_sha": None,
@@ -287,7 +287,7 @@ async def commit_memory_batch(ctx: Context, *, session_type: str) -> dict[str, A
         }
     return {
         "session_type": session_type,
-        "commit_sha": commit_sha,
+        "commit_sha": result.commit_sha,
         "committed": True,
         "hint": "Reviewed memory changes committed.",
     }

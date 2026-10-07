@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import re
+import stat
 import subprocess
 from pathlib import Path
 from unittest.mock import patch
@@ -10,7 +13,8 @@ from uuid import uuid4
 import pytest
 from owlbear_memory import MemoryCategory, MemoryEngine, MemoryEntry, MemoryState, storage
 
-from owlbear_memory_mcp.git import commit_batch
+import owlbear_memory_mcp.git as memory_git
+from owlbear_memory_mcp.git import commit_batch, main
 
 
 def _git(repository: Path, *args: str) -> str:
@@ -83,7 +87,7 @@ def test_review_batch_commit_uses_memory_reviewer_actor(tmp_path: Path) -> None:
     memory_dir = _init_memory_repository(tmp_path)
     _write_entry(memory_dir, state=MemoryState.APPROVED)
 
-    commit_sha = commit_batch(memory_dir, session_type="review")
+    commit_sha = commit_batch(memory_dir, session_type="review").commit_sha
 
     assert commit_sha == _git(tmp_path, "rev-parse", "HEAD")
     assert _git(tmp_path, "log", "-1", "--format=%s") == "chore: memory review batch (memory-mcp, memory-reviewer)"
@@ -163,7 +167,7 @@ def test_batch_commits_tracked_pending_deletion(tmp_path: Path) -> None:
     initial_sha = _git(tmp_path, "rev-parse", "HEAD")
     pending_path.unlink()
 
-    commit_sha = commit_batch(memory_dir, session_type="curation")
+    commit_sha = commit_batch(memory_dir, session_type="curation").commit_sha
 
     assert commit_sha != initial_sha
     assert _git(tmp_path, "status", "--porcelain", "--", ".owlbear/memory") == ""
@@ -202,7 +206,7 @@ def test_retiring_last_audience_commits_tombstone_then_purge(tmp_path: Path) -> 
     shared_relative = str(shared_path.relative_to(tmp_path))
     pending_relative = str(pending_path.relative_to(tmp_path))
 
-    initial_sha = commit_batch(memory_dir, session_type="curation")
+    initial_sha = commit_batch(memory_dir, session_type="curation").commit_sha
 
     assert initial_sha == _git(tmp_path, "rev-parse", "HEAD")
     assert set(_git(tmp_path, "ls-tree", "-r", "--name-only", "HEAD", "--", ".owlbear/memory").splitlines()) == {
@@ -229,7 +233,7 @@ def test_retiring_last_audience_commits_tombstone_then_purge(tmp_path: Path) -> 
     assert shared_after_retirement.scope_agents == ["builder"]
     assert _git(tmp_path, "diff", "--cached", "--name-only") == "notes.txt"
 
-    tombstone_sha = commit_batch(memory_dir, session_type="curation")
+    tombstone_sha = commit_batch(memory_dir, session_type="curation").commit_sha
 
     assert tombstone_sha == _git(tmp_path, "rev-parse", "HEAD")
     assert _git(tmp_path, "diff", "--cached", "--name-only") == "notes.txt"
@@ -244,7 +248,7 @@ def test_retiring_last_audience_commits_tombstone_then_purge(tmp_path: Path) -> 
 
     assert purge_result.purged == 1
     assert not orphaned_path.exists()
-    purge_sha = commit_batch(memory_dir, session_type="curation")
+    purge_sha = commit_batch(memory_dir, session_type="curation").commit_sha
 
     assert purge_sha == _git(tmp_path, "rev-parse", "HEAD")
     assert _git(tmp_path, "ls-tree", "-r", "--name-only", "HEAD", "--", ".owlbear/memory") == shared_relative
@@ -284,3 +288,277 @@ def test_purge_before_tombstone_checkpoint_is_rejected_without_staging(tmp_path:
         commit_batch(memory_dir, session_type="curation")
 
     assert _git(tmp_path, "diff", "--cached", "--name-only") == "notes.txt"
+
+
+def test_batch_rejects_staged_memory_blob_divergent_from_head_and_snapshot(tmp_path: Path) -> None:
+    memory_dir = _init_memory_repository(tmp_path)
+    memory_path = _write_entry(memory_dir, state=MemoryState.APPROVED)
+    relative_path = str(memory_path.relative_to(tmp_path))
+    _git(tmp_path, "add", "--", relative_path)
+    _git(tmp_path, "commit", "-m", "initial memory")
+    original_head = _git(tmp_path, "rev-parse", "HEAD")
+    head_blob = _git(tmp_path, "rev-parse", f"HEAD:{relative_path}")
+
+    approved = storage.read_entry_strict(memory_path)
+    storage.write_entry(
+        memory_path,
+        approved.model_copy(update={"content": "Staged content."}),
+        memory_dir=memory_dir,
+    )
+    _git(tmp_path, "add", "--", relative_path)
+    staged_blob = _git(tmp_path, "rev-parse", f":{relative_path}")
+    storage.write_entry(
+        memory_path,
+        approved.model_copy(update={"content": "Validated working-tree content."}),
+        memory_dir=memory_dir,
+    )
+    working_blob = _git(tmp_path, "hash-object", "--", relative_path)
+
+    assert head_blob != staged_blob
+    assert staged_blob != working_blob
+    with pytest.raises(ValueError, match=relative_path):
+        commit_batch(memory_dir, session_type="curation")
+
+    assert _git(tmp_path, "rev-parse", "HEAD") == original_head
+    assert _git(tmp_path, "rev-parse", f":{relative_path}") == staged_blob
+
+
+def test_staged_divergence_preserves_deferred_duplicate_deletion_index(tmp_path: Path) -> None:
+    memory_dir = _init_memory_repository(tmp_path)
+    tracked_path = _write_entry(memory_dir, state=MemoryState.APPROVED)
+    tracked = storage.read_entry_strict(tracked_path)
+    divergent_path = _write_entry(memory_dir, state=MemoryState.APPROVED)
+    divergent = storage.read_entry_strict(divergent_path)
+    tracked_relative = str(tracked_path.relative_to(tmp_path))
+    divergent_relative = str(divergent_path.relative_to(tmp_path))
+    _git(tmp_path, "add", "--", tracked_relative, divergent_relative)
+    _git(tmp_path, "commit", "-m", "initial memory")
+    initial_head = _git(tmp_path, "rev-parse", "HEAD")
+
+    pending_path = memory_dir / "pending-survivor.md"
+    storage.write_entry(
+        pending_path,
+        tracked.model_copy(
+            update={
+                "title": "Pending survivor",
+                "content": "Pending duplicate content.",
+                "state": MemoryState.PENDING,
+                "approved_at": None,
+                "updated_at": "2026-08-30T00:00:00+00:00",
+            }
+        ),
+        memory_dir=memory_dir,
+    )
+    tracked_path.unlink()
+    _git(tmp_path, "add", "-u", "--", tracked_relative)
+
+    storage.write_entry(
+        divergent_path,
+        divergent.model_copy(update={"content": "Staged divergent bytes."}),
+        memory_dir=memory_dir,
+    )
+    _git(tmp_path, "add", "--", divergent_relative)
+    staged_blob = _git(tmp_path, "rev-parse", f":{divergent_relative}")
+    storage.write_entry(
+        divergent_path,
+        divergent.model_copy(update={"content": "Validated working-tree bytes."}),
+        memory_dir=memory_dir,
+    )
+
+    with pytest.raises(ValueError, match=re.escape(divergent_relative)):
+        commit_batch(memory_dir, session_type="curation")
+
+    assert _git(tmp_path, "rev-parse", "HEAD") == initial_head
+    assert _git(tmp_path, "rev-parse", f":{divergent_relative}") == staged_blob
+    assert set(_git(tmp_path, "diff", "--cached", "--name-only").splitlines()) == {
+        tracked_relative,
+        divergent_relative,
+    }
+
+
+def test_batch_commits_duplicate_deletion_when_survivor_is_non_pending(tmp_path: Path) -> None:
+    memory_dir = _init_memory_repository(tmp_path)
+    tracked_path = _write_entry(memory_dir, state=MemoryState.APPROVED)
+    tracked = storage.read_entry_strict(tracked_path)
+    tracked_relative = str(tracked_path.relative_to(tmp_path))
+    _git(tmp_path, "add", "--", tracked_relative)
+    _git(tmp_path, "commit", "-m", "initial memory")
+
+    survivor_path = memory_dir / "newer-copy.md"
+    storage.write_entry(
+        survivor_path,
+        tracked.model_copy(
+            update={
+                "title": "Newer approved copy",
+                "content": "Newer memory content.",
+                "updated_at": "2026-08-30T00:00:00+00:00",
+            }
+        ),
+        memory_dir=memory_dir,
+    )
+    survivor_relative = str(survivor_path.relative_to(tmp_path))
+
+    commit_sha = commit_batch(memory_dir, session_type="curation").commit_sha
+
+    head_paths = _git(tmp_path, "ls-tree", "-r", "--name-only", "HEAD", "--", ".owlbear/memory").splitlines()
+    assert commit_sha == _git(tmp_path, "rev-parse", "HEAD")
+    assert head_paths == [survivor_relative]
+    assert _read_head_entry(tmp_path, survivor_relative).id == tracked.id
+    assert not tracked_path.exists()
+
+
+def test_batch_defers_duplicate_deletion_when_survivor_is_pending(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    memory_dir = _init_memory_repository(tmp_path)
+    tracked_path = _write_entry(memory_dir, state=MemoryState.APPROVED)
+    tracked = storage.read_entry_strict(tracked_path)
+    tracked_relative = str(tracked_path.relative_to(tmp_path))
+    _git(tmp_path, "add", "--", tracked_relative)
+    _git(tmp_path, "commit", "-m", "initial memory")
+    initial_head = _git(tmp_path, "rev-parse", "HEAD")
+
+    pending_path = memory_dir / "newer-pending-copy.md"
+    storage.write_entry(
+        pending_path,
+        tracked.model_copy(
+            update={
+                "title": "Newer pending copy",
+                "content": "Pending memory content.",
+                "state": MemoryState.PENDING,
+                "approved_at": None,
+                "updated_at": "2026-08-30T00:00:00+00:00",
+            }
+        ),
+        memory_dir=memory_dir,
+    )
+
+    result = commit_batch(memory_dir, session_type="curation")
+
+    head_paths = _git(tmp_path, "ls-tree", "-r", "--name-only", "HEAD", "--", ".owlbear/memory").splitlines()
+    assert result.commit_sha is None
+    assert result.deferred_deletions == (tracked_relative,)
+    assert _git(tmp_path, "rev-parse", "HEAD") == initial_head
+    assert head_paths == [tracked_relative]
+    assert _read_head_entry(tmp_path, tracked_relative).id == tracked.id
+    assert f"D {tracked_relative}" in _git(tmp_path, "status", "--porcelain", "--", ".owlbear/memory")
+    assert _git(tmp_path, "diff", "--cached", "--name-only") == ""
+
+    assert main(["curation", "--memory-dir", str(memory_dir)]) == 0
+    output = capsys.readouterr().out
+    assert "no memory changes to commit" in output
+    assert "note: deferred duplicate deletions" in output
+    assert tracked_relative in output
+
+
+def test_batch_reports_noop_and_refuses_symlink_memory_path(tmp_path: Path) -> None:
+    memory_dir = _init_memory_repository(tmp_path)
+    memory_path = _write_entry(memory_dir, state=MemoryState.APPROVED)
+    relative_path = str(memory_path.relative_to(tmp_path))
+    _git(tmp_path, "add", "--", relative_path)
+    _git(tmp_path, "commit", "-m", "initial memory")
+    initial_head = _git(tmp_path, "rev-parse", "HEAD")
+
+    result = commit_batch(memory_dir, session_type="curation")
+
+    assert result.commit_sha is None
+    assert result.deferred_deletions == ()
+
+    symlink_path = memory_dir / "unsafe-link.md"
+    symlink_path.symlink_to(memory_path.name)
+    with pytest.raises(ValueError, match=re.escape("unsafe-link.md")):
+        commit_batch(memory_dir, session_type="curation")
+
+    assert _git(tmp_path, "rev-parse", "HEAD") == initial_head
+    assert _git(tmp_path, "diff", "--cached", "--name-only") == ""
+
+
+def test_batch_reports_duplicate_repair_failure_without_losing_copies(tmp_path: Path) -> None:
+    memory_dir = _init_memory_repository(tmp_path)
+    tracked_path = _write_entry(memory_dir, state=MemoryState.APPROVED)
+    tracked = storage.read_entry_strict(tracked_path)
+    tracked_relative = str(tracked_path.relative_to(tmp_path))
+    _git(tmp_path, "add", "--", tracked_relative)
+    _git(tmp_path, "commit", "-m", "initial memory")
+    initial_head = _git(tmp_path, "rev-parse", "HEAD")
+
+    duplicate_path = memory_dir / "newer-copy.md"
+    storage.write_entry(
+        duplicate_path,
+        tracked.model_copy(
+            update={
+                "content": "Differing duplicate content.",
+                "updated_at": "2026-08-30T00:00:00+00:00",
+            }
+        ),
+        memory_dir=memory_dir,
+    )
+    original_mode = stat.S_IMODE(memory_dir.stat().st_mode)
+    memory_dir.chmod(original_mode & ~(stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH))
+    try:
+        with pytest.raises(ValueError, match=re.escape(tracked_path.name)) as raised:
+            commit_batch(memory_dir, session_type="curation")
+    finally:
+        memory_dir.chmod(original_mode)
+
+    message = str(raised.value)
+    assert tracked.id in message
+    assert tracked_path.name in message
+    assert duplicate_path.name in message
+    assert tracked_path.exists()
+    assert duplicate_path.exists()
+    assert len(list(memory_dir.glob("*.md"))) == 2
+    assert _git(tmp_path, "rev-parse", "HEAD") == initial_head
+    assert _git(tmp_path, "diff", "--cached", "--name-only") == ""
+
+
+def test_batch_refuses_non_regular_memory_path(tmp_path: Path) -> None:
+    memory_dir = _init_memory_repository(tmp_path)
+    fifo_path = memory_dir / "unsafe-fifo.md"
+    os.mkfifo(fifo_path)
+
+    with pytest.raises(ValueError, match=fifo_path.name):
+        commit_batch(memory_dir, session_type="curation")
+
+    assert _git(tmp_path, "diff", "--cached", "--name-only") == ""
+
+
+def test_batch_rejects_post_validation_replacement_before_commit(tmp_path: Path) -> None:
+    memory_dir = _init_memory_repository(tmp_path)
+    memory_path = _write_entry(memory_dir, state=MemoryState.APPROVED)
+    relative_path = str(memory_path.relative_to(tmp_path))
+    _git(tmp_path, "add", "--", relative_path)
+    _git(tmp_path, "commit", "-m", "initial memory")
+    initial_head = _git(tmp_path, "rev-parse", "HEAD")
+    entry = storage.read_entry_strict(memory_path)
+    storage.write_entry(
+        memory_path,
+        entry.model_copy(update={"content": "Validated update."}),
+        memory_dir=memory_dir,
+    )
+
+    real_git = memory_git._git  # noqa: SLF001
+    replaced = False
+
+    def replace_after_add(repository: Path, *args: str) -> str:
+        nonlocal replaced
+        result = real_git(repository, *args)
+        if args[0] == "add" and not replaced:
+            current = storage.read_entry_strict(memory_path)
+            storage.write_entry(
+                memory_path,
+                current.model_copy(update={"content": "Post-validation replacement."}),
+                memory_dir=memory_dir,
+            )
+            replaced = True
+        return result
+
+    with (
+        patch("owlbear_memory_mcp.git._git", side_effect=replace_after_add),
+        pytest.raises(ValueError, match=relative_path),
+    ):
+        commit_batch(memory_dir, session_type="curation")
+
+    assert replaced
+    assert _git(tmp_path, "rev-parse", "HEAD") == initial_head
