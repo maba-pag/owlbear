@@ -2711,6 +2711,55 @@ def test_push_timeout_after_remote_applies_returns_receipt_and_releases_reservat
     assert coordinator.show("lost-response-change").publication_lease is None
 
 
+@pytest.mark.parametrize("push_response", ["verified", "lost"])
+def test_failed_readback_after_applied_push_is_response_unknown(tmp_path: Path, push_response: str) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    _worktree, reviewed = _reviewed_change(manager, "unobserved-push-change")
+    publisher = ChangeBranchPublisher(
+        repository,
+        coordinator,
+        remote="origin",
+        target_branch="main",
+        operation_root=tmp_path / "operations",
+    )
+    original_run = publisher._run_git
+    pushed = False
+
+    def push_then_fail_readback(*arguments: str) -> subprocess.CompletedProcess[bytes]:
+        nonlocal pushed
+        if arguments[0] == "push":
+            completed = original_run(*arguments)
+            assert completed.returncode == 0
+            pushed = True
+            if push_response == "lost":
+                raise subprocess.TimeoutExpired(arguments, 30)
+            return completed
+        if pushed and arguments[0] == "ls-remote":
+            return subprocess.CompletedProcess(arguments, 128, stdout=b"", stderr=b"Internal Server Error")
+        return original_run(*arguments)
+
+    request = PublishChangeBranch(
+        change_id="unobserved-push-change",
+        expected_remote_head=None,
+        operation_id="operation-unobserved-push",
+    )
+    with (
+        patch.object(publisher, "_run_git", side_effect=push_then_fail_readback),
+        pytest.raises(PublicationProviderError) as exc_info,
+    ):
+        publisher.publish(request)
+
+    assert exc_info.value.code is PublicationProviderFailureCode.RESPONSE_UNKNOWN
+    assert exc_info.value.retry_safe is False
+    assert _head(remote, "refs/heads/owlbear/change/unobserved-push-change") == reviewed
+
+    with patch.object(publisher, "_push_exact_head", side_effect=AssertionError("unexpected push")):
+        receipt = publisher.publish(request)
+
+    assert receipt.published_head == reviewed
+
+
 def test_hung_change_branch_push_reads_back_before_any_retry_and_kills_the_transport(
     tmp_path: Path,
     ext_remote: Callable[[Path], Any],
