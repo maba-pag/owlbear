@@ -162,6 +162,7 @@ from owlbear_delivery.draft_pull_request import (
     PullRequestReadyReceipt,
     ReadChangePublicationCheckObservations,
 )
+from owlbear_delivery.merge_approval import MergeAttemptStore, merge_observation_expired
 from owlbear_delivery.publication_provider import (
     PublicationProviderError,
     PublicationPullRequest,
@@ -713,21 +714,36 @@ class PortfolioApplication(
             message = "acceptance observation requires awaiting-merge authority"
             raise PortfolioApplicationError(message)
         change_id = runtime.contract.change_id
-        key = RetryEpisodeKey.engine(
-            change_id,
-            "observe-acceptance",
-            finalization.exact_head,
-            self._workspace_manager.observed_target_head(),
-            finalization.finalization_id,
-        )
         ledger = runtime.retry_ledger(clock=self._clock)
-        episode = ledger.episode(key)
+        attempt = MergeAttemptStore(self._target_root, change_id).observed()
+        if attempt is not None:
+            key = RetryEpisodeKey.merge_observation(
+                change_id, attempt.head_sha, attempt.finalization_id, attempt.approval_id
+            )
+            automatic = not explicit
+            if automatic and merge_observation_expired(attempt, self._clock()):
+                return RetryReservation(
+                    episode_id=key.identity,
+                    allowed=False,
+                    reason_code=RetryStopCode.ACCEPTANCE_WAIT.value,
+                    stop_code=RetryStopCode.ACCEPTANCE_WAIT,
+                )
+        else:
+            key = RetryEpisodeKey.engine(
+                change_id,
+                "observe-acceptance",
+                finalization.exact_head,
+                self._workspace_manager.observed_target_head(),
+                finalization.finalization_id,
+            )
+            episode = ledger.episode(key)
+            automatic = not (explicit and episode is not None and episode.stop_code is RetryStopCode.ACCEPTANCE_WAIT)
         try:
             return ledger.reserve(
                 key,
                 failure_class=RetryFailureClass.ACCEPTANCE,
                 now=self._clock(),
-                automatic=not (explicit and episode is not None and episode.stop_code is RetryStopCode.ACCEPTANCE_WAIT),
+                automatic=automatic,
                 fence=self._coordinator.prepare_pause_fence(change_id, "provider", "observe-acceptance"),
             )
         except RetryLedgerConflictError:

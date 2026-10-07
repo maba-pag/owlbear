@@ -431,6 +431,9 @@ class RetryStopCode(StrEnum):
     BACKOFF = "retry-backoff"
 
 
+MERGE_OBSERVATION_ACTION = "observe-merge"
+
+
 class RetryEpisodeKey(_RecoveryModel):
     """Stable semantic identity for one bounded failure episode.
 
@@ -496,6 +499,18 @@ class RetryEpisodeKey(_RecoveryModel):
             task_lineage=task_lineage,
             procedure_class=procedure_class,
             original_candidate=original_candidate,
+        )
+
+    @classmethod
+    def merge_observation(
+        cls, change_id: str, exact_head: str, finalization_id: str, approval_id: str
+    ) -> RetryEpisodeKey:
+        """Create the acceptance identity scoped to one released merge approval, not the target head."""
+        return cls(
+            change_id=change_id,
+            action_kind=MERGE_OBSERVATION_ACTION,
+            exact_head=exact_head,
+            finalization_id=f"{finalization_id}:{approval_id}",
         )
 
     @property
@@ -754,6 +769,7 @@ class RetryLedger:
     mechanical_repairs = 2
     transient_attempts = 3
     acceptance_observations = 3
+    merge_observation_seconds = 30
     backoff_seconds = (1, 2)
 
     def __init__(
@@ -1323,8 +1339,10 @@ class RetryLedger:
         explicit_acceptance = (
             policy is RetryFailureClass.ACCEPTANCE
             and not automatic
-            and current is not None
-            and current.stop_code is RetryStopCode.ACCEPTANCE_WAIT
+            and (
+                key.action_kind == MERGE_OBSERVATION_ACTION
+                or (current is not None and current.stop_code is RetryStopCode.ACCEPTANCE_WAIT)
+            )
         )
         if policy is RetryFailureClass.ACCEPTANCE and not automatic and not explicit_acceptance:
             return RetryReservation(
@@ -1388,7 +1406,12 @@ class RetryLedger:
                 attempts=total,
                 stop_code=RetryStopCode.EXHAUSTED,
             )
-        if policy is RetryFailureClass.ACCEPTANCE and automatic and observations >= self.acceptance_observations:
+        if (
+            policy is RetryFailureClass.ACCEPTANCE
+            and automatic
+            and key.action_kind != MERGE_OBSERVATION_ACTION
+            and observations >= self.acceptance_observations
+        ):
             return RetryReservation(
                 episode_id=key.identity,
                 allowed=False,
@@ -1562,17 +1585,18 @@ class RetryLedger:
             if episode.failure_class is RetryFailureClass.MECHANICAL
             else episode.total_attempts - 1
         )
-        delay = self.backoff_seconds[min(delay_index, len(self.backoff_seconds) - 1)]
+        delay = (
+            self.merge_observation_seconds
+            if episode.key.action_kind == MERGE_OBSERVATION_ACTION
+            else self.backoff_seconds[min(delay_index, len(self.backoff_seconds) - 1)]
+        )
         next_at = observed + timedelta(seconds=delay)
         attempts_limit_reached = (
             episode.failure_class is RetryFailureClass.MECHANICAL and episode.repair_attempts >= self.mechanical_repairs
         ) or (
             episode.failure_class is RetryFailureClass.TRANSIENT and episode.total_attempts >= self.transient_attempts
         )
-        acceptance_limit_reached = (
-            episode.failure_class is RetryFailureClass.ACCEPTANCE
-            and episode.observation_attempts >= self.acceptance_observations
-        )
+        acceptance_limit_reached = self._acceptance_limit_reached(episode)
         stop = (
             RetryStopCode.ACCEPTANCE_WAIT
             if acceptance_limit_reached
@@ -1667,10 +1691,7 @@ class RetryLedger:
                     "reset_count": episode.reset_count + 1,
                 }
             )
-        elif (
-            episode.failure_class is RetryFailureClass.ACCEPTANCE
-            and episode.observation_attempts >= self.acceptance_observations
-        ):
+        elif self._acceptance_limit_reached(episode):
             updated = updated.model_copy(update={"last_status": "waiting", "stop_code": RetryStopCode.ACCEPTANCE_WAIT})
         self._commit_summary(
             previous,
@@ -1686,6 +1707,14 @@ class RetryLedger:
             outcome_id=outcome_id,
         )
         return updated
+
+    def _acceptance_limit_reached(self, episode: RetryEpisodeSummary) -> bool:
+        """Merge observations are time-bounded by their caller; other acceptance waits stop after a count."""
+        return (
+            episode.failure_class is RetryFailureClass.ACCEPTANCE
+            and episode.key.action_kind != MERGE_OBSERVATION_ACTION
+            and episode.observation_attempts >= self.acceptance_observations
+        )
 
     def record_accepted_progress(
         self,
