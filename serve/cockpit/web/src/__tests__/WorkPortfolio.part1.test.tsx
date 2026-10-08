@@ -24,6 +24,8 @@ import {
 
 installWorkPortfolioHarness();
 
+const clearBlockAction = { kind: "clear-block", label: "Clear block", command: null } as const;
+
 it("summarizes all current Change phases and nonzero operating states", () => {
   const outcome = {
     change_id: "delivery-change",
@@ -855,6 +857,7 @@ it("clears earlier action feedback before previewing a backward move", async () 
 
 it("requires evidence before clearing a requestless block", async () => {
   fixtureState.currentDetail = detail({
+    card: card({ needs: "you", next_actor: "you", action: clearBlockAction }),
     block: {
       block_id: "BLOCK-001",
       reason: "Proof is missing",
@@ -894,8 +897,77 @@ it("requires evidence before clearing a requestless block", async () => {
   expect(await screen.findByText("Block cleared.")).toBeInTheDocument();
 });
 
+it("offers only the attempt grant for an exhausted Builder retry block", async () => {
+  const blockId = `builder-attempt-limit-${"f".repeat(64)}`;
+  fixtureState.currentDetail = detail({
+    card: card({
+      needs: "you",
+      next_actor: "you",
+      action: { kind: "grant-attempt", label: "Grant one more attempt", command: null },
+    }),
+    block: {
+      block_id: blockId,
+      reason: "The Builder retry episode reached its three-attempt limit.",
+      unblock_condition: "Use a supported operator disposition without resetting this retry episode.",
+      expected_evidence: ["An exact operator disposition for the retained Builder task."],
+      locators: ["TASK-001"],
+      request_id: null,
+      resolution_note: null,
+      resolution_locators: [],
+      resume_commit: null,
+    },
+  });
+  const { container } = renderPage("/delivery/change-alpha/outcome%3AOUT-001");
+
+  const grant = await screen.findByText("Grant one more attempt", { selector: "p-button" });
+  expect(screen.queryByText("Clear block")).not.toBeInTheDocument();
+  expect(namedPdsHost(container, "p-input-text", "block-note")).toBeNull();
+  fireEvent.click(grant);
+
+  await waitFor(() =>
+    expect(fixtureState.requests).toContainEqual({
+      url: `/api/changes/change-alpha/outcomes/OUT-001/blocks/${blockId}/grant-attempt`,
+      method: "POST",
+      body: { expected_frontier_digest: "a".repeat(64) },
+    }),
+  );
+  expect(await screen.findByText("One more Builder attempt granted.")).toBeInTheDocument();
+});
+
+it("routes a Builder return limit to a Design revision without a clearance form", async () => {
+  fixtureState.currentDetail = detail({
+    card: card({
+      stage: "planning",
+      needs: "you",
+      next_actor: "you",
+      action: { kind: "resume-design", label: "Revise Design", command: "/design change-alpha" },
+    }),
+    block: {
+      block_id: `builder-return-limit-${"e".repeat(64)}`,
+      reason: "The Builder returned this task to Planning three times under the current Design.",
+      unblock_condition: "Revise the Design; the revision preserves the retained Builder work first.",
+      expected_evidence: ["An approved Design revision for this outcome."],
+      locators: ["TASK-001"],
+      request_id: null,
+      resolution_note: null,
+      resolution_locators: [],
+      resume_commit: null,
+    },
+  });
+  const { container } = renderPage("/delivery/change-alpha/outcome%3AOUT-001");
+
+  expect(await screen.findByText(/returned this task to Planning three times/)).toBeInTheDocument();
+  const revise = await screen.findByTestId("block-revise-design");
+  expect(revise).toHaveTextContent("Revise Design: Pause the Change, then revise its Design.");
+  expect(within(revise).getByRole("button", { name: "Copy command /design change-alpha" })).toBeInTheDocument();
+  expect(screen.queryByText("Clear block")).not.toBeInTheDocument();
+  expect(screen.queryByText("Grant one more attempt")).not.toBeInTheDocument();
+  expect(namedPdsHost(container, "p-input-text", "block-note")).toBeNull();
+});
+
 it("keeps block evidence available when clearing the block fails", async () => {
   fixtureState.currentDetail = detail({
+    card: card({ needs: "you", next_actor: "you", action: clearBlockAction }),
     block: {
       block_id: "BLOCK-001",
       reason: "Proof is missing",

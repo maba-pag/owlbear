@@ -371,6 +371,12 @@ class ClearBlockBody(_TargetHTTPModel):
     expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
+class GrantAttemptBody(_TargetHTTPModel):
+    """User decision funding one more attempt for an exhausted same-task Builder retry block."""
+
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 class ConfirmLostClaimBody(_TargetHTTPModel):
     """Legacy recovery request; confirmation does not prove worker exclusion."""
 
@@ -689,6 +695,7 @@ __all__ = [
     "ConfirmLostClaimBody",
     "DesignWorkDetailResponse",
     "ExternalHeadAdoptionResponse",
+    "GrantAttemptBody",
     "MergeApprovalResponse",
     "NeedsCounts",
     "PortfolioChangeLifecycleStatusResponse",

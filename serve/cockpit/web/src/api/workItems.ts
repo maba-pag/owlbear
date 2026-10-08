@@ -8,6 +8,7 @@ export type WorkItemActionKind =
   | "resume-design"
   | "answer-request"
   | "clear-block"
+  | "grant-attempt"
   | "recover-claim"
   | "finalize"
   | "reconcile-checkpoint"
@@ -1111,6 +1112,27 @@ export function clearWorkItemBlock(
   return controlRequest(blockPath, "ERR_WORK_ITEM_BLOCK_CLEAR", {
     operator_note: operatorNote,
     locators,
+    expected_frontier_digest: expectedFrontierDigest,
+  });
+}
+
+/** Funds exactly one more Builder attempt for an exhausted same-task retry block; retry history is kept. */
+export function grantWorkItemAttempt(
+  changeId: string,
+  outcomeId: string,
+  blockId: string,
+  expectedFrontierDigest: string,
+): Promise<unknown> {
+  const grantPath = [
+    "/api/changes",
+    encodeURIComponent(changeId),
+    "outcomes",
+    encodeURIComponent(outcomeId),
+    "blocks",
+    encodeURIComponent(blockId),
+    "grant-attempt",
+  ].join("/");
+  return controlRequest(grantPath, "ERR_WORK_ITEM_ATTEMPT_GRANT", {
     expected_frontier_digest: expectedFrontierDigest,
   });
 }

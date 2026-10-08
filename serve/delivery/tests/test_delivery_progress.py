@@ -328,12 +328,12 @@ def test_open_decision_request_is_your_decision(tmp_path: Path) -> None:
     assert _group(application).progress == card.readiness.progress
 
 
-def test_exhausted_retry_needs_attention(tmp_path: Path) -> None:
+def test_exhausted_same_task_builder_retry_is_your_decision(tmp_path: Path) -> None:
     application, _runtime, _contexts = _exhaust_builder_retry_with_distinct_codes(tmp_path)
 
     card = _card(application, "outcome:OUT-001")
     assert card.readiness.reason_code == "retry-exhausted"
-    assert _situation(card.readiness.progress) == "needs-attention"
+    assert _situation(card.readiness.progress) == "your-decision"
 
 
 def test_awaiting_merge_is_your_decision_and_exhausted_acceptance_names_the_block(tmp_path: Path) -> None:

@@ -132,6 +132,7 @@ from owlbear_delivery.delivery_contract_discovery import (
     discover_persisted_changes,
 )
 from owlbear_delivery.delivery_runtime import (
+    BUILDER_ATTEMPT_GRANT_NOTE,
     AdvanceDelivery,
     DeliveryAcceptanceAttentionReason,
     DeliveryAcceptanceWaitingError,
@@ -177,6 +178,7 @@ from owlbear_delivery.recovery import (
     RetryStopCode,
     is_canonical_admitted_path,
 )
+from owlbear_delivery.runtime_receipts import is_builder_return_limit
 from owlbear_delivery.storage_io import atomic_write, locked_roots, state_is_read_only
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
@@ -971,14 +973,15 @@ class PortfolioApplication(
     ) -> bool:
         """Refuse a requirement revision unless the admitted Change is paused, quiescent and nonterminal (I1).
 
-        With ``allow_design_return`` a retained Design-route handoff is accepted; returns whether one is retained.
+        With ``allow_design_return`` a retained Design-route or return-limit handoff is accepted; returns whether one
+        is retained.
         """
         frontier = parse_delivery_frontier(runtime.frontier_bytes())[0]
         coordination = self._coordinator.show(change_id)
         action = coordination.continuation_action
         design_return = allow_design_return and any(
             binding.builder_handoff_context is not None
-            and binding.builder_handoff_context.route == "same-outcome-design"
+            and (binding.builder_handoff_context.route == "same-outcome-design" or is_builder_return_limit(binding))
             for binding in frontier.bindings
         )
         handoff = next(
@@ -1675,7 +1678,7 @@ class PortfolioApplication(
             binding=binding,
         )
 
-    def answer(  # noqa: C901, PLR0911
+    def answer(  # noqa: C901, PLR0911, PLR0912
         self,
         answer: DeliveryAnswer,
         *,
@@ -1725,6 +1728,9 @@ class PortfolioApplication(
                         request=resolved,
                         frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
                     )
+
+                if answer.kind is DeliveryAnswerKind.GRANT_ATTEMPT:
+                    return self._grant_builder_attempt(runtime, answer, current_digest, allow_user_only=allow_user_only)
 
                 if answer.kind is DeliveryAnswerKind.BLOCK:
                     binding = runtime.show_binding(answer.outcome_id)
@@ -1796,6 +1802,46 @@ class PortfolioApplication(
                     disposition=resolved,
                     frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
                 )
+
+    def _grant_builder_attempt(
+        self,
+        runtime: DeliveryRuntime,
+        answer: DeliveryAnswer,
+        current_digest: str,
+        *,
+        allow_user_only: bool,
+    ) -> DeliveryAnswerResult:
+        """Apply the user's one-attempt grant to an exhausted same-task Builder retry block."""
+        if not allow_user_only:
+            message = "one more Builder attempt is granted only by the user in Cockpit"
+            raise DeliveryConfirmationError(message)
+        if current_digest != answer.expected_frontier_digest:
+            binding = runtime.show_binding(answer.outcome_id)
+            block = binding.block
+            if (
+                block is not None
+                and block.block_id == answer.block_id
+                and block.resolution_note == (BUILDER_ATTEMPT_GRANT_NOTE)
+            ):
+                return DeliveryAnswerResult(
+                    change_id=answer.change_id,
+                    kind=answer.kind,
+                    binding=runtime.grant_builder_attempt(answer.outcome_id, answer.block_id, now=self._clock()),
+                    frontier_digest=current_digest,
+                )
+            self._fail("answer frontier changed")
+        granted = runtime.grant_builder_attempt(answer.outcome_id, answer.block_id, now=self._clock())
+        self._publish_delivery_state(
+            answer.change_id,
+            runtime,
+            _checkpoint_operation_id("attempt-grant", answer.change_id, answer.outcome_id, answer.block_id),
+        )
+        return DeliveryAnswerResult(
+            change_id=answer.change_id,
+            kind=answer.kind,
+            binding=granted,
+            frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+        )
 
     @staticmethod
     def _exact_task_scope(task: DeliveryTaskDefinition, worktree: Path) -> tuple[str, ...]:

@@ -89,6 +89,7 @@ interface WorkItemDetailProps {
   actionResult: string | null;
   onAnswerRequest: (requestId: string, resolution: DeliveryRequestResolution) => Promise<Error | null>;
   onClearBlock: (blockId: string, note: string, locators: string[]) => Promise<Error | null>;
+  onGrantAttempt: (blockId: string) => Promise<Error | null>;
   onReleaseStuckWorker: (attemptId: string, claimId: string) => Promise<Error | null>;
   onPreviewBackward: (target: WorkItemStage) => Promise<BackwardMovePreview | null>;
   onMoveBackward: (target: WorkItemStage, reason: string, snapshotVersion: string) => Promise<Error | null>;
@@ -509,12 +510,16 @@ function ChangePauseSection(props: WorkItemDetailProps) {
   );
 }
 
-function BlockSection({ detail, pendingAction, onClearBlock }: WorkItemDetailProps) {
+function BlockSection({ detail, pendingAction, onClearBlock, onGrantAttempt }: WorkItemDetailProps) {
   const block = detail.item.block;
   const [note, setNote] = useState("");
   const [locator, setLocator] = useState("");
   if (!block) return null;
   const requestless = block.request_id === null;
+  // Attempt-limit, return-limit and legacy exhaustion blocks keep their handoff: only their own card action lifts them.
+  const clearable = requestless && detail.item.card.action.kind === "clear-block" && !block.resolution_note;
+  const grantable = detail.item.card.action.kind === "grant-attempt" && !block.resolution_note;
+  const reviseDesign = detail.item.card.action.kind === "resume-design" ? detail.item.card.action : null;
   const canClear = requestless && note.trim().length > 0 && locator.trim().length > 0 && pendingAction === null;
   return (
     <section className="border-l-4 border-warning bg-surface p-static-md" aria-labelledby="work-block-heading">
@@ -523,7 +528,33 @@ function BlockSection({ detail, pendingAction, onClearBlock }: WorkItemDetailPro
       </PHeading>
       <p className="mt-static-xs text-sm">{block.reason}</p>
       <p className="mt-static-xs text-sm text-contrast-medium">Clear when: {block.unblock_condition}</p>
-      {requestless && !block.resolution_note ? (
+      {reviseDesign?.command ? (
+        <div className="mt-static-md grid gap-static-sm" data-testid="block-revise-design">
+          <p className="text-sm">
+            {reviseDesign.label}: Pause the Change, then revise its Design. The revision first keeps the Builder's work
+            under refs and keeps completed tasks and answered requests.
+          </p>
+          <CopyCommand command={reviseDesign.command} />
+        </div>
+      ) : null}
+      {grantable ? (
+        <div className="mt-static-md grid gap-static-sm">
+          <p className="text-sm">
+            Granting adds exactly one more Builder attempt for this task. Earlier attempts stay recorded; if it fails
+            again, the task stops here for your decision.
+          </p>
+          <PButton
+            className="w-fit"
+            type="button"
+            compact
+            disabled={pendingAction !== null}
+            onClick={() => void onGrantAttempt(block.block_id)}
+          >
+            {pendingAction === "grant-attempt" ? "Granting..." : "Grant one more attempt"}
+          </PButton>
+        </div>
+      ) : null}
+      {clearable ? (
         <div className="mt-static-md grid gap-static-sm">
           <PInputText
             compact

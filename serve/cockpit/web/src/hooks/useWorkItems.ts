@@ -17,6 +17,7 @@ import {
   deferWorkItemChange,
   designWorkDetailUrl,
   discardAbandonedTargetSyncAndCleanup,
+  grantWorkItemAttempt,
   isUnavailableDetail,
   listCompletedChanges,
   type MergeApprovalResponse,
@@ -497,6 +498,18 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
             currentDetail().item.snapshot_version,
           ),
         "Block cleared.",
+      ),
+    grantAttempt: (blockId: string) =>
+      mutate(
+        "grant-attempt",
+        () =>
+          grantWorkItemAttempt(
+            identity.changeId,
+            currentDetail().item.card.work_item_id,
+            blockId,
+            currentDetail().item.snapshot_version,
+          ),
+        "One more Builder attempt granted.",
       ),
     releaseStuckWorker: (attemptId: string, claimId: string) =>
       mutate(

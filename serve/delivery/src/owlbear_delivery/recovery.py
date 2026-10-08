@@ -32,6 +32,7 @@ _MAX_REPAIR_BINDINGS = 256
 # Readiness shows the latest attempts: three budgeted ones plus explicit observations and refunded pauses.
 MAX_RETRY_HISTORY_ATTEMPTS = 6
 _RETRY_FAILURE_CODE_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+BUILDER_RETURN_FAILURE_CODE = "worker-returned"
 MAX_ADMITTED_PATH_LENGTH = 4096
 _ADMITTED_AUTHORITY_FIELDS = frozenset(
     {"admitted_task_id", "admitted_task_digest", "admitted_task_scope", "admitted_paths"}
@@ -685,6 +686,7 @@ class RetryEpisodeSummary(_RecoveryModel):
     stop_code: RetryStopCode | None = None
     reset_count: int = Field(default=0, ge=0)
     legacy_failures: int = Field(default=0, ge=0)
+    granted_attempts: int = Field(default=0, ge=0, exclude_if=lambda value: value == 0)
 
     @model_validator(mode="after")
     def _validate_identity(self) -> Self:
@@ -704,7 +706,7 @@ class RetryEpisodeSummary(_RecoveryModel):
 class RetryLedgerSummary(_RecoveryModel):
     """Versioned current retry projection guarded by expected-byte replacement."""
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 1
     change_id: str = Field(pattern=r"^[a-z0-9][a-z0-9-]*$")
     version: int = Field(default=0, ge=0)
     updated_at: str | None = Field(default=None, max_length=64)
@@ -722,7 +724,20 @@ class RetryLedgerSummary(_RecoveryModel):
         identities = tuple(episode.episode_id for episode in self.episodes)
         if len(set(identities)) != len(identities):
             raise ValueError("retry episode identities must be unique")
+        if self.schema_version == 1 and any(episode.granted_attempts for episode in self.episodes):
+            raise ValueError("schema-1 retry ledger cannot carry granted attempts")
         return self
+
+
+def parse_retry_ledger_summary(content: bytes) -> RetryLedgerSummary:
+    """Registered reader for schema-1 retry ledgers; the widened model validates them unchanged."""
+    return RetryLedgerSummary.model_validate_json(content, strict=True)
+
+
+class RetryAttemptGrantError(RuntimeError):
+    """The exact attempt is not the settled failure of an exhausted mechanical episode."""
+
+    code = "ERR_DELIVERY_RETRY_GRANT_REFUSED"
 
 
 class RetryReservation(_RecoveryModel):
@@ -767,6 +782,7 @@ class RetryLedger:
     schema_version = 1
     policy_version = 1
     mechanical_repairs = 2
+    builder_planning_returns = 3
     transient_attempts = 3
     acceptance_observations = 3
     merge_observation_seconds = 30
@@ -832,15 +848,7 @@ class RetryLedger:
         """Project the newest bounded attempts of the episode's current budget, oldest first, without mutation."""
         if episode.key.change_id != self.change_id:
             raise ValueError("retry episode belongs to another Change")
-        budget_start = max(
-            (
-                episode.attempt_ids.index(item) + 1
-                for item in episode.accepted_attempt_ids
-                if item in episode.attempt_ids
-            ),
-            default=0,
-        )
-        attempt_ids = episode.attempt_ids[budget_start:]
+        attempt_ids = _current_budget_attempt_ids(episode)
         if before_attempt_id is not None:
             if before_attempt_id not in attempt_ids:
                 raise RetryLedgerConflictError("attempt is not part of this retry episode")
@@ -865,14 +873,7 @@ class RetryLedger:
         )
         if outcome_id is None:
             return DeliveryRetryAttemptView(ordinal=ordinal, kind=attempt.kind, status="pending")
-        try:
-            outcome = RetryAttemptOutcome.model_validate_json(
-                read_record(self.runtime_root, self._outcomes_path / f"{outcome_id}.json")
-            )
-        except (OSError, TypeError, ValueError) as exc:
-            raise RetryLedgerCorruptError from exc
-        if outcome.attempt_id != attempt_id or outcome.episode_id != episode.episode_id:
-            raise RetryLedgerCorruptError
+        outcome = self._read_outcome(episode, attempt_id, outcome_id)
         code = outcome.failure_code
         return DeliveryRetryAttemptView(
             ordinal=ordinal,
@@ -881,6 +882,30 @@ class RetryLedger:
             failure_code=code if code is not None and re.fullmatch(_RETRY_FAILURE_CODE_PATTERN, code) else None,
             observed_at=outcome.observed_at,
         )
+
+    def returned_attempts(self, episode: RetryEpisodeSummary) -> int:
+        """Count Builder returns to Planning in the episode's whole current budget, refunded or legacy-charged."""
+        if episode.key.change_id != self.change_id:
+            raise ValueError("retry episode belongs to another Change")
+        returned = 0
+        for attempt_id in _current_budget_attempt_ids(episode):
+            for status in ("paused", "failed"):
+                outcome_id = digest(f"{attempt_id}:{status}".encode())
+                if outcome_id in episode.outcome_ids:
+                    outcome = self._read_outcome(episode, attempt_id, outcome_id)
+                    returned += outcome.failure_code == BUILDER_RETURN_FAILURE_CODE
+        return returned
+
+    def _read_outcome(self, episode: RetryEpisodeSummary, attempt_id: str, outcome_id: str) -> RetryAttemptOutcome:
+        try:
+            outcome = RetryAttemptOutcome.model_validate_json(
+                read_record(self.runtime_root, self._outcomes_path / f"{outcome_id}.json")
+            )
+        except (OSError, TypeError, ValueError) as exc:
+            raise RetryLedgerCorruptError from exc
+        if outcome.attempt_id != attempt_id or outcome.episode_id != episode.episode_id:
+            raise RetryLedgerCorruptError
+        return outcome
 
     def import_legacy_failures(
         self,
@@ -905,7 +930,7 @@ class RetryLedger:
         if current is None:
             current = RetryEpisodeSummary(episode_id=key.identity, key=key, failure_class=RetryFailureClass.MECHANICAL)
         total = current.total_attempts + max(0, count - current.legacy_failures) + int(adopt)
-        exhausted = total >= self.mechanical_repairs + 1
+        exhausted = total >= self.mechanical_repairs + current.granted_attempts + 1
         next_times = tuple(
             value
             for value in (
@@ -1218,7 +1243,13 @@ class RetryLedger:
                 ):
                     raise RetryLedgerCorruptError
                 if result.paused:
-                    self.record_pause(attempt_id, now=result.observed_at)
+                    self.record_pause(
+                        attempt_id,
+                        now=result.observed_at,
+                        failure_code=(
+                            result.failure_code if result.failure_code == BUILDER_RETURN_FAILURE_CODE else None
+                        ),
+                    )
                 elif result.repair_task_id is not None:
                     self.record_repair_owner_result(result)
                 elif result.accepted:
@@ -1390,7 +1421,13 @@ class RetryLedger:
                 attempts=total,
                 stop_code=RetryStopCode.CONTAINMENT,
             )
-        if policy is RetryFailureClass.MECHANICAL and not first and not original and repairs >= self.mechanical_repairs:
+        granted = current.granted_attempts if current else 0
+        if (
+            policy is RetryFailureClass.MECHANICAL
+            and not first
+            and not original
+            and repairs >= self.mechanical_repairs + granted
+        ):
             return RetryReservation(
                 episode_id=key.identity,
                 allowed=False,
@@ -1487,6 +1524,7 @@ class RetryLedger:
             ),
             reset_count=current.reset_count if current else 0,
             legacy_failures=current.legacy_failures if current else 0,
+            granted_attempts=granted,
         )
         self._commit_summary(
             previous,
@@ -1511,8 +1549,14 @@ class RetryLedger:
             stop_code=updated.stop_code,
         )
 
-    def record_pause(self, attempt_id: str, *, now: datetime | str | None = None) -> RetryEpisodeSummary:
-        """Settle only a human-gated reservation, retaining all prior failure authority."""
+    def record_pause(
+        self,
+        attempt_id: str,
+        *,
+        now: datetime | str | None = None,
+        failure_code: str | None = None,
+    ) -> RetryEpisodeSummary:
+        """Settle a human-gated reservation or a Builder return to Planning, retaining prior failure authority."""
         summary, previous = self._read_with_bytes()
         episode = _episode_for_attempt(summary, attempt_id)
         if episode is None:
@@ -1532,7 +1576,11 @@ class RetryLedger:
             raise RetryLedgerConflictError("pause requires an exact mechanical reservation")
         observed = _retry_timestamp(_retry_time(now if now is not None else self._clock()))
         outcome = RetryAttemptOutcome(
-            attempt_id=attempt_id, episode_id=episode.episode_id, status="paused", observed_at=observed
+            attempt_id=attempt_id,
+            episode_id=episode.episode_id,
+            status="paused",
+            observed_at=observed,
+            failure_code=failure_code,
         )
         updated = episode.model_copy(
             update={
@@ -1592,7 +1640,8 @@ class RetryLedger:
         )
         next_at = observed + timedelta(seconds=delay)
         attempts_limit_reached = (
-            episode.failure_class is RetryFailureClass.MECHANICAL and episode.repair_attempts >= self.mechanical_repairs
+            episode.failure_class is RetryFailureClass.MECHANICAL
+            and episode.repair_attempts >= self.mechanical_repairs + episode.granted_attempts
         ) or (
             episode.failure_class is RetryFailureClass.TRANSIENT and episode.total_attempts >= self.transient_attempts
         )
@@ -1689,6 +1738,7 @@ class RetryLedger:
                     "last_status": None,
                     "last_failure_at": None,
                     "reset_count": episode.reset_count + 1,
+                    "granted_attempts": 0,
                 }
             )
         elif self._acceptance_limit_reached(episode):
@@ -1865,6 +1915,7 @@ class RetryLedger:
                 "next_eligible_at": None,
                 "stop_code": None,
                 "reset_count": episode.reset_count + 1,
+                "granted_attempts": 0,
             }
         )
         self._commit_summary(
@@ -1878,6 +1929,50 @@ class RetryLedger:
             ),
         )
         return updated
+
+    def prepare_attempt_grant(
+        self,
+        attempt_id: str,
+        *,
+        now: datetime | str | None = None,
+    ) -> tuple[ReplacementTransactionParticipant, RetryEpisodeSummary]:
+        """Return the uncommitted summary replacement that funds one more mechanical attempt.
+
+        The caller commits the participant together with its own frontier and receipt, so the
+        grant is never visible without the user's recorded decision.
+        """
+        observed = _retry_time(now if now is not None else self._clock())
+        summary, previous = self._read_with_bytes()
+        episode = _episode_for_attempt(summary, attempt_id)
+        if (
+            previous is None
+            or episode is None
+            or episode.failure_class is not RetryFailureClass.MECHANICAL
+            or episode.stop_code is not RetryStopCode.EXHAUSTED
+            or episode.attempt_ids[-1:] != (attempt_id,)
+            or not episode.settled_failure(attempt_id)
+        ):
+            message = "only the latest settled failure of an exhausted mechanical retry episode can be granted"
+            raise RetryAttemptGrantError(message)
+        updated = episode.model_copy(
+            update={
+                "granted_attempts": episode.granted_attempts + 1,
+                "next_eligible_at": None,
+                "stop_code": None,
+            }
+        )
+        content = encoded(
+            _versioned_summary(
+                summary.model_copy(
+                    update={
+                        "version": summary.version + 1,
+                        "updated_at": _retry_timestamp(observed),
+                        "episodes": _replace_episode(summary.episodes, updated),
+                    }
+                )
+            )
+        )
+        return ReplacementTransactionParticipant(self.runtime_root, self._summary_path, previous, content), updated
 
     def _read_attempt(self, attempt_id: str) -> RetryAttempt:
         try:
@@ -1953,7 +2048,7 @@ class RetryLedger:
             relative = self._outcomes_path / f"{identity}.json"
             content = encoded(record)
             participants.append(TransactionParticipant(self.runtime_root, relative, content))
-        summary_content = encoded(summary)
+        summary_content = encoded(_versioned_summary(summary))
         if previous is None:
             participants.append(TransactionParticipant(self.runtime_root, self._summary_path, summary_content))
         else:
@@ -1982,6 +2077,12 @@ class RetryLedger:
             RuntimeTransaction(self.runtime_root, f"retry-ledger-{transaction_id}", tuple(participants)).commit()
         except TransactionConflictError as exc:
             raise RetryLedgerConflictError from exc
+
+
+def _versioned_summary(summary: RetryLedgerSummary) -> RetryLedgerSummary:
+    """Write schema 2 only while a grant exists, so ungranted ledgers stay readable by older controllers."""
+    version = 2 if any(episode.granted_attempts for episode in summary.episodes) else 1
+    return summary.model_copy(update={"schema_version": version})
 
 
 def _retry_failure_class(value: RetryFailureClass | str) -> RetryFailureClass:
@@ -2060,6 +2161,15 @@ def _matching_episode(summary: RetryLedgerSummary, key: RetryEpisodeKey) -> Retr
     if len(candidates) > 1:
         raise RetryLedgerConflictError("multiple unresolved retry episodes cover this action")
     return candidates[0] if candidates else exact
+
+
+def _current_budget_attempt_ids(episode: RetryEpisodeSummary) -> tuple[str, ...]:
+    """Return the attempts after the episode's last accepted progress."""
+    budget_start = max(
+        (episode.attempt_ids.index(item) + 1 for item in episode.accepted_attempt_ids if item in episode.attempt_ids),
+        default=0,
+    )
+    return episode.attempt_ids[budget_start:]
 
 
 def _episode_for_attempt(summary: RetryLedgerSummary, attempt_id: str) -> RetryEpisodeSummary | None:

@@ -37,6 +37,7 @@ from owlbear_delivery.runtime_models import (
     _reference,
 )
 from owlbear_delivery.runtime_receipts import (
+    _DeliveryBuilderAttemptGrantReceipt,
     _DeliveryBuilderHandoffChangeIntentHead,
     _DeliveryBuilderHandoffChangeIntentReceipt,
     _DeliveryBuilderRequestResolutionReceipt,
@@ -398,6 +399,49 @@ def _read_builder_request_resolution_receipt(
         or receipt.builder_handoff_context != builder_handoff_context
     ):
         _reference("Builder request resolution receipt does not match its exact handoff")
+    return receipt
+
+
+def _builder_attempt_grant_receipt_path(
+    runtime_root: Path,
+    change_id: str,
+    builder_handoff_context: DeliveryBuilderHandoffContext,
+) -> Path:
+    return (
+        runtime_root
+        / "changes"
+        / change_id
+        / "builder-attempt-grant-receipts"
+        / f"{builder_handoff_context.settlement_id}.json"
+    )
+
+
+def _read_builder_attempt_grant_receipt(
+    runtime_root: Path,
+    change_id: str,
+    builder_handoff_context: DeliveryBuilderHandoffContext,
+) -> _DeliveryBuilderAttemptGrantReceipt | None:
+    """Read one exact user attempt grant, or ``None`` when this handoff has none."""
+    receipt_path = _builder_attempt_grant_receipt_path(runtime_root, change_id, builder_handoff_context)
+    change_root = runtime_root / "changes" / change_id
+    if any(path.is_symlink() for path in (runtime_root / "changes", change_root, receipt_path.parent, receipt_path)):
+        _reference("Builder attempt grant receipt path is unsafe")
+    try:
+        content = receipt_path.read_bytes()
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        _reference("Builder attempt grant receipt is unavailable", exc)
+    try:
+        receipt = _DeliveryBuilderAttemptGrantReceipt.model_validate_json(content, strict=True)
+    except (TypeError, ValueError) as exc:
+        _reference("Builder attempt grant receipt is invalid", exc)
+    if (
+        content != _model_content(receipt)
+        or receipt.change_id != change_id
+        or receipt.builder_handoff_context != builder_handoff_context
+    ):
+        _reference("Builder attempt grant receipt does not match its exact handoff")
     return receipt
 
 

@@ -32,6 +32,7 @@ from serve.delivery.tests.test_portfolio_application import (
     _canonical,
     _continuation_request,
     _engine_action,
+    _exhaust_same_task_builder_retry,
     _failure_request,
     _git,
     _loader_activation_state_snapshot,
@@ -455,11 +456,12 @@ class _DeliveryApplicationFake:
         return SimpleNamespace(frontier_digest="a" * 64)
 
     def answer(self, answer: DeliveryAnswer, *, allow_user_only: bool = False) -> dict[str, object]:
-        # Only the request route answers as the user; block and attention routes never do.
-        assert allow_user_only is (answer.kind is DeliveryAnswerKind.REQUEST)
+        # Only the request and attempt-grant routes answer as the user; block and attention routes never do.
+        assert allow_user_only is (answer.kind in {DeliveryAnswerKind.REQUEST, DeliveryAnswerKind.GRANT_ATTEMPT})
         operation = {
             "request": "answer",
             "block": "clear",
+            "grant-attempt": "grant-attempt",
             "disposition": "attention-resolve",
         }[answer.kind.value]
         self.calls.append((operation, (answer,)))
@@ -3247,6 +3249,49 @@ def test_controls_require_exact_confirmation_and_delegate_once() -> None:
     assert uuid.UUID(move_request.move_id).version == 4  # type: ignore[attr-defined]
     assert move_request.outcome_id == "OUT-001"  # type: ignore[attr-defined]
     assert move_request.expected_version == "a" * 64  # type: ignore[attr-defined]
+
+
+def test_attempt_grant_route_is_the_only_user_grant_and_binds_the_exact_block() -> None:
+    client, application = _client()
+    route = "/api/changes/change-a/outcomes/OUT-001/blocks/builder-attempt-limit-one/grant-attempt"
+
+    rejected = client.post(route, json={"expected_frontier_digest": "a" * 64, "operator_note": "extra"})
+    granted = client.post(route, json={"expected_frontier_digest": "a" * 64})
+
+    assert (rejected.status_code, granted.status_code) == (422, 200)
+    assert [name for name, _args in application.calls] == ["grant-attempt"]
+    answer = application.calls[0][1][0]
+    assert isinstance(answer, DeliveryAnswer)
+    assert (answer.kind, answer.outcome_id, answer.block_id, answer.expected_frontier_digest) == (
+        DeliveryAnswerKind.GRANT_ATTEMPT,
+        "OUT-001",
+        "builder-attempt-limit-one",
+        "a" * 64,
+    )
+
+
+def test_real_http_attempt_grant_resumes_the_builder_and_replays(tmp_path: Path) -> None:
+    application, runtime, _state_root, _attempt_ids = _exhaust_same_task_builder_retry(
+        tmp_path, ["2026-08-04T00:00:00Z"]
+    )
+    block = runtime.show_binding("OUT-001").block
+    route = f"/api/changes/change-a/outcomes/OUT-001/blocks/{block.block_id}/grant-attempt"
+    digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
+
+    with TestClient(assemble_target_app(application)) as client:
+        before = client.get("/api/changes/change-a/work-items/outcome:OUT-001").json()["item"]
+        granted = client.post(route, json={"expected_frontier_digest": digest})
+        replay = client.post(route, json={"expected_frontier_digest": digest})
+        after = client.get("/api/changes/change-a/work-items/outcome:OUT-001").json()["item"]
+
+    assert (before["card"]["action"]["kind"], before["card"]["needs"]) == ("grant-attempt", "you")
+    assert (granted.status_code, replay.status_code) == (200, 200), (granted.json(), replay.json())
+    assert replay.json()["binding"] == granted.json()["binding"]
+    assert after["card"]["action"]["kind"] != "grant-attempt"
+    assert after["readiness"]["reason_code"] != "retry-exhausted"
+    episode = runtime.retry_ledger().read().episodes[0]
+    assert (episode.total_attempts, episode.granted_attempts, episode.stop_code) == (3, 1, None)
+    assert application.acquire_change_action(_continuation_request(application, "change-a")).launch is not None
 
 
 def test_bulk_expired_claim_recovery_route_is_removed_without_delivery_call() -> None:
