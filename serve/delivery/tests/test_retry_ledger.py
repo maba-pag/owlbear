@@ -11,6 +11,7 @@ from unittest.mock import patch
 import pytest
 
 from owlbear_delivery.recovery import (
+    BUILDER_RETURN_FAILURE_CODE,
     MAX_RETRY_HISTORY_ATTEMPTS,
     RetryAttemptGrantError,
     RetryEpisodeKey,
@@ -318,6 +319,31 @@ def test_attempt_history_restarts_with_the_budget_after_accepted_progress(tmp_pa
     episode = ledger.episode(key)
     assert episode is not None
     assert [(item.ordinal, item.status) for item in ledger.attempt_history(episode)] == [(1, "pending")]
+
+
+def test_builder_returns_are_refunded_and_counted_over_the_whole_current_budget(tmp_path: Path) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    key = _engine_key()
+    legacy = ledger.reserve(key, failure_class="mechanical", now=_START, attempt_id="legacy-return")
+    ledger.record_failure(legacy, failure_code=BUILDER_RETURN_FAILURE_CODE, now=_START)
+    at = _START + timedelta(seconds=2)
+    for index in range(MAX_RETRY_HISTORY_ATTEMPTS + 1):
+        reservation = ledger.reserve(key, failure_class="mechanical", now=at, attempt_id=f"return-{index}")
+        ledger.record_pause(reservation.attempt_id, now=at, failure_code=BUILDER_RETURN_FAILURE_CODE)
+    paused = ledger.reserve(key, failure_class="mechanical", now=at, attempt_id="request-pause")
+    episode = ledger.record_pause(paused.attempt_id, now=at)
+
+    assert episode.total_attempts == 1
+    assert ledger.returned_attempts(episode) == MAX_RETRY_HISTORY_ATTEMPTS + 2
+    assert ledger.record_pause("return-0", now=at, failure_code=BUILDER_RETURN_FAILURE_CODE) == episode
+    assert [item.failure_code for item in ledger.attempt_history(episode)][-2:] == [
+        BUILDER_RETURN_FAILURE_CODE,
+        None,
+    ]
+
+    accepted = ledger.reserve(key, failure_class="mechanical", now=at, attempt_id="accepted")
+    episode = ledger.record_accepted_progress(accepted, now=at)
+    assert ledger.returned_attempts(episode) == 0
 
 
 def test_attempt_history_fails_closed_when_an_outcome_record_is_missing(tmp_path: Path) -> None:

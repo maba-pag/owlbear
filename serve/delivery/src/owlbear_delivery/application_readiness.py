@@ -111,7 +111,7 @@ from owlbear_delivery.recovery import (
     RetryLedgerCorruptError,
     RetryStopCode,
 )
-from owlbear_delivery.runtime_receipts import builder_attempt_limit_block_id
+from owlbear_delivery.runtime_receipts import builder_attempt_grant_block_id, is_builder_attempt_grant_block
 from owlbear_delivery.runtime_transaction import (
     TransactionPathError,
     contained_directory,
@@ -1450,7 +1450,7 @@ class _ReadinessViewsMixin:
             and binding is not None
             and binding.block is not None
             and binding.builder_handoff_context is not None
-            and binding.block.block_id == builder_attempt_limit_block_id(binding.builder_handoff_context)
+            and binding.block.block_id == builder_attempt_grant_block_id(binding.builder_handoff_context)
         ):
             exact_head = binding.builder_handoff_context.last_reviewed_commit
         if exact_head is None and handoff_attempt_id is None:
@@ -1534,13 +1534,7 @@ class _ReadinessViewsMixin:
             )
         elif episode.stop_code is RetryStopCode.EXHAUSTED:
             grantable = (
-                handoff_attempt_id is not None
-                and binding is not None
-                and binding.stage is DeliveryStage.IMPLEMENTATION
-                and binding.builder_handoff_context is not None
-                and binding.builder_handoff_context.route == "same-task"
-                and binding.block is not None
-                and binding.block.block_id == builder_attempt_limit_block_id(binding.builder_handoff_context)
+                handoff_attempt_id is not None and binding is not None and is_builder_attempt_grant_block(binding)
             )
             updates.update(
                 {
@@ -2035,10 +2029,10 @@ class _ReadinessViewsMixin:
 
     @staticmethod
     def _user_action_readiness(card: WorkItemCardView, operation: WorkItemActionKind | None) -> tuple[str, str]:
-        if (
-            card.scope is WorkItemScope.OUTCOME
-            and card.stage is not None
-            and card.stage.value == DeliveryStage.DESIGN.value
+        if card.scope is WorkItemScope.OUTCOME and (
+            (card.stage is not None and card.stage.value == DeliveryStage.DESIGN.value)
+            # A Builder return limit routes to a Design revision as well (N12 I5).
+            or card.action.kind is WorkItemActionKind.RESUME_DESIGN
         ):
             return "blocked", "design-attention"
         return ("ready" if operation else "blocked"), "request-action"

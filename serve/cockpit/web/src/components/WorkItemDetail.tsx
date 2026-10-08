@@ -500,8 +500,8 @@ function BlockSection({ detail, pendingAction, onClearBlock, onGrantAttempt }: W
   const [locator, setLocator] = useState("");
   if (!block) return null;
   const requestless = block.request_id === null;
-  // An exhausted Builder retry block keeps its handoff, so only the user's attempt grant can lift it.
-  const attemptLimit = block.block_id.startsWith("builder-attempt-limit-");
+  // Attempt-limit, return-limit and legacy exhaustion blocks keep their handoff: only their own card action lifts them.
+  const clearable = requestless && detail.item.card.action.kind === "clear-block" && !block.resolution_note;
   const grantable = detail.item.card.action.kind === "grant-attempt" && !block.resolution_note;
   const canClear = requestless && note.trim().length > 0 && locator.trim().length > 0 && pendingAction === null;
   return (
@@ -528,7 +528,7 @@ function BlockSection({ detail, pendingAction, onClearBlock, onGrantAttempt }: W
           </PButton>
         </div>
       ) : null}
-      {requestless && !attemptLimit && !block.resolution_note ? (
+      {clearable ? (
         <div className="mt-static-md grid gap-static-sm">
           <PInputText
             compact

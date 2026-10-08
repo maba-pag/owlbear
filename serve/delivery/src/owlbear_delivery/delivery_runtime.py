@@ -151,6 +151,8 @@ from owlbear_delivery.runtime_receipts import (  # noqa: F401
     _DeliveryPlanningPauseReplay,
     _DeliveryPlanningRetrySettlementReceipt,
     builder_attempt_limit_block_id,
+    is_builder_attempt_grant_block,
+    is_builder_return_limit,
 )
 from owlbear_delivery.runtime_settlement import (
     _SettlementReplayMixin,
@@ -2275,7 +2277,7 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
                 original_task_commitment_ids=original_task.commitment_ids,
                 original_task_maintained_surfaces=original_task.maintained_surfaces,
             )
-            result, paused, failure_code = self._builder_invocation_settled_binding(
+            result, refunded, failure_code = self._builder_invocation_settled_binding(
                 binding, envelope, context, episode, ledger
             )
             receipt = _DeliveryBuilderInvocationSettlementReceipt(
@@ -2288,8 +2290,8 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
                 *ledger.owner_result_participants(
                     claim.attempt_id,
                     accepted=False,
-                    accepted_progress=not paused,
-                    paused=paused,
+                    accepted_progress=not refunded,
+                    paused=refunded,
                     failure_code=failure_code,
                     now=retry_observed_at or datetime.now(UTC),
                 ),
@@ -2310,7 +2312,7 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
             return result
 
     def release_design_return(self) -> OutcomeAuthorityBinding:
-        """Preserve and release one retained Design-return handoff into a plain Design return (N04 §1.7)."""
+        """Preserve and release one retained Design-return or return-limit handoff (N04 §1.7, N12 I5)."""
         manager = self._require_workspace()
         with manager._coordinator.publication_lock(self._contract.change_id) as lock:  # noqa: SLF001
             frontier, previous = self._read()
@@ -2322,17 +2324,20 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
             if (
                 binding is None
                 or context is None
-                or context.route != "same-outcome-design"
+                or (context.route != "same-outcome-design" and not is_builder_return_limit(binding))
                 or handoff is None
                 or handoff.settlement_id != context.settlement_id
                 or handoff.branch_head != context.branch_head
                 or handoff.metadata_fingerprint != context.metadata_fingerprint
             ):
-                _conflict("Design return release requires one exact retained Design-route handoff")
+                _conflict("Design return release requires one exact retained Design-route or return-limit handoff")
             participant = manager.release_design_return(self._contract.change_id, handoff, lock)
             # A Design return declares the outcome's Design wrong: its tasks and results go, as in a claim-held return.
+            # A Planning return does not, so the return-limit release keeps its plan, results, answers and context.
             released = binding.model_copy(
-                update={"tasks": (), "results": (), "builder_handoff_context": None, "block": None}
+                update={"builder_handoff_context": None, "block": None}
+                if context.route == "same-outcome-planner"
+                else {"tasks": (), "results": (), "builder_handoff_context": None, "block": None}
             )
             # The handoff was never published; the remote still holds the last acknowledged state.
             marker = (
@@ -2459,10 +2464,11 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
         *,
         now: datetime | str | None = None,
     ) -> OutcomeAuthorityBinding:
-        """Fund one more same-task Builder attempt after its exact retry episode was exhausted.
+        """Fund one more Builder attempt after its exact retry episode was exhausted.
 
-        The frontier, retry ledger and grant receipt commit in one transaction; retry history
-        is preserved and a later exhaustion needs another grant.
+        It lifts a same-task attempt limit (N11) or a pre-N12 exhausted return to Planning (N12 I6). The frontier,
+        retry ledger and grant receipt commit in one transaction; retry history is preserved and a later exhaustion
+        needs another grant.
         """
         frontier, previous = self._read()
         _require_change_mutable(frontier, "grant_builder_attempt")
@@ -2471,14 +2477,15 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
         block = binding.block
         if (
             context is None
-            or context.route != "same-task"
-            or binding.stage != DeliveryStage.IMPLEMENTATION
             or block is None
             or block.block_id != block_id
-            or block_id != builder_attempt_limit_block_id(context)
-            or block.request_id is not None
+            or not is_builder_attempt_grant_block(
+                binding.model_copy(
+                    update={"block": block.model_copy(update={"resolution_note": None, "resolution_locators": ()})}
+                )
+            )
         ):
-            _conflict("attempt grant requires the exact exhausted same-task Builder block")
+            _conflict("attempt grant requires the exact exhausted Builder block")
         if block.resolved:
             receipt = _read_builder_attempt_grant_receipt(self._target_root, self._contract.change_id, context)
             if receipt is not None and receipt.updated_block == block:

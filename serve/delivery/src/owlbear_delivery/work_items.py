@@ -32,7 +32,7 @@ from owlbear_delivery.evidence import DeliveryEvidenceProjection, build_evidence
 from owlbear_delivery.finalization_reports import FinalizationAttempt
 from owlbear_delivery.merge_offer import MergeBlock, MergeBlockReason, MergeFacts, MergeOffer
 from owlbear_delivery.recovery import MAX_RETRY_HISTORY_ATTEMPTS, DeliveryRetryAttemptView
-from owlbear_delivery.runtime_receipts import builder_attempt_limit_block_id
+from owlbear_delivery.runtime_receipts import is_builder_attempt_grant_block, is_builder_return_limit
 from owlbear_delivery.target_contract import DeliveryCommitment, DeliveryContract, DeliveryOutcome
 
 
@@ -1207,9 +1207,10 @@ class WorkItemProjector:
         ):
             return "Delivery has no recorded proof target; synchronize the target and re-finalize before merging."
         if readiness.reason_code == "retry-exhausted":
+            grant = _is_attempt_grant(card, readiness)
             owner = (
                 "Builder"
-                if card.scope is WorkItemScope.OUTCOME and card.stage is WorkItemStage.IMPLEMENTATION
+                if card.scope is WorkItemScope.OUTCOME and (card.stage is WorkItemStage.IMPLEMENTATION or grant)
                 else "Planner"
                 if card.scope is WorkItemScope.OUTCOME
                 else "Delivery"
@@ -1217,7 +1218,7 @@ class WorkItemProjector:
             remedy = (
                 "Use Grant one more attempt in Cockpit to fund exactly one more Builder attempt, or inspect this "
                 f"Change read-only with /inspect-change {card.change_id} first."
-                if _is_attempt_grant(card, readiness)
+                if grant
                 else f"Orchestrator can inspect this Change read-only with /inspect-change {card.change_id}; any "
                 "new attempt requires approved current authority."
             )
@@ -1475,26 +1476,20 @@ class WorkItemProjector:
             binding.recovery_attention is not None and binding.recovery_attention.diagnostic_transition is not None
         ):
             return WorkItemAction()
-        if binding.stage == DeliveryStage.DESIGN:
+        if binding.stage == DeliveryStage.DESIGN or is_builder_return_limit(binding):
+            # A Builder return limit is lifted only by a preserving Design revision (N12 I5).
             return WorkItemAction(
                 kind=WorkItemActionKind.RESUME_DESIGN,
-                label="Resume Design",
+                label="Resume Design" if binding.stage == DeliveryStage.DESIGN else "Revise Design",
                 command=f"/design {change_id}",
             )
         pending_request = next((item for item in binding.requests if item.resolution is None), None)
         if pending_request is not None:
             return WorkItemAction(kind=WorkItemActionKind.ANSWER_REQUEST, label="Answer request")
         if binding.block is not None and not binding.block.resolved and binding.block.request_id is None:
-            context = binding.builder_handoff_context
-            grantable = (
-                context is not None
-                and context.route == "same-task"
-                and binding.stage == DeliveryStage.IMPLEMENTATION
-                and binding.block.block_id == builder_attempt_limit_block_id(context)
-            )
             return (
                 WorkItemAction(kind=WorkItemActionKind.GRANT_ATTEMPT, label="Grant one more attempt")
-                if grantable
+                if is_builder_attempt_grant_block(binding)
                 else WorkItemAction(kind=WorkItemActionKind.CLEAR_BLOCK, label="Clear block")
             )
         if binding.recovery_attention is not None:

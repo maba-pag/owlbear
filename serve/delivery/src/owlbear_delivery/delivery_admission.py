@@ -566,7 +566,8 @@ def _replanned_binding(
     """Keep completed work whose commitments survive (D13) and the answered scoped requests (D8)."""
     if previous is None:
         return planning.model_copy(update={"return_context": context})
-    if previous.stage == DeliveryStage.DESIGN and previous.return_context is not None:
+    if previous.stage in {DeliveryStage.DESIGN, DeliveryStage.PLANNING} and previous.return_context is not None:
+        # A released Design return or return-limit Planning return keeps its preserved Builder head (N12 I5).
         context = context.model_copy(update={"preserved_commit": previous.return_context.preserved_commit})
     completed = {result.task_id for result in previous.results}
     kept = {

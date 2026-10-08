@@ -46,7 +46,9 @@ or public boundaries.
 `OUT-NNN.NN` in a legacy contract). Cover every criterion: at least one task's
 `acceptance_observations` entry cites its ID and the observable that proves it, for example
 `AC-002: the CLI exits 2 on an unknown flag`. For a criterion only a person can check, name that
-procedure so the Builder can ask the user to confirm it.
+procedure so the Builder can ask the user to confirm it. Bind such evidence by acceptance ID and
+exact procedure, which the Builder matches against an answered request's `applies_to`; never name a
+request ID in a task, since only the Builder's own pause creates and cites it.
 
 Repeat every `DeliveryPlanContext.retained_tasks` entry verbatim (completed work), then plan only the
 delta for criteria whose `coverage` status is not `covered` or `waived`, publishing the retained

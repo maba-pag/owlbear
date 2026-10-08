@@ -181,7 +181,7 @@ class TargetCockpitService:
         block_id: str,
         body: GrantAttemptBody,
     ) -> object:
-        """Grant one more attempt to an exhausted same-task Builder retry block."""
+        """Grant one more attempt to an exhausted Builder block (same-task, or a pre-N12 Planning return)."""
         answer = DeliveryAnswer(
             change_id=change_id,
             kind=DeliveryAnswerKind.GRANT_ATTEMPT,

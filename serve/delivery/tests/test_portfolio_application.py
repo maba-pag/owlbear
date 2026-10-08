@@ -166,6 +166,7 @@ from owlbear_delivery import (
     classify_publication_check,
     load_delivery_application,
     remote_git,
+    runtime_settlement,
 )
 from owlbear_delivery.change_workspace import (
     ChangeContinuationAction,
@@ -3365,7 +3366,9 @@ def _assert_returned_handoff_metadata_fences(application, builder, before_worksp
     builder_episode = runtime.retry_ledger().episode_for_attempt(builder.claim.attempt_id)
     assert builder_episode is not None
     assert builder_episode.key.exact_head == builder.last_reviewed_commit
-    assert builder_episode.total_attempts == 1
+    # The Planning return is refunded and counted as a return (N12 I2, I3).
+    assert builder_episode.total_attempts == 0
+    assert runtime.retry_ledger().returned_attempts(builder_episode) == 1
     assert builder_episode.reset_count == 0
     retained_metadata = application._workspace_manager._capture_builder_handoff_metadata(before_coordination)
     stale_metadata = replace(retained_metadata, status_digest="0" * 64)
@@ -3531,7 +3534,8 @@ def _assert_returned_builder_reacquisition(application, builder, advanced, now, 
     runtime = application._runtimes["change-a"]
     episode_before = runtime.retry_ledger().episode_for_attempt(builder.claim.attempt_id)
     assert episode_before is not None
-    assert episode_before.total_attempts == 1
+    # The Planning return was refunded (N12 I2); the reacquired Builder still joins its episode.
+    assert episode_before.total_attempts == 0
     assert episode_before.reset_count == 0
     now[0] = "2026-08-04T01:00:00Z"
     result = application.acquire_actions(
@@ -3559,7 +3563,7 @@ def _assert_returned_builder_reacquisition(application, builder, advanced, now, 
     assert _workspace_content_snapshot(builder.worktree_path) == before_workspace
     episode_after = runtime.retry_ledger().episode_for_attempt(builder.claim.attempt_id)
     assert episode_after is not None
-    assert episode_after.total_attempts == 2
+    assert episode_after.total_attempts == 1
     assert episode_after.reset_count == 0
     assert builder.claim.attempt_id in episode_after.attempt_ids
     assert resumed.claim.attempt_id in episode_after.attempt_ids
@@ -4244,7 +4248,7 @@ def test_attempt_grant_is_user_only_and_funds_exactly_one_more_attempt(tmp_path:
 
     with pytest.raises(DeliveryConfirmationError, match="only by the user in Cockpit"):
         application.answer(_grant_answer(application, block.block_id))
-    with pytest.raises(DeliveryRuntimeConflictError, match="exact exhausted same-task Builder block"):
+    with pytest.raises(DeliveryRuntimeConflictError, match="exact exhausted Builder block"):
         application.answer(_grant_answer(application, "builder-attempt-limit-other"), allow_user_only=True)
     assert runtime.frontier_bytes() == before
 
@@ -4604,7 +4608,10 @@ def test_ended_without_result_builder_attempts_share_one_exhausting_budget(
     ]
 
 
-def test_exhausted_builder_return_to_planning_projects_read_only_diagnostic(tmp_path: Path) -> None:
+def test_exhausted_builder_return_to_planning_projects_read_only_diagnostic(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(runtime_settlement, "_refunds_planning_return", lambda _request: False)
     now = ["2026-08-04T00:00:00Z"]
     application, runtime, coordinator, _state_root, first, _head, _workspace, retry_settlement = (
         _builder_retry_handoff_setup(tmp_path, now, add_workspace_changes=False)
@@ -4669,8 +4676,10 @@ def test_exhausted_builder_return_to_planning_projects_read_only_diagnostic(tmp_
     assert view.readiness.prompt is not None
     assert view.readiness.prompt.startswith("/inspect-change change-a")
     assert "read-only" in view.readiness.prompt
-    assert view.card.next_actor.value == "agent"
-    assert view.card.action.kind.value == "none"
+    # N12 I6: the pre-N12 exhausted Planning return is no longer read-only; only the user grant lifts it.
+    assert view.card.next_actor.value == "you"
+    assert view.card.action.kind.value == "grant-attempt"
+    assert "Builder retry budget is exhausted" in view.card.next_step
     assert view.card.action.command is None
     assert runtime.frontier_bytes() == before_frontier
     assert coordinator.show("change-a") == before_coordination

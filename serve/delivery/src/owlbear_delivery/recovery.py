@@ -32,6 +32,7 @@ _MAX_REPAIR_BINDINGS = 256
 # Readiness shows the latest attempts: three budgeted ones plus explicit observations and refunded pauses.
 MAX_RETRY_HISTORY_ATTEMPTS = 6
 _RETRY_FAILURE_CODE_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+BUILDER_RETURN_FAILURE_CODE = "worker-returned"
 MAX_ADMITTED_PATH_LENGTH = 4096
 _ADMITTED_AUTHORITY_FIELDS = frozenset(
     {"admitted_task_id", "admitted_task_digest", "admitted_task_scope", "admitted_paths"}
@@ -781,6 +782,7 @@ class RetryLedger:
     schema_version = 1
     policy_version = 1
     mechanical_repairs = 2
+    builder_planning_returns = 3
     transient_attempts = 3
     acceptance_observations = 3
     merge_observation_seconds = 30
@@ -846,15 +848,7 @@ class RetryLedger:
         """Project the newest bounded attempts of the episode's current budget, oldest first, without mutation."""
         if episode.key.change_id != self.change_id:
             raise ValueError("retry episode belongs to another Change")
-        budget_start = max(
-            (
-                episode.attempt_ids.index(item) + 1
-                for item in episode.accepted_attempt_ids
-                if item in episode.attempt_ids
-            ),
-            default=0,
-        )
-        attempt_ids = episode.attempt_ids[budget_start:]
+        attempt_ids = _current_budget_attempt_ids(episode)
         if before_attempt_id is not None:
             if before_attempt_id not in attempt_ids:
                 raise RetryLedgerConflictError("attempt is not part of this retry episode")
@@ -879,14 +873,7 @@ class RetryLedger:
         )
         if outcome_id is None:
             return DeliveryRetryAttemptView(ordinal=ordinal, kind=attempt.kind, status="pending")
-        try:
-            outcome = RetryAttemptOutcome.model_validate_json(
-                read_record(self.runtime_root, self._outcomes_path / f"{outcome_id}.json")
-            )
-        except (OSError, TypeError, ValueError) as exc:
-            raise RetryLedgerCorruptError from exc
-        if outcome.attempt_id != attempt_id or outcome.episode_id != episode.episode_id:
-            raise RetryLedgerCorruptError
+        outcome = self._read_outcome(episode, attempt_id, outcome_id)
         code = outcome.failure_code
         return DeliveryRetryAttemptView(
             ordinal=ordinal,
@@ -895,6 +882,30 @@ class RetryLedger:
             failure_code=code if code is not None and re.fullmatch(_RETRY_FAILURE_CODE_PATTERN, code) else None,
             observed_at=outcome.observed_at,
         )
+
+    def returned_attempts(self, episode: RetryEpisodeSummary) -> int:
+        """Count Builder returns to Planning in the episode's whole current budget, refunded or legacy-charged."""
+        if episode.key.change_id != self.change_id:
+            raise ValueError("retry episode belongs to another Change")
+        returned = 0
+        for attempt_id in _current_budget_attempt_ids(episode):
+            for status in ("paused", "failed"):
+                outcome_id = digest(f"{attempt_id}:{status}".encode())
+                if outcome_id in episode.outcome_ids:
+                    outcome = self._read_outcome(episode, attempt_id, outcome_id)
+                    returned += outcome.failure_code == BUILDER_RETURN_FAILURE_CODE
+        return returned
+
+    def _read_outcome(self, episode: RetryEpisodeSummary, attempt_id: str, outcome_id: str) -> RetryAttemptOutcome:
+        try:
+            outcome = RetryAttemptOutcome.model_validate_json(
+                read_record(self.runtime_root, self._outcomes_path / f"{outcome_id}.json")
+            )
+        except (OSError, TypeError, ValueError) as exc:
+            raise RetryLedgerCorruptError from exc
+        if outcome.attempt_id != attempt_id or outcome.episode_id != episode.episode_id:
+            raise RetryLedgerCorruptError
+        return outcome
 
     def import_legacy_failures(
         self,
@@ -1232,7 +1243,13 @@ class RetryLedger:
                 ):
                     raise RetryLedgerCorruptError
                 if result.paused:
-                    self.record_pause(attempt_id, now=result.observed_at)
+                    self.record_pause(
+                        attempt_id,
+                        now=result.observed_at,
+                        failure_code=(
+                            result.failure_code if result.failure_code == BUILDER_RETURN_FAILURE_CODE else None
+                        ),
+                    )
                 elif result.repair_task_id is not None:
                     self.record_repair_owner_result(result)
                 elif result.accepted:
@@ -1532,8 +1549,14 @@ class RetryLedger:
             stop_code=updated.stop_code,
         )
 
-    def record_pause(self, attempt_id: str, *, now: datetime | str | None = None) -> RetryEpisodeSummary:
-        """Settle only a human-gated reservation, retaining all prior failure authority."""
+    def record_pause(
+        self,
+        attempt_id: str,
+        *,
+        now: datetime | str | None = None,
+        failure_code: str | None = None,
+    ) -> RetryEpisodeSummary:
+        """Settle a human-gated reservation or a Builder return to Planning, retaining prior failure authority."""
         summary, previous = self._read_with_bytes()
         episode = _episode_for_attempt(summary, attempt_id)
         if episode is None:
@@ -1553,7 +1576,11 @@ class RetryLedger:
             raise RetryLedgerConflictError("pause requires an exact mechanical reservation")
         observed = _retry_timestamp(_retry_time(now if now is not None else self._clock()))
         outcome = RetryAttemptOutcome(
-            attempt_id=attempt_id, episode_id=episode.episode_id, status="paused", observed_at=observed
+            attempt_id=attempt_id,
+            episode_id=episode.episode_id,
+            status="paused",
+            observed_at=observed,
+            failure_code=failure_code,
         )
         updated = episode.model_copy(
             update={
@@ -2134,6 +2161,15 @@ def _matching_episode(summary: RetryLedgerSummary, key: RetryEpisodeKey) -> Retr
     if len(candidates) > 1:
         raise RetryLedgerConflictError("multiple unresolved retry episodes cover this action")
     return candidates[0] if candidates else exact
+
+
+def _current_budget_attempt_ids(episode: RetryEpisodeSummary) -> tuple[str, ...]:
+    """Return the attempts after the episode's last accepted progress."""
+    budget_start = max(
+        (episode.attempt_ids.index(item) + 1 for item in episode.accepted_attempt_ids if item in episode.attempt_ids),
+        default=0,
+    )
+    return episode.attempt_ids[budget_start:]
 
 
 def _episode_for_attempt(summary: RetryLedgerSummary, attempt_id: str) -> RetryEpisodeSummary | None:

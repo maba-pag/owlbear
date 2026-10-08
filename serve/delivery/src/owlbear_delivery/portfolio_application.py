@@ -178,6 +178,7 @@ from owlbear_delivery.recovery import (
     RetryStopCode,
     is_canonical_admitted_path,
 )
+from owlbear_delivery.runtime_receipts import is_builder_return_limit
 from owlbear_delivery.storage_io import atomic_write, locked_roots, state_is_read_only
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
@@ -971,14 +972,15 @@ class PortfolioApplication(
     ) -> bool:
         """Refuse a requirement revision unless the admitted Change is paused, quiescent and nonterminal (I1).
 
-        With ``allow_design_return`` a retained Design-route handoff is accepted; returns whether one is retained.
+        With ``allow_design_return`` a retained Design-route or return-limit handoff is accepted; returns whether one
+        is retained.
         """
         frontier = parse_delivery_frontier(runtime.frontier_bytes())[0]
         coordination = self._coordinator.show(change_id)
         action = coordination.continuation_action
         design_return = allow_design_return and any(
             binding.builder_handoff_context is not None
-            and binding.builder_handoff_context.route == "same-outcome-design"
+            and (binding.builder_handoff_context.route == "same-outcome-design" or is_builder_return_limit(binding))
             for binding in frontier.bindings
         )
         handoff = next(

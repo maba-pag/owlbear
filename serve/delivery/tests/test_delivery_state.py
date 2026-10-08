@@ -87,6 +87,7 @@ from owlbear_delivery import (
     SyncChangeWithTarget,
     WindowHostIdentity,
     remote_git,
+    runtime_settlement,
     state_migration,
 )
 from owlbear_delivery.acceptance import (
@@ -2309,7 +2310,9 @@ def test_builder_return_handoff_survives_default_loader_restart(  # noqa: PLR091
     builder_ledger.reconcile_owner_results()
     builder_episode = builder_ledger.episode_for_attempt(builder_launch.claim.attempt_id)
     assert builder_episode is not None
-    assert builder_episode.total_attempts == 1
+    # A Planning return is refunded (N12 I2) and counted by its return code instead.
+    assert builder_episode.total_attempts == (0 if return_target is DeliveryStage.PLANNING else 1)
+    assert builder_ledger.returned_attempts(builder_episode) == 1
     assert builder_episode.reset_count == 0
     builder_retry_budget = (builder_episode.episode_id, builder_episode.total_attempts, builder_episode.reset_count)
 
@@ -3025,7 +3028,10 @@ def test_change_intents_on_planner_pause_of_builder_planning_return_survive_defa
 def _exhaust_default_loader_planning_return(
     restart: _BuilderReturnRestartFixture,
     change_id: str,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> OutcomeAuthorityBinding:
+    """Settle the pre-N12 shape: a third, charged Planning return behind its exhaustion block."""
+    monkeypatch.setattr(runtime_settlement, "_refunds_planning_return", lambda _request: False)
     application = restart.application
     for minutes in (5, 10):
         launch = application.acquire_frontier_work().launch_packages[0]
@@ -3073,10 +3079,12 @@ def _assert_exhausted_planning_return_readiness(application: PortfolioApplicatio
     assert application.acquire_frontier_work().launch_packages == ()
 
 
-def test_exhausted_builder_planning_return_survives_default_loader_restart(tmp_path: Path) -> None:
+def test_exhausted_builder_planning_return_survives_default_loader_restart(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     change_id = "return-planning-exhausted"
     restart = _builder_return_restart_fixture(tmp_path, change_id)
-    settled = _exhaust_default_loader_planning_return(restart, change_id)
+    settled = _exhaust_default_loader_planning_return(restart, change_id, monkeypatch)
 
     restarted = _healthy_restart(restart)
     assert restarted._runtimes[change_id].show_binding("OUT-001") == settled  # noqa: SLF001
@@ -3099,10 +3107,11 @@ def test_default_loader_rejects_planner_pause_over_exhausted_builder_planning_re
     tmp_path: Path,
     tamper: str,
     expected_detail: str,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     change_id = "return-planning-exhausted-forgery"
     restart = _builder_return_restart_fixture(tmp_path, change_id)
-    settled = _exhaust_default_loader_planning_return(restart, change_id)
+    settled = _exhaust_default_loader_planning_return(restart, change_id, monkeypatch)
     assert settled.block is not None
     frontier_path = restart.fresh / ".owlbear/delivery/runtime/changes" / change_id / "frontier.json"
     frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=True)
@@ -5314,3 +5323,142 @@ def test_design_return_revision_waits_for_its_release_publication(tmp_path: Path
     assert activated.frontier.bindings[0].return_context.preserved_commit == branch_head
     assert [launch.outcome_id for launch in application.acquire_frontier_work().launch_packages] == ["OUT-001"]
     close_delivery_application(application)
+
+
+def _settle_builder_launch(
+    application: PortfolioApplication,
+    change_id: str,
+    launch: DeliveryLaunchPackage,
+    request: BlockDelivery | ReturnDelivery,
+) -> OutcomeAuthorityBinding:
+    return application.settle_worker_invocation(
+        DeliveryBuilderInvocationSettlement(
+            change_id=change_id,
+            outcome_id=launch.outcome_id,
+            claim_id=launch.claim.claim_id,
+            attempt_id=launch.claim.attempt_id,
+            task_id=launch.task_id,
+            expected_last_reviewed_commit=launch.last_reviewed_commit,
+            disposition="normal-return",
+            request=request,
+        ),
+        host_id=launch.claim.owner_id,
+        session_id=launch.claim.process_id,
+    )
+
+
+def _planning_return(launch: DeliveryLaunchPackage, task_id: str) -> ReturnDelivery:
+    return ReturnDelivery(
+        action="return",
+        outcome_id=launch.outcome_id,
+        claim_id=launch.claim.claim_id,
+        target=DeliveryStage.PLANNING,
+        reason="Clarify the remaining implementation task.",
+        locators=(task_id,),
+        preserved_commit=launch.source_head,
+        attempt_id=launch.claim.attempt_id,
+    )
+
+
+def _promote_corrected_plan(restart: _BuilderReturnRestartFixture, change_id: str, title: str) -> None:
+    application = _healthy_restart(restart)
+    planner = application.acquire_frontier_work().launch_packages[0]
+    assert planner.claim.worker_role is DeliveryWorkerRole.PLANNER
+    revised = restart.original_task.model_copy(update={"title": title})
+    candidate = application.publish_delivery_plan(
+        change_id,
+        PublishDeliveryPlan(
+            outcome_id=planner.outcome_id,
+            claim_id=planner.claim.claim_id,
+            tasks=(restart.completed_task, revised),
+        ),
+    )
+    application.transition_delivery(
+        change_id,
+        AdvanceDelivery(
+            action="advance", outcome_id=planner.outcome_id, claim_id=planner.claim.claim_id, output=candidate.output
+        ),
+    )
+
+
+# N12 I8: an unpublished settlement after an answered pause restarts from its receipt-derived predecessor.
+def test_builder_return_after_answered_pause_survives_default_loader_restart(tmp_path: Path) -> None:
+    change_id = "pause-then-return"
+    restart = _builder_return_restart_fixture(tmp_path, change_id)
+    launch = restart.application.acquire_frontier_work().launch_packages[0]
+    request = DeliveryRequest(
+        request_id="REQ-PILOT",
+        kind=DeliveryRequestKind.DECISION,
+        outcome_id=launch.outcome_id,
+        summary="Run the person-only check.",
+        options=(
+            DeliveryRequestOption(option_id="passed", label="passed"),
+            DeliveryRequestOption(option_id="failed", label="failed"),
+        ),
+    )
+    _settle_builder_launch(
+        restart.application,
+        change_id,
+        launch,
+        BlockDelivery(
+            action="block",
+            outcome_id=launch.outcome_id,
+            claim_id=launch.claim.claim_id,
+            block_id="BLOCK-PILOT",
+            reason="The check needs the user.",
+            unblock_condition="The user answers.",
+            expected_evidence=("Answer",),
+            locators=(restart.original_task.task_id,),
+            request=request,
+            resume_commit=launch.source_head,
+        ),
+    )
+    answer = DeliveryRequestResolution(selected_option_id="passed", provenance="user-confirmed")
+    _healthy_restart(restart).resolve_request(change_id, request.request_id, answer)
+    application = _healthy_restart(restart)
+    resumed = application.acquire_frontier_work().launch_packages[0]
+    assert resumed.claim.worker_role is DeliveryWorkerRole.BUILDER
+    returned = _settle_builder_launch(
+        application, change_id, resumed, _planning_return(resumed, restart.original_task.task_id)
+    )
+
+    reloaded = _healthy_restart(restart)
+    binding = reloaded._runtimes[change_id].show_binding("OUT-001")  # noqa: SLF001
+    assert binding == returned
+    assert binding.requests == (request.model_copy(update={"resolution": answer}),)
+    assert reloaded.acquire_frontier_work().launch_packages[0].claim.worker_role is DeliveryWorkerRole.PLANNER
+
+
+# N12 I3, I4, I8: refunded returns of one task are bounded; each unpublished return restarts.
+def test_third_planning_return_stops_at_the_return_limit_across_restarts(tmp_path: Path) -> None:
+    change_id = "planning-return-limit"
+    restart = _builder_return_restart_fixture(tmp_path, change_id)
+    task_id = restart.original_task.task_id
+    application = restart.application
+    for ordinal in range(1, 4):
+        launch = application.acquire_frontier_work().launch_packages[0]
+        assert launch.claim.worker_role is DeliveryWorkerRole.BUILDER
+        assert launch.task_id == task_id
+        returned = _settle_builder_launch(application, change_id, launch, _planning_return(launch, task_id))
+        application = _healthy_restart(restart)
+        if ordinal < 3:
+            assert returned.block is None
+            _promote_corrected_plan(restart, change_id, f"Implement the clarified task, revision {ordinal}")
+            application = _healthy_restart(restart)
+
+    assert returned.block is not None
+    assert returned.block.block_id == f"builder-return-limit-{returned.builder_handoff_context.settlement_id}"
+    assert returned.block.request_id is None
+    runtime = application._runtimes[change_id]  # noqa: SLF001
+    assert runtime.show_binding("OUT-001") == returned
+    assert application.acquire_frontier_work().launch_packages == ()
+    ledger = runtime.retry_ledger()
+    ledger.reconcile_owner_results()
+    episode = ledger.episode_for_attempt(launch.claim.attempt_id)
+    assert episode is not None
+    assert (episode.total_attempts, episode.stop_code) == (0, None)
+    assert ledger.returned_attempts(episode) == 3
+    before = runtime.frontier_bytes()
+    with pytest.raises(DeliveryRuntimeConflictError, match="requestless unblock cannot mutate"):
+        application.clear_block(change_id, "OUT-001", returned.block.block_id, "Operator verified.", (task_id,))
+    assert runtime.frontier_bytes() == before

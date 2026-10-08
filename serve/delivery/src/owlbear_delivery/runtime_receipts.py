@@ -385,6 +385,49 @@ def builder_attempt_limit_block_id(context: DeliveryBuilderHandoffContext) -> st
     return f"builder-attempt-limit-{context.settlement_id}"
 
 
+def builder_planning_route_block_id(context: DeliveryBuilderHandoffContext) -> str:
+    """Return the pre-N12 block identity of a Builder return to Planning that exhausted its episode."""
+    return f"builder-planning-route-{context.settlement_id}"
+
+
+def builder_return_limit_block_id(context: DeliveryBuilderHandoffContext) -> str:
+    """Return the block identity of a Builder return to Planning that reached the return limit."""
+    return f"builder-return-limit-{context.settlement_id}"
+
+
+def builder_attempt_grant_block_id(context: DeliveryBuilderHandoffContext) -> str | None:
+    """Return the exhausted block identity a user attempt grant may lift for this handoff route (N11, N12 I6)."""
+    if context.route == "same-task":
+        return builder_attempt_limit_block_id(context)
+    if context.route == "same-outcome-planner":
+        return builder_planning_route_block_id(context)
+    return None
+
+
+def is_builder_attempt_grant_block(binding: OutcomeAuthorityBinding) -> bool:
+    """Return whether the binding retains an unresolved exhausted Builder block that only a user grant lifts."""
+    context = binding.builder_handoff_context
+    block = binding.block
+    if context is None or block is None or block.request_id is not None or block.resolved:
+        return False
+    stage = DeliveryStage.IMPLEMENTATION if context.route == "same-task" else DeliveryStage.PLANNING
+    return binding.stage == stage and block.block_id == builder_attempt_grant_block_id(context)
+
+
+def is_builder_return_limit(binding: OutcomeAuthorityBinding) -> bool:
+    """Return whether the binding retains a Planning-route handoff stopped at its unresolved return limit."""
+    context = binding.builder_handoff_context
+    block = binding.block
+    return (
+        context is not None
+        and context.route == "same-outcome-planner"
+        and block is not None
+        and block.request_id is None
+        and not block.resolved
+        and block.block_id == builder_return_limit_block_id(context)
+    )
+
+
 class _DeliveryBuilderAttemptGrantReceipt(_DeliveryModel):
     """Immutable user grant of one more Builder attempt for one exact exhausted handoff."""
 
@@ -402,9 +445,9 @@ class _DeliveryBuilderAttemptGrantReceipt(_DeliveryModel):
     @model_validator(mode="after")
     def _validate_receipt(self) -> _DeliveryBuilderAttemptGrantReceipt:
         context = self.builder_handoff_context
-        block_id = builder_attempt_limit_block_id(context)
+        block_id = builder_attempt_grant_block_id(context)
         if (
-            context.route != "same-task"
+            block_id is None
             or context.outcome_id != self.outcome_id
             or context.settlement_id != self.settlement_id
             or context.attempt_id != self.attempt_id
