@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from serve.delivery.tests.test_delivery_state import (
@@ -23,6 +24,7 @@ from owlbear_delivery import (
     DeliveryFrontier,
     DeliveryRuntimeConflictError,
     DeliveryStage,
+    DeliveryStatePublisher,
     DeliveryTaskDefinition,
     DeliveryWorkerRole,
     PortfolioApplication,
@@ -262,6 +264,35 @@ def test_return_limit_refuses_clearance_and_the_attempt_grant(tmp_path: Path, mo
         application.clear_block(_CHANGE_ID, "OUT-001", block.block_id, "Operator verified.", ("TASK-001",))
 
     assert runtime.frontier_bytes() == before
+    close_delivery_application(application)
+
+
+def test_return_limit_revision_waits_for_its_release_publication(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    application, config, repository, _builder, branch_head = _published_planning_return(
+        tmp_path, monkeypatch, limited=True
+    )
+    retained = application._runtimes[_CHANGE_ID].show_binding("OUT-001")  # noqa: SLF001
+    before = application.read_design_session(_CHANGE_ID).package_id
+    unavailable = patch.object(DeliveryStatePublisher, "publish", side_effect=RuntimeError("provider unavailable"))
+    with unavailable, pytest.raises(DeliveryRevisionError, match="publication-pending"):
+        _revise(application)
+    released = retained.model_copy(update={"builder_handoff_context": None, "block": None})
+    assert application._runtimes[_CHANGE_ID].show_binding("OUT-001") == released  # noqa: SLF001
+    close_delivery_application(application)
+    with unavailable:
+        application = load_delivery_application(config, workspace_root=repository)
+        assert application._runtimes[_CHANGE_ID].show_binding("OUT-001") == released  # noqa: SLF001
+        with pytest.raises(DeliveryRevisionError, match="publication-pending"):
+            _revise(application)
+    assert application.read_design_session(_CHANGE_ID).package_id == before
+
+    _revise(application)
+
+    runtime = application._runtimes[_CHANGE_ID]  # noqa: SLF001
+    assert runtime.pending_state_publication() is None
+    assert runtime.show_binding("OUT-001").return_context.preserved_commit == branch_head
     close_delivery_application(application)
 
 

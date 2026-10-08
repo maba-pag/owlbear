@@ -503,6 +503,7 @@ function BlockSection({ detail, pendingAction, onClearBlock, onGrantAttempt }: W
   // Attempt-limit, return-limit and legacy exhaustion blocks keep their handoff: only their own card action lifts them.
   const clearable = requestless && detail.item.card.action.kind === "clear-block" && !block.resolution_note;
   const grantable = detail.item.card.action.kind === "grant-attempt" && !block.resolution_note;
+  const reviseDesign = detail.item.card.action.kind === "resume-design" ? detail.item.card.action : null;
   const canClear = requestless && note.trim().length > 0 && locator.trim().length > 0 && pendingAction === null;
   return (
     <section className="border-l-4 border-warning bg-surface p-static-md" aria-labelledby="work-block-heading">
@@ -511,6 +512,15 @@ function BlockSection({ detail, pendingAction, onClearBlock, onGrantAttempt }: W
       </PHeading>
       <p className="mt-static-xs text-sm">{block.reason}</p>
       <p className="mt-static-xs text-sm text-contrast-medium">Clear when: {block.unblock_condition}</p>
+      {reviseDesign?.command ? (
+        <div className="mt-static-md grid gap-static-sm" data-testid="block-revise-design">
+          <p className="text-sm">
+            {reviseDesign.label}: Pause the Change, then revise its Design. The revision first keeps the Builder's work
+            under refs and keeps completed tasks and answered requests.
+          </p>
+          <CopyCommand command={reviseDesign.command} />
+        </div>
+      ) : null}
       {grantable ? (
         <div className="mt-static-md grid gap-static-sm">
           <p className="text-sm">

@@ -301,10 +301,10 @@ head.
 | Phase | PR | Head | Proof | Challenge | Status |
 | --- | --- | --- | --- | --- | --- |
 | N12-P | shared | `eb9478eb3` + corrections | source probes (§2) | Sol round 1 `revision-required`; F1–F4 fix-now applied; gate closed | done |
-| N12-A | shared | — | — | — | not started |
-| N12-B | shared | — | — | — | not started |
-| N12-C | shared | — | — | — | not started |
-| N12-D | shared | — | — | — | not started |
+| N12-A | shared | `0055ae06d` + gate fixes | focused Delivery selection 676 passed; new return-limit and grant files | Sol implementation round 1 (A–D together) `revision-required`: F1 Cockpit label, F2 LC unrun; F1 fixed | done |
+| N12-B | shared | as N12-A | release, restart boundaries, publication wait, workspace-change refusal | as N12-A | done |
+| N12-C | shared | as N12-A | legacy grant through Planner pause, promotion and one funded attempt; missing-receipt refusal | as N12-A | done; LC open (G3) |
+| N12-D | shared | as N12-A | skill rule | as N12-A | done |
 
 ## 5. Verification gaps
 
@@ -312,3 +312,4 @@ head.
 | --- | --- | --- | --- | --- | --- |
 | G1 | The live Change continues to merge after the grant | Live state is read-only for programme work | LC grant on the copy | User, after `/upgrade-delivery` | Nothing (post-merge activation) |
 | G2 | Rollback to the pinned release while a return-limit or granted Planning-route handoff is local | The previous release does not know the shapes | Granted ledgers are version 2, which the pinned pre-N11 release refuses with a typed diagnostic; a return-limit handoff without a grant fails bootstrap for that Change only | User (switch forward) | Nothing |
+| G3 | The live incident records load, grant and promote under this release | The LC copy must be mounted at the main checkout path while no live work runs, which needs the user | LC load form on an isolated copy (§3.5) | User-confirmed LC run | Merge |

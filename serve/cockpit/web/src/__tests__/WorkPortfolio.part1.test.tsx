@@ -957,6 +957,9 @@ it("routes a Builder return limit to a Design revision without a clearance form"
   const { container } = renderPage("/delivery/change-alpha/outcome%3AOUT-001");
 
   expect(await screen.findByText(/returned this task to Planning three times/)).toBeInTheDocument();
+  const revise = await screen.findByTestId("block-revise-design");
+  expect(revise).toHaveTextContent("Revise Design: Pause the Change, then revise its Design.");
+  expect(within(revise).getByRole("button", { name: "Copy command /design change-alpha" })).toBeInTheDocument();
   expect(screen.queryByText("Clear block")).not.toBeInTheDocument();
   expect(screen.queryByText("Grant one more attempt")).not.toBeInTheDocument();
   expect(namedPdsHost(container, "p-input-text", "block-note")).toBeNull();

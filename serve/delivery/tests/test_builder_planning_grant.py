@@ -24,6 +24,7 @@ from owlbear_delivery import (
     DeliveryAnswerKind,
     DeliveryBuilderInvocationSettlement,
     DeliveryChangeIntentKind,
+    DeliveryFrontier,
     DeliveryRuntimeConflictError,
     DeliveryStage,
     DeliveryWorkerRole,
@@ -33,8 +34,11 @@ from owlbear_delivery import (
     RetryDelivery,
     runtime_settlement,
 )
+from owlbear_delivery.delivery_application_loader import load_delivery_application
+from owlbear_delivery.delivery_runtime import _model_content
 from owlbear_delivery.recovery import RetryStopCode
 from owlbear_delivery.runtime_models import DeliveryConfirmationError
+from owlbear_delivery.runtime_support import _builder_attempt_grant_receipt_path
 from owlbear_delivery.work_items import WorkItemActionKind, WorkItemNextActor
 
 _CHANGE_ID = "legacy-planning-grant"
@@ -152,6 +156,28 @@ def test_legacy_exhausted_planning_return_is_granted_once_and_continues_across_r
     assert episode is not None
     assert (episode.total_attempts, episode.granted_attempts) == (4, 1)
     assert episode.stop_code is RetryStopCode.EXHAUSTED
+
+
+@pytest.mark.parametrize("tamper", ["missing-receipt", "unresolved-block"])
+def test_default_loader_refuses_a_legacy_grant_without_its_exact_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tamper: str
+) -> None:
+    restart, settled = _legacy_exhaustion(tmp_path, monkeypatch)
+    assert settled.block is not None
+    assert settled.builder_handoff_context is not None
+    _grant(_healthy_restart(restart), settled.block.block_id)
+    runtime_root = restart.fresh / ".owlbear/delivery/runtime"
+    if tamper == "missing-receipt":
+        _builder_attempt_grant_receipt_path(runtime_root, _CHANGE_ID, settled.builder_handoff_context).unlink()
+    else:
+        frontier_path = runtime_root / "changes" / _CHANGE_ID / "frontier.json"
+        frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=True)
+        frontier_path.write_bytes(_model_content(frontier.model_copy(update={"bindings": (settled,)})))
+
+    health = load_delivery_application(restart.config, workspace_root=restart.fresh).delivery_health()
+
+    assert health.status.value == "attention"
+    assert [item.change_id for item in health.diagnostics] == [_CHANGE_ID]
 
 
 @pytest.mark.parametrize("request_bearing", [True, False])
