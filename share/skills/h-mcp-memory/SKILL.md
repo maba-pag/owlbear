@@ -97,8 +97,8 @@ may remain staged. Inspect `git status` and the staged diff before retrying.
 ## Assessment and curation policy
 
 This is the operating decision for the current learning loop. It clarifies
-responsibility without adding a tool, scheduler, receipt protocol, or recall
-policy.
+responsibility and documents revision-bound receipts without adding a role,
+scheduler, or recall policy.
 
 ### Decision: human-assisted and sampled
 
@@ -142,13 +142,27 @@ sample and its absence must not alter a transition, trigger a recovery route,
 or block publication. The current buckets remain the measurement vocabulary:
 `outstanding`, `unremarkable`, `didnt_use`, and `factually_wrong`.
 
-The per-entry `success`/`error` result from `assess_memories` is the current
-tool-level receipt. It is not a Delivery receipt and not an idempotency key.
 Malformed batches are rejected before entry updates; valid batches may have
-mixed per-entry results. Because ordinary assessments are not promised
-idempotent, an uncertain tool response must not be blindly retried. First use
-read-only evidence or operator reconciliation to determine whether any entry
-was applied; this policy does not add feedback receipts or retry machinery.
+mixed per-entry results. A stale revision fails for that entry without
+changing it and names the current revision. Re-recall changed content before
+submitting feedback about it; do not retry stale feedback against content not
+yet seen.
+The `task_id` must be 1-128 printable ASCII characters without whitespace;
+each item has exactly `{entry_id, revision, bucket}`. A recall block places its
+`Revision:` line immediately after `Entry ID:`. Use that current token.
+
+The engine stores the first recorded bucket with the entry as a receipt keyed
+by task, entry, and revision. A repeated assessment with the same task, entry,
+and revision is not applied again and returns `success: true`,
+`already_applied: true`, and the first `recorded_bucket`. A different task ID
+may be assessed independently.
+
+Only receipts for the current revision are retained, up to the 20 most recent.
+When needed, oldest receipts are evicted first to keep the serialized entry at
+or below 8192 bytes while retaining the newest. If the newest receipt cannot
+fit, that item fails without changing the entry, counters, or stored receipts.
+Content edits remove receipts for the previous revision; assessment counters
+persist across those edits.
 
 ### Curation trigger, visibility, and failure handling
 
@@ -209,9 +223,6 @@ signals into a new scheduler or mandatory step.
 - **Durable age/size scheduler or curation SLA:** rejected until pending-age
   and curation-latency evidence shows that opportunistic/manual handling is
   inadequate.
-- **Automatic assessment retries or a new receipt store:** rejected because
-  duplicate counter updates are possible and the feedback contract is outside
-  this policy decision.
 - **Recall-algorithm or pool changes:** deferred; usefulness measurement must
   precede any selection change.
 
@@ -283,7 +294,7 @@ Behavior:
 - includes `curated`, `approved`, and `contested` entries scoped to the agent
 - treats omitted `categories` as all categories; this is the standard pre-flight call
 - returns `approved` entries before `curated`
-- formats ordinary blocks as `## {title}`, `Entry ID:`{id}``, and the body on consecutive lines
+- formats each block as `## {title}`, `Entry ID: {id}`, `Revision: {revision}`, then the body; the revision line immediately follows the entry ID
 - adds `State: contested` to contested blocks, plus `Challenge task:` when `contested_by_task` is available
 - omits all other entry metadata
 - does not reject blank or wildcard callers; unrecognized callers receive universal-only guidance
@@ -297,7 +308,7 @@ caller uses the sampled assessment path, include every entry returned by
 
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
-| `task_id` | str | (required) | Non-empty identifier for the substantive task attempt |
+| `task_id` | str | (required) | 1-128 printable ASCII characters without whitespace for the substantive task attempt |
 | `assessments` | list[dict[str, str]] | (required) | Non-empty list of per-entry assessments |
 
 Each assessment item requires these fields:
@@ -305,6 +316,7 @@ Each assessment item requires these fields:
 | Field | Type | Description |
 | --- | --- | --- |
 | `entry_id` | str | Recalled memory entry identifier |
+| `revision` | str | Current 16-character lowercase hex revision from that entry's `Revision:` line |
 | `bucket` | str | One of the accepted bucket values below |
 
 | Bucket | Meaning |

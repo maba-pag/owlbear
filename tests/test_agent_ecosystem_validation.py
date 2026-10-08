@@ -1257,7 +1257,7 @@ def test_memory_learning_loop_policy_is_sampled_and_opportunistic() -> None:
     assert "`memory_candidate` for the task-owning caller to save" in reviewer
     assert "Validate the optional `memory_candidate` against `h-memory-structure`" in finalization
     assert "Preserve reviewer memory provenance" in finalizer
-    assert "not an idempotency key" in content
+    assert "A repeated assessment with the same task, entry, and revision is not applied again" in content
     assert "No Delivery or continuation step triggers it" in guidance
     assert "opportunistic, not an eventual-processing SLA" in guidance
     assert 'list_memories(states=["pending"])' in guidance

@@ -111,6 +111,26 @@ Pydantic `BaseModel` representing a single markdown-backed memory entry.
 | `stale` | Flagged as potentially outdated; excluded from recall; field edits preserve this state — use `resolve()` to return to approved |
 | `deleted` | Logically deleted (file may still exist) |
 
+### Revision-Bound Assessment Receipts
+
+The Memory MCP recall block places `Revision: {revision}` immediately after
+`Entry ID:`. An `assess_memories` batch uses one `task_id` of 1-128 printable
+ASCII characters without whitespace and items with exactly
+`{entry_id, revision, bucket}`. The revision must be the value supplied by the
+entry the caller recalled.
+
+`record_assessment` and `record_factually_wrong` return `AssessmentResult` with
+`entry`, `already_applied`, and `recorded_bucket`. The first receipt for a task,
+entry, and revision determines the bucket; a repeat returns it without another
+counter or state update. Different task IDs are assessed separately. Receipts
+are stored with the entry for its current revision only, keeping at most 20 and
+evicting the oldest first as needed to remain within 8192 bytes. The newest
+receipt is retained; if it cannot fit, the assessment is refused without
+changing counters, state, or receipts. A revision mismatch is refused before
+mutation and reports the current revision. Re-recall before submitting
+feedback about changed content. Content edits preserve assessment counters
+but remove receipts for the previous revision.
+
 ---
 
 ## Storage Primitives
@@ -231,8 +251,8 @@ string. The universal `*` member is allowed; an empty list is allowed for pendin
 | `save(...)` | `(title, content, categories, confidence, source_agent, scope_agents) → MemoryEntry` | Creates pending entry; initializes `score = confidence`, all counters to `0`; no OCC |
 | `approve(id, expected_updated_at=None, *, expected_revision=None)` | `(str, str \| None) → MemoryEntry` | curated → approved; exactly one OCC token; raises `TransitionError` / `ConcurrencyError` |
 | `resolve(id, expected_updated_at)` | `(str, str) → MemoryEntry` | contested/disputed/stale → approved; sets `approved_at`; raises `TransitionError` / `ConcurrencyError` |
-| `record_factually_wrong(id, task_id, expected_updated_at)` | `(str, str, str \| None) → MemoryEntry` | approved/curated → contested (stores `contested_by_task`, clears `approved_at`); contested + same `task_id` → no-op; contested + different `task_id` → disputed; raises `ValidationError` (empty/whitespace `task_id`), `TransitionError` (non-voteable state), `ConcurrencyError` (OCC mismatch, evaluated before state guard) |
-| `record_assessment(entry_id, bucket, expected_updated_at)` | `(str, str, str \| None) → MemoryEntry` | Increments the specified counter (`outstanding`, `unremarkable`, or `didnt_use`); recomputes `score` via `compute_score`; calls `try_stale_transition` when slot-efficiency threshold exceeded. Raises `TransitionError` (non-voteable state), `ConcurrencyError` (OCC mismatch), `ValidationError` (invalid bucket). `expected_updated_at` optional — pass `None` to skip OCC check. |
+| `record_factually_wrong(entry_id, task_id, *, expected_revision)` | `(str, str, *, expected_revision: str) → AssessmentResult` | Records the factually-wrong confirmation cycle. A repeated task, entry, and revision returns the first result; raises `TransitionError`, `ConcurrencyError` (revision mismatch), or `ValidationError` (invalid `task_id`). |
+| `record_assessment(entry_id, bucket, *, task_id, expected_revision)` | `(str, str, *, task_id: str, expected_revision: str) → AssessmentResult` | Increments the selected counter, recomputes `score`, and may transition the entry to `stale`. A repeated task, entry, and revision returns the first recorded bucket without applying again; raises `TransitionError`, `ConcurrencyError`, or `ValidationError`. |
 | `edit(id, fields, expected_updated_at=None, *, expected_revision=None)` | `(str, EditPayload, str \| None) → MemoryEntry` | State-machine rules apply; exactly one OCC token; contested/disputed/stale preserve their state while fields are updated; deleted entries are blocked; raises `TransitionError` / `ConcurrencyError` |
 | `delete(id, expected_updated_at=None, *, expected_revision=None)` | `(str, str \| None) → MemoryEntry` | Hard-delete for pending, soft-delete for curated/approved/contested/disputed/stale; exactly one OCC token; raises `TransitionError` / `ConcurrencyError` |
 | `try_stale_transition(entry)` | `(MemoryEntry) → MemoryEntry` | Calls `check_slot_efficiency`; when True and state in {approved, curated, contested}, writes state=stale with refreshed updated_at. Returns unchanged entry (no error) when predicate is False or state is ineligible. No OCC. Logs INFO on transition. |
@@ -268,9 +288,10 @@ string. The universal `*` member is allowed; an empty list is allowed for pendin
 #### OCC
 
 All mutation methods (`approve`, `resolve`, `edit`, `delete`) accept `expected_updated_at` (str).
-`record_factually_wrong` and `record_assessment` also accept `expected_updated_at` but it is optional (`str | None`); pass `None` to skip the OCC check.
-If a non-`None` value does not match the on-disk `entry.updated_at`, `ConcurrencyError` is
-raised. `save()` creates new entries and does not require an OCC token.
+For methods using `expected_updated_at`, a non-`None` token that does not match the on-disk
+`entry.updated_at` raises `ConcurrencyError`. `record_factually_wrong` and `record_assessment`
+instead require `expected_revision` from the caller's recalled entry; a mismatch raises before
+state, counters, or receipts change. `save()` creates new entries and does not require an OCC token.
 
 For `approve`, `edit` (the engine operation behind MCP `curate_memory`), and `delete`, the engine
 also accepts `expected_revision`; each call must supply exactly one token. Cockpit uses

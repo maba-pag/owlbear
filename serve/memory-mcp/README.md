@@ -64,13 +64,13 @@ stale     ──[resolve*]──► approved    [delete: soft → deleted]
 | `save_memory` | Create an unscoped `pending` entry from self-reported provenance; recognition is not authorization |
 | `list_memories` | List metadata sorted by curation priority, including each entry's `revision`; filters: `states`, `categories`, `scope_agents` |
 | `read_memory` | Read one full entry by `entry_id`, including its `revision`; errors on deleted entries |
-| `recall_memory` | Identity-bearing markdown blocks scoped to one agent (`## title`, entry ID, and body; contested entries add `State: contested` and an available `Challenge task:` reference); three-pool slot allocation (explore, challenge, regular) with final sort by `(state_rank, -score, id)`; constants `SLOT_EXPLORE=2`, `SLOT_CHALLENGE=2`; default limit 20 |
+| `recall_memory` | Identity-bearing markdown blocks scoped to one agent (`## title`, `Entry ID`, `Revision` immediately after the ID, then body; contested entries add `State: contested` and an available `Challenge task:` reference); three-pool slot allocation (explore, challenge, regular) with final sort by `(state_rank, -score, id)`; constants `SLOT_EXPLORE=2`, `SLOT_CHALLENGE=2`; default limit 20 |
 | `curate_memory` | Requires `revision`; mutates fields, promotes `pending→curated` when scope is provided, or downgrades `approved→curated`; raises `TransitionError` for contested/disputed/stale |
 | `delete_memory` | Requires `revision`; hard-deletes pending entries and soft-deletes curated/approved/contested/disputed/stale entries |
 | `rename_agent_memories` | Rewrite every matching `source_agent` and `scope_agents` reference after an agent rename |
 | `delete_agent_memories` | Preserve historical provenance and remove the retired role from scopes; hard-delete pending orphans and tombstone reviewed orphans for the normal commit/purge flow |
 | `approve_memory` | Requires `revision` to promote `curated→approved`; user-initiated only (not exposed to any agent) |
-| `assess_memories` | Process batch assessment submissions; increments counters for `outstanding`/`unremarkable`/`didnt_use`, delegates `factually_wrong` to confirmation cycle; returns per-entry `{entry_id, success}` or `{entry_id, success=False, error}` results |
+| `assess_memories` | Process revision-bound batch assessments, applying counters or the factually-wrong confirmation cycle; each result includes `success`, `already_applied`, and `recorded_bucket`, or `success=False` with `error` |
 | `commit_memory_batch` | Commit non-pending memory entries for one explicit `curation` or `review` session and return the commit SHA or a no-op result |
 
 All mutating tools return a `hint` field describing the transition or action taken.
@@ -83,6 +83,29 @@ All mutating tools return a `hint` field describing the transition or action tak
 counters, or timestamps. If the entry changed after it was read, the server refuses the mutation
 with a tool error naming the expected and current revisions and instructing the caller to re-read
 before retrying. Re-read the entry and retry with its new revision.
+
+## Revision-Bound Assessments
+
+Each `recall_memory` block places `Revision: {revision}` immediately after
+`Entry ID:`. `assess_memories` takes a batch-level `task_id` of 1-128 printable
+ASCII characters without whitespace and a non-empty `assessments` list. Each
+item has exactly `{entry_id, revision, bucket}`, using the revision from the
+entry's recall block.
+
+A stale revision is refused for that entry, leaves it unchanged, and returns
+an error naming the current revision. Re-recall changed content before
+submitting feedback about it; do not resubmit stale feedback against content
+not yet seen. Valid batches may return mixed per-entry results.
+
+The engine stores the first bucket for each task, entry, and revision with the
+entry. A repeat of the same tuple returns `success: true`,
+`already_applied: true`, and the first `recorded_bucket`, without applying the
+assessment again. A different task ID is independent. Receipts are retained
+only for the current revision, up to 20. Oldest receipts are evicted first as
+needed to keep the serialized entry within 8192 bytes while always retaining
+the newest. If the newest receipt cannot fit, the assessment fails without
+changing the entry, counters, or receipts. Content edits preserve counters but
+remove receipts for the previous revision.
 
 ## Entry Schema
 
