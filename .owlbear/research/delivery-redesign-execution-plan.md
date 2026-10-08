@@ -685,6 +685,8 @@ every new item exactly one lane.
 | N10-H | merged | fixes #383 (H1, non-ASCII contract digest), #384 (H7, actionable `custody-retained` refusal), #385 (H12, finalization preflight build order; F1 `/upgrade-delivery` fetches first), #386 (H2, H10, H11 agent findings), #387 (H4, H6, H8, H13 Cockpit findings), #388 (H15, one-line startup refusal); no format change; journey steps 1–8 complete ([N10 plan](delivery-n10-plan.md) §3.2.1); D7 gate passed on `b4514b34b` (pytest 4740 passed, 1 skipped; vitest 379 passed; build ok; `test:e2e:work` 31 passed; LC passed with the N10-A proposal); H9 and H14 to N10-N; evidence docs PR |
 | N10-M | done 2026-10-06 | record PR ([N10 plan](delivery-n10-plan.md) §3.3.1): live upgraded with the rehearsed proposal (format 2 → 3, marker only), pinned to `d25349567`, `previous` `841b1cffb`, health healthy and the three Changes unchanged across the upgrade; main checkout fast-forwarded to `d25349567`; `frontier-serialization-contract` and `delivery-action-readiness` abandoned with cleaned worktrees, PR #314 closed; B1 waits on its pilot request; #213, #215, #216, #219–#222 closed with evidence, #225 open |
 | N10-N | merged | plan #391; N10-N-A code `7243d9042`, gate fix `e3ec4ae28` ([N10 plan](delivery-n10-plan.md) §3.4, §4): H9 read-only `derive_evidence_receipts` tool used by Builder and Finalizer; H14 decided (Delivery keeps Change branches; GitHub's automatic head-branch deletion proven tolerated by the journey test); changed-scope pytest 488 passed; Sol gate finding fixed; LC not applicable; M1 and M2 run by the user as ordinary Changes |
+| N11-P | in progress | [N11 plan](delivery-n11-plan.md); plan gate pending |
+| N11-A | not started | — |
 
 ## 5. Packages
 
@@ -1138,6 +1140,23 @@ Reduced 2026-10-04 ([7](#7-decisions)).
   evidence and closes the programme.
 - N10-N: follow-ups from the host journey (H9 receipts tool, H14 Change-branch deletion), after N10-M; it does
   not block programme closure.
+
+### N11 — Grant one more Builder attempt
+
+Added 2026-10-06 after programme completion (user decision, option C).
+
+**Result:** an exhausted same-task Builder retry block
+(`builder-attempt-limit-<settlement_id>`) gets a user-only Cockpit action that adds exactly one
+attempt to the episode, keeps its history, and commits frontier, retry ledger and an immutable grant
+receipt atomically. Agent tools cannot grant. The retry ledger gains a version 2, written only when
+a grant exists.
+
+**Plan:** [N11 plan](delivery-n11-plan.md).
+
+**Phases:**
+
+- N11-P: plan and plan gate.
+- N11-A: implementation; LC full form. By user direction, N11-P and N11-A share one PR.
 
 ## 6. Programme Completion
 
