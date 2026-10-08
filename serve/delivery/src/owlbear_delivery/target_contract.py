@@ -201,6 +201,29 @@ class DeliveryContract(_ContractModel):
             identity for item in self.decisions for identity in item.supersedes if not is_decision_id(identity)
         )
 
+    def applicable_decisions(
+        self, commitment_ids: tuple[str, ...], request_ids: tuple[str, ...] = ()
+    ) -> tuple[DeliveryDecision, ...]:
+        """Return decisions behind the commitments and every decision replacing one of the requests."""
+        selected_commitments = set(commitment_ids)
+        selected = {
+            identity
+            for item in self.commitments
+            if item.commitment_id in selected_commitments
+            for identity in item.decision_ids
+        }
+        successors: dict[str, list[str]] = {}
+        for decision in self.decisions:
+            for identity in decision.supersedes:
+                successors.setdefault(identity, []).append(decision.decision_id)
+        pending = [identity for request_id in request_ids for identity in successors.get(request_id, ())]
+        while pending:
+            identity = pending.pop()
+            if identity not in selected:
+                selected.add(identity)
+                pending.extend(successors.get(identity, ()))
+        return tuple(item for item in self.decisions if item.decision_id in selected)
+
 
 def parse_delivery_contract(content: bytes) -> DeliveryContract:
     """Strictly parse one stored contract of either readable schema version."""

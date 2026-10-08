@@ -29,7 +29,7 @@ from owlbear_delivery.runtime_models import (
     DeliveryTaskResult,
     _model_content,
 )
-from owlbear_delivery.target_contract import DeliveryCommitment
+from owlbear_delivery.target_contract import DeliveryCommitment, DeliveryDecision
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -127,6 +127,7 @@ class DeliveryFinalizationSemantics(_EvidenceModel):
     contract_digest: str
     title: str
     outcomes: tuple[DeliverySemanticsOutcome, ...]
+    decisions: tuple[DeliveryDecision, ...] = ()
     commitments: tuple[DeliveryCommitment, ...]
     task_results: tuple[DeliverySemanticsTaskResult, ...]
     task_authority: tuple[DeliverySemanticsTaskAuthority, ...]
@@ -369,6 +370,7 @@ def build_finalization_semantics(
             )
             for outcome in contract.outcomes
         ),
+        decisions=contract.decisions,
         commitments=contract.commitments,
         task_results=tuple(
             DeliverySemanticsTaskResult(

@@ -57,3 +57,25 @@ it("shows no decision section for a contract without recorded decisions", async 
   const inspector = await screen.findByTestId("work-item-detail");
   expect(within(inspector).queryByText(/^Decisions \(/)).not.toBeInTheDocument();
 });
+
+it("marks an answered request that a later decision replaced as superseded", async () => {
+  const answered = (request_id: string, summary: string, option: string) => ({
+    request_id,
+    kind: "decision" as const,
+    outcome_id: "OUT-001",
+    summary,
+    options: [{ option_id: "a", label: option }],
+    resolution: { selected_option_id: "a", response_text: null },
+  });
+  fixtureState.currentDetail = detail({
+    requests: [answered("REQ-001", "Which page layout?", "One page"), answered("REQ-002", "Sort order?", "By stage")],
+    superseded_request_ids: ["REQ-001"],
+  });
+  renderPage("/delivery/change-alpha/outcome%3AOUT-001");
+
+  const inspector = await screen.findByTestId("work-item-detail");
+  const replaced = within(inspector).getByText("One page").closest("p");
+  expect(replaced).toHaveTextContent("Superseded");
+  expect(replaced).toHaveTextContent("replaced by a later decision");
+  expect(within(inspector).getByText("By stage").closest("p")).not.toHaveTextContent("Superseded");
+});

@@ -447,6 +447,20 @@ def test_detail_projects_decisions_behind_outcome_commitments_and_all_on_the_cha
             supersedes=("DEC-001",),
         ),
         DeliveryDecision(decision_id="DEC-003", origin=origin.AUTONOMOUS, basis="decide yourself", statement="Sort."),
+        DeliveryDecision(
+            decision_id="DEC-004",
+            origin=origin.DECIDED,
+            basis="askQuestions",
+            statement="Replace the answer.",
+            supersedes=("REQ-002",),
+        ),
+        DeliveryDecision(
+            decision_id="DEC-005",
+            origin=origin.DECIDED,
+            basis="askQuestions",
+            statement="Replace it again.",
+            supersedes=("DEC-004",),
+        ),
     )
     legacy = _contract()
     contract = legacy.model_copy(
@@ -459,8 +473,18 @@ def test_detail_projects_decisions_behind_outcome_commitments_and_all_on_the_cha
             ),
         }
     )
+    replaced = DeliveryRequest(
+        request_id="REQ-002",
+        kind=DeliveryRequestKind.DECISION,
+        outcome_id="OUT-002",
+        summary="Choose the report format.",
+        options=({"option_id": "keep", "label": "Keep it"},),
+    )
     frontier = DeliveryFrontier(
-        bindings=(_binding("OUT-001", DeliveryStage.PLANNING), _binding("OUT-002", DeliveryStage.DESIGN))
+        bindings=(
+            _binding("OUT-001", DeliveryStage.PLANNING),
+            _binding("OUT-002", DeliveryStage.DESIGN, requests=(replaced,)),
+        )
     )
     content = (json.dumps(frontier.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n").encode()
     projector = WorkItemProjector(DeliveryPortfolioSnapshot.capture(contract, content))
@@ -471,7 +495,10 @@ def test_detail_projects_decisions_behind_outcome_commitments_and_all_on_the_cha
     ).encode()
 
     assert [item.decision_id for item in projector.show_view("outcome:OUT-001").decisions] == ["DEC-002"]
-    assert projector.show_view("outcome:OUT-002").decisions == ()
+    assert projector.show_view("outcome:OUT-001").superseded_request_ids == ()
+    report = projector.show_view("outcome:OUT-002")
+    assert [item.decision_id for item in report.decisions] == ["DEC-004", "DEC-005"]
+    assert report.superseded_request_ids == ("REQ-002",)
     publication = WorkItemProjector(DeliveryPortfolioSnapshot.capture(contract, finished_content))
     assert publication.show_view("publication").decisions == decisions
     assert WorkItemProjector(_snapshot(completed)).show_view("publication").decisions == ()

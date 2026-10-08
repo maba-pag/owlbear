@@ -1414,14 +1414,14 @@ class _AcquisitionMixin:
         completed = {result.task_id for result in binding.results}
         frontier = parse_delivery_frontier(runtime.frontier_bytes())[0].model_copy(update={"finalization": None})
         coverage = evaluate_acceptance_evidence(runtime.contract, frontier).criteria
-        commitments = self._commitments(runtime, outcome.commitment_ids)
+        superseded_request_ids = self._superseded_request_ids(runtime, binding)
         return DeliveryPlanContext(
             launch=launch,
             outcome=outcome,
-            commitments=commitments,
-            decisions=self._decisions(runtime, commitments),
+            commitments=self._commitments(runtime, outcome.commitment_ids),
+            decisions=runtime.contract.applicable_decisions(outcome.commitment_ids, superseded_request_ids),
             requests=binding.requests,
-            superseded_request_ids=self._superseded_request_ids(runtime, binding),
+            superseded_request_ids=superseded_request_ids,
             return_context=binding.return_context,
             acceptance=self._outcome_acceptance(runtime, outcome_id),
             retained_tasks=tuple(task for task in binding.tasks if task.task_id in completed),
@@ -1466,16 +1466,16 @@ class _AcquisitionMixin:
             )
         ):
             self._fail("Build retry history does not match the active claim")
-        commitments = self._commitments(runtime, task.commitment_ids)
+        superseded_request_ids = self._superseded_request_ids(runtime, binding)
         return DeliveryBuildContext(
             launch=launch,
             task=task,
             task_digest=task.digest,
-            commitments=commitments,
-            decisions=self._decisions(runtime, commitments),
+            commitments=self._commitments(runtime, task.commitment_ids),
+            decisions=runtime.contract.applicable_decisions(outcome.commitment_ids, superseded_request_ids),
             predecessor_results=predecessor_results,
             requests=binding.requests,
-            superseded_request_ids=self._superseded_request_ids(runtime, binding),
+            superseded_request_ids=superseded_request_ids,
             return_context=binding.return_context,
             recovery_attention=binding.recovery_attention,
             prior_attempts=prior_attempts,

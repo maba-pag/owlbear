@@ -810,6 +810,7 @@ export interface WorkItemDetailView {
   tasks: WorkItemTaskEvidence[];
   block: DeliveryBlock | null;
   requests: DeliveryRequest[];
+  superseded_request_ids: string[];
   active_claim: {
     attempt_id: string;
     claim_id: string;

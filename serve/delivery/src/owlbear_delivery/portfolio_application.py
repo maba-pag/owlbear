@@ -181,7 +181,6 @@ from owlbear_delivery.storage_io import atomic_write, locked_roots, state_is_rea
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
     DeliveryCompilationResult,
-    DeliveryDecision,
     DeliveryOutcome,
     compile_delivery_contract,
     decision_delta,
@@ -2169,13 +2168,6 @@ class PortfolioApplication(
     def _commitments(runtime: DeliveryRuntime, commitment_ids: tuple[str, ...]) -> tuple[DeliveryCommitment, ...]:
         selected = set(commitment_ids)
         return tuple(item for item in runtime.contract.commitments if item.commitment_id in selected)
-
-    @staticmethod
-    def _decisions(
-        runtime: DeliveryRuntime, commitments: tuple[DeliveryCommitment, ...]
-    ) -> tuple[DeliveryDecision, ...]:
-        selected = {identity for item in commitments for identity in item.decision_ids}
-        return tuple(item for item in runtime.contract.decisions if item.decision_id in selected)
 
     @staticmethod
     def _fail(message: str, cause: Exception | None = None) -> Never:

@@ -227,9 +227,9 @@ Sol round 2 on plan SHA-256 `4fbd2443…` (2026-10-08), recommendation `revision
 | --- | --- | --- | --- | --- | --- |
 | Plan | — | — | — | Sol round 1 `blocked` → resolved; round 2 `revision-required`, corrections applied | revised |
 | R — Rules | — | `f31c4da50` | agent-ecosystem tests 71 passed | with C | committed |
-| C — Compiler and authority | — | `32e140485` | 17 focused Delivery, tools, MCP and journey files: 957 passed | pending | committed |
-| X — Contexts and delta | — | next commit | portfolio application, Delivery MCP and Cockpit backend: 896 passed | pending | committed |
-| K — Cockpit | — | next commit | vitest 383 passed, `npm run build`, Biome, `tsc` | pending | committed |
+| C — Compiler and authority | — | `32e140485` | 17 focused Delivery, tools, MCP and journey files: 957 passed | Sol round 1 on `2ae211581`: no C finding | committed |
+| X — Contexts and delta | — | `2ae211581` + repair | portfolio application, Delivery MCP and Cockpit backend: 896 passed | Sol round 1 `repair-required`: worker contexts and finalization semantics missed decisions; repaired | committed |
+| K — Cockpit | — | `2ae211581` + repair | vitest 383 passed, `npm run build`, Biome, `tsc` | Sol round 1: superseded request answers unmarked; repaired | committed |
 
 Implementation notes:
 
@@ -240,3 +240,6 @@ Implementation notes:
   Change is admitted; it also lists admitted decisions a candidate changes, which activation refuses.
 - Cockpit shows decisions on the Change publication item (all, with superseded markers) and on outcome items
   (the active decisions behind their commitments), with a filter to the user's own decisions.
+- Plan and Build contexts and outcome detail select decisions from the outcome's commitments plus every
+  decision replacing one of its answered requests (`DeliveryContract.applicable_decisions`); Cockpit marks
+  replaced request answers as superseded; finalization semantics carry all contract decisions.

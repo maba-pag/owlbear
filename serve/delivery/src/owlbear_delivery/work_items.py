@@ -617,6 +617,7 @@ class WorkItemDetailView(_ProjectionModel):
     tasks: tuple[WorkItemTaskEvidence, ...] = ()
     block: DeliveryBlock | None = None
     requests: tuple[DeliveryRequest, ...] = ()
+    superseded_request_ids: tuple[str, ...] = ()
     active_claim: WorkItemClaimView | None = None
     held_finalizer: WorkItemHeldFinalizerView | None = None
     return_context: DeliveryReturnContext | None = None
@@ -1280,7 +1281,8 @@ class WorkItemProjector:
         commitments = tuple(
             item for item in self._snapshot.contract.commitments if item.commitment_id in outcome.commitment_ids
         )
-        decision_ids = {identity for item in commitments for identity in item.decision_ids}
+        superseded = self._snapshot.contract.superseded_request_ids()
+        superseded_request_ids = tuple(item.request_id for item in binding.requests if item.request_id in superseded)
         return WorkItemDetailView(
             snapshot_version=self._snapshot.version,
             change_title=self._snapshot.contract.title,
@@ -1288,11 +1290,12 @@ class WorkItemProjector:
             promise=outcome.promise,
             acceptance=outcome.acceptance,
             commitments=commitments,
-            decisions=tuple(item for item in self._snapshot.contract.decisions if item.decision_id in decision_ids),
+            decisions=self._snapshot.contract.applicable_decisions(outcome.commitment_ids, superseded_request_ids),
             dependencies=tuple(self._dependency_view(identity) for identity in outcome.dependency_ids),
             tasks=self._task_evidence(binding),
             block=binding.block,
             requests=binding.requests,
+            superseded_request_ids=superseded_request_ids,
             active_claim=self._claim_view(binding),
             return_context=binding.return_context,
             operator_moves=self._snapshot.frontier.operator_moves,

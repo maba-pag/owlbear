@@ -15151,9 +15151,7 @@ def test_revision_reports_decision_delta_and_plan_context_carries_decisions(tmp_
         'kind: decision\nid: DEC-002\norigin: decided\nbasis: askQuestions 2026-10-08 "Launch path?"\n'
         "statement: Launch through path b.\nsupersedes: [REQ-PATH]"
     )
-    revised = _revision_intent(
-        "AC-002: The report is revised.", extra_decisions=(path_b,), launch_decisions="DEC-001, DEC-002"
-    )
+    revised = _revision_intent("AC-002: The report is revised.", extra_decisions=(path_b,))
     application.revise_design_session("change-r", current.package_id, revised, current.design_bytes)
 
     derived = application.derive_delivery_contract("change-r")

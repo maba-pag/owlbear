@@ -337,6 +337,7 @@ export function detail(
         },
       ],
       decisions: [],
+      superseded_request_ids: [],
       dependencies: [],
       tasks: [
         {

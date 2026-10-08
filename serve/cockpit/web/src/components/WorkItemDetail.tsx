@@ -168,10 +168,12 @@ function DetailHeader({ detail }: Pick<WorkItemDetailProps, "detail">) {
 
 function RequestControl({
   request,
+  superseded,
   pending,
   onAnswer,
 }: {
   request: DeliveryRequest;
+  superseded: boolean;
   pending: boolean;
   onAnswer: WorkItemDetailProps["onAnswerRequest"];
 }) {
@@ -188,6 +190,13 @@ function RequestControl({
       request.resolution.response_text ||
       request.options.find((option) => option.option_id === request.resolution?.selected_option_id)?.label ||
       "Answered";
+    if (superseded) {
+      return (
+        <p className="mt-static-xs text-sm text-contrast-medium">
+          <PTag compact>Superseded</PTag> <s>{answerText}</s> · replaced by a later decision
+        </p>
+      );
+    }
     return <p className="mt-static-xs text-sm text-success">{answerText}</p>;
   }
   return (
@@ -264,6 +273,7 @@ function RequestsSection({ detail, pendingAction, onAnswerRequest }: WorkItemDet
   if (detail.item.card.scope !== "outcome") return null;
   const requests = detail.item.requests;
   if (requests.length === 0) return null;
+  const superseded = new Set(detail.item.superseded_request_ids ?? []);
   return (
     <section aria-labelledby="work-requests-heading">
       <PHeading id="work-requests-heading" tag="h3" size="md">
@@ -277,7 +287,12 @@ function RequestsSection({ detail, pendingAction, onAnswerRequest }: WorkItemDet
               <PTag compact>{REQUEST_KIND_LABELS[request.kind]}</PTag>
             </div>
             {request.applies_to ? <RequestScope scope={request.applies_to} detail={detail} /> : null}
-            <RequestControl request={request} pending={pendingAction !== null} onAnswer={onAnswerRequest} />
+            <RequestControl
+              request={request}
+              superseded={superseded.has(request.request_id)}
+              pending={pendingAction !== null}
+              onAnswer={onAnswerRequest}
+            />
           </article>
         ))}
       </div>
