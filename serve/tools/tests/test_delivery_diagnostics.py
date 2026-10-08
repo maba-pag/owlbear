@@ -554,7 +554,7 @@ def test_portfolio_truncation_keeps_current_records_ahead_of_receipts(tmp_path: 
     for change_id in ("change-a", "change-b", "change-c"):
         change = _add_change_authority(root, change_id)
         _write_every_change_family(change)
-        _add_action_receipt_volume(change, 30, payload_marker="PORTFOLIO-RECEIPT-SECRET")
+        _add_action_receipt_volume(change, MAX_ENTRIES // 3 + 1, payload_marker="PORTFOLIO-RECEIPT-SECRET")
 
     completed = _run_cli(root, "inspect", "--project-root", os.fspath(root), "--format", "json")
 
@@ -582,8 +582,8 @@ def test_portfolio_truncation_keeps_current_records_ahead_of_receipts(tmp_path: 
 def test_many_change_current_records_obey_entry_budget(tmp_path: Path) -> None:
     root = _root(tmp_path)
     changes = root / ".owlbear/delivery/runtime/changes"
-    for index in range(300):
-        change = changes / f"change-{index:03}"
+    for index in range(MAX_ENTRIES // 3 + 1):
+        change = changes / f"change-{index:04}"
         (change / "retry-ledger").mkdir(parents=True)
         (change / "frontier.json").write_bytes(b'{"schema_version":19,"bindings":[]}\n')
         (change / "retry-ledger/current.json").write_bytes(b'{"schema_version":1}\n')
@@ -1884,6 +1884,18 @@ def test_entry_and_size_limits_are_reported_without_reading_unbounded_data(tmp_p
     assert result["counts"]["frontier"] <= MAX_ENTRIES
     assert result["counts"]["config"] == 0
     assert result["counts"]["pending_transactions"] == 0
+
+
+def test_portfolio_beyond_the_former_256_entry_budget_inspects_completely(tmp_path: Path) -> None:
+    root = _root(tmp_path)
+    changes = root / ".owlbear/delivery/runtime/changes"
+    for index in range(300):
+        (changes / f"change-{index}").mkdir()
+
+    result = inspect_delivery(root)
+
+    assert "ENTRY_LIMIT_EXCEEDED" not in result["diagnostic_codes"]
+    assert "PENDING_EFFECTS_UNKNOWN" not in result["diagnostic_codes"]
 
 
 def test_entry_limit_is_global_across_fixed_directories(tmp_path: Path) -> None:

@@ -17,7 +17,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-MAX_ENTRIES = 256
+# A live portfolio needed 891 entries and 1.9 MB on 2026-10-08; the byte budget stays the I/O bound.
+MAX_ENTRIES = 4096
 MAX_RECORD_BYTES = 1 << 20
 MAX_TOTAL_BYTES = 8 << 20
 MAX_LOG_BYTES = 64 << 10
@@ -394,7 +395,7 @@ apply and verify); migrations through `delivery-migrate` and upgrades through `/
 Anything without such a route stays contained for its owner. Do not use Git, network, provider,
 process, or manual filesystem repair commands."""
 _ENTRY_LIMIT_MAINTENANCE_PROMPT = (
-    "The 256-entry budget was exhausted, so this inspection is incomplete. Rerun the complete "
+    f"The {MAX_ENTRIES}-entry budget was exhausted, so this inspection is incomplete. Rerun the complete "
     "inspection one Change at a time with `delivery-diagnose inspect --project-root "
     "<PROJECT_ROOT> --change-id <CHANGE_ID>`, using the applicable project root and a valid "
     "Change ID. Do not manually edit any inspected file."
