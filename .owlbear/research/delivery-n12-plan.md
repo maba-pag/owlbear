@@ -187,6 +187,7 @@ loader's exhausted-row and requestless-clearance derivations; `design-attention`
 | U1 | Fix route for the incident | Fix Delivery first (2026-10-08) |
 | U2 | Return bound and its exit | Option A: 3 returns per original Builder task under the same contract; at the limit `/design` revision preserves the Builder head and keeps completed work (2026-10-08) |
 | U3 | Plan, gates and implementation in one session, challenger after every step, push at the end | Directed by the user 2026-10-08 |
+| U4 | Where the incident continuation is proven | Option A1 (2026-10-08, after a Sol plan challenge): the pre-merge LC is the isolated read-only load plus the incident card on the real records, with the inspector's incomplete inspection accepted (G4); the grant, Planner correction and funded Builder acquisition are proven by the guarded live activation (§3.6). The inspector budget is fixed in its own PR |
 
 **Lead decision L1 (2026-10-08, plan gate to confirm):** the earlier proposal's live recovery by a
 registered record migration is replaced by I6. A migration would have to rewrite owner results,
@@ -203,6 +204,10 @@ one more attempt, and the legacy shape differs only in route and stage. Cost: on
   released first (I5).
 - N04 D14 stands for Design returns; the I5 release keeps completed results because a Planning
   return does not declare the Design wrong.
+- This plan's original LC (§3.5: grant, Planner promotion and funded Builder acquisition on the
+  copy) is amended by U4. A copy cannot keep a retained handoff's fingerprint (managed Git index
+  device, inode and digest, and dirty-path stat identities), so the copied incident refuses every
+  mutation as `remote-state-reconciliation-required` under the candidate and the base alike.
 
 ## 2. Feasibility probes
 
@@ -290,11 +295,34 @@ head.
   the agent-ecosystem tests for `share/`; the full `uv run test` once.
 - **Closeout (frontend):** in `serve/cockpit/web`: `npm test`, `npm run build`, `npm run
   test:e2e:work`, Biome on the changed files.
-- **LC:** load form. No persisted schema changes (I1; N11 already versions the ledger). Load an
-  isolated live copy, prove every Change is available, grant on the copy's
-  `macos-managed-browser-authentication` block, reload, acquire the Planner, promote a corrected
-  plan, reload, acquire the funded Builder for TASK-004 with its preserved head and answered
-  request, and confirm live hashes are unchanged.
+- **LC (amended by U4):** load form on an isolated live copy, every Change available through the
+  offline read-only load, and the incident card on the real records offering **Grant one more
+  attempt** to the user; live hashes unchanged. The inspector's incomplete inspection (G4) is
+  accepted for this package. The originally planned copy continuation (grant, reload, Planner
+  promotion, reload, funded TASK-004 Builder) moves to the activation (§3.6).
+
+### 3.6 Activation (live, user-run, after merge)
+
+Each step stops on any refusal or unexpected diagnostic; no retry, record rewrite or rollback
+without a new diagnosis.
+
+1. **Baseline (before merge).** With no live Delivery work running, start Delivery as usual (an
+   authorized operational start, not a read-only probe: startup may reconcile pending effects) and
+   read health. `macos-managed-browser-authentication` must show no
+   `remote-state-reconciliation-required` and health no global diagnostic. Otherwise stop and choose
+   a preserving route before activation.
+2. **Upgrade.** Merge, then `/upgrade-delivery` for the exact merged revision, including its
+   backup and post-switch health under the new release; the same incident check must pass again.
+3. **Grant.** In Cockpit, **Grant one more attempt** on the incident block. Pass: block resolved
+   with the grant note, one grant receipt, the episode funded once (`granted_attempts` 1, not
+   exhausted); after a restart the same state loads.
+4. **Planner correction.** The Planner promotes a plan whose TASK-004 no longer names a request
+   identity (it consumes the person-only pilot by acceptance ID and procedure, D rule), keeping
+   TASK-001–003 and their results verbatim.
+5. **Builder.** The funded Builder acquires TASK-004 from the preserved head `e5cc2d01…` with the
+   answered pilot request retained. The request's procedure names that exact commit, so a new
+   Builder commit may ask the user to confirm the pilot again; that is expected.
+6. **Record** which criteria passed; close G1 only on step 5.
 
 ## 4. Progress
 
@@ -303,14 +331,14 @@ head.
 | N12-P | shared | `eb9478eb3` + corrections | source probes (§2) | Sol round 1 `revision-required`; F1–F4 fix-now applied; gate closed | done |
 | N12-A | shared | `0055ae06d` + gate fixes | focused Delivery selection 676 passed; new return-limit and grant files | Sol implementation round 1 (A–D together) `revision-required`: F1 Cockpit label, F2 LC unrun; F1 fixed | done |
 | N12-B | shared | as N12-A | release, restart boundaries, publication wait, workspace-change refusal | as N12-A | done |
-| N12-C | shared | as N12-A | legacy grant through Planner pause, promotion and one funded attempt; missing-receipt refusal | as N12-A | done; LC run (G3) |
+| N12-C | shared | as N12-A | legacy grant through Planner pause, promotion and one funded attempt; missing-receipt refusal | as N12-A | done; LC per U4 run, activation (§3.6) pending |
 | N12-D | shared | as N12-A | skill rule | as N12-A | done |
 
 ## 5. Verification gaps
 
 | Gap | Claim | Reason unproven | Evidence | Owner | Blocks |
 | --- | --- | --- | --- | --- | --- |
-| G1 | The live Change continues to merge after the grant | Live state is read-only for programme work | LC grant on the copy | User, after `/upgrade-delivery` | Nothing (post-merge activation) |
+| G1 | The live incident continues after the grant: Planner correction and funded TASK-004 Builder with preserved head, results and answer | No copy can keep the retained handoff's fingerprint (U4) | Activation §3.6 steps 1–5 | User, at activation | Closing N12 |
 | G2 | Rollback to the pinned release while a return-limit or granted Planning-route handoff is local | The previous release does not know the shapes | Granted ledgers are version 2, which the pinned pre-N11 release refuses with a typed diagnostic; a return-limit handoff without a grant fails bootstrap for that Change only | User (switch forward) | Nothing |
-| G3 | The live incident records load, grant and promote under this release | Load form run 2026-10-08 on an isolated Docker copy at `512499c8f`: launch provenance and in-container isolation proven, all 10 live Changes load available, records unchanged, live hashes unchanged (820 records). The tool reports `passed: false` only because the candidate-independent inspector stops at its 256-entry budget (`ENTRY_LIMIT_EXCEEDED`, 7 of 10 Changes even per Change; `serve/tools` is untouched by N12). The mutable rehearsal on the copy shows the real incident card as **Grant one more attempt** with next actor you, but the grant is refused as `remote-state-reconciliation-required`: the retained handoff's fingerprint hashes the worktree's Git index, whose stat data cannot survive a copy. The base `040a1fda9` refuses identically in the same container, so this is a copy artifact | Load form report and rehearsal reports in the LC stage `control/` | User: the first real grant is the post-merge activation (G1) | Nothing |
-| G4 | The LC load form can pass on current live state | The inspector's 256-entry budget is smaller than one live Change | Raise or page the `delivery-diagnose` entry budget | Delivery tools owner | Future LC gates |
+| G3 | The live records load under this release and the incident offers the user grant | Proven 2026-10-08 on an isolated Docker copy of `512499c8f`, with launch provenance and in-container isolation validated. 1) A fresh, unmodified copy passed the load form's offline read-only load: all 10 Changes available, no record changed. The tool verdict is still `passed: false` (G4). 2) Later harness runs reused that stage: they renamed the copy's pin and ran normal composition. The candidate shows the incident card **Grant one more attempt**, next actor *you*. The grant itself is refused as `remote-state-reconciliation-required` (handoff fingerprint, see the U4 amendment). The base `040a1fda9` refuses identically and shows the old read-only card. 3) `delivery-lc compare`: live unchanged, 820 records. Normal composition, grant and continuation on the real records are not proven by this LC | Local, uncommitted evidence: `.owlbear/scratch/n12-lc-evidence/` with `SHA256SUMS`; the stage `/private/tmp/n12-lc` | User: activation §3.6 | Nothing under U4 |
+| G4 | The LC tool gate passes on current live state | The candidate-independent inspector (`delivery-diagnose`, untouched by N12) stops at its 256-entry budget: `ENTRY_LIMIT_EXCEEDED` with `PENDING_EFFECTS_UNKNOWN`, for all Changes together and for 7 of 10 one by one, so `inspector_agrees` is false. A larger budget could still surface other diagnostics | Inspector budget fix in its own PR, then an isolated rerun with a complete report | Delivery tools | The current tool gate; accepted for N12 by U4 |
