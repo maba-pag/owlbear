@@ -95,10 +95,114 @@ A curator reads an entry, another writer changes its content, and the curator's 
 - Focused suites green while the maintained Cockpit memory e2e projects or other existing workspace tests fail on the old MCP arguments, engine signatures or the removed contested field.
 
 ```yaml target-contract
+kind: decision
+id: DEC-001
+origin: approved
+basis: "GitHub issue 249 requested outcome, approved with the package"
+statement: "Curator MCP approve, curate and delete apply only to the revision the caller inspected; a stale caller is refused without effect."
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-002
+origin: approved
+basis: "GitHub issue 244 requested outcome, approved with the package"
+statement: "Feedback applies only to the evaluated revision, a retried assessment counts once, and dispute evidence keeps every reporter and challenged revision."
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-003
+origin: decided
+basis: "user decision D1 (user-confirmed 2026-10-06) recorded in intent.md Decisions"
+statement: "Option A, computed content hash. `revision` is a short SHA-256 over the curator-editable fields (title, content, categories, confidence, scope_agents); it is not persisted; counters, state, receipts, challenges, and timestamps do not change it. Recall, `read_memory`, and `list_memories` emit it; recall gains one `Revision:` line per block. Rejected: B persisted integer (migration, misses hand edits); C reuse `updated_at` (counter bumps cause false conflicts and Builder collisions)."
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-004
+origin: decided
+basis: "user decision D2 (user-confirmed 2026-10-06) recorded in intent.md Decisions"
+statement: "Option A, bounded receipt window in the entry file. Receipts `{task_id, revision, bucket}` for the current revision only, most recent 20; one assessment per task/entry/revision regardless of bucket (first answer wins); a repeat returns `success: true, already_applied: true` with the recorded bucket. Rejected: B separate ledger (new store overlapping `memory-writer-safety`); C unbounded set (breaks 8 KB cap)."
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-005
+origin: approved
+basis: "designer-recorded D2 refinement after challenge (2026-10-06), approved with the package"
+statement: "the current-revision rule applies on every write path, including agent rename and removal; the newest receipt is always kept, older receipts are evicted oldest-first only to stay within the 8192-byte cap, and an assessment whose receipt cannot be stored is refused without effect; MCP `task_id` is 1-128 printable ASCII characters without whitespace."
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-006
+origin: decided
+basis: "user decision D3 (user-confirmed 2026-10-06) recorded in intent.md Decisions"
+statement: "Option A, per-cycle challenge list `challenges: [{task_id, revision, recorded_at}]` replacing `contested_by_task`; at most two records; kept on delete and on Cockpit edits; cleared by `resolve`. Rejected: B persistent history across resolutions."
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-007
+origin: decided
+basis: "user sequencing request (2026-10-06) quoted in intent.md Decisions: \"after or alongside without overlapping\""
+statement: "This change lands after or alongside memory-writer-safety without overlapping it."
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-008
+origin: decided
+basis: "user request (2026-10-06) recorded as COM-009 provenance"
+statement: "Stale-revision refusal is proven through the registered MCP tools on a live in-process server, not only the engine."
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-009
+origin: approved
+basis: "designer implementation discretion (COM-010 provenance), approved with the package"
+statement: "Field names, revision length, error wording, engine signatures and the receipt step location are implementation choices within the contract."
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-010
+origin: approved
+basis: "designer-recorded consumer scope after re-challenge (2026-10-07), approved with the package"
+statement: "maintained Cockpit e2e and workspace test consumers of the changed MCP arguments, engine signatures and challenge fields are adapted in the outcome that changes them and proven by that outcome's focused checks and existing Playwright projects; no new e2e project is added."
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-011
+origin: approved
+basis: "designer-recorded D1 consequence, approved with the package"
+statement: "D1 consequence: feedback naming a replaced revision is refused per entry (`success: false`, concurrency error naming the current revision); it is not attributed."
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-012
+origin: approved
+basis: "designer-recorded sequencing mechanism implementing DEC-007, approved with the package"
+statement: "no Delivery dependency on `memory-writer-safety`. This change adds no lock and changes no Git batching or cache code; the revision check runs inside the engine's existing critical section. Whichever change lands second rebases on shared `engine.py` methods."
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-013
+origin: approved
+basis: "intent.md Preserved Behavior and the issue #249 Cockpit-token exclusion, approved with the package"
+statement: "Lifecycle state machine transitions and their guards; `disputed` still refuses further challenges. Cockpit approve/resolve/edit/delete with `expected_updated_at`. Per-entry success/failure results for valid assessment batches; malformed batches rejected whole. Recall selection pools and ordering. Assessment counters persist across content edits (documented, not reset). Cockpit's existing `expected_updated_at` request-token contract is unchanged (#249)."
+```
+
+```yaml target-contract
 kind: commitment
 id: COM-001
 class: dealbreaker
-provenance: "GitHub issue 249 requested outcome"
+decisions: [DEC-001]
 statement: MCP approve_memory, curate_memory and delete_memory apply only when the caller-supplied revision equals the entry's current revision; otherwise they refuse with a concurrency error that names expected and current revision and tells the caller to re-read before retrying, and the entry is unchanged.
 ```
 
@@ -106,7 +210,7 @@ statement: MCP approve_memory, curate_memory and delete_memory apply only when t
 kind: commitment
 id: COM-002
 class: dealbreaker
-provenance: "GitHub issue 244 requested outcome"
+decisions: [DEC-002, DEC-011]
 statement: Each assessment item names the revision that was evaluated; an item whose revision is not the entry's current revision is refused for that entry without changing its state, counters, score, receipts or challenges, while other items in the batch are processed.
 ```
 
@@ -114,7 +218,7 @@ statement: Each assessment item names the revision that was evaluated; an item w
 kind: commitment
 id: COM-003
 class: dealbreaker
-provenance: "GitHub issue 244 requested outcome"
+decisions: [DEC-002, DEC-004, DEC-005]
 statement: A repeated assessment with the same task, entry and revision is not applied again and returns a deterministic already-applied result naming the recorded bucket; an assessment is never counted unless its receipt is stored with it.
 ```
 
@@ -122,7 +226,7 @@ statement: A repeated assessment with the same task, entry and revision is not a
 kind: commitment
 id: COM-004
 class: dealbreaker
-provenance: "GitHub issue 244 requested outcome"
+decisions: [DEC-002, DEC-006]
 statement: Factual challenges retain every reporting task ID of the current dispute cycle and the revision each challenged; both are visible in the MCP read and list projections and the Cockpit memory projection until resolve, and remain on a deleted tombstone.
 ```
 
@@ -130,7 +234,7 @@ statement: Factual challenges retain every reporting task ID of the current disp
 kind: commitment
 id: COM-005
 class: agreed-path
-provenance: "user decision D1 (2026-10-06)"
+decisions: [DEC-003]
 statement: The revision is a computed, unpersisted SHA-256-derived lowercase hex token over title, content, categories, confidence and scope_agents; state, counters, receipts, challenges and timestamps do not change it; recall_memory, read_memory and list_memories emit it, recall as one Revision line per block.
 ```
 
@@ -138,7 +242,7 @@ statement: The revision is a computed, unpersisted SHA-256-derived lowercase hex
 kind: commitment
 id: COM-006
 class: agreed-path
-provenance: "user decision D2 (2026-10-06) with designer refinement after challenge"
+decisions: [DEC-004, DEC-005]
 statement: Assessment receipts are stored in the entry file for the current revision only on every write path, at most the 20 most recent, evicting oldest first when needed to stay within the 8192-byte file cap while always keeping the newest; one assessment counts per task, entry and revision regardless of bucket, and the first recorded bucket wins.
 ```
 
@@ -146,7 +250,7 @@ statement: Assessment receipts are stored in the entry file for the current revi
 kind: commitment
 id: COM-007
 class: agreed-path
-provenance: "user decision D3 (2026-10-06)"
+decisions: [DEC-006]
 statement: Challenge evidence is a per-cycle list of task ID, revision and recorded time that replaces contested_by_task, holds at most two records, survives Cockpit edits and deletion, and is cleared by resolve.
 ```
 
@@ -154,7 +258,7 @@ statement: Challenge evidence is a per-cycle list of task ID, revision and recor
 kind: commitment
 id: COM-008
 class: protected-request
-provenance: "GitHub issues 249 and 244 exclusions; user sequencing request for memory-writer-safety"
+decisions: [DEC-001, DEC-002, DEC-007, DEC-012, DEC-013]
 statement: Cockpit's expected_updated_at request contract, the lifecycle state machine, recall selection and ordering, per-entry partial batch results with whole-batch rejection of malformed input, and assessment counters persisting across edits are unchanged; this change adds no cross-process lock and changes no Git batching, cache freshness or duplicate-ID handling.
 ```
 
@@ -162,7 +266,7 @@ statement: Cockpit's expected_updated_at request contract, the lifecycle state m
 kind: commitment
 id: COM-009
 class: protected-request
-provenance: "user request (2026-10-06)"
+decisions: [DEC-008]
 statement: Stale-revision refusal for curator mutations and assessments is proven through the registered MCP tools on a live in-process server, not only through the engine.
 ```
 
@@ -170,7 +274,7 @@ statement: Stale-revision refusal for curator mutations and assessments is prove
 kind: commitment
 id: COM-010
 class: implementation-discretion
-provenance: "designer"
+decisions: [DEC-009, DEC-010]
 statement: Exact field names, revision length, error wording, engine method signatures, and where the shared current-revision receipt step lives are implementation choices within the stated contract.
 ```
 
