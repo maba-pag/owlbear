@@ -1672,8 +1672,37 @@ def _drift_handoff_workspace(worktree: Path, drift: str) -> None:
         _git(worktree, "commit", "-m", "drift head", "--", "committed.txt")
 
 
-@pytest.mark.parametrize("drift", ["tracked", "untracked", "staged", "head"])
-def test_builder_handoff_with_ignored_churn_still_refuses_preserved_work_drift(tmp_path: Path, drift: str) -> None:
+@pytest.mark.parametrize("drift", ["tracked", "untracked", "staged"])
+def test_builder_handoff_with_ignored_churn_keeps_preserved_work_drift_for_triage(tmp_path: Path, drift: str) -> None:
+    start = _real_now()
+    now = [_iso(start)]
+    application, runtime, coordinator, _state_root, _probe, launch, _branch_head = _builder_with_workspace_changes(
+        tmp_path, now
+    )
+    _add_ignored_content(launch.worktree_path)
+    application.settle_worker_invocation(
+        _requestless_builder_settlement(launch, "ended-without-result"),
+        host_id=launch.claim.owner_id,
+        session_id=launch.claim.process_id,
+    )
+    assert coordinator.show("change-a").builder_handoff is not None
+    _churn_ignored_content(launch.worktree_path)
+    _drift_handoff_workspace(launch.worktree_path, drift)
+    drifted = _workspace_content_snapshot(launch.worktree_path)
+    now[0] = _iso(start + timedelta(hours=1))
+
+    result = application.acquire_change_action(_continuation_request(application, "change-a"))
+
+    assert result.launch is not None, result
+    assert result.launch.claim.task_id == launch.task_id
+    assert result.launch.claim.attempt_id != launch.claim.attempt_id
+    assert [claim.claim_id for _outcome_id, claim in runtime.active_claims()] == [result.launch.claim.claim_id]
+    assert coordinator.show("change-a").builder_handoff is None
+    assert _workspace_content_snapshot(launch.worktree_path) == drifted
+
+
+def test_builder_handoff_with_ignored_churn_still_refuses_a_moved_head(tmp_path: Path) -> None:
+    drift = "head"
     start = _real_now()
     now = [_iso(start)]
     application, runtime, coordinator, _state_root, _probe, launch, _branch_head = _builder_with_workspace_changes(
