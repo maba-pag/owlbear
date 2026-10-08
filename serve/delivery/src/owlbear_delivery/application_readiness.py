@@ -977,6 +977,7 @@ class _ReadinessViewsMixin:
     ) -> tuple[tuple[DeliveryReadiness, ...], tuple[str | None, ...]]:
         """Project progress from final readiness plus read-only issuer, occupancy and provider evidence."""
         at_capacity: bool | None = None
+        conflict_paths, aborted_target = self._target_sync_exit_evidence(snapshot.contract.change_id)
         updated: list[DeliveryReadiness] = []
         card_guidance: list[str | None] = []
         for card, decision in zip(cards, decisions, strict=True):
@@ -1007,10 +1008,25 @@ class _ReadinessViewsMixin:
                 merged_unrecorded=self._merged_unrecorded(snapshot, card),
                 dependency_id=dependency_id,
                 request=request,
+                sync_conflict_paths=conflict_paths,
+                aborted_sync_target=aborted_target,
             )
             updated.append(decision.model_copy(update={"progress": progress}))
             card_guidance.append(custody if custody is not None else guidance)
         return tuple(updated), tuple(card_guidance)
+
+    def _target_sync_exit_evidence(self, change_id: str) -> tuple[tuple[str, ...] | None, str | None]:
+        """Return the preserved target-merge conflict paths and the last aborted target head, read-only."""
+        try:
+            coordination = self._workspace_manager.show(change_id)
+        except OSError, RuntimeError, ValueError:
+            return None, None
+        conflict = coordination.target_sync_conflict
+        abort = coordination.target_sync_abort_receipt
+        return (
+            conflict.conflict_paths if conflict is not None else None,
+            abort.target_head if abort is not None else None,
+        )
 
     @staticmethod
     def _merged_unrecorded(snapshot: DeliveryPortfolioSnapshot, card: WorkItemCardView) -> bool:

@@ -226,6 +226,7 @@ from owlbear_delivery.runtime_models import _receipt_digest
 from owlbear_delivery.runtime_transaction import ReplacementTransactionParticipant, RuntimeTransaction
 from owlbear_delivery.state_formats import classify_kind, format_marker_bytes
 from owlbear_delivery.storage_io import locked_roots
+from owlbear_delivery.work_items import DeliveryProgress
 from owlbear_delivery_github import GitHubCliPublicationProvider
 
 _USER_CHECKOUT_STATES = (
@@ -5763,6 +5764,18 @@ def test_engine_target_sync_conflict_exit_releases_retained_engine_custody(tmp_p
     readiness = application.get_change("change-a").readiness
     assert readiness.reason_code == "engine-action-failed"
     assert readiness.prompt.startswith("/resolve-target-conflict change-a ")
+    conflict_progress = DeliveryProgress(
+        situation="ready-for-next-step",
+        headline=(
+            "Merging the latest target stopped on a conflict in product.txt; resolve it with /resolve-target-conflict."
+        ),
+        waiting_on="you",
+        target_sync="unavailable",
+    )
+    assert readiness.progress == conflict_progress
+    assert application.get_change("change-a").detail.change_progress == conflict_progress.model_copy(
+        update={"target_sync": None}
+    )
     disposition_id = runtime.change_disposition().disposition_id
     worktree = Path(coordinator.show("change-a").worktree_path)
     intent = coordinator.continuation_record_path("change-a", action.operation_id)
@@ -5782,7 +5795,14 @@ def test_engine_target_sync_conflict_exit_releases_retained_engine_custody(tmp_p
     assert coordinator.show("change-a").continuation_action is None
     assert (intent.read_bytes(), result.read_bytes()) == journals
     assert runtime.change_disposition() is None
-    assert application.get_change("change-a").readiness.reason_code != "engine-action-failed"
+    after = application.get_change("change-a").readiness
+    assert after.reason_code != "engine-action-failed"
+    assert "stopped on a conflict" not in after.progress.headline
+    if exit_kind == "abort":
+        assert after.basis.target_head == target
+        assert after.progress.headline.startswith("You aborted merging this target;"), after.progress
+    else:
+        assert not after.progress.headline.startswith("You aborted")
     assert _execute_engine(application, action) == blocked
     following = application.acquire_change_action(_continuation_request(application))
     assert following.kind != "unavailable", following

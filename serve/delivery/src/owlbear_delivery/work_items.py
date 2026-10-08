@@ -645,7 +645,9 @@ _START_VERBS: dict[WorkItemActionKind, str] = {
     WorkItemActionKind.START_ORCHESTRATION: "continue this Change",
     WorkItemActionKind.FINALIZE: "finalize this Change",
     WorkItemActionKind.RECONCILE_CHECKPOINT: "publish the pending checkpoint",
-    WorkItemActionKind.SYNC_TARGET: "bring the latest target into this Change",
+    WorkItemActionKind.SYNC_TARGET: (
+        "merge the latest target into this Change; a conflict stops there for you to resolve"
+    ),
     WorkItemActionKind.MARK_READY: "mark the pull request ready",
     WorkItemActionKind.OBSERVE_ACCEPTANCE: "check the merge",
 }
@@ -758,6 +760,8 @@ def derive_delivery_progress(  # noqa: PLR0913 - each keyword is one piece of re
     merged_unrecorded: bool = False,
     dependency_id: str | None = None,
     request: DeliveryRequest | None = None,
+    sync_conflict_paths: tuple[str, ...] | None = None,
+    aborted_sync_target: str | None = None,
 ) -> DeliveryProgress:
     """Map one final readiness and supplied evidence to its single user-facing situation (R3-R6).
 
@@ -767,17 +771,64 @@ def derive_delivery_progress(  # noqa: PLR0913 - each keyword is one piece of re
     ``merged_unrecorded`` reports a pull request GitHub merged whose completion Delivery has not recorded yet.
     ``dependency_id`` names the first incomplete Outcome a dependent Outcome waits on, and ``request`` is the
     card's open request, absent when a block stops the step.
+    ``sync_conflict_paths`` is the preserved target-merge conflict, when one is retained, and
+    ``aborted_sync_target`` the target head whose merge the user last aborted.
     No situation claims that work is running: custody is only "with an agent".
     """
+    publication = card.scope is WorkItemScope.CHANGE_PUBLICATION
+    conflict = sync_conflict_paths if publication or readiness.reason_code == "engine-action-failed" else None
     progress = (
         _lifecycle_progress(readiness, frontier, pause_requested=pause_requested, pause_drained=pause_drained)
         or _custody_progress(readiness, card, issuer_state, holder)
+        or _sync_conflict_progress(conflict)
         or _merge_progress(readiness, card, frontier, merged_unrecorded=merged_unrecorded)
         or _step_progress(readiness, card, at_capacity=at_capacity, dependency_id=dependency_id, request=request)
     )
-    if card.scope is WorkItemScope.CHANGE_PUBLICATION:
-        return progress.model_copy(update={"target_sync": _target_sync_availability(readiness, card, progress)})
-    return progress
+    if not publication:
+        return progress
+    if _repeats_aborted_sync(readiness, progress, aborted_sync_target):
+        when = " once the retry time passes" if progress.next_eligible_at is not None else ""
+        progress = progress.model_copy(update={"headline": _ABORTED_SYNC_HEADLINE.format(when=when)})
+    availability = (
+        "unavailable"
+        if sync_conflict_paths is not None and progress.situation not in {"done", "abandoned", "paused"}
+        else _target_sync_availability(readiness, card, progress)
+    )
+    return progress.model_copy(update={"target_sync": availability})
+
+
+_ABORTED_SYNC_HEADLINE = (
+    "You aborted merging this target; running the prompt{when} merges it again and keeps any conflict "
+    "for you to resolve."
+)
+
+
+def _sync_conflict_progress(paths: tuple[str, ...] | None) -> DeliveryProgress | None:
+    """A preserved target-merge conflict has one route: /resolve-target-conflict resolves or aborts it."""
+    if paths is None:
+        return None
+    where = f" in {paths[0]}" if len(paths) == 1 else f" in {len(paths)} files" if paths else ""
+    return _progress(
+        "ready-for-next-step",
+        f"Merging the latest target stopped on a conflict{where}; resolve it with /resolve-target-conflict.",
+        "you",
+    )
+
+
+def _repeats_aborted_sync(readiness: DeliveryReadiness, progress: DeliveryProgress, aborted: str | None) -> bool:
+    """The offered sync merges the same target the user just aborted."""
+    return (
+        aborted is not None
+        and progress.situation == "ready-for-next-step"
+        and readiness.basis.target_head == aborted
+        and (
+            readiness.reason_code == "target-sync-required"
+            or (
+                readiness.operation is WorkItemActionKind.SYNC_TARGET
+                and (readiness.executable or readiness.reason_code == "retry-backoff")
+            )
+        )
+    )
 
 
 def _lifecycle_progress(
@@ -866,7 +917,9 @@ def _merge_progress(  # noqa: PLR0911 - one return per merge situation.
         )
     if reason == "target-sync-required":
         return _progress(
-            "ready-for-next-step", "Run the prompt in Copilot Chat to bring the latest target into this Change.", "you"
+            "ready-for-next-step",
+            f"Run the prompt in Copilot Chat to {_START_VERBS[WorkItemActionKind.SYNC_TARGET]}.",
+            "you",
         )
     return _awaiting_merge_progress(readiness, card, frontier)
 
