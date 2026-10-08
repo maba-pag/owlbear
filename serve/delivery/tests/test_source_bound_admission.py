@@ -929,13 +929,24 @@ def test_converting_a_schema_2_contract_invalidates_no_outcome(repository: Path,
     (target_root / "changes/source-bound-change/contract.json").write_bytes(legacy_bytes)
     (active_root / "source-bound-change/authority.json").write_bytes(legacy_bytes)
     _write_revision(active_root, legacy_bytes, *_evidence_sources(decisions=_decision(statement="Converted.")))
+    tasks = (
+        _task("TASK-001", "OUT-001", "SCOPE-001", ("COM-001",)),
+        _task("TASK-002", "OUT-001", "SCOPE-001", ("COM-001",), ("TASK-001",)),
+    )
+    digest = hashlib.sha256(legacy_bytes).hexdigest()
+    result = _task_result("RESULT-TASK-001", "source-bound-change", digest, tasks[0], "1" * 40)
+    populated = first.frontier.bindings[0].model_copy(
+        update={"stage": DeliveryStage.IMPLEMENTATION, "tasks": tasks, "results": (result,)}
+    )
+    seeded = first.frontier.model_copy(update={"bindings": (populated, *first.frontier.bindings[1:])})
+    (target_root / "changes/source-bound-change/frontier.json").write_bytes(_canonical(seeded))
 
-    revised = _activate(registry, package_store, _canonical(first.frontier))
+    revised = _activate(registry, package_store, _canonical(seeded))
 
     assert revised.contract.schema_version == 3
     assert revised.carry_forward is not None
     assert revised.carry_forward.invalidated_outcome_ids == ()
-    assert revised.frontier.bindings == first.frontier.bindings
+    assert revised.frontier.bindings == seeded.bindings
 
 
 def _answered_request(
