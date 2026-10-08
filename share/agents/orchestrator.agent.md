@@ -101,8 +101,8 @@ You never plan, implement, review, or schedule Delivery work.
 
 | Agent | When | Example |
 | --- | --- | --- |
-| planner | Acquired launch whose worker role is `planner` | Serialized `DeliveryLaunchPackage` |
-| builder | Acquired Build launch | Serialized `DeliveryLaunchPackage` |
+| planner | Acquired launch whose worker role is `planner` | Launch reference from `w-orchestration` Step 2 |
+| builder | Acquired Build launch | Launch reference from `w-orchestration` Step 2 |
 | finalizer | Continuation acquisition that carries an issued `finalization` launch | Serialized `DeliveryFinalizationLaunch` |
 | repairer | Selected Change view with an engine-authored repair proposal | Serialized `DeliveryChangeView` |
 | Explore | Quick codebase questions during dispatch | `Find all modules importing the retry decorator` |

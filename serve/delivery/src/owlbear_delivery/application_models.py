@@ -96,6 +96,7 @@ from owlbear_delivery.recovery import (
 )
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
+    DeliveryDecision,
     DeliveryOutcome,
 )
 from owlbear_delivery.work_items import (
@@ -156,6 +157,23 @@ def _worker_stall_prompt(change_id: str, stall: _WorkerStall) -> str:
     return (
         f"/continue-change {change_id} The VS Code window that issued the active worker claim has closed. {wait}; "
         "do not edit the worktree or dispatch a replacement before then."
+    )
+
+
+def _held_finalizer_prompt(change_id: str) -> str:
+    return (
+        f"/continue-change {change_id} A Finalizer attempt holds this Change. If that exact Finalizer chat has "
+        "stopped, confirm it when the continuation asks, or use Release in Cockpit; Delivery records a failed "
+        "attempt once no process uses the worktree and it stays unchanged. While it may still run, do not edit "
+        "the worktree or dispatch a replacement."
+    )
+
+
+def _target_sync_conflict_prompt(change_id: str) -> str:
+    return (
+        f"/resolve-target-conflict {change_id} Target synchronization stopped on a merge conflict that the "
+        "Change worktree preserves. Resolve it there and record it with Delivery, or abort it; either exit "
+        "releases the retained engine action. Do not edit Delivery state or start another synchronization."
     )
 
 
@@ -655,6 +673,7 @@ class DeliveryAnswerKind(StrEnum):
     REQUEST = "request"
     BLOCK = "block"
     DISPOSITION = "disposition"
+    GRANT_ATTEMPT = "grant-attempt"
 
 
 class DeliveryAnswer(_ApplicationModel):
@@ -693,13 +712,25 @@ class DeliveryAnswer(_ApplicationModel):
             if self.request_id is not None or self.resolution is not None:
                 message = "block answers cannot include request resolution"
                 raise ValueError(message)
-        else:
+        elif self.kind is DeliveryAnswerKind.DISPOSITION:
             if self.expected_disposition_id is None:
                 message = "disposition answers require an expected disposition identity"
                 raise ValueError(message)
             if any((self.request_id, self.outcome_id, self.block_id, self.operator_note)) or self.locators:
                 message = "disposition answers cannot include request or block evidence"
                 raise ValueError(message)
+        return self
+
+    @model_validator(mode="after")
+    def _validate_attempt_grant(self) -> DeliveryAnswer:
+        if self.kind is not DeliveryAnswerKind.GRANT_ATTEMPT:
+            return self
+        if self.outcome_id is None or self.block_id is None:
+            message = "attempt grants require outcome and block identity"
+            raise ValueError(message)
+        if any((self.request_id, self.resolution, self.operator_note, self.expected_disposition_id)) or self.locators:
+            message = "attempt grants cannot include request, note, locator, or disposition evidence"
+            raise ValueError(message)
         return self
 
 
@@ -718,8 +749,8 @@ class DeliveryAnswerResult(_ApplicationModel):
         if self.kind is DeliveryAnswerKind.REQUEST and self.request is None:
             message = "request answer results require the resolved request"
             raise ValueError(message)
-        if self.kind is DeliveryAnswerKind.BLOCK and self.binding is None:
-            message = "block answer results require the cleared binding"
+        if self.kind in {DeliveryAnswerKind.BLOCK, DeliveryAnswerKind.GRANT_ATTEMPT} and self.binding is None:
+            message = "block answer results require the updated binding"
             raise ValueError(message)
         if self.kind is DeliveryAnswerKind.DISPOSITION and self.disposition is None:
             message = "disposition answer results require the resolution receipt"
@@ -743,7 +774,11 @@ class DeliveryPlanContext(_ApplicationModel):
     launch: DeliveryLaunchPackage
     outcome: DeliveryOutcome
     commitments: tuple[DeliveryCommitment, ...]
+    # Active decisions the commitments rest on; workers never change them.
+    decisions: tuple[DeliveryDecision, ...] = ()
     requests: tuple[DeliveryRequest, ...]
+    # Answered requests a contract decision replaced; consume that decision instead.
+    superseded_request_ids: tuple[str, ...] = ()
     return_context: DeliveryReturnContext | None = None
     acceptance: tuple[DeliveryAcceptanceCriterion, ...] = ()
     # A published plan must repeat these completed task definitions unchanged.
@@ -758,8 +793,10 @@ class DeliveryBuildContext(_ApplicationModel):
     task: DeliveryTaskDefinition
     task_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     commitments: tuple[DeliveryCommitment, ...]
+    decisions: tuple[DeliveryDecision, ...] = ()
     predecessor_results: tuple[DeliveryTaskResult, ...]
     requests: tuple[DeliveryRequest, ...]
+    superseded_request_ids: tuple[str, ...] = ()
     return_context: DeliveryReturnContext | None = None
     recovery_attention: DeliveryRecoveryAttention | None = None
     prior_attempts: tuple[DeliveryRetryAttemptView, ...] = Field(default=(), max_length=MAX_RETRY_HISTORY_ATTEMPTS)

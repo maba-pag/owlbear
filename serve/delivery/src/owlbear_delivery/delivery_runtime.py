@@ -26,7 +26,10 @@ from owlbear_delivery.recovery import (
     DeliveryWorkerExclusionRequiredError,
     RecoveryIntent,
     RecoveryReceipt,
+    RetryAttemptGrantError,
     RetryLedger,
+    RetryLedgerConflictError,
+    RetryLedgerCorruptError,
     digest,
     encoded,
     journal_path,
@@ -131,6 +134,7 @@ from owlbear_delivery.runtime_reads import (
     _RuntimeReadsMixin,
 )
 from owlbear_delivery.runtime_receipts import (  # noqa: F401
+    BUILDER_ATTEMPT_GRANT_NOTE,
     AdministrativeDeliveryMove,
     AdministrativeDeliveryMovePreview,
     AdministrativeDeliveryMoveResult,
@@ -138,6 +142,7 @@ from owlbear_delivery.runtime_receipts import (  # noqa: F401
     DeliveryEngineBuilderSettlement,
     DeliveryEnginePlanningSettlement,
     DeliveryPlanningRetrySettlement,
+    _DeliveryBuilderAttemptGrantReceipt,
     _DeliveryBuilderHandoffChangeIntentHead,
     _DeliveryBuilderHandoffChangeIntentReceipt,
     _DeliveryBuilderInvocationSettlementReceipt,
@@ -145,6 +150,9 @@ from owlbear_delivery.runtime_receipts import (  # noqa: F401
     _DeliveryBuilderRequestResolutionReceipt,
     _DeliveryPlanningPauseReplay,
     _DeliveryPlanningRetrySettlementReceipt,
+    builder_attempt_limit_block_id,
+    is_builder_attempt_grant_block,
+    is_builder_return_limit,
 )
 from owlbear_delivery.runtime_settlement import (
     _SettlementReplayMixin,
@@ -152,6 +160,7 @@ from owlbear_delivery.runtime_settlement import (
 from owlbear_delivery.runtime_support import (  # noqa: F401
     _administrative_move_closure,
     _attention_conflict,
+    _builder_attempt_grant_receipt_path,
     _checkpoint_with_head,
     _completed_outcome_repair_id,
     _conflict,
@@ -163,6 +172,7 @@ from owlbear_delivery.runtime_support import (  # noqa: F401
     _pull_request_identity,
     _queue_finalization_checkpoint,
     _queue_promoted_result_checkpoint,
+    _read_builder_attempt_grant_receipt,
     _read_builder_handoff_change_intent_receipts,
     _read_builder_request_resolution_receipt,
     _replace_binding,
@@ -1250,7 +1260,10 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
         return receipt
 
     def completion_bundle(self) -> CompletionReceiptBundle | None:
-        """Return the immutable completion evidence for this Change, if present."""
+        """Return completion evidence only when this Change's frontier records its completion."""
+        frontier, _previous = self._read()
+        if frontier.change_completion is None:
+            return None
         return CompletionReceiptStore(self._target_root).read_bundle(self._contract.change_id)
 
     def finalize_change(
@@ -2264,7 +2277,7 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
                 original_task_commitment_ids=original_task.commitment_ids,
                 original_task_maintained_surfaces=original_task.maintained_surfaces,
             )
-            result, paused, failure_code = self._builder_invocation_settled_binding(
+            result, refunded, failure_code = self._builder_invocation_settled_binding(
                 binding, envelope, context, episode, ledger
             )
             receipt = _DeliveryBuilderInvocationSettlementReceipt(
@@ -2277,8 +2290,8 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
                 *ledger.owner_result_participants(
                     claim.attempt_id,
                     accepted=False,
-                    accepted_progress=not paused,
-                    paused=paused,
+                    accepted_progress=not refunded,
+                    paused=refunded,
                     failure_code=failure_code,
                     now=retry_observed_at or datetime.now(UTC),
                 ),
@@ -2299,7 +2312,7 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
             return result
 
     def release_design_return(self) -> OutcomeAuthorityBinding:
-        """Preserve and release one retained Design-return handoff into a plain Design return (N04 §1.7)."""
+        """Preserve and release one retained Design-return or return-limit handoff (N04 §1.7, N12 I5)."""
         manager = self._require_workspace()
         with manager._coordinator.publication_lock(self._contract.change_id) as lock:  # noqa: SLF001
             frontier, previous = self._read()
@@ -2311,17 +2324,20 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
             if (
                 binding is None
                 or context is None
-                or context.route != "same-outcome-design"
+                or (context.route != "same-outcome-design" and not is_builder_return_limit(binding))
                 or handoff is None
                 or handoff.settlement_id != context.settlement_id
                 or handoff.branch_head != context.branch_head
                 or handoff.metadata_fingerprint != context.metadata_fingerprint
             ):
-                _conflict("Design return release requires one exact retained Design-route handoff")
+                _conflict("Design return release requires one exact retained Design-route or return-limit handoff")
             participant = manager.release_design_return(self._contract.change_id, handoff, lock)
             # A Design return declares the outcome's Design wrong: its tasks and results go, as in a claim-held return.
+            # A Planning return does not, so the return-limit release keeps its plan, results, answers and context.
             released = binding.model_copy(
-                update={"tasks": (), "results": (), "builder_handoff_context": None, "block": None}
+                update={"builder_handoff_context": None, "block": None}
+                if context.route == "same-outcome-planner"
+                else {"tasks": (), "results": (), "builder_handoff_context": None, "block": None}
             )
             # The handoff was never published; the remote still holds the last acknowledged state.
             marker = (
@@ -2439,6 +2455,91 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
                 _conflict("requestless unblock cannot mutate while a Builder handoff is retained")
             updated = updated.model_copy(update={"return_context": return_context})
         self._replace(previous, _replace_binding(frontier, binding, updated))
+        return updated
+
+    def grant_builder_attempt(
+        self,
+        outcome_id: str,
+        block_id: str,
+        *,
+        now: datetime | str | None = None,
+    ) -> OutcomeAuthorityBinding:
+        """Fund one more Builder attempt after its exact retry episode was exhausted.
+
+        It lifts a same-task attempt limit (N11) or a pre-N12 exhausted return to Planning (N12 I6). The frontier,
+        retry ledger and grant receipt commit in one transaction; retry history is preserved and a later exhaustion
+        needs another grant.
+        """
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "grant_builder_attempt")
+        binding = _find_binding(frontier, outcome_id)
+        context = binding.builder_handoff_context
+        block = binding.block
+        if (
+            context is None
+            or block is None
+            or block.block_id != block_id
+            or not is_builder_attempt_grant_block(
+                binding.model_copy(
+                    update={"block": block.model_copy(update={"resolution_note": None, "resolution_locators": ()})}
+                )
+            )
+        ):
+            _conflict("attempt grant requires the exact exhausted Builder block")
+        if block.resolved:
+            receipt = _read_builder_attempt_grant_receipt(self._target_root, self._contract.change_id, context)
+            if receipt is not None and receipt.updated_block == block:
+                return binding
+            _conflict("Builder attempt-limit block is already resolved")
+        _require_no_active_change_claim(frontier, "Builder attempt grant")
+        settlement = self._read_builder_invocation_settlement_receipt(context)
+        if (
+            settlement.handoff_context != context
+            or settlement.result != binding
+            or settlement.envelope.change_id != self._contract.change_id
+        ):
+            _conflict("attempt grant does not match its exact Builder settlement")
+        try:
+            ledger_participant, episode = self.retry_ledger().prepare_attempt_grant(context.attempt_id, now=now)
+        except (RetryAttemptGrantError, RetryLedgerConflictError, RetryLedgerCorruptError) as exc:
+            message = "attempt grant requires the exact exhausted Builder retry episode"
+            raise DeliveryRuntimeConflictError(message) from exc
+        updated_block = block.model_copy(
+            update={
+                "resolution_note": BUILDER_ATTEMPT_GRANT_NOTE,
+                "resolution_locators": (context.settlement_id,),
+            }
+        )
+        receipt = _DeliveryBuilderAttemptGrantReceipt(
+            change_id=self._contract.change_id,
+            outcome_id=outcome_id,
+            settlement_id=context.settlement_id,
+            attempt_id=context.attempt_id,
+            episode_id=episode.episode_id,
+            granted_attempts=episode.granted_attempts,
+            builder_handoff_context=context,
+            granted_block=block,
+            updated_block=updated_block,
+        )
+        receipt_path = _builder_attempt_grant_receipt_path(self._target_root, self._contract.change_id, context)
+        if any(
+            path.is_symlink()
+            for path in (self._target_root / "changes", self._frontier_path.parent, receipt_path.parent, receipt_path)
+        ):
+            _reference("Builder attempt grant receipt path is unsafe")
+        updated = binding.model_copy(update={"block": updated_block})
+        self._replace(
+            previous,
+            _replace_binding(frontier, binding, updated),
+            additional_participants=(
+                TransactionParticipant(
+                    self._target_root,
+                    receipt_path.relative_to(self._target_root),
+                    _model_content(receipt),
+                ),
+                ledger_participant,
+            ),
+        )
         return updated
 
     def administrative_move(

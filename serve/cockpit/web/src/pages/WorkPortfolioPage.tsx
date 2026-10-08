@@ -40,13 +40,12 @@ import { WorkspaceHeader } from "../components/WorkspaceHeader";
 import { WorkspaceViewCount } from "../components/WorkspaceViewHeader";
 import {
   CONTINUATION_PROMPT_HELP,
+  changeAwaitsPrompt,
   changeContinuationPrompt,
   changePauseUnavailableMessage,
   READINESS_CHECKS_LABELS,
-  READINESS_REASON_LABELS,
 } from "../components/workItemPresentation";
 import {
-  useAcceptanceReconciliation,
   useChangeIntent,
   useDesignWorkDetail,
   useWorkItemDetail,
@@ -363,6 +362,7 @@ function SelectedWorkItemDetail({
           actionResult={selectedDetail.actionResult}
           onAnswerRequest={selectedDetail.answerRequest}
           onClearBlock={selectedDetail.clearBlock}
+          onGrantAttempt={selectedDetail.grantAttempt}
           onReleaseStuckWorker={selectedDetail.releaseStuckWorker}
           onPreviewBackward={selectedDetail.previewBackward}
           onMoveBackward={selectedDetail.moveBackward}
@@ -431,7 +431,7 @@ function PortfolioWorkspace({
       renderGroupControls={(group) => (
         <ChangePauseControl
           changeId={group.change_id}
-          paused={group.progress === "paused" || group.lifecycle === "deferred"}
+          paused={group.progress?.situation === "paused" || group.lifecycle === "deferred"}
           pauseRequested={group.pause_requested === true}
           unavailableMessage={changePauseUnavailableMessage(group)}
           pendingAction={intent.pendingAction(group.change_id)}
@@ -648,7 +648,9 @@ function DeliveryIssuesSection({
                 </Link>
                 <span className="text-xs text-contrast-medium">Delivery</span>
               </div>
-              <p className="mt-1 font-medium text-primary">{READINESS_REASON_LABELS[change.readiness.reason_code]}</p>
+              <p className="mt-1 font-medium text-primary">
+                {change.readiness.progress?.headline ?? "Delivery cannot read this Change's state."}
+              </p>
               <p className="mt-1 text-xs text-contrast-medium">
                 Read-only inspection only. Checks: {READINESS_CHECKS_LABELS[change.readiness.checks_state]}.
               </p>
@@ -757,7 +759,6 @@ export default function WorkPortfolioPage() {
     isHistoryRoute(location.pathname) ? "history" : "current",
   );
   const { portfolio, hasData, error, isLoading, retry } = useWorkPortfolio(workspace === "history");
-  const acceptanceReconciliation = useAcceptanceReconciliation(portfolio, retry, workspace === "history");
   const [changeFilter, setChangeFilter] = useState("");
   const [needsFilter, setNeedsFilter] = useState<WorkItemNeed | "">("");
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -1008,6 +1009,7 @@ export default function WorkPortfolioPage() {
             <PortfolioHeaderSummary
               operating={portfolio.operating}
               totals={portfolio.totals}
+              runPromptCount={portfolio.groups.filter(changeAwaitsPrompt).length}
               needsFilter={needsFilter}
               onNeedsFilter={setNeedsFilter}
             />
@@ -1069,27 +1071,6 @@ export default function WorkPortfolioPage() {
                 </span>
                 <PButton type="button" variant="secondary" onClick={retry}>
                   Retry portfolio
-                </PButton>
-              </section>
-            ) : null}
-            {acceptanceReconciliation.providerError ? (
-              <section
-                className="flex flex-wrap items-center gap-static-sm border-l-4 border-warning bg-surface p-static-md"
-                role="alert"
-              >
-                <PIcon name="warning" aria-hidden="true" />
-                <span className="min-w-0 flex-1">
-                  {"GitHub acceptance checks are unavailable for "}
-                  {acceptanceReconciliation.providerChangeIds.join(", ")}.{" "}
-                  {acceptanceReconciliation.providerError.message}
-                </span>
-                <PButton
-                  type="button"
-                  variant="secondary"
-                  loading={acceptanceReconciliation.isRetrying}
-                  onClick={acceptanceReconciliation.retry}
-                >
-                  {acceptanceReconciliation.isRetrying ? "Retrying acceptance check..." : "Retry acceptance check"}
                 </PButton>
               </section>
             ) : null}

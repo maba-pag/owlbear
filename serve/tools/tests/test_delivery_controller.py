@@ -337,6 +337,8 @@ def test_verify_detects_a_changed_interpreter_and_a_release_record_the_pin_does_
     assert f"pin.json does not name the RELEASE.json of release {commits[0]}" in failures
 
 
+# Three installs plus pin, switch, verify and prune spawn release interpreters; shared CI workers exceed 30s.
+@pytest.mark.timeout(120)
 def test_prune_belongs_to_the_stopped_interval_after_switch_and_verify(
     tmp_path: Path, source: tuple[Path, list[str]]
 ) -> None:

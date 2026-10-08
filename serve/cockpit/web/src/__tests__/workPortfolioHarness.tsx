@@ -8,7 +8,9 @@ import type {
   ChangePauseUnavailableReason,
   CompletedChangeRecord,
   DeliveryHealthResponse,
+  DeliveryProgress,
   DeliveryReadiness,
+  DeliverySituation,
   DeliveryUnavailableChangeResponse,
   DesignWorkDetailResponse,
   PortfolioChangeLifecycleStatus,
@@ -42,7 +44,6 @@ export interface WorkPortfolioState {
   releaseStuckWorkerActive: "write" | "processes" | "unobservable" | null;
   designFailure: boolean;
   acceptanceObservationFailure: boolean;
-  acceptanceReconciliationProviderUnavailable: boolean;
   publicationChecksFailure: boolean;
   publicationChecksResponse: PublicationChecksObservationResponse;
   supersedeFailuresRemaining: number;
@@ -160,6 +161,10 @@ export function changeStatus(
   };
 }
 
+export function situation(value: DeliverySituation, overrides: Partial<DeliveryProgress> = {}): DeliveryProgress {
+  return { situation: value, headline: `Headline for ${value}.`, waiting_on: "none", ...overrides };
+}
+
 export function readiness(overrides: Partial<DeliveryReadiness> = {}): DeliveryReadiness {
   return {
     status: "waiting",
@@ -208,6 +213,10 @@ export function unavailableChange(changeId: string, title: string | null = null)
         workspace_fingerprint: null,
         diagnostic_sequence: null,
       },
+      progress: situation("needs-attention", {
+        headline: "Delivery cannot read this Change's state; diagnose it before continuing.",
+        waiting_on: "you",
+      }),
     }),
   };
 }
@@ -323,10 +332,12 @@ export function detail(
         {
           commitment_id: "COM-001",
           commitment_class: "protected-request",
-          provenance: "user request",
+          decision_ids: ["DEC-001"],
           statement: "Keep user attention explicit.",
         },
       ],
+      decisions: [],
+      superseded_request_ids: [],
       dependencies: [],
       tasks: [
         {
@@ -342,10 +353,12 @@ export function detail(
       block: null,
       requests: [],
       active_claim: null,
+      held_finalizer: null,
       return_context: null,
       operator_moves: [],
       recovery_attention: null,
       retry_diagnostic: null,
+      abandon_available: true,
       ...overrides,
       publication: publication || null,
     },
@@ -596,23 +609,6 @@ export function installFetch() {
         }
         return response(fixtureState.publicationChecksResponse);
       }
-      if (method === "POST" && url === "/api/work-items/acceptance/reconcile") {
-        return response({
-          outcomes: [
-            {
-              change_id: "change-alpha",
-              status: fixtureState.acceptanceReconciliationProviderUnavailable ? "provider-unavailable" : "waiting",
-              code: fixtureState.acceptanceReconciliationProviderUnavailable
-                ? "ERR_DELIVERY_PROVIDER_UNAVAILABLE"
-                : null,
-              detail: fixtureState.acceptanceReconciliationProviderUnavailable
-                ? "GitHub acceptance provider unavailable"
-                : null,
-              completion_id: null,
-            },
-          ],
-        });
-      }
       if (method === "POST" && fixtureState.mutationFailurePath && url.endsWith(fixtureState.mutationFailurePath)) {
         return response(
           {
@@ -690,7 +686,11 @@ export function installFetch() {
             409,
           );
         }
-        fixtureState.currentDetail = detail({ ...fixtureState.currentDetail.item, active_claim: null });
+        fixtureState.currentDetail = detail({
+          ...fixtureState.currentDetail.item,
+          active_claim: null,
+          held_finalizer: null,
+        });
         return response({});
       }
       if (method === "POST" && url.endsWith("/move-backward/preview")) {
@@ -912,7 +912,6 @@ export function installWorkPortfolioHarness() {
     fixtureState.releaseStuckWorkerActive = null;
     fixtureState.designFailure = false;
     fixtureState.acceptanceObservationFailure = false;
-    fixtureState.acceptanceReconciliationProviderUnavailable = false;
     fixtureState.publicationChecksFailure = false;
     fixtureState.publicationReconciliationResult = {
       change_id: "change-alpha",
@@ -1014,7 +1013,7 @@ export function continuationCard(overrides: Partial<WorkItemCardView> = {}): Wor
       reason_code: "ready",
       action: { kind: "start-orchestration", label: "Copy continuation prompt", command: null },
       prompt: CONTINUATION_PROMPT,
-      progress: "waiting-for-chat",
+      progress: situation("ready-for-next-step", { headline: "Run the prompt in Copilot Chat to start the step." }),
     }),
     ...overrides,
   });

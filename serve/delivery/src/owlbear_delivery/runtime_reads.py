@@ -149,15 +149,14 @@ class _RuntimeReadsMixin:
     def completion_receipt(self) -> CompletionReceipt | None:
         """Return the exact terminal receipt while rejecting partial completion state."""
         frontier, _content = self._read()
+        if frontier.change_completion is None:
+            # A receipt here belongs to an earlier admission of the same Change ID.
+            return None
         store = CompletionReceiptStore(self._target_root)
         try:
             record = store.read_bundle(self._contract.change_id)
         except CompletionReceiptConflictError:
             _conflict("terminal frontier state does not match its completion record")
-        if frontier.change_completion is None:
-            if record is not None:
-                _conflict("completion receipt exists without terminal frontier state")
-            return None
         if record is None:
             _conflict("terminal frontier state does not match its completion record")
         stored = record.receipt
@@ -701,7 +700,13 @@ class _RuntimeReadsMixin:
             source_boundary=request.source_boundary,
         )
         returned = _reset_binding(binding, request.target)
-        return returned.model_copy(update={"return_context": context, "retry_diagnostic": None})
+        return returned.model_copy(
+            update={
+                "return_context": context,
+                "retry_diagnostic": None,
+                "requests": retained_requests(binding.requests),
+            }
+        )
 
     def _block(
         self,

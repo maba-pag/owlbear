@@ -7,9 +7,9 @@ import CopyCommand from "./CopyCommand";
 import { StatusChip, WorkRow } from "./DeliveryPrimitives";
 import {
   CONTINUATION_PROMPT_HELP,
-  DELIVERY_PROGRESS_LABELS,
   isContinuationPrompt,
   PROGRESS_STAGE_LABELS,
+  progressLabel,
   progressTone,
   workItemStatus,
 } from "./workItemPresentation";
@@ -315,11 +315,16 @@ export default function WorkPortfolioTable({
               {group.lifecycle === "deferred" ? "paused" : group.lifecycle.replace(/-/g, " ")}
             </span>
             {group.progress ? (
-              <StatusChip
-                label={DELIVERY_PROGRESS_LABELS[group.progress]}
-                tone={progressTone(group.progress)}
-                testId={`change-progress-${group.change_id}`}
-              />
+              <span className="flex min-w-0 flex-wrap items-center gap-static-xs">
+                <StatusChip
+                  label={progressLabel(group.progress)}
+                  tone={progressTone(group.progress)}
+                  testId={`change-progress-${group.change_id}`}
+                />
+                <span className="text-xs text-contrast-medium" data-testid={`change-headline-${group.change_id}`}>
+                  {group.progress.headline}
+                </span>
+              </span>
             ) : null}
             {renderGroupControls ? renderGroupControls(group) : null}
           </div>

@@ -9,6 +9,7 @@ from pathlib import Path
 import mcp
 import pytest
 from mcp.types import CallToolResult
+from owlbear_memory import MemoryCategory, MemoryEngine, MemoryState, storage
 
 from owlbear_memory_mcp.server import mcp as memory_mcp
 
@@ -94,6 +95,7 @@ async def test_live_server_commits_reviewed_memory_batch(
     empty_payload = json.loads(_text(empty))
     assert not committed.is_error
     assert committed_payload["committed"] is True
+    assert committed_payload["deferred_deletions"] == []
     assert committed_payload["commit_sha"] == _git(tmp_path, "rev-parse", "HEAD")
     assert _git(tmp_path, "log", "-1", "--format=%s") == ("chore: memory review batch (memory-mcp, memory-reviewer)")
     assert not empty.is_error
@@ -101,8 +103,69 @@ async def test_live_server_commits_reviewed_memory_batch(
         "session_type": "review",
         "commit_sha": None,
         "committed": False,
+        "deferred_deletions": [],
         "hint": "No memory changes to commit.",
     }
+
+
+@pytest.mark.asyncio
+async def test_live_server_reports_deferred_duplicate_deletions(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    memory_dir = tmp_path / ".owlbear/memory"
+    memory_dir.mkdir(parents=True)
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.name", "OwlBear Test")
+    _git(tmp_path, "config", "user.email", "test@example.invalid")
+
+    engine = MemoryEngine(memory_dir)
+    pending = engine.save(
+        title="Tracked memory",
+        content="Approved memory content.",
+        categories=[MemoryCategory.PROCESS],
+        confidence=0.8,
+        source_agent="test-agent",
+        scope_agents=[],
+    )
+    curated = engine.edit(pending.id, {"scope_agents": ["test-agent"]}, pending.updated_at)
+    approved = engine.approve(curated.id, curated.updated_at)
+    tracked_path = memory_dir / f"{approved.id}.md"
+    tracked_relative = tracked_path.relative_to(tmp_path).as_posix()
+    _git(tmp_path, "add", "--", tracked_relative)
+    _git(tmp_path, "commit", "-m", "initial memory")
+    initial_head = _git(tmp_path, "rev-parse", "HEAD")
+
+    storage.write_entry(
+        memory_dir / "newer-pending-copy.md",
+        approved.model_copy(
+            update={
+                "title": "Newer pending copy",
+                "content": "Pending memory content.",
+                "state": MemoryState.PENDING,
+                "approved_at": None,
+                "updated_at": "2099-08-30T00:00:00+00:00",
+            },
+        ),
+        memory_dir=memory_dir,
+    )
+    monkeypatch.chdir(tmp_path)
+
+    async with mcp.Client(memory_mcp) as client:
+        result = await client.call_tool("commit_memory_batch", {"session_type": "review"})
+
+    payload = json.loads(_text(result))
+    assert not result.is_error
+    assert payload["session_type"] == "review"
+    assert payload["commit_sha"] is None
+    assert payload["committed"] is False
+    assert payload["deferred_deletions"] == [tracked_relative]
+    assert "curate the surviving pending entry" in payload["hint"].lower()
+    assert _git(tmp_path, "rev-parse", "HEAD") == initial_head
+    head_paths = _git(tmp_path, "ls-tree", "-r", "--name-only", "HEAD", "--", ".owlbear/memory").splitlines()
+    assert head_paths == [tracked_relative]
+    head_entry = storage.read_entry_bytes_strict(_git(tmp_path, "show", f"HEAD:{tracked_relative}").encode())
+    assert head_entry.id == approved.id
 
 
 @pytest.mark.asyncio

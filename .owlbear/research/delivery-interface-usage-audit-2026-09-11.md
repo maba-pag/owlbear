@@ -438,6 +438,9 @@ The frontend uses a shared `usePollingFetch` hook with an in-flight guard, visib
 - selected work-item detail: 3 seconds;
 - selected Design detail: 3 seconds;
 - acceptance reconciliation: initial visible poll, then 30 seconds, exponential backoff to 5 minutes after provider failure;
+  since the status rethink R2 ([delivery-status-model-rethink.md](delivery-status-model-rethink.md)),
+  each Delivery host's checkpoint supervisor also runs the batch every 30 seconds and the retry ledger
+  dedups reads across callers;
 - publication checks: explicit user action, not the general 3-second detail polling;
 - history: initial/on-demand page requests, not the active portfolio timer.
 

@@ -101,6 +101,12 @@ export default function MergeApprovalDialog({ offer, pendingAction, onApproveMer
                 }
               />
             </dl>
+            {reviewed.proof.proof_target !== reviewed.target_head ? (
+              <p className="text-sm" data-testid="merge-approval-target-drift">
+                {`${reviewed.base_branch} moved after the proof. The proof does not cover the commits between ` +
+                  `${reviewed.proof.proof_target.slice(0, 12)} and ${reviewed.target_head.slice(0, 12)}.`}
+              </p>
+            ) : null}
             {error ? (
               <p className="border-l-4 border-danger bg-surface p-static-sm text-sm" role="alert">
                 {stale ? (

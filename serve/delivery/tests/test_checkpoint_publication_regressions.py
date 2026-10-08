@@ -414,7 +414,7 @@ def _replay_once_then_converge(repository: Path, snapshot_2_id: str, state_head:
     published_head, snapshot = _remote_snapshot(repository)
     assert published_head != state_head
     assert _git(repository, "rev-list", "--count", f"{state_head}..{published_head}") == "1"
-    assert snapshot["schema_version"] == 3
+    assert snapshot["schema_version"] == 4
     assert snapshot["frontier"]["schema_version"] == 19
     assert snapshot["parent_snapshot_id"] == snapshot_2_id
     assert replaying._runtimes["change-a"].pending_state_publication() is None
@@ -465,7 +465,7 @@ def test_first_mutation_of_a_stored_v18_frontier_records_one_marker_on_its_v18_b
 def test_drained_acknowledgment_of_a_stored_frontier_records_a_marker_only_for_v18(tmp_path: Path, stored: int) -> None:
     repository, frontier_path, head, state_head = _v18_loader_case(tmp_path, retained_checkpoint=True, stored=stored)
     _state, snapshot = _remote_snapshot(repository)
-    assert snapshot["schema_version"] == (2 if stored == 18 else 3)
+    assert snapshot["schema_version"] == (2 if stored == 18 else 4)
     assert snapshot["frontier"].get("pending_checkpoint") is None
     before = frontier_path.read_bytes()
 

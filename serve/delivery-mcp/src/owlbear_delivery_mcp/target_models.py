@@ -6,7 +6,7 @@ import json
 from functools import partial
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator, model_validator
 
 from owlbear_delivery.change_publication import ChangeBranchSupersessionReceipt
 from owlbear_delivery.change_workspace import (
@@ -198,6 +198,14 @@ class AnswerParams(ChangeParams):
     operator_note: str | None = None
     locators: tuple[str, ...] = ()
     expected_disposition_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+    @field_validator("kind")
+    @classmethod
+    def _refuse_user_only_kind(cls, kind: DeliveryAnswerKind) -> DeliveryAnswerKind:
+        if kind is DeliveryAnswerKind.GRANT_ATTEMPT:
+            message = "one more Builder attempt is granted only by the user in Cockpit"
+            raise ValueError(message)
+        return kind
 
     @model_validator(mode="after")
     def _validate_target(self) -> AnswerParams:

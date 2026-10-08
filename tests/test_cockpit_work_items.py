@@ -32,6 +32,7 @@ from serve.delivery.tests.test_portfolio_application import (
     _canonical,
     _continuation_request,
     _engine_action,
+    _exhaust_same_task_builder_retry,
     _failure_request,
     _git,
     _loader_activation_state_snapshot,
@@ -59,8 +60,6 @@ from owlbear_cockpit.target_context import load_target_context
 from owlbear_cockpit.target_models import PublicationChecksObservationResponse
 from owlbear_delivery import (
     ChangeContinuationAction,
-    DeliveryAcceptanceReconciliationOutcome,
-    DeliveryAcceptanceReconciliationStatus,
     DeliveryAcquisitionFailure,
     DeliveryActionBusyError,
     DeliveryAnswer,
@@ -457,11 +456,12 @@ class _DeliveryApplicationFake:
         return SimpleNamespace(frontier_digest="a" * 64)
 
     def answer(self, answer: DeliveryAnswer, *, allow_user_only: bool = False) -> dict[str, object]:
-        # Only the request route answers as the user; block and attention routes never do.
-        assert allow_user_only is (answer.kind is DeliveryAnswerKind.REQUEST)
+        # Only the request and attempt-grant routes answer as the user; block and attention routes never do.
+        assert allow_user_only is (answer.kind in {DeliveryAnswerKind.REQUEST, DeliveryAnswerKind.GRANT_ATTEMPT})
         operation = {
             "request": "answer",
             "block": "clear",
+            "grant-attempt": "grant-attempt",
             "disposition": "attention-resolve",
         }[answer.kind.value]
         self.calls.append((operation, (answer,)))
@@ -564,27 +564,6 @@ class _DeliveryApplicationFake:
         if failure is not None:
             raise failure
         return {"change_id": args[0], "completion_id": "f" * 64}
-
-    def reconcile_awaiting_acceptance(self, *args: object) -> tuple[DeliveryAcceptanceReconciliationOutcome, ...]:
-        self.calls.append(("acceptance-reconcile", args))
-        return (
-            DeliveryAcceptanceReconciliationOutcome(
-                change_id="change-a",
-                status=DeliveryAcceptanceReconciliationStatus.WAITING,
-                detail="The pull request is open and not merged.",
-            ),
-            DeliveryAcceptanceReconciliationOutcome(
-                change_id="change-b",
-                status=DeliveryAcceptanceReconciliationStatus.COMPLETED,
-                completion_id="f" * 64,
-            ),
-            DeliveryAcceptanceReconciliationOutcome(
-                change_id="change-c",
-                status=DeliveryAcceptanceReconciliationStatus.PROVIDER_UNAVAILABLE,
-                code="unavailable",
-                detail="Provider unavailable",
-            ),
-        )
 
     def resolve_change_disposition(self, *args: object) -> dict[str, object]:
         self.calls.append(("attention-resolve", args))
@@ -895,14 +874,12 @@ def test_http_explicit_acceptance_reads_once_per_invocation(tmp_path: Path, *, e
     calls = provider.read_pull_request.call_count
     with TestClient(assemble_target_app(application)) as client:
         for _ in range(2):
-            assert (
-                client.post("/api/work-items/acceptance/reconcile", json={"change_ids": ["change-a"]}).status_code
-                == 200
-            )
+            application.reconcile_awaiting_acceptance(("change-a",))
         assert provider.read_pull_request.call_count == calls
         first = client.post("/api/changes/change-a/acceptance/observe")
-    with TestClient(assemble_target_app(restart())) as client:
-        assert client.post("/api/work-items/acceptance/reconcile", json={"change_ids": ["change-a"]}).status_code == 200
+    restarted = restart()
+    with TestClient(assemble_target_app(restarted)) as client:
+        restarted.reconcile_awaiting_acceptance(("change-a",))
         second = client.post("/api/changes/change-a/acceptance/observe")
     assert first.status_code == second.status_code == 409
     assert first.json()["code"] == "ERR_DELIVERY_ACCEPTANCE_WAITING"
@@ -1108,18 +1085,22 @@ def test_http_portfolio_and_detail_carry_progress_without_writing_records(tmp_pa
 
     assert portfolio.status_code == held.status_code == waiting.status_code == 200
     groups = {group["change_id"]: group for group in portfolio.json()["groups"]}
-    assert groups["change-a"]["progress"] is None
-    assert groups["change-a"]["items"][0]["readiness"]["progress"] is None
+    assert groups["change-a"]["progress"]["situation"] == "with-agent"
+    assert groups["change-a"]["items"][0]["readiness"]["progress"] == groups["change-a"]["progress"]
     assert groups["change-a"]["items"][0]["next_step"] == "Claimed by Planner"
-    assert groups["change-b"]["progress"] == "waiting-for-change"
+    assert held.json()["item"]["abandon_available"] is True
+    assert (groups["change-b"]["progress"]["situation"], groups["change-b"]["progress"]["waiting_on"]) == (
+        "waiting-on-dependency",
+        "change",
+    )
     # N09-A2: Pause is admissible under custody; the request drains the running step first.
     assert (groups["change-a"]["pause_available"], groups["change-a"]["pause_unavailable_reason"]) == (True, None)
     assert (groups["change-b"]["pause_available"], groups["change-b"]["pause_unavailable_reason"]) == (True, None)
     assert (held.json()["item"]["pause_available"], held.json()["item"]["pause_unavailable_reason"]) == (True, None)
-    assert held.json()["item"]["change_progress"] is None
+    assert held.json()["item"]["change_progress"] == groups["change-a"]["progress"]
     assert held.json()["item"]["card"]["readiness"]["status"] == "running"
     waiting_item = waiting.json()["item"]
-    assert waiting_item["change_progress"] == "waiting-for-change"
+    assert waiting_item["change_progress"] == groups["change-b"]["progress"]
     assert (waiting_item["pause_available"], waiting_item["pause_unavailable_reason"]) == (True, None)
     assert waiting_item["card"]["readiness"]["action"]["label"] == "Copy continuation prompt"
     assert waiting_item["card"]["readiness"]["prompt"].startswith("/continue-change change-b ")
@@ -1163,9 +1144,13 @@ def test_http_pause_requests_drain_under_custody_and_pauses_a_quiescent_change(t
     groups = {group["change_id"]: group for group in portfolio["groups"]}
     assert groups["change-a"]["pause_requested"] is True
     assert groups["change-b"]["pause_requested"] is False
+    assert groups["change-a"]["progress"]["situation"] == "pausing"
     assert paused.status_code == resumed.status_code == 200
-    assert (paused_view["change_progress"], paused_view["card"]["readiness"]["progress"]) == ("paused", "paused")
-    assert resumed_view["change_progress"] == "waiting-for-chat"
+    assert (
+        paused_view["change_progress"]["situation"],
+        paused_view["card"]["readiness"]["progress"]["situation"],
+    ) == ("paused", "paused")
+    assert resumed_view["change_progress"]["situation"] == "ready-for-next-step"
 
 
 def test_http_direct_mark_ready_lost_to_pause_is_a_typed_no_effect_refusal(tmp_path: Path) -> None:
@@ -3266,6 +3251,49 @@ def test_controls_require_exact_confirmation_and_delegate_once() -> None:
     assert move_request.expected_version == "a" * 64  # type: ignore[attr-defined]
 
 
+def test_attempt_grant_route_is_the_only_user_grant_and_binds_the_exact_block() -> None:
+    client, application = _client()
+    route = "/api/changes/change-a/outcomes/OUT-001/blocks/builder-attempt-limit-one/grant-attempt"
+
+    rejected = client.post(route, json={"expected_frontier_digest": "a" * 64, "operator_note": "extra"})
+    granted = client.post(route, json={"expected_frontier_digest": "a" * 64})
+
+    assert (rejected.status_code, granted.status_code) == (422, 200)
+    assert [name for name, _args in application.calls] == ["grant-attempt"]
+    answer = application.calls[0][1][0]
+    assert isinstance(answer, DeliveryAnswer)
+    assert (answer.kind, answer.outcome_id, answer.block_id, answer.expected_frontier_digest) == (
+        DeliveryAnswerKind.GRANT_ATTEMPT,
+        "OUT-001",
+        "builder-attempt-limit-one",
+        "a" * 64,
+    )
+
+
+def test_real_http_attempt_grant_resumes_the_builder_and_replays(tmp_path: Path) -> None:
+    application, runtime, _state_root, _attempt_ids = _exhaust_same_task_builder_retry(
+        tmp_path, ["2026-08-04T00:00:00Z"]
+    )
+    block = runtime.show_binding("OUT-001").block
+    route = f"/api/changes/change-a/outcomes/OUT-001/blocks/{block.block_id}/grant-attempt"
+    digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
+
+    with TestClient(assemble_target_app(application)) as client:
+        before = client.get("/api/changes/change-a/work-items/outcome:OUT-001").json()["item"]
+        granted = client.post(route, json={"expected_frontier_digest": digest})
+        replay = client.post(route, json={"expected_frontier_digest": digest})
+        after = client.get("/api/changes/change-a/work-items/outcome:OUT-001").json()["item"]
+
+    assert (before["card"]["action"]["kind"], before["card"]["needs"]) == ("grant-attempt", "you")
+    assert (granted.status_code, replay.status_code) == (200, 200), (granted.json(), replay.json())
+    assert replay.json()["binding"] == granted.json()["binding"]
+    assert after["card"]["action"]["kind"] != "grant-attempt"
+    assert after["readiness"]["reason_code"] != "retry-exhausted"
+    episode = runtime.retry_ledger().read().episodes[0]
+    assert (episode.total_attempts, episode.granted_attempts, episode.stop_code) == (3, 1, None)
+    assert application.acquire_change_action(_continuation_request(application, "change-a")).launch is not None
+
+
 def test_bulk_expired_claim_recovery_route_is_removed_without_delivery_call() -> None:
     client, application = _client()
 
@@ -3584,61 +3612,6 @@ def test_open_acceptance_waiting_route_is_retry_safe() -> None:
         "retry_safe": True,
     }
     assert application.calls == [("acceptance-observe", ("change-a",))]
-
-
-def test_acceptance_reconciliation_route_returns_isolated_mixed_outcomes() -> None:
-    client, application = _client()
-
-    response = client.post(
-        "/api/work-items/acceptance/reconcile",
-        json={"change_ids": ["change-a", "change-b"]},
-    )
-
-    assert response.status_code == 200
-    assert response.json() == {
-        "outcomes": [
-            {
-                "change_id": "change-a",
-                "status": "waiting",
-                "code": None,
-                "detail": "The pull request is open and not merged.",
-                "completion_id": None,
-            },
-            {
-                "change_id": "change-b",
-                "status": "completed",
-                "code": None,
-                "detail": None,
-                "completion_id": "f" * 64,
-            },
-            {
-                "change_id": "change-c",
-                "status": "provider-unavailable",
-                "code": "unavailable",
-                "detail": "Provider unavailable",
-                "completion_id": None,
-            },
-        ]
-    }
-    assert application.calls == [("acceptance-reconcile", (("change-a", "change-b"),))]
-
-
-def test_acceptance_reconciliation_route_rejects_malformed_ids() -> None:
-    client, application = _client()
-
-    response = client.post(
-        "/api/work-items/acceptance/reconcile",
-        json={"change_ids": "change-a"},
-    )
-
-    assert response.status_code == 422
-    assert response.json() == {
-        "code": "ERR_DELIVERY_HTTP_VALIDATION",
-        "detail": "Delivery request input is malformed",
-        "authority": "delivery",
-        "retry_safe": False,
-    }
-    assert application.calls == []
 
 
 def test_target_sync_conflict_route_preserves_typed_delivery_error() -> None:

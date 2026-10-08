@@ -447,6 +447,17 @@ class _PublicationMixin:
             self._publish_delivery_state(change_id, runtime, f"promotion-{promoted.receipt_id}")
             return promoted
 
+    def _release_target_sync_conflict_custody(
+        self, change_id: str, expected_disposition_id: str, operation_id: str
+    ) -> None:
+        """Let the exact conflict exit proceed when an engine sync retained custody on that conflict."""
+        with self._selected_action_checkpoint_lock(change_id):
+            action = self._retained_target_sync_conflict(change_id)
+            if action is None or action.operation_id != operation_id:
+                return
+            self._runtime(change_id).validate_target_sync_conflict(expected_disposition_id, operation_id)
+            self._coordinator.release_target_sync_conflict_action(action)
+
     def abort_target_sync_conflict(
         self,
         change_id: str,
@@ -455,6 +466,7 @@ class _PublicationMixin:
         operation_id: str,
     ) -> ChangeTargetSyncAbortReceipt:
         """Abort one exact preserved target merge and clear its attention."""
+        self._release_target_sync_conflict_custody(change_id, expected_disposition_id, operation_id)
         runtime = self._runtime(change_id, for_mutation=True)
         with (
             locked_roots((self._checkpoint_lock_root(change_id),)),
@@ -497,6 +509,7 @@ class _PublicationMixin:
         operation_id: str,
     ) -> ChangeTargetSyncReceipt:
         """Record one exact semantic target merge and clear its attention."""
+        self._release_target_sync_conflict_custody(change_id, expected_disposition_id, operation_id)
         runtime = self._runtime(change_id, for_mutation=True)
         request = TargetSyncConflictRequest(
             change_id=change_id,
@@ -1890,8 +1903,13 @@ class _PublicationMixin:
             (item for item in inventory.snapshots if item.change_id == change_id),
             None,
         )
-        if inventory.remote_head is None or snapshot is None:
+        if inventory.remote_head is None:
             self._fail("remote Delivery snapshot is unavailable for pending replay")
+        if snapshot is None:
+            if any(item.change_id == change_id for item in inventory.diagnostics):
+                self._fail("remote Delivery snapshot is unavailable for pending replay")
+            # Snapshots are never removed, so a clean absence means the first publication never landed.
+            return inventory.remote_head
         remote_digest = hashlib.sha256(_canonical_model_bytes(snapshot.frontier)).hexdigest()
         if remote_digest not in {pending.base_frontier_digest, current_frontier_digest, published_frontier_digest}:
             self._fail("remote Delivery snapshot no longer matches the pending publication base")

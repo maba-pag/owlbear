@@ -21,6 +21,8 @@ import pytest
 from pydantic import ValidationError
 from serve.delivery.tests.test_portfolio_application import (
     _acquire_planning_claim,
+    _advance_remote_target,
+    _attach_engine_publication,
     _builder_retry_history,
     _continuation_request,
     _finalization_request,
@@ -49,6 +51,7 @@ from owlbear_delivery import (
     PublishDeliveryResult,
     RetryDelivery,
     change_workspace,
+    worker_stall,
 )
 from owlbear_delivery.delivery_runtime import DeliveryEngineBuilderSettlement, DeliveryEnginePlanningSettlement
 from owlbear_delivery.diagnostics import DeliveryFailureCategory, classify_delivery_failure
@@ -528,6 +531,13 @@ class _FakeProcess:
     failure: str | None = None
     create_time: float | None = _ISSUED.timestamp() - 3600
     argv: tuple[str, ...] | None = ()
+    exe: Path | None = None
+
+    def executable(self) -> Path | None:
+        if self.failure == "unreadable" or self.exe == Path("unreadable"):
+            message = "executable unreadable"
+            raise ProcessObservationError(message)
+        return self.exe
 
     def cmdline(self) -> tuple[str, ...]:
         if self.argv is None:
@@ -623,6 +633,39 @@ def test_process_guard_classifies_leftover_processes(tmp_path: Path, case: str) 
     assert probe.active_processes((roots["W"], roots["A"]), issued_after=issued_after) == (
         (fake.name,) if blocks else ()
     )
+
+
+_DAEMON = Path("/System/Library/Frameworks/ClassKit.framework/Versions/A/progressd")
+_SEALED_CASES = {
+    "sealed-daemon-files-unreadable-new": ("elsewhere", "files-unreadable", _DAEMON, Path("/System"), False),
+    "sealed-root-unavailable": ("elsewhere", "files-unreadable", _DAEMON, None, True),
+    "data-volume-binary": ("elsewhere", "files-unreadable", Path("/System/Volumes/Data/tmp/w"), Path("/System"), True),
+    "parent-escape": ("elsewhere", "files-unreadable", Path("/System/../Users/w/node"), Path("/System"), True),
+    "user-binary": ("elsewhere", "files-unreadable", Path("/usr/local/bin/node"), Path("/System"), True),
+    "executable-unreadable": ("elsewhere", "files-unreadable", Path("unreadable"), Path("/System"), True),
+    "cwd-unreadable": (None, "unreadable", _DAEMON, Path("/System"), True),
+    "cwd-inside-worktree": ("worktree", "files-unreadable", _DAEMON, Path("/System"), True),
+}
+
+
+@pytest.mark.parametrize("case", sorted(_SEALED_CASES))
+def test_process_guard_exempts_only_sealed_system_daemons_outside_the_worktree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, case: str
+) -> None:
+    working, failure, exe, sealed_root, blocks = _SEALED_CASES[case]
+    monkeypatch.setattr(worker_stall, "_SEALED_SYSTEM_ROOT", sealed_root)
+    worktree = tmp_path / "worktree"
+    process = _FakeProcess(
+        "progressd",
+        working=None if working is None else tmp_path / working,
+        failure=failure,
+        create_time=_NEW,
+        exe=exe,
+    )
+
+    names = ProcessTableWorktreeProbe(lambda: iter((process,))).active_processes((worktree,), issued_after=_ISSUED)
+
+    assert names == (("progressd",) if blocks else ())
 
 
 class _FakePsutilProcess:
@@ -1950,3 +1993,69 @@ def test_ended_finalizer_settles_as_reported_attention_and_retries_under_one_bud
     assert len(episodes) == 1
     assert episodes[0].total_attempts == 2
     assert {attempt.writer.attempt_id, second.writer.attempt_id} <= set(episodes[0].attempt_ids)
+
+
+@pytest.mark.parametrize("mode", ["host-lost", "released-stuck"])
+def test_ended_finalizer_settlement_charges_retry_before_target_drift_readiness(tmp_path: Path, mode: str) -> None:
+    start = _real_now()
+    now = [_iso(start)]
+    application, _runtimes, _coordinator, state_root, probe = _stall_portfolio(
+        tmp_path, {"change-a": DeliveryStage.COMPLETED}, now
+    )
+    first = application.acquire_change_action(_continuation_request(application))
+    assert first.finalization is not None
+    attempt = first.finalization.attempt.writer
+    _provider, remote = _attach_engine_publication(application, tmp_path)
+    target = _advance_remote_target(tmp_path, remote)
+    _git(application._workspace_manager.repository, "fetch", "origin", "main:refs/remotes/origin/main")
+    now[0] = _iso(start + timedelta(minutes=10))
+
+    if mode == "host-lost":
+        probe.states[_HOST] = "gone"
+        result = application.acquire_change_action(_continuation_request(application))
+        assert (result.kind, result.reason_code) != ("unavailable", "retry-ledger-unavailable"), result
+        probe.states[_HOST] = "alive"
+    else:
+        application.release_stuck_worker("change-a", None, attempt.attempt_id, attempt.claim_id)
+
+    episode = RetryLedger(state_root, "change-a").episode_for_attempt(attempt.attempt_id)
+    assert episode is not None
+    assert episode.settled_failure(attempt.attempt_id)
+    readiness = application.get_change("change-a").readiness
+    assert readiness.reason_code != "retry-ledger-unavailable", readiness
+    assert (readiness.status, readiness.operation.value) == ("ready", "sync-target"), readiness
+    assert readiness.basis.target_head == target
+
+
+@pytest.mark.parametrize("role", ["finalizer", "planner"])
+def test_held_custody_prompt_names_the_finalizer_release_route_only_for_a_finalizer(tmp_path: Path, role: str) -> None:
+    now = [_iso(_real_now())]
+    stage = DeliveryStage.COMPLETED if role == "finalizer" else DeliveryStage.PLANNING
+    application, _runtimes, _coordinator, _state_root, _probe = _stall_portfolio(tmp_path, {"change-a": stage}, now)
+    if role == "finalizer":
+        acquired = application.acquire_change_action(_continuation_request(application))
+        assert acquired.finalization is not None
+        writer = acquired.finalization.attempt.writer
+    else:
+        _acquire_planning_claim(application)
+
+    readiness = application.get_change("change-a").readiness
+    item_key = "publication" if role == "finalizer" else "outcome:OUT-001"
+    held = application.show_work_item_view("change-a", item_key).held_finalizer
+
+    assert (readiness.status, readiness.reason_code) == ("running", "active-custody")
+    assert readiness.prompt is not None
+    if role == "finalizer":
+        assert readiness.prompt.startswith("/continue-change change-a A Finalizer attempt holds this Change.")
+        assert "Release in Cockpit" in readiness.prompt
+        assert held is not None
+        assert (held.attempt_id, held.claim_id, held.owner_id, held.process_id, held.started_at) == (
+            writer.attempt_id,
+            writer.claim_id,
+            writer.actor_id,
+            writer.process_id,
+            writer.claimed_at,
+        )
+    else:
+        assert readiness.prompt.startswith("/repair-delivery")
+        assert held is None

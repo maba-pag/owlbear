@@ -13,6 +13,7 @@ import {
   publicationCardForChecks,
   readiness,
   renderPage,
+  situation,
 } from "./workPortfolioHarness";
 
 installWorkPortfolioHarness();
@@ -27,15 +28,19 @@ it("says a completed outcome of an open Change is complete, not that the Change 
   const done = card({
     stage: "completed",
     activity: { state: "idle", worker_role: null, started_at: null, task_id: null },
-    readiness: readiness({ status: "complete", reason_code: "outcome-complete", progress: "completed" }),
+    readiness: readiness({
+      status: "complete",
+      reason_code: "outcome-complete",
+      progress: situation("done", { headline: "This Outcome is complete." }),
+    }),
   });
   fixtureState.currentPortfolio = portfolio([group({ items: [done] })]);
   fixtureState.currentDetail = detail({ card: done, readiness: done.readiness });
   renderPage("/delivery/change-alpha/outcome%3AOUT-001");
 
   const inspector = await screen.findByTestId("work-item-detail");
-  expect(inspector).toHaveTextContent("This outcome is complete.");
-  expect(inspector).not.toHaveTextContent("This Change reached a terminal state.");
+  expect(inspector).toHaveTextContent("This Outcome is complete.");
+  expect(inspector).not.toHaveTextContent("This Change is done.");
 });
 
 it("calls a paused Change paused, never deferred", async () => {
@@ -56,7 +61,12 @@ it("copies a blocked repair prompt with one click", async () => {
   const writeText = mockClipboard();
   const prompt = "/repair-delivery Diagnose Change change-alpha read-only; preserve existing custody and journals.";
   const blocked = card({
-    readiness: readiness({ status: "blocked", reason_code: "retry-exhausted", prompt, progress: "needs-decision" }),
+    readiness: readiness({
+      status: "blocked",
+      reason_code: "retry-exhausted",
+      prompt,
+      progress: situation("needs-attention"),
+    }),
   });
   fixtureState.currentPortfolio = portfolio([group({ items: [blocked] })]);
   fixtureState.currentDetail = detail({ card: blocked, readiness: blocked.readiness });
@@ -98,7 +108,7 @@ it("offers the publication continuation prompt once a resumed Change's outcomes 
   const done = card({
     stage: "completed",
     activity: { state: "idle", worker_role: null, started_at: null, task_id: null },
-    readiness: readiness({ status: "complete", reason_code: "outcome-complete", progress: "completed" }),
+    readiness: readiness({ status: "complete", reason_code: "outcome-complete", progress: situation("done") }),
   });
   const publication = publicationCardForChecks({
     readiness: readiness({

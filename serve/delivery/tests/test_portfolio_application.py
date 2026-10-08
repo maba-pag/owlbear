@@ -48,7 +48,11 @@ from owlbear_delivery import (
     ChangeWorktreeAttentionError,
     ChangeWriter,
     CompletedHistoryCatalog,
+    CompletionDisplayMetadata,
+    CompletionEvidence,
+    CompletionPullRequestIdentity,
     CompletionReceipt,
+    CompletionReceiptStore,
     CoordinationConflictError,
     CreateOrReconcileDraftPullRequest,
     DeliveryAcceptanceAttentionReason,
@@ -80,6 +84,7 @@ from owlbear_delivery import (
     DeliveryCommandResult,
     DeliveryCommitment,
     DeliveryCommitmentClass,
+    DeliveryConfirmationError,
     DeliveryContract,
     DeliveryDesignPut,
     DeliveryEngineActionResult,
@@ -161,6 +166,7 @@ from owlbear_delivery import (
     classify_publication_check,
     load_delivery_application,
     remote_git,
+    runtime_settlement,
 )
 from owlbear_delivery.change_workspace import (
     ChangeContinuationAction,
@@ -3360,7 +3366,9 @@ def _assert_returned_handoff_metadata_fences(application, builder, before_worksp
     builder_episode = runtime.retry_ledger().episode_for_attempt(builder.claim.attempt_id)
     assert builder_episode is not None
     assert builder_episode.key.exact_head == builder.last_reviewed_commit
-    assert builder_episode.total_attempts == 1
+    # The Planning return is refunded and counted as a return (N12 I2, I3).
+    assert builder_episode.total_attempts == 0
+    assert runtime.retry_ledger().returned_attempts(builder_episode) == 1
     assert builder_episode.reset_count == 0
     retained_metadata = application._workspace_manager._capture_builder_handoff_metadata(before_coordination)
     stale_metadata = replace(retained_metadata, status_digest="0" * 64)
@@ -3526,7 +3534,8 @@ def _assert_returned_builder_reacquisition(application, builder, advanced, now, 
     runtime = application._runtimes["change-a"]
     episode_before = runtime.retry_ledger().episode_for_attempt(builder.claim.attempt_id)
     assert episode_before is not None
-    assert episode_before.total_attempts == 1
+    # The Planning return was refunded (N12 I2); the reacquired Builder still joins its episode.
+    assert episode_before.total_attempts == 0
     assert episode_before.reset_count == 0
     now[0] = "2026-08-04T01:00:00Z"
     result = application.acquire_actions(
@@ -3554,7 +3563,7 @@ def _assert_returned_builder_reacquisition(application, builder, advanced, now, 
     assert _workspace_content_snapshot(builder.worktree_path) == before_workspace
     episode_after = runtime.retry_ledger().episode_for_attempt(builder.claim.attempt_id)
     assert episode_after is not None
-    assert episode_after.total_attempts == 2
+    assert episode_after.total_attempts == 1
     assert episode_after.reset_count == 0
     assert builder.claim.attempt_id in episode_after.attempt_ids
     assert resumed.claim.attempt_id in episode_after.attempt_ids
@@ -4144,38 +4153,58 @@ def test_builder_handoff_readiness_uses_original_task_retry_episode(
     assert runtime.retry_ledger().episode_for_attempt(first.claim.attempt_id) == episode
 
 
-def test_exhausted_builder_retry_projects_read_only_diagnostic_without_clear_action(tmp_path: Path) -> None:
-    now = ["2026-08-04T00:00:00Z"]
-    application, runtime, _coordinator, _state_root, first, _head, _workspace, settlement = (
-        _builder_retry_handoff_setup(tmp_path, now, add_workspace_changes=False)
+def _exhaust_same_task_builder_retry(tmp_path: Path, now: list[str]):
+    """Fail one same-task Builder handoff three times; return the application, runtime and attempt ids."""
+    application, runtime, _coordinator, state_root, first, _head, _workspace, settlement = _builder_retry_handoff_setup(
+        tmp_path, now, add_workspace_changes=False
     )
     _settle_builder_handoff_attempt(application, first.claim, settlement)
     attempt_ids = [first.claim.attempt_id]
-
     for hour in (1, 2):
         now[0] = f"2026-08-04T{hour:02}:00:00Z"
-        acquired = application.acquire_change_action(_continuation_request(application, "change-a"))
-        assert acquired.launch is not None, acquired
-        resumed = acquired.launch
-        attempt_ids.append(resumed.claim.attempt_id)
-        retry_settlement = DeliveryBuilderInvocationSettlement(
-            change_id=resumed.change_id,
+        attempt_ids.append(_fail_resumed_builder_attempt(application))
+    return application, runtime, state_root, attempt_ids
+
+
+def _fail_resumed_builder_attempt(application: PortfolioApplication) -> str:
+    acquired = application.acquire_change_action(_continuation_request(application, "change-a"))
+    assert acquired.launch is not None, acquired
+    resumed = acquired.launch
+    retry_settlement = DeliveryBuilderInvocationSettlement(
+        change_id=resumed.change_id,
+        outcome_id=resumed.outcome_id,
+        claim_id=resumed.claim.claim_id,
+        attempt_id=resumed.claim.attempt_id,
+        task_id=resumed.task_id,
+        expected_last_reviewed_commit=resumed.last_reviewed_commit,
+        disposition="normal-return",
+        request=RetryDelivery(
+            action="retry",
             outcome_id=resumed.outcome_id,
             claim_id=resumed.claim.claim_id,
             attempt_id=resumed.claim.attempt_id,
-            task_id=resumed.task_id,
-            expected_last_reviewed_commit=resumed.last_reviewed_commit,
-            disposition="normal-return",
-            request=RetryDelivery(
-                action="retry",
-                outcome_id=resumed.outcome_id,
-                claim_id=resumed.claim.claim_id,
-                attempt_id=resumed.claim.attempt_id,
-                abandoned_commit=resumed.source_head,
-                failure_code="builder-failed",
-            ),
-        )
-        _settle_builder_handoff_attempt(application, resumed.claim, retry_settlement)
+            abandoned_commit=resumed.source_head,
+            failure_code="builder-failed",
+        ),
+    )
+    _settle_builder_handoff_attempt(application, resumed.claim, retry_settlement)
+    return resumed.claim.attempt_id
+
+
+def _grant_answer(application: PortfolioApplication, block_id: str, digest: str | None = None) -> DeliveryAnswer:
+    return DeliveryAnswer(
+        change_id="change-a",
+        kind=DeliveryAnswerKind.GRANT_ATTEMPT,
+        expected_frontier_digest=digest
+        or hashlib.sha256(application._runtime("change-a").frontier_bytes()).hexdigest(),
+        outcome_id="OUT-001",
+        block_id=block_id,
+    )
+
+
+def test_exhausted_builder_retry_offers_only_the_user_attempt_grant(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtime, _state_root, attempt_ids = _exhaust_same_task_builder_retry(tmp_path, now)
 
     binding = runtime.show_binding("OUT-001")
     assert binding.block is not None
@@ -4190,20 +4219,132 @@ def test_exhausted_builder_retry_projects_read_only_diagnostic_without_clear_act
 
     view = application.show_work_item_view("change-a", "outcome:OUT-001")
     assert view.readiness is not None
-    assert view.card.needs.value == "none"
-    assert view.card.next_actor.value == "agent"
-    assert view.card.action.kind.value == "none"
+    assert view.card.needs.value == "you"
+    assert view.card.next_actor.value == "you"
+    assert view.card.action.kind.value == "grant-attempt"
+    assert view.card.action.label == "Grant one more attempt"
     assert view.card.action.command is None
     assert view.readiness.reason_code == "retry-exhausted"
     assert view.readiness.attempts == 3
     assert view.readiness.executable is False
     assert view.readiness.operation is None
+    assert view.readiness.action is None
     assert view.readiness.prompt is not None
     assert view.readiness.prompt.startswith("/inspect-change change-a")
-    assert "read-only" in view.readiness.prompt
     assert "do not clear the block, retry, dispatch, or reset the budget" in view.readiness.prompt
-    assert "Builder" in view.card.next_step
-    assert "approved current authority" in view.card.next_step
+    assert view.readiness.progress.situation == "your-decision"
+    assert "Grant one more attempt" in view.card.next_step
+    assert "/inspect-change change-a" in view.card.next_step
+
+    refused = application.acquire_change_action(_continuation_request(application, "change-a"))
+    assert refused.launch is None
+
+
+def test_attempt_grant_is_user_only_and_funds_exactly_one_more_attempt(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtime, state_root, attempt_ids = _exhaust_same_task_builder_retry(tmp_path, now)
+    block = runtime.show_binding("OUT-001").block
+    before = runtime.frontier_bytes()
+
+    with pytest.raises(DeliveryConfirmationError, match="only by the user in Cockpit"):
+        application.answer(_grant_answer(application, block.block_id))
+    with pytest.raises(DeliveryRuntimeConflictError, match="exact exhausted Builder block"):
+        application.answer(_grant_answer(application, "builder-attempt-limit-other"), allow_user_only=True)
+    assert runtime.frontier_bytes() == before
+
+    stale_digest = hashlib.sha256(before).hexdigest()
+    result = application.answer(_grant_answer(application, block.block_id), allow_user_only=True)
+    granted = runtime.show_binding("OUT-001")
+    assert result.binding == granted
+    assert granted.block.resolved
+    assert granted.block.resolution_note == "The user granted one more Builder attempt."
+    assert granted.block.resolution_locators == (granted.builder_handoff_context.settlement_id,)
+    assert granted.block.model_copy(update={"resolution_note": None, "resolution_locators": ()}) == block
+    summary = runtime.retry_ledger().read()
+    episode = summary.episodes[0]
+    assert summary.schema_version == 2
+    assert (episode.total_attempts, episode.granted_attempts, episode.stop_code) == (3, 1, None)
+    assert episode.attempt_ids == tuple(attempt_ids)
+    receipts = list((state_root / "changes" / "change-a" / "builder-attempt-grant-receipts").iterdir())
+    assert [path.name for path in receipts] == [f"{granted.builder_handoff_context.settlement_id}.json"]
+
+    replay = application.answer(_grant_answer(application, block.block_id, stale_digest), allow_user_only=True)
+    assert replay.binding == granted
+    assert runtime.retry_ledger().read() == summary
+
+    view = application.show_work_item_view("change-a", "outcome:OUT-001")
+    assert view.readiness.reason_code != "retry-exhausted"
+    assert view.card.action.kind.value != "grant-attempt"
+
+    now[0] = "2026-08-04T03:00:00Z"
+    attempt_ids.append(_fail_resumed_builder_attempt(application))
+    regranted = runtime.show_binding("OUT-001")
+    assert regranted.block is not None
+    assert not regranted.block.resolved
+    assert regranted.block.block_id != block.block_id
+    episode = runtime.retry_ledger().read().episodes[0]
+    assert (episode.total_attempts, episode.granted_attempts) == (4, 1)
+    assert episode.stop_code.value == "retry-exhausted"
+    assert episode.attempt_ids == tuple(attempt_ids)
+    view = application.show_work_item_view("change-a", "outcome:OUT-001")
+    assert view.card.action.kind.value == "grant-attempt"
+    assert application.acquire_change_action(_continuation_request(application, "change-a")).launch is None
+
+    application.answer(_grant_answer(application, regranted.block.block_id), allow_user_only=True)
+    episode = runtime.retry_ledger().read().episodes[0]
+    assert (episode.total_attempts, episode.granted_attempts, episode.stop_code) == (4, 2, None)
+
+
+def test_stale_attempt_grant_replay_requires_its_receipt(tmp_path: Path) -> None:
+    application, runtime, state_root, _attempt_ids = _exhaust_same_task_builder_retry(
+        tmp_path, ["2026-08-04T00:00:00Z"]
+    )
+    block = runtime.show_binding("OUT-001").block
+    stale_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
+    application.answer(_grant_answer(application, block.block_id), allow_user_only=True)
+    granted_frontier = runtime.frontier_bytes()
+    summary = runtime.retry_ledger().read()
+    receipts = state_root / "changes" / "change-a" / "builder-attempt-grant-receipts"
+    for receipt in receipts.iterdir():
+        receipt.unlink()
+
+    with pytest.raises(DeliveryRuntimeConflictError, match="already resolved"):
+        application.answer(_grant_answer(application, block.block_id, stale_digest), allow_user_only=True)
+    assert runtime.frontier_bytes() == granted_frontier
+    assert runtime.retry_ledger().read() == summary
+    assert list(receipts.iterdir()) == []
+
+
+@pytest.mark.parametrize("stage", ["before-publication", "after-first-publication"])
+def test_interrupted_attempt_grant_recovers_to_the_whole_grant(tmp_path: Path, stage: str) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtime, state_root, _attempt_ids = _exhaust_same_task_builder_retry(tmp_path, now)
+    block = runtime.show_binding("OUT-001").block
+    receipts = state_root / "changes" / "change-a" / "builder-attempt-grant-receipts"
+    original_commit = RuntimeTransaction.commit
+
+    def interrupted(transaction):
+        def fail(current):
+            if current == stage:
+                message = "injected attempt grant interruption"
+                raise RuntimeError(message)
+
+        grant = any(
+            "builder-attempt-grant-receipts" in str(getattr(item, "relative_path", ""))
+            for item in transaction.participants
+        )
+        original_commit(transaction, failure=fail if grant else None)
+
+    with patch.object(RuntimeTransaction, "commit", interrupted), pytest.raises(RuntimeError, match="injected"):
+        application.answer(_grant_answer(application, block.block_id), allow_user_only=True)
+
+    _reopened, _coordinator, _manager = _reopen_portfolio(tmp_path, state_root, {"change-a": runtime})
+    recovered = DeliveryRuntime(state_root, runtime.contract).show_binding("OUT-001")
+    assert recovered.block is not None
+    assert recovered.block.resolution_note == "The user granted one more Builder attempt."
+    assert [path.name for path in receipts.iterdir()] == [f"{recovered.builder_handoff_context.settlement_id}.json"]
+    episode = RetryLedger(state_root, "change-a").read().episodes[0]
+    assert (episode.total_attempts, episode.granted_attempts, episode.stop_code) == (3, 1, None)
 
 
 def _builder_retry_history(items) -> list[tuple[int, str, str, str | None]]:
@@ -4303,7 +4444,7 @@ def test_builder_retry_history_reaches_fresh_builder_and_exhaustion_diagnosis(tm
     view = application.show_work_item_view("change-a", "outcome:OUT-001")
     assert view.readiness is not None
     assert view.readiness.reason_code == "retry-exhausted"
-    assert view.readiness.next_actor.value == "agent"
+    assert view.readiness.next_actor.value == "you"
     assert view.readiness.attempts == 3
     assert _builder_retry_history(view.readiness.retry_history) == expected
     change = application.get_change("change-a")
@@ -4467,7 +4608,10 @@ def test_ended_without_result_builder_attempts_share_one_exhausting_budget(
     ]
 
 
-def test_exhausted_builder_return_to_planning_projects_read_only_diagnostic(tmp_path: Path) -> None:
+def test_exhausted_builder_return_to_planning_projects_read_only_diagnostic(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(runtime_settlement, "_refunds_planning_return", lambda _request: False)
     now = ["2026-08-04T00:00:00Z"]
     application, runtime, coordinator, _state_root, first, _head, _workspace, retry_settlement = (
         _builder_retry_handoff_setup(tmp_path, now, add_workspace_changes=False)
@@ -4532,8 +4676,10 @@ def test_exhausted_builder_return_to_planning_projects_read_only_diagnostic(tmp_
     assert view.readiness.prompt is not None
     assert view.readiness.prompt.startswith("/inspect-change change-a")
     assert "read-only" in view.readiness.prompt
-    assert view.card.next_actor.value == "agent"
-    assert view.card.action.kind.value == "none"
+    # N12 I6: the pre-N12 exhausted Planning return is no longer read-only; only the user grant lifts it.
+    assert view.card.next_actor.value == "you"
+    assert view.card.action.kind.value == "grant-attempt"
+    assert "Builder retry budget is exhausted" in view.card.next_step
     assert view.card.action.command is None
     assert runtime.frontier_bytes() == before_frontier
     assert coordinator.show("change-a") == before_coordination
@@ -5587,6 +5733,60 @@ def test_engine_target_fetch_drift_is_stale_then_syncs_exact_target(tmp_path: Pa
     assert synchronized.target_sync.target_head == target
     assert synchronized.target_sync.merged_head != action.exact_head
     assert _execute_engine(application, fresh) == synchronized
+
+
+@pytest.mark.parametrize("exit_kind", ["resolve", "abort"])
+def test_engine_target_sync_conflict_exit_releases_retained_engine_custody(tmp_path: Path, exit_kind: str) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
+    runtime = runtimes["change-a"]
+    head = _commit_reviewed_head(
+        application, coordinator.show("change-a"), "product.txt", "Change implementation\n", "Change edit"
+    )
+    _set_checkpoint(
+        runtime,
+        state_root,
+        DeliveryPendingCheckpoint(
+            head=head,
+            triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK),),
+        ),
+    )
+    _provider, remote = _attach_engine_publication(application, tmp_path)
+    assert _execute_engine(application, _engine_action(application)).kind == "completed"
+    stale = _engine_action(application)
+    target = _advance_remote_target(tmp_path, remote, product="Competing target edit\n")
+    assert _execute_engine(application, stale).kind == "stale"
+    action = _engine_action(application)
+    assert action.target_head == target
+    blocked = _execute_engine(application, action)
+    assert blocked.kind == "blocked", blocked
+    assert blocked.failure.code == "ERR_TARGET_SYNC_CONFLICT"
+    readiness = application.get_change("change-a").readiness
+    assert readiness.reason_code == "engine-action-failed"
+    assert readiness.prompt.startswith("/resolve-target-conflict change-a ")
+    disposition_id = runtime.change_disposition().disposition_id
+    worktree = Path(coordinator.show("change-a").worktree_path)
+    intent = coordinator.continuation_record_path("change-a", action.operation_id)
+    result = coordinator.continuation_record_path("change-a", action.operation_id, result=True)
+    journals = (intent.read_bytes(), result.read_bytes())
+
+    if exit_kind == "resolve":
+        (worktree / "product.txt").write_text("Change implementation\nCompeting target edit\n")
+        _git(worktree, "add", "product.txt")
+        receipt = application.resolve_target_sync_conflict("change-a", disposition_id, target, action.operation_id)
+        assert receipt.target_head == target
+        assert _git(worktree, "rev-parse", "HEAD") == receipt.merged_head
+    else:
+        application.abort_target_sync_conflict("change-a", disposition_id, target, action.operation_id)
+        assert _git(worktree, "rev-parse", "HEAD") == action.exact_head
+
+    assert coordinator.show("change-a").continuation_action is None
+    assert (intent.read_bytes(), result.read_bytes()) == journals
+    assert runtime.change_disposition() is None
+    assert application.get_change("change-a").readiness.reason_code != "engine-action-failed"
+    assert _execute_engine(application, action) == blocked
+    following = application.acquire_change_action(_continuation_request(application))
+    assert following.kind != "unavailable", following
+    assert following.engine_action is None or following.engine_action.operation_id != action.operation_id
 
 
 def test_engine_exact_sync_after_remote_rewind_selects_the_rewound_target(tmp_path: Path) -> None:
@@ -9885,6 +10085,8 @@ def test_known_corrupt_change_remains_visible_without_relaxing_parser(tmp_path: 
     assert view.kind == "unavailable"
     assert view.readiness.basis.frontier_digest is None
     assert view.readiness.action is None
+    assert view.readiness.progress is not None
+    assert (view.readiness.progress.situation, view.readiness.progress.waiting_on) == ("needs-attention", "you")
     assert application.show_work_item_view("change-a", "publication") == view
     listing = application.list_changes()
     assert listing.unavailable_changes == (view,)
@@ -11633,6 +11835,55 @@ def test_change_worktree_cleanup_requires_terminal_authority(tmp_path: Path) -> 
         application.cleanup_change_worktree("change-a")
 
 
+def test_abandoned_readmitted_change_cleans_up_beside_an_earlier_completion(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    coordination = application._workspace_manager.show("change-a")
+    application.abandon_change("change-a", "User stopped the Change")
+    digest = hashlib.sha256(b"change-a").hexdigest()
+    completed_at = datetime(2026, 8, 11, 13, tzinfo=UTC)
+    earlier = CompletionReceipt.create(
+        CompletionEvidence(
+            change_id="change-a",
+            finalization_receipt_id=digest,
+            finalized_change_head=digest[:40],
+            repository_identity="example/project",
+            pull_request_identity=CompletionPullRequestIdentity(number=7, node_id="PR_node_7"),
+            accepted_target_ref="main",
+            accepted_merge_commit=digest[-40:],
+            merged_at=completed_at,
+            acceptance_observation_id=digest,
+            check_observation_ids=(digest,),
+            review_receipt_ids=(digest,),
+            completed_at=completed_at,
+        )
+    )
+    display = CompletionDisplayMetadata.create(
+        change_id="change-a",
+        completion_id=earlier.completion_id,
+        title="Earlier delivery",
+        outcome_titles=("Earlier result",),
+        outcome_promises=("Deliver the earlier result.",),
+    )
+    store = CompletionReceiptStore(runtimes["change-a"]._target_root)
+    for participant in (store.participant(earlier), store.display_participant(display)):
+        participant.destination().parent.mkdir(parents=True, exist_ok=True)
+        participant.destination().write_bytes(participant.content)
+
+    row = application.list_retained_change_worktrees()[0]
+    assert row.cleanup_eligible is True
+    assert row.cleanup_blocked_reason is None
+    assert runtimes["change-a"].completion_receipt() is None
+
+    application.cleanup_abandoned_change_worktree("change-a")
+
+    assert not coordination.worktree_path.exists()
+    assert application.list_retained_change_worktrees() == ()
+    assert store.read_bundle("change-a") is not None
+
+
 def test_abandoned_change_worktree_cleanup_surfaces_lost_worktree_attention(tmp_path: Path) -> None:
     application, _runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,
@@ -11783,10 +12034,18 @@ def test_portfolio_reader_reconciles_admitted_change_after_warm_start(tmp_path: 
     intent = b"""# Admitted Delivery
 
 ```yaml target-contract
+kind: decision
+id: DEC-001
+origin: approved
+basis: fixture approval
+statement: Fixture decision.
+```
+
+```yaml target-contract
 kind: commitment
 id: COM-001
 class: agreed-path
-provenance: characterization
+decisions: [DEC-001]
 statement: Preserve source-bound admission.
 ```
 
@@ -11845,10 +12104,18 @@ def test_warm_reader_reconciles_change_admitted_by_second_application(tmp_path: 
     intent = b"""# Admitted Delivery
 
 ```yaml target-contract
+kind: decision
+id: DEC-001
+origin: approved
+basis: fixture approval
+statement: Fixture decision.
+```
+
+```yaml target-contract
 kind: commitment
 id: COM-001
 class: agreed-path
-provenance: characterization
+decisions: [DEC-001]
 statement: Preserve source-bound admission.
 ```
 
@@ -11923,8 +12190,16 @@ def test_health_reconciliation_does_not_race_shared_runtime_admission(tmp_path: 
 kind: commitment
 id: COM-001
 class: agreed-path
-provenance: concurrency test
+decisions: [DEC-001]
 statement: Preserve concurrent runtime reconciliation.
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-001
+origin: approved
+basis: fixture approval
+statement: Fixture decision.
 ```
 
 ```yaml target-contract
@@ -13453,7 +13728,7 @@ def test_delivery_loader_composes_validated_owners_from_authorized_root(tmp_path
     assert application.list_work_items() == ()
     assert not (runtime_root / "capacity.json").exists()
     assert not (runtime_root / "capacity-ledger.json").exists()
-    assert application._execution_capacity == 3
+    assert application._execution_capacity == 8
     assert application._claim_timeout == timedelta(hours=1)
     assert not (repository / ".owlbear/target").exists()
     assert not (repository / ".owlbear/worktrees").exists()
@@ -14166,8 +14441,16 @@ def _admit_discovery_change(application: PortfolioApplication, change_id: str):
 kind: commitment
 id: COM-001
 class: agreed-path
-provenance: discovery test
+decisions: [DEC-001]
 statement: Preserve persisted admission evidence.
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-001
+origin: approved
+basis: fixture approval
+statement: Fixture decision.
 ```
 
 ```yaml target-contract
@@ -14504,8 +14787,16 @@ def _assert_composed_delivery_admission(
 kind: commitment
 id: COM-001
 class: agreed-path
-provenance: composed test
+decisions: [DEC-001]
 statement: Preserve source ownership.
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-001
+origin: approved
+basis: fixture approval
+statement: Fixture decision.
 ```
 
 ```yaml target-contract
@@ -14658,8 +14949,16 @@ def test_interrupted_first_design_admission_replays_after_workspace_ensure(tmp_p
 kind: commitment
 id: COM-001
 class: agreed-path
-provenance: regression test
+decisions: [DEC-001]
 statement: Preserve the admitted Design source.
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-001
+origin: approved
+basis: fixture approval
+statement: Fixture decision.
 ```
 
 ```yaml target-contract
@@ -14848,10 +15147,20 @@ def test_design_return_release_refusal_changes_nothing(tmp_path: Path, case: str
     ) == before
 
 
-def _revision_intent(second: str = "AC-002: The report is retained.") -> bytes:
+def _revision_intent(
+    second: str = "AC-002: The report is retained.",
+    *,
+    extra_decisions: tuple[str, ...] = (),
+    launch_decisions: str = "DEC-001",
+) -> bytes:
     blocks = (
-        "kind: commitment\nid: COM-001\nclass: agreed-path\nprovenance: revision test\nstatement: Keep launches.",
-        "kind: commitment\nid: COM-002\nclass: agreed-path\nprovenance: revision test\nstatement: Keep reports.",
+        "kind: decision\nid: DEC-001\norigin: approved\nbasis: package approval\nstatement: Revise in place.",
+        *extra_decisions,
+        (
+            f"kind: commitment\nid: COM-001\nclass: agreed-path\ndecisions: [{launch_decisions}]\n"
+            "statement: Keep launches."
+        ),
+        "kind: commitment\nid: COM-002\nclass: agreed-path\ndecisions: [DEC-001]\nstatement: Keep reports.",
         (
             "kind: outcome\nid: OUT-001\ntitle: Launch\npromise: Make the launch observable.\n"
             f'acceptance: ["AC-001: The launch is observable.", "{second}"]\ncommitments: [COM-001]\ndependencies: []'
@@ -14960,6 +15269,64 @@ def test_paused_change_revision_replans_changed_outcome_and_replays(tmp_path: Pa
     assert [(launch.outcome_id, launch.claim.worker_role) for launch in launches] == [
         ("OUT-001", DeliveryWorkerRole.PLANNER)
     ]
+
+
+def test_revision_reports_decision_delta_and_plan_context_carries_decisions(tmp_path: Path) -> None:
+    application, _coordinator, state_root, seeded = _paused_revision_change(tmp_path, pause=False)
+    answered = DeliveryRequest(
+        request_id="REQ-PATH",
+        kind=DeliveryRequestKind.DECISION,
+        outcome_id="OUT-001",
+        summary="Choose the launch path",
+        options=(DeliveryRequestOption(option_id="a", label="a"), DeliveryRequestOption(option_id="b", label="b")),
+        resolution=DeliveryRequestResolution(selected_option_id="a", provenance="user-confirmed"),
+    )
+    launch, report = seeded.bindings
+    (state_root / "changes/change-r/frontier.json").write_bytes(
+        _canonical(
+            seeded.model_copy(update={"bindings": (launch.model_copy(update={"requests": (answered,)}), report)})
+        )
+    )
+    _change_intent(application, "change-r", DeliveryChangeIntentKind.DEFER, reason="Revise requirements")
+    current = application.read_design_session("change-r")
+    path_b = (
+        'kind: decision\nid: DEC-002\norigin: decided\nbasis: askQuestions 2026-10-08 "Launch path?"\n'
+        "statement: Launch through path b.\nsupersedes: [REQ-PATH]"
+    )
+    revised = _revision_intent("AC-002: The report is revised.", extra_decisions=(path_b,))
+    application.revise_design_session("change-r", current.package_id, revised, current.design_bytes)
+
+    derived = application.derive_delivery_contract("change-r")
+
+    assert derived.decision_delta is not None
+    assert [item.decision_id for item in derived.decision_delta.added] == ["DEC-002"]
+    assert derived.decision_delta.superseded_request_ids == ("REQ-PATH",)
+    assert derived.decision_delta.changed_admitted_ids == ()
+    application.admit_change(_revision_request(application))
+    (planner,) = application.acquire_frontier_work().launch_packages
+    context = application.show_plan_context(
+        "change-r", planner.outcome_id, planner.claim.attempt_id, planner.claim.claim_id
+    )
+    assert [(item.decision_id, item.origin.value) for item in context.decisions] == [
+        ("DEC-001", "approved"),
+        ("DEC-002", "decided"),
+    ]
+    assert [item.request_id for item in context.requests] == ["REQ-PATH"]
+    assert context.superseded_request_ids == ("REQ-PATH",)
+    returned = application.transition_delivery(
+        "change-r",
+        ReturnDelivery(
+            action="return",
+            outcome_id=planner.outcome_id,
+            claim_id=planner.claim.claim_id,
+            target=DeliveryStage.DESIGN,
+            reason="The launch path needs another decision.",
+            locators=("OUT-001",),
+            source_boundary=derived.digest,
+        ),
+    )
+    assert returned.stage is DeliveryStage.DESIGN
+    assert [item.request_id for item in returned.requests] == ["REQ-PATH"]
 
 
 @pytest.mark.parametrize("revision", ["delta", "zero-delta"])
@@ -15212,8 +15579,16 @@ Publish the stable package before workers run.
 kind: commitment
 id: COM-001
 class: agreed-path
-provenance: admission test
+decisions: [DEC-001]
 statement: Preserve the admitted package.
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-001
+origin: approved
+basis: admission fixture
+statement: Fixture decision.
 ```
 
 ```yaml target-contract
@@ -15305,8 +15680,16 @@ The intent contains <script>, Fixes #456, @team, https://example.test/path, and 
 kind: commitment
 id: COM-001
 class: agreed-path
-provenance: summary test
+decisions: [DEC-001]
 statement: Preserve safe summary rendering.
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-001
+origin: approved
+basis: fixture approval
+statement: Fixture decision.
 ```
 
 ```yaml target-contract
@@ -15977,8 +16360,16 @@ def test_admit_change_uses_the_existing_source_bound_admission_authority(tmp_pat
 kind: commitment
 id: COM-001
 class: agreed-path
-provenance: facade test
+decisions: [DEC-001]
 statement: Preserve the admitted package.
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-001
+origin: approved
+basis: facade fixture
+statement: Fixture decision.
 ```
 
 ```yaml target-contract
@@ -16399,6 +16790,73 @@ def test_acquisition_replays_pending_state_when_remote_matches_current_frontier(
     assert acquisition.failures == ()
     assert runtimes["change-a"].pending_state_publication() is None
     assert state_publisher.publish.call_count == 2
+
+
+def _fail_first_state_publication(application: PortfolioApplication, state_publisher: Mock) -> None:
+    application._delivery_state_publisher = state_publisher
+    launch = application.acquire_frontier_work().launch_packages[0]
+    with pytest.raises(DeliveryStatePublicationError, match="state unavailable"):
+        application.transition_delivery(
+            "change-a",
+            BlockDelivery(
+                action="block",
+                outcome_id=launch.outcome_id,
+                claim_id=launch.claim.claim_id,
+                block_id="block-first-publication",
+                reason="Remote state is temporarily unavailable.",
+                unblock_condition="Remote state publication succeeds.",
+                expected_evidence=("Published state",),
+                locators=("test_portfolio_application.py",),
+            ),
+        )
+
+
+def test_acquisition_replays_first_state_publication_without_remote_snapshot(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    state_publisher = Mock()
+    state_publisher.publish.side_effect = [
+        DeliveryStatePublicationError("state unavailable", retry_safe=True),
+        object(),
+    ]
+    state_publisher.read_snapshot_inventory.return_value = Mock(
+        remote_head="remote-head",
+        snapshots=(),
+        diagnostics=(),
+    )
+    _fail_first_state_publication(application, state_publisher)
+
+    acquisition = application.acquire_frontier_work()
+
+    assert acquisition.failures == ()
+    assert runtimes["change-a"].pending_state_publication() is None
+    assert state_publisher.publish.call_count == 2
+    assert state_publisher.publish.call_args.kwargs["expected_remote_head"] == "remote-head"
+
+
+def test_acquisition_retains_pending_state_when_remote_snapshot_is_quarantined(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    state_publisher = Mock()
+    state_publisher.publish.side_effect = [DeliveryStatePublicationError("state unavailable", retry_safe=True)]
+    state_publisher.read_snapshot_inventory.return_value = Mock(
+        remote_head="remote-head",
+        snapshots=(),
+        diagnostics=(Mock(change_id="change-a"),),
+    )
+    _fail_first_state_publication(application, state_publisher)
+
+    acquisition = application.acquire_frontier_work()
+
+    assert [failure.detail for failure in acquisition.failures] == [
+        "remote Delivery snapshot is unavailable for pending replay"
+    ]
+    assert runtimes["change-a"].pending_state_publication() is not None
+    assert state_publisher.publish.call_count == 1
 
 
 def test_acquisition_reanchors_pending_publication_after_authority_revision(tmp_path: Path) -> None:

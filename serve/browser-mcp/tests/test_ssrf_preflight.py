@@ -41,6 +41,7 @@ def _make_ctx(domains: list[str] | None = None) -> MagicMock:
     """
     allowlist = DomainAllowlist(domains=domains if domains is not None else [_ALLOWED_HOST])
     page = MagicMock()
+    page.is_closed.return_value = False
     page.goto = AsyncMock()
     page.content = AsyncMock(return_value="<html><body><main>Rendered page</main></body></html>")
     page.url = f"https://{_ALLOWED_HOST}/"

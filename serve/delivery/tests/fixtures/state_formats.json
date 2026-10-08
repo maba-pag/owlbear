@@ -25,6 +25,12 @@
     },
     "version": 1
   },
+  "builder_attempt_grant_receipt": {
+    "fingerprints": {
+      "owlbear_delivery.runtime_receipts:_DeliveryBuilderAttemptGrantReceipt": "671d8568a4740daba1a0552d65764ca6228fa02a03a5d8119fbe636d5b5d4e38"
+    },
+    "version": 1
+  },
   "builder_handoff_change_intent_head": {
     "fingerprints": {
       "owlbear_delivery.runtime_receipts:_DeliveryBuilderHandoffChangeIntentHead": "1951e294167d9c11027b5b7e2f57d736dac95ef7243b9a5e9e46cfafd80ab4f4"
@@ -81,9 +87,9 @@
   },
   "contract": {
     "fingerprints": {
-      "owlbear_delivery.target_contract:DeliveryContract": "6e62cbb262709543a4961b83aded559da9fcf10bb478d265865fa6dd1c3954e3"
+      "owlbear_delivery.target_contract:DeliveryContract": "b27b0728cc5e466c1ffb88a82043c7bc83ba047b40fa2c57fec2d79963e5a96f"
     },
-    "version": 2
+    "version": 3
   },
   "coordination": {
     "fingerprints": {
@@ -123,7 +129,7 @@
   },
   "host": {
     "fingerprints": {
-      "owlbear_delivery.delivery_application_loader:DeliveryHostConfig": "3bbcbfeb55e00c2a952ad12597af1934b4f10f3637941ba6b772915ad50e0607"
+      "owlbear_delivery.delivery_application_loader:DeliveryHostConfig": "9b5317aefc4750bbdb353f681dbc384a802012490f35919527d46fd85ca7d942"
     },
     "version": 1
   },
@@ -147,9 +153,9 @@
   },
   "package_authority": {
     "fingerprints": {
-      "owlbear_delivery.target_contract:DeliveryContract": "6e62cbb262709543a4961b83aded559da9fcf10bb478d265865fa6dd1c3954e3"
+      "owlbear_delivery.target_contract:DeliveryContract": "b27b0728cc5e466c1ffb88a82043c7bc83ba047b40fa2c57fec2d79963e5a96f"
     },
-    "version": 2
+    "version": 3
   },
   "package_manifest": {
     "fingerprints": {
@@ -278,9 +284,9 @@
   },
   "retry_ledger": {
     "fingerprints": {
-      "owlbear_delivery.recovery:RetryLedgerSummary": "9d34b4a440b558a3e9f2a68368f4f20db4d6d8a9f0f2bdbe9130a135a044bf93"
+      "owlbear_delivery.recovery:RetryLedgerSummary": "e11cec59d9ae08ac51ba741f7cee7956cfd708644e48d2923b344b9f9b23e441"
     },
-    "version": 1
+    "version": 2
   },
   "retry_outcome": {
     "fingerprints": {
@@ -302,9 +308,9 @@
   },
   "snapshot": {
     "fingerprints": {
-      "owlbear_delivery.delivery_state:DeliveryStateSnapshot": "9fa230372b3d5bb48022f32e6c8b844529376d15c23bdf45894d17c9d8afee33"
+      "owlbear_delivery.delivery_state:DeliveryStateSnapshot": "0d246fbbcbd17a2a074883508998f49ceb67701361dfa824109d48dca11e369c"
     },
-    "version": 3
+    "version": 4
   },
   "state_publication": {
     "fingerprints": {

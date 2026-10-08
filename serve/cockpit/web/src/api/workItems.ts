@@ -8,6 +8,7 @@ export type WorkItemActionKind =
   | "resume-design"
   | "answer-request"
   | "clear-block"
+  | "grant-attempt"
   | "recover-claim"
   | "finalize"
   | "reconcile-checkpoint"
@@ -134,6 +135,7 @@ export interface MergeAttemptSummary {
   state: "intent" | "released" | "pending";
   approved_head: string;
   pr_url: string;
+  released_at?: string | null;
 }
 
 export interface MergeOffer {
@@ -163,20 +165,34 @@ export interface MergeOffer {
   };
 }
 
-/** Engine-projected programme progress; Cockpit only maps keys to labels. */
-export type DeliveryProgress =
-  | "preparing"
-  | "working"
-  | "checking"
-  | "repairing"
-  | "needs-decision"
-  | "needs-sign-in"
-  | "waiting-for-service"
-  | "waiting-for-change"
-  | "ready-to-merge"
-  | "completed"
+/** Engine-projected situation; Cockpit only maps keys to labels and tones. */
+export type DeliverySituation =
+  | "with-agent"
+  | "ready-for-next-step"
+  | "your-decision"
+  | "waiting-on-github"
+  | "waiting-on-delivery"
+  | "waiting-on-dependency"
+  | "retrying-automatically"
+  | "needs-attention"
+  | "pausing"
   | "paused"
-  | "waiting-for-chat";
+  | "abandoned"
+  | "done";
+export type DeliveryWaitingOn = "you" | "agent" | "delivery" | "github" | "outcome" | "change" | "none";
+export type TargetSyncAvailability = "required" | "optional" | "unavailable" | "unnecessary";
+
+/** The one user-facing situation Delivery derives; Cockpit renders it without reconstruction. */
+export interface DeliveryProgress {
+  situation: DeliverySituation;
+  headline: string;
+  waiting_on: DeliveryWaitingOn;
+  waiting_on_id?: string | null;
+  since?: string | null;
+  next_eligible_at?: string | null;
+  target_sync?: TargetSyncAvailability | null;
+}
+
 /** Delivery's own reason that the defer intent would refuse Pause; Cockpit only maps keys to copy. */
 export type ChangePauseUnavailableReason =
   | "finalizer-custody"
@@ -434,26 +450,6 @@ export interface WorkItemPortfolioResponse {
   health: DeliveryHealthResponse;
 }
 
-export type AcceptanceReconciliationStatus =
-  | "completed"
-  | "waiting"
-  | "head-moved"
-  | "attention"
-  | "provider-unavailable"
-  | "skipped";
-
-export interface AcceptanceReconciliationOutcome {
-  change_id: string;
-  status: AcceptanceReconciliationStatus;
-  code: string | null;
-  detail: string | null;
-  completion_id: string | null;
-}
-
-export interface AcceptanceReconciliationResponse {
-  outcomes: AcceptanceReconciliationOutcome[];
-}
-
 export interface DesignWorkDetailResponse {
   change_id: string;
   package_id: string;
@@ -551,8 +547,20 @@ export interface DeliveryBlock {
 export interface WorkItemCommitment {
   commitment_id: string;
   commitment_class: string;
-  provenance: string;
+  /** Schema-2 contracts name provenance; schema-3 contracts name decisions instead. */
+  provenance?: string;
+  decision_ids?: string[];
   statement: string;
+}
+
+export type DeliveryDecisionOrigin = "decided" | "approved" | "autonomous";
+
+export interface DeliveryDecision {
+  decision_id: string;
+  origin: DeliveryDecisionOrigin;
+  basis: string;
+  statement: string;
+  supersedes: string[];
 }
 
 export interface WorkItemDependency {
@@ -798,10 +806,12 @@ export interface WorkItemDetailView {
   promise: string;
   acceptance: string[];
   commitments: WorkItemCommitment[];
+  decisions: DeliveryDecision[];
   dependencies: WorkItemDependency[];
   tasks: WorkItemTaskEvidence[];
   block: DeliveryBlock | null;
   requests: DeliveryRequest[];
+  superseded_request_ids: string[];
   active_claim: {
     attempt_id: string;
     claim_id: string;
@@ -811,6 +821,13 @@ export interface WorkItemDetailView {
     started_at: string;
     worker_role: DeliveryWorkerRole;
     task_id: string | null;
+  } | null;
+  held_finalizer: {
+    attempt_id: string;
+    claim_id: string;
+    owner_id: string;
+    process_id: string;
+    started_at: string;
   } | null;
   return_context: {
     target: WorkItemStage;
@@ -838,6 +855,7 @@ export interface WorkItemDetailView {
   publication: WorkItemPublicationView | null;
   readiness?: DeliveryReadiness | null;
   change_progress?: DeliveryProgress | null;
+  abandon_available?: boolean;
   pause_available?: boolean;
   pause_unavailable_reason?: ChangePauseUnavailableReason | null;
   evidence?: DeliveryEvidenceProjection | null;
@@ -1098,6 +1116,27 @@ export function clearWorkItemBlock(
   });
 }
 
+/** Funds exactly one more Builder attempt for an exhausted same-task retry block; retry history is kept. */
+export function grantWorkItemAttempt(
+  changeId: string,
+  outcomeId: string,
+  blockId: string,
+  expectedFrontierDigest: string,
+): Promise<unknown> {
+  const grantPath = [
+    "/api/changes",
+    encodeURIComponent(changeId),
+    "outcomes",
+    encodeURIComponent(outcomeId),
+    "blocks",
+    encodeURIComponent(blockId),
+    "grant-attempt",
+  ].join("/");
+  return controlRequest(grantPath, "ERR_WORK_ITEM_ATTEMPT_GRANT", {
+    expected_frontier_digest: expectedFrontierDigest,
+  });
+}
+
 /** A null outcome names the Change's Finalizer attempt; recent worktree activity is refused unchanged. */
 export function releaseStuckWorker(
   changeId: string,
@@ -1203,18 +1242,6 @@ export function adoptExternalHeadAfterAcceptanceAttention(
       adopted_head: adoptedHead,
       operation_id: operationId,
     },
-  );
-}
-
-export function reconcileWorkItemAcceptance(
-  changeIds: string[],
-  signal?: AbortSignal,
-): Promise<AcceptanceReconciliationResponse> {
-  return controlRequest(
-    "/api/work-items/acceptance/reconcile",
-    "ERR_WORK_ITEM_ACCEPTANCE_RECONCILE",
-    { change_ids: changeIds },
-    signal,
   );
 }
 

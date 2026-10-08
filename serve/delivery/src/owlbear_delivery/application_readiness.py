@@ -17,8 +17,10 @@ from owlbear_delivery.application_models import (
     DeliveryRuntimeReconciliationError,
     DeliveryUnavailableChangeView,
     PortfolioReadView,
+    _held_finalizer_prompt,
     _operator_claim,
     _operator_recovery_attention,
+    _target_sync_conflict_prompt,
     _worker_stall_prompt,
     _WorkerStall,
 )
@@ -37,6 +39,7 @@ from owlbear_delivery.application_support import (
 from owlbear_delivery.change_workspace import (
     ChangeContinuationAction,
     ChangeCoordination,
+    ChangeTargetSyncConflictError,
     ChangeWorktreeAttentionCode,
     RetainedChangeWorktree,
 )
@@ -77,7 +80,7 @@ from owlbear_delivery.finalization_reports import (
     FinalizationReportStore,
     FinalizerSettlementReceipt,
 )
-from owlbear_delivery.merge_approval import MergeAttemptStore
+from owlbear_delivery.merge_approval import MergeAttemptStore, merge_response_overdue
 from owlbear_delivery.merge_offer import MergeDecision, MergeFacts, MergeOfferAuthority, decide_merge
 from owlbear_delivery.portfolio_operating import (
     DeliveryHealthDiagnostic,
@@ -108,6 +111,7 @@ from owlbear_delivery.recovery import (
     RetryLedgerCorruptError,
     RetryStopCode,
 )
+from owlbear_delivery.runtime_receipts import builder_attempt_grant_block_id, is_builder_attempt_grant_block
 from owlbear_delivery.runtime_transaction import (
     TransactionPathError,
     contained_directory,
@@ -128,6 +132,7 @@ from owlbear_delivery.work_items import (
     WorkItemActivityState,
     WorkItemCardView,
     WorkItemDetailView,
+    WorkItemHeldFinalizerView,
     WorkItemNeed,
     WorkItemNextActor,
     WorkItemProjector,
@@ -860,6 +865,20 @@ class _ReadinessViewsMixin:
             for card, decision in zip(cards, decisions, strict=True)
         )
         decisions = self._with_worker_stall_readiness(snapshot, cards, decisions)
+        held_finalizer = self._held_finalizer_view(snapshot.contract.change_id)
+        if held_finalizer is not None:
+            decisions = self._with_held_finalizer_prompt(snapshot, cards, decisions)
+        if (
+            workspace_reason == "engine-action-failed"
+            and self._retained_target_sync_conflict(snapshot.contract.change_id) is not None
+        ):
+            prompt = _target_sync_conflict_prompt(snapshot.contract.change_id)
+            decisions = tuple(
+                decision.model_copy(update={"prompt": prompt})
+                if decision.reason_code == "engine-action-failed"
+                else decision
+                for decision in decisions
+            )
         if settled_attention:
             # Settled Finalizer attention names /inspect-change in its card guidance instead.
             decisions = tuple(
@@ -872,15 +891,16 @@ class _ReadinessViewsMixin:
         if pause_requested:
             decisions = self._with_pause_request_readiness(snapshot, cards, decisions)
         decisions, card_guidance = self._with_progress(
-            snapshot, cards, decisions, readiness_guidance, pause_drained=pause_drained
+            snapshot, cards, decisions, readiness_guidance, pause_requested=pause_requested, pause_drained=pause_drained
         )
         return WorkItemProjector(
             snapshot,
             decisions,
             readiness_guidance=card_guidance,
-            change_progress=("paused" if pause_drained else self._change_activity_progress(snapshot, cards, decisions)),
+            change_progress=self._change_activity_progress(snapshot, cards, decisions, pause_drained=pause_drained),
             pause_unavailable_reason=self._pause_unavailable_reason(snapshot),
             pause_requested=pause_requested,
+            held_finalizer=held_finalizer,
         )
 
     def _pause_request_state(self, snapshot: DeliveryPortfolioSnapshot) -> tuple[bool, bool]:
@@ -945,24 +965,26 @@ class _ReadinessViewsMixin:
             return "pause-requested"
         return None
 
-    def _with_progress(
+    def _with_progress(  # noqa: PLR0913 - pause evidence is captured once per projection.
         self,
         snapshot: DeliveryPortfolioSnapshot,
         cards: tuple[WorkItemCardView, ...],
         decisions: tuple[DeliveryReadiness, ...],
         guidance: str | None,
         *,
+        pause_requested: bool = False,
         pause_drained: bool = False,
     ) -> tuple[tuple[DeliveryReadiness, ...], tuple[str | None, ...]]:
-        """Project progress from final readiness plus read-only issuer and occupancy evidence."""
+        """Project progress from final readiness plus read-only issuer, occupancy and provider evidence."""
         at_capacity: bool | None = None
         updated: list[DeliveryReadiness] = []
         card_guidance: list[str | None] = []
         for card, decision in zip(cards, decisions, strict=True):
             issuer_state: DeliveryIssuerState | None = None
+            holder: str | None = None
             custody: str | None = None
             if decision.status == "running" and decision.reason_code == "active-custody":
-                issuer_state, custody = self._custody_evidence(snapshot, card)
+                issuer_state, holder, custody = self._custody_evidence(snapshot, card)
             capacity = False
             if (
                 decision.reason_code == "ready"
@@ -972,22 +994,62 @@ class _ReadinessViewsMixin:
                 if at_capacity is None:
                     at_capacity = self._other_changes_fill_capacity(snapshot.contract.change_id)
                 capacity = at_capacity
+            request, dependency_id = self._outcome_wait_evidence(snapshot, card)
             progress = derive_delivery_progress(
                 decision,
                 card,
                 snapshot.frontier,
                 issuer_state=issuer_state,
+                holder=holder,
                 at_capacity=capacity,
+                pause_requested=pause_requested,
                 pause_drained=pause_drained,
+                merged_unrecorded=self._merged_unrecorded(snapshot, card),
+                dependency_id=dependency_id,
+                request=request,
             )
             updated.append(decision.model_copy(update={"progress": progress}))
             card_guidance.append(custody if custody is not None else guidance)
         return tuple(updated), tuple(card_guidance)
 
+    @staticmethod
+    def _merged_unrecorded(snapshot: DeliveryPortfolioSnapshot, card: WorkItemCardView) -> bool:
+        """GitHub reports the awaited pull request merged before Delivery records completion."""
+        observation = snapshot.publication_observation
+        return (
+            card.publication_phase is WorkItemPublicationPhase.AWAITING_MERGE
+            and snapshot.frontier.change_disposition is None
+            and observation is not None
+            and observation.snapshot.merged
+        )
+
+    @staticmethod
+    def _outcome_wait_evidence(
+        snapshot: DeliveryPortfolioSnapshot, card: WorkItemCardView
+    ) -> tuple[DeliveryRequest | None, str | None]:
+        """Return the Outcome card's open request and first incomplete dependency, if any."""
+        if card.scope is not WorkItemScope.OUTCOME:
+            return None, None
+        bindings = {binding.outcome_id: binding for binding in snapshot.frontier.bindings}
+        binding = bindings.get(card.work_item_id)
+        outcome = next((item for item in snapshot.contract.outcomes if item.outcome_id == card.work_item_id), None)
+        request = (
+            next((item for item in binding.requests if item.resolution is None), None) if binding is not None else None
+        )
+        dependency = next(
+            (
+                identity
+                for identity in (outcome.dependency_ids if outcome is not None else ())
+                if identity in bindings and bindings[identity].stage != DeliveryStage.COMPLETED
+            ),
+            None,
+        )
+        return request, dependency
+
     def _custody_evidence(
         self, snapshot: DeliveryPortfolioSnapshot, card: WorkItemCardView
-    ) -> tuple[DeliveryIssuerState | None, str | None]:
-        """Return issuer evidence and neutral custody copy for a held Planner, Builder or Finalizer step."""
+    ) -> tuple[DeliveryIssuerState | None, str | None, str | None]:
+        """Return issuer evidence, holder role and custody copy for a held Planner, Builder or Finalizer step."""
         change_id = snapshot.contract.change_id
         claims = tuple(
             (binding.outcome_id, binding.active_claim)
@@ -1004,18 +1066,18 @@ class _ReadinessViewsMixin:
             }
             roles = ", ".join(dict.fromkeys(claim.worker_role.value.capitalize() for _outcome, claim in claims))
             state: DeliveryIssuerState = "unknown" if "unknown" in states else "alive" if "alive" in states else "gone"
-            return state, f"Claimed by {roles}"
+            return state, roles, f"Claimed by {roles}"
         if card.scope is not WorkItemScope.CHANGE_PUBLICATION or snapshot.frontier.integration_repair_claim is not None:
-            return None, None
+            return None, None, None
         try:
             attempt = self._active_finalizer_writer_attempt(change_id)
         except OSError, RuntimeError, ValueError:
-            return None, None
+            return None, None, None
         if attempt is None:
-            return None, None
+            return None, None, None
         writer = attempt.writer
         state = self._claim_issuer_state(change_id, None, writer.attempt_id, writer.claim_id, "finalizer")
-        return state, "Finalizer attempt held"
+        return state, "Finalizer", "Finalizer attempt held"
 
     def _claim_issuer_state(
         self, change_id: str, outcome_id: str | None, attempt_id: str, claim_id: str, role: str
@@ -1047,14 +1109,18 @@ class _ReadinessViewsMixin:
         snapshot: DeliveryPortfolioSnapshot,
         cards: tuple[WorkItemCardView, ...],
         decisions: tuple[DeliveryReadiness, ...],
+        *,
+        pause_drained: bool,
     ) -> DeliveryProgress | None:
         frontier = snapshot.frontier
         if frontier.change_completion is not None:
-            return "completed"
+            return DeliveryProgress(situation="done", headline="This Change is done.", waiting_on="none")
         if frontier.change_abandonment is not None:
-            return None
-        if frontier.change_deferral is not None:
-            return "paused"
+            return DeliveryProgress(situation="abandoned", headline="This Change was abandoned.", waiting_on="none")
+        if frontier.change_deferral is not None or pause_drained:
+            return DeliveryProgress(
+                situation="paused", headline="Paused. Resume the Change to continue.", waiting_on="you"
+            )
         current = tuple(
             card.model_copy(update={"readiness": decision}) for card, decision in zip(cards, decisions, strict=True)
         )
@@ -1318,6 +1384,38 @@ class _ReadinessViewsMixin:
             )
         return tuple(updated)
 
+    def _held_finalizer_view(self, change_id: str) -> WorkItemHeldFinalizerView | None:
+        try:
+            attempt = self._active_finalizer_writer_attempt(change_id)
+        except OSError, RuntimeError, ValueError:
+            return None
+        if attempt is None:
+            return None
+        writer = attempt.writer
+        return WorkItemHeldFinalizerView(
+            attempt_id=writer.attempt_id,
+            claim_id=writer.claim_id,
+            owner_id=writer.actor_id,
+            process_id=writer.process_id,
+            started_at=writer.claimed_at,
+        )
+
+    @staticmethod
+    def _with_held_finalizer_prompt(
+        snapshot: DeliveryPortfolioSnapshot,
+        cards: tuple[WorkItemCardView, ...],
+        decisions: tuple[DeliveryReadiness, ...],
+    ) -> tuple[DeliveryReadiness, ...]:
+        """Point custody held by an unfinished Finalizer at its stopped-run route, not offline diagnosis."""
+        change_id = snapshot.contract.change_id
+        return tuple(
+            decision.model_copy(update={"prompt": _held_finalizer_prompt(change_id)})
+            if card.scope is WorkItemScope.CHANGE_PUBLICATION
+            and (decision.status, decision.reason_code) == ("running", "active-custody")
+            else decision
+            for card, decision in zip(cards, decisions, strict=True)
+        )
+
     def _with_retry_readiness(  # noqa: C901, PLR0912 - maps one persisted policy to the shared readiness contract.
         self,
         snapshot: DeliveryPortfolioSnapshot,
@@ -1352,7 +1450,7 @@ class _ReadinessViewsMixin:
             and binding is not None
             and binding.block is not None
             and binding.builder_handoff_context is not None
-            and binding.block.block_id == f"builder-attempt-limit-{binding.builder_handoff_context.settlement_id}"
+            and binding.block.block_id == builder_attempt_grant_block_id(binding.builder_handoff_context)
         ):
             exact_head = binding.builder_handoff_context.last_reviewed_commit
         if exact_head is None and handoff_attempt_id is None:
@@ -1435,6 +1533,9 @@ class _ReadinessViewsMixin:
                 }
             )
         elif episode.stop_code is RetryStopCode.EXHAUSTED:
+            grantable = (
+                handoff_attempt_id is not None and binding is not None and is_builder_attempt_grant_block(binding)
+            )
             updates.update(
                 {
                     "status": "blocked",
@@ -1442,7 +1543,7 @@ class _ReadinessViewsMixin:
                     "operation": None,
                     "executable": False,
                     "action": None,
-                    "next_actor": WorkItemNextActor.AGENT,
+                    "next_actor": WorkItemNextActor.YOU if grantable else WorkItemNextActor.AGENT,
                 }
             )
         elif episode.stop_code is RetryStopCode.ACCEPTANCE_WAIT:
@@ -1637,6 +1738,11 @@ class _ReadinessViewsMixin:
                         "The publication owner has a recorded provider/readback failure; no exact authoritative "
                         "publication readback is available. Preserve custody and journals; the publication owner "
                         "must resolve this condition before resume; do not retry or release custody."
+                    )
+                elif recorded.failure.code == ChangeTargetSyncConflictError.code:
+                    guidance = (
+                        "Target synchronization stopped on a preserved merge conflict. Resolve or abort it with "
+                        f"/resolve-target-conflict {action.change_id}; that exit releases this engine action."
                     )
                 else:
                     state = (
@@ -1923,10 +2029,10 @@ class _ReadinessViewsMixin:
 
     @staticmethod
     def _user_action_readiness(card: WorkItemCardView, operation: WorkItemActionKind | None) -> tuple[str, str]:
-        if (
-            card.scope is WorkItemScope.OUTCOME
-            and card.stage is not None
-            and card.stage.value == DeliveryStage.DESIGN.value
+        if card.scope is WorkItemScope.OUTCOME and (
+            (card.stage is not None and card.stage.value == DeliveryStage.DESIGN.value)
+            # A Builder return limit routes to a Design revision as well (N12 I5).
+            or card.action.kind is WorkItemActionKind.RESUME_DESIGN
         ):
             return "blocked", "design-attention"
         return ("ready" if operation else "blocked"), "request-action"
@@ -2423,7 +2529,7 @@ class _ReadinessViewsMixin:
     def _merge_attempt_readiness(
         self, snapshot: DeliveryPortfolioSnapshot
     ) -> tuple[Literal["merge-in-progress", "merge-response-unknown"], MergeAttemptSummary | None] | None:
-        """I11, 1.13: an unsettled approval is in progress until the acceptance episode stops, then unknown."""
+        """I11, 1.13: an unsettled approval is in progress until its response deadline passes, then unknown."""
         change_id = snapshot.contract.change_id
         frontier = snapshot.frontier
         if frontier.change_abandonment is not None or frontier.change_completion is not None:
@@ -2439,26 +2545,10 @@ class _ReadinessViewsMixin:
             state=attempt.state.value,
             approved_head=attempt.head_sha,
             pr_url=attempt.pr_url,
+            released_at=attempt.released_at,
         )
-        finalization = frontier.finalization
-        try:
-            episode = (
-                None
-                if finalization is None
-                else RetryLedger(self._target_root, change_id, clock=self._clock).episode(
-                    RetryEpisodeKey.engine(
-                        change_id,
-                        "observe-acceptance",
-                        finalization.exact_head,
-                        self._workspace_manager.observed_target_head(),
-                        finalization.finalization_id,
-                    )
-                )
-            )
-        except OSError, RetryLedgerConflictError, RetryLedgerCorruptError, RuntimeError, ValueError:
-            episode = None
-        stopped = episode is not None and episode.stop_code is RetryStopCode.ACCEPTANCE_WAIT
-        return ("merge-response-unknown" if stopped else "merge-in-progress"), summary
+        overdue = merge_response_overdue(attempt, self._clock())
+        return ("merge-response-unknown" if overdue else "merge-in-progress"), summary
 
     @classmethod
     def _with_merge_attempt_readiness(

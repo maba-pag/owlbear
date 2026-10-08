@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from owlbear_delivery.recovery import (
+    BUILDER_RETURN_FAILURE_CODE,
     DeliveryWorkerExclusionRequiredError,
     RetryEpisodeSummary,
     RetryFailureClass,
@@ -61,12 +62,15 @@ from owlbear_delivery.runtime_receipts import (
     _DeliveryBuilderRequestResolutionReceipt,
     _DeliveryPlanningPauseReplay,
     _DeliveryPlanningRetrySettlementReceipt,
+    builder_planning_route_block_id,
+    builder_return_limit_block_id,
 )
 from owlbear_delivery.runtime_support import (
     _builder_handoff_change_intent_directory,
     _builder_handoff_change_intent_head_path,
     _builder_request_resolution_receipt_path,
     _conflict,
+    _read_builder_attempt_grant_receipt,
     _read_builder_handoff_change_intent_receipts,
     parse_stored_delivery_frontier,
 )
@@ -84,6 +88,11 @@ if TYPE_CHECKING:
         PreparedBuilderHandoff,
         PublicationLock,
     )
+
+
+def _refunds_planning_return(request: DeliveryTransition | None) -> bool:
+    """A Builder handing its task back to Planning is not a failure; it is bounded by the return limit instead."""
+    return isinstance(request, ReturnDelivery) and request.target == DeliveryStage.PLANNING
 
 
 class _SettlementReplayMixin:
@@ -473,28 +482,39 @@ class _SettlementReplayMixin:
         episode: RetryEpisodeSummary,
         ledger: RetryLedger,
     ) -> tuple[OutcomeAuthorityBinding, bool, str]:
+        """Return the settled binding, whether the attempt is refunded, and its owner-result failure code."""
         request = envelope.request
         paused = isinstance(request, BlockDelivery)
+        planning_return = _refunds_planning_return(request)
+        refunded = paused or planning_return
         requestless_code = REQUESTLESS_WORKER_SETTLEMENT_FAILURE_CODES.get(envelope.disposition)
         failure_code = (
             requestless_code
             if requestless_code is not None
             else "worker-blocked"
             if paused
-            else "worker-returned"
+            else BUILDER_RETURN_FAILURE_CODE
             if isinstance(request, ReturnDelivery)
             else request.failure_code
         )
-        exhausted = not paused and episode.total_attempts >= ledger.mechanical_repairs + 1
+        exhausted = not refunded and (
+            episode.total_attempts >= ledger.mechanical_repairs + episode.granted_attempts + 1
+        )
         if requestless_code is not None or isinstance(request, RetryDelivery):
             result = self._builder_retry_settled_binding(binding, context, envelope, exhausted=exhausted)
         elif isinstance(request, BlockDelivery):
             result = self._builder_pause_settled_binding(binding, context, request)
         elif isinstance(request, ReturnDelivery):
-            result = self._builder_return_settled_binding(binding, context, request, exhausted=exhausted)
+            # Every earlier return of this lineage is reconciled: the Builder could not reserve over a pending one.
+            return_limited = (
+                planning_return and ledger.returned_attempts(episode) + 1 >= ledger.builder_planning_returns
+            )
+            result = self._builder_return_settled_binding(
+                binding, context, request, exhausted=exhausted, return_limited=return_limited
+            )
         else:
             _conflict("Builder invocation settlement has no supported completed disposition")
-        return result, paused, failure_code
+        return result, refunded, failure_code
 
     @staticmethod
     def _builder_retry_settled_binding(
@@ -567,20 +587,31 @@ class _SettlementReplayMixin:
         request: ReturnDelivery,
         *,
         exhausted: bool,
+        return_limited: bool = False,
     ) -> OutcomeAuthorityBinding:
         if request.target not in {DeliveryStage.PLANNING, DeliveryStage.DESIGN}:
             _conflict("Builder return target has no supported workspace owner route")
-        block = (
-            DeliveryBlock(
-                block_id=f"builder-{request.target.value}-route-{context.settlement_id}",
+        block = None
+        if return_limited:
+            block = DeliveryBlock(
+                block_id=builder_return_limit_block_id(context),
+                reason="The Builder returned this task to Planning three times under the current Design.",
+                unblock_condition="Revise the Design; the revision first preserves the retained Builder work.",
+                expected_evidence=("An approved Design revision for this outcome.",),
+                locators=request.locators,
+            )
+        elif exhausted:
+            block = DeliveryBlock(
+                block_id=(
+                    builder_planning_route_block_id(context)
+                    if request.target == DeliveryStage.PLANNING
+                    else f"builder-design-route-{context.settlement_id}"
+                ),
                 reason="The Builder retry episode reached its three-attempt limit.",
                 unblock_condition="The retry episode is eligible to continue.",
                 expected_evidence=("A retry episode below its attempt limit.",),
                 locators=request.locators,
             )
-            if exhausted
-            else None
-        )
         return binding.model_copy(
             update={
                 "stage": request.target,
@@ -772,12 +803,13 @@ class _SettlementReplayMixin:
             return None
         settlement = self._read_builder_invocation_settlement_receipt(context)
         returned = settlement.envelope.request
+        settled_block = settlement.result.block
         if not (
             isinstance(returned, ReturnDelivery)
             and returned.target == DeliveryStage.PLANNING
             and settlement.handoff_context == context
             and settlement.envelope.change_id == self._contract.change_id
-            and settlement.result.block is None
+            and (settled_block is None or self._granted_planner_return(context, settled_block))
             and settlement.result.return_context is not None
             and settlement.result.tasks == binding.tasks
             and settlement.result.results == binding.results
@@ -786,6 +818,11 @@ class _SettlementReplayMixin:
         if block.request_id is not None and not self._planning_pause_receipt_matches(binding):
             return None
         return settlement.result.return_context
+
+    def _granted_planner_return(self, context: DeliveryBuilderHandoffContext, settled_block: DeliveryBlock) -> bool:
+        """Return whether a user grant lifted this exact pre-N12 exhausted Planning return (N12 I6)."""
+        grant = _read_builder_attempt_grant_receipt(self._target_root, self._contract.change_id, context)
+        return grant is not None and grant.granted_block == settled_block
 
     def _planning_pause_receipt_matches(self, binding: OutcomeAuthorityBinding) -> bool:
         directory = self._target_root / self._planning_pause_replay_path(binding.outcome_id, "0" * 64).parent
