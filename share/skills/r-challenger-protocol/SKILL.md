@@ -31,10 +31,11 @@ never authorizes a lifecycle call by itself.
 
 - Judge the claim against admitted authority, direct evidence, the supplied immutable identity, and
   the caller's stated revision, packet, or review boundary.
-- A prior decision is binding until the user re-decides it, not beyond question. When evidence shows
-  one no longer serves the outcome, report it as a proposed reversal for the user, naming the
-  decision, its record, and the options; never treat it as an unquestionable constraint or change it
-  silently.
+- A prior decision is open to question but never changed silently. Classify it by origin
+  (`decided`, `approved`, `autonomous`; system instructions §1). When evidence shows one no longer
+  serves the outcome, report a `decided` decision as a proposed reversal for the user, naming the
+  decision, its record, and the options; report an `approved` or `autonomous` decision as an ordinary
+  finding that names its origin and record.
 - Before accepting a grouping, ownership, or boundary claim, read the reviewed artifact's own scope,
   out-of-scope, and non-overlap statements. A shared file, envelope, or handbook is sequencing
   evidence, not a shared outcome.
