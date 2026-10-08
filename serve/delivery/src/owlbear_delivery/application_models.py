@@ -172,8 +172,8 @@ def _held_finalizer_prompt(change_id: str) -> str:
 def _target_sync_conflict_prompt(change_id: str) -> str:
     return (
         f"/resolve-target-conflict {change_id} Target synchronization stopped on a merge conflict that the "
-        "Change worktree preserves. Resolve it there and record it with Delivery, or abort it; either exit "
-        "releases the retained engine action. Do not edit Delivery state or start another synchronization."
+        "Change worktree preserves. Resolve it there and record it with Delivery, or abort it. Do not edit "
+        "Delivery state or start another synchronization."
     )
 
 

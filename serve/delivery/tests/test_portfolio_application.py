@@ -5772,9 +5772,9 @@ def test_engine_target_sync_conflict_exit_releases_retained_engine_custody(tmp_p
         waiting_on="you",
         target_sync="unavailable",
     )
-    assert readiness.progress == conflict_progress
-    assert application.get_change("change-a").detail.change_progress == conflict_progress.model_copy(
-        update={"target_sync": None}
+    assert (readiness.progress, application.get_change("change-a").detail.change_progress) == (
+        conflict_progress,
+        conflict_progress.model_copy(update={"target_sync": None}),
     )
     disposition_id = runtime.change_disposition().disposition_id
     worktree = Path(coordinator.show("change-a").worktree_path)
@@ -5807,6 +5807,27 @@ def test_engine_target_sync_conflict_exit_releases_retained_engine_custody(tmp_p
     following = application.acquire_change_action(_continuation_request(application))
     assert following.kind != "unavailable", following
     assert following.engine_action is None or following.engine_action.operation_id != action.operation_id
+    if exit_kind == "abort":
+        _assert_same_target_retry_resolves(application, worktree, target, conflict_progress.headline)
+
+
+def _assert_same_target_retry_resolves(
+    application: PortfolioApplication, worktree: Path, target: str, conflict_headline: str
+) -> None:
+    """Re-merging an aborted target preserves a fresh, readable conflict that resolves normally."""
+    coordinator = application._workspace_manager._coordinator
+    with pytest.raises(ChangeTargetSyncConflictError):
+        application.sync_change_with_target("change-a", target, "retry-same-target")
+    assert coordinator.show("change-a").target_sync_abort_receipt is None
+    retried = application.get_change("change-a").readiness
+    assert retried.prompt.startswith("/resolve-target-conflict change-a ")
+    assert retried.progress.headline == conflict_headline
+    disposition_id = application._runtimes["change-a"].change_disposition().disposition_id
+    (worktree / "product.txt").write_text("Change implementation\nCompeting target edit\n")
+    _git(worktree, "add", "product.txt")
+    receipt = application.resolve_target_sync_conflict("change-a", disposition_id, target, "retry-same-target")
+    assert _git(worktree, "rev-parse", "HEAD") == receipt.merged_head
+    assert "/resolve-target-conflict" not in (application.get_change("change-a").readiness.prompt or "")
 
 
 def test_engine_exact_sync_after_remote_rewind_selects_the_rewound_target(tmp_path: Path) -> None:

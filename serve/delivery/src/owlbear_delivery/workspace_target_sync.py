@@ -284,7 +284,7 @@ class _TargetSyncMixin:
             and action.target_head == request.expected_target
             and _is_settled_finalizer_attention_sync(coordination, action)
         )
-        updates = {"target_sync_receipt": None, "target_sync_conflict": conflict}
+        updates = {"target_sync_receipt": None, "target_sync_conflict": conflict, "target_sync_abort_receipt": None}
         if attention_sync:
             updates.update({"writer": None, "finalization_attention": None})
         self._coordinator.update(coordination.model_copy(update=updates), lock=lock)
