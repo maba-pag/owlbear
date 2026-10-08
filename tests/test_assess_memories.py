@@ -563,10 +563,19 @@ class TestCounterIncrementPath:
             expected_revision=entry.revision,
         )
 
-        persisted = MemoryEngine(memory_dir=tmp_path).get_entry(_ID_APPROVED)
+        fresh_engine = MemoryEngine(memory_dir=tmp_path)
+        replay = fresh_engine.record_assessment(
+            _ID_APPROVED,
+            "unremarkable",
+            task_id="task-1",
+            expected_revision=entry.revision,
+        )
+        persisted = fresh_engine.get_entry(_ID_APPROVED)
         assert first.already_applied is False
         assert second.already_applied is True
         assert second.recorded_bucket == "outstanding"
+        assert replay.already_applied is True
+        assert replay.recorded_bucket == "outstanding"
         assert persisted.outstanding_count == 1
         assert persisted.unremarkable_count == 0
         assert len(persisted.assessment_receipts) == 1
