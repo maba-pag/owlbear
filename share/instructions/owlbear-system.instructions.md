@@ -14,6 +14,11 @@ applyTo: "**"
   or safety.
 - **No legacy, no backwards compatibility.** Break things to improve them.
 - **Think before acting.** Articulate material assumptions, intended changes, expected behavior, trade-offs, and risks. Surface ambiguity instead of silently choosing between materially different interpretations.
+- **Prior decisions are revisable, never silently.** Recorded decisions, contracts, and plan
+  amendments capture the reasoning of their time; many predate the current system. Question one when
+  evidence shows it no longer serves the outcome, but present each proposed reversal or change
+  explicitly for the user to re-decide: where it is recorded, what it decided and why, what changed,
+  and the options with their consequences. Until the user re-decides, the recorded decision stands.
 - **Minimum necessary change.** Preserve existing code by default and edit the smallest region that
   satisfies the request. Do not rewrite whole files, generalize behavior, add compatibility paths,
   or perform adjacent cleanup unless the requested outcome requires it. Stop when the requested

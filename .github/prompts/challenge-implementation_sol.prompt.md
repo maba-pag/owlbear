@@ -31,7 +31,9 @@ Before dispatch, establish the narrowest review frame supported by evidence:
   matters for the stakes; concerns that need an excluded actor or input are not material findings.
 - **Acceptance contract:** explicit requirements, accepted plan decisions, invariants, and exclusions.
   Distinguish approved commitments from tentative suggestions. Explain how the plan should achieve
-  the intended result.
+  the intended result. Approved decisions stand until the user re-decides them; when evidence argues
+  against one, report a proposed reversal (decision, record, what changed, options) instead of
+  treating it as fixed or changing it silently.
 - **Reviewed state:** repository and worktree, exact candidate and baseline commits when applicable.
   For a working-tree review, identify HEAD plus staged, unstaged, and relevant untracked changes;
   do not equate HEAD with the uncommitted implementation or claim immutable proof. Record subsequent
@@ -213,8 +215,9 @@ Then issue one scoped caller verdict:
 
 Keep the final report compact: lead with material findings and reconciled dispositions, or state
 that none were found; then give the verdict, exact scope, plan/intent conformance, smallest proposed
-repair sequence, proof limits, and blockers. Confirm whether the fresh unnamed GPT-6.1 Sol review
-actually ran. Do not reproduce the entire memo.
+repair sequence, proof limits, and blockers. List every proposed reversal of a prior decision
+separately with its options so the user can re-decide it. Confirm whether the fresh unnamed GPT-6.1
+Sol review actually ran. Do not reproduce the entire memo.
 
 Stop after the review and repair proposal. Do not edit, commit, publish, finalize, or perform lifecycle
 transitions unless the user separately authorizes implementation after the challenge is complete.

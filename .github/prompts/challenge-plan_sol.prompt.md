@@ -30,7 +30,10 @@ Before dispatching the challenger, and again when reconciling its memo, establis
 - **Intent and change contract:** what the user is trying to accomplish, why it matters now, what
  to do, why to do it, how the proposed route does it, and what result that route should produce.
 - **Commitments and scope:** distinguish explicit requirements and constraints, approved decisions,
-  and tentative suggestions. Identify the plan version or exact supplied text, relevant repository
+  and tentative suggestions. Approved decisions stand until the user re-decides them but remain open
+  to question: when evidence argues against one, report it as a proposed reversal (decision, record,
+  what changed, options) rather than as a fixed constraint or a silent change. Identify the plan
+  version or exact supplied text, relevant repository
   and worktree, and the source state supporting its premises. If uncommitted changes matter, identify
   HEAD plus staged, unstaged, and relevant untracked changes; do not claim immutable proof from HEAD.
 
@@ -210,7 +213,8 @@ Judge the supplied plan, not a silently assumed repaired version:
 
 Keep the final report compact: lead with material findings and reconciled dispositions, or state
 that none were found; then give the recommendation, reviewed scope, plan deltas, refined sequence,
-proof boundaries, and exact blockers. Confirm whether a fresh unnamed GPT-6.1 Sol review actually
+proof boundaries, and exact blockers. List every proposed reversal of a prior decision separately
+with its options so the user can re-decide it. Confirm whether a fresh unnamed GPT-6.1 Sol review actually
 ran. Do not reproduce the entire memo.
 
 Stop after the challenge and proposed plan revision. Do not edit, commit, publish, finalize, or perform
