@@ -687,6 +687,8 @@ every new item exactly one lane.
 | N10-N | merged | plan #391; N10-N-A code `7243d9042`, gate fix `e3ec4ae28` ([N10 plan](delivery-n10-plan.md) §3.4, §4): H9 read-only `derive_evidence_receipts` tool used by Builder and Finalizer; H14 decided (Delivery keeps Change branches; GitHub's automatic head-branch deletion proven tolerated by the journey test); changed-scope pytest 488 passed; Sol gate finding fixed; LC not applicable; M1 and M2 run by the user as ordinary Changes |
 | N11-P | done | [N11 plan](delivery-n11-plan.md); Sol plan gate round 1 `revision-required`, F1–F3 fix-now applied (persisted settlement unchanged, grant carry-forward and reset, assembled readiness contract); gate closed |
 | N11-A | in progress | — |
+| N12-P | in progress | [N12 plan](delivery-n12-plan.md); stacked on N11-A |
+| N12-A–D | not started | — |
 
 ## 5. Packages
 
@@ -1157,6 +1159,21 @@ a grant exists.
 
 - N11-P: plan and plan gate.
 - N11-A: implementation; LC full form. By user direction, N11-P and N11-A share one PR.
+
+### N12 — Recoverable Builder returns to Planning
+
+Added 2026-10-08 after the live Change `macos-managed-browser-authentication` was left with Abandon
+as its only exit (user decisions U1, U2 in the N12 plan).
+
+**Result:** a Builder return to Planning is refunded instead of charged; the third return of the same
+original task under one contract stops behind a return-limit block whose exit is a Design revision
+that first preserves the Builder head and keeps completed work; an already settled exhausted
+Planning-route block gets N11's user-only grant.
+
+**Plan:** [N12 plan](delivery-n12-plan.md).
+
+**Phases:** N12-P plan and plan gate; N12-A return accounting and bound; N12-B preserving release;
+N12-C legacy grant; N12-D guidance and records. By user direction all share one PR, stacked on N11.
 
 ## 6. Programme Completion
 
