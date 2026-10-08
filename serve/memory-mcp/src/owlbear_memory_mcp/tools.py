@@ -110,7 +110,7 @@ def _recall_fallback(known_agents: list[str]) -> str:
 
 def _recall_block(entry: MemoryEntry) -> str:
     """Render one recall block with challenge context when required."""
-    lines = [f"## {entry.title}", f"Entry ID: `{entry.id}`"]
+    lines = [f"## {entry.title}", f"Entry ID: `{entry.id}`", f"Revision: `{entry.revision}`"]
     if entry.state == MemoryState.CONTESTED:
         lines.append("State: contested")
         if entry.contested_by_task:
@@ -363,8 +363,8 @@ async def recall_memory(
     """Return identity-bearing recall text for a single scoped agent.
 
     Output format: concatenated markdown blocks using "## {title}" headings,
-    followed by the entry ID and body. Contested entries add a state marker and
-    an available challenge-task reference between the ID and body.
+    followed by the entry ID, revision, and body. Contested entries add a state
+    marker and an available challenge-task reference between the revision and body.
     """
     engine = _engine_from_ctx(ctx)
     category_filter = set(_coerce_categories(categories) or [])

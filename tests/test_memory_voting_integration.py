@@ -424,6 +424,50 @@ class TestMemoryVotingLifecycle:
         assert "RegularLow 00" not in titles
         assert "RegularLow 01" not in titles
 
+    @pytest.mark.asyncio
+    async def test_recall_id_order_matches_source_head_selection(self, tmp_path: Path) -> None:
+        """Pin selection and ordering for entries spanning all recall states and scores."""
+        from owlbear_memory_mcp.tools import recall_memory  # noqa: PLC0415
+
+        specifications = [
+            ("550e8400-e29b-41d4-a716-446655486001", "Explore approved", MemoryState.APPROVED, 0.70, 0, 0),
+            ("550e8400-e29b-41d4-a716-446655486002", "Explore contested", MemoryState.CONTESTED, 0.70, 0, 0),
+            ("550e8400-e29b-41d4-a716-446655486003", "Challenge curated", MemoryState.CURATED, 0.80, 0, 1),
+            ("550e8400-e29b-41d4-a716-446655486004", "Challenge contested", MemoryState.CONTESTED, 0.75, 1, 1),
+            ("550e8400-e29b-41d4-a716-446655486005", "Regular approved high", MemoryState.APPROVED, 0.95, 3, 0),
+            ("550e8400-e29b-41d4-a716-446655486006", "Regular curated high", MemoryState.CURATED, 0.90, 3, 0),
+            ("550e8400-e29b-41d4-a716-446655486007", "Regular contested mid", MemoryState.CONTESTED, 0.84, 4, 0),
+            ("550e8400-e29b-41d4-a716-446655486008", "Regular approved top", MemoryState.APPROVED, 0.80, 5, 0),
+        ]
+        for entry_id, title, state, confidence, outstanding, didnt_use in specifications:
+            entry = _make_approved_entry(
+                entry_id,
+                title,
+                confidence=confidence,
+                outstanding_count=outstanding,
+                didnt_use_count=didnt_use,
+                state=state,
+                contested_by_task="task-order" if state == MemoryState.CONTESTED else None,
+            )
+            _write_entry(tmp_path, entry)
+
+        engine = MemoryEngine(memory_dir=tmp_path)
+        result = await recall_memory(_make_ctx(engine), agent=_AGENT, limit=6)
+        actual_ids = [
+            line.removeprefix("Entry ID: `").removesuffix("`")
+            for line in result.splitlines()
+            if line.startswith("Entry ID: ")
+        ]
+
+        assert actual_ids == [
+            "550e8400-e29b-41d4-a716-446655486008",
+            "550e8400-e29b-41d4-a716-446655486005",
+            "550e8400-e29b-41d4-a716-446655486001",
+            "550e8400-e29b-41d4-a716-446655486004",
+            "550e8400-e29b-41d4-a716-446655486003",
+            "550e8400-e29b-41d4-a716-446655486002",
+        ]
+
 
 # ---------------------------------------------------------------------------
 # TestMemoryVotingStateTransitions — AC2
