@@ -230,6 +230,7 @@ Sol round 2 on plan SHA-256 `4fbd2443…` (2026-10-08), recommendation `revision
 | C — Compiler and authority | — | `32e140485` | 17 focused Delivery, tools, MCP and journey files: 957 passed | Sol round 1 on `2ae211581`: no C finding | committed |
 | X — Contexts and delta | — | `2ae211581` + repair | portfolio application, Delivery MCP and Cockpit backend: 896 passed | Sol round 1 `repair-required`: worker contexts and finalization semantics missed decisions; repaired | committed |
 | K — Cockpit | — | `2ae211581` + repair | vitest 383 passed, `npm run build`, Biome, `tsc` | Sol round 1: superseded request answers unmarked; repaired | committed |
+| G — Closeout | — | `efa8bcc49` | `test --changed` 3860 passed, 1 skipped; vitest 384 passed; LC full form against `92073c0ce` on a quiescent live copy: format 3 → 4 marker-only, all 10 live Changes available after migration, unmigrated copy refused `state-migration-required`, older controller refuses format 4, live 820 records unchanged; tool verdict `fail` only from the pre-existing inspector `ENTRY_LIMIT_EXCEEDED` limit (no `serve/tools` inspector-limit change here) | Sol repairs are read-side; no second round | proven |
 
 Implementation notes:
 
