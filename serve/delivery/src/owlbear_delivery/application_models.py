@@ -96,6 +96,7 @@ from owlbear_delivery.recovery import (
 )
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
+    DeliveryDecision,
     DeliveryOutcome,
 )
 from owlbear_delivery.work_items import (
@@ -760,7 +761,11 @@ class DeliveryPlanContext(_ApplicationModel):
     launch: DeliveryLaunchPackage
     outcome: DeliveryOutcome
     commitments: tuple[DeliveryCommitment, ...]
+    # Active decisions the commitments rest on; workers never change them.
+    decisions: tuple[DeliveryDecision, ...] = ()
     requests: tuple[DeliveryRequest, ...]
+    # Answered requests a contract decision replaced; consume that decision instead.
+    superseded_request_ids: tuple[str, ...] = ()
     return_context: DeliveryReturnContext | None = None
     acceptance: tuple[DeliveryAcceptanceCriterion, ...] = ()
     # A published plan must repeat these completed task definitions unchanged.
@@ -775,8 +780,10 @@ class DeliveryBuildContext(_ApplicationModel):
     task: DeliveryTaskDefinition
     task_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     commitments: tuple[DeliveryCommitment, ...]
+    decisions: tuple[DeliveryDecision, ...] = ()
     predecessor_results: tuple[DeliveryTaskResult, ...]
     requests: tuple[DeliveryRequest, ...]
+    superseded_request_ids: tuple[str, ...] = ()
     return_context: DeliveryReturnContext | None = None
     recovery_attention: DeliveryRecoveryAttention | None = None
     prior_attempts: tuple[DeliveryRetryAttemptView, ...] = Field(default=(), max_length=MAX_RETRY_HISTORY_ATTEMPTS)

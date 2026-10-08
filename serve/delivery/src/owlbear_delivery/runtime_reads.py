@@ -700,7 +700,13 @@ class _RuntimeReadsMixin:
             source_boundary=request.source_boundary,
         )
         returned = _reset_binding(binding, request.target)
-        return returned.model_copy(update={"return_context": context, "retry_diagnostic": None})
+        return returned.model_copy(
+            update={
+                "return_context": context,
+                "retry_diagnostic": None,
+                "requests": retained_requests(binding.requests),
+            }
+        )
 
     def _block(
         self,

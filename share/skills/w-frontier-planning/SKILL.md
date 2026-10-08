@@ -65,6 +65,10 @@ defect is Planner-owned. A missing or contradictory Design premise is not.
 Planner may choose decomposition, order, dependencies, maintained surfaces, and proof only while
 preserving the supplied Design meaning and observable outcome authority.
 
+`DeliveryPlanContext.decisions` lists the decisions behind the outcome's commitments with their
+origin. Never change one. When a decision, or an answered request, no longer serves the outcome,
+`return` to Design with its identity in the locators; the Designer asks the user or supersedes it.
+
 ### Requests And Resumed Context
 
 If context contains a request or a request may be needed, load `h-decision-requests` before consuming

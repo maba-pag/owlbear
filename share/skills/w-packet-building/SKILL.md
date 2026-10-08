@@ -131,7 +131,9 @@ not authority.
 Do not edit Design, task definitions, Delivery runtime, package internals, coordination records, or
 unlisted surfaces. A missing task premise belongs to Planning or Design, not local implementation.
 Builder may choose internal implementation details only when their alternatives are not observable
-at the supplied task boundary.
+at the supplied task boundary. `DeliveryBuildContext.decisions` lists the decisions behind the
+task's commitments with their origin; never change one. A decision or answered request that no
+longer serves the task is a `return` to its owner, named in the locators.
 
 If context contains a request or a request may be needed, load `h-decision-requests` before consuming
 or constructing it. Choose among authority-equivalent implementation alternatives; use a request

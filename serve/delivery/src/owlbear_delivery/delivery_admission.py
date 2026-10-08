@@ -22,6 +22,8 @@ from owlbear_delivery.delivery_runtime import (
 from owlbear_delivery.design_package import DesignPackageManifest
 from owlbear_delivery.runtime_models import (
     DeliveryPendingStatePublication,
+    DeliveryRequest,
+    DeliveryRequestKind,
     DeliveryReturnContext,
     retained_requests,
 )
@@ -36,14 +38,18 @@ from owlbear_delivery.target_contract import (
     DeliveryCompilationDiagnostic,
     DeliveryCompilationDiagnosticCode,
     DeliveryContract,
+    DeliveryDecision,
     DeliveryOutcome,
     compile_delivery_contract,
+    is_decision_id,
 )
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from owlbear_delivery.design_package import DesignPackageStore
+
+_LEGACY_CONTRACT_SCHEMA_VERSION = 2
 
 
 class DeliveryAdmissionError(RuntimeError):
@@ -229,6 +235,8 @@ class DeliveryAuthorityRegistry:
                     ),
                 )
             self._validate_current(request, current)
+            if current is None or current.is_partial:
+                _validate_decision_requests(compiled.contract.decisions, ())
             if current is not None and not current.is_partial and current.contract != compiled.contract:
                 message = f"admitted Delivery authority changes only through revision activation: {request.change_id}"
                 raise DeliveryAdmissionConflictError(message)
@@ -286,6 +294,9 @@ class DeliveryAuthorityRegistry:
             if request.expected_frontier_digest != observed:
                 message = f"Delivery frontier changed before authority revision: {request.change_id}"
                 raise DeliveryAdmissionConflictError(message)
+            if current.contract is None or current.frontier is None:
+                raise DeliveryAdmissionConflictError
+            _validate_decision_revision(current.contract, compiled.contract, current.frontier)
             resumed = self._package_store.read_verified(request.change_id).authority_bytes == compiled.canonical_bytes
             checkpoint_commit = self._publish_package_contract(request.change_id, compiled)
             snapshot_head = snapshot()
@@ -508,7 +519,7 @@ def _delivery_frontier(
     if current.contract is None or current.frontier is None:
         raise DeliveryAdmissionConflictError
     _validate_delivery_frontier(current.contract, current.frontier)
-    invalidated = _invalidated_outcomes(current.contract, contract)
+    invalidated = _invalidated_outcomes(current.contract, contract, current.frontier)
     previous_bindings = {binding.outcome_id: binding for binding in current.frontier.bindings}
     previous_criteria = {criterion.ref for criterion in acceptance_criteria(current.contract)}
     changed_criteria: dict[str, list[str]] = {}
@@ -586,16 +597,20 @@ def _replanned_binding(
     )
 
 
-def _invalidated_outcomes(previous: DeliveryContract, replacement: DeliveryContract) -> set[str]:
+def _invalidated_outcomes(
+    previous: DeliveryContract, replacement: DeliveryContract, frontier: DeliveryFrontier
+) -> set[str]:
     previous_outcomes = {outcome.outcome_id: outcome for outcome in previous.outcomes}
     replacement_outcomes = {outcome.outcome_id: outcome for outcome in replacement.outcomes}
+    request_ids = {
+        binding.outcome_id: tuple(item.request_id for item in binding.requests) for binding in frontier.bindings
+    }
     invalidated = {
         outcome_id
         for outcome_id in previous_outcomes.keys() | replacement_outcomes.keys()
         if outcome_id not in previous_outcomes
         or outcome_id not in replacement_outcomes
-        or _outcome_projection(previous, previous_outcomes[outcome_id])
-        != _outcome_projection(replacement, replacement_outcomes[outcome_id])
+        or _meaning_changed(previous, replacement, outcome_id, request_ids.get(outcome_id, ()))
     }
     dependencies = {
         outcome.outcome_id: set(outcome.dependency_ids) for outcome in (*previous.outcomes, *replacement.outcomes)
@@ -608,12 +623,98 @@ def _invalidated_outcomes(previous: DeliveryContract, replacement: DeliveryContr
         invalidated = expanded
 
 
-def _outcome_projection(contract: DeliveryContract, outcome: DeliveryOutcome) -> tuple[object, ...]:
+def _outcome_projection(
+    contract: DeliveryContract,
+    outcome: DeliveryOutcome,
+    request_ids: tuple[str, ...],
+    *,
+    with_decisions: bool,
+) -> tuple[object, ...]:
+    """Return an outcome's meaning: its definition, its commitments and the decisions they rest on."""
     commitments = {item.commitment_id: item for item in contract.commitments}
+    statements = {item.decision_id: item.statement for item in contract.decisions}
+    replacements = contract.applicable_decisions((), request_ids) if with_decisions else ()
     return (
         outcome,
-        tuple(commitments[commitment_id] for commitment_id in outcome.commitment_ids),
+        tuple(
+            (
+                commitments[commitment_id].commitment_class,
+                commitments[commitment_id].statement,
+                tuple(sorted(statements[identity] for identity in commitments[commitment_id].decision_ids))
+                if with_decisions
+                else (),
+            )
+            for commitment_id in outcome.commitment_ids
+        ),
+        tuple(sorted(item.statement for item in replacements)),
     )
+
+
+def _meaning_changed(
+    previous: DeliveryContract, replacement: DeliveryContract, outcome_id: str, request_ids: tuple[str, ...]
+) -> bool:
+    # A schema-2 contract records no decisions, so its conversion compares commitments without them.
+    with_decisions = previous.schema_version != _LEGACY_CONTRACT_SCHEMA_VERSION
+    return _outcome_projection(
+        previous, _outcome(previous, outcome_id), request_ids, with_decisions=with_decisions
+    ) != _outcome_projection(replacement, _outcome(replacement, outcome_id), request_ids, with_decisions=with_decisions)
+
+
+def _outcome(contract: DeliveryContract, outcome_id: str) -> DeliveryOutcome:
+    return next(item for item in contract.outcomes if item.outcome_id == outcome_id)
+
+
+def _validate_decision_revision(
+    previous: DeliveryContract,
+    replacement: DeliveryContract,
+    frontier: DeliveryFrontier,
+) -> None:
+    """Admitted decisions stay unchanged history; new ones may cite only answered requests of this Change."""
+    admitted = {item.decision_id: item for item in previous.decisions}
+    candidate = {item.decision_id: item for item in replacement.decisions}
+    changed = sorted(identity for identity, item in admitted.items() if candidate.get(identity) != item)
+    if changed:
+        message = "an admitted decision changes only through a new decision that supersedes it"
+        raise DeliveryAdmissionValidationError(
+            message,
+            tuple(
+                DeliveryCompilationDiagnostic(
+                    code=DeliveryCompilationDiagnosticCode.DECISION_HISTORY_CHANGED, subject=identity, detail=message
+                )
+                for identity in changed
+            ),
+        )
+    requests = tuple(request for binding in frontier.bindings for request in binding.requests)
+    _validate_decision_requests(
+        tuple(item for item in replacement.decisions if item.decision_id not in admitted), requests
+    )
+
+
+def _validate_decision_requests(decisions: tuple[DeliveryDecision, ...], requests: tuple[DeliveryRequest, ...]) -> None:
+    """A request basis or superseded request names an answered request; a superseded one is an unscoped decision."""
+    answered = {request.request_id: request for request in requests if request.resolution is not None}
+    findings: list[DeliveryCompilationDiagnostic] = []
+    for decision in decisions:
+        basis = decision.basis.split()
+        cited = basis[1] if len(basis) > 1 and basis[0] == "request" else None
+        superseded = tuple(identity for identity in decision.supersedes if not is_decision_id(identity))
+        valid = (cited is None or cited in answered) and all(
+            identity in answered
+            and answered[identity].kind is DeliveryRequestKind.DECISION
+            and answered[identity].applies_to is None
+            for identity in superseded
+        )
+        if not valid:
+            findings.append(
+                DeliveryCompilationDiagnostic(
+                    code=DeliveryCompilationDiagnosticCode.DECISION_REQUEST_INVALID,
+                    subject=decision.decision_id,
+                    detail="a cited request must be answered on this Change; a superseded one is an unscoped decision",
+                )
+            )
+    if findings:
+        message = "decision request references are invalid"
+        raise DeliveryAdmissionValidationError(message, tuple(findings))
 
 
 def _validate_delivery_frontier(contract: DeliveryContract, frontier: DeliveryFrontier) -> None:

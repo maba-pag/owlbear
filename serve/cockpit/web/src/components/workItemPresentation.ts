@@ -3,6 +3,7 @@ import type {
   DeliveryAcceptanceIdentitySource,
   DeliveryConfirmationKind,
   DeliveryCriterionStatus,
+  DeliveryDecisionOrigin,
   DeliveryEvidenceVerdict,
   DeliveryFinalizationRules,
   DeliveryProgress,
@@ -103,6 +104,13 @@ export const FINALIZATION_RULES_LABELS: Record<DeliveryFinalizationRules, string
 export const CONFIRMATION_KIND_LABELS: Record<DeliveryConfirmationKind, string> = {
   waive: "Waiver",
   "confirm-check": "Person-only check",
+};
+
+/** Who made a recorded decision; only `decided` ones were asked of the user directly. */
+export const DECISION_ORIGIN_LABELS: Record<DeliveryDecisionOrigin, string> = {
+  decided: "Decided by you",
+  approved: "Approved by you",
+  autonomous: "Made by an agent",
 };
 
 export function readinessTone(status: DeliveryReadinessStatus): WorkItemStatusTone {

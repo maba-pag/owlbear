@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 
 import pytest
@@ -48,7 +49,15 @@ from owlbear_delivery.evidence import (
     resolve_request,
 )
 from owlbear_delivery.runtime_models import _receipt_digest
-from owlbear_delivery.target_contract import DeliveryContract, DeliveryOutcome, DeliveryPlanScope
+from owlbear_delivery.target_contract import (
+    DeliveryCommitment,
+    DeliveryCommitmentClass,
+    DeliveryContract,
+    DeliveryDecision,
+    DeliveryDecisionOrigin,
+    DeliveryOutcome,
+    DeliveryPlanScope,
+)
 
 AT = datetime(2026, 10, 4, 12, tzinfo=UTC)
 CHANGE = "evidence-change"
@@ -519,6 +528,41 @@ def test_semantics_are_complete_within_budget_and_refused_whole_above_it(monkeyp
     assert finalization_semantics_or_refusal(
         contract, frontier, contract_digest="a" * 64, change_head="1" * 40, diff_base=None
     ) == DeliveryContextRefusal(code="finalization-basis-unavailable")
+
+
+def test_semantics_carry_the_decisions_behind_schema_3_commitments() -> None:
+    legacy = _contract("One.")
+    decision = DeliveryDecision(
+        decision_id="DEC-001",
+        origin=DeliveryDecisionOrigin.DECIDED,
+        basis='askQuestions 2026-10-08 "Report format?"',
+        statement="Keep the CSV report format.",
+    )
+    commitment = DeliveryCommitment(
+        commitment_id="COM-001",
+        commitment_class=DeliveryCommitmentClass("agreed-path"),
+        decision_ids=("DEC-001",),
+        statement="Keep reports.",
+    )
+    contract = legacy.model_copy(
+        update={
+            "schema_version": 3,
+            "decisions": (decision,),
+            "commitments": (commitment,),
+            "outcomes": (legacy.outcomes[0].model_copy(update={"commitment_ids": ("COM-001",)}),),
+        }
+    )
+    frontier = _frontier((_result(_observation(covers=(_ref(contract, 0),))),))
+    arguments = {"contract_digest": "a" * 64, "change_head": "1" * 40, "diff_base": "2" * 40}
+
+    semantics = finalization_semantics_or_refusal(contract, frontier, **arguments)
+    previous = finalization_semantics_or_refusal(legacy, frontier, **arguments)
+
+    assert not isinstance(semantics, DeliveryContextRefusal)
+    assert semantics.decisions == (decision,)
+    assert "Keep the CSV report format." in json.dumps(semantics.model_dump(mode="json"))
+    assert not isinstance(previous, DeliveryContextRefusal)
+    assert previous.decisions == ()
 
 
 # --- Projection (N03-C) --------------------------------------------------------------------------

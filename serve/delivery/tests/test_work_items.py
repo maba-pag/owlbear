@@ -54,6 +54,8 @@ from owlbear_delivery.target_contract import (
     DeliveryCommitment,
     DeliveryCommitmentClass,
     DeliveryContract,
+    DeliveryDecision,
+    DeliveryDecisionOrigin,
     DeliveryOutcome,
     DeliveryPlanScope,
 )
@@ -431,6 +433,75 @@ def test_detail_exposes_operator_directed_course_changes() -> None:
     detail = projector.show_view("outcome:OUT-001")
 
     assert detail.operator_moves == (move,)
+
+
+def test_detail_projects_decisions_behind_outcome_commitments_and_all_on_the_change() -> None:
+    origin = DeliveryDecisionOrigin
+    decisions = (
+        DeliveryDecision(decision_id="DEC-001", origin=origin.APPROVED, basis="package approval", statement="One."),
+        DeliveryDecision(
+            decision_id="DEC-002",
+            origin=origin.DECIDED,
+            basis="askQuestions",
+            statement="Two.",
+            supersedes=("DEC-001",),
+        ),
+        DeliveryDecision(decision_id="DEC-003", origin=origin.AUTONOMOUS, basis="decide yourself", statement="Sort."),
+        DeliveryDecision(
+            decision_id="DEC-004",
+            origin=origin.DECIDED,
+            basis="askQuestions",
+            statement="Replace the answer.",
+            supersedes=("REQ-002",),
+        ),
+        DeliveryDecision(
+            decision_id="DEC-005",
+            origin=origin.DECIDED,
+            basis="askQuestions",
+            statement="Replace it again.",
+            supersedes=("DEC-004",),
+        ),
+    )
+    legacy = _contract()
+    contract = legacy.model_copy(
+        update={
+            "schema_version": 3,
+            "decisions": decisions,
+            "commitments": tuple(
+                item.model_copy(update={"provenance": None, "decision_ids": ("DEC-002",)})
+                for item in legacy.commitments
+            ),
+        }
+    )
+    replaced = DeliveryRequest(
+        request_id="REQ-002",
+        kind=DeliveryRequestKind.DECISION,
+        outcome_id="OUT-002",
+        summary="Choose the report format.",
+        options=({"option_id": "keep", "label": "Keep it"},),
+    )
+    frontier = DeliveryFrontier(
+        bindings=(
+            _binding("OUT-001", DeliveryStage.PLANNING),
+            _binding("OUT-002", DeliveryStage.DESIGN, requests=(replaced,)),
+        )
+    )
+    content = (json.dumps(frontier.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n").encode()
+    projector = WorkItemProjector(DeliveryPortfolioSnapshot.capture(contract, content))
+    completed = (_binding("OUT-001", DeliveryStage.COMPLETED), _binding("OUT-002", DeliveryStage.COMPLETED))
+    finished = DeliveryFrontier(bindings=completed)
+    finished_content = (
+        json.dumps(finished.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n"
+    ).encode()
+
+    assert [item.decision_id for item in projector.show_view("outcome:OUT-001").decisions] == ["DEC-002"]
+    assert projector.show_view("outcome:OUT-001").superseded_request_ids == ()
+    report = projector.show_view("outcome:OUT-002")
+    assert [item.decision_id for item in report.decisions] == ["DEC-004", "DEC-005"]
+    assert report.superseded_request_ids == ("REQ-002",)
+    publication = WorkItemProjector(DeliveryPortfolioSnapshot.capture(contract, finished_content))
+    assert publication.show_view("publication").decisions == decisions
+    assert WorkItemProjector(_snapshot(completed)).show_view("publication").decisions == ()
 
 
 def test_request_and_requestless_block_share_need_but_keep_distinct_actions() -> None:

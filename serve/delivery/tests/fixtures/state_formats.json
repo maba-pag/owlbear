@@ -81,9 +81,9 @@
   },
   "contract": {
     "fingerprints": {
-      "owlbear_delivery.target_contract:DeliveryContract": "6e62cbb262709543a4961b83aded559da9fcf10bb478d265865fa6dd1c3954e3"
+      "owlbear_delivery.target_contract:DeliveryContract": "b27b0728cc5e466c1ffb88a82043c7bc83ba047b40fa2c57fec2d79963e5a96f"
     },
-    "version": 2
+    "version": 3
   },
   "coordination": {
     "fingerprints": {
@@ -147,9 +147,9 @@
   },
   "package_authority": {
     "fingerprints": {
-      "owlbear_delivery.target_contract:DeliveryContract": "6e62cbb262709543a4961b83aded559da9fcf10bb478d265865fa6dd1c3954e3"
+      "owlbear_delivery.target_contract:DeliveryContract": "b27b0728cc5e466c1ffb88a82043c7bc83ba047b40fa2c57fec2d79963e5a96f"
     },
-    "version": 2
+    "version": 3
   },
   "package_manifest": {
     "fingerprints": {
@@ -302,9 +302,9 @@
   },
   "snapshot": {
     "fingerprints": {
-      "owlbear_delivery.delivery_state:DeliveryStateSnapshot": "9fa230372b3d5bb48022f32e6c8b844529376d15c23bdf45894d17c9d8afee33"
+      "owlbear_delivery.delivery_state:DeliveryStateSnapshot": "0d246fbbcbd17a2a074883508998f49ceb67701361dfa824109d48dca11e369c"
     },
-    "version": 3
+    "version": 4
   },
   "state_publication": {
     "fingerprints": {

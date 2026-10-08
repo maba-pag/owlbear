@@ -124,6 +124,8 @@
     "DeliveryContinuationResult",
     "DeliveryContract",
     "DeliveryCriterionCoverage",
+    "DeliveryDecision",
+    "DeliveryDecisionOrigin",
     "DeliveryDesignPut",
     "DeliveryEngineActionResult",
     "DeliveryEvidenceGap",

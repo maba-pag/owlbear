@@ -183,6 +183,7 @@ from owlbear_delivery.target_contract import (
     DeliveryCompilationResult,
     DeliveryOutcome,
     compile_delivery_contract,
+    decision_delta,
 )
 from owlbear_delivery.work_items import (  # noqa: F401
     DeliveryPortfolioSnapshot,
@@ -1030,9 +1031,14 @@ class PortfolioApplication(
         return self._package_store.checkpoint(change_id)
 
     def derive_delivery_contract(self, change_id: str) -> DeliveryCompilationResult:
-        """Compile one verified package without publishing generated authority."""
+        """Compile one verified package without publishing generated authority; a revision adds its decision delta."""
         package = self._package_store.read_verified(change_id)
-        return compile_delivery_contract(change_id, package.intent_bytes, package.design_bytes)
+        compiled = compile_delivery_contract(change_id, package.intent_bytes, package.design_bytes)
+        self._reconcile_runtimes()
+        runtime = self._runtimes.get(change_id)
+        if runtime is None or compiled.contract is None:
+            return compiled
+        return compiled.model_copy(update={"decision_delta": decision_delta(runtime.contract, compiled.contract)})
 
     def admit_delivery_change(self, request: DeliveryAdmissionRequest) -> DeliveryAdmissionResult:
         """Admit source-bound Delivery authority through the owning registry."""
