@@ -144,3 +144,74 @@ it("after an abort shows the repeat-merge warning without conflict controls", as
   expect(within(inspector).queryByTestId("target-sync-conflict-abort")).toBeNull();
   expect(within(inspector).queryByText("Target sync conflict")).toBeNull();
 });
+
+it("keeps a paused Change's conflict factual and points to Resume instead of refused exits", async () => {
+  const conflict = conflictDetail();
+  const paused = situation("paused", { headline: "Paused. Resume the Change to continue.", waiting_on: "you" });
+  const pausedReadiness = readiness({
+    status: "blocked",
+    reason_code: "change-paused",
+    next_actor: "you",
+    progress: { ...paused, target_sync: "unnecessary" },
+  });
+  fixtureState.currentDetail = {
+    ...conflict,
+    item: {
+      ...conflict.item,
+      card: { ...conflict.item.card, readiness: pausedReadiness },
+      readiness: pausedReadiness,
+      change_progress: paused,
+    },
+  };
+  renderPage("/delivery/change-alpha/publication");
+
+  const inspector = await screen.findByTestId("work-item-detail");
+  expect(within(inspector).getByTestId("target-sync-conflict-paths")).toHaveTextContent(
+    "web/src/pages/WorkPortfolioPage.tsx",
+  );
+  expect(within(inspector).getByTestId("target-sync-conflict-paused")).toHaveTextContent(
+    "Resume the Change to resolve or abort this conflict.",
+  );
+  expect(within(inspector).queryByTestId("target-sync-conflict-abort")).toBeNull();
+  expect(within(inspector).queryByTestId("target-sync-conflict-resolve")).toBeNull();
+  expect(within(inspector).queryByRole("button", { name: /^Copy command/ })).toBeNull();
+});
+
+it("keeps finalization diagnostics in Technical details before a target sync", async () => {
+  const sync = situation("ready-for-next-step", {
+    headline:
+      "Run the prompt in Copilot Chat to merge the latest target into this Change; a conflict stops there for you " +
+      "to resolve.",
+    waiting_on: "you",
+    target_sync: "required",
+  });
+  const ready = readiness({
+    status: "ready",
+    operation: "sync-target",
+    executable: true,
+    reason_code: "ready",
+    prompt: "/continue-change change-alpha reread get_change",
+    progress: sync,
+  });
+  fixtureState.currentDetail = detail({
+    card: publicationCardForChecks({
+      publication_phase: "ready-for-finalization",
+      next_step: "Next: merge the latest target into this Change; a conflict stops there for you to resolve.",
+      readiness: ready,
+    }),
+    readiness: ready,
+    change_progress: { ...sync, target_sync: null },
+    publication: {
+      ...publicationForChecks("ready-for-finalization"),
+      ready_for_finalization: false,
+      readiness_diagnostics: ["target-sync-required"],
+    },
+  });
+  renderPage("/delivery/change-alpha/publication");
+
+  const inspector = await screen.findByTestId("work-item-detail");
+  expect(within(inspector).getByTestId("readiness-headline")).toHaveTextContent("merge the latest target");
+  expect(inspector).not.toHaveTextContent("Finalize the reviewed Change");
+  const blocked = within(inspector).getByTestId("finalization-readiness");
+  expect(blocked.querySelector("details")).toHaveTextContent("target-sync-required");
+});

@@ -1801,8 +1801,10 @@ function TargetSyncConflictSection(props: WorkItemDetailProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [actionFailed, setActionFailed] = useState(false);
   if (!publication || !conflict) return null;
-  const canExit = attention?.kind === "publication-attention";
-  const command = props.detail.item.card.action.command;
+  // Delivery refuses conflict exits on a paused Change; Resume comes first.
+  const paused = props.detail.item.change_progress?.situation === "paused" || publication.phase === "deferred";
+  const canExit = attention?.kind === "publication-attention" && !paused;
+  const command = paused ? null : props.detail.item.card.action.command;
   const promptOffersCommand = Boolean(command && props.detail.item.readiness?.prompt?.startsWith(command));
   const abort = async () => {
     if (!attention) return;
@@ -1870,6 +1872,10 @@ function TargetSyncConflictSection(props: WorkItemDetailProps) {
             <p className="mt-static-xs text-xs text-contrast-medium">{SUBMIT_RESOLVED_MERGE_HELP}</p>
           </div>
         </div>
+      ) : paused ? (
+        <p className="mt-static-md text-sm" data-testid="target-sync-conflict-paused">
+          Resume the Change to resolve or abort this conflict.
+        </p>
       ) : (
         <p className="mt-static-md text-sm text-contrast-medium">Waiting for the matching Change attention record.</p>
       )}
@@ -2325,11 +2331,16 @@ function PublicationSection(props: WorkItemDetailProps) {
           </PHeading>
           <p className="mt-static-xs text-sm">Delivery cannot finalize the current Change yet.</p>
           {(publication.readiness_diagnostics ?? []).length > 0 ? (
-            <ul className="mt-static-xs list-disc pl-static-md text-sm">
-              {(publication.readiness_diagnostics ?? []).map((diagnostic) => (
-                <li key={diagnostic}>{diagnostic}</li>
-              ))}
-            </ul>
+            <details className="mt-static-xs">
+              <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">
+                Technical details
+              </summary>
+              <ul className="mt-static-xs list-disc pl-static-md text-sm">
+                {(publication.readiness_diagnostics ?? []).map((diagnostic) => (
+                  <li key={diagnostic}>{diagnostic}</li>
+                ))}
+              </ul>
+            </details>
           ) : null}
           <p className="mt-static-xs text-sm text-contrast-medium">
             Follow the next step under Delivery readiness above.

@@ -226,7 +226,7 @@ from owlbear_delivery.runtime_models import _receipt_digest
 from owlbear_delivery.runtime_transaction import ReplacementTransactionParticipant, RuntimeTransaction
 from owlbear_delivery.state_formats import classify_kind, format_marker_bytes
 from owlbear_delivery.storage_io import locked_roots
-from owlbear_delivery.work_items import DeliveryProgress
+from owlbear_delivery.work_items import DeliveryProgress, WorkItemActionKind
 from owlbear_delivery_github import GitHubCliPublicationProvider
 
 _USER_CHECKOUT_STATES = (
@@ -5716,6 +5716,9 @@ def test_engine_target_fetch_drift_is_stale_then_syncs_exact_target(tmp_path: Pa
     pending_attempt_ids = {attempt.attempt_id for attempt in RetryLedger(state_root, "change-a").pending_attempts()}
     assert action.operation_id in pending_attempt_ids
     assert coordinator.show("change-a").last_reviewed_commit == action.exact_head
+    pending_sync = application.get_change("change-a").detail.card
+    assert pending_sync.readiness.operation is WorkItemActionKind.SYNC_TARGET
+    assert pending_sync.next_step.startswith("Next: merge the latest target into this Change"), pending_sync
     fresh = _engine_action(application)
     assert fresh.operation_id != action.operation_id
     assert fresh.target_head == target

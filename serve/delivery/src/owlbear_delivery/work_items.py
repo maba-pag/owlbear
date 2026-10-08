@@ -1021,6 +1021,20 @@ def _request_progress(request: DeliveryRequest | None) -> DeliveryProgress:
     return _progress("needs-attention", f"Action needed: {request.summary}", "you")
 
 
+def _sync_next_step(card: WorkItemCardView, readiness: DeliveryReadiness) -> str | None:
+    """A pending target sync replaces the phase step it precedes."""
+    if readiness.reason_code != "target-sync-required" and not (
+        readiness.executable and readiness.operation is WorkItemActionKind.SYNC_TARGET
+    ):
+        return None
+    if (
+        readiness.reason_code == "target-sync-required"
+        and card.publication_phase is WorkItemPublicationPhase.AWAITING_MERGE
+    ):
+        return "Delivery has no recorded proof target; synchronize the target and re-finalize before merging."
+    return f"Next: {_START_VERBS[WorkItemActionKind.SYNC_TARGET]}."
+
+
 def _target_sync_availability(
     readiness: DeliveryReadiness, card: WorkItemCardView, progress: DeliveryProgress
 ) -> TargetSyncAvailability:
@@ -1256,11 +1270,9 @@ class WorkItemProjector:
                 f"at {offer.target_head[:12]}. Approve the merge in Cockpit, or merge the pull request in GitHub; "
                 "Delivery records completion afterward."
             )
-        if (
-            readiness.reason_code == "target-sync-required"
-            and card.publication_phase is WorkItemPublicationPhase.AWAITING_MERGE
-        ):
-            return "Delivery has no recorded proof target; synchronize the target and re-finalize before merging."
+        sync_step = _sync_next_step(card, readiness)
+        if sync_step is not None:
+            return sync_step
         if readiness.reason_code == "retry-exhausted":
             grant = _is_attempt_grant(card, readiness)
             owner = (
