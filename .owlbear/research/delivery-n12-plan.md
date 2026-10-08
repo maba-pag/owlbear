@@ -313,16 +313,34 @@ without a new diagnosis.
    a preserving route before activation.
 2. **Upgrade.** Merge, then `/upgrade-delivery` for the exact merged revision, including its
    backup and post-switch health under the new release; the same incident check must pass again.
-3. **Grant.** In Cockpit, **Grant one more attempt** on the incident block. Pass: block resolved
-   with the grant note, one grant receipt, the episode funded once (`granted_attempts` 1, not
-   exhausted); after a restart the same state loads.
-4. **Planner correction.** The Planner promotes a plan whose TASK-004 no longer names a request
-   identity (it consumes the person-only pilot by acceptance ID and procedure, D rule), keeping
-   TASK-001–003 and their results verbatim.
-5. **Builder.** The funded Builder acquires TASK-004 from the preserved head `e5cc2d01…` with the
-   answered pilot request retained. The request's procedure names that exact commit, so a new
-   Builder commit may ask the user to confirm the pilot again; that is expected.
-6. **Record** which criteria passed; close G1 only on step 5.
+3. **Guidance.** The pinned upgrade installs a controller release but leaves the checkout's `HEAD`,
+   and VS Code loads skills from the checkout's `share/skills`. Move the checkout to the merged
+   revision (`git pull --ff-only` on a clean tree), confirm `share/skills/w-frontier-planning/SKILL.md`
+   contains the rule against naming request IDs in tasks, and start a fresh chat. If the rule is
+   not loaded, stop: an old Planner may republish the wrong request binding.
+4. **Grant.** In Cockpit, **Grant one more attempt** on the incident block, then restart Delivery.
+   Pass, under `.owlbear/delivery/runtime/changes/macos-managed-browser-authentication/`:
+   - the block is resolved with the note "The user granted one more Builder attempt.";
+   - `builder-attempt-grant-receipts/<settlement_id>.json` exists, where `<settlement_id>` is the
+     handoff's settlement;
+   - in `retry-ledger/current.json`, the episode of the handoff attempt shows `granted_attempts` 1
+     and no stop code;
+   - the card offers the Planner.
+5. **Planner correction.** Run `/continue-change macos-managed-browser-authentication` until the
+   Planner promotes. Pass:
+   - TASK-004 names no request identity and binds the person-only pilot by acceptance ID and
+     procedure;
+   - TASK-001–003 and their results are verbatim;
+   - the answered pilot request and its resolution are retained;
+   - the outcome is in Implementation with a `same-task` handoff on the same settlement.
+6. **Builder.** Continue until the funded Builder acquires TASK-004. Pass:
+   - its launch's `source_head` and handoff head are `e5cc2d01…`;
+   - the answered pilot request is in its context;
+   - the ledger episode shows the one granted attempt in use.
+
+   The request's procedure names that exact commit, so a new Builder commit may ask the user to
+   confirm the pilot again; that is expected.
+7. **Record** each criterion with its observed value; close G1 only when steps 4–6 all pass.
 
 ## 4. Progress
 
@@ -338,7 +356,7 @@ without a new diagnosis.
 
 | Gap | Claim | Reason unproven | Evidence | Owner | Blocks |
 | --- | --- | --- | --- | --- | --- |
-| G1 | The live incident continues after the grant: Planner correction and funded TASK-004 Builder with preserved head, results and answer | No copy can keep the retained handoff's fingerprint (U4) | Activation §3.6 steps 1–5 | User, at activation | Closing N12 |
+| G1 | The live incident continues after the grant: Planner correction and funded TASK-004 Builder with preserved head, results and answer | No copy can keep the retained handoff's fingerprint (U4) | Activation §3.6 steps 1–7 | User, at activation | Closing N12 |
 | G2 | Rollback to the pinned release while a return-limit or granted Planning-route handoff is local | The previous release does not know the shapes | Granted ledgers are version 2, which the pinned pre-N11 release refuses with a typed diagnostic; a return-limit handoff without a grant fails bootstrap for that Change only | User (switch forward) | Nothing |
 | G3 | The live records load under this release and the incident offers the user grant | Proven 2026-10-08 on an isolated Docker copy of `512499c8f`, with launch provenance and in-container isolation validated. 1) A fresh, unmodified copy passed the load form's offline read-only load: all 10 Changes available, no record changed. The tool verdict is still `passed: false` (G4). 2) Later harness runs reused that stage: they renamed the copy's pin and ran normal composition. The candidate shows the incident card **Grant one more attempt**, next actor *you*. The grant itself is refused as `remote-state-reconciliation-required` (handoff fingerprint, see the U4 amendment). The base `040a1fda9` refuses identically and shows the old read-only card. 3) `delivery-lc compare`: live unchanged, 820 records. Normal composition, grant and continuation on the real records are not proven by this LC | Local, uncommitted evidence: `.owlbear/scratch/n12-lc-evidence/` with `SHA256SUMS`; the stage `/private/tmp/n12-lc` | User: activation §3.6 | Nothing under U4 |
 | G4 | The LC tool gate passes on current live state | The candidate-independent inspector (`delivery-diagnose`, untouched by N12) stops at its 256-entry budget: `ENTRY_LIMIT_EXCEEDED` with `PENDING_EFFECTS_UNKNOWN`, for all Changes together and for 7 of 10 one by one, so `inspector_agrees` is false. A larger budget could still surface other diagnostics | Inspector budget fix in its own PR, then an isolated rerun with a complete report | Delivery tools | The current tool gate; accepted for N12 by U4 |
