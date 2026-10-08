@@ -342,6 +342,33 @@ without a new diagnosis.
    confirm the pilot again; that is expected.
 7. **Record** each criterion with its observed value; close G1 only when steps 4–6 all pass.
 
+**Step 1 amendment (user decision, 2026-10-08).** Live `92073c0ce` reported the incident as
+`remote-state-reconciliation-required` with *local Builder return result is not the exact successor
+of its remote binding*: the restart bootstrap that I8 fixes, which the running release can never
+pass. On the copy, `040a1fda9` and the candidate passed it and stopped at the fingerprint check
+instead. Step 1 therefore cannot discriminate; the user chose to rely on step 2's check under the
+new release, after a verified backup, with `switch 92073c0ce` as rollback.
+
+### 3.7 Activation record (2026-10-08)
+
+PR #420 was brought up to date with `dev` (merge of #421, one import conflict in `work_items.py`;
+no format-step collision: #421 adds marker-only `format-3-to-4`), rechecked locally (ruff; focused
+Delivery selection 1045 passed; `uv run test --changed` 4063 passed, 1 skipped, Vitest 386; `tsc`),
+and squash-merged as `a304a31a9` after CI passed (Python shard 3/4 first failed with 19 pytest
+30-second timeouts across unrelated suites and passed on rerun). Evidence, uncommitted:
+`.owlbear/scratch/n12-activation/` in the main checkout.
+
+| Step | Criterion | Observed |
+| --- | --- | --- |
+| 1 | Incident free of reconciliation diagnostic | Not met under `92073c0ce` (I8 bootstrap); amended above. No global diagnostic; `static-website-knowledge-ingestion-v2` carried a pre-existing fingerprint diagnostic |
+| 2 | Upgrade with backup, health under the new release | Installed `a304a31a9` (bundle built, format 4); no running claims or engine actions; backup 815 files, 40 refs (`~/owlbear-delivery-backups/20261008T201700Z-pre-n12`); migration `a5b49790…` (marker only) applied and verified; pinned with previous `92073c0ce`; verify passed; pruned `6f20f3fa6`. After restart the incident is `healthy` and offers **Grant one more attempt**; other Changes match the baseline |
+| 3 | Checkout and guidance | Main checkout fast-forwarded `d4ce5ffa8` → `a304a31a9`, local changes kept; `w-frontier-planning` line 51 carries the rule. Workers ran as fresh subagents reading the updated skills |
+| 4 | Grant | Through the Cockpit API at the user's instruction: block resolved with "The user granted one more Builder attempt."; receipt `builder-attempt-grant-receipts/ece810ea….json` names the handoff settlement; ledger episode `e62a8043…` (TASK-004) `granted_attempts` 1, `stop_code` null; after a Delivery restart the incident is `ready`, `start-orchestration`, Planner next |
+| 5 | Planner correction | Planner advanced plan `539e8bc9…`; TASK-004 names no request ID and binds the pilot by OUT-001.05/.11 and procedure; TASK-001–003 identical, results kept; request `REQ-TASK-004-MANAGED-MAC-PILOT-E5CC2D0` answered `passed` kept; stage Implementation with a `same-task` handoff on settlement `ece810ea…` |
+| 6 | Funded Builder | Builder acquired TASK-004 with launch `source_head` and handoff head `e5cc2d01…`; it submitted `result:…:TASK-004:e5cc2d01…` without a new commit, so the pilot confirmation stays valid. The Change is ready for finalization (next: target sync, then finalization) |
+
+G1 is closed.
+
 ## 4. Progress
 
 | Phase | PR | Head | Proof | Challenge | Status |
@@ -349,14 +376,14 @@ without a new diagnosis.
 | N12-P | shared | `eb9478eb3` + corrections | source probes (§2) | Sol round 1 `revision-required`; F1–F4 fix-now applied; gate closed | done |
 | N12-A | shared | `0055ae06d` + gate fixes | focused Delivery selection 676 passed; new return-limit and grant files | Sol implementation round 1 (A–D together) `revision-required`: F1 Cockpit label, F2 LC unrun; F1 fixed | done |
 | N12-B | shared | as N12-A | release, restart boundaries, publication wait, workspace-change refusal | as N12-A | done |
-| N12-C | shared | as N12-A | legacy grant through Planner pause, promotion and one funded attempt; missing-receipt refusal | as N12-A | done; LC per U4 run, activation (§3.6) pending |
+| N12-C | shared | as N12-A | legacy grant through Planner pause, promotion and one funded attempt; missing-receipt refusal | as N12-A | done; LC per U4 run; activated 2026-10-08 (§3.7) |
 | N12-D | shared | as N12-A | skill rule | as N12-A | done |
 
 ## 5. Verification gaps
 
 | Gap | Claim | Reason unproven | Evidence | Owner | Blocks |
 | --- | --- | --- | --- | --- | --- |
-| G1 | The live incident continues after the grant: Planner correction and funded TASK-004 Builder with preserved head, results and answer | No copy can keep the retained handoff's fingerprint (U4) | Activation §3.6 steps 1–7 | User, at activation | Closing N12 |
+| G1 | The live incident continues after the grant: Planner correction and funded TASK-004 Builder with preserved head, results and answer | No copy can keep the retained handoff's fingerprint (U4) | Closed 2026-10-08 by the live activation, §3.7 steps 4–6 | — | Nothing |
 | G2 | Rollback to the pinned release while a return-limit or granted Planning-route handoff is local | The previous release does not know the shapes | Granted ledgers are version 2, which the pinned pre-N11 release refuses with a typed diagnostic; a return-limit handoff without a grant fails bootstrap for that Change only | User (switch forward) | Nothing |
 | G3 | The live records load under this release and the incident offers the user grant | Proven 2026-10-08 on an isolated Docker copy of `512499c8f`, with launch provenance and in-container isolation validated. 1) A fresh, unmodified copy passed the load form's offline read-only load: all 10 Changes available, no record changed. The tool verdict is still `passed: false` (G4). 2) Later harness runs reused that stage: they renamed the copy's pin and ran normal composition. The candidate shows the incident card **Grant one more attempt**, next actor *you*. The grant itself is refused as `remote-state-reconciliation-required` (handoff fingerprint, see the U4 amendment). The base `040a1fda9` refuses identically and shows the old read-only card. 3) `delivery-lc compare`: live unchanged, 820 records. Normal composition, grant and continuation on the real records are not proven by this LC | Local, uncommitted evidence: `.owlbear/scratch/n12-lc-evidence/` with `SHA256SUMS`; the stage `/private/tmp/n12-lc` | User: activation §3.6 | Nothing under U4 |
 | G4 | The LC tool gate passes on current live state | The candidate-independent inspector (`delivery-diagnose`, untouched by N12) stops at its 256-entry budget: `ENTRY_LIMIT_EXCEEDED` with `PENDING_EFFECTS_UNKNOWN`, for all Changes together and for 7 of 10 one by one, so `inspector_agrees` is false. A larger budget could still surface other diagnostics | Inspector budget fix in its own PR, then an isolated rerun with a complete report | Delivery tools | The current tool gate; accepted for N12 by U4 |
