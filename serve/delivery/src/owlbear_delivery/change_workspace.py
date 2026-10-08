@@ -356,8 +356,8 @@ class ChangeWorkspaceManager(_WorktreeStateMixin, _PreservationMixin, _SnapshotM
         if writer.kind != "build":
             _coordination_conflict("only a new Builder claim can consume Builder handoff custody")
         metadata = self._capture_builder_handoff_metadata(coordination)
-        if metadata.fingerprint != handoff.metadata_fingerprint:
-            message = "Builder handoff workspace metadata changed before acquisition"
+        if metadata.branch_head != handoff.branch_head:
+            message = "Builder handoff workspace head changed before acquisition"
             raise PreservationFenceError(message)
         return self._coordinator._prepare_builder_handoff_acquisition(  # noqa: SLF001
             change_id, writer, handoff, metadata, lock
