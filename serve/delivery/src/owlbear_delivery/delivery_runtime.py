@@ -2479,12 +2479,12 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
             or block.request_id is not None
         ):
             _conflict("attempt grant requires the exact exhausted same-task Builder block")
-        _require_no_active_change_claim(frontier, "Builder attempt grant")
         if block.resolved:
             receipt = _read_builder_attempt_grant_receipt(self._target_root, self._contract.change_id, context)
             if receipt is not None and receipt.updated_block == block:
                 return binding
             _conflict("Builder attempt-limit block is already resolved")
+        _require_no_active_change_claim(frontier, "Builder attempt grant")
         settlement = self._read_builder_invocation_settlement_receipt(context)
         if (
             settlement.handoff_context != context

@@ -2511,6 +2511,17 @@ def test_builder_attempt_grant_survives_default_loader_restart(tmp_path: Path, *
     assert resumed is not None
     assert resumed.claim.worker_role is DeliveryWorkerRole.BUILDER
     assert resumed.task_id == task_id
+    _assert_granted_claim_reloads(config, fresh, change_id, resumed.claim.attempt_id)
+
+
+def _assert_granted_claim_reloads(config: DeliveryStartupConfig, fresh: Path, change_id: str, attempt_id: str) -> None:
+    claimed = load_delivery_application(config, workspace_root=fresh)
+    assert claimed.delivery_health().status.value == "healthy"
+    binding = claimed._runtimes[change_id].show_binding("OUT-001")  # noqa: SLF001
+    assert binding.active_claim is not None
+    assert binding.active_claim.attempt_id == attempt_id
+    assert binding.block is not None
+    assert binding.block.resolution_note == "The user granted one more Builder attempt."
 
 
 def _settle_default_loader_planning_return(

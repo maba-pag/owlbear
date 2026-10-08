@@ -32,6 +32,7 @@ from serve.delivery.tests.test_portfolio_application import (
     _canonical,
     _continuation_request,
     _engine_action,
+    _exhaust_same_task_builder_retry,
     _failure_request,
     _git,
     _loader_activation_state_snapshot,
@@ -3267,6 +3268,30 @@ def test_attempt_grant_route_is_the_only_user_grant_and_binds_the_exact_block() 
         "builder-attempt-limit-one",
         "a" * 64,
     )
+
+
+def test_real_http_attempt_grant_resumes_the_builder_and_replays(tmp_path: Path) -> None:
+    application, runtime, _state_root, _attempt_ids = _exhaust_same_task_builder_retry(
+        tmp_path, ["2026-08-04T00:00:00Z"]
+    )
+    block = runtime.show_binding("OUT-001").block
+    route = f"/api/changes/change-a/outcomes/OUT-001/blocks/{block.block_id}/grant-attempt"
+    digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
+
+    with TestClient(assemble_target_app(application)) as client:
+        before = client.get("/api/changes/change-a/work-items/outcome:OUT-001").json()["item"]
+        granted = client.post(route, json={"expected_frontier_digest": digest})
+        replay = client.post(route, json={"expected_frontier_digest": digest})
+        after = client.get("/api/changes/change-a/work-items/outcome:OUT-001").json()["item"]
+
+    assert (before["card"]["action"]["kind"], before["card"]["needs"]) == ("grant-attempt", "you")
+    assert (granted.status_code, replay.status_code) == (200, 200), (granted.json(), replay.json())
+    assert replay.json()["binding"] == granted.json()["binding"]
+    assert after["card"]["action"]["kind"] != "grant-attempt"
+    assert after["readiness"]["reason_code"] != "retry-exhausted"
+    episode = runtime.retry_ledger().read().episodes[0]
+    assert (episode.total_attempts, episode.granted_attempts, episode.stop_code) == (3, 1, None)
+    assert application.acquire_change_action(_continuation_request(application, "change-a")).launch is not None
 
 
 def test_bulk_expired_claim_recovery_route_is_removed_without_delivery_call() -> None:

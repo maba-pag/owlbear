@@ -524,6 +524,11 @@ def test_attempt_grant_funds_exactly_one_more_attempt_of_an_unchanged_v1_episode
     assert refused.attempts == 4
     _commit_grant(ledger, tmp_path, "attempt-4")
     assert ledger.episode(key).granted_attempts == 2
+    second = ledger.reserve(key, failure_class="mechanical", now=_START + timedelta(seconds=60), attempt_id="attempt-5")
+    assert second.allowed
+    ledger.record_failure(second, failure_code="builder-failed", now=_START + timedelta(seconds=60))
+    denied = ledger.reserve(key, failure_class="mechanical", now=_START + timedelta(seconds=120))
+    assert (denied.allowed, denied.reason_code, denied.attempts) == (False, RetryStopCode.EXHAUSTED.value, 5)
 
 
 @pytest.mark.parametrize("clearance", ["reset", "accepted-progress"])

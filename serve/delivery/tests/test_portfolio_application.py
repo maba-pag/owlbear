@@ -4291,6 +4291,58 @@ def test_attempt_grant_is_user_only_and_funds_exactly_one_more_attempt(tmp_path:
     assert (episode.total_attempts, episode.granted_attempts, episode.stop_code) == (4, 2, None)
 
 
+def test_stale_attempt_grant_replay_requires_its_receipt(tmp_path: Path) -> None:
+    application, runtime, state_root, _attempt_ids = _exhaust_same_task_builder_retry(
+        tmp_path, ["2026-08-04T00:00:00Z"]
+    )
+    block = runtime.show_binding("OUT-001").block
+    stale_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
+    application.answer(_grant_answer(application, block.block_id), allow_user_only=True)
+    granted_frontier = runtime.frontier_bytes()
+    summary = runtime.retry_ledger().read()
+    receipts = state_root / "changes" / "change-a" / "builder-attempt-grant-receipts"
+    for receipt in receipts.iterdir():
+        receipt.unlink()
+
+    with pytest.raises(DeliveryRuntimeConflictError, match="already resolved"):
+        application.answer(_grant_answer(application, block.block_id, stale_digest), allow_user_only=True)
+    assert runtime.frontier_bytes() == granted_frontier
+    assert runtime.retry_ledger().read() == summary
+    assert list(receipts.iterdir()) == []
+
+
+@pytest.mark.parametrize("stage", ["before-publication", "after-first-publication"])
+def test_interrupted_attempt_grant_recovers_to_the_whole_grant(tmp_path: Path, stage: str) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtime, state_root, _attempt_ids = _exhaust_same_task_builder_retry(tmp_path, now)
+    block = runtime.show_binding("OUT-001").block
+    receipts = state_root / "changes" / "change-a" / "builder-attempt-grant-receipts"
+    original_commit = RuntimeTransaction.commit
+
+    def interrupted(transaction):
+        def fail(current):
+            if current == stage:
+                message = "injected attempt grant interruption"
+                raise RuntimeError(message)
+
+        grant = any(
+            "builder-attempt-grant-receipts" in str(getattr(item, "relative_path", ""))
+            for item in transaction.participants
+        )
+        original_commit(transaction, failure=fail if grant else None)
+
+    with patch.object(RuntimeTransaction, "commit", interrupted), pytest.raises(RuntimeError, match="injected"):
+        application.answer(_grant_answer(application, block.block_id), allow_user_only=True)
+
+    _reopened, _coordinator, _manager = _reopen_portfolio(tmp_path, state_root, {"change-a": runtime})
+    recovered = DeliveryRuntime(state_root, runtime.contract).show_binding("OUT-001")
+    assert recovered.block is not None
+    assert recovered.block.resolution_note == "The user granted one more Builder attempt."
+    assert [path.name for path in receipts.iterdir()] == [f"{recovered.builder_handoff_context.settlement_id}.json"]
+    episode = RetryLedger(state_root, "change-a").read().episodes[0]
+    assert (episode.total_attempts, episode.granted_attempts, episode.stop_code) == (3, 1, None)
+
+
 def _builder_retry_history(items) -> list[tuple[int, str, str, str | None]]:
     return [(item.ordinal, item.kind, item.status, item.failure_code) for item in items]
 

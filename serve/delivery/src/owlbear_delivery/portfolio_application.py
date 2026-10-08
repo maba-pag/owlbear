@@ -1818,7 +1818,7 @@ class PortfolioApplication(
                 return DeliveryAnswerResult(
                     change_id=answer.change_id,
                     kind=answer.kind,
-                    binding=binding,
+                    binding=runtime.grant_builder_attempt(answer.outcome_id, answer.block_id, now=self._clock()),
                     frontier_digest=current_digest,
                 )
             self._fail("answer frontier changed")
