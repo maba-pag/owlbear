@@ -7,13 +7,13 @@ created_at: '2026-09-13T03:57:14.785461+00:00'
 didnt_use_count: 0
 id: aaeeb1e4-429f-4a5c-afd9-2a922f5fcc1a
 outstanding_count: 0
-scope_agents: []
+scope_agents: [builder, finalizer]
 score: 0.8
 source_agent: builder
-state: pending
-title: Re-enter managed worktrees after delegated execution
+state: curated
+title: Re-establish Delivery worktree context in new terminals
 unremarkable_count: 0
-updated_at: '2026-09-13T03:57:14.785461+00:00'
+updated_at: '2026-10-08T21:00:49.703624+00:00'
 ---
 
-In TASK-001 delivery-action-readiness, execution_subagent left a timed-out test process running in its terminal. The next run_in_terminal call started in the main checkout rather than the managed worktree and `test --changed --base <source>` exited with 'No test scope matched'. After delegated execution, explicitly cd to the supplied managed worktree and verify HEAD before running more exact-commit proof; a scope-empty exit is not test evidence. Preserve the returned terminal ID to collect the original process's completion.
+New async VS Code terminals in a Delivery lane can start in the primary checkout, including after delegated execution. `run_in_terminal` may strip a leading `cd <worktree> &&`; issue `cd <absolute-worktree>` as a separate command and verify `pwd` and `git rev-parse HEAD` against the launch/source before proof or writes. Use `git -C` or absolute paths where useful. Preserve the delegated terminal ID and collect its completion; a scope-empty `test --changed` from the primary checkout is not proof.
