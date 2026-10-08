@@ -949,6 +949,34 @@ def test_converting_a_schema_2_contract_invalidates_no_outcome(repository: Path,
     assert revised.frontier.bindings == seeded.bindings
 
 
+@pytest.mark.parametrize("replaces", [True, False], ids=["replaces-answer", "cites-answer"])
+def test_replacing_an_answered_request_replans_its_outcome(
+    repository: Path,
+    tmp_path: Path,
+    replaces: bool,  # noqa: FBT001 - parametrized outcome.
+) -> None:
+    registry, package_store, first, active_root, target_root = _admitted_change(
+        repository, tmp_path, _evidence_sources()
+    )
+    binding = first.frontier.bindings[0].model_copy(update={"requests": (_answered_request("REQ-CHOICE"),)})
+    frontier_bytes = _canonical(first.frontier.model_copy(update={"bindings": (binding, *first.frontier.bindings[1:])}))
+    (target_root / "changes/source-bound-change/frontier.json").write_bytes(frontier_bytes)
+    decision = (
+        _decision("DEC-002", "decided", "Use path b.", basis="askQuestions", supersedes=("REQ-CHOICE",))
+        if replaces
+        else _decision("DEC-002", "decided", "Use path b.", basis="request REQ-CHOICE")
+    )
+    _write_revision(active_root, first.contract_bytes, *_evidence_sources(decisions=_decision() + decision))
+
+    revised = _activate(registry, package_store, frontier_bytes)
+
+    assert revised.carry_forward is not None
+    assert ("OUT-001" in revised.carry_forward.invalidated_outcome_ids) is replaces
+    replanned = revised.frontier.bindings[0]
+    assert [item.request_id for item in replanned.requests] == ["REQ-CHOICE"]
+    assert (replanned.return_context is not None) is replaces
+
+
 def _answered_request(
     request_id: str,
     *,

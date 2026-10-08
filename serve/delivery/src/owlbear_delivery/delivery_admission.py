@@ -519,7 +519,7 @@ def _delivery_frontier(
     if current.contract is None or current.frontier is None:
         raise DeliveryAdmissionConflictError
     _validate_delivery_frontier(current.contract, current.frontier)
-    invalidated = _invalidated_outcomes(current.contract, contract)
+    invalidated = _invalidated_outcomes(current.contract, contract, current.frontier)
     previous_bindings = {binding.outcome_id: binding for binding in current.frontier.bindings}
     previous_criteria = {criterion.ref for criterion in acceptance_criteria(current.contract)}
     changed_criteria: dict[str, list[str]] = {}
@@ -597,15 +597,20 @@ def _replanned_binding(
     )
 
 
-def _invalidated_outcomes(previous: DeliveryContract, replacement: DeliveryContract) -> set[str]:
+def _invalidated_outcomes(
+    previous: DeliveryContract, replacement: DeliveryContract, frontier: DeliveryFrontier
+) -> set[str]:
     previous_outcomes = {outcome.outcome_id: outcome for outcome in previous.outcomes}
     replacement_outcomes = {outcome.outcome_id: outcome for outcome in replacement.outcomes}
+    request_ids = {
+        binding.outcome_id: tuple(item.request_id for item in binding.requests) for binding in frontier.bindings
+    }
     invalidated = {
         outcome_id
         for outcome_id in previous_outcomes.keys() | replacement_outcomes.keys()
         if outcome_id not in previous_outcomes
         or outcome_id not in replacement_outcomes
-        or _meaning_changed(previous, replacement, outcome_id)
+        or _meaning_changed(previous, replacement, outcome_id, request_ids.get(outcome_id, ()))
     }
     dependencies = {
         outcome.outcome_id: set(outcome.dependency_ids) for outcome in (*previous.outcomes, *replacement.outcomes)
@@ -619,11 +624,16 @@ def _invalidated_outcomes(previous: DeliveryContract, replacement: DeliveryContr
 
 
 def _outcome_projection(
-    contract: DeliveryContract, outcome: DeliveryOutcome, *, with_decisions: bool
+    contract: DeliveryContract,
+    outcome: DeliveryOutcome,
+    request_ids: tuple[str, ...],
+    *,
+    with_decisions: bool,
 ) -> tuple[object, ...]:
     """Return an outcome's meaning: its definition, its commitments and the decisions they rest on."""
     commitments = {item.commitment_id: item for item in contract.commitments}
     statements = {item.decision_id: item.statement for item in contract.decisions}
+    replacements = contract.applicable_decisions((), request_ids) if with_decisions else ()
     return (
         outcome,
         tuple(
@@ -636,15 +646,18 @@ def _outcome_projection(
             )
             for commitment_id in outcome.commitment_ids
         ),
+        tuple(sorted(item.statement for item in replacements)),
     )
 
 
-def _meaning_changed(previous: DeliveryContract, replacement: DeliveryContract, outcome_id: str) -> bool:
+def _meaning_changed(
+    previous: DeliveryContract, replacement: DeliveryContract, outcome_id: str, request_ids: tuple[str, ...]
+) -> bool:
     # A schema-2 contract records no decisions, so its conversion compares commitments without them.
     with_decisions = previous.schema_version != _LEGACY_CONTRACT_SCHEMA_VERSION
     return _outcome_projection(
-        previous, _outcome(previous, outcome_id), with_decisions=with_decisions
-    ) != _outcome_projection(replacement, _outcome(replacement, outcome_id), with_decisions=with_decisions)
+        previous, _outcome(previous, outcome_id), request_ids, with_decisions=with_decisions
+    ) != _outcome_projection(replacement, _outcome(replacement, outcome_id), request_ids, with_decisions=with_decisions)
 
 
 def _outcome(contract: DeliveryContract, outcome_id: str) -> DeliveryOutcome:

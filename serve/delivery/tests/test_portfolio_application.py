@@ -15171,6 +15171,20 @@ def test_revision_reports_decision_delta_and_plan_context_carries_decisions(tmp_
     ]
     assert [item.request_id for item in context.requests] == ["REQ-PATH"]
     assert context.superseded_request_ids == ("REQ-PATH",)
+    returned = application.transition_delivery(
+        "change-r",
+        ReturnDelivery(
+            action="return",
+            outcome_id=planner.outcome_id,
+            claim_id=planner.claim.claim_id,
+            target=DeliveryStage.DESIGN,
+            reason="The launch path needs another decision.",
+            locators=("OUT-001",),
+            source_boundary=derived.digest,
+        ),
+    )
+    assert returned.stage is DeliveryStage.DESIGN
+    assert [item.request_id for item in returned.requests] == ["REQ-PATH"]
 
 
 @pytest.mark.parametrize("revision", ["delta", "zero-delta"])
