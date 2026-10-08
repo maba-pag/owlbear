@@ -35,6 +35,7 @@ OUTSTANDING_BOOST = 0.1
 UNREMARKABLE_PENALTY = 0.01
 STALE_THRESHOLD = 50
 _ASSESSMENT_TASK_ID_MAX_LENGTH = 128
+_ASSESSMENT_RECEIPT_WINDOW = 20
 
 
 def compute_score(confidence: float, outstanding_count: int, unremarkable_count: int) -> float:
@@ -701,7 +702,24 @@ class MemoryEngine:
         self._id_to_path.pop(entry_id, None)
         self._entries = [entry for entry in self._entries if entry.id != entry_id]
 
+    @staticmethod
+    def _prepare_entry_for_write(entry: MemoryEntry) -> MemoryEntry:
+        receipts = [receipt for receipt in entry.assessment_receipts if receipt.revision == entry.revision]
+        receipts = receipts[-_ASSESSMENT_RECEIPT_WINDOW:]
+        while receipts:
+            prepared = entry.model_copy(update={"assessment_receipts": receipts})
+            if storage.serialized_entry_size(prepared) <= storage.MAX_ENTRY_FILE_SIZE_BYTES:
+                return prepared
+            if len(receipts) == 1:
+                msg = f"newest assessment receipt cannot fit within {storage.MAX_ENTRY_FILE_SIZE_BYTES} bytes"
+                raise ValidationError(msg)
+            receipts = receipts[1:]
+        if entry.assessment_receipts:
+            return entry.model_copy(update={"assessment_receipts": []})
+        return entry
+
     def _write_updated_entry(self, entry: MemoryEntry) -> MemoryEntry:
+        entry = self._prepare_entry_for_write(entry)
         path = self._id_to_path.get(entry.id, self._memory_dir / f"{entry.id}.md")
         storage.write_entry(path, entry, memory_dir=self._memory_dir)
         self._id_to_path[entry.id] = path
@@ -718,8 +736,9 @@ class MemoryEngine:
         original_paths = {entry.id: self._id_to_path[entry.id] for entry in originals}
         affected_ids = {entry.id for entry in (*updated_entries, *deleted_entries)}
         affected_entries = [entry for entry in originals if entry.id in affected_ids]
+        prepared_entries = [self._prepare_entry_for_write(entry) for entry in updated_entries]
         try:
-            for entry in updated_entries:
+            for entry in prepared_entries:
                 storage.write_entry(original_paths[entry.id], entry, memory_dir=self._memory_dir)
             for entry in deleted_entries:
                 storage.delete_entry(original_paths[entry.id], memory_dir=self._memory_dir)

@@ -10,6 +10,7 @@ import mcp
 import pytest
 from mcp.types import CallToolResult
 from owlbear_memory import MemoryCategory, MemoryEngine, MemoryEntry, MemoryState, storage
+from owlbear_memory.models import AssessmentReceipt
 
 from owlbear_memory_mcp.server import mcp as memory_mcp
 
@@ -472,6 +473,106 @@ async def test_live_assessment_replay_survives_transition_to_stale(
     assert replay_result["already_applied"] is True
     assert replay_result["recorded_bucket"] == "didnt_use"
     assert path.read_bytes() == before_replay
+
+
+@pytest.mark.asyncio
+async def test_live_assessment_capacity_refusal_preserves_entry(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """The registered tool reports an unstorable receipt without changing entry bytes or state."""
+    memory_dir = tmp_path / ".owlbear/memory"
+    entry = MemoryEntry(
+        id="550e8400-e29b-41d4-a716-446655440000",
+        title="t" * 6700,
+        content="c" * 1024,
+        categories=[MemoryCategory.PROCESS],
+        confidence=0.8,
+        state=MemoryState.APPROVED,
+        scope_agents=["test-agent"],
+        source_agent="test-agent",
+        created_at="2026-01-01T00:00:00+00:00",
+        updated_at="2026-01-01T00:00:00+00:00",
+        approved_at="2026-01-01T00:00:00+00:00",
+    )
+    receipt = AssessmentReceipt(task_id="capacity-task", revision=entry.revision, bucket="outstanding")
+    updated_base = entry.model_copy(
+        update={
+            "outstanding_count": 1,
+            "score": 0.9,
+            "updated_at": "2026-10-09T12:34:56.123456+00:00",
+            "assessment_receipts": [receipt],
+        }
+    )
+    assert storage.serialized_entry_size(entry) <= storage.MAX_ENTRY_FILE_SIZE_BYTES
+    assert storage.serialized_entry_size(updated_base) > storage.MAX_ENTRY_FILE_SIZE_BYTES
+    path = memory_dir / f"{entry.id}.md"
+    storage.write_entry(path, entry, memory_dir=memory_dir)
+    before = path.read_bytes()
+    monkeypatch.chdir(tmp_path)
+
+    async with mcp.Client(memory_mcp) as client:
+        result = await client.call_tool(
+            "assess_memories",
+            {
+                "assessments": [{"entry_id": entry.id, "revision": entry.revision, "bucket": "outstanding"}],
+                "task_id": "capacity-task",
+            },
+        )
+
+    item = json.loads(_text(result))["results"][0]
+    persisted = MemoryEngine(memory_dir).get_entry(entry.id)
+    assert not result.is_error
+    assert item["success"] is False
+    assert "newest assessment receipt" in item["error"]
+    assert path.read_bytes() == before
+    assert persisted == entry
+
+
+@pytest.mark.asyncio
+async def test_live_agent_lifecycle_writes_drop_obsolete_receipts(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Registered rename and delete tools discard receipts when their scope changes revision."""
+    memory_dir = tmp_path / ".owlbear/memory"
+    entry = _create_entry(memory_dir, title="Lifecycle receipts", state=MemoryState.APPROVED)
+    monkeypatch.chdir(tmp_path)
+
+    async with mcp.Client(memory_mcp) as client:
+        first = await client.call_tool(
+            "assess_memories",
+            {
+                "assessments": [{"entry_id": entry.id, "revision": entry.revision, "bucket": "outstanding"}],
+                "task_id": "before-rename",
+            },
+        )
+        renamed = await client.call_tool(
+            "rename_agent_memories",
+            {"old_name": "test-agent", "new_name": "renamed-agent"},
+        )
+        renamed_entry = MemoryEngine(memory_dir).get_entry(entry.id)
+        second = await client.call_tool(
+            "assess_memories",
+            {
+                "assessments": [{"entry_id": entry.id, "revision": renamed_entry.revision, "bucket": "outstanding"}],
+                "task_id": "after-rename",
+            },
+        )
+        deleted = await client.call_tool("delete_agent_memories", {"agent": "renamed-agent"})
+
+    assert not first.is_error
+    assert not renamed.is_error
+    assert not second.is_error
+    assert not deleted.is_error
+    assert json.loads(_text(first))["results"][0]["success"] is True
+    assert renamed_entry.scope_agents == ["renamed-agent"]
+    assert renamed_entry.assessment_receipts == []
+    assert json.loads(_text(second))["results"][0]["success"] is True
+    deleted_entry = MemoryEngine(memory_dir).get_entry(entry.id)
+    assert deleted_entry.state == MemoryState.DELETED
+    assert deleted_entry.scope_agents == []
+    assert deleted_entry.assessment_receipts == []
 
 
 @pytest.mark.asyncio

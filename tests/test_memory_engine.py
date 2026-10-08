@@ -12,7 +12,7 @@ from unittest.mock import patch
 import pytest
 from owlbear_memory import LifecycleRecoveryError, MemoryEngine, storage
 from owlbear_memory.errors import ConcurrencyError, ValidationError
-from owlbear_memory.models import MemoryEntry, MemoryState
+from owlbear_memory.models import AssessmentReceipt, MemoryEntry, MemoryState
 
 _VALID_ID = "550e8400-e29b-41d4-a716-446655440000"
 
@@ -280,6 +280,154 @@ def test_rejected_engine_edit_preserves_previous_file(tmp_path: Path) -> None:
     loaded = fresh_engine.get_entry(entry.id)
     assert loaded.title == "Original title"
     assert fresh_engine.parse_errors == 0
+
+
+def test_assessment_receipt_window_keeps_only_the_twenty_most_recent(tmp_path: Path) -> None:
+    """Assessments keep the newest twenty receipts for the unchanged revision."""
+    entry = MemoryEntry(**{**_valid_entry_data(), "state": "approved"})
+    storage.write_entry(tmp_path / f"{entry.id}.md", entry, memory_dir=tmp_path)
+    engine = MemoryEngine(tmp_path)
+    engine.load()
+
+    for index in range(21):
+        engine.record_assessment(
+            entry.id,
+            "outstanding",
+            task_id=f"task-{index}",
+            expected_revision=entry.revision,
+        )
+
+    persisted = MemoryEngine(tmp_path).get_entry(entry.id)
+    assert [receipt.task_id for receipt in persisted.assessment_receipts] == [f"task-{index}" for index in range(1, 21)]
+
+
+def test_standard_entry_fits_twenty_maximum_length_receipts(tmp_path: Path) -> None:
+    """A standard maximum-content entry stores twenty 128-character task IDs within the file cap."""
+    entry = MemoryEntry(
+        **{
+            **_valid_entry_data(),
+            "title": "t" * 120,
+            "content": "c" * 1024,
+            "state": "approved",
+        }
+    )
+    path = tmp_path / f"{entry.id}.md"
+    storage.write_entry(path, entry, memory_dir=tmp_path)
+    engine = MemoryEngine(tmp_path)
+    engine.load()
+
+    for index in range(20):
+        engine.record_assessment(
+            entry.id,
+            "outstanding",
+            task_id=f"{index:03d}" + "x" * 125,
+            expected_revision=entry.revision,
+        )
+
+    persisted = MemoryEngine(tmp_path).get_entry(entry.id)
+    assert len(persisted.assessment_receipts) == 20
+    assert len(path.read_bytes()) <= storage.MAX_ENTRY_FILE_SIZE_BYTES
+
+
+def test_assessment_receipts_are_evicted_oldest_first_to_fit_file_limit(tmp_path: Path) -> None:
+    """A new receipt evicts the oldest receipt when the current file size is near its cap."""
+    entry = MemoryEntry(
+        **{
+            **_valid_entry_data(),
+            "title": "t" * 3000,
+            "content": "c" * 1024,
+            "state": "approved",
+        }
+    )
+    receipts = [
+        AssessmentReceipt(
+            task_id=f"{index:03d}" + "x" * 125,
+            revision=entry.revision,
+            bucket="outstanding",
+        )
+        for index in range(19)
+    ]
+    entry = entry.model_copy(update={"assessment_receipts": receipts})
+    path = tmp_path / f"{entry.id}.md"
+    storage.write_entry(path, entry, memory_dir=tmp_path)
+    engine = MemoryEngine(tmp_path)
+    engine.load()
+
+    engine.record_assessment(
+        entry.id,
+        "outstanding",
+        task_id="019" + "x" * 125,
+        expected_revision=entry.revision,
+    )
+
+    persisted = MemoryEngine(tmp_path).get_entry(entry.id)
+    assert [receipt.task_id for receipt in persisted.assessment_receipts] == [
+        f"{index:03d}" + "x" * 125 for index in range(1, 20)
+    ]
+    assert len(path.read_bytes()) <= storage.MAX_ENTRY_FILE_SIZE_BYTES
+
+
+def test_content_edit_discards_receipts_for_previous_revision(tmp_path: Path) -> None:
+    """A content edit persists no receipt bound to the replaced revision."""
+    entry = MemoryEntry(**{**_valid_entry_data(), "state": "approved"})
+    receipt = AssessmentReceipt(task_id="old-task", revision=entry.revision, bucket="outstanding")
+    entry = entry.model_copy(update={"assessment_receipts": [receipt]})
+    storage.write_entry(tmp_path / f"{entry.id}.md", entry, memory_dir=tmp_path)
+    engine = MemoryEngine(tmp_path)
+    engine.load()
+
+    updated = engine.edit(
+        entry.id,
+        {"content": "Changed content."},
+        expected_revision=entry.revision,
+    )
+
+    assert updated.revision != entry.revision
+    assert updated.assessment_receipts == []
+    assert MemoryEngine(tmp_path).get_entry(entry.id).assessment_receipts == []
+
+
+@pytest.mark.parametrize(
+    ("operation", "state", "didnt_use_count"),
+    [
+        ("approve", MemoryState.CURATED, 0),
+        ("resolve", MemoryState.STALE, 0),
+        ("delete", MemoryState.APPROVED, 0),
+        ("stale", MemoryState.APPROVED, 51),
+    ],
+)
+def test_revision_preserving_single_entry_writes_keep_receipts(
+    tmp_path: Path,
+    operation: str,
+    state: MemoryState,
+    didnt_use_count: int,
+) -> None:
+    """State-only writes retain receipts while the editable revision remains unchanged."""
+    entry = MemoryEntry(
+        **{
+            **_valid_entry_data(),
+            "state": state,
+            "didnt_use_count": didnt_use_count,
+        }
+    )
+    receipt = AssessmentReceipt(task_id="current-task", revision=entry.revision, bucket="outstanding")
+    entry = entry.model_copy(update={"assessment_receipts": [receipt]})
+    storage.write_entry(tmp_path / f"{entry.id}.md", entry, memory_dir=tmp_path)
+    engine = MemoryEngine(tmp_path)
+    engine.load()
+
+    if operation == "approve":
+        updated = engine.approve(entry.id, expected_revision=entry.revision)
+    elif operation == "resolve":
+        updated = engine.resolve(entry.id, expected_updated_at=entry.updated_at)
+    elif operation == "delete":
+        updated = engine.delete(entry.id, expected_revision=entry.revision)
+    else:
+        updated = engine.try_stale_transition(engine.get_entry(entry.id))
+
+    assert updated.revision == entry.revision
+    assert updated.assessment_receipts == [receipt]
+    assert MemoryEngine(tmp_path).get_entry(entry.id).assessment_receipts == [receipt]
 
 
 def test_lifecycle_rollback_failure_preserves_both_errors_and_reloads_cache(tmp_path: Path) -> None:
