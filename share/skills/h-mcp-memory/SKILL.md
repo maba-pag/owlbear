@@ -333,7 +333,7 @@ Behavior:
 - entry-level failures such as a missing entry or invalid state are returned in `results` with
  `success: false`; other valid items may still succeed
 
-Returns: `results`, containing `entry_id` and `success` for each item, plus `error` for failed items.
+Returns: `results`, with `entry_id` and `success` for each item; successful items also include `already_applied` and `recorded_bucket`, while failures include `error`.
 
 ## curate_memory
 
