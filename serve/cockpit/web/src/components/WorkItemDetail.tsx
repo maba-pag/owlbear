@@ -484,7 +484,9 @@ function ChangePauseSection(props: WorkItemDetailProps) {
   if (situation === "done" || situation === "abandoned" || phase === "abandoned") return null;
   const paused = situation === "paused" || phase === "deferred";
   const continuation = props.changeContinuationPrompt;
-  const showContinuation = !paused && continuation && continuation !== item.readiness?.prompt;
+  // A preserved target conflict has one route; a continuation from an older portfolio poll would compete with it.
+  const showContinuation =
+    !paused && continuation && continuation !== item.readiness?.prompt && !item.publication?.target_sync_conflict;
   return (
     <section aria-labelledby="change-pause-heading" className="grid gap-static-xs">
       <PHeading id="change-pause-heading" tag="h3" size="sm">
@@ -1787,6 +1789,11 @@ function AbandonedTargetSyncCleanupSection(props: WorkItemDetailProps) {
   );
 }
 
+const ABORT_TARGET_SYNC_HELP = "Rolls the Change back to its reviewed head; the latest target stays unmerged.";
+const SUBMIT_RESOLVED_MERGE_HELP =
+  "Only after you resolved and staged every conflicting file in the Change worktree yourself; the target conflict " +
+  "workflow submits it for you.";
+
 function TargetSyncConflictSection(props: WorkItemDetailProps) {
   const publication = props.detail.item.publication;
   const conflict = publication?.target_sync_conflict;
@@ -1835,7 +1842,7 @@ function TargetSyncConflictSection(props: WorkItemDetailProps) {
               compact
               variant="secondary"
               data-testid="target-sync-conflict-abort"
-              aria-describedby="target-sync-conflict-abort-help"
+              aria={{ "aria-description": ABORT_TARGET_SYNC_HELP }}
               disabled={props.pendingAction !== null}
               onClick={() => {
                 setActionFailed(false);
@@ -1844,9 +1851,7 @@ function TargetSyncConflictSection(props: WorkItemDetailProps) {
             >
               {props.pendingAction === "target-sync-abort" ? "Aborting..." : "Abort target sync"}
             </PButton>
-            <p id="target-sync-conflict-abort-help" className="mt-static-xs text-xs text-contrast-medium">
-              Rolls the Change back to its reviewed head; the latest target stays unmerged.
-            </p>
+            <p className="mt-static-xs text-xs text-contrast-medium">{ABORT_TARGET_SYNC_HELP}</p>
           </div>
           <div>
             <PButton
@@ -1854,7 +1859,7 @@ function TargetSyncConflictSection(props: WorkItemDetailProps) {
               compact
               variant="secondary"
               data-testid="target-sync-conflict-resolve"
-              aria-describedby="target-sync-conflict-resolve-help"
+              aria={{ "aria-description": SUBMIT_RESOLVED_MERGE_HELP }}
               disabled={props.pendingAction !== null}
               onClick={() =>
                 void props.onResolveTargetSync(attention.disposition_id, conflict.target_head, conflict.operation_id)
@@ -1862,16 +1867,16 @@ function TargetSyncConflictSection(props: WorkItemDetailProps) {
             >
               {props.pendingAction === "target-sync-resolve" ? "Submitting..." : "Submit resolved merge"}
             </PButton>
-            <p id="target-sync-conflict-resolve-help" className="mt-static-xs text-xs text-contrast-medium">
-              Only after you resolved and staged every conflicting file in the Change worktree yourself; the target
-              conflict workflow submits it for you.
-            </p>
+            <p className="mt-static-xs text-xs text-contrast-medium">{SUBMIT_RESOLVED_MERGE_HELP}</p>
           </div>
         </div>
       ) : (
         <p className="mt-static-md text-sm text-contrast-medium">Waiting for the matching Change attention record.</p>
       )}
-      <details className="mt-static-md border-t border-contrast-low pt-static-xs">
+      <details
+        className="mt-static-md border-t border-contrast-low pt-static-xs"
+        data-testid="target-sync-conflict-details"
+      >
         <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">
           Technical details
         </summary>
@@ -1884,7 +1889,15 @@ function TargetSyncConflictSection(props: WorkItemDetailProps) {
           <IdentityRow label="Operation" value={conflict.operation_id} />
           <IdentityRow label="Target head" value={conflict.target_head} />
           <IdentityRow label="Reviewed head" value={conflict.change_head_before} />
+          <IdentityRow label="Disposition" value={attention?.disposition_id ?? null} />
         </dl>
+        {attention?.diagnostics.length ? (
+          <ul className="mt-static-xs list-disc break-all pl-static-md text-xs">
+            {attention.diagnostics.map((diagnostic) => (
+              <li key={diagnostic}>{diagnostic}</li>
+            ))}
+          </ul>
+        ) : null}
       </details>
       {confirmOpen ? (
         <PModal

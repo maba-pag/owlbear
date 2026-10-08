@@ -1,9 +1,12 @@
 import { screen, within } from "@testing-library/react";
 import { expect, it } from "vitest";
 import {
+  continuationCard,
   detail,
   fixtureState,
+  group,
   installWorkPortfolioHarness,
+  portfolio,
   publicationCardForChecks,
   publicationForChecks,
   readiness,
@@ -26,7 +29,11 @@ const GUIDANCE =
 
 // Shaped like Delivery's detail response for a retained engine target-sync conflict.
 function conflictDetail() {
-  const progress = situation("ready-for-next-step", { headline: CONFLICT_HEADLINE, target_sync: "unavailable" });
+  const progress = situation("ready-for-next-step", {
+    headline: CONFLICT_HEADLINE,
+    waiting_on: "you",
+    target_sync: "unavailable",
+  });
   const blocked = readiness({
     status: "blocked",
     operation: "resolve-attention",
@@ -76,21 +83,28 @@ function conflictDetail() {
 
 it("presents a preserved target conflict as one next step with labelled alternatives", async () => {
   fixtureState.currentDetail = conflictDetail();
+  // An older portfolio poll can still carry the executable continuation from before the conflict.
+  fixtureState.currentPortfolio = portfolio([group({ items: [continuationCard()] })]);
   renderPage("/delivery/change-alpha/publication");
 
   const inspector = await screen.findByTestId("work-item-detail");
   expect(within(inspector).getByTestId("readiness-headline")).toHaveTextContent(CONFLICT_HEADLINE);
   expect(within(inspector).getAllByRole("button", { name: /^Copy/ })).toHaveLength(1);
+  expect(within(inspector).queryByRole("button", { name: "Copy continuation prompt" })).toBeNull();
   expect(within(inspector).getByTestId("readiness-prompt")).toHaveTextContent("/resolve-target-conflict change-alpha");
   expect(within(inspector).getByTestId("target-sync-conflict-paths")).toHaveTextContent(
     "web/src/pages/WorkPortfolioPage.tsx",
   );
-  expect(within(inspector).getByTestId("target-sync-conflict-abort")).toHaveAccessibleDescription(
+  type PdsButton = HTMLElement & { aria?: Record<string, string> };
+  const abort = within(inspector).getByTestId("target-sync-conflict-abort") as PdsButton;
+  const submit = within(inspector).getByTestId("target-sync-conflict-resolve") as PdsButton;
+  expect(abort.aria?.["aria-description"]).toBe(
     "Rolls the Change back to its reviewed head; the latest target stays unmerged.",
   );
-  expect(within(inspector).getByTestId("target-sync-conflict-resolve")).toHaveAccessibleDescription(
-    /Only after you resolved and staged every conflicting file/,
-  );
+  expect(submit.aria?.["aria-description"]).toMatch(/^Only after you resolved and staged every conflicting file/);
+  const technical = within(inspector).getByTestId("target-sync-conflict-details");
+  expect(technical).toHaveTextContent("6".repeat(64));
+  expect(technical).toHaveTextContent("target synchronization merge conflict");
 
   expect(inspector).not.toHaveTextContent("A Delivery step failed");
   expect(inspector).not.toHaveTextContent("that exit releases this engine action");
