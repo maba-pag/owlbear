@@ -546,8 +546,20 @@ export interface DeliveryBlock {
 export interface WorkItemCommitment {
   commitment_id: string;
   commitment_class: string;
-  provenance: string;
+  /** Schema-2 contracts name provenance; schema-3 contracts name decisions instead. */
+  provenance?: string;
+  decision_ids?: string[];
   statement: string;
+}
+
+export type DeliveryDecisionOrigin = "decided" | "approved" | "autonomous";
+
+export interface DeliveryDecision {
+  decision_id: string;
+  origin: DeliveryDecisionOrigin;
+  basis: string;
+  statement: string;
+  supersedes: string[];
 }
 
 export interface WorkItemDependency {
@@ -793,6 +805,7 @@ export interface WorkItemDetailView {
   promise: string;
   acceptance: string[];
   commitments: WorkItemCommitment[];
+  decisions: DeliveryDecision[];
   dependencies: WorkItemDependency[];
   tasks: WorkItemTaskEvidence[];
   block: DeliveryBlock | null;

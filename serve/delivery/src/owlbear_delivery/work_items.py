@@ -32,7 +32,7 @@ from owlbear_delivery.evidence import DeliveryEvidenceProjection, build_evidence
 from owlbear_delivery.finalization_reports import FinalizationAttempt
 from owlbear_delivery.merge_offer import MergeBlock, MergeBlockReason, MergeFacts, MergeOffer
 from owlbear_delivery.recovery import MAX_RETRY_HISTORY_ATTEMPTS, DeliveryRetryAttemptView
-from owlbear_delivery.target_contract import DeliveryCommitment, DeliveryContract, DeliveryOutcome
+from owlbear_delivery.target_contract import DeliveryCommitment, DeliveryContract, DeliveryDecision, DeliveryOutcome
 
 
 class WorkItemStage(StrEnum):
@@ -612,6 +612,7 @@ class WorkItemDetailView(_ProjectionModel):
     promise: str = Field(min_length=1)
     acceptance: tuple[str, ...] = ()
     commitments: tuple[DeliveryCommitment, ...] = ()
+    decisions: tuple[DeliveryDecision, ...] = ()
     dependencies: tuple[WorkItemDependencyView, ...] = ()
     tasks: tuple[WorkItemTaskEvidence, ...] = ()
     block: DeliveryBlock | None = None
@@ -1261,6 +1262,7 @@ class WorkItemProjector:
                 change_title=self._snapshot.contract.title,
                 card=card,
                 promise="Publish the reviewed Change and observe its user-merged pull request.",
+                decisions=self._snapshot.contract.decisions,
                 held_finalizer=self._held_finalizer,
                 operator_moves=self._snapshot.frontier.operator_moves,
                 publication=self._publication_view(),
@@ -1275,15 +1277,18 @@ class WorkItemProjector:
         outcome_id = card.work_item_id
         outcome = self._outcomes[outcome_id]
         binding = self._bindings[outcome_id]
+        commitments = tuple(
+            item for item in self._snapshot.contract.commitments if item.commitment_id in outcome.commitment_ids
+        )
+        decision_ids = {identity for item in commitments for identity in item.decision_ids}
         return WorkItemDetailView(
             snapshot_version=self._snapshot.version,
             change_title=self._snapshot.contract.title,
             card=card,
             promise=outcome.promise,
             acceptance=outcome.acceptance,
-            commitments=tuple(
-                item for item in self._snapshot.contract.commitments if item.commitment_id in outcome.commitment_ids
-            ),
+            commitments=commitments,
+            decisions=tuple(item for item in self._snapshot.contract.decisions if item.decision_id in decision_ids),
             dependencies=tuple(self._dependency_view(identity) for identity in outcome.dependency_ids),
             tasks=self._task_evidence(binding),
             block=binding.block,

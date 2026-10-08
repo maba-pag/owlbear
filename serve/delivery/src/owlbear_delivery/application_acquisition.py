@@ -1414,11 +1414,14 @@ class _AcquisitionMixin:
         completed = {result.task_id for result in binding.results}
         frontier = parse_delivery_frontier(runtime.frontier_bytes())[0].model_copy(update={"finalization": None})
         coverage = evaluate_acceptance_evidence(runtime.contract, frontier).criteria
+        commitments = self._commitments(runtime, outcome.commitment_ids)
         return DeliveryPlanContext(
             launch=launch,
             outcome=outcome,
-            commitments=self._commitments(runtime, outcome.commitment_ids),
+            commitments=commitments,
+            decisions=self._decisions(runtime, commitments),
             requests=binding.requests,
+            superseded_request_ids=self._superseded_request_ids(runtime, binding),
             return_context=binding.return_context,
             acceptance=self._outcome_acceptance(runtime, outcome_id),
             retained_tasks=tuple(task for task in binding.tasks if task.task_id in completed),
@@ -1463,18 +1466,26 @@ class _AcquisitionMixin:
             )
         ):
             self._fail("Build retry history does not match the active claim")
+        commitments = self._commitments(runtime, task.commitment_ids)
         return DeliveryBuildContext(
             launch=launch,
             task=task,
             task_digest=task.digest,
-            commitments=self._commitments(runtime, task.commitment_ids),
+            commitments=commitments,
+            decisions=self._decisions(runtime, commitments),
             predecessor_results=predecessor_results,
             requests=binding.requests,
+            superseded_request_ids=self._superseded_request_ids(runtime, binding),
             return_context=binding.return_context,
             recovery_attention=binding.recovery_attention,
             prior_attempts=prior_attempts,
             acceptance=self._outcome_acceptance(runtime, outcome_id),
         )
+
+    @staticmethod
+    def _superseded_request_ids(runtime: DeliveryRuntime, binding: OutcomeAuthorityBinding) -> tuple[str, ...]:
+        superseded = runtime.contract.superseded_request_ids()
+        return tuple(request.request_id for request in binding.requests if request.request_id in superseded)
 
     @staticmethod
     def _outcome_acceptance(runtime: DeliveryRuntime, outcome_id: str) -> tuple[DeliveryAcceptanceCriterion, ...]:

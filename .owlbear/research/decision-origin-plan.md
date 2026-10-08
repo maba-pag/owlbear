@@ -226,3 +226,17 @@ Sol round 2 on plan SHA-256 `4fbd2443…` (2026-10-08), recommendation `revision
 | Phase | PR | Head | Proof | Challenge | Status |
 | --- | --- | --- | --- | --- | --- |
 | Plan | — | — | — | Sol round 1 `blocked` → resolved; round 2 `revision-required`, corrections applied | revised |
+| R — Rules | — | `f31c4da50` | agent-ecosystem tests 71 passed | with C | committed |
+| C — Compiler and authority | — | `32e140485` | 17 focused Delivery, tools, MCP and journey files: 957 passed | pending | committed |
+| X — Contexts and delta | — | next commit | portfolio application, Delivery MCP and Cockpit backend: 896 passed | pending | committed |
+| K — Cockpit | — | next commit | vitest 383 passed, `npm run build`, Biome, `tsc` | pending | committed |
+
+Implementation notes:
+
+- The snapshot record moves to schema 4 (it embeds the contract) and the workspace format to 4 through a
+  marker-only step `format-3-to-4`, following the N05-B2 precedent; schema-2 and schema-3 snapshots stay
+  readable and may embed only schema-2 contracts.
+- The decision delta is a field of the `derive_delivery_contract` result (`decision_delta`), set when the
+  Change is admitted; it also lists admitted decisions a candidate changes, which activation refuses.
+- Cockpit shows decisions on the Change publication item (all, with superseded markers) and on outcome items
+  (the active decisions behind their commitments), with a filter to the user's own decisions.

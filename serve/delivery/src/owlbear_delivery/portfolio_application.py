@@ -181,8 +181,10 @@ from owlbear_delivery.storage_io import atomic_write, locked_roots, state_is_rea
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
     DeliveryCompilationResult,
+    DeliveryDecision,
     DeliveryOutcome,
     compile_delivery_contract,
+    decision_delta,
 )
 from owlbear_delivery.work_items import (  # noqa: F401
     DeliveryPortfolioSnapshot,
@@ -1030,9 +1032,14 @@ class PortfolioApplication(
         return self._package_store.checkpoint(change_id)
 
     def derive_delivery_contract(self, change_id: str) -> DeliveryCompilationResult:
-        """Compile one verified package without publishing generated authority."""
+        """Compile one verified package without publishing generated authority; a revision adds its decision delta."""
         package = self._package_store.read_verified(change_id)
-        return compile_delivery_contract(change_id, package.intent_bytes, package.design_bytes)
+        compiled = compile_delivery_contract(change_id, package.intent_bytes, package.design_bytes)
+        self._reconcile_runtimes()
+        runtime = self._runtimes.get(change_id)
+        if runtime is None or compiled.contract is None:
+            return compiled
+        return compiled.model_copy(update={"decision_delta": decision_delta(runtime.contract, compiled.contract)})
 
     def admit_delivery_change(self, request: DeliveryAdmissionRequest) -> DeliveryAdmissionResult:
         """Admit source-bound Delivery authority through the owning registry."""
@@ -2162,6 +2169,13 @@ class PortfolioApplication(
     def _commitments(runtime: DeliveryRuntime, commitment_ids: tuple[str, ...]) -> tuple[DeliveryCommitment, ...]:
         selected = set(commitment_ids)
         return tuple(item for item in runtime.contract.commitments if item.commitment_id in selected)
+
+    @staticmethod
+    def _decisions(
+        runtime: DeliveryRuntime, commitments: tuple[DeliveryCommitment, ...]
+    ) -> tuple[DeliveryDecision, ...]:
+        selected = {identity for item in commitments for identity in item.decision_ids}
+        return tuple(item for item in runtime.contract.decisions if item.decision_id in selected)
 
     @staticmethod
     def _fail(message: str, cause: Exception | None = None) -> Never:
