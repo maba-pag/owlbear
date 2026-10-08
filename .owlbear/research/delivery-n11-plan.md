@@ -8,7 +8,11 @@
 > **Deviation (user-directed):** the user asked for plan, plan gate, implementation and
 > implementation gate in one session. N11-P and N11-A share one branch and one PR; the plan commit
 > precedes the code commits, and both gates run on their exact heads.
-> **Status:** N11-P drafted; plan gate pending. Reviews work in the execution plan's
+> **Status:** N11-P plan gate closed 2026-10-06. A fresh Sol gate ran round 1 on `1c4d965a5`. Verdict:
+> `revision-required`, with three findings. All three were accepted fix-now and applied: F1 keeps the
+> persisted settlement block unchanged, F2 adds the grant carry-forward and reset rules to I3, and
+> F3 adds the assembled readiness contract. The gate ends with these corrections; they refine the
+> specification without changing its route. Reviews work in the execution plan's
 > [operating context](delivery-redesign-execution-plan.md#19-operating-context).
 
 ## 1. Contract
@@ -57,10 +61,16 @@ cannot perform it.
   - the episode containing `context.attempt_id` is MECHANICAL with `stop_code == EXHAUSTED`.
 
   Any other state is a typed conflict.
-- **I3 One budget unit per grant.** `granted_attempts` increases by one. Every mechanical threshold
-  becomes `mechanical_repairs + granted_attempts`. That covers `reserve`, `record_failure`,
-  `import_legacy_failures` and the Builder settlement exhaustion test. `RetryLedger.reset` clears it
-  together with the other counts.
+- **I3 One budget unit per grant.**
+  - `granted_attempts` increases by one per grant.
+  - Every mechanical threshold becomes `mechanical_repairs + granted_attempts`. That covers
+    `reserve`, `record_failure`, `import_legacy_failures` and the Builder settlement exhaustion
+    test.
+  - Every episode rebuild carries the value forward, including the fresh `RetryEpisodeSummary(...)`
+    constructed in `reserve` (plan-gate F2).
+  - Both accepted-progress resets clear it together with the other counts: `RetryLedger.reset`, and
+    the `accepted_progress` branch of the success path that owner-result reconciliation reaches.
+  - A second grant after re-exhaustion funds exactly one further attempt.
 - **I4 Atomic.** Frontier replacement, ledger summary replacement (expected previous bytes) and grant
   receipt creation form one `RuntimeTransaction`, recovered by the existing `recover_all` paths.
 - **I5 Rollback-safe by default.** A ledger with no grant is written as `schema_version` 1, byte-
@@ -113,9 +123,22 @@ cannot perform it.
 - **Work items:**
   - New `WorkItemActionKind.GRANT_ATTEMPT` ("grant-attempt", label "Grant one more attempt") is
     returned instead of `CLEAR_BLOCK` for the exact attempt-limit block (I2 shape on the binding).
-  - The Builder `retry-exhausted` guidance and the settled block's `unblock_condition` name the
-    Cockpit action and keep `/inspect-change` as the read-only diagnosis route.
-  - The non-Builder `retry-exhausted` text is unchanged.
+  - Persisted settlement output is unchanged (plan-gate F1). The settled block's `reason`,
+    `unblock_condition` and `expected_evidence` keep their current bytes, because the loader
+    recomputes them and compares them with pre-N11 immutable settlement receipts.
+  - New guidance lives only in the projection. The Builder `retry-exhausted` next step names the
+    Cockpit action and keeps `/inspect-change` as the read-only diagnosis route. The non-Builder
+    `retry-exhausted` text is unchanged.
+  - **Assembled readiness contract** (plan-gate F3). Today `_with_retry_readiness` sets
+    `retry-exhausted` with `action=None` and `next_actor=AGENT`, and the card overlay suppresses the
+    raw card action. For the grant-eligible binding (I2 shape), readiness keeps `status=blocked`,
+    `reason_code=retry-exhausted`, `executable=False` and `action=None`: Builder dispatch is not
+    eligible. It sets `next_actor=YOU`, and the overlay keeps the card's `GRANT_ATTEMPT` action.
+    Granting is a human action outside `DeliveryReadiness.action`, which stays reserved for
+    executable operations.
+  - Other `retry-exhausted` cards keep `AGENT` and no action.
+  - The detail view's independent **Clear block** form is replaced by the grant control for this
+    block.
 - **Cockpit:**
   - Route `POST /api/changes/{change_id}/outcomes/{outcome_id}/blocks/{block_id}/grant-attempt`,
     body `{expected_frontier_digest}`, calls `answer(..., allow_user_only=True)`.
@@ -178,11 +201,18 @@ cannot perform it.
 - **Required companions:** the D03 mandatory companions for the new action, and the mutability
   policy and authority test for the new operation.
 - **Positive scenarios:**
-  - **P1** — ledger: an exhausted MECHANICAL episode can be granted once. Counts and history are
-    unchanged, `stop_code` is cleared, the next `reserve` is allowed, and the following failure
-    re-exhausts.
-  - **P2** — a v1 ledger reads unchanged. A grant writes v2, a no-grant write stays v1, and `reset`
-    clears `granted_attempts`.
+  - **P1** — ledger, two grants in sequence:
+    1. An exhausted MECHANICAL episode is granted. Counts and history are unchanged, `stop_code` is
+       cleared, and the next `reserve` is allowed and keeps `granted_attempts`.
+    2. That attempt fails, which re-exhausts the episode. A second grant funds exactly one more
+       reservation, and the reservation after it is denied.
+  - **P2** — versions and resets:
+    - A v1 ledger reads unchanged.
+    - A grant writes v2; a no-grant write stays v1.
+    - Both `reset` and an accepted-progress success clear `granted_attempts` and restore the default
+      budget.
+  - **P2b** — a pre-N11 exhausted Builder settlement loads unchanged under the candidate and can then
+    be granted (F1).
   - **P3** — runtime: a grant on the exact handoff resolves the block, writes the receipt and ledger
     in one transaction, and replays idempotently.
   - **P4** — after a grant, acquisition re-claims the same task, and a failed granted attempt
@@ -190,9 +220,12 @@ cannot perform it.
   - **P5** — the loader bootstraps the granted frontier before and after the new claim.
   - **P6** — the application, through the Cockpit HTTP route, grants with the digest and replays
     after the digest moved.
-  - **P7** — Work Item: the exact block offers `grant-attempt`, not `clear-block`, and readiness is
-    ready after the grant.
-  - **P8** — Cockpit vitest: the button renders and posts.
+  - **P7** — through the assembled `show_work_item_view`:
+    - Before the grant, the exact block's card shows `grant-attempt` with `next_actor=you`, no
+      executable readiness action, and continuation refuses.
+    - After the HTTP grant, the outcome is ready for the Builder.
+  - **P8** — Cockpit vitest: the grant button renders and posts; the detail view shows no **Clear
+    block** form for this block.
 - **Negative scenarios:**
   - **N1** — the grant is refused for: a non-exhausted episode, a wrong block ID, a request-bearing
     block, no handoff, an active claim, a stale digest without a receipt, and a resolved block
@@ -227,7 +260,7 @@ cannot perform it.
 
 | Phase | PR | Head | Proof | Challenge | Status |
 | --- | --- | --- | --- | --- | --- |
-| N11-P | — | — | — | plan gate pending | drafted |
+| N11-P | shared with N11-A | `1c4d965a5` + corrections | source probes (§2) | Sol round 1 `revision-required`; F1–F3 fix-now applied; gate closed | done |
 | N11-A | — | — | — | — | not started |
 
 ## 5. Verification gaps
