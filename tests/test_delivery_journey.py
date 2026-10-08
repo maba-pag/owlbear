@@ -51,8 +51,16 @@ INTENT = """# Journey
 kind: commitment
 id: COM-001
 class: agreed-path
-provenance: N10 journey
+decisions: [DEC-001]
 statement: Deliver one reviewed product change.
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-001
+origin: approved
+basis: journey approval
+statement: Deliver the journey change.
 ```
 
 ```yaml target-contract

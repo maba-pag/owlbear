@@ -1339,7 +1339,7 @@ def test_clean_finalizer_recovery_of_a_stored_v18_frontier_records_one_marker_on
     published = _git(repository, "rev-parse", "refs/remotes/origin/owlbear/delivery-state")
     assert _git(repository, "rev-list", "--count", f"{state_head}..{published}") == "1"
     republished = json.loads(_git(repository, "show", f"{published}:.owlbear/delivery/state/change-a/snapshot.json"))
-    assert republished["schema_version"] == 3
+    assert republished["schema_version"] == 4
     assert republished["parent_snapshot_id"] == snapshot["snapshot_id"]
     assert reopened._runtimes["change-a"].pending_state_publication() is None
     assert reopened._replay_pending_state_publications() == ()
@@ -1558,7 +1558,7 @@ def _assert_default_loader_republishes_once(repository: Path, state_head: str, m
     republished_head = _git(repository, "rev-parse", "refs/remotes/origin/owlbear/delivery-state")
     assert _git(repository, "rev-list", "--count", f"{state_head}..{republished_head}") == "1"
     republished = json.loads(_git(repository, "show", f"{republished_head}:{_LOADER_SNAPSHOT_PATH}"))
-    assert republished["schema_version"] == 3
+    assert republished["schema_version"] == 4
     assert republished["parent_snapshot_id"] == snapshot_2["snapshot_id"]
 
     converged = load_delivery_application(_LOADER_CONFIG, workspace_root=repository)

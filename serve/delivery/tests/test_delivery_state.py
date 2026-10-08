@@ -838,7 +838,7 @@ def test_state_snapshot_migrates_schema_1_and_retains_predecessor_identity(tmp_p
 
     migrated = parse_delivery_state_snapshot(raw)
 
-    assert migrated.schema_version == 3
+    assert migrated.schema_version == 4
     assert migrated.migrated_from_snapshot_id == legacy_snapshot_id
     assert migrated.frontier.schema_version == 18
     assert migrated.frontier.bindings[0].retry_count == 0
@@ -889,7 +889,7 @@ def test_state_publisher_rewrites_migrated_snapshot_to_current_schema(tmp_path: 
     assert rewritten.published_head != legacy_head
     current = publisher.read_snapshot("legacy-publish")
     assert current is not None
-    assert current.schema_version == 3
+    assert current.schema_version == 4
     assert current.migrated_from_snapshot_id is None
     assert current.parent_snapshot_id is not None
     assert publisher._git_blob(legacy_head, snapshot_path) == legacy_raw  # noqa: SLF001
@@ -924,7 +924,7 @@ def test_schema_1_remote_snapshot_reads_as_pure_upcast_with_verified_stored_iden
     assert inventory.diagnostics == ()
     assert inventory.remote_head == legacy_head
     snapshot = inventory.snapshots[0]
-    assert snapshot.schema_version == 3
+    assert snapshot.schema_version == 4
     assert snapshot.migrated_from_snapshot_id == stored_id
     assert snapshot.snapshot_id != stored_id
     assert snapshot.frontier.schema_version == 18
@@ -944,7 +944,7 @@ def test_newer_remote_snapshot_is_unsupported_never_restored_published_over_or_r
     first = _publish(publisher, runtime, manager, change_id, package_id, "newer-state-one")
     snapshot_path = f".owlbear/delivery/state/{change_id}/snapshot.json"
     newer_payload = json.loads(publisher._git_blob(first.published_head, snapshot_path))  # noqa: SLF001
-    newer_payload["schema_version"] = 4
+    newer_payload["schema_version"] = 5
     newer_payload["future_field"] = {"written": "by a newer controller"}
     newer_raw = _canonical_payload(newer_payload)
     newer_head = _commit_corrupt_snapshot(repository, first.published_head, change_id, newer_raw)
@@ -4731,7 +4731,8 @@ class _Crash(BaseException):
 
 def _revision_sources(second: str) -> bytes:
     blocks = (
-        "kind: commitment\nid: COM-001\nclass: agreed-path\nprovenance: restart test\nstatement: Keep launches.",
+        "kind: decision\nid: DEC-001\norigin: approved\nbasis: fixture\nstatement: Restart fixture.",
+        "kind: commitment\nid: COM-001\nclass: agreed-path\ndecisions: [DEC-001]\nstatement: Keep launches.",
         (
             "kind: outcome\nid: OUT-001\ntitle: Launch\npromise: Make the launch observable.\n"
             f'acceptance: ["AC-001: The launch is observable.", "{second}"]\ncommitments: [COM-001]\ndependencies: []'

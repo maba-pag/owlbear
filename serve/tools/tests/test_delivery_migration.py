@@ -46,7 +46,7 @@ def test_cli_proposes_applies_and_verifies_from_fresh_processes(tmp_path: Path) 
     assert code == 0
     assert record_tree_digest(repository) == before
     assert [entry["locator"] for entry in proposed["entries"]] == [FORMAT_MARKER]  # type: ignore[index]
-    assert proposed["steps"] == ["format-0-to-1", "format-1-to-2", "format-2-to-3"]
+    assert proposed["steps"] == ["format-0-to-1", "format-1-to-2", "format-2-to-3", "format-3-to-4"]
     migration_id = str(proposed["migration_id"])
     assert proposed["staging"] == f".owlbear/delivery-migrations/{migration_id}/stage"
     assert _cli(repository, "apply", migration_id) == (0, _cli(repository, "resume", migration_id)[1])

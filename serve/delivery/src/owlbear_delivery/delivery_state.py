@@ -43,7 +43,9 @@ _BRANCH_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/+:-]*$")
 _STATE_ROOT = ".owlbear/delivery/state"
 _LEGACY_SNAPSHOT_SCHEMA_VERSION = 1
 _SNAPSHOT_V2 = 2
-_SNAPSHOT_SCHEMA_VERSION = 3
+_SNAPSHOT_V3 = 3
+_SNAPSHOT_SCHEMA_VERSION = 4
+_LEGACY_CONTRACT_SCHEMA_VERSION = 2
 
 
 class DeliveryStatePublicationError(RuntimeError):
@@ -92,7 +94,7 @@ class _StateModel(BaseModel):
 class DeliveryStateSnapshot(_StateModel):
     """Sanitized resumable state for one Change at one semantic checkpoint."""
 
-    schema_version: Literal[2, 3] = 3
+    schema_version: Literal[2, 3, 4] = 4
     snapshot_id: Digest = Field(pattern=r"^[0-9a-f]{64}$")
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
     change_id: ChangeId
@@ -223,6 +225,12 @@ def _validate_snapshot_authority(snapshot: DeliveryStateSnapshot) -> None:
         raise ValueError(message)
     if snapshot.schema_version == _SNAPSHOT_V2 and snapshot.frontier.schema_version != _READABLE_LEGACY_FRONTIER:
         message = "Delivery-state snapshot schema 2 embeds only a schema-18 frontier"
+        raise ValueError(message)
+    if (
+        snapshot.schema_version in {_SNAPSHOT_V2, _SNAPSHOT_V3}
+        and snapshot.contract.schema_version != _LEGACY_CONTRACT_SCHEMA_VERSION
+    ):
+        message = "Delivery-state snapshot schemas 2 and 3 embed only a schema-2 contract"
         raise ValueError(message)
     if snapshot.admission.integration_target != snapshot.integration_target:
         message = "Delivery-state snapshot admission target does not match its Change"
@@ -915,7 +923,7 @@ def parse_delivery_state_snapshot(content: bytes) -> DeliveryStateSnapshot:
         }
         payload["snapshot_id"] = hashlib.sha256(_canonical_payload(payload)).hexdigest()
         return DeliveryStateSnapshot.model_validate_json(_canonical_payload(payload), strict=True)
-    if schema_version not in {_SNAPSHOT_V2, _SNAPSHOT_SCHEMA_VERSION} or isinstance(schema_version, bool):
+    if schema_version not in {_SNAPSHOT_V2, _SNAPSHOT_V3, _SNAPSHOT_SCHEMA_VERSION} or isinstance(schema_version, bool):
         raise ValueError
     return DeliveryStateSnapshot.model_validate_json(content, strict=True)
 

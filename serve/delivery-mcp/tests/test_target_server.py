@@ -3728,7 +3728,7 @@ def test_entry_point_prints_one_refusal_line_for_newer_state_format(tmp_path: Pa
     _write_config(path, _config())
     runtime_root = repository / ".owlbear/delivery/runtime"
     runtime_root.mkdir()
-    runtime_root.joinpath("format.json").write_bytes(format_marker_bytes(4))
+    runtime_root.joinpath("format.json").write_bytes(format_marker_bytes(5))
 
     completed = subprocess.run(
         (sys.executable, "-m", "owlbear_delivery_mcp"),
