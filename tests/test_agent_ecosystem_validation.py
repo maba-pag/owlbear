@@ -1563,6 +1563,20 @@ def test_pr_feedback_phase_routing_precedes_mutation_and_fences_finalized_phases
     ]
 
     assert positions == sorted(positions)
+    assert "has no review-repair invalidation" in step0
+    assert "its `finalized_head` equals the Change head" in step0
+    assert (
+        "at least one unresolved bound-PR thread mapped by a trailer reachable from that head is awaiting | `resume`"
+    ) in step0
+    assert "no unresolved mapped thread is awaiting | `start`" in step0
+    assert "mapped by a `Review-Thread` trailer reachable from the exact finalized head" in step0
+    assert (
+        "has no viewer-authored marker reply for its newest mapped commit, or has a settled marker reply for it"
+    ) in step0
+    assert "every viewer-authored marker reply for its newest mapped commit is unsettled" in step0
+    assert "reopened threads do not select `resume` by themselves" in step0
+    assert "before triaging, replying, or resolving any thread" in step0
+    assert "leave threads untouched" in step0
     assert "An unresolved bound-PR thread is `awaiting`" in step0
     assert "A mapped thread is `reopened`" in step0
     assert "Every other state" in step0
