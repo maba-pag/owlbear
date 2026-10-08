@@ -583,8 +583,8 @@ class TestFromAC_ContestedMarker:
         contested_live = engine.record_factually_wrong(
             contested_live.id,
             "task-mixed-243",
-            expected_updated_at=contested_live.updated_at,
-        )
+            expected_revision=contested_live.revision,
+        ).entry
         ctx = _make_ctx(engine)
 
         result = await _recall(ctx, agent="builder")

@@ -14,6 +14,10 @@ from owlbear_memory import MemoryCategory, MemoryEngine, MemoryState
 from pydantic import Field, StrictStr
 
 from owlbear_memory_mcp.tools import (
+    AssessmentItem,
+    AssessmentTaskId,
+)
+from owlbear_memory_mcp.tools import (
     approve_memory as approve_memory_impl,
 )
 from owlbear_memory_mcp.tools import (
@@ -235,8 +239,8 @@ async def approve_memory(ctx: Context, *, entry_id: str, revision: _Revision) ->
 async def assess_memories(
     ctx: Context,
     *,
-    assessments: Annotated[list[dict[str, str]], Field(min_length=1)],
-    task_id: _Agent,
+    assessments: Annotated[list[AssessmentItem], Field(min_length=1)],
+    task_id: AssessmentTaskId,
 ) -> dict[str, Any]:  # pragma: no cover
     """Assess memories in batch and return per-entry outcomes."""
     return await assess_memories_impl(ctx, assessments=assessments, task_id=task_id)

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import subprocess
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from mcp.server.mcpserver.exceptions import ToolError
 from owlbear_memory import (
@@ -19,7 +19,10 @@ from owlbear_memory import (
     TransitionError,
     validate_scope_agents,
 )
-from pydantic import ValidationError
+from owlbear_memory import (
+    ValidationError as MemoryValidationError,
+)
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, ValidationError, field_validator
 
 from owlbear_memory_mcp.git import commit_batch, format_git_failure
 
@@ -44,17 +47,35 @@ __all__ = [
 
 SLOT_EXPLORE = 2
 SLOT_CHALLENGE = 2
-_ASSESSMENT_BUCKETS = (
-    "outstanding",
-    "unremarkable",
-    "didnt_use",
-    "factually_wrong",
-)
+AssessmentTaskId = Annotated[StrictStr, Field(pattern=r"^[\x21-\x7e]{1,128}$")]
+
+
+class AssessmentItem(BaseModel):
+    """Strict input shape for one revision-bound assessment."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    entry_id: StrictStr
+    revision: Annotated[StrictStr, Field(pattern=r"^[0-9a-f]{16}$")]
+    bucket: Literal["outstanding", "unremarkable", "didnt_use", "factually_wrong"]
+
+
+class _AssessmentBatch(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    assessments: list[AssessmentItem] = Field(min_length=1)
+    task_id: AssessmentTaskId
+
+    @field_validator("task_id")
+    @classmethod
+    def _validate_task_id(cls, value: str) -> str:
+        if any(not "!" <= character <= "~" for character in value):
+            msg = "task_id must be 1-128 printable ASCII characters without whitespace"
+            raise ValueError(msg)
+        return value
+
+
 _LOGGER = logging.getLogger(__name__)
-
-
-def _allowed_assessment_values() -> str:
-    return ", ".join(_ASSESSMENT_BUCKETS)
 
 
 def _engine_from_ctx(ctx: Context) -> MemoryEngine:
@@ -618,49 +639,49 @@ async def approve_memory(ctx: Context, *, entry_id: str, revision: str) -> dict[
 async def assess_memories(
     ctx: Context,
     *,
-    assessments: list[dict[str, str]],
+    assessments: list[AssessmentItem],
     task_id: str,
 ) -> dict[str, list[dict[str, object]]]:
     """Process batch assessment submissions with per-entry success/failure results."""
-    if not assessments:
-        msg = "assessments must be non-empty"
-        raise ToolError(msg)
-
-    if not task_id.strip():
-        msg = "task_id must be non-empty"
-        raise ToolError(msg)
-
-    for assessment in assessments:
-        if not isinstance(assessment, dict) or "entry_id" not in assessment or "bucket" not in assessment:
-            msg = "Each assessment must be a dict containing 'entry_id' and 'bucket' keys."
-            raise ToolError(msg)
-        bucket = assessment["bucket"]
-        if bucket not in _ASSESSMENT_BUCKETS:
-            msg = f"Invalid bucket {bucket!r}. Allowed values: {_allowed_assessment_values()}."
-            raise ToolError(msg)
+    try:
+        batch = _AssessmentBatch.model_validate({"assessments": assessments, "task_id": task_id})
+    except ValidationError as exc:
+        msg = (
+            "Invalid assessment batch. Each item requires entry_id, revision, and a supported bucket "
+            "(outstanding, unremarkable, didnt_use, factually_wrong); "
+            "task_id must be 1-128 printable ASCII characters without whitespace."
+        )
+        raise ToolError(msg) from exc
 
     engine = _engine_from_ctx(ctx)
     results: list[dict[str, object]] = []
 
-    for assessment in assessments:
-        entry_id = assessment["entry_id"]
-        bucket = assessment["bucket"]
+    for assessment in batch.assessments:
+        entry_id = assessment.entry_id
+        bucket = assessment.bucket
         try:
-            current = engine.get_entry(entry_id)
             if bucket == "factually_wrong":
-                engine.record_factually_wrong(
+                outcome = engine.record_factually_wrong(
                     entry_id,
-                    task_id,
-                    expected_updated_at=current.updated_at,
+                    batch.task_id,
+                    expected_revision=assessment.revision,
                 )
             else:
-                engine.record_assessment(
+                outcome = engine.record_assessment(
                     entry_id,
                     bucket,
-                    expected_updated_at=current.updated_at,
+                    task_id=batch.task_id,
+                    expected_revision=assessment.revision,
                 )
-            results.append({"entry_id": entry_id, "success": True})
-        except (NotFoundError, TransitionError, ConcurrencyError, ValidationError) as exc:
+            results.append(
+                {
+                    "entry_id": entry_id,
+                    "success": True,
+                    "already_applied": outcome.already_applied,
+                    "recorded_bucket": outcome.recorded_bucket,
+                }
+            )
+        except (NotFoundError, TransitionError, ConcurrencyError, MemoryValidationError) as exc:
             results.append({"entry_id": entry_id, "success": False, "error": str(exc)})
 
     return {"results": results}

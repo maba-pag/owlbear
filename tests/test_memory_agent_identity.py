@@ -130,7 +130,11 @@ def test_delete_agent_soft_deletes_reviewed_entries_left_without_audience(
     if state == MemoryState.APPROVED:
         reviewed = engine.approve(reviewed_id, reviewed.updated_at)
     elif state == MemoryState.CONTESTED:
-        reviewed = engine.record_factually_wrong(reviewed_id, "task-1", reviewed.updated_at)
+        reviewed = engine.record_factually_wrong(
+            reviewed_id,
+            "task-1",
+            expected_revision=reviewed.revision,
+        ).entry
 
     pending_id = _save(engine, source="builder", scope=["retired"])
     tombstone_id = _save(engine, source="builder", scope=["retired"])

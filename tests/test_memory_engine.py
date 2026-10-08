@@ -114,7 +114,12 @@ def test_engine_revision_survives_reads_approval_and_assessment(tmp_path: Path) 
         side_effect=["2026-02-01T00:00:00+00:00", "2026-02-02T00:00:00+00:00"],
     ):
         approved = engine.approve(entry.id, expected_revision=curated_revision)
-        assessed = engine.record_assessment(entry.id, "outstanding", expected_updated_at=approved.updated_at)
+        assessed = engine.record_assessment(
+            entry.id,
+            "outstanding",
+            task_id="engine-assessment",
+            expected_revision=approved.revision,
+        ).entry
 
     assert curated.state == MemoryState.CURATED
     assert approved.state == MemoryState.APPROVED

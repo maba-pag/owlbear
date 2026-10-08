@@ -144,6 +144,8 @@ def _serialize_entry(entry: MemoryEntry) -> bytes:
         "approved_at": entry.approved_at,
         "contested_by_task": entry.contested_by_task,
     }
+    if entry.assessment_receipts:
+        frontmatter["assessment_receipts"] = [receipt.model_dump() for receipt in entry.assessment_receipts]
 
     yaml_stream = StringIO()
     _YAML.dump(frontmatter, yaml_stream)

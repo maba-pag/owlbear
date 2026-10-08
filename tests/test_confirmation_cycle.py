@@ -92,6 +92,16 @@ def _engine_with_entries(directory: Path, *entries: MemoryEntry) -> MemoryEngine
     return MemoryEngine(memory_dir=directory)
 
 
+def _record_factually_wrong(engine: MemoryEngine, entry_id: str, task_id: str) -> MemoryEntry:
+    entry = engine.get_entry(entry_id)
+    result = engine.record_factually_wrong(
+        entry_id,
+        task_id=task_id,
+        expected_revision=entry.revision,
+    )
+    return result.entry
+
+
 # ---------------------------------------------------------------------------
 # TestFromAC_ConfirmationCycle — AC1, AC2, AC3, AC4
 # ---------------------------------------------------------------------------
@@ -136,28 +146,28 @@ class TestConfirmationCycle:
         """AC1: record_factually_wrong on approved entry → contested state."""
         entry = _make_entry_base(_ID_APPROVED, MemoryState.APPROVED)
         engine = _engine_with_entries(tmp_path, entry)
-        result = engine.record_factually_wrong(_ID_APPROVED, task_id=_TASK_A)
+        result = _record_factually_wrong(engine, _ID_APPROVED, _TASK_A)
         assert result.state == MemoryState.CONTESTED
 
     def test_curated_entry_transitions_to_contested(self, tmp_path: Path) -> None:
         """AC1: record_factually_wrong on curated entry → contested state."""
         entry = _make_entry_base(_ID_CURATED, MemoryState.CURATED)
         engine = _engine_with_entries(tmp_path, entry)
-        result = engine.record_factually_wrong(_ID_CURATED, task_id=_TASK_A)
+        result = _record_factually_wrong(engine, _ID_CURATED, _TASK_A)
         assert result.state == MemoryState.CONTESTED
 
     def test_contested_by_task_stored_on_initial_call(self, tmp_path: Path) -> None:
         """AC1: contested_by_task is set to task_id on initial transition to contested."""
         entry = _make_entry_base(_ID_APPROVED, MemoryState.APPROVED)
         engine = _engine_with_entries(tmp_path, entry)
-        result = engine.record_factually_wrong(_ID_APPROVED, task_id=_TASK_A)
+        result = _record_factually_wrong(engine, _ID_APPROVED, _TASK_A)
         assert result.contested_by_task == _TASK_A
 
     def test_contested_entry_remains_in_recall_results(self, tmp_path: Path) -> None:
         """AC1: contested entry is still returned by get_entries (not excluded from recall)."""
         entry = _make_entry_base(_ID_APPROVED, MemoryState.APPROVED)
         engine = _engine_with_entries(tmp_path, entry)
-        engine.record_factually_wrong(_ID_APPROVED, task_id=_TASK_A)
+        _record_factually_wrong(engine, _ID_APPROVED, _TASK_A)
         entries = engine.get_entries()
         assert any(e.id == _ID_APPROVED for e in entries)
 
@@ -168,14 +178,14 @@ class TestConfirmationCycle:
         """
         entry = _make_entry_base(_ID_APPROVED, MemoryState.APPROVED, approved_at=_TS_APPROVED)
         engine = _engine_with_entries(tmp_path, entry)
-        result = engine.record_factually_wrong(_ID_APPROVED, task_id=_TASK_A)
+        result = _record_factually_wrong(engine, _ID_APPROVED, _TASK_A)
         assert result.approved_at is None
 
     def test_approved_at_cleared_persisted_after_contested_transition(self, tmp_path: Path) -> None:
         """AC1: approved_at=None clearing is persisted to storage on approved→contested transition."""
         entry = _make_entry_base(_ID_APPROVED, MemoryState.APPROVED, approved_at=_TS_APPROVED)
         engine = _engine_with_entries(tmp_path, entry)
-        engine.record_factually_wrong(_ID_APPROVED, task_id=_TASK_A)
+        _record_factually_wrong(engine, _ID_APPROVED, _TASK_A)
         reloaded = engine.get_entry(_ID_APPROVED)
         assert reloaded.approved_at is None
 
@@ -184,14 +194,14 @@ class TestConfirmationCycle:
         entry = _make_entry_base(_ID_APPROVED, MemoryState.APPROVED)
         engine = _engine_with_entries(tmp_path, entry)
         with pytest.raises(ValidationError):
-            engine.record_factually_wrong(_ID_APPROVED, task_id="")
+            engine.record_factually_wrong(_ID_APPROVED, task_id="", expected_revision=entry.revision)
 
     def test_whitespace_task_id_raises_validation_error(self, tmp_path: Path) -> None:
         """AC1: record_factually_wrong with whitespace-only task_id raises ValidationError."""
         entry = _make_entry_base(_ID_APPROVED, MemoryState.APPROVED)
         engine = _engine_with_entries(tmp_path, entry)
         with pytest.raises(ValidationError):
-            engine.record_factually_wrong(_ID_APPROVED, task_id="   ")
+            engine.record_factually_wrong(_ID_APPROVED, task_id="   ", expected_revision=entry.revision)
 
     # ------------------------------------------------------------------
     # AC2 — second confirmation: different task → disputed; None → initial
@@ -201,14 +211,14 @@ class TestConfirmationCycle:
         """AC2: contested entry with non-None contested_by_task ≠ task_id → disputed."""
         entry = _make_entry(_ID_CONTESTED, MemoryState.CONTESTED, contested_by_task=_TASK_A)
         engine = _engine_with_entries(tmp_path, entry)
-        result = engine.record_factually_wrong(_ID_CONTESTED, task_id=_TASK_B)
+        result = _record_factually_wrong(engine, _ID_CONTESTED, _TASK_B)
         assert result.state == MemoryState.DISPUTED
 
     def test_contested_with_none_contested_by_task_treated_as_initial_confirmation(self, tmp_path: Path) -> None:
         """AC2 edge: contested with contested_by_task=None → stays contested, stores task_id."""
         entry = _make_entry(_ID_CONTESTED, MemoryState.CONTESTED, contested_by_task=None)
         engine = _engine_with_entries(tmp_path, entry)
-        result = engine.record_factually_wrong(_ID_CONTESTED, task_id=_TASK_B)
+        result = _record_factually_wrong(engine, _ID_CONTESTED, _TASK_B)
         assert result.state == MemoryState.CONTESTED
         assert result.contested_by_task == _TASK_B
 
@@ -217,83 +227,87 @@ class TestConfirmationCycle:
     # ------------------------------------------------------------------
 
     def test_same_task_id_on_contested_returns_entry_unchanged(self, tmp_path: Path) -> None:
-        """AC3: same task_id on contested entry → no mutation, original entry returned."""
+        """A replay returns the stored result without rewriting the receipt or entry."""
         entry = _make_entry(_ID_CONTESTED, MemoryState.CONTESTED, contested_by_task=_TASK_A)
         engine = _engine_with_entries(tmp_path, entry)
-        result = engine.record_factually_wrong(_ID_CONTESTED, task_id=_TASK_A)
-        assert result.state == MemoryState.CONTESTED
-        assert result.contested_by_task == _TASK_A
-        assert result.updated_at == _TS  # no mutation means updated_at is unchanged
+        first = _record_factually_wrong(engine, _ID_CONTESTED, _TASK_A)
+        path = tmp_path / f"{_ID_CONTESTED}.md"
+        before_replay = path.read_bytes()
+
+        replay = engine.record_factually_wrong(
+            _ID_CONTESTED,
+            task_id=_TASK_A,
+            expected_revision=entry.revision,
+        )
+
+        assert replay.already_applied is True
+        assert replay.entry.state == MemoryState.CONTESTED
+        assert replay.entry.contested_by_task == _TASK_A
+        assert replay.entry.updated_at == first.updated_at
+        assert path.read_bytes() == before_replay
 
     def test_pending_state_raises_transition_error(self, tmp_path: Path) -> None:
         """AC3: pending is not voteable → TransitionError."""
         entry = _make_entry_base(_ID_PENDING, MemoryState.PENDING)
         engine = _engine_with_entries(tmp_path, entry)
         with pytest.raises(TransitionError):
-            engine.record_factually_wrong(_ID_PENDING, task_id=_TASK_A)
+            _record_factually_wrong(engine, _ID_PENDING, _TASK_A)
 
     def test_disputed_state_raises_transition_error(self, tmp_path: Path) -> None:
         """AC3: disputed is not voteable → TransitionError."""
         entry = _make_entry_base(_ID_DISPUTED, MemoryState.DISPUTED)
         engine = _engine_with_entries(tmp_path, entry)
         with pytest.raises(TransitionError):
-            engine.record_factually_wrong(_ID_DISPUTED, task_id=_TASK_A)
+            _record_factually_wrong(engine, _ID_DISPUTED, _TASK_A)
 
     def test_stale_state_raises_transition_error(self, tmp_path: Path) -> None:
         """AC3: stale is not voteable → TransitionError."""
         entry = _make_entry_base(_ID_STALE, MemoryState.STALE)
         engine = _engine_with_entries(tmp_path, entry)
         with pytest.raises(TransitionError):
-            engine.record_factually_wrong(_ID_STALE, task_id=_TASK_A)
+            _record_factually_wrong(engine, _ID_STALE, _TASK_A)
 
     def test_deleted_state_raises_transition_error(self, tmp_path: Path) -> None:
         """AC3: deleted is not voteable → TransitionError."""
         entry = _make_entry_base(_ID_DELETED, MemoryState.DELETED)
         engine = _engine_with_entries(tmp_path, entry)
         with pytest.raises(TransitionError):
-            engine.record_factually_wrong(_ID_DELETED, task_id=_TASK_A)
+            _record_factually_wrong(engine, _ID_DELETED, _TASK_A)
 
     # ------------------------------------------------------------------
     # AC4 — OCC guard
     # ------------------------------------------------------------------
 
     def test_occ_mismatch_raises_concurrency_error(self, tmp_path: Path) -> None:
-        """AC4: expected_updated_at mismatch raises ConcurrencyError."""
+        """A stale content revision raises ConcurrencyError."""
         entry = _make_entry_base(_ID_APPROVED, MemoryState.APPROVED)
         engine = _engine_with_entries(tmp_path, entry)
         with pytest.raises(ConcurrencyError):
-            engine.record_factually_wrong(_ID_APPROVED, task_id=_TASK_A, expected_updated_at=_TS_WRONG)
+            engine.record_factually_wrong(_ID_APPROVED, task_id=_TASK_A, expected_revision="0" * 16)
 
     def test_occ_mismatch_does_not_mutate_entry(self, tmp_path: Path) -> None:
         """AC4: ConcurrencyError is raised without mutating the entry."""
         entry = _make_entry_base(_ID_APPROVED, MemoryState.APPROVED)
         engine = _engine_with_entries(tmp_path, entry)
         with pytest.raises(ConcurrencyError):
-            engine.record_factually_wrong(_ID_APPROVED, task_id=_TASK_A, expected_updated_at=_TS_WRONG)
+            engine.record_factually_wrong(_ID_APPROVED, task_id=_TASK_A, expected_revision="0" * 16)
         after = engine.get_entry(_ID_APPROVED)
         assert after.state == MemoryState.APPROVED
-
-    def test_occ_none_skips_check_and_proceeds(self, tmp_path: Path) -> None:
-        """AC4: expected_updated_at=None skips OCC check (unconditional write)."""
-        entry = _make_entry_base(_ID_APPROVED, MemoryState.APPROVED)
-        engine = _engine_with_entries(tmp_path, entry)
-        result = engine.record_factually_wrong(_ID_APPROVED, task_id=_TASK_A, expected_updated_at=None)
-        assert result.state == MemoryState.CONTESTED
 
     def test_occ_match_allows_transition(self, tmp_path: Path) -> None:
         """AC4: matching expected_updated_at proceeds to state transition."""
         entry = _make_entry_base(_ID_APPROVED, MemoryState.APPROVED, updated_at=_TS)
         engine = _engine_with_entries(tmp_path, entry)
-        result = engine.record_factually_wrong(_ID_APPROVED, task_id=_TASK_A, expected_updated_at=_TS)
+        result = _record_factually_wrong(engine, _ID_APPROVED, _TASK_A)
         assert result.state == MemoryState.CONTESTED
 
     def test_occ_evaluated_before_state_guard(self, tmp_path: Path) -> None:
         """AC4 + AC3: OCC guard runs before state guard — ConcurrencyError beats TransitionError."""
-        # pending is non-voteable; wrong expected_updated_at → ConcurrencyError, not TransitionError
+        # pending is non-voteable; a stale revision must fail before the state guard.
         entry = _make_entry_base(_ID_PENDING, MemoryState.PENDING)
         engine = _engine_with_entries(tmp_path, entry)
         with pytest.raises(ConcurrencyError):
-            engine.record_factually_wrong(_ID_PENDING, task_id=_TASK_A, expected_updated_at=_TS_WRONG)
+            engine.record_factually_wrong(_ID_PENDING, task_id=_TASK_A, expected_revision="0" * 16)
 
     def test_occ_mismatch_beats_empty_task_id_validation(self, tmp_path: Path) -> None:
         """AC3+AC4: OCC guard evaluated before task_id validation —
@@ -303,7 +317,7 @@ class TestConfirmationCycle:
         entry = _make_entry_base(_ID_APPROVED, MemoryState.APPROVED)
         engine = _engine_with_entries(tmp_path, entry)
         with pytest.raises(ConcurrencyError):
-            engine.record_factually_wrong(_ID_APPROVED, task_id="", expected_updated_at=_TS_WRONG)
+            engine.record_factually_wrong(_ID_APPROVED, task_id="", expected_revision="0" * 16)
 
     def test_occ_mismatch_beats_whitespace_task_id_validation(self, tmp_path: Path) -> None:
         """AC3+AC4: OCC guard evaluated before task_id validation —
@@ -312,4 +326,4 @@ class TestConfirmationCycle:
         entry = _make_entry_base(_ID_APPROVED, MemoryState.APPROVED)
         engine = _engine_with_entries(tmp_path, entry)
         with pytest.raises(ConcurrencyError):
-            engine.record_factually_wrong(_ID_APPROVED, task_id="   ", expected_updated_at=_TS_WRONG)
+            engine.record_factually_wrong(_ID_APPROVED, task_id="   ", expected_revision="0" * 16)

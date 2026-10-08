@@ -1,31 +1,23 @@
 """MCP assessment tool regression tests.
 
 Behavioral coverage:
-- AC1: assess_memories MCP tool validates assessments list (non-empty; ToolError if empty),
-       task_id (non-empty; ToolError if empty/whitespace-only). Valid bucket values:
-       outstanding, unremarkable, didnt_use, factually_wrong. Invalid bucket in any item
-       raises ToolError with allowed values listed (aborts entire batch).
-- AC2: Counter-increment path (outstanding/unremarkable/didnt_use): validates entry exists
-       and is in voteable state (approved, curated, contested); increments corresponding
-       counter; recomputes score via compute_score; calls check_slot_efficiency and if
-       exceeded calls try_stale_transition.
-- AC3: Factually-wrong path: validates entry exists and is in voteable state; delegates to
-       record_factually_wrong(entry_id, task_id, expected_updated_at=entry.updated_at).
-       No counter increment, no score recompute, no slot-efficiency check.
-- AC4: Returns list of per-entry results with entry_id and success/error. Non-existent
-       entry_id, non-voteable state, or ConcurrencyError produces a failure result for that
-       entry (with error message) without aborting remaining assessments. Successful entries
-       are persisted to disk atomically per entry.
+- The MCP item schema requires entry_id, a current revision token, and a supported bucket;
+  the complete batch and printable task ID are validated before engine access.
+- Counter and factually-wrong assessments check the supplied revision and replay receipts before
+  state guards, then persist counters or transitions with one receipt in one entry write.
+- Successful per-entry results report already_applied and recorded_bucket. Stale revisions,
+  missing entries, and non-voteable states remain per-item failures while other items proceed.
 """
 
 from __future__ import annotations
 
+from itertools import count
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from owlbear_memory import MemoryEngine, MemoryEntry, MemoryState, storage
-from owlbear_memory.errors import ConcurrencyError, TransitionError
+from owlbear_memory import AssessmentResult, MemoryEngine, MemoryEntry, MemoryState, storage
+from owlbear_memory.errors import ConcurrencyError, NotFoundError, TransitionError
 
 # ---------------------------------------------------------------------------
 # Shared constants
@@ -42,6 +34,7 @@ _ID_DELETED = "550e8400-e29b-41d4-a716-446655441864"
 _ID_STALE = "550e8400-e29b-41d4-a716-446655441865"
 _ID_MISSING = "550e8400-e29b-41d4-a716-446655441866"
 _ID_CURATED_B = "550e8400-e29b-41d4-a716-446655441867"
+_TASK_IDS = count()
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -87,6 +80,25 @@ def _make_ctx(engine: MemoryEngine) -> MagicMock:
     ctx = MagicMock()
     ctx.request_context.lifespan_context.engine = engine
     return ctx
+
+
+def _assessment_input(engine: MemoryEngine, entry_id: str, bucket: str) -> dict[str, str]:
+    try:
+        revision = engine.get_entry(entry_id).revision
+    except NotFoundError:
+        revision = "0" * 16
+    return {"entry_id": entry_id, "revision": revision, "bucket": bucket}
+
+
+def _record_assessment(engine: MemoryEngine, entry_id: str, bucket: str) -> MemoryEntry:
+    entry = engine.get_entry(entry_id)
+    outcome = engine.record_assessment(
+        entry_id,
+        bucket,
+        task_id=f"assessment-test-{next(_TASK_IDS)}",
+        expected_revision=entry.revision,
+    )
+    return outcome.entry
 
 
 # ---------------------------------------------------------------------------
@@ -148,7 +160,7 @@ class TestToolRegistration:
         with pytest.raises(ToolError):
             await assess_memories(
                 ctx,
-                assessments=[{"entry_id": _ID_APPROVED, "bucket": "outstanding"}],
+                assessments=[_assessment_input(engine, _ID_APPROVED, "outstanding")],
                 task_id="",
             )
 
@@ -168,7 +180,7 @@ class TestToolRegistration:
         with pytest.raises(ToolError):
             await assess_memories(
                 ctx,
-                assessments=[{"entry_id": _ID_APPROVED, "bucket": "outstanding"}],
+                assessments=[_assessment_input(engine, _ID_APPROVED, "outstanding")],
                 task_id="   ",
             )
 
@@ -185,7 +197,7 @@ class TestToolRegistration:
         with pytest.raises(ToolError):
             await assess_memories(
                 ctx,
-                assessments=[{"entry_id": _ID_APPROVED, "bucket": "bogus_bucket"}],
+                assessments=[{"entry_id": _ID_APPROVED, "revision": "0" * 16, "bucket": "bogus_bucket"}],
                 task_id="task-1",
             )
 
@@ -202,7 +214,7 @@ class TestToolRegistration:
         with pytest.raises(ToolError) as exc_info:
             await assess_memories(
                 ctx,
-                assessments=[{"entry_id": _ID_APPROVED, "bucket": "invalid"}],
+                assessments=[{"entry_id": _ID_APPROVED, "revision": "0" * 16, "bucket": "invalid"}],
                 task_id="task-1",
             )
 
@@ -228,8 +240,8 @@ class TestToolRegistration:
             await assess_memories(
                 ctx,
                 assessments=[
-                    {"entry_id": _ID_APPROVED, "bucket": "outstanding"},
-                    {"entry_id": _ID_APPROVED, "bucket": "INVALID"},
+                    _assessment_input(engine, _ID_APPROVED, "outstanding"),
+                    {**_assessment_input(engine, _ID_APPROVED, "outstanding"), "bucket": "INVALID"},
                 ],
                 task_id="task-1",
             )
@@ -269,7 +281,7 @@ class TestToolRegistration:
         with pytest.raises(ToolError):
             await assess_memories(
                 ctx,
-                assessments=[{"entry_id": _ID_APPROVED}],  # missing 'bucket'
+                assessments=[{"entry_id": _ID_APPROVED, "revision": "0" * 16}],  # missing 'bucket'
                 task_id="task-1",
             )
 
@@ -286,7 +298,7 @@ class TestToolRegistration:
         with pytest.raises(ToolError):
             await assess_memories(
                 ctx,
-                assessments=[{"bucket": "outstanding"}],  # missing 'entry_id'
+                assessments=[{"revision": "0" * 16, "bucket": "outstanding"}],  # missing 'entry_id'
                 task_id="task-1",
             )
 
@@ -306,8 +318,8 @@ class TestToolRegistration:
 
             result = await assess_memories(
                 ctx,
-                assessments=[{"entry_id": _ID_APPROVED, "bucket": bucket}],
-                task_id="task-1",
+                assessments=[_assessment_input(engine, _ID_APPROVED, bucket)],
+                task_id=f"task-{bucket}",
             )
             assert isinstance(result, dict), f"Expected dict result for bucket={bucket}"
 
@@ -333,7 +345,7 @@ class TestCounterIncrementPath:
         _seed_entry(tmp_path, entry)
         engine.load()
 
-        updated = engine.record_assessment(_ID_APPROVED, "outstanding")
+        updated = _record_assessment(engine, _ID_APPROVED, "outstanding")
         assert updated.outstanding_count == 3
 
     def test_unremarkable_bucket_increments_unremarkable_count(self, tmp_path: Path) -> None:
@@ -343,7 +355,7 @@ class TestCounterIncrementPath:
         _seed_entry(tmp_path, entry)
         engine.load()
 
-        updated = engine.record_assessment(_ID_APPROVED, "unremarkable")
+        updated = _record_assessment(engine, _ID_APPROVED, "unremarkable")
         assert updated.unremarkable_count == 6
 
     def test_didnt_use_bucket_increments_didnt_use_count(self, tmp_path: Path) -> None:
@@ -353,7 +365,7 @@ class TestCounterIncrementPath:
         _seed_entry(tmp_path, entry)
         engine.load()
 
-        updated = engine.record_assessment(_ID_APPROVED, "didnt_use")
+        updated = _record_assessment(engine, _ID_APPROVED, "didnt_use")
         assert updated.didnt_use_count == 11
 
     def test_outstanding_increment_only_changes_outstanding_count(self, tmp_path: Path) -> None:
@@ -363,7 +375,7 @@ class TestCounterIncrementPath:
         _seed_entry(tmp_path, entry)
         engine.load()
 
-        updated = engine.record_assessment(_ID_APPROVED, "outstanding")
+        updated = _record_assessment(engine, _ID_APPROVED, "outstanding")
         assert updated.unremarkable_count == 0
         assert updated.didnt_use_count == 0
 
@@ -377,7 +389,7 @@ class TestCounterIncrementPath:
         _seed_entry(tmp_path, entry)
         engine.load()
 
-        updated = engine.record_assessment(_ID_APPROVED, "outstanding")
+        updated = _record_assessment(engine, _ID_APPROVED, "outstanding")
         expected = compute_score(confidence, 2, 0)
         assert updated.score == pytest.approx(expected)
         assert updated.score == pytest.approx(confidence + 2 * OUTSTANDING_BOOST)
@@ -392,7 +404,7 @@ class TestCounterIncrementPath:
         _seed_entry(tmp_path, entry)
         engine.load()
 
-        updated = engine.record_assessment(_ID_APPROVED, "unremarkable")
+        updated = _record_assessment(engine, _ID_APPROVED, "unremarkable")
         expected = compute_score(confidence, 0, 3)
         assert updated.score == pytest.approx(expected)
         assert updated.score == pytest.approx(confidence - 3 * UNREMARKABLE_PENALTY)
@@ -404,7 +416,7 @@ class TestCounterIncrementPath:
         _seed_entry(tmp_path, entry)
         engine.load()
 
-        updated = engine.record_assessment(_ID_APPROVED, "outstanding")
+        updated = _record_assessment(engine, _ID_APPROVED, "outstanding")
         assert updated.outstanding_count == 1
 
     def test_curated_entry_is_voteable(self, tmp_path: Path) -> None:
@@ -414,7 +426,7 @@ class TestCounterIncrementPath:
         _seed_entry(tmp_path, entry)
         engine.load()
 
-        updated = engine.record_assessment(_ID_CURATED, "unremarkable")
+        updated = _record_assessment(engine, _ID_CURATED, "unremarkable")
         assert updated.unremarkable_count == 1
 
     def test_contested_entry_is_voteable(self, tmp_path: Path) -> None:
@@ -424,7 +436,7 @@ class TestCounterIncrementPath:
         _seed_entry(tmp_path, entry)
         engine.load()
 
-        updated = engine.record_assessment(_ID_CONTESTED, "didnt_use")
+        updated = _record_assessment(engine, _ID_CONTESTED, "didnt_use")
         assert updated.didnt_use_count == 1
 
     def test_pending_entry_raises_transition_error(self, tmp_path: Path) -> None:
@@ -435,7 +447,7 @@ class TestCounterIncrementPath:
         engine.load()
 
         with pytest.raises(TransitionError):
-            engine.record_assessment(_ID_PENDING, "outstanding")
+            _record_assessment(engine, _ID_PENDING, "outstanding")
 
     def test_deleted_entry_raises_transition_error(self, tmp_path: Path) -> None:
         """deleted state is not voteable — record_assessment raises TransitionError."""
@@ -445,7 +457,7 @@ class TestCounterIncrementPath:
         engine.load()
 
         with pytest.raises(TransitionError):
-            engine.record_assessment(_ID_DELETED, "outstanding")
+            _record_assessment(engine, _ID_DELETED, "outstanding")
 
     def test_stale_entry_raises_transition_error(self, tmp_path: Path) -> None:
         """stale state is not voteable — record_assessment raises TransitionError."""
@@ -455,7 +467,7 @@ class TestCounterIncrementPath:
         engine.load()
 
         with pytest.raises(TransitionError):
-            engine.record_assessment(_ID_STALE, "outstanding")
+            _record_assessment(engine, _ID_STALE, "outstanding")
 
     def test_occ_mismatch_raises_concurrency_error(self, tmp_path: Path) -> None:
         """ConcurrencyError raised when expected_updated_at doesn't match entry updated_at."""
@@ -465,7 +477,12 @@ class TestCounterIncrementPath:
         engine.load()
 
         with pytest.raises(ConcurrencyError):
-            engine.record_assessment(_ID_APPROVED, "outstanding", expected_updated_at=_TS_WRONG)
+            engine.record_assessment(
+                _ID_APPROVED,
+                "outstanding",
+                task_id="assessment-conflict",
+                expected_revision="0" * 16,
+            )
 
     def test_occ_match_succeeds(self, tmp_path: Path) -> None:
         """No error when expected_updated_at matches entry's current updated_at."""
@@ -474,7 +491,7 @@ class TestCounterIncrementPath:
         _seed_entry(tmp_path, entry)
         engine.load()
 
-        updated = engine.record_assessment(_ID_APPROVED, "outstanding", expected_updated_at=_TS)
+        updated = _record_assessment(engine, _ID_APPROVED, "outstanding")
         assert updated.outstanding_count == 1
 
     def test_slot_efficiency_exceeded_transitions_entry_to_stale(self, tmp_path: Path) -> None:
@@ -493,7 +510,7 @@ class TestCounterIncrementPath:
         _seed_entry(tmp_path, entry)
         engine.load()
 
-        updated = engine.record_assessment(_ID_APPROVED, "didnt_use")
+        updated = _record_assessment(engine, _ID_APPROVED, "didnt_use")
         assert updated.state == MemoryState.STALE
 
     def test_slot_efficiency_not_exceeded_state_unchanged(self, tmp_path: Path) -> None:
@@ -510,7 +527,7 @@ class TestCounterIncrementPath:
         _seed_entry(tmp_path, entry)
         engine.load()
 
-        updated = engine.record_assessment(_ID_APPROVED, "didnt_use")
+        updated = _record_assessment(engine, _ID_APPROVED, "didnt_use")
         assert updated.state == MemoryState.APPROVED
 
     def test_counter_persisted_to_disk_after_increment(self, tmp_path: Path) -> None:
@@ -520,11 +537,39 @@ class TestCounterIncrementPath:
         _seed_entry(tmp_path, entry)
         engine.load()
 
-        engine.record_assessment(_ID_APPROVED, "outstanding")
+        _record_assessment(engine, _ID_APPROVED, "outstanding")
 
         fresh_engine = MemoryEngine(memory_dir=tmp_path)
         persisted = fresh_engine.get_entry(_ID_APPROVED)
         assert persisted.outstanding_count == 1
+
+    def test_duplicate_task_revision_keeps_first_bucket_after_reload(self, tmp_path: Path) -> None:
+        """A repeated assessment reuses its receipt instead of incrementing another bucket."""
+        engine = MemoryEngine(memory_dir=tmp_path)
+        entry = _make_entry(_ID_APPROVED, "approved")
+        _seed_entry(tmp_path, entry)
+        engine.load()
+
+        first = engine.record_assessment(
+            _ID_APPROVED,
+            "outstanding",
+            task_id="task-1",
+            expected_revision=entry.revision,
+        )
+        second = engine.record_assessment(
+            _ID_APPROVED,
+            "unremarkable",
+            task_id="task-1",
+            expected_revision=entry.revision,
+        )
+
+        persisted = MemoryEngine(memory_dir=tmp_path).get_entry(_ID_APPROVED)
+        assert first.already_applied is False
+        assert second.already_applied is True
+        assert second.recorded_bucket == "outstanding"
+        assert persisted.outstanding_count == 1
+        assert persisted.unremarkable_count == 0
+        assert len(persisted.assessment_receipts) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -548,7 +593,7 @@ class TestFactuallyWrongPath:
 
         await assess_memories(
             ctx,
-            assessments=[{"entry_id": _ID_APPROVED, "bucket": "factually_wrong"}],
+            assessments=[_assessment_input(engine, _ID_APPROVED, "factually_wrong")],
             task_id="task-99",
         )
 
@@ -574,7 +619,7 @@ class TestFactuallyWrongPath:
 
         await assess_memories(
             ctx,
-            assessments=[{"entry_id": _ID_APPROVED, "bucket": "factually_wrong"}],
+            assessments=[_assessment_input(engine, _ID_APPROVED, "factually_wrong")],
             task_id="task-99",
         )
 
@@ -597,7 +642,7 @@ class TestFactuallyWrongPath:
 
         await assess_memories(
             ctx,
-            assessments=[{"entry_id": _ID_APPROVED, "bucket": "factually_wrong"}],
+            assessments=[_assessment_input(engine, _ID_APPROVED, "factually_wrong")],
             task_id="task-99",
         )
 
@@ -618,7 +663,7 @@ class TestFactuallyWrongPath:
         with patch.object(engine, "record_factually_wrong", wraps=engine.record_factually_wrong) as mock_fw:
             await assess_memories(
                 ctx,
-                assessments=[{"entry_id": _ID_APPROVED, "bucket": "factually_wrong"}],
+                assessments=[_assessment_input(engine, _ID_APPROVED, "factually_wrong")],
                 task_id="task-sentinel-abc",
             )
 
@@ -627,8 +672,8 @@ class TestFactuallyWrongPath:
         assert "task-sentinel-abc" in all_args
 
     @pytest.mark.asyncio
-    async def test_factually_wrong_passes_entry_updated_at_as_expected_updated_at(self, tmp_path: Path) -> None:
-        """assess_memories passes entry.updated_at as expected_updated_at to record_factually_wrong."""
+    async def test_factually_wrong_forwards_caller_revision(self, tmp_path: Path) -> None:
+        """assess_memories forwards the item's revision unchanged to record_factually_wrong."""
         from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
@@ -636,16 +681,16 @@ class TestFactuallyWrongPath:
         _seed_entry(tmp_path, entry)
         engine.load()
         ctx = _make_ctx(engine)
+        assessment = _assessment_input(engine, _ID_APPROVED, "factually_wrong")
 
         with patch.object(engine, "record_factually_wrong", wraps=engine.record_factually_wrong) as mock_fw:
             await assess_memories(
                 ctx,
-                assessments=[{"entry_id": _ID_APPROVED, "bucket": "factually_wrong"}],
+                assessments=[assessment],
                 task_id="task-1",
             )
 
-        all_args = list(mock_fw.call_args.args) + list(mock_fw.call_args.kwargs.values())
-        assert _TS in all_args, f"expected_updated_at={_TS!r} was not passed to record_factually_wrong; got: {all_args}"
+        assert mock_fw.call_args.kwargs["expected_revision"] == assessment["revision"]
 
     @pytest.mark.asyncio
     async def test_factually_wrong_non_voteable_produces_per_item_failure(self, tmp_path: Path) -> None:
@@ -663,8 +708,8 @@ class TestFactuallyWrongPath:
         result = await assess_memories(
             ctx,
             assessments=[
-                {"entry_id": _ID_PENDING, "bucket": "factually_wrong"},
-                {"entry_id": _ID_APPROVED, "bucket": "outstanding"},
+                _assessment_input(engine, _ID_PENDING, "factually_wrong"),
+                _assessment_input(engine, _ID_APPROVED, "outstanding"),
             ],
             task_id="task-1",
         )
@@ -698,7 +743,7 @@ class TestBatchSemantics:
 
         result = await assess_memories(
             ctx,
-            assessments=[{"entry_id": _ID_APPROVED, "bucket": "outstanding"}],
+            assessments=[_assessment_input(engine, _ID_APPROVED, "outstanding")],
             task_id="task-1",
         )
 
@@ -718,7 +763,7 @@ class TestBatchSemantics:
 
         result = await assess_memories(
             ctx,
-            assessments=[{"entry_id": _ID_APPROVED, "bucket": "outstanding"}],
+            assessments=[_assessment_input(engine, _ID_APPROVED, "outstanding")],
             task_id="task-1",
         )
 
@@ -726,6 +771,8 @@ class TestBatchSemantics:
         assert len(results) == 1
         assert results[0]["entry_id"] == _ID_APPROVED
         assert results[0]["success"] is True
+        assert results[0]["already_applied"] is False
+        assert results[0]["recorded_bucket"] == "outstanding"
 
     @pytest.mark.asyncio
     async def test_results_list_length_equals_assessments_count(self, tmp_path: Path) -> None:
@@ -743,8 +790,8 @@ class TestBatchSemantics:
         result = await assess_memories(
             ctx,
             assessments=[
-                {"entry_id": _ID_APPROVED, "bucket": "outstanding"},
-                {"entry_id": _ID_CURATED, "bucket": "unremarkable"},
+                _assessment_input(engine, _ID_APPROVED, "outstanding"),
+                _assessment_input(engine, _ID_CURATED, "unremarkable"),
             ],
             task_id="task-1",
         )
@@ -761,7 +808,7 @@ class TestBatchSemantics:
 
         result = await assess_memories(
             ctx,
-            assessments=[{"entry_id": _ID_MISSING, "bucket": "outstanding"}],
+            assessments=[_assessment_input(engine, _ID_MISSING, "outstanding")],
             task_id="task-1",
         )
 
@@ -785,7 +832,7 @@ class TestBatchSemantics:
 
         result = await assess_memories(
             ctx,
-            assessments=[{"entry_id": _ID_PENDING, "bucket": "outstanding"}],
+            assessments=[_assessment_input(engine, _ID_PENDING, "outstanding")],
             task_id="task-1",
         )
 
@@ -808,19 +855,30 @@ class TestBatchSemantics:
 
         original_record = engine.record_assessment
 
-        def _patched_record(entry_id: str, bucket: str, expected_updated_at: str | None = None) -> MemoryEntry:
+        def _patched_record(
+            entry_id: str,
+            bucket: str,
+            *,
+            task_id: str,
+            expected_revision: str,
+        ) -> AssessmentResult:
             if entry_id == _ID_APPROVED:
                 msg = "simulated OCC conflict"
                 raise ConcurrencyError(msg)
-            return original_record(entry_id, bucket, expected_updated_at)
+            return original_record(
+                entry_id,
+                bucket,
+                task_id=task_id,
+                expected_revision=expected_revision,
+            )
 
         ctx = _make_ctx(engine)
         with patch.object(engine, "record_assessment", side_effect=_patched_record):
             result = await assess_memories(
                 ctx,
                 assessments=[
-                    {"entry_id": _ID_APPROVED, "bucket": "outstanding"},
-                    {"entry_id": _ID_CURATED, "bucket": "unremarkable"},
+                    _assessment_input(engine, _ID_APPROVED, "outstanding"),
+                    _assessment_input(engine, _ID_CURATED, "unremarkable"),
                 ],
                 task_id="task-1",
             )
@@ -847,8 +905,8 @@ class TestBatchSemantics:
         result = await assess_memories(
             ctx,
             assessments=[
-                {"entry_id": _ID_MISSING, "bucket": "outstanding"},  # fails
-                {"entry_id": _ID_APPROVED, "bucket": "outstanding"},  # must still run
+                _assessment_input(engine, _ID_MISSING, "outstanding"),  # fails
+                _assessment_input(engine, _ID_APPROVED, "outstanding"),  # must still run
             ],
             task_id="task-1",
         )
@@ -875,7 +933,7 @@ class TestBatchSemantics:
 
         await assess_memories(
             ctx,
-            assessments=[{"entry_id": _ID_APPROVED, "bucket": "outstanding"}],
+            assessments=[_assessment_input(engine, _ID_APPROVED, "outstanding")],
             task_id="task-1",
         )
 
@@ -896,7 +954,7 @@ class TestBatchSemantics:
 
         await assess_memories(
             ctx,
-            assessments=[{"entry_id": _ID_PENDING, "bucket": "outstanding"}],
+            assessments=[_assessment_input(engine, _ID_PENDING, "outstanding")],
             task_id="task-1",
         )
 
@@ -921,9 +979,9 @@ class TestBatchSemantics:
         result = await assess_memories(
             ctx,
             assessments=[
-                {"entry_id": _ID_MISSING, "bucket": "outstanding"},
-                {"entry_id": _ID_APPROVED, "bucket": "outstanding"},
-                {"entry_id": _ID_CURATED, "bucket": "unremarkable"},
+                _assessment_input(engine, _ID_MISSING, "outstanding"),
+                _assessment_input(engine, _ID_APPROVED, "outstanding"),
+                _assessment_input(engine, _ID_CURATED, "unremarkable"),
             ],
             task_id="task-1",
         )

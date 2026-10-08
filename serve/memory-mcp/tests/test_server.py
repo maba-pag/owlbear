@@ -9,7 +9,7 @@ from pathlib import Path
 import mcp
 import pytest
 from mcp.types import CallToolResult
-from owlbear_memory import MemoryCategory, MemoryEngine, MemoryEntry, MemoryState
+from owlbear_memory import MemoryCategory, MemoryEngine, MemoryEntry, MemoryState, storage
 
 from owlbear_memory_mcp.server import mcp as memory_mcp
 
@@ -32,6 +32,14 @@ Reviewed memory.
 def _text(result: CallToolResult) -> str:
     """Extract the text payload from one MCP tool result."""
     return "".join(item.text for item in result.content if hasattr(item, "text"))
+
+
+def _recall_revision(result: CallToolResult, entry_id: str) -> str:
+    text = _text(result)
+    marker = f"Entry ID: `{entry_id}`\nRevision: `"
+    assert not result.is_error
+    assert marker in text
+    return text.partition(marker)[2].partition("`")[0]
 
 
 def _git(repository: Path, *args: str) -> str:
@@ -257,6 +265,213 @@ async def test_live_server_rejects_missing_and_malformed_revisions_without_mutat
                 )
                 assert malformed.is_error
                 assert path.read_bytes() == before_calls
+
+
+@pytest.mark.asyncio
+async def test_live_assessments_reject_stale_revision_and_apply_sibling_item(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A stale recalled item is byte-stable while a current sibling is applied."""
+    memory_dir = tmp_path / ".owlbear/memory"
+    stale_entry = _create_entry(memory_dir, title="Stale assessment", state=MemoryState.APPROVED)
+    current_entry = _create_entry(memory_dir, title="Current assessment", state=MemoryState.APPROVED)
+    monkeypatch.chdir(tmp_path)
+
+    async with mcp.Client(memory_mcp) as client:
+        recalled = await client.call_tool("recall_memory", {"agent": "test-agent"})
+        stale_revision = _recall_revision(recalled, stale_entry.id)
+        current_revision = _recall_revision(recalled, current_entry.id)
+
+        second_engine = MemoryEngine(memory_dir)
+        edited = second_engine.edit(
+            stale_entry.id,
+            {"content": "Changed after recall."},
+            expected_revision=stale_revision,
+        )
+        current = second_engine.approve(stale_entry.id, expected_revision=edited.revision)
+        stale_path = memory_dir / f"{stale_entry.id}.md"
+        stale_bytes = stale_path.read_bytes()
+
+        result = await client.call_tool(
+            "assess_memories",
+            {
+                "assessments": [
+                    {"entry_id": stale_entry.id, "revision": stale_revision, "bucket": "outstanding"},
+                    {"entry_id": current_entry.id, "revision": current_revision, "bucket": "outstanding"},
+                ],
+                "task_id": "stale-batch-task",
+            },
+        )
+
+    assert not result.is_error
+    by_id = {item["entry_id"]: item for item in json.loads(_text(result))["results"]}
+    stale_result = by_id[stale_entry.id]
+    assert stale_result["success"] is False
+    assert "changed since recall" in stale_result["error"].lower()
+    assert current.revision in stale_result["error"]
+    assert "feedback was not applied" in stale_result["error"].lower()
+    assert stale_path.read_bytes() == stale_bytes
+
+    current_result = by_id[current_entry.id]
+    assert current_result["success"] is True
+    assert current_result["already_applied"] is False
+    assert current_result["recorded_bucket"] == "outstanding"
+    persisted = MemoryEngine(memory_dir).get_entry(current_entry.id)
+    assert persisted.outstanding_count == 1
+    assert len(persisted.assessment_receipts) == 1
+
+
+@pytest.mark.asyncio
+async def test_live_assessments_replay_first_bucket_and_allow_different_task(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Same-task retries retain the first bucket; a different task is applied."""
+    memory_dir = tmp_path / ".owlbear/memory"
+    entry = _create_entry(memory_dir, title="Receipt replay", state=MemoryState.APPROVED)
+    monkeypatch.chdir(tmp_path)
+
+    async with mcp.Client(memory_mcp) as client:
+        recalled = await client.call_tool("recall_memory", {"agent": "test-agent"})
+        revision = _recall_revision(recalled, entry.id)
+
+        first = await client.call_tool(
+            "assess_memories",
+            {
+                "assessments": [{"entry_id": entry.id, "revision": revision, "bucket": "outstanding"}],
+                "task_id": "assessment-task-one",
+            },
+        )
+        replay = await client.call_tool(
+            "assess_memories",
+            {
+                "assessments": [{"entry_id": entry.id, "revision": revision, "bucket": "unremarkable"}],
+                "task_id": "assessment-task-one",
+            },
+        )
+        other_task = await client.call_tool(
+            "assess_memories",
+            {
+                "assessments": [{"entry_id": entry.id, "revision": revision, "bucket": "unremarkable"}],
+                "task_id": "assessment-task-two",
+            },
+        )
+
+    first_result = json.loads(_text(first))["results"][0]
+    replay_result = json.loads(_text(replay))["results"][0]
+    other_result = json.loads(_text(other_task))["results"][0]
+    assert not first.is_error
+    assert not replay.is_error
+    assert not other_task.is_error
+    assert first_result["success"] is True
+    assert first_result["already_applied"] is False
+    assert first_result["recorded_bucket"] == "outstanding"
+    assert replay_result["success"] is True
+    assert replay_result["already_applied"] is True
+    assert replay_result["recorded_bucket"] == "outstanding"
+    assert other_result["success"] is True
+    assert other_result["already_applied"] is False
+    assert other_result["recorded_bucket"] == "unremarkable"
+
+    persisted = MemoryEngine(memory_dir).get_entry(entry.id)
+    assert persisted.outstanding_count == 1
+    assert persisted.unremarkable_count == 1
+    assert len(persisted.assessment_receipts) == 2
+
+
+@pytest.mark.asyncio
+async def test_live_assessments_reject_malformed_batches_without_mutation(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Malformed items or task IDs reject the whole registered-tool batch."""
+    memory_dir = tmp_path / ".owlbear/memory"
+    first_entry = _create_entry(memory_dir, title="Valid batch item", state=MemoryState.APPROVED)
+    second_entry = _create_entry(memory_dir, title="Malformed batch item", state=MemoryState.APPROVED)
+    first_path = memory_dir / f"{first_entry.id}.md"
+    second_path = memory_dir / f"{second_entry.id}.md"
+    before = {first_entry.id: first_path.read_bytes(), second_entry.id: second_path.read_bytes()}
+    valid_item = {"entry_id": first_entry.id, "revision": first_entry.revision, "bucket": "outstanding"}
+    malformed_items = [
+        {"entry_id": second_entry.id, "bucket": "outstanding"},
+        {"entry_id": second_entry.id, "revision": "a" * 15, "bucket": "outstanding"},
+        {"entry_id": second_entry.id, "revision": "A" + "a" * 15, "bucket": "outstanding"},
+        {
+            "entry_id": second_entry.id,
+            "revision": second_entry.revision,
+            "bucket": "outstanding",
+            "unexpected": True,
+        },
+    ]
+    invalid_task_ids = ("", "x" * 129, "task 1", "task-1\n", "task-\u00e9")
+    monkeypatch.chdir(tmp_path)
+
+    async with mcp.Client(memory_mcp) as client:
+        for malformed_item in malformed_items:
+            result = await client.call_tool(
+                "assess_memories",
+                {
+                    "assessments": [valid_item, malformed_item],
+                    "task_id": "valid-task-id",
+                },
+            )
+            assert result.is_error
+            assert first_path.read_bytes() == before[first_entry.id]
+            assert second_path.read_bytes() == before[second_entry.id]
+
+        for task_id in invalid_task_ids:
+            result = await client.call_tool(
+                "assess_memories",
+                {"assessments": [valid_item], "task_id": task_id},
+            )
+            assert result.is_error
+            assert first_path.read_bytes() == before[first_entry.id]
+            assert second_path.read_bytes() == before[second_entry.id]
+
+
+@pytest.mark.asyncio
+async def test_live_assessment_replay_survives_transition_to_stale(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """An idempotent replay is returned before the now-stale state guard."""
+    memory_dir = tmp_path / ".owlbear/memory"
+    entry = _create_entry(memory_dir, title="Stale replay", state=MemoryState.APPROVED)
+    entry = entry.model_copy(update={"didnt_use_count": 50})
+    path = memory_dir / f"{entry.id}.md"
+    storage.write_entry(path, entry, memory_dir=memory_dir)
+    monkeypatch.chdir(tmp_path)
+
+    async with mcp.Client(memory_mcp) as client:
+        first = await client.call_tool(
+            "assess_memories",
+            {
+                "assessments": [{"entry_id": entry.id, "revision": entry.revision, "bucket": "didnt_use"}],
+                "task_id": "stale-transition-task",
+            },
+        )
+        first_result = json.loads(_text(first))["results"][0]
+        assert not first.is_error
+        assert first_result["success"] is True
+        assert first_result["already_applied"] is False
+        assert MemoryEngine(memory_dir).get_entry(entry.id).state == MemoryState.STALE
+        before_replay = path.read_bytes()
+
+        replay = await client.call_tool(
+            "assess_memories",
+            {
+                "assessments": [{"entry_id": entry.id, "revision": entry.revision, "bucket": "outstanding"}],
+                "task_id": "stale-transition-task",
+            },
+        )
+
+    replay_result = json.loads(_text(replay))["results"][0]
+    assert not replay.is_error
+    assert replay_result["success"] is True
+    assert replay_result["already_applied"] is True
+    assert replay_result["recorded_bucket"] == "didnt_use"
+    assert path.read_bytes() == before_replay
 
 
 @pytest.mark.asyncio
