@@ -1194,6 +1194,12 @@ The programme is complete when all of the following hold:
 
 ## 7. Decisions
 
+Decision origins follow the system instructions (§1): "Decided by the user" entries are `decided`,
+"Decided by the lead" entries are `autonomous`, and plan content the user approved without a direct
+question is `approved`. New entries in this and package plans carry an inline label: `[decided
+YYYY-MM-DD]`, `[approved YYYY-MM-DD]` or `[autonomous: <role> YYYY-MM-DD]`; a reversal adds
+`[supersedes <locator>: <reason>]`.
+
 **Decided by the user on 2026-10-02:**
 
 - **U-1 — Push and PR authority: allowed.** Agents push their own `redesign/*` branches and create

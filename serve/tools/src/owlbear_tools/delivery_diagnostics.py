@@ -42,14 +42,14 @@ SUPPORTED_VERSIONS = {
     "config": 2,
     "frontier": 19,
     "coordination": 2,
-    "snapshot": 3,
+    "snapshot": 4,
     "host": 1,
     "host_local": 1,
 }
 # Mirror of the Delivery format registry's registered read-upcasts; a parity test pins both.
 READABLE_LEGACY_VERSIONS: dict[str, tuple[int, ...]] = {
     "frontier": (18,),
-    "snapshot": (1, 2),
+    "snapshot": (1, 2, 3),
 }
 # Mirror of the registry's fenced rewrites: these versions load only after ``delivery-migrate``.
 MIGRATION_REQUIRED_VERSIONS: dict[str, tuple[int, ...]] = {
@@ -57,7 +57,7 @@ MIGRATION_REQUIRED_VERSIONS: dict[str, tuple[int, ...]] = {
     "frontier": (17,),
 }
 # Mirror of the registry's workspace format (``runtime/format.json``) and migration journal states.
-SUPPORTED_FORMAT = 3
+SUPPORTED_FORMAT = 4
 MIGRATION_JOURNAL_STATES = frozenset({"backed-up", "applying", "applied", "verified", "aborting"})
 # Mirror of the registry's journal kinds: version 1 is a migration, version 2 names ``repair``.
 MIGRATION_JOURNAL_KINDS = {1: "migration", 2: "repair"}
@@ -178,7 +178,7 @@ _CURRENT_CHANGE_RECORD_ENTRIES = frozenset(
 )
 # Supported schema versions per JSON kind; None marks owner models without a version field.
 _CHANGE_RECORD_VERSIONS: dict[str, tuple[int, ...] | None] = {
-    "contract": (2,),
+    "contract": (2, 3),
     "admission": (1,),
     "state_publication": (1,),
     "result_receipt": None,
@@ -256,7 +256,7 @@ _RUNTIME_RECORD_VERSIONS: dict[str, tuple[int, ...] | None] = {
     "pull_request_observation": (1,),
     "acceptance_cursor": (1,),
     "package_manifest": (1,),
-    "package_authority": (2,),
+    "package_authority": (2, 3),
     "migration_journal": (1, 2),
 }
 # An unadmitted Design keeps an empty authority file.

@@ -27,7 +27,9 @@ _INTENT = b"# Acceptance identities\n"
 def _design(*items: tuple[str, list[str]]) -> bytes:
     blocks = [
         (
-            "```yaml target-contract\nkind: commitment\nid: COM-001\nclass: dealbreaker\nprovenance: test\n"
+            "```yaml target-contract\nkind: decision\nid: DEC-001\norigin: approved\nbasis: fixture\n"
+            "statement: Fixture decision.\n```\n"
+            "```yaml target-contract\nkind: commitment\nid: COM-001\nclass: dealbreaker\ndecisions: [DEC-001]\n"
             "statement: Keep identities stable.\n```\n"
         )
     ]

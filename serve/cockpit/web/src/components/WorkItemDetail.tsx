@@ -36,6 +36,7 @@ import {
   CONFIRMATION_KIND_LABELS,
   CONTINUATION_PROMPT_HELP,
   changePauseUnavailableMessage,
+  DECISION_ORIGIN_LABELS,
   EVIDENCE_STATUS_LABELS,
   EVIDENCE_STATUS_TONES,
   EVIDENCE_VERDICT_LABELS,
@@ -168,10 +169,12 @@ function DetailHeader({ detail }: Pick<WorkItemDetailProps, "detail">) {
 
 function RequestControl({
   request,
+  superseded,
   pending,
   onAnswer,
 }: {
   request: DeliveryRequest;
+  superseded: boolean;
   pending: boolean;
   onAnswer: WorkItemDetailProps["onAnswerRequest"];
 }) {
@@ -188,6 +191,13 @@ function RequestControl({
       request.resolution.response_text ||
       request.options.find((option) => option.option_id === request.resolution?.selected_option_id)?.label ||
       "Answered";
+    if (superseded) {
+      return (
+        <p className="mt-static-xs text-sm text-contrast-medium">
+          <PTag compact>Superseded</PTag> <s>{answerText}</s> · replaced by a later decision
+        </p>
+      );
+    }
     return <p className="mt-static-xs text-sm text-success">{answerText}</p>;
   }
   return (
@@ -264,6 +274,7 @@ function RequestsSection({ detail, pendingAction, onAnswerRequest }: WorkItemDet
   if (detail.item.card.scope !== "outcome") return null;
   const requests = detail.item.requests;
   if (requests.length === 0) return null;
+  const superseded = new Set(detail.item.superseded_request_ids ?? []);
   return (
     <section aria-labelledby="work-requests-heading">
       <PHeading id="work-requests-heading" tag="h3" size="md">
@@ -277,7 +288,12 @@ function RequestsSection({ detail, pendingAction, onAnswerRequest }: WorkItemDet
               <PTag compact>{REQUEST_KIND_LABELS[request.kind]}</PTag>
             </div>
             {request.applies_to ? <RequestScope scope={request.applies_to} detail={detail} /> : null}
-            <RequestControl request={request} pending={pendingAction !== null} onAnswer={onAnswerRequest} />
+            <RequestControl
+              request={request}
+              superseded={superseded.has(request.request_id)}
+              pending={pendingAction !== null}
+              onAnswer={onAnswerRequest}
+            />
           </article>
         ))}
       </div>
@@ -1003,6 +1019,55 @@ function SemanticDetail({ detail }: Pick<WorkItemDetailProps, "detail">) {
         </code>
       </details>
     </>
+  );
+}
+
+function DecisionsSection({ detail }: Pick<WorkItemDetailProps, "detail">) {
+  const [onlyYours, setOnlyYours] = useState(false);
+  const decisions = detail.item.decisions ?? [];
+  if (decisions.length === 0) return null;
+  const superseded = new Set(decisions.flatMap((decision) => decision.supersedes));
+  const shown = onlyYours ? decisions.filter((decision) => decision.origin === "decided") : decisions;
+  return (
+    <details>
+      <summary
+        id="work-decisions-heading"
+        className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium"
+      >
+        Decisions ({decisions.length})
+      </summary>
+      <div className="mt-static-sm">
+        <PButton
+          type="button"
+          variant="secondary"
+          compact
+          aria={{ "aria-pressed": onlyYours }}
+          onClick={() => setOnlyYours(!onlyYours)}
+        >
+          {onlyYours ? "Show all decisions" : "Show only your decisions"}
+        </PButton>
+      </div>
+      <ol
+        aria-labelledby="work-decisions-heading"
+        className="mt-static-sm grid list-decimal gap-static-md pl-static-lg text-sm text-primary"
+      >
+        {shown.map((decision) => (
+          <li key={decision.decision_id} data-testid={`work-decision-${decision.decision_id}`}>
+            <div className="flex flex-wrap items-center gap-static-xs">
+              <strong className="text-xs">{decision.decision_id}</strong>
+              <PTag compact>{DECISION_ORIGIN_LABELS[decision.origin]}</PTag>
+              {superseded.has(decision.decision_id) ? <PTag compact>Superseded</PTag> : null}
+            </div>
+            <p className="mt-static-xs">{decision.statement}</p>
+            <p className="text-xs text-contrast-medium">
+              {decision.basis}
+              {decision.supersedes.length > 0 ? ` · replaces ${decision.supersedes.join(", ")}` : ""}
+            </p>
+          </li>
+        ))}
+      </ol>
+      {shown.length === 0 ? <p className="text-sm text-contrast-medium">You decided none of these directly.</p> : null}
+    </details>
   );
 }
 
@@ -2480,6 +2545,7 @@ export default function WorkItemDetail(
         <PublicationSection {...available} />
         <CourseChangesSection detail={props.detail} />
         <SemanticDetail detail={props.detail} />
+        <DecisionsSection detail={props.detail} />
         <EvidenceSummary detail={props.detail} />
         <ClaimSection {...available} />
         <ExceptionalStateSection detail={props.detail} />

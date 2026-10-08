@@ -332,10 +332,12 @@ export function detail(
         {
           commitment_id: "COM-001",
           commitment_class: "protected-request",
-          provenance: "user request",
+          decision_ids: ["DEC-001"],
           statement: "Keep user attention explicit.",
         },
       ],
+      decisions: [],
+      superseded_request_ids: [],
       dependencies: [],
       tasks: [
         {

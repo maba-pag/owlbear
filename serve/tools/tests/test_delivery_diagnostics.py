@@ -71,7 +71,7 @@ def _root(tmp_path: Path) -> Path:
         '{"schema_version":2,"remote":"origin","target_branch":"dev","github_repository":"safe/project"}\n',
         encoding="utf-8",
     )
-    (delivery / "runtime/format.json").write_text('{"format":3}\n', encoding="utf-8")
+    (delivery / "runtime/format.json").write_text('{"format":4}\n', encoding="utf-8")
     return tmp_path
 
 
@@ -188,7 +188,7 @@ def test_valid_structure_is_bounded_and_healthy(tmp_path: Path) -> None:
     coordination.write_text('{"schema_version":2,"change_id":"example"}\n', encoding="utf-8")
     snapshot = root / ".owlbear/delivery/state/example"
     snapshot.mkdir(parents=True)
-    (snapshot / "snapshot.json").write_text('{"schema_version":3,"frontier":{}}\n', encoding="utf-8")
+    (snapshot / "snapshot.json").write_text('{"schema_version":4,"frontier":{}}\n', encoding="utf-8")
 
     result = inspect_delivery(root)
 
@@ -196,7 +196,7 @@ def test_valid_structure_is_bounded_and_healthy(tmp_path: Path) -> None:
     assert result["writes_performed"] is False
     assert all(
         result["versions"][key] == value
-        for key, value in {"config": 2, "coordination": 2, "frontier": 19, "host": 1, "snapshot": 3}.items()
+        for key, value in {"config": 2, "coordination": 2, "frontier": 19, "host": 1, "snapshot": 4}.items()
     )
     assert result["versions"]["python"]["major"] >= 3
     assert result["counts"]["frontier"] == 1
@@ -1268,7 +1268,7 @@ _JOURNAL_CASES = {
         ("fresh", [], []),
         ("format-0-with-records", ["FORMAT_MIGRATION_REQUIRED"], ["state-migration-required"]),
         ("format-previous-with-records", ["FORMAT_MIGRATION_REQUIRED"], ["state-migration-required"]),
-        ("format-4", ["FORMAT_UNSUPPORTED"], ["state-newer-than-controller"]),
+        ("format-5", ["FORMAT_UNSUPPORTED"], ["state-newer-than-controller"]),
         ("journal-applied", ["MIGRATION_INCOMPLETE"], ["state-migration-incomplete"]),
         ("journal-verified", [], []),
         ("journal-newer", ["MIGRATION_JOURNAL_UNSUPPORTED"], ["state-newer-than-controller"]),
@@ -1290,8 +1290,8 @@ def test_inspector_mirrors_the_gate_format_and_journal_classification(
         (runtime / "format.json").unlink()
     elif case == "format-previous-with-records":
         (runtime / "format.json").write_bytes(state_formats.format_marker_bytes(state_formats.SUPPORTED_FORMAT - 1))
-    elif case == "format-4":
-        (runtime / "format.json").write_text('{"format":4}\n', encoding="utf-8")
+    elif case == "format-5":
+        (runtime / "format.json").write_text('{"format":5}\n', encoding="utf-8")
     elif case == "namespace-file":
         (runtime / "migrations").write_text("not a directory\n", encoding="utf-8")
     elif case.startswith("journal-"):

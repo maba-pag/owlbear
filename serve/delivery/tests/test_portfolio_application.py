@@ -12034,10 +12034,18 @@ def test_portfolio_reader_reconciles_admitted_change_after_warm_start(tmp_path: 
     intent = b"""# Admitted Delivery
 
 ```yaml target-contract
+kind: decision
+id: DEC-001
+origin: approved
+basis: fixture approval
+statement: Fixture decision.
+```
+
+```yaml target-contract
 kind: commitment
 id: COM-001
 class: agreed-path
-provenance: characterization
+decisions: [DEC-001]
 statement: Preserve source-bound admission.
 ```
 
@@ -12096,10 +12104,18 @@ def test_warm_reader_reconciles_change_admitted_by_second_application(tmp_path: 
     intent = b"""# Admitted Delivery
 
 ```yaml target-contract
+kind: decision
+id: DEC-001
+origin: approved
+basis: fixture approval
+statement: Fixture decision.
+```
+
+```yaml target-contract
 kind: commitment
 id: COM-001
 class: agreed-path
-provenance: characterization
+decisions: [DEC-001]
 statement: Preserve source-bound admission.
 ```
 
@@ -12174,8 +12190,16 @@ def test_health_reconciliation_does_not_race_shared_runtime_admission(tmp_path: 
 kind: commitment
 id: COM-001
 class: agreed-path
-provenance: concurrency test
+decisions: [DEC-001]
 statement: Preserve concurrent runtime reconciliation.
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-001
+origin: approved
+basis: fixture approval
+statement: Fixture decision.
 ```
 
 ```yaml target-contract
@@ -14417,8 +14441,16 @@ def _admit_discovery_change(application: PortfolioApplication, change_id: str):
 kind: commitment
 id: COM-001
 class: agreed-path
-provenance: discovery test
+decisions: [DEC-001]
 statement: Preserve persisted admission evidence.
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-001
+origin: approved
+basis: fixture approval
+statement: Fixture decision.
 ```
 
 ```yaml target-contract
@@ -14755,8 +14787,16 @@ def _assert_composed_delivery_admission(
 kind: commitment
 id: COM-001
 class: agreed-path
-provenance: composed test
+decisions: [DEC-001]
 statement: Preserve source ownership.
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-001
+origin: approved
+basis: fixture approval
+statement: Fixture decision.
 ```
 
 ```yaml target-contract
@@ -14909,8 +14949,16 @@ def test_interrupted_first_design_admission_replays_after_workspace_ensure(tmp_p
 kind: commitment
 id: COM-001
 class: agreed-path
-provenance: regression test
+decisions: [DEC-001]
 statement: Preserve the admitted Design source.
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-001
+origin: approved
+basis: fixture approval
+statement: Fixture decision.
 ```
 
 ```yaml target-contract
@@ -15099,10 +15147,20 @@ def test_design_return_release_refusal_changes_nothing(tmp_path: Path, case: str
     ) == before
 
 
-def _revision_intent(second: str = "AC-002: The report is retained.") -> bytes:
+def _revision_intent(
+    second: str = "AC-002: The report is retained.",
+    *,
+    extra_decisions: tuple[str, ...] = (),
+    launch_decisions: str = "DEC-001",
+) -> bytes:
     blocks = (
-        "kind: commitment\nid: COM-001\nclass: agreed-path\nprovenance: revision test\nstatement: Keep launches.",
-        "kind: commitment\nid: COM-002\nclass: agreed-path\nprovenance: revision test\nstatement: Keep reports.",
+        "kind: decision\nid: DEC-001\norigin: approved\nbasis: package approval\nstatement: Revise in place.",
+        *extra_decisions,
+        (
+            f"kind: commitment\nid: COM-001\nclass: agreed-path\ndecisions: [{launch_decisions}]\n"
+            "statement: Keep launches."
+        ),
+        "kind: commitment\nid: COM-002\nclass: agreed-path\ndecisions: [DEC-001]\nstatement: Keep reports.",
         (
             "kind: outcome\nid: OUT-001\ntitle: Launch\npromise: Make the launch observable.\n"
             f'acceptance: ["AC-001: The launch is observable.", "{second}"]\ncommitments: [COM-001]\ndependencies: []'
@@ -15211,6 +15269,64 @@ def test_paused_change_revision_replans_changed_outcome_and_replays(tmp_path: Pa
     assert [(launch.outcome_id, launch.claim.worker_role) for launch in launches] == [
         ("OUT-001", DeliveryWorkerRole.PLANNER)
     ]
+
+
+def test_revision_reports_decision_delta_and_plan_context_carries_decisions(tmp_path: Path) -> None:
+    application, _coordinator, state_root, seeded = _paused_revision_change(tmp_path, pause=False)
+    answered = DeliveryRequest(
+        request_id="REQ-PATH",
+        kind=DeliveryRequestKind.DECISION,
+        outcome_id="OUT-001",
+        summary="Choose the launch path",
+        options=(DeliveryRequestOption(option_id="a", label="a"), DeliveryRequestOption(option_id="b", label="b")),
+        resolution=DeliveryRequestResolution(selected_option_id="a", provenance="user-confirmed"),
+    )
+    launch, report = seeded.bindings
+    (state_root / "changes/change-r/frontier.json").write_bytes(
+        _canonical(
+            seeded.model_copy(update={"bindings": (launch.model_copy(update={"requests": (answered,)}), report)})
+        )
+    )
+    _change_intent(application, "change-r", DeliveryChangeIntentKind.DEFER, reason="Revise requirements")
+    current = application.read_design_session("change-r")
+    path_b = (
+        'kind: decision\nid: DEC-002\norigin: decided\nbasis: askQuestions 2026-10-08 "Launch path?"\n'
+        "statement: Launch through path b.\nsupersedes: [REQ-PATH]"
+    )
+    revised = _revision_intent("AC-002: The report is revised.", extra_decisions=(path_b,))
+    application.revise_design_session("change-r", current.package_id, revised, current.design_bytes)
+
+    derived = application.derive_delivery_contract("change-r")
+
+    assert derived.decision_delta is not None
+    assert [item.decision_id for item in derived.decision_delta.added] == ["DEC-002"]
+    assert derived.decision_delta.superseded_request_ids == ("REQ-PATH",)
+    assert derived.decision_delta.changed_admitted_ids == ()
+    application.admit_change(_revision_request(application))
+    (planner,) = application.acquire_frontier_work().launch_packages
+    context = application.show_plan_context(
+        "change-r", planner.outcome_id, planner.claim.attempt_id, planner.claim.claim_id
+    )
+    assert [(item.decision_id, item.origin.value) for item in context.decisions] == [
+        ("DEC-001", "approved"),
+        ("DEC-002", "decided"),
+    ]
+    assert [item.request_id for item in context.requests] == ["REQ-PATH"]
+    assert context.superseded_request_ids == ("REQ-PATH",)
+    returned = application.transition_delivery(
+        "change-r",
+        ReturnDelivery(
+            action="return",
+            outcome_id=planner.outcome_id,
+            claim_id=planner.claim.claim_id,
+            target=DeliveryStage.DESIGN,
+            reason="The launch path needs another decision.",
+            locators=("OUT-001",),
+            source_boundary=derived.digest,
+        ),
+    )
+    assert returned.stage is DeliveryStage.DESIGN
+    assert [item.request_id for item in returned.requests] == ["REQ-PATH"]
 
 
 @pytest.mark.parametrize("revision", ["delta", "zero-delta"])
@@ -15463,8 +15579,16 @@ Publish the stable package before workers run.
 kind: commitment
 id: COM-001
 class: agreed-path
-provenance: admission test
+decisions: [DEC-001]
 statement: Preserve the admitted package.
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-001
+origin: approved
+basis: admission fixture
+statement: Fixture decision.
 ```
 
 ```yaml target-contract
@@ -15556,8 +15680,16 @@ The intent contains <script>, Fixes #456, @team, https://example.test/path, and 
 kind: commitment
 id: COM-001
 class: agreed-path
-provenance: summary test
+decisions: [DEC-001]
 statement: Preserve safe summary rendering.
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-001
+origin: approved
+basis: fixture approval
+statement: Fixture decision.
 ```
 
 ```yaml target-contract
@@ -16228,8 +16360,16 @@ def test_admit_change_uses_the_existing_source_bound_admission_authority(tmp_pat
 kind: commitment
 id: COM-001
 class: agreed-path
-provenance: facade test
+decisions: [DEC-001]
 statement: Preserve the admitted package.
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-001
+origin: approved
+basis: facade fixture
+statement: Fixture decision.
 ```
 
 ```yaml target-contract
