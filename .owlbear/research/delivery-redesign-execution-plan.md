@@ -688,7 +688,7 @@ every new item exactly one lane.
 | N11-P | done | [N11 plan](delivery-n11-plan.md); Sol plan gate round 1 `revision-required`, F1–F3 fix-now applied (persisted settlement unchanged, grant carry-forward and reset, assembled readiness contract); gate closed |
 | N11-A | in progress | — |
 | N12-P | done | [N12 plan](delivery-n12-plan.md); stacked on N11-A; Sol plan gate round 1 `revision-required`, F1–F4 fix-now applied (successive handoff predecessor, legacy grant receipt and Planner baseline, Cockpit clearance gating, preserved-commit carry-forward); gate closed |
-| N12-A–D | implemented; LC open | `0055ae06d` + gate fixes; Sol implementation round 1 `revision-required` (F1 Cockpit "Revise Design" label fixed; F2 LC load form unrun, needs the user's isolated copy before merge) |
+| N12-A–D | implemented; LC run | `0055ae06d` + gate fixes + E2E repair `512499c8f`; Sol implementation round 1 `revision-required` (F1 fixed), round 2 no findings; LC load form 2026-10-08: all 10 live Changes load available, live unchanged; tool verdict false only from the inspector's 256-entry budget (N12 plan G4); grant rehearsal on the copy refused by the copy-sensitive handoff fingerprint, identically on the base (G3) |
 
 ## 5. Packages
 
