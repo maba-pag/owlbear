@@ -10,6 +10,13 @@
 > **Deviation (user-directed, 2026-10-08):** plan, plan gate, implementation and an implementation
 > gate after every phase in one session; N12-P and the N12 phases share one branch and one PR.
 > Reviews work in the execution plan's [operating context](delivery-redesign-execution-plan.md#19-operating-context).
+> **Status:** N12-P plan gate closed 2026-10-08. A fresh Sol gate ran round 1 on `eb9478eb3`. Verdict:
+> `revision-required`, four findings, all accepted fix-now and applied: F1 successive handoff
+> settlements derive from their receipt-authenticated local predecessor (I8); F2 the grant receipt
+> invariant and the Planner pause/answer baseline accept the legacy grant (I6); F3 Cockpit offers
+> **Clear block** only when the card's action is `clear-block`; F4 revision activation carries the
+> released Planning return's preserved commit. They refine the specification without changing its
+> route; each phase's implementation gate covers them.
 
 ## 1. Contract
 
@@ -66,8 +73,8 @@ After N12:
   outcome leaves Implementation; the Design route already has its N04-B exit).
 - **I3 Return bound.** At settlement, `returns = 1 + |{attempts in the episode's current budget whose
   outcome carries failure code worker-returned}|`, where the current budget starts after the last
-  accepted attempt (the window `attempt_history` already uses) and a `failed` legacy outcome with
-  that code also counts. The episode identity already fixes contract digest, outcome, procedure and
+  accepted attempt (the window `attempt_history` uses, but never truncated to its display length)
+  and a `failed` legacy outcome with that code also counts. The episode identity already fixes contract digest, outcome, procedure and
   task lineage, and Planning promotion with a retained handoff keeps the original task ID
   (`_validate_planner_return_plan`). When `returns >= 3` the settled binding carries block
   `builder-return-limit-<settlement_id>`; otherwise no block.
@@ -78,15 +85,28 @@ After N12:
   `same-outcome-planner` with an unresolved return-limit block runs the existing N04-B capture and
   reset (`ChangeWorkspaceManager.release_design_return`, route-agnostic) and then clears the
   binding's `builder_handoff_context` and block in the same transaction as the coordination
-  release. It keeps `stage`, `tasks`, `results`, `requests` and `return_context`.
+  release. It keeps `stage`, `tasks`, `results`, `requests` and `return_context`. Revision
+  activation carries that `return_context.preserved_commit` into a replanned Planning outcome as it
+  already does for a Design-stage predecessor (`_replanned_binding`, plan-gate F4); N04 D8/D13 still
+  decide which completed tasks and answered requests survive the revision.
 - **I6 Legacy grant.** N11's grant also accepts the exact legacy shape: stage Planning, route
   `same-outcome-planner`, unresolved requestless block `builder-planning-route-<settlement_id>`, the
   settlement receipt's `ReturnDelivery` result equal to the binding, and the episode MECHANICAL and
   EXHAUSTED with the return attempt as its latest settled failure. It writes the same receipt kind
-  and resolution note; the binding keeps its `return_context`.
+  and resolution note; the binding keeps its `return_context`. The receipt's model invariant
+  accepts exactly this second shape, and `_planner_handoff_pause_return_context` accepts the
+  receipt-backed granted row as the Planner pause/answer baseline (plan-gate F2).
 - **I7 One budget unit.** After a legacy grant the Planner runs under its own episode; the next
-  Builder reservation for the original task matches the granted episode and is allowed exactly once
-  (`mechanical_repairs + granted_attempts`).
+  Builder reservation for the original task matches the granted episode, and the grant funds exactly
+  one more charged attempt (`mechanical_repairs + granted_attempts`). Refunded returns and pauses may
+  still permit further invocations.
+- **I8 Successive handoffs** (plan-gate F1). While a handoff is retained the frontier is not
+  published, so a later Builder settlement of the same outcome (retry, pause or return after a
+  Planner-promoted correction) starts from a local binding the remote snapshot does not hold. The
+  loader derives each settlement's source binding from the remote binding or, failing that, from
+  the immediately preceding settlement's receipt-authenticated plan promotion, and validates that
+  predecessor's chain the same way. Today such a restart fails bootstrap; N12 makes it the normal
+  path to the return limit.
 
 ### 1.4 Interfaces and error cases
 
@@ -126,6 +146,12 @@ After N12:
     receipts anchored before the grant (the live Change's Pause and Resume) stay valid.
   - `_validate_local_builder_handoff_workspace` recognizes a captured return-limit release
     (`_design_return_captured`) for the planner route, as it does for the Design route.
+  - `_builder_handoff_settled_binding` derives its source binding per I8.
+- **Admission** (`delivery_admission.py` `_replanned_binding`): carries the preserved commit of a
+  released Planning return (I5).
+- **Cockpit** (`serve/cockpit/web/src/components/WorkItemDetail.tsx`): the requestless clearance form
+  renders only when the card action is `clear-block`, so neither the legacy grant nor the
+  return-limit card offers a control that is certain to be refused; component tests for both.
 - **Readiness and work items** (`work_items.py`, `application_readiness.py`):
   - A shared predicate `builder_attempt_grant_block(binding)` (same-task attempt limit or legacy
     Planning-route exhaustion) replaces the three copies of N11's grant-eligibility test.
@@ -199,13 +225,16 @@ head.
 ### 3.1 N12-A — Return accounting and bound
 
 - **Editable:** `recovery.py`, `runtime_settlement.py`, `delivery_runtime.py`, `runtime_receipts.py`,
-  `delivery_application_loader.py` (third expected Planning-return variant), tests.
+  `delivery_application_loader.py` (third expected Planning-return variant, I8), tests.
 - **Positive:** P-A1 a Builder return after two failures settles without a block, refunds, and the
   next Builder reservation for the re-planned task is allowed; P-A2 owner-result reconciliation
-  twice and a restart keep one `paused` outcome with `worker-returned` and the same counts; P-A3 the
-  third return of the same task under the same contract settles behind
-  `builder-return-limit-<settlement_id>`; P-A4 accepted progress resets the return count; P-A5 the
-  loader bootstraps an unpublished return-limit handoff.
+  twice and a restart keep one `paused` outcome with `worker-returned` and the same counts, for an
+  original and a repair attempt; P-A3 the third return of the same task under the same contract
+  settles behind `builder-return-limit-<settlement_id>`, also with an ordinary pause and a legacy
+  `failed` return in the window; P-A4 accepted progress resets the return count; P-A5 the loader
+  bootstraps an unpublished return-limit handoff; P-A6 (I8) return → Planner corrects an allowed
+  task field → promotion → Builder reacquires → second settlement → restart through the default
+  loader.
 - **Negative:** N-A1 `unblock` refuses the return-limit block; N-A2 a return to Design keeps its
   current accounting; N-A3 the loader refuses a return-limit block that differs from the receipt.
 - **Size / risk:** small–medium / medium (settlement accounting, loader variant).
@@ -213,28 +242,34 @@ head.
 ### 3.2 N12-B — Preserving release at the return limit
 
 - **Editable:** `delivery_runtime.py`, `portfolio_application.py`, `delivery_application_loader.py`,
-  `work_items.py`, `application_readiness.py`, tests.
+  `delivery_admission.py`, `work_items.py`, `application_readiness.py`,
+  `serve/cockpit/web/src/components/WorkItemDetail.tsx` and its test, tests.
 - **Positive:** P-B1 the return-limit card shows `RESUME_DESIGN` and readiness `design-attention`;
   P-B2 Pause → `revise_design_session` releases the handoff (attempt ref = Builder head; branch and
   worktree at the reviewed head; coordination writer and handoff cleared) and keeps tasks, results,
   requests and `return_context`, then revises; P-B3 dirty Builder work is captured under the
   quarantine refs; P-B4 startup recognizes the captured-but-unreleased state and the revision
-  replays; P-B5 after activation the Planner can claim the outcome.
+  replays; P-B5 after activation and reload the replanned outcome keeps the preserved commit,
+  surviving completed results and scoped answers, and the Planner can claim it; P-B6 Cockpit shows
+  "Revise Design" and no clearance form for the return-limit block.
 - **Negative:** N-B1 any other retained Planning-route handoff still refuses `custody-retained`;
   N-B2 a changed worktree refuses `design-return-workspace-changed`.
 - **Size / risk:** medium / high (workspace reset, startup recognition).
 
 ### 3.3 N12-C — Grant for the legacy exhausted Planning-route block
 
-- **Editable:** `delivery_runtime.py`, `runtime_receipts.py`, `delivery_application_loader.py`,
-  `work_items.py`, `application_readiness.py`, tests (including the narrowed pinning test).
+- **Editable:** `delivery_runtime.py`, `runtime_receipts.py`, `runtime_settlement.py`,
+  `delivery_application_loader.py`, `work_items.py`, `application_readiness.py`, the Cockpit block
+  component and its test, tests (including the narrowed pinning test).
 - **Positive:** P-C1 an incident-shaped fixture (two host-lost failures, one pause, one charged
   return, exhaustion block) shows **Grant one more attempt** with `next_actor=you`; P-C2 the grant
   resolves the block, writes receipt and ledger in one transaction and replays; P-C3 readiness then
   offers the Planner; the Planner claims, publishes and promotes a corrected plan; the Builder
   reservation for the original task is allowed exactly once; P-C4 the loader bootstraps the
   granted row, the Planner claim, the candidate and the promotion, including a lifecycle receipt
-  anchored before the grant; P-C5 the assembled Cockpit HTTP route grants it.
+  anchored before the grant; P-C5 the assembled Cockpit HTTP route grants it; P-C6 legacy grant →
+  request-bearing Planner pause → answer → restart → promotion, and a requestless Planner clearance
+  after the grant; P-C7 Cockpit shows only the grant control for the legacy block.
 - **Negative:** N-C1 `unblock` still refuses the legacy block; N-C2 the grant refuses a return-limit
   block, a Design-route handoff and a non-exhausted episode; N-C3 MCP `answer` still refuses
   `grant-attempt`.
@@ -253,16 +288,19 @@ head.
   "<phase scenarios>"`.
 - **Closeout:** `uv run test --changed`; scoped `uv run ruff check` and `uv run ruff format --check`;
   the agent-ecosystem tests for `share/`; the full `uv run test` once.
+- **Closeout (frontend):** in `serve/cockpit/web`: `npm test`, `npm run build`, `npm run
+  test:e2e:work`, Biome on the changed files.
 - **LC:** load form. No persisted schema changes (I1; N11 already versions the ledger). Load an
   isolated live copy, prove every Change is available, grant on the copy's
-  `macos-managed-browser-authentication` block, reload, acquire the Planner, and confirm live
-  hashes are unchanged.
+  `macos-managed-browser-authentication` block, reload, acquire the Planner, promote a corrected
+  plan, reload, acquire the funded Builder for TASK-004 with its preserved head and answered
+  request, and confirm live hashes are unchanged.
 
 ## 4. Progress
 
 | Phase | PR | Head | Proof | Challenge | Status |
 | --- | --- | --- | --- | --- | --- |
-| N12-P | shared | — | source probes (§2) | — | in progress |
+| N12-P | shared | `eb9478eb3` + corrections | source probes (§2) | Sol round 1 `revision-required`; F1–F4 fix-now applied; gate closed | done |
 | N12-A | shared | — | — | — | not started |
 | N12-B | shared | — | — | — | not started |
 | N12-C | shared | — | — | — | not started |

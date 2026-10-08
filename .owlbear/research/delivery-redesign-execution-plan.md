@@ -687,7 +687,7 @@ every new item exactly one lane.
 | N10-N | merged | plan #391; N10-N-A code `7243d9042`, gate fix `e3ec4ae28` ([N10 plan](delivery-n10-plan.md) §3.4, §4): H9 read-only `derive_evidence_receipts` tool used by Builder and Finalizer; H14 decided (Delivery keeps Change branches; GitHub's automatic head-branch deletion proven tolerated by the journey test); changed-scope pytest 488 passed; Sol gate finding fixed; LC not applicable; M1 and M2 run by the user as ordinary Changes |
 | N11-P | done | [N11 plan](delivery-n11-plan.md); Sol plan gate round 1 `revision-required`, F1–F3 fix-now applied (persisted settlement unchanged, grant carry-forward and reset, assembled readiness contract); gate closed |
 | N11-A | in progress | — |
-| N12-P | in progress | [N12 plan](delivery-n12-plan.md); stacked on N11-A |
+| N12-P | done | [N12 plan](delivery-n12-plan.md); stacked on N11-A; Sol plan gate round 1 `revision-required`, F1–F4 fix-now applied (successive handoff predecessor, legacy grant receipt and Planner baseline, Cockpit clearance gating, preserved-commit carry-forward); gate closed |
 | N12-A–D | not started | — |
 
 ## 5. Packages
