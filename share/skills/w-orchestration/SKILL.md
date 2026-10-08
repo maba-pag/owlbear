@@ -199,8 +199,9 @@ No agent tool approves a merge; only the user approves, in Cockpit.
 ### Continuation Refresh And Output
 
 After a `release_stuck_worker` result, report it and stop the current cycle; do not reacquire or
-dispatch a replacement in that cycle. After a released engine action, ordinary worker settlement, or
-worker transition, re-observe with `get_change` and acquire again for the same Change. Stop on the
+dispatch a replacement in that cycle. After a host-tool `dispatch_failure` (Step 2), report it and end
+the session without reacquiring or dispatching. After a released engine action, ordinary worker
+settlement, or worker transition, re-observe with `get_change` and acquire again for the same Change. Stop on the
 first yielding, unsupported, unavailable, or terminal disposition, or when readiness offers no
 further action. Report the Change identity, each acquired action and its exact disposition, forwarded
 transitions and worker settlement results, preserved engine results and failure envelopes, the
@@ -232,6 +233,10 @@ Treat `dispatch_failure` as a no-result outcome; settle it with `settle_worker_i
 `transition_delivery` or use returned identity values. Apply the same no-result route to a returned
 Planner/Builder dispatch error, empty or `no response` result, malformed or schema-invalid output,
 or identity-mismatched result. Preserve any available failure diagnostics for the report.
+
+When a returned `dispatch_failure` reports that the worker's terminal or other host tools returned no
+output or were unavailable, this chat's host is suspect: settle it as above, then end the session
+without reacquiring or dispatching, and tell the user to continue the Change from a new chat.
 
 Only settle after Orchestrator observes that the dispatch call returned and all owned mutating
 terminals and asynchronous jobs are settled. A dispatch call that has not returned, or any owned
