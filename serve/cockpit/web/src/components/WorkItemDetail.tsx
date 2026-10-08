@@ -1795,6 +1795,8 @@ function TargetSyncConflictSection(props: WorkItemDetailProps) {
   const [actionFailed, setActionFailed] = useState(false);
   if (!publication || !conflict) return null;
   const canExit = attention?.kind === "publication-attention";
+  const command = props.detail.item.card.action.command;
+  const promptOffersCommand = Boolean(command && props.detail.item.readiness?.prompt?.startsWith(command));
   const abort = async () => {
     if (!attention) return;
     const error = await props.onAbortTargetSync(attention.disposition_id, conflict.target_head, conflict.operation_id);
@@ -1807,26 +1809,11 @@ function TargetSyncConflictSection(props: WorkItemDetailProps) {
         Target sync conflict
       </PHeading>
       <p className="mt-static-xs text-sm">
-        The merge is preserved in the Change worktree. Choose an explicit exit after reviewing the conflict.
+        Merging the latest target stopped on conflicting files. Delivery keeps the merge in the Change worktree until it
+        is resolved or aborted.
       </p>
-      {props.detail.item.card.action.command ? (
-        <div className="mt-static-md">
-          <p className="text-sm">Run the target conflict workflow before submitting the resolved merge.</p>
-          <CopyCommand className="mt-static-xs" command={props.detail.item.card.action.command} />
-        </div>
-      ) : null}
-      <dl
-        className={[
-          "mt-static-md grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md",
-          "gap-y-static-xs break-all text-xs",
-        ].join(" ")}
-      >
-        <IdentityRow label="Operation" value={conflict.operation_id} />
-        <IdentityRow label="Target head" value={conflict.target_head} />
-        <IdentityRow label="Reviewed head" value={conflict.change_head_before} />
-      </dl>
       {conflict.conflict_paths.length > 0 ? (
-        <ul className="mt-static-md list-disc break-all pl-static-md text-sm">
+        <ul className="mt-static-md list-disc break-all pl-static-md text-sm" data-testid="target-sync-conflict-paths">
           {conflict.conflict_paths.map((path) => (
             <li key={path}>{path}</li>
           ))}
@@ -1834,37 +1821,71 @@ function TargetSyncConflictSection(props: WorkItemDetailProps) {
       ) : (
         <p className="mt-static-md text-sm text-contrast-medium">Git did not report individual conflict paths.</p>
       )}
+      {command && !promptOffersCommand ? (
+        <div className="mt-static-md">
+          <p className="text-sm">Resolve them with the target conflict workflow.</p>
+          <CopyCommand className="mt-static-xs" command={command} />
+        </div>
+      ) : null}
       {canExit && attention ? (
-        <div className="mt-static-md flex flex-wrap gap-static-sm">
-          <PButton
-            type="button"
-            compact
-            variant="secondary"
-            data-testid="target-sync-conflict-abort"
-            disabled={props.pendingAction !== null}
-            onClick={() => {
-              setActionFailed(false);
-              setConfirmOpen(true);
-            }}
-          >
-            {props.pendingAction === "target-sync-abort" ? "Aborting..." : "Abort target sync"}
-          </PButton>
-          <PButton
-            type="button"
-            compact
-            variant="secondary"
-            data-testid="target-sync-conflict-resolve"
-            disabled={props.pendingAction !== null}
-            onClick={() =>
-              void props.onResolveTargetSync(attention.disposition_id, conflict.target_head, conflict.operation_id)
-            }
-          >
-            {props.pendingAction === "target-sync-resolve" ? "Submitting..." : "Submit resolved merge"}
-          </PButton>
+        <div className="mt-static-md grid gap-static-sm">
+          <div>
+            <PButton
+              type="button"
+              compact
+              variant="secondary"
+              data-testid="target-sync-conflict-abort"
+              aria-describedby="target-sync-conflict-abort-help"
+              disabled={props.pendingAction !== null}
+              onClick={() => {
+                setActionFailed(false);
+                setConfirmOpen(true);
+              }}
+            >
+              {props.pendingAction === "target-sync-abort" ? "Aborting..." : "Abort target sync"}
+            </PButton>
+            <p id="target-sync-conflict-abort-help" className="mt-static-xs text-xs text-contrast-medium">
+              Rolls the Change back to its reviewed head; the latest target stays unmerged.
+            </p>
+          </div>
+          <div>
+            <PButton
+              type="button"
+              compact
+              variant="secondary"
+              data-testid="target-sync-conflict-resolve"
+              aria-describedby="target-sync-conflict-resolve-help"
+              disabled={props.pendingAction !== null}
+              onClick={() =>
+                void props.onResolveTargetSync(attention.disposition_id, conflict.target_head, conflict.operation_id)
+              }
+            >
+              {props.pendingAction === "target-sync-resolve" ? "Submitting..." : "Submit resolved merge"}
+            </PButton>
+            <p id="target-sync-conflict-resolve-help" className="mt-static-xs text-xs text-contrast-medium">
+              Only after you resolved and staged every conflicting file in the Change worktree yourself; the target
+              conflict workflow submits it for you.
+            </p>
+          </div>
         </div>
       ) : (
         <p className="mt-static-md text-sm text-contrast-medium">Waiting for the matching Change attention record.</p>
       )}
+      <details className="mt-static-md border-t border-contrast-low pt-static-xs">
+        <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">
+          Technical details
+        </summary>
+        <dl
+          className={[
+            "mt-static-xs grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md",
+            "gap-y-static-xs break-all text-xs",
+          ].join(" ")}
+        >
+          <IdentityRow label="Operation" value={conflict.operation_id} />
+          <IdentityRow label="Target head" value={conflict.target_head} />
+          <IdentityRow label="Reviewed head" value={conflict.change_head_before} />
+        </dl>
+      </details>
       {confirmOpen ? (
         <PModal
           open
@@ -1918,9 +1939,9 @@ function TargetSyncSection(props: WorkItemDetailProps) {
   const [actionFailed, setActionFailed] = useState(false);
   if (!publication || !availability || availability === "unnecessary") return null;
   if (availability === "unavailable")
-    return (
+    return publication.target_sync_conflict ? null : (
       <p className="border-t border-contrast-low pt-static-sm text-sm text-contrast-medium" data-testid="target-sync">
-        Updating the Change from its target is unavailable while Delivery or an agent holds it.
+        Updating the Change from its target is not offered in its current state.
       </p>
     );
   const run = async () => {
@@ -2202,7 +2223,7 @@ function PublicationSection(props: WorkItemDetailProps) {
           <PHeading id="work-publication-heading" tag="h3" size="md">
             {PUBLICATION_PHASE_LABELS[publication.phase]}
           </PHeading>
-          {readiness ? (
+          {readiness && !targetSyncAttention ? (
             <StatusChip
               label={publicationStatus.label}
               tone={publicationStatus.tone}
@@ -2210,7 +2231,11 @@ function PublicationSection(props: WorkItemDetailProps) {
             />
           ) : null}
         </div>
-        <p className="mt-static-xs text-sm leading-relaxed">{invalidationReason ?? props.detail.item.card.next_step}</p>
+        {invalidationReason || !targetSyncAttention ? (
+          <p className="mt-static-xs text-sm leading-relaxed">
+            {invalidationReason ?? props.detail.item.card.next_step}
+          </p>
+        ) : null}
         {invalidationReason ? (
           <div className="mt-static-sm grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-sm gap-y-static-xs text-xs">
             <span className="text-contrast-medium">Expected</span>
@@ -2219,7 +2244,7 @@ function PublicationSection(props: WorkItemDetailProps) {
             <code>{publication.invalidated_observed_head}</code>
           </div>
         ) : null}
-        {invalidationReason ? (
+        {invalidationReason && !targetSyncAttention ? (
           <p className="mt-static-sm text-sm text-contrast-medium">Next: {props.detail.item.card.next_step}</p>
         ) : null}
         {action.command && !finalizationBlocked && !targetSyncAttention ? (
@@ -2276,7 +2301,7 @@ function PublicationSection(props: WorkItemDetailProps) {
           </ConfirmationContent>
         </PModal>
       ) : null}
-      {finalizationBlocked ? (
+      {finalizationBlocked && !targetSyncAttention ? (
         <section
           className="mt-static-md border-l-4 border-warning bg-surface p-static-sm"
           role="status"
@@ -2294,12 +2319,12 @@ function PublicationSection(props: WorkItemDetailProps) {
             </ul>
           ) : null}
           <p className="mt-static-xs text-sm text-contrast-medium">
-            Resolve the condition, then run the continuation prompt again.
+            Follow the next step under Delivery readiness above.
           </p>
         </section>
       ) : null}
       <TargetSyncConflictSection {...props} />
-      {publication.attention ? (
+      {publication.attention && !targetSyncAttention ? (
         <div className="mt-static-md border-l-4 border-warning bg-surface p-static-sm" role="alert">
           <PHeading tag="h4" size="sm">
             Change attention
@@ -2309,14 +2334,19 @@ function PublicationSection(props: WorkItemDetailProps) {
               ? "Publication evidence needs reconciliation."
               : "Acceptance evidence needs reconciliation."}
           </p>
-          <ul className="mt-static-xs list-disc pl-static-md text-sm">
-            {publication.attention.diagnostics.map((diagnostic) => (
-              <li key={diagnostic}>{diagnostic}</li>
-            ))}
-          </ul>
-          <p className="mt-static-xs break-all font-mono text-xs">
-            Disposition: {publication.attention.disposition_id}
-          </p>
+          <details className="mt-static-xs">
+            <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">
+              Technical details
+            </summary>
+            <ul className="mt-static-xs list-disc pl-static-md text-sm">
+              {publication.attention.diagnostics.map((diagnostic) => (
+                <li key={diagnostic}>{diagnostic}</li>
+              ))}
+            </ul>
+            <p className="mt-static-xs break-all font-mono text-xs">
+              Disposition: {publication.attention.disposition_id}
+            </p>
+          </details>
         </div>
       ) : null}
       <ExternalHeadAdoptionSection {...props} />
