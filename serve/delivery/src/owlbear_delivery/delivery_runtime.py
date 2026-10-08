@@ -26,7 +26,10 @@ from owlbear_delivery.recovery import (
     DeliveryWorkerExclusionRequiredError,
     RecoveryIntent,
     RecoveryReceipt,
+    RetryAttemptGrantError,
     RetryLedger,
+    RetryLedgerConflictError,
+    RetryLedgerCorruptError,
     digest,
     encoded,
     journal_path,
@@ -131,6 +134,7 @@ from owlbear_delivery.runtime_reads import (
     _RuntimeReadsMixin,
 )
 from owlbear_delivery.runtime_receipts import (  # noqa: F401
+    BUILDER_ATTEMPT_GRANT_NOTE,
     AdministrativeDeliveryMove,
     AdministrativeDeliveryMovePreview,
     AdministrativeDeliveryMoveResult,
@@ -138,6 +142,7 @@ from owlbear_delivery.runtime_receipts import (  # noqa: F401
     DeliveryEngineBuilderSettlement,
     DeliveryEnginePlanningSettlement,
     DeliveryPlanningRetrySettlement,
+    _DeliveryBuilderAttemptGrantReceipt,
     _DeliveryBuilderHandoffChangeIntentHead,
     _DeliveryBuilderHandoffChangeIntentReceipt,
     _DeliveryBuilderInvocationSettlementReceipt,
@@ -145,6 +150,7 @@ from owlbear_delivery.runtime_receipts import (  # noqa: F401
     _DeliveryBuilderRequestResolutionReceipt,
     _DeliveryPlanningPauseReplay,
     _DeliveryPlanningRetrySettlementReceipt,
+    builder_attempt_limit_block_id,
 )
 from owlbear_delivery.runtime_settlement import (
     _SettlementReplayMixin,
@@ -152,6 +158,7 @@ from owlbear_delivery.runtime_settlement import (
 from owlbear_delivery.runtime_support import (  # noqa: F401
     _administrative_move_closure,
     _attention_conflict,
+    _builder_attempt_grant_receipt_path,
     _checkpoint_with_head,
     _completed_outcome_repair_id,
     _conflict,
@@ -163,6 +170,7 @@ from owlbear_delivery.runtime_support import (  # noqa: F401
     _pull_request_identity,
     _queue_finalization_checkpoint,
     _queue_promoted_result_checkpoint,
+    _read_builder_attempt_grant_receipt,
     _read_builder_handoff_change_intent_receipts,
     _read_builder_request_resolution_receipt,
     _replace_binding,
@@ -2442,6 +2450,89 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
                 _conflict("requestless unblock cannot mutate while a Builder handoff is retained")
             updated = updated.model_copy(update={"return_context": return_context})
         self._replace(previous, _replace_binding(frontier, binding, updated))
+        return updated
+
+    def grant_builder_attempt(
+        self,
+        outcome_id: str,
+        block_id: str,
+        *,
+        now: datetime | str | None = None,
+    ) -> OutcomeAuthorityBinding:
+        """Fund one more same-task Builder attempt after its exact retry episode was exhausted.
+
+        The frontier, retry ledger and grant receipt commit in one transaction; retry history
+        is preserved and a later exhaustion needs another grant.
+        """
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "grant_builder_attempt")
+        binding = _find_binding(frontier, outcome_id)
+        context = binding.builder_handoff_context
+        block = binding.block
+        if (
+            context is None
+            or context.route != "same-task"
+            or binding.stage != DeliveryStage.IMPLEMENTATION
+            or block is None
+            or block.block_id != block_id
+            or block_id != builder_attempt_limit_block_id(context)
+            or block.request_id is not None
+        ):
+            _conflict("attempt grant requires the exact exhausted same-task Builder block")
+        _require_no_active_change_claim(frontier, "Builder attempt grant")
+        if block.resolved:
+            receipt = _read_builder_attempt_grant_receipt(self._target_root, self._contract.change_id, context)
+            if receipt is not None and receipt.updated_block == block:
+                return binding
+            _conflict("Builder attempt-limit block is already resolved")
+        settlement = self._read_builder_invocation_settlement_receipt(context)
+        if (
+            settlement.handoff_context != context
+            or settlement.result != binding
+            or settlement.envelope.change_id != self._contract.change_id
+        ):
+            _conflict("attempt grant does not match its exact Builder settlement")
+        try:
+            ledger_participant, episode = self.retry_ledger().prepare_attempt_grant(context.attempt_id, now=now)
+        except (RetryAttemptGrantError, RetryLedgerConflictError, RetryLedgerCorruptError) as exc:
+            message = "attempt grant requires the exact exhausted Builder retry episode"
+            raise DeliveryRuntimeConflictError(message) from exc
+        updated_block = block.model_copy(
+            update={
+                "resolution_note": BUILDER_ATTEMPT_GRANT_NOTE,
+                "resolution_locators": (context.settlement_id,),
+            }
+        )
+        receipt = _DeliveryBuilderAttemptGrantReceipt(
+            change_id=self._contract.change_id,
+            outcome_id=outcome_id,
+            settlement_id=context.settlement_id,
+            attempt_id=context.attempt_id,
+            episode_id=episode.episode_id,
+            granted_attempts=episode.granted_attempts,
+            builder_handoff_context=context,
+            granted_block=block,
+            updated_block=updated_block,
+        )
+        receipt_path = _builder_attempt_grant_receipt_path(self._target_root, self._contract.change_id, context)
+        if any(
+            path.is_symlink()
+            for path in (self._target_root / "changes", self._frontier_path.parent, receipt_path.parent, receipt_path)
+        ):
+            _reference("Builder attempt grant receipt path is unsafe")
+        updated = binding.model_copy(update={"block": updated_block})
+        self._replace(
+            previous,
+            _replace_binding(frontier, binding, updated),
+            additional_participants=(
+                TransactionParticipant(
+                    self._target_root,
+                    receipt_path.relative_to(self._target_root),
+                    _model_content(receipt),
+                ),
+                ledger_participant,
+            ),
+        )
         return updated
 
     def administrative_move(

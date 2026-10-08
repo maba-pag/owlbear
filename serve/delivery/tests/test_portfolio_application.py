@@ -84,6 +84,7 @@ from owlbear_delivery import (
     DeliveryCommandResult,
     DeliveryCommitment,
     DeliveryCommitmentClass,
+    DeliveryConfirmationError,
     DeliveryContract,
     DeliveryDesignPut,
     DeliveryEngineActionResult,
@@ -4148,38 +4149,58 @@ def test_builder_handoff_readiness_uses_original_task_retry_episode(
     assert runtime.retry_ledger().episode_for_attempt(first.claim.attempt_id) == episode
 
 
-def test_exhausted_builder_retry_projects_read_only_diagnostic_without_clear_action(tmp_path: Path) -> None:
-    now = ["2026-08-04T00:00:00Z"]
-    application, runtime, _coordinator, _state_root, first, _head, _workspace, settlement = (
-        _builder_retry_handoff_setup(tmp_path, now, add_workspace_changes=False)
+def _exhaust_same_task_builder_retry(tmp_path: Path, now: list[str]):
+    """Fail one same-task Builder handoff three times; return the application, runtime and attempt ids."""
+    application, runtime, _coordinator, state_root, first, _head, _workspace, settlement = _builder_retry_handoff_setup(
+        tmp_path, now, add_workspace_changes=False
     )
     _settle_builder_handoff_attempt(application, first.claim, settlement)
     attempt_ids = [first.claim.attempt_id]
-
     for hour in (1, 2):
         now[0] = f"2026-08-04T{hour:02}:00:00Z"
-        acquired = application.acquire_change_action(_continuation_request(application, "change-a"))
-        assert acquired.launch is not None, acquired
-        resumed = acquired.launch
-        attempt_ids.append(resumed.claim.attempt_id)
-        retry_settlement = DeliveryBuilderInvocationSettlement(
-            change_id=resumed.change_id,
+        attempt_ids.append(_fail_resumed_builder_attempt(application))
+    return application, runtime, state_root, attempt_ids
+
+
+def _fail_resumed_builder_attempt(application: PortfolioApplication) -> str:
+    acquired = application.acquire_change_action(_continuation_request(application, "change-a"))
+    assert acquired.launch is not None, acquired
+    resumed = acquired.launch
+    retry_settlement = DeliveryBuilderInvocationSettlement(
+        change_id=resumed.change_id,
+        outcome_id=resumed.outcome_id,
+        claim_id=resumed.claim.claim_id,
+        attempt_id=resumed.claim.attempt_id,
+        task_id=resumed.task_id,
+        expected_last_reviewed_commit=resumed.last_reviewed_commit,
+        disposition="normal-return",
+        request=RetryDelivery(
+            action="retry",
             outcome_id=resumed.outcome_id,
             claim_id=resumed.claim.claim_id,
             attempt_id=resumed.claim.attempt_id,
-            task_id=resumed.task_id,
-            expected_last_reviewed_commit=resumed.last_reviewed_commit,
-            disposition="normal-return",
-            request=RetryDelivery(
-                action="retry",
-                outcome_id=resumed.outcome_id,
-                claim_id=resumed.claim.claim_id,
-                attempt_id=resumed.claim.attempt_id,
-                abandoned_commit=resumed.source_head,
-                failure_code="builder-failed",
-            ),
-        )
-        _settle_builder_handoff_attempt(application, resumed.claim, retry_settlement)
+            abandoned_commit=resumed.source_head,
+            failure_code="builder-failed",
+        ),
+    )
+    _settle_builder_handoff_attempt(application, resumed.claim, retry_settlement)
+    return resumed.claim.attempt_id
+
+
+def _grant_answer(application: PortfolioApplication, block_id: str, digest: str | None = None) -> DeliveryAnswer:
+    return DeliveryAnswer(
+        change_id="change-a",
+        kind=DeliveryAnswerKind.GRANT_ATTEMPT,
+        expected_frontier_digest=digest
+        or hashlib.sha256(application._runtime("change-a").frontier_bytes()).hexdigest(),
+        outcome_id="OUT-001",
+        block_id=block_id,
+    )
+
+
+def test_exhausted_builder_retry_offers_only_the_user_attempt_grant(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtime, _state_root, attempt_ids = _exhaust_same_task_builder_retry(tmp_path, now)
 
     binding = runtime.show_binding("OUT-001")
     assert binding.block is not None
@@ -4194,20 +4215,80 @@ def test_exhausted_builder_retry_projects_read_only_diagnostic_without_clear_act
 
     view = application.show_work_item_view("change-a", "outcome:OUT-001")
     assert view.readiness is not None
-    assert view.card.needs.value == "none"
-    assert view.card.next_actor.value == "agent"
-    assert view.card.action.kind.value == "none"
+    assert view.card.needs.value == "you"
+    assert view.card.next_actor.value == "you"
+    assert view.card.action.kind.value == "grant-attempt"
+    assert view.card.action.label == "Grant one more attempt"
     assert view.card.action.command is None
     assert view.readiness.reason_code == "retry-exhausted"
     assert view.readiness.attempts == 3
     assert view.readiness.executable is False
     assert view.readiness.operation is None
+    assert view.readiness.action is None
     assert view.readiness.prompt is not None
     assert view.readiness.prompt.startswith("/inspect-change change-a")
-    assert "read-only" in view.readiness.prompt
     assert "do not clear the block, retry, dispatch, or reset the budget" in view.readiness.prompt
-    assert "Builder" in view.card.next_step
-    assert "approved current authority" in view.card.next_step
+    assert view.readiness.progress.situation == "your-decision"
+    assert "Grant one more attempt" in view.card.next_step
+    assert "/inspect-change change-a" in view.card.next_step
+
+    refused = application.acquire_change_action(_continuation_request(application, "change-a"))
+    assert refused.launch is None
+
+
+def test_attempt_grant_is_user_only_and_funds_exactly_one_more_attempt(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtime, state_root, attempt_ids = _exhaust_same_task_builder_retry(tmp_path, now)
+    block = runtime.show_binding("OUT-001").block
+    before = runtime.frontier_bytes()
+
+    with pytest.raises(DeliveryConfirmationError, match="only by the user in Cockpit"):
+        application.answer(_grant_answer(application, block.block_id))
+    with pytest.raises(DeliveryRuntimeConflictError, match="exact exhausted same-task Builder block"):
+        application.answer(_grant_answer(application, "builder-attempt-limit-other"), allow_user_only=True)
+    assert runtime.frontier_bytes() == before
+
+    stale_digest = hashlib.sha256(before).hexdigest()
+    result = application.answer(_grant_answer(application, block.block_id), allow_user_only=True)
+    granted = runtime.show_binding("OUT-001")
+    assert result.binding == granted
+    assert granted.block.resolved
+    assert granted.block.resolution_note == "The user granted one more Builder attempt."
+    assert granted.block.resolution_locators == (granted.builder_handoff_context.settlement_id,)
+    assert granted.block.model_copy(update={"resolution_note": None, "resolution_locators": ()}) == block
+    summary = runtime.retry_ledger().read()
+    episode = summary.episodes[0]
+    assert summary.schema_version == 2
+    assert (episode.total_attempts, episode.granted_attempts, episode.stop_code) == (3, 1, None)
+    assert episode.attempt_ids == tuple(attempt_ids)
+    receipts = list((state_root / "changes" / "change-a" / "builder-attempt-grant-receipts").iterdir())
+    assert [path.name for path in receipts] == [f"{granted.builder_handoff_context.settlement_id}.json"]
+
+    replay = application.answer(_grant_answer(application, block.block_id, stale_digest), allow_user_only=True)
+    assert replay.binding == granted
+    assert runtime.retry_ledger().read() == summary
+
+    view = application.show_work_item_view("change-a", "outcome:OUT-001")
+    assert view.readiness.reason_code != "retry-exhausted"
+    assert view.card.action.kind.value != "grant-attempt"
+
+    now[0] = "2026-08-04T03:00:00Z"
+    attempt_ids.append(_fail_resumed_builder_attempt(application))
+    regranted = runtime.show_binding("OUT-001")
+    assert regranted.block is not None
+    assert not regranted.block.resolved
+    assert regranted.block.block_id != block.block_id
+    episode = runtime.retry_ledger().read().episodes[0]
+    assert (episode.total_attempts, episode.granted_attempts) == (4, 1)
+    assert episode.stop_code.value == "retry-exhausted"
+    assert episode.attempt_ids == tuple(attempt_ids)
+    view = application.show_work_item_view("change-a", "outcome:OUT-001")
+    assert view.card.action.kind.value == "grant-attempt"
+    assert application.acquire_change_action(_continuation_request(application, "change-a")).launch is None
+
+    application.answer(_grant_answer(application, regranted.block.block_id), allow_user_only=True)
+    episode = runtime.retry_ledger().read().episodes[0]
+    assert (episode.total_attempts, episode.granted_attempts, episode.stop_code) == (4, 2, None)
 
 
 def _builder_retry_history(items) -> list[tuple[int, str, str, str | None]]:
@@ -4307,7 +4388,7 @@ def test_builder_retry_history_reaches_fresh_builder_and_exhaustion_diagnosis(tm
     view = application.show_work_item_view("change-a", "outcome:OUT-001")
     assert view.readiness is not None
     assert view.readiness.reason_code == "retry-exhausted"
-    assert view.readiness.next_actor.value == "agent"
+    assert view.readiness.next_actor.value == "you"
     assert view.readiness.attempts == 3
     assert _builder_retry_history(view.readiness.retry_history) == expected
     change = application.get_change("change-a")

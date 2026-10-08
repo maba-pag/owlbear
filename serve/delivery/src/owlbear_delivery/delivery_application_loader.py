@@ -54,6 +54,7 @@ from owlbear_delivery.delivery_runtime import (
     _DeliveryBuilderPlanPromotionReceipt,
     _DeliveryPlanningPauseReplay,
     _model_content,
+    _read_builder_attempt_grant_receipt,
     _read_builder_handoff_change_intent_receipts,
     _read_builder_request_resolution_receipt,
     normalize_frontier,
@@ -81,6 +82,7 @@ from owlbear_delivery.portfolio_operating import (
     DeliveryHealthResolution,
 )
 from owlbear_delivery.remote_git import RemoteGitError, RemoteGitFailed, read_remote_ref, run_remote_git
+from owlbear_delivery.runtime_receipts import BUILDER_ATTEMPT_GRANT_NOTE, builder_attempt_limit_block_id
 from owlbear_delivery.runtime_transaction import (
     RuntimeTransaction,
     TransactionParticipant,
@@ -1815,7 +1817,33 @@ def _builder_handoff_settled_binding(
     )
     if receipt.result not in expected_results:
         _bootstrap_failure("local Builder handoff result is not the exact retry successor of its remote binding")
-    return receipt.result
+    return _builder_attempt_grant_successor(paths.runtime_root, snapshot, receipt, local_binding)
+
+
+def _builder_attempt_grant_successor(
+    runtime_root: Path,
+    snapshot: DeliveryStateSnapshot,
+    settlement: _DeliveryBuilderInvocationSettlementReceipt,
+    local_binding: OutcomeAuthorityBinding,
+) -> OutcomeAuthorityBinding:
+    """Derive the settled retry result or only the exact user grant recorded for its exhausted block."""
+    if settlement.result.block is None or local_binding.block == settlement.result.block:
+        return settlement.result
+    try:
+        grant = _read_builder_attempt_grant_receipt(runtime_root, snapshot.change_id, settlement.handoff_context)
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        _bootstrap_failure("local Builder attempt grant receipt is unavailable or invalid", exc)
+    if grant is None or not all(
+        (
+            grant.change_id == snapshot.change_id,
+            grant.outcome_id == settlement.envelope.outcome_id,
+            grant.settlement_id == settlement.settlement_id,
+            grant.builder_handoff_context == settlement.handoff_context,
+            grant.granted_block == settlement.result.block,
+        )
+    ):
+        _bootstrap_failure("local Builder retry block differs from its exact settlement and attempt grant")
+    return settlement.result.model_copy(update={"block": grant.updated_block})
 
 
 def _builder_handoff_lifecycle_successor_frontier(
@@ -1966,12 +1994,34 @@ def _builder_handoff_lifecycle_baselines(
     if expected_frontier == settlement_frontier:
         resolved_frontier = None
         baselines = (settlement_frontier,)
-    elif isinstance(settlement.envelope.request, BlockDelivery):
+    elif isinstance(settlement.envelope.request, BlockDelivery) or _is_attempt_grant_frontier(
+        expected_frontier, settlement
+    ):
         resolved_frontier = expected_frontier
         baselines = (settlement_frontier, resolved_frontier)
     else:
         _bootstrap_failure("local Builder lifecycle intent has an unknown request-resolution baseline")
     return baselines, resolved_frontier, settlement_frontier
+
+
+def _is_attempt_grant_frontier(
+    expected_frontier: DeliveryFrontier,
+    settlement: _DeliveryBuilderInvocationSettlementReceipt,
+) -> bool:
+    """Recognize the receipt-derived granted retry block as a lifecycle baseline."""
+    block = settlement.result.block
+    binding = next(
+        (item for item in expected_frontier.bindings if item.outcome_id == settlement.envelope.outcome_id),
+        None,
+    )
+    return (
+        block is not None
+        and block.block_id == builder_attempt_limit_block_id(settlement.handoff_context)
+        and binding is not None
+        and binding.block is not None
+        and binding.block.resolution_note == BUILDER_ATTEMPT_GRANT_NOTE
+        and binding == settlement.result.model_copy(update={"block": binding.block})
+    )
 
 
 def _builder_handoff_frontier_with_lifecycle_fields(

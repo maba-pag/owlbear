@@ -25,6 +25,8 @@ from owlbear_delivery import (
     DeliveryActiveClaim,
     DeliveryAdmissionReceipt,
     DeliveryAdmissionRequest,
+    DeliveryAnswer,
+    DeliveryAnswerKind,
     DeliveryBlock,
     DeliveryBuilderInvocationSettlement,
     DeliveryChangeCompletion,
@@ -2420,6 +2422,95 @@ def test_builder_return_handoff_survives_default_loader_restart(  # noqa: PLR091
     assert acquired_episode.episode_id == builder_retry_budget[0]
     assert acquired_episode.total_attempts == builder_retry_budget[1] + 1
     assert acquired_episode.reset_count == builder_retry_budget[2] == 0
+
+
+@pytest.mark.parametrize("missing_receipt", [False, True])
+def test_builder_attempt_grant_survives_default_loader_restart(tmp_path: Path, *, missing_receipt: bool) -> None:
+    change_id = "attempt-grant-restart"
+    restart = _builder_return_restart_fixture(tmp_path, change_id)
+    fresh, config, application = restart.fresh, restart.config, restart.application
+    task_id = restart.original_task.task_id
+
+    def acquire(current: PortfolioApplication) -> DeliveryLaunchPackage | None:
+        episodes = current._runtimes[change_id].retry_ledger().read().episodes  # noqa: SLF001
+        eligible = [episode.next_eligible_at for episode in episodes if episode.next_eligible_at is not None]
+        if eligible:
+            resume = datetime.fromisoformat(max(eligible)) + timedelta(seconds=1)
+            current._clock = lambda: resume.isoformat().replace("+00:00", "Z")  # noqa: SLF001
+        launches = current.acquire_frontier_work().launch_packages
+        return launches[0] if launches else None
+
+    for _ in range(3):
+        launch = acquire(application)
+        assert launch is not None
+        assert launch.claim.worker_role is DeliveryWorkerRole.BUILDER
+        assert launch.task_id == task_id
+        application.settle_worker_invocation(
+            DeliveryBuilderInvocationSettlement(
+                change_id=change_id,
+                outcome_id=launch.outcome_id,
+                claim_id=launch.claim.claim_id,
+                attempt_id=launch.claim.attempt_id,
+                task_id=launch.task_id,
+                expected_last_reviewed_commit=launch.last_reviewed_commit,
+                disposition="normal-return",
+                request=RetryDelivery(
+                    action="retry",
+                    outcome_id=launch.outcome_id,
+                    claim_id=launch.claim.claim_id,
+                    attempt_id=launch.claim.attempt_id,
+                    abandoned_commit=launch.source_head,
+                    failure_code="builder-failed",
+                ),
+            ),
+            host_id=launch.claim.owner_id,
+            session_id=launch.claim.process_id,
+        )
+        application = load_delivery_application(config, workspace_root=fresh)
+        assert application.delivery_health().status.value == "healthy"
+
+    runtime = application._runtimes[change_id]  # noqa: SLF001
+    block = runtime.show_binding("OUT-001").block
+    assert block is not None
+    assert not block.resolved
+    exhausted = application.show_work_item_view(change_id, "outcome:OUT-001")
+    assert exhausted.readiness.reason_code == "retry-exhausted"
+    assert exhausted.card.action.kind.value == "grant-attempt"
+    assert acquire(application) is None
+
+    application.answer(
+        DeliveryAnswer(
+            change_id=change_id,
+            kind=DeliveryAnswerKind.GRANT_ATTEMPT,
+            expected_frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+            outcome_id="OUT-001",
+            block_id=block.block_id,
+        ),
+        allow_user_only=True,
+    )
+    granted_frontier = runtime.frontier_bytes()
+    receipt_path = next(
+        (fresh / ".owlbear/delivery/runtime/changes" / change_id / "builder-attempt-grant-receipts").iterdir()
+    )
+    if missing_receipt:
+        receipt_path.unlink()
+
+    reloaded = load_delivery_application(config, workspace_root=fresh)
+    health = reloaded.delivery_health()
+    if missing_receipt:
+        assert health.status.value == "attention"
+        assert any(diagnostic.code == "remote-state-reconciliation-required" for diagnostic in health.diagnostics)
+        assert runtime.frontier_bytes() == granted_frontier
+        return
+    assert health.status.value == "healthy", health.diagnostics
+    view = reloaded.show_work_item_view(change_id, "outcome:OUT-001")
+    assert view.readiness.reason_code != "retry-exhausted"
+    episode = reloaded._runtimes[change_id].retry_ledger().read().episodes[0]  # noqa: SLF001
+    assert (episode.total_attempts, episode.granted_attempts, episode.stop_code) == (3, 1, None)
+    resumed = acquire(reloaded)
+    assert resumed is not None
+    assert resumed.claim.worker_role is DeliveryWorkerRole.BUILDER
+    assert resumed.task_id == task_id
 
 
 def _settle_default_loader_planning_return(

@@ -33,6 +33,7 @@ from owlbear_cockpit.target_models import (
     DeliveryUnavailableChangeResponse,
     DesignWorkDetailResponse,
     ExternalHeadAdoptionResponse,
+    GrantAttemptBody,
     MergeApprovalResponse,
     NeedsCounts,
     PortfolioOperatingResponse,
@@ -172,6 +173,23 @@ class TargetCockpitService:
                 )
             )
         )
+
+    def grant_attempt(
+        self,
+        change_id: str,
+        outcome_id: str,
+        block_id: str,
+        body: GrantAttemptBody,
+    ) -> object:
+        """Grant one more attempt to an exhausted same-task Builder retry block."""
+        answer = DeliveryAnswer(
+            change_id=change_id,
+            kind=DeliveryAnswerKind.GRANT_ATTEMPT,
+            expected_frontier_digest=body.expected_frontier_digest,
+            outcome_id=outcome_id,
+            block_id=block_id,
+        )
+        return self._invoke(lambda: self._application.answer(answer, allow_user_only=True))
 
     def recover_claim(
         self,
@@ -591,6 +609,16 @@ def _register_outcome_controls(router: APIRouter) -> None:
         service: _TargetService,
     ) -> object:
         return service.clear_block(change_id, outcome_id, block_id, body)
+
+    @router.post("/changes/{change_id}/outcomes/{outcome_id}/blocks/{block_id}/grant-attempt")
+    def grant_attempt(
+        change_id: str,
+        outcome_id: str,
+        block_id: str,
+        body: GrantAttemptBody,
+        service: _TargetService,
+    ) -> object:
+        return service.grant_attempt(change_id, outcome_id, block_id, body)
 
     @router.post("/changes/{change_id}/outcomes/{outcome_id}/claims/recover")
     def recover_claim(

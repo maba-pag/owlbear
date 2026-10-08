@@ -377,6 +377,53 @@ class _DeliveryBuilderRequestResolutionReceipt(_DeliveryModel):
         return self
 
 
+BUILDER_ATTEMPT_GRANT_NOTE = "The user granted one more Builder attempt."
+
+
+def builder_attempt_limit_block_id(context: DeliveryBuilderHandoffContext) -> str:
+    """Return the requestless block identity that marks one exhausted same-task Builder episode."""
+    return f"builder-attempt-limit-{context.settlement_id}"
+
+
+class _DeliveryBuilderAttemptGrantReceipt(_DeliveryModel):
+    """Immutable user grant of one more Builder attempt for one exact exhausted handoff."""
+
+    schema_version: Literal[1] = 1
+    change_id: str = Field(min_length=1, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    settlement_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    attempt_id: str = Field(min_length=1, max_length=128)
+    episode_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    granted_attempts: int = Field(ge=1)
+    builder_handoff_context: DeliveryBuilderHandoffContext
+    granted_block: DeliveryBlock
+    updated_block: DeliveryBlock
+
+    @model_validator(mode="after")
+    def _validate_receipt(self) -> _DeliveryBuilderAttemptGrantReceipt:
+        context = self.builder_handoff_context
+        block_id = builder_attempt_limit_block_id(context)
+        if (
+            context.route != "same-task"
+            or context.outcome_id != self.outcome_id
+            or context.settlement_id != self.settlement_id
+            or context.attempt_id != self.attempt_id
+            or self.granted_block.block_id != block_id
+            or self.granted_block.request_id is not None
+            or self.granted_block.resolved
+            or self.updated_block
+            != self.granted_block.model_copy(
+                update={
+                    "resolution_note": BUILDER_ATTEMPT_GRANT_NOTE,
+                    "resolution_locators": (self.settlement_id,),
+                }
+            )
+        ):
+            message = "Builder attempt grant receipt does not match its exact exhausted handoff"
+            raise ValueError(message)
+        return self
+
+
 class _DeliveryBuilderHandoffChangeIntentReceipt(_DeliveryModel):
     """Immutable proof of one supported lifecycle intent during a retained Builder handoff."""
 

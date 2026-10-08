@@ -455,11 +455,12 @@ class _DeliveryApplicationFake:
         return SimpleNamespace(frontier_digest="a" * 64)
 
     def answer(self, answer: DeliveryAnswer, *, allow_user_only: bool = False) -> dict[str, object]:
-        # Only the request route answers as the user; block and attention routes never do.
-        assert allow_user_only is (answer.kind is DeliveryAnswerKind.REQUEST)
+        # Only the request and attempt-grant routes answer as the user; block and attention routes never do.
+        assert allow_user_only is (answer.kind in {DeliveryAnswerKind.REQUEST, DeliveryAnswerKind.GRANT_ATTEMPT})
         operation = {
             "request": "answer",
             "block": "clear",
+            "grant-attempt": "grant-attempt",
             "disposition": "attention-resolve",
         }[answer.kind.value]
         self.calls.append((operation, (answer,)))
@@ -3247,6 +3248,25 @@ def test_controls_require_exact_confirmation_and_delegate_once() -> None:
     assert uuid.UUID(move_request.move_id).version == 4  # type: ignore[attr-defined]
     assert move_request.outcome_id == "OUT-001"  # type: ignore[attr-defined]
     assert move_request.expected_version == "a" * 64  # type: ignore[attr-defined]
+
+
+def test_attempt_grant_route_is_the_only_user_grant_and_binds_the_exact_block() -> None:
+    client, application = _client()
+    route = "/api/changes/change-a/outcomes/OUT-001/blocks/builder-attempt-limit-one/grant-attempt"
+
+    rejected = client.post(route, json={"expected_frontier_digest": "a" * 64, "operator_note": "extra"})
+    granted = client.post(route, json={"expected_frontier_digest": "a" * 64})
+
+    assert (rejected.status_code, granted.status_code) == (422, 200)
+    assert [name for name, _args in application.calls] == ["grant-attempt"]
+    answer = application.calls[0][1][0]
+    assert isinstance(answer, DeliveryAnswer)
+    assert (answer.kind, answer.outcome_id, answer.block_id, answer.expected_frontier_digest) == (
+        DeliveryAnswerKind.GRANT_ATTEMPT,
+        "OUT-001",
+        "builder-attempt-limit-one",
+        "a" * 64,
+    )
 
 
 def test_bulk_expired_claim_recovery_route_is_removed_without_delivery_call() -> None:

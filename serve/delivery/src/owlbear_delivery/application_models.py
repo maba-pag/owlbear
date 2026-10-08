@@ -672,6 +672,7 @@ class DeliveryAnswerKind(StrEnum):
     REQUEST = "request"
     BLOCK = "block"
     DISPOSITION = "disposition"
+    GRANT_ATTEMPT = "grant-attempt"
 
 
 class DeliveryAnswer(_ApplicationModel):
@@ -710,13 +711,25 @@ class DeliveryAnswer(_ApplicationModel):
             if self.request_id is not None or self.resolution is not None:
                 message = "block answers cannot include request resolution"
                 raise ValueError(message)
-        else:
+        elif self.kind is DeliveryAnswerKind.DISPOSITION:
             if self.expected_disposition_id is None:
                 message = "disposition answers require an expected disposition identity"
                 raise ValueError(message)
             if any((self.request_id, self.outcome_id, self.block_id, self.operator_note)) or self.locators:
                 message = "disposition answers cannot include request or block evidence"
                 raise ValueError(message)
+        return self
+
+    @model_validator(mode="after")
+    def _validate_attempt_grant(self) -> DeliveryAnswer:
+        if self.kind is not DeliveryAnswerKind.GRANT_ATTEMPT:
+            return self
+        if self.outcome_id is None or self.block_id is None:
+            message = "attempt grants require outcome and block identity"
+            raise ValueError(message)
+        if any((self.request_id, self.resolution, self.operator_note, self.expected_disposition_id)) or self.locators:
+            message = "attempt grants cannot include request, note, locator, or disposition evidence"
+            raise ValueError(message)
         return self
 
 
@@ -735,8 +748,8 @@ class DeliveryAnswerResult(_ApplicationModel):
         if self.kind is DeliveryAnswerKind.REQUEST and self.request is None:
             message = "request answer results require the resolved request"
             raise ValueError(message)
-        if self.kind is DeliveryAnswerKind.BLOCK and self.binding is None:
-            message = "block answer results require the cleared binding"
+        if self.kind in {DeliveryAnswerKind.BLOCK, DeliveryAnswerKind.GRANT_ATTEMPT} and self.binding is None:
+            message = "block answer results require the updated binding"
             raise ValueError(message)
         if self.kind is DeliveryAnswerKind.DISPOSITION and self.disposition is None:
             message = "disposition answer results require the resolution receipt"

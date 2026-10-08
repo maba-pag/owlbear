@@ -362,6 +362,7 @@ function SelectedWorkItemDetail({
           actionResult={selectedDetail.actionResult}
           onAnswerRequest={selectedDetail.answerRequest}
           onClearBlock={selectedDetail.clearBlock}
+          onGrantAttempt={selectedDetail.grantAttempt}
           onReleaseStuckWorker={selectedDetail.releaseStuckWorker}
           onPreviewBackward={selectedDetail.previewBackward}
           onMoveBackward={selectedDetail.moveBackward}

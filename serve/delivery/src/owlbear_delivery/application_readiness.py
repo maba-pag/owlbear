@@ -111,6 +111,7 @@ from owlbear_delivery.recovery import (
     RetryLedgerCorruptError,
     RetryStopCode,
 )
+from owlbear_delivery.runtime_receipts import builder_attempt_limit_block_id
 from owlbear_delivery.runtime_transaction import (
     TransactionPathError,
     contained_directory,
@@ -1449,7 +1450,7 @@ class _ReadinessViewsMixin:
             and binding is not None
             and binding.block is not None
             and binding.builder_handoff_context is not None
-            and binding.block.block_id == f"builder-attempt-limit-{binding.builder_handoff_context.settlement_id}"
+            and binding.block.block_id == builder_attempt_limit_block_id(binding.builder_handoff_context)
         ):
             exact_head = binding.builder_handoff_context.last_reviewed_commit
         if exact_head is None and handoff_attempt_id is None:
@@ -1532,6 +1533,15 @@ class _ReadinessViewsMixin:
                 }
             )
         elif episode.stop_code is RetryStopCode.EXHAUSTED:
+            grantable = (
+                handoff_attempt_id is not None
+                and binding is not None
+                and binding.stage is DeliveryStage.IMPLEMENTATION
+                and binding.builder_handoff_context is not None
+                and binding.builder_handoff_context.route == "same-task"
+                and binding.block is not None
+                and binding.block.block_id == builder_attempt_limit_block_id(binding.builder_handoff_context)
+            )
             updates.update(
                 {
                     "status": "blocked",
@@ -1539,7 +1549,7 @@ class _ReadinessViewsMixin:
                     "operation": None,
                     "executable": False,
                     "action": None,
-                    "next_actor": WorkItemNextActor.AGENT,
+                    "next_actor": WorkItemNextActor.YOU if grantable else WorkItemNextActor.AGENT,
                 }
             )
         elif episode.stop_code is RetryStopCode.ACCEPTANCE_WAIT:

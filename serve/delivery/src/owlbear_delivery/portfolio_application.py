@@ -132,6 +132,7 @@ from owlbear_delivery.delivery_contract_discovery import (
     discover_persisted_changes,
 )
 from owlbear_delivery.delivery_runtime import (
+    BUILDER_ATTEMPT_GRANT_NOTE,
     AdvanceDelivery,
     DeliveryAcceptanceAttentionReason,
     DeliveryAcceptanceWaitingError,
@@ -1669,7 +1670,7 @@ class PortfolioApplication(
             binding=binding,
         )
 
-    def answer(  # noqa: C901, PLR0911
+    def answer(  # noqa: C901, PLR0911, PLR0912
         self,
         answer: DeliveryAnswer,
         *,
@@ -1719,6 +1720,9 @@ class PortfolioApplication(
                         request=resolved,
                         frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
                     )
+
+                if answer.kind is DeliveryAnswerKind.GRANT_ATTEMPT:
+                    return self._grant_builder_attempt(runtime, answer, current_digest, allow_user_only=allow_user_only)
 
                 if answer.kind is DeliveryAnswerKind.BLOCK:
                     binding = runtime.show_binding(answer.outcome_id)
@@ -1790,6 +1794,46 @@ class PortfolioApplication(
                     disposition=resolved,
                     frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
                 )
+
+    def _grant_builder_attempt(
+        self,
+        runtime: DeliveryRuntime,
+        answer: DeliveryAnswer,
+        current_digest: str,
+        *,
+        allow_user_only: bool,
+    ) -> DeliveryAnswerResult:
+        """Apply the user's one-attempt grant to an exhausted same-task Builder retry block."""
+        if not allow_user_only:
+            message = "one more Builder attempt is granted only by the user in Cockpit"
+            raise DeliveryConfirmationError(message)
+        if current_digest != answer.expected_frontier_digest:
+            binding = runtime.show_binding(answer.outcome_id)
+            block = binding.block
+            if (
+                block is not None
+                and block.block_id == answer.block_id
+                and block.resolution_note == (BUILDER_ATTEMPT_GRANT_NOTE)
+            ):
+                return DeliveryAnswerResult(
+                    change_id=answer.change_id,
+                    kind=answer.kind,
+                    binding=binding,
+                    frontier_digest=current_digest,
+                )
+            self._fail("answer frontier changed")
+        granted = runtime.grant_builder_attempt(answer.outcome_id, answer.block_id, now=self._clock())
+        self._publish_delivery_state(
+            answer.change_id,
+            runtime,
+            _checkpoint_operation_id("attempt-grant", answer.change_id, answer.outcome_id, answer.block_id),
+        )
+        return DeliveryAnswerResult(
+            change_id=answer.change_id,
+            kind=answer.kind,
+            binding=granted,
+            frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+        )
 
     @staticmethod
     def _exact_task_scope(task: DeliveryTaskDefinition, worktree: Path) -> tuple[str, ...]:

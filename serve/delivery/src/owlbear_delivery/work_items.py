@@ -32,6 +32,7 @@ from owlbear_delivery.evidence import DeliveryEvidenceProjection, build_evidence
 from owlbear_delivery.finalization_reports import FinalizationAttempt
 from owlbear_delivery.merge_offer import MergeBlock, MergeBlockReason, MergeFacts, MergeOffer
 from owlbear_delivery.recovery import MAX_RETRY_HISTORY_ATTEMPTS, DeliveryRetryAttemptView
+from owlbear_delivery.runtime_receipts import builder_attempt_limit_block_id
 from owlbear_delivery.target_contract import DeliveryCommitment, DeliveryContract, DeliveryOutcome
 
 
@@ -83,6 +84,7 @@ class WorkItemActionKind(StrEnum):
     RESUME_DESIGN = "resume-design"
     ANSWER_REQUEST = "answer-request"
     CLEAR_BLOCK = "clear-block"
+    GRANT_ATTEMPT = "grant-attempt"
     RECOVER_CLAIM = "recover-claim"
     FINALIZE = "finalize"
     RECONCILE_CHECKPOINT = "reconcile-checkpoint"
@@ -669,6 +671,18 @@ _ATTENTION_HEADLINES: dict[str, str] = {
     "settled-attention-target-drift": "The target moved after a failed verification; inspect the Change.",
     "merge-blocked": "GitHub reports the pull request cannot merge; open it to check.",
 }
+_ATTEMPT_GRANT_HEADLINE = "Automatic Builder retries are used up; grant one more attempt or inspect the Change."
+
+
+def _is_attempt_grant(card: WorkItemCardView, readiness: DeliveryReadiness) -> bool:
+    """Return whether exhausted Builder readiness offers the user-only attempt grant on this card."""
+    return (
+        readiness.reason_code == "retry-exhausted"
+        and readiness.next_actor is WorkItemNextActor.YOU
+        and card.action.kind is WorkItemActionKind.GRANT_ATTEMPT
+    )
+
+
 _GITHUB_WAITS: dict[str, str] = {
     "checks-running": "Required checks are running in GitHub.",
     "merge-checking": "GitHub is working out whether the pull request can merge.",
@@ -876,7 +890,7 @@ def _awaiting_merge_progress(
     return _progress("your-decision", "Merge the pull request in GitHub; Delivery records the result.", "you")
 
 
-def _step_progress(  # noqa: C901, PLR0911 - one return per readiness reason group.
+def _step_progress(  # noqa: C901, PLR0911, PLR0912 - one return per readiness reason group.
     readiness: DeliveryReadiness,
     card: WorkItemCardView,
     *,
@@ -918,6 +932,8 @@ def _step_progress(  # noqa: C901, PLR0911 - one return per readiness reason gro
         return _progress("waiting-on-dependency", "Waiting for this Change's current step to finish.", "change")
     if reason == "change-paused":
         return _progress("paused", "Paused. Resume the Change to continue.", "you")
+    if _is_attempt_grant(card, readiness):
+        return _progress("your-decision", _ATTEMPT_GRANT_HEADLINE, "you")
     return _progress(
         "needs-attention",
         _ATTENTION_HEADLINES.get(reason, "Delivery cannot continue this step on its own; inspect the Change."),
@@ -1087,6 +1103,8 @@ class WorkItemProjector:
                             decision.action
                             if decision.action is not None
                             else card.action
+                            if _is_attempt_grant(card, decision)
+                            else card.action
                             if (
                                 decision.reason_code == "design-attention"
                                 and card.action.kind is WorkItemActionKind.RESUME_DESIGN
@@ -1105,9 +1123,17 @@ class WorkItemProjector:
                             else WorkItemAction()
                         ),
                         "next_actor": decision.next_actor,
-                        "needs": WorkItemNeed.NONE if decision.reason_code in retained_reasons else card.needs,
+                        "needs": (
+                            card.needs
+                            if _is_attempt_grant(card, decision)
+                            else WorkItemNeed.NONE
+                            if decision.reason_code in retained_reasons
+                            else card.needs
+                        ),
                         "needs_headline": (
-                            guidance_item or readiness_fallbacks.get(decision.reason_code, card.needs_headline)
+                            _ATTEMPT_GRANT_HEADLINE
+                            if _is_attempt_grant(card, decision)
+                            else guidance_item or readiness_fallbacks.get(decision.reason_code, card.needs_headline)
                             if decision.reason_code in retained_reasons
                             else card.needs_headline
                         ),
@@ -1188,11 +1214,14 @@ class WorkItemProjector:
                 if card.scope is WorkItemScope.OUTCOME
                 else "Delivery"
             )
-            return (
-                f"{owner} retry budget is exhausted after {readiness.attempts} attempts. Orchestrator can inspect "
-                f"this Change read-only with /inspect-change {card.change_id}; any new attempt requires approved "
-                "current authority."
+            remedy = (
+                "Use Grant one more attempt in Cockpit to fund exactly one more Builder attempt, or inspect this "
+                f"Change read-only with /inspect-change {card.change_id} first."
+                if _is_attempt_grant(card, readiness)
+                else f"Orchestrator can inspect this Change read-only with /inspect-change {card.change_id}; any "
+                "new attempt requires approved current authority."
             )
+            return f"{owner} retry budget is exhausted after {readiness.attempts} attempts. {remedy}"
         return fallback
 
     def list_items(self) -> tuple[WorkItemProjection, ...]:
@@ -1456,7 +1485,18 @@ class WorkItemProjector:
         if pending_request is not None:
             return WorkItemAction(kind=WorkItemActionKind.ANSWER_REQUEST, label="Answer request")
         if binding.block is not None and not binding.block.resolved and binding.block.request_id is None:
-            return WorkItemAction(kind=WorkItemActionKind.CLEAR_BLOCK, label="Clear block")
+            context = binding.builder_handoff_context
+            grantable = (
+                context is not None
+                and context.route == "same-task"
+                and binding.stage == DeliveryStage.IMPLEMENTATION
+                and binding.block.block_id == builder_attempt_limit_block_id(context)
+            )
+            return (
+                WorkItemAction(kind=WorkItemActionKind.GRANT_ATTEMPT, label="Grant one more attempt")
+                if grantable
+                else WorkItemAction(kind=WorkItemActionKind.CLEAR_BLOCK, label="Clear block")
+            )
         if binding.recovery_attention is not None:
             return WorkItemAction(kind=WorkItemActionKind.RECOVER_CLAIM, label="Recover claim")
         return WorkItemAction()

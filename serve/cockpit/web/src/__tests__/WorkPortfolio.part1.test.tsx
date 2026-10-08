@@ -894,6 +894,43 @@ it("requires evidence before clearing a requestless block", async () => {
   expect(await screen.findByText("Block cleared.")).toBeInTheDocument();
 });
 
+it("offers only the attempt grant for an exhausted Builder retry block", async () => {
+  const blockId = `builder-attempt-limit-${"f".repeat(64)}`;
+  fixtureState.currentDetail = detail({
+    card: card({
+      needs: "you",
+      next_actor: "you",
+      action: { kind: "grant-attempt", label: "Grant one more attempt", command: null },
+    }),
+    block: {
+      block_id: blockId,
+      reason: "The Builder retry episode reached its three-attempt limit.",
+      unblock_condition: "Use a supported operator disposition without resetting this retry episode.",
+      expected_evidence: ["An exact operator disposition for the retained Builder task."],
+      locators: ["TASK-001"],
+      request_id: null,
+      resolution_note: null,
+      resolution_locators: [],
+      resume_commit: null,
+    },
+  });
+  const { container } = renderPage("/delivery/change-alpha/outcome%3AOUT-001");
+
+  const grant = await screen.findByText("Grant one more attempt", { selector: "p-button" });
+  expect(screen.queryByText("Clear block")).not.toBeInTheDocument();
+  expect(namedPdsHost(container, "p-input-text", "block-note")).toBeNull();
+  fireEvent.click(grant);
+
+  await waitFor(() =>
+    expect(fixtureState.requests).toContainEqual({
+      url: `/api/changes/change-alpha/outcomes/OUT-001/blocks/${blockId}/grant-attempt`,
+      method: "POST",
+      body: { expected_frontier_digest: "a".repeat(64) },
+    }),
+  );
+  expect(await screen.findByText("One more Builder attempt granted.")).toBeInTheDocument();
+});
+
 it("keeps block evidence available when clearing the block fails", async () => {
   fixtureState.currentDetail = detail({
     block: {

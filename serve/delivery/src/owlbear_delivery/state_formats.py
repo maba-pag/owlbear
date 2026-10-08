@@ -290,7 +290,15 @@ RECORD_KINDS: Final[tuple[RecordKind, ...]] = (
         None,
         read=False,
     ),
-    _kind("retry_ledger", "retry", rf"{_CH}/retry-ledger/current\.json", (f"{_RECOVERY}:RetryLedgerSummary",), "M", 1),
+    _kind(
+        "retry_ledger",
+        "retry",
+        rf"{_CH}/retry-ledger/current\.json",
+        (f"{_RECOVERY}:RetryLedgerSummary",),
+        "M",
+        2,
+        read_upcasts=((1, f"{_RECOVERY}:parse_retry_ledger_summary"),),
+    ),
     _kind("retry_attempt", "retry", rf"{_CH}/retry-ledger/attempts/{_N}\.json", (f"{_RECOVERY}:RetryAttempt",), "R", 1),
     _kind(
         "retry_outcome",
@@ -351,6 +359,14 @@ RECORD_KINDS: Final[tuple[RecordKind, ...]] = (
         "R",
         2,
         read_upcasts=((1, f"{_RUNTIME_RECEIPTS}:parse_builder_plan_promotion_receipt"),),
+    ),
+    _kind(
+        "builder_attempt_grant_receipt",
+        "builder",
+        rf"{_CH}/builder-attempt-grant-receipts/{_D}\.json",
+        (f"{_RUNTIME_RECEIPTS}:_DeliveryBuilderAttemptGrantReceipt",),
+        "R",
+        1,
     ),
     _kind(
         "builder_request_resolution_receipt",

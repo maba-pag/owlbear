@@ -12,6 +12,7 @@ import pytest
 
 from owlbear_delivery.recovery import (
     MAX_RETRY_HISTORY_ATTEMPTS,
+    RetryAttemptGrantError,
     RetryEpisodeKey,
     RetryFailureClass,
     RetryLedger,
@@ -475,6 +476,73 @@ def test_recovery_release_preserves_failed_backoff_and_fractional_clock(tmp_path
     assert not ledger.reserve(key, failure_class="mechanical", now=at - timedelta(seconds=1)).allowed
     assert not ledger.reserve(key, failure_class="mechanical", now=at + timedelta(milliseconds=999)).allowed
     assert ledger.reserve(key, failure_class="mechanical", now=at + timedelta(seconds=1)).allowed
+
+
+def _exhaust_mechanical_episode(ledger: RetryLedger, key: RetryEpisodeKey) -> None:
+    for index, offset in enumerate((0, 1, 3), start=1):
+        observed = _START + timedelta(seconds=offset)
+        reservation = ledger.reserve(key, failure_class="mechanical", now=observed, attempt_id=f"attempt-{index}")
+        ledger.record_failure(reservation, failure_code="builder-failed", now=observed)
+    exhausted = ledger.reserve(key, failure_class="mechanical", now=_START + timedelta(seconds=10))
+    assert exhausted.reason_code == RetryStopCode.EXHAUSTED.value
+
+
+def _commit_grant(ledger: RetryLedger, tmp_path: Path, attempt_id: str = "attempt-3") -> None:
+    participant, _episode = ledger.prepare_attempt_grant(attempt_id, now=_START + timedelta(seconds=20))
+    RuntimeTransaction(tmp_path, f"grant-{attempt_id}", (participant,)).commit()
+
+
+def test_attempt_grant_funds_exactly_one_more_attempt_of_an_unchanged_v1_episode(tmp_path: Path) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    key = _engine_key()
+    _exhaust_mechanical_episode(ledger, key)
+    v1_bytes = ledger.summary_path.read_bytes()
+    assert RetryLedger(tmp_path, "change-a").read().schema_version == 1
+
+    for attempt_id in ("attempt-2", "attempt-unknown"):
+        with pytest.raises(RetryAttemptGrantError):
+            ledger.prepare_attempt_grant(attempt_id, now=_START)
+    participant, prepared = ledger.prepare_attempt_grant("attempt-3", now=_START + timedelta(seconds=20))
+    assert (prepared.granted_attempts, prepared.stop_code, prepared.next_eligible_at) == (1, None, None)
+    assert ledger.summary_path.read_bytes() == v1_bytes
+    RuntimeTransaction(tmp_path, "grant", (participant,)).commit()
+
+    summary = RetryLedger(tmp_path, "change-a").read()
+    assert summary.schema_version == 2
+    episode = summary.episodes[0]
+    assert (episode.total_attempts, episode.granted_attempts, episode.stop_code) == (3, 1, None)
+    with pytest.raises(RetryAttemptGrantError):
+        ledger.prepare_attempt_grant("attempt-3", now=_START + timedelta(seconds=20))
+
+    granted = ledger.reserve(
+        key, failure_class="mechanical", now=_START + timedelta(seconds=20), attempt_id="attempt-4"
+    )
+    assert granted.allowed
+    ledger.record_failure(granted, failure_code="builder-failed", now=_START + timedelta(seconds=20))
+    refused = ledger.reserve(key, failure_class="mechanical", now=_START + timedelta(seconds=60))
+    assert refused.reason_code == RetryStopCode.EXHAUSTED.value
+    assert refused.attempts == 4
+    _commit_grant(ledger, tmp_path, "attempt-4")
+    assert ledger.episode(key).granted_attempts == 2
+
+
+@pytest.mark.parametrize("clearance", ["reset", "accepted-progress"])
+def test_attempt_grant_ends_with_its_retry_episode(tmp_path: Path, clearance: str) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    key = _engine_key()
+    _exhaust_mechanical_episode(ledger, key)
+    _commit_grant(ledger, tmp_path)
+
+    if clearance == "reset":
+        episode = ledger.reset(key, accepted_progress=True, now=_START + timedelta(seconds=30))
+    else:
+        accepted = ledger.reserve(
+            key, failure_class="mechanical", now=_START + timedelta(seconds=30), attempt_id="attempt-4"
+        )
+        episode = ledger.record_accepted_progress(accepted, now=_START + timedelta(seconds=30))
+
+    assert episode.granted_attempts == 0
+    assert ledger.read().schema_version == 1
 
 
 def test_old_accepted_result_cannot_reset_successor_episode(tmp_path: Path) -> None:

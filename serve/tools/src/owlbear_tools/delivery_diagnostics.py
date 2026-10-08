@@ -158,6 +158,7 @@ _CHANGE_RECORD_LAYOUT: dict[str, object] = {
     "planning-retry-receipts": {"$outcome": {"$digest.json": "planning_retry_receipt"}},
     "builder-invocation-receipts": {"$digest.json": "builder_invocation_receipt"},
     "builder-plan-promotion-receipts": {"$digest.json": "builder_plan_promotion_receipt"},
+    "builder-attempt-grant-receipts": {"$digest.json": "builder_attempt_grant_receipt"},
     "builder-request-resolution-receipts": {"$digest.json": "builder_request_resolution_receipt"},
     "builder-handoff-change-intent-receipts": {
         "$digest": {
@@ -191,7 +192,7 @@ _CHANGE_RECORD_VERSIONS: dict[str, tuple[int, ...] | None] = {
     "recovery_receipt": (1,),
     "preservation_manifest": (1,),
     "restoration_record": (1,),
-    "retry_ledger": (1,),
+    "retry_ledger": (1, 2),
     "retry_attempt": (1,),
     "retry_outcome": (1,),
     "retry_repair_binding": (1,),
@@ -200,6 +201,7 @@ _CHANGE_RECORD_VERSIONS: dict[str, tuple[int, ...] | None] = {
     "planning_retry_receipt": (1, 2),
     "builder_invocation_receipt": (1, 2),
     "builder_plan_promotion_receipt": (1, 2),
+    "builder_attempt_grant_receipt": (1,),
     "builder_request_resolution_receipt": (1, 2),
     "builder_handoff_change_intent_head": (1,),
     "builder_handoff_change_intent_receipt": (1, 2),
@@ -340,6 +342,9 @@ _SAFE_LOCATORS = {
     ),
     "builder_plan_promotion_receipt": (
         ".owlbear/delivery/runtime/changes/<redacted>/builder-plan-promotion-receipts/<opaque>.json"
+    ),
+    "builder_attempt_grant_receipt": (
+        ".owlbear/delivery/runtime/changes/<redacted>/builder-attempt-grant-receipts/<opaque>.json"
     ),
     "builder_request_resolution_receipt": (
         ".owlbear/delivery/runtime/changes/<redacted>/builder-request-resolution-receipts/<opaque>.json"

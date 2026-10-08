@@ -485,7 +485,7 @@ class _SettlementReplayMixin:
             if isinstance(request, ReturnDelivery)
             else request.failure_code
         )
-        exhausted = not paused and episode.total_attempts >= ledger.mechanical_repairs + 1
+        exhausted = not paused and (episode.total_attempts >= ledger.mechanical_repairs + episode.granted_attempts + 1)
         if requestless_code is not None or isinstance(request, RetryDelivery):
             result = self._builder_retry_settled_binding(binding, context, envelope, exhausted=exhausted)
         elif isinstance(request, BlockDelivery):
