@@ -118,6 +118,7 @@ from owlbear_delivery.runtime_transaction import (
 from owlbear_delivery.storage_io import locked_roots, state_is_read_only
 from owlbear_delivery.work_items import (
     DeliveryPortfolioSnapshot,
+    DeliveryProgress,
     DeliveryReadiness,
     DeliveryReadinessBasis,
     WorkItemCardView,
@@ -1623,6 +1624,11 @@ class _RecoveryMixin:
                     f"Use /repair-delivery Diagnose Change {change_id} read-only; preserve existing custody and "
                     "journals. This does not repair authority or prove host/worker closure; the responsible owner "
                     "must resolve the condition separately before Delivery rereads it."
+                ),
+                progress=DeliveryProgress(
+                    situation="needs-attention",
+                    headline="Delivery cannot read this Change's state; diagnose it before continuing.",
+                    waiting_on="you",
                 ),
             ),
         )

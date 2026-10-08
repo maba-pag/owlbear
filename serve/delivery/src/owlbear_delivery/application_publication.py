@@ -447,6 +447,17 @@ class _PublicationMixin:
             self._publish_delivery_state(change_id, runtime, f"promotion-{promoted.receipt_id}")
             return promoted
 
+    def _release_target_sync_conflict_custody(
+        self, change_id: str, expected_disposition_id: str, operation_id: str
+    ) -> None:
+        """Let the exact conflict exit proceed when an engine sync retained custody on that conflict."""
+        with self._selected_action_checkpoint_lock(change_id):
+            action = self._retained_target_sync_conflict(change_id)
+            if action is None or action.operation_id != operation_id:
+                return
+            self._runtime(change_id).validate_target_sync_conflict(expected_disposition_id, operation_id)
+            self._coordinator.release_target_sync_conflict_action(action)
+
     def abort_target_sync_conflict(
         self,
         change_id: str,
@@ -455,6 +466,7 @@ class _PublicationMixin:
         operation_id: str,
     ) -> ChangeTargetSyncAbortReceipt:
         """Abort one exact preserved target merge and clear its attention."""
+        self._release_target_sync_conflict_custody(change_id, expected_disposition_id, operation_id)
         runtime = self._runtime(change_id, for_mutation=True)
         with (
             locked_roots((self._checkpoint_lock_root(change_id),)),
@@ -497,6 +509,7 @@ class _PublicationMixin:
         operation_id: str,
     ) -> ChangeTargetSyncReceipt:
         """Record one exact semantic target merge and clear its attention."""
+        self._release_target_sync_conflict_custody(change_id, expected_disposition_id, operation_id)
         runtime = self._runtime(change_id, for_mutation=True)
         request = TargetSyncConflictRequest(
             change_id=change_id,

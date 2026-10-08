@@ -1,7 +1,10 @@
 # owlbear-browser-mcp — Browser MCP Server
 
 MCP server that exposes Playwright-based browser tools to pipeline agents for rendered web content
-fetching. It launches a persistent Chromium profile; a dedicated profile is created by default,
+fetching. It launches a persistent Chromium profile on the first `navigate`, `acquire`, `click`,
+`type_input`, or `select` call rather than at server start, and launches or reopens it on the next
+such call after the window is closed. `read_text` and `snapshot` only read an open page and never
+launch the browser. A dedicated profile is created by default,
 while `PLAYWRIGHT_USER_DATA_DIR` can point to an existing profile. It does not select Microsoft
 Edge or attach to an existing browser through CDP. Both `navigate` and `acquire` apply the explicit
 domain allowlist and DNS/IP preflight checks.
@@ -48,8 +51,9 @@ with exact hostnames before using the project against production or sensitive si
 | `read_text` | Return the current page's normalized Markdown content without navigating |
 | `snapshot` | Return the current page's Playwright ARIA accessibility snapshot in YAML |
 
-Interactive tools require a live browser session and raise a browser-unavailable error otherwise;
-`type_input` never echoes typed text, and `snapshot` returns YAML.
+Action tools (`navigate`, `acquire`, `click`, `type_input`, `select`) launch or reopen the browser
+when needed; `read_text` and `snapshot` require an open page and raise a browser-unavailable error
+otherwise. `type_input` never echoes typed text, and `snapshot` returns YAML.
 
 `acquire` accepts a URL, optional readiness/content selectors, and bounded navigation/readiness
 timeouts. It does not accept arbitrary browser actions, scripts, credentials, session inputs, or

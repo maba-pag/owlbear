@@ -523,10 +523,13 @@ def test_inspect_change_prompt_uses_effective_read_only_allowlist() -> None:
     assert metadata["tools"] == [
         "owlbear-delivery/get_change",
         "owlbear-delivery/delivery_health",
+        "read/readFile",
     ]
     content = " ".join(path.read_text(encoding="utf-8").split())
-    assert "query is exactly `get_change` or `delivery_health`; call no other tool" in content
-    assert "remains uncallable, report that inspection is unavailable" in content
+    assert "query is exactly `get_change` or `delivery_health`." in content
+    assert "read that exact file with `read/readFile`" in content
+    assert "read no other file and call no other tool" in content
+    assert "remains uncallable or unreadable, report that inspection is unavailable" in content
     assert "raw Git" in content
 
 

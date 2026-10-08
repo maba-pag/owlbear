@@ -113,6 +113,7 @@ class PlaywrightLauncher:
         self._max_pending_pages = max_pending_pages
         self._headless = headless
         self._context: BrowserContext | None = None
+        self._context_closed = False
         self._fetcher: BrowserContentFetcher | None = None
         self._pw = None
         self._capabilities = AuthenticationCapabilities(
@@ -125,6 +126,14 @@ class PlaywrightLauncher:
     def capabilities(self) -> AuthenticationCapabilities:
         """Return authentication capabilities detected at launch."""
         return self._capabilities
+
+    @property
+    def is_running(self) -> bool:
+        """Return whether the persistent context is launched and has not closed."""
+        return self._context is not None and not self._context_closed
+
+    def _mark_context_closed(self, *_: object) -> None:
+        self._context_closed = True
 
     async def launch(self) -> None:
         """Launch Chromium with the SSO extension and open a persistent context."""
@@ -147,6 +156,8 @@ class PlaywrightLauncher:
             await self._pw.stop()
             self._pw = None
             raise
+        self._context_closed = False
+        self._context.on("close", self._mark_context_closed)
         self._capabilities = AuthenticationCapabilities(
             persistent_session=True,
             visible_manual_auth=not self._headless,

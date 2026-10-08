@@ -46,6 +46,7 @@ from owlbear_delivery.change_workspace import (
     ChangeCoordination,
     ChangeFinalizationAttempt,
     ChangePauseRequestedError,
+    ChangeTargetSyncConflictError,
     ChangeTargetSyncStaleError,
     ChangeWriter,
     CoordinationConflictError,
@@ -767,6 +768,26 @@ class _AcquisitionMixin:
             raise DeliveryRuntimeReconciliationError(request.change_id, "continuation result lacks its original intent")
         return result
 
+    def _retained_target_sync_conflict(self, change_id: str) -> ChangeContinuationAction | None:
+        """Return the unfinished engine sync whose exact recorded result is a preserved target conflict."""
+        try:
+            action = self._coordinator.show(change_id).continuation_action
+            if action is None or action.finished_at is not None or action.kind != "sync-target":
+                return None
+            result = self._read_engine_result(
+                ExecuteDeliveryChangeAction(change_id=change_id, operation_id=action.operation_id)
+            )
+        except OSError, RuntimeError, ValueError:
+            return None
+        if (
+            result is None
+            or result.kind != "blocked"
+            or result.failure is None
+            or result.failure.code != ChangeTargetSyncConflictError.code
+        ):
+            return None
+        return action
+
     def execute_change_action(self, request: ExecuteDeliveryChangeAction) -> DeliveryEngineActionResult:
         """Execute the fixed retained owner once, or return its exact durable result."""
         with self._selected_action_checkpoint_lock(request.change_id):
@@ -1393,11 +1414,14 @@ class _AcquisitionMixin:
         completed = {result.task_id for result in binding.results}
         frontier = parse_delivery_frontier(runtime.frontier_bytes())[0].model_copy(update={"finalization": None})
         coverage = evaluate_acceptance_evidence(runtime.contract, frontier).criteria
+        superseded_request_ids = self._superseded_request_ids(runtime, binding)
         return DeliveryPlanContext(
             launch=launch,
             outcome=outcome,
             commitments=self._commitments(runtime, outcome.commitment_ids),
+            decisions=runtime.contract.applicable_decisions(outcome.commitment_ids, superseded_request_ids),
             requests=binding.requests,
+            superseded_request_ids=superseded_request_ids,
             return_context=binding.return_context,
             acceptance=self._outcome_acceptance(runtime, outcome_id),
             retained_tasks=tuple(task for task in binding.tasks if task.task_id in completed),
@@ -1442,18 +1466,26 @@ class _AcquisitionMixin:
             )
         ):
             self._fail("Build retry history does not match the active claim")
+        superseded_request_ids = self._superseded_request_ids(runtime, binding)
         return DeliveryBuildContext(
             launch=launch,
             task=task,
             task_digest=task.digest,
             commitments=self._commitments(runtime, task.commitment_ids),
+            decisions=runtime.contract.applicable_decisions(outcome.commitment_ids, superseded_request_ids),
             predecessor_results=predecessor_results,
             requests=binding.requests,
+            superseded_request_ids=superseded_request_ids,
             return_context=binding.return_context,
             recovery_attention=binding.recovery_attention,
             prior_attempts=prior_attempts,
             acceptance=self._outcome_acceptance(runtime, outcome_id),
         )
+
+    @staticmethod
+    def _superseded_request_ids(runtime: DeliveryRuntime, binding: OutcomeAuthorityBinding) -> tuple[str, ...]:
+        superseded = runtime.contract.superseded_request_ids()
+        return tuple(request.request_id for request in binding.requests if request.request_id in superseded)
 
     @staticmethod
     def _outcome_acceptance(runtime: DeliveryRuntime, outcome_id: str) -> tuple[DeliveryAcceptanceCriterion, ...]:

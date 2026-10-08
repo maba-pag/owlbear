@@ -8,7 +8,7 @@ import hashlib
 import json
 import subprocess
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -48,7 +48,7 @@ from owlbear_delivery.delivery_runtime import (
     OutcomeAuthorityBinding,
 )
 from owlbear_delivery.design_package import DesignPackageStore
-from owlbear_delivery.merge_approval import ApproveChangeMerge
+from owlbear_delivery.merge_approval import MERGE_RESPONSE_DEADLINE, ApproveChangeMerge
 from owlbear_delivery.portfolio_application import DeliveryContinuationRequest
 from owlbear_delivery.publication_provider import PublicationProviderError
 from owlbear_delivery.runtime_models import (
@@ -633,6 +633,10 @@ def _leave_merge_unknown(application: PortfolioApplication, change_id: str, offe
         host_id="work-portfolio-e2e",
         session_id="seed",
     )
+    # A lost response becomes unknown only after its deadline, so the approval is stamped that far back.
+    approved_at = datetime.now(UTC).replace(microsecond=0) - MERGE_RESPONSE_DEADLINE - timedelta(minutes=1)
+    clock = application._clock  # noqa: SLF001
+    application._clock = lambda: approved_at.isoformat().replace("+00:00", "Z")  # noqa: SLF001
     try:
         application.approve_merge(request)
     except PublicationProviderError:
@@ -640,6 +644,8 @@ def _leave_merge_unknown(application: PortfolioApplication, change_id: str, offe
     else:
         message = f"{change_id} merge response was not lost"
         raise RuntimeError(message)
+    finally:
+        application._clock = clock  # noqa: SLF001
     for _ in range(20):
         application.reconcile_awaiting_acceptance((change_id,))
         if application.get_change(change_id).readiness.reason_code == "merge-response-unknown":

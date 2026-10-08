@@ -2,16 +2,26 @@ from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
 
 import pytest
 
 from owlbear_delivery import DeliveryCommitmentClass, DeliveryCompilationDiagnosticCode, compile_delivery_contract
+from owlbear_delivery.target_contract import contract_canonical_bytes, parse_delivery_contract
 
+_DECISION = """```yaml target-contract
+kind: decision
+id: DEC-001
+origin: decided
+basis: askQuestions 2026-10-08 "Keep compilation deterministic?"
+statement: Compilation stays deterministic.
+```
+"""
 _COMMITMENT = """```yaml target-contract
 kind: commitment
 id: COM-001
 class: dealbreaker
-provenance: test source
+decisions: [DEC-001]
 statement: Keep compilation deterministic.
 ```
 """
@@ -56,12 +66,12 @@ _DESIGN_OUTCOMES = (
 )
 
 
-def _commitment_block(identity: str, commitment_class: str, statement: str, source: str) -> str:
+def _commitment_block(identity: str, commitment_class: str, statement: str, _source: str) -> str:
     return f"""```yaml target-contract
 kind: commitment
 id: {identity}
 class: {commitment_class}
-provenance: {source} fixture
+decisions: [DEC-001]
 statement: {statement}
 ```
 """
@@ -85,6 +95,7 @@ dependencies: [{dependency_list}]
 def _specification_fixture() -> tuple[bytes, bytes]:
     intent = "# Self-Contained Delivery Contract\n\nRepresentative intent.\n\n" + "\n".join(
         [
+            _DECISION,
             *(_commitment_block(*definition, "intent") for definition in _INTENT_COMMITMENTS),
             *(_outcome_block(*definition) for definition in _INTENT_OUTCOMES),
         ]
@@ -165,7 +176,7 @@ def test_specification_compiles_to_complete_replayable_contract() -> None:
 kind: commitment
 id: COM-002
 class: agreed-path
-provenance: test source
+decisions: [DEC-001]
 statement: Reject unknown keys.
 warning: do not accept
 ```
@@ -213,10 +224,191 @@ def test_definition_failures_return_stable_diagnostics_without_partial_contract(
     dependencies: str,
     expected_codes: tuple[DeliveryCompilationDiagnosticCode, ...],
 ) -> None:
-    intent = f"# Sample Change\n\n{_COMMITMENT}\n{_OUTCOME.format(dependencies=dependencies)}\n{addition}".encode()
+    intent = (
+        f"# Sample Change\n\n{_DECISION}\n{_COMMITMENT}\n{_OUTCOME.format(dependencies=dependencies)}\n{addition}"
+    ).encode()
 
     result = compile_delivery_contract("sample-change", intent, b"# Sample Design\n")
 
     assert tuple(diagnostic.code for diagnostic in result.diagnostics) == expected_codes
     assert all(diagnostic.source_name == "intent.md" for diagnostic in result.diagnostics)
     assert result.contract is result.canonical_bytes is result.digest is None
+
+
+def _decision(identity: str, origin: str, *, supersedes: str = "", basis: str = "askQuestions fixture") -> str:
+    supersession = f"supersedes: [{supersedes}]\n" if supersedes else ""
+    return f"""```yaml target-contract
+kind: decision
+id: {identity}
+origin: {origin}
+basis: {basis}
+statement: Decision {identity}.
+{supersession}```
+"""
+
+
+def _decision_change(decisions: str, commitment_decisions: str = "DEC-001") -> bytes:
+    commitment = _COMMITMENT.replace("decisions: [DEC-001]", f"decisions: [{commitment_decisions}]")
+    return f"# Sample Change\n\n{decisions}\n{commitment}\n{_OUTCOME.format(dependencies='')}".encode()
+
+
+def test_decisions_compile_with_origin_supersession_history_and_active_links() -> None:
+    decisions = "\n".join(
+        (
+            _decision("DEC-001", "approved"),
+            _decision("DEC-002", "autonomous"),
+            _decision("DEC-003", "approved", supersedes="DEC-002"),
+            _decision("DEC-004", "decided", supersedes="REQ-ANSWERED", basis="request REQ-OTHER"),
+        )
+    )
+
+    result = compile_delivery_contract("sample-change", _decision_change(decisions, "DEC-001, DEC-003"), b"# D\n")
+
+    assert result.diagnostics == ()
+    assert result.contract is not None
+    assert result.contract.schema_version == 3
+    assert [(item.decision_id, item.origin.value) for item in result.contract.decisions] == [
+        ("DEC-001", "approved"),
+        ("DEC-002", "autonomous"),
+        ("DEC-003", "approved"),
+        ("DEC-004", "decided"),
+    ]
+    assert [item.decision_id for item in result.contract.active_decisions()] == ["DEC-001", "DEC-003", "DEC-004"]
+    assert result.contract.superseded_request_ids() == frozenset({"REQ-ANSWERED"})
+    assert result.contract.commitments[0].decision_ids == ("DEC-001", "DEC-003")
+    assert result.contract.commitments[0].provenance is None
+    payload = json.loads(result.canonical_bytes or b"{}")
+    assert "provenance" not in payload["commitments"][0]
+    assert payload["decisions"][2]["supersedes"] == ["DEC-002"]
+
+
+_DECIDED = _decision("DEC-001", "decided")
+
+
+@pytest.mark.parametrize(
+    ("decisions", "links", "expected"),
+    [
+        (_decision("DEC-001", "unsure"), "DEC-001", (DeliveryCompilationDiagnosticCode.VALUE_INVALID,)),
+        (
+            _DECIDED.replace("basis: askQuestions fixture\n", ""),
+            "DEC-001",
+            (DeliveryCompilationDiagnosticCode.KEY_MISSING,),
+        ),
+        (
+            _DECIDED + _decision("DEC-001", "approved"),
+            "DEC-001",
+            (DeliveryCompilationDiagnosticCode.IDENTITY_DUPLICATE,),
+        ),
+        (
+            _DECIDED + _decision("DEC-002", "decided", supersedes="DEC-404"),
+            "DEC-001",
+            (DeliveryCompilationDiagnosticCode.REFERENCE_UNRESOLVED,),
+        ),
+        (
+            _decision("DEC-001", "decided", supersedes="DEC-001"),
+            "DEC-001",
+            (DeliveryCompilationDiagnosticCode.SUPERSESSION_INVALID,),
+        ),
+        (
+            _DECIDED
+            + _decision("DEC-002", "decided", supersedes="DEC-003")
+            + _decision("DEC-003", "decided", supersedes="DEC-002"),
+            "DEC-001",
+            (DeliveryCompilationDiagnosticCode.SUPERSESSION_INVALID,),
+        ),
+        (
+            _decision("DEC-001", "approved")
+            + _decision("DEC-002", "decided", supersedes="DEC-001")
+            + _decision("DEC-003", "decided", supersedes="DEC-001"),
+            "DEC-002",
+            (DeliveryCompilationDiagnosticCode.SUPERSESSION_INVALID,),
+        ),
+        (
+            _DECIDED + _decision("DEC-002", "approved", supersedes="DEC-001"),
+            "DEC-002",
+            (DeliveryCompilationDiagnosticCode.DECISION_ORIGIN_REQUIRED,),
+        ),
+        (
+            _decision("DEC-001", "approved")
+            + _decision("DEC-002", "autonomous", supersedes="DEC-001")
+            + _decision("DEC-003", "approved", supersedes="DEC-002"),
+            "DEC-003",
+            (DeliveryCompilationDiagnosticCode.DECISION_ORIGIN_REQUIRED,),
+        ),
+        (
+            _DECIDED + _decision("DEC-002", "approved", supersedes="REQ-ANSWERED"),
+            "DEC-001",
+            (DeliveryCompilationDiagnosticCode.DECISION_ORIGIN_REQUIRED,),
+        ),
+        (
+            _decision("DEC-001", "approved") + _decision("DEC-002", "approved", supersedes="DEC-001"),
+            "DEC-001",
+            (DeliveryCompilationDiagnosticCode.DECISION_INACTIVE,),
+        ),
+        (_DECIDED, "", (DeliveryCompilationDiagnosticCode.VALUE_INVALID,)),
+        (
+            "",
+            "DEC-001",
+            (
+                DeliveryCompilationDiagnosticCode.DEFINITION_MISSING,
+                DeliveryCompilationDiagnosticCode.REFERENCE_UNRESOLVED,
+            ),
+        ),
+    ],
+    ids=(
+        "unknown-origin",
+        "missing-basis",
+        "reused-id",
+        "dangling-supersession",
+        "self-supersession",
+        "supersession-cycle",
+        "superseded-twice",
+        "decided-superseded-without-user",
+        "second-reversal-without-user",
+        "request-superseded-without-user",
+        "commitment-on-superseded-decision",
+        "commitment-without-decision",
+        "no-decision",
+    ),
+)
+def test_decision_rules_return_stable_diagnostics(
+    decisions: str,
+    links: str,
+    expected: tuple[DeliveryCompilationDiagnosticCode, ...],
+) -> None:
+    result = compile_delivery_contract("sample-change", _decision_change(decisions, links), b"# D\n")
+
+    codes = tuple(diagnostic.code for diagnostic in result.diagnostics)
+    assert codes[: len(expected)] == expected
+    assert set(codes[len(expected) :]) <= {
+        DeliveryCompilationDiagnosticCode.DEFINITION_MISSING,
+        DeliveryCompilationDiagnosticCode.REFERENCE_UNRESOLVED,
+    }
+    assert result.contract is None
+
+
+def test_legacy_provenance_commitment_no_longer_compiles() -> None:
+    legacy = _COMMITMENT.replace("decisions: [DEC-001]", "provenance: test source")
+    intent = f"# Sample Change\n\n{_DECISION}\n{legacy}\n{_OUTCOME.format(dependencies='')}".encode()
+
+    result = compile_delivery_contract("sample-change", intent, b"# D\n")
+
+    assert {diagnostic.code for diagnostic in result.diagnostics} == {
+        DeliveryCompilationDiagnosticCode.KEY_UNKNOWN,
+        DeliveryCompilationDiagnosticCode.KEY_MISSING,
+        DeliveryCompilationDiagnosticCode.DEFINITION_MISSING,
+        DeliveryCompilationDiagnosticCode.REFERENCE_UNRESOLVED,
+    }
+
+
+def test_stored_schema_2_contract_reads_and_keeps_its_exact_bytes() -> None:
+    stored = (
+        Path(__file__).with_name("fixtures") / "state_formats/golden/runtime/changes/source-bound-change/contract.json"
+    ).read_bytes()
+
+    contract = parse_delivery_contract(stored)
+
+    assert contract.schema_version == 2
+    assert contract.decisions == ()
+    assert all(item.provenance and not item.decision_ids for item in contract.commitments)
+    assert contract_canonical_bytes(contract) == stored

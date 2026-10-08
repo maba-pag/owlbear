@@ -1508,7 +1508,12 @@ def test_unconverted_request_projects_no_executable_new_work(tmp_path: Path) -> 
         readiness = application.show_work_item_view("change-a", "outcome:OUT-001").card.readiness
         view = application.get_change("change-a")
 
-    assert (readiness.status, readiness.reason_code, readiness.progress) == ("blocked", "change-paused", "paused")
+    assert readiness.progress is not None
+    assert (readiness.status, readiness.reason_code, readiness.progress.situation) == (
+        "blocked",
+        "change-paused",
+        "paused",
+    )
     assert not readiness.executable
     assert readiness.action is None
     assert view.readiness.executable is False

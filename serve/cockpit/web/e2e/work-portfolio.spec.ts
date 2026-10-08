@@ -133,10 +133,10 @@ test.describe("assembled Delivery portfolio", () => {
     await expect(tableHeaders).toHaveCount(2);
     await expect(tableHeaders.nth(0)).toHaveClass(/sr-only/);
     await expect(tableHeaders.nth(1)).toHaveClass(/sr-only/);
-    await expect(table).toContainText("Decision required");
+    await expect(table).toContainText("Your decision");
     await expect(table).toContainText("Ready for finalization");
-    await expect(table).toContainText("Waiting on OUT-002");
-    await expect(table).toContainText("Complete");
+    await expect(table).toContainText("Waiting for OUT-002 to complete.");
+    await expect(table).toContainText("This Outcome is complete.");
     await expect(table).not.toContainText("Reviewed");
 
     const summary = page.getByLabel("Delivery portfolio status");
@@ -428,7 +428,7 @@ test.describe("assembled Delivery portfolio", () => {
     inspected = await inspect(page, "Publication");
     await expect(inspected.detail).toContainText("Ready for finalization");
     await expect(inspected.detail).toContainText("Finalize the reviewed Change");
-    await expect(inspected.detail.getByTestId("publication-readiness-status")).toHaveText("Run prompt in Copilot Chat");
+    await expect(inspected.detail.getByTestId("publication-readiness-status")).toHaveText("Ready for next step");
     await expect(
       inspected.detail.locator('section[aria-labelledby="work-publication-heading"] [data-section-tone="neutral"]'),
     ).toBeVisible();
@@ -1058,7 +1058,7 @@ test.describe("assembled Delivery portfolio", () => {
     await page.goto("/delivery");
 
     const row = (await visibleRows(page)).filter({ hasText: "Build operator controls" });
-    await expect(row.getByText("Run prompt in Copilot Chat", { exact: true })).toBeVisible();
+    await expect(row.getByText("Ready for next step", { exact: true })).toBeVisible();
     const copy = row.getByRole("button", { name: "Copy continuation prompt" });
     await expect(copy).toHaveAccessibleDescription("Run it in Copilot Chat. Copying does not start an agent.");
     await copy.click();
@@ -1073,7 +1073,7 @@ test.describe("assembled Delivery portfolio", () => {
 
     const { detail, trigger } = await inspect(page, "Build operator controls");
     await expect(detail.getByTestId("readiness-prompt")).toHaveText(copied);
-    await expect(detail.getByTestId("readiness-progress")).toHaveText("Run prompt in Copilot Chat");
+    await expect(detail.getByTestId("readiness-progress")).toHaveText("Ready for next step");
     await expect(detail.getByTestId("change-pause-work-e2e").getByText("Pause", { exact: true })).toBeVisible();
     const requirements = detail.getByRole("button", { name: "Change requirements" });
     await expect(requirements).toHaveAccessibleDescription(
@@ -1087,13 +1087,13 @@ test.describe("assembled Delivery portfolio", () => {
 
     const control = page.getByTestId("change-pause-publication-e2e");
     const progress = page.getByTestId("change-progress-publication-e2e");
-    await expect(progress).toHaveText("Run prompt in Copilot Chat");
+    await expect(progress).toHaveText("Ready for next step");
     await control.getByText("Pause", { exact: true }).click();
     await inputValue(control.locator('p-input-text[name="change-pause-reason-publication-e2e"]'), "Hold for review");
     await control.getByText("Confirm pause", { exact: true }).click();
     await expect(progress).toHaveText("Paused");
     await control.getByText("Resume", { exact: true }).click();
-    await expect(progress).toHaveText("Run prompt in Copilot Chat");
+    await expect(progress).toHaveText("Ready for next step");
     await expect(page.getByLabel("Change publication for Publication release")).toContainText("Ready for finalization");
   });
 
@@ -1355,9 +1355,8 @@ test.describe("assembled merge approval", () => {
   test("shows an unknown merge with its PR link and checks again only when asked", async ({ page }) => {
     const detail = await openMergeChange(page, "merge-unknown-e2e");
     const number = pullNumber("merge-unknown-e2e");
-    await expect(detail.locator('[data-readiness-reason="merge-response-unknown"]')).toContainText(
-      "GitHub has not confirmed this merge.",
-    );
+    await expect(detail).toContainText("GitHub has not confirmed this merge.");
+    await expect(detail.locator('[data-readiness-reason="merge-response-unknown"]')).toBeAttached();
     await expect(detail.getByTestId("merge-attempt").getByRole("link")).toHaveAttribute(
       "href",
       `https://github.com/example/project/pull/${number}`,
@@ -1371,7 +1370,8 @@ test.describe("assembled merge approval", () => {
     const stillUnknown = mergeResponse(page, "/acceptance/observe");
     await detail.getByRole("button", { name: "Check again" }).click();
     expect((await stillUnknown).status()).toBe(409);
-    await expect(detail.locator('[data-readiness-reason="merge-response-unknown"]')).toBeVisible();
+    await expect(detail).toContainText("GitHub has not confirmed this merge.");
+    await expect(detail.locator('[data-readiness-reason="merge-response-unknown"]')).toBeAttached();
 
     fakeGh("__merge", String(number));
     // Cockpit's background acceptance reconciliation can briefly hold the Change lock; the user clicks again.
@@ -1393,7 +1393,8 @@ test.describe("assembled merge approval", () => {
 
   test("abandons a Change whose merge is unknown without another merge request", async ({ page }) => {
     const detail = await openMergeChange(page, "merge-abandon-e2e");
-    await expect(detail.locator('[data-readiness-reason="merge-response-unknown"]')).toBeVisible();
+    await expect(detail).toContainText("GitHub has not confirmed this merge.");
+    await expect(detail.locator('[data-readiness-reason="merge-response-unknown"]')).toBeAttached();
 
     await detail.getByText("Change lifecycle").click();
     await inputValue(detail.locator('p-input-text[name="change-disposition-reason"]'), "Merge outcome unknown");
@@ -1415,9 +1416,19 @@ test.describe("assembled merge approval", () => {
 
     const modal = await openApproveMerge(page, detail);
     await expect(modal.getByTestId("merge-approval-offer")).toContainText("merge");
-    const approval = mergeResponse(page, "/approve-merge");
-    await modal.getByRole("button", { name: "Approve merge" }).click();
-    const response = await approval;
+    // Background merge observation of the other Changes can publish state mid-approval; the user approves again.
+    let response = await Promise.all([
+      mergeResponse(page, "/approve-merge"),
+      modal.getByRole("button", { name: "Approve merge" }).click(),
+    ]).then(([approved]) => approved);
+    for (let attempt = 0; attempt < 2 && response.status() === 409; attempt += 1) {
+      expect(await response.text()).toContain("ERR_DELIVERY_STATE_CONFLICT");
+      expect(mergeRequests("merge-approve-e2e")).toEqual([]);
+      response = await Promise.all([
+        mergeResponse(page, "/approve-merge"),
+        modal.getByRole("button", { name: "Approve merge" }).click(),
+      ]).then(([approved]) => approved);
+    }
     expect(response.status()).toBe(200);
     const result = (await response.json()) as { state: string; completion_id: string | null };
     expect(result.state).toBe("merged");

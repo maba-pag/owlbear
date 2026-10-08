@@ -587,6 +587,14 @@ without an application owner is outside the operating context.
 
 ### 1.13 Unknown merge and user exit
 
+> **Superseded in part (status rethink R1/R2,
+> [delivery-status-model-rethink.md](delivery-status-model-rethink.md) §3.7).** An approval no
+> longer inherits the target-head acceptance episode. Each released approval has its own
+> observation episode: automatic reads every 30 seconds by the host supervisor for 24 hours from
+> release, with Check again always allowed and never extending that window. `merge-response-unknown`
+> starts 10 minutes after release instead of when the episode stops; the deadline never refuses,
+> cancels or resends. The rest of this section stands.
+
 While an attempt is `released` or `pending` and the acceptance episode has not stopped, readiness is
 `merge-in-progress` (actor system). Once the episode stops (`ACCEPTANCE_WAIT`), readiness is
 `merge-response-unknown` (actor you, `human` acquisition) with the `merge_attempt` summary

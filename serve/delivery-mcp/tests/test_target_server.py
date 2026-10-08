@@ -70,6 +70,7 @@ from owlbear_delivery import (
     ChangeContinuationAction,
     ChangeCoordination,
     DeliveryAdmissionReceipt,
+    DeliveryAnswerKind,
     DeliveryBuilderInvocationSettlement,
     DeliveryCommitment,
     DeliveryCommitmentClass,
@@ -127,7 +128,7 @@ from owlbear_delivery_mcp.server import (
     load_delivery_config,
     mcp,
 )
-from owlbear_delivery_mcp.target_models import DeliveryStartupDiagnostic
+from owlbear_delivery_mcp.target_models import AnswerParams, DeliveryStartupDiagnostic
 from owlbear_delivery_mcp.target_server import TargetMCPAdapter, assemble_target_server
 
 
@@ -210,7 +211,8 @@ async def test_registered_get_change_exposes_exhausted_builder_retry_history(tmp
     exhausted = next(item for item in payload["unresolved_outcomes"] if item["outcome_id"] == "OUT-001")
     readiness = exhausted["card"]["readiness"]
     assert readiness["reason_code"] == "retry-exhausted"
-    assert readiness["next_actor"] == "agent"
+    assert readiness["next_actor"] == "you"
+    assert exhausted["card"]["action"]["kind"] == "grant-attempt"
     assert readiness["retry_history"] == [
         {
             "ordinal": 1,
@@ -235,6 +237,39 @@ async def test_registered_get_change_exposes_exhausted_builder_retry_history(tmp
         },
     ]
     assert runtime.retry_ledger().read() == ledger_before
+
+
+@pytest.mark.asyncio
+async def test_registered_answer_refuses_the_user_only_attempt_grant(tmp_path: Path) -> None:
+    application, runtime, _contexts = _exhaust_builder_retry_with_distinct_codes(tmp_path)
+    block = runtime.show_binding("OUT-001").block
+    frontier_before = runtime.frontier_bytes()
+    ledger_before = runtime.retry_ledger().read()
+
+    async with Client(assemble_target_server(application)) as client:
+        result = await client.call_tool(
+            "answer",
+            {
+                "change_id": "change-a",
+                "kind": "grant-attempt",
+                "expected_frontier_digest": hashlib.sha256(frontier_before).hexdigest(),
+                "outcome_id": "OUT-001",
+                "block_id": block.block_id,
+            },
+        )
+
+    assert result.is_error
+    assert "ERR_TARGET_PARAM_VALIDATION" in result.content[0].text
+    assert runtime.frontier_bytes() == frontier_before
+    assert runtime.retry_ledger().read() == ledger_before
+    with pytest.raises(ValidationError, match="granted only by the user in Cockpit"):
+        AnswerParams(
+            change_id="change-a",
+            kind=DeliveryAnswerKind.GRANT_ATTEMPT,
+            expected_frontier_digest=hashlib.sha256(frontier_before).hexdigest(),
+            outcome_id="OUT-001",
+            block_id=block.block_id,
+        )
 
 
 def _evidence_statuses(projection: dict[str, Any]) -> dict[str, str]:
@@ -292,16 +327,19 @@ async def test_registered_change_reads_carry_progress_and_change_activity(tmp_pa
     assert "progress" in ready["readiness"]
     assert "change_progress" in ready["detail"]
     assert ready["detail"]["card"]["work_item_id"] == "OUT-001"
-    assert ready["detail"]["card"]["readiness"]["progress"] == "completed"
-    assert ready["detail"]["change_progress"] == "waiting-for-chat"
+    assert ready["detail"]["card"]["readiness"]["progress"]["situation"] == "done"
+    assert ready["detail"]["change_progress"]["situation"] == "ready-for-next-step"
     assert (ready["detail"]["pause_available"], ready["detail"]["pause_unavailable_reason"]) == (True, None)
-    assert held["detail"]["change_progress"] == "needs-decision"
+    assert held["detail"]["change_progress"]["situation"] == "needs-attention"
     # N09-A2: Pause is admissible under custody; the request drains the running step first.
     assert (held["detail"]["pause_available"], held["detail"]["pause_unavailable_reason"]) == (True, None)
     held_card = next(item for item in held["unresolved_outcomes"] if item["outcome_id"] == "OUT-002")["card"]
-    assert (held_card["readiness"]["progress"], held_card["next_step"]) == ("needs-decision", "Claimed by Builder")
+    assert (held_card["readiness"]["progress"]["situation"], held_card["next_step"]) == (
+        "needs-attention",
+        "Claimed by Builder",
+    )
     (group,) = listed["groups"]
-    assert group["progress"] == "needs-decision"
+    assert group["progress"]["situation"] == "needs-attention"
     assert (group["pause_available"], group["pause_unavailable_reason"]) == (True, None)
 
 
@@ -3725,7 +3763,7 @@ def test_entry_point_prints_one_refusal_line_for_newer_state_format(tmp_path: Pa
     _write_config(path, _config())
     runtime_root = repository / ".owlbear/delivery/runtime"
     runtime_root.mkdir()
-    runtime_root.joinpath("format.json").write_bytes(format_marker_bytes(4))
+    runtime_root.joinpath("format.json").write_bytes(format_marker_bytes(5))
 
     completed = subprocess.run(
         (sys.executable, "-m", "owlbear_delivery_mcp"),

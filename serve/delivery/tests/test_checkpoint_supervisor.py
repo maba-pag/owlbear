@@ -57,3 +57,36 @@ def test_supervisor_start_and_stop_are_idempotent() -> None:
     supervisor.stop(timeout_seconds=1)
     supervisor.stop(timeout_seconds=1)
     assert not supervisor.running
+
+
+class _AcceptanceApplication:
+    def __init__(self) -> None:
+        self.checkpoints = 0
+        self.acceptance = 0
+        self.ticked = Event()
+
+    def reconcile_pending_checkpoints(self, *, limit: int) -> tuple[object, ...]:
+        assert limit == 1
+        self.checkpoints += 1
+        if self.checkpoints >= 5:
+            self.ticked.set()
+        return ()
+
+    def reconcile_awaiting_acceptance(self, *, limit: int) -> tuple[object, ...]:
+        assert limit == 1
+        self.acceptance += 1
+        failure = "provider unavailable"
+        raise RuntimeError(failure)
+
+
+def test_supervisor_observes_acceptance_on_its_own_cadence_despite_failures() -> None:
+    application = _AcceptanceApplication()
+    supervisor = DeliveryCheckpointSupervisor(
+        application, interval_seconds=0.01, acceptance_interval_seconds=60, limit=1
+    )
+    supervisor.start()
+    assert application.ticked.wait(1)
+    supervisor.stop(timeout_seconds=1)
+
+    assert application.checkpoints >= 5
+    assert application.acceptance == 1

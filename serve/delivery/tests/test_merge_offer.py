@@ -305,7 +305,7 @@ def test_expired_observation_is_reread_and_a_provider_outage_is_a_distinct_wait(
         False,
         None,
     )
-    assert readiness.progress == "waiting-for-service"
+    assert (readiness.progress.situation, readiness.progress.waiting_on) == ("waiting-on-github", "github")
     assert (acquired.kind, acquired.reason_code, acquired.engine_action) == ("waiting", "provider-unavailable", None)
     _expire_caches(application)
     recovered = application.get_change("change-a").readiness

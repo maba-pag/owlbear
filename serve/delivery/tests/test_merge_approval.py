@@ -31,6 +31,7 @@ from owlbear_delivery.application_merge import (
     DeliveryMergeError,
 )
 from owlbear_delivery.application_models import (
+    DeliveryActionBusyError,
     DeliveryChangeIntent,
     DeliveryChangeIntentKind,
     PortfolioApplicationError,
@@ -682,3 +683,127 @@ def test_a_crash_at_each_outcome_changing_boundary_replays_to_one_outcome(tmp_pa
         assert reopened.observe_acceptance("change-a").finalized_change_head == _attempt(state_root).head_sha
     assert _attempt(state_root).state is MergeAttemptState.MERGED
     assert (len(_completions(state_root)), len(memory.merge_request_bodies)) == (1, 1)
+
+
+_START = datetime(2026, 8, 4, tzinfo=UTC)
+
+
+def _reconcile_reads(*hosts: PortfolioApplication) -> list[int]:
+    counts = []
+    for host in hosts:
+        with _counted_reads() as reads:
+            host.reconcile_awaiting_acceptance(("change-a",))
+        counts.append(reads.call_count)
+    return counts
+
+
+def test_an_approval_after_exhausted_reads_is_observed_until_completion(tmp_path: Path) -> None:
+    application, _runtime, memory, _head, state_root = _memory_awaiting_merge(tmp_path)
+    now = [_START]
+    _with_clock(application, now)
+    for seconds in (0, 1, 3):
+        now[0] = _START + timedelta(seconds=seconds)
+        application.reconcile_awaiting_acceptance(("change-a",))
+    now[0] = _START + timedelta(hours=1)
+    assert _approve(application).attempt.state is MergeAttemptState.PENDING
+
+    for minutes in (1, 2, 9):
+        now[0] = _START + timedelta(hours=1, minutes=minutes)
+        assert _reconcile_reads(application)[0] > 0
+        assert application.get_change("change-a").readiness.reason_code == "merge-in-progress"
+    now[0] = _START + timedelta(hours=1, minutes=11)
+    assert application.get_change("change-a").readiness.reason_code == "merge-response-unknown"
+    memory.execute_pending_merges()
+    now[0] += timedelta(minutes=1)
+
+    assert application.reconcile_awaiting_acceptance(("change-a",))[0].status.value == "completed"
+    assert (len(_completions(state_root)), len(memory.merge_request_bodies)) == (1, 1)
+
+
+def test_a_merged_approval_converges_after_repeated_read_failures_and_a_restart(tmp_path: Path) -> None:
+    application, runtime, memory, _head, state_root = _memory_awaiting_merge(tmp_path)
+    now = [_START]
+    _with_clock(application, now)
+    _approve(application)
+    memory.execute_pending_merges()
+    outage = PublicationProviderError(
+        PublicationProviderFailureCode.UNAVAILABLE, "observe_pull_request", "down", retry_safe=True
+    )
+    publisher = application._draft_pull_request_publisher
+
+    with patch.object(publisher, "observe_pull_request", side_effect=outage):
+        for step in range(5):
+            now[0] = _START + timedelta(seconds=31 * step)
+            outcome = application.reconcile_awaiting_acceptance(("change-a",))[0]
+            assert outcome.status.value == "provider-unavailable", outcome
+    assert (_attempt(state_root).state, runtime.completion_receipt()) == (MergeAttemptState.MERGED, None)
+    reopened = _reopen_with_providers(tmp_path, application, runtime, state_root, now)
+    now[0] += timedelta(seconds=31)
+
+    assert reopened.reconcile_awaiting_acceptance(("change-a",))[0].status.value == "completed"
+    assert (len(_completions(state_root)), len(memory.merge_request_bodies)) == (1, 1)
+
+
+def test_hosts_share_one_merge_observation_cadence(tmp_path: Path) -> None:
+    application, runtime, _memory, _head, state_root = _memory_awaiting_merge(tmp_path)
+    now = [_START]
+    _with_clock(application, now)
+    _approve(application)
+    other = _reopen_with_providers(tmp_path, application, runtime, state_root, now)
+
+    first = _reconcile_reads(application, other, application, other)
+    now[0] = _START + timedelta(seconds=31)
+    second = _reconcile_reads(other, application, other)
+
+    assert first[0] > 0
+    assert (first[1:], second) == ([0, 0, 0], [first[0], 0, 0])
+
+
+def test_check_again_reads_without_extending_the_approval_window(tmp_path: Path) -> None:
+    application, _runtime, memory, _head, _state_root = _memory_awaiting_merge(tmp_path)
+    now = [_START]
+    _with_clock(application, now)
+    memory.lose_next_merge_response = True
+    with pytest.raises(PublicationProviderError):
+        _approve(application)
+
+    now[0] = _START + timedelta(hours=23, minutes=59)
+    with _counted_reads() as reads, pytest.raises(DeliveryAcceptanceWaitingError):
+        application.observe_acceptance("change-a")
+    assert reads.call_count > 0
+    now[0] = _START + timedelta(hours=24, minutes=1)
+
+    assert _reconcile_reads(application) == [0]
+    with _counted_reads() as reads, pytest.raises(DeliveryAcceptanceWaitingError):
+        application.observe_acceptance("change-a")
+    assert reads.call_count > 0
+
+
+def test_an_observation_interrupted_after_the_merge_settles_recovers_after_a_restart(tmp_path: Path) -> None:
+    application, runtime, memory, _head, state_root = _memory_awaiting_merge(tmp_path)
+    now = [_START]
+    _with_clock(application, now)
+    _approve(application)
+    memory.execute_pending_merges()
+
+    with (
+        patch.object(PortfolioApplication, "_observe_acceptance_once", side_effect=_Crash),
+        pytest.raises(_Crash),
+    ):
+        application.reconcile_awaiting_acceptance(("change-a",))
+    assert (_attempt(state_root).state, runtime.completion_receipt()) == (MergeAttemptState.MERGED, None)
+    reopened = _reopen_with_providers(tmp_path, application, runtime, state_root, now)
+    now[0] = _START + timedelta(seconds=31)
+
+    assert reopened.reconcile_awaiting_acceptance(("change-a",))[0].status.value == "completed"
+    assert (len(_completions(state_root)), len(memory.merge_request_bodies)) == (1, 1)
+
+
+def test_retained_custody_skips_only_that_change_in_the_acceptance_batch(tmp_path: Path) -> None:
+    application, *_ = _memory_awaiting_merge(tmp_path)
+    busy = DeliveryActionBusyError("selected Change retains engine action custody: continue-1")
+
+    with patch.object(application, "_runtime", side_effect=busy):
+        outcome = application._reconcile_awaiting_acceptance_change("change-a")
+
+    assert (outcome.status.value, outcome.code) == ("skipped", "ERR_DELIVERY_RECONCILIATION_BUSY")

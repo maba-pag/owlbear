@@ -46,7 +46,9 @@ or public boundaries.
 `OUT-NNN.NN` in a legacy contract). Cover every criterion: at least one task's
 `acceptance_observations` entry cites its ID and the observable that proves it, for example
 `AC-002: the CLI exits 2 on an unknown flag`. For a criterion only a person can check, name that
-procedure so the Builder can ask the user to confirm it.
+procedure so the Builder can ask the user to confirm it. Bind such evidence by acceptance ID and
+exact procedure, which the Builder matches against an answered request's `applies_to`; never name a
+request ID in a task, since only the Builder's own pause creates and cites it.
 
 Repeat every `DeliveryPlanContext.retained_tasks` entry verbatim (completed work), then plan only the
 delta for criteria whose `coverage` status is not `covered` or `waived`, publishing the retained
@@ -64,6 +66,10 @@ defect is Planner-owned. A missing or contradictory Design premise is not.
 
 Planner may choose decomposition, order, dependencies, maintained surfaces, and proof only while
 preserving the supplied Design meaning and observable outcome authority.
+
+`DeliveryPlanContext.decisions` lists the decisions behind the outcome's commitments with their
+origin. Never change one. When a decision, or an answered request, no longer serves the outcome,
+`return` to Design with its identity in the locators; the Designer asks the user or supersedes it.
 
 ### Requests And Resumed Context
 

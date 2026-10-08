@@ -45,6 +45,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryPlanCandidate,
     DeliveryRequestKind,
     DeliveryRuntime,
+    DeliveryRuntimeConflictError,
     DeliveryStage,
     DeliveryWorkerRole,
     OutcomeAuthorityBinding,
@@ -54,6 +55,7 @@ from owlbear_delivery.delivery_runtime import (
     _DeliveryBuilderPlanPromotionReceipt,
     _DeliveryPlanningPauseReplay,
     _model_content,
+    _read_builder_attempt_grant_receipt,
     _read_builder_handoff_change_intent_receipts,
     _read_builder_request_resolution_receipt,
     normalize_frontier,
@@ -81,6 +83,12 @@ from owlbear_delivery.portfolio_operating import (
     DeliveryHealthResolution,
 )
 from owlbear_delivery.remote_git import RemoteGitError, RemoteGitFailed, read_remote_ref, run_remote_git
+from owlbear_delivery.runtime_receipts import (
+    BUILDER_ATTEMPT_GRANT_NOTE,
+    builder_attempt_limit_block_id,
+    builder_planning_route_block_id,
+    is_builder_return_limit,
+)
 from owlbear_delivery.runtime_transaction import (
     RuntimeTransaction,
     TransactionParticipant,
@@ -171,6 +179,8 @@ class _PlannerPauseHistory:
     paused: tuple[OutcomeAuthorityBinding, ...]
     answered: tuple[OutcomeAuthorityBinding, ...]
     latest: OutcomeAuthorityBinding
+    # The exhausted settlement a user grant replaced as the Planner baseline (N12 I6).
+    exhausted: OutcomeAuthorityBinding | None = None
 
 
 class DeliveryApplicationLoadError(RuntimeError):
@@ -1051,7 +1061,9 @@ def _is_unpublished_builder_handoff_successor(
         _bootstrap_failure("local Builder handoff receipt does not match its reviewed task authority")
     if not _builder_handoff_owner_matches(coordination, local_binding, context, receipt.envelope):
         _bootstrap_failure("local Builder handoff receipt does not match current Change custody")
-    branch_head = _validate_local_builder_handoff_workspace(snapshot, coordination, context, paths, workspace_manager)
+    branch_head = _validate_local_builder_handoff_workspace(
+        snapshot, coordination, local_binding, paths, workspace_manager
+    )
     _validate_local_builder_handoff_frontier(
         snapshot,
         local_frontier,
@@ -1124,11 +1136,14 @@ def _builder_handoff_receipt_matches_snapshot(
 def _validate_local_builder_handoff_workspace(
     snapshot: DeliveryStateSnapshot,
     coordination: ChangeCoordination,
-    context: DeliveryBuilderHandoffContext,
+    local_binding: OutcomeAuthorityBinding,
     paths: _DeliveryPaths,
     workspace_manager: ChangeWorkspaceManager,
 ) -> str:
     """Require retained metadata or an active successor branch to match the exact handoff."""
+    context = local_binding.builder_handoff_context
+    if context is None:
+        _bootstrap_failure("local Builder handoff context is unavailable")
     if coordination.builder_handoff is None:
         active_head = workspace_manager.source_head(
             snapshot.change_id,
@@ -1155,11 +1170,11 @@ def _validate_local_builder_handoff_workspace(
         return active_head
 
     if (
-        context.route == "same-outcome-design"
+        (context.route == "same-outcome-design" or is_builder_return_limit(local_binding))
         and coordination.builder_handoff.branch_head == context.branch_head
         and workspace_manager._design_return_captured(coordination, coordination.builder_handoff)  # noqa: SLF001
     ):
-        # N04 §1.7: a captured Design return keeps its handoff head under the attempt ref until its release.
+        # N04 §1.7, N12 I5: a captured release keeps its handoff head under the attempt ref until its release.
         if not _loader_git_is_ancestor(paths.repository_root, snapshot.change_head, context.branch_head):
             _bootstrap_failure("local Design return capture does not descend from its remote Change head")
         return context.branch_head
@@ -1456,10 +1471,11 @@ def _planner_handoff_pause_history(
         paused=tuple(paused),
         answered=tuple(answered),
         latest=settled_binding,
+        exhausted=None if replay.settlement.result == settled_binding else replay.settlement.result,
     )
     latest = (
         _exhausted_planner_handoff_row(history, local_binding.block)
-        if settled_binding.block is not None
+        if settled_binding.block is not None and not settled_binding.block.resolved
         else _planner_handoff_latest_row(history, local_binding.block)
     )
     return replace(history, latest=latest)
@@ -1547,7 +1563,7 @@ def _planner_handoff_latest_row(
     block: DeliveryBlock | None,
 ) -> OutcomeAuthorityBinding:
     """Derive the settled row, the latest receipt-backed pause, or a requestless pause, with any answer."""
-    if block is None:
+    if block is None or block == history.settled.block:
         if history.paused:
             _bootstrap_failure("local Planner pause differs from its exact Planning pause receipt")
         return history.settled
@@ -1651,6 +1667,9 @@ def _planner_handoff_lifecycle_rank(
     """Order one claimless row within the exact receipt-chained Planner pause history."""
     if promotion is not None and row == promotion.result_binding:
         return 3 * len(history.paused) + 4
+    if history.exhausted is not None and row == history.exhausted:
+        # Lifecycle receipts anchored before the user grant precede the granted baseline.
+        return -1
     known = (
         (0, history.settled),
         *((3 * index + 2, item) for index, item in enumerate(history.paused)),
@@ -1767,7 +1786,7 @@ def _builder_handoff_settled_binding(
     receipt: _DeliveryBuilderInvocationSettlementReceipt,
     paths: _DeliveryPaths,
 ) -> OutcomeAuthorityBinding:
-    """Derive the exact immutable retry or request-bearing pause result."""
+    """Derive the exact immutable retry, pause or return result and any recorded successor."""
     envelope = receipt.envelope
     snapshot_binding = next(
         (binding for binding in snapshot.frontier.bindings if binding.outcome_id == envelope.outcome_id),
@@ -1775,47 +1794,202 @@ def _builder_handoff_settled_binding(
     )
     if snapshot_binding is None:
         _bootstrap_failure("local Builder handoff outcome is absent from its remote snapshot")
+    _settlement_source_binding(snapshot, snapshot_binding, receipt, paths, frozenset())
     if isinstance(envelope.request, BlockDelivery):
-        expected_result = DeliveryRuntime._builder_pause_settled_binding(  # noqa: SLF001
-            snapshot_binding,
-            receipt.handoff_context,
-            envelope.request,
-        )
-        if receipt.result != expected_result:
-            _bootstrap_failure("local Builder pause result is not the exact successor of its remote binding")
-        if local_binding != expected_result:
+        if local_binding != receipt.result:
             return _builder_request_resolution_successor(paths.runtime_root, snapshot, receipt)
-        return expected_result
-    if isinstance(envelope.request, ReturnDelivery):
-        if envelope.request.target not in {DeliveryStage.PLANNING, DeliveryStage.DESIGN}:
-            _bootstrap_failure("local Builder return settlement has an unsupported target")
-        expected_results = tuple(
-            DeliveryRuntime._builder_return_settled_binding(  # noqa: SLF001
-                snapshot_binding,
-                receipt.handoff_context,
-                envelope.request,
-                exhausted=exhausted,
-            )
-            for exhausted in (False, True)
-        )
-        if receipt.result not in expected_results:
-            _bootstrap_failure("local Builder return result is not the exact successor of its remote binding")
         return receipt.result
-    requestless = envelope.disposition in REQUESTLESS_WORKER_SETTLEMENT_FAILURE_CODES and envelope.request is None
-    if not isinstance(envelope.request, RetryDelivery) and not requestless:
-        _bootstrap_failure("local Builder handoff route is unsupported")
-    expected_results = tuple(
-        DeliveryRuntime._builder_retry_settled_binding(  # noqa: SLF001
-            snapshot_binding,
-            receipt.handoff_context,
-            envelope,
-            exhausted=exhausted,
+    if isinstance(envelope.request, ReturnDelivery):
+        return _granted_planner_return_row(paths.runtime_root, snapshot, receipt) or receipt.result
+    return _builder_attempt_grant_successor(paths.runtime_root, snapshot, receipt, local_binding)
+
+
+def _granted_planner_return_row(
+    runtime_root: Path,
+    snapshot: DeliveryStateSnapshot,
+    settlement: _DeliveryBuilderInvocationSettlementReceipt,
+) -> OutcomeAuthorityBinding | None:
+    """Return the user-granted row of a pre-N12 exhausted Planning return, or ``None`` without its exact grant."""
+    block = settlement.result.block
+    context = settlement.handoff_context
+    if (
+        block is None
+        or context.route != "same-outcome-planner"
+        or block.block_id != builder_planning_route_block_id(context)
+    ):
+        return None
+    try:
+        grant = _read_builder_attempt_grant_receipt(runtime_root, snapshot.change_id, context)
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        _bootstrap_failure("local Builder attempt grant receipt is unavailable or invalid", exc)
+    if grant is None:
+        return None
+    if grant.settlement_id != settlement.settlement_id or grant.granted_block != block:
+        _bootstrap_failure("local Builder attempt grant differs from its exact exhausted Planning return")
+    return settlement.result.model_copy(update={"block": grant.updated_block})
+
+
+def _expected_settlement_results(
+    source: OutcomeAuthorityBinding,
+    settlement: _DeliveryBuilderInvocationSettlementReceipt,
+) -> tuple[OutcomeAuthorityBinding, ...]:
+    """Return every result the runtime can settle from one claimless source row."""
+    envelope = settlement.envelope
+    request = envelope.request
+    context = settlement.handoff_context
+    if isinstance(request, BlockDelivery):
+        try:
+            return (DeliveryRuntime._builder_pause_settled_binding(source, context, request),)  # noqa: SLF001
+        except DeliveryRuntimeConflictError:
+            return ()
+    if isinstance(request, ReturnDelivery):
+        if request.target not in {DeliveryStage.PLANNING, DeliveryStage.DESIGN}:
+            _bootstrap_failure("local Builder return settlement has an unsupported target")
+        return tuple(
+            DeliveryRuntime._builder_return_settled_binding(  # noqa: SLF001
+                source, context, request, exhausted=exhausted, return_limited=return_limited
+            )
+            for exhausted, return_limited in ((False, False), (True, False), (False, True))
         )
+    requestless = envelope.disposition in REQUESTLESS_WORKER_SETTLEMENT_FAILURE_CODES and request is None
+    if not isinstance(request, RetryDelivery) and not requestless:
+        _bootstrap_failure("local Builder handoff route is unsupported")
+    return tuple(
+        DeliveryRuntime._builder_retry_settled_binding(source, context, envelope, exhausted=exhausted)  # noqa: SLF001
         for exhausted in (False, True)
     )
-    if receipt.result not in expected_results:
-        _bootstrap_failure("local Builder handoff result is not the exact retry successor of its remote binding")
-    return receipt.result
+
+
+def _settlement_source_binding(
+    snapshot: DeliveryStateSnapshot,
+    snapshot_binding: OutcomeAuthorityBinding,
+    settlement: _DeliveryBuilderInvocationSettlementReceipt,
+    paths: _DeliveryPaths,
+    seen: frozenset[str],
+) -> OutcomeAuthorityBinding:
+    """Return the remote row, or the receipt-derived local row, one unpublished Builder settlement started from.
+
+    A retained handoff keeps the frontier unpublished, so a later settlement of the same outcome may start
+    from an answered pause, a granted retry or a promoted Planning return that only local receipts prove.
+    """
+    if settlement.result in _expected_settlement_results(snapshot_binding, settlement):
+        return snapshot_binding
+    seen |= {settlement.settlement_id}
+    for prior in _local_builder_settlement_receipts(paths.runtime_root, snapshot, settlement.envelope.outcome_id):
+        if prior.settlement_id in seen:
+            continue
+        for row in _builder_handoff_resumable_rows(snapshot, snapshot_binding, prior, paths, seen):
+            if settlement.result in _expected_settlement_results(row, settlement):
+                return row
+    request = settlement.envelope.request
+    return _bootstrap_failure(
+        "local Builder pause result is not the exact successor of its remote binding"
+        if isinstance(request, BlockDelivery)
+        else "local Builder return result is not the exact successor of its remote binding"
+        if isinstance(request, ReturnDelivery)
+        else "local Builder handoff result is not the exact retry successor of its remote binding"
+    )
+
+
+def _builder_handoff_resumable_rows(
+    snapshot: DeliveryStateSnapshot,
+    snapshot_binding: OutcomeAuthorityBinding,
+    prior: _DeliveryBuilderInvocationSettlementReceipt,
+    paths: _DeliveryPaths,
+    seen: frozenset[str],
+) -> tuple[OutcomeAuthorityBinding, ...]:
+    """Return the claimless rows a later Builder claim may start from after one earlier, validated settlement."""
+    try:
+        if not _builder_handoff_receipt_matches_snapshot(snapshot, snapshot_binding, prior.handoff_context, prior):
+            return ()
+        _settlement_source_binding(snapshot, snapshot_binding, prior, paths, seen)
+        return _settled_successor_rows(snapshot, prior, paths)
+    except DeliveryApplicationLoadError, OSError, RuntimeError, TypeError, ValueError:
+        return ()
+
+
+def _settled_successor_rows(
+    snapshot: DeliveryStateSnapshot,
+    prior: _DeliveryBuilderInvocationSettlementReceipt,
+    paths: _DeliveryPaths,
+) -> tuple[OutcomeAuthorityBinding, ...]:
+    """Return the answered, promoted, unblocked or granted row one validated settlement leads to."""
+    runtime_root = paths.runtime_root
+    request = prior.envelope.request
+    if isinstance(request, BlockDelivery):
+        return (_builder_request_resolution_successor(runtime_root, snapshot, prior),)
+    if isinstance(request, ReturnDelivery):
+        promotion = _read_local_builder_plan_promotion_receipt(
+            runtime_root, snapshot.change_id, prior.settlement_id, required=False
+        )
+        if request.target != DeliveryStage.PLANNING or promotion is None:
+            return ()
+        branch_head = prior.handoff_context.branch_head
+        replay = _BuilderReturnReplayContext(snapshot, snapshot.frontier, prior, paths, branch_head)
+        _validate_local_builder_plan_promotion(
+            replay, _granted_planner_return_row(runtime_root, snapshot, prior) or prior.result, promotion
+        )
+        return (promotion.result_binding,)
+    if prior.result.block is None:
+        return (prior.result,)
+    grant = _read_builder_attempt_grant_receipt(runtime_root, snapshot.change_id, prior.handoff_context)
+    if grant is None or grant.settlement_id != prior.settlement_id or grant.granted_block != prior.result.block:
+        return ()
+    return (prior.result.model_copy(update={"block": grant.updated_block}),)
+
+
+def _local_builder_settlement_receipts(
+    runtime_root: Path,
+    snapshot: DeliveryStateSnapshot,
+    outcome_id: str,
+) -> tuple[_DeliveryBuilderInvocationSettlementReceipt, ...]:
+    """Read the outcome's local Builder settlements that share the snapshot's reviewed boundary."""
+    change_root = runtime_root / "changes" / snapshot.change_id
+    receipt_directory = change_root / "builder-invocation-receipts"
+    if any(path.is_symlink() for path in (runtime_root / "changes", change_root, receipt_directory)):
+        _bootstrap_failure("local Builder handoff receipt path is unsafe")
+    receipts = []
+    for path in sorted(receipt_directory.glob("*.json")) if receipt_directory.is_dir() else []:
+        if path.is_symlink() or not path.is_file():
+            _bootstrap_failure("local Builder handoff receipt path is unsafe")
+        try:
+            receipt = _DeliveryBuilderInvocationSettlementReceipt.model_validate_json(path.read_bytes(), strict=True)
+        except (OSError, TypeError, ValueError) as exc:
+            _bootstrap_failure("local Builder handoff settlement receipt is invalid", exc)
+        envelope = receipt.envelope
+        if (
+            envelope.change_id == snapshot.change_id
+            and envelope.outcome_id == outcome_id
+            and envelope.expected_last_reviewed_commit == snapshot.last_reviewed_commit
+        ):
+            receipts.append(receipt)
+    return tuple(receipts)
+
+
+def _builder_attempt_grant_successor(
+    runtime_root: Path,
+    snapshot: DeliveryStateSnapshot,
+    settlement: _DeliveryBuilderInvocationSettlementReceipt,
+    local_binding: OutcomeAuthorityBinding,
+) -> OutcomeAuthorityBinding:
+    """Derive the settled retry result or only the exact user grant recorded for its exhausted block."""
+    if settlement.result.block is None or local_binding.block == settlement.result.block:
+        return settlement.result
+    try:
+        grant = _read_builder_attempt_grant_receipt(runtime_root, snapshot.change_id, settlement.handoff_context)
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        _bootstrap_failure("local Builder attempt grant receipt is unavailable or invalid", exc)
+    if grant is None or not all(
+        (
+            grant.change_id == snapshot.change_id,
+            grant.outcome_id == settlement.envelope.outcome_id,
+            grant.settlement_id == settlement.settlement_id,
+            grant.builder_handoff_context == settlement.handoff_context,
+            grant.granted_block == settlement.result.block,
+        )
+    ):
+        _bootstrap_failure("local Builder retry block differs from its exact settlement and attempt grant")
+    return settlement.result.model_copy(update={"block": grant.updated_block})
 
 
 def _builder_handoff_lifecycle_successor_frontier(
@@ -1966,12 +2140,34 @@ def _builder_handoff_lifecycle_baselines(
     if expected_frontier == settlement_frontier:
         resolved_frontier = None
         baselines = (settlement_frontier,)
-    elif isinstance(settlement.envelope.request, BlockDelivery):
+    elif isinstance(settlement.envelope.request, BlockDelivery) or _is_attempt_grant_frontier(
+        expected_frontier, settlement
+    ):
         resolved_frontier = expected_frontier
         baselines = (settlement_frontier, resolved_frontier)
     else:
         _bootstrap_failure("local Builder lifecycle intent has an unknown request-resolution baseline")
     return baselines, resolved_frontier, settlement_frontier
+
+
+def _is_attempt_grant_frontier(
+    expected_frontier: DeliveryFrontier,
+    settlement: _DeliveryBuilderInvocationSettlementReceipt,
+) -> bool:
+    """Recognize the receipt-derived granted retry block as a lifecycle baseline."""
+    block = settlement.result.block
+    binding = next(
+        (item for item in expected_frontier.bindings if item.outcome_id == settlement.envelope.outcome_id),
+        None,
+    )
+    return (
+        block is not None
+        and block.block_id == builder_attempt_limit_block_id(settlement.handoff_context)
+        and binding is not None
+        and binding.block is not None
+        and binding.block.resolution_note == BUILDER_ATTEMPT_GRANT_NOTE
+        and binding == settlement.result.model_copy(update={"block": binding.block})
+    )
 
 
 def _builder_handoff_frontier_with_lifecycle_fields(

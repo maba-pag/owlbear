@@ -38,6 +38,9 @@ from owlbear_delivery import (
     DeliveryChangeIntent,
     DeliveryChangeIntentKind,
     DeliveryFrontier,
+    DeliveryRequest,
+    DeliveryRequestKind,
+    DeliveryRequestOption,
     DeliveryStage,
     OutcomeAuthorityBinding,
     PortfolioApplication,
@@ -46,6 +49,7 @@ from owlbear_delivery import (
     PortfolioApplicationHooks,
 )
 from owlbear_delivery.finalization_reports import FinalizationReportStore
+from owlbear_delivery.merge_offer import MergeBlock, MergeBlockReason
 from owlbear_delivery.publication_provider import PublicationProviderError, PublicationProviderFailureCode
 from owlbear_delivery.recovery import DeliveryWorkerExclusionRequiredError, RetryLedger
 from owlbear_delivery.work_items import (
@@ -53,6 +57,8 @@ from owlbear_delivery.work_items import (
     DeliveryReadiness,
     DeliveryReadinessBasis,
     DeliveryReadinessReason,
+    DeliverySituation,
+    MergeAttemptSummary,
     WorkItemAction,
     WorkItemActionKind,
     WorkItemActivity,
@@ -68,7 +74,19 @@ from owlbear_delivery.work_items import (
     derive_delivery_progress,
 )
 
-_RESERVED = frozenset({"preparing", "working", "checking", "repairing", "needs-sign-in"})
+
+def _situation(progress: DeliveryProgress | None) -> str | None:
+    return progress.situation if progress is not None else None
+
+
+_IN_GITHUB_BLOCKS = frozenset(
+    {
+        MergeBlockReason.CAPABILITY_UNAVAILABLE,
+        MergeBlockReason.QUEUE_REQUIRED,
+        MergeBlockReason.STACKED,
+        MergeBlockReason.METHOD_NOT_ALLOWED,
+    }
+)
 
 
 def _progress_portfolio(
@@ -140,7 +158,7 @@ def _record_tree(root: Path) -> dict[str, bytes]:
 # Assembled positive scenarios.
 
 
-def test_undispatched_builder_claim_with_live_issuer_shows_neutral_custody(tmp_path: Path) -> None:
+def test_undispatched_builder_claim_with_live_issuer_is_with_agent(tmp_path: Path) -> None:
     now = [_iso(_real_now())]
     application, _runtimes, _coordinator, _state_root, probe = _progress_portfolio(
         tmp_path, {"change-a": DeliveryStage.IMPLEMENTATION}, now
@@ -152,27 +170,31 @@ def test_undispatched_builder_claim_with_live_issuer_shows_neutral_custody(tmp_p
     view = application.show_work_item_view("change-a", "outcome:OUT-001")
     readiness = view.card.readiness
     assert readiness is not None
-    assert (readiness.status, readiness.reason_code, readiness.progress) == ("running", "active-custody", None)
+    assert (readiness.status, readiness.reason_code) == ("running", "active-custody")
+    assert readiness.progress == DeliveryProgress(
+        situation="with-agent",
+        headline="Builder holds this step.",
+        waiting_on="agent",
+        since=view.card.activity.started_at,
+    )
     assert view.card.next_step == "Claimed by Builder"
-    assert view.change_progress is None
+    assert view.change_progress == readiness.progress
     group = _group(application)
-    assert group.progress is None
+    assert group.progress == readiness.progress
     change = application.get_change("change-a")
-    assert change.detail.change_progress is None
-    assert change.readiness is not None
-    assert change.readiness.progress is None
-    observed = {group.progress, change.detail.change_progress, *(item.readiness.progress for item in group.items)}
-    assert not observed & _RESERVED
+    assert change.detail.change_progress == readiness.progress
 
 
-def test_ready_planning_outcome_waits_for_chat_with_continuation_prompt(tmp_path: Path) -> None:
+def test_ready_planning_outcome_is_ready_for_next_step_with_continuation_prompt(tmp_path: Path) -> None:
     now = [_iso(_real_now())]
     application, *_rest = _progress_portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING}, now)
 
     card = _card(application, "outcome:OUT-001")
     readiness = card.readiness
     assert readiness is not None
-    assert (readiness.status, readiness.progress) == ("ready", "waiting-for-chat")
+    assert (readiness.status, _situation(readiness.progress)) == ("ready", "ready-for-next-step")
+    assert readiness.progress.headline == "Run the prompt in Copilot Chat to continue this Change."
+    assert readiness.progress.waiting_on == "you"
     assert readiness.action is not None
     assert (readiness.action.kind, readiness.action.label) == (
         WorkItemActionKind.START_ORCHESTRATION,
@@ -182,12 +204,12 @@ def test_ready_planning_outcome_waits_for_chat_with_continuation_prompt(tmp_path
     assert readiness.prompt.startswith("/continue-change change-a ")
     assert card.next_step == "Run the continuation prompt in Copilot Chat"
     change = application.get_change("change-a")
-    assert (change.readiness.progress, change.detail.change_progress) == ("waiting-for-chat", "waiting-for-chat")
-    assert _group(application).progress == "waiting-for-chat"
+    assert change.readiness.progress == change.detail.change_progress == readiness.progress
+    assert _group(application).progress == readiness.progress
 
 
 @pytest.mark.parametrize("role", ["planner", "builder"])
-def test_live_issuer_claim_is_neutral_custody_and_unknown_evidence_needs_decision(tmp_path: Path, role: str) -> None:
+def test_live_issuer_claim_is_with_agent_and_unknown_evidence_needs_attention(tmp_path: Path, role: str) -> None:
     now = [_iso(_real_now())]
     stage = DeliveryStage.PLANNING if role == "planner" else DeliveryStage.IMPLEMENTATION
     application, _runtimes, _coordinator, state_root, probe = _progress_portfolio(tmp_path, {"change-a": stage}, now)
@@ -198,23 +220,24 @@ def test_live_issuer_claim_is_neutral_custody_and_unknown_evidence_needs_decisio
     claim = acquired.launch.claim
 
     alive = _card(application, "outcome:OUT-001")
-    assert (alive.readiness.status, alive.readiness.progress) == ("running", None)
+    assert (alive.readiness.status, _situation(alive.readiness.progress)) == ("running", "with-agent")
+    assert alive.readiness.progress.headline == f"{role.capitalize()} holds this step."
     assert alive.next_step == f"Claimed by {role.capitalize()}"
 
     probe.states[_HOST] = "unknown"
     unknown = _card(application, "outcome:OUT-001")
-    assert (unknown.readiness.status, unknown.readiness.progress) == ("running", "needs-decision")
+    assert (unknown.readiness.status, _situation(unknown.readiness.progress)) == ("running", "needs-attention")
     assert unknown.next_step == f"Claimed by {role.capitalize()}"
-    assert _group(application).progress == "needs-decision"
-    assert application.get_change("change-a").detail.change_progress == "needs-decision"
+    assert _situation(_group(application).progress) == "needs-attention"
+    assert _situation(application.get_change("change-a").detail.change_progress) == "needs-attention"
 
     probe.states[_HOST] = "alive"
     _issuer_path(state_root, "change-a", claim.attempt_id).unlink()
     missing = _card(application, "outcome:OUT-001")
-    assert (missing.readiness.status, missing.readiness.progress) == ("running", "needs-decision")
+    assert (missing.readiness.status, _situation(missing.readiness.progress)) == ("running", "needs-attention")
 
 
-def test_finalizer_attempt_shows_held_custody_or_decision(tmp_path: Path) -> None:
+def test_finalizer_attempt_is_with_agent_or_needs_attention(tmp_path: Path) -> None:
     now = [_iso(_real_now())]
     application, _runtimes, _coordinator, _state_root, probe = _progress_portfolio(
         tmp_path, {"change-a": DeliveryStage.COMPLETED}, now
@@ -224,16 +247,17 @@ def test_finalizer_attempt_shows_held_custody_or_decision(tmp_path: Path) -> Non
 
     publication = _card(application, "publication")
     assert (publication.readiness.status, publication.readiness.reason_code) == ("running", "active-custody")
-    assert publication.readiness.progress is None
+    assert publication.readiness.progress.headline == "Finalizer holds this step."
+    assert publication.readiness.progress.target_sync == "unavailable"
     assert publication.next_step == "Finalizer attempt held"
-    assert application.get_change("change-a").detail.change_progress is None
+    assert _situation(application.get_change("change-a").detail.change_progress) == "with-agent"
 
     probe.states[_HOST] = "unknown"
-    assert _card(application, "publication").readiness.progress == "needs-decision"
-    assert application.get_change("change-a").detail.change_progress == "needs-decision"
+    assert _situation(_card(application, "publication").readiness.progress) == "needs-attention"
+    assert _situation(application.get_change("change-a").detail.change_progress) == "needs-attention"
 
 
-def test_closed_issuing_window_waits_for_chat(tmp_path: Path) -> None:
+def test_closed_issuing_window_waits_on_delivery_then_is_ready_for_next_step(tmp_path: Path) -> None:
     now = [_iso(_real_now())]
     application, _runtimes, _coordinator, _state_root, probe = _progress_portfolio(
         tmp_path, {"change-a": DeliveryStage.PLANNING}, now
@@ -243,22 +267,33 @@ def test_closed_issuing_window_waits_for_chat(tmp_path: Path) -> None:
     probe.processes = ("node",)
 
     card = _card(application, "outcome:OUT-001")
-    assert (card.readiness.reason_code, card.readiness.progress) == ("worker-stall-wait", "waiting-for-chat")
-    assert _group(application).progress == "waiting-for-chat"
+    assert card.readiness.reason_code == "worker-stall-wait"
+    assert card.readiness.progress.situation == "waiting-on-delivery"
+    assert card.readiness.progress.waiting_on == "delivery"
+    assert card.readiness.progress.next_eligible_at is None
+    assert _group(application).progress == card.readiness.progress
+
+    probe.processes = ()
+    card = _card(application, "outcome:OUT-001")
+    assert card.readiness.reason_code == "worker-stall-wait"
+    assert card.readiness.progress.situation == "ready-for-next-step"
+    assert card.readiness.next_eligible_at is not None
+    assert card.readiness.progress.next_eligible_at == card.readiness.next_eligible_at
 
 
-def test_pending_engine_action_waits_for_chat_with_resume_prompt(tmp_path: Path) -> None:
+def test_pending_engine_action_is_ready_for_next_step_with_resume_prompt(tmp_path: Path) -> None:
     application, *_rest = _awaiting_acceptance_fixture(tmp_path, mark_ready=False)
     _engine_action(application)
 
     change = application.get_change("change-a")
-    assert (change.readiness.reason_code, change.readiness.progress) == ("engine-action-pending", "waiting-for-chat")
+    assert change.readiness.reason_code == "engine-action-pending"
+    assert _situation(change.readiness.progress) == "ready-for-next-step"
     assert change.readiness.prompt.startswith("/continue-change change-a Resume the exact engine-selected operation")
-    assert change.detail.change_progress == "waiting-for-chat"
-    assert _group(application).progress == "waiting-for-chat"
+    assert _situation(change.detail.change_progress) == "ready-for-next-step"
+    assert _situation(_group(application).progress) == "ready-for-next-step"
 
 
-def test_full_execution_capacity_waits_for_another_change(tmp_path: Path) -> None:
+def test_full_execution_capacity_waits_on_another_change(tmp_path: Path) -> None:
     now = [_iso(_real_now())]
     application, _runtimes, coordinator, _state_root, _probe = _progress_portfolio(
         tmp_path, {"change-a": DeliveryStage.PLANNING, "change-b": DeliveryStage.PLANNING}, now, capacity=1
@@ -267,48 +302,58 @@ def test_full_execution_capacity_waits_for_another_change(tmp_path: Path) -> Non
     assert held.launch is not None, held
 
     waiting = _card(application, "outcome:OUT-001", "change-b")
-    assert (waiting.readiness.status, waiting.readiness.progress) == ("ready", "waiting-for-change")
-    assert _group(application, "change-b").progress == "waiting-for-change"
-    assert application.get_change("change-b").detail.change_progress == "waiting-for-change"
+    assert waiting.readiness.status == "ready"
+    assert (_situation(waiting.readiness.progress), waiting.readiness.progress.waiting_on) == (
+        "waiting-on-dependency",
+        "change",
+    )
+    assert _group(application, "change-b").progress == waiting.readiness.progress
+    assert application.get_change("change-b").detail.change_progress == waiting.readiness.progress
 
     with patch.object(coordinator, "list_registered", side_effect=OSError("occupancy unreadable")):
         unreadable = _card(application, "outcome:OUT-001", "change-b")
-    assert unreadable.readiness.progress == "waiting-for-chat"
+    assert _situation(unreadable.readiness.progress) == "ready-for-next-step"
 
 
-def test_open_request_needs_decision(tmp_path: Path) -> None:
+def test_open_decision_request_is_your_decision(tmp_path: Path) -> None:
     now = [_iso(_real_now())]
     application, *_rest = _progress_portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING}, now)
     claim = _acquire_planning_claim(application)
     application.transition_delivery("change-a", _planning_decision_block(claim.claim_id, 0))
 
     card = _card(application, "outcome:OUT-001")
-    assert (card.readiness.reason_code, card.readiness.progress) == ("request-action", "needs-decision")
-    assert _group(application).progress == "needs-decision"
+    assert card.readiness.reason_code == "request-action"
+    assert _situation(card.readiness.progress) == "your-decision"
+    assert card.readiness.progress.headline.startswith("Decide: ")
+    assert _group(application).progress == card.readiness.progress
 
 
-def test_exhausted_retry_needs_decision(tmp_path: Path) -> None:
+def test_exhausted_same_task_builder_retry_is_your_decision(tmp_path: Path) -> None:
     application, _runtime, _contexts = _exhaust_builder_retry_with_distinct_codes(tmp_path)
 
     card = _card(application, "outcome:OUT-001")
-    assert (card.readiness.reason_code, card.readiness.progress) == ("retry-exhausted", "needs-decision")
+    assert card.readiness.reason_code == "retry-exhausted"
+    assert _situation(card.readiness.progress) == "your-decision"
 
 
-def test_awaiting_merge_and_acceptance_wait_are_ready_to_merge(tmp_path: Path) -> None:
+def test_awaiting_merge_is_your_decision_and_exhausted_acceptance_names_the_block(tmp_path: Path) -> None:
     (tmp_path / "awaiting").mkdir()
     (tmp_path / "exhausted").mkdir()
     application, *_rest = _awaiting_acceptance_fixture(tmp_path / "awaiting")
     publication = _card(application, "publication")
     assert publication.publication_phase is WorkItemPublicationPhase.AWAITING_MERGE
-    assert publication.readiness.progress == "ready-to-merge"
-    assert application.get_change("change-a").detail.change_progress == "ready-to-merge"
+    assert _situation(publication.readiness.progress) == "your-decision"
+    assert application.get_change("change-a").detail.change_progress == publication.readiness.progress
 
     _first, _provider, _ledger, restart = acceptance_budget_case(tmp_path / "exhausted", exhausted=True)
     readiness = restart().get_change("change-a").readiness
-    assert (readiness.reason_code, readiness.progress) == ("merge-blocked", "ready-to-merge")
+    assert readiness.reason_code == "merge-blocked"
+    assert readiness.merge_block is not None
+    expected = "your-decision" if readiness.merge_block.reason in _IN_GITHUB_BLOCKS else "needs-attention"
+    assert _situation(readiness.progress) == expected
 
 
-def test_provider_backoff_waits_for_service(tmp_path: Path) -> None:
+def test_provider_backoff_on_a_chat_step_is_ready_for_next_step(tmp_path: Path) -> None:
     now = {"value": "2026-08-04T00:00:00Z"}
     application, _runtime, provider, _state, _head, _state_root = _awaiting_acceptance_fixture(
         tmp_path, mark_ready=False, clock=lambda: now["value"]
@@ -321,7 +366,8 @@ def test_provider_backoff_waits_for_service(tmp_path: Path) -> None:
 
     readiness = application.get_change("change-a").readiness
     assert (readiness.reason_code, readiness.operation) == ("retry-backoff", WorkItemActionKind.MARK_READY)
-    assert readiness.progress == "waiting-for-service"
+    assert _situation(readiness.progress) == "ready-for-next-step"
+    assert readiness.progress.next_eligible_at == readiness.next_eligible_at
 
 
 def test_pause_and_resume_project_paused_then_restore(tmp_path: Path) -> None:
@@ -335,17 +381,17 @@ def test_pause_and_resume_project_paused_then_restore(tmp_path: Path) -> None:
         )
     )
 
-    assert _group(application).progress == "paused"
-    assert {item.readiness.progress for item in _group(application).items} == {"paused"}
+    assert _situation(_group(application).progress) == "paused"
+    assert {_situation(item.readiness.progress) for item in _group(application).items} == {"paused"}
     application.set_change_intent(
         DeliveryChangeIntent(
             change_id="change-a", kind=DeliveryChangeIntentKind.RESUME, expected_frontier_digest=paused.frontier_digest
         )
     )
-    assert _group(application).progress == "waiting-for-chat"
+    assert _situation(_group(application).progress) == "ready-for-next-step"
 
 
-def test_accepted_completion_projects_completed(tmp_path: Path) -> None:
+def test_accepted_completion_projects_done(tmp_path: Path) -> None:
     application, _runtime, _provider, state, _head, _state_root = _awaiting_acceptance_fixture(tmp_path)
     state["pull_request"] = state["pull_request"].model_copy(
         update={
@@ -359,7 +405,8 @@ def test_accepted_completion_projects_completed(tmp_path: Path) -> None:
     application.observe_acceptance("change-a")
 
     change = application.get_change("change-a")
-    assert (change.readiness.progress, change.detail.change_progress) == ("completed", "completed")
+    assert (_situation(change.readiness.progress), _situation(change.detail.change_progress)) == ("done", "done")
+    assert change.readiness.progress.target_sync == "unnecessary"
 
 
 # Change activity selection (C1-C5).
@@ -375,21 +422,21 @@ def test_change_activity_follows_second_outcome_not_first_completed_card(tmp_pat
 
     ready = application.get_change("change-a")
     assert ready.detail.card.work_item_id == "OUT-001"
-    assert ready.detail.card.readiness.progress == "completed"
-    assert ready.detail.change_progress == "waiting-for-chat"
-    assert _group(application).progress == "waiting-for-chat"
+    assert _situation(ready.detail.card.readiness.progress) == "done"
+    assert _situation(ready.detail.change_progress) == "ready-for-next-step"
+    assert _group(application).progress == ready.detail.change_progress
 
     acquired = application.acquire_change_action(_continuation_request(application))
     assert acquired.launch is not None, acquired
     assert acquired.launch.outcome_id == "OUT-002"
     probe.states[_HOST] = issuer
-    expected = None if issuer == "alive" else "needs-decision"
+    expected = "with-agent" if issuer == "alive" else "needs-attention"
 
     held = application.get_change("change-a")
     assert held.detail.card.work_item_id == "OUT-001"
-    assert held.detail.card.readiness.progress == "completed"
-    assert held.detail.change_progress == expected
-    assert _group(application).progress == expected
+    assert _situation(held.detail.card.readiness.progress) == "done"
+    assert _situation(held.detail.change_progress) == expected
+    assert _situation(_group(application).progress) == expected
     assert _card(application, "outcome:OUT-002").next_step == "Claimed by Builder"
 
 
@@ -399,19 +446,18 @@ def test_contained_builder_transition_wins_change_activity(tmp_path: Path) -> No
         application.transition_delivery("change-a", transition)
     snapshot = application._delivery_snapshot(runtimes["change-a"])
     contained = _card(application, "outcome:OUT-001")
-    assert (contained.readiness.reason_code, contained.readiness.progress) == ("builder-transition-contained", None)
+    assert contained.readiness.reason_code == "builder-transition-contained"
+    assert _situation(contained.readiness.progress) == "needs-attention"
     running = contained.model_copy(
         update={
             "item_key": "outcome:OUT-002",
             "work_item_id": "OUT-002",
-            "readiness": contained.readiness.model_copy(
-                update={"status": "running", "reason_code": "active-custody", "progress": "needs-decision"}
-            ),
+            "readiness": contained.readiness.model_copy(update={"status": "running", "reason_code": "active-custody"}),
         }
     )
 
     assert application._change_activity_card(snapshot, (running, contained)) == contained
-    assert application.get_change("change-a").detail.change_progress is None
+    assert application.get_change("change-a").detail.change_progress == contained.readiness.progress
 
 
 @pytest.fixture
@@ -434,10 +480,17 @@ def test_dependency_first_declaration_follows_runnable_sibling(tmp_path: Path) -
         tmp_path, {"change-a": DeliveryStage.IMPLEMENTATION}, now, include_independent=True
     )
     first = _card(application, "outcome:OUT-001")
-    assert (first.readiness.reason_code, first.readiness.progress) == ("dependency-wait", None)
-    assert _card(application, "outcome:OUT-002").readiness.progress == "waiting-for-chat"
-    assert _group(application).progress == "waiting-for-chat"
-    assert application.get_change("change-a").detail.change_progress == "waiting-for-chat"
+    assert first.readiness.reason_code == "dependency-wait"
+    assert first.readiness.progress == DeliveryProgress(
+        situation="waiting-on-dependency",
+        headline="Waiting for OUT-002 to complete.",
+        waiting_on="outcome",
+        waiting_on_id="OUT-002",
+    )
+    sibling = _card(application, "outcome:OUT-002").readiness.progress
+    assert _situation(sibling) == "ready-for-next-step"
+    assert _group(application).progress == sibling
+    assert application.get_change("change-a").detail.change_progress == sibling
 
     block = DeliveryBlock(
         block_id="blocked-sibling",
@@ -451,15 +504,15 @@ def test_dependency_first_declaration_follows_runnable_sibling(tmp_path: Path) -
     cards = application._read_projector(snapshot).group_view().items
 
     assert runtimes["change-a"].claimable_outcome_ids() == ()
-    assert _card(application, "outcome:OUT-002").readiness.progress == "needs-decision"
+    assert _situation(_card(application, "outcome:OUT-002").readiness.progress) == "needs-attention"
     assert application._change_activity_card(snapshot, cards).work_item_id == "OUT-001"
-    assert _group(application).progress is None
+    assert _situation(_group(application).progress) == "waiting-on-dependency"
 
 
 # Negative scenarios.
 
 
-def test_unreadable_retry_ledger_keeps_unavailable_readiness_without_progress(tmp_path: Path) -> None:
+def test_unreadable_retry_ledger_needs_attention(tmp_path: Path) -> None:
     now = [_iso(_real_now())]
     application, _runtimes, _coordinator, state_root, _probe = _progress_portfolio(
         tmp_path, {"change-a": DeliveryStage.PLANNING}, now
@@ -469,7 +522,7 @@ def test_unreadable_retry_ledger_keeps_unavailable_readiness_without_progress(tm
     summary.write_bytes(b"{")
 
     readiness = _card(application, "outcome:OUT-001").readiness
-    assert (readiness.reason_code, readiness.progress) == ("retry-ledger-unavailable", None)
+    assert (readiness.reason_code, _situation(readiness.progress)) == ("retry-ledger-unavailable", "needs-attention")
 
 
 def test_progress_reads_create_no_delivery_record(tmp_path: Path) -> None:
@@ -491,7 +544,7 @@ def test_progress_reads_create_no_delivery_record(tmp_path: Path) -> None:
     assert _record_tree(state_root) == before
 
 
-def test_portfolio_never_emits_reserved_or_start_labels(tmp_path: Path) -> None:
+def test_portfolio_always_projects_one_situation_and_no_start_labels(tmp_path: Path) -> None:
     now = [_iso(_real_now())]
     application, *_rest = _progress_portfolio(
         tmp_path, {"change-a": DeliveryStage.PLANNING, "change-b": DeliveryStage.IMPLEMENTATION}, now
@@ -499,9 +552,9 @@ def test_portfolio_never_emits_reserved_or_start_labels(tmp_path: Path) -> None:
     application.acquire_change_action(_continuation_request(application, "change-b"))
 
     for group in application.list_work_item_groups():
-        assert group.progress not in _RESERVED
+        assert group.progress is not None
         for item in group.items:
-            assert item.readiness.progress not in _RESERVED
+            assert item.readiness.progress is not None
             labels = (item.action.label, item.readiness.action.label if item.readiness.action else None)
             assert not any(label and "Start" in label for label in labels)
 
@@ -555,52 +608,52 @@ _FRONTIER = DeliveryFrontier(
 # The projection reads only lifecycle presence; any non-None value stands for the record.
 _PRESENT = object()
 
-# reason -> (status, operation, executable, frontier lifecycle field, expected progress)
-_EXPECTED: dict[str, tuple[str, WorkItemActionKind | None, bool, str | None, DeliveryProgress | None]] = {
-    "ready": ("ready", _START, True, None, "waiting-for-chat"),
-    "design-attention": ("blocked", None, False, None, "needs-decision"),
-    "active-custody": ("running", None, False, None, None),
-    "builder-transition-contained": ("blocked", None, False, None, None),
-    "retry-transition-contained": ("blocked", None, False, None, None),
-    "finalization-failed": ("blocked", None, False, None, None),
-    "claim-activation-failed": ("blocked", None, False, None, None),
-    "coordination-unavailable": ("unavailable", None, False, None, None),
-    "execution-occupancy-unavailable": ("unavailable", None, False, None, None),
-    "engine-action-pending": ("running", None, False, None, "waiting-for-chat"),
-    "engine-action-blocked": ("blocked", None, False, None, None),
-    "engine-action-interrupted": ("blocked", None, False, None, None),
-    "engine-action-failed": ("blocked", None, False, None, None),
-    "engine-action-incomplete": ("blocked", None, False, None, None),
-    "target-sync-required": ("waiting", None, False, None, "waiting-for-chat"),
-    "claim-custody-unreconciled": ("blocked", None, False, None, None),
-    "runtime-unavailable": ("unavailable", None, False, None, None),
-    "dependency-wait": ("waiting", None, False, None, None),
-    "request-action": ("ready", WorkItemActionKind.ANSWER_REQUEST, True, None, "needs-decision"),
+# reason -> (status, operation, executable, frontier lifecycle field, expected situation)
+_EXPECTED: dict[str, tuple[str, WorkItemActionKind | None, bool, str | None, DeliverySituation]] = {
+    "ready": ("ready", _START, True, None, "ready-for-next-step"),
+    "design-attention": ("blocked", None, False, None, "your-decision"),
+    "active-custody": ("running", None, False, None, "with-agent"),
+    "builder-transition-contained": ("blocked", None, False, None, "needs-attention"),
+    "retry-transition-contained": ("blocked", None, False, None, "needs-attention"),
+    "finalization-failed": ("blocked", None, False, None, "needs-attention"),
+    "claim-activation-failed": ("blocked", None, False, None, "needs-attention"),
+    "coordination-unavailable": ("unavailable", None, False, None, "needs-attention"),
+    "execution-occupancy-unavailable": ("unavailable", None, False, None, "needs-attention"),
+    "engine-action-pending": ("running", None, False, None, "ready-for-next-step"),
+    "engine-action-blocked": ("blocked", None, False, None, "needs-attention"),
+    "engine-action-interrupted": ("blocked", None, False, None, "needs-attention"),
+    "engine-action-failed": ("blocked", None, False, None, "needs-attention"),
+    "engine-action-incomplete": ("blocked", None, False, None, "needs-attention"),
+    "target-sync-required": ("waiting", None, False, None, "ready-for-next-step"),
+    "claim-custody-unreconciled": ("blocked", None, False, None, "needs-attention"),
+    "runtime-unavailable": ("unavailable", None, False, None, "needs-attention"),
+    "dependency-wait": ("waiting", None, False, None, "waiting-on-dependency"),
+    "request-action": ("ready", WorkItemActionKind.ANSWER_REQUEST, True, None, "needs-attention"),
     "change-paused": ("blocked", None, False, "change_deferral", "paused"),
-    "change-terminal": ("complete", None, False, "change_completion", "completed"),
-    "outcome-complete": ("complete", None, False, None, "completed"),
-    "task-incomplete": ("waiting", None, False, None, None),
-    "workspace-inspection-failed": ("unavailable", None, False, None, None),
-    "workspace-dirty": ("blocked", None, False, None, None),
-    "workspace-preflight-failed": ("blocked", None, False, None, None),
-    "settled-attention-target-drift": ("blocked", None, False, None, "needs-decision"),
-    "review-repair": ("blocked", None, False, None, "waiting-for-chat"),
-    "publication-wait": ("waiting", None, False, None, "waiting-for-service"),
-    "checkpoint-pending": ("waiting", None, False, None, "waiting-for-service"),
-    "report-store-unavailable": ("ready", _START, True, None, None),
-    "retry-backoff": ("waiting", WorkItemActionKind.SYNC_TARGET, False, None, "waiting-for-service"),
-    "retry-exhausted": ("blocked", None, False, None, "needs-decision"),
-    "acceptance-wait": ("waiting", WorkItemActionKind.OBSERVE_ACCEPTANCE, False, None, "ready-to-merge"),
-    "retry-containment": ("blocked", None, False, None, None),
-    "retry-ledger-unavailable": ("unavailable", None, False, None, None),
-    "worker-stall-wait": ("waiting", None, False, None, "waiting-for-chat"),
-    "merge-approval-required": ("waiting", None, False, None, "ready-to-merge"),
-    "merge-checking": ("waiting", None, False, None, "waiting-for-service"),
-    "merge-blocked": ("blocked", None, False, None, "needs-decision"),
-    "checks-running": ("waiting", None, False, None, "waiting-for-service"),
-    "provider-unavailable": ("waiting", None, False, None, "waiting-for-service"),
-    "merge-in-progress": ("waiting", None, False, None, "waiting-for-service"),
-    "merge-response-unknown": ("blocked", None, False, None, "needs-decision"),
+    "change-terminal": ("complete", None, False, "change_completion", "done"),
+    "outcome-complete": ("complete", None, False, None, "done"),
+    "task-incomplete": ("waiting", None, False, None, "waiting-on-dependency"),
+    "workspace-inspection-failed": ("unavailable", None, False, None, "needs-attention"),
+    "workspace-dirty": ("blocked", None, False, None, "needs-attention"),
+    "workspace-preflight-failed": ("blocked", None, False, None, "needs-attention"),
+    "settled-attention-target-drift": ("blocked", None, False, None, "needs-attention"),
+    "review-repair": ("blocked", None, False, None, "ready-for-next-step"),
+    "publication-wait": ("waiting", None, False, None, "waiting-on-dependency"),
+    "checkpoint-pending": ("waiting", None, False, None, "waiting-on-delivery"),
+    "report-store-unavailable": ("ready", _START, True, None, "ready-for-next-step"),
+    "retry-backoff": ("waiting", WorkItemActionKind.SYNC_TARGET, False, None, "ready-for-next-step"),
+    "retry-exhausted": ("blocked", None, False, None, "needs-attention"),
+    "acceptance-wait": ("waiting", WorkItemActionKind.OBSERVE_ACCEPTANCE, False, None, "your-decision"),
+    "retry-containment": ("blocked", None, False, None, "needs-attention"),
+    "retry-ledger-unavailable": ("unavailable", None, False, None, "needs-attention"),
+    "worker-stall-wait": ("waiting", None, False, None, "waiting-on-delivery"),
+    "merge-approval-required": ("waiting", None, False, None, "your-decision"),
+    "merge-checking": ("waiting", None, False, None, "waiting-on-github"),
+    "merge-blocked": ("blocked", None, False, None, "needs-attention"),
+    "checks-running": ("waiting", None, False, None, "waiting-on-github"),
+    "provider-unavailable": ("waiting", None, False, None, "waiting-on-github"),
+    "merge-in-progress": ("waiting", None, False, None, "waiting-on-github"),
+    "merge-response-unknown": ("blocked", None, False, None, "needs-attention"),
 }
 
 
@@ -617,44 +670,85 @@ def test_readiness_reason_maps_to_programme_progress(reason: str) -> None:
         _readiness(status, reason, operation=operation, executable=executable), _outcome_card(), frontier
     )
 
-    assert progress == expected
+    assert progress.situation == expected
+    assert progress.headline.strip()
 
 
 @pytest.mark.parametrize(
-    ("issuer", "expected"), [(None, None), ("alive", None), ("gone", "waiting-for-chat"), ("unknown", "needs-decision")]
+    ("issuer", "expected"),
+    [
+        (None, "with-agent"),
+        ("alive", "with-agent"),
+        ("gone", "ready-for-next-step"),
+        ("unknown", "needs-attention"),
+    ],
 )
-def test_running_custody_maps_issuer_evidence_without_active_labels(issuer: str | None, expected: str | None) -> None:
+def test_running_custody_maps_issuer_evidence(issuer: str | None, expected: str) -> None:
     progress = derive_delivery_progress(
-        _readiness("running", "active-custody"), _outcome_card(), _FRONTIER, issuer_state=issuer
+        _readiness("running", "active-custody"), _outcome_card(), _FRONTIER, issuer_state=issuer, holder="Builder"
     )
-    assert progress == expected
+    assert progress.situation == expected
+    if expected == "with-agent":
+        assert (progress.headline, progress.waiting_on) == ("Builder holds this step.", "agent")
 
 
-def test_capacity_and_service_retries_select_their_waits() -> None:
+def test_capacity_and_retries_select_their_situations() -> None:
     ready = _readiness("ready", "ready", operation=_START, executable=True)
-    assert derive_delivery_progress(ready, _outcome_card(), _FRONTIER, at_capacity=True) == "waiting-for-change"
-    assert derive_delivery_progress(ready, _outcome_card(), _FRONTIER) == "waiting-for-chat"
+    capacity = derive_delivery_progress(ready, _outcome_card(), _FRONTIER, at_capacity=True)
+    assert (capacity.situation, capacity.waiting_on) == ("waiting-on-dependency", "change")
+    assert derive_delivery_progress(ready, _outcome_card(), _FRONTIER).situation == "ready-for-next-step"
     human = _readiness("ready", "ready", operation=_START, executable=True, next_actor=WorkItemNextActor.YOU)
-    assert derive_delivery_progress(human, _outcome_card(), _FRONTIER) is None
-    for operation in (WorkItemActionKind.SYNC_TARGET, WorkItemActionKind.MARK_READY):
-        backoff = _readiness("waiting", "retry-backoff", operation=operation)
-        assert derive_delivery_progress(backoff, _outcome_card(), _FRONTIER) == "waiting-for-service"
+    assert derive_delivery_progress(human, _outcome_card(), _FRONTIER).headline == "Next: Run."
+    observe = _readiness("waiting", "retry-backoff", operation=WorkItemActionKind.OBSERVE_ACCEPTANCE).model_copy(
+        update={"next_eligible_at": "2026-08-04T00:05:00Z"}
+    )
+    retrying = derive_delivery_progress(observe, _outcome_card(), _FRONTIER)
+    assert (retrying.situation, retrying.waiting_on, retrying.next_eligible_at) == (
+        "retrying-automatically",
+        "delivery",
+        "2026-08-04T00:05:00Z",
+    )
     backoff = _readiness("waiting", "retry-backoff", operation=_START)
-    assert derive_delivery_progress(backoff, _outcome_card(), _FRONTIER) == "waiting-for-chat"
+    assert derive_delivery_progress(backoff, _outcome_card(), _FRONTIER).situation == "ready-for-next-step"
     executable_checkpoint = _readiness(
         "ready", "checkpoint-pending", operation=WorkItemActionKind.RECONCILE_CHECKPOINT, executable=True
     )
-    assert derive_delivery_progress(executable_checkpoint, _outcome_card(), _FRONTIER) is None
+    assert derive_delivery_progress(executable_checkpoint, _outcome_card(), _FRONTIER).situation == (
+        "ready-for-next-step"
+    )
 
 
-def test_awaiting_merge_publication_is_ready_to_merge_unless_conflicted() -> None:
-    publication = _outcome_card(
+def test_decision_requests_are_your_decision_and_action_requests_need_attention() -> None:
+    readiness = _readiness("ready", "request-action", operation=WorkItemActionKind.ANSWER_REQUEST, executable=True)
+
+    def request(kind: DeliveryRequestKind) -> DeliveryRequest:
+        options = (DeliveryRequestOption(option_id="a", label="A"),) if kind is DeliveryRequestKind.DECISION else ()
+        return DeliveryRequest(
+            request_id="REQ-1", kind=kind, outcome_id="OUT-001", summary="Pick a store", options=options
+        )
+
+    decision = derive_delivery_progress(
+        readiness, _outcome_card(), _FRONTIER, request=request(DeliveryRequestKind.DECISION)
+    )
+    action = derive_delivery_progress(
+        readiness, _outcome_card(), _FRONTIER, request=request(DeliveryRequestKind.ACTION)
+    )
+    assert (decision.situation, decision.headline) == ("your-decision", "Decide: Pick a store")
+    assert (action.situation, action.headline) == ("needs-attention", "Action needed: Pick a store")
+
+
+def _publication(**updates: object) -> WorkItemCardView:
+    return _outcome_card(
         item_key="publication",
         scope=WorkItemScope.CHANGE_PUBLICATION,
         stage=None,
         publication_phase=WorkItemPublicationPhase.AWAITING_MERGE,
         action=WorkItemAction(kind=WorkItemActionKind.OBSERVE_ACCEPTANCE, label="Check merge status"),
-    )
+    ).model_copy(update=updates)
+
+
+def test_awaiting_merge_publication_is_your_decision_unless_conflicted() -> None:
+    publication = _publication()
     request = _readiness(
         "ready",
         "request-action",
@@ -662,39 +756,96 @@ def test_awaiting_merge_publication_is_ready_to_merge_unless_conflicted() -> Non
         executable=True,
         next_actor=WorkItemNextActor.YOU,
     )
-    assert derive_delivery_progress(request, publication, _FRONTIER) == "ready-to-merge"
+    awaiting = derive_delivery_progress(request, publication, _FRONTIER)
+    assert (awaiting.situation, awaiting.target_sync) == ("your-decision", "unnecessary")
     conflicted = publication.model_copy(
         update={"action": publication.action.model_copy(update={"command": "/resolve-target-conflict change-a"})}
     )
-    assert derive_delivery_progress(request, conflicted, _FRONTIER) == "needs-decision"
+    assert derive_delivery_progress(request, conflicted, _FRONTIER).situation == "ready-for-next-step"
     exhausted = _readiness("blocked", "retry-exhausted")
-    assert derive_delivery_progress(exhausted, publication, _FRONTIER) == "needs-decision"
+    assert derive_delivery_progress(exhausted, publication, _FRONTIER).situation == "needs-attention"
+    merged = derive_delivery_progress(request, publication, _FRONTIER, merged_unrecorded=True)
+    assert (merged.situation, merged.target_sync) == ("waiting-on-delivery", "unavailable")
 
 
-def test_abandonment_has_no_progress_and_completion_wins() -> None:
+@pytest.mark.parametrize(
+    ("block", "situation", "target_sync"),
+    [
+        (MergeBlockReason.CONFLICTS, "ready-for-next-step", "required"),
+        (MergeBlockReason.BEHIND, "ready-for-next-step", "required"),
+        (MergeBlockReason.CAPABILITY_UNAVAILABLE, "your-decision", "unnecessary"),
+        (MergeBlockReason.CHECKS_FAILED, "needs-attention", "unavailable"),
+    ],
+)
+def test_merge_blocks_select_situation_and_target_sync(
+    block: MergeBlockReason, situation: str, target_sync: str
+) -> None:
+    readiness = _readiness("blocked", "merge-blocked").model_copy(
+        update={"merge_block": MergeBlock(reason=block, detail="blocked")}
+    )
+    progress = derive_delivery_progress(readiness, _publication(), _FRONTIER)
+    assert (progress.situation, progress.target_sync) == (situation, target_sync)
+
+
+def test_pre_finalization_sync_prerequisite_is_required() -> None:
+    """Production keeps reason ``ready`` and swaps in the executable sync action (``_card_readiness``)."""
+    readiness = _readiness("ready", "ready", operation=WorkItemActionKind.SYNC_TARGET, executable=True)
+    publication = _publication(publication_phase=WorkItemPublicationPhase.READY_FOR_FINALIZATION)
+    progress = derive_delivery_progress(readiness, publication, _FRONTIER)
+    assert (progress.situation, progress.target_sync) == ("ready-for-next-step", "required")
+
+
+def test_merge_attempt_waits_on_github_since_release_and_holds_target_sync() -> None:
+    attempt = MergeAttemptSummary(
+        approval_id="a" * 64,
+        state="released",
+        approved_head="b" * 40,
+        pr_url="https://github.com/o/r/pull/1",
+        released_at="2026-08-04T00:00:00Z",
+    )
+    readiness = _readiness("waiting", "merge-in-progress").model_copy(update={"merge_attempt": attempt})
+    progress = derive_delivery_progress(readiness, _publication(), _FRONTIER)
+    assert (progress.situation, progress.waiting_on, progress.since, progress.target_sync) == (
+        "waiting-on-github",
+        "github",
+        "2026-08-04T00:00:00Z",
+        "unavailable",
+    )
+
+
+def test_pause_request_shows_pausing_until_drained() -> None:
+    running = _readiness("running", "active-custody")
+    assert derive_delivery_progress(running, _outcome_card(), _FRONTIER, pause_requested=True).situation == "pausing"
+    drained = derive_delivery_progress(running, _outcome_card(), _FRONTIER, pause_requested=True, pause_drained=True)
+    assert drained.situation == "paused"
+
+
+def test_abandonment_and_completion_are_terminal() -> None:
     complete = _readiness("complete", "change-terminal")
     abandoned = _FRONTIER.model_copy(update={"change_abandonment": _PRESENT})
-    assert derive_delivery_progress(complete, _outcome_card(), abandoned) is None
-    assert derive_delivery_progress(complete, _outcome_card(), _FRONTIER) == "completed"
+    assert derive_delivery_progress(complete, _outcome_card(), abandoned).situation == "abandoned"
+    assert derive_delivery_progress(complete, _outcome_card(), _FRONTIER).situation == "done"
 
 
-def test_reserved_progress_keys_are_never_emitted() -> None:
+def test_every_input_combination_projects_one_valid_situation() -> None:
     reasons = get_args(DeliveryReadinessReason)
     statuses = ("ready", "running", "waiting", "blocked", "unavailable", "complete")
     frontiers = (
         _FRONTIER,
         *(_FRONTIER.model_copy(update={field: _PRESENT}) for field in ("change_deferral", "change_completion")),
     )
-    cards = (_outcome_card(), _outcome_card(publication_phase=WorkItemPublicationPhase.AWAITING_MERGE))
+    cards = (_outcome_card(), _publication())
     emitted = set()
     for reason, status, frontier, card, issuer, capacity in itertools.product(
         reasons, statuses, frontiers, cards, (None, "alive", "gone", "unknown"), (False, True)
     ):
         executable = status == "ready"
         readiness = _readiness(status, reason, operation=_START if executable else None, executable=executable)
-        emitted.add(derive_delivery_progress(readiness, card, frontier, issuer_state=issuer, at_capacity=capacity))
-    assert not emitted & _RESERVED
-    assert emitted - {None} <= set(get_args(DeliveryProgress)) - _RESERVED
+        progress = derive_delivery_progress(readiness, card, frontier, issuer_state=issuer, at_capacity=capacity)
+        assert progress.headline.strip()
+        assert (progress.target_sync is None) == (card.scope is WorkItemScope.OUTCOME)
+        emitted.add(progress.situation)
+    assert emitted <= set(get_args(DeliverySituation))
 
 
 # Server-derived Pause availability (F1/F2): each fixture's projection must equal defer acceptance.

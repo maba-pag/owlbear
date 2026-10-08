@@ -7,7 +7,6 @@ import CopyCommand from "./CopyCommand";
 import { StatusChip, WorkRow } from "./DeliveryPrimitives";
 import {
   CONTINUATION_PROMPT_HELP,
-  changeProgressReadiness,
   isContinuationPrompt,
   PROGRESS_STAGE_LABELS,
   progressLabel,
@@ -17,8 +16,6 @@ import {
 
 interface WorkPortfolioTableProps {
   groups: ChangeGroupView[];
-  /** Unfiltered cards of a Change; filtering must not change what its progress says. */
-  changeItems?: (changeId: string) => WorkItemCardView[];
   selected: WorkItemIdentity | null;
   emptyMessage?: string;
   onSelect: (identity: WorkItemIdentity, trigger: HTMLElement) => void;
@@ -290,7 +287,6 @@ function PublicationGate({ group, selected, onSelect }: GroupTableProps) {
 
 export default function WorkPortfolioTable({
   groups,
-  changeItems = (changeId) => groups.find((group) => group.change_id === changeId)?.items ?? [],
   selected,
   emptyMessage,
   onSelect,
@@ -319,14 +315,16 @@ export default function WorkPortfolioTable({
               {group.lifecycle === "deferred" ? "paused" : group.lifecycle.replace(/-/g, " ")}
             </span>
             {group.progress ? (
-              <StatusChip
-                label={progressLabel(
-                  group.progress,
-                  changeProgressReadiness(changeItems(group.change_id), group.progress),
-                )}
-                tone={progressTone(group.progress)}
-                testId={`change-progress-${group.change_id}`}
-              />
+              <span className="flex min-w-0 flex-wrap items-center gap-static-xs">
+                <StatusChip
+                  label={progressLabel(group.progress)}
+                  tone={progressTone(group.progress)}
+                  testId={`change-progress-${group.change_id}`}
+                />
+                <span className="text-xs text-contrast-medium" data-testid={`change-headline-${group.change_id}`}>
+                  {group.progress.headline}
+                </span>
+              </span>
             ) : null}
             {renderGroupControls ? renderGroupControls(group) : null}
           </div>

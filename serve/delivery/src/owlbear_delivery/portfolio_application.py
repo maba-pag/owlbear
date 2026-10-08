@@ -132,6 +132,7 @@ from owlbear_delivery.delivery_contract_discovery import (
     discover_persisted_changes,
 )
 from owlbear_delivery.delivery_runtime import (
+    BUILDER_ATTEMPT_GRANT_NOTE,
     AdvanceDelivery,
     DeliveryAcceptanceAttentionReason,
     DeliveryAcceptanceWaitingError,
@@ -162,6 +163,7 @@ from owlbear_delivery.draft_pull_request import (
     PullRequestReadyReceipt,
     ReadChangePublicationCheckObservations,
 )
+from owlbear_delivery.merge_approval import MergeAttemptStore, merge_observation_expired
 from owlbear_delivery.publication_provider import (
     PublicationProviderError,
     PublicationPullRequest,
@@ -176,12 +178,14 @@ from owlbear_delivery.recovery import (
     RetryStopCode,
     is_canonical_admitted_path,
 )
+from owlbear_delivery.runtime_receipts import is_builder_return_limit
 from owlbear_delivery.storage_io import atomic_write, locked_roots, state_is_read_only
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
     DeliveryCompilationResult,
     DeliveryOutcome,
     compile_delivery_contract,
+    decision_delta,
 )
 from owlbear_delivery.work_items import (  # noqa: F401
     DeliveryPortfolioSnapshot,
@@ -434,7 +438,12 @@ class PortfolioApplication(
         self,
         change_id: str,
     ) -> DeliveryAcceptanceReconciliationOutcome:
-        runtime = self._runtime(change_id, for_mutation=True)
+        try:
+            runtime = self._runtime(change_id, for_mutation=True)
+        except (DeliveryRuntimeConflictError, DeliveryWorkerExclusionRequiredError) as exc:
+            return self._reconciliation_skipped_outcome(
+                change_id, str(exc) or "Change custody is retained.", code="ERR_DELIVERY_RECONCILIATION_BUSY"
+            )
         try:
             with locked_roots((self._checkpoint_lock_root(change_id),), blocking=False):
                 if not self._is_acceptance_reconciliation_eligible(runtime):
@@ -713,21 +722,42 @@ class PortfolioApplication(
             message = "acceptance observation requires awaiting-merge authority"
             raise PortfolioApplicationError(message)
         change_id = runtime.contract.change_id
-        key = RetryEpisodeKey.engine(
-            change_id,
-            "observe-acceptance",
-            finalization.exact_head,
-            self._workspace_manager.observed_target_head(),
-            finalization.finalization_id,
-        )
         ledger = runtime.retry_ledger(clock=self._clock)
-        episode = ledger.episode(key)
+        attempt = MergeAttemptStore(self._target_root, change_id).observed()
+        if attempt is not None:
+            key = RetryEpisodeKey.merge_observation(
+                change_id, attempt.head_sha, attempt.finalization_id, attempt.approval_id
+            )
+            automatic = not explicit
+            if automatic and merge_observation_expired(attempt, self._clock()):
+                return RetryReservation(
+                    episode_id=key.identity,
+                    allowed=False,
+                    reason_code=RetryStopCode.ACCEPTANCE_WAIT.value,
+                    stop_code=RetryStopCode.ACCEPTANCE_WAIT,
+                )
+            # Callers hold the checkpoint lock, so a pending read of this approval was interrupted.
+            for orphan in ledger.pending_attempts():
+                if orphan.key == key:
+                    ledger.record_failure(
+                        orphan.attempt_id, failure_code="acceptance-interrupted", now=orphan.reserved_at
+                    )
+        else:
+            key = RetryEpisodeKey.engine(
+                change_id,
+                "observe-acceptance",
+                finalization.exact_head,
+                self._workspace_manager.observed_target_head(),
+                finalization.finalization_id,
+            )
+            episode = ledger.episode(key)
+            automatic = not (explicit and episode is not None and episode.stop_code is RetryStopCode.ACCEPTANCE_WAIT)
         try:
             return ledger.reserve(
                 key,
                 failure_class=RetryFailureClass.ACCEPTANCE,
                 now=self._clock(),
-                automatic=not (explicit and episode is not None and episode.stop_code is RetryStopCode.ACCEPTANCE_WAIT),
+                automatic=automatic,
                 fence=self._coordinator.prepare_pause_fence(change_id, "provider", "observe-acceptance"),
             )
         except RetryLedgerConflictError:
@@ -943,14 +973,15 @@ class PortfolioApplication(
     ) -> bool:
         """Refuse a requirement revision unless the admitted Change is paused, quiescent and nonterminal (I1).
 
-        With ``allow_design_return`` a retained Design-route handoff is accepted; returns whether one is retained.
+        With ``allow_design_return`` a retained Design-route or return-limit handoff is accepted; returns whether one
+        is retained.
         """
         frontier = parse_delivery_frontier(runtime.frontier_bytes())[0]
         coordination = self._coordinator.show(change_id)
         action = coordination.continuation_action
         design_return = allow_design_return and any(
             binding.builder_handoff_context is not None
-            and binding.builder_handoff_context.route == "same-outcome-design"
+            and (binding.builder_handoff_context.route == "same-outcome-design" or is_builder_return_limit(binding))
             for binding in frontier.bindings
         )
         handoff = next(
@@ -1003,9 +1034,14 @@ class PortfolioApplication(
         return self._package_store.checkpoint(change_id)
 
     def derive_delivery_contract(self, change_id: str) -> DeliveryCompilationResult:
-        """Compile one verified package without publishing generated authority."""
+        """Compile one verified package without publishing generated authority; a revision adds its decision delta."""
         package = self._package_store.read_verified(change_id)
-        return compile_delivery_contract(change_id, package.intent_bytes, package.design_bytes)
+        compiled = compile_delivery_contract(change_id, package.intent_bytes, package.design_bytes)
+        self._reconcile_runtimes()
+        runtime = self._runtimes.get(change_id)
+        if runtime is None or compiled.contract is None:
+            return compiled
+        return compiled.model_copy(update={"decision_delta": decision_delta(runtime.contract, compiled.contract)})
 
     def admit_delivery_change(self, request: DeliveryAdmissionRequest) -> DeliveryAdmissionResult:
         """Admit source-bound Delivery authority through the owning registry."""
@@ -1642,7 +1678,7 @@ class PortfolioApplication(
             binding=binding,
         )
 
-    def answer(  # noqa: C901, PLR0911
+    def answer(  # noqa: C901, PLR0911, PLR0912
         self,
         answer: DeliveryAnswer,
         *,
@@ -1692,6 +1728,9 @@ class PortfolioApplication(
                         request=resolved,
                         frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
                     )
+
+                if answer.kind is DeliveryAnswerKind.GRANT_ATTEMPT:
+                    return self._grant_builder_attempt(runtime, answer, current_digest, allow_user_only=allow_user_only)
 
                 if answer.kind is DeliveryAnswerKind.BLOCK:
                     binding = runtime.show_binding(answer.outcome_id)
@@ -1763,6 +1802,46 @@ class PortfolioApplication(
                     disposition=resolved,
                     frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
                 )
+
+    def _grant_builder_attempt(
+        self,
+        runtime: DeliveryRuntime,
+        answer: DeliveryAnswer,
+        current_digest: str,
+        *,
+        allow_user_only: bool,
+    ) -> DeliveryAnswerResult:
+        """Apply the user's one-attempt grant to an exhausted same-task Builder retry block."""
+        if not allow_user_only:
+            message = "one more Builder attempt is granted only by the user in Cockpit"
+            raise DeliveryConfirmationError(message)
+        if current_digest != answer.expected_frontier_digest:
+            binding = runtime.show_binding(answer.outcome_id)
+            block = binding.block
+            if (
+                block is not None
+                and block.block_id == answer.block_id
+                and block.resolution_note == (BUILDER_ATTEMPT_GRANT_NOTE)
+            ):
+                return DeliveryAnswerResult(
+                    change_id=answer.change_id,
+                    kind=answer.kind,
+                    binding=runtime.grant_builder_attempt(answer.outcome_id, answer.block_id, now=self._clock()),
+                    frontier_digest=current_digest,
+                )
+            self._fail("answer frontier changed")
+        granted = runtime.grant_builder_attempt(answer.outcome_id, answer.block_id, now=self._clock())
+        self._publish_delivery_state(
+            answer.change_id,
+            runtime,
+            _checkpoint_operation_id("attempt-grant", answer.change_id, answer.outcome_id, answer.block_id),
+        )
+        return DeliveryAnswerResult(
+            change_id=answer.change_id,
+            kind=answer.kind,
+            binding=granted,
+            frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+        )
 
     @staticmethod
     def _exact_task_scope(task: DeliveryTaskDefinition, worktree: Path) -> tuple[str, ...]:

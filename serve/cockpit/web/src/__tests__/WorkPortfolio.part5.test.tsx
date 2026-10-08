@@ -7,7 +7,7 @@ import type {
   WorkItemAvailableDetailResponse,
   WorkItemCardView,
 } from "../api/workItems";
-import { MERGE_BLOCK_LABELS, READINESS_REASON_LABELS } from "../components/workItemPresentation";
+import { MERGE_BLOCK_LABELS, workItemStatus } from "../components/workItemPresentation";
 import {
   CONTINUATION_PROMPT,
   card,
@@ -36,6 +36,7 @@ import {
   requirePresent,
   response,
   selectValue,
+  situation,
   unavailableChange,
 } from "./workPortfolioHarness";
 
@@ -59,7 +60,6 @@ it("maps every coherent engine readiness response to its portfolio state and con
     lifecycle: ChangeGroupView["lifecycle"];
     publication: PublicationView | null;
     chip: string;
-    reason: string;
     actor: string;
     copyLabel: string | null;
   }
@@ -93,7 +93,6 @@ it("maps every coherent engine readiness response to its portfolio state and con
         ready_for_finalization: true,
       },
       chip: "Ready",
-      reason: "Delivery reports this operation is eligible now.",
       actor: "Agent",
       copyLabel: "Copy continuation prompt",
     },
@@ -115,7 +114,6 @@ it("maps every coherent engine readiness response to its portfolio state and con
       lifecycle: "in-delivery",
       publication: null,
       chip: "Running",
-      reason: "An active operation retains Change custody.",
       actor: "Agent",
       copyLabel: null,
     },
@@ -149,7 +147,6 @@ it("maps every coherent engine readiness response to its portfolio state and con
       lifecycle: "in-delivery",
       publication: null,
       chip: "Waiting",
-      reason: "A dependency has not completed yet.",
       actor: "Dependency",
       copyLabel: null,
     },
@@ -172,7 +169,6 @@ it("maps every coherent engine readiness response to its portfolio state and con
       lifecycle: "deferred",
       publication: null,
       chip: "Blocked",
-      reason: "This Change is paused.",
       actor: "You",
       copyLabel: null,
     },
@@ -196,7 +192,6 @@ it("maps every coherent engine readiness response to its portfolio state and con
       lifecycle: "publication",
       publication: publicationForChecks("ready-for-finalization"),
       chip: "Unavailable",
-      reason: "Managed workspace readiness could not be observed.",
       actor: "Agent",
       copyLabel: null,
     },
@@ -232,7 +227,6 @@ it("maps every coherent engine readiness response to its portfolio state and con
       lifecycle: "publication",
       publication: publicationForChecks("ready-for-finalization"),
       chip: "Ready",
-      reason: "The Change must be synchronized with its integration target first.",
       actor: "Agent",
       copyLabel: null,
     },
@@ -262,7 +256,6 @@ it("maps every coherent engine readiness response to its portfolio state and con
       lifecycle: "in-delivery",
       publication: null,
       chip: "Complete",
-      reason: "This Change reached a terminal state.",
       actor: "Nobody",
       copyLabel: null,
     },
@@ -288,7 +281,7 @@ it("maps every coherent engine readiness response to its portfolio state and con
     const inspector = await screen.findByTestId("work-item-detail");
     expect(within(inspector).getByTestId("readiness-status")).toHaveTextContent(scenario.chip);
     expect(inspector.querySelector(`[data-readiness-reason="${scenario.state.reason_code}"]`)).toHaveTextContent(
-      scenario.reason,
+      scenario.state.reason_code,
     );
     expect(inspector.querySelector(`[data-readiness-actor="${scenario.state.next_actor}"]`)).toHaveTextContent(
       `Next: ${scenario.actor}`,
@@ -427,7 +420,7 @@ it.each([
   }
 });
 
-it("labels every continuation readiness reason without blanking a new engine state", async () => {
+it("shows every continuation readiness reason code under Details", async () => {
   const continuationReasons: DeliveryReadinessReasonCode[] = [
     "design-attention",
     "builder-transition-contained",
@@ -450,9 +443,6 @@ it("labels every continuation readiness reason without blanking a new engine sta
     "retry-ledger-unavailable",
     "worker-stall-wait",
   ];
-  expect(new Set(continuationReasons.map((reason) => READINESS_REASON_LABELS[reason])).size).toBe(
-    continuationReasons.length,
-  );
 
   const retryCondition = "Wait until the retained attempt can be safely inspected.";
   const containedBuilderAttention: NonNullable<WorkItemAvailableDetailResponse["item"]["recovery_attention"]> = {
@@ -500,9 +490,7 @@ it("labels every continuation readiness reason without blanking a new engine sta
 
     const inspector = await screen.findByTestId("work-item-detail");
     const rendered = inspector.querySelector(`[data-readiness-reason="${reason}"]`);
-    expect(rendered).toHaveTextContent(READINESS_REASON_LABELS[reason]);
-    expect(rendered?.textContent?.trim()).not.toBe("");
-    expect(rendered).not.toHaveTextContent(READINESS_REASON_LABELS.ready);
+    expect(rendered).toHaveTextContent(reason);
     if (designAttention) {
       expect(inspector.querySelector('[data-readiness-actor="you"]')).toHaveTextContent("Next: You");
     }
@@ -592,7 +580,7 @@ it("shows the exact merge offer in the Approve merge dialog and Cancel sends not
 
   const inspector = await screen.findByTestId("work-item-detail");
   expect(inspector.querySelector('[data-readiness-reason="merge-approval-required"]')).toHaveTextContent(
-    READINESS_REASON_LABELS["merge-approval-required"],
+    "merge-approval-required",
   );
   const summary = within(inspector).getByTestId("merge-offer");
   expect(summary).toHaveTextContent("owlbear/example#42");
@@ -731,7 +719,7 @@ it("renders an unknown merge as attention with the pull request link and no merg
 
   const inspector = await screen.findByTestId("work-item-detail");
   expect(inspector.querySelector('[data-readiness-reason="merge-response-unknown"]')).toHaveTextContent(
-    READINESS_REASON_LABELS["merge-response-unknown"],
+    "merge-response-unknown",
   );
   const attempt = within(inspector).getByTestId("merge-attempt");
   expect(within(attempt).getByRole("link", { name: /pull request/i })).toHaveAttribute("href", prUrl);
@@ -739,20 +727,15 @@ it("renders an unknown merge as attention with the pull request link and no merg
   expect(within(inspector).queryByRole("button", { name: /approve|merge/i })).not.toBeInTheDocument();
 });
 
-it("gives every new merge readiness reason a distinct non-empty label", () => {
-  const reasons: DeliveryReadinessReasonCode[] = [
-    "merge-approval-required",
-    "merge-checking",
-    "merge-blocked",
-    "checks-running",
-    "provider-unavailable",
-    "merge-in-progress",
-    "merge-response-unknown",
-  ];
-  const labels = reasons.map((reason) => READINESS_REASON_LABELS[reason]);
+it.each([
+  [{ action: { kind: "resolve-attention", label: "Resolve" } }],
+  [{ publication_phase: "pull-request-draft", needs: "you" }],
+] as const)("lets Delivery's situation outrank publication phase copy (%o)", (overrides) => {
+  const progress = situation("needs-attention", { headline: "Engine headline for this publication." });
+  const status = workItemStatus(publicationCardForChecks({ ...overrides, readiness: readiness({ progress }) }));
 
-  expect(labels.every((label) => label.trim().length > 0)).toBe(true);
-  expect(new Set(labels).size).toBe(reasons.length);
+  expect(status.label).toBe("Needs attention");
+  expect(status.detail).toBe("Engine headline for this publication.");
 });
 
 it("renders durable retry readiness metadata", async () => {
@@ -774,29 +757,26 @@ it("renders durable retry readiness metadata", async () => {
   expect(inspector).toHaveTextContent("2026-08-04T00:00:02Z");
 });
 
-it.each([
-  ["retry-exhausted", "Automatic retries are exhausted; Delivery offers no action to reset this budget."],
-  [
-    "retry-containment",
-    "A prior attempt has no authoritative outcome. Preserve custody; no caller action can retry or release it.",
-  ],
-] as const)("shows no expected actor or prompt for %s", async (reason, explanation) => {
-  fixtureState.currentDetail = detail({
-    readiness: readiness({
-      status: "blocked",
-      reason_code: reason,
-      next_actor: "none",
-      prompt: null,
-      stop_reason: reason,
-    }),
-  });
-  renderPage("/delivery/change-alpha/outcome%3AOUT-001");
+it.each(["retry-exhausted", "retry-containment"] as const)(
+  "shows no expected actor or prompt for %s",
+  async (reason) => {
+    fixtureState.currentDetail = detail({
+      readiness: readiness({
+        status: "blocked",
+        reason_code: reason,
+        next_actor: "none",
+        prompt: null,
+        stop_reason: reason,
+      }),
+    });
+    renderPage("/delivery/change-alpha/outcome%3AOUT-001");
 
-  const inspector = await screen.findByTestId("work-item-detail");
-  expect(inspector.querySelector('[data-readiness-actor="none"]')).toHaveTextContent("Next: Nobody");
-  expect(inspector.querySelector(`[data-readiness-reason="${reason}"]`)).toHaveTextContent(explanation);
-  expect(screen.queryByTestId("readiness-prompt")).not.toBeInTheDocument();
-});
+    const inspector = await screen.findByTestId("work-item-detail");
+    expect(inspector.querySelector('[data-readiness-actor="none"]')).toHaveTextContent("Next: Nobody");
+    expect(inspector.querySelector(`[data-readiness-reason="${reason}"]`)).toHaveTextContent(reason);
+    expect(screen.queryByTestId("readiness-prompt")).not.toBeInTheDocument();
+  },
+);
 
 it("renders the bounded attempt history of an exhausted retry episode", async () => {
   fixtureState.currentDetail = detail({
@@ -908,7 +888,7 @@ it("exposes the coordination status behind an unreadable Change record", async (
   expect(diagnostics).toHaveTextContent("coordination-unavailable");
   expect(diagnostics).toHaveTextContent("Coordination record: unreadable");
   expect(inspector.querySelector('[data-readiness-reason="coordination-unavailable"]')).toHaveTextContent(
-    "This Change has no readable coordination record.",
+    "coordination-unavailable",
   );
   expect(within(inspector).queryByRole("button")).not.toBeInTheDocument();
 });
@@ -924,7 +904,7 @@ it("lists engine-reported unavailable Changes that no operating status covers", 
   expect(issues).toHaveTextContent("1 Change unavailable to Delivery.");
   const row = issues.querySelector('[data-delivery-unavailable="quarantined-change"]') as HTMLElement;
   expect(row).toHaveTextContent("Quarantined work");
-  expect(row).toHaveTextContent("Delivery could not compose this Change runtime.");
+  expect(row).toHaveTextContent("Delivery cannot read this Change's state; diagnose it before continuing.");
   expect(row).toHaveTextContent("Read-only inspection only. Checks: Unknown.");
 });
 
@@ -1043,13 +1023,19 @@ it("does not duplicate an unavailable Change already carried by an operating sta
 it("copies the engine continuation prompt from a row without navigating or starting an agent", async () => {
   const writeText = vi.fn().mockResolvedValue(undefined);
   Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
-  fixtureState.currentPortfolio = portfolio([group({ progress: "waiting-for-chat", items: [continuationCard()] })]);
+  fixtureState.currentPortfolio = portfolio([
+    group({ progress: continuationCard().readiness?.progress, items: [continuationCard()] }),
+  ]);
   renderPage();
 
   const table = await screen.findByTestId("work-portfolio-table");
   const row = within(table).getAllByText("Delivery foundation")[0].closest("[data-work-item]") as HTMLElement;
-  expect(within(row).getByText("Run prompt in Copilot Chat", { selector: "[data-status-tone]" })).toBeVisible();
-  expect(within(table).getByTestId("change-progress-change-alpha")).toHaveTextContent("Run prompt in Copilot Chat");
+  expect(within(row).getByText("Ready for next step", { selector: "[data-status-tone]" })).toBeVisible();
+  expect(within(row).getByText("Run the prompt in Copilot Chat to start the step.")).toBeVisible();
+  expect(within(table).getByTestId("change-progress-change-alpha")).toHaveTextContent("Ready for next step");
+  expect(within(table).getByTestId("change-headline-change-alpha")).toHaveTextContent(
+    "Run the prompt in Copilot Chat to start the step.",
+  );
   expect(screen.getByTestId("portfolio-activity-run-prompt")).toHaveTextContent("1Run prompt");
   const copy = within(row).getByRole("button", { name: "Copy continuation prompt" });
   expect(copy).toHaveAccessibleDescription("Run it in Copilot Chat. Copying does not start an agent.");
@@ -1074,7 +1060,12 @@ it.each([
   ["/continue-change change-alphabet reread get_change and pass its readiness basis unchanged."],
 ])("never labels %s as this Change's continuation prompt", async (prompt) => {
   const other = continuationCard({
-    readiness: readiness({ status: "blocked", reason_code: "retry-exhausted", prompt, progress: "needs-decision" }),
+    readiness: readiness({
+      status: "blocked",
+      reason_code: "retry-exhausted",
+      prompt,
+      progress: situation("needs-attention"),
+    }),
   });
   fixtureState.currentPortfolio = portfolio([group({ items: [other] })]);
   fixtureState.currentDetail = detail({ card: other, readiness: other.readiness });
@@ -1089,13 +1080,17 @@ it("shows the continuation copy, progress and Change activity in detail", async 
   const writeText = vi.fn().mockResolvedValue(undefined);
   Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
   const ready = continuationCard();
-  fixtureState.currentPortfolio = portfolio([group({ progress: "waiting-for-chat", items: [ready] })]);
-  fixtureState.currentDetail = detail({ card: ready, readiness: ready.readiness, change_progress: "waiting-for-chat" });
+  const progress = ready.readiness?.progress;
+  fixtureState.currentPortfolio = portfolio([group({ progress, items: [ready] })]);
+  fixtureState.currentDetail = detail({ card: ready, readiness: ready.readiness, change_progress: progress });
   renderPage("/delivery/change-alpha/outcome%3AOUT-001");
 
   const inspector = await screen.findByTestId("work-item-detail");
-  expect(within(inspector).getByTestId("readiness-progress")).toHaveTextContent("Run prompt in Copilot Chat");
-  expect(within(inspector).getByTestId("change-progress")).toHaveTextContent("Run prompt in Copilot Chat");
+  expect(within(inspector).getByTestId("readiness-progress")).toHaveTextContent("Ready for next step");
+  expect(within(inspector).getByTestId("readiness-headline")).toHaveTextContent(
+    "Run the prompt in Copilot Chat to start the step.",
+  );
+  expect(within(inspector).getByTestId("change-progress")).toHaveTextContent("Ready for next step");
   expect(within(inspector).getByTestId("delivery-readiness")).toHaveTextContent(
     "Next: Agent, after you run the prompt",
   );
@@ -1106,6 +1101,10 @@ it("shows the continuation copy, progress and Change activity in detail", async 
 it("tells the user to wait, not to run the prompt, while a closed worker's claim is settling", async () => {
   const later = new Date(Date.now() + 60 * 60 * 1000);
   const time = later.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const restart = situation("ready-for-next-step", {
+    headline: "The VS Code window running this worker closed; run the prompt in Copilot Chat to restart the step.",
+    next_eligible_at: later.toISOString(),
+  });
   const stalled = continuationCard({
     readiness: readiness({
       status: "waiting",
@@ -1113,46 +1112,38 @@ it("tells the user to wait, not to run the prompt, while a closed worker's claim
       executable: false,
       operation: null,
       action: null,
-      progress: "waiting-for-chat",
+      progress: restart,
       next_eligible_at: later.toISOString(),
     }),
   });
-  fixtureState.currentPortfolio = portfolio([group({ progress: "waiting-for-chat", items: [stalled] })]);
+  fixtureState.currentPortfolio = portfolio([group({ progress: restart, items: [stalled] })]);
   const { unmount } = renderPage();
 
   let table = await screen.findByTestId("work-portfolio-table");
-  expect(within(table).getByTestId("change-progress-change-alpha")).toHaveTextContent(
-    `Wait until ${time}, then run prompt`,
-  );
+  expect(within(table).getByTestId("change-progress-change-alpha")).toHaveTextContent("Ready for next step");
   expect(screen.getByTestId("portfolio-activity-run-prompt")).toHaveTextContent("0Run prompt");
   unmount();
 
   // Delivery's Change progress follows the held step even when a ready sibling is listed first.
   const ready = continuationCard();
   const held = { ...stalled, item_key: "outcome:OUT-002", work_item_id: "OUT-002", title: "Stalled outcome" };
-  fixtureState.currentPortfolio = portfolio([group({ progress: "waiting-for-chat", items: [ready, held] })]);
-  fixtureState.currentDetail = detail({ card: ready, readiness: ready.readiness, change_progress: "waiting-for-chat" });
+  fixtureState.currentPortfolio = portfolio([group({ progress: restart, items: [ready, held] })]);
+  fixtureState.currentDetail = detail({ card: ready, readiness: ready.readiness, change_progress: restart });
   const { unmount: unmount2 } = renderPage("/delivery/change-alpha/outcome%3AOUT-001");
 
   table = await screen.findByTestId("work-portfolio-table");
-  expect(within(table).getByTestId("change-progress-change-alpha")).toHaveTextContent(
-    `Wait until ${time}, then run prompt`,
-  );
   expect(screen.getByTestId("portfolio-activity-run-prompt")).toHaveTextContent("0Run prompt");
   const inspector = await screen.findByTestId("work-item-detail");
-  expect(within(inspector).getByTestId("change-progress")).toHaveTextContent(`Wait until ${time}, then run prompt`);
+  expect(within(inspector).getByTestId("change-progress")).toHaveTextContent(`not before ${time}`);
   unmount2();
 
-  // A backed-off outcome listed first must not hide a sibling the prompt can start now.
-  const backedOff = {
-    ...held,
-    readiness: { ...stalled.readiness, reason_code: "retry-backoff" as const },
-  };
-  fixtureState.currentPortfolio = portfolio([group({ progress: "waiting-for-chat", items: [backedOff, ready] })]);
+  // Once the eligible time passes, the same situation asks for the prompt.
+  const now = situation("ready-for-next-step", { next_eligible_at: new Date(Date.now() - 1000).toISOString() });
+  fixtureState.currentPortfolio = portfolio([group({ progress: now, items: [held, ready] })]);
   renderPage();
 
   table = await screen.findByTestId("work-portfolio-table");
-  expect(within(table).getByTestId("change-progress-change-alpha")).toHaveTextContent("Run prompt in Copilot Chat");
+  expect(within(table).getByTestId("change-progress-change-alpha")).toHaveTextContent("Ready for next step");
   expect(screen.getByTestId("portfolio-activity-run-prompt")).toHaveTextContent("1Run prompt");
 });
 
@@ -1163,7 +1154,7 @@ it("renders held custody neutrally and unknown issuer evidence as a decision", a
     title: "Completed outcome",
     stage: "completed",
     activity: { state: "idle", worker_role: null, started_at: null, task_id: null },
-    readiness: readiness({ status: "complete", reason_code: "change-terminal", progress: "completed" }),
+    readiness: readiness({ status: "complete", reason_code: "change-terminal", progress: situation("done") }),
   });
   fixtureState.currentPortfolio = portfolio([group({ progress: null, items: [completedFirst, heldCard()] })]);
   const { unmount } = renderPage();
@@ -1176,13 +1167,14 @@ it("renders held custody neutrally and unknown issuer evidence as a decision", a
   expect(within(table).queryByTestId("change-progress-change-alpha")).not.toBeInTheDocument();
   unmount();
 
+  const decision = situation("your-decision");
   fixtureState.currentPortfolio = portfolio([
-    group({ progress: "needs-decision", items: [completedFirst, heldCard("needs-decision")] }),
+    group({ progress: decision, items: [completedFirst, heldCard(decision)] }),
   ]);
   renderPage();
   table = await screen.findByTestId("work-portfolio-table");
-  expect(within(table).getByTestId("change-progress-change-alpha")).toHaveTextContent("Needs your decision");
-  expect(within(table).getByText("Needs your decision", { selector: "td [data-status-tone]" })).toBeInTheDocument();
+  expect(within(table).getByTestId("change-progress-change-alpha")).toHaveTextContent("Your decision");
+  expect(within(table).getByText("Your decision", { selector: "td [data-status-tone]" })).toBeInTheDocument();
 });
 
 it("offers Pause on every unfinished Change, including one whose step holds custody", async () => {
@@ -1191,7 +1183,7 @@ it("offers Pause on every unfinished Change, including one whose step holds cust
     group({
       change_id: "change-beta",
       title: "Quiescent change",
-      progress: "waiting-for-chat",
+      progress: continuationCard().readiness?.progress,
       items: [continuationCard({ change_id: "change-beta" })],
       ...PAUSE_AVAILABLE,
     }),
@@ -1238,10 +1230,12 @@ it("shows a recorded Pause request with Resume while the started step drains", a
 
 it("resumes a paused Change from its group header", async () => {
   const paused = card({
-    readiness: readiness({ status: "blocked", reason_code: "change-paused", progress: "paused" }),
+    readiness: readiness({ status: "blocked", reason_code: "change-paused", progress: situation("paused") }),
     activity: { state: "idle", worker_role: null, started_at: null, task_id: null },
   });
-  fixtureState.currentPortfolio = portfolio([group({ lifecycle: "deferred", progress: "paused", items: [paused] })]);
+  fixtureState.currentPortfolio = portfolio([
+    group({ lifecycle: "deferred", progress: situation("paused"), items: [paused] }),
+  ]);
   renderPage();
 
   const control = await screen.findByTestId("change-pause-change-alpha");
@@ -1259,13 +1253,15 @@ it("resumes a paused Change from its group header", async () => {
 
 it("shows the paused lifecycle note on an outcome detail", async () => {
   const paused = card({
-    readiness: readiness({ status: "blocked", reason_code: "change-paused", progress: "paused" }),
+    readiness: readiness({ status: "blocked", reason_code: "change-paused", progress: situation("paused") }),
     activity: { state: "idle", worker_role: null, started_at: null, task_id: null },
   });
-  fixtureState.currentPortfolio = portfolio([group({ lifecycle: "deferred", progress: "paused", items: [paused] })]);
+  fixtureState.currentPortfolio = portfolio([
+    group({ lifecycle: "deferred", progress: situation("paused"), items: [paused] }),
+  ]);
   fixtureState.currentDetail = detail({
     card: paused,
-    change_progress: "paused",
+    change_progress: situation("paused"),
     abandon_available: true,
   });
   renderPage("/delivery/change-alpha/outcome%3AOUT-001");

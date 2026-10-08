@@ -237,8 +237,8 @@ def test_first_migration_on_format_0_state_writes_only_the_marker(tmp_path: Path
     proposal = state_migration.propose(repository)
 
     assert refusal.locator == FORMAT_MARKER
-    assert (proposal.source_format, proposal.target_format) == (0, 3)
-    assert proposal.steps == ("format-0-to-1", "format-1-to-2", "format-2-to-3")
+    assert (proposal.source_format, proposal.target_format) == (0, 4)
+    assert proposal.steps == ("format-0-to-1", "format-1-to-2", "format-2-to-3", "format-3-to-4")
     assert [(entry.locator, entry.before_sha256) for entry in proposal.entries] == [(FORMAT_MARKER, None)]
     assert record_tree_digest(repository) == pre
     journal = state_migration.apply(repository, proposal.migration_id)
@@ -288,7 +288,7 @@ def test_schema_17_frontier_is_rewritten_by_the_registered_rewrite_and_staged_by
     proposal = state_migration.propose(repository)
 
     staged = _migration_dir(repository, proposal.migration_id) / "stage/runtime/changes/change-a/frontier.json"
-    assert proposal.steps == ("format-0-to-1", "format-1-to-2", "format-2-to-3")
+    assert proposal.steps == ("format-0-to-1", "format-1-to-2", "format-2-to-3", "format-3-to-4")
     assert [entry.locator for entry in proposal.entries] == [
         "runtime/changes/change-a/frontier.json",
         FORMAT_MARKER,
@@ -1020,12 +1020,16 @@ def _report_finalizer_attention(application: PortfolioApplication, change_id: st
 
 @pytest.mark.parametrize(
     ("source", "steps"),
-    [(1, ("format-1-to-2", "format-2-to-3")), (2, ("format-2-to-3",))],
+    [
+        (1, ("format-1-to-2", "format-2-to-3", "format-3-to-4")),
+        (2, ("format-2-to-3", "format-3-to-4")),
+        (3, ("format-3-to-4",)),
+    ],
 )
 def test_marker_only_format_steps_change_only_the_marker_and_keep_every_change_available(
     tmp_path: Path, source: int, steps: tuple[str, ...]
 ) -> None:
-    """N03-A and N05-B2: formats 2 and 3 only gate new record versions; no stored record is rewritten."""
+    """N03-A, N05-B2 and decision origin: formats 2 to 4 only gate new record versions; nothing is rewritten."""
     repository = _seed(tmp_path)
     _write_config(repository)
     (repository / ".owlbear/delivery" / FORMAT_MARKER).write_bytes(f'{{"format":{source}}}\n'.encode())
@@ -1034,7 +1038,7 @@ def test_marker_only_format_steps_change_only_the_marker_and_keep_every_change_a
 
     proposal = state_migration.propose(repository)
 
-    assert (proposal.source_format, proposal.target_format, proposal.steps) == (source, 3, steps)
+    assert (proposal.source_format, proposal.target_format, proposal.steps) == (source, 4, steps)
     assert [(entry.locator, entry.before_sha256) for entry in proposal.entries] == [(FORMAT_MARKER, pre[FORMAT_MARKER])]
     state_migration.apply(repository, proposal.migration_id)
     state_migration.verify(repository, proposal.migration_id)

@@ -1130,8 +1130,13 @@ class DeliveryRequest(_DeliveryModel):
 
 
 def retained_requests(requests: tuple[DeliveryRequest, ...]) -> tuple[DeliveryRequest, ...]:
-    """Return the answered scoped requests that promotion keeps, since evidence may cite them."""
-    return tuple(request for request in requests if request.applies_to is not None and request.resolution is not None)
+    """Return the answered requests promotion keeps: scoped ones for evidence, decisions as user decisions."""
+    return tuple(
+        request
+        for request in requests
+        if request.resolution is not None
+        and (request.applies_to is not None or request.kind is DeliveryRequestKind.DECISION)
+    )
 
 
 class DeliveryBlock(_DeliveryModel):
@@ -2042,6 +2047,7 @@ _NORMAL_CHANGE_MUTATIONS = frozenset(
         "_retry",
         "resolve_request",
         "unblock",
+        "grant_builder_attempt",
         "administrative_move",
         "release_design_return",
         "defer_change",
@@ -2107,6 +2113,7 @@ _PAUSE_GATED_MUTATIONS = frozenset(
         "activate_claim",
         "resolve_request",
         "unblock",
+        "grant_builder_attempt",
         "administrative_move",
         "resolve_change_disposition",
         "release_design_return",

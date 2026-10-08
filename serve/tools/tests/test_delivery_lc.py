@@ -706,7 +706,7 @@ def test_full_form_migrates_the_copy_and_meets_the_rollback_downgrade_oracle(tmp
         [FORMAT_MARKER, _COORDINATION]
     )
     assert report["proposal"]["source_format"] == 0  # type: ignore[index]
-    assert report["proposal"]["steps"] == ["format-0-to-1", "format-1-to-2", "format-2-to-3"]  # type: ignore[index]
+    assert report["proposal"]["steps"] == ["format-0-to-1", "format-1-to-2", "format-2-to-3", "format-3-to-4"]  # type: ignore[index]
     assert report["previous_gate_before"]["refusals"] == []  # type: ignore[index]
     assert ["state-newer-than-controller", FORMAT_MARKER] in report["previous_gate_after"]["refusals"]  # type: ignore[index]
     assert "previous_load" not in report
