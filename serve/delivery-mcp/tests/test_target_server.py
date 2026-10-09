@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import builtins
+import copy
 import hashlib
 import io
 import json
@@ -40,6 +41,7 @@ from serve.delivery.tests.test_portfolio_application import (
     _canonical,
     _continuation_request,
     _engine_action,
+    _engine_target_sync_conflict,
     _exhaust_builder_retry_with_distinct_codes,
     _failure_request,
     _loader_activation_state_snapshot,
@@ -53,6 +55,7 @@ from serve.delivery.tests.test_portfolio_application import (
     _workspace_content_snapshot,
     _workspace_mutation_snapshot,
     acceptance_budget_case,
+    retain_contained_transition,
 )
 from serve.delivery.tests.test_recovery import (
     absent_host_process_case,
@@ -4070,3 +4073,66 @@ async def test_assembled_work_item_tools_observe_runtime_transition(
     assert before.structured_content["projection"]["stage"] == "completed"
     assert listed.structured_content["result"][0]["stage"] == "planning"
     assert after.structured_content["projection"]["stage"] == "planning"
+
+
+def _continuation_change_state(tmp_path: Path, state: str):
+    if state == "evidence":
+        return evidence_projection_case(tmp_path)[0]
+    if state in {"running", "held"}:
+        application, *_setup, settlement = _builder_retry_handoff_setup(
+            tmp_path, ["2026-08-04T00:00:00Z"], add_workspace_changes=False
+        )
+        if state == "held":
+            retain_contained_transition(application, "change-a", settlement.request)
+        return application
+    if state == "conflicted":
+        return _engine_target_sync_conflict(tmp_path)[0]
+    if state == "exhausted":
+        return _exhaust_builder_retry_with_distinct_codes(tmp_path)[0]
+    repository, _runtime_root, _remote, provider, application, _head_a, _head_b = _loader_composed_engine_fixture(
+        tmp_path
+    )
+    coordination = application._coordinator.runtime_root / "coordination/changes/change-a.json"  # noqa: SLF001
+    coordination.write_bytes(b"{")
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    _git(repository, "config", f"url.{_remote}.insteadOf", "https://github.com/example/project.git")
+    return load_core_delivery_application(_startup_config(), workspace_root=repository, publication_provider=provider)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("state", "marker"),
+    [
+        ("evidence", None),
+        ("running", "active-custody"),
+        ("held", "retry-transition-contained"),
+        ("conflicted", "engine-action-failed"),
+        ("exhausted", "retry-exhausted"),
+        ("unavailable", "coordination-unavailable"),
+    ],
+)
+async def test_registered_continuation_view_keeps_every_field_but_evidence_bodies(
+    tmp_path: Path, state: str, marker: str | None
+) -> None:
+    application = _continuation_change_state(tmp_path, state)
+
+    async with Client(assemble_target_server(application)) as client:
+        full = (await client.call_tool("get_change", {"change_id": "change-a"})).structured_content
+        compact = (
+            await client.call_tool("get_change", {"change_id": "change-a", "view": "continuation"})
+        ).structured_content
+
+    assert full is not None
+    if marker is not None:
+        assert full["readiness"]["reason_code"] == marker
+    expected = copy.deepcopy(full)
+    if full["kind"] == "available":
+        expected["evidence"] = None
+        expected["detail"]["evidence"] = None
+        expected["evidence_counts"] = None if full["evidence"] is None else full["evidence"]["counts"]
+    assert compact == expected
+    if state == "evidence":
+        assert full["evidence"]["criteria"]
+        assert full["detail"]["evidence"]["criteria"]
+        assert compact["evidence_counts"] == full["evidence"]["counts"]
+        assert len(json.dumps(compact)) < len(json.dumps(full)) / 2

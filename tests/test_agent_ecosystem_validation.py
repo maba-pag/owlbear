@@ -1079,11 +1079,11 @@ def _assert_session_start_claim_guidance(orchestration: str) -> None:
     session_start_end = orchestration.index("## Change Continuation Entry")
     session_start = orchestration[session_start_begin:session_start_end]
 
-    assert "For `/continue-change <change_id>`, call `get_change(change_id)` and" in session_start
+    assert 'For `/continue-change <change_id>`, call `get_change(change_id, view: "continuation")` and' in session_start
     assert "inspect only that Change's running claims" in session_start
     assert "Do not call `list_changes` or inspect sibling Changes on this route." in session_start
     assert 'readiness.status == "running"' in session_start
-    assert "call `get_change(change_id)`" in session_start
+    assert "use it for every `get_change` read on this route" in orchestration
     assert "Ask once per revalidated claim through `vscode/askQuestions`" in session_start
     assert "role, Change ID, outcome (or Finalizer), and start time" in session_start
     assert "A pre-existing running claim was not dispatched by this session" in orchestration

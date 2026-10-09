@@ -16,7 +16,8 @@ Run the session-start claim check before the first acquisition. A pre-existing r
 dispatched by this session and may belong to a prior run or another live chat; only the user can
 identify whether that exact run stopped.
 
-**Session-start stale-claim check.** For `/continue-change <change_id>`, call `get_change(change_id)` and
+**Session-start stale-claim check.** For `/continue-change <change_id>`, call
+`get_change(change_id, view: "continuation")` and
 inspect only that Change's running claims, revalidating them in the same coherent view. Do not call
 `list_changes` or inspect sibling Changes on this route. For every Planner, Builder, or Finalizer card
 with `readiness.status == "running"`, or whose `reason_code` is `retry-transition-contained` or
@@ -74,7 +75,9 @@ and name `/repair-delivery` as the user's next step.
 
 ### Continuation Observation
 
-Call `get_change(change_id)` once per continuation cycle. Pass its returned `readiness.basis`
+Call `get_change(change_id, view: "continuation")` once per continuation cycle. That view omits
+acceptance-evidence bodies, keeps only `evidence_counts`, and leaves every other field identical to
+the full read; use it for every `get_change` read on this route. Pass its returned `readiness.basis`
 unchanged as `expected_basis`. Do not edit, complete, reorder, recompute, or infer basis fields; the
 engine compares the observed basis exactly and answers `stale` when it no longer matches.
 

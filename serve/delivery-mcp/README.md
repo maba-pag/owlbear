@@ -78,7 +78,9 @@ and `show_work_item` uses the MCP Work Item ID (the Change ID
 for a publication projection), not Cockpit's `publication` item key. `show_work_item_view` accepts
 a detailed view key such as `publication` when a workflow needs richer publication and conflict evidence.
 `get_change` and `show_finalization_context` preserve the core readiness decision, including tagged
-unavailable results. `report_finalization_failure` accepts only bounded structural diagnostic fields
+unavailable results. `get_change` with `view: "continuation"` returns the same Change read without
+acceptance-evidence bodies, keeping only `evidence_counts`; Change continuation uses it.
+`report_finalization_failure` accepts only bounded structural diagnostic fields
 and retains a report without creating finalization proof or changing worker custody.
 
 `settle_worker_invocation` accepts strict typed Planner, Builder or Finalizer settlement for an exact

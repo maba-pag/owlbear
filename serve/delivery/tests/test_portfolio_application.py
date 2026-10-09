@@ -5782,8 +5782,8 @@ def test_engine_target_fetch_drift_is_stale_then_syncs_exact_target(tmp_path: Pa
     assert _execute_engine(application, fresh) == synchronized
 
 
-@pytest.mark.parametrize("exit_kind", ["resolve", "abort"])
-def test_engine_target_sync_conflict_exit_releases_retained_engine_custody(tmp_path: Path, exit_kind: str) -> None:
+def _engine_target_sync_conflict(tmp_path: Path):
+    """Stop a completed Change's engine publication on a real target merge conflict in product.txt."""
     application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
     runtime = runtimes["change-a"]
     head = _commit_reviewed_head(
@@ -5807,6 +5807,12 @@ def test_engine_target_sync_conflict_exit_releases_retained_engine_custody(tmp_p
     blocked = _execute_engine(application, action)
     assert blocked.kind == "blocked", blocked
     assert blocked.failure.code == "ERR_TARGET_SYNC_CONFLICT"
+    return application, runtimes["change-a"], coordinator, target, action, blocked
+
+
+@pytest.mark.parametrize("exit_kind", ["resolve", "abort"])
+def test_engine_target_sync_conflict_exit_releases_retained_engine_custody(tmp_path: Path, exit_kind: str) -> None:
+    application, runtime, coordinator, target, action, blocked = _engine_target_sync_conflict(tmp_path)
     readiness = application.get_change("change-a").readiness
     assert readiness.reason_code == "engine-action-failed"
     assert readiness.prompt.startswith("/resolve-target-conflict change-a ")

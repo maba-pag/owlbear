@@ -119,6 +119,8 @@ from owlbear_delivery_mcp.target_models import (
     ExternalHeadPromotionRequest,
     FinalizeDeliveryChangeParams,
     FinalizeDeliveryChangeRequest,
+    GetChangeParams,
+    GetChangeRequest,
     MarkChangeReadyRequest,
     OperatorContextParams,
     OperatorContextRequest,
@@ -437,16 +439,30 @@ class TargetMCPAdapter:
         params = self._validate(EmptyParams, request)
         return await asyncio.to_thread(self._call, params, self._application.list_changes)
 
-    async def get_change(self, request: ChangeRequest) -> dict[str, object]:
-        """Return one coherent Change detail, health, and repair projection."""
-        params = self._validate(ChangeParams, request)
+    async def get_change(self, request: GetChangeRequest) -> dict[str, object]:
+        """Return one coherent Change detail, health, and repair projection.
+
+        ``view="continuation"`` omits acceptance-evidence bodies and reports only ``evidence_counts``.
+        """
+        params = self._validate(GetChangeParams, request)
         view = await asyncio.to_thread(
             self._call_adapter,
             params,
             lambda: self._application.get_change(params.change_id),
             TypeAdapter(DeliveryChangeView | DeliveryUnavailableChangeView),
         )
+        if params.view == "continuation" and isinstance(view, DeliveryChangeView):
+            return self._continuation_change_view(view)
         return self._serialize(view)
+
+    @classmethod
+    def _continuation_change_view(cls, view: DeliveryChangeView) -> dict[str, object]:
+        compact = view.model_copy(
+            update={"evidence": None, "detail": view.detail.model_copy(update={"evidence": None})}
+        )
+        payload = cls._serialize(compact)
+        payload["evidence_counts"] = None if view.evidence is None else view.evidence.counts.model_dump(mode="json")
+        return payload
 
     async def answer(self, request: AnswerRequest) -> DeliveryAnswerResponse:
         """Apply one version-bound answer to a retained Delivery request."""

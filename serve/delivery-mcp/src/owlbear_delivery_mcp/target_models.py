@@ -182,6 +182,12 @@ class ChangeParams(_TargetProtocolModel):
     change_id: ChangeId
 
 
+class GetChangeParams(ChangeParams):
+    """Validate one Change read; ``continuation`` omits acceptance-evidence bodies and keeps their counts."""
+
+    view: Literal["full", "continuation"] = "full"
+
+
 class ReportFinalizationFailureParams(ReportFinalizationFailure):
     """Validate one bounded finalization diagnostic through MCP."""
 
@@ -1146,6 +1152,7 @@ type AdmitDeliveryChangeRequest = Annotated[
     BeforeValidator(partial(_parse_json_model, DeliveryAdmissionRequest)),
 ]
 type ChangeRequest = Annotated[ChangeParams, BeforeValidator(partial(_parse_json_model, ChangeParams))]
+type GetChangeRequest = Annotated[GetChangeParams, BeforeValidator(partial(_parse_json_model, GetChangeParams))]
 type AnswerRequest = Annotated[AnswerParams, BeforeValidator(partial(_parse_json_model, AnswerParams))]
 type PutDesignRequest = Annotated[
     PutDesignParams,
@@ -1370,6 +1377,8 @@ __all__ = [
     "ExternalHeadPromotionRequest",
     "FinalizeDeliveryChangeParams",
     "FinalizeDeliveryChangeRequest",
+    "GetChangeParams",
+    "GetChangeRequest",
     "MarkChangeReadyRequest",
     "OperatorContextParams",
     "OperatorContextRequest",
