@@ -11,3 +11,7 @@ worktree, obtain an independent `review_mode: finalization` exact-commit review,
 `finalize_change` only when every identity and cleanliness check still matches. Do not ask for
 approval, create another worktree, mutate target refs, publish the checkpoint, mark the pull request
 ready, or observe acceptance.
+
+If a continuation entry supplied a serialized `DeliveryFinalizationLaunch` instead of a bare Change
+ID, bind its issued attempt identity and retained context as `w-change-finalization` requires, and
+still obtain the independent exact-commit review.

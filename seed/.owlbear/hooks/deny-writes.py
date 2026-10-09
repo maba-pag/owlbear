@@ -133,11 +133,11 @@ def _is_allowed_write_path(normalized: str, *, allow_research: bool) -> bool:
     )
 
 
-def _git_command(arguments: str) -> str | None:
+def _git_command(arguments: str) -> tuple[str | None, list[str]]:
     try:
         tokens = shlex.split(arguments)
     except ValueError:
-        return None
+        return None, []
     index = 0
     while index < len(tokens):
         token = tokens[index]
@@ -150,8 +150,15 @@ def _git_command(arguments: str) -> str | None:
         if any(token.startswith(f"{option}=") for option in _GIT_GLOBAL_OPTIONS if option.startswith("--")):
             index += 1
             continue
-        return token if not token.startswith("-") else None
-    return "--version" if "--version" in tokens else None
+        return (token, tokens[index + 1 :]) if not token.startswith("-") else (None, [])
+    return ("--version" if "--version" in tokens else None), []
+
+
+def _is_read_only_branch(arguments: list[str]) -> bool:
+    # Without --list, a positional argument creates a branch.
+    if arguments in ([], ["--show-current"]):
+        return True
+    return arguments[0] == "--list" and not any(argument.startswith("-") for argument in arguments[1:])
 
 
 def _git_mutation(command: str) -> str | None:
@@ -165,7 +172,9 @@ def _git_mutation(command: str) -> str | None:
             for token in git_tokens
         ):
             return "Git output option"
-        subcommand = _git_command(match.group("arguments"))
+        subcommand, subcommand_arguments = _git_command(match.group("arguments"))
+        if subcommand == "branch" and _is_read_only_branch(subcommand_arguments):
+            continue
         if subcommand not in _READ_ONLY_GIT_COMMANDS and subcommand != "--version":
             return f"non-read-only Git command '{subcommand or match.group(0).strip()}'"
     return None

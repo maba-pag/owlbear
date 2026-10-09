@@ -68,10 +68,10 @@ stale     ──[resolve*]──► approved    [delete: soft → deleted]
 | `curate_memory` | Mutate fields + auto-promote `pending→curated` (when scope provided) or auto-downgrade `approved→curated`; raises `TransitionError` for contested/disputed/stale (use resolve first) |
 | `delete_memory` | Hard-delete pending (file removed); soft-delete curated/approved/contested/disputed/stale (state→deleted) |
 | `rename_agent_memories` | Rewrite every matching `source_agent` and `scope_agents` reference after an agent rename |
-| `delete_agent_memories` | Preserve historical provenance, remove the retired role from scopes, and physically delete entries left without an audience |
+| `delete_agent_memories` | Preserve historical provenance and remove the retired role from scopes; hard-delete pending orphans and tombstone reviewed orphans for the normal commit/purge flow |
 | `approve_memory` | Promote `curated→approved`; user-initiated only (not exposed to any agent) |
 | `assess_memories` | Process batch assessment submissions; increments counters for `outstanding`/`unremarkable`/`didnt_use`, delegates `factually_wrong` to confirmation cycle; returns per-entry `{entry_id, success}` or `{entry_id, success=False, error}` results |
-| `commit_memory_batch` | Commit non-pending memory entries for one explicit `curation` or `review` session and return the commit SHA or a no-op result |
+| `commit_memory_batch` | Commit a curation/review batch; return its SHA, no-op status, and deferred duplicate deletions |
 
 All mutating tools return a `hint` field describing the transition or action taken.
 
@@ -110,13 +110,31 @@ definition, and named scope needs that evidence or explicit user confirmation du
 
 Rename memory references with `rename_agent_memories`. When deleting an agent,
 `delete_agent_memories` preserves immutable source provenance, removes the retired identity from
-relevance scopes, and deletes only entries left without an audience. No aliases or retired role
-names remain in active relevance scope.
+relevance scopes. Pending entries left without an audience are hard-deleted; reviewed entries become
+`deleted` tombstones that must be committed before they are purged. No aliases or retired role names
+remain in active relevance scope.
 
 ## Configuration
 
 Memory entries are stored at `.owlbear/memory` under the current initialized workspace. The server
 has no environment configuration.
+
+## Writer Model and Freshness
+
+MemoryEngine mutations and `commit_memory_batch` use one exclusive advisory lock on the resolved
+memory directory. The lock coordinates threads, engine instances, and other processes, uses one
+bounded wait (30 seconds by default), and creates no lock file. A timeout raises
+`MemoryBusyError`, a `ConcurrencyError` subtype. MCP mutation tools surface busy and stale-token
+failures as `ToolError`; a stale `expected_updated_at` is checked against the fresh on-disk entry
+and does not overwrite newer content.
+
+Non-writing reads remain lock-free. `MemoryEngine.get_entries()` reparses when an entry filename,
+inode, size, or `mtime_ns` changes; `load()` forces a full parse. Before each mutation, the engine
+reloads under the lock and repairs duplicate IDs. Reads select or report duplicates but never
+repair them. The newest copy keeps the original ID, identical copies are removed, and each differing
+copy is preserved as a pending entry with a new ID and the title marker
+`[Recovered duplicate ID <id>]`. A repair failure names the ID and paths and prevents the triggering
+mutation; pending copies already written remain available for a later retry.
 
 ## Batch Commits
 
@@ -127,12 +145,31 @@ owlbear-memory/commit_memory_batch(session_type="curation")
 owlbear-memory/commit_memory_batch(session_type="review")
 ```
 
-The operation validates every existing memory entry before staging, stages only non-pending entries and tracked hard-deletions of pending entries or purged tombstones, and returns the commit SHA or a no-op result when there is nothing to commit. Invalid entries, staged pending entries, and physical deletion of live reviewed entries fail the batch without creating a commit. The lower-level `git.py` module remains an internal implementation detail.
+The operation holds the shared writer lock from snapshot validation through `git commit`. It
+strictly validates each memory file and tracked deletion, stages only validated non-pending entries
+and permitted deletions, then rechecks working-tree bytes and staged blobs. After Git completes, it
+compares the committed path set and blobs with the validated snapshot. Unrelated staged paths are
+not committed; a staged memory blob that differs from both `HEAD` and the validated file is rejected
+without resetting that index entry.
 
-If Git or a commit hook fails, the MCP error begins with `memory batch commit failed` and includes
-the failed command, exit status, and captured `stderr` (falling back to `stdout`). Captured output
-is tail-bounded to 4,096 characters and marked as diagnostic text. The operation does not restore
-the Git index after a failure, so memory paths may remain staged; inspect staging before retrying.
+A tracked duplicate-copy deletion is permitted when another file with that ID survives. If the
+survivor is not pending, the removal commits with the survivor. If the survivor is pending, the
+removal is left unstaged and deferred; the result exposes its path in `deferred_deletions`, and the
+CLI prints `note: deferred duplicate deletions: ...`. Curate the survivor before retrying the batch.
+Other reviewed entries must first be soft-deleted and committed as tombstones, then purged. Restore
+guidance remains in the validation error for a disallowed deletion.
+
+Initial validation and pre-commit recheck failures return tool errors before a commit is created.
+Once staging begins, recheck, Git, or hook failures may leave memory paths staged; the operation
+does not restore the index, so inspect `git status` and the staged diff before retrying. A
+post-commit verification error can occur after `HEAD` has moved; it reports unvalidated changes and
+does not reset Git state, so inspect `git show --stat HEAD` as well. Git and hook failures start
+with `memory batch commit failed`
+and include the failed command, exit status, and bounded captured `stderr` (or `stdout` when
+`stderr` is empty). Output is limited to the final 4,096 characters and marked as diagnostic text.
+The operation returns the commit SHA or a no-op result when there is nothing to commit. The lower-
+level `git.py` module remains an internal implementation detail.
+
 The command-line entry point uses the same bounded diagnostic formatter.
 
 ## Dependencies

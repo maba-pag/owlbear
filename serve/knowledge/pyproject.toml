@@ -1,7 +1,7 @@
 [project]
 name = "owlbear-knowledge"
 version = "0.1.0"
-requires-python = ">=3.12.14"
+requires-python = ">=3.14.8"
 description = "OwlBear knowledge engine (graph + vector)"
 dependencies = [
     "pydantic>=2.13.4",
@@ -9,12 +9,13 @@ dependencies = [
 
 [project.optional-dependencies]
 qdrant = ["qdrant-client>=1.18.0"]
-embedding = ["FlagEmbedding>=1.4.0"]
+embedding = ["accelerate>=1.15.0", "FlagEmbedding>=1.4.0"]
 intake = [
     "httpx>=0.28.1",
     "owlbear-web-content",
 ]
 full = [
+    "accelerate>=1.15.0",
     "qdrant-client>=1.18.0",
     "FlagEmbedding>=1.4.0",
     "httpx>=0.28.1",

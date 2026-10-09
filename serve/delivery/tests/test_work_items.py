@@ -4,11 +4,15 @@ import hashlib
 import json
 from datetime import UTC, datetime
 
+import pytest
+from pydantic import ValidationError
+
 from owlbear_delivery.change_workspace import ChangeTargetSyncReceipt
 from owlbear_delivery.delivery_runtime import (
     DeliveryActiveClaim,
     DeliveryBlock,
     DeliveryChangeAbandonment,
+    DeliveryChangeCompletion,
     DeliveryChangeDeferral,
     DeliveryChangeDisposition,
     DeliveryChangeDispositionKind,
@@ -17,6 +21,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryChangeStage,
     DeliveryCheckpointTrigger,
     DeliveryCheckpointTriggerKind,
+    DeliveryCommandResult,
     DeliveryFinalization,
     DeliveryFinalizationInvalidation,
     DeliveryFinalizationInvalidationReceipt,
@@ -49,14 +54,19 @@ from owlbear_delivery.target_contract import (
     DeliveryCommitment,
     DeliveryCommitmentClass,
     DeliveryContract,
+    DeliveryDecision,
+    DeliveryDecisionOrigin,
     DeliveryOutcome,
     DeliveryPlanScope,
 )
 from owlbear_delivery.work_items import (
     DeliveryPortfolioSnapshot,
+    DeliveryProgress,
+    DeliveryReadiness,
+    DeliveryReadinessBasis,
+    WorkItemAction,
     WorkItemActionKind,
     WorkItemActivityState,
-    WorkItemAttention,
     WorkItemNeed,
     WorkItemNextActor,
     WorkItemProjector,
@@ -138,14 +148,15 @@ def _task_result(
             task_or_finalization_id=task.task_id,
             exact_commit=completed_commit,
             observation_kind="pytest",
-            command_or_procedure="work-item fixture validation",
-            exit_status_or_artifact_locator="exit:0",
+            procedure="work-item fixture validation",
+            result=DeliveryCommandResult(exit_status=0),
             observer_or_runner_identity="pytest",
             observed_at=observed_at,
         )
     )
     review = DeliveryReviewReceipt.create(
         DeliveryReview(
+            review_mode="task",
             exact_commit=completed_commit,
             author_id="Work item test author",
             reviewer_id="Work item test reviewer",
@@ -282,14 +293,17 @@ def _finalization(exact_head: str = "3" * 40) -> DeliveryFinalizationReceipt:
             task_or_finalization_id="finalize-portfolio-change",
             exact_commit=exact_head,
             observation_kind="pytest",
-            command_or_procedure="work-item finalization validation",
-            exit_status_or_artifact_locator="exit:0",
+            procedure="work-item finalization validation",
+            result=DeliveryCommandResult(exit_status=0),
             observer_or_runner_identity="pytest",
             observed_at=observed_at,
         )
     )
     review = DeliveryReviewReceipt.create(
         DeliveryReview(
+            review_mode="finalization",
+            basis_digest="e" * 64,
+            observation_ids=(observation.observation_id,),
             exact_commit=exact_head,
             author_id="Work item finalization author",
             reviewer_id="Work item finalization reviewer",
@@ -362,7 +376,6 @@ def test_design_return_is_user_owned_and_not_projected_as_planning() -> None:
     assert card.action.command == "/design portfolio-change"
     assert card.progress.label == "Returned to Design"
     detail = projector.show("OUT-001")
-    assert detail.projection.attention == WorkItemAttention.USER
     assert detail.return_context == return_context
     assert projector.group_view().lifecycle == "in-delivery"
 
@@ -394,7 +407,7 @@ def test_design_return_exposes_resume_command_and_suppresses_preserved_request_a
 
     card = projector.group_view().items[0]
 
-    assert card.needs_headline == "Re-admission required"
+    assert card.needs_headline == "Designer attention required before re-admission"
     assert card.action.kind == WorkItemActionKind.RESUME_DESIGN
     assert card.action.command == "/design portfolio-change"
 
@@ -420,6 +433,75 @@ def test_detail_exposes_operator_directed_course_changes() -> None:
     detail = projector.show_view("outcome:OUT-001")
 
     assert detail.operator_moves == (move,)
+
+
+def test_detail_projects_decisions_behind_outcome_commitments_and_all_on_the_change() -> None:
+    origin = DeliveryDecisionOrigin
+    decisions = (
+        DeliveryDecision(decision_id="DEC-001", origin=origin.APPROVED, basis="package approval", statement="One."),
+        DeliveryDecision(
+            decision_id="DEC-002",
+            origin=origin.DECIDED,
+            basis="askQuestions",
+            statement="Two.",
+            supersedes=("DEC-001",),
+        ),
+        DeliveryDecision(decision_id="DEC-003", origin=origin.AUTONOMOUS, basis="decide yourself", statement="Sort."),
+        DeliveryDecision(
+            decision_id="DEC-004",
+            origin=origin.DECIDED,
+            basis="askQuestions",
+            statement="Replace the answer.",
+            supersedes=("REQ-002",),
+        ),
+        DeliveryDecision(
+            decision_id="DEC-005",
+            origin=origin.DECIDED,
+            basis="askQuestions",
+            statement="Replace it again.",
+            supersedes=("DEC-004",),
+        ),
+    )
+    legacy = _contract()
+    contract = legacy.model_copy(
+        update={
+            "schema_version": 3,
+            "decisions": decisions,
+            "commitments": tuple(
+                item.model_copy(update={"provenance": None, "decision_ids": ("DEC-002",)})
+                for item in legacy.commitments
+            ),
+        }
+    )
+    replaced = DeliveryRequest(
+        request_id="REQ-002",
+        kind=DeliveryRequestKind.DECISION,
+        outcome_id="OUT-002",
+        summary="Choose the report format.",
+        options=({"option_id": "keep", "label": "Keep it"},),
+    )
+    frontier = DeliveryFrontier(
+        bindings=(
+            _binding("OUT-001", DeliveryStage.PLANNING),
+            _binding("OUT-002", DeliveryStage.DESIGN, requests=(replaced,)),
+        )
+    )
+    content = (json.dumps(frontier.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n").encode()
+    projector = WorkItemProjector(DeliveryPortfolioSnapshot.capture(contract, content))
+    completed = (_binding("OUT-001", DeliveryStage.COMPLETED), _binding("OUT-002", DeliveryStage.COMPLETED))
+    finished = DeliveryFrontier(bindings=completed)
+    finished_content = (
+        json.dumps(finished.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n"
+    ).encode()
+
+    assert [item.decision_id for item in projector.show_view("outcome:OUT-001").decisions] == ["DEC-002"]
+    assert projector.show_view("outcome:OUT-001").superseded_request_ids == ()
+    report = projector.show_view("outcome:OUT-002")
+    assert [item.decision_id for item in report.decisions] == ["DEC-004", "DEC-005"]
+    assert report.superseded_request_ids == ("REQ-002",)
+    publication = WorkItemProjector(DeliveryPortfolioSnapshot.capture(contract, finished_content))
+    assert publication.show_view("publication").decisions == decisions
+    assert WorkItemProjector(_snapshot(completed)).show_view("publication").decisions == ()
 
 
 def test_request_and_requestless_block_share_need_but_keep_distinct_actions() -> None:
@@ -450,9 +532,9 @@ def test_request_and_requestless_block_share_need_but_keep_distinct_actions() ->
         .items
     )
 
-    assert [(card.needs, card.action.kind) for card in cards] == [
-        (WorkItemNeed.YOU, WorkItemActionKind.ANSWER_REQUEST),
-        (WorkItemNeed.YOU, WorkItemActionKind.CLEAR_BLOCK),
+    assert [(card.needs, card.next_actor, card.action.kind) for card in cards] == [
+        (WorkItemNeed.YOU, WorkItemNextActor.YOU, WorkItemActionKind.ANSWER_REQUEST),
+        (WorkItemNeed.YOU, WorkItemNextActor.YOU, WorkItemActionKind.CLEAR_BLOCK),
     ]
 
 
@@ -481,9 +563,44 @@ def test_dependency_and_active_claim_are_independent_axes() -> None:
 
     assert cards[0].activity.state == WorkItemActivityState.WORKING
     assert cards[0].needs == WorkItemNeed.NONE
-    assert (cards[0].next_actor, cards[0].next_step) == (WorkItemNextActor.AGENT, "Work in progress")
+    assert (cards[0].next_actor, cards[0].next_step) == (WorkItemNextActor.AGENT, "Claimed by Builder")
     assert (cards[1].needs, cards[1].needs_headline) == (WorkItemNeed.DEPENDENCY, "Waiting on OUT-001")
     assert cards[1].next_actor == WorkItemNextActor.DEPENDENCY
+
+
+def test_projector_carries_change_activity_and_continuation_next_step() -> None:
+    progress = DeliveryProgress(situation="ready-for-next-step", headline="Run the prompt.", waiting_on="you")
+    projector = WorkItemProjector(
+        _snapshot((_binding("OUT-001", DeliveryStage.PLANNING), _binding("OUT-002", DeliveryStage.PLANNING))),
+        change_progress=progress,
+    )
+
+    assert projector.group_view().progress == progress
+    assert projector.show_view("outcome:OUT-002").change_progress == progress
+    assert projector.group_view().items[0].next_step == "Run the continuation prompt in Copilot Chat"
+    assert WorkItemProjector(projector._snapshot).group_view().progress is None  # noqa: SLF001
+
+
+def test_projector_carries_change_pause_availability_and_fails_closed_by_default() -> None:
+    snapshot = _snapshot((_binding("OUT-001", DeliveryStage.PLANNING), _binding("OUT-002", DeliveryStage.PLANNING)))
+    available = WorkItemProjector(snapshot, pause_unavailable_reason=None)
+    refused = WorkItemProjector(snapshot, pause_unavailable_reason="finalizer-custody")
+
+    assert (available.group_view().pause_available, available.group_view().pause_unavailable_reason) == (True, None)
+    detail = refused.show_view("outcome:OUT-001")
+    assert (detail.pause_available, detail.pause_unavailable_reason) == (False, "finalizer-custody")
+    default = WorkItemProjector(snapshot).group_view()
+    assert (default.pause_available, default.pause_unavailable_reason) == (False, "state-unavailable")
+    with pytest.raises(ValidationError):
+        default.model_validate({**default.model_dump(), "pause_available": True})
+
+
+def test_change_without_terminal_record_projects_abandon_available_for_every_detail() -> None:
+    projector = WorkItemProjector(
+        _snapshot((_binding("OUT-001", DeliveryStage.PLANNING), _binding("OUT-002", DeliveryStage.PLANNING)))
+    )
+
+    assert all(projector.show_view(item_key).abandon_available for item_key in ("outcome:OUT-001", "outcome:OUT-002"))
 
 
 def test_completed_outcome_progress_and_detail_contain_result_evidence() -> None:
@@ -522,7 +639,7 @@ def test_completed_outcomes_project_ready_for_finalization() -> None:
         WorkItemActionKind.FINALIZE,
     )
     assert card.action.label == "Finalize Change"
-    assert card.action.command == "/finalize-change portfolio-change"
+    assert card.action.command is None
     assert detail.publication is not None
     assert detail.publication.phase == WorkItemPublicationPhase.READY_FOR_FINALIZATION
 
@@ -610,7 +727,7 @@ def test_head_drift_projects_exact_finalization_invalidation() -> None:
     assert card.progress.label == "Head drift observed"
     assert card.action.kind == WorkItemActionKind.FINALIZE
     assert card.action.label == "Re-finalize Change"
-    assert card.action.command == "/finalize-change portfolio-change"
+    assert card.action.command is None
     assert detail.publication is not None
     assert detail.publication.invalidated_expected_head == finalization.exact_head
     assert detail.publication.invalidated_observed_head == "4" * 40
@@ -911,6 +1028,13 @@ def test_deferred_change_projects_paused_outcomes_and_resume_action() -> None:
     assert all(item.next_actor == WorkItemNextActor.NONE for item in group.items[:2])
     assert group.items[-1].action.kind == WorkItemActionKind.RESUME_CHANGE
     assert group.items[-1].action.command is None
+    prompt = "/design portfolio-change Change requirements:"
+    assert projector.show_view("outcome:OUT-001").revision_prompt == prompt
+    assert projector.show_view("publication").revision_prompt == prompt
+    assert all(
+        projector.show_view(item_key).abandon_available
+        for item_key in ("outcome:OUT-001", "outcome:OUT-002", "publication")
+    )
 
 
 def test_abandoned_change_projects_terminal_publication_without_action() -> None:
@@ -933,6 +1057,11 @@ def test_abandoned_change_projects_terminal_publication_without_action() -> None
     assert projector.publication_phase() == WorkItemPublicationPhase.ABANDONED
     assert group.items[-1].next_step == "Change abandoned"
     assert group.items[-1].action.kind == WorkItemActionKind.NONE
+    assert projector.show_view("publication").revision_prompt is None
+    assert all(
+        not projector.show_view(item_key).abandon_available
+        for item_key in ("outcome:OUT-001", "outcome:OUT-002", "publication")
+    )
 
 
 def test_ready_pull_request_waits_for_user_merge_without_merge_control() -> None:
@@ -961,6 +1090,72 @@ def test_ready_pull_request_waits_for_user_merge_without_merge_control() -> None
     assert card.action.label == "Check merge status"
     assert detail.publication is not None
     assert detail.publication.pull_request_number == 42
+
+
+@pytest.mark.parametrize(
+    ("reason", "status", "next_actor", "operation", "expected"),
+    [
+        (
+            "target-sync-required",
+            "ready",
+            WorkItemNextActor.AGENT,
+            WorkItemActionKind.SYNC_TARGET,
+            (WorkItemNeed.NONE, None, WorkItemActivityState.READY, "Target sync needed"),
+        ),
+        (
+            "checks-running",
+            "waiting",
+            WorkItemNextActor.NONE,
+            None,
+            (WorkItemNeed.NONE, None, WorkItemActivityState.IDLE, "Awaiting merge in GitHub"),
+        ),
+        (
+            "merge-approval-required",
+            "waiting",
+            WorkItemNextActor.YOU,
+            None,
+            (
+                WorkItemNeed.YOU,
+                "Merge pull request in GitHub",
+                WorkItemActivityState.IDLE,
+                "Awaiting merge in GitHub",
+            ),
+        ),
+    ],
+)
+def test_awaiting_merge_ownership_follows_final_readiness(reason, status, next_actor, operation, expected) -> None:
+    finalization = _finalization()
+    snapshot = _snapshot(
+        (_binding("OUT-001", DeliveryStage.COMPLETED), _binding("OUT-002", DeliveryStage.COMPLETED)),
+        frontier_updates={
+            "finalization": finalization,
+            "published_head": finalization.exact_head,
+            "ready": _ready(finalization),
+        },
+    )
+    executable = operation is not None
+    publication = DeliveryReadiness(
+        status=status,
+        reason_code=reason,
+        operation=operation,
+        executable=executable,
+        next_actor=next_actor,
+        basis=DeliveryReadinessBasis(),
+        action=WorkItemAction(kind=operation, label="Synchronize target") if executable else None,
+    )
+    done = DeliveryReadiness(
+        status="complete",
+        reason_code="ready",
+        executable=False,
+        next_actor=WorkItemNextActor.NONE,
+        basis=DeliveryReadinessBasis(),
+    )
+    projector = WorkItemProjector(snapshot, (done, done, publication))
+
+    card = projector.group_view().items[-1]
+
+    assert (card.needs, card.needs_headline, card.activity.state, card.progress.label) == expected
+    assert card.next_actor is next_actor
 
 
 def test_conflicting_ready_pull_request_keeps_status_check_and_resolution_prompt() -> None:
@@ -1016,16 +1211,17 @@ def test_merged_latch_projects_distinct_finalized_and_accepted_heads() -> None:
         accepted_merge_commit="7" * 40,
         merged_at=datetime(2026, 8, 11, 16, tzinfo=UTC),
     )
-    projector = WorkItemProjector(
-        _snapshot(
-            (_binding("OUT-001", DeliveryStage.COMPLETED), _binding("OUT-002", DeliveryStage.COMPLETED)),
-            frontier_updates={
-                "finalization": finalization,
-                "published_head": finalization.exact_head,
-                "ready": ready,
-                "merged_pull_request_latch": merged,
-            },
-        )
+    bindings = (_binding("OUT-001", DeliveryStage.COMPLETED), _binding("OUT-002", DeliveryStage.COMPLETED))
+    merged_updates: dict[str, object] = {
+        "finalization": finalization,
+        "published_head": finalization.exact_head,
+        "ready": ready,
+        "merged_pull_request_latch": merged,
+    }
+    projector = WorkItemProjector(_snapshot(bindings, frontier_updates=merged_updates))
+    completion = DeliveryChangeCompletion(completion_id="8" * 64, completed_at=datetime(2026, 8, 11, 17, tzinfo=UTC))
+    completed = WorkItemProjector(
+        _snapshot(bindings, frontier_updates={**merged_updates, "change_completion": completion})
     )
 
     detail = projector.show_view("publication")
@@ -1035,3 +1231,9 @@ def test_merged_latch_projects_distinct_finalized_and_accepted_heads() -> None:
     assert detail.publication.finalized_head == finalization.exact_head
     assert detail.publication.accepted_merge_commit == "7" * 40
     assert detail.publication.finalized_head != detail.publication.accepted_merge_commit
+    assert detail.revision_prompt is None
+    assert completed.show_view("publication").revision_prompt is None
+    assert all(
+        not completed.show_view(item_key).abandon_available
+        for item_key in ("outcome:OUT-001", "outcome:OUT-002", "publication")
+    )

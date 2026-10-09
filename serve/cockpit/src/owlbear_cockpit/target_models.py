@@ -8,7 +8,11 @@ from typing import TYPE_CHECKING, Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from owlbear_delivery.delivery_runtime import DeliveryChangeStage, DeliveryStage
+from owlbear_delivery.merge_approval import MergeAttemptState
 from owlbear_delivery.portfolio_operating import (
+    DeliveryHealthHeadRelation,
+    DeliveryHealthReason,
+    DeliveryHealthResolution,
     DeliveryHealthStatus,
     DeliveryHealthView,
     PortfolioChangeAdmission,
@@ -22,7 +26,12 @@ from owlbear_delivery.publication_provider import (
     PublicationCheckKind,
     classify_publication_check,
 )
-from owlbear_delivery.work_items import ChangeGroupView, WorkItemDetailView
+from owlbear_delivery.work_items import (
+    ChangeGroupView,
+    DeliveryReadiness,
+    DeliveryReadinessBasis,
+    WorkItemDetailView,
+)
 
 if TYPE_CHECKING:
     from owlbear_delivery.change_workspace import (
@@ -31,12 +40,13 @@ if TYPE_CHECKING:
         ChangeTargetSyncReceipt,
     )
     from owlbear_delivery.draft_pull_request import PublicationCheckObservationReceipt
+    from owlbear_delivery.merge_approval import MergeApprovalResult
     from owlbear_delivery.portfolio_application import (
-        DeliveryAcceptanceReconciliationOutcome,
         DeliveryChangePublicationSupersessionReceipt,
         DeliveryChangeWorktreeCleanup,
         DeliveryChangeWorktreeRecovery,
         DeliveryCheckpointReconciliationResult,
+        DeliveryUnavailableChangeView,
     )
 
 
@@ -135,6 +145,12 @@ class DeliveryHealthDiagnosticResponse(_TargetHTTPModel):
     change_id: str | None = Field(default=None, min_length=1)
     path: str | None = Field(default=None, min_length=1)
     retry_safe: bool
+    reason: DeliveryHealthReason
+    resolution: DeliveryHealthResolution
+    expected_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    observed_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    observed_local_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    head_relation: DeliveryHealthHeadRelation | None = None
 
 
 class DeliveryHealthResponse(_TargetHTTPModel):
@@ -154,19 +170,71 @@ class DeliveryHealthResponse(_TargetHTTPModel):
         )
 
 
+class DeliveryUnavailableChangeResponse(_TargetHTTPModel):
+    """Expose a known Change whose canonical runtime is unavailable."""
+
+    kind: Literal["unavailable"] = "unavailable"
+    change_id: str = Field(min_length=1)
+    title: str | None = None
+    diagnostics: tuple[Literal["runtime-unavailable", "coordination-unavailable"], ...] = ("runtime-unavailable",)
+    coordination_status: Literal["missing", "unreadable"] | None = None
+    readiness: DeliveryReadiness
+
+    @classmethod
+    def from_view(cls, view: DeliveryUnavailableChangeView) -> DeliveryUnavailableChangeResponse:
+        """Adapt one unavailable Change without inventing HTTP state."""
+        return cls(
+            change_id=view.change_id,
+            title=view.title,
+            diagnostics=view.diagnostics,
+            coordination_status=view.coordination_status,
+            readiness=view.readiness,
+        )
+
+
+class WorkItemAvailableDetailResponse(_TargetHTTPModel):
+    """Semantic and operator detail from one exact available snapshot."""
+
+    kind: Literal["available"] = "available"
+    item: WorkItemDetailView
+
+
+class WorkItemUnavailableDetailResponse(_TargetHTTPModel):
+    """Degraded detail for a known Change without canonical runtime authority."""
+
+    kind: Literal["unavailable"] = "unavailable"
+    change_id: str = Field(min_length=1)
+    title: str | None = None
+    diagnostics: tuple[Literal["runtime-unavailable", "coordination-unavailable"], ...] = ("runtime-unavailable",)
+    coordination_status: Literal["missing", "unreadable"] | None = None
+    readiness: DeliveryReadiness
+
+    @classmethod
+    def from_view(cls, view: DeliveryUnavailableChangeView) -> WorkItemUnavailableDetailResponse:
+        """Adapt unavailable detail without exposing mutation or custody state."""
+        return cls(
+            change_id=view.change_id,
+            title=view.title,
+            diagnostics=view.diagnostics,
+            coordination_status=view.coordination_status,
+            readiness=view.readiness,
+        )
+
+
+WorkItemDetailResponse = Annotated[
+    WorkItemAvailableDetailResponse | WorkItemUnavailableDetailResponse,
+    Field(discriminator="kind"),
+]
+
+
 class WorkItemPortfolioResponse(_TargetHTTPModel):
     """Return Change-grouped current Work Items and independent totals."""
 
     groups: tuple[ChangeGroupView, ...]
+    unavailable_changes: tuple[DeliveryUnavailableChangeResponse, ...] = ()
     totals: WorkItemPortfolioTotals
     operating: PortfolioOperatingResponse
     health: DeliveryHealthResponse
-
-
-class WorkItemDetailResponse(_TargetHTTPModel):
-    """Semantic and operator detail from one exact snapshot."""
-
-    item: WorkItemDetailView
 
 
 class PublicationCheckView(_TargetHTTPModel):
@@ -237,33 +305,6 @@ class PublicationChecksObservationResponse(_TargetHTTPModel):
         )
 
 
-class AcceptanceReconciliationRequest(_TargetHTTPModel):
-    """Optional current Change IDs supplied by one visible Cockpit page."""
-
-    change_ids: list[Annotated[str, Field(min_length=1)]] | None = Field(default=None, max_length=100)
-
-
-class AcceptanceReconciliationOutcomeResponse(_TargetHTTPModel):
-    """One bounded provider reconciliation result."""
-
-    change_id: str = Field(min_length=1)
-    status: str = Field(min_length=1)
-    code: str | None = Field(default=None, min_length=1)
-    detail: str | None = Field(default=None, min_length=1)
-    completion_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
-
-    @classmethod
-    def from_result(cls, result: DeliveryAcceptanceReconciliationOutcome) -> AcceptanceReconciliationOutcomeResponse:
-        """Convert one Delivery outcome without adding transport semantics."""
-        return cls(**result.model_dump(mode="json"))
-
-
-class AcceptanceReconciliationResponse(_TargetHTTPModel):
-    """Batch of isolated acceptance reconciliation outcomes."""
-
-    outcomes: tuple[AcceptanceReconciliationOutcomeResponse, ...]
-
-
 class WorkItemPublicationReconciliationResponse(_TargetHTTPModel):
     """Expose one checkpoint attempt and its durable remaining queue state."""
 
@@ -311,6 +352,8 @@ class AnswerRequestBody(_TargetHTTPModel):
 
     selected_option_id: str | None = None
     response_text: str | None = None
+    provenance: Literal["user-confirmed"] = "user-confirmed"
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
     @model_validator(mode="after")
     def _require_answer(self) -> AnswerRequestBody:
@@ -325,12 +368,27 @@ class ClearBlockBody(_TargetHTTPModel):
 
     operator_note: str = Field(min_length=1)
     locators: list[str] = Field(min_length=1)
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class GrantAttemptBody(_TargetHTTPModel):
+    """User decision funding one more attempt for an exhausted same-task Builder retry block."""
+
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class ConfirmLostClaimBody(_TargetHTTPModel):
-    """Explicit confirmation for removal of one exact failed claim."""
+    """Legacy recovery request; confirmation does not prove worker exclusion."""
 
     confirmed_lost: Literal[True]
+    attempt_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
+
+
+class ReleaseStuckWorkerBody(_TargetHTTPModel):
+    """Exact active worker identity; a null outcome names the Change's Finalizer attempt."""
+
+    outcome_id: str | None = Field(default=None, pattern=r"^OUT-[0-9]{3}$")
     attempt_id: str = Field(min_length=1)
     claim_id: str = Field(min_length=1)
 
@@ -339,6 +397,7 @@ class ResolveChangeAttentionBody(_TargetHTTPModel):
     """Exact Change attention identity selected by the operator."""
 
     expected_disposition_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class AdoptExternalHeadAfterAcceptanceAttentionBody(_TargetHTTPModel):
@@ -354,6 +413,13 @@ class ChangeDispositionReasonBody(_TargetHTTPModel):
     """User reason for deferring or abandoning one Change."""
 
     reason: str = Field(min_length=1)
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class ResumeChangeBody(_TargetHTTPModel):
+    """Expected frontier version for resuming one deferred Change."""
+
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class AbandonChangeBody(_TargetHTTPModel):
@@ -361,6 +427,7 @@ class AbandonChangeBody(_TargetHTTPModel):
 
     confirmed_abandonment: Literal[True]
     reason: str = Field(min_length=1)
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class CleanupCompletedChangeBody(_TargetHTTPModel):
@@ -402,6 +469,57 @@ class SupersedePublicationBody(_TargetHTTPModel):
     """Stable operation identity used to reconcile a publication successor retry."""
 
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+class ApproveMergeBody(_TargetHTTPModel):
+    """The exact offer the user approved in the dialog; a retried POST repeats ``submission_id``."""
+
+    offer_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    submission_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+class MergeApprovalResponse(_TargetHTTPModel):
+    """The approval's attempt after its single request, and the completion when acceptance completed."""
+
+    approval_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    state: MergeAttemptState
+    refusal_reason: str | None = None
+    pr_url: str = Field(min_length=1)
+    completion_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+    @classmethod
+    def from_result(cls, result: MergeApprovalResult) -> MergeApprovalResponse:
+        """Convert one application approval result into the HTTP transport shape."""
+        attempt = result.attempt
+        return cls(
+            approval_id=attempt.approval_id,
+            state=attempt.state,
+            refusal_reason=attempt.refusal_reason,
+            pr_url=attempt.pr_url,
+            completion_id=result.completion_id,
+        )
+
+
+class ContinuationAcquisitionBody(_TargetHTTPModel):
+    """Observed basis, host capabilities, and provenance for one continuation attempt."""
+
+    expected_basis: DeliveryReadinessBasis
+    capabilities: list[Literal["planner", "builder", "finalizer", "engine"]] = Field(min_length=1, max_length=4)
+    host_id: str = Field(min_length=1, max_length=128)
+    session_id: str = Field(min_length=1, max_length=128)
+
+    @model_validator(mode="after")
+    def _validate_capabilities(self) -> ContinuationAcquisitionBody:
+        if len(set(self.capabilities)) != len(self.capabilities):
+            message = "continuation capabilities must be unique"
+            raise ValueError(message)
+        return self
+
+
+class ContinuationExecutionBody(_TargetHTTPModel):
+    """Exact engine operation already acquired for the selected Change."""
+
+    operation_id: str = Field(pattern=r"^continue-[0-9a-f]{64}$")
 
 
 class TargetSyncResponse(_TargetHTTPModel):
@@ -562,12 +680,10 @@ class BackwardMovePreviewBody(_TargetHTTPModel):
 
 __all__ = [
     "AbandonChangeBody",
-    "AcceptanceReconciliationOutcomeResponse",
-    "AcceptanceReconciliationRequest",
-    "AcceptanceReconciliationResponse",
     "ActivityCounts",
     "AdoptExternalHeadAfterAcceptanceAttentionBody",
     "AnswerRequestBody",
+    "ApproveMergeBody",
     "BackwardMoveBody",
     "BackwardMovePreviewBody",
     "ChangeDispositionReasonBody",
@@ -579,13 +695,17 @@ __all__ = [
     "ConfirmLostClaimBody",
     "DesignWorkDetailResponse",
     "ExternalHeadAdoptionResponse",
+    "GrantAttemptBody",
+    "MergeApprovalResponse",
     "NeedsCounts",
     "PortfolioChangeLifecycleStatusResponse",
     "PortfolioOperatingResponse",
     "PublicationCheckView",
     "PublicationChecksObservationResponse",
     "RecoverChangeWorktreeBody",
+    "ReleaseStuckWorkerBody",
     "ResolveChangeAttentionBody",
+    "ResumeChangeBody",
     "TargetSyncAbortResponse",
     "TargetSyncConflictBody",
     "TargetSyncResponse",

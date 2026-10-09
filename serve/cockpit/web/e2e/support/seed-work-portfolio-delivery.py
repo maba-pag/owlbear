@@ -7,8 +7,10 @@ import argparse
 import hashlib
 import json
 import subprocess
-from datetime import UTC, datetime
+import time
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
 
@@ -19,11 +21,17 @@ from owlbear_delivery.acceptance import (
     CompletionReceipt,
     CompletionReceiptStore,
 )
+from owlbear_delivery.acceptance_criteria import DeliveryAcceptanceRef, acceptance_criteria
 from owlbear_delivery.change_workspace import ChangeWorkspaceManager, PortfolioCoordinator
 from owlbear_delivery.delivery_admission import DeliveryAdmissionReceipt
-from owlbear_delivery.delivery_application_loader import DeliveryHostConfig, DeliveryStartupConfig
+from owlbear_delivery.delivery_application_loader import (
+    DeliveryHostConfig,
+    DeliveryStartupConfig,
+    load_delivery_application,
+)
 from owlbear_delivery.delivery_runtime import (
     DeliveryBlock,
+    DeliveryCommandResult,
     DeliveryFrontier,
     DeliveryObservation,
     DeliveryObservationReceipt,
@@ -36,9 +44,19 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryStage,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
+    FinalizeDeliveryChange,
     OutcomeAuthorityBinding,
 )
 from owlbear_delivery.design_package import DesignPackageStore
+from owlbear_delivery.merge_approval import MERGE_RESPONSE_DEADLINE, ApproveChangeMerge
+from owlbear_delivery.portfolio_application import DeliveryContinuationRequest
+from owlbear_delivery.publication_provider import PublicationProviderError
+from owlbear_delivery.runtime_models import (
+    DeliveryCheckpointTrigger,
+    DeliveryCheckpointTriggerKind,
+    DeliveryPendingCheckpoint,
+)
+from owlbear_delivery.state_formats import format_marker_bytes
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
     DeliveryCommitmentClass,
@@ -46,6 +64,10 @@ from owlbear_delivery.target_contract import (
     DeliveryOutcome,
     DeliveryPlanScope,
 )
+from owlbear_delivery_github import GitHubCliPublicationProvider
+
+if TYPE_CHECKING:
+    from owlbear_delivery.portfolio_application import PortfolioApplication
 
 
 def _git(repository: Path, *arguments: str) -> str:
@@ -55,6 +77,9 @@ def _git(repository: Path, *arguments: str) -> str:
         capture_output=True,
         text=True,
     ).stdout.strip()
+
+
+_REMOTE_URL = "https://github.com/example/project.git"
 
 
 def _canonical(value: object) -> bytes:
@@ -76,9 +101,12 @@ def _outcome(identity: str, title: str, promise: str, dependencies: tuple[str, .
     )
 
 
+def _sources(change_id: str) -> tuple[bytes, bytes]:
+    return f"intent for {change_id}\n".encode(), f"design for {change_id}\n".encode()
+
+
 def _contract(change_id: str, title: str, outcomes: tuple[DeliveryOutcome, ...]) -> DeliveryContract:
-    intent = f"intent for {change_id}\n".encode()
-    design = f"design for {change_id}\n".encode()
+    intent, design = _sources(change_id)
     return DeliveryContract(
         change_id=change_id,
         title=title,
@@ -120,22 +148,32 @@ def _task(outcome_id: str, index: int) -> DeliveryTaskDefinition:
     )
 
 
-def _result(contract: DeliveryContract, task: DeliveryTaskDefinition, head: str) -> DeliveryTaskResult:
+def _result(
+    contract: DeliveryContract,
+    task: DeliveryTaskDefinition,
+    head: str,
+    *,
+    covers: bool = False,
+) -> DeliveryTaskResult:
     observed_at = datetime(2026, 8, 11, 12, tzinfo=UTC)
+    refs = tuple(item.ref for item in acceptance_criteria(contract) if item.outcome_id == task.outcome_id)
     observation = DeliveryObservationReceipt.create(
         DeliveryObservation(
             change_id=contract.change_id,
             task_or_finalization_id=task.task_id,
             exact_commit=head,
             observation_kind="playwright",
-            command_or_procedure="Assembled Cockpit fixture validation",
-            exit_status_or_artifact_locator="fixture:passed",
+            procedure="Assembled Cockpit fixture validation",
+            result=DeliveryCommandResult(exit_status=0),
+            covers=refs if covers else (),
+            locator="path:reports/assembled-cockpit.txt" if covers else None,
             observer_or_runner_identity="work-portfolio-e2e",
             observed_at=observed_at,
         )
     )
     review = DeliveryReviewReceipt.create(
         DeliveryReview(
+            review_mode="task",
             exact_commit=head,
             author_id="work-portfolio-e2e-author",
             reviewer_id="work-portfolio-e2e-reviewer",
@@ -214,7 +252,7 @@ def _current_bindings(contract: DeliveryContract, head: str) -> tuple[OutcomeAut
             plan_scope_id="SCOPE-005",
             stage=DeliveryStage.COMPLETED,
             tasks=(completed_task,),
-            results=(_result(contract, completed_task, head),),
+            results=(_result(contract, completed_task, head, covers=True),),
         ),
         OutcomeAuthorityBinding(
             outcome_id="OUT-006",
@@ -259,7 +297,14 @@ def _write_admission(
     (change_root / "admission.json").write_bytes(_canonical(DeliveryAdmissionReceipt.model_validate(receipt_payload)))
 
 
-def _write_current_delivery(runtime_root: Path, head: str) -> None:
+def _write_design_package(store: DesignPackageStore, contract: DeliveryContract) -> None:
+    """Bind the admitted contract to the authored sources its source bindings declare."""
+    intent, design = _sources(contract.change_id)
+    package = store.create(contract.change_id, intent, design)
+    store.publish_contract(contract.change_id, package.package_id, _canonical(contract), lambda *_content: None)
+
+
+def _write_current_delivery(runtime_root: Path, head: str, store: DesignPackageStore) -> None:
     outcomes = (
         _outcome("OUT-001", "Choose release mode", "Resolve the bounded release decision."),
         _outcome("OUT-002", "Build operator controls", "Ship exact Delivery controls."),
@@ -277,9 +322,10 @@ def _write_current_delivery(runtime_root: Path, head: str) -> None:
     (change_root / "contract.json").write_bytes(_canonical(contract))
     (change_root / "frontier.json").write_bytes(_canonical(frontier))
     _write_admission(change_root, contract, frontier, head)
+    _write_design_package(store, contract)
 
 
-def _write_publication_delivery(runtime_root: Path, head: str) -> None:
+def _write_publication_delivery(runtime_root: Path, head: str, store: DesignPackageStore) -> None:
     contract = _contract(
         "publication-e2e",
         "Publication release",
@@ -302,6 +348,7 @@ def _write_publication_delivery(runtime_root: Path, head: str) -> None:
     (change_root / "contract.json").write_bytes(_canonical(contract))
     (change_root / "frontier.json").write_bytes(_canonical(frontier))
     _write_admission(change_root, contract, frontier, head)
+    _write_design_package(store, contract)
 
 
 def _seed_repository(repository: Path) -> str:
@@ -312,8 +359,14 @@ def _seed_repository(repository: Path) -> str:
     (repository / "product.txt").write_text("baseline\n", encoding="utf-8")
     _git(repository, "add", "product.txt")
     _git(repository, "commit", "-m", "baseline")
-    _git(repository, "remote", "add", "origin", "https://github.com/example/project.git")
+    _git(repository, "remote", "add", "origin", _REMOTE_URL)
+    # Delivery startup requires a GitHub-shaped remote URL; rewrite it to a local bare repository
+    # inside the fixture's own .git directory so the harness cleanup owns every created path.
+    mirror = repository / ".git" / "e2e-origin.git"
+    _git(repository, "init", "--bare", str(mirror))
+    _git(repository, "config", f"url.{mirror}.insteadOf", _REMOTE_URL)
     head = _git(repository, "rev-parse", "HEAD")
+    _git(repository, "push", "origin", "main")
     _git(repository, "update-ref", "refs/remotes/origin/main", head)
     return head
 
@@ -356,23 +409,26 @@ def _write_completion_receipt(
         destination.write_bytes(participant.content)
 
 
-def _write_config(workspace: Path) -> None:
+def _write_config(workspace: Path, repository: str = "example/project") -> DeliveryStartupConfig:
     config = DeliveryStartupConfig(
         schema_version=2,
         remote="origin",
         target_branch="main",
-        github_repository="example/project",
+        github_repository=repository,
     )
     path = workspace / ".owlbear/delivery/config.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(config.model_dump_json(by_alias=True), encoding="utf-8")
+    return config
 
 
-def _write_host_config(workspace: Path) -> None:
-    config = DeliveryHostConfig(schema_version=1, execution_capacity=2)
+def _write_host_config(workspace: Path, execution_capacity: int = 2) -> None:
+    config = DeliveryHostConfig(schema_version=1, execution_capacity=execution_capacity)
     path = workspace / ".owlbear/delivery/runtime/host.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(config.model_dump_json(), encoding="utf-8")
+    # Records seeded through their owners are current-format state (N02-B format marker).
+    path.with_name("format.json").write_bytes(format_marker_bytes())
 
 
 def seed_delivery(workspace: Path) -> None:
@@ -383,13 +439,14 @@ def seed_delivery(workspace: Path) -> None:
     head = _seed_repository(repository)
     _write_completion_receipt(runtime_root, "completed-alpha", "Alpha delivery", 41)
     _write_completion_receipt(runtime_root, "completed-beta", "Beta search", 42)
-    DesignPackageStore(workspace / ".owlbear/delivery/packages", repository).create(
+    store = DesignPackageStore(workspace / ".owlbear/delivery/packages", repository)
+    store.create(
         "design-operations-roadmap",
         b"# Design Operations Roadmap\n\nCoordinate the next focused Delivery change.\n",
         b"# Design\n\nKeep roadmap authority separate from admitted Changes.\n",
     )
-    _write_current_delivery(runtime_root, head)
-    _write_publication_delivery(runtime_root, head)
+    _write_current_delivery(runtime_root, head, store)
+    _write_publication_delivery(runtime_root, head, store)
     _write_host_config(workspace)
     coordinator = PortfolioCoordinator(runtime_root)
     workspace_manager = ChangeWorkspaceManager(repository, worktrees, coordinator, "main")
@@ -398,12 +455,259 @@ def seed_delivery(workspace: Path) -> None:
     _write_config(workspace)
 
 
+STUCK_WORKER_CHANGES = {
+    "stuck-quiet-e2e": "Quiet stopped worker",
+    "stuck-active-e2e": "Active worker",
+    "stuck-busy-e2e": "Busy worker",
+}
+
+
+def _write_planning_change(runtime_root: Path, head: str, store: DesignPackageStore, change_id: str) -> None:
+    title = STUCK_WORKER_CHANGES[change_id]
+    contract = _contract(change_id, title, (_outcome("OUT-001", f"Plan {title}", "Plan bounded work."),))
+    frontier = DeliveryFrontier(
+        bindings=(
+            OutcomeAuthorityBinding(outcome_id="OUT-001", plan_scope_id="SCOPE-001", stage=DeliveryStage.PLANNING),
+        )
+    )
+    change_root = runtime_root / "changes" / change_id
+    change_root.mkdir(parents=True, exist_ok=True)
+    (change_root / "contract.json").write_bytes(_canonical(contract))
+    (change_root / "frontier.json").write_bytes(_canonical(frontier))
+    _write_admission(change_root, contract, frontier, head)
+    _write_design_package(store, contract)
+
+
+def seed_stuck_workers(workspace: Path) -> None:
+    """Seed Changes whose Planner continuation claims were granted and then left without a worker."""
+    runtime_root = workspace / ".owlbear/delivery/runtime"
+    head = _seed_repository(workspace)
+    store = DesignPackageStore(workspace / ".owlbear/delivery/packages", workspace)
+    for change_id in STUCK_WORKER_CHANGES:
+        _write_planning_change(runtime_root, head, store, change_id)
+    _write_host_config(workspace, len(STUCK_WORKER_CHANGES))
+    workspace_manager = ChangeWorkspaceManager(
+        workspace, workspace / ".owlbear/delivery/worktrees", PortfolioCoordinator(runtime_root), "main"
+    )
+    for change_id in STUCK_WORKER_CHANGES:
+        workspace_manager.ensure(change_id)
+    config = _write_config(workspace)
+    # Without an issuing window the claims carry ``window: null``, so only an explicit release can settle them.
+    application = load_delivery_application(config, workspace_root=workspace)
+    for change_id in STUCK_WORKER_CHANGES:
+        for _ in range(3):
+            acquired = application.acquire_change_action(
+                DeliveryContinuationRequest(
+                    change_id=change_id,
+                    expected_basis=application.get_change(change_id).readiness.basis,
+                    capabilities=("planner", "builder", "finalizer", "engine"),
+                    host_id="stopped-chat-host",
+                    session_id=f"stopped-chat-{change_id}",
+                )
+            )
+            if acquired.launch is not None:
+                break
+        else:
+            message = f"{change_id} did not grant a Planner claim: {acquired}"
+            raise RuntimeError(message)
+
+
+MERGE_CHANGES = {
+    "merge-stale-e2e": "Stale merge offer",
+    "merge-unknown-e2e": "Unknown merge",
+    "merge-abandon-e2e": "Abandoned unknown merge",
+    "merge-approve-e2e": "Approved merge",
+}
+UNKNOWN_MERGES = ("merge-unknown-e2e", "merge-abandon-e2e")
+
+
+def _write_publishable_change(  # noqa: PLR0913 - the merge smoke test reuses this writer with its own Change.
+    runtime_root: Path,
+    store: DesignPackageStore,
+    manager: ChangeWorkspaceManager,
+    change_id: str,
+    *,
+    title: str,
+    base: str,
+) -> None:
+    """One completed Change whose admitted-design checkpoint waits at its reviewed commit."""
+    contract = _contract(change_id, title, (_outcome("OUT-001", title, f"Deliver {title.lower()}."),))
+    worktree = manager.ensure(change_id).worktree_path
+    (worktree / f"{change_id}.txt").write_text(f"{title}\n", encoding="utf-8")
+    _git(worktree, "add", f"{change_id}.txt")
+    _git(worktree, "commit", "-m", title)
+    head = _git(worktree, "rev-parse", "HEAD")
+    manager.record_reviewed(change_id, head)
+    task = _task("OUT-001", 1)
+    frontier = DeliveryFrontier(
+        bindings=(
+            OutcomeAuthorityBinding(
+                outcome_id="OUT-001",
+                plan_scope_id="SCOPE-001",
+                stage=DeliveryStage.COMPLETED,
+                tasks=(task,),
+                results=(_result(contract, task, head),),
+            ),
+        ),
+        pending_checkpoint=DeliveryPendingCheckpoint(
+            head=head,
+            triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.ADMITTED_DESIGN),),
+        ),
+    )
+    change_root = runtime_root / "changes" / change_id
+    change_root.mkdir(parents=True, exist_ok=True)
+    (change_root / "contract.json").write_bytes(_canonical(contract))
+    (change_root / "frontier.json").write_bytes(_canonical(frontier))
+    _write_admission(change_root, contract, frontier, base)
+    _write_design_package(store, contract)
+
+
+def _finalization(application: PortfolioApplication, change_id: str) -> FinalizeDeliveryChange:
+    context = application.show_finalization_context(change_id)
+    semantics = context.semantics
+    if semantics is None:
+        message = f"{change_id} has no finalization semantics: {context.semantics_refusal}"
+        raise RuntimeError(message)
+    operation_id = f"finalize-{change_id}"
+    observed_at = datetime(2026, 10, 5, 12, tzinfo=UTC)
+    observation = DeliveryObservationReceipt.create(
+        DeliveryObservation(
+            change_id=change_id,
+            task_or_finalization_id=operation_id,
+            exact_commit=context.change_head,
+            observation_kind="playwright",
+            procedure="Assembled merge fixture finalization",
+            result=DeliveryCommandResult(exit_status=0),
+            covers=tuple(
+                DeliveryAcceptanceRef(acceptance_id=item.acceptance_id, acceptance_version=item.acceptance_version)
+                for item in semantics.coverage
+                if item.status not in {"covered", "waived"}
+            ),
+            observer_or_runner_identity="work-portfolio-e2e",
+            observed_at=observed_at,
+        )
+    )
+    review = DeliveryReviewReceipt.create(
+        DeliveryReview(
+            review_mode="finalization",
+            basis_digest=semantics.basis_digest,
+            observation_ids=(observation.observation_id,),
+            exact_commit=context.change_head,
+            author_id="work-portfolio-e2e-author",
+            reviewer_id="work-portfolio-e2e-reviewer",
+            evidence=("The assembled fixture head satisfies finalization authority.",),
+            reviewed_at=observed_at,
+        )
+    )
+    return FinalizeDeliveryChange(
+        operation_id=operation_id, exact_head=context.change_head, observations=(observation,), review=review
+    )
+
+
+def _publish_ready(application: PortfolioApplication, change_id: str) -> None:
+    """Publish, sync, finalize and mark one Change ready through public owners."""
+    application.reconcile_change_checkpoint(change_id)
+    application.sync_change_with_current_target(change_id, f"sync-{change_id}")
+    application.finalize_change(change_id, _finalization(application, change_id))
+    application.reconcile_change_checkpoint(change_id)
+    application.mark_current_change_ready(change_id)
+
+
+def _merge_offer(application: PortfolioApplication, change_id: str) -> str:
+    # Readiness keeps the pre-ready (draft) PR observation for its 15-second cache lifetime.
+    for _ in range(30):
+        readiness = application.get_change(change_id).readiness
+        if readiness.reason_code == "merge-approval-required" and readiness.merge_offer is not None:
+            return readiness.merge_offer.offer_id
+        time.sleep(1)
+    message = f"{change_id} offers no merge: {readiness.reason_code} {readiness.merge_block}"
+    raise RuntimeError(message)
+
+
+def _leave_merge_unknown(application: PortfolioApplication, change_id: str, offer_id: str) -> None:
+    """Approve once while fake GitHub loses the response, then spend the automatic acceptance reads."""
+    request = ApproveChangeMerge(
+        change_id=change_id,
+        offer_id=offer_id,
+        submission_id=f"seed-{change_id}",
+        host_id="work-portfolio-e2e",
+        session_id="seed",
+    )
+    # A lost response becomes unknown only after its deadline, so the approval is stamped that far back.
+    approved_at = datetime.now(UTC).replace(microsecond=0) - MERGE_RESPONSE_DEADLINE - timedelta(minutes=1)
+    clock = application._clock  # noqa: SLF001
+    application._clock = lambda: approved_at.isoformat().replace("+00:00", "Z")  # noqa: SLF001
+    try:
+        application.approve_merge(request)
+    except PublicationProviderError:
+        pass
+    else:
+        message = f"{change_id} merge response was not lost"
+        raise RuntimeError(message)
+    finally:
+        application._clock = clock  # noqa: SLF001
+    for _ in range(20):
+        application.reconcile_awaiting_acceptance((change_id,))
+        if application.get_change(change_id).readiness.reason_code == "merge-response-unknown":
+            return
+        time.sleep(1)
+    message = f"{change_id} did not reach merge-response-unknown"
+    raise RuntimeError(message)
+
+
+def seed_merges(workspace: Path, fake_gh_state: Path) -> None:
+    """Seed merge-approval Changes through the default loader; `gh` on PATH is the fake GitHub."""
+    runtime_root = workspace / ".owlbear/delivery/runtime"
+    base = _seed_repository(workspace)
+    fake_gh_state.write_text(
+        json.dumps(
+            {
+                "repository": "example/project",
+                "mirror": str(workspace / ".git" / "e2e-origin.git"),
+                "branches": {"main": base},
+                "seed_base": base,
+                "pulls": {},
+                "next_number": 1,
+            }
+        ),
+        encoding="utf-8",
+    )
+    store = DesignPackageStore(workspace / ".owlbear/delivery/packages", workspace)
+    _write_host_config(workspace, len(MERGE_CHANGES))
+    manager = ChangeWorkspaceManager(
+        workspace, workspace / ".owlbear/delivery/worktrees", PortfolioCoordinator(runtime_root), "main"
+    )
+    for change_id, title in MERGE_CHANGES.items():
+        _write_publishable_change(runtime_root, store, manager, change_id, title=title, base=base)
+    config = _write_config(workspace)
+    application = load_delivery_application(
+        config, workspace_root=workspace, publication_provider=GitHubCliPublicationProvider()
+    )
+    for change_id in MERGE_CHANGES:
+        _publish_ready(application, change_id)
+    offers = {change_id: _merge_offer(application, change_id) for change_id in UNKNOWN_MERGES}
+    state = json.loads(fake_gh_state.read_text(encoding="utf-8"))
+    for pull in state["pulls"].values():
+        if pull["head"].removeprefix("owlbear/change/") in UNKNOWN_MERGES:
+            pull["merge_response"] = "unknown"
+    fake_gh_state.write_text(json.dumps(state), encoding="utf-8")
+    for change_id in UNKNOWN_MERGES:
+        _leave_merge_unknown(application, change_id, offers[change_id])
+
+
 def main() -> None:
     """Parse the fixture root and seed Delivery state."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--workspace", type=Path, required=True)
+    parser.add_argument("--stuck-workers", action="store_true")
+    parser.add_argument("--merges", type=Path, help="fake gh state file; seeds the merge-approval Changes")
     arguments = parser.parse_args()
-    seed_delivery(arguments.workspace.resolve())
+    if arguments.stuck_workers:
+        seed_stuck_workers(arguments.workspace.resolve())
+    elif arguments.merges is not None:
+        seed_merges(arguments.workspace.resolve(), arguments.merges.resolve())
+    else:
+        seed_delivery(arguments.workspace.resolve())
 
 
 if __name__ == "__main__":

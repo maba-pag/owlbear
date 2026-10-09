@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from dataclasses import fields
 from pathlib import Path
 from unittest.mock import patch
@@ -22,9 +23,16 @@ class _FakeContext:
     def __init__(self) -> None:
         self.pages: list[object] = []
         self.closed = False
+        self._listeners: dict[str, Callable[..., None]] = {}
+
+    def on(self, event: str, callback: Callable[..., None]) -> None:
+        self._listeners[event] = callback
 
     async def close(self) -> None:
         self.closed = True
+        callback = self._listeners.get("close")
+        if callback is not None:
+            callback()
 
 
 class _FakeBrowserType:

@@ -10,6 +10,7 @@ the [sharing guide](sharing-guide.md).
 | --- | --- |
 | See what setup wrote into your project | [What Setup Creates](#what-setup-creates) |
 | Understand what `git pull` updates | [Shared vs Copied](#shared-vs-copied) |
+| Upgrade OwlBear and migrate Delivery state | [Upgrading OwlBear](#upgrading-owlbear) |
 | Replace seeded editor and lint configuration | [Refreshing Consumer Configs](#refreshing-consumer-configs) |
 | Remove OwlBear from a project | [Uninstalling](#uninstalling) |
 | Run, correct, publish, and accept a Change | [Delivery Workflow](#delivery-workflow) |
@@ -28,7 +29,7 @@ Running `init.py` writes the following files into your project directory:
 | `.vscode/settings.json` | Points VS Code at OwlBear agents, skills, and instructions, and carries the seeded Copilot workspace settings | Merged (OwlBear keys as defaults; your existing keys are preserved) |
 | `.vscode/mcp.json` | Registers 5 MCP servers (4 OwlBear stdio, including Browser access seeded for wildcard testing, + markitdown) | Merged (OwlBear servers as defaults; your existing servers are preserved) |
 | `.owlbear/delivery/config.json` | Declares the Git remote, pull-request target branch, exact GitHub `owner/name` identity, and remote Delivery-state branch | Tracked in Git; exact schema-1 policy is migrated once and schema-2 project edits are preserved on rerun |
-| `.owlbear/delivery/runtime/host.json` | Shows the tracked baseline for the shared execution budget and the 60-minute claim timeout | Seeded with `execution_capacity: 3`; existing values are preserved on rerun |
+| `.owlbear/delivery/runtime/host.json` | Shows the tracked baseline for the shared execution budget and the 60-minute claim timeout | Seeded with `execution_capacity: 8`; existing values are preserved on rerun |
 | `.owlbear/delivery/runtime/host.local.json` | Optional per-host overrides for any `host.json` setting | Not seeded; ignored by Git and preserved when present |
 | `.owlbear/install-manifest.json` | Records seed paths created or merged by setup, their installed digests, claimed settings/MCP values, and setup-created directories for conservative uninstall | Rewritten atomically on each successful setup; removed when uninstall completes unchanged |
 | `.owlbear/hooks/allow-stances-only.py` | Restricts ideation agents to approved stance outputs | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
@@ -62,7 +63,7 @@ The seeded Browser MCP entry uses `BROWSER_ALLOWED_DOMAINS: "*"` for local testi
 exact hostnames before using Browser against production or sensitive sites.
 
 For a fresh workspace, `init.py` writes tracked Delivery configuration and the visible default
-`host.json` with one shared execution budget for Planner and Builder claims (`execution_capacity: 3`).
+`host.json` with one shared execution budget for Planner and Builder claims (`execution_capacity: 8`).
 Builds retain exact per-Change writer custody; there is no separate global `writer_capacity` limit.
 Create `host.local.json` only for machine-specific execution or timeout overrides; it is ignored and
 is not synced to other hosts. Setup does not create mutable Delivery runtime state, worktrees, verification
@@ -94,7 +95,9 @@ OwlBear uses two different update models:
 - **Copied runtime surfaces:** files under `seed/` are copied into your project by `init.py`; this includes `.owlbear/hooks/` and project-local editor/runtime configuration.
 
 This split is why `git pull` updates shared agents and skills immediately, while copied
-runtime files may need a later `init.py` run to refresh.
+runtime files may need a later `init.py` run to refresh. A pull also changes the Delivery code that
+the next MCP or Cockpit start runs, so update the checkout through
+[Upgrading OwlBear](#upgrading-owlbear) rather than a plain `git pull`.
 
 ## Refreshing Consumer Configs
 
@@ -118,6 +121,49 @@ uv run --project ../owlbear python ../owlbear/setup/init.py --refresh-configs
 
 `--refresh-configs` does not overwrite `.github/copilot-instructions.md`, hook files, or other
 project-specific files that are outside the refreshable set.
+
+## Upgrading OwlBear
+
+Delivery records its state format in `.owlbear/delivery/runtime/format.json`. A newer OwlBear may
+need a newer format: its Delivery MCP server and Cockpit then refuse to start with
+`state-migration-required` until the state is migrated, and an older OwlBear that has this check
+refuses newer state with `state-newer-than-controller`. Neither refusal changes your state. Upgrade
+from the project, in a VS Code chat:
+
+1. Run `/upgrade-delivery`, optionally naming an OwlBear commit or ref.
+
+   **Expected result:** the agent reports Delivery health and every Change, and asks you to let
+   running work finish first.
+2. When asked, stop `owlbear-delivery` (**MCP: List Servers** → **Stop**) and Cockpit.
+
+   **Expected result:** the agent moves the OwlBear checkout forward with `git pull --ff-only`, then
+   runs `delivery-controller preflight` and `backup` and `delivery-migrate` `propose`, `apply` and
+   `verify` from the new code. The backup is written to a directory outside the project.
+3. When asked, start `owlbear-delivery` and Cockpit again.
+
+   **Expected result:** the agent confirms that Delivery is healthy and that every Change is still
+   available.
+4. Rerun setup from the project root to refresh copied files:
+
+   ```shell
+   uv run --project ../owlbear python ../owlbear/setup/init.py
+   ```
+
+   **Expected result:** setup preserves your edits and existing Delivery configuration; see
+   [Refreshing Consumer Configs](#refreshing-consumer-configs) for the editor and lint files.
+
+The OwlBear checkout is shared: once it moves, every project that uses it runs the new code. Run
+`/upgrade-delivery` in each of them before starting its Delivery again. If a project's
+`owlbear-delivery` already refuses with `state-migration-required` because the checkout was pulled
+directly, run `/upgrade-delivery` there; it skips the online check and continues with the offline
+preflight.
+
+The upgrade refuses while a Delivery MCP server or Cockpit still runs for the project, and changes
+nothing. To go back after a migration, the backup has to be restored first, which is your decision;
+moving the checkout back alone is safe only when no migration was needed. The upgrade also leaves
+`.owlbear/controller/` (its lock) and `.owlbear/delivery-migrations/` (the migration journal and the
+previous bytes of the migrated records) in the project; the setup rerun in step 4 ignores both in
+`.owlbear/.gitignore`.
 
 ## Uninstalling
 
@@ -191,10 +237,22 @@ with deterministic outcomes, dependencies, commitments, and proof boundaries.
 
 ### Delivery
 
-After admission, invoke `/orchestrate`. Each cycle lists current work, acquires a bounded ordered
-set of launch packages across the portfolio, dispatches only the worker named by each package, and
-forwards the worker's transition unchanged. Tasks execute sequentially in the managed Change
-worktree and their promoted commits advance the Change branch directly.
+Admission ends with the continuation prompt `/continue-change <change-id>`. Run it in Copilot Chat;
+Cockpit's **Copy continuation prompt** copies the same prompt for a Change that is
+**Ready for next step**. Copying does not start an agent. One continuation chat carries exactly
+one Change: it reads the Change, acquires its next action from Delivery, and dispatches only that
+action: a Planner or Builder launch, the issued finalization, or an engine action that publishes a
+checkpoint, synchronizes with the target, marks the pull request ready, or observes acceptance. It
+repeats for the same Change until Delivery yields because the step needs you, waits for a service or
+another Change, or the Change is complete. After an interruption, run the same prompt again; it
+resumes from Delivery's recorded state. For several Changes, use one chat per Change: Delivery
+enforces the shared execution capacity and dependencies across them, and Cockpit shows the portfolio.
+
+Before its first acquisition, the chat checks the Change's running Planner, Builder, or Finalizer
+claims and asks once whether each exact prior run was stopped or closed; only a confirmed stop is
+released, while `worker-stall-wait` needs no question. The chat forwards each worker's transition
+unchanged. Tasks execute sequentially in the managed Change worktree and their promoted commits
+advance the Change branch directly.
 
 - Planning reads one typed plan context, publishes one independently reviewed task chain, and
   returns `advance`, `retry`, `return`, or `block`.
@@ -204,7 +262,40 @@ worktree and their promoted commits advance the Change branch directly.
   repair, choose transitions, or mutate lifecycle state.
 
 Expected outcome: outcomes move through Planning and Build under one shared execution budget, with
-exact per-Change writer custody, without Orchestrator scheduling judgment or conversation-derived authority.
+exact per-Change writer custody, without scheduling judgment in the chat or conversation-derived
+authority. Cockpit shows each Change's situation, such as **Ready for next step**,
+**With an agent**, **Your decision**, **Waiting on GitHub**, **Waiting on another Change**,
+**Needs attention**, **Paused**, and **Done**, with a one-line headline, who it waits on and since
+when, its requests, **Pause** and **Resume**, and the **Acceptance evidence** for its criteria.
+Technical detail stays under **Details**; **Merge latest target into Change** appears only when
+Delivery says an update is required or optional.
+
+For exact ended invocations, the continuation chat (the `orchestrator` agent) uses the typed
+`settle_worker_invocation` route for retries, Builder request pauses/returns and report-backed
+Finalizer failures. Successful submitted/finalized results already have their owner receipt and are
+not transitioned twice.
+
+To change the requirements of an admitted Change that is not complete, run `/design <change-id>` and
+describe the change. The Designer pauses the Change, revises its package, shows you the delta, and
+activates the revision after your approval: unchanged outcomes keep their bindings and evidence, and
+changed outcomes return to Planning. Then continue with `/continue-change <change-id>`. Completed,
+abandoned, and merged Changes cannot be revised; start a successor Change instead.
+
+### Exceptional Entries
+
+Normal work needs only `/ideate`, `/design`, and `/continue-change`. Delivery, Cockpit, or the
+continuation chat names one of these prompts when a step falls outside the normal path; run it with
+the arguments shown there.
+
+| Prompt | When to use it | Where it is offered |
+| --- | --- | --- |
+| `/resolve-target-conflict <change-id>` | Merging the target into the Change branch has a conflict, or the pull request has merge conflicts | Cockpit's target-conflict and publication actions; afterwards run `/continue-change <change-id>` |
+| `/address-pr-feedback <change-id>` | A reviewer left feedback on the published pull request: `start` repairs it, `resume` publishes and replies | You start it after external review; Cockpit's review-repair action names it |
+| `/resolve-delivery-attention <change-id> <attention-id>` | Delivery reports typed attention or a health diagnostic for a Change | The command on that attention in Cockpit, and Cockpit's health panel |
+| `/inspect-change <change-id>` | A read-only explanation of a Change, for example after retries are exhausted or when readiness is unavailable | The readiness prompt of that Change |
+| `/finalize-change <change-id>` | The continuation chat cannot dispatch the Finalizer in this host | The continuation chat names it; `/address-pr-feedback start` hands off to it |
+| `/repair-delivery [change-id]` | Delivery MCP is unavailable or refuses to start, or an activation failed or custody is retained | The continuation chat and the readiness prompt name it |
+| `/upgrade-delivery [commit]` | Upgrading OwlBear and migrating this project's Delivery state | Maintenance; see [Upgrading OwlBear](#upgrading-owlbear) |
 
 ### Correction And Recovery
 
@@ -213,59 +304,151 @@ Worker transitions keep correction finite and typed:
 | Condition | Owner and control | Resume behavior |
 | --- | --- | --- |
 | Local implementation defect | Builder creates a bounded follow-up commit and requests fresh exact-commit review | Continue the same Build claim only after a fresh pass |
-| Missing user decision or action | Worker returns `block` with an embedded request | Answer the request in Cockpit; fresh context carries the structured resolution |
+| Planning-stage user decision or action | Planning worker returns `block` with an embedded request; the owner records a durable paused result | Only that paused reservation is settled, without counting it as a failure or erasing earlier failures. Answer the request in Cockpit before work resumes; fresh context carries the structured resolution, and exact result replay does not charge another attempt |
 | Requestless condition is satisfied | User clears the block in Cockpit | Engine recomputes eligibility |
-| Retryable worker condition | Worker returns `retry` with exact claim and source boundary | Runtime clears the claim and recomputes same-stage eligibility |
-| Planning or Design premise failed | Worker returns `return` with evidence and target | Runtime persists successor context; Design reopen is currently manual through `/design` |
-| Claim owner is confirmed dead | User recovers the exact claim in Cockpit | Runtime preserves or clears custody according to exact workspace evidence |
+| Worker returns `retry` | Settle exact invocation | Preserve work; same task after backoff |
+| Planner/Builder no-result | `ended-without-result` after return + settled jobs | Preserve; same task after backoff |
+| Issuing VS Code window ended | Recorded PID/start time is gone; no writes for 30 seconds and no live process in the worktree or Git admin directory | Auto `worker-host-lost`; preserve work |
+| Write/process guard incomplete | `worker-stall-wait`; retry time for recent writes or process/scan details when unresolved | Yield; no question or replacement |
+| Stopped chat with live window | User confirms the exact run stopped: Cockpit **Release stuck worker**, or the question `/continue-change` asks when it starts | One guarded `worker-released-stuck`; no same-cycle replacement |
+| Planning-stage premise failed | Planning worker returns `return` with evidence, target and source boundary | Runtime persists typed successor context; Design reopen is currently manual through `/design` |
+| Implementation Builder requests `block` or `return` | Orchestrator settles the exact ended invocation, preserving work and completed results | Genuine request-bearing block settles the pause and gates reacquisition until answered. Planning return permits lineage-preserving replan; Design return supplies complete Designer attention, not automatic revision/admission. Raw unsupervised transitions remain refused |
+| Retry episode is exhausted | Responsible agent receives bounded read-only diagnosis with the failure history | Nonterminal blocking prevents automatic redispatch; no fabricated user request, clear-block reset or fresh allowance is offered |
+| Finalizer returns `proof-failed` or `review-failed` | Orchestrator binds the exact ended invocation to its stored report | Retain report-backed passive attention without occupying a live execution slot. The report is diagnostic evidence, never proof of successful finalization |
+| Failed activation or retained active custody | Readiness exposes `/repair-delivery` for read-only diagnosis | The prompt can explain the retained state; it grants no permission to retry, release custody or start replacement work |
+| `recover_claim` requested | Requires supported host exclusion | Timeout/`confirmed_lost` do not release custody |
 | Earlier valid stage is required | User selects an invariant-checked backward move in Cockpit | Runtime resets only the selected outcome and its affected successors |
+| User pauses a Change | **Pause** in Cockpit (or `set_change_intent` `defer`) is accepted at any time; while a step is running it records a **Pause requested** state | The running step finishes and records its result; no new work starts. The Change then shows **Paused**. **Resume** clears a pending request or restores the prior stage. Pause never stops or releases a worker |
+| Requirements change on an admitted Change | **Change requirements** on the Change detail in Cockpit copies `/design <change-id> Change requirements:`; add the change and run it in Copilot Chat. Completed, abandoned and merged Changes offer no control: start a successor Change | The Designer pauses the Change, revises the package, shows the delta and activates it after your approval. Unchanged outcomes keep their bindings and evidence; changed outcomes return to Planning with their surviving completed work |
 
-Do not recover a live claim or infer recovery from elapsed time alone. Request answers, requestless
-unblock, confirmed-dead claim recovery, backward movement, and retained Integration attention
-remain user-owned Cockpit controls rather than agent MCP operations.
+The window-exit row also covers a prior-session Orchestrator restart, reload, or closed window. If the
+issuing window process remains alive, only the user can confirm whether its earlier run was stopped;
+the Orchestrator asks once at session start and does not infer closure from an MCP-server restart.
+
+Recovery requests and `confirmed_lost` are not proof. A returned Planner/Builder no-result uses
+`settle_worker_invocation` only after Orchestrator sees the dispatch return and all owned mutating work
+settle. For a previous-session loss, each claim records its issuing VS Code window PID and process
+start time. The next acquisition can record engine-only `worker-host-lost` only after that exact
+window process is gone, no write has occurred in the last 30 seconds, and no live same-user process
+has its cwd or an open file under the managed worktree or Git admin directory. A terminal-attached idle
+shell whose only link is its worktree cwd and which has no live child is ignored; open files still block. If the
+guard is incomplete, readiness reports `worker-stall-wait`: a `next_eligible_at` means the write
+guard is still running; without a time, the prompt reports active process names or bounded scan
+detail. Yield without settling or recovering. During `worker-stall-wait`, avoid Git commands against
+the managed worktree: commands such as `git status` and `git diff` can update Git metadata and restart
+the quiet period. Restarting the MCP server while the issuing window is alive does not trigger
+automatic settlement.
+
+When the user states that a specific worker chat was stopped, use Cockpit's **Release stuck worker**
+action, or answer `stopped/closed` to the question `/continue-change` asks for that exact active claim.
+When a continuation chat starts, it asks once about each exact `running` claim of its Change; it does
+not ask about `worker-stall-wait`. This is a user
+decision, not a process command. Delivery applies the same 30-second no-write and worktree/Git-admin
+process guard. If it returns `ERR_DELIVERY_WORKER_ACTIVE`, a retry time means the write guard is
+pending; otherwise report the active process or bounded observation details unchanged. Custody and
+files remain unchanged. Call the route once; do not retry or dispatch a replacement in the same
+cycle. Neither
+`worker-host-lost` nor `worker-released-stuck` goes through `settle_worker_invocation`.
+
+Both engine dispositions count as failed attempts in the same three-attempt episode and preserve
+worktree bytes, staging, commits, and refs. After backoff, a fresh Builder uses Build context and
+`prior_attempts` to triage same-task work; Planner retries under the same budget. Three failures
+exhaust the episode. A lost or released Finalizer with no report receives a `worker-ended` report
+with code `finalizer-ended-without-report` and `checks_state: unknown`; it is not proof. Fresh
+exact-head checks and independent review remain required under the original budget.
+
+A dispatch that has not returned in the current session remains unsettled by Orchestrator unless the
+user selects the stopped-worker route above. Time, disconnection, and `confirmed_lost` are not proof
+for `settle_worker_invocation` or `recover_claim`; do not suggest Git or process-control commands.
+Request answers, requestless unblock, exact recovery requests, backward movement, and retained
+Integration attention remain user-owned Cockpit controls. Those controls cannot turn a refused
+Builder diagnostic into an actionable request or transition.
+
+Corroborated passive Builder handoff and report-backed Finalizer attention release live execution
+capacity while preserving their mutation fences. Claims awaiting write/process-guard eligibility and uncertain
+engine actions still occupy slots. Once Delivery records `worker-host-lost` or `worker-released-stuck`,
+the claim is released but its failed attempt remains. If active claims occupy every slot, new
+Planner/Builder work, finalization, and engine continuation stall across the portfolio. A Change
+cannot be abandoned while an active mutation claim remains. Timeout and `confirmed_lost` are not
+proof; a stopped-chat release is a user decision guarded by Delivery's 30-second write/process check.
+
+Separately, a proven-no-launch reservation can remain pending while another claim in the same
+Change is active. It does not consume an execution slot, but a later attempt contains that
+outcome's retry budget without an actionable request or unblock path. Once the other claims end,
+the supported exit is abandoning the whole Change; do not reset the reservation manually.
+
+Use `/repair-delivery` when normal Delivery inspection is unavailable. It starts with read-only
+diagnosis and applies only supported, fenced repairs with the controllers stopped and under their
+confirmation policy; it never releases custody or repairs unknown state. If the current working directory is
+missing or access is denied, the offline diagnostic returns `ROOT_UNAVAILABLE`, unknown pending
+effects and exit status 2 without writes. Unknown pending effects must not be read as no effects.
 
 ### Publication, Acceptance, And Completed History
 
-When every outcome is complete and the reviewed source boundary is current, run
-`/finalize-change <change-id>` for the exact Change head. Delivery publishes or reconciles a draft
+When every outcome is complete and the reviewed source boundary is current, the same continuation chat
+finalizes the exact Change head: it dispatches the issued finalization, which collects fresh evidence
+and an independent review. If this host cannot dispatch the Finalizer, the chat names
+`/finalize-change <change-id>` instead. Delivery publishes or reconciles a draft
 pull request for the Change branch, observes the required checks, and marks the PR ready only when
 the finalized head is unchanged. Target synchronization, when required, merges only the configured
 remote-tracking target into the managed Change worktree; it never updates the target branch or the
 user checkout.
 
-The user merges the pull request in GitHub. Delivery never merges, enables auto-merge, updates the
-target branch, or completes from local evidence. After the merge, read-only acceptance observation
-requires the exact repository, PR, base, finalized head, merged state, merge time, and provider-
-reported merge commit. Completed history preserves the finalized Change head and accepted merge
-commit as separate identities. An open or unmerged PR waits or is deferred; it cannot complete.
+When the PR is ready, mergeable and its required checks pass at the finalized head, Cockpit offers
+**Approve merge** with the repository, PR, exact head, target, proof and check summary and merge
+method. If the target branch moved after the proof, the offer stays and says so: it names the proof
+target and the current target, and approving merges commits the proof did not cover. Conflicts and an
+up-to-date requirement still route to target synchronization. The continuation chat shows the same
+offer and stops; only you approve, in Cockpit. One approval sends one merge-commit
+request fenced to that exact head; Delivery never enables auto-merge, uses a merge queue, bypasses
+rules or updates the target branch. You can also merge the PR in GitHub yourself. If GitHub never
+confirms an approved merge, Cockpit shows the PR link with **Check again**, Pause and Abandon; Delivery
+never sends the request again. Engine and provider publication (Change branches, draft PRs, Delivery
+state) and an approved merge are system work: agents never run `git push`, `gh pr merge` or provider
+mutations directly, and no agent tool approves a merge. After the merge, read-only acceptance
+observation requires the exact repository, PR, base, finalized head, merged state, merge time, and
+provider-reported merge commit; it never completes from local evidence. Completed history preserves
+the finalized Change head and accepted merge commit as separate identities. An open or unmerged PR
+waits or is deferred; it cannot complete.
+
+Delivery keeps each Change branch (`owlbear/change/<change-id>`) locally and on the remote after
+completion or abandonment; the local branch keeps the reviewed commits reachable even when the remote
+branch is gone. To remove merged remote branches, enable the GitHub repository setting
+**Automatically delete head branches**; Delivery tolerates that deletion.
 
 Persisted Integration attention remains visible through the current attention surfaces. Use
 Cockpit or `/resolve-delivery-attention <change-id> <attention-id>` to inspect that exact attention.
 New Integration repair claims, candidates, reviews, and admissions are not created by the current
 workflow. Treat a
 merge conflict without a current repair claim as an authority gap; if persisted repair-claim context
-supplies exact attempt and claim identities, use the exact recovery operation and preserve its
-evidence. Do not edit the target or worktree directly. Cockpit and the MCP completed-change tools
-provide bounded list, search, and exact lookup of receipt-backed history.
+supplies exact attempt and claim identities, request recovery only through the exact owner operation
+and preserve its evidence. The operation still requires supported host-owned exclusion; the default
+provider refuses without it and leaves attention/custody intact. Do not edit the target or worktree
+directly. Cockpit and the MCP completed-change tools provide bounded list, search, and exact lookup
+of receipt-backed history.
 
 ### Current Manual Boundaries
 
 - External Change-head adoption proves provenance only. Explicit promotion is required before an
   adopted head becomes review authority, and finalization binds the exact reviewed head.
-- Design return persists structured successor context, but reopening and revising the Specification
-  currently starts with a manual `/design` invocation.
+- A Planning-stage return to Design persists structured successor context, but reopening and revising
+  the Specification currently starts with a manual `/design` invocation.
 - Target-sync conflict repair remains in the managed Change worktree; Delivery never mutates the
   configured target ref, and merge-conflict repair production is retired outside that bounded path.
 - Files under `.owlbear/research/` are frozen comparison evidence, not operational or runtime
   authority. Completed-history search reads current receipt-backed runtime records only.
 
 ```text
-/ideate -> /design -> explicit admission -> /orchestrate -> /finalize-change <change-id>
+/ideate -> /design -> explicit admission -> /continue-change <change-id> (repeat after any stop)
 Specification: read/revise -> checkpoint -> derive -> validate -> approve/admit
 Delivery: acquire -> plan/build -> publish -> worker transition
-Correction: retry | return | block -> typed successor context
-Publication: finalize-change -> checkpoint -> draft PR -> finalized head -> ready PR
-Acceptance: user merges PR -> observe merged evidence -> completed lookup
+Correction: returned end/no-result -> settlement -> same-task retry after backoff
+  | request answer gate | Planning/Design return
+Recovery: prior-session window exit -> automatic 30-second write/process guard; live-window stopped chat -> one user-directed release
+Wait: worker-stall-wait -> yield with retry time or process details
+  | exhausted episode -> agent-owned read-only diagnosis
+Publication: finalize -> checkpoint -> draft PR -> finalized head -> ready PR
+Acceptance: Approve merge in Cockpit (or merge in GitHub) -> observe merged evidence -> completed lookup
 ```
 
 ## Portability and recovery
@@ -279,14 +462,70 @@ Delivery also publishes sparse semantic snapshots to `owlbear/delivery-state`. T
 retain the admitted contract, frontier progress, publication and finalization identities, and
 completion evidence. They exclude active claims, writer custody, locks, capacity ledgers, process
 identifiers, absolute paths, and transient model output. A new clone recreates ignored runtime state,
-the package cache, and open Change worktrees from those remote identities; incomplete claims are
-requeued rather than treated as live.
+the package cache, and open Change worktrees from those remote identities. The next acquisition
+applies the recorded-window and write/process guard to an unsettled prior-session claim rather than
+treating its age or missing response as proof of death.
 
 For a new machine, clone the project normally, run setup so `.owlbear/delivery/config.json` names
 the configured `delivery_state_branch`, and launch Delivery or Cockpit from the project root. Do
 not copy `.git`, hidden OwlBear refs, ignored runtime files, or an old managed worktree. If startup
 reports a package, Change-branch, target, or state-snapshot divergence, preserve both sides and
 resolve the typed attention before acquiring work.
+
+### Pinned controller releases
+
+The OwlBear development checkout runs Delivery from a pinned, immutable controller release so that
+new commits on `dev` never change the running controller. Consumer projects run unpinned by default:
+the `uv --project <owlbear clone>` entries that setup writes start the checkout's code, and
+[Upgrading OwlBear](#upgrading-owlbear) moves it forward.
+
+Pinning is optional for a consumer project. It keeps Delivery on an installed release while the
+OwlBear checkout moves; each release holds a controller-only environment (Delivery MCP, Cockpit and
+the maintenance tools, without knowledge or browser packages) of about 90 MB. To opt in,
+upgrade first so the state is current, stop `owlbear-delivery` and Cockpit, and run from the project
+root:
+
+```shell
+uv --project ../owlbear run delivery-controller --project-root "$PWD" install HEAD \
+  --source ../owlbear --bundle-source ../owlbear/serve/cockpit/dist --pin
+```
+
+Then set the `owlbear-delivery` entry in `.vscode/mcp.json` to
+`"command": "${workspaceFolder}/.owlbear/controller/bin/delivery-mcp", "args": []` and start Cockpit
+with `.owlbear/controller/bin/cockpit`. Rerunning setup keeps your edited entry.
+
+| Path | Content |
+| --- | --- |
+| `.owlbear/controller/releases/<commit>/` | Read-only `git archive` of the commit, its locked controller-only `.venv`, the Cockpit bundle and `RELEASE.json` (commit, supported format, interpreter identity, tree digest) |
+| `.owlbear/controller/pin.json` | Pinned release `commit`, its `previous` (rollback) release and the digest of its `RELEASE.json` |
+| `.owlbear/controller/bin/delivery-mcp`, `bin/cockpit` | Generated launchers; `.vscode/mcp.json` starts `owlbear-delivery` through `bin/delivery-mcp` |
+
+On a pinned workspace every controller whose code is not the pinned release refuses to start with
+`controller-not-pinned` before it reads state, including `uv run cockpit` and
+`uv run python -m owlbear_delivery_mcp` from the checkout. Start Cockpit with
+`.owlbear/controller/bin/cockpit`. A clone without a release shows `owlbear-delivery` as failed to
+start until `uv run delivery-controller install --pin <commit>` installs and pins one.
+
+Install refuses a release whose Delivery MCP server, Cockpit app or maintenance commands cannot be
+imported from its own environment.
+
+Release integrity protects against accidental and ordinary-tool changes: editor saves, Git commands
+in the wrong directory, interrupted installs, package-manager writes and restores. Install seals
+every release file and directory read-only and refuses a release it cannot seal; `pin`, `switch` and
+`verify` hash the full content and the interpreter against `RELEASE.json`, refuse a writable entry and
+report a modified release. Starts do not re-verify the release. It is not a security boundary
+against root or another process running as your user.
+
+Upgrade only through `/upgrade-delivery`, which drives `delivery-controller` and `delivery-migrate`:
+install, online preflight, stop, offline `preflight`, `backup`, migration, `switch`, `verify` and
+`prune` while both controllers are still stopped, then restart and online verification. `preflight`,
+`backup`, `pin`, `switch` and `prune` hold the controller lock
+exclusively and refuse while any controller runs. `switch <previous>` rolls back only when that
+release's own gate accepts the current state; otherwise restoring the backup is your decision.
+`verify` detects a release modified after install. `prune` keeps the current and previous releases.
+The upgrade builds the new release with the current release's `delivery-controller` and reuses an
+intact installed release, so a change to the installer applies from the upgrade after the one that
+activates it.
 
 ---
 
@@ -306,12 +545,6 @@ so it reads this project's `.owlbear/delivery/config.json`, Delivery state, and 
 
    ```shell
    uv run --project ../owlbear cockpit
-   ```
-
-   Windows PowerShell:
-
-   ```powershell
-   uv run --project ..\owlbear cockpit
    ```
 
     Expected outcome: Cockpit opens `http://127.0.0.1:8420` and shows this project's

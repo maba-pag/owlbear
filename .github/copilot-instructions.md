@@ -23,6 +23,15 @@ metadata, workspace state, test suites, and root tooling. The exact boundary is 
 `.github/sync-manifest.json`; excluded paths remain on `dev` and are not part of the generated
 product surface.
 
+### Direct Delivery Redesign
+
+The Delivery redesign programme runs in local VS Code chats under
+[the execution plan](../.owlbear/research/delivery-redesign-execution-plan.md). Start at its
+section 0; its section 1 holds the working rules: lanes, worktrees, the main-checkout freeze, live
+state protection, proof and review gates. Never use Delivery to implement Delivery. Product
+requirements stay in
+[the programme](../.owlbear/research/change-continuation-delivery-redesign.md).
+
 ## Directory Structure
 
 | Directory | Purpose |
@@ -47,9 +56,9 @@ product surface.
 | Stack | React 19 + Vite 8 + TypeScript 6 + Porsche Design System React 4 + React Router 8 + React Compiler (`babel-plugin-react-compiler`) |
 | Test runner | Vitest 4 (`npm test`) |
 | E2E test runner | Playwright (version locked by `serve/cockpit/web/package-lock.json`) via `npm run test:e2e` — Chromium only; requires `npx playwright install chromium` once |
-| CSS/HTML lint | Stylelint (`npm run lint:css`) and HTMLHint (`npm run lint:html`) |
+| CSS/HTML lint | Biome and HTMLHint (`npm run lint:html`) |
 | Build output | `serve/cockpit/dist/` (`npm run build`); gitignored on `dev` — pre-built in `main` by sync-to-main CI |
-| Node requirement | Node 24.19.0 pinned in `serve/cockpit/web/.nvmrc`; `package.json` requires `>=24.16.0` |
+| Node requirement | Node 24.21.0 pinned in `serve/cockpit/web/.nvmrc`; `package.json` requires `>=24.21.0` |
 | Package manager | `npm` (never `uv` for this package) |
 
 All other `serve/` packages are Python — use `uv run` for those.
@@ -67,7 +76,18 @@ All other `serve/` packages are Python — use `uv run` for those.
 
 ## 5. Test Domain Mapping
 
-Maps source paths to the test scope that covers them. Used by quality-runner `mode=full` with `changed_paths` for domain-scoped regression testing.
+### GitHub Cloud Sessions
+
+Use explicit affected test selections and scoped checks. If scope is unknown, inspect the owning
+tests before choosing a check. Never run the whole-project suite, MegaLinter or `uv run quality`.
+Follow the
+applicable [cloud-agent](instructions/cloud-agent.instructions.md) or
+[code-review](instructions/code-review.instructions.md) instructions. Required external CI gates remain unchanged.
+
+### Local Development and CI
+
+This table maps source paths to their regression scope for local/CI tooling, including
+quality-runner `mode=full` with `changed_paths`.
 
 | Source prefix | Test scope | Toolchain |
 | --- | --- | --- |

@@ -4,9 +4,9 @@ description: "User-facing change designer - create or resume durable target auth
 argument-hint: "Design: {rough idea or target change ID}"
 user-invocable: true
 disable-model-invocation: true
-model: GPT-5.6 Sol (copilot)
+model: Claude Opus 5.5 (copilot)
 tools:
-  [vscode/toolSearch, vscode/askQuestions, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, web, owlbear-delivery/create_design_session, owlbear-delivery/read_design_session, owlbear-delivery/revise_design_session, owlbear-delivery/publish_design_checkpoint, owlbear-delivery/derive_delivery_contract, owlbear-delivery/admit_delivery_change, owlbear-memory/recall_memory, owlbear-memory/save_memory, vscodeTasks/problems, vscodeGeneral/toolSearch]
+  [vscode/toolSearch, vscode/askQuestions, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, web, owlbear-delivery/create_design_session, owlbear-delivery/read_design_session, owlbear-delivery/revise_design_session, owlbear-delivery/publish_design_checkpoint, owlbear-delivery/derive_delivery_contract, owlbear-delivery/admit_change, owlbear-delivery/get_change, owlbear-delivery/set_change_intent, owlbear-delivery/prepare_review_repair, owlbear-memory/recall_memory, owlbear-memory/save_memory, vscodeTasks/problems, vscodeGeneral/toolSearch]
 agents: [conceptual-design-reviewer, designer-challenger, Explore]
 hooks:
   PreToolUse:
@@ -49,7 +49,7 @@ challenge, validation, or approval gate is incomplete. A plausible plan is not a
 - **Preserve reviewer memory provenance.** Save a qualified `memory_candidate` with its supplied
   reviewer `source_agent` and no scope; discard malformed or low-signal candidates without repair.
 - **Admit unchanged source through the public boundary.** Derive, challenge, baseline, checkpoint,
-  and validate one unchanged package before explicit approval, then call `admit_delivery_change`;
+  and validate one unchanged package before explicit approval, then call `admit_change`;
   any authored revision invalidates those gates and starts them again.
 
 </critical_rules>
@@ -79,6 +79,9 @@ and initial plan-job identities.
 
 - This role owns Specification, not Delivery implementation, frontier planning, acceptance, or audit.
 - Only the user can resolve material product and architecture choices or grant admission approval.
+- For returned Design attention, use the exact caller-supplied reason and locators, then re-read the
+  verified package. This handoff is not revision approval or admission; if its return context or
+  current Delivery stage is absent or ambiguous, leave the package unchanged and report that limit.
 - Memory is qualified supporting evidence, never current specification or execution authority.
 - A challenger `warning` remains visible in known limits; `error` or malformed evidence blocks
   admission.

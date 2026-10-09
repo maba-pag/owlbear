@@ -28,14 +28,11 @@ from owlbear_tools.todo import run_todo
 
 COCKPIT_WEB = Path("serve/cockpit/web")
 _PYTHON_SUFFIXES = frozenset({".py", ".pyi"})
-_JSON_SUFFIXES = frozenset({".json", ".jsonc"})
 
 
 _PRECOMMIT_FIX_HOOKS: dict[str, tuple[str, str, str | None]] = {
     "lint-python": ("ruff-fix", "ruff-check", "ruff-unsafe-fix"),
     "lint-markdown": ("markdownlint-fix", "markdownlint-check", None),
-    "lint-cockpit-code": ("eslint-frontend-fix", "eslint-frontend-check", None),
-    "lint-cockpit-style": ("stylelint-frontend-fix", "stylelint-frontend-check", "stylelint-frontend-lax"),
     "format-python": ("ruff-format-fix", "ruff-format-check", None),
     "format-whitespace": ("trailing-whitespace-fix", "", None),
     "format-eof": ("end-of-file-fix", "", None),
@@ -50,17 +47,15 @@ _AGGREGATES: dict[str, tuple[str, ...]] = {
     "lint": (
         "lint-python",
         "lint-markdown",
-        "lint-json",
         "lint-yaml",
         "lint-shell",
         "lint-actions",
         "lint-editorconfig",
         "lint-cockpit",
     ),
-    "lint-cockpit": ("lint-cockpit-code", "lint-cockpit-style", "lint-cockpit-html"),
-    "lint-full": ("lint", "megalint"),
-    "format-full": ("format-python", "format-whitespace", "format-eof"),
-    "quality-full": ("format-full", "lint-full", "typecheck-cockpit", "todo"),
+    "lint-cockpit": ("lint-cockpit-biome", "lint-cockpit-html"),
+    "format": ("format-python", "format-biome", "format-whitespace", "format-eof"),
+    "quality": ("format", "lint", "megalint", "typecheck-cockpit", "todo"),
 }
 
 
@@ -163,30 +158,18 @@ def _run_cockpit_html(*, staged: bool) -> int:
     return _call(["npm", "run", "lint:html"], cwd=COCKPIT_WEB)
 
 
-def _run_json_lint(*, staged: bool) -> int:
-    """Run the repository-owned JSON and JSONC ESLint configuration."""
-    targets = (
-        [path for path in _git_paths(staged=True) if Path(path).suffix in _JSON_SUFFIXES]
-        if staged
-        else ["**/*.json", "**/*.jsonc"]
-    )
-    if not targets:
-        return 0
-    return _call(
-        [
-            str(COCKPIT_WEB / "node_modules/.bin/eslint"),
-            "--config",
-            "eslint-json.config.cjs",
-            "--no-config-lookup",
-            "--no-warn-ignored",
-            "--no-error-on-unmatched-pattern",
-            *targets,
-        ]
-    )
+def _run_biome(*, staged: bool, fix_mode: FixMode, format_only: bool = False) -> int:
+    command = ["node", str(COCKPIT_WEB / "scripts/run-biome-check.mjs"), "format" if format_only else "check"]
+    command.extend(["--staged", "--no-errors-on-unmatched"] if staged else ["."])
+    if fix_mode is not FixMode.NONE:
+        command.append("--write")
+    if fix_mode is FixMode.UNSAFE and not format_only:
+        command.append("--unsafe")
+    return _call(command)
 
 
 def _run_typecheck_cockpit() -> int:
-    return _call(
+    app_result = _call(
         [
             "npx",
             "--prefix",
@@ -197,15 +180,17 @@ def _run_typecheck_cockpit() -> int:
             str(COCKPIT_WEB / "tsconfig.json"),
         ]
     )
+    e2e_result = _call(["npm", "run", "typecheck:e2e"], cwd=COCKPIT_WEB)
+    return int(bool(app_result or e2e_result))
 
 
 def _run_leaf(name: str, *, staged: bool, fix_mode: FixMode) -> int:
-    if name == "lint-json":
-        result = _run_json_lint(staged=staged)
-    elif name in _PRECOMMIT_FIX_HOOKS:
+    if name in _PRECOMMIT_FIX_HOOKS:
         result = _run_precommit_fix_hook(name, staged=staged, fix_mode=fix_mode)
     elif name in _PRECOMMIT_CHECK_HOOKS:
         result = _precommit_hook(_PRECOMMIT_CHECK_HOOKS[name], staged=staged)
+    elif name in {"lint-cockpit-biome", "format-biome"}:
+        result = _run_biome(staged=staged, fix_mode=fix_mode, format_only=name == "format-biome")
     elif name == "lint-cockpit-html":
         result = _run_cockpit_html(staged=staged)
     elif name == "megalint":
@@ -341,11 +326,6 @@ def lint_markdown() -> None:
     _run_public_leaf("lint-markdown", fixes=True, allow_unsafe=False, staged=True)
 
 
-def lint_json() -> None:
-    """Run JSON and JSONC ESLint checks."""
-    _run_public_leaf("lint-json", fixes=False, allow_unsafe=False, staged=True)
-
-
 def lint_yaml() -> None:
     """Run strict YAML lint checks."""
     _run_public_leaf("lint-yaml", fixes=False, allow_unsafe=False, staged=True)
@@ -366,14 +346,9 @@ def lint_editorconfig() -> None:
     _run_public_leaf("lint-editorconfig", fixes=False, allow_unsafe=False, staged=True)
 
 
-def lint_cockpit_code() -> None:
-    """Run Cockpit ESLint checks."""
-    _run_public_leaf("lint-cockpit-code", fixes=True, allow_unsafe=False, staged=True)
-
-
-def lint_cockpit_style() -> None:
-    """Run Cockpit Stylelint checks."""
-    _run_public_leaf("lint-cockpit-style", fixes=True, allow_unsafe=True, staged=True)
+def lint_cockpit_biome() -> None:
+    """Run Biome checks for the Cockpit and owned repository frontend files."""
+    _run_public_leaf("lint-cockpit-biome", fixes=True, allow_unsafe=True, staged=True)
 
 
 def lint_cockpit_html() -> None:
@@ -381,16 +356,14 @@ def lint_cockpit_html() -> None:
     _run_public_leaf("lint-cockpit-html", fixes=False, allow_unsafe=False, staged=True)
 
 
-def lint_full() -> None:
-    """Run every configured lint engine, including MegaLinter."""
-    args = _parse_options("lint-full", staged=False, fixes=True, allow_unsafe=True)
-    _require_development("lint-full")
-    _finish(_run_named_checked("lint-full", staged=False, fix_mode=args.fix_mode))
-
-
 def format_python() -> None:
     """Format Python with Ruff."""
     _run_public_leaf("format-python", fixes=True, allow_unsafe=False, staged=True)
+
+
+def format_biome() -> None:
+    """Format owned frontend and JSON files with Biome."""
+    _run_public_leaf("format-biome", fixes=True, allow_unsafe=False, staged=True)
 
 
 def format_whitespace() -> None:
@@ -403,11 +376,11 @@ def format_eof() -> None:
     _run_public_leaf("format-eof", fixes=True, allow_unsafe=False, staged=True)
 
 
-def format_full() -> None:
+def format_commands() -> None:
     """Run all dedicated formatters and text normalizers."""
-    args = _parse_options("format-full", staged=True, fixes=True, allow_unsafe=False)
-    _require_development("format-full")
-    _finish(_run_named_checked("format-full", staged=args.staged, fix_mode=args.fix_mode))
+    args = _parse_options("format", staged=True, fixes=True, allow_unsafe=False)
+    _require_development("format")
+    _finish(_run_named_checked("format", staged=args.staged, fix_mode=args.fix_mode))
 
 
 def typecheck_cockpit() -> None:
@@ -418,8 +391,8 @@ def typecheck_cockpit() -> None:
     _finish(_run_named_checked("typecheck-cockpit", staged=False, fix_mode=FixMode.NONE))
 
 
-def quality_full() -> None:
+def quality() -> None:
     """Run format, lint, typecheck, and advisory checks."""
-    args = _parse_options("quality-full", staged=False, fixes=True, allow_unsafe=True)
-    _require_development("quality-full")
-    _finish(_run_named_checked("quality-full", staged=False, fix_mode=args.fix_mode))
+    args = _parse_options("quality", staged=False, fixes=True, allow_unsafe=True)
+    _require_development("quality")
+    _finish(_run_named_checked("quality", staged=False, fix_mode=args.fix_mode))

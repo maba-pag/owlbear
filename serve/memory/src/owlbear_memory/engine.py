@@ -1,17 +1,21 @@
-"""Memory engine with state transitions, OCC, and mtime-based caching."""
+"""Memory engine with state transitions, OCC, and stat-signature caching."""
 
 from __future__ import annotations
 
 import logging
+import os
+from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import RLock
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict
 from uuid import uuid4
 
 from owlbear_memory import storage
 from owlbear_memory.errors import (
     ConcurrencyError,
+    DuplicateEntryError,
     LifecycleRecoveryError,
     LifecycleRollbackFailure,
     NotFoundError,
@@ -26,12 +30,240 @@ from owlbear_memory.models import (
     PurgePreview,
     PurgeResult,
 )
+from owlbear_memory.writer_lock import writer_lock
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 _LOGGER = logging.getLogger(__name__)
 
 OUTSTANDING_BOOST = 0.1
 UNREMARKABLE_PENALTY = 0.01
 STALE_THRESHOLD = 50
+_DUPLICATE_COPY_THRESHOLD = 2
+
+
+@dataclass(slots=True)
+class _DuplicateRepairContext:
+    memory_dir: Path
+    candidates: list[tuple[Path, MemoryEntry]]
+    used_candidate_paths: set[Path]
+    existing_ids: set[str]
+
+
+def _read_entries_by_id(memory_dir: Path) -> tuple[int, dict[str, list[tuple[Path, MemoryEntry]]]]:
+    parse_errors = 0
+    entries_by_id: dict[str, list[tuple[Path, MemoryEntry]]] = {}
+    for file_path in sorted(memory_dir.glob("*.md")):
+        entry = storage.read_entry(file_path)
+        if entry is None:
+            parse_errors += 1
+            continue
+        entries_by_id.setdefault(entry.id, []).append((file_path, entry))
+    return parse_errors, entries_by_id
+
+
+def _select_canonical_copy(
+    memory_dir: Path,
+    entry_id: str,
+    copies: list[tuple[Path, MemoryEntry]],
+) -> tuple[Path, MemoryEntry]:
+    latest_updated_at = max(datetime.fromisoformat(entry.updated_at) for _, entry in copies)
+    newest_copies = [
+        (path, entry) for path, entry in copies if datetime.fromisoformat(entry.updated_at) == latest_updated_at
+    ]
+    canonical_path = f"{entry_id}.md"
+    named_copy = next(
+        (copy for copy in newest_copies if copy[0].relative_to(memory_dir).as_posix() == canonical_path),
+        None,
+    )
+    if named_copy is not None:
+        return named_copy
+    return min(newest_copies, key=lambda copy: copy[0].relative_to(memory_dir).as_posix())
+
+
+def _relative_paths(memory_dir: Path, paths: list[Path]) -> tuple[str, ...]:
+    return tuple(sorted(path.relative_to(memory_dir).as_posix() for path in paths))
+
+
+def _matches_repair_copy(candidate: MemoryEntry, source: MemoryEntry, marked_title: str) -> bool:
+    return (
+        candidate.state == MemoryState.PENDING
+        and candidate.approved_at is None
+        and candidate.contested_by_task is None
+        and candidate.outstanding_count == 0
+        and candidate.unremarkable_count == 0
+        and candidate.didnt_use_count == 0
+        and candidate.score == candidate.confidence
+        and candidate.title == marked_title
+        and candidate.content == source.content
+        and candidate.categories == source.categories
+        and candidate.confidence == source.confidence
+        and candidate.source_agent == source.source_agent
+        and candidate.scope_agents == source.scope_agents
+        and candidate.created_at == source.created_at
+    )
+
+
+def _find_reusable_repair_copy(
+    entry_id: str,
+    source: MemoryEntry,
+    marked_title: str,
+    candidates: list[tuple[Path, MemoryEntry]],
+    used_paths: set[Path],
+) -> tuple[Path, MemoryEntry] | None:
+    return next(
+        (
+            (path, entry)
+            for path, entry in candidates
+            if path not in used_paths and entry.id != entry_id and _matches_repair_copy(entry, source, marked_title)
+        ),
+        None,
+    )
+
+
+def _next_updated_at(previous_updated_at: str) -> str:
+    now = datetime.now(UTC)
+    previous = datetime.fromisoformat(previous_updated_at)
+    if now <= previous:
+        now = previous + timedelta(microseconds=1)
+    return now.isoformat()
+
+
+def _write_repair_copy(
+    memory_dir: Path,
+    source: MemoryEntry,
+    marked_title: str,
+    existing_ids: set[str],
+) -> tuple[Path, MemoryEntry]:
+    while True:
+        new_id = str(uuid4())
+        new_path = memory_dir / f"{new_id}.md"
+        if new_id not in existing_ids and not new_path.exists():
+            break
+
+    repaired = source.model_copy(
+        update={
+            "id": new_id,
+            "title": marked_title,
+            "state": MemoryState.PENDING,
+            "approved_at": None,
+            "contested_by_task": None,
+            "outstanding_count": 0,
+            "unremarkable_count": 0,
+            "didnt_use_count": 0,
+            "score": source.confidence,
+            "scope_agents": list(source.scope_agents),
+            "updated_at": _next_updated_at(source.updated_at),
+        }
+    )
+    storage.write_entry(new_path, repaired, memory_dir=memory_dir)
+    existing_ids.add(new_id)
+    return new_path, repaired
+
+
+def _prepare_duplicate_group(
+    entry_id: str,
+    copies: list[tuple[Path, MemoryEntry]],
+    canonical: tuple[Path, MemoryEntry],
+    repair_context: _DuplicateRepairContext,
+) -> tuple[str, tuple[str, ...], list[Path]]:
+    canonical_path, canonical_entry = canonical
+    duplicate_paths = [path for path, _ in copies if path != canonical_path]
+    error_paths = _relative_paths(repair_context.memory_dir, [path for path, _ in copies])
+    try:
+        for old_path, old_entry in copies:
+            if old_path == canonical_path or old_entry == canonical_entry:
+                continue
+
+            marked_title = f"[Recovered duplicate ID {entry_id}] {old_entry.title}"
+            repair_copy = _find_reusable_repair_copy(
+                entry_id,
+                old_entry,
+                marked_title,
+                repair_context.candidates,
+                repair_context.used_candidate_paths,
+            )
+            if repair_copy is None:
+                repair_copy = _write_repair_copy(
+                    repair_context.memory_dir,
+                    old_entry,
+                    marked_title,
+                    repair_context.existing_ids,
+                )
+                repair_context.candidates.append(repair_copy)
+
+            repair_context.used_candidate_paths.add(repair_copy[0])
+            _LOGGER.warning(
+                "Repaired duplicate UUID %s from %s as %s",
+                entry_id,
+                old_path.relative_to(repair_context.memory_dir).as_posix(),
+                repair_copy[1].id,
+            )
+    except Exception as error:
+        raise DuplicateEntryError(entry_id, error_paths) from error
+    return entry_id, error_paths, duplicate_paths
+
+
+def _prepare_duplicate_repairs(
+    memory_dir: Path,
+    entries_by_id: dict[str, list[tuple[Path, MemoryEntry]]],
+) -> list[tuple[str, tuple[str, ...], list[Path]]]:
+    canonical_copies = {
+        entry_id: _select_canonical_copy(memory_dir, entry_id, copies) for entry_id, copies in entries_by_id.items()
+    }
+    scheduled_deletions = {
+        path
+        for entry_id, copies in entries_by_id.items()
+        for path, _ in copies
+        if path != canonical_copies[entry_id][0]
+    }
+    repair_context = _DuplicateRepairContext(
+        memory_dir=memory_dir,
+        candidates=[
+            (path, entry)
+            for copies in entries_by_id.values()
+            for path, entry in copies
+            if entry.state == MemoryState.PENDING and path not in scheduled_deletions
+        ],
+        used_candidate_paths=set(),
+        existing_ids=set(entries_by_id),
+    )
+    plans: list[tuple[str, tuple[str, ...], list[Path]]] = []
+    for entry_id, copies in entries_by_id.items():
+        if len(copies) < _DUPLICATE_COPY_THRESHOLD:
+            continue
+        plans.append(
+            _prepare_duplicate_group(
+                entry_id,
+                copies,
+                canonical_copies[entry_id],
+                repair_context,
+            )
+        )
+    return plans
+
+
+def _delete_duplicate_sources(
+    memory_dir: Path,
+    plans: list[tuple[str, tuple[str, ...], list[Path]]],
+) -> None:
+    for entry_id, error_paths, duplicate_paths in plans:
+        for path in duplicate_paths:
+            try:
+                storage.delete_entry(path, memory_dir=memory_dir)
+            except Exception as error:
+                raise DuplicateEntryError(entry_id, error_paths) from error
+
+
+def repair_duplicate_ids(memory_dir: Path | str) -> None:
+    """Repair duplicate IDs; callers must hold writer_lock for ``memory_dir``."""
+    directory = Path(memory_dir)
+    _, entries_by_id = _read_entries_by_id(directory)
+    if not any(len(copies) >= _DUPLICATE_COPY_THRESHOLD for copies in entries_by_id.values()):
+        return
+    plans = _prepare_duplicate_repairs(directory, entries_by_id)
+    _delete_duplicate_sources(directory, plans)
 
 
 def compute_score(confidence: float, outstanding_count: int, unremarkable_count: int) -> float:
@@ -70,40 +302,67 @@ class AgentDeleteResult(TypedDict):
     scopes_updated: int
 
 
-class MtimeScanCache:
-    """Track directory mtime so callers can skip unnecessary reparsing."""
+class _StatSignatureCache:
+    """Track entry-file metadata so unchanged stores skip unnecessary reparsing."""
 
     def __init__(self, memory_dir: Path) -> None:
         self._memory_dir = memory_dir
-        self._last_mtime_ns: int | None = None
+        self._last_signature: tuple[tuple[str, int, int, int], ...] | None = None
 
     def has_changed(self) -> bool:
-        """Return True on first call and when directory mtime changes."""
-        current = self._memory_dir.stat().st_mtime_ns
-        if self._last_mtime_ns is None:
-            self._last_mtime_ns = current
-            return True
-        if current != self._last_mtime_ns:
-            self._last_mtime_ns = current
-            return True
-        return False
+        """Return True on first call or when an entry-file signature changes."""
+        current = self._current_signature()
+        if current == self._last_signature:
+            return False
+        self._last_signature = current
+        return True
 
     def invalidate(self) -> None:
         """Force the next change check to request a reload."""
-        self._last_mtime_ns = None
+        self._last_signature = None
+
+    def _current_signature(self) -> tuple[tuple[str, int, int, int], ...]:
+        signature: list[tuple[str, int, int, int]] = []
+        with os.scandir(self._memory_dir) as entries:
+            for entry in entries:
+                if not entry.name.endswith(".md"):
+                    continue
+                try:
+                    metadata = entry.stat(follow_symlinks=False)
+                except FileNotFoundError:
+                    continue
+                signature.append((entry.name, metadata.st_ino, metadata.st_size, metadata.st_mtime_ns))
+        return tuple(sorted(signature))
 
 
 class MemoryEngine:
     """Orchestrate markdown storage with state machine and OCC enforcement."""
 
-    def __init__(self, memory_dir: Path | str = ".owlbear/memory") -> None:
+    def __init__(
+        self,
+        memory_dir: Path | str = ".owlbear/memory",
+        *,
+        writer_lock_timeout: float = 30.0,
+    ) -> None:
         self._memory_dir = Path(memory_dir)
         self._memory_dir.mkdir(parents=True, exist_ok=True)
-        self._cache = MtimeScanCache(self._memory_dir)
+        self._cache = _StatSignatureCache(self._memory_dir)
         self._entries: list[MemoryEntry] = []
         self._id_to_path: dict[str, Path] = {}
         self._lock = RLock()
+        self._writer_lock_timeout = writer_lock_timeout
         self.parse_errors = 0
+
+    @contextmanager
+    def _writer(self) -> Iterator[None]:
+        with writer_lock(self._memory_dir, timeout=self._writer_lock_timeout), self._lock:
+            try:
+                repair_duplicate_ids(self._memory_dir)
+                self._load_from_disk()
+            except Exception:
+                self._cache.invalidate()
+                raise
+            yield
 
     def load(self) -> list[MemoryEntry]:
         """Parse memory files from disk, skipping malformed files leniently."""
@@ -115,39 +374,28 @@ class MemoryEngine:
                 raise
 
     def _load(self) -> list[MemoryEntry]:
-        self.parse_errors = 0
+        return self._load_from_disk()
+
+    def _load_from_disk(self) -> list[MemoryEntry]:
+        self.parse_errors, entries_by_id = _read_entries_by_id(self._memory_dir)
         by_id: dict[str, MemoryEntry] = {}
         id_to_path: dict[str, Path] = {}
 
-        for file_path in sorted(self._memory_dir.glob("*.md")):
-            entry = storage.read_entry(file_path)
-            if entry is None:
-                self.parse_errors += 1
-                continue
-
-            current = by_id.get(entry.id)
-            if current is None:
-                by_id[entry.id] = entry
-                id_to_path[entry.id] = file_path
-                continue
-
-            if self._parse_iso_datetime(entry.updated_at) > self._parse_iso_datetime(current.updated_at):
-                _LOGGER.warning("Duplicate UUID %s found in %s; keeping later updated_at", entry.id, file_path)
-                by_id[entry.id] = entry
-                id_to_path[entry.id] = file_path
-            else:
-                _LOGGER.warning(
-                    "Duplicate UUID %s found in %s; keeping existing later updated_at",
-                    entry.id,
-                    file_path,
-                )
+        for entry_id, copies in entries_by_id.items():
+            canonical_path, canonical_entry = _select_canonical_copy(self._memory_dir, entry_id, copies)
+            by_id[entry_id] = canonical_entry
+            id_to_path[entry_id] = canonical_path
+            if len(copies) > 1:
+                for path, _ in copies:
+                    if path != canonical_path:
+                        _LOGGER.warning("Duplicate UUID %s found in %s", entry_id, path)
 
         self._entries = list(by_id.values())
         self._id_to_path = id_to_path
         return list(self._entries)
 
     def get_entries(self) -> list[MemoryEntry]:
-        """Return cached entries, reparsing only when directory mtime changes."""
+        """Return cached entries, reparsing only when an entry-file signature changes."""
         with self._lock:
             if self._cache.has_changed():
                 try:
@@ -169,7 +417,7 @@ class MemoryEngine:
 
     def purge(self, min_age_days: int = 30) -> PurgeResult:
         """Best-effort remove age-eligible deleted entries."""
-        with self._lock:
+        with self._writer():
             eligible, too_recent = self._eligible_deleted(min_age_days)
             purged = 0
             failed = 0
@@ -218,7 +466,7 @@ class MemoryEngine:
 
     def approve(self, entry_id: str, expected_updated_at: str) -> MemoryEntry:
         """Transition curated entry to approved after OCC check."""
-        with self._lock:
+        with self._writer():
             entry = self.get_entry(entry_id)
             self._validate_occ(entry, expected_updated_at)
 
@@ -226,7 +474,7 @@ class MemoryEngine:
                 msg = f"approve() not allowed from state {entry.state}"
                 raise TransitionError(msg)
 
-            now = self._now_iso()
+            now = self._now_iso(entry.updated_at)
             updated = entry.model_copy(
                 update={
                     "state": MemoryState.APPROVED,
@@ -238,7 +486,7 @@ class MemoryEngine:
 
     def resolve(self, entry_id: str, expected_updated_at: str) -> MemoryEntry:
         """Transition contested/disputed/stale entry to approved after OCC check."""
-        with self._lock:
+        with self._writer():
             entry = self.get_entry(entry_id)
             self._validate_occ(entry, expected_updated_at)
 
@@ -246,7 +494,7 @@ class MemoryEngine:
                 msg = f"resolve() not allowed from state {entry.state}"
                 raise TransitionError(msg)
 
-            now = self._now_iso()
+            now = self._now_iso(entry.updated_at)
             updated = entry.model_copy(
                 update={
                     "state": MemoryState.APPROVED,
@@ -260,20 +508,25 @@ class MemoryEngine:
 
     def try_stale_transition(self, entry: MemoryEntry) -> MemoryEntry:
         """Transition eligible entries to stale when slot-efficiency predicate fires."""
-        with self._lock:
+        expected_updated_at = entry.updated_at
+        with self._writer():
+            entry = self.get_entry(entry.id)
+            self._validate_occ(entry, expected_updated_at)
             if not check_slot_efficiency(entry):
                 return entry
 
             if entry.state not in {MemoryState.APPROVED, MemoryState.CURATED, MemoryState.CONTESTED}:
                 return entry
 
-            updated = entry.model_copy(update={"state": MemoryState.STALE, "updated_at": self._now_iso()})
+            updated = entry.model_copy(
+                update={"state": MemoryState.STALE, "updated_at": self._now_iso(entry.updated_at)}
+            )
             _LOGGER.info("Auto-transitioned entry %s to stale via slot-efficiency", entry.id)
             return self._write_updated_entry(updated)
 
     def edit(self, entry_id: str, fields: EditPayload, expected_updated_at: str) -> MemoryEntry:
         """Apply field updates with state-machine and OCC constraints."""
-        with self._lock:
+        with self._writer():
             entry = self.get_entry(entry_id)
             self._validate_occ(entry, expected_updated_at)
 
@@ -295,7 +548,7 @@ class MemoryEngine:
                     data[key] = fields[key]  # type: ignore[literal-required]
             data["state"] = target_state
             data["approved_at"] = approved_at
-            data["updated_at"] = self._now_iso()
+            data["updated_at"] = self._now_iso(entry.updated_at)
             if "confidence" in fields:
                 data["score"] = compute_score(
                     fields["confidence"],
@@ -308,7 +561,7 @@ class MemoryEngine:
 
     def delete(self, entry_id: str, expected_updated_at: str) -> MemoryEntry:
         """Hard-delete pending entries; soft-delete curated/approved entries."""
-        with self._lock:
+        with self._writer():
             entry = self.get_entry(entry_id)
             self._validate_occ(entry, expected_updated_at)
 
@@ -327,7 +580,9 @@ class MemoryEngine:
                 self._entries = [current for current in self._entries if current.id != entry.id]
                 return entry
 
-            updated = entry.model_copy(update={"state": MemoryState.DELETED, "updated_at": self._now_iso()})
+            updated = entry.model_copy(
+                update={"state": MemoryState.DELETED, "updated_at": self._now_iso(entry.updated_at)}
+            )
             return self._write_updated_entry(updated)
 
     def rename_agent(self, old_name: str, new_name: str) -> AgentRenameResult:
@@ -336,7 +591,7 @@ class MemoryEngine:
             msg = "old_name and new_name must be distinct non-empty agent names"
             raise ValidationError(msg)
 
-        with self._lock:
+        with self._writer():
             originals = self.get_entries()
             updated_entries: list[MemoryEntry] = []
             sources_updated = 0
@@ -356,7 +611,7 @@ class MemoryEngine:
                             **entry.model_dump(),
                             "source_agent": source_agent,
                             "scope_agents": scope_agents,
-                            "updated_at": self._now_iso(),
+                            "updated_at": self._now_iso(entry.updated_at),
                         }
                     )
                 )
@@ -369,36 +624,56 @@ class MemoryEngine:
             )
 
     def delete_agent(self, agent: str) -> AgentDeleteResult:
-        """Remove an agent from scopes while preserving historical provenance."""
+        """Remove an agent from scopes, preserving reviewed orphans as tombstones."""
         if not agent.strip():
             msg = "agent must not be empty"
             raise ValidationError(msg)
 
-        with self._lock:
+        with self._writer():
             originals = self.get_entries()
             updated_entries: list[MemoryEntry] = []
             deleted_entries: list[MemoryEntry] = []
+            soft_deleted = 0
+            scopes_updated = 0
             for entry in originals:
                 if agent not in entry.scope_agents:
                     continue
                 scope_agents = [name for name in entry.scope_agents if name != agent]
                 if not scope_agents:
-                    deleted_entries.append(entry)
+                    if entry.state == MemoryState.PENDING:
+                        deleted_entries.append(entry)
+                        continue
+
+                    if entry.state == MemoryState.DELETED:
+                        scopes_updated += 1
+                    else:
+                        soft_deleted += 1
+                    updated_entries.append(
+                        MemoryEntry.model_validate(
+                            {
+                                **entry.model_dump(),
+                                "state": MemoryState.DELETED,
+                                "scope_agents": scope_agents,
+                                "updated_at": self._now_iso(entry.updated_at),
+                            }
+                        )
+                    )
                     continue
                 updated_entries.append(
                     MemoryEntry.model_validate(
                         {
                             **entry.model_dump(),
                             "scope_agents": scope_agents,
-                            "updated_at": self._now_iso(),
+                            "updated_at": self._now_iso(entry.updated_at),
                         }
                     )
                 )
+                scopes_updated += 1
 
             self._write_agent_lifecycle_changes(originals, updated_entries, deleted_entries)
             return AgentDeleteResult(
-                entries_deleted=len(deleted_entries),
-                scopes_updated=len(updated_entries),
+                entries_deleted=len(deleted_entries) + soft_deleted,
+                scopes_updated=scopes_updated,
             )
 
     def record_factually_wrong(
@@ -408,7 +683,7 @@ class MemoryEngine:
         expected_updated_at: str | None = None,
     ) -> MemoryEntry:
         """Record a factually-wrong assessment via contested/disputed confirmation cycle."""
-        with self._lock:
+        with self._writer():
             entry = self.get_entry(entry_id)
 
             if expected_updated_at is not None:
@@ -424,7 +699,7 @@ class MemoryEngine:
                         "state": MemoryState.CONTESTED,
                         "contested_by_task": task_id,
                         "approved_at": None,
-                        "updated_at": self._now_iso(),
+                        "updated_at": self._now_iso(entry.updated_at),
                     }
                 )
                 return self._write_updated_entry(updated)
@@ -438,7 +713,7 @@ class MemoryEngine:
                     update={
                         "state": updated_state,
                         "contested_by_task": None if updated_state == MemoryState.DISPUTED else task_id,
-                        "updated_at": self._now_iso(),
+                        "updated_at": self._now_iso(entry.updated_at),
                     }
                 )
                 return self._write_updated_entry(updated)
@@ -453,7 +728,7 @@ class MemoryEngine:
         expected_updated_at: str | None = None,
     ) -> MemoryEntry:
         """Record counter-based assessments and recompute score."""
-        with self._lock:
+        with self._writer():
             entry = self.get_entry(entry_id)
 
             if expected_updated_at is not None:
@@ -483,7 +758,7 @@ class MemoryEngine:
                     "unremarkable_count": unremarkable_count,
                     "didnt_use_count": didnt_use_count,
                     "score": compute_score(entry.confidence, outstanding_count, unremarkable_count),
-                    "updated_at": self._now_iso(),
+                    "updated_at": self._now_iso(entry.updated_at),
                 }
             )
             updated = self._write_updated_entry(updated)
@@ -503,7 +778,7 @@ class MemoryEngine:
         scope_agents: list[str],
     ) -> MemoryEntry:
         """Create, persist, and return a new pending memory entry."""
-        with self._lock:
+        with self._writer():
             now = self._now_iso()
             entry = MemoryEntry(
                 id=str(uuid4()),
@@ -679,8 +954,13 @@ class MemoryEngine:
                 return
         self._entries.append(entry)
 
-    def _now_iso(self) -> str:
-        return datetime.now(UTC).isoformat()
+    def _now_iso(self, previous_updated_at: str | None = None) -> str:
+        now = datetime.now(UTC)
+        if previous_updated_at is not None:
+            previous = datetime.fromisoformat(previous_updated_at)
+            if now <= previous:
+                now = previous + timedelta(microseconds=1)
+        return now.isoformat()
 
     def _parse_iso_datetime(self, value: str) -> datetime:
         return datetime.fromisoformat(value)

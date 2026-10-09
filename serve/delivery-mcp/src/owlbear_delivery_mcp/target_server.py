@@ -13,6 +13,7 @@ from typing import Annotated, Never, cast, get_args, get_origin, get_type_hints
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
+from mcp.server.mcpserver.utilities.func_metadata import FuncMetadata
 from mcp.types import ToolAnnotations
 from pydantic import BaseModel, BeforeValidator, ConfigDict, TypeAdapter, ValidationError, create_model
 
@@ -21,6 +22,7 @@ from owlbear_delivery.change_workspace import (
     ChangeExternalHeadPromotionReceipt,
     ChangeTargetSyncAbortReceipt,
     ChangeTargetSyncReceipt,
+    OutOfBandHeadRecoveryReceipt,
     PublicationBaselineRecoveryReceipt,
 )
 from owlbear_delivery.completed_history import CompletedHistoryError
@@ -29,30 +31,55 @@ from owlbear_delivery.delivery_runtime import (
     AdministrativeDeliveryMove,
     AdministrativeDeliveryMovePreview,
     AdministrativeDeliveryMoveResult,
+    DeliveryAcceptanceEvidenceError,
+    DeliveryEvidenceGap,
+    DeliveryObservationReceipt,
     DeliveryPlanCandidate,
-    DeliveryRequest,
-    DeliveryResultCandidate,
-    OutcomeAuthorityBinding,
+    DeliveryReviewReceipt,
 )
+from owlbear_delivery.design_package import DesignPackageResult
 from owlbear_delivery.diagnostics import classify_delivery_failure
 from owlbear_delivery.draft_pull_request import MarkChangePullRequestReady
+from owlbear_delivery.finalization_reports import FinalizationReport, FinalizerSettlement, ReportFinalizationFailure
 from owlbear_delivery.portfolio_application import (
+    DeliveryAnswer,
+    DeliveryAnswerResult,
+    DeliveryChangeIntent,
+    DeliveryChangeIntentResult,
     DeliveryChangePublicationSupersessionReceipt,
+    DeliveryChangeView,
     DeliveryChangeWorktreeCleanup,
     DeliveryChangeWorktreeRecovery,
+    DeliveryContinuationRequest,
+    DeliveryContinuationResult,
+    DeliveryDesignPut,
+    DeliveryEngineActionResult,
+    DeliveryFinalizationContext,
     DeliveryOperatorContext,
+    DeliveryQuarantinedSnapshotRepairProposal,
+    DeliveryQuarantinedSnapshotRepairReceipt,
+    DeliveryReadiness,
+    DeliveryResultSubmission,
+    DeliveryResultSubmissionResult,
+    DeliveryStateSnapshotRepairReceipt,
+    DeliveryStrandedFrontierRepairReceipt,
     DeliveryTargetSyncRepairReceipt,
+    DeliveryUnavailableChangeView,
+    ExecuteDeliveryChangeAction,
     PortfolioApplication,
 )
 from owlbear_delivery.portfolio_operating import DeliveryHealthView
 from owlbear_delivery_mcp.target_models import (
-    AbandonChangeParams,
-    AbandonChangeRequest,
+    AcquireActionsParams,
+    AcquireActionsRequest,
+    AcquireChangeActionRequest,
     AdministrativeMoveParams,
     AdministrativeMovePreviewResponse,
     AdministrativeMoveRequest,
     AdministrativeMoveResponse,
     AdmitDeliveryChangeRequest,
+    AnswerParams,
+    AnswerRequest,
     ChangeExternalHeadAdoptionResponse,
     ChangeExternalHeadPromotionResponse,
     ChangeParams,
@@ -70,22 +97,22 @@ from owlbear_delivery_mcp.target_models import (
     CleanupAbandonedTargetSyncRequest,
     CleanupCompletedChangeParams,
     CleanupCompletedChangeRequest,
-    ClearBlockParams,
-    ClearBlockRequest,
-    ClearedDeliveryBlockResponse,
     CompletedPageParams,
     CompletedPageRequest,
     CreateDesignSessionParams,
     CreateDesignSessionRequest,
-    DeferChangeParams,
-    DeferChangeRequest,
+    DeliveryAnswerResponse,
     DeliveryHealthResponse,
     DeliveryOperatorContextResponse,
     DeliveryPlanPublication,
     DeliveryPublicationSupersessionResponse,
-    DeliveryResultPublication,
+    DeliveryStateSnapshotRepairResponse,
+    DerivedEvidenceReceiptsResponse,
+    DeriveEvidenceReceiptsParams,
+    DeriveEvidenceReceiptsRequest,
     EmptyParams,
     EmptyRequest,
+    ExecuteChangeActionRequest,
     ExternalHeadAdoptionParams,
     ExternalHeadAdoptionRequest,
     ExternalHeadPromotionParams,
@@ -95,32 +122,55 @@ from owlbear_delivery_mcp.target_models import (
     MarkChangeReadyRequest,
     OperatorContextParams,
     OperatorContextRequest,
+    OutOfBandHeadRecoveryResponse,
     PreviewAdministrativeMoveParams,
     PreviewAdministrativeMoveRequest,
     PublishDeliveryPlanParams,
     PublishDeliveryPlanRequest,
-    PublishDeliveryResultParams,
-    PublishDeliveryResultRequest,
+    PutDesignParams,
+    PutDesignRequest,
+    PutDesignResponse,
+    QuarantinedSnapshotRepairProposalResponse,
+    QuarantinedSnapshotRepairResponse,
     RecoverChangeWorktreeParams,
     RecoverChangeWorktreeRequest,
+    RecoverClaimParams,
+    RecoverClaimRequest,
+    RecoverOutOfBandHeadParams,
+    RecoverOutOfBandHeadRequest,
     RecoverPublicationBaselineParams,
     RecoverPublicationBaselineRequest,
+    ReleaseStuckWorkerParams,
+    ReleaseStuckWorkerRequest,
+    RepairChangeParams,
+    RepairChangeRequest,
     RepairClaimContextParams,
     RepairClaimContextRequest,
+    RepairDeliveryStateSnapshotParams,
+    RepairDeliveryStateSnapshotRequest,
+    RepairQuarantinedDeliveryStateSnapshotParams,
+    RepairQuarantinedDeliveryStateSnapshotRequest,
+    RepairStrandedFrontierParams,
+    RepairStrandedFrontierRequest,
     RepairTargetSyncPublicationParams,
     RepairTargetSyncPublicationRequest,
-    ResolveChangeDispositionParams,
-    ResolveChangeDispositionRequest,
-    ResolvedDeliveryRequestResponse,
-    ResolveRequestParams,
-    ResolveRequestRequest,
+    ReportFinalizationFailureParams,
     RetainedChangeWorktreeResponse,
     ReviseDesignSessionParams,
     ReviseDesignSessionRequest,
     SearchCompletedParams,
     SearchCompletedRequest,
+    SetChangeIntentParams,
+    SetChangeIntentRequest,
+    SetChangeIntentResponse,
+    SettleWorkerInvocationParams,
+    SettleWorkerInvocationRequest,
     ShowCompletedParams,
     ShowCompletedRequest,
+    StrandedFrontierRepairResponse,
+    SubmitResultParams,
+    SubmitResultRequest,
+    SubmitResultResponse,
     SupersedePublicationParams,
     SupersedePublicationRequest,
     TargetDiagnostic,
@@ -145,28 +195,42 @@ _ACQUIRE = ToolAnnotations(read_only_hint=False, idempotent_hint=False, destruct
 
 DELIVERY_OPERATION_NAMES = (
     "create_design_session",
+    "put_design",
     "read_design_session",
     "revise_design_session",
     "publish_design_checkpoint",
     "derive_delivery_contract",
     "admit_delivery_change",
+    "admit_change",
     "list_work_items",
+    "list_changes",
+    "get_change",
+    "answer",
+    "set_change_intent",
     "delivery_health",
+    "propose_quarantined_delivery_state_snapshot_repair",
+    "repair_delivery_state_snapshot",
+    "repair_quarantined_delivery_state_snapshot",
+    "repair_stranded_frontier",
+    "recover_out_of_band_head",
     "repair_target_sync_publication",
     "list_retained_change_worktrees",
     "show_work_item",
     "show_work_item_view",
     "show_operator_context",
-    "resolve_request",
-    "clear_block",
+    "repair",
     "preview_administrative_move",
     "administrative_move",
-    "acquire_frontier_work",
+    "acquire_actions",
+    "acquire_change_action",
+    "execute_change_action",
     "show_plan_context",
     "show_build_context",
     "show_finalization_context",
+    "derive_evidence_receipts",
+    "report_finalization_failure",
     "publish_delivery_plan",
-    "publish_delivery_result",
+    "submit_result",
     "finalize_change",
     "mark_change_ready",
     "prepare_review_repair",
@@ -180,16 +244,14 @@ DELIVERY_OPERATION_NAMES = (
     "supersede_publication",
     "observe_change_publication_checks",
     "observe_acceptance",
-    "resolve_change_disposition",
-    "defer_change",
-    "resume_change",
-    "abandon_change",
     "cleanup_abandoned_change_worktree",
     "cleanup_abandoned_change_worktree_after_target_sync_discard",
     "cleanup_completed_change_worktree",
     "recover_change_worktree",
     "recover_publication_baseline",
     "transition_delivery",
+    "settle_worker_invocation",
+    "release_stuck_worker",
     "recover_claim",
     "recover_integration_repair_claim",
     "show_integration_attention",
@@ -202,7 +264,10 @@ _DELIVERY_READS = frozenset(
         "read_design_session",
         "derive_delivery_contract",
         "list_work_items",
+        "list_changes",
+        "get_change",
         "delivery_health",
+        "propose_quarantined_delivery_state_snapshot_repair",
         "list_retained_change_worktrees",
         "show_work_item",
         "show_work_item_view",
@@ -211,6 +276,7 @@ _DELIVERY_READS = frozenset(
         "show_plan_context",
         "show_build_context",
         "show_finalization_context",
+        "derive_evidence_receipts",
         "show_integration_attention",
         "observe_change_publication_checks",
         "list_completed_changes",
@@ -218,12 +284,12 @@ _DELIVERY_READS = frozenset(
         "show_completed_change",
     }
 )
-_DELIVERY_NON_IDEMPOTENT_WRITES = frozenset({"resolve_request", "clear_block", "administrative_move"})
+_DELIVERY_NON_IDEMPOTENT_WRITES = frozenset({"administrative_move", "repair", "set_change_intent"})
 DELIVERY_OPERATION_ANNOTATIONS = {
     name: _READ
     if name in _DELIVERY_READS
     else _ACQUIRE
-    if name == "acquire_frontier_work"
+    if name in {"acquire_actions", "acquire_change_action"}
     else _CLEANUP
     if name
     in {
@@ -292,6 +358,24 @@ class TargetMCPAdapter:
             ),
         )
 
+    async def put_design(self, request: PutDesignRequest) -> PutDesignResponse:
+        """Create or CAS-revise one authored Design package."""
+        params = self._validate(PutDesignParams, request)
+        result = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.put_design(
+                DeliveryDesignPut(
+                    change_id=params.change_id,
+                    intent_bytes=params.intent_bytes,
+                    design_bytes=params.design_bytes,
+                    expected_package_id=params.expected_package_id,
+                )
+            ),
+            DesignPackageResult,
+        )
+        return PutDesignResponse.from_result(result)
+
     async def read_design_session(self, request: ChangeRequest) -> dict[str, object]:
         """Read one verified authored Design session and its current identity."""
         params = self._validate(ChangeParams, request)
@@ -334,16 +418,184 @@ class TargetMCPAdapter:
             lambda: self._application.admit_delivery_change(params),
         )
 
+    async def admit_change(self, request: AdmitDeliveryChangeRequest) -> dict[str, object]:
+        """Admit one exact approved Design version as executable Delivery authority."""
+        params = self._validate(DeliveryAdmissionRequest, request)
+        return await asyncio.to_thread(
+            self._call,
+            params,
+            lambda: self._application.admit_change(params),
+        )
+
     async def list_work_items(self, request: EmptyRequest) -> list[object]:
         """List bounded work-item projections."""
         params = self._validate(EmptyParams, request)
         return self._call(params, self._application.list_work_items)
+
+    async def list_changes(self, request: EmptyRequest) -> dict[str, object]:
+        """Return grouped Change state and operating guidance."""
+        params = self._validate(EmptyParams, request)
+        return await asyncio.to_thread(self._call, params, self._application.list_changes)
+
+    async def get_change(self, request: ChangeRequest) -> dict[str, object]:
+        """Return one coherent Change detail, health, and repair projection."""
+        params = self._validate(ChangeParams, request)
+        view = await asyncio.to_thread(
+            self._call_adapter,
+            params,
+            lambda: self._application.get_change(params.change_id),
+            TypeAdapter(DeliveryChangeView | DeliveryUnavailableChangeView),
+        )
+        return self._serialize(view)
+
+    async def answer(self, request: AnswerRequest) -> DeliveryAnswerResponse:
+        """Apply one version-bound answer to a retained Delivery request."""
+        params = self._validate(AnswerParams, request)
+        result = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.answer(
+                DeliveryAnswer(
+                    change_id=params.change_id,
+                    kind=params.kind,
+                    request_id=params.request_id,
+                    resolution=params.resolution,
+                    expected_frontier_digest=params.expected_frontier_digest,
+                    outcome_id=params.outcome_id,
+                    block_id=params.block_id,
+                    operator_note=params.operator_note,
+                    locators=params.locators,
+                    expected_disposition_id=params.expected_disposition_id,
+                )
+            ),
+            DeliveryAnswerResult,
+        )
+        return DeliveryAnswerResponse(
+            change_id=params.change_id,
+            kind=result.kind,
+            request=result.request,
+            binding=result.binding,
+            disposition=result.disposition,
+            frontier_digest=result.frontier_digest,
+        )
+
+    async def set_change_intent(self, request: SetChangeIntentRequest) -> SetChangeIntentResponse:
+        """Apply one version-bound pause, resume, or abandon intent; Pause under custody drains first."""
+        params = self._validate(SetChangeIntentParams, request)
+        result = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.set_change_intent(
+                DeliveryChangeIntent(
+                    change_id=params.change_id,
+                    kind=params.kind,
+                    expected_frontier_digest=params.expected_frontier_digest,
+                    reason=params.reason,
+                )
+            ),
+            DeliveryChangeIntentResult,
+        )
+        return SetChangeIntentResponse.from_result(result)
 
     async def delivery_health(self, request: EmptyRequest) -> DeliveryHealthResponse:
         """Return bounded diagnostics for quarantined or unavailable Delivery state."""
         params = self._validate(EmptyParams, request)
         health = self._call_model(params, self._application.delivery_health, DeliveryHealthView)
         return DeliveryHealthResponse.from_view(health)
+
+    async def propose_quarantined_delivery_state_snapshot_repair(
+        self,
+        request: ChangeRequest,
+    ) -> QuarantinedSnapshotRepairProposalResponse:
+        """Return exact fences for one known quarantined remote snapshot."""
+        params = self._validate(ChangeParams, request)
+        proposal = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.propose_quarantined_delivery_state_snapshot_repair(params.change_id),
+            DeliveryQuarantinedSnapshotRepairProposal,
+        )
+        return QuarantinedSnapshotRepairProposalResponse.from_proposal(proposal)
+
+    async def repair_delivery_state_snapshot(
+        self,
+        request: RepairDeliveryStateSnapshotRequest,
+    ) -> DeliveryStateSnapshotRepairResponse:
+        """Repair one exact confirmed local frontier successor over remote state."""
+        params = self._validate(RepairDeliveryStateSnapshotParams, request)
+        receipt = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.repair_delivery_state_snapshot(
+                params.change_id,
+                params.operation_id,
+                confirmed_repair=params.confirmed_repair,
+            ),
+            DeliveryStateSnapshotRepairReceipt,
+        )
+        return DeliveryStateSnapshotRepairResponse.from_receipt(receipt)
+
+    async def repair_quarantined_delivery_state_snapshot(
+        self,
+        request: RepairQuarantinedDeliveryStateSnapshotRequest,
+    ) -> QuarantinedSnapshotRepairResponse:
+        """Repair one exact confirmed quarantined remote Delivery snapshot."""
+        params = self._validate(RepairQuarantinedDeliveryStateSnapshotParams, request)
+        receipt = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.repair_quarantined_delivery_state_snapshot(
+                params.change_id,
+                params.operation_id,
+                confirmed_repair=params.confirmed_repair,
+                expected_remote_head=params.expected_remote_head,
+                expected_snapshot_digest=params.expected_snapshot_digest,
+                expected_diagnostic_code=params.expected_diagnostic_code,
+            ),
+            DeliveryQuarantinedSnapshotRepairReceipt,
+        )
+        return QuarantinedSnapshotRepairResponse.from_receipt(receipt)
+
+    async def repair_stranded_frontier(
+        self,
+        request: RepairStrandedFrontierRequest,
+    ) -> StrandedFrontierRepairResponse:
+        """Repair one exact confirmed missing request-provenance defect."""
+        params = self._validate(RepairStrandedFrontierParams, request)
+        receipt = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.repair_stranded_frontier(
+                params.change_id,
+                params.request_id,
+                params.expected_frontier_digest,
+                params.operation_id,
+                confirmed_repair=params.confirmed_repair,
+            ),
+            DeliveryStrandedFrontierRepairReceipt,
+        )
+        return StrandedFrontierRepairResponse.from_receipt(receipt)
+
+    async def recover_out_of_band_head(
+        self,
+        request: RecoverOutOfBandHeadRequest,
+    ) -> OutOfBandHeadRecoveryResponse:
+        """Preserve one out-of-band Change head and restore reviewed authority."""
+        params = self._validate(RecoverOutOfBandHeadParams, request)
+        receipt = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.recover_out_of_band_head(
+                params.change_id,
+                params.expected_reviewed_head,
+                params.expected_remote_head,
+                params.expected_branch_head,
+                params.operation_id,
+                confirmed_recovery=params.confirmed_recovery,
+            ),
+            OutOfBandHeadRecoveryReceipt,
+        )
+        return OutOfBandHeadRecoveryResponse.from_receipt(receipt)
 
     async def repair_target_sync_publication(
         self,
@@ -400,43 +652,17 @@ class TargetMCPAdapter:
         )
         return DeliveryOperatorContextResponse.from_context(context)
 
-    async def resolve_request(self, request: ResolveRequestRequest) -> ResolvedDeliveryRequestResponse:
-        """Persist one user-owned answer for a retained Delivery request."""
-        params = self._validate(ResolveRequestParams, request)
-        resolved = await asyncio.to_thread(
-            self._call_model,
+    async def repair(self, request: RepairChangeRequest) -> dict[str, object]:
+        """Diagnose or apply one high-level repair proposal."""
+        params = self._validate(RepairChangeParams, request)
+        return await asyncio.to_thread(
+            self._call,
             params,
-            lambda: self._application.resolve_request(
+            lambda: self._application.repair(
                 params.change_id,
-                params.request_id,
-                params.resolution,
+                params.proposal_id,
+                confirmed_lost=params.confirmed_lost,
             ),
-            DeliveryRequest,
-        )
-        return ResolvedDeliveryRequestResponse(change_id=params.change_id, request=resolved)
-
-    async def clear_block(self, request: ClearBlockRequest) -> ClearedDeliveryBlockResponse:
-        """Clear one requestless block with explicit operator evidence."""
-        params = self._validate(ClearBlockParams, request)
-        binding = await asyncio.to_thread(
-            self._call_model,
-            params,
-            lambda: self._application.clear_block(
-                params.change_id,
-                params.outcome_id,
-                params.block_id,
-                params.operator_note,
-                params.locators,
-            ),
-            OutcomeAuthorityBinding,
-        )
-        if binding.block is None:
-            message = "unsupported cleared block output: missing block"
-            raise TypeError(message)
-        return ClearedDeliveryBlockResponse(
-            change_id=params.change_id,
-            outcome_id=binding.outcome_id,
-            block=binding.block,
         )
 
     async def preview_administrative_move(
@@ -477,19 +703,40 @@ class TargetMCPAdapter:
         )
         return AdministrativeMoveResponse.from_result(result)
 
-    async def acquire_frontier_work(self, request: EmptyRequest) -> dict[str, object]:
-        """Acquire currently available frontier work.
-
-        Cancelling a handler only cancels the transport wait; an in-flight mutation
-        may finish, so callers must reconcile durable state before retrying rather
-        than blindly replaying it.
-        """
-        params = self._validate(EmptyParams, request)
+    async def acquire_actions(self, request: AcquireActionsRequest) -> dict[str, object]:
+        """Acquire one fenced action when selection is supplied, otherwise a portfolio batch."""
+        params = self._validate(AcquireActionsParams, request)
         return await asyncio.to_thread(
             self._call,
             params,
-            self._application.acquire_frontier_work,
+            (
+                self._application.acquire_actions
+                if params.selection is None
+                else lambda: self._application.acquire_actions(params.selection)
+            ),
         )
+
+    async def acquire_change_action(self, request: AcquireChangeActionRequest) -> dict[str, object]:
+        """Acquire at most one supported action for the exact selected Change."""
+        params = self._validate(DeliveryContinuationRequest, request)
+        result = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.acquire_change_action(params),
+            DeliveryContinuationResult,
+        )
+        return self._serialize(result)
+
+    async def execute_change_action(self, request: ExecuteChangeActionRequest) -> dict[str, object]:
+        """Invoke only the engine-owned operation already acquired for this Change."""
+        params = self._validate(ExecuteDeliveryChangeAction, request)
+        result = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.execute_change_action(params),
+            DeliveryEngineActionResult,
+        )
+        return self._serialize(result)
 
     async def show_plan_context(self, request: ClaimContextRequest) -> dict[str, object]:
         """Show bounded Planning context for one claim."""
@@ -504,7 +751,36 @@ class TargetMCPAdapter:
     async def show_finalization_context(self, request: ChangeRequest) -> dict[str, object]:
         """Show engine-resolved context for one exact Change finalization."""
         params = self._validate(ChangeParams, request)
-        return self._call(params, lambda: self._application.show_finalization_context(params.change_id))
+        context = self._call_model(
+            params,
+            lambda: self._application.show_finalization_context(params.change_id),
+            DeliveryFinalizationContext,
+        )
+        return self._serialize(context)
+
+    async def derive_evidence_receipts(self, request: DeriveEvidenceReceiptsRequest) -> DerivedEvidenceReceiptsResponse:
+        """Return canonical observation and review receipts without reading or changing Delivery state."""
+        params = self._validate(DeriveEvidenceReceiptsParams, request)
+        try:
+            return DerivedEvidenceReceiptsResponse(
+                observations=tuple(DeliveryObservationReceipt.create(item) for item in params.observations),
+                review=DeliveryReviewReceipt.create(params.review) if params.review is not None else None,
+            )
+        except ValidationError as exc:
+            self._raise("ERR_TARGET_PARAM_VALIDATION", str(exc), self._authority(params), retry_safe=False)
+
+    async def report_finalization_failure(self, request: ReportFinalizationFailureParams) -> dict[str, object]:
+        """Persist one bounded finalization diagnostic without granting proof authority."""
+        params = self._validate(ReportFinalizationFailureParams, request)
+        result = await asyncio.to_thread(
+            self._call_adapter,
+            params,
+            lambda: self._application.report_finalization_failure(
+                ReportFinalizationFailure.model_validate(params.model_dump())
+            ),
+            TypeAdapter(FinalizationReport | DeliveryReadiness),
+        )
+        return self._serialize(result)
 
     async def publish_delivery_plan(self, request: PublishDeliveryPlanRequest) -> DeliveryPlanPublication:
         """Publish one claim-scoped Delivery plan."""
@@ -516,15 +792,23 @@ class TargetMCPAdapter:
         )
         return DeliveryPlanPublication.from_candidate(candidate)
 
-    async def publish_delivery_result(self, request: PublishDeliveryResultRequest) -> DeliveryResultPublication:
-        """Publish one claim-scoped Delivery result."""
-        params = self._validate(PublishDeliveryResultParams, request)
-        candidate = self._call_model(
+    async def submit_result(self, request: SubmitResultRequest) -> SubmitResultResponse:
+        """Publish and promote one exact Builder result as one claim-bound operation."""
+        params = self._validate(SubmitResultParams, request)
+        result = await asyncio.to_thread(
+            self._call_model,
             params,
-            lambda: self._application.publish_delivery_result(params.change_id, params.result),
-            DeliveryResultCandidate,
+            lambda: self._application.submit_result(
+                DeliveryResultSubmission(
+                    change_id=params.change_id,
+                    outcome_id=params.outcome_id,
+                    claim_id=params.claim_id,
+                    result=params.result,
+                )
+            ),
+            DeliveryResultSubmissionResult,
         )
-        return DeliveryResultPublication.from_candidate(candidate)
+        return SubmitResultResponse.from_result(result)
 
     async def finalize_change(self, request: FinalizeDeliveryChangeRequest) -> dict[str, object]:
         """Finalize one exact clean reviewed Change head with persisted evidence."""
@@ -692,51 +976,12 @@ class TargetMCPAdapter:
         )
 
     async def observe_acceptance(self, request: ChangeRequest) -> dict[str, object]:
-        """Complete one Change from engine-derived merged pull-request evidence."""
+        """Observe acceptance once (Check again): one read per call, never a budget reset; it never merges."""
         params = self._validate(ChangeParams, request)
         return await asyncio.to_thread(
             self._call,
             params,
             lambda: self._application.observe_acceptance(params.change_id),
-        )
-
-    async def resolve_change_disposition(self, request: ResolveChangeDispositionRequest) -> dict[str, object]:
-        """Resolve one exact Change attention record without restoring provider authority."""
-        params = self._validate(ResolveChangeDispositionParams, request)
-        return await asyncio.to_thread(
-            self._call,
-            params,
-            lambda: self._application.resolve_change_disposition(
-                params.change_id,
-                params.expected_disposition_id,
-            ),
-        )
-
-    async def defer_change(self, request: DeferChangeRequest) -> dict[str, object]:
-        """Retain one Change while pausing its claimable frontier."""
-        params = self._validate(DeferChangeParams, request)
-        return await asyncio.to_thread(
-            self._call,
-            params,
-            lambda: self._application.defer_change(params.change_id, params.reason),
-        )
-
-    async def resume_change(self, request: ChangeRequest) -> dict[str, object]:
-        """Resume one deferred Change from its retained prior state."""
-        params = self._validate(ChangeParams, request)
-        return await asyncio.to_thread(
-            self._call,
-            params,
-            lambda: self._application.resume_change(params.change_id),
-        )
-
-    async def abandon_change(self, request: AbandonChangeRequest) -> dict[str, object]:
-        """Terminate one uncompleted Change by explicit user disposition."""
-        params = self._validate(AbandonChangeParams, request)
-        return await asyncio.to_thread(
-            self._call,
-            params,
-            lambda: self._application.abandon_change(params.change_id, params.reason),
         )
 
     async def cleanup_abandoned_change_worktree(
@@ -832,16 +1077,62 @@ class TargetMCPAdapter:
         params = self._validate(TransitionDeliveryParams, request)
         return self._call(params, lambda: self._application.transition_delivery(params.change_id, params.transition))
 
-    async def recover_claim(self, request: ClaimContextRequest) -> dict[str, object]:
-        """Recover one exact failed Delivery claim."""
-        params = self._validate(ClaimContextParams, request)
-        return self._call(params, lambda: self._application.recover_claim(**params.model_dump()))
+    async def settle_worker_invocation(self, request: SettleWorkerInvocationRequest) -> dict[str, object]:
+        """Settle one exact ended Planner or Builder invocation, or a normally returned Finalizer invocation."""
+        params = self._validate(SettleWorkerInvocationParams, request)
+        if isinstance(params.settlement, FinalizerSettlement):
+            return self._call(
+                params,
+                lambda: self._application.settle_finalizer_invocation(params.settlement),
+            )
+        return self._call(
+            params,
+            lambda: self._application.settle_worker_invocation(
+                params.settlement,
+                host_id=params.host_id,
+                session_id=params.session_id,
+            ),
+        )
+
+    async def release_stuck_worker(self, request: ReleaseStuckWorkerRequest) -> dict[str, object]:
+        """Settle one user-confirmed stopped worker as a failed attempt once nothing still uses its worktree.
+
+        Use only while the claim's readiness is ``running``; Delivery settles a ``worker-stall-wait`` claim itself.
+        Omit ``outcome_id`` to release the Change's Finalizer attempt. A live process using the worktree, or a
+        worktree write in the last 30 seconds, fails with ``ERR_DELIVERY_WORKER_ACTIVE`` and changes nothing;
+        ``retry_after`` is given only for the write case. Replaying a completed release returns its result.
+        """
+        params = self._validate(ReleaseStuckWorkerParams, request)
+        return await asyncio.to_thread(
+            self._call,
+            params,
+            lambda: self._application.release_stuck_worker(
+                params.change_id,
+                params.outcome_id,
+                params.attempt_id,
+                params.claim_id,
+            ),
+        )
+
+    async def recover_claim(self, request: RecoverClaimRequest) -> dict[str, object]:
+        """Request exact recovery; caller confirmation cannot establish worker exclusion."""
+        params = self._validate(RecoverClaimParams, request)
+        return self._call(
+            params,
+            lambda: self._application.recover_claim(
+                params.change_id,
+                params.outcome_id,
+                params.attempt_id,
+                params.claim_id,
+                confirmed_lost=params.confirmed_lost,
+            ),
+        )
 
     async def recover_integration_repair_claim(
         self,
         request: RepairClaimContextRequest,
     ) -> dict[str, object]:
-        """Recover one exact failed Integration repair claim."""
+        """Request legacy Integration recovery without treating identity as exclusion evidence."""
         params = self._validate(RepairClaimContextParams, request)
         return self._call(
             params,
@@ -903,6 +1194,19 @@ class TargetMCPAdapter:
             raise TypeError(message)
         return value
 
+    def _call_adapter[ModelT: BaseModel](
+        self,
+        params: BaseModel,
+        operation: Callable[[], object],
+        adapter: TypeAdapter[ModelT],
+    ) -> ModelT:
+        value = self._call_raw(params, operation)
+        try:
+            return adapter.validate_python(value)
+        except ValidationError as exc:
+            message = f"unsupported structured output: {exc}"
+            raise TypeError(message) from exc
+
     def _call(self, params: BaseModel, operation: Callable[[], object]) -> StructuredOutput:
         return self._serialize(self._call_raw(params, operation))
 
@@ -916,7 +1220,8 @@ class TargetMCPAdapter:
             authority = self._authority(params)
             if isinstance(exc, CompletedHistoryError):
                 authority = exc.diagnostic.change_id or exc.diagnostic.completion_id or authority
-            self._raise(failure.code, failure.detail, authority, retry_safe=failure.retry_safe)
+            gaps = exc.gaps if isinstance(exc, DeliveryAcceptanceEvidenceError) else None
+            self._raise(failure.code, failure.detail, authority, retry_safe=failure.retry_safe, gaps=gaps)
 
     @staticmethod
     def _serialize(value: object) -> StructuredOutput:
@@ -956,12 +1261,20 @@ class TargetMCPAdapter:
         return None
 
     @staticmethod
-    def _raise(code: str, detail: str, authority: str, *, retry_safe: bool) -> Never:
+    def _raise(
+        code: str,
+        detail: str,
+        authority: str,
+        *,
+        retry_safe: bool,
+        gaps: tuple[DeliveryEvidenceGap, ...] | None = None,
+    ) -> Never:
         diagnostic = TargetDiagnostic(
             code=code,
             detail=detail,
             current_authority_identity=authority,
             retry_safe=retry_safe,
+            gaps=gaps,
         )
         raise ToolError(diagnostic.model_dump_json())
 
@@ -986,19 +1299,56 @@ def register_target_tools(server: MCPServer, adapter: TargetMCPAdapter) -> None:
 
 
 def _install_strict_argument_model(server: MCPServer, name: str) -> None:
-    """Replace MCP's permissive argument model with an extra-forbid variant."""
+    """Install strict arguments and bounded diagnostics at MCP's validation boundary."""
     tool_manager = getattr(server, "_tool_manager", None)
     tool = tool_manager.get_tool(name) if tool_manager is not None else None
     if tool is None:
         message = f"Delivery MCP operation {name} was not registered"
         raise RuntimeError(message)
+    metadata = tool.fn_metadata
     argument_model = create_model(
         f"Strict{name.title().replace('_', '')}Arguments",
-        __base__=tool.fn_metadata.arg_model,
+        __base__=metadata.arg_model,
         __config__=ConfigDict(extra="forbid"),
     )
-    tool.fn_metadata.arg_model = argument_model
+    tool.fn_metadata = _TargetToolMetadata(
+        arg_model=argument_model,
+        output_schema=metadata.output_schema,
+        output_model=metadata.output_model,
+        wrap_output=metadata.wrap_output,
+    )
     tool.parameters = argument_model.model_json_schema(by_alias=True)
+
+
+class _TargetArgumentValidationError(ValidationError):
+    """Carry a value-free diagnostic through MCP's expected validation-error path."""
+
+    def __str__(self) -> str:
+        return TargetDiagnostic(
+            code="ERR_TARGET_PARAM_VALIDATION",
+            detail="Invalid tool arguments. Check the tool input schema.",
+            current_authority_identity="portfolio",
+            retry_safe=False,
+        ).model_dump_json()
+
+
+class _TargetToolMetadata(FuncMetadata):
+    """Sanitize input validation without altering MCP's result conversion."""
+
+    def validate_arguments(self, arguments_to_validate: dict[str, object]) -> dict[str, object]:
+        try:
+            return super().validate_arguments(arguments_to_validate)
+        except ValidationError:
+            title = "Tool arguments"
+            raise _TargetArgumentValidationError.from_exception_data(title, []) from None
+
+
+def _validate_flat_model[ModelT: BaseModel](model: type[ModelT], payload: dict[str, object]) -> ModelT:
+    try:
+        return model.model_validate(payload)
+    except ValidationError:
+        diagnostic = _TargetArgumentValidationError.from_exception_data("Tool arguments", [])
+        raise ToolError(str(diagnostic)) from None
 
 
 def _flatten_tool(adapter: TargetMCPAdapter, name: str) -> Callable[..., object]:
@@ -1045,7 +1395,7 @@ def _flatten_tool(adapter: TargetMCPAdapter, name: str) -> Callable[..., object]
         )
 
     async def flat_tool(**payload: object) -> object:
-        params = request_annotation.model_validate(payload)
+        params = _validate_flat_model(request_annotation, payload)
         return await method(params)
 
     flat_tool.__name__ = name

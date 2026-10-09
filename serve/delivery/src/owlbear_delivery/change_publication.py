@@ -22,6 +22,12 @@ from owlbear_delivery.publication_provider import (
     PublicationProviderError,
     PublicationProviderFailureCode,
 )
+from owlbear_delivery.remote_git import (
+    RemoteGitFailed,
+    RemoteGitTimeout,
+    RemoteGitWriteUnknown,
+    run_remote_git,
+)
 from owlbear_delivery.storage_io import atomic_write, locked_roots
 
 if TYPE_CHECKING:
@@ -33,12 +39,16 @@ if TYPE_CHECKING:
         PortfolioCoordinator,
         PublicationLock,
     )
+    from owlbear_delivery.remote_git import RemoteGitKind
 
 _COMMIT_PATTERN = re.compile(r"[0-9a-f]{40}")
 _GIT_TIMEOUT_SECONDS = 30.0
+_REMOTE_GIT_KINDS: dict[str, RemoteGitKind] = {"fetch": "read", "ls-remote": "read", "push": "write"}
 _LS_REMOTE_MISSING = 2
 _PUBLICATION_LEASE_DURATION = timedelta(minutes=10)
 _REMOTE_REF_FIELD_COUNT = 2
+# Hosting providers report their own 5xx failures through a "[remote rejected]" push status.
+_PROVIDER_SERVER_ERRORS = ("internal server error", "bad gateway", "service unavailable", "gateway timeout")
 
 
 class _PublicationModel(BaseModel):
@@ -157,7 +167,7 @@ class ChangeBranchPublisher:
             try:
                 try:
                     return self._publish(request, attempt, lock)
-                except subprocess.TimeoutExpired as exc:
+                except (subprocess.TimeoutExpired, RemoteGitTimeout) as exc:
                     code = (
                         PublicationProviderFailureCode.RESPONSE_UNKNOWN
                         if attempt.write_started
@@ -170,7 +180,7 @@ class ChangeBranchPublisher:
                         retry_safe=not attempt.write_started,
                     )
                     raise error from exc
-                except (OSError, ValueError) as exc:
+                except (OSError, ValueError, RemoteGitFailed) as exc:
                     error = PublicationProviderError(
                         PublicationProviderFailureCode.UNAVAILABLE,
                         request.operation_id,
@@ -186,6 +196,14 @@ class ChangeBranchPublisher:
                 ):
                     self._release_reserved_request(request, attempt.owner_id, lock)
 
+    def observe_remote_head(self, change_id: str) -> str | None:
+        """Read the current remote Change branch head without reserving publication."""
+        request = PublishChangeBranch(
+            change_id=change_id,
+            operation_id=f"observe-remote-{hashlib.sha256(change_id.encode()).hexdigest()[:16]}",
+        )
+        return self._remote_head(f"owlbear/change/{change_id}", request)
+
     def supersede(self, request: SupersedeChangeBranch) -> ChangeBranchSupersessionReceipt:
         """Publish one successor branch without rewriting the predecessor publication."""
         branch_request = PublishChangeBranch(
@@ -197,7 +215,7 @@ class ChangeBranchPublisher:
         with self._publication_lock(branch_request) as lock:
             try:
                 return self._supersede(request, branch_request, attempt, lock)
-            except subprocess.TimeoutExpired as exc:
+            except (subprocess.TimeoutExpired, RemoteGitTimeout) as exc:
                 code = (
                     PublicationProviderFailureCode.RESPONSE_UNKNOWN
                     if attempt.write_started
@@ -210,7 +228,7 @@ class ChangeBranchPublisher:
                     retry_safe=not attempt.write_started,
                 )
                 raise error from exc
-            except (OSError, ValueError) as exc:
+            except (OSError, ValueError, RemoteGitFailed) as exc:
                 error = PublicationProviderError(
                     PublicationProviderFailureCode.UNAVAILABLE,
                     request.operation_id,
@@ -604,7 +622,7 @@ class ChangeBranchPublisher:
                 self._remote,
                 f"{operation.published_head}:{destination}",
             )
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired, RemoteGitWriteUnknown:
             self._reconcile_failed_push(operation, request, attempt, timed_out=True, result=None)
             return
         if result.returncode == 0:
@@ -652,6 +670,13 @@ class ChangeBranchPublisher:
                 PublicationProviderFailureCode.RATE_LIMITED,
                 request,
                 "Change branch push was rate limited",
+                retry_safe=True,
+            )
+        if any(marker in diagnostics for marker in _PROVIDER_SERVER_ERRORS):
+            self._failure(
+                PublicationProviderFailureCode.UNAVAILABLE,
+                request,
+                "Change branch push hit a provider server error without changing the remote",
                 retry_safe=True,
             )
         if "pre-receive hook declined" in diagnostics or "remote rejected" in diagnostics:
@@ -724,6 +749,21 @@ class ChangeBranchPublisher:
         return commit
 
     def _run_git(self, *arguments: str) -> subprocess.CompletedProcess[bytes]:
+        kind = _REMOTE_GIT_KINDS.get(arguments[0])
+        if kind is not None:
+            try:
+                return run_remote_git(
+                    self._repository,
+                    arguments,
+                    kind=kind,
+                    timeout=_GIT_TIMEOUT_SECONDS,
+                    environment=self._git_environment,
+                )
+            except RemoteGitWriteUnknown as exc:
+                if exc.result is None:
+                    raise
+                # The caller reads the remote back before classifying or retrying a failed push.
+                return exc.result
         return subprocess.run(  # noqa: S603 - fixed Git executable and code-owned argument vectors.
             (self._git_executable, "-C", str(self._repository), *arguments),
             check=False,

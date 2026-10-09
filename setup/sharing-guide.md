@@ -14,12 +14,7 @@ This means sharing owlbear with a teammate means they clone **both**:
 1. The **owlbear** repository (shared tooling)
 2. The **project** repository (their actual project)
 
-Both repos must sit in a sibling layout for the relative paths to work. On Windows,
-they must also be on the same drive.
-
-> **Windows limitation:** owlbear and the project must be on the **same drive**.
-> Cross-drive relative paths raise a `ValueError` in `init.py` before any files are
-> written. macOS and Linux are not affected.
+Both repos must sit in a sibling layout for the relative paths to work.
 
 ---
 
@@ -62,10 +57,6 @@ code .
 **Expected result:** VS Code opens `~/Dev/my-project` with the shared OwlBear customization roots
 available.
 
-> **Windows:** use `C:\Dev\...` paths and backslashes:
-> `uv run --project ..\owlbear python ..\owlbear\setup\init.py`.
-> owlbear and the project must be on the same drive.
-
 Setup infers the GitHub `owner/name` identity from the default `origin` remote. If the project uses a
 different remote or has no inferable GitHub URL, pass `--remote NAME --github-repository OWNER/NAME`.
 
@@ -89,19 +80,12 @@ Memory, and Ideas state scoped to the project.
 
 ## Platform Notes
 
-### macOS and Linux
+OwlBear supports macOS and Linux (Ubuntu). Windows is unsupported.
 
 No platform-specific configuration is required:
 
 - **Hooks** — all 5 hooks are Python scripts (`allow-stances-only.py`, `deny-src-writes.py`, `deny-writes.py`, `lint-changed.py`, `session-context.py`) executed by VS Code's extension host — no shell dependency
-- **MCP servers** — started via `uv run`, which works identically on macOS, Linux, and Windows
-
-### Windows
-
-- owlbear and the project must be on the **same drive** (e.g., both on `C:\`)
-- Use backslashes in the bootstrap command: `uv run --project ..\owlbear python ..\owlbear\setup\init.py`
-
----
+- **MCP servers** — started via `uv run` on macOS and Linux
 
 ## What's Shared vs. Project-Local
 
@@ -171,10 +155,9 @@ organization agent registry as a complement to the local installation.
 
 | Symptom | Resolution |
 | --- | --- |
-| `ValueError` during `init.py` | Ensure owlbear and project are on the same Windows drive |
 | Agents missing after setup | Run `init.py` again; check that `.vscode/settings.json` was created and contains `chat.agentFilesLocations` pointing to the owlbear installation |
 | Cockpit command not found in project | Run `uv run --project ../owlbear cockpit` from the project root instead of plain `uv run cockpit` |
 | Cockpit opens the wrong workspace | Launch from the project root or pass the intended project directory to `uv --directory` |
 | Hook updates not taking effect after `git pull` | Re-run `init.py`; use `--replace-hooks` if local hook files differ and you want the seeded versions restored |
 | `uv` not found | Install uv using the [official installation guide](https://docs.astral.sh/uv/getting-started/installation/) |
-| Different owlbear checkout states between teammates | Use the same branch (`main` for consumer use or `dev` for OwlBear development), then `git pull` and rerun `init.py` to refresh copied runtime files |
+| Different owlbear checkout states between teammates | Use the same branch (`main` for consumer use or `dev` for OwlBear development), then run `/upgrade-delivery` in each project ([Upgrading OwlBear](operating-owlbear.md#upgrading-owlbear)) and rerun `init.py` to refresh copied runtime files |

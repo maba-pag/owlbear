@@ -13,27 +13,26 @@ tools, or your GitHub workflow.
 
 ## What it looks like
 
-You work in Copilot Chat. Four commands cover the normal loop:
+You work in Copilot Chat. Three prompts cover the normal loop:
 
 ```text
 /ideate                       Refine a rough idea, one question at a time.
 /design                       Turn it into an approved work package. You approve it.
-/orchestrate                  Run the work that is currently eligible: plan, build, review, repeat.
-/finalize-change my-change    Collect evidence and open the pull request.
+/continue-change my-change    Plan, build, review, and publish it. Run it again after any stop.
 ```
 
 ```mermaid
 flowchart LR
     A[Rough idea] -->|/ideate| B[Refined outcome]
     B -->|/design| C[Approved change]
-    C -->|/orchestrate| D[Plan, build, review]
-    D -->|/finalize-change| E[Pull request]
-    E -->|you merge| F[Completed history]
+    C -->|/continue-change| D[Plan, build, review, pull request]
+    D -->|you approve the merge| E[Completed history]
 ```
 
-Between those commands, a browser view called Cockpit shows what is in flight, what is waiting on
-you, and what already completed. When a step needs a decision or gets stuck, it stops and asks
-there instead of guessing.
+While a chat runs, a browser view called Cockpit shows what is in flight, what is waiting on you, and
+what already completed. When a step needs a decision or gets stuck, it stops and asks there instead
+of guessing. When the pull request is ready, you approve the merge in Cockpit or merge it in GitHub.
+A few other prompts handle exceptions; Cockpit or the chat names them when they are needed.
 
 ![Cockpit delivery portfolio: one change in Design, portfolio counters for work that needs you, is
 blocked, running, or ready, and the exact next command to run](share/diagrams/cockpit-delivery.png)
@@ -59,14 +58,14 @@ Probably not a fit when:
 
 | Requirement | Why |
 | --- | --- |
-| **Python 3.12.14+** | Runs the OwlBear tool servers. The checkout defaults to Python 3.14.7. |
+| **Python 3.14.8 or later in the 3.14 series** | Runs the OwlBear tool servers. |
+| **macOS or Linux (Ubuntu)** | Supported operating systems. |
 | [uv](https://docs.astral.sh/uv/) | Installs dependencies and launches the tool servers |
 | VS Code + GitHub Copilot extension | The editor and the agents |
 | [GitHub CLI](https://cli.github.com/) | Opens and updates pull requests |
 | Git, and a project with a GitHub `origin` | The change is published to that repository |
 
-Run `gh auth login` once, and check `gh auth status` before your first change. On Windows, the
-OwlBear checkout and your project must be on the same drive.
+Run `gh auth login` once, and check `gh auth status` before your first change. Windows is unsupported.
 
 Expect agent-scale Copilot usage. A single change runs many chat requests across design, planning,
 building, and review.
@@ -111,8 +110,7 @@ uv run --project ../owlbear python ../owlbear/setup/init.py \
   --github-repository OWNER/PROJECT
 ```
 
-Windows PowerShell uses the same steps with backslash paths. The
-[setup guide](setup/setup-guide.md#quick-start) has the copy-paste variant and every option.
+See the [setup guide](setup/setup-guide.md#quick-start) for the copy-paste variant and every option.
 
 ## Verify
 
@@ -130,9 +128,11 @@ and [Troubleshooting](setup/setup-guide.md#troubleshooting).
 Prove the installation with one small outcome:
 
 1. `/ideate` — describe what you want. Answer the questions it asks.
-2. `/design` — review the proposed work and approve it. Note the Change ID it returns, for example
-   `improve-search`.
-3. `/orchestrate` — the work is planned, built, and reviewed in order. Repeat until it stops.
+2. `/design` — review the proposed work and approve it. It returns the Change ID and the prompt to
+   run next, for example `/continue-change improve-search`.
+3. `/continue-change improve-search` — the work is planned, built, reviewed, and published as a
+   pull request, in order. When the chat stops to wait for you, act in Cockpit, then run the same
+   prompt again.
 4. Open Cockpit from the project root to watch progress, or to answer whatever it is waiting for:
 
    ```shell
@@ -140,8 +140,8 @@ Prove the installation with one small outcome:
    ```
 
    It opens at `http://127.0.0.1:8420` and reads the project you launched it from.
-5. `/finalize-change improve-search` — OwlBear opens the pull request. You review and merge it on
-   GitHub.
+5. When Cockpit shows **Ready to merge**, review the pull request and approve it with
+   **Approve merge**, or merge it in GitHub yourself.
 
 The full walkthrough with expected output at each step is in
 [First successful workflow](setup/setup-guide.md#first-successful-workflow).
@@ -175,9 +175,10 @@ See [Uninstalling](setup/operating-owlbear.md#uninstalling) for exactly what is 
 ## Status and expectations
 
 OwlBear has no numbered releases. The rolling `main` branch is the supported consumer surface.
-`git pull` in the OwlBear checkout updates the shared agents, skills, instructions, and prompts
-immediately; rerun setup when you also want refreshed copied files. For a reproducible workspace,
-pin the checkout to a reviewed commit and record that commit with your project.
+To update, run `/upgrade-delivery` in each project instead of a plain `git pull`: it moves the
+OwlBear checkout forward, migrates the project's Delivery state and checks every Change. Then rerun
+setup to refresh copied files. To stay on a reviewed commit, name it: `/upgrade-delivery <commit>`.
+See [Upgrading OwlBear](setup/operating-owlbear.md#upgrading-owlbear).
 
 | Surface | Status | What it does |
 | --- | --- | --- |
@@ -192,7 +193,7 @@ pin the checkout to a reviewed commit and record that commit with your project.
 | You want to... | Go to |
 | --- | --- |
 | Every setup option, verification detail, and fix | [Setup guide](setup/setup-guide.md) |
-| Daily operation, recovery, uninstall, and customization | [Operating OwlBear](setup/operating-owlbear.md) |
+| Daily operation, upgrades, recovery, uninstall, and customization | [Operating OwlBear](setup/operating-owlbear.md) |
 | Share one installation with teammates | [Sharing guide](setup/sharing-guide.md) |
 | Understand the packages and tool servers | [Package map](serve/README.md) |
 | Configure the Browser capability | [Browser MCP guide](serve/browser-mcp/README.md) |

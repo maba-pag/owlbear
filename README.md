@@ -26,7 +26,8 @@ result through reviewed steps. Cockpit shows the current work and gives a person
 requests, recovery, publication, and completed history.
 
 OwlBear expects VS Code with GitHub Copilot and a Git project with a GitHub repository identity. A
-completed Delivery change becomes a pull request for a person to review and merge.
+completed Delivery change becomes a pull request that a person reviews and either approves for merge
+in Cockpit or merges in GitHub.
 
 The main terms are simple:
 
@@ -38,10 +39,10 @@ The main terms are simple:
 | Change | One approved piece of work tracked from design through review and publication |
 | Cockpit | The browser UI for seeing work and taking human-owned actions |
 
-The normal path is `/ideate` to refine the outcome, `/design` to approve the work package,
-`/orchestrate` to run currently eligible work across the portfolio, and
-`/finalize-change <change-id>` to prepare one reviewed Change for publication. The Delivery engine
-keeps the work ordered and reviewed; you decide when to approve, answer, recover, publish, or merge.
+The normal path is `/ideate` to refine the outcome, `/design` to approve the work package, and
+`/continue-change <change-id>` to plan, build, review, finalize, and publish that one Change; run the
+same prompt again after any stop. The Delivery engine keeps the work ordered and reviewed; you decide
+when to approve, answer, pause, recover, or merge.
 
 Current surface maturity is published on the consumer front door in
 [Status and expectations](README-consumer.md#status-and-expectations). The
@@ -53,13 +54,12 @@ The `dev` branch is the development checkout. The `main` branch is generated fro
 rolling supported consumer branch; do not edit `main` directly. OwlBear has no numbered product
 releases.
 
-Requirements: Python 3.12.14+, [uv](https://docs.astral.sh/uv/), VS Code with GitHub Copilot,
+Requirements: Python 3.14.8 (3.14 series only), [uv](https://docs.astral.sh/uv/), VS Code with GitHub Copilot,
 [GitHub CLI](https://cli.github.com/), and Git. Cockpit frontend development also needs the Node
 version pinned in
 `serve/cockpit/web/.nvmrc`.
 
-The checked-in development runtime remains Python 3.14.7; Python 3.12.14 is the compatibility
-floor.
+The checked-in development runtime is pinned to Python 3.14.8; OwlBear supports the 3.14 series only.
 
 ```shell
 git clone -b dev https://github.com/maba-pag/owlbear.git
@@ -74,6 +74,12 @@ use `uv run dep-sync --all` when you also need optional workspace assets or brow
 Open this checkout directly in VS Code. Its repository settings already load the shared
 `share/` and project-local `.owlbear/` agent, skill, instruction, and prompt roots; do not run
 consumer setup against the OwlBear checkout itself.
+
+This checkout's `owlbear-delivery` server runs a pinned controller release through
+`.owlbear/controller/bin/delivery-mcp`, so new `dev` commits never change running Delivery. It
+fails to start until `uv run delivery-controller install --pin <commit>` installs and pins a
+release; later upgrades use `/upgrade-delivery`. See
+[Pinned controller releases](setup/operating-owlbear.md#pinned-controller-releases).
 
 Run the repository checks:
 

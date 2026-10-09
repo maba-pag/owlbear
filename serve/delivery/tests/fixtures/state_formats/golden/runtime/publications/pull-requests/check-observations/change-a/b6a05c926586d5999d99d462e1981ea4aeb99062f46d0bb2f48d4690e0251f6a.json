@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "change_id": "change-a",
+  "repository": "example/project",
+  "number": 7,
+  "exact_commit": "2d1b42e793db122e3cd8a8f0ec18bbb44058c1c2",
+  "observation_kind": "github-checks",
+  "command_or_procedure": "observe-publication-checks",
+  "observer_or_runner_identity": "github",
+  "observed_at": "2026-10-03T08:42:16.628642Z",
+  "snapshot": {
+    "repository": "example/project",
+    "number": 7,
+    "head_sha": "2d1b42e793db122e3cd8a8f0ec18bbb44058c1c2",
+    "rollup_state": null,
+    "checks": [
+      {
+        "check_id": "check-failure",
+        "kind": "check_run",
+        "name": "unit tests",
+        "head_sha": "2d1b42e793db122e3cd8a8f0ec18bbb44058c1c2",
+        "status": "completed",
+        "conclusion": "provider-added-failure",
+        "required": true,
+        "started_at": null,
+        "completed_at": null,
+        "duration_seconds": null,
+        "details_url": null
+      }
+    ]
+  },
+  "provider_evidence_digest": "b6a05c926586d5999d99d462e1981ea4aeb99062f46d0bb2f48d4690e0251f6a",
+  "observation_id": "a412b546972609ea456cb9c03027ad3c468122dc5f80971fcc4dacecad460a69"
+}

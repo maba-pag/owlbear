@@ -12,17 +12,18 @@ from owlbear_tools.megalinter import MegaLinterImage, megalint
 from owlbear_tools.quality import (
     FixMode,
     _consumer_lint,
+    _run_biome,
     _run_cockpit_html,
     _run_named,
     format_eof,
     format_whitespace,
     lint,
-    lint_full,
-    lint_json,
+    lint_cockpit_biome,
     lint_python,
-    quality_full,
+    quality,
     typecheck_cockpit,
 )
+from owlbear_tools.quality_runtime import _call
 
 _TEST_IMAGE = MegaLinterImage(reference="registry.example/megalinter-main:v-current")
 
@@ -39,25 +40,31 @@ def test_lint_runs_the_normal_local_suite() -> None:
     assert commands == [
         ["pre-commit", "run", "ruff-fix", "--all-files"],
         ["pre-commit", "run", "markdownlint-fix", "--all-files"],
-        [
-            "serve/cockpit/web/node_modules/.bin/eslint",
-            "--config",
-            "eslint-json.config.cjs",
-            "--no-config-lookup",
-            "--no-warn-ignored",
-            "--no-error-on-unmatched-pattern",
-            "**/*.json",
-            "**/*.jsonc",
-        ],
         ["pre-commit", "run", "yamllint", "--all-files"],
         ["pre-commit", "run", "shellcheck", "--all-files"],
         ["pre-commit", "run", "actionlint", "--all-files"],
         ["pre-commit", "run", "editorconfig-checker", "--all-files"],
-        ["pre-commit", "run", "eslint-frontend-fix", "--all-files"],
-        ["pre-commit", "run", "stylelint-frontend-fix", "--all-files"],
+        ["node", "serve/cockpit/web/scripts/run-biome-check.mjs", "check", ".", "--write"],
         ["npm", "run", "lint:html"],
     ]
     assert call.call_args_list[-1].kwargs["cwd"] == Path("serve/cockpit/web")
+
+
+def test_call_bridges_node_ca_to_python_tools(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    ca_path = tmp_path / "atls-root.pem"
+    ca_path.write_text("certificate", encoding="utf-8")
+    monkeypatch.setenv("NODE_EXTRA_CA_CERTS", str(ca_path))
+    monkeypatch.delenv("SSL_CERT_FILE", raising=False)
+    monkeypatch.delenv("SSL_CERT_DIR", raising=False)
+
+    with patch("owlbear_tools.quality_runtime.subprocess.call", return_value=0) as call:
+        assert _call(["editorconfig-checker"]) == 0
+
+    environment = call.call_args.kwargs["env"]
+    assert environment["SSL_CERT_FILE"] == str(ca_path)
+    assert environment["REQUESTS_CA_BUNDLE"] == str(ca_path)
+    assert environment["CURL_CA_BUNDLE"] == str(ca_path)
+    assert environment["PIP_CERT"] == str(ca_path)
 
 
 def test_lint_staged_passes_staged_files_to_every_local_leaf() -> None:
@@ -70,8 +77,11 @@ def test_lint_staged_passes_staged_files_to_every_local_leaf() -> None:
     ):
         lint()
 
-    assert all("--files" in item.args[0] for item in call.call_args_list)
-    assert all("README.md" in item.args[0] for item in call.call_args_list)
+    precommit_commands = [item.args[0] for item in call.call_args_list if item.args[0][0] == "pre-commit"]
+    assert all("--files" in command for command in precommit_commands)
+    assert all("README.md" in command for command in precommit_commands)
+    biome_command = next(item.args[0] for item in call.call_args_list if item.args[0][0] == "node")
+    assert biome_command[2:] == ["check", "--staged", "--no-errors-on-unmatched", "--write"]
 
 
 def test_lint_python_exposes_safe_no_fix_and_unsafe_modes() -> None:
@@ -96,34 +106,40 @@ def test_lint_python_exposes_safe_no_fix_and_unsafe_modes() -> None:
             assert "--all-files" in command
 
 
-def test_lint_json_staged_targets_only_staged_json_files() -> None:
+@pytest.mark.parametrize(
+    ("options", "flags"),
+    [([], ["--write"]), (["--no-fix"], []), (["--unsafe-fix"], ["--write", "--unsafe"])],
+)
+def test_lint_cockpit_biome_forwards_fix_policy(options: list[str], flags: list[str]) -> None:
     with (
-        patch.object(sys, "argv", ["lint-json", "--staged"]),
-        patch(
-            "owlbear_tools.quality._git_paths",
-            return_value=["README.md", "package.json", ".vscode/settings.json", "src/App.tsx"],
-        ),
-        patch("owlbear_tools.quality._call", return_value=0) as call,
+        patch.object(sys, "argv", ["lint-cockpit-biome", *options]),
+        patch("owlbear_tools.quality_runtime.subprocess.call", return_value=0) as call,
         pytest.raises(SystemExit, match="0"),
     ):
-        lint_json()
+        lint_cockpit_biome()
 
     assert call.call_args.args[0] == [
-        "serve/cockpit/web/node_modules/.bin/eslint",
-        "--config",
-        "eslint-json.config.cjs",
-        "--no-config-lookup",
-        "--no-warn-ignored",
-        "--no-error-on-unmatched-pattern",
-        "package.json",
-        ".vscode/settings.json",
+        "node",
+        "serve/cockpit/web/scripts/run-biome-check.mjs",
+        "check",
+        ".",
+        *flags,
     ]
+
+
+@pytest.mark.parametrize("staged", [False, True])
+def test_biome_formatter_preserves_selection_without_lint_fixes(*, staged: bool) -> None:
+    with patch("owlbear_tools.quality._call", return_value=0) as call:
+        assert _run_biome(staged=staged, fix_mode=FixMode.SAFE, format_only=True) == 0
+    selection = ["--staged", "--no-errors-on-unmatched"] if staged else ["."]
+    assert call.call_args.args[0][2:] == ["format", *selection, "--write"]
 
 
 def test_megalint_runs_as_a_direct_workspace_engine() -> None:
     with (
         patch.object(sys, "argv", ["megalint", "--unsafe-fix"]),
         patch("owlbear_tools.megalinter.load_megalinter_image", return_value=_TEST_IMAGE),
+        patch("owlbear_tools.megalinter._acquire_docker_runtime", return_value=("docker", None)),
         patch("owlbear_tools.quality_runtime.subprocess.call", return_value=0) as call,
         pytest.raises(SystemExit, match="0"),
     ):
@@ -133,24 +149,32 @@ def test_megalint_runs_as_a_direct_workspace_engine() -> None:
     assert command[:6] == ["docker", "run", "--rm", "--platform", "linux/amd64", "-v"]
     assert "registry.example/megalinter-main:v-current" in command
     assert "PYTHON_RUFF_ARGUMENTS=--unsafe-fixes" in command
+    assert all(
+        f"{descriptor}_BIOME_ARGUMENTS=--unsafe" in command
+        for descriptor in ("CSS", "JAVASCRIPT", "JSON", "JSX", "TYPESCRIPT")
+    )
+    assert "ACTION_ZIZMOR_COMMAND_REMOVE_ARGUMENTS=--fix" in command
+    assert "ACTION_ZIZMOR_ARGUMENTS=--fix=all" in command
 
 
-def test_lint_full_runs_local_lint_then_megalint() -> None:
+def test_quality_runs_local_lint_then_megalint() -> None:
     with (
-        patch.object(sys, "argv", ["lint-full", "--no-fix"]),
+        patch.object(sys, "argv", ["quality", "--no-fix"]),
         patch("owlbear_tools.quality_runtime.subprocess.call", return_value=0) as call,
         patch("owlbear_tools.megalinter.load_megalinter_image", return_value=_TEST_IMAGE),
+        patch("owlbear_tools.megalinter._acquire_docker_runtime", return_value=("docker", None)),
         pytest.raises(SystemExit, match="0"),
     ):
-        lint_full()
+        quality()
 
     commands = [item.args[0] for item in call.call_args_list]
-    assert commands[0][:3] == ["pre-commit", "run", "ruff-check"]
-    assert commands[-1][-1] == _TEST_IMAGE.reference
-    assert "APPLY_FIXES=none" in commands[-1]
+    assert commands[0][:3] == ["pre-commit", "run", "ruff-format-check"]
+    assert ["pre-commit", "run", "ruff-check"] in [command[:3] for command in commands]
+    megalint_command = next(command for command in commands if _TEST_IMAGE.reference in command)
+    assert "APPLY_FIXES=none" in megalint_command
 
 
-def test_quality_full_executes_todo_last() -> None:
+def test_quality_executes_todo_last() -> None:
     executed: list[str] = []
 
     def record(name: str, **_: object) -> int:
@@ -158,22 +182,21 @@ def test_quality_full_executes_todo_last() -> None:
         return 0
 
     with patch("owlbear_tools.quality._run_leaf", side_effect=record):
-        assert _run_named("quality-full", staged=False, fix_mode=FixMode.SAFE) == 0
+        assert _run_named("quality", staged=False, fix_mode=FixMode.SAFE) == 0
 
     assert executed[-1] == "todo"
     assert executed == [
         "format-python",
+        "format-biome",
         "format-whitespace",
         "format-eof",
         "lint-python",
         "lint-markdown",
-        "lint-json",
         "lint-yaml",
         "lint-shell",
         "lint-actions",
         "lint-editorconfig",
-        "lint-cockpit-code",
-        "lint-cockpit-style",
+        "lint-cockpit-biome",
         "lint-cockpit-html",
         "megalint",
         "typecheck-cockpit",
@@ -341,6 +364,19 @@ def test_text_check_reports_invalid_precommit_exclude(capsys: pytest.CaptureFixt
     assert "Error:" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize(("results", "expected"), [([0, 0], "0"), ([1, 0], "1"), ([0, 1], "1")])
+def test_typecheck_covers_application_and_all_browser_specs(results: list[int], expected: str) -> None:
+    with (
+        patch.object(sys, "argv", ["typecheck-cockpit"]),
+        patch("owlbear_tools.quality._call", side_effect=results) as call,
+        pytest.raises(SystemExit, match=expected),
+    ):
+        typecheck_cockpit()
+    assert call.call_args_list[0].args[0][-1] == "serve/cockpit/web/tsconfig.json"
+    assert call.call_args_list[1].args[0] == ["npm", "run", "typecheck:e2e"]
+    assert call.call_args_list[1].kwargs["cwd"] == Path("serve/cockpit/web")
+
+
 def test_typecheck_reports_missing_runtime(capsys: pytest.CaptureFixture[str]) -> None:
     with (
         patch.object(sys, "argv", ["typecheck-cockpit"]),
@@ -374,7 +410,7 @@ def test_text_check_reports_malformed_precommit_config(capsys: pytest.CaptureFix
     assert "Error: invalid YAML" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("command", [lint, megalint, lint_full, quality_full])
+@pytest.mark.parametrize("command", [lint, megalint, quality])
 def test_unsafe_and_no_fix_are_mutually_exclusive(command: object) -> None:
     with (
         patch.object(sys, "argv", ["command", "--no-fix", "--unsafe-fix"]),

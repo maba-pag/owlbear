@@ -46,12 +46,12 @@ def _read_node_lower_bound(path: Path) -> tuple[int, int, int]:
 
 
 def check_node_declaration(version_file: Path, engines_file: Path) -> None:
-    """Raise when the development Node version is below the declared lower bound."""
+    """Raise when the checked-in Node pin differs from the declared lower bound."""
     actual = _parse_version(version_file.read_text(encoding="utf-8"), str(version_file))
     minimum = _read_node_lower_bound(engines_file)
-    if actual < minimum:
+    if actual != minimum:
         _raise_value_error(
-            f"{version_file} Node version {actual[0]}.{actual[1]}.{actual[2]} is below "
+            f"{version_file} Node version {actual[0]}.{actual[1]}.{actual[2]} does not match "
             f"{engines_file} engines.node lower bound {minimum[0]}.{minimum[1]}.{minimum[2]}"
         )
 

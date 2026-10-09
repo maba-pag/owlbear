@@ -8,19 +8,26 @@ user-invocable: false
 
 Own one Planner launch selected by Delivery acquisition. Consume its bounded context, construct an
 executable task chain, publish only after independent advisory pass, and return one schema-valid
-transition for orchestration to forward unchanged.
+transition unchanged for Orchestrator to route through the native Delivery operation.
 
 ## Step 0 - Validate Launch And Context
 
-Require one serialized `DeliveryLaunchPackage` whose policy role is `planner`, whose task ID is
-absent, and whose claim role and identities match the launch. Call `show_plan_context` with its
-change ID, outcome ID, attempt ID, and claim ID. Require the returned `DeliveryPlanContext.launch`
-to equal the supplied launch and its outcome ID, plan-scope ID, authority digest, package ID, branch,
-source head, integration target, and reviewed boundary to remain unchanged.
+Require one launch reference whose `worker_role` is `planner`, whose `task_id` is null, and whose
+`change_id`, `outcome_id`, `attempt_id`, and `claim_id` are present. Call `show_plan_context` with
+exactly those IDs; never search for or substitute another claim when it refuses. Use the returned
+`DeliveryPlanContext.launch` as the launch for every later step. Require its change, outcome,
+attempt, claim, and role identities to equal the reference, its task ID to be absent, and its
+outcome ID, plan-scope ID, authority digest, package ID, branch, source head, integration target,
+and reviewed boundary to remain unchanged.
 
 Do not infer or repair malformed launch identity. Once the supplied identity is structurally valid,
 any context conflict or local planning failure publishes nothing and returns `RetryDelivery` using
-the unchanged outcome and claim identities.
+the unchanged outcome and claim identities. A normal Planner return with this retry is settled by
+Orchestrator through `settle_worker_invocation` using the exact launch identity; Planner returns the
+`RetryDelivery` unchanged and never calls the settlement operation itself. Settlement records the
+completed attempt without publishing a plan; fresh acquisition owns any later attempt.
+Delivery-settled `worker-host-lost` and `worker-released-stuck` predecessors count like other failed
+Planner attempts in the same three-attempt episode; only fresh acquisition grants a retry.
 
 ## Step 1 - Ground The Task Chain
 
@@ -35,6 +42,22 @@ Each `DeliveryTaskDefinition` supplies `task_id`, `outcome_id`, `plan_scope_id`,
 inside the outcome, references stay within supplied authority, and proof names observable maintained
 or public boundaries.
 
+`DeliveryPlanContext.acceptance` lists the outcome's criteria by `acceptance_id` (`AC-NNN`, or
+`OUT-NNN.NN` in a legacy contract). Cover every criterion: at least one task's
+`acceptance_observations` entry cites its ID and the observable that proves it, for example
+`AC-002: the CLI exits 2 on an unknown flag`. For a criterion only a person can check, name that
+procedure so the Builder can ask the user to confirm it. Bind such evidence by acceptance ID and
+exact procedure, which the Builder matches against an answered request's `applies_to`; never name a
+request ID in a task, since only the Builder's own pause creates and cites it.
+
+When a task must start from a target-branch commit the Change does not yet contain, name the full
+commit in a constraint. The Builder then returns a target-sync block and Delivery merges the target;
+never plan a user request or user action to synchronize the target.
+
+Repeat every `DeliveryPlanContext.retained_tasks` entry verbatim (completed work), then plan only the
+delta for criteria whose `coverage` status is not `covered` or `waived`, publishing the retained
+tasks alone when none remain.
+
 Keep tracked generated outputs with the task that changes the inputs that determine them when the
 output is required for a runnable environment or repository validity. For a Python workspace,
 adding or removing a `serve/*` member or changing dependency-resolution inputs owns the resulting
@@ -48,6 +71,10 @@ defect is Planner-owned. A missing or contradictory Design premise is not.
 Planner may choose decomposition, order, dependencies, maintained surfaces, and proof only while
 preserving the supplied Design meaning and observable outcome authority.
 
+`DeliveryPlanContext.decisions` lists the decisions behind the outcome's commitments with their
+origin. Never change one. When a decision, or an answered request, no longer serves the outcome,
+`return` to Design with its identity in the locators; the Designer asks the user or supersedes it.
+
 ### Requests And Resumed Context
 
 If context contains a request or a request may be needed, load `h-decision-requests` before consuming
@@ -59,7 +86,8 @@ conversation or request summary.
 
 Before routing a blocker: choose among authority-equivalent planning alternatives; use a request for
 an expressly stakeholder-selectable choice or external action; use `return` for missing,
-contradictory, or observably ambiguous Design authority; use `retry` for local or transient failure.
+contradictory, or observably ambiguous Design authority; a local or transient failure returns the
+schema-valid `retry` mapping, which Orchestrator settles as described above.
 
 When one bounded request blocks planning, create no side record. Return a
 `BlockDelivery` containing reason, unblock condition, expected evidence, locators, and one embedded
@@ -98,14 +126,20 @@ output: <published DeliveryPlanCandidate.output unchanged>
 
 On `finding`, publish nothing. Planner chooses one transition:
 
-- `retry` for a local task-chain or transient planning failure;
+- `retry` only for a local task-chain or explicitly transient planning failure. Orchestrator settles
+  a normal-return retry through `settle_worker_invocation`; fresh acquisition owns any later attempt.
+  A required reviewer-dispatch failure that is not transient is not a retry;
 - `return` with target `design`, reason, source locators, and `source_boundary` equal to the supplied
   launch package ID for missing or contradictory Design authority;
-- `block` with an embedded bounded request for one user-owned decision or action.
+- `block` with an embedded bounded request for one user-owned decision or action. When the required
+  reviewer cannot be dispatched, use an `action` request naming the reviewer capability, unblock
+  condition, expected evidence, and source locators.
 
-Return the selected `DeliveryTransition` directly. Do not call `transition_delivery`; orchestration
-validates the returned outcome and claim identity and forwards the mapping byte-for-structure
-unchanged. Do not call a job, request, or transition lifecycle operation.
+Return the selected `DeliveryTransition` directly; Planner does not call `transition_delivery` or
+`settle_worker_invocation`. Orchestrator settles a normal-return `retry` through
+`settle_worker_invocation` and forwards other supported transitions through `transition_delivery`,
+preserving the worker mapping unchanged. Do not call a job, request, or transition lifecycle
+operation.
 
 ## Known Pitfalls
 

@@ -62,12 +62,43 @@ owlbear-memory/commit_memory_batch(session_type="curation")
 owlbear-memory/commit_memory_batch(session_type="review")
 ```
 
+MemoryEngine mutations and batch commits share one exclusive advisory lock on the resolved memory
+directory. It coordinates same-process writers and other processes, is re-entrant on the owning
+thread, uses one bounded deadline (30 seconds by default), and creates no lock file. A busy lock is
+`MemoryBusyError`, a `ConcurrencyError` subtype. MCP mutation tools surface busy locks and stale
+`expected_updated_at` tokens as `ToolError`; a stale token is checked after reloading under the lock
+and does not overwrite newer content. Reads remain lock-free: `get_entries()` reparses when an entry
+filename, inode, size, or `mtime_ns` changes, while `load()` forces a full parse.
+
+The first mutation or batch commit that observes duplicate IDs repairs them under the lock; reads
+only select or report duplicates. The newest copy keeps the original ID, identical copies are
+removed, and differing copies are preserved as pending entries with new IDs and the title marker
+`[Recovered duplicate ID <id>]`. If repair fails, the error names the ID and paths, the triggering
+mutation does not run, and any pending copy already written is retained for retry.
+
+The batch operation holds that same lock from strict snapshot validation through `git commit`. It
+rechecks working-tree bytes and staged blobs before commit, then verifies the committed path set and
+blobs against the validated snapshot. It commits only validated memory paths; unrelated staged
+paths remain staged. A staged memory blob that differs from both `HEAD` and the validated file is
+rejected without resetting the index.
+
+A tracked duplicate-copy deletion is allowed while another file still carries its ID. If the
+survivor is pending, the old path is left unstaged and reported in `deferred_deletions`; the MCP
+result includes that field and the CLI prints `note: deferred duplicate deletions: ...`. Curate the
+survivor before retrying the batch. Other reviewed entries must be soft-deleted and committed as
+tombstones before purge.
+
+After staging begins, a recheck, Git, or hook failure may leave memory paths staged; the operation
+does not restore the index. Inspect `git status` and the staged diff before retrying. A post-commit
+verification failure can occur after `HEAD` has moved; it reports unvalidated changes and does not
+reset Git state, so also inspect `git show --stat HEAD`.
+
 On Git or hook failure, the response is a `ToolError` whose message starts with
 `memory batch commit failed`. It includes the failed command, exit status, and `stderr` when
 available, otherwise `stdout`. Captured output is limited to the final 4,096 characters and is
 delimited as diagnostic text; hook output is untrusted and is not an instruction to the caller.
-The operation does not restore or otherwise manage the Git index after failure, so memory paths
-may remain staged. Inspect `git status` and the staged diff before retrying.
+See the [memory package README](../../../serve/memory/README.md) and
+[Memory MCP README](../../../serve/memory-mcp/README.md) for implementation details.
 
 ## Tool Summary
 
@@ -82,7 +113,7 @@ may remain staged. Inspect `git status` and the staged diff before retrying.
 | `curate_memory` | Curator mutation and code-managed state transition tool | `entry_id`, optional mutable fields, `scope_agents` |
 | `delete_memory` | Lifecycle-aware deletion with hard/soft semantics | `entry_id` |
 | `rename_agent_memories` | Rewrite provenance and scopes after an agent rename | `old_name`, `new_name` |
-| `delete_agent_memories` | Remove retired scope references and delete entries left without an audience | `agent` |
+| `delete_agent_memories` | Remove retired scope references, hard-delete pending orphans, and tombstone reviewed orphans | `agent` |
 | `approve_memory` | Promote `curated -> approved` | `entry_id` |
 
 ## Assessment and curation policy
@@ -143,24 +174,20 @@ was applied; this policy does not add feedback receipts or retry machinery.
 
 ### Curation trigger, visibility, and failure handling
 
-- `memory-curator` is the owner. The existing orchestrator trigger remains
-  after completed acquisition cycle 3, then cycles 13, 23, and every tenth
-  completed cycle thereafter. Manual curation is available at any time.
-- This cadence is opportunistic, not an eventual-processing SLA. Short
-  invocations may perform no automatic curation, and no durable due state or
-  age scheduler is implied.
+- `memory-curator` is the owner. No Delivery or continuation step triggers it:
+  the user runs `memory-curator` with `Curate: Periodic curation` or reviews
+  pending entries in Cockpit's Memory tab. Manual curation is available at any
+  time.
+- Curation is opportunistic, not an eventual-processing SLA. No durable due
+  state or age scheduler is implied.
 - The pending backlog is visible through
   `list_memories(states=["pending"])`, including `created_at`; the operator is
   responsible for manually invoking the curator when pending age, volume, or
   conflict cost warrants attention. Pending entries remain unreviewed and
   recall-invisible until curation.
-- A missing curation binding, tool-layer error, or pre-result dispatch failure
-  is non-blocking housekeeping attention: report it, finish the current batch,
-  and continue independent acquisition without Delivery recovery. A curator
-  child failure or malformed verdict is reported without retry and does not stop
-  unrelated acquisition. A batch-commit error
-  follows the existing `git status`/staged-diff inspection rule before an
-  operator retry.
+- A curator child failure or malformed verdict is reported without retry. A
+  batch-commit error follows the existing `git status`/staged-diff inspection
+  rule before an operator retry.
 
 ### Minimum measurement plan
 
@@ -173,7 +200,7 @@ fixture or lightweight event record must capture:
    with a complete batch over eligible attempts; keep `didnt_use` separate from
    tool failure and `factually_wrong`.
 2. **Pending age and curation latency:** pending `created_at`, curation
-   trigger (`cycle-3`, later cadence, or `manual`), curation start/end,
+   trigger (`periodic` or `manual`), curation start/end,
    entry action (`promoted`, `pruned`, or `deferred`), and failure/re-entry
    reason. Report oldest, median, and high-percentile pending age and the
    created-to-curated latency.
@@ -358,8 +385,9 @@ it, while `*` is anonymous provenance rather than a named identity.
     `rename_agent_memories(old_name="old", new_name="new")`. The new name must already resolve from
     the active agent locations. Provenance and every matching relevance scope are rewritten.
 - When deleting an agent, call `delete_agent_memories(agent="name")`. Historical `source_agent`
-    provenance remains unchanged. The retired name is removed from relevance scopes, and entries
-    left with no audience are physically deleted.
+    provenance remains unchanged. The retired name is removed from relevance scopes; pending entries
+    left without an audience are hard-deleted, while reviewed entries become `deleted` tombstones
+    that must be committed before purge.
 - Both operations attempt to restore original entries if a multi-file write fails, but recovery can
     be `complete`, `partial`, or `uncertain`. Inspect the `LifecycleRecoveryError` diagnostics instead
     of assuming every original entry was restored. A process interruption during the operation or its

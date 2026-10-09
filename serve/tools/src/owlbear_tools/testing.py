@@ -90,7 +90,7 @@ def _root_tests() -> list[Path]:
 def _imported_namespaces(path: Path) -> frozenset[str]:
     try:
         tree = ast.parse(path.read_text(encoding="utf-8"))
-    except (OSError, SyntaxError):
+    except OSError, SyntaxError:
         return frozenset()
     namespaces: set[str] = set()
     for node in ast.walk(tree):
@@ -162,7 +162,10 @@ def _python_scope(path: str) -> list[str] | None:
             elif normalized.startswith(f"{package_prefix}tests/"):
                 candidate = _REPOSITORY_ROOT / normalized
                 if candidate.exists():
-                    scope = [normalized] if candidate.is_file() else _relative_paths(_package_tests(package))
+                    is_test_module = (
+                        candidate.is_file() and candidate.name.startswith("test_") and candidate.suffix == ".py"
+                    )
+                    scope = [normalized] if is_test_module else _relative_paths(_package_tests(package))
         elif normalized.startswith(_DOCS_ONLY_PREFIXES) or Path(normalized).suffix.lower() == ".md":
             scope = []
         else:

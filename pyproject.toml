@@ -20,7 +20,7 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "serve"]
-pythonpath = ["serve/delivery/src", "serve/tools/src"]
+pythonpath = [".", "serve/delivery/src", "serve/tools/src"]
 addopts = """\
 --import-mode=importlib -m 'not e2e and not model' -n auto --dist loadfile \
 -p no:logfire -p no:pytest_logfire\
@@ -39,7 +39,7 @@ markers = [
 ]
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py314"
 line-length = 120
 src = [
   "serve/delivery/src",
@@ -54,6 +54,14 @@ src = [
   "serve/cockpit/src",
   "serve/tools/src",
 ]
+
+# Hooks run under each consumer project's own Python; CI runs these scripts with the runner's python3.
+[tool.ruff.per-file-target-version]
+".owlbear/hooks/*.py" = "py312"
+"seed/.owlbear/hooks/*.py" = "py312"
+".owlbear/scripts/diagrams/*.py" = "py312"
+".github/scripts/*.py" = "py312"
+"serve/tools/src/owlbear_tools/dependency_ci.py" = "py312"
 
 [tool.ruff.lint]
 select = ["ALL"]

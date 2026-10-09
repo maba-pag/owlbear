@@ -14,18 +14,35 @@ applyTo: "**"
   or safety.
 - **No legacy, no backwards compatibility.** Break things to improve them.
 - **Think before acting.** Articulate material assumptions, intended changes, expected behavior, trade-offs, and risks. Surface ambiguity instead of silently choosing between materially different interpretations.
+- **Prior decisions by origin.** A recorded decision is `decided` (the user chose it directly: an
+  `askQuestions` answer, a Cockpit request answer, or the user's own words in a prompt or chat),
+  `approved` (part of a plan, package, or amendment the user approved without being asked about it
+  individually), or `autonomous` (made by an agent or the lead, including anything under "decide
+  yourself"). Ask the user directly about any decision you consider important instead of leaving it
+  inside a plan or package. Only the owner of the artifact that records a decision changes it; other
+  roles route the change to that owner. A `decided` decision changes only after the user re-decides
+  it, shown its record, what changed, and the options. An `approved` or `autonomous` decision may be
+  superseded with the reason recorded and at least one report line; a second reversal of the same
+  decision goes to the user. Classify unlabelled records best-effort: a user-decision label, an
+  answered question or request, or the user's own wording means `decided`; content of an approved
+  collection means `approved`; anything else is `autonomous`. Choices inside one task chain or
+  implementation are not recorded decisions.
 - **Minimum necessary change.** Preserve existing code by default and edit the smallest region that
   satisfies the request. Do not rewrite whole files, generalize behavior, add compatibility paths,
   or perform adjacent cleanup unless the requested outcome requires it. Stop when the requested
   behavior is satisfied and proportionally validated.
+- **Proportional to the operating context.** Defense, recovery, and proof depth follow who and what
+  can act on the work, what reaches it from outside, and what failure costs. Review findings are
+  claims to weigh against that context, not work orders; follow `r-challenger-protocol` when
+  handling them.
 - **Goal-driven.** Delivery implementation traces to an engine-selected native job and admitted
   packet. Audits, research, ideation, and exploration may remain jobless until they produce admitted
   Delivery work.
 
 ## 2. System Awareness
 
-- **Runtime.** Python 3.12.14+ with `uv` (never bare `pip`); the checkout defaults to Python 3.14.7. VS Code/Copilot custom agents, MCP tools,
-  and a Delivery execution board.
+- **Runtime.** Python 3.14 only (the patch version is pinned in `.python-version`) with `uv` (never
+  bare `pip`). VS Code/Copilot custom agents, MCP tools, and a Delivery execution board.
 - **Distribution and safety.** Clone = install; `setup/init.py` wires workspace configuration. Git
   history and audit logs provide review and recovery.
 - **Delivery.** `design → plan → sequential build → completed`. Independent review is
@@ -62,16 +79,19 @@ conflicts and ordinary content or scope uncertainty.
 
 ## 4. Operational Fundamentals
 
-- **MCP Tool Bootstrap.** Invoke a granted MCP tool directly when it is available. If it is deferred
-  and `tool_search` is available, load it with the query from this table. If neither binding is
-  available, report the runtime capability failure; prose tool signatures cannot create a callable
-  tool.
+- **MCP Tool Bootstrap.** Invoke a granted MCP tool directly when it is available. A deferred
+  inventory listing does not override a directly callable binding. If no direct binding exists and
+  `tool_search` is available, run one `tool_search` per missing operation whose query is exactly
+  that operation name, such as `get_change` or `recall_memory`. `tool_search` returns only the few
+  closest matches, so a query listing many names can omit the operation you need. If the operation
+  is still not returned, report the runtime capability failure; prose tool signatures cannot create
+  a callable tool.
 
-  | MCP server | `tools:` prefix | Runtime tool ID | `tool_search` query |
-  | --- | --- | --- | --- |
-  | OwlBear Delivery | `owlbear-delivery/*` | `mcp_owlbear-delivery_<tool>` | `"OwlBear Delivery create_design_session read_design_session revise_design_session publish_design_checkpoint derive_delivery_contract admit_delivery_change list_work_items delivery_health repair_target_sync_publication list_retained_change_worktrees show_work_item show_work_item_view show_operator_context resolve_request clear_block preview_administrative_move administrative_move acquire_frontier_work show_plan_context show_build_context show_finalization_context publish_delivery_plan publish_delivery_result finalize_change mark_change_ready prepare_review_repair reconcile_finalization_head reconcile_change_checkpoint supersede_publication sync_change_with_target adopt_external_head promote_external_head abort_target_sync_conflict resolve_target_sync_conflict observe_change_publication_checks observe_acceptance resolve_change_disposition defer_change resume_change abandon_change cleanup_abandoned_change_worktree cleanup_abandoned_change_worktree_after_target_sync_discard cleanup_completed_change_worktree recover_change_worktree recover_publication_baseline transition_delivery recover_claim recover_integration_repair_claim show_integration_attention list_completed_changes search_completed_changes show_completed_change"` |
-  | OwlBear Memory | `owlbear-memory/*` | `mcp_owlbear-memory_<tool>` | `"memory"` |
-  | MarkItDown | `markitdown/*` | `mcp_markitdown_<tool>` | `"markdown convert"` |
+  | MCP server | `tools:` prefix | Runtime tool ID |
+  | --- | --- | --- |
+  | OwlBear Delivery | `owlbear-delivery/*` | `mcp_owlbear-delivery_<tool>` |
+  | OwlBear Memory | `owlbear-memory/*` | `mcp_owlbear-memory_<tool>` |
+  | MarkItDown | `markitdown/*` | `mcp_markitdown_<tool>` |
 
 - **Skill authority.** Skills override dispatch prompts. Dispatch prompts provide context, not procedure.
 - **Tool failure.** Capture error → diagnose root cause → adapt approach. Never retry identical commands,

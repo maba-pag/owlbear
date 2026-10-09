@@ -1,16 +1,17 @@
 # owlbear-browser — Browser Content Fetcher
 
-Authenticated web content extraction via Playwright. The Browser MCP selects stable Microsoft Edge
-by default on macOS and Chromium elsewhere, using an OwlBear-owned persistent profile. It never
-reads, copies, or controls the operator's daily Edge profile.
+Public and authenticated web content acquisition through Playwright's persistent browser context.
+The Browser MCP selects stable Microsoft Edge by default on macOS and Chromium elsewhere, using an
+OwlBear-owned profile. A standalone `PlaywrightLauncher()` defaults to Chromium. Managed Edge uses
+its fixed OwlBear profile and never reads, copies, or controls the operator's daily Edge profile.
 
 **Use this guide when:** you need to extend the alpha authenticated page acquisition or its cleaned
 content extraction API.
 
 Package map: [serve/README.md](../README.md) · Project README: [README.md](../../README.md)
 
-**Status:** Alpha. Launch mechanics are implemented; authentication must be confirmed for each
-target. Browser readiness or extension presence does not prove that sign-in succeeded.
+**Status:** Alpha. Typed acquisition results and launch mechanics are implemented; authentication
+must be confirmed for each target. Browser readiness or extension presence does not prove sign-in.
 
 ---
 
@@ -35,30 +36,54 @@ async with PlaywrightLauncher() as launcher:
 | `BrowserContentFetcher` | Async fetcher backed by a Playwright `BrowserContext` |
 | `PlaywrightLauncher` | Manages Playwright browser lifecycle |
 | `BrowserMode` | Selects Chromium or managed Edge |
-| `extract_content(html, url)` | Clean raw HTML to plain text via trafilatura |
-| `find_sso_extension()` | Locate the optional Microsoft SSO extension used by Chromium |
-| `AuthenticationRequired` | Raised when a page requires login and no session is available |
-| `SSOExtensionNotFoundError` | Raised when the SSO extension cannot be found |
+| `AuthenticationCapabilities` | Reports browser mechanics without claiming authentication |
+| `AcquisitionRequest` | Validated URL, selector, and timeout inputs for structured acquisition |
+| `AcquisitionSuccess` / `AcquisitionFailure` | Typed success and failure result variants |
+| `AcquisitionStatus` | Status enum carried by each acquisition result |
+| `extract_content(html, url)` | Convert rendered HTML to normalized Markdown through the shared web-content package |
+| `find_sso_extension()` | Locate the explicitly configured extension directory |
+| `AuthenticationRequired` | Authentication exception used by interactive page-control callers; structured acquisition reports an `AcquisitionFailure` instead |
+| `SSOExtensionNotFoundError` | Raised when the explicit extension path is missing or invalid |
 
 ## Configuration
 
-`PlaywrightLauncher()` defaults to Chromium; pass `mode=BrowserMode.MANAGED_EDGE` to launch
-Microsoft Edge with the fixed `~/.owlbear/edge-profile`. Managed Edge ignores `user_data_dir`.
-Chromium accepts a dedicated `user_data_dir` and defaults to `~/.owlbear/browser-profile` when none
-is supplied. The Browser MCP's `BROWSER_MODE` and `PLAYWRIGHT_USER_DATA_DIR` behavior is documented
-in the [Browser MCP guide](../browser-mcp/README.md#configuration).
+| Setting | Default | Description |
+| --- | --- | --- |
+| `mode` constructor argument | `chromium` | Selects Chromium or managed Edge; the standalone launcher defaults to Chromium |
+| `user_data_dir` constructor argument | `~/.owlbear/browser-profile` | Persistent Chromium profile; managed Edge always uses `~/.owlbear/edge-profile` and ignores this argument |
+| `headless` constructor argument | `false` | Chromium may run headless; managed Edge is always visible |
+| `SSO_EXTENSION_PATH` environment variable | unset | Optional explicit extension directory loaded only in Chromium mode |
 
-In Chromium mode, extension discovery reads `SSO_EXTENSION_PATH` when set, then uses
-`LOCALAPPDATA` on Windows to locate the bundled Microsoft SSO extension. The optional extension is
-a launch aid only: finding it does not establish that SSO works or that any target is authenticated.
+The launcher does not search platform-specific extension locations. Set `SSO_EXTENSION_PATH` to an
+approved existing directory when the extension is needed. Finding or loading an extension proves
+only configuration, not successful tenant authentication, Conditional Access, MFA, or device
+compliance. The Browser MCP's platform default and its Chromium profile override are documented in
+the [Browser MCP guide](../browser-mcp/README.md#configuration).
+
+## Acquisition Contract
+
+`BrowserContentFetcher.acquire()` returns a typed `AcquisitionSuccess` or `AcquisitionFailure`.
+Successful content is normalized Markdown, not plain text. The request supports an optional content
+selector, readiness selector, and bounded navigation/readiness timeouts. It does not follow discovered
+links, execute caller-supplied scripts, accept credentials, or ingest content into Knowledge.
+
+Authentication-required failures retain the page for a retry within the same fetcher. Callers must
+provide their own user interaction and cancellation policy; the package does not claim a complete
+managed-SSO workflow or concurrent session ownership model. See the maintained
+[acquisition tests](tests/test_acquisition.py) for the exercised synthetic behavior.
+
+`AcquisitionSuccess` applies URL redaction at construction: userinfo and fragments are removed;
+values for exact sensitive keys and normalized keys ending in `token`, `secret`, `signature`,
+`password`, `credential`, or `assertion` become `%5BREDACTED%5D`; `state`, `session_state`, and `nonce` values
+become `%5BCORRELATION%5D`. The `code` key is exact-match only. Other query bytes and paths remain
+for document identity. Diagnostic URLs with secret-like paths are replaced in full.
 
 ## Dependencies
 
 | Package | Purpose |
 | --- | --- |
-| `playwright` | Browser automation (Edge CDP) |
-| `trafilatura` | HTML-to-text extraction |
-| `lxml` | HTML parsing (trafilatura dependency) |
+| `playwright` | Chromium browser automation and persistent contexts |
+| `owlbear-web-content` | Shared HTML-to-Markdown extraction (workspace package) |
 
 > **First-time setup:** From a consumer project using a sibling OwlBear checkout, install Playwright
 > Chromium with `uv run --project ../owlbear playwright install chromium` only when selecting

@@ -11,24 +11,31 @@ from typing import Any
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import BaseModel, ConfigDict
+from serve.delivery.tests.test_portfolio_application import _reopen_portfolio, builder_transition_case
+from serve.delivery.tests.test_recovery import completed_recovery_case, recovery_case
 
 from owlbear_delivery import (
     DeliveryAdmissionConflictError,
     DeliveryAdmissionValidationError,
     DeliveryChangeWorktreeCleanup,
     DeliveryChangeWorktreeRecovery,
+    DeliveryQuarantinedSnapshotRepairProposal,
+    DeliveryQuarantinedSnapshotRepairReceipt,
     DeliveryRetainedChangeWorktree,
+    DeliveryStrandedFrontierRepairReceipt,
     PublicationBaselineRecoveryReceipt,
 )
 from owlbear_delivery.acceptance import CompletionReceiptConflictError
 from owlbear_delivery.change_publication import ChangeBranchSupersessionReceipt
 from owlbear_delivery.change_workspace import (
+    ChangeContinuationAction,
     ChangeExternalHeadAdoptionReceipt,
     ChangeExternalHeadPromotionReceipt,
     ChangeTargetSyncAbortReceipt,
     ChangeTargetSyncConflictError,
     ChangeTargetSyncReceipt,
     CoordinationConflictError,
+    OutOfBandHeadRecoveryReceipt,
     PublicationBaselineUnavailableError,
 )
 from owlbear_delivery.completed_history import (
@@ -36,20 +43,26 @@ from owlbear_delivery.completed_history import (
     CompletedHistoryDiagnosticCode,
     CompletedHistoryMissingError,
 )
+from owlbear_delivery.delivery_admission import DeliveryRevisionError
 from owlbear_delivery.delivery_runtime import (
     AdministrativeDeliveryMove,
     AdministrativeDeliveryMovePreview,
     AdministrativeDeliveryMoveResult,
     DeliveryAcceptanceWaitingError,
     DeliveryBlock,
+    DeliveryChangeDeferral,
     DeliveryChangeDispositionBusyError,
     DeliveryChangeDispositionConflictError,
+    DeliveryChangeDispositionResolution,
     DeliveryChangePublicationHistory,
     DeliveryChangePublicationIdentity,
+    DeliveryChangeStage,
+    DeliveryCommandResult,
     DeliveryObservation,
     DeliveryObservationReceipt,
     DeliveryOperatorMove,
     DeliveryPlanCandidate,
+    DeliveryPlanningRetrySettlement,
     DeliveryRequest,
     DeliveryRequestKind,
     DeliveryRequestResolution,
@@ -62,25 +75,51 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryTaskResult,
     FinalizeDeliveryChange,
     OutcomeAuthorityBinding,
+    RetryDelivery,
 )
 from owlbear_delivery.delivery_state import DeliveryStatePublicationError
-from owlbear_delivery.design_package import DesignPackageConflictError
+from owlbear_delivery.design_package import DesignPackageConflictError, DesignPackageManifest, DesignPackageResult
 from owlbear_delivery.draft_pull_request import (
     DraftPullRequestPublicationReceipt,
     DraftPullRequestSupersessionReceipt,
     MarkChangePullRequestReady,
 )
+from owlbear_delivery.finalization_reports import FinalizationFailureCode, ReportFinalizationFailure
 from owlbear_delivery.portfolio_application import (
+    DeliveryAcquisitionFailure,
+    DeliveryActionSelection,
+    DeliveryAnswer,
+    DeliveryAnswerKind,
+    DeliveryAnswerResult,
+    DeliveryChangeIntent,
+    DeliveryChangeIntentKind,
+    DeliveryChangeIntentResult,
     DeliveryChangePublicationSupersessionReceipt,
+    DeliveryContinuationResult,
+    DeliveryDesignPut,
+    DeliveryEngineActionResult,
+    DeliveryFinalizationContext,
     DeliveryOperatorContext,
+    DeliveryReadiness,
+    DeliveryReadinessBasis,
+    DeliveryResultSubmission,
+    DeliveryResultSubmissionResult,
+    DeliveryStateSnapshotRepairReceipt,
     DeliveryTargetSyncRepairReceipt,
+    DeliveryUnavailableChangeView,
 )
 from owlbear_delivery.portfolio_operating import (
     DeliveryHealthDiagnostic,
+    DeliveryHealthReason,
+    DeliveryHealthResolution,
     DeliveryHealthStatus,
     DeliveryHealthView,
 )
 from owlbear_delivery.publication_provider import PublicationProviderError, PublicationProviderFailureCode
+from owlbear_delivery.recovery import DeliveryWorkerExclusionRequiredError
+from owlbear_delivery.work_items import WorkItemNextActor
+from owlbear_delivery.worker_stall import DeliveryWorkerActiveError
+from owlbear_delivery_mcp.target_models import ReportFinalizationFailureParams
 from owlbear_delivery_mcp.target_server import (
     DELIVERY_OPERATION_ANNOTATIONS,
     DELIVERY_OPERATION_NAMES,
@@ -90,6 +129,7 @@ from owlbear_delivery_mcp.target_server import (
 CHANGE = "change-a"
 DIGEST = "a" * 64
 COMMIT = "b" * 40
+CONTINUATION_ID = f"continue-{'c' * 64}"
 WORKTREE_PATH = Path(__file__).resolve().parent / "fixture-worktree" / CHANGE
 
 
@@ -226,6 +266,18 @@ def _target_sync_repair_receipt() -> DeliveryTargetSyncRepairReceipt:
     )
 
 
+def _delivery_state_repair_receipt() -> DeliveryStateSnapshotRepairReceipt:
+    return DeliveryStateSnapshotRepairReceipt.model_construct(
+        schema_version=1,
+        receipt_id=DIGEST,
+        operation_id="repair-state-change-a",
+        change_id=CHANGE,
+        snapshot_id=DIGEST,
+        published_head=COMMIT,
+        local_frontier_digest=DIGEST,
+    )
+
+
 def _external_head_adoption_receipt() -> ChangeExternalHeadAdoptionReceipt:
     return ChangeExternalHeadAdoptionReceipt.create(
         operation_id="adopt-change-a",
@@ -248,10 +300,118 @@ def _external_head_promotion_receipt() -> ChangeExternalHeadPromotionReceipt:
     )
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["planner", "builder", "integration", "proposal"])
+async def test_real_core_recovery_exclusion_required(tmp_path: Path, kind: str) -> None:
+    application, operation, request, unchanged = recovery_case(tmp_path, kind)
+    with pytest.raises(ToolError) as error:
+        await getattr(TargetMCPAdapter(application), operation)(request)
+    diagnostic = json.loads(str(error.value))
+    assert diagnostic["code"] == DeliveryWorkerExclusionRequiredError.code
+    assert diagnostic["retry_safe"] is False
+    assert diagnostic["current_authority_identity"] == "change-a"
+    assert "Custody and files are unchanged" in diagnostic["detail"]
+    unchanged()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("action", ["block", "return", "retry"])
+async def test_builder_transition_diagnostics_survive_mcp_refusal_and_restart(tmp_path: Path, action: str) -> None:
+    application, runtimes, coordinator, state_root, launch, transition = builder_transition_case(tmp_path, action)
+    if action == "retry":
+        transition = RetryDelivery(
+            action="retry",
+            outcome_id=launch.outcome_id,
+            claim_id=launch.claim.claim_id,
+            abandoned_commit=launch.last_reviewed_commit,
+            attempt_id=launch.claim.attempt_id,
+            failure_code="builder-failed",
+        )
+    before_coordination = coordinator.show(CHANGE)
+    payload = {"change_id": CHANGE, "transition": transition.model_dump(mode="json")}
+    with pytest.raises(ToolError) as error:
+        await TargetMCPAdapter(application).transition_delivery(payload)
+    diagnostic = json.loads(str(error.value))
+    assert diagnostic["code"] == DeliveryWorkerExclusionRequiredError.code
+    assert diagnostic["retry_safe"] is False
+    retained = runtimes[CHANGE].frontier_bytes()
+    reopened, reopened_coordinator, _manager = _reopen_portfolio(tmp_path, state_root, runtimes)
+    adapter = TargetMCPAdapter(reopened)
+    with pytest.raises(ToolError):
+        await adapter.transition_delivery(payload)
+    context = await adapter.show_operator_context({"change_id": CHANGE, "outcome_id": "OUT-001"})
+    if action == "retry":
+        assert context.retry_diagnostic.model_dump(mode="json") == {
+            "code": "ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED",
+            "attempt_id": launch.claim.attempt_id,
+            "transition": transition.model_dump(mode="json"),
+        }
+        assert context.recovery_attention is None
+    else:
+        assert context.recovery_attention.diagnostic_transition == transition
+    assert context.active_claim.owner_id == launch.claim.owner_id
+    assert context.block is None
+    assert context.requests == ()
+    change = await adapter.get_change({"change_id": CHANGE})
+    assert change["readiness"]["status"] == "blocked"
+    expected_reason = "retry-transition-contained" if action == "retry" else "builder-transition-contained"
+    assert change["readiness"]["reason_code"] == expected_reason
+    assert change["readiness"]["action"] is None
+    if action == "retry":
+        assert change["readiness"]["next_actor"] == "none"
+    assert "read-only" in change["readiness"]["prompt"]
+    if action == "retry":
+        assert "delivery-diagnose inspect --change-id change-a" in change["readiness"]["prompt"]
+        assert "Make no MCP calls" in change["readiness"]["prompt"]
+        assert "do not retry" in change["readiness"]["prompt"]
+    assert runtimes[CHANGE].frontier_bytes() == retained
+    assert reopened_coordinator.show(CHANGE) == before_coordination
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["claim", "proposal"])
+async def test_verified_completed_recovery_replay(tmp_path: Path, kind: str) -> None:
+    application, operation, request, unchanged = completed_recovery_case(tmp_path, kind)
+    result = await getattr(TargetMCPAdapter(application), operation)(request)
+    recovered = result["recovery"] if kind == "proposal" else result
+    assert recovered["status"] == "recovered"
+    unchanged()
+
+
 class _Result(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     operation: str
+
+
+def _continuation_action() -> ChangeContinuationAction:
+    return ChangeContinuationAction(
+        operation_id=CONTINUATION_ID,
+        change_id=CHANGE,
+        kind="sync-target",
+        contract_digest=DIGEST,
+        frontier_digest=DIGEST,
+        exact_head=COMMIT,
+        target_head="c" * 40,
+        host_id="host",
+        session_id="session",
+        acquired_at="2026-09-13T00:00:00Z",
+    )
+
+
+def _continuation_readiness() -> DeliveryReadiness:
+    return DeliveryReadiness(
+        status="ready",
+        next_actor=WorkItemNextActor.AGENT,
+        reason_code="target-sync-required",
+        basis=DeliveryReadinessBasis(
+            contract_digest=DIGEST,
+            frontier_digest=DIGEST,
+            source_head=COMMIT,
+            target_head="c" * 40,
+            continuation_id=CONTINUATION_ID,
+        ),
+    )
 
 
 class _RecordingApplication:
@@ -270,18 +430,61 @@ class _RecordingApplication:
                     detail="The fixture Change requires reconciliation.",
                     change_id=CHANGE,
                     retry_safe=True,
+                    reason=DeliveryHealthReason.RUNTIME_UNAVAILABLE,
+                    resolution=DeliveryHealthResolution.RETRY,
                 ),
             ),
         )
 
-    def __getattr__(self, name: str) -> Any:  # noqa: C901
-        def operation(*args: object, **kwargs: object) -> object:  # noqa: C901, PLR0912
+    def __getattr__(self, name: str) -> Any:  # noqa: C901, PLR0915
+        def operation(*args: object, **kwargs: object) -> object:  # noqa: C901, PLR0912, PLR0915
             self.calls.append((name, args, kwargs))
             failure = self.failures.get(name)
             if failure is not None:
                 raise failure
             if name == "list_work_items":
                 result: object = (_Result(operation=name),)
+            elif name == "get_change":
+                result = DeliveryUnavailableChangeView(
+                    change_id=CHANGE,
+                    readiness=DeliveryReadiness(
+                        status="unavailable",
+                        next_actor=WorkItemNextActor.NONE,
+                        reason_code="runtime-unavailable",
+                        basis=DeliveryReadinessBasis(),
+                    ),
+                )
+            elif name == "show_finalization_context":
+                result = DeliveryFinalizationContext.model_construct(change_id=CHANGE)
+            elif name == "acquire_change_action":
+                result = DeliveryContinuationResult(
+                    change_id=CHANGE,
+                    kind="acquired",
+                    reason_code="ready",
+                    readiness=_continuation_readiness(),
+                    engine_action=_continuation_action(),
+                )
+            elif name == "execute_change_action":
+                result = DeliveryEngineActionResult(
+                    action=_continuation_action(),
+                    kind="blocked",
+                    reason_code="engine-action-interrupted",
+                    failure=DeliveryAcquisitionFailure(
+                        change_id=CHANGE,
+                        outcome_id="OUT-001",
+                        attempt_id=CONTINUATION_ID,
+                        code="ERR_DELIVERY_ACTION_INTERRUPTED",
+                        detail="The engine action did not report an outcome.",
+                        retry_condition="Recover the retained engine action custody.",
+                    ),
+                )
+            elif name == "report_finalization_failure":
+                result = DeliveryReadiness(
+                    status="unavailable",
+                    next_actor=WorkItemNextActor.NONE,
+                    reason_code="runtime-unavailable",
+                    basis=DeliveryReadinessBasis(),
+                )
             elif name == "list_retained_change_worktrees":
                 result = (
                     DeliveryRetainedChangeWorktree(
@@ -328,6 +531,52 @@ class _RecordingApplication:
                 )
             elif name == "repair_target_sync_publication":
                 result = _target_sync_repair_receipt()
+            elif name == "repair_delivery_state_snapshot":
+                result = _delivery_state_repair_receipt()
+            elif name == "propose_quarantined_delivery_state_snapshot_repair":
+                result = DeliveryQuarantinedSnapshotRepairProposal(
+                    change_id=CHANGE,
+                    diagnostic_code="snapshot-identity-invalid",
+                    expected_remote_head="c" * 40,
+                    snapshot_digest=DIGEST,
+                    consequence="Replace the invalid predecessor.",
+                )
+            elif name == "repair_quarantined_delivery_state_snapshot":
+                result = DeliveryQuarantinedSnapshotRepairReceipt.model_construct(
+                    schema_version=1,
+                    receipt_id=DIGEST,
+                    operation_id="repair-quarantined-change-a",
+                    change_id=CHANGE,
+                    invalid_snapshot_digest=DIGEST,
+                    expected_remote_head="c" * 40,
+                    snapshot_id=DIGEST,
+                    published_head="d" * 40,
+                    diagnostic_code="snapshot-identity-invalid",
+                )
+            elif name == "repair_stranded_frontier":
+                result = DeliveryStrandedFrontierRepairReceipt.model_construct(
+                    schema_version=1,
+                    receipt_id=DIGEST,
+                    operation_id="repair-frontier-change-a",
+                    change_id=CHANGE,
+                    request_id="request",
+                    previous_frontier_digest=DIGEST,
+                    frontier_digest="e" * 64,
+                    preserved_frontier_path="changes/change-a/revisions/frontier/frontier.json",
+                )
+            elif name == "recover_out_of_band_head":
+                result = OutOfBandHeadRecoveryReceipt.create(
+                    operation_id="recover-out-of-band-change-a",
+                    change_id=CHANGE,
+                    branch="owlbear/change/change-a",
+                    worktree_path=WORKTREE_PATH,
+                    expected_reviewed_head=COMMIT,
+                    expected_remote_head="a" * 40,
+                    observed_branch_head="c" * 40,
+                    preserved_ref="refs/owlbear/recovery/change-a/recover-out-of-band-change-a",
+                    preserved_head="c" * 40,
+                    restored_head=COMMIT,
+                )
             elif name == "show_operator_context":
                 result = DeliveryOperatorContext(
                     change_id=CHANGE,
@@ -356,7 +605,76 @@ class _RecordingApplication:
                     kind=DeliveryRequestKind.ACTION,
                     outcome_id="OUT-001",
                     summary="Complete the action",
-                    resolution=DeliveryRequestResolution(response_text="Completed."),
+                    resolution=DeliveryRequestResolution(
+                        response_text="Completed.",
+                        provenance="user-confirmed",
+                    ),
+                )
+            elif name == "answer":
+                if args and isinstance(args[0], DeliveryAnswer) and args[0].kind is DeliveryAnswerKind.BLOCK:
+                    return DeliveryAnswerResult(
+                        change_id=CHANGE,
+                        kind=DeliveryAnswerKind.BLOCK,
+                        binding=OutcomeAuthorityBinding(
+                            outcome_id="OUT-001",
+                            plan_scope_id="SCOPE-001",
+                            block=DeliveryBlock(
+                                block_id="block",
+                                reason="Need operator evidence",
+                                unblock_condition="Evidence is recorded",
+                                expected_evidence=("operator evidence",),
+                                locators=("operator-note",),
+                                resolution_note="Verified.",
+                                resolution_locators=("operator-note",),
+                            ),
+                        ),
+                        frontier_digest=DIGEST,
+                    )
+                if args and isinstance(args[0], DeliveryAnswer) and args[0].kind is DeliveryAnswerKind.DISPOSITION:
+                    return DeliveryAnswerResult(
+                        change_id=CHANGE,
+                        kind=DeliveryAnswerKind.DISPOSITION,
+                        disposition=DeliveryChangeDispositionResolution.create(
+                            change_id=CHANGE,
+                            disposition_id=DIGEST,
+                            resolved_at=datetime(2026, 8, 11, 12, tzinfo=UTC),
+                        ),
+                        frontier_digest=DIGEST,
+                    )
+                result = DeliveryAnswerResult(
+                    change_id=CHANGE,
+                    kind=DeliveryAnswerKind.REQUEST,
+                    request=DeliveryRequest(
+                        request_id="request",
+                        kind=DeliveryRequestKind.ACTION,
+                        outcome_id="OUT-001",
+                        summary="Complete the action",
+                        resolution=DeliveryRequestResolution(
+                            response_text="Completed.",
+                            provenance="user-confirmed",
+                        ),
+                    ),
+                    frontier_digest=DIGEST,
+                )
+            elif name == "put_design":
+                result = DesignPackageResult(
+                    change_id=CHANGE,
+                    package_id=DIGEST,
+                    package_root=WORKTREE_PATH,
+                    manifest=DesignPackageManifest.from_content(CHANGE, b"intent", b"design"),
+                    replayed=False,
+                )
+            elif name == "set_change_intent":
+                result = DeliveryChangeIntentResult(
+                    change_id=CHANGE,
+                    kind=DeliveryChangeIntentKind.DEFER,
+                    frontier_digest=DIGEST,
+                    receipt=DeliveryChangeDeferral.create(
+                        change_id=CHANGE,
+                        prior_stage=DeliveryChangeStage.BUILDING,
+                        deferred_at=datetime(2026, 8, 4, tzinfo=UTC),
+                        reason="Wait for user review",
+                    ),
                 )
             elif name == "clear_block":
                 result = OutcomeAuthorityBinding(
@@ -407,6 +725,18 @@ class _RecordingApplication:
                     claim_id="claim",
                     digest=DIGEST,
                     result=result,
+                )
+            elif name == "submit_result":
+                result = DeliveryResultSubmissionResult(
+                    change_id=CHANGE,
+                    outcome_id="OUT-001",
+                    claim_id="claim",
+                    result_id="result-one",
+                    binding=OutcomeAuthorityBinding(
+                        outcome_id="OUT-001",
+                        plan_scope_id="SCOPE-001",
+                        stage=DeliveryStage.COMPLETED,
+                    ),
                 )
             elif name in {
                 "supersede_publication",
@@ -459,14 +789,15 @@ def _result() -> dict[str, object]:
             task_or_finalization_id="TASK-001",
             exact_commit=COMMIT,
             observation_kind="pytest",
-            command_or_procedure="Delivery MCP adapter contract test",
-            exit_status_or_artifact_locator="exit:0",
+            procedure="Delivery MCP adapter contract test",
+            result=DeliveryCommandResult(exit_status=0),
             observer_or_runner_identity="pytest",
             observed_at=observed_at,
         )
     )
     review = DeliveryReviewReceipt.create(
         DeliveryReview(
+            review_mode="task",
             exact_commit=COMMIT,
             author_id="MCP adapter test author",
             reviewer_id="MCP adapter test reviewer",
@@ -495,14 +826,17 @@ def _finalization() -> dict[str, object]:
             task_or_finalization_id=operation_id,
             exact_commit=COMMIT,
             observation_kind="pytest",
-            command_or_procedure="Delivery MCP finalization contract test",
-            exit_status_or_artifact_locator="exit:0",
+            procedure="Delivery MCP finalization contract test",
+            result=DeliveryCommandResult(exit_status=0),
             observer_or_runner_identity="pytest",
             observed_at=observed_at,
         )
     )
     review = DeliveryReviewReceipt.create(
         DeliveryReview(
+            review_mode="finalization",
+            basis_digest="e" * 64,
+            observation_ids=(observation.observation_id,),
             exact_commit=COMMIT,
             author_id="MCP finalization test author",
             reviewer_id="MCP finalization test reviewer",
@@ -518,12 +852,36 @@ def _finalization() -> dict[str, object]:
     }
 
 
+@pytest.mark.asyncio
+async def test_selected_acquisition_adapter_preserves_selection() -> None:
+    application = _RecordingApplication()
+    adapter = TargetMCPAdapter(application)  # type: ignore[arg-type]
+    selection = DeliveryActionSelection(
+        change_id=CHANGE,
+        outcome_id="OUT-001",
+        expected_stage=DeliveryStage.IMPLEMENTATION,
+        expected_task_id="TASK-001",
+        expected_frontier_digest=DIGEST,
+        expected_source_head=COMMIT,
+    )
+
+    await adapter.acquire_actions({"selection": selection.model_dump(mode="json")})
+
+    assert application.calls == [("acquire_actions", (selection,), {})]
+
+
 def _requests() -> dict[str, dict[str, object]]:
     change = {"change_id": CHANGE}
     claim = {**change, "outcome_id": "OUT-001", "attempt_id": "attempt", "claim_id": "claim"}
     repair_claim = {**change, "attempt_id": "repair-attempt", "claim_id": "repair-claim"}
     return {
         "create_design_session": {**change, "intent_bytes": "intent", "design_bytes": "design"},
+        "put_design": {
+            **change,
+            "intent_bytes": "intent",
+            "design_bytes": "design",
+            "expected_package_id": DIGEST,
+        },
         "read_design_session": change,
         "revise_design_session": {
             **change,
@@ -533,17 +891,93 @@ def _requests() -> dict[str, dict[str, object]]:
         },
         "publish_design_checkpoint": change,
         "derive_delivery_contract": change,
-        "admit_delivery_change": {"change_id": CHANGE, "active_claim_ids": []},
+        "derive_evidence_receipts": {
+            "observations": [
+                {key: value for key, value in observation.items() if key != "observation_id"}
+                for observation in _result()["observations"]  # type: ignore[union-attr]
+            ],
+            "review": {key: value for key, value in _result()["review"].items() if key != "review_id"},  # type: ignore[union-attr]
+        },
+        "admit_delivery_change": {
+            "change_id": CHANGE,
+            "expected_package_id": DIGEST,
+            "active_claim_ids": [],
+        },
+        "admit_change": {
+            "change_id": CHANGE,
+            "expected_package_id": DIGEST,
+            "active_claim_ids": [],
+        },
         "list_work_items": {},
+        "list_changes": {},
+        "get_change": change,
+        "answer": {
+            **change,
+            "request_id": "request",
+            "resolution": {"response_text": "Completed.", "provenance": "user-confirmed"},
+            "expected_frontier_digest": DIGEST,
+        },
+        "answer_block": {
+            **change,
+            "kind": "block",
+            "expected_frontier_digest": DIGEST,
+            "outcome_id": "OUT-001",
+            "block_id": "block",
+            "operator_note": "Verified.",
+            "locators": ["operator-note"],
+        },
+        "answer_disposition": {
+            **change,
+            "kind": "disposition",
+            "expected_frontier_digest": DIGEST,
+            "expected_disposition_id": DIGEST,
+        },
+        "set_change_intent": {
+            **change,
+            "kind": "defer",
+            "expected_frontier_digest": DIGEST,
+            "reason": "Wait for user review",
+        },
         "delivery_health": {},
+        "propose_quarantined_delivery_state_snapshot_repair": change,
+        "repair_delivery_state_snapshot": {
+            **change,
+            "confirmed_repair": True,
+            "operation_id": "repair-state-change-a",
+        },
+        "repair_quarantined_delivery_state_snapshot": {
+            **change,
+            "confirmed_repair": True,
+            "expected_remote_head": "c" * 40,
+            "expected_snapshot_digest": DIGEST,
+            "expected_diagnostic_code": "snapshot-identity-invalid",
+            "operation_id": "repair-quarantined-change-a",
+        },
+        "repair_stranded_frontier": {
+            **change,
+            "confirmed_repair": True,
+            "request_id": "request",
+            "expected_frontier_digest": DIGEST,
+            "operation_id": "repair-frontier-change-a",
+        },
+        "recover_out_of_band_head": {
+            **change,
+            "confirmed_recovery": True,
+            "expected_reviewed_head": COMMIT,
+            "expected_remote_head": "a" * 40,
+            "expected_branch_head": "c" * 40,
+            "operation_id": "recover-out-of-band-change-a",
+        },
         "list_retained_change_worktrees": {},
         "show_work_item": {**change, "work_item_id": "OUT-001"},
         "show_work_item_view": {**change, "item_key": "publication"},
         "show_operator_context": {**change, "outcome_id": "OUT-001"},
+        "repair_change": change,
+        "repair": change,
         "resolve_request": {
             **change,
             "request_id": "request",
-            "resolution": {"response_text": "Completed."},
+            "resolution": {"response_text": "Completed.", "provenance": "user-confirmed"},
         },
         "clear_block": {
             **change,
@@ -565,10 +999,38 @@ def _requests() -> dict[str, dict[str, object]]:
             "reason": "Verified.",
             "expected_version": DIGEST,
         },
-        "acquire_frontier_work": {},
+        "acquire_actions": {},
+        "acquire_change_action": {
+            **change,
+            "expected_basis": {
+                "contract_digest": DIGEST,
+                "frontier_digest": DIGEST,
+                "source_head": COMMIT,
+                "target_head": None,
+                "continuation_id": None,
+            },
+            "capabilities": ["engine"],
+            "host_id": "host",
+            "session_id": "session",
+        },
+        "execute_change_action": {**change, "operation_id": CONTINUATION_ID},
         "show_plan_context": claim,
         "show_build_context": claim,
         "show_finalization_context": change,
+        "report_finalization_failure": {
+            **change,
+            "expected_contract_digest": DIGEST,
+            "expected_frontier_digest": DIGEST,
+            "expected_change_head": COMMIT,
+            "expected_reviewed_head": COMMIT,
+            "expected_diagnostic_sequence": 0,
+            "attempt_key": "attempt-1",
+            "category": "maintained-check",
+            "code": "maintained-check-failed",
+            "checks_state": "failed",
+            "check_id": "check-1",
+            "exit_status": 1,
+        },
         "publish_delivery_plan": {
             **change,
             "plan": {"outcome_id": "OUT-001", "claim_id": "claim", "tasks": [_task()]},
@@ -576,6 +1038,12 @@ def _requests() -> dict[str, dict[str, object]]:
         "publish_delivery_result": {
             **change,
             "result": {"outcome_id": "OUT-001", "claim_id": "claim", "result": _result()},
+        },
+        "submit_result": {
+            **change,
+            "outcome_id": "OUT-001",
+            "claim_id": "claim",
+            "result": _result(),
         },
         "finalize_change": {**change, "finalization": _finalization()},
         "mark_change_ready": {
@@ -673,7 +1141,25 @@ def _requests() -> dict[str, dict[str, object]]:
                 },
             },
         },
-        "recover_claim": claim,
+        "settle_worker_invocation": {
+            "settlement": {
+                "change_id": CHANGE,
+                "outcome_id": "OUT-001",
+                "claim_id": "claim",
+                "attempt_id": "attempt",
+                "disposition": "normal-return",
+                "request": {
+                    "action": "retry",
+                    "outcome_id": "OUT-001",
+                    "claim_id": "claim",
+                    "failure_code": "worker-retry",
+                },
+            },
+            "host_id": "host",
+            "session_id": "session",
+        },
+        "recover_claim": {**claim, "confirmed_lost": True},
+        "release_stuck_worker": claim,
         "recover_integration_repair_claim": repair_claim,
         "show_integration_attention": change,
         "list_completed_changes": {"limit": 25},
@@ -722,10 +1208,42 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
 
     result = await getattr(adapter, operation_name)(_requests()[operation_name])
 
+    if operation_name == "derive_evidence_receipts":
+        # N10-N N1: stateless; the receipts are the ones the result fixture builds with `.create()`.
+        assert application.calls == []
+        expected = _result()
+        assert result.model_dump(mode="json") == {
+            "observations": expected["observations"],
+            "review": expected["review"],
+        }
+        return
     assert [call[0] for call in application.calls] == [operation_name]
     call_args = {
         "show_operator_context": (CHANGE, "OUT-001"),
-        "resolve_request": (CHANGE, "request", DeliveryRequestResolution(response_text="Completed.")),
+        "answer": (
+            DeliveryAnswer(
+                change_id=CHANGE,
+                request_id="request",
+                resolution=DeliveryRequestResolution(
+                    response_text="Completed.",
+                    provenance="user-confirmed",
+                ),
+                expected_frontier_digest=DIGEST,
+            ),
+        ),
+        "set_change_intent": (
+            DeliveryChangeIntent(
+                change_id=CHANGE,
+                kind=DeliveryChangeIntentKind.DEFER,
+                expected_frontier_digest=DIGEST,
+                reason="Wait for user review",
+            ),
+        ),
+        "resolve_request": (
+            CHANGE,
+            "request",
+            DeliveryRequestResolution(response_text="Completed.", provenance="user-confirmed"),
+        ),
         "clear_block": (CHANGE, "OUT-001", "block", "Verified.", ("operator-note",)),
         "preview_administrative_move": (CHANGE, "OUT-001", DeliveryStage.PLANNING),
         "administrative_move": (
@@ -753,14 +1271,55 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
             "sync-change-a",
             "repair-sync-change-a",
         ),
+        "recover_out_of_band_head": (
+            CHANGE,
+            COMMIT,
+            "a" * 40,
+            "c" * 40,
+            "recover-out-of-band-change-a",
+        ),
         "cleanup_abandoned_change_worktree": (CHANGE,),
         "cleanup_abandoned_change_worktree_after_target_sync_discard": (CHANGE,),
         "cleanup_completed_change_worktree": (CHANGE, DIGEST),
         "resolve_change_disposition": (CHANGE, DIGEST),
         "prepare_review_repair": (CHANGE,),
+        "release_stuck_worker": (CHANGE, "OUT-001", "attempt", "claim"),
+        "settle_worker_invocation": (
+            DeliveryPlanningRetrySettlement(
+                change_id=CHANGE,
+                outcome_id="OUT-001",
+                claim_id="claim",
+                attempt_id="attempt",
+                disposition="normal-return",
+                request=RetryDelivery(
+                    action="retry",
+                    outcome_id="OUT-001",
+                    claim_id="claim",
+                    failure_code="worker-retry",
+                ),
+            ),
+        ),
     }
     if operation_name in call_args:
         assert application.calls[0][1] == call_args[operation_name]
+    if operation_name == "settle_worker_invocation":
+        assert application.calls[0][2] == {"host_id": "host", "session_id": "session"}
+    if operation_name == "submit_result":
+        submission = application.calls[0][1][0]
+        assert isinstance(submission, DeliveryResultSubmission)
+        assert submission.change_id == CHANGE
+        assert submission.outcome_id == "OUT-001"
+        assert submission.claim_id == "claim"
+        assert submission.result.result_id == "result-one"
+    if operation_name == "put_design":
+        assert application.calls[0][1] == (
+            DeliveryDesignPut(
+                change_id=CHANGE,
+                intent_bytes=b"intent",
+                design_bytes=b"design",
+                expected_package_id=DIGEST,
+            ),
+        )
     if operation_name == "recover_change_worktree":
         assert application.calls[0][1] == (CHANGE, COMMIT)
         assert application.calls[0][2] == {"confirmed_recovery": True}
@@ -770,6 +1329,32 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
     if operation_name == "repair_target_sync_publication":
         assert application.calls[0][1] == (CHANGE, COMMIT, "d" * 40, "sync-change-a", "repair-sync-change-a")
         assert application.calls[0][2] == {"confirmed_repair": True}
+    if operation_name == "repair_delivery_state_snapshot":
+        assert application.calls[0][1] == (CHANGE, "repair-state-change-a")
+        assert application.calls[0][2] == {"confirmed_repair": True}
+    if operation_name == "propose_quarantined_delivery_state_snapshot_repair":
+        assert application.calls[0][1] == (CHANGE,)
+        assert application.calls[0][2] == {}
+    if operation_name == "repair_quarantined_delivery_state_snapshot":
+        assert application.calls[0][1] == (CHANGE, "repair-quarantined-change-a")
+        assert application.calls[0][2] == {
+            "confirmed_repair": True,
+            "expected_remote_head": "c" * 40,
+            "expected_snapshot_digest": DIGEST,
+            "expected_diagnostic_code": "snapshot-identity-invalid",
+        }
+    if operation_name == "repair_stranded_frontier":
+        assert application.calls[0][1] == (CHANGE, "request", DIGEST, "repair-frontier-change-a")
+        assert application.calls[0][2] == {"confirmed_repair": True}
+    if operation_name == "recover_out_of_band_head":
+        assert application.calls[0][1] == (
+            CHANGE,
+            COMMIT,
+            "a" * 40,
+            "c" * 40,
+            "recover-out-of-band-change-a",
+        )
+        assert application.calls[0][2] == {"confirmed_recovery": True}
     if operation_name == "cleanup_abandoned_change_worktree_after_target_sync_discard":
         assert application.calls[0][1] == (CHANGE,)
         assert application.calls[0][2] == {
@@ -804,6 +1389,35 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
             "expected_change_head": COMMIT,
             "publication_base_head": "a" * 40,
         },
+        "repair_delivery_state_snapshot": {
+            "change_id": CHANGE,
+            "snapshot_id": DIGEST,
+            "published_head": COMMIT,
+            "local_frontier_digest": DIGEST,
+        },
+        "repair_quarantined_delivery_state_snapshot": {
+            "change_id": CHANGE,
+            "invalid_snapshot_digest": DIGEST,
+            "expected_remote_head": "c" * 40,
+            "snapshot_id": DIGEST,
+            "published_head": "d" * 40,
+            "diagnostic_code": "snapshot-identity-invalid",
+        },
+        "repair_stranded_frontier": {
+            "change_id": CHANGE,
+            "request_id": "request",
+            "previous_frontier_digest": DIGEST,
+            "frontier_digest": "e" * 64,
+            "preserved_frontier_path": "changes/change-a/revisions/frontier/frontier.json",
+        },
+        "recover_out_of_band_head": {
+            "change_id": CHANGE,
+            "expected_reviewed_head": COMMIT,
+            "expected_remote_head": "a" * 40,
+            "observed_branch_head": "c" * 40,
+            "preserved_head": "c" * 40,
+            "restored_head": COMMIT,
+        },
     }
     if operation_name == "list_retained_change_worktrees":
         assert len(result) == 1
@@ -822,6 +1436,12 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
     elif operation_name in receipt_results:
         for field, expected in receipt_results[operation_name].items():
             assert getattr(result, field) == expected
+    elif operation_name == "propose_quarantined_delivery_state_snapshot_repair":
+        assert result.change_id == CHANGE
+        assert result.diagnostic_code == "snapshot-identity-invalid"
+        assert result.expected_remote_head == "c" * 40
+        assert result.snapshot_digest == DIGEST
+        assert result.requires_confirmation is True
     elif operation_name in publication_results:
         assert result.candidate_id == publication_results[operation_name]["candidate_id"]
         assert result.claim_id == publication_results[operation_name]["claim_id"]
@@ -835,6 +1455,26 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
         assert result.change_id == CHANGE
         assert result.request.request_id == "request"
         assert result.request.resolution.response_text == "Completed."
+    elif operation_name == "answer":
+        assert result.change_id == CHANGE
+        assert result.request.request_id == "request"
+        assert result.request.resolution.response_text == "Completed."
+        assert result.frontier_digest == DIGEST
+    elif operation_name == "submit_result":
+        assert result.change_id == CHANGE
+        assert result.outcome_id == "OUT-001"
+        assert result.claim_id == "claim"
+        assert result.result_id == "result-one"
+        assert result.binding.stage is DeliveryStage.COMPLETED
+    elif operation_name == "put_design":
+        assert result.change_id == CHANGE
+        assert result.package_id == DIGEST
+        assert result.replayed is False
+    elif operation_name == "set_change_intent":
+        assert result.change_id == CHANGE
+        assert result.kind is DeliveryChangeIntentKind.DEFER
+        assert result.frontier_digest == DIGEST
+        assert result.receipt.change_id == CHANGE
     elif operation_name == "clear_block":
         assert result.change_id == CHANGE
         assert result.outcome_id == "OUT-001"
@@ -853,6 +1493,23 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
         assert result.status is DeliveryHealthStatus.ATTENTION
         assert result.diagnostics[0].change_id == CHANGE
         assert result.diagnostics[0].retry_safe is True
+    elif operation_name == "get_change":
+        assert result["kind"] == "unavailable"
+        assert result["change_id"] == CHANGE
+    elif operation_name == "show_finalization_context":
+        assert result["change_id"] == CHANGE
+    elif operation_name == "report_finalization_failure":
+        assert result["reason_code"] == "runtime-unavailable"
+    elif operation_name == "acquire_change_action":
+        assert result["kind"] == "acquired"
+        assert result["engine_action"]["operation_id"] == CONTINUATION_ID
+        assert result["readiness"]["basis"]["continuation_id"] == CONTINUATION_ID
+        assert result["readiness"]["basis"]["target_head"] == "c" * 40
+    elif operation_name == "execute_change_action":
+        assert result["kind"] == "blocked"
+        assert result["reason_code"] == "engine-action-interrupted"
+        assert result["action"]["operation_id"] == CONTINUATION_ID
+        assert result["failure"]["code"] == "ERR_DELIVERY_ACTION_INTERRUPTED"
     else:
         assert result == (
             [{"operation": operation_name}] if operation_name in tuple_results else {"operation": operation_name}
@@ -860,6 +1517,33 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
     serialized = result.model_dump(mode="json") if isinstance(result, BaseModel) else result
     assert "intent_bytes" not in json.dumps(serialized)
     assert "design_bytes" not in json.dumps(serialized)
+
+
+@pytest.mark.asyncio
+async def test_answer_adapter_supports_requestless_block_evidence() -> None:
+    application = _RecordingApplication()
+    adapter = TargetMCPAdapter(application)  # type: ignore[arg-type]
+
+    result = await adapter.answer(_requests()["answer_block"])
+
+    assert result.kind is DeliveryAnswerKind.BLOCK
+    assert result.binding is not None
+    assert result.binding.block is not None
+    assert result.binding.block.resolution_note == "Verified."
+    assert result.frontier_digest == DIGEST
+
+
+@pytest.mark.asyncio
+async def test_answer_adapter_supports_change_disposition_resolution() -> None:
+    application = _RecordingApplication()
+    adapter = TargetMCPAdapter(application)  # type: ignore[arg-type]
+
+    result = await adapter.answer(_requests()["answer_disposition"])
+
+    assert result.kind is DeliveryAnswerKind.DISPOSITION
+    assert result.disposition is not None
+    assert result.disposition.disposition_id == DIGEST
+    assert result.frontier_digest == DIGEST
 
 
 @pytest.mark.asyncio
@@ -891,12 +1575,121 @@ async def test_publication_baseline_recovery_requires_literal_confirmation_befor
     assert application.calls == []
 
 
+@pytest.mark.asyncio
+async def test_release_stuck_worker_forwards_absent_outcome_as_finalizer_release() -> None:
+    application = _RecordingApplication()
+    adapter = TargetMCPAdapter(application)  # type: ignore[arg-type]
+
+    await adapter.release_stuck_worker({"change_id": CHANGE, "attempt_id": "final-attempt", "claim_id": "final"})
+    await adapter.release_stuck_worker(
+        {"change_id": CHANGE, "outcome_id": None, "attempt_id": "final-attempt", "claim_id": "final"}
+    )
+
+    assert application.calls == [
+        ("release_stuck_worker", (CHANGE, None, "final-attempt", "final"), {}),
+        ("release_stuck_worker", (CHANGE, None, "final-attempt", "final"), {}),
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "request_update",
+    [
+        {"outcome_id": "OUT-1"},
+        {"attempt_id": ""},
+        {"claim_id": None},
+        {"confirmed_lost": True},
+        {"elapsed_time": 600},
+    ],
+)
+async def test_release_stuck_worker_rejects_invalid_or_extra_parameters(request_update: dict[str, object]) -> None:
+    application = _RecordingApplication()
+    adapter = TargetMCPAdapter(application)  # type: ignore[arg-type]
+
+    with pytest.raises(ToolError) as exc_info:
+        await adapter.release_stuck_worker({**_requests()["release_stuck_worker"], **request_update})
+
+    diagnostic = json.loads(str(exc_info.value))
+    assert diagnostic["code"] == "ERR_TARGET_PARAM_VALIDATION"
+    assert diagnostic["retry_safe"] is False
+    assert application.calls == []
+
+
+@pytest.mark.asyncio
+async def test_release_stuck_worker_active_worktree_maps_to_retryable_conflict_with_retry_time() -> None:
+    retry_after = datetime(2026, 10, 2, 12, 2, tzinfo=UTC)
+    application = _RecordingApplication({"release_stuck_worker": DeliveryWorkerActiveError(retry_after)})
+    adapter = TargetMCPAdapter(application)  # type: ignore[arg-type]
+
+    with pytest.raises(ToolError) as exc_info:
+        await adapter.release_stuck_worker(_requests()["release_stuck_worker"])
+
+    diagnostic = json.loads(str(exc_info.value))
+    assert diagnostic["code"] == "ERR_DELIVERY_WORKER_ACTIVE"
+    assert diagnostic["retry_safe"] is True
+    assert diagnostic["current_authority_identity"] == CHANGE
+    assert "2026-10-02T12:02:00Z" in diagnostic["detail"]
+    assert "unchanged" in diagnostic["detail"]
+
+
+def test_report_finalization_failure_request_reuses_core_structural_validation() -> None:
+    request = ReportFinalizationFailureParams(
+        change_id=CHANGE,
+        expected_contract_digest=DIGEST,
+        expected_frontier_digest=DIGEST,
+        expected_change_head=COMMIT,
+        expected_reviewed_head=COMMIT,
+        expected_diagnostic_sequence=0,
+        attempt_key="attempt-1",
+        category="maintained-check",
+        code=FinalizationFailureCode.MAINTAINED_CHECK_FAILED,
+        checks_state="failed",
+        check_id="check-1",
+        exit_status=1,
+    )
+
+    assert request.code is FinalizationFailureCode.MAINTAINED_CHECK_FAILED
+    with pytest.raises(ValueError, match="dirty paths belong only to custody diagnostics"):
+        ReportFinalizationFailureParams(
+            **request.model_dump(exclude={"paths"}),
+            paths=("product.txt",),
+        )
+
+
+@pytest.mark.asyncio
+async def test_registered_report_finalization_failure_preserves_proof_mutation_evidence() -> None:
+    application = _RecordingApplication()
+    adapter = TargetMCPAdapter(application)  # type: ignore[arg-type]
+    request = {
+        **_requests()["report_finalization_failure"],
+        "category": "proof-mutation",
+        "code": "proof-mutated-worktree",
+        "procedure_id": "proof-procedure",
+        "proof_fingerprint_before": DIGEST,
+        "proof_fingerprint_after": "d" * 64,
+    }
+
+    result = await adapter.report_finalization_failure(request)
+
+    assert result["reason_code"] == "runtime-unavailable"
+    submitted = application.calls[0][1][0]
+    assert isinstance(submitted, ReportFinalizationFailure)
+    assert submitted.category == "proof-mutation"
+    assert submitted.code is FinalizationFailureCode.PROOF_MUTATED_WORKTREE
+    assert submitted.procedure_id == "proof-procedure"
+    assert submitted.proof_fingerprint_before == DIGEST
+    assert submitted.proof_fingerprint_after == "d" * 64
+
+
 def test_delivery_operation_names_annotations_and_prohibited_methods_are_exact() -> None:
     reads = {
         "read_design_session",
         "derive_delivery_contract",
         "list_work_items",
+        "list_changes",
+        "get_change",
         "delivery_health",
+        "propose_quarantined_delivery_state_snapshot_repair",
         "list_retained_change_worktrees",
         "show_work_item",
         "show_work_item_view",
@@ -905,6 +1698,7 @@ def test_delivery_operation_names_annotations_and_prohibited_methods_are_exact()
         "show_plan_context",
         "show_build_context",
         "show_finalization_context",
+        "derive_evidence_receipts",
         "show_integration_attention",
         "observe_change_publication_checks",
         "list_completed_changes",
@@ -941,7 +1735,15 @@ def test_delivery_operation_names_annotations_and_prohibited_methods_are_exact()
         )
         assert tool_annotations.read_only_hint is (name in reads)
         assert tool_annotations.idempotent_hint is (
-            name not in {"acquire_frontier_work", "resolve_request", "clear_block", "administrative_move"}
+            name
+            not in {
+                "acquire_actions",
+                "acquire_change_action",
+                "administrative_move",
+                "repair",
+                "repair_change",
+                "set_change_intent",
+            }
         )
     assert all(not hasattr(TargetMCPAdapter, name) for name in prohibited)
 
@@ -997,6 +1799,12 @@ async def test_named_runtime_catalog_and_integration_failures_preserve_diagnosti
             False,
         ),
         (
+            "admit_delivery_change",
+            DeliveryRevisionError("change-not-paused", "Pause the Change before revising its requirements"),
+            "ERR_DELIVERY_REVISION",
+            False,
+        ),
+        (
             "transition_delivery",
             DeliveryRuntimeReferenceError("outcome is absent"),
             "ERR_DELIVERY_RUNTIME_REFERENCE",
@@ -1033,13 +1841,13 @@ async def test_named_runtime_catalog_and_integration_failures_preserve_diagnosti
             True,
         ),
         (
-            "resolve_change_disposition",
+            "answer",
             DeliveryChangeDispositionConflictError("attention identity is stale"),
             "ERR_DELIVERY_RUNTIME_CONFLICT",
             False,
         ),
         (
-            "resolve_change_disposition",
+            "answer",
             DeliveryChangeDispositionBusyError("attention resolution is already in progress"),
             "ERR_DELIVERY_ATTENTION_RESOLVE_BUSY",
             True,
@@ -1077,9 +1885,10 @@ async def test_named_runtime_catalog_and_integration_failures_preserve_diagnosti
     for operation_name, failure, code, retry_safe in cases:
         application = _RecordingApplication({operation_name: failure})
         adapter = TargetMCPAdapter(application)  # type: ignore[arg-type]
+        request_key = "answer_disposition" if operation_name == "answer" else operation_name
 
         with pytest.raises(ToolError) as exc_info:
-            await getattr(adapter, operation_name)(_requests()[operation_name])
+            await getattr(adapter, operation_name)(_requests()[request_key])
 
         diagnostic = json.loads(str(exc_info.value))
         assert diagnostic["code"] == code

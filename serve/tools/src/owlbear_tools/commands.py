@@ -80,7 +80,6 @@ COMMANDS = (
         includes=(
             "lint-python",
             "lint-markdown",
-            "lint-json",
             "lint-yaml",
             "lint-shell",
             "lint-actions",
@@ -96,7 +95,7 @@ COMMANDS = (
         "uv run lint-cockpit",
         "Cockpit frontend lint.",
         "Quality",
-        includes=("lint-cockpit-code", "lint-cockpit-style", "lint-cockpit-html"),
+        includes=("lint-cockpit-biome", "lint-cockpit-html"),
         development_only=True,
         supports_staged=True,
         supports_safe_fixes=True,
@@ -120,14 +119,6 @@ COMMANDS = (
         development_only=True,
         supports_staged=True,
         supports_safe_fixes=True,
-    ),
-    Command(
-        "lint-json",
-        "uv run lint-json",
-        "JSON and JSONC lint.",
-        "Quality",
-        development_only=True,
-        supports_staged=True,
     ),
     Command(
         "lint-yaml",
@@ -162,18 +153,9 @@ COMMANDS = (
         supports_staged=True,
     ),
     Command(
-        "lint-cockpit-code",
-        "uv run lint-cockpit-code",
-        "Cockpit code lint.",
-        "Quality",
-        development_only=True,
-        supports_staged=True,
-        supports_safe_fixes=True,
-    ),
-    Command(
-        "lint-cockpit-style",
-        "uv run lint-cockpit-style",
-        "Cockpit CSS lint.",
+        "lint-cockpit-biome",
+        "uv run lint-cockpit-biome",
+        "Frontend and JSON checks.",
         "Quality",
         development_only=True,
         supports_staged=True,
@@ -198,19 +180,18 @@ COMMANDS = (
         supports_unsafe_fixes=True,
     ),
     Command(
-        "lint-full",
-        "uv run lint-full",
-        "All lint engines.",
-        "Quality",
-        includes=("lint", "megalint"),
-        development_only=True,
-        supports_safe_fixes=True,
-        supports_unsafe_fixes=True,
-    ),
-    Command(
         "format-python",
         "uv run format-python",
         "Ruff Python format.",
+        "Quality",
+        development_only=True,
+        supports_staged=True,
+        supports_safe_fixes=True,
+    ),
+    Command(
+        "format-biome",
+        "uv run format-biome",
+        "Frontend and JSON format.",
         "Quality",
         development_only=True,
         supports_staged=True,
@@ -235,11 +216,11 @@ COMMANDS = (
         supports_safe_fixes=True,
     ),
     Command(
-        "format-full",
-        "uv run format-full",
+        "format",
+        "uv run format",
         "All formatters.",
         "Quality",
-        includes=("format-python", "format-whitespace", "format-eof"),
+        includes=("format-python", "format-biome", "format-whitespace", "format-eof"),
         development_only=True,
         supports_staged=True,
         supports_safe_fixes=True,
@@ -252,11 +233,11 @@ COMMANDS = (
         development_only=True,
     ),
     Command(
-        "quality-full",
-        "uv run quality-full",
+        "quality",
+        "uv run quality",
         "Full quality sequence.",
         "Quality",
-        includes=("format-full", "lint-full", "typecheck-cockpit", "todo"),
+        includes=("format", "lint", "megalint", "typecheck-cockpit", "todo"),
         development_only=True,
         supports_safe_fixes=True,
         supports_unsafe_fixes=True,
@@ -287,6 +268,14 @@ COMMANDS = (
         "Run tests; paths select suites.",
         "Tests",
         development_only=True,
+    ),
+    Command(
+        "tests",
+        "uv run tests [OPTIONS] [PATH ...]",
+        "Alias for test.",
+        "Tests",
+        development_only=True,
+        hidden=True,
     ),
     Command(
         "test-e2e",
@@ -358,7 +347,6 @@ _TOPICS = {
     "workspace": "Workspace",
     "w": "Workspace",
     "quality": "Quality",
-    "lint": "Quality",
     "q": "Quality",
     "tests": "Tests",
     "test": "Tests",
@@ -583,7 +571,11 @@ def help_main() -> None:
         command for command in COMMANDS if _visible(command, development=development, selected=selected)
     ]
     if selected is None:
-        topics = "s, m, i" if development else "s"
+        topics = (
+            "w (workspace), q (quality), t (tests), s (setup), m (maintenance), i (internal)"
+            if development
+            else "w (workspace), q (quality)"
+        )
         visible_commands = [
             replace(command, summary=f"Topics: {topics}.") if command.name == "help" else command
             for command in visible_commands
@@ -592,7 +584,7 @@ def help_main() -> None:
     terminal_width = shutil.get_terminal_size(fallback=(120, 24)).columns
 
     stream = sys.stdout
-    print(_style(f"{_INFO} OwlBear commands", _BOLD, _MAGENTA, stream=stream) + "\n")  # noqa: T201
+    print(_style(f"{_INFO} OwlBear workspace helpers", _BOLD, _MAGENTA, stream=stream) + "\n")  # noqa: T201
     for group in _GROUP_ORDER:
         if selected is not None and group != selected:
             continue

@@ -43,21 +43,39 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 
 | Agent | Model | Required reading | Delegates | Hooks |
 | --- | --- | --- | --- | --- |
-| designer | GPT-5.6 Sol | `w-design-session` | conceptual-design-reviewer, designer-challenger, Explore | `PreToolUse`: allow only scratch/research edits and read-only terminal commands; target publication uses the admission tool surface |
-| conceptual-design-reviewer | Claude Opus 5 | `r-challenger-protocol`, `h-module-design`, `h-frontend-design` | None | `PreToolUse`: deny writes except scratch |
-| designer-challenger | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design` | None | `PreToolUse`: deny writes except scratch |
-| planner | GPT-6 Astra | `w-frontier-planning` | planner-challenger, Explore | `PreToolUse`: deny writes except scratch; terminal read-only; publishes advisory-reviewed task chains and returns worker-owned transitions |
-| planner-challenger | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | None | `PreToolUse`: deny writes except scratch |
-| orchestrator | GPT-5.6 Luna | `w-orchestration` | planner, builder, memory-curator, Explore | Reports and acquires portfolio work, inspects bounded Delivery health when acquisition supplies a hint, dispatches task claims, recovers exact failed claims including retained Integration repair claims, forwards task transitions, runs memory housekeeping on cycle 3 and every tenth completed acquisition cycle thereafter, and reports typed Integration attention; no repository write tools |
-| builder | GPT-5.6 Luna | `w-packet-building`, `r-workspace-governance`, `h-codebase-orientation` | build-reviewer | Assigned change worktree only; task Build returns a lifecycle transition; `SessionStart`: repository context; `PostToolUse`: lint changed files |
-| build-reviewer | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation` | None | Exact-commit task-result or finalization review with read-only Git; `PreToolUse`: deny writes except scratch; terminal read-only |
-| finalizer | GPT-5.6 Luna | `w-change-finalization`, `h-codebase-orientation` | build-reviewer | User-invoked exact Change proof and finalization; `PreToolUse`: deny writes and terminal mutation |
-| test-curator | GPT-5.6 Luna | `w-test-curation`, `r-workspace-governance` | None | `PreToolUse`: deny source writes through recognized file tools; terminal execution is trusted for this manually invoked role |
-| memory-curator | GPT-5.6 Luna | `w-mem-curation` | None | None |
-| knowledge-ingestor | GPT-5.6 Luna | `h-knowledge-ops` | None | None |
-| knowledge-enricher | GPT-5.6 Luna | `w-knowledge-enrichment`, `h-knowledge-ops` | None | None |
+| designer | Claude Opus 5.5 (copilot) | `w-design-session` | conceptual-design-reviewer, designer-challenger, Explore | `PreToolUse`: allow only scratch/research edits and read-only terminal commands; target publication uses the admission tool surface |
+| conceptual-design-reviewer | GPT-6.1 Sol (copilot) | `r-challenger-protocol`, `h-module-design`, `h-frontend-design` | None | `PreToolUse`: deny writes except scratch |
+| designer-challenger | GPT-6.1 Sol (copilot) | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design` | None | `PreToolUse`: deny writes except scratch |
+| planner | Claude Opus 5.5 (copilot) | `w-frontier-planning` | planner-challenger, Explore | `PreToolUse`: deny writes except scratch; terminal read-only; publishes advisory-reviewed task chains and returns worker-owned transitions |
+| planner-challenger | GPT-6.1 Sol (copilot) | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | None | `PreToolUse`: deny writes except scratch |
+| orchestrator | GPT-6 Luna | `w-orchestration` | see below | Session-start claim check; user-confirmed stopped claims use one exact release; window loss is engine-settled after the write/process guard. |
+| repairer | GPT-6 Luna | `h-decision-requests` | None | One exact Change view and one bounded answer/repair interaction; high-level Delivery tools only, no repository or worker authority |
+| builder | GPT-6 Luna | `w-packet-building`, `r-workspace-governance`, `h-codebase-orientation` | build-reviewer | Assigned Change worktree only; successful Build uses the claim-bound submit-result facade; normally returned retry/block/Planning-or-Design-return transitions are settled by Orchestrator, while other supported transitions are forwarded; `SessionStart`: repository context; `PostToolUse`: lint changed files |
+| build-reviewer | GPT-6.1 Sol (copilot) | `r-challenger-protocol`, `h-codebase-orientation` | None | Exact-commit task-result or finalization review with read-only Git; `PreToolUse`: deny writes except scratch; terminal read-only |
+| finalizer | GPT-6 Luna | `w-change-finalization`, `h-codebase-orientation` | build-reviewer | User-invoked exact Change proof and finalization; `PreToolUse`: deny writes and terminal mutation |
+| test-curator | GPT-6.1 Sol (copilot) | `w-test-curation`, `r-workspace-governance` | None | `PreToolUse`: deny source writes through recognized file tools; terminal execution is trusted for this manually invoked role |
+| memory-curator | GPT-6 Luna | `w-mem-curation` | None | None |
+| knowledge-ingestor | GPT-6 Luna | `h-knowledge-ops` | None | None |
+| knowledge-enricher | GPT-6 Luna | `w-knowledge-enrichment`, `h-knowledge-ops` | None | None |
+| Explore (built-in) | default | None declared by OwlBear | None | VS Code built-in delegate; no OwlBear-specific model override or hook |
 
 Tool allowlists remain in agent frontmatter; they are not duplicated here.
+
+Orchestrator continues one selected Change through `/continue-change`: it acquires and dispatches at
+most one Change action at a time, then forwards ordinary transitions and routes typed attention and
+admitted Change repair proposals. Before dispatching, it inspects only that Change's running
+Planner/Builder/Finalizer claims through `get_change` and asks once with `vscode/askQuestions`
+whether each exact prior run was stopped. Only a confirmed stop uses one exact
+`release_stuck_worker` call. A `worker-stall-wait` needs no question and yields with its retry time
+or bounded process details. Delivery records each claim's issuing VS Code window PID and process
+start time, then settles a previous-session loss on acquisition only after that window is gone, no
+worktree write occurred for 30 seconds, and the worktree/Git-admin process guard passes. An
+MCP-server restart while the window is alive does not qualify. Orchestrator triggers no memory
+curation and has no repository write tools. Returned Planner/Builder no-results use
+`ended-without-result` only after dispatch return and owned mutators settle. `worker-host-lost` and
+`worker-released-stuck` are engine-only and never go through Orchestrator settlement. A lost or
+released Finalizer without a report receives `finalizer-ended-without-report` with unknown checks,
+not proof.
 
 ## Prompt Entry Map
 
@@ -65,10 +83,15 @@ Tool allowlists remain in agent frontmatter; they are not duplicated here.
 | --- | --- | --- |
 | `ideate` | `prompt` -> designer in discovery mode | Agent required-reading loads `w-design-session`; selects or creates one target Design session |
 | `design` | `prompt` -> designer in direct design mode | Agent required-reading loads `w-design-session`; rehydrates the same target Design session |
-| `orchestrate` | `prompt` -> orchestrator | Agent required-reading loads `w-orchestration` |
-| `finalize-change` | `prompt` -> finalizer | Agent required-reading loads `w-change-finalization`; engine proof and exact reviewed finalization |
+| `continue-change` | `prompt` -> orchestrator | The normal execution entry: one selected Change; session-start claim check, then acquires and dispatches at most one Change action at a time |
+| `challenge-plan_sol` | Current agent directed by `.github/prompts` | Dispatches a fresh unnamed read-only subagent with `GPT-6.1 Sol (copilot)`; caller reconciles evidence and owns the recommendation |
+| `challenge-implementation_sol` | Current agent directed by `.github/prompts` | Dispatches a fresh unnamed read-only subagent with `GPT-6.1 Sol (copilot)`; caller reconciles findings and owns the verdict |
+| `finalize-change` | `prompt` -> finalizer | Exceptional fallback when the continuation host cannot dispatch Finalizer, and the `address-pr-feedback` handoff; agent required-reading loads `w-change-finalization`; engine proof and exact reviewed finalization |
+| `inspect-change` | `agent` with a read-only allowlist | Read-only Change diagnosis through `get_change` and `delivery_health` (exact-name tool search for deferred bindings; `readFile` only for host-spilled results); no mutation or host repair |
+| `upgrade-delivery` | Current agent directed by prompt | Prompt-defined N02-D procedure: install, online read-only preflight, user stop, offline preflight, backup, `delivery-migrate`, confirmed switch, user restart and verification through `delivery-controller` |
 | `address-pr-feedback` | Current agent directed by prompt | Loads `w-address-pr-feedback`; `start` evaluates and repairs external review threads, while `resume` publishes the fresh finalized head before replying and resolving threads |
-| `resolve-target-conflict` | Current agent directed by prompt | Loads `w-target-conflict-resolution`; resolves exact target merges in the managed Change worktree and hands off to finalization |
+| `resolve-target-conflict` | Current agent directed by prompt | Loads `w-target-conflict-resolution`; resolves exact target merges in the managed Change worktree and hands off to `/continue-change` |
+| `repair-delivery` | Current agent directed by prompt | Loads `w-delivery-repair`; read-only `delivery-diagnose` bootstrap, then `delivery-repair` classification and fenced proposals under the confirmation policy while the user has stopped the controllers |
 | `resolve-delivery-attention` | Temporary recovery/exception prompt | Loads `w-delivery-attention-resolution`; binds one exact Change or Integration attention before interactive diagnosis; retire only after Cockpit and Delivery provide tested guided routes for all prompt-only recovery capabilities |
 | `test-curation` | `prompt` -> test-curator | Agent required-reading loads `w-test-curation` |
 | `kb-ingest` | `prompt` -> knowledge-ingestor | Agent required-reading loads `h-knowledge-ops` |
@@ -99,6 +122,7 @@ The named caller owns each on-demand condition and timing.
 | Builder or Finalizer post-result context | `h-process-observations` | A reviewed result exposes retry, return, block, review-finding, material divergence, or explicit process-learning need |
 | `resolve-delivery-attention` prompt | `w-delivery-attention-resolution` | One exact operator-required Delivery attention or blocked outcome needs interactive diagnosis or a user-selected remedy |
 | `resolve-target-conflict` prompt | `w-target-conflict-resolution` | One exact target merge needs managed-worktree resolution and Delivery-owned merge validation |
+| `repair-delivery` prompt | `w-delivery-repair` | Delivery refuses to start or the user asks for offline diagnosis and supported repair |
 
 ## Required Skill Consumers
 
@@ -115,6 +139,7 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 | `h-frontend-design` | conceptual-design-reviewer |
 | `h-ac-quality` | planner-challenger |
 | `w-orchestration` | orchestrator |
+| `h-decision-requests` | repairer |
 | `w-change-finalization` | finalizer |
 | `w-test-curation` | test-curator |
 | `r-workspace-governance` | builder, test-curator |
@@ -130,11 +155,16 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 | designer-challenger | designer | Native admission lacks required repository-grounded entity challenge evidence |
 | planner | orchestrator | An acquired Planning launch cannot produce a published task chain and worker-owned transition |
 | planner-challenger | planner | A proposed Delivery task chain cannot receive independent advisory evidence |
-| builder | orchestrator | An acquired Build launch cannot produce its exact-commit result; a dispatch failure instead triggers the matching exact claim recovery |
+| builder | orchestrator | Settled no-result preserves same-task work; unreturned/live work stays held |
+| finalizer | orchestrator | An issued finalization launch is dispatched intact; normal failures settle only with its actual stored report and issued identities, while success is recorded without another API call; if the capability is unavailable, the orchestrator reports the exceptional `/finalize-change <change_id>` fallback instead |
+| repairer | orchestrator | A Change-specific engine-authored repair proposal cannot receive its bounded user interaction |
 | build-reviewer | builder | An exact-commit task result cannot receive advisory pass or finding evidence |
 | build-reviewer | finalizer | An exact finalization proof cannot receive advisory pass or finding evidence |
-| memory-curator | orchestrator | Scheduled memory housekeeping is unavailable; the failure is reported and does not stop independent Delivery acquisition |
 | Explore | designer, planner, orchestrator | Broad read-only orientation must be performed by the caller or omitted |
+
+`recover_claim` refusals report `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` and retain custody; the user
+recovers claims through Cockpit or `/resolve-delivery-attention`. The user-stopped release route is
+separate. No agent triggers `memory-curator`; the user runs it or reviews pending entries in Cockpit.
 
 The agent validator enforces ND3 metadata and frontmatter-to-`<agents>` alignment; see
 `h-agent-structure` for the nesting rules.

@@ -6,7 +6,7 @@ user-invocable: false
 
 # Memory Curation
 
-> **Audience:** The `memory-curator` agent (periodic or manual dispatch). **When:** Orchestrator dispatches a curation cycle, or the user invokes manually for conflict resolution. **Why:** Turns raw `pending` agent reflections into scoped, quality-checked MCP entries that `recall_memory` surfaces.
+> **Audience:** The `memory-curator` agent (periodic or manual mode). **When:** The user requests a periodic curation pass (`Curate: Periodic curation`) or invokes the curator for conflict resolution. **Why:** Turns raw `pending` agent reflections into scoped, quality-checked MCP entries that `recall_memory` surfaces.
 
 Maintain institutional memory by turning raw agent learnings into scoped MCP memory entries. MCP memory is the canonical reviewed store; the retired VS Code `/memories/` store is not an inbox or fallback.
 
@@ -40,20 +40,22 @@ The curator also does not resolve exceptional states. `curate_memory` is blocked
 
 ## Step 0 — Setup
 
-Before curation, if the Memory tools are deferred, run one focused `tool_search` with:
-
-`OwlBear Memory list_memories read_memory curate_memory delete_memory delete_agent_memories rename_agent_memories commit_memory_batch`
+Before curation, invoke directly callable Memory operations as granted; a deferred inventory listing
+does not override those bindings. For each required Memory operation without a direct callable
+binding (`list_memories`, `read_memory`, `curate_memory`, `delete_memory`, `delete_agent_memories`,
+`rename_agent_memories`, `commit_memory_batch`), run one `tool_search` whose query is exactly that
+operation name.
 
 Require callable bindings for `list_memories` and `commit_memory_batch` before any candidate read or
-mutation. If either required binding is unavailable or the focused search returns a tool error,
+mutation. If either required binding is unavailable or its search returns a tool error,
 report the exact missing operation and return without changing MCP memory or the workspace. The
 remaining bindings are required before using their corresponding operations; do not substitute a
 different memory store or direct Git command.
 
 **Mode detection:**
 
-- **Periodic mode** — dispatched by the orchestrator. Handle clear-cut entries only. Do not call `askQuestions`; defer conflicts and ordinary content or scope uncertainty.
-- **Manual mode** — invoked directly by the user. Resolve conflicts and uncertain scope through `askQuestions`.
+- **Periodic mode** — the request is `Curate: Periodic curation`. Handle clear-cut entries only. Do not call `askQuestions`; defer conflicts and ordinary content or scope uncertainty.
+- **Manual mode** — any other direct user request. Resolve conflicts and uncertain scope through `askQuestions`.
 
 Classify content before provenance or scope. Delete low-value content regardless of identity. For
 keep-worthy unfamiliar named provenance, require another reviewed non-pending entry or a readable

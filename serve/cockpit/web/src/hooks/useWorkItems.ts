@@ -1,56 +1,63 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  answerWorkItemRequest,
-  abortWorkItemTargetSync,
   abandonWorkItemChange,
+  abortWorkItemTargetSync,
+  adoptExternalHeadAfterAcceptanceAttention,
+  answerWorkItemRequest,
+  approveWorkItemMerge,
+  type ChangeGroupView,
+  type CompletedChangePage,
+  type CompletedChangeRecord,
   cleanupAbandonedWorkItemChange,
-  discardAbandonedTargetSyncAndCleanup,
   cleanupCompletedWorkItemChange,
   clearWorkItemBlock,
+  completedChangeRecordId,
+  type DeliveryRequestResolution,
+  type DesignWorkDetailResponse,
   deferWorkItemChange,
+  designWorkDetailUrl,
+  discardAbandonedTargetSyncAndCleanup,
+  grantRetryAttempt,
+  grantWorkItemAttempt,
+  isUnavailableDetail,
   listCompletedChanges,
+  type MergeApprovalResponse,
   markWorkItemPublicationReady,
   moveWorkItemBackward,
   observeWorkItemAcceptance,
   observeWorkItemPublicationChecks,
+  type PublicationChecksObservationResponse,
   previewWorkItemBackward,
   reconcileWorkItemPublication,
-  recoverWorkItemClaim,
   recoverWorkItemChange,
-  reconcileWorkItemAcceptance,
-  resolveWorkItemTargetSync,
+  releaseStuckWorker,
   resolveWorkItemAttention,
+  resolveWorkItemTargetSync,
   resumeWorkItemChange,
   searchCompletedChanges,
+  showCompletedChange,
   supersedeWorkItemPublication,
   syncWorkItemTarget,
-  showCompletedChange,
-  workItemDetailUrl,
-  type CompletedChangePage,
-  type CompletedChangeRecord,
-  completedChangeRecordId,
-  type DeliveryRequestResolution,
-  type DesignWorkDetailResponse,
+  WorkItemApiError,
+  type WorkItemAvailableDetailResponse,
+  type WorkItemCardView,
   type WorkItemDetailResponse,
   type WorkItemPortfolioResponse,
-  type WorkItemCardView,
-  type PublicationChecksObservationResponse,
   type WorkItemStage,
-  WorkItemApiError,
-  designWorkDetailUrl,
-  adoptExternalHeadAfterAcceptanceAttention,
-} from '../api/workItems'
-import { usePollingFetch } from './usePollingFetch'
+  type WorkItemUnavailableDetailResponse,
+  workItemDetailUrl,
+} from "../api/workItems";
+import { usePollingFetch } from "./usePollingFetch";
 
 export interface WorkItemIdentity {
-  changeId: string
-  itemKey: string
+  changeId: string;
+  itemKey: string;
 }
 
 interface AsyncResource<T> {
-  data: T | null
-  error: Error | null
-  isLoading: boolean
+  data: T | null;
+  error: Error | null;
+  isLoading: boolean;
 }
 
 const EMPTY_PORTFOLIO: WorkItemPortfolioResponse = {
@@ -71,46 +78,38 @@ const EMPTY_PORTFOLIO: WorkItemPortfolioResponse = {
     queued_for_orchestration: [],
     interventions: [],
     dependency_waits: [],
-    guidance: [{ kind: 'create-change', change_ids: [], work_count: 0 }],
+    guidance: [{ kind: "create-change", change_ids: [], work_count: 0 }],
   },
   health: {
-    status: 'healthy',
+    status: "healthy",
     diagnostics: [],
   },
-}
+};
 
-const EMPTY_HISTORY: CompletedChangePage = { records: [], total_count: 0, next_cursor: null }
-
-const ACCEPTANCE_RECONCILIATION_INTERVAL_MS = 30_000
-const ACCEPTANCE_RECONCILIATION_MAX_BACKOFF_MS = 5 * 60_000
-
-function acceptanceChangeIds(portfolio: WorkItemPortfolioResponse): string[] {
-  return portfolio.groups
-    .filter((group) => group.lifecycle === 'awaiting-merge' && group.items.some(
-      (item) => item.scope === 'change-publication' && item.action.kind === 'observe-acceptance',
-    ))
-    .map((group) => group.change_id)
-    .sort()
-}
+const EMPTY_HISTORY: CompletedChangePage = {
+  records: [],
+  total_count: 0,
+  next_cursor: null,
+};
 
 export function useWorkPortfolio(paused = false) {
-  const [portfolio, setPortfolio] = useState<WorkItemPortfolioResponse | null>(null)
-  const [error, setError] = useState<Error | null>(null)
-  const wasPaused = useRef(paused)
-  const polling = usePollingFetch<WorkItemPortfolioResponse>('/api/work-items', {
+  const [portfolio, setPortfolio] = useState<WorkItemPortfolioResponse | null>(null);
+  const [error, setError] = useState<Error | null>(null);
+  const wasPaused = useRef(paused);
+  const polling = usePollingFetch<WorkItemPortfolioResponse>("/api/work-items", {
     intervalMs: 3_000,
     paused,
     onSuccess: (data) => {
-      setPortfolio(data)
-      setError(null)
+      setPortfolio(data);
+      setError(null);
     },
     onError: setError,
-  })
+  });
   useEffect(() => {
-    const resumed = wasPaused.current && !paused
-    wasPaused.current = paused
-    if (resumed) polling.refetch()
-  }, [paused, polling.refetch])
+    const resumed = wasPaused.current && !paused;
+    wasPaused.current = paused;
+    if (resumed) polling.refetch();
+  }, [paused, polling.refetch]);
 
   return {
     portfolio: portfolio ?? EMPTY_PORTFOLIO,
@@ -118,153 +117,26 @@ export function useWorkPortfolio(paused = false) {
     error,
     isLoading: polling.isFetching && portfolio === null,
     retry: polling.refetch,
-  }
-}
-
-export function useAcceptanceReconciliation(
-  portfolio: WorkItemPortfolioResponse,
-  onChanged: () => void,
-  paused = false,
-): { providerError: Error | null; providerChangeIds: string[]; isRetrying: boolean; retry: () => void } {
-  const changeIds = acceptanceChangeIds(portfolio)
-  const changeIdsKey = changeIds.join('\u0000')
-  const changeIdsRef = useRef(changeIds)
-  const onChangedRef = useRef(onChanged)
-  const [providerError, setProviderError] = useState<Error | null>(null)
-  const [providerChangeIds, setProviderChangeIds] = useState<string[]>([])
-  const [isRetrying, setIsRetrying] = useState(false)
-  const [retryNonce, setRetryNonce] = useState(0)
-  const providerFailureCountRef = useRef(0)
-  changeIdsRef.current = changeIds
-  onChangedRef.current = onChanged
-
-  useEffect(() => {
-    if (!changeIdsKey) providerFailureCountRef.current = 0
-    if (paused || !changeIdsKey) {
-      setProviderError(null)
-      setProviderChangeIds([])
-      setIsRetrying(false)
-      return
-    }
-
-    let active = true
-    let inFlight = false
-    let timer: ReturnType<typeof setTimeout> | null = null
-    let controller: AbortController | null = null
-
-    const clearTimer = () => {
-      if (timer !== null) {
-        clearTimeout(timer)
-        timer = null
-      }
-    }
-
-    const isVisible = () => document.visibilityState === 'visible'
-
-    const scheduleNext = () => {
-      if (!active || !isVisible() || changeIdsRef.current.length === 0) return
-      const delay = Math.min(
-        ACCEPTANCE_RECONCILIATION_INTERVAL_MS * (2 ** providerFailureCountRef.current),
-        ACCEPTANCE_RECONCILIATION_MAX_BACKOFF_MS,
-      )
-      timer = setTimeout(() => {
-        timer = null
-        void poll()
-      }, delay)
-    }
-
-    const poll = async () => {
-      if (!active || !isVisible() || inFlight || changeIdsRef.current.length === 0) return
-      inFlight = true
-      controller = new AbortController()
-      const requestedIds = [...changeIdsRef.current]
-      let providerUnavailable = false
-      try {
-        const result = await reconcileWorkItemAcceptance(requestedIds, controller.signal)
-        const unavailable = result.outcomes.filter((outcome) => outcome.status === 'provider-unavailable')
-        providerUnavailable = unavailable.length > 0
-        if (providerUnavailable) {
-          const affectedIds = unavailable.map((outcome) => outcome.change_id)
-          const detail = unavailable.map((outcome) => outcome.detail).find((value): value is string => Boolean(value))
-          setProviderChangeIds(affectedIds)
-          setProviderError(new Error(detail ?? 'The provider was unavailable while checking GitHub acceptance.'))
-        } else {
-          setProviderChangeIds([])
-          setProviderError(null)
-        }
-        if (result.outcomes.some((outcome) => outcome.status !== 'waiting')) {
-          onChangedRef.current()
-        }
-      } catch (caught: unknown) {
-        if (!(caught instanceof DOMException && caught.name === 'AbortError')) {
-          providerUnavailable = true
-          setProviderChangeIds(requestedIds)
-          setProviderError(caught instanceof Error ? caught : new Error('The provider was unavailable while checking GitHub acceptance.'))
-        }
-      } finally {
-        inFlight = false
-        controller = null
-        if (active) {
-          setIsRetrying(false)
-          providerFailureCountRef.current = providerUnavailable
-            ? Math.min(providerFailureCountRef.current + 1, 4)
-            : 0
-          scheduleNext()
-        }
-      }
-    }
-
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        clearTimer()
-        controller?.abort()
-        return
-      }
-      void poll()
-    }
-
-    document.addEventListener('visibilitychange', onVisibilityChange)
-    if (isVisible()) void poll()
-
-    return () => {
-      active = false
-      clearTimer()
-      controller?.abort()
-      document.removeEventListener('visibilitychange', onVisibilityChange)
-    }
-  }, [changeIdsKey, paused, retryNonce])
-
-  return {
-    providerError,
-    providerChangeIds,
-    isRetrying,
-    retry: () => {
-      providerFailureCountRef.current = 0
-      setProviderError(null)
-      setProviderChangeIds([])
-      setIsRetrying(true)
-      setRetryNonce((value) => value + 1)
-    },
-  }
+  };
 }
 
 export function useDesignWorkDetail(changeId: string) {
-  const [data, setData] = useState<DesignWorkDetailResponse | null>(null)
-  const [detailError, setDetailError] = useState<Error | null>(null)
+  const [data, setData] = useState<DesignWorkDetailResponse | null>(null);
+  const [detailError, setDetailError] = useState<Error | null>(null);
   const polling = usePollingFetch<DesignWorkDetailResponse>(designWorkDetailUrl(changeId), {
     intervalMs: 3_000,
     onSuccess: (next) => {
-      if (next.change_id !== changeId) return
-      setData(next)
-      setDetailError(null)
+      if (next.change_id !== changeId) return;
+      setData(next);
+      setDetailError(null);
     },
     onError: setDetailError,
-  })
+  });
 
   useEffect(() => {
-    setData(null)
-    setDetailError(null)
-  }, [changeId])
+    setData((current) => (current?.change_id === changeId ? current : null));
+    setDetailError((current) => (current === null ? null : current));
+  }, [changeId]);
 
   return {
     data,
@@ -272,7 +144,7 @@ export function useDesignWorkDetail(changeId: string) {
     isLoading: polling.isFetching && data === null,
     isRefreshing: polling.isFetching,
     retry: polling.refetch,
-  }
+  };
 }
 
 export function useCompletedHistory(query: string) {
@@ -280,58 +152,59 @@ export function useCompletedHistory(query: string) {
     data: null,
     error: null,
     isLoading: true,
-  })
-  const [retryNonce, setRetryNonce] = useState(0)
-  const [failedCursor, setFailedCursor] = useState<string | null>(null)
-  const [isLoadingMore, setIsLoadingMore] = useState(false)
-  const requestGeneration = useRef(0)
-  const latestQuery = useRef(query)
-  latestQuery.current = query
+  });
+  const [retryNonce, setRetryNonce] = useState(0);
+  const [failedCursor, setFailedCursor] = useState<string | null>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const requestGeneration = useRef(0);
+  const latestQuery = useRef(query);
+  const requestInput = useMemo(() => ({ query, retryNonce }), [query, retryNonce]);
+  latestQuery.current = query;
 
   useEffect(() => {
-    let active = true
-    const generation = ++requestGeneration.current
-    const controller = new AbortController()
-    setFailedCursor(null)
-    setIsLoadingMore(false)
-    setResource((current) => ({ ...current, isLoading: true, error: null }))
-    const request = query
-      ? searchCompletedChanges(query, undefined, controller.signal)
-      : listCompletedChanges(undefined, controller.signal)
+    let active = true;
+    const generation = ++requestGeneration.current;
+    const controller = new AbortController();
+    setFailedCursor(null);
+    setIsLoadingMore(false);
+    setResource((current) => ({ ...current, isLoading: true, error: null }));
+    const request = requestInput.query
+      ? searchCompletedChanges(requestInput.query, undefined, controller.signal)
+      : listCompletedChanges(undefined, controller.signal);
     void request
-      .then((data) => active && generation === requestGeneration.current
-        && setResource({ data, error: null, isLoading: false }))
+      .then(
+        (data) =>
+          active && generation === requestGeneration.current && setResource({ data, error: null, isLoading: false }),
+      )
       .catch((caught: unknown) => {
-        if (!active || generation !== requestGeneration.current) return
-        const error = caught instanceof Error ? caught : new Error('Change history is unavailable')
-        setResource({
-          data: resource.data,
+        if (!active || generation !== requestGeneration.current) return;
+        const error = caught instanceof Error ? caught : new Error("Change history is unavailable");
+        setResource((current) => ({
+          data: current.data,
           error,
           isLoading: false,
-        })
-        setFailedCursor(null)
-      })
+        }));
+        setFailedCursor(null);
+      });
     return () => {
-      active = false
-      controller.abort()
-    }
-  }, [query, retryNonce])
+      active = false;
+      controller.abort();
+    };
+  }, [requestInput]);
 
   const loadMore = async () => {
-    const current = resource.data
-    if (!current?.next_cursor || resource.isLoading) return
-    const generation = requestGeneration.current
-    const requestedQuery = query
-    const cursor = current.next_cursor
-    setFailedCursor(null)
-    setIsLoadingMore(true)
-    setResource({ data: current, error: null, isLoading: true })
+    const current = resource.data;
+    if (!current?.next_cursor || resource.isLoading) return;
+    const generation = requestGeneration.current;
+    const requestedQuery = query;
+    const cursor = current.next_cursor;
+    setFailedCursor(null);
+    setIsLoadingMore(true);
+    setResource({ data: current, error: null, isLoading: true });
     try {
-      const next = query
-        ? await searchCompletedChanges(query, cursor)
-        : await listCompletedChanges(cursor)
-      if (generation !== requestGeneration.current || requestedQuery !== latestQuery.current) return
-      setIsLoadingMore(false)
+      const next = query ? await searchCompletedChanges(query, cursor) : await listCompletedChanges(cursor);
+      if (generation !== requestGeneration.current || requestedQuery !== latestQuery.current) return;
+      setIsLoadingMore(false);
       setResource({
         data: {
           records: [...current.records, ...next.records],
@@ -340,19 +213,19 @@ export function useCompletedHistory(query: string) {
         },
         error: null,
         isLoading: false,
-      })
-      setFailedCursor(null)
+      });
+      setFailedCursor(null);
     } catch (caught: unknown) {
-      if (generation !== requestGeneration.current || requestedQuery !== latestQuery.current) return
-      setIsLoadingMore(false)
+      if (generation !== requestGeneration.current || requestedQuery !== latestQuery.current) return;
+      setIsLoadingMore(false);
       setResource({
         data: current,
-        error: caught instanceof Error ? caught : new Error('Change history is unavailable'),
+        error: caught instanceof Error ? caught : new Error("Change history is unavailable"),
         isLoading: false,
-      })
-      setFailedCursor(cursor)
+      });
+      setFailedCursor(cursor);
     }
-  }
+  };
 
   return {
     page: resource.data ?? EMPTY_HISTORY,
@@ -362,13 +235,13 @@ export function useCompletedHistory(query: string) {
     loadMore,
     canRetryLoadMore: failedCursor !== null,
     retryLoadMore: () => {
-      void loadMore()
+      void loadMore();
     },
     retry: () => {
-      requestGeneration.current += 1
-      setRetryNonce((value) => value + 1)
+      requestGeneration.current += 1;
+      setRetryNonce((value) => value + 1);
     },
-  }
+  };
 }
 
 export function useCompletedChange(identity: { changeId: string; recordId: string } | null) {
@@ -376,404 +249,556 @@ export function useCompletedChange(identity: { changeId: string; recordId: strin
     data: null,
     error: null,
     isLoading: false,
-  })
-  const [retryNonce, setRetryNonce] = useState(0)
+  });
+  const [retryNonce, setRetryNonce] = useState(0);
+  const requestedChangeId = identity?.changeId;
+  const requestedRecordId = identity?.recordId;
+  const requestInput = useMemo(
+    () => ({
+      changeId: requestedChangeId,
+      recordId: requestedRecordId,
+      retryNonce,
+    }),
+    [requestedChangeId, requestedRecordId, retryNonce],
+  );
 
   useEffect(() => {
-    let active = true
-    if (!identity) {
-      setResource({ data: null, error: null, isLoading: false })
+    let active = true;
+    if (!requestInput.changeId || !requestInput.recordId) {
+      setResource({ data: null, error: null, isLoading: false });
       return () => {
-        active = false
-      }
+        active = false;
+      };
     }
-    setResource({ data: null, error: null, isLoading: true })
-    void showCompletedChange(identity.changeId, identity.recordId)
+    setResource({ data: null, error: null, isLoading: true });
+    void showCompletedChange(requestInput.changeId, requestInput.recordId)
       .then((data) => {
-        if (!active) return
-        if (data.change_id !== identity.changeId || completedChangeRecordId(data) !== identity.recordId) {
-          throw new Error('Completed change detail did not match the requested identity')
+        if (!active) return;
+        if (data.change_id !== requestInput.changeId || completedChangeRecordId(data) !== requestInput.recordId) {
+          throw new Error("Completed change detail did not match the requested identity");
         }
-        setResource({ data, error: null, isLoading: false })
+        setResource({ data, error: null, isLoading: false });
       })
       .catch((caught: unknown) => {
-        if (!active) return
+        if (!active) return;
         setResource({
           data: null,
-          error: caught instanceof Error ? caught : new Error('Completed change is unavailable'),
+          error: caught instanceof Error ? caught : new Error("Completed change is unavailable"),
           isLoading: false,
-        })
-      })
+        });
+      });
     return () => {
-      active = false
-    }
-  }, [identity?.changeId, identity?.recordId, retryNonce])
+      active = false;
+    };
+  }, [requestInput]);
 
   return {
     ...resource,
     retry: () => setRetryNonce((value) => value + 1),
-  }
+  };
 }
 
 export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => void) {
-  const [data, setData] = useState<WorkItemDetailResponse | null>(null)
-  const [detailError, setDetailError] = useState<Error | null>(null)
-  const [pendingAction, setPendingAction] = useState<string | null>(null)
-  const [actionError, setActionError] = useState<Error | null>(null)
-  const [actionResult, setActionResult] = useState<string | null>(null)
-  const [publicationChecks, setPublicationChecks] = useState<PublicationChecksObservationResponse | null>(null)
-  const [publicationChecksError, setPublicationChecksError] = useState<Error | null>(null)
-  const [publicationChecksStale, setPublicationChecksStale] = useState(false)
-  const [isObservingPublicationChecks, setIsObservingPublicationChecks] = useState(false)
-  const targetSyncOperation = useRef<{ changeId: string; operationId: string } | null>(null)
-  const acceptanceHeadAdoptionOperation = useRef<{ changeId: string; operationId: string } | null>(null)
-  const supersedePublicationOperation = useRef<{ changeId: string; operationId: string } | null>(null)
-  const identityKey = `${identity.changeId}:${identity.itemKey}`
-  const publicationIdentityRef = useRef(identityKey)
-  const publicationDetailRef = useRef<WorkItemDetailResponse | null>(null)
-  const publicationHeadRef = useRef<string | null>(null)
-  const publicationChecksRef = useRef<PublicationChecksObservationResponse | null>(null)
-  const publicationObservationGenerationRef = useRef(0)
-  const publicationObservationRequestRef = useRef(0)
-  const observingPublicationChecksRef = useRef(false)
-  publicationIdentityRef.current = identityKey
+  const [data, setData] = useState<WorkItemAvailableDetailResponse | null>(null);
+  const [unavailable, setUnavailable] = useState<WorkItemUnavailableDetailResponse | null>(null);
+  const [detailError, setDetailError] = useState<Error | null>(null);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<Error | null>(null);
+  const [actionResult, setActionResult] = useState<string | null>(null);
+  const [publicationChecks, setPublicationChecks] = useState<PublicationChecksObservationResponse | null>(null);
+  const [publicationChecksError, setPublicationChecksError] = useState<Error | null>(null);
+  const [publicationChecksStale, setPublicationChecksStale] = useState(false);
+  const [isObservingPublicationChecks, setIsObservingPublicationChecks] = useState(false);
+  const targetSyncOperation = useRef<{
+    changeId: string;
+    operationId: string;
+  } | null>(null);
+  const acceptanceHeadAdoptionOperation = useRef<{
+    changeId: string;
+    operationId: string;
+  } | null>(null);
+  const supersedePublicationOperation = useRef<{
+    changeId: string;
+    operationId: string;
+  } | null>(null);
+  const identityKey = `${identity.changeId}:${identity.itemKey}`;
+  const publicationIdentityRef = useRef(identityKey);
+  const publicationDetailRef = useRef<WorkItemAvailableDetailResponse | null>(null);
+  const publicationHeadRef = useRef<string | null>(null);
+  const publicationChecksRef = useRef<PublicationChecksObservationResponse | null>(null);
+  const publicationObservationGenerationRef = useRef(0);
+  const publicationObservationRequestRef = useRef(0);
+  const observingPublicationChecksRef = useRef(false);
+  publicationIdentityRef.current = identityKey;
 
   useEffect(() => {
-    publicationDetailRef.current = null
-    publicationHeadRef.current = null
-    publicationChecksRef.current = null
-    publicationObservationGenerationRef.current += 1
-    publicationObservationRequestRef.current += 1
-    observingPublicationChecksRef.current = false
-    setPublicationChecks(null)
-    setPublicationChecksError(null)
-    setPublicationChecksStale(false)
-    setIsObservingPublicationChecks(false)
-    setData(null)
-    setDetailError(null)
-    setPendingAction(null)
-    setActionError(null)
-    setActionResult(null)
-  }, [identityKey])
+    publicationDetailRef.current = null;
+    publicationHeadRef.current = null;
+    publicationChecksRef.current = null;
+    publicationObservationGenerationRef.current += 1;
+    publicationObservationRequestRef.current += 1;
+    observingPublicationChecksRef.current = false;
+    setPublicationChecks(null);
+    setPublicationChecksError(null);
+    setPublicationChecksStale(false);
+    setIsObservingPublicationChecks(false);
+    setData((current) =>
+      current && `${current.item.card.change_id}:${current.item.card.item_key}` === identityKey ? current : null,
+    );
+    setUnavailable((current) => (current?.change_id === identity.changeId ? current : null));
+    setDetailError(null);
+    setPendingAction(null);
+    setActionError(null);
+    setActionResult(null);
+  }, [identityKey, identity.changeId]);
 
-  const polling = usePollingFetch<WorkItemDetailResponse>(
-    workItemDetailUrl(identity.changeId, identity.itemKey),
-    {
-      intervalMs: 3_000,
-      onSuccess: (next) => {
-        if (next.item.card.change_id !== identity.changeId || next.item.card.item_key !== identity.itemKey) return
-        const nextPublishedHead = next.item.publication?.published_head ?? null
-        const previousPublishedHead = publicationHeadRef.current
-        if (previousPublishedHead !== nextPublishedHead) {
-          const hadObservation = publicationChecksRef.current !== null
-          publicationObservationGenerationRef.current += 1
-          publicationObservationRequestRef.current += 1
-          observingPublicationChecksRef.current = false
-          publicationChecksRef.current = null
-          setPublicationChecks(null)
-          setPublicationChecksError(null)
-          setPublicationChecksStale(hadObservation)
-          setIsObservingPublicationChecks(false)
-        }
-        publicationHeadRef.current = nextPublishedHead
-        publicationDetailRef.current = next
-        setData(next)
-        setDetailError(null)
-      },
-      onError: setDetailError,
+  const polling = usePollingFetch<WorkItemDetailResponse>(workItemDetailUrl(identity.changeId, identity.itemKey), {
+    intervalMs: 3_000,
+    onSuccess: (next) => {
+      if (isUnavailableDetail(next)) {
+        if (next.change_id !== identity.changeId) return;
+        publicationHeadRef.current = null;
+        publicationDetailRef.current = null;
+        setData(null);
+        setUnavailable(next);
+        setDetailError(null);
+        return;
+      }
+      if (next.item.card.change_id !== identity.changeId || next.item.card.item_key !== identity.itemKey) return;
+      const nextPublishedHead = next.item.publication?.published_head ?? null;
+      const previousPublishedHead = publicationHeadRef.current;
+      if (previousPublishedHead !== nextPublishedHead) {
+        const hadObservation = publicationChecksRef.current !== null;
+        publicationObservationGenerationRef.current += 1;
+        publicationObservationRequestRef.current += 1;
+        observingPublicationChecksRef.current = false;
+        publicationChecksRef.current = null;
+        setPublicationChecks(null);
+        setPublicationChecksError(null);
+        setPublicationChecksStale(hadObservation);
+        setIsObservingPublicationChecks(false);
+      }
+      publicationHeadRef.current = nextPublishedHead;
+      publicationDetailRef.current = next;
+      setData(next);
+      setUnavailable(null);
+      setDetailError(null);
     },
-  )
+    onError: setDetailError,
+  });
 
   const observePublicationChecks = async (): Promise<Error | null> => {
-    const requestedIdentity = identityKey
-    const requestedHead = publicationDetailRef.current?.item.publication?.published_head ?? null
+    const requestedIdentity = identityKey;
+    const requestedHead = publicationDetailRef.current?.item.publication?.published_head ?? null;
     if (!requestedHead) {
-      const error = new Error('Publication checks require a published head.')
-      setPublicationChecksError(error)
-      return error
+      const error = new Error("Publication checks require a published head.");
+      setPublicationChecksError(error);
+      return error;
     }
-    if (observingPublicationChecksRef.current) return null
-    const generation = publicationObservationGenerationRef.current
-    const requestId = ++publicationObservationRequestRef.current
-    observingPublicationChecksRef.current = true
-    setIsObservingPublicationChecks(true)
-    setPublicationChecksError(null)
-    const isCurrent = () => requestId === publicationObservationRequestRef.current
-      && generation === publicationObservationGenerationRef.current
-      && publicationIdentityRef.current === requestedIdentity
-      && publicationHeadRef.current === requestedHead
+    if (observingPublicationChecksRef.current) return null;
+    const generation = publicationObservationGenerationRef.current;
+    const requestId = ++publicationObservationRequestRef.current;
+    observingPublicationChecksRef.current = true;
+    setIsObservingPublicationChecks(true);
+    setPublicationChecksError(null);
+    const isCurrent = () =>
+      requestId === publicationObservationRequestRef.current &&
+      generation === publicationObservationGenerationRef.current &&
+      publicationIdentityRef.current === requestedIdentity &&
+      publicationHeadRef.current === requestedHead;
     try {
-      const observed = await observeWorkItemPublicationChecks(identity.changeId)
+      const observed = await observeWorkItemPublicationChecks(identity.changeId);
       if (!isCurrent() || observed.change_id !== identity.changeId || observed.exact_commit !== requestedHead) {
         if (isCurrent()) {
-          publicationChecksRef.current = null
-          setPublicationChecks(null)
-          setPublicationChecksStale(true)
-          const error = new Error('Observed checks do not match the current Change published head. Refresh the Work Item and try again.')
-          setPublicationChecksError(error)
-          return error
+          publicationChecksRef.current = null;
+          setPublicationChecks(null);
+          setPublicationChecksStale(true);
+          const error = new Error(
+            "Observed checks do not match the current Change published head. Refresh the Work Item and try again.",
+          );
+          setPublicationChecksError(error);
+          return error;
         }
-        return null
+        return null;
       }
-      publicationChecksRef.current = observed
-      setPublicationChecks(observed)
-      setPublicationChecksStale(false)
-      setPublicationChecksError(null)
-      return null
+      publicationChecksRef.current = observed;
+      setPublicationChecks(observed);
+      setPublicationChecksStale(false);
+      setPublicationChecksError(null);
+      return null;
     } catch (caught: unknown) {
-      if (!isCurrent()) return null
-      const error = caught instanceof Error ? caught : new Error('Publication checks could not be observed')
-      setPublicationChecksError(error)
-      return error
+      if (!isCurrent()) return null;
+      const error = caught instanceof Error ? caught : new Error("Publication checks could not be observed");
+      setPublicationChecksError(error);
+      return error;
     } finally {
       if (requestId === publicationObservationRequestRef.current) {
-        observingPublicationChecksRef.current = false
-        setIsObservingPublicationChecks(false)
+        observingPublicationChecksRef.current = false;
+        setIsObservingPublicationChecks(false);
       }
     }
-  }
+  };
 
   async function mutate<T>(
     action: string,
     operation: () => Promise<T>,
     result: string | ((value: T) => string | null),
   ): Promise<Error | null> {
-    setPendingAction(action)
-    setActionError(null)
-    setActionResult(null)
+    setPendingAction(action);
+    setActionError(null);
+    setActionResult(null);
     try {
-      const value = await operation()
-      polling.refetch()
-      onChanged()
-      const message = typeof result === 'function' ? result(value) : result
-      if (message !== null) setActionResult(message)
-      return null
+      const value = await operation();
+      polling.refetch();
+      onChanged();
+      const message = typeof result === "function" ? result(value) : result;
+      if (message !== null) setActionResult(message);
+      return null;
     } catch (caught: unknown) {
-      const error = caught instanceof Error ? caught : new Error('Delivery control failed')
-      setActionError(error)
-      return error
+      const error = caught instanceof Error ? caught : new Error("Delivery control failed");
+      setActionError(error);
+      return error;
     } finally {
-      setPendingAction(null)
+      setPendingAction(null);
     }
+  }
+
+  function currentDetail(): WorkItemAvailableDetailResponse {
+    if (data === null) {
+      throw new Error("Work Item detail is not available");
+    }
+    return data;
   }
 
   return {
     detail: {
-      data,
+      data: (unavailable ?? data) as WorkItemDetailResponse | null,
       error: detailError,
-      isLoading: polling.isFetching && data === null,
+      isLoading: polling.isFetching && data === null && unavailable === null,
       isRefreshing: polling.isFetching,
     },
     pendingAction,
     actionError,
     actionResult,
-    answerRequest: (requestId: string, resolution: DeliveryRequestResolution) => mutate(
-      'answer',
-      () => answerWorkItemRequest(identity.changeId, requestId, resolution),
-      'Request answered.',
-    ),
-    clearBlock: (blockId: string, note: string, locators: string[]) => mutate(
-      'clear',
-      () => clearWorkItemBlock(identity.changeId, data!.item.card.work_item_id, blockId, note, locators),
-      'Block cleared.',
-    ),
-    recoverClaim: (attemptId: string, claimId: string) => mutate(
-      'recover',
-      () => recoverWorkItemClaim(identity.changeId, data!.item.card.work_item_id, attemptId, claimId),
-      'Claim recovered.',
-    ),
+    answerRequest: (requestId: string, resolution: DeliveryRequestResolution) =>
+      mutate(
+        "answer",
+        () => answerWorkItemRequest(identity.changeId, requestId, resolution, currentDetail().item.snapshot_version),
+        "Request answered.",
+      ),
+    clearBlock: (blockId: string, note: string, locators: string[]) =>
+      mutate(
+        "clear",
+        () =>
+          clearWorkItemBlock(
+            identity.changeId,
+            currentDetail().item.card.work_item_id,
+            blockId,
+            note,
+            locators,
+            currentDetail().item.snapshot_version,
+          ),
+        "Block cleared.",
+      ),
+    grantAttempt: (blockId: string) =>
+      mutate(
+        "grant-attempt",
+        () =>
+          grantWorkItemAttempt(
+            identity.changeId,
+            currentDetail().item.card.work_item_id,
+            blockId,
+            currentDetail().item.snapshot_version,
+          ),
+        "One more Builder attempt granted.",
+      ),
+    grantRetryAttempt: (attemptId: string) =>
+      mutate(
+        "grant-attempt",
+        () => grantRetryAttempt(identity.changeId, attemptId, currentDetail().item.snapshot_version),
+        "One more attempt granted.",
+      ),
+    releaseStuckWorker: (attemptId: string, claimId: string) =>
+      mutate(
+        "release-stuck",
+        () => {
+          const card = currentDetail().item.card;
+          // The publication card holds only the Change's Finalizer, which Delivery names by a null outcome.
+          const outcomeId = card.scope === "change-publication" ? null : card.work_item_id;
+          return releaseStuckWorker(identity.changeId, outcomeId, attemptId, claimId);
+        },
+        "Stuck worker released. The attempt was recorded as failed; its work is preserved.",
+      ),
     previewBackward: async (target: WorkItemStage) => {
-      setPendingAction('preview')
-      setActionError(null)
-      setActionResult(null)
+      setPendingAction("preview");
+      setActionError(null);
+      setActionResult(null);
       try {
-        return await previewWorkItemBackward(identity.changeId, data!.item.card.work_item_id, target)
+        return await previewWorkItemBackward(identity.changeId, currentDetail().item.card.work_item_id, target);
       } catch (caught: unknown) {
-        setActionError(caught instanceof Error ? caught : new Error('Backward move preview failed'))
-        return null
+        setActionError(caught instanceof Error ? caught : new Error("Backward move preview failed"));
+        return null;
       } finally {
-        setPendingAction(null)
+        setPendingAction(null);
       }
     },
     moveBackward: async (target: WorkItemStage, reason: string, snapshotVersion: string) => {
-      setPendingAction('move')
-      setActionError(null)
-      setActionResult(null)
+      setPendingAction("move");
+      setActionError(null);
+      setActionResult(null);
       try {
         const moved = await moveWorkItemBackward(
           identity.changeId,
-          data!.item.card.work_item_id,
+          currentDetail().item.card.work_item_id,
           target,
           reason,
           snapshotVersion,
-        )
-        const invalidated = moved.invalidated_outcome_ids.join(', ')
-        setActionResult(invalidated ? `Moved backward. Reset: ${invalidated}.` : 'Moved backward.')
-        polling.refetch()
-        onChanged()
-        return null
+        );
+        const invalidated = moved.invalidated_outcome_ids.join(", ");
+        setActionResult(invalidated ? `Moved backward. Reset: ${invalidated}.` : "Moved backward.");
+        polling.refetch();
+        onChanged();
+        return null;
       } catch (caught: unknown) {
-        const error = caught instanceof Error ? caught : new Error('Backward move failed')
-        setActionError(error)
-        return error
+        const error = caught instanceof Error ? caught : new Error("Backward move failed");
+        setActionError(error);
+        return error;
       } finally {
-        setPendingAction(null)
+        setPendingAction(null);
       }
     },
-    reconcilePublication: () => mutate(
-      'publication-reconcile',
-      () => reconcileWorkItemPublication(identity.changeId),
-      (reconciliation) => {
-        if (reconciliation.reconciled) return 'Publication checkpoint reconciled.'
-        if (reconciliation.error_detail) return `${reconciliation.error_code ?? 'Checkpoint pending'}: ${reconciliation.error_detail}`
-        return null
-      },
-    ),
-    markPublicationReady: () => mutate(
-      'publication-ready',
-      () => markWorkItemPublicationReady(identity.changeId),
-      'Pull request marked ready.',
-    ),
+    reconcilePublication: () =>
+      mutate(
+        "publication-reconcile",
+        () => reconcileWorkItemPublication(identity.changeId),
+        (reconciliation) => {
+          if (reconciliation.reconciled) return "Publication checkpoint reconciled.";
+          if (reconciliation.error_detail)
+            return `${reconciliation.error_code ?? "Checkpoint pending"}: ${reconciliation.error_detail}`;
+          return null;
+        },
+      ),
+    markPublicationReady: () =>
+      mutate("publication-ready", () => markWorkItemPublicationReady(identity.changeId), "Pull request marked ready."),
     publicationChecks,
     publicationChecksError,
     publicationChecksStale,
     isObservingPublicationChecks,
     observePublicationChecks,
-    observeAcceptance: () => mutate(
-      'acceptance-observe',
-      () => observeWorkItemAcceptance(identity.changeId),
-      'GitHub acceptance observed.',
-    ),
+    observeAcceptance: () =>
+      mutate("acceptance-observe", () => observeWorkItemAcceptance(identity.changeId), "GitHub acceptance observed."),
+    approveMerge: (offerId: string, submissionId: string) =>
+      mutate(
+        "merge-approve",
+        () => approveWorkItemMerge(identity.changeId, offerId, submissionId),
+        mergeApprovalMessage,
+      ).then((error) => {
+        // A refused offer carries no effect; the refreshed detail shows the current offer or its reason.
+        if (error instanceof WorkItemApiError && error.status !== 502) polling.refetch();
+        return error;
+      }),
     adoptExternalHeadAfterAcceptanceAttention: (
       expectedDispositionId: string,
       expectedHead: string,
       adoptedHead: string,
-    ) => mutate(
-      'acceptance-head-adopt',
-      () => {
-        const existing = acceptanceHeadAdoptionOperation.current
-        const operationId = existing?.changeId === identity.changeId
-          ? existing.operationId
-          : `cockpit-acceptance-head-adopt-${crypto.randomUUID()}`
-        acceptanceHeadAdoptionOperation.current = { changeId: identity.changeId, operationId }
-        return adoptExternalHeadAfterAcceptanceAttention(
-          identity.changeId,
-          expectedDispositionId,
-          expectedHead,
-          adoptedHead,
-          operationId,
-        )
-      },
-      'Changed pull-request head adopted; re-finalization is required.',
-    ).then((error) => {
-      const operationId = acceptanceHeadAdoptionOperation.current?.operationId
-      if (
-        operationId
-        && (error === null || (error instanceof WorkItemApiError && !error.retrySafe))
-      ) {
-        acceptanceHeadAdoptionOperation.current = null
-      }
-      return error
-    }),
-    resolveAttention: (expectedDispositionId: string) => mutate(
-      'attention-resolve',
-      () => resolveWorkItemAttention(identity.changeId, expectedDispositionId),
-      'Change attention resolved.',
-    ),
-    supersedePublication: () => mutate(
-      'publication-supersede',
-      () => {
-        const existing = supersedePublicationOperation.current
-        const operationId = existing?.changeId === identity.changeId
-          ? existing.operationId
-          : `cockpit-publication-supersede-${crypto.randomUUID()}`
-        supersedePublicationOperation.current = { changeId: identity.changeId, operationId }
-        return supersedeWorkItemPublication(identity.changeId, operationId)
-      },
-      'Publication superseded.',
-    ).then((error) => {
-      const operationId = supersedePublicationOperation.current?.operationId
-      if (
-        operationId
-        && (error === null || (error instanceof WorkItemApiError && !error.retrySafe))
-      ) {
-        supersedePublicationOperation.current = null
-      }
-      return error
-    }),
-    syncTarget: () => mutate(
-      'target-sync',
-      () => {
-        const existing = targetSyncOperation.current
-        const operationId = existing?.changeId === identity.changeId
-          ? existing.operationId
-          : `cockpit-target-sync-${crypto.randomUUID()}`
-        targetSyncOperation.current = { changeId: identity.changeId, operationId }
-        return syncWorkItemTarget(identity.changeId, operationId)
-      },
-      'Target synchronized with the integration target.',
-    ).then((error) => {
-      const operationId = targetSyncOperation.current?.operationId
-      if (
-        operationId
-        && (error === null || (error instanceof WorkItemApiError && !error.retrySafe))
-      ) {
-        targetSyncOperation.current = null
-      }
-      return error
-    }),
-    abortTargetSync: (expectedDispositionId: string, targetHead: string, operationId: string) => mutate(
-      'target-sync-abort',
-      () => abortWorkItemTargetSync(identity.changeId, expectedDispositionId, targetHead, operationId),
-      'Target sync conflict aborted.',
-    ).then((error) => {
-      if (error === null) targetSyncOperation.current = null
-      return error
-    }),
-    resolveTargetSync: (expectedDispositionId: string, targetHead: string, operationId: string) => mutate(
-      'target-sync-resolve',
-      () => resolveWorkItemTargetSync(identity.changeId, expectedDispositionId, targetHead, operationId),
-      'Resolved target sync is ready for review.',
-    ),
-    deferChange: (reason: string) => mutate(
-      'change-defer',
-      () => deferWorkItemChange(identity.changeId, reason),
-      'Change deferred.',
-    ),
-    resumeChange: () => mutate(
-      'change-resume',
-      () => resumeWorkItemChange(identity.changeId),
-      'Change resumed.',
-    ),
-    abandonChange: (reason: string) => mutate(
-      'change-abandon',
-      () => abandonWorkItemChange(identity.changeId, reason),
-      'Change abandoned.',
-    ),
-    cleanupAbandonedChange: () => mutate(
-      'change-cleanup-abandoned',
-      () => cleanupAbandonedWorkItemChange(identity.changeId),
-      'Abandoned Change worktree cleaned up.',
-    ),
-    discardAbandonedTargetSync: (expectedTargetHead: string, expectedOperationId: string) => mutate(
-      'change-cleanup-abandoned-target-sync',
-      () => discardAbandonedTargetSyncAndCleanup(identity.changeId, expectedTargetHead, expectedOperationId),
-      'Target merge discarded and abandoned Change worktree cleaned up.',
-    ),
-    cleanupCompletedChange: (completionId: string) => mutate(
-      'change-cleanup-completed',
-      () => cleanupCompletedWorkItemChange(identity.changeId, completionId),
-      'Completed Change worktree cleaned up.',
-    ),
-    recoverChangeWorktree: (recoveryReviewedHead: string) => mutate(
-      'change-worktree-recover',
-      () => recoverWorkItemChange(identity.changeId, recoveryReviewedHead),
-      'Missing Change worktree recovered.',
-    ),
+    ) =>
+      mutate(
+        "acceptance-head-adopt",
+        () => {
+          const existing = acceptanceHeadAdoptionOperation.current;
+          const operationId =
+            existing?.changeId === identity.changeId
+              ? existing.operationId
+              : `cockpit-acceptance-head-adopt-${crypto.randomUUID()}`;
+          acceptanceHeadAdoptionOperation.current = {
+            changeId: identity.changeId,
+            operationId,
+          };
+          return adoptExternalHeadAfterAcceptanceAttention(
+            identity.changeId,
+            expectedDispositionId,
+            expectedHead,
+            adoptedHead,
+            operationId,
+          );
+        },
+        "Changed pull-request head adopted; re-finalization is required.",
+      ).then((error) => {
+        const operationId = acceptanceHeadAdoptionOperation.current?.operationId;
+        if (operationId && (error === null || (error instanceof WorkItemApiError && !error.retrySafe))) {
+          acceptanceHeadAdoptionOperation.current = null;
+        }
+        return error;
+      }),
+    resolveAttention: (expectedDispositionId: string) =>
+      mutate(
+        "attention-resolve",
+        () => resolveWorkItemAttention(identity.changeId, expectedDispositionId, currentDetail().item.snapshot_version),
+        "Change attention resolved.",
+      ),
+    supersedePublication: () =>
+      mutate(
+        "publication-supersede",
+        () => {
+          const existing = supersedePublicationOperation.current;
+          const operationId =
+            existing?.changeId === identity.changeId
+              ? existing.operationId
+              : `cockpit-publication-supersede-${crypto.randomUUID()}`;
+          supersedePublicationOperation.current = {
+            changeId: identity.changeId,
+            operationId,
+          };
+          return supersedeWorkItemPublication(identity.changeId, operationId);
+        },
+        "Publication superseded.",
+      ).then((error) => {
+        const operationId = supersedePublicationOperation.current?.operationId;
+        if (operationId && (error === null || (error instanceof WorkItemApiError && !error.retrySafe))) {
+          supersedePublicationOperation.current = null;
+        }
+        return error;
+      }),
+    syncTarget: () =>
+      mutate(
+        "target-sync",
+        () => {
+          const existing = targetSyncOperation.current;
+          const operationId =
+            existing?.changeId === identity.changeId
+              ? existing.operationId
+              : `cockpit-target-sync-${crypto.randomUUID()}`;
+          targetSyncOperation.current = {
+            changeId: identity.changeId,
+            operationId,
+          };
+          return syncWorkItemTarget(identity.changeId, operationId);
+        },
+        "Target synchronized with the integration target.",
+      ).then((error) => {
+        const operationId = targetSyncOperation.current?.operationId;
+        if (operationId && (error === null || (error instanceof WorkItemApiError && !error.retrySafe))) {
+          targetSyncOperation.current = null;
+        }
+        return error;
+      }),
+    abortTargetSync: (expectedDispositionId: string, targetHead: string, operationId: string) =>
+      mutate(
+        "target-sync-abort",
+        () => abortWorkItemTargetSync(identity.changeId, expectedDispositionId, targetHead, operationId),
+        "Target sync conflict aborted.",
+      ).then((error) => {
+        if (error === null) targetSyncOperation.current = null;
+        return error;
+      }),
+    resolveTargetSync: (expectedDispositionId: string, targetHead: string, operationId: string) =>
+      mutate(
+        "target-sync-resolve",
+        () => resolveWorkItemTargetSync(identity.changeId, expectedDispositionId, targetHead, operationId),
+        "Resolved target sync is ready for review.",
+      ),
+    deferChange: (reason: string) =>
+      mutate(
+        "change-defer",
+        () => deferWorkItemChange(identity.changeId, reason, currentDetail().item.snapshot_version),
+        "Change paused.",
+      ),
+    resumeChange: () =>
+      mutate(
+        "change-resume",
+        () => resumeWorkItemChange(identity.changeId, currentDetail().item.snapshot_version),
+        "Change resumed.",
+      ),
+    abandonChange: (reason: string) =>
+      mutate(
+        "change-abandon",
+        () => abandonWorkItemChange(identity.changeId, reason, currentDetail().item.snapshot_version),
+        "Change abandoned.",
+      ),
+    cleanupAbandonedChange: () =>
+      mutate(
+        "change-cleanup-abandoned",
+        () => cleanupAbandonedWorkItemChange(identity.changeId),
+        "Abandoned Change worktree cleaned up.",
+      ),
+    discardAbandonedTargetSync: (expectedTargetHead: string, expectedOperationId: string) =>
+      mutate(
+        "change-cleanup-abandoned-target-sync",
+        () => discardAbandonedTargetSyncAndCleanup(identity.changeId, expectedTargetHead, expectedOperationId),
+        "Target merge discarded and abandoned Change worktree cleaned up.",
+      ),
+    cleanupCompletedChange: (completionId: string) =>
+      mutate(
+        "change-cleanup-completed",
+        () => cleanupCompletedWorkItemChange(identity.changeId, completionId),
+        "Completed Change worktree cleaned up.",
+      ),
+    recoverChangeWorktree: (recoveryReviewedHead: string) =>
+      mutate(
+        "change-worktree-recover",
+        () => recoverWorkItemChange(identity.changeId, recoveryReviewedHead),
+        "Missing Change worktree recovered.",
+      ),
     retry: polling.refetch,
-  }
+  };
 }
 
 export function workItemIdentity(item: WorkItemCardView): string {
-  return `${item.change_id}:${item.item_key}`
+  return `${item.change_id}:${item.item_key}`;
+}
+
+const MERGE_STATE_MESSAGES: Record<Exclude<MergeApprovalResponse["state"], "merged" | "refused">, string> = {
+  intent: "GitHub has not confirmed the merge yet; Delivery checks it again.",
+  released: "GitHub has not confirmed the merge yet; Delivery checks it again.",
+  pending: "GitHub accepted the merge request and is merging; Delivery records the result shortly.",
+  "not-sent": "No merge request was sent.",
+  "head-changed": "The pull request head changed; this approval merged nothing.",
+  closed: "The pull request was closed; this approval merged nothing.",
+};
+
+function mergeApprovalMessage(result: MergeApprovalResponse): string {
+  if (result.state === "merged") {
+    return result.completion_id
+      ? "Merged in GitHub; Delivery recorded completion."
+      : "Merged in GitHub; Delivery records completion on its next check.";
+  }
+  if (result.state === "refused") {
+    return `GitHub refused the merge (${result.refusal_reason ?? "no reason given"}); nothing was merged.`;
+  }
+  return MERGE_STATE_MESSAGES[result.state];
+}
+
+/** Change-level Pause and Resume for portfolio groups, using the existing defer and resume intents. */
+export function useChangeIntent(onChanged: () => void) {
+  const [pending, setPending] = useState<{ changeId: string; action: "change-defer" | "change-resume" } | null>(null);
+  const [failure, setFailure] = useState<{ changeId: string; error: Error } | null>(null);
+
+  async function run(
+    changeId: string,
+    action: "change-defer" | "change-resume",
+    operation: () => Promise<unknown>,
+  ): Promise<Error | null> {
+    setPending({ changeId, action });
+    setFailure(null);
+    try {
+      await operation();
+      onChanged();
+      return null;
+    } catch (caught: unknown) {
+      const error = caught instanceof Error ? caught : new Error("Delivery control failed");
+      setFailure({ changeId, error });
+      return error;
+    } finally {
+      setPending(null);
+    }
+  }
+
+  return {
+    pendingAction: (changeId: string) => (pending?.changeId === changeId ? pending.action : null),
+    actionError: (changeId: string) => (failure?.changeId === changeId ? failure.error : null),
+    pause: (group: ChangeGroupView, reason: string) =>
+      run(group.change_id, "change-defer", () => deferWorkItemChange(group.change_id, reason, group.snapshot_version)),
+    resume: (group: ChangeGroupView) =>
+      run(group.change_id, "change-resume", () => resumeWorkItemChange(group.change_id, group.snapshot_version)),
+  };
 }

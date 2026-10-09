@@ -529,6 +529,11 @@ class DraftPullRequestPublisher:
         """Return the configured pull-request target branch."""
         return self._target_branch
 
+    @property
+    def provider(self) -> PublicationProvider:
+        """Return the configured provider for read-only merge-offer facts."""
+        return self._provider
+
     def publish(self, request: CreateOrReconcileDraftPullRequest) -> DraftPullRequestPublicationReceipt:
         """Create or recover the unique draft PR for one first checkpoint."""
         lock_root = self._state_root / "locks" / request.change_id

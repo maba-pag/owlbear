@@ -1,0 +1,308 @@
+---
+name: Tooling
+
+"on":
+  pull_request:
+    branches:
+      - dev
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+    paths:
+      - .github/renovate.json
+      - .github/scripts/**
+      - .github/workflows/**
+      - .mega-linter.yml
+      - .pre-commit-config.yaml
+      - .python-version
+      - .owlbear/scripts/diagrams/**
+      - share/diagrams/**
+      - biome.json
+      - package.json
+      - package-lock.json
+      - pyproject.toml
+      - serve/*/pyproject.toml
+      - serve/cockpit/web/.nvmrc
+      - serve/cockpit/web/package.json
+      - serve/cockpit/web/package-lock.json
+      - serve/tools/src/owlbear_tools/dependency_ci.py
+      - serve/tools/src/owlbear_tools/megalinter.py
+      - tests/test_archify_diagrams.py
+      - tests/test_dependency_verification_workflow.py
+      - uv.lock
+  workflow_dispatch:
+
+concurrency:
+  group: tooling-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Tooling
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout requested revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Fingerprint inputs
+        id: fingerprint
+        run: |
+          value="$(git ls-files -s -- .github .mega-linter.yml .pre-commit-config.yaml .python-version \
+            .owlbear/scripts/diagrams share/diagrams biome.json package.json package-lock.json \
+            pyproject.toml ':(glob)serve/*/pyproject.toml' serve/cockpit/web/.nvmrc \
+            serve/cockpit/web/package.json serve/cockpit/web/package-lock.json \
+            serve/tools/src/owlbear_tools/dependency_ci.py serve/tools/src/owlbear_tools/megalinter.py \
+            serve/tools/tests/test_megalinter.py tests/test_archify_diagrams.py \
+            tests/test_dependency_verification_workflow.py uv.lock | sha256sum | cut -c1-40)"
+          echo "value=$value" >> "$GITHUB_OUTPUT"
+
+      - name: Look up passing result for identical inputs
+        id: reuse
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ci-pass
+          key: ci-pass-v1-tooling-${{ steps.fingerprint.outputs.value }}
+          lookup-only: true
+
+      - name: Report reused result
+        if: steps.reuse.outputs.cache-hit == 'true'
+        run: echo "Reused a passing result for identical inputs; checks skipped." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Classify changed tooling surfaces
+        id: scope
+        if: steps.reuse.outputs.cache-hit != 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            : > "$RUNNER_TEMP/tooling-paths"
+            for output in \
+              python node shared_node_runtime root_node diagrams pds precommit \
+              ruff_toolchain workflows megalinter renovate applicable compatibility
+            do
+              echo "$output=true" >> "$GITHUB_OUTPUT"
+            done
+          else
+            MERGE_BASE="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
+            git diff --name-only -z "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/tooling-paths"
+            git diff --unified=0 "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/tooling.diff"
+            python3 serve/tools/src/owlbear_tools/dependency_ci.py \
+              --paths-file "$RUNNER_TEMP/tooling-paths" \
+              --diff-file "$RUNNER_TEMP/tooling.diff" \
+              --base-ref "$MERGE_BASE" \
+              --head-ref "$HEAD_SHA" \
+              --repository-root "$GITHUB_WORKSPACE" \
+              --github-output "$GITHUB_OUTPUT" \
+              --summary "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Detect changed proof tooling
+        id: proof_tooling
+        if: steps.reuse.outputs.cache-hit != 'true'
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "proof_tooling=true" >> "$GITHUB_OUTPUT"
+            echo "workspace_lock_tooling=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          proof_tooling=false
+          workspace_lock_tooling=false
+          while IFS= read -r -d '' path; do
+            case "$path" in
+              .github/scripts/check_uv_workspace_lock.py)
+                workspace_lock_tooling=true
+                ;;
+              .github/workflows/*|\
+              .github/renovate.json|\
+              .github/scripts/check_ruff_toolchain.py|\
+              .github/scripts/sync_megalinter_toolchain.py|\
+              biome.json|\
+              serve/cockpit/web/package.json|\
+              serve/cockpit/web/package-lock.json|\
+              serve/tools/src/owlbear_tools/dependency_ci.py|\
+              serve/tools/src/owlbear_tools/megalinter.py|\
+              tests/test_dependency_verification_workflow.py)
+                proof_tooling=true
+                ;;
+            esac
+          done < "$RUNNER_TEMP/tooling-paths"
+          echo "proof_tooling=$proof_tooling" >> "$GITHUB_OUTPUT"
+          echo "workspace_lock_tooling=$workspace_lock_tooling" >> "$GITHUB_OUTPUT"
+
+      - name: Setup uv
+        if: steps.reuse.outputs.cache-hit != 'true'
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
+        with:
+          enable-cache: true
+          cache-suffix: dev-tools
+          cache-dependency-glob: uv.lock
+          prune-cache: false
+
+      - name: Check uv runtime
+        if: steps.reuse.outputs.cache-hit != 'true'
+        run: python3 .github/scripts/check_uv_version.py
+
+      - name: Install locked Python tooling
+        if: steps.reuse.outputs.cache-hit != 'true'
+        run: |
+          uv python install
+          uv sync --locked --group dev
+
+      - name: Prove workspace lock regeneration
+        if: >-
+          steps.reuse.outputs.cache-hit != 'true' &&
+          (steps.scope.outputs.python == 'true' || steps.proof_tooling.outputs.workspace_lock_tooling == 'true')
+        run: uv run python .github/scripts/check_uv_workspace_lock.py
+
+      - name: Exercise dependency proof tooling
+        if: steps.reuse.outputs.cache-hit != 'true' && steps.proof_tooling.outputs.proof_tooling == 'true'
+        run: uv run pytest -q tests/test_dependency_verification_workflow.py serve/tools/tests/test_megalinter.py
+
+      - name: Verify Ruff toolchain parity
+        if: steps.reuse.outputs.cache-hit != 'true' && steps.scope.outputs.ruff_toolchain == 'true'
+        run: uv run python .github/scripts/check_ruff_toolchain.py
+
+      - name: Verify MegaLinter derived pins and locks
+        if: steps.reuse.outputs.cache-hit != 'true'
+        run: uv run --locked python .github/scripts/sync_megalinter_toolchain.py --check
+
+      - name: Validate Renovate policy JSON
+        if: steps.reuse.outputs.cache-hit != 'true' && steps.scope.outputs.renovate == 'true'
+        run: python3 -m json.tool .github/renovate.json >/dev/null
+
+      - name: Validate GitHub Actions workflows
+        if: steps.reuse.outputs.cache-hit != 'true' && steps.scope.outputs.workflows == 'true'
+        run: uv run pre-commit run actionlint --all-files
+
+      - name: Setup Node.js
+        if: >-
+          steps.reuse.outputs.cache-hit != 'true' &&
+          (steps.scope.outputs.node == 'true' || steps.scope.outputs.shared_node_runtime == 'true' ||
+          steps.scope.outputs.root_node == 'true' || steps.scope.outputs.diagrams == 'true' ||
+          steps.scope.outputs.pds == 'true' || steps.scope.outputs.precommit == 'true')
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version-file: serve/cockpit/web/.nvmrc
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            serve/cockpit/web/package-lock.json
+
+      - name: Check Node runtime declaration
+        if: >-
+          steps.reuse.outputs.cache-hit != 'true' &&
+          (steps.scope.outputs.node == 'true' || steps.scope.outputs.shared_node_runtime == 'true')
+        run: |
+          python3 .github/scripts/check_node_runtime.py \
+            --version-file serve/cockpit/web/.nvmrc \
+            --engines-file serve/cockpit/web/package.json \
+            --expected-version "$(tr -d '\r\n' < serve/cockpit/web/.nvmrc)"
+
+      - name: Install locked root dependencies
+        if: >-
+          steps.reuse.outputs.cache-hit != 'true' &&
+          (steps.scope.outputs.root_node == 'true' || steps.scope.outputs.shared_node_runtime == 'true')
+        run: npm ci
+
+      - name: Verify pinned Archify release and static render
+        if: >-
+          steps.reuse.outputs.cache-hit != 'true' &&
+          (steps.scope.outputs.diagrams == 'true' || steps.scope.outputs.shared_node_runtime == 'true')
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          python3 .owlbear/scripts/diagrams/sync.py
+          python3 -c '
+          import json
+          from pathlib import Path
+
+          manifest = json.loads(Path("share/diagrams/manifest.json").read_text(encoding="utf-8"))
+          manifest_sources = {diagram["source"] for diagram in manifest["diagrams"]}
+          architecture_sources = {
+              path.as_posix() for path in Path("share/diagrams").rglob("*.architecture.json")
+          }
+          if manifest_sources != architecture_sources:
+              missing = sorted(architecture_sources - manifest_sources)
+              unlisted = sorted(manifest_sources - architecture_sources)
+              raise SystemExit(
+                  f"Archify manifest source coverage mismatch: missing={missing}; unlisted={unlisted}"
+              )
+          for diagram in manifest["diagrams"]:
+              print("\t".join((diagram["source"], diagram["artifact"])))
+          ' > "$RUNNER_TEMP/archify-diagrams.tsv"
+          test -s "$RUNNER_TEMP/archify-diagrams.tsv"
+          diagram_index=0
+          while IFS=$'\t' read -r source artifact; do
+            test -n "$source"
+            test -n "$artifact"
+            test -f "$source"
+            test -f "$artifact"
+            output="$RUNNER_TEMP/archify-diagram-${diagram_index}.svg"
+            python3 .owlbear/scripts/diagrams/render.py \
+              --input "$source" \
+              --output "$output" \
+              --offline
+            if cmp --silent "$output" "$artifact"; then
+              :
+            else
+              echo "Archify artifact is stale: $artifact"
+              echo "Regenerate with:"
+              echo "  python3 .owlbear/scripts/diagrams/render.py"
+              echo "    --input \"$source\" --output \"$artifact\" --offline"
+              exit 1
+            fi
+            diagram_index=$((diagram_index + 1))
+          done < "$RUNNER_TEMP/archify-diagrams.tsv"
+
+      - name: Install locked Cockpit dependencies
+        if: >-
+          steps.reuse.outputs.cache-hit != 'true' &&
+          (steps.scope.outputs.pds == 'true' || steps.scope.outputs.precommit == 'true')
+        run: npm ci --prefix serve/cockpit/web --engine-strict --no-audit --no-fund
+
+      - name: Verify generated PDS assets
+        if: steps.reuse.outputs.cache-hit != 'true' && steps.scope.outputs.pds == 'true'
+        working-directory: serve/cockpit/web
+        run: |
+          npm run sync:pds
+          git status --porcelain --untracked-files=all -- public/porsche-design-system \
+            | tee "$RUNNER_TEMP/pds-status"
+          test ! -s "$RUNNER_TEMP/pds-status"
+
+      - name: Exercise updated pre-commit hooks
+        if: steps.reuse.outputs.cache-hit != 'true' && steps.scope.outputs.precommit == 'true'
+        run: uv run lint --no-fix
+
+      - name: Record passing result
+        if: github.event_name == 'pull_request' && steps.reuse.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/ci-pass"
+          echo "$HEAD_SHA" > "$RUNNER_TEMP/ci-pass/head"
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+
+      - name: Save passing result
+        if: github.event_name == 'pull_request' && steps.reuse.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ci-pass
+          key: ci-pass-v1-tooling-${{ steps.fingerprint.outputs.value }}

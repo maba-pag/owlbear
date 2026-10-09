@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
-from owlbear_memory import LifecycleRecoveryError, LifecycleRollbackFailure, MemoryCategory, MemoryEngine
+from owlbear_memory import LifecycleRecoveryError, LifecycleRollbackFailure, MemoryCategory, MemoryEngine, MemoryState
 
 from owlbear_memory_mcp.tools import (
     _recognized_agent_names,
@@ -114,6 +114,48 @@ async def test_delete_agent_preserves_sourced_memories_with_surviving_audiences(
     assert entries[universal_id].scope_agents == ["*"]
     assert orphaned_id not in entries
     assert entries[retained_id].scope_agents == ["builder"]
+
+
+@pytest.mark.parametrize("state", [MemoryState.CURATED, MemoryState.APPROVED, MemoryState.CONTESTED])
+def test_delete_agent_soft_deletes_reviewed_entries_left_without_audience(
+    tmp_path: Path,
+    state: MemoryState,
+) -> None:
+    memory_dir = tmp_path / ".owlbear/memory"
+    engine = MemoryEngine(memory_dir)
+    reviewed_id = _save(engine, source="builder", scope=["retired"])
+    reviewed = engine.get_entry(reviewed_id)
+    reviewed = engine.edit(reviewed_id, {"scope_agents": ["retired"]}, reviewed.updated_at)
+    if state == MemoryState.APPROVED:
+        reviewed = engine.approve(reviewed_id, reviewed.updated_at)
+    elif state == MemoryState.CONTESTED:
+        reviewed = engine.record_factually_wrong(reviewed_id, "task-1", reviewed.updated_at)
+
+    pending_id = _save(engine, source="builder", scope=["retired"])
+    tombstone_id = _save(engine, source="builder", scope=["retired"])
+    tombstone = engine.get_entry(tombstone_id)
+    tombstone = engine.edit(tombstone_id, {"scope_agents": ["retired"]}, tombstone.updated_at)
+    tombstone = engine.delete(tombstone_id, tombstone.updated_at)
+    tombstone_updated_at = tombstone.updated_at
+    reviewed_path = memory_dir / f"{reviewed_id}.md"
+    pending_path = memory_dir / f"{pending_id}.md"
+    tombstone_path = memory_dir / f"{tombstone_id}.md"
+
+    with patch.object(engine, "_now_iso", return_value="2000-01-01T00:00:00+00:00"):
+        result = engine.delete_agent("retired")
+
+    assert result == {"entries_deleted": 2, "scopes_updated": 1}
+    assert reviewed_path.exists()
+    assert not pending_path.exists()
+    assert tombstone_path.exists()
+    reviewed_after = engine.get_entry(reviewed_id)
+    assert reviewed_after.state == MemoryState.DELETED
+    assert reviewed_after.scope_agents == []
+    assert pending_id not in {entry.id for entry in engine.get_entries()}
+    tombstone_after = engine.get_entry(tombstone_id)
+    assert tombstone_after.state == MemoryState.DELETED
+    assert tombstone_after.scope_agents == []
+    assert tombstone_after.updated_at != tombstone_updated_at
 
 
 @pytest.mark.asyncio

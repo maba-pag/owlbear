@@ -4,6 +4,74 @@
 
 External repos and resources studied during OwlBear development.
 
+## OwlBear Distribution Under the Agent Host
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| VS Code agent plugins | <https://code.visualstudio.com/docs/copilot/customization/agent-plugins> | Plugin components, install sources, `chat.pluginLocations`, update behavior | [distribution research](../research/owlbear-distribution-agent-host.md) | 2026-10-07 |
+| VS Code Agent Host | <https://code.visualstudio.com/docs/agents/concepts/agent-host> | Agent Host MCP and customization sources | [distribution research](../research/owlbear-distribution-agent-host.md) | 2026-10-07 |
+| VS Code customization overview | <https://code.visualstudio.com/docs/agent-customization/overview> | Deprecated location settings and migrations | [distribution research](../research/owlbear-distribution-agent-host.md) | 2026-10-07 |
+| VS Code prompt files | <https://code.visualstudio.com/docs/copilot/customization/prompt-files> | Prompt files not loaded by Agent Host | [distribution research](../research/owlbear-distribution-agent-host.md) | 2026-10-07 |
+| VS Code MCP servers and configuration | <https://code.visualstudio.com/docs/agents/reference/mcp-configuration> | Portable `.mcp.json`, `cwd` default, forwarding | [distribution research](../research/owlbear-distribution-agent-host.md) | 2026-10-07 |
+| VS Code agent harnesses | <https://code.visualstudio.com/docs/agents/concepts/agent-harnesses> | Folder versus worktree isolation | [distribution research](../research/owlbear-distribution-agent-host.md) | 2026-10-07 |
+| VS Code hooks | <https://code.visualstudio.com/docs/agent-customization/hooks> | Harness-specific hooks; agent-scoped hooks Local only | [distribution research](../research/owlbear-distribution-agent-host.md) | 2026-10-07 |
+| Agent Plugins spec 1.0.0 | <https://github.com/agentplugins/agent-plugins-spec/blob/main/spec/1.0.0.md> | MCP `cwd` rules, placeholders, `PLUGIN_DATA` | [distribution research](../research/owlbear-distribution-agent-host.md) | 2026-10-07 |
+| Copilot CLI plugin reference | <https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-plugin-reference> | Marketplace `ref`/`sha` pins, auto-update, precedence | [distribution research](../research/owlbear-distribution-agent-host.md) | 2026-10-07 |
+| GitHub custom agents configuration | <https://docs.github.com/en/copilot/reference/custom-agents-configuration> | Agent frontmatter without `hooks` | [distribution research](../research/owlbear-distribution-agent-host.md) | 2026-10-07 |
+
+## GitHub Review and Cloud Instructions
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| GitHub repository instructions | <https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/add-custom-instructions/add-repository-instructions> | Automatic path-scoped loading, `excludeAgent` feature targeting and PR head-branch context | `.github/instructions/code-review.instructions.md`; `.github/instructions/cloud-agent.instructions.md` | 2026-09-21 |
+| GitHub instruction support matrix | <https://docs.github.com/en/copilot/reference/custom-instructions-support> | Path-specific instruction eligibility in GitHub and IDE features; explicit applicability avoids imposing cloud procedures on local sessions | `.github/instructions/code-review.instructions.md`; `.github/instructions/cloud-agent.instructions.md`; [cloud guide](../research/delivery-cloud-flight-handoff.md) | 2026-09-21 |
+| GitHub code review customization | <https://docs.github.com/en/copilot/tutorials/customize-code-review> | Concise review criteria and unsupported comment-format/overview customization | `.github/instructions/code-review.instructions.md`; [cloud guide](../research/delivery-cloud-flight-handoff.md) | 2026-09-21 |
+| GitHub code review usage | <https://docs.github.com/en/copilot/how-tos/use-copilot-agents/request-a-code-review/use-code-review> | Native review versus Fix with Copilot, effort controls, re-review, thread reply and optional approval limits | [cloud guide](../research/delivery-cloud-flight-handoff.md) | 2026-09-21 |
+
+## Copilot Cloud Dependency Setup
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| GitHub cloud environment setup | <https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/customize-the-agent-environment> | Single setup job, supported settings, default-branch discovery and setup-failure behavior | `.github/workflows/copilot-setup-steps.yml`; [cloud guide](../research/delivery-cloud-flight-handoff.md) | 2026-09-18 |
+| GitHub parallel steps | <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepsparallel> | Same-job independent step execution with implicit wait and failure propagation, without custom process management | `.github/workflows/copilot-setup-steps.yml`; [cloud guide](../research/delivery-cloud-flight-handoff.md) | 2026-09-21 |
+| Astral setup-uv | <https://github.com/astral-sh/setup-uv> | Version selection, managed Python installation and dependency caching | `.github/workflows/copilot-setup-steps.yml` | 2026-09-18 |
+| Renovate GitHub Actions manager | <https://docs.renovatebot.com/modules/manager/github-actions/> | Native workflow discovery, action SHA/tag updates and `astral-sh/setup-uv` version input extraction | `.github/workflows/copilot-setup-steps.yml`; [cloud guide](../research/delivery-cloud-flight-handoff.md) | 2026-09-18 |
+
+## MegaLinter Toolchain Synchronization
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| MegaLinter release manifest | <https://raw.githubusercontent.com/oxsecurity/megalinter/v10.1.0/.automation/generated/linter-versions.json> | Exact release-owned Ruff, Ruff formatter, and Biome versions | `.github/scripts/sync_megalinter_toolchain.py` | 2026-09-16 |
+| Renovate configuration | <https://docs.renovatebot.com/configuration-options/> | Grouping versus version selection, disabled derived dependencies, and ignored bot authors | `.github/renovate.json` | 2026-09-16 |
+| Renovate hosted FAQ | <https://docs.renovatebot.com/mend-hosted/faq/> | Hosted post-upgrade command restrictions motivating repository-owned synchronization | `.github/workflows/sync-megalinter-toolchain.yml` | 2026-09-16 |
+| GitHub workflow triggers | <https://docs.github.com/en/actions/how-tos/writing-workflows/choosing-when-your-workflow-runs/triggering-a-workflow> | Token-triggered CI limitations and PAT-triggered verification on the new commit | `.github/workflows/sync-megalinter-toolchain.yml` | 2026-09-16 |
+
+## Biome Incremental Lint Adoption
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Biome linter | <https://biomejs.dev/linter/> | Recommended rule presets, diagnostic severities, safe versus unsafe fixes, and the distinction between linting and formatting | `biome.json`; `serve/cockpit/web/package.json` | 2026-09-16 |
+| Biome configuration | <https://biomejs.dev/guides/configure-biome/> | Package-local configuration, explicit `files.includes` scopes, and configuration resolution | `biome.json` | 2026-09-16 |
+| Biome VCS integration | <https://biomejs.dev/guides/integrate-vcs/> | `--staged` and `--changed` rollout checks plus Git ignore integration | `biome.json`; `serve/cockpit/web/package.json` | 2026-09-16 |
+| Biome continuous integration | <https://biomejs.dev/recipes/continuous-integration/> | `biome ci` as the non-mutating CI command | `.github/workflows/static.yml`; `serve/cockpit/web/package.json` | 2026-09-16 |
+| Biome ESLint migration | <https://biomejs.dev/guides/migrate-eslint-prettier/> | Migration behavior, explicit rule translation, and the warning that Biome behavior is not exact ESLint parity | `biome.json` | 2026-09-16 |
+| Biome GritQL plugins | <https://biomejs.dev/linter/plugins/> | Custom diagnostics, JavaScript/TypeScript plugin syntax, and project-specific rule extension | `serve/cockpit/web/plugins/pds-component-wrappers.grit`; `serve/cockpit/web/scripts/test-biome-pds.mjs` | 2026-09-16 |
+
+## Intermittent-Connectivity Cloud Delivery
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| GitHub cloud agent | <https://docs.github.com/en/copilot/concepts/agents/coding-agent/about-coding-agent> | Background execution, one-branch/PR scope, hard 59-minute limit and usage costs | [Flight handoff](../research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
+| GitHub cloud planning | <https://docs.github.com/en/copilot/how-tos/copilot-on-github/use-copilot-agents/research-plan-iterate> | Separate planning and implementation with durable PR context | [Flight handoff](../research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
+| GitHub model selection | <https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/changing-the-ai-model> | User-selected model/reasoning controls, supported entry points and Auto fallback | [Flight handoff](../research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
+| GitHub cloud PR controls | <https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/use-cloud-agent-on-github> | Base branch, follow-up PR comments, model choice and workflow approval | [Flight handoff](../research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
+| GitHub session management | <https://docs.github.com/en/copilot/how-tos/copilot-on-github/use-copilot-agents/manage-and-track-agents> | Persisted logs and pushed checkpoints, not ephemeral workspace assumptions | [Flight handoff](../research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
+| GitHub cloud environment | <https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/customize-the-agent-environment> | Default-branch setup discovery, failed setup behavior and runner OS limits | [Flight handoff](../research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
+| GitHub repository MCP configuration | <https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/configure-mcp-servers> | Repository-configured MCP access differs from local VS Code tools; in-process project tests do not require that access | [Flight handoff](../research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
+| GitHub security controls | <https://docs.github.com/en/copilot/concepts/agents/cloud-agent/risks-and-mitigations> | Branch publication, human approval and workflow constraints | [Flight handoff](../research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
+| GitHub alternative agents | <https://docs.github.com/en/copilot/concepts/agents/about-third-party-coding-agents> | Claude/Codex alternatives and shared platform limitations | [Flight handoff](../research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
+| GitHub automations | <https://docs.github.com/en/copilot/concepts/agents/cloud-agent/about-automations> | Private/internal availability, permissions, triggers and billing | [Flight handoff](../research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
+
 ## Memory System End-to-End Audit
 
 | Source | URL | What | Where Used | Date |

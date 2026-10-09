@@ -19,16 +19,33 @@ from owlbear_delivery.delivery_admission import DeliveryAdmissionReceipt
 from owlbear_delivery.delivery_runtime import DeliveryFrontier
 from owlbear_delivery.git_executable import resolve_git_executable
 from owlbear_delivery.identities import ChangeId, Digest
-from owlbear_delivery.target_contract import DeliveryContract
+from owlbear_delivery.remote_git import (
+    RemoteGitError,
+    RemoteGitFailed,
+    RemoteGitWriteUnknown,
+    classify_write_readback,
+    read_remote_ref,
+    run_remote_git,
+)
+from owlbear_delivery.runtime_models import _FRONTIER_SCHEMA_VERSION, _READABLE_LEGACY_FRONTIER_SCHEMA_VERSION
+from owlbear_delivery.runtime_support import parse_stored_delivery_frontier
+from owlbear_delivery.target_contract import DeliveryContract, contract_canonical_bytes
+
+_READABLE_LEGACY_FRONTIER = _READABLE_LEGACY_FRONTIER_SCHEMA_VERSION
 
 if TYPE_CHECKING:
     from owlbear_delivery.change_workspace import ChangeCoordination
     from owlbear_delivery.delivery_runtime import DeliveryRuntime
+    from owlbear_delivery.remote_git import RemoteGitKind
 
 _CHANGE_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _BRANCH_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/+:-]*$")
 _STATE_ROOT = ".owlbear/delivery/state"
-_REMOTE_REF_MISSING = 2
+_LEGACY_SNAPSHOT_SCHEMA_VERSION = 1
+_SNAPSHOT_V2 = 2
+_SNAPSHOT_V3 = 3
+_SNAPSHOT_SCHEMA_VERSION = 4
+_LEGACY_CONTRACT_SCHEMA_VERSION = 2
 
 
 class DeliveryStatePublicationError(RuntimeError):
@@ -47,10 +64,27 @@ class DeliveryStateConflictError(DeliveryStatePublicationError):
     code = "ERR_DELIVERY_STATE_CONFLICT"
 
 
+class DeliveryStateQuarantineError(DeliveryStateConflictError):
+    """A remote snapshot is quarantined and requires the repair operation."""
+
+    code = "ERR_DELIVERY_STATE_QUARANTINED"
+
+    def __init__(self, detail: str, *, diagnostic_code: str) -> None:
+        super().__init__(detail, retry_safe=False)
+        self.diagnostic_code = diagnostic_code
+
+
 class DeliveryStateResponseUnknownError(DeliveryStatePublicationError):
     """A state push completed without verifiable remote confirmation."""
 
     code = "ERR_DELIVERY_STATE_RESPONSE_UNKNOWN"
+
+
+class DeliveryStateSnapshotVersionError(ValueError):
+    """A remote snapshot was written by a newer controller; it is never read, restored or replaced."""
+
+
+REMOTE_STATE_VERSION_UNSUPPORTED = "remote-state-version-unsupported"
 
 
 class _StateModel(BaseModel):
@@ -60,7 +94,7 @@ class _StateModel(BaseModel):
 class DeliveryStateSnapshot(_StateModel):
     """Sanitized resumable state for one Change at one semantic checkpoint."""
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2, 3, 4] = 4
     snapshot_id: Digest = Field(pattern=r"^[0-9a-f]{64}$")
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
     change_id: ChangeId
@@ -78,6 +112,8 @@ class DeliveryStateSnapshot(_StateModel):
     completion: CompletionReceiptBundle | None = None
     sequence: int = Field(gt=0)
     parent_snapshot_id: Digest | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    migrated_from_snapshot_id: Digest | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    repaired_predecessor_digest: Digest | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     base_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     captured_at: datetime
 
@@ -95,6 +131,8 @@ class DeliveryStateSnapshot(_StateModel):
         parent_snapshot_id: str | None,
         base_head: str | None,
         captured_at: datetime,
+        migrated_from_snapshot_id: str | None = None,
+        repaired_predecessor_digest: str | None = None,
     ) -> DeliveryStateSnapshot:
         """Create one sanitized snapshot from current runtime and workspace authority."""
         frontier = _portable_frontier(runtime)
@@ -123,6 +161,8 @@ class DeliveryStateSnapshot(_StateModel):
             "completion": completion,
             "sequence": sequence,
             "parent_snapshot_id": parent_snapshot_id,
+            "migrated_from_snapshot_id": migrated_from_snapshot_id,
+            "repaired_predecessor_digest": repaired_predecessor_digest,
             "base_head": base_head,
             "captured_at": captured_at,
         }
@@ -151,6 +191,7 @@ class DeliveryStateSnapshotDiagnostic(_StateModel):
     path: str = Field(min_length=1)
     code: str = Field(min_length=1)
     detail: str = Field(min_length=1, max_length=240)
+    raw_digest: Digest | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
 
 class DeliveryStateSnapshotInventory(_StateModel):
@@ -182,10 +223,19 @@ def _validate_snapshot_authority(snapshot: DeliveryStateSnapshot) -> None:
     if snapshot.contract.change_id != snapshot.change_id or snapshot.admission.change_id != snapshot.change_id:
         message = "Delivery-state snapshot authority does not match its Change"
         raise ValueError(message)
+    if snapshot.schema_version == _SNAPSHOT_V2 and snapshot.frontier.schema_version != _READABLE_LEGACY_FRONTIER:
+        message = "Delivery-state snapshot schema 2 embeds only a schema-18 frontier"
+        raise ValueError(message)
+    if (
+        snapshot.schema_version in {_SNAPSHOT_V2, _SNAPSHOT_V3}
+        and snapshot.contract.schema_version != _LEGACY_CONTRACT_SCHEMA_VERSION
+    ):
+        message = "Delivery-state snapshot schemas 2 and 3 embed only a schema-2 contract"
+        raise ValueError(message)
     if snapshot.admission.integration_target != snapshot.integration_target:
         message = "Delivery-state snapshot admission target does not match its Change"
         raise ValueError(message)
-    if snapshot.admission.contract_digest != hashlib.sha256(_canonical_bytes(snapshot.contract)).hexdigest():
+    if snapshot.admission.contract_digest != hashlib.sha256(contract_canonical_bytes(snapshot.contract)).hexdigest():
         message = "Delivery-state snapshot admission contract digest is invalid"
         raise ValueError(message)
     expected_bindings = tuple((scope.outcome_id, scope.scope_id) for scope in snapshot.contract.plan_scopes)
@@ -290,9 +340,20 @@ class DeliveryStatePublisher:
         """Publish or replay one exact sparse Change state snapshot."""
         _validate_change_id(change_id)
         remote_head = self._refresh_remote_head()
-        current = self._read_snapshot(remote_head, change_id) if remote_head is not None else None
         if expected_remote_head != remote_head and expected_remote_head is not None:
             _raise_state_conflict("Delivery-state branch changed before snapshot publication")
+        try:
+            current = self._read_snapshot(remote_head, change_id) if remote_head is not None else None
+        except DeliveryStateSnapshotVersionError as exc:
+            message = f"remote Delivery snapshot is unsupported by this controller and was not replaced: {exc}"
+            raise DeliveryStateQuarantineError(message, diagnostic_code=REMOTE_STATE_VERSION_UNSUPPORTED) from exc
+        except (TypeError, ValueError, ValidationError) as exc:
+            message = f"remote Delivery snapshot is quarantined; use repair-only publication: {exc}"
+            raise DeliveryStateQuarantineError(
+                message,
+                diagnostic_code=_snapshot_validation_code(exc),
+            ) from exc
+        _require_change_branch_reachability(self._repository, coordination, runtime)
         if current is not None and _same_snapshot_inputs(current, package_id, coordination, runtime, admission):
             return DeliveryStatePublicationReceipt.create(
                 operation_id=operation_id,
@@ -336,7 +397,7 @@ class DeliveryStatePublisher:
         for path in paths:
             if not path.endswith("/snapshot.json"):
                 continue
-            snapshots.append(DeliveryStateSnapshot.model_validate_json(self._git_blob(remote_head, path), strict=False))
+            snapshots.append(parse_delivery_state_snapshot(self._git_blob(remote_head, path)))
         return tuple(sorted(snapshots, key=lambda item: item.change_id))
 
     def read_snapshot_inventory(self) -> DeliveryStateSnapshotInventory:
@@ -362,8 +423,8 @@ class DeliveryStatePublisher:
                 continue
             try:
                 raw = self._git_blob(remote_head, path)
-                snapshot = DeliveryStateSnapshot.model_validate_json(raw, strict=False)
-            except (OSError, RuntimeError, subprocess.SubprocessError):
+                snapshot = parse_delivery_state_snapshot(raw)
+            except OSError, RuntimeError, subprocess.SubprocessError:
                 diagnostics.append(
                     DeliveryStateSnapshotDiagnostic(
                         change_id=change_id,
@@ -380,6 +441,7 @@ class DeliveryStatePublisher:
                         path=path,
                         code=_snapshot_validation_code(exc),
                         detail=_snapshot_validation_detail(exc),
+                        raw_digest=hashlib.sha256(raw).hexdigest(),
                     )
                 )
                 continue
@@ -390,6 +452,7 @@ class DeliveryStatePublisher:
                         path=path,
                         code="snapshot-path-identity-mismatch",
                         detail="Remote Delivery snapshot Change identity does not match its state path.",
+                        raw_digest=hashlib.sha256(raw).hexdigest(),
                     )
                 )
                 continue
@@ -406,18 +469,93 @@ class DeliveryStatePublisher:
         remote_head = self._refresh_remote_head()
         return None if remote_head is None else self._read_snapshot(remote_head, change_id)
 
+    def repair_quarantined_snapshot(  # noqa: PLR0913 - repair binds each exact authority fence.
+        self,
+        *,
+        change_id: str,
+        package_id: str,
+        coordination: ChangeCoordination,
+        runtime: DeliveryRuntime,
+        admission: DeliveryAdmissionReceipt,
+        operation_id: str,
+        captured_at: datetime,
+        expected_remote_head: str,
+        expected_snapshot_digest: str,
+        expected_diagnostic_code: Literal["snapshot-invalid", "snapshot-identity-invalid"],
+    ) -> DeliveryStatePublicationReceipt:
+        """Replace one known quarantined predecessor from validated local authority."""
+        _validate_change_id(change_id)
+        remote_head = self._refresh_remote_head()
+        if remote_head != expected_remote_head:
+            try:
+                replayed = self._read_snapshot(remote_head, change_id) if remote_head is not None else None
+            except TypeError, ValueError, ValidationError:
+                replayed = None
+            if (
+                replayed is not None
+                and replayed.operation_id == operation_id
+                and replayed.base_head == expected_remote_head
+                and replayed.repaired_predecessor_digest == expected_snapshot_digest
+            ):
+                return DeliveryStatePublicationReceipt.create(
+                    operation_id=operation_id,
+                    change_id=change_id,
+                    state_branch=self._state_branch,
+                    snapshot_id=replayed.snapshot_id,
+                    expected_remote_head=expected_remote_head,
+                    published_head=remote_head,
+                )
+            _raise_state_conflict("remote Delivery-state branch changed before snapshot repair")
+        raw = self._read_snapshot_bytes(remote_head, change_id)
+        if raw is None:
+            _raise_state_conflict("quarantined remote Delivery snapshot is absent")
+        if hashlib.sha256(raw).hexdigest() != expected_snapshot_digest:
+            _raise_state_conflict("quarantined remote Delivery snapshot bytes changed before repair")
+        _require_quarantine_diagnostic(raw, expected_diagnostic_code)
+        try:
+            payload = json.loads(raw)
+        except TypeError, ValueError:
+            payload = {}
+        sequence = payload.get("sequence") if isinstance(payload, dict) else None
+        next_sequence = (
+            sequence + 1 if isinstance(sequence, int) and not isinstance(sequence, bool) and sequence > 0 else 1
+        )
+        _require_change_branch_reachability(self._repository, coordination, runtime)
+        snapshot = DeliveryStateSnapshot.create(
+            operation_id=operation_id,
+            change_id=change_id,
+            package_id=package_id,
+            coordination=coordination,
+            runtime=runtime,
+            admission=admission,
+            sequence=next_sequence,
+            parent_snapshot_id=None,
+            base_head=remote_head,
+            repaired_predecessor_digest=expected_snapshot_digest,
+            captured_at=captured_at,
+        )
+        commit = self._commit_snapshot(remote_head, snapshot)
+        self._push_snapshot(commit, remote_head)
+        return DeliveryStatePublicationReceipt.create(
+            operation_id=operation_id,
+            change_id=change_id,
+            state_branch=self._state_branch,
+            snapshot_id=snapshot.snapshot_id,
+            expected_remote_head=remote_head,
+            published_head=commit,
+        )
+
     def _refresh_remote_head(self) -> str | None:
         before = self._remote_head()
         if before is None:
             return None
-        fetched = self._run_git(
+        fetched = self._run_remote_git(
             "fetch",
             "--no-tags",
             "--no-write-fetch-head",
             "--refmap=",
             self._remote,
             f"refs/heads/{self._state_branch}",
-            check=False,
         )
         if fetched.returncode != 0:
             _raise_state_error("remote Delivery-state branch could not be fetched", retry_safe=True)
@@ -427,26 +565,17 @@ class DeliveryStatePublisher:
         return before
 
     def _remote_head(self) -> str | None:
-        result = self._run_git(
-            "ls-remote",
-            "--exit-code",
-            "--heads",
-            self._remote,
-            f"refs/heads/{self._state_branch}",
-            check=False,
-        )
-        if result.returncode == _REMOTE_REF_MISSING:
-            return None
-        if result.returncode != 0:
-            _raise_state_error("remote Delivery-state branch could not be observed", retry_safe=True)
-        line = result.stdout.decode(errors="replace").strip().splitlines()
-        if len(line) != 1 or not line[0].endswith(f"\trefs/heads/{self._state_branch}"):
-            _raise_state_error("remote Delivery-state branch response is invalid", retry_safe=False)
-        return line[0].split("\t", 1)[0]
+        try:
+            return read_remote_ref(self._repository, self._remote, f"refs/heads/{self._state_branch}")
+        except RemoteGitError as exc:
+            invalid = isinstance(exc, RemoteGitFailed) and exc.result is not None and not exc.retry_safe
+            detail = "response is invalid" if invalid else "could not be observed"
+            error = DeliveryStatePublicationError(f"remote Delivery-state branch {detail}", retry_safe=exc.retry_safe)
+            raise error from exc
 
     def _read_snapshot(self, commit: str, change_id: str) -> DeliveryStateSnapshot | None:
         raw = self._read_snapshot_bytes(commit, change_id)
-        return None if raw is None else DeliveryStateSnapshot.model_validate_json(raw, strict=False)
+        return None if raw is None else parse_delivery_state_snapshot(raw)
 
     def _read_snapshot_bytes(self, commit: str, change_id: str) -> bytes | None:
         path = _snapshot_path(change_id)
@@ -496,14 +625,9 @@ class DeliveryStatePublisher:
 
     def _push_snapshot(self, commit: str, expected_remote_head: str | None) -> None:
         destination = f"refs/heads/{self._state_branch}"
-        result = self._run_git(
-            "push",
-            "--porcelain",
-            self._remote,
-            f"{commit}:{destination}",
-            check=False,
-        )
-        if result.returncode != 0:
+        try:
+            self._run_remote_git("push", "--porcelain", self._remote, f"{commit}:{destination}", kind="write")
+        except RemoteGitWriteUnknown:
             try:
                 observed = self._remote_head()
             except DeliveryStatePublicationError as exc:
@@ -512,9 +636,10 @@ class DeliveryStatePublisher:
                     retry_safe=False,
                 )
                 raise error from exc
-            if observed == commit:
+            readback = classify_write_readback(observed, intended=commit, expected_old=expected_remote_head)
+            if readback == "applied":
                 return
-            if observed != expected_remote_head:
+            if readback == "conflict":
                 _raise_state_conflict("remote Delivery-state branch changed before publication")
             _raise_state_error("Delivery-state snapshot push failed", retry_safe=True)
         try:
@@ -547,6 +672,18 @@ class DeliveryStatePublisher:
     ) -> str:
         return self._run_git(*arguments, input_bytes=input_bytes, environment=environment).stdout.decode().strip()
 
+    def _run_remote_git(self, *arguments: str, kind: RemoteGitKind = "read") -> subprocess.CompletedProcess[bytes]:
+        try:
+            return run_remote_git(self._repository, arguments, kind=kind)
+        except RemoteGitWriteUnknown:
+            raise
+        except RemoteGitError as exc:
+            error = DeliveryStatePublicationError(
+                f"remote Delivery-state branch is unavailable: {exc}",
+                retry_safe=exc.retry_safe,
+            )
+            raise error from exc
+
     def _run_git(
         self,
         *arguments: str,
@@ -567,6 +704,19 @@ class DeliveryStatePublisher:
             raise error from exc
 
 
+def _require_quarantine_diagnostic(raw: bytes, expected_diagnostic_code: str) -> None:
+    """Allow repair only of a known invalid snapshot; never of a valid or newer-controller one."""
+    try:
+        parse_delivery_state_snapshot(raw)
+    except DeliveryStateSnapshotVersionError:
+        _raise_state_conflict("remote Delivery snapshot was written by a newer controller and cannot be repaired")
+    except (TypeError, ValueError, ValidationError) as exc:
+        if _snapshot_validation_code(exc) != expected_diagnostic_code:
+            _raise_state_conflict("quarantined remote Delivery snapshot diagnostic changed before repair")
+    else:
+        _raise_state_conflict("remote Delivery snapshot is valid and cannot use quarantine repair")
+
+
 def _same_snapshot_inputs(
     current: DeliveryStateSnapshot,
     package_id: str,
@@ -581,6 +731,59 @@ def _same_snapshot_inputs(
     )
 
 
+def _require_change_branch_reachability(
+    repository: Path,
+    coordination: ChangeCoordination,
+    runtime: DeliveryRuntime,
+) -> None:
+    """Require every portable result commit to be reachable from reviewed Change authority."""
+    branch_head = _resolve_branch_head(repository, coordination.branch)
+    if branch_head is None or branch_head != coordination.last_reviewed_commit:
+        _raise_state_error(
+            "Delivery-state snapshot requires the managed Change branch at its reviewed boundary",
+            retry_safe=False,
+        )
+    frontier = _portable_frontier(runtime)
+    if frontier.published_head is not None and frontier.published_head != coordination.last_reviewed_commit:
+        _raise_state_error(
+            "Delivery-state snapshot requires the reviewed Change head to be acknowledged on its branch",
+            retry_safe=False,
+        )
+    for binding in frontier.bindings:
+        for result in binding.results:
+            if not _is_ancestor(repository, result.completed_commit, branch_head):
+                _raise_state_error(
+                    "Delivery-state snapshot contains a result commit absent from the managed Change branch",
+                    retry_safe=False,
+                )
+
+
+def _resolve_branch_head(repository: Path, branch: str) -> str | None:
+    result = subprocess.run(  # noqa: S603 - fixed Git executable and argument-vector invocation.
+        (resolve_git_executable(), "-C", str(repository), "rev-parse", "--verify", f"refs/heads/{branch}^{{commit}}"),
+        check=False,
+        capture_output=True,
+    )
+    return result.stdout.decode().strip() if result.returncode == 0 else None
+
+
+def _is_ancestor(repository: Path, ancestor: str, descendant: str) -> bool:
+    result = subprocess.run(  # noqa: S603 - fixed Git executable and argument-vector invocation.
+        (
+            resolve_git_executable(),
+            "-C",
+            str(repository),
+            "merge-base",
+            "--is-ancestor",
+            ancestor,
+            descendant,
+        ),
+        check=False,
+        capture_output=True,
+    )
+    return result.returncode == 0
+
+
 def _same_snapshot_authority(
     current: DeliveryStateSnapshot,
     package_id: str,
@@ -589,7 +792,9 @@ def _same_snapshot_authority(
     admission: DeliveryAdmissionReceipt,
 ) -> bool:
     return (
-        current.change_id == coordination.change_id
+        current.migrated_from_snapshot_id is None
+        and current.repaired_predecessor_digest is None
+        and current.change_id == coordination.change_id
         and current.package_id == package_id
         and current.authority_digest == runtime.authority_digest
         and current.branch == coordination.branch
@@ -605,7 +810,7 @@ def _same_snapshot_authority(
 
 def _portable_frontier(runtime: DeliveryRuntime) -> DeliveryFrontier:
     """Project a frontier after the exact checkpoint already published remotely."""
-    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=True)
     pending = frontier.pending_checkpoint
     if pending is not None and pending.head == frontier.published_head:
         return frontier.model_copy(update={"pending_checkpoint": None})
@@ -627,12 +832,16 @@ def _snapshot_path_change_id(path: str) -> str | None:
 
 
 def _snapshot_validation_code(error: Exception) -> str:
+    if isinstance(error, DeliveryStateSnapshotVersionError):
+        return REMOTE_STATE_VERSION_UNSUPPORTED
     if "snapshot identity is invalid" in str(error):
         return "snapshot-identity-invalid"
     return "snapshot-invalid"
 
 
 def _snapshot_validation_detail(error: Exception) -> str:
+    if isinstance(error, DeliveryStateSnapshotVersionError):
+        return str(error)[:240]
     if isinstance(error, ValidationError):
         errors = error.errors(include_url=False, include_context=False, include_input=False)
         if errors:
@@ -666,6 +875,59 @@ def _snapshot_digest(snapshot: DeliveryStateSnapshot) -> str:
     return hashlib.sha256(_canonical_bytes(snapshot.model_copy(update={"snapshot_id": ""}))).hexdigest()
 
 
+def _require_supported_snapshot_versions(payload: dict[str, object]) -> None:
+    """Refuse snapshots or embedded frontiers written by a newer controller before any typed read."""
+    frontier = payload.get("frontier")
+    for name, version, supported in (
+        ("snapshot", payload.get("schema_version"), _SNAPSHOT_SCHEMA_VERSION),
+        (
+            "snapshot frontier",
+            frontier.get("schema_version") if isinstance(frontier, dict) else None,
+            _FRONTIER_SCHEMA_VERSION,
+        ),
+    ):
+        if isinstance(version, int) and not isinstance(version, bool) and version > supported:
+            message = (
+                f"Remote Delivery {name} schema_version {version} is newer than this controller supports "
+                f"({supported}); upgrade the controller before using this Change."
+            )
+            raise DeliveryStateSnapshotVersionError(message)
+
+
+def parse_delivery_state_snapshot(content: bytes) -> DeliveryStateSnapshot:
+    """Parse one current snapshot strictly or upcast one valid schema-1 snapshot without rewriting it."""
+    payload = json.loads(content)
+    if not isinstance(payload, dict):
+        raise TypeError
+    _require_supported_snapshot_versions(payload)
+    schema_version = payload.get("schema_version")
+    if schema_version == _LEGACY_SNAPSHOT_SCHEMA_VERSION and not isinstance(schema_version, bool):
+        legacy_snapshot_id = payload.get("snapshot_id")
+        if not isinstance(legacy_snapshot_id, str):
+            _raise_state_value_error("Delivery-state snapshot identity is invalid")
+        legacy_candidate = {**payload, "snapshot_id": ""}
+        expected_legacy_id = hashlib.sha256(_canonical_payload(legacy_candidate)).hexdigest()
+        if legacy_snapshot_id != expected_legacy_id:
+            _raise_state_value_error("Delivery-state snapshot identity is invalid")
+        frontier_payload = payload.get("frontier")
+        if not isinstance(frontier_payload, dict):
+            raise TypeError
+        frontier = parse_stored_delivery_frontier(_canonical_payload(frontier_payload))
+        payload = {
+            **payload,
+            "schema_version": _SNAPSHOT_SCHEMA_VERSION,
+            "snapshot_id": "",
+            "frontier": frontier.model_dump(mode="json"),
+            "migrated_from_snapshot_id": legacy_snapshot_id,
+            "repaired_predecessor_digest": None,
+        }
+        payload["snapshot_id"] = hashlib.sha256(_canonical_payload(payload)).hexdigest()
+        return DeliveryStateSnapshot.model_validate_json(_canonical_payload(payload), strict=True)
+    if schema_version not in {_SNAPSHOT_V2, _SNAPSHOT_V3, _SNAPSHOT_SCHEMA_VERSION} or isinstance(schema_version, bool):
+        raise ValueError
+    return DeliveryStateSnapshot.model_validate_json(content, strict=True)
+
+
 def _publication_digest(receipt: DeliveryStatePublicationReceipt) -> str:
     return hashlib.sha256(_canonical_bytes(receipt.model_copy(update={"publication_id": ""}))).hexdigest()
 
@@ -683,14 +945,18 @@ def _raise_state_value_error(detail: str) -> NoReturn:
 
 
 __all__ = [
+    "REMOTE_STATE_VERSION_UNSUPPORTED",
     "DeliveryStateConflictError",
     "DeliveryStatePublicationError",
     "DeliveryStatePublicationReceipt",
     "DeliveryStatePublisher",
+    "DeliveryStateQuarantineError",
     "DeliveryStateResponseUnknownError",
     "DeliveryStateSnapshot",
     "DeliveryStateSnapshotDiagnostic",
     "DeliveryStateSnapshotInventory",
+    "DeliveryStateSnapshotVersionError",
+    "parse_delivery_state_snapshot",
 ]
 
 

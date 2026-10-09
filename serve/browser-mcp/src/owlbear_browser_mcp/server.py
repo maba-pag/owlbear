@@ -9,7 +9,7 @@ import os
 import socket
 import sys
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, TypedDict
@@ -58,7 +58,7 @@ class InvalidBrowserModeError(ValueError):
 class BrowserStatus(TypedDict):
     browser_mode: Literal["managed-edge", "chromium"]
     ownership: Literal["per-user-owned"]
-    startup_state: Literal["ready", "unavailable"]
+    startup_state: Literal["not-launched", "ready", "unavailable"]
     startup_reason: str | None
     visible_authentication: Literal["available", "unavailable"]
     latest_acquisition_status: str | None
@@ -178,11 +178,12 @@ class AppContext:
     allowlist: DomainAllowlist
     launcher: PlaywrightLauncher | None = None
     page: Any = None
-    last_content: str = ""
     browser_diagnostic: str | None = None
     browser_mode: BrowserMode = BrowserMode.CHROMIUM
     startup_reason: StartupReason | None = None
     latest_acquisition_status: AcquisitionStatus | None = None
+    user_data_dir: str = str(_DEFAULT_CHROMIUM_USER_DATA_DIR)
+    launch_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 
 def _safe_browser_diagnostic(stage: str, error: BaseException) -> str:
@@ -218,51 +219,34 @@ async def _close_browser_resources(
 
 @asynccontextmanager
 async def app_lifespan(_server: MCPServer) -> AsyncGenerator[AppContext]:
-    """Configure DomainAllowlist, attempt Playwright launch, and yield AppContext."""
+    """Configure the allowlist and profile; the browser launches on first use."""
     domains_env = os.environ.get(_ALLOWED_DOMAINS_ENV, "")
     domains = [d.strip() for d in domains_env.split(",") if d.strip()]
-    allowlist = DomainAllowlist(domains=domains)
-
-    launcher: PlaywrightLauncher | None = None
-    page: Any = None
-    browser_diagnostic: str | None = None
-    startup_reason: StartupReason | None = None
     browser_mode = BrowserMode.MANAGED_EDGE if sys.platform == "darwin" else BrowserMode.CHROMIUM
     try:
         browser_mode = _resolve_browser_mode()
-        user_data_dir = _resolve_user_data_dir(browser_mode)
-        launcher = PlaywrightLauncher(user_data_dir=user_data_dir, mode=browser_mode)
-        await launcher.launch()
-        page = await launcher.page()
-    except BaseException as exc:  # cleanup precedes control-flow re-raise or degradation.
-        diagnostics = [_safe_browser_diagnostic("browser startup", exc)]
-        diagnostics.extend(await _close_browser_resources(page, launcher))
-        if not isinstance(exc, Exception):
-            raise
-        browser_diagnostic = "; ".join(diagnostics)
-        startup_reason = _startup_reason(exc)
-        launcher = None
-        page = None
+    except InvalidBrowserModeError as exc:
+        startup_reason = StartupReason.INVALID_MODE
+        browser_diagnostic = _safe_browser_diagnostic("browser startup", exc)
+    else:
+        startup_reason = None
+        browser_diagnostic = None
 
     app_context = AppContext(
-        allowlist=allowlist,
-        launcher=launcher,
-        page=page,
+        allowlist=DomainAllowlist(domains=domains),
         browser_diagnostic=browser_diagnostic,
         browser_mode=browser_mode,
         startup_reason=startup_reason,
+        user_data_dir=_resolve_user_data_dir(browser_mode),
     )
     try:
         yield app_context
     finally:
-        try:
-            for diagnostic in await _close_browser_resources(page, launcher):
-                _LOGGER.warning(diagnostic)
-        finally:
-            app_context.page = None
-            app_context.launcher = None
-            page = None
-            launcher = None
+        page, launcher = app_context.page, app_context.launcher
+        app_context.page = None
+        app_context.launcher = None
+        for diagnostic in await _close_browser_resources(page, launcher):
+            _LOGGER.warning(diagnostic)
 
 
 _MSG_NO_PAGE = "No browser session"
@@ -305,11 +289,18 @@ def _startup_reason(error: Exception) -> StartupReason:
 
 
 def _browser_status(app_ctx: AppContext) -> BrowserStatus:
-    ready = app_ctx.launcher is not None and app_ctx.page is not None
+    ready = app_ctx.launcher is not None and app_ctx.launcher.is_running
+    startup_state: Literal["not-launched", "ready", "unavailable"]
+    if app_ctx.startup_reason is not None:
+        startup_state = "unavailable"
+    elif ready:
+        startup_state = "ready"
+    else:
+        startup_state = "not-launched"
     return {
         "browser_mode": app_ctx.browser_mode.value,
         "ownership": "per-user-owned",
-        "startup_state": "ready" if ready else "unavailable",
+        "startup_state": startup_state,
         "startup_reason": app_ctx.startup_reason.value if app_ctx.startup_reason else None,
         "visible_authentication": "available" if ready else "unavailable",
         "latest_acquisition_status": (
@@ -317,6 +308,77 @@ def _browser_status(app_ctx: AppContext) -> BrowserStatus:
         ),
         "startup_diagnostic": app_ctx.browser_diagnostic,
     }
+
+
+async def _launch_browser(app_ctx: AppContext) -> None:
+    """Launch the owned browser and its first page, recording a safe diagnostic on failure."""
+    launcher: PlaywrightLauncher | None = None
+    page: Any = None
+    try:
+        launcher = PlaywrightLauncher(user_data_dir=app_ctx.user_data_dir, mode=app_ctx.browser_mode)
+        await launcher.launch()
+        page = await launcher.page()
+    except BaseException as exc:  # cleanup precedes control-flow re-raise or degradation.
+        diagnostics = [_safe_browser_diagnostic("browser startup", exc)]
+        diagnostics.extend(await _close_browser_resources(page, launcher))
+        if not isinstance(exc, Exception):
+            raise
+        app_ctx.browser_diagnostic = "; ".join(diagnostics)
+        app_ctx.startup_reason = _startup_reason(exc)
+        raise ToolError(_browser_unavailable_message(app_ctx)) from None
+    app_ctx.launcher = launcher
+    app_ctx.page = page
+    app_ctx.browser_diagnostic = None
+    app_ctx.startup_reason = None
+
+
+async def _ensure_browser(app_ctx: object, *, need_page: bool = True) -> Any:  # noqa: ANN401 - Playwright page.
+    """Launch or reopen the owned browser when needed; return the live page when requested."""
+    if not isinstance(app_ctx, AppContext):
+        raise ToolError(_MSG_BROWSER_UNAVAILABLE)
+    async with app_ctx.launch_lock:
+        if app_ctx.startup_reason is StartupReason.INVALID_MODE:
+            raise ToolError(_browser_unavailable_message(app_ctx))
+        if app_ctx.launcher is not None and not app_ctx.launcher.is_running:
+            stale_launcher = app_ctx.launcher
+            app_ctx.launcher = None
+            app_ctx.page = None
+            for diagnostic in await _close_browser_resources(None, stale_launcher):
+                _LOGGER.warning(diagnostic)
+        if app_ctx.launcher is None:
+            await _launch_browser(app_ctx)
+        elif need_page and (app_ctx.page is None or app_ctx.page.is_closed()):
+            try:
+                app_ctx.page = await app_ctx.launcher.page()
+            except Exception as exc:  # noqa: BLE001 - any page failure becomes a safe typed tool error.
+                app_ctx.page = None
+                msg = f"{_MSG_BROWSER_UNAVAILABLE}: {_safe_browser_diagnostic('browser page', exc)}"
+                raise ToolError(msg) from None
+        return app_ctx.page
+
+
+def _require_live_page(app_ctx: object) -> Any:  # noqa: ANN401 - Playwright page objects are external runtime values.
+    """Return the current live page without launching, or raise a typed unavailable error."""
+    if (
+        not isinstance(app_ctx, AppContext)
+        or app_ctx.launcher is None
+        or not app_ctx.launcher.is_running
+        or app_ctx.page is None
+        or app_ctx.page.is_closed()
+    ):
+        raise ToolError(_browser_unavailable_message(app_ctx))
+    return app_ctx.page
+
+
+async def _validate_destination(app_ctx: object, url: str) -> None:
+    """Apply the DNS/IP preflight and allowlist before any browser work."""
+    if not isinstance(app_ctx, AppContext):
+        raise ToolError(_MSG_BROWSER_UNAVAILABLE)
+    await _check_ssrf(url, allowlist=app_ctx.allowlist)
+    try:
+        app_ctx.allowlist.check(url)
+    except PermissionError as exc:
+        raise ToolError(str(exc)) from exc
 
 
 mcp = MCPServer("owlbear-browser", lifespan=app_lifespan)
@@ -332,12 +394,12 @@ def _serialize_acquisition(result: AcquisitionSuccess | AcquisitionFailure) -> d
         return {"status": result.status.value, "diagnostics": diagnostics}
     return {
         "status": result.status.value,
-        "requested_url": redact_url(result.requested_url),
-        "canonical_url": redact_url(result.canonical_url),
-        "redirect_chain": [redact_url(url) for url in result.redirect_chain],
+        "requested_url": result.requested_url,
+        "canonical_url": result.canonical_url,
+        "redirect_chain": list(result.redirect_chain),
         "title": result.title,
         "markdown": result.markdown,
-        "discovered_links": [redact_url(url) for url in result.discovered_links],
+        "discovered_links": list(result.discovered_links),
         "content_hash": result.content_hash,
         "fetched_at": result.fetched_at.isoformat(),
         "diagnostics": diagnostics,
@@ -373,13 +435,7 @@ async def acquire(  # noqa: PLR0913
 ) -> dict[str, Any]:
     """Acquire one rendered page through the shared browser acquisition contract."""
     app_ctx = ctx.request_context.lifespan_context
-    if not isinstance(app_ctx, AppContext) or app_ctx.launcher is None:
-        raise ToolError(_browser_unavailable_message(app_ctx))
-    await _check_ssrf(url, allowlist=app_ctx.allowlist)
-    try:
-        app_ctx.allowlist.check(url)
-    except PermissionError as exc:
-        raise ToolError(str(exc)) from exc
+    await _validate_destination(app_ctx, url)
     try:
         request = AcquisitionRequest(
             url=url,
@@ -388,6 +444,10 @@ async def acquire(  # noqa: PLR0913
             navigation_timeout_ms=navigation_timeout_ms,
             readiness_timeout_ms=readiness_timeout_ms,
         )
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
+    await _ensure_browser(app_ctx, need_page=False)
+    try:
         result = await app_ctx.launcher.acquire(request)
     except PermissionError as exc:
         raise ToolError(str(exc)) from exc
@@ -401,105 +461,51 @@ async def acquire(  # noqa: PLR0913
 async def navigate(ctx: Context, url: str) -> str:
     """Navigate the browser to *url*."""
     app_ctx = ctx.request_context.lifespan_context
-    await _check_ssrf(url, allowlist=app_ctx.allowlist)
+    await _validate_destination(app_ctx, url)
+    page = await _ensure_browser(app_ctx)
+
     try:
-        app_ctx.allowlist.check(url)
-    except PermissionError as exc:
-        raise ToolError(str(exc)) from exc
-
-    if isinstance(app_ctx, AppContext):
-        if app_ctx.launcher is None:
-            raise ToolError(_browser_unavailable_message(app_ctx))
-        if app_ctx.page is not None:
-            try:
-                await app_ctx.page.goto(url, wait_until="domcontentloaded")
-            except AuthenticationRequired as exc:
-                msg = f"SSO session expired or authentication required: {exc}"
-                raise ToolError(msg) from exc
-            content = extract_content(await app_ctx.page.content(), url)
-            app_ctx.last_content = content
-            return content
-        return url  # dry-run: allowlist passed, no live page
-
-    # Non-AppContext (SimpleNamespace from tests, etc.): only access page if
-    # explicitly set — avoids awaiting auto-generated MagicMock attributes.
-    if "page" in vars(app_ctx):
-        page = app_ctx.page
-        if page is not None:
-            await page.goto(url)
-            return url
-        raise ToolError(_MSG_NO_PAGE)
-
-    return url  # Raw MagicMock or context without explicit page — allowlist passed
+        await page.goto(url, wait_until="domcontentloaded")
+    except AuthenticationRequired as exc:
+        msg = f"SSO session expired or authentication required: {exc}"
+        raise ToolError(msg) from exc
+    return extract_content(await page.content(), url)
 
 
-@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=True))
 async def click(ctx: Context, selector: str) -> str:
     """Click the element identified by *selector*."""
-    app_ctx = ctx.request_context.lifespan_context
-    page = getattr(app_ctx, "page", None)
-    if page is not None:
-        await page.locator(selector).click()
-    else:
-        raise ToolError(_browser_unavailable_message(app_ctx))
+    page = await _ensure_browser(ctx.request_context.lifespan_context)
+    await page.locator(selector).click()
     return selector
 
 
-@mcp.tool(
-    name="type",
-    annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False),
-)
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=True, destructive_hint=False))
 async def type_input(ctx: Context, selector: str, text: str) -> str:
-    """Type *text* into the element identified by *selector*."""
-    app_ctx = ctx.request_context.lifespan_context
-    page = getattr(app_ctx, "page", None)
-    if page is not None:
-        await page.locator(selector).fill(text)
-    else:
-        raise ToolError(_browser_unavailable_message(app_ctx))
-    return f"{selector}:{text}"
+    """Fill *text* into the element identified by *selector*."""
+    page = await _ensure_browser(ctx.request_context.lifespan_context)
+    await page.locator(selector).fill(text)
+    return selector
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=True, destructive_hint=False))
 async def select(ctx: Context, selector: str, value: str) -> str:
     """Select *value* in the element identified by *selector*."""
-    app_ctx = ctx.request_context.lifespan_context
-    page = getattr(app_ctx, "page", None)
-    if page is not None:
-        await page.locator(selector).select_option(value)
-    else:
-        raise ToolError(_browser_unavailable_message(app_ctx))
+    page = await _ensure_browser(ctx.request_context.lifespan_context)
+    await page.locator(selector).select_option(value)
     return f"{selector}:{value}"
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False))
 async def read_text(ctx: Context) -> str:
-    """Read the visible text content of the current page.
-
-    Returns the last cached content when no browser session is intentionally active.
-    Raises a browser-unavailable error when browser startup failed.
-    """
-    app_ctx = ctx.request_context.lifespan_context
-    page = getattr(app_ctx, "page", None)
-    if page is not None:
-        html = await page.content()
-        return extract_content(html, page.url)
-    if isinstance(app_ctx, AppContext) and app_ctx.browser_diagnostic:
-        raise ToolError(_browser_unavailable_message(app_ctx))
-    return getattr(app_ctx, "last_content", "")
+    """Read the visible text content of the current page."""
+    page = _require_live_page(ctx.request_context.lifespan_context)
+    html = await page.content()
+    return extract_content(html, page.url)
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False))
 async def snapshot(ctx: Context) -> str:
-    """Take an accessibility snapshot of the current page as Markdown.
-
-    Returns the last cached content when no browser session is intentionally active.
-    Raises a browser-unavailable error when browser startup failed.
-    """
-    app_ctx = ctx.request_context.lifespan_context
-    page = getattr(app_ctx, "page", None)
-    if page is not None:
-        return await page.locator("body").aria_snapshot()
-    if isinstance(app_ctx, AppContext) and app_ctx.browser_diagnostic:
-        raise ToolError(_browser_unavailable_message(app_ctx))
-    return getattr(app_ctx, "last_content", "")
+    """Take an ARIA accessibility snapshot of the current page in YAML."""
+    page = _require_live_page(ctx.request_context.lifespan_context)
+    return await page.locator("body").aria_snapshot()

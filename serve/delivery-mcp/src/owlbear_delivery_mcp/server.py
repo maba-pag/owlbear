@@ -13,9 +13,14 @@ from owlbear_delivery import (
     DeliveryApplicationLoadError,
     DeliveryCheckpointSupervisor,
     DeliveryStartupConfig,
+    DeliveryStateVersionError,
     PortfolioApplication,
+    WindowHostIdentity,
+    close_delivery_application,
+    load_configured_delivery_application,
 )
 from owlbear_delivery import load_delivery_application as load_core_delivery_application
+from owlbear_delivery.state_formats import StateCapabilityError, config_capability, require_capability
 from owlbear_delivery_github import GitHubCliPublicationProvider
 from owlbear_delivery_mcp.target_models import (
     DeliveryStartupDiagnostic,
@@ -30,8 +35,11 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
 _DELIVERY_CONFIG_PATH = Path(".owlbear/delivery/config.json")
+_CONFIG_RECORD = "config.json"
 _UNCONFIGURED = "ERR_DELIVERY_STARTUP_UNCONFIGURED"
 _INVALID = "ERR_DELIVERY_STARTUP_INVALID"
+_STATE_VERSION = "ERR_DELIVERY_STATE_VERSION"
+_CONTROLLER_FENCED = "ERR_DELIVERY_CONTROLLER_FENCED"
 _REQUIRED_TOP_LEVEL_FIELDS = {"schema_version", "remote", "target_branch", "github_repository"}
 _live_context: DeliveryAppContext | None = None
 
@@ -57,6 +65,12 @@ def load_delivery_config(path: Path) -> DeliveryStartupConfig:
             "Delivery startup configuration cannot be read",
             str(_DELIVERY_CONFIG_PATH),
         ) from exc
+    try:
+        require_capability(config_capability(content))
+    except StateCapabilityError as exc:
+        if exc.version_absent and exc.locator == _CONFIG_RECORD:
+            raise _unconfigured_version() from exc
+        raise DeliveryStartupDiagnostic(_STATE_VERSION, exc.detail, "state_version") from exc
     try:
         return DeliveryStartupConfig.model_validate_json(content)
     except ValidationError as exc:
@@ -86,15 +100,45 @@ def _is_missing_required(error: dict[str, object], field: str) -> bool:
 
 
 def load_delivery_application(config: DeliveryStartupConfig, workspace_root: Path) -> PortfolioApplication:
-    """Delegate canonical workspace owner construction to Delivery."""
+    """Delegate canonical workspace owner construction to Delivery, binding claims to this VS Code window."""
     try:
         return load_core_delivery_application(
             config,
             workspace_root=workspace_root,
             publication_provider=GitHubCliPublicationProvider(),
+            issuer_host=WindowHostIdentity.capture(),
         )
     except DeliveryApplicationLoadError as exc:
-        raise DeliveryStartupDiagnostic(_INVALID, exc.detail, exc.field) from exc
+        raise _startup_diagnostic(exc) from exc
+
+
+def _load_workspace_application(workspace_root: Path) -> PortfolioApplication:
+    """Read and parse the configuration only inside the core controller fence and format gate."""
+    try:
+        return load_configured_delivery_application(
+            workspace_root,
+            load_delivery_config,
+            publication_provider=GitHubCliPublicationProvider(),
+            issuer_host=WindowHostIdentity.capture(),
+        )
+    except DeliveryApplicationLoadError as exc:
+        raise _startup_diagnostic(exc) from exc
+
+
+def _unconfigured_version() -> DeliveryStartupDiagnostic:
+    return DeliveryStartupDiagnostic(
+        _UNCONFIGURED, "required Delivery startup configuration is absent", "schema_version"
+    )
+
+
+def _startup_diagnostic(exc: DeliveryApplicationLoadError) -> DeliveryStartupDiagnostic:
+    if isinstance(exc, DeliveryStateVersionError) and exc.version_absent and exc.locator == _CONFIG_RECORD:
+        return _unconfigured_version()
+    if exc.code == "controller-fenced":
+        code = _CONTROLLER_FENCED
+    else:
+        code = _STATE_VERSION if exc.code is not None else _INVALID
+    return DeliveryStartupDiagnostic(code, exc.detail, exc.field)
 
 
 def _live_application() -> PortfolioApplication:
@@ -109,8 +153,8 @@ async def app_lifespan(_server: MCPServer) -> AsyncGenerator[DeliveryAppContext]
     """Construct one explicitly configured Delivery application for this process."""
     global _live_context  # noqa: PLW0603 - process lifespan owns this binding.
     workspace_root = Path.cwd().resolve()
-    config = load_delivery_config(_delivery_config_path(workspace_root))
-    application = load_delivery_application(config, workspace_root)
+    _delivery_config_path(workspace_root)
+    application = _load_workspace_application(workspace_root)
     supervisor = DeliveryCheckpointSupervisor(application)
     supervisor.start()
     context = DeliveryAppContext(application=application)
@@ -120,6 +164,8 @@ async def app_lifespan(_server: MCPServer) -> AsyncGenerator[DeliveryAppContext]
     finally:
         supervisor.stop()
         _live_context = None
+        if not supervisor.running:
+            close_delivery_application(application)
 
 
 mcp = MCPServer("owlbear-delivery", lifespan=app_lifespan)

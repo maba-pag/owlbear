@@ -31,7 +31,7 @@ Describe your project in 2-4 sentences.
 | Backend | Python / Node.js / Go (example) | Add your actual backend stack |
 | Frontend | React / Vue / Svelte (example) | Keep only what you use |
 | Testing | pytest / vitest / playwright (example) | List real commands |
-| Tooling | ruff / eslint / mypy (example) | Remove tools you do not run |
+| Tooling | ruff / biome / mypy (example) | Remove tools you do not run |
 
 ## 4. Working Rules
 

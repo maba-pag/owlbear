@@ -72,7 +72,7 @@ finalization authority and requires fresh review.
 Return the next user-visible command exactly as:
 
 ```text
-/finalize-change <change-id>
+/continue-change <change-id>
 ```
 
 Do not publish the checkpoint, mark the pull request ready, resolve GitHub review threads, or merge
@@ -88,7 +88,7 @@ action: resolve_target_sync_conflict
 change_id: <change-id>
 target_head: <exact target head>
 merged_head: <exact returned merge head>
-next_command: /finalize-change <change-id>
+next_command: /continue-change <change-id>
 ```
 
 When the current evidence cannot safely choose or prove a resolution:
@@ -110,7 +110,7 @@ action: sync_change_with_target
 change_id: <change-id>
 target_head: <exact target head>
 merged_head: <exact returned merge head>
-next_command: /finalize-change <change-id>
+next_command: /continue-change <change-id>
 ```
 
 ## Known Pitfalls

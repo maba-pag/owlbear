@@ -1,0 +1,144 @@
+---
+name: Python
+
+"on":
+  pull_request:
+    branches:
+      - dev
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+    paths:
+      - .github/workflows/python.yml
+      - .python-version
+      - conftest.py
+      - pyproject.toml
+      - uv.lock
+      - serve/*/pyproject.toml
+      - serve/*/src/**
+      - serve/*/tests/**
+      - tests/**
+      - setup/**
+      - seed/**
+  workflow_dispatch:
+
+concurrency:
+  group: python-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Only the deselected `model` tests import this stack; it is 96% of the workspace download.
+  CI_SKIPPED_PACKAGES: >-
+    torch triton nvidia-cublas nvidia-cuda-cupti nvidia-cuda-nvrtc nvidia-cuda-runtime
+    nvidia-cudnn-cu13 nvidia-cufft nvidia-cufile nvidia-curand nvidia-cusolver nvidia-cusparse
+    nvidia-cusparselt-cu13 nvidia-nccl-cu13 nvidia-nvjitlink nvidia-nvshmem-cu13 nvidia-nvtx
+    cuda-bindings cuda-pathfinder cuda-toolkit flagembedding accelerate transformers
+    sentence-transformers peft datasets ir-datasets pyarrow pandas scipy scikit-learn sympy
+    tokenizers safetensors sentencepiece hf-xet huggingface-hub
+  CI_SHARDS: 4
+
+jobs:
+  tests:
+    name: Python tests ${{ matrix.shard }}/4
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - name: Checkout requested revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Fingerprint inputs
+        id: fingerprint
+        run: |
+          value="$(git ls-files -s -- . ':!:.owlbear/research' | sha256sum | cut -c1-40)"
+          echo "value=$value" >> "$GITHUB_OUTPUT"
+
+      - name: Look up passing result for identical inputs
+        id: reuse
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ci-pass
+          key: ci-pass-v1-python-${{ matrix.shard }}-${{ steps.fingerprint.outputs.value }}
+          lookup-only: true
+
+      - name: Report reused result
+        if: steps.reuse.outputs.cache-hit == 'true'
+        run: echo "Reused a passing result for identical inputs; tests skipped." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Setup uv
+        if: steps.reuse.outputs.cache-hit != 'true'
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
+        with:
+          enable-cache: true
+          cache-suffix: python-tests
+          cache-dependency-glob: uv.lock
+          prune-cache: false
+
+      - name: Check uv runtime
+        if: steps.reuse.outputs.cache-hit != 'true'
+        run: python3 .github/scripts/check_uv_version.py
+
+      - name: Install pinned Python
+        if: steps.reuse.outputs.cache-hit != 'true'
+        run: uv python install
+
+      - name: Install locked workspace without the model stack
+        if: steps.reuse.outputs.cache-hit != 'true'
+        run: |
+          skipped=()
+          for package in $CI_SKIPPED_PACKAGES; do skipped+=(--no-install-package "$package"); done
+          uv sync --locked --all-packages --all-groups "${skipped[@]}"
+
+      - name: Run test shard
+        if: steps.reuse.outputs.cache-hit != 'true'
+        env:
+          CI_SHARD_INDEX: ${{ matrix.shard }}
+        run: |
+          plugin_dir="$RUNNER_TEMP/ci-plugins"
+          mkdir -p "$plugin_dir"
+          cat > "$plugin_dir/ci_shard.py" <<'PY'
+          import os
+          import zlib
+
+
+          def pytest_collection_modifyitems(config, items):
+              index = int(os.environ["CI_SHARD_INDEX"]) - 1
+              total = int(os.environ["CI_SHARDS"])
+              keep = [item for item in items if zlib.crc32(item.nodeid.encode()) % total == index]
+              drop = [item for item in items if zlib.crc32(item.nodeid.encode()) % total != index]
+              if drop:
+                  config.hook.pytest_deselected(items=drop)
+                  items[:] = keep
+          PY
+          PYTHONPATH="$plugin_dir" uv run --no-sync pytest tests serve -p ci_shard \
+            -m "not e2e and not model and not browser" --dist worksteal
+
+      - name: Record passing result
+        if: github.event_name == 'pull_request' && steps.reuse.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/ci-pass"
+          echo "$HEAD_SHA" > "$RUNNER_TEMP/ci-pass/head"
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+
+      - name: Save passing result
+        if: github.event_name == 'pull_request' && steps.reuse.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ci-pass
+          key: ci-pass-v1-python-${{ matrix.shard }}-${{ steps.fingerprint.outputs.value }}

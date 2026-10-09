@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+import psutil
 import pytest
 
 from owlbear_delivery.git_executable import resolve_git_executable
@@ -306,3 +309,134 @@ def seed_user_checkout_metadata() -> Callable[[Path], None]:
 def _tmp_path(tmp_path: Path) -> Path:
     """Alias for tmp_path with underscore prefix (for tests that use _tmp_path)."""
     return tmp_path
+
+
+_EXT_TRANSPORT_HELPER = """\
+import os, pathlib, sys, time
+service, bare, root, git = sys.argv[1], sys.argv[2], pathlib.Path(sys.argv[3]), sys.argv[4]
+name = service.removeprefix("git-")
+log = root / "invocations.log"
+with log.open("a", encoding="utf-8") as stream:
+    stream.write(f"{name} {os.getpid()}\\n")
+index = sum(1 for line in log.read_text(encoding="utf-8").splitlines() if line.split()[0] == name) - 1
+modes_path = root / f"{name}.modes"
+modes = modes_path.read_text(encoding="utf-8").split() if modes_path.exists() else ["pass"]
+mode = modes[min(index, len(modes) - 1)]
+deadline = time.monotonic() + 30
+if mode == "arm-hang":
+    (root / "armed").touch()
+if mode in {"hang", "arm-hang"} or (name == "upload-pack" and (root / "armed").exists()):
+    time.sleep(300)
+    sys.exit(1)
+if mode == "orphan":
+    os.setsid()
+    time.sleep(300)
+    sys.exit(1)
+if mode == "gate":
+    (root / "gate-blocked").touch()
+    while not (root / "gate-release").exists() and time.monotonic() < deadline:
+        time.sleep(0.02)
+if name == "upload-pack":
+    while (root / "receiving").exists() and time.monotonic() < deadline:
+        time.sleep(0.02)
+if mode == "detach":
+    os.setsid()
+    (root / "receiving").touch()
+    os.dup2(os.open(root / "detached.err", os.O_WRONLY | os.O_CREAT | os.O_APPEND), 2)
+os.execv(git, [git, name, bare])
+"""
+
+
+@dataclass(frozen=True)
+class ExtRemote:
+    """A local bare remote reached through a scriptable ``ext::`` transport helper.
+
+    Modes per invocation of one service: ``pass``, ``hang`` (never answers), ``arm-hang`` (never
+    answers and makes every later ``upload-pack`` hang), ``orphan`` (hangs in its own session),
+    ``gate`` (waits for ``release()``) and ``detach`` (runs ``receive-pack`` outside the client's
+    process group, so it survives the client's timeout).
+    """
+
+    bare: Path
+    root: Path
+    url: str
+
+    def use(self, repository: Path, remote: str = "origin") -> None:
+        _git(repository, "config", "protocol.ext.allow", "always")
+        _git(repository, "remote", "set-url", remote, self.url)
+
+    def modes(self, service: str, *modes: str) -> None:
+        (self.root / f"{service}.modes").write_text(" ".join(modes), encoding="utf-8")
+
+    def pids(self, service: str) -> tuple[int, ...]:
+        log = self.root / "invocations.log"
+        lines = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
+        return tuple(int(line.split()[1]) for line in lines if line.split()[0] == service)
+
+    def wait_blocked(self, timeout: float = 20) -> None:
+        deadline = time.monotonic() + timeout
+        while not (self.root / "gate-blocked").exists():
+            if time.monotonic() > deadline:
+                message = "ext transport never reached its gate"
+                raise AssertionError(message)
+            time.sleep(0.02)
+
+    def release(self) -> None:
+        (self.root / "gate-release").touch()
+
+    def assert_exited(self, service: str, timeout: float = 10) -> None:
+        """Fail unless every helper process started for ``service`` has exited."""
+        assert_processes_gone(self.pids(service), timeout)
+
+    def slow_accepting_receive(self, seconds: float) -> None:
+        """Make the bare remote accept pushes only after a slow ``pre-receive`` hook."""
+        hooks = self.bare / "hooks"
+        _write_hook(hooks / "pre-receive", f"cat >/dev/null\nsleep {seconds}\nexit 0\n")
+        marker = self.root / "receiving"
+        _write_hook(
+            hooks / "reference-transaction",
+            f'cat >/dev/null\nif [ "$1" = committed ]; then rm -f "{marker}"; fi\nexit 0\n',
+        )
+        _git(self.bare, "config", "receive.keepAlive", "0")
+
+
+def _write_hook(path: Path, body: str) -> None:
+    path.write_text(f"#!/bin/sh\n{body}", encoding="utf-8")
+    path.chmod(0o755)
+
+
+def assert_processes_gone(pids: tuple[int, ...], timeout: float = 10) -> None:
+    """Fail unless every PID has exited (a reaped or zombie process counts as gone)."""
+    deadline = time.monotonic() + timeout
+    remaining = set(pids)
+    while remaining:
+        remaining = {pid for pid in remaining if _process_running(pid)}
+        if not remaining:
+            return
+        if time.monotonic() > deadline:
+            message = f"remote Git transport processes survived: {sorted(remaining)}"
+            raise AssertionError(message)
+        time.sleep(0.05)
+
+
+def _process_running(pid: int) -> bool:
+    try:
+        return psutil.Process(pid).status() != psutil.STATUS_ZOMBIE
+    except psutil.NoSuchProcess:
+        return False
+
+
+@pytest.fixture
+def ext_remote(tmp_path: Path) -> Callable[[Path], ExtRemote]:
+    """Build an ``ext::`` transport for one local bare remote."""
+    counter = iter(range(1_000))
+
+    def build(bare: Path) -> ExtRemote:
+        root = tmp_path / f"ext-transport-{next(counter)}"
+        root.mkdir()
+        helper = root / "helper.py"
+        helper.write_text(_EXT_TRANSPORT_HELPER, encoding="utf-8")
+        url = f"ext::{sys.executable} {helper} %S {bare} {root} {resolve_git_executable()}"
+        return ExtRemote(bare=bare, root=root, url=url)
+
+    return build

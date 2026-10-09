@@ -1,4 +1,4 @@
-import type { WorkItemPortfolioResponse } from '../../src/api/workItems'
+import type { WorkItemPortfolioResponse } from "../../src/api/workItems";
 
 export const EMPTY_WORK_ITEM_PORTFOLIO = {
   groups: [],
@@ -18,10 +18,10 @@ export const EMPTY_WORK_ITEM_PORTFOLIO = {
     queued_for_orchestration: [],
     interventions: [],
     dependency_waits: [],
-    guidance: [{ kind: 'create-change', change_ids: [], work_count: 0 }],
+    guidance: [{ kind: "create-change", change_ids: [], work_count: 0 }],
   },
   health: {
-    status: 'healthy',
+    status: "healthy",
     diagnostics: [],
   },
-} satisfies WorkItemPortfolioResponse
+} satisfies WorkItemPortfolioResponse;

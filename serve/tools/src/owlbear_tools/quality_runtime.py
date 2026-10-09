@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from enum import StrEnum
@@ -23,11 +24,28 @@ class FixMode(StrEnum):
 
 def _call(command: list[str], *, env: dict[str, str] | None = None, cwd: Path | None = None) -> int:
     kwargs: dict[str, object] = {}
-    if env is not None:
-        kwargs["env"] = env
+    kwargs["env"] = _subprocess_environment(env)
     if cwd is not None:
         kwargs["cwd"] = cwd
     return subprocess.call(command, **kwargs)  # noqa: S603
+
+
+def _subprocess_environment(env: dict[str, str] | None) -> dict[str, str]:
+    """Bridge the configured Node CA to Python subprocesses when needed."""
+    environment = dict(os.environ if env is None else env)
+    if environment.get("SSL_CERT_FILE") or environment.get("SSL_CERT_DIR"):
+        return environment
+
+    extra_ca = environment.get("NODE_EXTRA_CA_CERTS")
+    if not extra_ca:
+        return environment
+    ca_path = Path(extra_ca).expanduser()
+    if not ca_path.is_file() or not os.access(ca_path, os.R_OK):
+        return environment
+
+    for variable in ("SSL_CERT_FILE", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE", "PIP_CERT"):
+        environment.setdefault(variable, str(ca_path))
+    return environment
 
 
 def _git_paths(*, staged: bool) -> list[str]:

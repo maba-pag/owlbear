@@ -7,7 +7,6 @@
     "test:e2e": "npm --prefix serve/cockpit/web run test:e2e --",
     "test:e2e:all": "npm --prefix serve/cockpit/web run test:e2e:all --",
     "build": "npm --prefix serve/cockpit/web run build",
-    "lint:css": "npm --prefix serve/cockpit/web run lint:css",
     "lint:html": "npm --prefix serve/cockpit/web run lint:html"
   }
 }

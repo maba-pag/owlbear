@@ -1,0 +1,8 @@
+---
+# TEMPORARY: actionlint 1.7.12 does not know ubuntu-26.04 yet.
+# https://github.com/rhysd/actionlint/issues/682
+# Remove this file once actionlint knows the images.
+self-hosted-runner:
+  labels:
+    - ubuntu-26.04
+    - ubuntu-26.04-arm

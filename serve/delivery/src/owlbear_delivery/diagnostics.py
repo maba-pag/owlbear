@@ -15,23 +15,29 @@ from owlbear_delivery.change_workspace import (
 from owlbear_delivery.completed_history import CompletedHistoryError, CompletedHistoryMissingError
 from owlbear_delivery.delivery_admission import DeliveryAdmissionError
 from owlbear_delivery.delivery_runtime import (
+    DeliveryAcceptanceEvidenceError,
     DeliveryAcceptanceWaitingError,
+    DeliveryActionSelectionConflictError,
     DeliveryChangeDispositionConflictError,
+    DeliveryConfirmationError,
     DeliveryRuntimeConflictError,
     DeliveryRuntimeReferenceError,
 )
 from owlbear_delivery.delivery_state import DeliveryStatePublicationError
 from owlbear_delivery.design_package import DesignPackageConflictError
+from owlbear_delivery.finalization_reports import FinalizationReportError
 from owlbear_delivery.portfolio_application import (
     DeliveryRuntimeReconciliationError,
     PortfolioApplicationError,
 )
 from owlbear_delivery.publication_provider import PublicationProviderError
+from owlbear_delivery.recovery import DeliveryWorkerExclusionRequiredError
 from owlbear_delivery.runtime_transaction import (
     TransactionConflictError,
     TransactionManifestError,
     TransactionPathError,
 )
+from owlbear_delivery.worker_stall import DeliveryWorkerActiveError
 
 
 class DeliveryFailureCategory(StrEnum):
@@ -101,7 +107,22 @@ def classify_delivery_failure(error: Exception) -> DeliveryFailureClassification
             category=DeliveryFailureCategory.CONFLICT,
             retry_safe=error.retry_safe,
         )
-    elif isinstance(error, DeliveryChangeDispositionConflictError):
+    elif isinstance(error, DeliveryWorkerActiveError):
+        classification = _classification(error, category=DeliveryFailureCategory.CONFLICT, retry_safe=True)
+    elif isinstance(error, FinalizationReportError):
+        classification = _classification(
+            error, category=DeliveryFailureCategory.CONFLICT, retry_safe=error.code.endswith("-unavailable")
+        )
+    elif isinstance(
+        error,
+        (
+            DeliveryWorkerExclusionRequiredError,
+            DeliveryChangeDispositionConflictError,
+            DeliveryActionSelectionConflictError,
+            DeliveryAcceptanceEvidenceError,
+            DeliveryConfirmationError,
+        ),
+    ):
         classification = _classification(error, category=DeliveryFailureCategory.CONFLICT, retry_safe=False)
     elif isinstance(
         error,

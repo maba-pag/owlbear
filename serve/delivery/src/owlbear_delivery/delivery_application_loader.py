@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
 import re
 import subprocess
-from dataclasses import dataclass
+import weakref
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Never
 
@@ -16,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from owlbear_delivery.acceptance import CompletionReceiptStore
 from owlbear_delivery.change_publication import ChangeBranchPublisher
 from owlbear_delivery.change_workspace import (
+    BuilderHandoffSource,
     ChangeCoordination,
     ChangeWorkspaceManager,
     CoordinationConflictError,
@@ -29,13 +32,37 @@ from owlbear_delivery.delivery_contract_discovery import (
     discover_persisted_changes,
 )
 from owlbear_delivery.delivery_runtime import (
+    REQUESTLESS_WORKER_SETTLEMENT_FAILURE_CODES,
+    BlockDelivery,
     DeliveryAcceptanceAttentionReason,
+    DeliveryActiveClaim,
+    DeliveryBlock,
+    DeliveryBuilderHandoffContext,
+    DeliveryBuilderInvocationSettlement,
     DeliveryChangeDispositionKind,
     DeliveryFrontier,
+    DeliveryPendingStatePublication,
+    DeliveryPlanCandidate,
+    DeliveryRequestKind,
     DeliveryRuntime,
+    DeliveryRuntimeConflictError,
+    DeliveryStage,
     DeliveryWorkerRole,
+    OutcomeAuthorityBinding,
+    RetryDelivery,
+    ReturnDelivery,
+    _DeliveryBuilderInvocationSettlementReceipt,
+    _DeliveryBuilderPlanPromotionReceipt,
+    _DeliveryPlanningPauseReplay,
+    _model_content,
+    _read_builder_attempt_grant_receipt,
+    _read_builder_handoff_change_intent_receipts,
+    _read_builder_request_resolution_receipt,
+    normalize_frontier,
+    parse_delivery_frontier,
 )
 from owlbear_delivery.delivery_state import (
+    REMOTE_STATE_VERSION_UNSUPPORTED,
     DeliveryStatePublicationError,
     DeliveryStatePublisher,
     DeliveryStateSnapshot,
@@ -49,12 +76,55 @@ from owlbear_delivery.portfolio_application import (
     PortfolioApplicationConfig,
     PortfolioApplicationDependencies,
 )
-from owlbear_delivery.portfolio_operating import DeliveryHealthDiagnostic
-from owlbear_delivery.runtime_transaction import RuntimeTransaction, TransactionParticipant
+from owlbear_delivery.portfolio_operating import (
+    DeliveryHealthDiagnostic,
+    DeliveryHealthHeadRelation,
+    DeliveryHealthReason,
+    DeliveryHealthResolution,
+)
+from owlbear_delivery.remote_git import RemoteGitError, RemoteGitFailed, read_remote_ref, run_remote_git
+from owlbear_delivery.runtime_models import required_target_commit
+from owlbear_delivery.runtime_receipts import (
+    BUILDER_ATTEMPT_GRANT_NOTE,
+    builder_attempt_limit_block_id,
+    builder_planning_route_block_id,
+    is_builder_return_limit,
+    is_builder_target_sync_handoff,
+)
+from owlbear_delivery.runtime_transaction import (
+    RuntimeTransaction,
+    TransactionParticipant,
+    read_contained,
+    write_contained,
+)
+from owlbear_delivery.state_formats import (
+    CONTROLLER_PIN,
+    FORMAT_MARKER,
+    MIGRATIONS_ROOT,
+    SUPPORTED_FORMAT,
+    StateCapabilityError,
+    controller_pin_refusal,
+    format_marker_bytes,
+    require_capability,
+    scan_capability,
+)
+from owlbear_delivery.storage_io import (
+    ControllerFencedError,
+    ControllerLock,
+    acquire_controller_lock,
+    read_only_state,
+)
+from owlbear_delivery.target_contract import contract_canonical_bytes
+from owlbear_delivery.workspace_snapshots import DESIGN_PACKAGE_SNAPSHOT_SUBJECT
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from owlbear_delivery.delivery_runtime import DeliveryRequest, _DeliveryBuilderHandoffChangeIntentReceipt
     from owlbear_delivery.publication_provider import PublicationProvider
     from owlbear_delivery.target_contract import DeliveryContract
+    from owlbear_delivery.worker_stall import WindowHostIdentity
+    from owlbear_delivery.workspace_models import ChangeDesignPackageSnapshotIntent
 
 
 class _LoaderModel(BaseModel):
@@ -75,7 +145,7 @@ class DeliveryHostConfig(_LoaderModel):
     """Host-local limits and timeout for Delivery work."""
 
     schema_version: Literal[1]
-    execution_capacity: int = Field(default=3, gt=0)
+    execution_capacity: int = Field(default=8, gt=0)
     claim_timeout_seconds: int = Field(default=60 * 60, gt=0)
 
 
@@ -95,18 +165,55 @@ class _DeliveryPaths:
     worktree_root: Path
 
 
+@dataclass(frozen=True)
+class _BuilderReturnReplayContext:
+    snapshot: DeliveryStateSnapshot
+    local_frontier: DeliveryFrontier
+    settlement: _DeliveryBuilderInvocationSettlementReceipt
+    paths: _DeliveryPaths
+    branch_head: str
+
+
+@dataclass(frozen=True)
+class _PlannerPauseHistory:
+    settled: OutcomeAuthorityBinding
+    answered_requests: tuple[DeliveryRequest, ...]
+    paused: tuple[OutcomeAuthorityBinding, ...]
+    answered: tuple[OutcomeAuthorityBinding, ...]
+    latest: OutcomeAuthorityBinding
+    # The exhausted settlement a user grant replaced as the Planner baseline (N12 I6).
+    exhausted: OutcomeAuthorityBinding | None = None
+
+
 class DeliveryApplicationLoadError(RuntimeError):
     """Field-aware failure raised before Delivery state owners are composed."""
 
-    __slots__ = ("detail", "field")
+    __slots__ = ("code", "detail", "field")
 
-    def __init__(self, field: str, detail: str) -> None:
+    def __init__(self, field: str, detail: str, *, code: str | None = None) -> None:
         self.field = field
         self.detail = detail
+        self.code = code
         super().__init__(detail)
 
 
-_REMOTE_REF_MISSING = 2
+class DeliveryStateVersionError(DeliveryApplicationLoadError):
+    """Persisted Delivery state is outside the formats this controller may read or write."""
+
+    __slots__ = ("locator", "version_absent")
+
+    def __init__(self, code: str, detail: str, *, locator: str, version_absent: bool = False) -> None:
+        super().__init__("state_version", detail, code=code)
+        self.locator = locator
+        self.version_absent = version_absent
+
+
+CONTROLLER_FENCED = "controller-fenced"
+CONTROLLER_NOT_PINNED = "controller-not-pinned"
+_CONFIG_LOCATOR = ".owlbear/delivery/config.json"
+_CONTROLLER_LOCKS: weakref.WeakKeyDictionary[PortfolioApplication, ControllerLock] = weakref.WeakKeyDictionary()
+
+
 _RECOVERABLE_ADMISSION_ERRORS = frozenset(
     {
         DeliveryDiscoveryErrorCode.ADMISSION_UNAVAILABLE,
@@ -236,6 +343,8 @@ def _load_contracts(runtime_root: Path) -> tuple[dict[str, DeliveryContract], tu
                     detail=detail,
                     change_id=observation.change_id,
                     path=f".owlbear/delivery/runtime/changes/{observation.change_id}",
+                    reason=DeliveryHealthReason.RUNTIME_UNAVAILABLE,
+                    resolution=DeliveryHealthResolution.AUTHORITY_GAP,
                 )
             )
         if (
@@ -330,6 +439,10 @@ def _bootstrap_remote_state(
                     "Remote Delivery-state snapshots are unavailable; local state was retained.",
                 ),
                 retry_safe=exc.retry_safe,
+                reason=DeliveryHealthReason.REMOTE_STATE_UNAVAILABLE,
+                resolution=(
+                    DeliveryHealthResolution.RETRY if exc.retry_safe else DeliveryHealthResolution.AUTHORITY_GAP
+                ),
             ),
         )
     diagnostics = [
@@ -339,6 +452,12 @@ def _bootstrap_remote_state(
             detail=item.detail,
             change_id=item.change_id,
             path=item.path,
+            reason=(
+                DeliveryHealthReason.REMOTE_STATE_VERSION_UNSUPPORTED
+                if item.code == REMOTE_STATE_VERSION_UNSUPPORTED
+                else DeliveryHealthReason.REMOTE_STATE_RECONCILIATION
+            ),
+            resolution=DeliveryHealthResolution.AUTHORITY_GAP,
         )
         for item in inventory.diagnostics
     ]
@@ -356,29 +475,62 @@ def _bootstrap_remote_state(
     for snapshot in inventory.snapshots:
         try:
             if snapshot.change_id in local_change_ids:
-                _validate_local_snapshot(snapshot, config, paths, package_store, coordinator)
+                _validate_local_snapshot(snapshot, config, paths, package_store, workspace_manager)
             else:
                 _restore_remote_snapshot(snapshot, config, paths, package_store, coordinator, workspace_manager)
-        except _DeferredRemoteStateReconciliationError:
+        except _DeferredRemoteStateReconciliationError as exc:
             diagnostics.append(
                 DeliveryHealthDiagnostic(
                     source="remote-state",
                     code="remote-change-head-ahead",
                     detail="Remote Change branch is ahead of its reviewed Delivery snapshot and was quarantined.",
                     change_id=snapshot.change_id,
+                    reason=DeliveryHealthReason.REMOTE_CHANGE_HEAD_AHEAD,
+                    resolution=DeliveryHealthResolution.AUTHORITY_GAP,
+                    expected_head=exc.expected_head,
+                    observed_head=exc.observed_head,
+                    observed_local_head=exc.observed_local_head,
+                    head_relation=exc.head_relation,
                 )
             )
             continue
-        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+        except _RemoteChangeHeadMismatchError as exc:
             diagnostics.append(
                 DeliveryHealthDiagnostic(
                     source="remote-state",
                     code="remote-state-reconciliation-required",
-                    detail=_bounded_health_detail(
-                        str(exc),
-                        "Remote Delivery state could not be reconciled and was quarantined.",
-                    ),
+                    detail=str(exc),
                     change_id=snapshot.change_id,
+                    reason=exc.reason,
+                    resolution=DeliveryHealthResolution.AUTHORITY_GAP,
+                    expected_head=exc.expected_head,
+                    observed_head=exc.observed_head,
+                    observed_local_head=exc.observed_local_head,
+                    head_relation=exc.head_relation,
+                )
+            )
+        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+            detail = _bounded_health_detail(
+                str(exc),
+                "Remote Delivery state could not be reconciled and was quarantined.",
+            )
+            reason = (
+                DeliveryHealthReason.LOCAL_FRONTIER_MISMATCH
+                if "local Delivery runtime artifact differs from its remote snapshot: frontier.json" in detail
+                else DeliveryHealthReason.REMOTE_STATE_RECONCILIATION
+            )
+            diagnostics.append(
+                DeliveryHealthDiagnostic(
+                    source="remote-state",
+                    code="remote-state-reconciliation-required",
+                    detail=detail,
+                    change_id=snapshot.change_id,
+                    reason=reason,
+                    resolution=(
+                        DeliveryHealthResolution.INSPECT
+                        if reason is DeliveryHealthReason.LOCAL_FRONTIER_MISMATCH
+                        else DeliveryHealthResolution.AUTHORITY_GAP
+                    ),
                 )
             )
     return tuple(diagnostics)
@@ -430,69 +582,256 @@ def _restore_remote_snapshot(  # noqa: PLR0913, PLR0917 - restoration binds each
     workspace_manager.show(snapshot.change_id)
 
 
-def _validate_local_snapshot(
+def _validate_local_snapshot(  # noqa: C901 - one predicate per recognized local successor.
     snapshot: DeliveryStateSnapshot,
     config: DeliveryStartupConfig,
     paths: _DeliveryPaths,
     package_store: DesignPackageStore,
-    coordinator: PortfolioCoordinator,
+    workspace_manager: ChangeWorkspaceManager,
 ) -> None:
     """Reject local Delivery state outside exact or explicitly recoverable authority."""
     try:
         package = package_store.read_verified(snapshot.change_id)
     except (OSError, RuntimeError, ValueError) as exc:
         _bootstrap_failure("local Delivery package cannot be reconciled with its remote snapshot", exc)
-    if package.package_id != snapshot.package_id:
-        _bootstrap_failure("local Delivery package differs from its remote snapshot")
     try:
-        coordination = coordinator.show(snapshot.change_id)
+        coordination = workspace_manager.show(snapshot.change_id)
     except (OSError, RuntimeError, ValueError) as exc:
         _bootstrap_failure("local Delivery coordination cannot be reconciled with its remote snapshot", exc)
+    relative_root = paths.runtime_root / "changes" / snapshot.change_id
+    frontier_bytes, canonical_frontier, frontier = _read_local_snapshot_frontier(relative_root / "frontier.json")
+    local_pending_publication = _read_local_pending_publication(
+        relative_root / "state-publication.json",
+        frontier_bytes,
+    )
+    # Successor recognition compares writable models: the snapshot frontier is normalized to 19 (N rows).
+    replay_snapshot = snapshot.model_copy(update={"frontier": normalize_frontier(snapshot.frontier)})
+    revision = _local_revision_state(
+        replay_snapshot, package.package_id, coordination, frontier, relative_root, paths.repository_root
+    )
+    if revision == "activated" and not local_pending_publication:
+        revision = None
+    if package.package_id != snapshot.package_id and revision is None:
+        _bootstrap_failure("local Delivery package differs from its remote snapshot")
     if (
         coordination.branch != snapshot.branch
         or coordination.integration_target != snapshot.integration_target
         or coordination.target_head != snapshot.target_head
         or coordination.publication_base_head != snapshot.publication_base_head
-        or coordination.last_reviewed_commit != snapshot.last_reviewed_commit
+        or (coordination.last_reviewed_commit != snapshot.last_reviewed_commit and revision is None)
     ):
         _bootstrap_failure("local Delivery coordination differs from its remote snapshot")
-    relative_root = paths.runtime_root / "changes" / snapshot.change_id
     expected = {
-        "contract.json": _canonical_model(snapshot.contract),
+        "contract.json": contract_canonical_bytes(snapshot.contract),
         "frontier.json": _canonical_model(snapshot.frontier),
         "admission.json": _canonical_model(snapshot.admission),
     }
-    frontier_bytes, frontier = _read_local_snapshot_frontier(relative_root / "frontier.json")
+    if local_pending_publication and (
+        coordination.builder_handoff is not None
+        or any(binding.builder_handoff_context is not None for binding in frontier.bindings)
+    ):
+        _bootstrap_failure("local Builder handoff cannot be combined with portable state publication")
     local_attention_successor = _is_unpublished_acceptance_attention_successor(
-        snapshot.frontier, frontier
-    ) or _is_unpublished_target_sync_attention_successor(snapshot.frontier, frontier)
+        replay_snapshot.frontier, frontier
+    ) or _is_unpublished_target_sync_attention_successor(replay_snapshot.frontier, frontier)
+    local_claim_successor = _is_unpublished_claim_successor(replay_snapshot.frontier, frontier)
+    local_builder_handoff_successor = _is_unpublished_builder_handoff_successor(
+        replay_snapshot,
+        frontier,
+        coordination,
+        paths,
+        workspace_manager,
+    )
+    local_checkpoint_successor = _is_unpublished_checkpoint_successor(replay_snapshot.frontier, frontier)
+    local_recoverable_successor = (
+        local_attention_successor
+        or local_claim_successor
+        or local_builder_handoff_successor
+        or local_checkpoint_successor
+        or local_pending_publication
+    )
+    builder_claim_successor = local_claim_successor and _has_builder_writer_claim(frontier, coordination)
+    if local_claim_successor:
+        _require_local_snapshot_branch(
+            snapshot,
+            paths.repository_root,
+            allow_descendant=builder_claim_successor,
+        )
+    reviewed = coordination.last_reviewed_commit
+    pending = frontier.pending_checkpoint
+    # An activated revision may have pushed its snapshot head to the Change branch before its state.
+    revision_head = (
+        reviewed
+        if revision == "activated"
+        and (frontier.published_head == reviewed or (pending is not None and pending.head == reviewed))
+        else None
+    )
     _fetch_snapshot_change_head(
         snapshot,
         config,
         paths.repository_root,
         allow_local_branch=True,
-        allow_local_descendant=local_attention_successor,
+        allow_local_descendant=(
+            local_attention_successor
+            or local_builder_handoff_successor
+            or builder_claim_successor
+            or revision is not None
+        ),
+        pending_revision_head=revision_head,
     )
-    if frontier_bytes != expected["frontier.json"] and not local_attention_successor:
+    if canonical_frontier != expected["frontier.json"] and not local_recoverable_successor:
         _bootstrap_failure("local Delivery runtime artifact differs from its remote snapshot: frontier.json")
-    _validate_local_snapshot_artifacts(relative_root, expected)
+    if revision != "activated":
+        _validate_local_snapshot_artifacts(relative_root, expected)
     try:
-        completion = CompletionReceiptStore(paths.runtime_root).read_bundle(snapshot.change_id)
+        completion = (
+            None
+            if frontier.change_completion is None
+            else CompletionReceiptStore(paths.runtime_root).read_bundle(snapshot.change_id)
+        )
     except RuntimeError as exc:
         _bootstrap_failure("local completion evidence cannot be reconciled with its remote snapshot", exc)
     if completion != snapshot.completion:
         _bootstrap_failure("local completion evidence differs from its remote snapshot")
 
 
-def _read_local_snapshot_frontier(path: Path) -> tuple[bytes, DeliveryFrontier]:
-    """Read and validate the local frontier needed for startup reconciliation."""
+def _read_local_snapshot_frontier(path: Path) -> tuple[bytes, bytes, DeliveryFrontier]:
+    """Return stored bytes (for publication digests), registered-upcast canonical bytes and the frontier."""
     if path.is_symlink() or not path.is_file():
         _bootstrap_failure("local Delivery runtime artifact differs from its remote snapshot: frontier.json")
     try:
         content = path.read_bytes()
-        return content, DeliveryFrontier.model_validate_json(content, strict=False)
-    except (OSError, ValueError) as exc:
+        frontier, canonical = parse_delivery_frontier(content)
+    except (OSError, TypeError, ValueError) as exc:
         _bootstrap_failure("local Delivery runtime artifact differs from its remote snapshot: frontier.json", exc)
+    return content, canonical, frontier
+
+
+def _read_local_pending_publication(path: Path, frontier_bytes: bytes) -> bool:
+    """Recognize one exact pending local publication marker for restart replay."""
+    if not path.exists():
+        return False
+    if path.is_symlink() or not path.is_file():
+        _bootstrap_failure("local Delivery publication intent cannot be reconciled")
+    try:
+        intent = DeliveryPendingStatePublication.model_validate_json(path.read_bytes(), strict=True)
+    except (OSError, TypeError, ValueError) as exc:
+        _bootstrap_failure("local Delivery publication intent cannot be reconciled", exc)
+    return (
+        intent.status == "pending"
+        and intent.base_frontier_digest is not None
+        and intent.frontier_digest == hashlib.sha256(frontier_bytes).hexdigest()
+    )
+
+
+def _local_revision_state(  # noqa: PLR0911, PLR0913, PLR0917 - one exit per recognized activation state.
+    snapshot: DeliveryStateSnapshot,
+    package_id: str,
+    coordination: ChangeCoordination,
+    frontier: DeliveryFrontier,
+    relative_root: Path,
+    repository: Path,
+) -> Literal["paused", "activated"] | None:
+    """N04 §1.5 I6: recognize one durable step of a revision activation over a published paused Change."""
+    reviewed = coordination.last_reviewed_commit
+    if package_id == snapshot.package_id and reviewed == snapshot.last_reviewed_commit:
+        return None
+    try:
+        contract = (relative_root / "contract.json").read_bytes()
+        admission = (relative_root / "admission.json").read_bytes()
+    except OSError:
+        return None
+    state: Literal["paused", "activated"]
+    if contract == contract_canonical_bytes(snapshot.contract) and admission == _canonical_model(snapshot.admission):
+        if frontier.change_deferral is None:
+            return None
+        state = "paused"
+    elif _revision_history_matches(relative_root, snapshot):
+        state = "activated"
+    else:
+        return None
+    if reviewed != snapshot.last_reviewed_commit and not _package_snapshot_chain(
+        repository, snapshot.change_id, snapshot.last_reviewed_commit, reviewed
+    ):
+        return None
+    branch_head = _loader_git_output(
+        repository, "rev-parse", "--verify", f"refs/heads/{coordination.branch}^{{commit}}"
+    )
+    intent = coordination.design_package_snapshot_intent
+    if intent is not None:
+        if state == "activated" or intent.package_id != package_id or intent.expected_head != reviewed:
+            return None
+        return state if _interrupted_package_snapshot(repository, coordination, intent, branch_head) else None
+    receipt = coordination.design_package_snapshot
+    if reviewed != snapshot.last_reviewed_commit and (
+        receipt is None or receipt.package_id != package_id or branch_head != reviewed
+    ):
+        return None
+    return state
+
+
+def _revision_history_matches(relative_root: Path, snapshot: DeliveryStateSnapshot) -> bool:
+    """Require the revision history entry holding exactly the published contract, admission and frontier."""
+    contract = contract_canonical_bytes(snapshot.contract)
+    admission = _canonical_model(snapshot.admission)
+    for entry in (relative_root / "revisions").glob(f"{hashlib.sha256(contract).hexdigest()}-*"):
+        try:
+            if (entry / "contract.json").read_bytes() != contract or (
+                entry / "admission.json"
+            ).read_bytes() != admission:
+                continue
+            history = parse_delivery_frontier((entry / "frontier.json").read_bytes())[0]
+        except OSError, TypeError, ValueError:
+            continue
+        pending = history.pending_checkpoint
+        if pending is not None and pending.head == history.published_head:
+            history = history.model_copy(update={"pending_checkpoint": None})
+        if history == snapshot.frontier:
+            return True
+    return False
+
+
+def _package_snapshot_chain(repository: Path, change_id: str, base: str, head: str) -> bool:
+    """Return whether every first-parent commit from ``base`` to ``head`` is a package snapshot of the Change."""
+    listing = _loader_git_output(repository, "rev-list", "--first-parent", "--parents", f"{base}..{head}")
+    if not listing:
+        return False
+    prefix = DESIGN_PACKAGE_SNAPSHOT_SUBJECT.split("{operation_id}", 1)[0].format(change_id=change_id)
+    current = head
+    for line in listing.splitlines():
+        commit, *parents = line.split()
+        subject = _loader_git_output(repository, "log", "-1", "--format=%s", commit)
+        if commit != current or len(parents) != 1 or subject is None or not subject.startswith(prefix):
+            return False
+        current = parents[0]
+    return current == base
+
+
+def _interrupted_package_snapshot(
+    repository: Path,
+    coordination: ChangeCoordination,
+    intent: ChangeDesignPackageSnapshotIntent,
+    branch_head: str | None,
+) -> bool:
+    """Recognize package files written or staged on the intent head, or its commit made before the receipt."""
+    if branch_head == intent.expected_head:
+        worktree = coordination.worktree_path
+        changed = _loader_git_output(worktree, "diff", "--name-only", "HEAD")
+        untracked = _loader_git_output(worktree, "ls-files", "--others", "--exclude-standard")
+        if changed is None or untracked is None:
+            return False
+        package_paths = {
+            f".owlbear/delivery/packages/{coordination.change_id}/{name}"
+            for name in ("authority.json", "design.md", "intent.md", "manifest.json")
+        }
+        return set((changed + "\n" + untracked).split()) <= package_paths
+    if branch_head is None:
+        return False
+    parents = (_loader_git_output(repository, "rev-list", "--parents", "-n", "1", branch_head) or "").split()
+    subject = DESIGN_PACKAGE_SNAPSHOT_SUBJECT.format(change_id=coordination.change_id, operation_id=intent.operation_id)
+    return parents[1:] == [intent.expected_head] and (
+        _loader_git_output(repository, "log", "-1", "--format=%s", branch_head) == subject
+    )
 
 
 def _validate_local_snapshot_artifacts(
@@ -518,18 +857,21 @@ def _validate_local_snapshot_artifact(
     _bootstrap_failure(f"local Delivery runtime artifact differs from its remote snapshot: {name}")
 
 
-def _fetch_snapshot_change_head(
+def _fetch_snapshot_change_head(  # noqa: PLR0913 - each flag names one recognized local successor.
     snapshot: DeliveryStateSnapshot,
     config: DeliveryStartupConfig,
     repository: Path,
     *,
     allow_local_branch: bool = False,
     allow_local_descendant: bool = False,
+    pending_revision_head: str | None = None,
 ) -> tuple[str, bool]:
     """Fetch the remote Change branch or use the configured target for finalized authority."""
     remote_branch = _remote_branch_head(repository, config.remote, snapshot.branch)
     if remote_branch is not None:
-        return _fetch_remote_snapshot_change_head(snapshot, config, repository, remote_branch)
+        return _fetch_remote_snapshot_change_head(
+            snapshot, config, repository, remote_branch, pending_revision_head=pending_revision_head
+        )
     local_head = _local_snapshot_change_head(
         snapshot,
         repository,
@@ -551,13 +893,38 @@ def _fetch_remote_snapshot_change_head(
     config: DeliveryStartupConfig,
     repository: Path,
     remote_branch: str,
+    *,
+    pending_revision_head: str | None = None,
 ) -> tuple[str, bool]:
     """Validate and fetch one remote Change branch at its snapshot head."""
-    if remote_branch != snapshot.change_head:
+    if remote_branch not in {snapshot.change_head, pending_revision_head}:
+        observed_local_head = _loader_git_output(
+            repository,
+            "rev-parse",
+            "--verify",
+            f"refs/heads/{snapshot.branch}^{{commit}}",
+        )
+        head_relation = _head_relation(repository, snapshot.change_head, remote_branch)
         if _can_defer_remote_state_reconciliation(snapshot, repository, remote_branch):
-            raise _DeferredRemoteStateReconciliationError
-        _bootstrap_failure(f"remote Change branch differs from Delivery-state snapshot: {snapshot.change_id}")
-    result = _run_loader_git(
+            raise _DeferredRemoteStateReconciliationError(
+                expected_head=snapshot.change_head,
+                observed_head=remote_branch,
+                observed_local_head=observed_local_head,
+                head_relation=head_relation,
+            )
+        raise _RemoteChangeHeadMismatchError(
+            change_id=snapshot.change_id,
+            expected_head=snapshot.change_head,
+            observed_head=remote_branch,
+            observed_local_head=observed_local_head,
+            head_relation=head_relation,
+            reason=(
+                DeliveryHealthReason.REMOTE_CHANGE_HEAD_MISMATCH
+                if head_relation is not DeliveryHealthHeadRelation.DESCENDANT
+                else DeliveryHealthReason.REMOTE_STATE_RECONCILIATION
+            ),
+        )
+    result = _run_loader_remote_git(
         repository,
         "fetch",
         "--no-tags",
@@ -565,7 +932,7 @@ def _fetch_remote_snapshot_change_head(
         "--refmap=",
         config.remote,
         f"refs/heads/{snapshot.branch}",
-        check=False,
+        failure="remote Change branch could not be fetched",
     )
     if result.returncode != 0:
         _bootstrap_failure("remote Change branch could not be fetched")
@@ -597,6 +964,1442 @@ def _local_snapshot_change_head(
     ):
         return snapshot.change_head
     return None
+
+
+def _require_local_snapshot_branch(
+    snapshot: DeliveryStateSnapshot,
+    repository: Path,
+    *,
+    allow_descendant: bool = False,
+) -> None:
+    """Require one active local snapshot branch at its reviewed head, or past it for Builder custody."""
+    local_head = _local_snapshot_change_head(
+        snapshot,
+        repository,
+        allow_local_branch=True,
+        allow_local_descendant=allow_descendant,
+    )
+    if local_head != snapshot.change_head:
+        _bootstrap_failure("local Change branch differs from Delivery-state snapshot")
+
+
+def _has_builder_writer_claim(frontier: DeliveryFrontier, coordination: ChangeCoordination) -> bool:
+    """Recognize a recorded Builder writer whose active claim may commit past the reviewed head."""
+    writer = coordination.writer
+    if writer is None or writer.kind != "build":
+        return False
+    return any(
+        binding.active_claim is not None
+        and binding.active_claim.worker_role == DeliveryWorkerRole.BUILDER
+        and binding.active_claim.claim_id == writer.claim_id
+        and binding.active_claim.attempt_id == writer.attempt_id
+        for binding in frontier.bindings
+    )
+
+
+def _is_unpublished_claim_successor(
+    snapshot_frontier: DeliveryFrontier,
+    local_frontier: DeliveryFrontier,
+) -> bool:
+    """Recognize a local frontier that adds host-local claim and output state."""
+    if snapshot_frontier.change_completion is not None or local_frontier.change_completion is not None:
+        return False
+    if len(snapshot_frontier.bindings) != len(local_frontier.bindings):
+        return False
+    local_has_claim = False
+    for snapshot_binding, local_binding in zip(snapshot_frontier.bindings, local_frontier.bindings, strict=True):
+        if snapshot_binding.outcome_id != local_binding.outcome_id:
+            return False
+        if snapshot_binding.active_claim is not None:
+            return False
+        if local_binding.active_claim is not None:
+            local_has_claim = True
+    transient_fields = {
+        "active_claim": None,
+        "output": None,
+        "candidate": None,
+        "result_candidate": None,
+        "recovery_attention": None,
+        "retry_diagnostic": None,
+    }
+    snapshot_without_claims = snapshot_frontier.model_copy(
+        update={
+            "bindings": tuple(binding.model_copy(update=transient_fields) for binding in snapshot_frontier.bindings)
+        }
+    )
+    local_without_claims = local_frontier.model_copy(
+        update={"bindings": tuple(binding.model_copy(update=transient_fields) for binding in local_frontier.bindings)}
+    )
+    return local_has_claim and snapshot_without_claims == local_without_claims
+
+
+def _is_unpublished_builder_handoff_successor(
+    snapshot: DeliveryStateSnapshot,
+    local_frontier: DeliveryFrontier,
+    coordination: ChangeCoordination,
+    paths: _DeliveryPaths,
+    workspace_manager: ChangeWorkspaceManager,
+) -> bool:
+    """Recognize one exact local Builder handoff settlement or its permitted successor."""
+    local_bindings = tuple(
+        binding for binding in local_frontier.bindings if binding.builder_handoff_context is not None
+    )
+    if not local_bindings and coordination.builder_handoff is None:
+        return False
+    if len(local_bindings) != 1:
+        _bootstrap_failure("local Builder handoff does not have one exact outcome context")
+    local_binding = local_bindings[0]
+    context = local_binding.builder_handoff_context
+    if context is None:
+        _bootstrap_failure("local Builder handoff context is unavailable")
+    snapshot_binding = next(
+        (binding for binding in snapshot.frontier.bindings if binding.outcome_id == context.outcome_id),
+        None,
+    )
+    if snapshot_binding is None:
+        _bootstrap_failure("local Builder handoff outcome is absent from its remote snapshot")
+    receipt = _read_local_builder_handoff_receipt(paths.runtime_root, snapshot.change_id, context)
+    if not _builder_handoff_receipt_matches_snapshot(snapshot, snapshot_binding, receipt.handoff_context, receipt):
+        _bootstrap_failure("local Builder handoff receipt does not match its reviewed task authority")
+    if not _builder_handoff_owner_matches(coordination, local_binding, context, receipt.envelope):
+        _bootstrap_failure("local Builder handoff receipt does not match current Change custody")
+    branch_head = _validate_local_builder_handoff_workspace(
+        snapshot, coordination, local_binding, paths, workspace_manager
+    )
+    _validate_local_builder_handoff_frontier(
+        snapshot,
+        local_frontier,
+        receipt,
+        branch_head,
+        paths,
+    )
+    return True
+
+
+def _builder_handoff_receipt_matches_snapshot(
+    snapshot: DeliveryStateSnapshot,
+    snapshot_binding: OutcomeAuthorityBinding,
+    context: DeliveryBuilderHandoffContext,
+    receipt: _DeliveryBuilderInvocationSettlementReceipt,
+) -> bool:
+    """Bind one immutable Builder settlement to its published task authority and route."""
+    envelope = receipt.envelope
+    request = envelope.request
+    requestless = envelope.disposition in REQUESTLESS_WORKER_SETTLEMENT_FAILURE_CODES and request is None
+    if requestless:
+        request_matches = True
+        expected_route = "same-task"
+    elif isinstance(request, RetryDelivery):
+        request_matches = request.abandoned_commit == context.branch_head and request.attempt_id == envelope.attempt_id
+        expected_route = "same-task"
+    elif isinstance(request, BlockDelivery):
+        delivery_request = request.request
+        request_matches = (
+            required_target_commit(request.locators) is not None
+            if delivery_request is None
+            else delivery_request.resolution is None
+            and delivery_request.outcome_id == context.outcome_id
+            and delivery_request.request_id not in {item.request_id for item in snapshot_binding.requests}
+        )
+        expected_route = "same-task"
+    elif isinstance(request, ReturnDelivery):
+        expected_route = {
+            DeliveryStage.PLANNING: "same-outcome-planner",
+            DeliveryStage.DESIGN: "same-outcome-design",
+        }.get(request.target)
+        request_matches = (
+            expected_route is not None
+            and request.preserved_commit == context.branch_head
+            and request.attempt_id == envelope.attempt_id
+        )
+    else:
+        return False
+    original_task = next((task for task in snapshot_binding.tasks if task.task_id == context.original_task_id), None)
+    return all(
+        (
+            request_matches,
+            context.route == expected_route,
+            receipt.handoff_context == context,
+            envelope.disposition == "normal-return" or requestless,
+            envelope.change_id == snapshot.change_id,
+            envelope.outcome_id == context.outcome_id,
+            envelope.task_id == context.original_task_id,
+            request is None or (request.outcome_id == context.outcome_id and request.claim_id == envelope.claim_id),
+            envelope.expected_last_reviewed_commit == snapshot.last_reviewed_commit,
+            context.last_reviewed_commit == snapshot.last_reviewed_commit,
+            any(outcome.outcome_id == context.outcome_id for outcome in snapshot.contract.outcomes),
+            original_task is not None,
+            original_task.plan_scope_id == snapshot_binding.plan_scope_id,
+            original_task.commitment_ids == context.original_task_commitment_ids,
+            original_task.maintained_surfaces == context.original_task_maintained_surfaces,
+        )
+    )
+
+
+def _validate_local_builder_handoff_workspace(
+    snapshot: DeliveryStateSnapshot,
+    coordination: ChangeCoordination,
+    local_binding: OutcomeAuthorityBinding,
+    paths: _DeliveryPaths,
+    workspace_manager: ChangeWorkspaceManager,
+) -> str:
+    """Require retained metadata or an active successor branch to match the exact handoff."""
+    context = local_binding.builder_handoff_context
+    if context is None:
+        _bootstrap_failure("local Builder handoff context is unavailable")
+    if coordination.builder_handoff is None:
+        active_head = workspace_manager.source_head(
+            snapshot.change_id,
+            require_clean=False,
+            builder_handoff_source=BuilderHandoffSource(
+                settlement_id=context.settlement_id,
+                original_task_id=context.original_task_id,
+                branch_head=context.branch_head,
+                last_reviewed_commit=context.last_reviewed_commit,
+                metadata_fingerprint=context.metadata_fingerprint,
+            ),
+        )
+        local_branch_head = _loader_git_output(
+            paths.repository_root,
+            "rev-parse",
+            "--verify",
+            f"refs/heads/{snapshot.branch}^{{commit}}",
+        )
+        if not (
+            active_head == local_branch_head
+            and _loader_git_is_ancestor(paths.repository_root, snapshot.change_head, context.branch_head)
+        ):
+            _bootstrap_failure("active Builder handoff branch differs from its captured descendant")
+        return active_head
+
+    if (
+        (
+            context.route == "same-outcome-design"
+            or is_builder_return_limit(local_binding)
+            or is_builder_target_sync_handoff(local_binding)
+        )
+        and coordination.builder_handoff.branch_head == context.branch_head
+        and workspace_manager._design_return_captured(coordination, coordination.builder_handoff)  # noqa: SLF001
+    ):
+        # N04 §1.7, N12 I5: a captured release keeps its handoff head under the attempt ref until its release.
+        if not _loader_git_is_ancestor(paths.repository_root, snapshot.change_head, context.branch_head):
+            _bootstrap_failure("local Design return capture does not descend from its remote Change head")
+        return context.branch_head
+    metadata = workspace_manager._capture_builder_handoff_metadata(coordination)  # noqa: SLF001
+    local_branch_head = _loader_git_output(
+        paths.repository_root,
+        "rev-parse",
+        "--verify",
+        f"refs/heads/{snapshot.branch}^{{commit}}",
+    )
+    # Retained uncommitted material may drift (editor restore, index refresh); the next Builder triages it.
+    if not all(
+        (
+            metadata.change_id == snapshot.change_id,
+            metadata.branch == snapshot.branch,
+            metadata.worktree_path == coordination.worktree_path,
+            metadata.last_reviewed_commit == context.last_reviewed_commit,
+            metadata.branch_head == context.branch_head,
+            metadata.registration.path == metadata.worktree_path,
+            metadata.registration.branch == metadata.branch,
+            metadata.registration.head == metadata.branch_head,
+            local_branch_head == context.branch_head,
+            _loader_git_is_ancestor(paths.repository_root, snapshot.change_head, context.branch_head),
+        )
+    ):
+        _bootstrap_failure("local Builder handoff worktree or Change head differs from its captured proof")
+    return context.branch_head
+
+
+def _validate_local_builder_handoff_frontier(
+    snapshot: DeliveryStateSnapshot,
+    local_frontier: DeliveryFrontier,
+    receipt: _DeliveryBuilderInvocationSettlementReceipt,
+    branch_head: str,
+    paths: _DeliveryPaths,
+) -> None:
+    """Require the exact retry or pause result, answer, claim, and candidate."""
+    if isinstance(receipt.envelope.request, ReturnDelivery):
+        _validate_local_builder_return_frontier(
+            _BuilderReturnReplayContext(snapshot, local_frontier, receipt, paths, branch_head)
+        )
+        return
+    outcome_id = receipt.envelope.outcome_id
+    local_binding = next((binding for binding in local_frontier.bindings if binding.outcome_id == outcome_id), None)
+    if local_binding is None:
+        _bootstrap_failure("local Builder handoff frontier lacks its exact outcome binding")
+    expected_binding = _builder_handoff_settled_binding(snapshot, local_binding, receipt, paths)
+    if local_binding.active_claim is not None:
+        claim = local_binding.active_claim
+        expected_binding = expected_binding.model_copy(update={"active_claim": claim})
+        candidate = local_binding.result_candidate
+        if candidate is not None:
+            _validate_local_builder_handoff_candidate(snapshot, local_binding, receipt, branch_head, paths)
+            expected_binding = expected_binding.model_copy(
+                update={"result_candidate": candidate, "output": candidate.output}
+            )
+    expected_frontier = snapshot.frontier.model_copy(
+        update={
+            "bindings": tuple(
+                expected_binding if binding.outcome_id == receipt.envelope.outcome_id else binding
+                for binding in snapshot.frontier.bindings
+            )
+        }
+    )
+    if local_binding.active_claim is None:
+        expected_frontier = _builder_handoff_lifecycle_successor_frontier(
+            snapshot.frontier,
+            expected_frontier,
+            receipt,
+            paths.runtime_root,
+        )
+    if expected_frontier != local_frontier:
+        _bootstrap_failure("local Delivery frontier contains state outside the exact Builder handoff")
+
+
+def _validate_local_builder_return_frontier(
+    replay: _BuilderReturnReplayContext,
+) -> None:
+    """Validate the passive Design handoff or an exact successor of a Builder return."""
+    snapshot = replay.snapshot
+    local_frontier = replay.local_frontier
+    settlement = replay.settlement
+    paths = replay.paths
+    outcome_id = settlement.envelope.outcome_id
+    local_binding = next((binding for binding in local_frontier.bindings if binding.outcome_id == outcome_id), None)
+    if local_binding is None or local_binding.builder_handoff_context is None:
+        _bootstrap_failure("local Builder return frontier lacks its exact outcome handoff")
+    settled_binding = _builder_handoff_settled_binding(snapshot, local_binding, settlement, paths)
+    context = local_binding.builder_handoff_context
+    if context.route == "same-outcome-planner":
+        expected_frontier = _local_planner_return_frontier(replay, local_binding, settled_binding)
+    elif context.route == "same-outcome-design":
+        if local_binding.stage != DeliveryStage.DESIGN or local_binding != settled_binding:
+            _bootstrap_failure("local Design return differs from its exact passive handoff")
+        expected_frontier = _local_builder_return_successor_frontier(replay, settled_binding)
+    elif context.route == "same-task":
+        expected_frontier = _local_promoted_builder_return_frontier(replay, local_binding, settled_binding)
+    else:
+        _bootstrap_failure("local Builder return has an unsupported handoff route")
+
+    if expected_frontier != local_frontier:
+        _bootstrap_failure("local Delivery frontier differs from its exact Builder return promotion")
+
+
+def _local_planner_return_frontier(
+    replay: _BuilderReturnReplayContext,
+    local_binding: OutcomeAuthorityBinding,
+    settled_binding: OutcomeAuthorityBinding,
+) -> DeliveryFrontier:
+    """Derive the exact Planning-stage successor and its permitted active candidate fields."""
+    snapshot = replay.snapshot
+    settlement = replay.settlement
+    paths = replay.paths
+    if (
+        local_binding.stage != DeliveryStage.PLANNING
+        or local_binding.builder_handoff_context != settlement.handoff_context
+    ):
+        _bootstrap_failure("local Builder return does not retain its exact Planning handoff")
+    promotion = _read_local_builder_plan_promotion_receipt(
+        paths.runtime_root,
+        snapshot.change_id,
+        settlement.settlement_id,
+        required=False,
+    )
+    if promotion is not None:
+        _bootstrap_failure("unpromoted Builder return already has a plan promotion receipt")
+    history = _planner_handoff_pause_history(replay, settled_binding, local_binding)
+    expected_binding = _local_planner_handoff_successor(replay, history, local_binding)
+    return _local_builder_return_successor_frontier(replay, expected_binding, history=history)
+
+
+def _local_promoted_builder_return_frontier(
+    replay: _BuilderReturnReplayContext,
+    local_binding: OutcomeAuthorityBinding,
+    settled_binding: OutcomeAuthorityBinding,
+) -> DeliveryFrontier:
+    """Derive the receipt-backed same-task successor before or after Builder acquisition."""
+    snapshot = replay.snapshot
+    settlement = replay.settlement
+    paths = replay.paths
+    if local_binding.stage != DeliveryStage.IMPLEMENTATION:
+        _bootstrap_failure("promoted Builder return is not in Implementation")
+    promotion = _read_local_builder_plan_promotion_receipt(
+        paths.runtime_root,
+        snapshot.change_id,
+        settlement.settlement_id,
+        required=True,
+    )
+    history = _validate_local_builder_plan_promotion(replay, settled_binding, promotion)
+    if promotion.result_binding.builder_handoff_context != local_binding.builder_handoff_context:
+        _bootstrap_failure("promoted Builder return lost its exact same-task handoff")
+    expected_binding = _promoted_builder_return_successor(replay, local_binding, promotion)
+    return _local_builder_return_successor_frontier(replay, expected_binding, promotion=promotion, history=history)
+
+
+def _promoted_builder_return_successor(
+    replay: _BuilderReturnReplayContext,
+    local_binding: OutcomeAuthorityBinding,
+    promotion: _DeliveryBuilderPlanPromotionReceipt,
+) -> OutcomeAuthorityBinding:
+    """Allow only the promoted binding or its exact same-task Builder claim and result candidate."""
+    expected_binding = promotion.result_binding
+    claim = local_binding.active_claim
+    if claim is None:
+        return expected_binding
+    settlement = replay.settlement
+    context = settlement.handoff_context
+    if (
+        claim.worker_role != DeliveryWorkerRole.BUILDER
+        or claim.task_id != context.original_task_id
+        or claim.attempt_id == settlement.envelope.attempt_id
+        or claim.claim_id == settlement.envelope.claim_id
+    ):
+        _bootstrap_failure("promoted Builder return has an unrelated active claim")
+    expected_binding = expected_binding.model_copy(update={"active_claim": claim})
+    candidate = local_binding.result_candidate
+    if candidate is None:
+        return expected_binding
+    _validate_local_builder_handoff_candidate(
+        replay.snapshot,
+        local_binding,
+        settlement,
+        replay.branch_head,
+        replay.paths,
+    )
+    return expected_binding.model_copy(update={"result_candidate": candidate, "output": candidate.output})
+
+
+def _local_builder_return_successor_frontier(
+    replay: _BuilderReturnReplayContext,
+    expected_binding: OutcomeAuthorityBinding,
+    *,
+    promotion: _DeliveryBuilderPlanPromotionReceipt | None = None,
+    history: _PlannerPauseHistory | None = None,
+) -> DeliveryFrontier:
+    """Replace only the exact handoff row and fold any authenticated lifecycle receipts."""
+    snapshot = replay.snapshot
+    local_frontier = replay.local_frontier
+    settlement = replay.settlement
+    outcome_id = settlement.envelope.outcome_id
+    expected_frontier = snapshot.frontier.model_copy(
+        update={
+            "bindings": tuple(
+                expected_binding if binding.outcome_id == outcome_id else binding
+                for binding in snapshot.frontier.bindings
+            )
+        }
+    )
+    if next(binding for binding in local_frontier.bindings if binding.outcome_id == outcome_id).active_claim is None:
+        if history is not None:
+            return _planner_handoff_lifecycle_successor_frontier(replay, expected_frontier, history, promotion)
+        return _builder_handoff_lifecycle_successor_frontier(
+            snapshot.frontier,
+            expected_frontier,
+            settlement,
+            replay.paths.runtime_root,
+        )
+    return expected_frontier
+
+
+def _local_planner_handoff_successor(
+    replay: _BuilderReturnReplayContext,
+    history: _PlannerPauseHistory,
+    local_binding: OutcomeAuthorityBinding,
+) -> OutcomeAuthorityBinding:
+    """Allow only receipt-chained Planner pauses, answers, one active claim, and its canonical candidate."""
+    settlement = replay.settlement
+    claim = local_binding.active_claim
+    candidate = local_binding.candidate
+    if claim is None:
+        if candidate is not None:
+            _bootstrap_failure("local Planner candidate has no active Planner claim")
+        return history.latest
+    claimable_binding = _claimable_planner_handoff_binding(history)
+    if (
+        claim.worker_role != DeliveryWorkerRole.PLANNER
+        or claim.task_id is not None
+        or claim.attempt_id == settlement.envelope.attempt_id
+        or claim.claim_id == settlement.envelope.claim_id
+    ):
+        _bootstrap_failure("local Builder return has an unrelated active Planner claim")
+    if candidate is None:
+        return claimable_binding.model_copy(update={"active_claim": claim})
+    _validate_local_builder_plan_candidate(replay.snapshot, history.settled, claim, candidate)
+    return claimable_binding.model_copy(
+        update={"active_claim": claim, "candidate": candidate, "output": candidate.output}
+    )
+
+
+def _claimable_planner_handoff_binding(history: _PlannerPauseHistory) -> OutcomeAuthorityBinding:
+    """Return the settled or answered Planning row a fresh Planner claim may hold."""
+    binding = history.latest
+    if binding.block is not None and not binding.block.resolved:
+        _bootstrap_failure("local Planner claim overlaps an unanswered Planning pause")
+    return binding
+
+
+def _planner_handoff_pause_history(
+    replay: _BuilderReturnReplayContext,
+    settled_binding: OutcomeAuthorityBinding,
+    local_binding: OutcomeAuthorityBinding,
+) -> _PlannerPauseHistory:
+    """Chain every Planner request pause to its immutable receipt and derive the latest claimless row."""
+    settled_requests = settled_binding.requests
+    if local_binding.requests[: len(settled_requests)] != settled_requests:
+        _bootstrap_failure("local Planner pause differs from its exact Planning pause receipt")
+    receipts = _read_planner_handoff_pause_receipts(replay, settled_binding)
+    claim_ids = {replay.settlement.envelope.claim_id}
+    answered_requests: list[DeliveryRequest] = []
+    paused: list[OutcomeAuthorityBinding] = []
+    answered: list[OutcomeAuthorityBinding] = []
+    for index, local_request in enumerate(local_binding.requests[len(settled_requests) :]):
+        if len(answered_requests) != index:
+            _bootstrap_failure("local Planner pause answer has no recorded resolution")
+        path, receipt = receipts.pop(local_request.request_id, (None, None))
+        expected = (
+            None
+            if path is None or receipt is None or receipt.claim_id in claim_ids
+            else _planner_handoff_receipt_pause(replay, path, receipt, settled_binding, tuple(answered_requests))
+        )
+        if receipt is None or expected is None:
+            _bootstrap_failure("local Planner pause differs from its exact Planning pause receipt")
+        claim_ids.add(receipt.claim_id)
+        paused.append(expected)
+        if local_request.resolution is not None:
+            answered_row = _planner_handoff_answered_request(expected, local_request, settled_binding)
+            answered.append(answered_row)
+            answered_requests.append(answered_row.requests[-1])
+    if receipts:
+        _bootstrap_failure("local Planning pause receipt is outside its exact Planner pause sequence")
+    history = _PlannerPauseHistory(
+        settled=settled_binding,
+        answered_requests=tuple(answered_requests),
+        paused=tuple(paused),
+        answered=tuple(answered),
+        latest=settled_binding,
+        exhausted=None if replay.settlement.result == settled_binding else replay.settlement.result,
+    )
+    latest = (
+        _exhausted_planner_handoff_row(history, local_binding.block)
+        if settled_binding.block is not None and not settled_binding.block.resolved
+        else _planner_handoff_latest_row(history, local_binding.block)
+    )
+    return replace(history, latest=latest)
+
+
+def _exhausted_planner_handoff_row(
+    history: _PlannerPauseHistory,
+    block: DeliveryBlock | None,
+) -> OutcomeAuthorityBinding:
+    """Admit only the unchanged read-only settlement of an exhausted Builder return."""
+    if history.paused or block != history.settled.block:
+        _bootstrap_failure("local exhausted Builder return differs from its exact settlement")
+    return history.settled
+
+
+def _read_planner_handoff_pause_receipts(
+    replay: _BuilderReturnReplayContext,
+    settled_binding: OutcomeAuthorityBinding,
+) -> dict[str, tuple[Path, _DeliveryPlanningPauseReplay]]:
+    """Read every request-bearing Planning pause receipt bound to this exact Planner handoff."""
+    changes_root = replay.paths.runtime_root / "changes"
+    receipt_root = changes_root / replay.snapshot.change_id / "planning-pause-receipts"
+    receipt_directory = receipt_root / settled_binding.outcome_id
+    if any(path.is_symlink() for path in (changes_root, receipt_root.parent, receipt_root, receipt_directory)):
+        _bootstrap_failure("local Planning pause receipt path is unsafe")
+    receipts: dict[str, tuple[Path, _DeliveryPlanningPauseReplay]] = {}
+    for path in sorted(receipt_directory.glob("*.json")) if receipt_directory.is_dir() else []:
+        if path.is_symlink() or not path.is_file():
+            _bootstrap_failure("local Planning pause receipt path is unsafe")
+        try:
+            receipt = _DeliveryPlanningPauseReplay.model_validate_json(path.read_bytes(), strict=True)
+        except (OSError, TypeError, ValueError) as exc:
+            _bootstrap_failure("local Planning pause receipt is invalid", exc)
+        request = receipt.request.request
+        if request is None or receipt.result.builder_handoff_context != settled_binding.builder_handoff_context:
+            continue
+        if request.request_id in receipts:
+            _bootstrap_failure("local Planning pause receipt is outside its exact Planner pause sequence")
+        receipts[request.request_id] = (path, receipt)
+    return receipts
+
+
+def _planner_handoff_receipt_pause(
+    replay: _BuilderReturnReplayContext,
+    path: Path,
+    receipt: _DeliveryPlanningPauseReplay,
+    settled_binding: OutcomeAuthorityBinding,
+    answered_requests: tuple[DeliveryRequest, ...],
+) -> OutcomeAuthorityBinding | None:
+    """Return the paused row one receipt binds over the settled row and every earlier answer."""
+    transition = receipt.request
+    request = transition.request
+    if request is None:
+        return None
+    prior_requests = (*settled_binding.requests, *answered_requests)
+    paused = _planner_handoff_paused_binding(
+        settled_binding,
+        DeliveryBlock(
+            block_id=transition.block_id,
+            reason=transition.reason,
+            unblock_condition=transition.unblock_condition,
+            expected_evidence=transition.expected_evidence,
+            locators=transition.locators,
+            request_id=request.request_id,
+            resume_commit=transition.resume_commit,
+        ),
+        (*prior_requests, request),
+    )
+    matches = all(
+        (
+            receipt.change_id == replay.snapshot.change_id,
+            receipt.outcome_id == settled_binding.outcome_id,
+            path.name == f"{receipt.request_digest}.json",
+            transition.resume_commit is None,
+            request.resolution is None,
+            request.request_id not in {item.request_id for item in prior_requests},
+            receipt.result == paused,
+        )
+    )
+    return paused if matches else None
+
+
+def _planner_handoff_latest_row(
+    history: _PlannerPauseHistory,
+    block: DeliveryBlock | None,
+) -> OutcomeAuthorityBinding:
+    """Derive the settled row, the latest receipt-backed pause, or a requestless pause, with any answer."""
+    if block is None or block == history.settled.block:
+        if history.paused:
+            _bootstrap_failure("local Planner pause differs from its exact Planning pause receipt")
+        return history.settled
+    if block.request_id is None:
+        if block.resume_commit is not None:
+            _bootstrap_failure("local Planner pause has an Implementation resume commit")
+        if len(history.answered) != len(history.paused):
+            _bootstrap_failure("local Planner pause answer has no recorded resolution")
+        paused = _planner_handoff_requestless_pause(history, block, len(history.answered_requests))
+        return _planner_handoff_cleared_pause(paused, block, history.settled) if block.resolved else paused
+    latest_block = history.paused[-1].block if history.paused else None
+    if latest_block is None or latest_block.request_id != block.request_id:
+        _bootstrap_failure("local Planner pause differs from its exact Planning pause receipt")
+    if not block.resolved:
+        return history.paused[-1]
+    if len(history.answered) != len(history.paused):
+        _bootstrap_failure("local Planner pause answer has no recorded resolution")
+    return history.answered[-1]
+
+
+def _planner_handoff_paused_binding(
+    settled_binding: OutcomeAuthorityBinding,
+    block: DeliveryBlock,
+    requests: tuple[DeliveryRequest, ...],
+) -> OutcomeAuthorityBinding:
+    """Mirror the runtime Planning block over the exact settled Builder return."""
+    return settled_binding.model_copy(
+        update={
+            "active_claim": None,
+            "output": None,
+            "candidate": None,
+            "result_candidate": None,
+            "return_context": None,
+            "recovery_attention": None,
+            "retry_diagnostic": None,
+            "block": block,
+            "requests": requests,
+        }
+    )
+
+
+def _planner_handoff_requestless_pause(
+    history: _PlannerPauseHistory,
+    block: DeliveryBlock,
+    answered_count: int,
+) -> OutcomeAuthorityBinding:
+    """Mirror one requestless Planner block over the settled row and its first answered requests."""
+    return _planner_handoff_paused_binding(
+        history.settled,
+        block.model_copy(update={"resolution_note": None, "resolution_locators": ()}),
+        (*history.settled.requests, *history.answered_requests[:answered_count]),
+    )
+
+
+def _planner_handoff_cleared_pause(
+    paused: OutcomeAuthorityBinding,
+    block: DeliveryBlock,
+    settled_binding: OutcomeAuthorityBinding,
+) -> OutcomeAuthorityBinding:
+    """Derive the operator clearance that restores the retained Planning context."""
+    if not block.resolution_note or not block.resolution_locators:
+        _bootstrap_failure("local Planner requestless clearance lacks operator evidence")
+    return paused.model_copy(update={"block": block, "return_context": settled_binding.return_context})
+
+
+def _planner_handoff_answered_request(
+    paused: OutcomeAuthorityBinding,
+    local_request: DeliveryRequest,
+    settled_binding: OutcomeAuthorityBinding,
+) -> OutcomeAuthorityBinding:
+    """Derive the recorded answer that restores the retained Planning context."""
+    block = paused.block
+    original = paused.requests[-1]
+    resolution = local_request.resolution
+    if block is None or block.request_id is None or resolution is None:
+        _bootstrap_failure("local Planner pause answer has no recorded resolution")
+    if (original.kind == DeliveryRequestKind.DECISION and resolution.selected_option_id is None) or (
+        resolution.selected_option_id is not None
+        and resolution.selected_option_id not in {option.option_id for option in original.options}
+    ):
+        _bootstrap_failure("local Planner pause answer does not answer its exact bounded options")
+    return paused.model_copy(
+        update={
+            "requests": (*paused.requests[:-1], original.model_copy(update={"resolution": resolution})),
+            "block": block.model_copy(
+                update={
+                    "resolution_note": resolution.response_text or resolution.selected_option_id,
+                    "resolution_locators": (block.request_id,),
+                }
+            ),
+            "return_context": settled_binding.return_context,
+        }
+    )
+
+
+def _planner_handoff_lifecycle_rank(
+    history: _PlannerPauseHistory,
+    row: OutcomeAuthorityBinding,
+    promotion: _DeliveryBuilderPlanPromotionReceipt | None,
+) -> int | None:
+    """Order one claimless row within the exact receipt-chained Planner pause history."""
+    if promotion is not None and row == promotion.result_binding:
+        return 3 * len(history.paused) + 4
+    if history.exhausted is not None and row == history.exhausted:
+        # Lifecycle receipts anchored before the user grant precede the granted baseline.
+        return -1
+    known = (
+        (0, history.settled),
+        *((3 * index + 2, item) for index, item in enumerate(history.paused)),
+        *((3 * index + 3, item) for index, item in enumerate(history.answered)),
+    )
+    rank = next((rank for rank, item in known if item == row), None)
+    block = row.block
+    if rank is not None or block is None or block.request_id is not None or block.resume_commit is not None:
+        return rank
+    for answered_count in range(len(history.answered_requests) + 1):
+        paused = _planner_handoff_requestless_pause(history, block, answered_count)
+        cleared = paused.model_copy(update={"block": block, "return_context": history.settled.return_context})
+        if row == paused or (block.resolution_note and block.resolution_locators and row == cleared):
+            return 3 * answered_count + 1
+    return None
+
+
+def _validate_local_builder_plan_candidate(
+    snapshot: DeliveryStateSnapshot,
+    settled_binding: OutcomeAuthorityBinding,
+    planner_claim: DeliveryActiveClaim,
+    candidate: DeliveryPlanCandidate,
+) -> None:
+    """Validate one claim-bound, canonical same-outcome Planner return candidate."""
+    context = settled_binding.builder_handoff_context
+    tasks = candidate.tasks
+    task_ids = tuple(task.task_id for task in tasks)
+    task_map = {task.task_id: task for task in tasks}
+    source_tasks = {task.task_id: task for task in settled_binding.tasks}
+    completed_task_ids = {result.task_id for result in settled_binding.results}
+    contract_outcome = next(
+        (outcome for outcome in snapshot.contract.outcomes if outcome.outcome_id == settled_binding.outcome_id),
+        None,
+    )
+    digest = hashlib.sha256(b"".join(_model_content(task) for task in tasks)).hexdigest()
+    original_task = task_map.get(context.original_task_id)
+    if contract_outcome is None or original_task is None:
+        _bootstrap_failure("local Planner candidate lacks its exact outcome or original task")
+    if not all(
+        (
+            planner_claim.worker_role == DeliveryWorkerRole.PLANNER,
+            planner_claim.task_id is None,
+            candidate.claim_id == planner_claim.claim_id,
+            candidate.candidate_id == f"plan-{digest}",
+            candidate.digest == digest,
+            len(task_ids) == len(set(task_ids)),
+            all(
+                task.outcome_id == settled_binding.outcome_id
+                and task.plan_scope_id == settled_binding.plan_scope_id
+                and set(task.commitment_ids) <= set(contract_outcome.commitment_ids)
+                and set(task.dependency_ids) <= set(task_ids)
+                and task.task_id not in task.dependency_ids
+                for task in tasks
+            ),
+            all(
+                result.task_id in task_map
+                and result.task_digest == source_tasks[result.task_id].digest
+                and task_map[result.task_id] == source_tasks[result.task_id]
+                for result in settled_binding.results
+            ),
+            original_task.task_id not in completed_task_ids,
+            original_task.commitment_ids == context.original_task_commitment_ids,
+            original_task.maintained_surfaces == context.original_task_maintained_surfaces,
+            set(original_task.dependency_ids) <= completed_task_ids,
+        )
+    ):
+        _bootstrap_failure("local Planner candidate differs from its exact task, result, or scope authority")
+    ready = {task.task_id for task in tasks if not task.dependency_ids}
+    visited = set(ready)
+    while True:
+        expanded = visited | {task.task_id for task in tasks if set(task.dependency_ids) <= visited}
+        if expanded == visited:
+            break
+        visited = expanded
+    if not ready or visited != set(task_ids):
+        _bootstrap_failure("local Planner candidate does not contain an acyclic task chain")
+
+
+def _validate_local_builder_plan_promotion(
+    replay: _BuilderReturnReplayContext,
+    settled_binding: OutcomeAuthorityBinding,
+    promotion: _DeliveryBuilderPlanPromotionReceipt,
+) -> _PlannerPauseHistory:
+    """Require the exact Planner claim, candidate, and successor bound to the original return."""
+    snapshot = replay.snapshot
+    settlement = replay.settlement
+    claim = promotion.planner_claim
+    if (
+        promotion.change_id != snapshot.change_id
+        or promotion.outcome_id != settlement.envelope.outcome_id
+        or promotion.settlement_id != settlement.settlement_id
+        or promotion.source_binding.builder_handoff_context != settlement.handoff_context
+        or claim.attempt_id == settlement.envelope.attempt_id
+        or claim.claim_id == settlement.envelope.claim_id
+    ):
+        _bootstrap_failure("local Builder plan promotion receipt has a foreign identity")
+    _validate_local_builder_plan_candidate(snapshot, settled_binding, claim, promotion.candidate)
+    history = _planner_handoff_pause_history(replay, settled_binding, promotion.source_binding)
+    expected_source = _claimable_planner_handoff_binding(history).model_copy(
+        update={
+            "active_claim": claim,
+            "candidate": promotion.candidate,
+            "output": promotion.candidate.output,
+        }
+    )
+    if promotion.source_binding != expected_source:
+        _bootstrap_failure("local Builder plan promotion receipt does not retain its exact Planner source row")
+    return history
+
+
+def _builder_handoff_settled_binding(
+    snapshot: DeliveryStateSnapshot,
+    local_binding: OutcomeAuthorityBinding,
+    receipt: _DeliveryBuilderInvocationSettlementReceipt,
+    paths: _DeliveryPaths,
+) -> OutcomeAuthorityBinding:
+    """Derive the exact immutable retry, pause or return result and any recorded successor."""
+    envelope = receipt.envelope
+    snapshot_binding = next(
+        (binding for binding in snapshot.frontier.bindings if binding.outcome_id == envelope.outcome_id),
+        None,
+    )
+    if snapshot_binding is None:
+        _bootstrap_failure("local Builder handoff outcome is absent from its remote snapshot")
+    _settlement_source_binding(snapshot, snapshot_binding, receipt, paths, frozenset())
+    if isinstance(envelope.request, BlockDelivery):
+        if local_binding != receipt.result:
+            return _builder_request_resolution_successor(paths.runtime_root, snapshot, receipt)
+        return receipt.result
+    if isinstance(envelope.request, ReturnDelivery):
+        return _granted_planner_return_row(paths.runtime_root, snapshot, receipt) or receipt.result
+    return _builder_attempt_grant_successor(paths.runtime_root, snapshot, receipt, local_binding)
+
+
+def _granted_planner_return_row(
+    runtime_root: Path,
+    snapshot: DeliveryStateSnapshot,
+    settlement: _DeliveryBuilderInvocationSettlementReceipt,
+) -> OutcomeAuthorityBinding | None:
+    """Return the user-granted row of a pre-N12 exhausted Planning return, or ``None`` without its exact grant."""
+    block = settlement.result.block
+    context = settlement.handoff_context
+    if (
+        block is None
+        or context.route != "same-outcome-planner"
+        or block.block_id != builder_planning_route_block_id(context)
+    ):
+        return None
+    try:
+        grant = _read_builder_attempt_grant_receipt(runtime_root, snapshot.change_id, context)
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        _bootstrap_failure("local Builder attempt grant receipt is unavailable or invalid", exc)
+    if grant is None:
+        return None
+    if grant.settlement_id != settlement.settlement_id or grant.granted_block != block:
+        _bootstrap_failure("local Builder attempt grant differs from its exact exhausted Planning return")
+    return settlement.result.model_copy(update={"block": grant.updated_block})
+
+
+def _expected_settlement_results(
+    source: OutcomeAuthorityBinding,
+    settlement: _DeliveryBuilderInvocationSettlementReceipt,
+) -> tuple[OutcomeAuthorityBinding, ...]:
+    """Return every result the runtime can settle from one claimless source row."""
+    envelope = settlement.envelope
+    request = envelope.request
+    context = settlement.handoff_context
+    if isinstance(request, BlockDelivery):
+        try:
+            return (DeliveryRuntime._builder_pause_settled_binding(source, context, request),)  # noqa: SLF001
+        except DeliveryRuntimeConflictError:
+            return ()
+    if isinstance(request, ReturnDelivery):
+        if request.target not in {DeliveryStage.PLANNING, DeliveryStage.DESIGN}:
+            _bootstrap_failure("local Builder return settlement has an unsupported target")
+        return tuple(
+            DeliveryRuntime._builder_return_settled_binding(  # noqa: SLF001
+                source, context, request, exhausted=exhausted, return_limited=return_limited
+            )
+            for exhausted, return_limited in ((False, False), (True, False), (False, True))
+        )
+    requestless = envelope.disposition in REQUESTLESS_WORKER_SETTLEMENT_FAILURE_CODES and request is None
+    if not isinstance(request, RetryDelivery) and not requestless:
+        _bootstrap_failure("local Builder handoff route is unsupported")
+    return tuple(
+        DeliveryRuntime._builder_retry_settled_binding(source, context, envelope, exhausted=exhausted)  # noqa: SLF001
+        for exhausted in (False, True)
+    )
+
+
+def _settlement_source_binding(
+    snapshot: DeliveryStateSnapshot,
+    snapshot_binding: OutcomeAuthorityBinding,
+    settlement: _DeliveryBuilderInvocationSettlementReceipt,
+    paths: _DeliveryPaths,
+    seen: frozenset[str],
+) -> OutcomeAuthorityBinding:
+    """Return the remote row, or the receipt-derived local row, one unpublished Builder settlement started from.
+
+    A retained handoff keeps the frontier unpublished, so a later settlement of the same outcome may start
+    from an answered pause, a granted retry or a promoted Planning return that only local receipts prove.
+    """
+    if settlement.result in _expected_settlement_results(snapshot_binding, settlement):
+        return snapshot_binding
+    seen |= {settlement.settlement_id}
+    for prior in _local_builder_settlement_receipts(paths.runtime_root, snapshot, settlement.envelope.outcome_id):
+        if prior.settlement_id in seen:
+            continue
+        for row in _builder_handoff_resumable_rows(snapshot, snapshot_binding, prior, paths, seen):
+            if settlement.result in _expected_settlement_results(row, settlement):
+                return row
+    request = settlement.envelope.request
+    return _bootstrap_failure(
+        "local Builder pause result is not the exact successor of its remote binding"
+        if isinstance(request, BlockDelivery)
+        else "local Builder return result is not the exact successor of its remote binding"
+        if isinstance(request, ReturnDelivery)
+        else "local Builder handoff result is not the exact retry successor of its remote binding"
+    )
+
+
+def _builder_handoff_resumable_rows(
+    snapshot: DeliveryStateSnapshot,
+    snapshot_binding: OutcomeAuthorityBinding,
+    prior: _DeliveryBuilderInvocationSettlementReceipt,
+    paths: _DeliveryPaths,
+    seen: frozenset[str],
+) -> tuple[OutcomeAuthorityBinding, ...]:
+    """Return the claimless rows a later Builder claim may start from after one earlier, validated settlement."""
+    try:
+        if not _builder_handoff_receipt_matches_snapshot(snapshot, snapshot_binding, prior.handoff_context, prior):
+            return ()
+        _settlement_source_binding(snapshot, snapshot_binding, prior, paths, seen)
+        return _settled_successor_rows(snapshot, prior, paths)
+    except DeliveryApplicationLoadError, OSError, RuntimeError, TypeError, ValueError:
+        return ()
+
+
+def _settled_successor_rows(
+    snapshot: DeliveryStateSnapshot,
+    prior: _DeliveryBuilderInvocationSettlementReceipt,
+    paths: _DeliveryPaths,
+) -> tuple[OutcomeAuthorityBinding, ...]:
+    """Return the answered, promoted, unblocked or granted row one validated settlement leads to."""
+    runtime_root = paths.runtime_root
+    request = prior.envelope.request
+    if isinstance(request, BlockDelivery):
+        return (_builder_request_resolution_successor(runtime_root, snapshot, prior),)
+    if isinstance(request, ReturnDelivery):
+        promotion = _read_local_builder_plan_promotion_receipt(
+            runtime_root, snapshot.change_id, prior.settlement_id, required=False
+        )
+        if request.target != DeliveryStage.PLANNING or promotion is None:
+            return ()
+        branch_head = prior.handoff_context.branch_head
+        replay = _BuilderReturnReplayContext(snapshot, snapshot.frontier, prior, paths, branch_head)
+        _validate_local_builder_plan_promotion(
+            replay, _granted_planner_return_row(runtime_root, snapshot, prior) or prior.result, promotion
+        )
+        return (promotion.result_binding,)
+    if prior.result.block is None:
+        return (prior.result,)
+    grant = _read_builder_attempt_grant_receipt(runtime_root, snapshot.change_id, prior.handoff_context)
+    if grant is None or grant.settlement_id != prior.settlement_id or grant.granted_block != prior.result.block:
+        return ()
+    return (prior.result.model_copy(update={"block": grant.updated_block}),)
+
+
+def _local_builder_settlement_receipts(
+    runtime_root: Path,
+    snapshot: DeliveryStateSnapshot,
+    outcome_id: str,
+) -> tuple[_DeliveryBuilderInvocationSettlementReceipt, ...]:
+    """Read the outcome's local Builder settlements that share the snapshot's reviewed boundary."""
+    change_root = runtime_root / "changes" / snapshot.change_id
+    receipt_directory = change_root / "builder-invocation-receipts"
+    if any(path.is_symlink() for path in (runtime_root / "changes", change_root, receipt_directory)):
+        _bootstrap_failure("local Builder handoff receipt path is unsafe")
+    receipts = []
+    for path in sorted(receipt_directory.glob("*.json")) if receipt_directory.is_dir() else []:
+        if path.is_symlink() or not path.is_file():
+            _bootstrap_failure("local Builder handoff receipt path is unsafe")
+        try:
+            receipt = _DeliveryBuilderInvocationSettlementReceipt.model_validate_json(path.read_bytes(), strict=True)
+        except (OSError, TypeError, ValueError) as exc:
+            _bootstrap_failure("local Builder handoff settlement receipt is invalid", exc)
+        envelope = receipt.envelope
+        if (
+            envelope.change_id == snapshot.change_id
+            and envelope.outcome_id == outcome_id
+            and envelope.expected_last_reviewed_commit == snapshot.last_reviewed_commit
+        ):
+            receipts.append(receipt)
+    return tuple(receipts)
+
+
+def _builder_attempt_grant_successor(
+    runtime_root: Path,
+    snapshot: DeliveryStateSnapshot,
+    settlement: _DeliveryBuilderInvocationSettlementReceipt,
+    local_binding: OutcomeAuthorityBinding,
+) -> OutcomeAuthorityBinding:
+    """Derive the settled retry result or only the exact user grant recorded for its exhausted block."""
+    if settlement.result.block is None or local_binding.block == settlement.result.block:
+        return settlement.result
+    try:
+        grant = _read_builder_attempt_grant_receipt(runtime_root, snapshot.change_id, settlement.handoff_context)
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        _bootstrap_failure("local Builder attempt grant receipt is unavailable or invalid", exc)
+    if grant is None or not all(
+        (
+            grant.change_id == snapshot.change_id,
+            grant.outcome_id == settlement.envelope.outcome_id,
+            grant.settlement_id == settlement.settlement_id,
+            grant.builder_handoff_context == settlement.handoff_context,
+            grant.granted_block == settlement.result.block,
+        )
+    ):
+        _bootstrap_failure("local Builder retry block differs from its exact settlement and attempt grant")
+    return settlement.result.model_copy(update={"block": grant.updated_block})
+
+
+def _builder_handoff_lifecycle_successor_frontier(
+    snapshot_frontier: DeliveryFrontier,
+    expected_frontier: DeliveryFrontier,
+    settlement: _DeliveryBuilderInvocationSettlementReceipt,
+    runtime_root: Path,
+) -> DeliveryFrontier:
+    """Fold exact local lifecycle receipts over a known Builder settlement or answer."""
+    chain = _builder_handoff_lifecycle_chain(runtime_root, settlement)
+    if not chain:
+        return expected_frontier
+
+    baselines, resolved_frontier, settlement_frontier = _builder_handoff_lifecycle_baselines(
+        snapshot_frontier,
+        expected_frontier,
+        settlement,
+    )
+    lifecycle_fields = ("change_deferral", "change_abandonment", "pending_checkpoint")
+    previous_frontier: DeliveryFrontier | None = None
+    previous_baseline: DeliveryFrontier | None = None
+    for receipt_item in chain:
+        item = _NormalizedLifecycleReceipt.of(receipt_item)
+        baseline = next(
+            (
+                candidate
+                for candidate in baselines
+                if _builder_handoff_frontier_with_lifecycle_fields(candidate, item.before_frontier)
+                == item.before_frontier
+            ),
+            None,
+        )
+        if baseline is None:
+            _bootstrap_failure("local Builder lifecycle intent is not anchored to its exact settlement or answer")
+        if _builder_handoff_frontier_with_lifecycle_fields(baseline, item.after_frontier) != item.after_frontier:
+            _bootstrap_failure("local Builder lifecycle intent receipt changes unsupported frontier state")
+
+        if previous_frontier is not None and item.before_frontier != previous_frontier:
+            resolved_after_answer = (
+                previous_baseline == settlement_frontier
+                and resolved_frontier is not None
+                and baseline == resolved_frontier
+                and all(
+                    getattr(previous_frontier, field_name) == getattr(item.before_frontier, field_name)
+                    for field_name in lifecycle_fields
+                )
+            )
+            if not resolved_after_answer:
+                _bootstrap_failure("local Builder lifecycle intent chain contains an unrecorded frontier transition")
+
+        previous_frontier = item.after_frontier
+        previous_baseline = baseline
+
+    return _builder_handoff_frontier_with_lifecycle_fields(expected_frontier, chain[-1].after_frontier)
+
+
+@dataclass(frozen=True)
+class _NormalizedLifecycleReceipt:
+    """Lifecycle receipt frontiers after the registered 18 -> 19 representation change (N rows)."""
+
+    before_frontier: DeliveryFrontier
+    after_frontier: DeliveryFrontier
+
+    @classmethod
+    def of(cls, receipt: _DeliveryBuilderHandoffChangeIntentReceipt) -> _NormalizedLifecycleReceipt:
+        return cls(normalize_frontier(receipt.before_frontier), normalize_frontier(receipt.after_frontier))
+
+
+def _builder_handoff_lifecycle_chain(
+    runtime_root: Path,
+    settlement: _DeliveryBuilderInvocationSettlementReceipt,
+) -> tuple[_DeliveryBuilderHandoffChangeIntentReceipt, ...]:
+    """Read the exact lifecycle receipt chain addressed by one Builder settlement."""
+    try:
+        return _read_builder_handoff_change_intent_receipts(
+            runtime_root,
+            settlement.envelope.change_id,
+            settlement.handoff_context,
+        )
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        _bootstrap_failure("local Builder lifecycle intent receipt chain is unavailable or invalid", exc)
+
+
+def _planner_handoff_lifecycle_successor_frontier(
+    replay: _BuilderReturnReplayContext,
+    expected_frontier: DeliveryFrontier,
+    history: _PlannerPauseHistory,
+    promotion: _DeliveryBuilderPlanPromotionReceipt | None,
+) -> DeliveryFrontier:
+    """Fold lifecycle receipts anchored in order to the settlement, Planner pauses, answers, or promotion."""
+    chain = _builder_handoff_lifecycle_chain(replay.paths.runtime_root, replay.settlement)
+    if not chain:
+        return expected_frontier
+    snapshot_frontier = replay.snapshot.frontier
+    outcome_id = replay.settlement.envelope.outcome_id
+    current_rank = _planner_handoff_lifecycle_rank(
+        history,
+        history.latest if promotion is None else promotion.result_binding,
+        promotion,
+    )
+    previous: tuple[DeliveryFrontier, int] | None = None
+    for receipt_item in chain:
+        item = _NormalizedLifecycleReceipt.of(receipt_item)
+        row = next((binding for binding in item.before_frontier.bindings if binding.outcome_id == outcome_id), None)
+        rank = None if row is None else _planner_handoff_lifecycle_rank(history, row, promotion)
+        if rank is None or current_rank is None or rank > current_rank:
+            _bootstrap_failure("local Builder lifecycle intent is not anchored to its exact settlement or answer")
+        baseline = snapshot_frontier.model_copy(
+            update={
+                "bindings": tuple(
+                    row if binding.outcome_id == outcome_id else binding for binding in snapshot_frontier.bindings
+                )
+            }
+        )
+        if _builder_handoff_frontier_with_lifecycle_fields(baseline, item.before_frontier) != item.before_frontier:
+            _bootstrap_failure("local Builder lifecycle intent is not anchored to its exact settlement or answer")
+        if _builder_handoff_frontier_with_lifecycle_fields(baseline, item.after_frontier) != item.after_frontier:
+            _bootstrap_failure("local Builder lifecycle intent receipt changes unsupported frontier state")
+        if (
+            previous is not None
+            and item.before_frontier != previous[0]
+            and (
+                rank < previous[1]
+                or _builder_handoff_frontier_with_lifecycle_fields(item.before_frontier, previous[0])
+                != item.before_frontier
+            )
+        ):
+            _bootstrap_failure("local Builder lifecycle intent chain contains an unrecorded frontier transition")
+        previous = (item.after_frontier, rank)
+    return _builder_handoff_frontier_with_lifecycle_fields(expected_frontier, chain[-1].after_frontier)
+
+
+def _builder_handoff_lifecycle_baselines(
+    snapshot_frontier: DeliveryFrontier,
+    expected_frontier: DeliveryFrontier,
+    settlement: _DeliveryBuilderInvocationSettlementReceipt,
+) -> tuple[tuple[DeliveryFrontier, ...], DeliveryFrontier | None, DeliveryFrontier]:
+    """Select only a settlement or answered pause as a lifecycle baseline."""
+    outcome_id = settlement.envelope.outcome_id
+    settlement_frontier = snapshot_frontier.model_copy(
+        update={
+            "bindings": tuple(
+                settlement.result if binding.outcome_id == outcome_id else binding
+                for binding in snapshot_frontier.bindings
+            )
+        }
+    )
+    if expected_frontier == settlement_frontier:
+        resolved_frontier = None
+        baselines = (settlement_frontier,)
+    elif isinstance(settlement.envelope.request, BlockDelivery) or _is_attempt_grant_frontier(
+        expected_frontier, settlement
+    ):
+        resolved_frontier = expected_frontier
+        baselines = (settlement_frontier, resolved_frontier)
+    else:
+        _bootstrap_failure("local Builder lifecycle intent has an unknown request-resolution baseline")
+    return baselines, resolved_frontier, settlement_frontier
+
+
+def _is_attempt_grant_frontier(
+    expected_frontier: DeliveryFrontier,
+    settlement: _DeliveryBuilderInvocationSettlementReceipt,
+) -> bool:
+    """Recognize the receipt-derived granted retry block as a lifecycle baseline."""
+    block = settlement.result.block
+    binding = next(
+        (item for item in expected_frontier.bindings if item.outcome_id == settlement.envelope.outcome_id),
+        None,
+    )
+    return (
+        block is not None
+        and block.block_id == builder_attempt_limit_block_id(settlement.handoff_context)
+        and binding is not None
+        and binding.block is not None
+        and binding.block.resolution_note == BUILDER_ATTEMPT_GRANT_NOTE
+        and binding == settlement.result.model_copy(update={"block": binding.block})
+    )
+
+
+def _builder_handoff_frontier_with_lifecycle_fields(
+    frontier: DeliveryFrontier,
+    lifecycle_frontier: DeliveryFrontier,
+) -> DeliveryFrontier:
+    """Copy only fields permitted to change in a Builder handoff lifecycle receipt."""
+    lifecycle_fields = ("change_deferral", "change_abandonment", "pending_checkpoint")
+    return frontier.model_copy(
+        update={field_name: getattr(lifecycle_frontier, field_name) for field_name in lifecycle_fields}
+    )
+
+
+def _validate_local_builder_handoff_candidate(
+    snapshot: DeliveryStateSnapshot,
+    local_binding: OutcomeAuthorityBinding,
+    receipt: _DeliveryBuilderInvocationSettlementReceipt,
+    branch_head: str,
+    paths: _DeliveryPaths,
+) -> None:
+    """Validate one candidate against its exact same-task claim and commit ancestry."""
+    candidate = local_binding.result_candidate
+    claim = local_binding.active_claim
+    task = next(
+        (item for item in local_binding.tasks if item.task_id == receipt.handoff_context.original_task_id),
+        None,
+    )
+    if candidate is None or claim is None or task is None:
+        _bootstrap_failure("local Builder result candidate lacks its exact task or active claim")
+    result_digest = hashlib.sha256(_canonical_model(candidate.result)).hexdigest()
+    if not all(
+        (
+            claim.worker_role == DeliveryWorkerRole.BUILDER,
+            claim.task_id == task.task_id,
+            candidate.claim_id == claim.claim_id,
+            candidate.candidate_id == f"result-{result_digest}",
+            candidate.digest == result_digest,
+            candidate.result.change_id == snapshot.change_id,
+            candidate.result.authority_digest == snapshot.authority_digest,
+            candidate.result.task_id == task.task_id,
+            candidate.result.task_digest == task.digest,
+            _loader_git_is_ancestor(
+                paths.repository_root,
+                receipt.handoff_context.branch_head,
+                candidate.result.completed_commit,
+            ),
+            _loader_git_is_ancestor(paths.repository_root, candidate.result.completed_commit, branch_head),
+        )
+    ):
+        _bootstrap_failure("local Builder result candidate differs from its exact active claim and task")
+
+
+def _builder_request_resolution_successor(
+    runtime_root: Path,
+    snapshot: DeliveryStateSnapshot,
+    settlement: _DeliveryBuilderInvocationSettlementReceipt,
+) -> OutcomeAuthorityBinding:
+    """Derive only the exact request and block resolution recorded for one local pause."""
+    envelope = settlement.envelope
+    block_request = envelope.request
+    if not isinstance(block_request, BlockDelivery) or block_request.request is None:
+        _bootstrap_failure("local Builder handoff has no exact request-bearing pause")
+    original_request = block_request.request
+    original_block = settlement.result.block
+    if original_block is None or original_block.request_id != original_request.request_id:
+        _bootstrap_failure("local Builder pause result does not retain its exact request block")
+    try:
+        resolution_receipt = _read_builder_request_resolution_receipt(
+            runtime_root,
+            snapshot.change_id,
+            original_request.request_id,
+            settlement.handoff_context,
+        )
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        _bootstrap_failure("local Builder request resolution receipt is unavailable or invalid", exc)
+
+    resolution = resolution_receipt.resolved_request.resolution
+    if resolution is None:
+        _bootstrap_failure("local Builder request resolution receipt has no user answer")
+    if (original_request.kind == DeliveryRequestKind.DECISION and resolution.selected_option_id is None) or (
+        resolution.selected_option_id is not None
+        and resolution.selected_option_id not in {option.option_id for option in original_request.options}
+    ):
+        _bootstrap_failure("local Builder request resolution does not answer its exact bounded options")
+    expected_request = original_request.model_copy(update={"resolution": resolution})
+    expected_block = original_block.model_copy(
+        update={
+            "resolution_note": resolution.response_text or resolution.selected_option_id,
+            "resolution_locators": (original_request.request_id,),
+        }
+    )
+    if not all(
+        (
+            resolution_receipt.change_id == snapshot.change_id,
+            resolution_receipt.outcome_id == envelope.outcome_id,
+            resolution_receipt.request_id == original_request.request_id,
+            resolution_receipt.settlement_id == settlement.settlement_id,
+            resolution_receipt.builder_handoff_context == settlement.handoff_context,
+            resolution_receipt.resolved_request == expected_request,
+            resolution_receipt.updated_block == expected_block,
+        )
+    ):
+        _bootstrap_failure("local Builder request resolution receipt differs from its exact settlement pause")
+    return settlement.result.model_copy(
+        update={
+            "requests": tuple(
+                expected_request if request.request_id == original_request.request_id else request
+                for request in settlement.result.requests
+            ),
+            "block": expected_block,
+        }
+    )
+
+
+def _builder_handoff_owner_matches(
+    coordination: ChangeCoordination,
+    binding: OutcomeAuthorityBinding,
+    context: DeliveryBuilderHandoffContext,
+    envelope: DeliveryBuilderInvocationSettlement,
+) -> bool:
+    """Match a retained handoff or its exact newly acquired Builder claim."""
+    writer = coordination.writer
+    if writer is None or coordination.change_id != envelope.change_id:
+        return False
+    handoff = coordination.builder_handoff
+    if handoff is not None:
+        if not all(
+            (
+                handoff.change_id == envelope.change_id,
+                writer == handoff.original_writer.model_copy(update={"kind": "handoff"}),
+                handoff.settlement_id == context.settlement_id,
+                handoff.original_task_id == context.original_task_id,
+                handoff.last_reviewed_commit == context.last_reviewed_commit,
+                handoff.branch_head == context.branch_head,
+                handoff.metadata_fingerprint == context.metadata_fingerprint,
+            )
+        ):
+            return False
+        claim = binding.active_claim
+        if claim is None:
+            return True
+        return (
+            context.route == "same-outcome-planner"
+            and binding.stage == DeliveryStage.PLANNING
+            and claim.worker_role == DeliveryWorkerRole.PLANNER
+            and claim.task_id is None
+            and claim.attempt_id != envelope.attempt_id
+            and claim.claim_id != envelope.claim_id
+        )
+    claim = binding.active_claim
+    return (
+        claim is not None
+        and claim.worker_role == DeliveryWorkerRole.BUILDER
+        and claim.task_id == context.original_task_id
+        and claim.attempt_id != envelope.attempt_id
+        and claim.claim_id != envelope.claim_id
+        and writer.kind == "build"
+        and writer.attempt_id == claim.attempt_id
+        and writer.claim_id == claim.claim_id
+        and writer.actor_id == claim.owner_id
+        and writer.process_id == claim.process_id
+        and writer.claimed_at == claim.started_at
+    )
+
+
+def _read_local_builder_handoff_receipt(
+    runtime_root: Path,
+    change_id: str,
+    context: DeliveryBuilderHandoffContext,
+) -> _DeliveryBuilderInvocationSettlementReceipt:
+    """Read one exact immutable Builder settlement receipt without constructing a runtime."""
+    attempt_digest = hashlib.sha256(context.attempt_id.encode("utf-8")).hexdigest()
+    change_root = runtime_root / "changes" / change_id
+    receipt_directory = change_root / "builder-invocation-receipts"
+    receipt_path = receipt_directory / f"{attempt_digest}.json"
+    if any(path.is_symlink() for path in (runtime_root / "changes", change_root, receipt_directory, receipt_path)):
+        _bootstrap_failure("local Builder handoff receipt path is unsafe")
+    if not receipt_path.is_file():
+        _bootstrap_failure("local Builder handoff settlement receipt is missing")
+    try:
+        return _DeliveryBuilderInvocationSettlementReceipt.model_validate_json(receipt_path.read_bytes(), strict=True)
+    except (OSError, TypeError, ValueError) as exc:
+        _bootstrap_failure("local Builder handoff settlement receipt is invalid", exc)
+
+
+def _read_local_builder_plan_promotion_receipt(
+    runtime_root: Path,
+    change_id: str,
+    settlement_id: str,
+    *,
+    required: bool,
+) -> _DeliveryBuilderPlanPromotionReceipt | None:
+    """Read one exact host-local Planning promotion receipt without constructing a runtime."""
+    change_root = runtime_root / "changes" / change_id
+    receipt_directory = change_root / "builder-plan-promotion-receipts"
+    receipt_path = receipt_directory / f"{settlement_id}.json"
+    if any(path.is_symlink() for path in (runtime_root / "changes", change_root, receipt_directory, receipt_path)):
+        _bootstrap_failure("local Builder plan promotion receipt path is unsafe")
+    if not receipt_path.exists():
+        if required:
+            _bootstrap_failure("local Builder plan promotion receipt is missing")
+        return None
+    if not receipt_path.is_file():
+        _bootstrap_failure("local Builder plan promotion receipt is not a regular file")
+    try:
+        return _DeliveryBuilderPlanPromotionReceipt.model_validate_json(receipt_path.read_bytes(), strict=True)
+    except (OSError, TypeError, ValueError) as exc:
+        _bootstrap_failure("local Builder plan promotion receipt is invalid", exc)
+
+
+def _is_unpublished_checkpoint_successor(
+    snapshot_frontier: DeliveryFrontier,
+    local_frontier: DeliveryFrontier,
+) -> bool:
+    """Recognize a local checkpoint retained until Change reconciliation."""
+    pending = local_frontier.pending_checkpoint
+    if (
+        snapshot_frontier.pending_checkpoint is not None
+        or pending is None
+        or pending.head is None
+        or local_frontier.published_head != pending.head
+        or snapshot_frontier.published_head != pending.head
+    ):
+        return False
+    return snapshot_frontier == local_frontier.model_copy(update={"pending_checkpoint": None})
 
 
 def _is_unpublished_acceptance_attention_successor(
@@ -755,6 +2558,54 @@ def _fetch_finalized_snapshot_change_head(
 class _DeferredRemoteStateReconciliationError(Exception):
     """One Change is safely deferred while its remote branch advances past its snapshot."""
 
+    __slots__ = ("expected_head", "head_relation", "observed_head", "observed_local_head")
+
+    def __init__(
+        self,
+        *,
+        expected_head: str,
+        observed_head: str,
+        observed_local_head: str | None,
+        head_relation: DeliveryHealthHeadRelation | None,
+    ) -> None:
+        self.expected_head = expected_head
+        self.observed_head = observed_head
+        self.observed_local_head = observed_local_head
+        self.head_relation = head_relation
+        super().__init__("remote Change branch is ahead of its reviewed Delivery snapshot")
+
+
+class _RemoteChangeHeadMismatchError(DeliveryApplicationLoadError):
+    """One remote Change head cannot be reconciled with its reviewed snapshot."""
+
+    __slots__ = (
+        "expected_head",
+        "head_relation",
+        "observed_head",
+        "observed_local_head",
+        "reason",
+    )
+
+    def __init__(  # noqa: PLR0913 - the exception preserves each exact head classification field.
+        self,
+        *,
+        change_id: str,
+        expected_head: str,
+        observed_head: str,
+        observed_local_head: str | None,
+        head_relation: DeliveryHealthHeadRelation | None,
+        reason: DeliveryHealthReason,
+    ) -> None:
+        self.expected_head = expected_head
+        self.observed_head = observed_head
+        self.observed_local_head = observed_local_head
+        self.head_relation = head_relation
+        self.reason = reason
+        super().__init__(
+            "runtime_root",
+            f"remote Change branch differs from Delivery-state snapshot: {change_id}",
+        )
+
 
 def _can_defer_remote_state_reconciliation(
     snapshot: DeliveryStateSnapshot,
@@ -784,6 +2635,21 @@ def _loader_git_is_ancestor(repository: Path, ancestor: str, descendant: str) ->
     )
 
 
+def _head_relation(
+    repository: Path,
+    expected_head: str,
+    observed_head: str,
+) -> DeliveryHealthHeadRelation | None:
+    """Classify one observed Git head against expected Delivery authority."""
+    if expected_head == observed_head:
+        return DeliveryHealthHeadRelation.EQUAL
+    if _loader_git_is_ancestor(repository, expected_head, observed_head):
+        return DeliveryHealthHeadRelation.DESCENDANT
+    if _loader_git_is_ancestor(repository, observed_head, expected_head):
+        return DeliveryHealthHeadRelation.ANCESTOR
+    return DeliveryHealthHeadRelation.DIVERGENT
+
+
 def _restore_local_change_branch(
     snapshot: DeliveryStateSnapshot,
     repository: Path,
@@ -802,13 +2668,16 @@ def _restore_local_change_branch(
 def _restore_runtime_snapshot(snapshot: DeliveryStateSnapshot, runtime_root: Path) -> None:
     """Atomically recreate one Change's startup and terminal evidence files."""
     relative_root = Path("changes") / snapshot.change_id
+    contract = contract_canonical_bytes(snapshot.contract)
     participants = (
-        TransactionParticipant(runtime_root, relative_root / "contract.json", _canonical_model(snapshot.contract)),
+        TransactionParticipant(runtime_root, relative_root / "contract.json", contract),
         TransactionParticipant(runtime_root, relative_root / "frontier.json", _canonical_model(snapshot.frontier)),
         TransactionParticipant(runtime_root, relative_root / "admission.json", _canonical_model(snapshot.admission)),
     )
     completion_store = CompletionReceiptStore(runtime_root)
-    existing_completion = completion_store.read_bundle(snapshot.change_id)
+    existing_completion = (
+        None if snapshot.frontier.change_completion is None else completion_store.read_bundle(snapshot.change_id)
+    )
     if existing_completion != snapshot.completion:
         if existing_completion is not None:
             _bootstrap_failure("local completion evidence differs from its remote snapshot")
@@ -837,23 +2706,12 @@ def _local_runtime_change_ids(runtime_root: Path) -> set[str]:
 
 
 def _remote_branch_head(repository: Path, remote: str, branch: str) -> str | None:
-    result = _run_loader_git(
-        repository,
-        "ls-remote",
-        "--exit-code",
-        "--heads",
-        remote,
-        f"refs/heads/{branch}",
-        check=False,
-    )
-    if result.returncode == _REMOTE_REF_MISSING:
-        return None
-    if result.returncode != 0:
-        _bootstrap_failure("remote Change branch could not be observed")
-    lines = result.stdout.decode(errors="replace").strip().splitlines()
-    if len(lines) != 1:
-        _bootstrap_failure("remote Change branch response is invalid")
-    return lines[0].split("\t", 1)[0]
+    try:
+        return read_remote_ref(repository, remote, f"refs/heads/{branch}")
+    except RemoteGitError as exc:
+        invalid = isinstance(exc, RemoteGitFailed) and exc.result is not None and not exc.retry_safe
+        detail = "remote Change branch response is invalid" if invalid else "remote Change branch could not be observed"
+        _bootstrap_failure(detail, exc)
 
 
 def _read_git_blob(repository: Path, revision: str, path: str) -> bytes:
@@ -880,6 +2738,13 @@ def _run_loader_git(
     )
 
 
+def _run_loader_remote_git(repository: Path, *arguments: str, failure: str) -> subprocess.CompletedProcess[bytes]:
+    try:
+        return run_remote_git(repository, arguments, kind="read")
+    except RemoteGitError as exc:
+        _bootstrap_failure(f"{failure}: {exc}", exc)
+
+
 def _canonical_model(model: BaseModel) -> bytes:
     return (json.dumps(model.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n").encode()
 
@@ -903,6 +2768,7 @@ def _compose_application(  # noqa: PLR0913, PLR0917 - composition binds independ
     contracts: dict[str, DeliveryContract],
     publication_provider: PublicationProvider | None,
     health_diagnostics: tuple[DeliveryHealthDiagnostic, ...] = (),
+    issuer_host: WindowHostIdentity | None = None,
 ) -> PortfolioApplication:
     package_store = DesignPackageStore(
         paths.package_root,
@@ -959,6 +2825,7 @@ def _compose_application(  # noqa: PLR0913, PLR0917 - composition binds independ
             else None
         ),
         health_diagnostics=(*health_diagnostics, *runtime_diagnostics),
+        issuer_window=issuer_host,
     )
     application_config = PortfolioApplicationConfig(
         package_root=paths.package_root,
@@ -994,6 +2861,8 @@ def _composed_runtimes(
                     ),
                     change_id=change_id,
                     path=f".owlbear/delivery/runtime/changes/{change_id}",
+                    reason=DeliveryHealthReason.RUNTIME_UNAVAILABLE,
+                    resolution=DeliveryHealthResolution.AUTHORITY_GAP,
                 )
             )
     return runtimes, tuple(diagnostics)
@@ -1004,11 +2873,203 @@ def load_delivery_application(
     *,
     workspace_root: Path,
     publication_provider: PublicationProvider | None = None,
+    issuer_host: WindowHostIdentity | None = None,
 ) -> PortfolioApplication:
-    """Validate external identities before constructing the Delivery state owners."""
+    """Validate external identities before constructing the Delivery state owners.
+
+    The shared controller lock and the format gate run first, so fenced or unsupported state is
+    refused before any Git, remote, typed read or write. The returned application holds the lock
+    until ``close_delivery_application`` or garbage collection.
+    Only a process whose agents receive its claims passes ``issuer_host``; claims issued without it are
+    never settled automatically and need user-confirmed release.
+    """
+    return _load_fenced_application(
+        workspace_root, lambda _path: config, publication_provider=publication_provider, issuer_host=issuer_host
+    )
+
+
+def load_configured_delivery_application(
+    workspace_root: Path,
+    read_config: Callable[[Path], DeliveryStartupConfig],
+    *,
+    publication_provider: PublicationProvider | None = None,
+    issuer_host: WindowHostIdentity | None = None,
+) -> PortfolioApplication:
+    """Load like ``load_delivery_application``, reading the startup configuration inside the fence.
+
+    ``read_config`` receives the canonical ``config.json`` path only after the shared controller lock
+    is held and the format gate (including the configuration version) has passed; a fenced start
+    never opens the configuration. Its exceptions propagate after the lock is released.
+    """
+    return _load_fenced_application(
+        workspace_root, read_config, publication_provider=publication_provider, issuer_host=issuer_host
+    )
+
+
+def _load_fenced_application(
+    workspace_root: Path,
+    read_config: Callable[[Path], DeliveryStartupConfig],
+    *,
+    publication_provider: PublicationProvider | None,
+    issuer_host: WindowHostIdentity | None,
+) -> PortfolioApplication:
     paths = _derive_paths(workspace_root)
+    controller_lock = _acquire_controller_fence(paths)
+    try:
+        _require_pinned_code(paths)
+        fresh = _require_state_capability(paths)
+        config = read_config(paths.repository_root / _CONFIG_LOCATOR)
+        application = _load_gated_application(config, paths, publication_provider, issuer_host, stamp_format=fresh)
+    except BaseException:
+        controller_lock.release()
+        raise
+    _CONTROLLER_LOCKS[application] = controller_lock
+    weakref.finalize(application, controller_lock.release)
+    return application
+
+
+def close_delivery_application(application: PortfolioApplication) -> None:
+    """Release the controller lock of one loaded application; stop its checkpoint supervisor first."""
+    controller_lock = _CONTROLLER_LOCKS.pop(application, None)
+    if controller_lock is not None:
+        controller_lock.release()
+
+
+def _acquire_controller_fence(paths: _DeliveryPaths) -> ControllerLock:
+    try:
+        return acquire_controller_lock(paths.runtime_root)
+    except ControllerFencedError as exc:
+        error = DeliveryApplicationLoadError(
+            "controller_lock",
+            f"{CONTROLLER_FENCED}: Delivery state is fenced by a migration or upgrade; no state was read",
+            code=CONTROLLER_FENCED,
+        )
+        raise error from exc
+    except (OSError, ValueError) as exc:
+        error = _load_error("runtime_root", "workspace controller lock is unavailable")
+        raise error from exc
+
+
+def _require_pinned_code(paths: _DeliveryPaths) -> None:
+    """Refuse a controller whose code is not the workspace's pinned release (I6), before any state read."""
+    detail = controller_pin_refusal(paths.repository_root, Path(__file__))
+    if detail is not None:
+        message = f"{CONTROLLER_NOT_PINNED}: {detail}"
+        raise DeliveryStateVersionError(CONTROLLER_NOT_PINNED, message, locator=CONTROLLER_PIN)
+
+
+def _require_state_capability(paths: _DeliveryPaths) -> bool:
+    """Refuse unsupported state; return whether the workspace is fresh and needs the format stamp."""
+    try:
+        report = scan_capability(paths.repository_root)
+        require_capability(report)
+    except StateCapabilityError as exc:
+        raise DeliveryStateVersionError(
+            exc.code, exc.detail, locator=exc.locator, version_absent=exc.version_absent
+        ) from exc
+    return report.format_absent and report.format_status == "current"
+
+
+def _stamp_fresh_workspace_format(paths: _DeliveryPaths) -> None:
+    """Record the supported format on a workspace without runtime records, before any other write."""
+    content = format_marker_bytes()
+    relative = Path(FORMAT_MARKER).relative_to("runtime")
+    try:
+        root_fd = os.open(paths.runtime_root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            try:
+                write_contained(root_fd, relative, content)
+            except FileExistsError:
+                if read_contained(root_fd, relative, limit=len(content)) != content:
+                    raise
+        finally:
+            os.close(root_fd)
+    except (OSError, RuntimeError, ValueError) as exc:
+        error = _load_error("runtime_root", "Delivery state format marker could not be recorded")
+        raise error from exc
+
+
+def load_verification_application(
+    workspace_root: Path,
+    read_config: Callable[[Path], DeliveryStartupConfig],
+    *,
+    migration_id: str,
+    controller_lock: ControllerLock,
+) -> PortfolioApplication:
+    """Compose the offline migration verifier's read-only application; never used by MCP or Cockpit.
+
+    The caller must hold the exclusive controller lock. The gate accepts exactly the named ``applied``
+    journal at the supported format; remote bootstrap, the publication provider and the format stamp
+    are skipped. Composition runs in ``read_only_state``, which disables transaction recovery, frontier
+    canonicalization and retry reconciliation; callers must keep every query on the result in that scope.
+    """
+    if not (controller_lock.exclusive and controller_lock.held):
+        field, detail = "controller_lock", "migration verification requires the held exclusive controller lock"
+        raise DeliveryApplicationLoadError(field, detail, code=CONTROLLER_FENCED)
+    paths = _derive_paths(workspace_root)
+    report = scan_capability(paths.repository_root, verification_journal=migration_id)
+    try:
+        require_capability(report)
+    except StateCapabilityError as exc:
+        raise DeliveryStateVersionError(
+            exc.code, exc.detail, locator=exc.locator, version_absent=exc.version_absent
+        ) from exc
+    incomplete = "state-migration-incomplete"
+    if report.format_absent or report.format != SUPPORTED_FORMAT:
+        detail = f"{incomplete}: verification requires format {SUPPORTED_FORMAT}"
+        raise DeliveryStateVersionError(incomplete, detail, locator=FORMAT_MARKER)
+    if not any(journal.migration_id == migration_id for journal in report.journals):
+        detail = f"{incomplete}: the named migration journal is absent"
+        raise DeliveryStateVersionError(incomplete, detail, locator=MIGRATIONS_ROOT)
+    config = read_config(paths.repository_root / _CONFIG_LOCATOR)
+    return _compose_read_only_application(config, paths)
+
+
+def load_read_only_application(
+    workspace_root: Path,
+    read_config: Callable[[Path], DeliveryStartupConfig],
+) -> PortfolioApplication:
+    """Compose an offline read-only application for compatibility checks; never used by MCP or Cockpit.
+
+    Like ``load_configured_delivery_application`` it holds the shared controller lock and applies the
+    normal format gate first; like the verification load it skips remote bootstrap, the publication
+    provider and the format stamp, and composes in ``read_only_state``. Callers must keep every query on
+    the result in that scope and release it with ``close_delivery_application``.
+    """
+    paths = _derive_paths(workspace_root)
+    controller_lock = _acquire_controller_fence(paths)
+    try:
+        _require_state_capability(paths)
+        config = read_config(paths.repository_root / _CONFIG_LOCATOR)
+        application = _compose_read_only_application(config, paths)
+    except BaseException:
+        controller_lock.release()
+        raise
+    _CONTROLLER_LOCKS[application] = controller_lock
+    weakref.finalize(application, controller_lock.release)
+    return application
+
+
+def _compose_read_only_application(config: DeliveryStartupConfig, paths: _DeliveryPaths) -> PortfolioApplication:
+    _validate_git_config(config, paths)
+    with read_only_state():
+        host_config = _load_host_config(paths)
+        contracts, diagnostics = _load_contracts(paths.runtime_root)
+        return _compose_application(config, host_config, paths, contracts, None, diagnostics)
+
+
+def _load_gated_application(
+    config: DeliveryStartupConfig,
+    paths: _DeliveryPaths,
+    publication_provider: PublicationProvider | None,
+    issuer_host: WindowHostIdentity | None,
+    *,
+    stamp_format: bool = False,
+) -> PortfolioApplication:
     _validate_git_config(config, paths)
     host_config = _load_host_config(paths)
+    if stamp_format:
+        _stamp_fresh_workspace_format(paths)
     remote_diagnostics: tuple[DeliveryHealthDiagnostic, ...] = ()
     if "delivery_state_branch" in config.model_fields_set:
         remote_diagnostics = _bootstrap_remote_state(config, paths)
@@ -1030,4 +3091,5 @@ def load_delivery_application(
         contracts,
         publication_provider,
         health_diagnostics,
+        issuer_host,
     )

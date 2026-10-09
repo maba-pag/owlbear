@@ -262,11 +262,7 @@ class CompletedHistoryCatalog:
             self._malformed("Delivery abandoned-history root is invalid")
         observations = []
         for change_root in sorted(changes_root.iterdir(), key=lambda path: path.name):
-            if (
-                change_root.is_symlink()
-                or not change_root.is_dir()
-                or not _SAFE_CHANGE_ID.fullmatch(change_root.name)
-            ):
+            if change_root.is_symlink() or not change_root.is_dir() or not _SAFE_CHANGE_ID.fullmatch(change_root.name):
                 continue
             path = change_root / "frontier.json"
             if path.is_symlink() or not path.is_file():
@@ -322,7 +318,7 @@ class CompletedHistoryCatalog:
             self._malformed("abandoned-history coordination is invalid", change_id, cause=exc)
         conflict = coordination.target_sync_conflict
         return (
-            coordination.worktree_cleanup is None,
+            coordination.worktree_cleanup is None and coordination.writer is None,
             conflict is not None,
             conflict.target_head if conflict is not None else None,
             conflict.operation_id if conflict is not None else None,

@@ -164,7 +164,7 @@ async def test_read_url_classifies_and_normalizes_supported_media(
     assert isinstance(result, IntakeResult)
     assert result.media_type == expected_media_type
     expected_content = (
-        "Fixture title\nBody text"
+        "# Fixture title\n\nBody text"
         if expected_media_type in {"text/html", "application/xhtml+xml"}
         else "Fixture title\n\nBody text"
     )

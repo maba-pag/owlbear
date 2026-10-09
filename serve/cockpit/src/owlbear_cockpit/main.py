@@ -24,6 +24,9 @@ from owlbear_memory.errors import (
     ConcurrencyError as MemoryConcurrencyError,
 )
 from owlbear_memory.errors import (
+    DuplicateEntryError as MemoryDuplicateEntryError,
+)
+from owlbear_memory.errors import (
     NotFoundError as MemoryNotFoundError,
 )
 from owlbear_memory.errors import (
@@ -93,6 +96,15 @@ def handle_memory_not_found(_request: Request, exc: MemoryNotFoundError) -> JSON
     return JSONResponse(
         status_code=404,
         content=_error_envelope("MEM_NOT_FOUND", str(exc)),
+    )
+
+
+@app.exception_handler(MemoryDuplicateEntryError)
+def handle_memory_duplicate_entry(_request: Request, exc: MemoryDuplicateEntryError) -> JSONResponse:
+    """Map failed duplicate repair to a conflict envelope."""
+    return JSONResponse(
+        status_code=409,
+        content=_error_envelope("MEM_DUPLICATE_ID", str(exc)),
     )
 
 
@@ -248,7 +260,7 @@ def _probe_instance(instance: CockpitInstance) -> bool:
         if response.status != _HTTP_OK:
             return False
         body = json.loads(response.read())
-    except (OSError, json.JSONDecodeError):
+    except OSError, json.JSONDecodeError:
         return False
     finally:
         connection.close()
@@ -268,7 +280,7 @@ def _running_instances() -> list[CockpitInstance]:
     for path in sorted(registry.glob("*.json")):
         try:
             instance = CockpitInstance.model_validate_json(path.read_bytes())
-        except (OSError, ValueError):
+        except OSError, ValueError:
             path.unlink(missing_ok=True)
             continue
         if _probe_instance(instance):

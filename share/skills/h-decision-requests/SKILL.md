@@ -42,14 +42,17 @@ The enclosing block supplies:
 - condition that makes the task ready to resume;
 - source locators and optional resumable commit.
 
-Return the block to Orchestrator. It forwards the unchanged transition to `transition_delivery`,
-which persists the request and gates the outcome. Do not call a separate request tool or hand-write
-request records.
+Return the block to Orchestrator. It uses the role-specific routing table in
+`w-orchestration` Step 3, preserving the inner transition unchanged. Delivery persists the request
+and gates the outcome; normal Builder blocks settle through `settle_worker_invocation`. Do not call
+a separate request tool or hand-write request records.
 
 ## Resolution And Resume
 
 Resolution is user/Cockpit controlled. It updates the durable request and lets Delivery recompute
-readiness; workers do not invoke a resolution tool.
+readiness; workers do not invoke a resolution tool. A request scoped to acceptance criteria
+(`applies_to`: a waiver or a person-only check) is answered only by the user in Cockpit; the agent
+`answer` tool refuses it.
 
 On a newly acquired resumed claim:
 
@@ -62,3 +65,8 @@ On a newly acquired resumed claim:
 
 Resolved decisions constrain subsequent work. Action outcomes are evidence, not automatic proof
 that a node or change satisfies its acceptance boundary.
+
+An answered Decision Request is a `decided` decision. Never create a request to replace an answered
+one: return to Design, where the Designer asks the user and records a contract decision that
+supersedes it. The context's `superseded_request_ids` names such a request; consume the superseding
+decision from its `decisions` instead.

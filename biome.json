@@ -1,0 +1,51 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.11/schema.json",
+  "vcs": {
+    "clientKind": "git",
+    "enabled": true,
+    "useIgnoreFile": true
+  },
+  "files": {
+    "includes": [
+      "serve/cockpit/web/**/*.js",
+      "serve/cockpit/web/**/*.mjs",
+      "serve/cockpit/web/**/*.ts",
+      "serve/cockpit/web/**/*.tsx",
+      "serve/cockpit/web/src/**/*.css",
+      "**/*.json",
+      "**/*.jsonc",
+      "!serve/cockpit/web/public",
+      "!**/scratch",
+      "!**/worktrees",
+      "!**/.owlbear/controller",
+      "!**/.owlbear/delivery/packages",
+      "!**/.owlbear/delivery/runtime",
+      "!**/.owlbear/legacy",
+      "!**/.owlbear/memory",
+      "!**/.owlbear/research",
+      "!**/.owlbear/sources",
+      "!**/.owlbear/target",
+      "!serve/delivery/tests/fixtures/state_formats/golden"
+    ]
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended"
+    }
+  },
+  "formatter": {
+    "enabled": true,
+    "useEditorconfig": true,
+    "lineWidth": 120
+  },
+  "assist": {
+    "enabled": true
+  },
+  "plugins": ["./serve/cockpit/web/plugins/pds-component-wrappers.grit"],
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  }
+}

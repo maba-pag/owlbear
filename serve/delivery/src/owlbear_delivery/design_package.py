@@ -422,21 +422,7 @@ class DesignPackageStore:
         if content is None:
             message = f"Design package does not exist: {change_id}"
             raise DesignPackageConflictError(message)
-        try:
-            manifest = DesignPackageManifest.model_validate_json(content[_MANIFEST_NAME])
-        except (ValidationError, ValueError) as exc:
-            message = f"Design package manifest is invalid: {change_id}"
-            raise DesignPackageConflictError(message) from exc
-        expected = DesignPackageManifest.from_content(
-            change_id,
-            content["intent.md"],
-            content["design.md"],
-            content["authority.json"],
-        )
-        if manifest != expected or content[_MANIFEST_NAME] != manifest.canonical_bytes():
-            message = f"Design package bytes do not match its manifest: {change_id}"
-            raise DesignPackageConflictError(message)
-        return manifest, content
+        return verify_package_content(change_id, content).manifest, content
 
     @staticmethod
     def _verified_package(
@@ -524,6 +510,29 @@ class DesignPackageStore:
             manifest=manifest,
             replayed=replayed,
         )
+
+
+def verify_package_content(change_id: str, content: Mapping[str, bytes]) -> VerifiedDesignPackage:
+    """Verify one exact package byte set against its manifest without any disk or Git side effect."""
+    _validate_change_id(change_id)
+    if set(content) != set(_PACKAGE_NAMES):
+        message = f"Design package files are incomplete: {change_id}"
+        raise DesignPackageConflictError(message)
+    try:
+        manifest = DesignPackageManifest.model_validate_json(content[_MANIFEST_NAME])
+    except (ValidationError, ValueError) as exc:
+        message = f"Design package manifest is invalid: {change_id}"
+        raise DesignPackageConflictError(message) from exc
+    expected = DesignPackageManifest.from_content(
+        change_id,
+        content["intent.md"],
+        content["design.md"],
+        content["authority.json"],
+    )
+    if manifest != expected or content[_MANIFEST_NAME] != manifest.canonical_bytes():
+        message = f"Design package bytes do not match its manifest: {change_id}"
+        raise DesignPackageConflictError(message)
+    return DesignPackageStore._verified_package(change_id, manifest, dict(content))  # noqa: SLF001 - same module.
 
 
 def _validate_change_id(change_id: str) -> None:

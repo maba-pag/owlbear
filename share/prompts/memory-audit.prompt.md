@@ -38,7 +38,9 @@ clarity, not for minor wording polish.
 
 MCP tools may be deferred when the prompt starts.
 
-1. If any `owlbear-memory/*` tool is unavailable, call `vscode/toolSearch` with query `memory` before doing session setup.
+1. Use any directly callable `owlbear-memory/*` tool as granted; a deferred inventory listing does
+   not override that binding. If a needed Memory tool has no direct callable binding, call
+   `vscode/toolSearch` with query `memory` before doing session setup.
 2. If `owlbear-memory` remains unavailable, do not pretend the queue is empty. Report the tool-loading failure, explain that memory review cannot mutate or read MCP entries without those tools, and ask one continuation decision: retry bootstrap, inspect local docs only, or pause.
 3. If read/search tools needed for source context are unavailable, continue the memory review only after telling the user which context sources will be missing and lowering context confidence.
 

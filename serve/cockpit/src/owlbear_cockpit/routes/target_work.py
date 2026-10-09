@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import platform
 import uuid
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, NoReturn
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
@@ -13,12 +14,10 @@ from fastapi.responses import JSONResponse
 from owlbear_cockpit.deps import get_target_context
 from owlbear_cockpit.target_models import (
     AbandonChangeBody,
-    AcceptanceReconciliationOutcomeResponse,
-    AcceptanceReconciliationRequest,
-    AcceptanceReconciliationResponse,
     ActivityCounts,
     AdoptExternalHeadAfterAcceptanceAttentionBody,
     AnswerRequestBody,
+    ApproveMergeBody,
     BackwardMoveBody,
     BackwardMovePreviewBody,
     ChangeDispositionReasonBody,
@@ -28,25 +27,35 @@ from owlbear_cockpit.target_models import (
     CleanupCompletedChangeBody,
     ClearBlockBody,
     ConfirmLostClaimBody,
+    ContinuationAcquisitionBody,
+    ContinuationExecutionBody,
     DeliveryHealthResponse,
+    DeliveryUnavailableChangeResponse,
     DesignWorkDetailResponse,
     ExternalHeadAdoptionResponse,
+    GrantAttemptBody,
+    MergeApprovalResponse,
     NeedsCounts,
     PortfolioOperatingResponse,
     PublicationChecksObservationResponse,
     PublicationSupersessionResponse,
     RecoverChangeWorktreeBody,
+    ReleaseStuckWorkerBody,
     ResolveChangeAttentionBody,
+    ResumeChangeBody,
     SupersedePublicationBody,
     TargetSyncAbortResponse,
     TargetSyncBody,
     TargetSyncConflictBody,
     TargetSyncResponse,
+    WorkItemAvailableDetailResponse,
     WorkItemDetailResponse,
     WorkItemPortfolioResponse,
     WorkItemPortfolioTotals,
     WorkItemPublicationReconciliationResponse,
+    WorkItemUnavailableDetailResponse,
 )
+from owlbear_delivery.application_merge import ERR_MERGE_UNAVAILABLE, DeliveryMergeError
 from owlbear_delivery.completed_history import (
     CompletedChangePage,
     CompletedChangeRecord,
@@ -57,8 +66,18 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryStage,
 )
 from owlbear_delivery.diagnostics import DeliveryFailureCategory, classify_delivery_failure
+from owlbear_delivery.merge_approval import ApproveChangeMerge, MergeApprovalResult
 from owlbear_delivery.portfolio_application import (
-    PortfolioApplication,  # noqa: TC001 - FastAPI evaluates this annotation.
+    DeliveryAnswer,
+    DeliveryAnswerKind,
+    DeliveryChangeIntent,
+    DeliveryChangeIntentKind,
+    DeliveryContinuationRequest,
+    DeliveryContinuationResult,
+    DeliveryEngineActionResult,
+    DeliveryUnavailableChangeView,
+    ExecuteDeliveryChangeAction,
+    PortfolioApplication,
 )
 from owlbear_delivery.portfolio_operating import DeliveryHealthStatus, DeliveryHealthView
 from owlbear_delivery.work_items import (
@@ -68,9 +87,15 @@ from owlbear_delivery.work_items import (
     WorkItemScope,
     WorkItemStage,
 )
+from owlbear_delivery.worker_stall import DeliveryWorkerActiveError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from datetime import datetime
+
+# Approval provenance: the user approves in this Cockpit process (N05 D14).
+_APPROVAL_HOST_ID = (platform.node() or "cockpit")[:128]
+_APPROVAL_SESSION_ID = "cockpit"
 
 
 class TargetCockpitService:
@@ -83,10 +108,13 @@ class TargetCockpitService:
         self,
     ) -> WorkItemPortfolioResponse:
         """Return Change-grouped current Work Items from exact snapshots."""
-        view = self._invoke(self._application.portfolio_read_view)
+        view = self._invoke(self._application.list_changes)
         health = getattr(view, "health", DeliveryHealthView(status=DeliveryHealthStatus.HEALTHY))
         return WorkItemPortfolioResponse(
             groups=view.groups,
+            unavailable_changes=tuple(
+                DeliveryUnavailableChangeResponse.from_view(item) for item in view.unavailable_changes
+            ),
             totals=_portfolio_totals(view.groups),
             operating=PortfolioOperatingResponse.from_view(view.operating),
             health=DeliveryHealthResponse.from_view(health),
@@ -95,7 +123,9 @@ class TargetCockpitService:
     def show_item(self, change_id: str, item_key: str) -> WorkItemDetailResponse:
         """Return semantic and operator detail from one exact snapshot."""
         item = self._invoke(lambda: self._application.show_work_item_view(change_id, item_key))
-        return WorkItemDetailResponse(item=item)
+        if isinstance(item, DeliveryUnavailableChangeView):
+            return WorkItemUnavailableDetailResponse.from_view(item)
+        return WorkItemAvailableDetailResponse(item=item)
 
     def show_design_work(self, change_id: str) -> DesignWorkDetailResponse:
         """Return verified authored sources for one pre-admission Design package."""
@@ -109,8 +139,18 @@ class TargetCockpitService:
 
     def answer_request(self, change_id: str, request_id: str, body: AnswerRequestBody) -> object:
         """Answer one exact pending Delivery request."""
-        resolution = DeliveryRequestResolution(**body.model_dump())
-        return self._invoke(lambda: self._application.resolve_request(change_id, request_id, resolution))
+        resolution = DeliveryRequestResolution(
+            selected_option_id=body.selected_option_id,
+            response_text=body.response_text,
+            provenance=body.provenance if body.response_text else None,
+        )
+        answer = DeliveryAnswer(
+            change_id=change_id,
+            request_id=request_id,
+            resolution=resolution,
+            expected_frontier_digest=body.expected_frontier_digest,
+        )
+        return self._invoke(lambda: self._application.answer(answer, allow_user_only=True))
 
     def clear_block(
         self,
@@ -121,14 +161,45 @@ class TargetCockpitService:
     ) -> object:
         """Clear one exact requestless block with operator evidence."""
         return self._invoke(
-            lambda: self._application.clear_block(
-                change_id,
-                outcome_id,
-                block_id,
-                body.operator_note,
-                tuple(body.locators),
+            lambda: self._application.answer(
+                DeliveryAnswer(
+                    change_id=change_id,
+                    kind=DeliveryAnswerKind.BLOCK,
+                    expected_frontier_digest=body.expected_frontier_digest,
+                    outcome_id=outcome_id,
+                    block_id=block_id,
+                    operator_note=body.operator_note,
+                    locators=tuple(body.locators),
+                )
             )
         )
+
+    def grant_attempt(
+        self,
+        change_id: str,
+        outcome_id: str,
+        block_id: str,
+        body: GrantAttemptBody,
+    ) -> object:
+        """Grant one more attempt to an exhausted Builder block (same-task, or a pre-N12 Planning return)."""
+        answer = DeliveryAnswer(
+            change_id=change_id,
+            kind=DeliveryAnswerKind.GRANT_ATTEMPT,
+            expected_frontier_digest=body.expected_frontier_digest,
+            outcome_id=outcome_id,
+            block_id=block_id,
+        )
+        return self._invoke(lambda: self._application.answer(answer, allow_user_only=True))
+
+    def grant_retry_attempt(self, change_id: str, attempt_id: str, body: GrantAttemptBody) -> object:
+        """Grant one more Planner or Finalizer attempt past its exact exhausted retry attempt."""
+        answer = DeliveryAnswer(
+            change_id=change_id,
+            kind=DeliveryAnswerKind.GRANT_ATTEMPT,
+            expected_frontier_digest=body.expected_frontier_digest,
+            attempt_id=attempt_id,
+        )
+        return self._invoke(lambda: self._application.answer(answer, allow_user_only=True))
 
     def recover_claim(
         self,
@@ -136,11 +207,23 @@ class TargetCockpitService:
         outcome_id: str,
         body: ConfirmLostClaimBody,
     ) -> object:
-        """Recover one exact claim only after explicit lost confirmation."""
+        """Request exact recovery; host-owned exclusion remains an engine requirement."""
         return self._invoke(
             lambda: self._application.recover_claim(
                 change_id,
                 outcome_id,
+                body.attempt_id,
+                body.claim_id,
+                confirmed_lost=body.confirmed_lost,
+            )
+        )
+
+    def release_stuck_worker(self, change_id: str, body: ReleaseStuckWorkerBody) -> object:
+        """Settle one exact stopped worker as a failed attempt once its worktree stays quiet."""
+        return self._invoke(
+            lambda: self._application.release_stuck_worker(
+                change_id,
+                body.outcome_id,
                 body.attempt_id,
                 body.claim_id,
             )
@@ -177,6 +260,36 @@ class TargetCockpitService:
         result = self._invoke(lambda: self._application.reconcile_change_checkpoint(change_id))
         return WorkItemPublicationReconciliationResponse.from_result(result)
 
+    def acquire_change_action(
+        self,
+        change_id: str,
+        body: ContinuationAcquisitionBody,
+    ) -> DeliveryContinuationResult:
+        """Acquire at most one supported action for the exact selected Change."""
+        return self._invoke(
+            lambda: self._application.acquire_change_action(
+                DeliveryContinuationRequest(
+                    change_id=change_id,
+                    expected_basis=body.expected_basis,
+                    capabilities=tuple(body.capabilities),
+                    host_id=body.host_id,
+                    session_id=body.session_id,
+                )
+            )
+        )
+
+    def execute_change_action(
+        self,
+        change_id: str,
+        body: ContinuationExecutionBody,
+    ) -> DeliveryEngineActionResult:
+        """Invoke only the engine-owned operation already acquired for this Change."""
+        return self._invoke(
+            lambda: self._application.execute_change_action(
+                ExecuteDeliveryChangeAction(change_id=change_id, operation_id=body.operation_id)
+            )
+        )
+
     def mark_ready(self, change_id: str) -> object:
         """Mark the current exact finalized pull request ready."""
         return self._invoke(lambda: self._application.mark_current_change_ready(change_id))
@@ -184,6 +297,24 @@ class TargetCockpitService:
     def observe_acceptance(self, change_id: str) -> object:
         """Observe provider acceptance without merge authority."""
         return self._invoke(lambda: self._application.observe_acceptance(change_id))
+
+    def approve_merge(self, change_id: str, body: ApproveMergeBody) -> MergeApprovalResponse:
+        """Approve the exact offer the user confirmed; Delivery sends its single request (N05 D14)."""
+        request = ApproveChangeMerge(
+            change_id=change_id,
+            offer_id=body.offer_id,
+            submission_id=body.submission_id,
+            host_id=_APPROVAL_HOST_ID,
+            session_id=_APPROVAL_SESSION_ID,
+        )
+
+        def approve() -> MergeApprovalResult:
+            try:
+                return self._application.approve_merge(request)
+            except DeliveryMergeError as exc:
+                _merge_http_error(exc)
+
+        return MergeApprovalResponse.from_result(self._invoke(approve))
 
     def adopt_external_head_after_acceptance_attention(
         self,
@@ -207,22 +338,16 @@ class TargetCockpitService:
         receipt = self._invoke(lambda: self._application.observe_change_publication_checks(change_id))
         return PublicationChecksObservationResponse.from_receipt(receipt)
 
-    def reconcile_acceptance(
-        self,
-        change_ids: tuple[str, ...] | None,
-    ) -> AcceptanceReconciliationResponse:
-        """Reconcile visible awaiting-merge Changes as one isolated batch."""
-        outcomes = self._invoke(lambda: self._application.reconcile_awaiting_acceptance(change_ids))
-        return AcceptanceReconciliationResponse(
-            outcomes=tuple(AcceptanceReconciliationOutcomeResponse.from_result(item) for item in outcomes),
-        )
-
     def resolve_attention(self, change_id: str, body: ResolveChangeAttentionBody) -> object:
         """Resolve one exact Change attention record without restoring provider authority."""
         return self._invoke(
-            lambda: self._application.resolve_change_disposition(
-                change_id,
-                body.expected_disposition_id,
+            lambda: self._application.answer(
+                DeliveryAnswer(
+                    change_id=change_id,
+                    kind=DeliveryAnswerKind.DISPOSITION,
+                    expected_frontier_digest=body.expected_frontier_digest,
+                    expected_disposition_id=body.expected_disposition_id,
+                )
             )
         )
 
@@ -266,15 +391,41 @@ class TargetCockpitService:
 
     def defer_change(self, change_id: str, body: ChangeDispositionReasonBody) -> object:
         """Retain one Change while pausing its claimable frontier."""
-        return self._invoke(lambda: self._application.defer_change(change_id, body.reason))
+        return self._invoke(
+            lambda: self._application.set_change_intent(
+                DeliveryChangeIntent(
+                    change_id=change_id,
+                    kind=DeliveryChangeIntentKind.DEFER,
+                    expected_frontier_digest=body.expected_frontier_digest,
+                    reason=body.reason,
+                )
+            )
+        )
 
-    def resume_change(self, change_id: str) -> object:
+    def resume_change(self, change_id: str, body: ResumeChangeBody) -> object:
         """Resume one exact deferred Change."""
-        return self._invoke(lambda: self._application.resume_change(change_id))
+        return self._invoke(
+            lambda: self._application.set_change_intent(
+                DeliveryChangeIntent(
+                    change_id=change_id,
+                    kind=DeliveryChangeIntentKind.RESUME,
+                    expected_frontier_digest=body.expected_frontier_digest,
+                )
+            )
+        )
 
     def abandon_change(self, change_id: str, body: AbandonChangeBody) -> object:
         """Terminate one uncompleted Change by explicit user disposition."""
-        return self._invoke(lambda: self._application.abandon_change(change_id, body.reason))
+        return self._invoke(
+            lambda: self._application.set_change_intent(
+                DeliveryChangeIntent(
+                    change_id=change_id,
+                    kind=DeliveryChangeIntentKind.ABANDON,
+                    expected_frontier_digest=body.expected_frontier_digest,
+                    reason=body.reason,
+                )
+            )
+        )
 
     def cleanup_abandoned_change_worktree(self, change_id: str) -> ChangeWorktreeCleanupResponse:
         """Clean one abandoned Change worktree without reopening its terminal state."""
@@ -348,6 +499,7 @@ class TargetCockpitService:
                 failure.code,
                 failure.detail,
                 retry_safe=failure.retry_safe,
+                retry_after=exc.retry_after if isinstance(exc, DeliveryWorkerActiveError) else None,
             )
 
 
@@ -422,9 +574,28 @@ def _register_queries(router: APIRouter) -> None:
 def _register_controls(router: APIRouter) -> None:
     _register_request_controls(router)
     _register_outcome_controls(router)
+    _register_continuation_controls(router)
     _register_publication_controls(router)
     _register_target_controls(router)
     _register_worktree_controls(router)
+
+
+def _register_continuation_controls(router: APIRouter) -> None:
+    @router.post("/changes/{change_id}/continuation/acquire", response_model=DeliveryContinuationResult)
+    def acquire_change_action(
+        change_id: str,
+        body: ContinuationAcquisitionBody,
+        service: _TargetService,
+    ) -> DeliveryContinuationResult:
+        return service.acquire_change_action(change_id, body)
+
+    @router.post("/changes/{change_id}/continuation/execute", response_model=DeliveryEngineActionResult)
+    def execute_change_action(
+        change_id: str,
+        body: ContinuationExecutionBody,
+        service: _TargetService,
+    ) -> DeliveryEngineActionResult:
+        return service.execute_change_action(change_id, body)
 
 
 def _register_request_controls(router: APIRouter) -> None:
@@ -449,6 +620,25 @@ def _register_outcome_controls(router: APIRouter) -> None:
     ) -> object:
         return service.clear_block(change_id, outcome_id, block_id, body)
 
+    @router.post("/changes/{change_id}/outcomes/{outcome_id}/blocks/{block_id}/grant-attempt")
+    def grant_attempt(
+        change_id: str,
+        outcome_id: str,
+        block_id: str,
+        body: GrantAttemptBody,
+        service: _TargetService,
+    ) -> object:
+        return service.grant_attempt(change_id, outcome_id, block_id, body)
+
+    @router.post("/changes/{change_id}/retry-attempts/{attempt_id}/grant")
+    def grant_retry_attempt(
+        change_id: str,
+        attempt_id: str,
+        body: GrantAttemptBody,
+        service: _TargetService,
+    ) -> object:
+        return service.grant_retry_attempt(change_id, attempt_id, body)
+
     @router.post("/changes/{change_id}/outcomes/{outcome_id}/claims/recover")
     def recover_claim(
         change_id: str,
@@ -457,6 +647,14 @@ def _register_outcome_controls(router: APIRouter) -> None:
         service: _TargetService,
     ) -> object:
         return service.recover_claim(change_id, outcome_id, body)
+
+    @router.post("/changes/{change_id}/workers/release-stuck")
+    def release_stuck_worker(
+        change_id: str,
+        body: ReleaseStuckWorkerBody,
+        service: _TargetService,
+    ) -> object:
+        return service.release_stuck_worker(change_id, body)
 
     @router.post("/changes/{change_id}/outcomes/{outcome_id}/move-backward")
     def move_backward(
@@ -479,16 +677,6 @@ def _register_outcome_controls(router: APIRouter) -> None:
 
 def _register_publication_controls(router: APIRouter) -> None:  # noqa: C901
     @router.post(
-        "/work-items/acceptance/reconcile",
-        response_model=AcceptanceReconciliationResponse,
-    )
-    def reconcile_acceptance(
-        body: AcceptanceReconciliationRequest,
-        service: _TargetService,
-    ) -> AcceptanceReconciliationResponse:
-        return service.reconcile_acceptance(tuple(body.change_ids) if body.change_ids is not None else None)
-
-    @router.post(
         "/changes/{change_id}/publication/reconcile",
         response_model=WorkItemPublicationReconciliationResponse,
     )
@@ -505,6 +693,10 @@ def _register_publication_controls(router: APIRouter) -> None:  # noqa: C901
     @router.post("/changes/{change_id}/acceptance/observe")
     def observe_acceptance(change_id: str, service: _TargetService) -> object:
         return service.observe_acceptance(change_id)
+
+    @router.post("/changes/{change_id}/approve-merge", response_model=MergeApprovalResponse)
+    def approve_merge(change_id: str, body: ApproveMergeBody, service: _TargetService) -> MergeApprovalResponse:
+        return service.approve_merge(change_id, body)
 
     @router.post(
         "/changes/{change_id}/acceptance/external-head/adopt",
@@ -555,8 +747,12 @@ def _register_publication_controls(router: APIRouter) -> None:  # noqa: C901
         return service.defer_change(change_id, body)
 
     @router.post("/changes/{change_id}/resume")
-    def resume_change(change_id: str, service: _TargetService) -> object:
-        return service.resume_change(change_id)
+    def resume_change(
+        change_id: str,
+        body: ResumeChangeBody,
+        service: _TargetService,
+    ) -> object:
+        return service.resume_change(change_id, body)
 
 
 def _register_target_controls(router: APIRouter) -> None:
@@ -675,16 +871,36 @@ def _http_status(category: DeliveryFailureCategory) -> int:
     return 409
 
 
-def _http_error(status_code: int, code: object, detail: str, *, retry_safe: bool) -> None:
-    raise HTTPException(
-        status_code=status_code,
-        detail={
-            "code": str(code),
-            "detail": detail,
-            "authority": "delivery",
-            "retry_safe": retry_safe,
-        },
-    )
+def _merge_http_error(error: DeliveryMergeError) -> NoReturn:
+    """Stale and in-progress refusals are 409; an unverifiable offer is 503. Both carry the fresh readiness."""
+    unavailable = error.code == ERR_MERGE_UNAVAILABLE
+    content: dict[str, object] = {
+        "code": error.code,
+        "detail": str(error),
+        "authority": "delivery",
+        "retry_safe": unavailable,
+        "readiness": error.readiness.model_dump(mode="json") if error.readiness is not None else None,
+    }
+    raise HTTPException(status_code=503 if unavailable else 409, detail=content)
+
+
+def _http_error(
+    status_code: int,
+    code: object,
+    detail: str,
+    *,
+    retry_safe: bool,
+    retry_after: datetime | None = None,
+) -> None:
+    content: dict[str, object] = {
+        "code": str(code),
+        "detail": detail,
+        "authority": "delivery",
+        "retry_safe": retry_safe,
+    }
+    if retry_after is not None:
+        content["retry_after"] = retry_after.isoformat().replace("+00:00", "Z")
+    raise HTTPException(status_code=status_code, detail=content)
 
 
 async def handle_target_http_error(request: Request, exc: Exception) -> JSONResponse:

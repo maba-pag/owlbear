@@ -62,20 +62,40 @@ repository.
 
 | Attribute | Value |
 | --- | --- |
-| Node development pin | `24.19.0` (`web/.nvmrc`) |
-| Node support/build floor | `>=24.16.0` (`web/package.json`) |
+| Node development pin | `24.21.0` (`web/.nvmrc`) |
+| Node engine floor | `>=24.21.0` (`web/package.json`) |
 | Stack | React `^19.2.7`, Vite `^8.1.5`, TypeScript `^6.0.3`, React Router `^8.2.0`, Porsche Design System React `^4.5.0`, React Compiler (`babel-plugin-react-compiler` `^1.0.0`), Tailwind CSS `^4.3.3` (`@tailwindcss/vite` + `tailwindcss`) |
 | Test runner | Vitest `^4.1.10` (`npm test`) |
 | E2E runner | Playwright `^1.61.1` (`npm run test:e2e`) |
-| Browser output target | Chrome/Edge `123`, Firefox `120`, Safari/iOS `17.5` (native `light-dark()` floor) |
-| CSS/HTML lint | Stylelint `^17.12.0` (`npm run lint:css`), HTMLHint `^1.9.2` (`npm run lint:html`) |
+| Browser output target | Chrome/Edge `123` (native `light-dark()` floor) |
+| CSS/HTML lint | Biome `2.5.11`, HTMLHint `^1.9.2` (`npm run lint:html`) |
 | Build output | `serve/cockpit/dist/` via `npm run build` |
 
 The Node development pin is the reproducible local toolchain; the support/build floor is the
-oldest Cockpit runtime exercised in CI. Vite compiles JavaScript and CSS for the listed browser
-target but does not polyfill missing Web APIs. The browser floor includes native `light-dark()`
-support; TypeScript's `ES2020` target is a type-checking configuration here because the project
-uses `noEmit`.
+Node is pinned to `24.21.0` for local development and CI, and the package engine floor matches it.
+Vite targets Chrome and Edge `123` and does not polyfill missing Web APIs. The target includes
+native `light-dark()` support; TypeScript's `ES2020` target is a type-checking configuration here
+because the project uses `noEmit`.
+
+## Frontend Quality
+
+From the development checkout root, `uv run lint-cockpit` applies safe Biome fixes and runs
+HTMLHint. Use `--no-fix` for check-only runs or `--unsafe-fix` to opt into unsafe Biome fixes.
+`uv run format-biome` formats without lint fixes; `uv run format` includes it. Both commands
+support `--staged`. `uv run help quality` lists the complete command tree and options.
+`uv run typecheck-cockpit` checks both the application and all E2E TypeScript inputs.
+
+The root [Biome configuration](../../biome.json) owns frontend code, configuration, scripts,
+CSS, and repository JSON/JSONC. Git ignores and explicit exclusions protect generated, vendored,
+and machine-managed files. Biome natively skips npm lockfiles. The PDS plugin retains the ban on
+raw interactive PDS elements. Other lint rules use Biome's recommended preset.
+
+Formatting imports [EditorConfig](../../.editorconfig). `lineWidth: 120` is also explicit because
+Biome 2.5.11 did not reliably inherit that value in this checkout; 120 is a wrapping target, not
+a hard limit for unsplittable strings. VS Code selects Biome for supported owned languages while
+format-on-save remains off. CI runs the complete `npm run lint:biome:ci` scope, including on
+configuration-only changes and manual dispatch. Package scripts anchor Biome at the repository
+root regardless of the caller's working directory.
 
 ## Browser-backed tests
 
@@ -103,17 +123,9 @@ npm run test:e2e:compat
 ```
 
 The compatibility gate uses a separate Playwright configuration and runs only the shell and PDS
-smoke scenarios against the Playwright-pinned Chromium engine. To run the full cross-engine matrix
-locally, install all three engines and use the explicit full-suite command:
-
-```shell
-npx playwright install chromium firefox webkit
-npm run test:e2e:compat:all
-```
-
-The full matrix does not execute the exact minimum browser versions in the output-target table.
-On Ubuntu CI, manual workflow dispatch runs the full matrix with `--with-deps`; pull-request CI
-uses the Chromium-only gate. The maintained fast and assembled suites remain Chromium-only.
+smoke scenarios against the Playwright-pinned Chromium engine. Pull-request CI and manual dispatch
+both install and test Chromium only. Chrome and Edge are the supported browser families; consumers
+use the prebuilt bundle and do not run these developer-only tests.
 
 ## Delivery Evidence
 
@@ -123,7 +135,8 @@ Cockpit projects current Delivery state and user-owned controls without becoming
 | --- | --- |
 | Outcome portfolio | Admitted outcomes, dependencies, Planning/Build stages, task progress, and explicit per-Change admission/runtime status from `PortfolioApplication` |
 | Actionable attention | Typed requests, requestless blocks, long-idle claims, revision attention, publication and target-sync attention, and acceptance attention |
-| User controls | Answer requests, clear blocks, recover confirmed-dead claims or worktrees, move backward, reconcile target-sync conflicts, supersede a publication, and observe acceptance |
+| Acceptance evidence | Each acceptance criterion's status and evidence records from Delivery's evidence projection |
+| User controls | Copy continuation prompt, Pause and Resume, answer requests, clear blocks, release workers, request recovery, move backward, approve merge, observe acceptance |
 | Completed history | Bounded list, semantic search, and exact completed-change lookup |
 | Startup authority | Tracked `.owlbear/delivery/config.json` and validated canonical Delivery roots |
 
@@ -131,27 +144,37 @@ The `/api/work-items` response consumes Delivery's explicit status axes. A packa
 unadmitted Design only when persisted admission is absent. An admitted Change with no tasks is a
 valid Planning state and reports `Task plan not published`; an admitted but non-actionable Change
 retains its admission state and reports the generic `runtime_unavailable` diagnostic.
+`recover_claim` remains an exact recovery request and does not prove worker closure; it refuses with
+`ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` when supported host exclusion is unavailable. Separately,
+Cockpit's "Release stuck worker" action calls `release_stuck_worker` after the user identifies a
+stopped chat. Delivery requires no worktree writes for 30 seconds and no live same-user process with a
+cwd or open file under the managed worktree or Git admin directory; terminal-attached idle shells with
+no live child are ignored unless an open file matches. `ERR_DELIVERY_WORKER_ACTIVE` includes a retry time when the write
+guard is pending, or process details otherwise, and leaves custody and files unchanged. The action
+does not operate the process. See the
+[operator recovery boundary](../../setup/operating-owlbear.md#correction-and-recovery).
 
 The current frontend polls `/api/work-items` every three seconds. Each poll observes a reconciled
 Delivery read, so an already-running Cockpit can see newly admitted Changes without a process
 restart. Polling does not reload the full application, use SSE, or replace persisted Delivery
 authority.
 
-The assembled FastAPI inventory preserves 21 POST routes for user-owned controls:
+The assembled FastAPI inventory preserves 27 POST routes for user-owned controls:
 
 | Control family | Preserved operations | Routes |
 | --- | --- | ---: |
-| Requests and outcomes | Answer a request; clear a requestless block; recover a claim; preview a backward move; apply a backward move | 5 |
-| Publication and acceptance | Reconcile acceptance; reconcile a publication; mark ready; observe acceptance; observe publication checks; resolve attention; supersede a publication; defer; resume | 9 |
-| Target and worktree | Sync with target; abort or resolve a target conflict; abandon a Change; clean up abandoned or completed worktrees; recover a worktree | 7 |
+| Continuation | Acquire the selected Change's next action; execute an acquired engine action | 2 |
+| Requests and outcomes | Answer/clear; release stopped worker; request recovery; move backward | 6 |
+| Publication and acceptance | Reconcile acceptance; reconcile a publication; mark ready; observe acceptance; approve merge; adopt an external head; observe publication checks; resolve attention; supersede a publication; defer; resume | 11 |
+| Target and worktree | Sync with target; abort or resolve a target conflict; abandon a Change; clean up abandoned or completed worktrees, or discard a target merge and clean up; recover a worktree | 8 |
 
 These controls remain Cockpit user authority and continue to use the Delivery domain methods and
 locks. Cockpit does not schedule work, choose worker transitions, interpret reviewer evidence, or
 silently turn these controls into agent actions.
 
 Cause-specific missing-coordination classification is deferred to a separate follow-up Change.
-Delivery MCP user-control parity is also deferred: this remediation adds no Delivery MCP operation,
-and any later parity work must define explicit user confirmation and reuse the core Delivery
+Stopped-worker release is available through both Cockpit and Delivery MCP. Broader user-control parity
+remains deferred; later operations must define explicit user confirmation and reuse core Delivery
 methods.
 
 Cockpit calls the same transport-free application owners used by the MCP adapter but exposes the

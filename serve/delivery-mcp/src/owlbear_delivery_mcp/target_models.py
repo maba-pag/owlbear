@@ -6,15 +6,17 @@ import json
 from functools import partial
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator, model_validator
 
 from owlbear_delivery.change_publication import ChangeBranchSupersessionReceipt
 from owlbear_delivery.change_workspace import (
     ChangeExternalHeadAdoptionReceipt,
     ChangeExternalHeadPromotionReceipt,
+    ChangePauseRequest,
     ChangeTargetSyncAbortReceipt,
     ChangeTargetSyncReceipt,
     ChangeWorktreeAttentionCode,
+    OutOfBandHeadRecoveryReceipt,
     PublicationBaselineRecoveryReceipt,
 )
 from owlbear_delivery.delivery_admission import DeliveryAdmissionRequest
@@ -22,42 +24,74 @@ from owlbear_delivery.delivery_application_loader import DeliveryStartupConfig
 from owlbear_delivery.delivery_runtime import (
     AdministrativeDeliveryMovePreview,
     AdministrativeDeliveryMoveResult,
+    BlockDelivery,
     DeliveryBlock,
+    DeliveryBuilderInvocationSettlement,
+    DeliveryChangeAbandonment,
+    DeliveryChangeDeferral,
+    DeliveryChangeDispositionResolution,
     DeliveryChangePublicationHistory,
     DeliveryChangeStage,
     DeliveryIntegrationAttentionCode,
     DeliveryIntegrationAttentionDisposition,
+    DeliveryObservation,
+    DeliveryObservationReceipt,
     DeliveryOperatorMove,
     DeliveryOutputReference,
     DeliveryPlanCandidate,
+    DeliveryPlanningRetrySettlement,
     DeliveryRequest,
     DeliveryRequestResolution,
-    DeliveryResultCandidate,
+    DeliveryRetryDiagnostic,
     DeliveryReturnContext,
+    DeliveryReview,
+    DeliveryReviewReceipt,
     DeliveryStage,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
     DeliveryTransition,
     DeliveryWorkerRole,
     FinalizeDeliveryChange,
+    OutcomeAuthorityBinding,
     PublishDeliveryPlan,
-    PublishDeliveryResult,
+    ReturnDelivery,
 )
+from owlbear_delivery.design_package import DesignPackageManifest, DesignPackageResult
 from owlbear_delivery.draft_pull_request import DraftPullRequestSupersessionReceipt, MarkChangePullRequestReady
+from owlbear_delivery.evidence import DeliveryEvidenceProjection
+from owlbear_delivery.finalization_reports import (
+    FinalizerSettlement,
+    ReportFinalizationFailure,
+)
 from owlbear_delivery.identities import ChangeId
 from owlbear_delivery.portfolio_application import (
+    DeliveryActionSelection,
+    DeliveryAnswerKind,
+    DeliveryChangeIntentKind,
+    DeliveryChangeIntentResult,
     DeliveryChangePublicationSupersessionReceipt,
     DeliveryChangeWorktreeCleanup,
     DeliveryChangeWorktreeRecovery,
+    DeliveryContinuationRequest,
     DeliveryOperatorContext,
+    DeliveryQuarantinedSnapshotRepairProposal,
+    DeliveryQuarantinedSnapshotRepairReceipt,
+    DeliveryResultSubmissionResult,
     DeliveryRetainedChangeWorktree,
     DeliveryRetainedWorktreeCleanupBlockReason,
+    DeliveryStateSnapshotRepairReceipt,
+    DeliveryStrandedFrontierRepairReceipt,
     DeliveryTargetSyncRepairReceipt,
+    ExecuteDeliveryChangeAction,
 )
 from owlbear_delivery.portfolio_operating import (
+    DeliveryHealthHeadRelation,
+    DeliveryHealthReason,
+    DeliveryHealthResolution,
     DeliveryHealthStatus,
     DeliveryHealthView,
 )
+from owlbear_delivery.runtime_models import MAX_EVIDENCE_GAPS, DeliveryEvidenceGap
 
 
 class _TargetProtocolModel(BaseModel):
@@ -93,6 +127,9 @@ class TargetDiagnostic(_TargetProtocolModel):
     detail: str = Field(min_length=1)
     current_authority_identity: str = Field(min_length=1)
     retry_safe: bool
+    gaps: tuple[DeliveryEvidenceGap, ...] | None = Field(
+        default=None, max_length=MAX_EVIDENCE_GAPS, exclude_if=lambda value: value is None
+    )
 
 
 class DeliveryHealthDiagnosticResponse(_TargetProtocolModel):
@@ -104,6 +141,12 @@ class DeliveryHealthDiagnosticResponse(_TargetProtocolModel):
     change_id: str | None = Field(default=None, min_length=1)
     path: str | None = Field(default=None, min_length=1)
     retry_safe: bool
+    reason: DeliveryHealthReason
+    resolution: DeliveryHealthResolution
+    expected_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    observed_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    observed_local_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    head_relation: DeliveryHealthHeadRelation | None = None
 
 
 class DeliveryHealthResponse(_TargetProtocolModel):
@@ -127,28 +170,100 @@ class EmptyParams(_TargetProtocolModel):
     """Validate an operation that accepts no parameters."""
 
 
+class AcquireActionsParams(_TargetProtocolModel):
+    """Select one fenced action or explicitly request portfolio acquisition."""
+
+    selection: DeliveryActionSelection | None = None
+
+
 class ChangeParams(_TargetProtocolModel):
     """Validate one exact Delivery change identity."""
 
     change_id: ChangeId
 
 
-class ResolveChangeDispositionParams(ChangeParams):
-    """Validate one exact Change attention identity for explicit resolution."""
-
-    expected_disposition_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+class ReportFinalizationFailureParams(ReportFinalizationFailure):
+    """Validate one bounded finalization diagnostic through MCP."""
 
 
-class DeferChangeParams(ChangeParams):
-    """Validate one user-requested Change deferral."""
+class AnswerParams(ChangeParams):
+    """Validate one version-bound request or requestless-block answer."""
 
-    reason: str = Field(min_length=1)
+    kind: DeliveryAnswerKind = DeliveryAnswerKind.REQUEST
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    request_id: str | None = None
+    resolution: DeliveryRequestResolution | None = None
+    outcome_id: str | None = Field(default=None, pattern=r"^OUT-[0-9]{3}$")
+    block_id: str | None = None
+    operator_note: str | None = None
+    locators: tuple[str, ...] = ()
+    expected_disposition_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+    @field_validator("kind")
+    @classmethod
+    def _refuse_user_only_kind(cls, kind: DeliveryAnswerKind) -> DeliveryAnswerKind:
+        if kind is DeliveryAnswerKind.GRANT_ATTEMPT:
+            message = "one more Builder, Planner, or Finalizer attempt is granted only by the user in Cockpit"
+            raise ValueError(message)
+        return kind
+
+    @model_validator(mode="after")
+    def _validate_target(self) -> AnswerParams:
+        if self.kind is DeliveryAnswerKind.REQUEST:
+            if self.request_id is None or self.resolution is None:
+                message = "request answers require request identity and resolution"
+                raise ValueError(message)
+            if any((self.outcome_id, self.block_id, self.operator_note, self.expected_disposition_id)) or self.locators:
+                message = "request answers cannot include block evidence"
+                raise ValueError(message)
+        elif self.kind is DeliveryAnswerKind.BLOCK:
+            if (
+                self.outcome_id is None
+                or self.block_id is None
+                or self.operator_note is None
+                or not self.operator_note.strip()
+                or not self.locators
+            ):
+                message = "block answers require outcome, block, note, and locators"
+                raise ValueError(message)
+            if self.request_id is not None or self.resolution is not None or self.expected_disposition_id is not None:
+                message = "block answers cannot include request resolution"
+                raise ValueError(message)
+        else:
+            if self.expected_disposition_id is None:
+                message = "disposition answers require an expected disposition identity"
+                raise ValueError(message)
+            if any((self.request_id, self.outcome_id, self.block_id, self.operator_note)) or self.locators:
+                message = "disposition answers cannot include request or block evidence"
+                raise ValueError(message)
+        return self
 
 
-class AbandonChangeParams(ChangeParams):
-    """Validate one user-requested terminal Change abandonment."""
+class PutDesignParams(ChangeParams):
+    """Validate one create-or-CAS-revise authored Design request."""
 
-    reason: str = Field(min_length=1)
+    intent_bytes: bytes
+    design_bytes: bytes
+    expected_package_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+
+class SetChangeIntentParams(ChangeParams):
+    """Validate one version-bound pause, resume, or abandon intent."""
+
+    kind: DeliveryChangeIntentKind
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    reason: str | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_reason(self) -> SetChangeIntentParams:
+        if self.kind is DeliveryChangeIntentKind.RESUME:
+            if self.reason is not None:
+                message = "resume intent does not accept a reason"
+                raise ValueError(message)
+        elif self.reason is None or not self.reason.strip():
+            message = "defer and abandon intents require a reason"
+            raise ValueError(message)
+        return self
 
 
 class CleanupAbandonedChangeParams(ChangeParams):
@@ -216,20 +331,11 @@ class OperatorContextParams(ChangeParams):
     outcome_id: str = Field(min_length=1)
 
 
-class ResolveRequestParams(ChangeParams):
-    """Validate one user-owned answer for a retained Delivery request."""
+class RepairChangeParams(ChangeParams):
+    """Validate one high-level repair diagnosis or proposal application."""
 
-    request_id: str = Field(min_length=1)
-    resolution: DeliveryRequestResolution
-
-
-class ClearBlockParams(ChangeParams):
-    """Validate operator evidence for one requestless same-stage block."""
-
-    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
-    block_id: str = Field(min_length=1)
-    operator_note: str = Field(min_length=1)
-    locators: tuple[str, ...] = Field(min_length=1)
+    proposal_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    confirmed_lost: bool = False
 
 
 class PreviewAdministrativeMoveParams(ChangeParams):
@@ -247,6 +353,20 @@ class ClaimContextParams(ChangeParams):
     claim_id: str = Field(min_length=1)
 
 
+class RecoverClaimParams(ClaimContextParams):
+    """Retain the legacy request shape; confirmation supplies no exclusion evidence."""
+
+    confirmed_lost: Literal[True]
+
+
+class ReleaseStuckWorkerParams(ChangeParams):
+    """Validate one exact active worker release; a null outcome names the Change's Finalizer attempt."""
+
+    outcome_id: str | None = Field(default=None, pattern=r"^OUT-[0-9]{3}$")
+    attempt_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
+
+
 class RepairClaimContextParams(ChangeParams):
     """Validate one exact active change-level Integration repair claim."""
 
@@ -260,10 +380,12 @@ class PublishDeliveryPlanParams(ChangeParams):
     plan: PublishDeliveryPlan
 
 
-class PublishDeliveryResultParams(ChangeParams):
-    """Validate one Build result publication."""
+class SubmitResultParams(ChangeParams):
+    """Validate one claim-bound Builder result submission and promotion."""
 
-    result: PublishDeliveryResult
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    claim_id: str = Field(min_length=1)
+    result: DeliveryTaskResult
 
 
 class FinalizeDeliveryChangeParams(ChangeParams):
@@ -326,6 +448,63 @@ class RepairTargetSyncPublicationParams(ChangeParams):
     expected_remote_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     expected_merged_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     target_sync_operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+class DeriveEvidenceReceiptsParams(_TargetProtocolModel):
+    """Validate observation and review content whose canonical receipts a worker submits."""
+
+    observations: tuple[DeliveryObservation, ...] = ()
+    review: DeliveryReview | None = None
+
+    @model_validator(mode="after")
+    def _validate_content(self) -> DeriveEvidenceReceiptsParams:
+        if not self.observations and self.review is None:
+            message = "deriving evidence receipts requires an observation or a review"
+            raise ValueError(message)
+        return self
+
+
+class DerivedEvidenceReceiptsResponse(_TargetProtocolModel):
+    """Canonical receipts, in request order, to pass unchanged to review and submission."""
+
+    observations: tuple[DeliveryObservationReceipt, ...] = ()
+    review: DeliveryReviewReceipt | None = None
+
+
+class RepairDeliveryStateSnapshotParams(ChangeParams):
+    """Validate explicit repair of one quarantined local Delivery frontier."""
+
+    confirmed_repair: Literal[True]
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+class RepairStrandedFrontierParams(ChangeParams):
+    """Validate explicit repair of one missing request-provenance defect."""
+
+    confirmed_repair: Literal[True]
+    request_id: str = Field(min_length=1)
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+class RepairQuarantinedDeliveryStateSnapshotParams(ChangeParams):
+    """Validate explicit repair of one quarantined remote Delivery snapshot."""
+
+    confirmed_repair: Literal[True]
+    expected_remote_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    expected_snapshot_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_diagnostic_code: Literal["snapshot-invalid", "snapshot-identity-invalid"]
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+class RecoverOutOfBandHeadParams(ChangeParams):
+    """Validate explicit recovery of one out-of-band Change head."""
+
+    confirmed_recovery: Literal[True]
+    expected_reviewed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    expected_remote_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    expected_branch_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
@@ -435,21 +614,6 @@ class ChangePublicationBaselineRecoveryResponse(_TargetProtocolModel):
         return cls(**receipt.model_dump())
 
 
-class DeliveryResultPublication(_TargetProtocolModel):
-    """Build publication response with its transition-ready output reference."""
-
-    candidate_id: str = Field(min_length=1)
-    claim_id: str = Field(min_length=1)
-    digest: str = Field(pattern=r"^[0-9a-f]{64}$")
-    result: DeliveryTaskResult
-    output: DeliveryOutputReference
-
-    @classmethod
-    def from_candidate(cls, candidate: DeliveryResultCandidate) -> DeliveryResultPublication:
-        """Project one domain candidate into its complete MCP response."""
-        return cls(**candidate.model_dump(), output=candidate.output)
-
-
 class DeliveryOperatorClaimResponse(_TargetProtocolModel):
     """Bounded active-claim identity for operator diagnostics."""
 
@@ -458,6 +622,7 @@ class DeliveryOperatorClaimResponse(_TargetProtocolModel):
     started_at: str = Field(min_length=1)
     worker_role: DeliveryWorkerRole
     task_id: str | None = None
+    owner_id: str | None = None
 
 
 class DeliveryOperatorRecoveryAttentionResponse(_TargetProtocolModel):
@@ -468,6 +633,7 @@ class DeliveryOperatorRecoveryAttentionResponse(_TargetProtocolModel):
     reason: str = Field(min_length=1)
     custody_retained: bool
     retry_condition: str = Field(min_length=1)
+    diagnostic_transition: Annotated[BlockDelivery | ReturnDelivery, Field(discriminator="action")] | None = None
 
 
 class DeliveryOperatorIntegrationAttentionResponse(_TargetProtocolModel):
@@ -490,7 +656,9 @@ class DeliveryOperatorContextResponse(_TargetProtocolModel):
     active_claim: DeliveryOperatorClaimResponse | None = None
     return_context: DeliveryReturnContext | None = None
     recovery_attention: DeliveryOperatorRecoveryAttentionResponse | None = None
+    retry_diagnostic: DeliveryRetryDiagnostic | None = None
     integration_attention: DeliveryOperatorIntegrationAttentionResponse | None = None
+    evidence: DeliveryEvidenceProjection | None = None
 
     @classmethod
     def from_context(cls, context: DeliveryOperatorContext) -> DeliveryOperatorContextResponse:
@@ -511,11 +679,13 @@ class DeliveryOperatorContextResponse(_TargetProtocolModel):
                     started_at=active_claim.started_at,
                     worker_role=active_claim.worker_role,
                     task_id=active_claim.task_id,
+                    owner_id=active_claim.owner_id,
                 )
                 if active_claim is not None
                 else None
             ),
             return_context=context.return_context,
+            retry_diagnostic=context.retry_diagnostic,
             recovery_attention=(
                 DeliveryOperatorRecoveryAttentionResponse(
                     attempt_id=recovery_attention.attempt_id,
@@ -523,6 +693,7 @@ class DeliveryOperatorContextResponse(_TargetProtocolModel):
                     reason=recovery_attention.reason,
                     custody_retained=recovery_attention.custody_retained,
                     retry_condition=recovery_attention.retry_condition,
+                    diagnostic_transition=recovery_attention.diagnostic_transition,
                 )
                 if recovery_attention is not None
                 else None
@@ -537,6 +708,7 @@ class DeliveryOperatorContextResponse(_TargetProtocolModel):
                 if integration_attention is not None
                 else None
             ),
+            evidence=context.evidence,
         )
 
 
@@ -545,6 +717,93 @@ class ResolvedDeliveryRequestResponse(_TargetProtocolModel):
 
     change_id: ChangeId
     request: DeliveryRequest
+
+
+class DeliveryAnswerResponse(_TargetProtocolModel):
+    """Bounded response for one version-bound request answer."""
+
+    change_id: ChangeId
+    kind: DeliveryAnswerKind
+    request: DeliveryRequest | None = None
+    binding: OutcomeAuthorityBinding | None = None
+    disposition: DeliveryChangeDispositionResolution | None = None
+    frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def _validate_result(self) -> DeliveryAnswerResponse:
+        if self.kind is DeliveryAnswerKind.REQUEST and self.request is None:
+            message = "request answer responses require the resolved request"
+            raise ValueError(message)
+        if self.kind is DeliveryAnswerKind.BLOCK and self.binding is None:
+            message = "block answer responses require the cleared binding"
+            raise ValueError(message)
+        if self.kind is DeliveryAnswerKind.DISPOSITION and self.disposition is None:
+            message = "disposition answer responses require the resolution receipt"
+            raise ValueError(message)
+        return self
+
+
+class PutDesignResponse(_TargetProtocolModel):
+    """Bounded response for one authored Design package write or replay."""
+
+    change_id: ChangeId
+    package_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    package_root: str = Field(min_length=1)
+    manifest: DesignPackageManifest
+    replayed: bool
+
+    @classmethod
+    def from_result(cls, result: DesignPackageResult) -> PutDesignResponse:
+        """Project one core Design package result into the strict MCP response."""
+        return cls(
+            change_id=result.change_id,
+            package_id=result.package_id,
+            package_root=str(result.package_root),
+            manifest=result.manifest,
+            replayed=result.replayed,
+        )
+
+
+class SetChangeIntentResponse(_TargetProtocolModel):
+    """Bounded response for one applied Change lifecycle intent."""
+
+    change_id: ChangeId
+    kind: DeliveryChangeIntentKind
+    frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    receipt: DeliveryChangeDeferral | DeliveryChangeAbandonment | ChangePauseRequest
+
+    @classmethod
+    def from_result(cls, result: DeliveryChangeIntentResult) -> SetChangeIntentResponse:
+        """Project one core intent result into the strict MCP response."""
+        return cls(
+            change_id=result.change_id,
+            kind=result.kind,
+            frontier_digest=result.frontier_digest,
+            receipt=result.receipt,
+        )
+
+
+class SubmitResultResponse(_TargetProtocolModel):
+    """Bounded response for one promoted Builder result."""
+
+    kind: Literal["submitted"] = "submitted"
+    change_id: ChangeId
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    claim_id: str = Field(min_length=1)
+    result_id: str = Field(min_length=1)
+    binding: OutcomeAuthorityBinding
+
+    @classmethod
+    def from_result(cls, result: DeliveryResultSubmissionResult) -> SubmitResultResponse:
+        """Project one core submission result into the strict MCP response."""
+        return cls(
+            kind=result.kind,
+            change_id=result.change_id,
+            outcome_id=result.outcome_id,
+            claim_id=result.claim_id,
+            result_id=result.result_id,
+            binding=result.binding,
+        )
 
 
 class ClearedDeliveryBlockResponse(_TargetProtocolModel):
@@ -666,6 +925,113 @@ class TargetSyncPublicationRepairResponse(_TargetProtocolModel):
         return cls(**receipt.model_dump())
 
 
+class DeliveryStateSnapshotRepairResponse(_TargetProtocolModel):
+    """MCP response for one exact Delivery-state frontier repair."""
+
+    schema_version: int = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(min_length=1)
+    change_id: ChangeId
+    snapshot_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    published_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    local_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @classmethod
+    def from_receipt(
+        cls,
+        receipt: DeliveryStateSnapshotRepairReceipt,
+    ) -> DeliveryStateSnapshotRepairResponse:
+        """Project one Delivery-state repair receipt into the MCP contract."""
+        return cls(**receipt.model_dump())
+
+
+class QuarantinedSnapshotRepairProposalResponse(_TargetProtocolModel):
+    """MCP proposal for one exact quarantined remote snapshot repair."""
+
+    change_id: ChangeId
+    diagnostic_code: Literal["snapshot-invalid", "snapshot-identity-invalid"]
+    expected_remote_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    snapshot_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    requires_confirmation: Literal[True] = True
+    consequence: str = Field(min_length=1)
+
+    @classmethod
+    def from_proposal(
+        cls,
+        proposal: DeliveryQuarantinedSnapshotRepairProposal,
+    ) -> QuarantinedSnapshotRepairProposalResponse:
+        """Project one core repair proposal into the strict MCP contract."""
+        return cls(**proposal.model_dump())
+
+
+class QuarantinedSnapshotRepairResponse(_TargetProtocolModel):
+    """MCP receipt for one exact quarantined remote snapshot repair."""
+
+    schema_version: int = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(min_length=1)
+    change_id: ChangeId
+    invalid_snapshot_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_remote_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    snapshot_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    published_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    diagnostic_code: Literal["snapshot-invalid", "snapshot-identity-invalid"]
+
+    @classmethod
+    def from_receipt(
+        cls,
+        receipt: DeliveryQuarantinedSnapshotRepairReceipt,
+    ) -> QuarantinedSnapshotRepairResponse:
+        """Project one core quarantined-snapshot repair receipt."""
+        return cls(**receipt.model_dump())
+
+
+class StrandedFrontierRepairResponse(_TargetProtocolModel):
+    """MCP receipt for one exact local frontier provenance repair."""
+
+    schema_version: int = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(min_length=1)
+    change_id: ChangeId
+    request_id: str = Field(min_length=1)
+    previous_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    preserved_frontier_path: str = Field(min_length=1)
+
+    @classmethod
+    def from_receipt(
+        cls,
+        receipt: DeliveryStrandedFrontierRepairReceipt,
+    ) -> StrandedFrontierRepairResponse:
+        """Project one core stranded-frontier repair receipt."""
+        return cls(**receipt.model_dump())
+
+
+class OutOfBandHeadRecoveryResponse(_TargetProtocolModel):
+    """MCP response for one preserved out-of-band Change head recovery."""
+
+    schema_version: int = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(min_length=1)
+    change_id: ChangeId
+    branch: str = Field(min_length=1)
+    worktree_path: str = Field(min_length=1)
+    expected_reviewed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    expected_remote_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    observed_branch_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    preserved_ref: str = Field(min_length=1)
+    preserved_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    restored_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+    @classmethod
+    def from_receipt(cls, receipt: OutOfBandHeadRecoveryReceipt) -> OutOfBandHeadRecoveryResponse:
+        """Project one out-of-band recovery receipt into the transport contract."""
+        return cls(
+            **receipt.model_dump(mode="json", exclude={"worktree_path"}),
+            worktree_path=str(receipt.worktree_path),
+        )
+
+
 class ChangeExternalHeadAdoptionResponse(_TargetProtocolModel):
     """MCP response for one exact external Change-head adoption or observation receipt."""
 
@@ -732,6 +1098,23 @@ class TransitionDeliveryParams(ChangeParams):
     transition: DeliveryTransition
 
 
+class SettleWorkerInvocationParams(_TargetProtocolModel):
+    """Validate one typed Planner, Builder, or Finalizer invocation settlement."""
+
+    settlement: FinalizerSettlement | DeliveryPlanningRetrySettlement | DeliveryBuilderInvocationSettlement
+    host_id: str | None = Field(default=None, min_length=1)
+    session_id: str | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_finalizer_identity_location(self) -> SettleWorkerInvocationParams:
+        if isinstance(self.settlement, FinalizerSettlement) and any(
+            value is not None for value in (self.host_id, self.session_id)
+        ):
+            message = "Finalizer host and session identities belong in the settlement"
+            raise ValueError(message)
+        return self
+
+
 class CompletedPageParams(_TargetProtocolModel):
     """Validate one bounded completed-history page request."""
 
@@ -763,17 +1146,26 @@ type AdmitDeliveryChangeRequest = Annotated[
     BeforeValidator(partial(_parse_json_model, DeliveryAdmissionRequest)),
 ]
 type ChangeRequest = Annotated[ChangeParams, BeforeValidator(partial(_parse_json_model, ChangeParams))]
+type AnswerRequest = Annotated[AnswerParams, BeforeValidator(partial(_parse_json_model, AnswerParams))]
+type PutDesignRequest = Annotated[
+    PutDesignParams,
+    BeforeValidator(partial(_parse_json_model, PutDesignParams)),
+]
+type SetChangeIntentRequest = Annotated[
+    SetChangeIntentParams,
+    BeforeValidator(partial(_parse_json_model, SetChangeIntentParams)),
+]
+type SubmitResultRequest = Annotated[
+    SubmitResultParams,
+    BeforeValidator(partial(_parse_json_model, SubmitResultParams)),
+]
 type OperatorContextRequest = Annotated[
     OperatorContextParams,
     BeforeValidator(partial(_parse_json_model, OperatorContextParams)),
 ]
-type ResolveRequestRequest = Annotated[
-    ResolveRequestParams,
-    BeforeValidator(partial(_parse_json_model, ResolveRequestParams)),
-]
-type ClearBlockRequest = Annotated[
-    ClearBlockParams,
-    BeforeValidator(partial(_parse_json_model, ClearBlockParams)),
+type RepairChangeRequest = Annotated[
+    RepairChangeParams,
+    BeforeValidator(partial(_parse_json_model, RepairChangeParams)),
 ]
 type PreviewAdministrativeMoveRequest = Annotated[
     PreviewAdministrativeMoveParams,
@@ -782,14 +1174,6 @@ type PreviewAdministrativeMoveRequest = Annotated[
 type AdministrativeMoveRequest = Annotated[
     AdministrativeMoveParams,
     BeforeValidator(partial(_parse_json_model, AdministrativeMoveParams)),
-]
-type DeferChangeRequest = Annotated[
-    DeferChangeParams,
-    BeforeValidator(partial(_parse_json_model, DeferChangeParams)),
-]
-type AbandonChangeRequest = Annotated[
-    AbandonChangeParams,
-    BeforeValidator(partial(_parse_json_model, AbandonChangeParams)),
 ]
 type CleanupAbandonedChangeRequest = Annotated[
     CleanupAbandonedChangeParams,
@@ -815,6 +1199,14 @@ type ClaimContextRequest = Annotated[
     ClaimContextParams,
     BeforeValidator(partial(_parse_json_model, ClaimContextParams)),
 ]
+type RecoverClaimRequest = Annotated[
+    RecoverClaimParams,
+    BeforeValidator(partial(_parse_json_model, RecoverClaimParams)),
+]
+type ReleaseStuckWorkerRequest = Annotated[
+    ReleaseStuckWorkerParams,
+    BeforeValidator(partial(_parse_json_model, ReleaseStuckWorkerParams)),
+]
 type CompletedPageRequest = Annotated[
     CompletedPageParams,
     BeforeValidator(partial(_parse_json_model, CompletedPageParams)),
@@ -824,6 +1216,18 @@ type CreateDesignSessionRequest = Annotated[
     BeforeValidator(partial(_parse_json_model, CreateDesignSessionParams)),
 ]
 type EmptyRequest = Annotated[EmptyParams, BeforeValidator(partial(_parse_json_model, EmptyParams))]
+type AcquireActionsRequest = Annotated[
+    AcquireActionsParams,
+    BeforeValidator(partial(_parse_json_model, AcquireActionsParams)),
+]
+type AcquireChangeActionRequest = Annotated[
+    DeliveryContinuationRequest,
+    BeforeValidator(partial(_parse_json_model, DeliveryContinuationRequest)),
+]
+type ExecuteChangeActionRequest = Annotated[
+    ExecuteDeliveryChangeAction,
+    BeforeValidator(partial(_parse_json_model, ExecuteDeliveryChangeAction)),
+]
 type FinalizeDeliveryChangeRequest = Annotated[
     FinalizeDeliveryChangeParams,
     BeforeValidator(partial(_parse_json_model, FinalizeDeliveryChangeParams)),
@@ -856,6 +1260,22 @@ type RepairTargetSyncPublicationRequest = Annotated[
     RepairTargetSyncPublicationParams,
     BeforeValidator(partial(_parse_json_model, RepairTargetSyncPublicationParams)),
 ]
+type RepairDeliveryStateSnapshotRequest = Annotated[
+    RepairDeliveryStateSnapshotParams,
+    BeforeValidator(partial(_parse_json_model, RepairDeliveryStateSnapshotParams)),
+]
+type RepairQuarantinedDeliveryStateSnapshotRequest = Annotated[
+    RepairQuarantinedDeliveryStateSnapshotParams,
+    BeforeValidator(partial(_parse_json_model, RepairQuarantinedDeliveryStateSnapshotParams)),
+]
+type RepairStrandedFrontierRequest = Annotated[
+    RepairStrandedFrontierParams,
+    BeforeValidator(partial(_parse_json_model, RepairStrandedFrontierParams)),
+]
+type RecoverOutOfBandHeadRequest = Annotated[
+    RecoverOutOfBandHeadParams,
+    BeforeValidator(partial(_parse_json_model, RecoverOutOfBandHeadParams)),
+]
 type PublishDeliveryPlanRequest = Annotated[
     PublishDeliveryPlanParams,
     BeforeValidator(partial(_parse_json_model, PublishDeliveryPlanParams)),
@@ -864,17 +1284,9 @@ type RepairClaimContextRequest = Annotated[
     RepairClaimContextParams,
     BeforeValidator(partial(_parse_json_model, RepairClaimContextParams)),
 ]
-type PublishDeliveryResultRequest = Annotated[
-    PublishDeliveryResultParams,
-    BeforeValidator(partial(_parse_json_model, PublishDeliveryResultParams)),
-]
 type ReviseDesignSessionRequest = Annotated[
     ReviseDesignSessionParams,
     BeforeValidator(partial(_parse_json_model, ReviseDesignSessionParams)),
-]
-type ResolveChangeDispositionRequest = Annotated[
-    ResolveChangeDispositionParams,
-    BeforeValidator(partial(_parse_json_model, ResolveChangeDispositionParams)),
 ]
 type SearchCompletedRequest = Annotated[
     SearchCompletedParams,
@@ -884,9 +1296,17 @@ type ShowCompletedRequest = Annotated[
     ShowCompletedParams,
     BeforeValidator(partial(_parse_json_model, ShowCompletedParams)),
 ]
+type DeriveEvidenceReceiptsRequest = Annotated[
+    DeriveEvidenceReceiptsParams,
+    BeforeValidator(partial(_parse_json_model, DeriveEvidenceReceiptsParams)),
+]
 type TransitionDeliveryRequest = Annotated[
     TransitionDeliveryParams,
     BeforeValidator(partial(_parse_json_model, TransitionDeliveryParams)),
+]
+type SettleWorkerInvocationRequest = Annotated[
+    SettleWorkerInvocationParams,
+    BeforeValidator(partial(_parse_json_model, SettleWorkerInvocationParams)),
 ]
 type WorkItemRequest = Annotated[WorkItemParams, BeforeValidator(partial(_parse_json_model, WorkItemParams))]
 type WorkItemViewRequest = Annotated[
@@ -896,13 +1316,16 @@ type WorkItemViewRequest = Annotated[
 
 
 __all__ = [
-    "AbandonChangeParams",
-    "AbandonChangeRequest",
+    "AcquireActionsParams",
+    "AcquireActionsRequest",
+    "AcquireChangeActionRequest",
     "AdministrativeMoveParams",
     "AdministrativeMovePreviewResponse",
     "AdministrativeMoveRequest",
     "AdministrativeMoveResponse",
     "AdmitDeliveryChangeRequest",
+    "AnswerParams",
+    "AnswerRequest",
     "ChangeExternalHeadAdoptionResponse",
     "ChangeExternalHeadPromotionResponse",
     "ChangeParams",
@@ -919,15 +1342,11 @@ __all__ = [
     "CleanupAbandonedTargetSyncRequest",
     "CleanupCompletedChangeParams",
     "CleanupCompletedChangeRequest",
-    "ClearBlockParams",
-    "ClearBlockRequest",
-    "ClearedDeliveryBlockResponse",
     "CompletedPageParams",
     "CompletedPageRequest",
     "CreateDesignSessionParams",
     "CreateDesignSessionRequest",
-    "DeferChangeParams",
-    "DeferChangeRequest",
+    "DeliveryAnswerResponse",
     "DeliveryHealthDiagnosticResponse",
     "DeliveryHealthResponse",
     "DeliveryOperatorClaimResponse",
@@ -936,11 +1355,15 @@ __all__ = [
     "DeliveryOperatorRecoveryAttentionResponse",
     "DeliveryPlanPublication",
     "DeliveryPublicationSupersessionResponse",
-    "DeliveryResultPublication",
     "DeliveryStartupConfig",
     "DeliveryStartupDiagnostic",
+    "DeliveryStateSnapshotRepairResponse",
+    "DeriveEvidenceReceiptsParams",
+    "DeriveEvidenceReceiptsRequest",
+    "DerivedEvidenceReceiptsResponse",
     "EmptyParams",
     "EmptyRequest",
+    "ExecuteChangeActionRequest",
     "ExternalHeadAdoptionParams",
     "ExternalHeadAdoptionRequest",
     "ExternalHeadPromotionParams",
@@ -950,32 +1373,50 @@ __all__ = [
     "MarkChangeReadyRequest",
     "OperatorContextParams",
     "OperatorContextRequest",
+    "OutOfBandHeadRecoveryResponse",
     "PreviewAdministrativeMoveParams",
     "PreviewAdministrativeMoveRequest",
     "PublishDeliveryPlanParams",
     "PublishDeliveryPlanRequest",
-    "PublishDeliveryResultParams",
-    "PublishDeliveryResultRequest",
+    "PutDesignParams",
+    "PutDesignRequest",
+    "PutDesignResponse",
+    "QuarantinedSnapshotRepairProposalResponse",
+    "QuarantinedSnapshotRepairResponse",
     "RecoverChangeWorktreeParams",
     "RecoverChangeWorktreeRequest",
+    "RecoverClaimParams",
+    "RecoverClaimRequest",
+    "RecoverOutOfBandHeadParams",
+    "RecoverOutOfBandHeadRequest",
     "RecoverPublicationBaselineParams",
     "RecoverPublicationBaselineRequest",
+    "ReleaseStuckWorkerParams",
+    "ReleaseStuckWorkerRequest",
+    "RepairChangeParams",
+    "RepairChangeRequest",
     "RepairClaimContextParams",
     "RepairClaimContextRequest",
+    "RepairDeliveryStateSnapshotParams",
+    "RepairDeliveryStateSnapshotRequest",
+    "RepairQuarantinedDeliveryStateSnapshotParams",
+    "RepairStrandedFrontierParams",
     "RepairTargetSyncPublicationParams",
     "RepairTargetSyncPublicationRequest",
-    "ResolveChangeDispositionParams",
-    "ResolveChangeDispositionRequest",
-    "ResolveRequestParams",
-    "ResolveRequestRequest",
-    "ResolvedDeliveryRequestResponse",
+    "ReportFinalizationFailureParams",
     "RetainedChangeWorktreeResponse",
     "ReviseDesignSessionParams",
     "ReviseDesignSessionRequest",
     "SearchCompletedParams",
     "SearchCompletedRequest",
+    "SetChangeIntentParams",
+    "SetChangeIntentRequest",
+    "SetChangeIntentResponse",
+    "SettleWorkerInvocationParams",
+    "SettleWorkerInvocationRequest",
     "ShowCompletedParams",
     "ShowCompletedRequest",
+    "StrandedFrontierRepairResponse",
     "SupersedePublicationParams",
     "SupersedePublicationRequest",
     "TargetDiagnostic",

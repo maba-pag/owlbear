@@ -95,7 +95,7 @@ Honor explicit project or CI thresholds, but never manufacture low-value asserti
 
 - **Pydantic v2 + MagicMock:** `MagicMock(spec=PydanticModel)` cannot auto-generate Pydantic v2 fields. Explicitly set every accessed field on the mock.
 - **Schema version bumps:** Search all test files for old version and update every assertion.
-- **`patch.dict("sys.modules")` on Python 3.12+:** Modules first imported inside the context are removed when it exits. Pre-import needed modules at file scope. Prefer `patch("module.attr")`.
+- **`patch.dict("sys.modules")` on Python 3.14:** Modules first imported inside the context are removed when it exits. Pre-import needed modules at file scope. Prefer `patch("module.attr")`.
 
 ## Patterns
 

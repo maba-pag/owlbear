@@ -106,28 +106,27 @@ Apply these only when the target is the OwlBear repository or matching configura
 | --- | --- |
 | `uv run test` or `uv run test --all` | Complete Python and Cockpit frontend unit-test suites |
 | `uv run test --changed [--base REF]` | Changed Python packages, importing consumer tests, invariants, and affected frontend tests |
-| `uv run test [PATH ...]` | Tests owning the explicit paths; routes to pytest and/or Vitest |
+| `uv run test [PATH ...]` (also `uv run tests`) | Tests owning the explicit paths; routes to pytest and/or Vitest |
 | `uv run test-e2e [SPEC ...]` | Cockpit maintained fast Playwright gate |
 | `uv run lint` | Normal local lint aggregate on the workspace; `--staged` selects staged files |
 | `uv run lint-cockpit` | Cockpit frontend lint aggregate |
+| `uv run lint-cockpit-biome` | Biome lint, formatting, and Assist for owned frontend and repository JSON |
 | `uv run megalint` | Standalone MegaLinter on the workspace; safe fixes by default, or check-only with `--no-fix` |
-| `uv run lint-full` | `lint` plus MegaLinter |
-| `uv run format-full` | Python, whitespace, and final-newline formatters |
-| `uv run typecheck-cockpit` | Cockpit frontend TypeScript check |
-| `uv run quality-full` | Format, lint-full, typecheck-cockpit, then advisory TODO scan |
+| `uv run format` | Python, Biome, whitespace, and final-newline formatters |
+| `uv run format-biome` | Format owned frontend and JSON; `--no-fix` checks, `--staged` selects staged files |
+| `uv run typecheck-cockpit` | Cockpit application and all E2E TypeScript checks |
+| `uv run quality` | Format, lint, MegaLinter, typecheck-cockpit, then advisory TODO scan |
 
 Use these workspace entry points instead of invoking individual linters manually. `lint` and
 `megalint` may auto-fix files through their configured safe fixers; inspect the diff afterward.
 MegaLinter's repository policy is `APPLY_FIXES: all` by default, while `--no-fix` explicitly selects
-a check-only run. Agents should
-scope validation to their own work with `lint --staged`; workspace-wide `lint`, `megalint`, and
-`lint-full` are broad user workflows rather than focused agent validation commands.
+check-only runs. Agents should scope validation to their own work with `lint --staged`; workspace-wide
+`lint`, `megalint`, and `quality` are broad user workflows rather than focused agent validation commands.
 
-`lint`, `lint-cockpit`, `megalint`, `lint-full`, and `quality-full` accept one optional fix-policy
-flag. `--no-fix` replaces mutating hooks with check-only equivalents. `--unsafe-fix` enables Ruff
-unsafe fixes and Stylelint lax fixes in addition to the configured safe fixes. The two flags are
-mutually exclusive; review the resulting diff whenever unsafe fixes are enabled. Full
-aggregates are listed by `uv run help quality`.
+`lint`, `lint-cockpit`, `megalint`, and `quality` accept one optional fix-policy flag. `--no-fix`
+replaces mutating hooks with check-only equivalents. `--unsafe-fix` enables unsafe Ruff and Biome
+fixes, plus Zizmor unsafe fixes in MegaLinter. The flags are mutually exclusive; review the resulting diff
+whenever unsafe fixes are enabled. Full aggregates are listed by `uv run help quality`.
 
 | Marker | Local meaning |
 | --- | --- |
@@ -157,13 +156,3 @@ When analyzing `uv run megalint` or CI results, start with the structured report
 `megalinter-reports/mega-linter-report.json`. Use `megalinter-reports/linters_logs/` for raw
 per-linter output and `megalinter-reports/megalinter-report.sarif` for code-scanning findings;
 console output is primarily progress and diagnostic context.
-
-### Windows-Only Notes
-
-These are observed OwlBear workspace workarounds for Windows with PowerShell:
-
-- **Startup instability.** If scoped runs show plugin errors, set `$env:PYTEST_DISABLE_PLUGIN_AUTOLOAD='1'` then add `-p pytest_asyncio.plugin -p xdist -n 0`. Or selectively disable logfire: `-p no:logfire -p no:pytest_logfire`.
-
-- **WMI + logfire hang.** CPython 3.12+ `platform.uname()` calls WMI which can hang indefinitely. `conftest.py` has a workaround. If pytest still hangs: `Get-Process python*,pytest* | Stop-Process -Force`.
-
-- **PowerShell piping.** PS 5.1 wraps stderr in ErrorRecord objects. All pipe combinations corrupt output.

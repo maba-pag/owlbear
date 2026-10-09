@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import re
+import shutil
+import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
+import pytest
 import yaml
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -49,20 +54,6 @@ _P01_SHARED_INCLUDED_PATHS = (
     "store/audit/history.txt",
     "generated/output.txt",
 )
-_P04_LOCAL_ESLINT_SCOPE = r"^serve/cockpit/web/(src|e2e)/.*\.(ts|tsx)$"
-_P04_CI_ESLINT_SCOPE = r"^serve/cockpit/web/.*\.(ts|tsx)$"
-_P04_SCOPE_SAMPLES = (
-    ("serve/cockpit/web/src/CockpitShell.tsx", True, True),
-    ("serve/cockpit/web/e2e/smoke.spec.ts", True, True),
-    ("serve/cockpit/web/vitest.setup.ts", False, True),
-    ("serve/cockpit/web/scripts/run-e2e.mjs", False, False),
-)
-_P05_STYLELINT_SCOPE = r"^serve/cockpit/web/src/.*\.css$"
-_P05_SCOPE_SAMPLES = (
-    ("serve/cockpit/web/src/custom-tokens.css", True),
-    ("serve/cockpit/web/public/porsche-design-system/future.css", False),
-    ("serve/cockpit/dist/assets/index.css", False),
-)
 _P08_JSON_SCOPE = r"(^|/).*\.(json|jsonc)$"
 _P08_JSON_SCOPE_SAMPLES = (
     ("package.json", True),
@@ -71,17 +62,16 @@ _P08_JSON_SCOPE_SAMPLES = (
     (".markdownlint-cli2.jsonc", True),
     ("serve/cockpit/web/src/App.tsx", False),
 )
-_P08_JSON_IGNORE_MARKERS = (
-    '".owlbear/delivery/packages/**"',
-    '".owlbear/research/**"',
-    '".owlbear/sources/**"',
-    '".venv/**"',
-    '"**/.venv/**"',
-    '"node_modules/**"',
-    '"test-results/**"',
-    '"megalinter-reports/**"',
-    '"store/audit/*.db"',
-)
+_BIOME_DESCRIPTORS = {
+    "JAVASCRIPT_BIOME": (r"^serve/cockpit/web/(?!public/).*\.(js|mjs)$", [".js", ".mjs"]),
+    "TYPESCRIPT_BIOME": (r"^serve/cockpit/web/(?!public/).*\.ts$", None),
+    "JSX_BIOME": (r"^serve/cockpit/web/(?!public/).*\.tsx$", [".tsx"]),
+    "CSS_BIOME": (r"^serve/cockpit/web/src/.*\.css$", None),
+    "JSON_BIOME": (
+        None,
+        [".json", ".jsonc"],
+    ),
+}
 _M04_ALLOWED_ELEMENTS = [
     "agents",
     "boundaries",
@@ -114,10 +104,10 @@ _M09_RESEARCH_MARKDOWN_PATHS = (
 )
 _M09_SOURCES_MARKDOWN_PATH = ".owlbear/sources/overview.md"
 _X04_FORMATTERS = {
-    "[json]": "vscode.json-language-features",
-    "[jsonc]": "vscode.json-language-features",
+    "[json]": "biomejs.biome",
+    "[jsonc]": "biomejs.biome",
+    "[javascript][javascriptreact][typescript][typescriptreact][css]": "biomejs.biome",
     "[markdown]": "DavidAnson.vscode-markdownlint",
-    "[powershell]": "ms-vscode.powershell",
     "[python]": "charliermarsh.ruff",
     "[toml]": "tamasfe.even-better-toml",
     "[xml]": "redhat.vscode-xml",
@@ -437,57 +427,19 @@ def test_precommit_and_megalinter_share_exclusion_taxonomy() -> None:
     assert all(precommit_pattern.search(path) is None for path in _P01_SHARED_INCLUDED_PATHS)
 
 
-def test_frontend_eslint_local_ci_scope_contract() -> None:
-    precommit_hooks = _read_precommit_local_hooks(_read_yaml_mapping(_ROOT / ".pre-commit-config.yaml"))
-    local_pattern = re.compile(_P04_LOCAL_ESLINT_SCOPE)
-    ci_pattern = re.compile(_P04_CI_ESLINT_SCOPE)
-
-    for hook_id in ("eslint-frontend", "eslint-frontend-check"):
-        hook = precommit_hooks[hook_id]
-        assert hook.get("files") == _P04_LOCAL_ESLINT_SCOPE
-        assert hook.get("pass_filenames") is False
-        entry = hook.get("entry")
-        assert isinstance(entry, str)
-        assert "serve/cockpit/web/src/" in entry
-        assert "serve/cockpit/web/e2e/" in entry
-
-    megalinter = _read_yaml_mapping(_ROOT / ".mega-linter.yml")
-    assert megalinter.get("TYPESCRIPT_ES_FILTER_REGEX_INCLUDE") == _P04_CI_ESLINT_SCOPE
-
-    for path, local_expected, ci_expected in _P04_SCOPE_SAMPLES:
-        assert bool(local_pattern.search(path)) is local_expected, path
-        assert bool(ci_pattern.search(path)) is ci_expected, path
-
-
-def test_frontend_stylelint_local_ci_scope_contract() -> None:
-    precommit_hooks = _read_precommit_local_hooks(_read_yaml_mapping(_ROOT / ".pre-commit-config.yaml"))
-    stylelint_pattern = re.compile(_P05_STYLELINT_SCOPE)
-
-    for hook_id in ("stylelint-frontend-fix", "stylelint-frontend-check", "stylelint-frontend-lax"):
-        hook = precommit_hooks[hook_id]
-        assert hook.get("files") == _P05_STYLELINT_SCOPE
-        assert hook.get("pass_filenames") is False
-        entry = hook.get("entry")
-        assert isinstance(entry, str)
-        assert "npm --prefix serve/cockpit/web run lint:css" in entry
-
-    megalinter = _read_yaml_mapping(_ROOT / ".mega-linter.yml")
-    assert megalinter.get("CSS_STYLELINT_FILTER_REGEX_INCLUDE") == _P05_STYLELINT_SCOPE
-
-    for path, expected in _P05_SCOPE_SAMPLES:
-        assert bool(stylelint_pattern.search(path)) is expected, path
-
-
-def test_json_eslint_replaces_jsonlint_with_local_ci_scope_contract() -> None:
+def test_biome_replaces_frontend_and_json_scanners() -> None:
     megalinter = _read_yaml_mapping(_ROOT / ".mega-linter.yml")
     enabled = megalinter.get("ENABLE_LINTERS")
     assert isinstance(enabled, list)
     assert "JSON_JSONLINT" not in enabled
-    assert "JAVASCRIPT_ES" in enabled
-    assert megalinter.get("JAVASCRIPT_ES_FILTER_REGEX_INCLUDE") == _P08_JSON_SCOPE
-    assert megalinter.get("JAVASCRIPT_ES_FILE_EXTENSIONS") == [".json", ".jsonc"]
-    assert megalinter.get("JAVASCRIPT_ES_CONFIG_FILE") == "eslint-json.config.cjs"
-    assert megalinter.get("JAVASCRIPT_ES_RULES_PATH") == "."
+    assert "JAVASCRIPT_ES" not in enabled
+    assert "TYPESCRIPT_ES" not in enabled
+    assert "CSS_STYLELINT" not in enabled
+    assert "JAVASCRIPT_BIOME" in enabled
+    assert "TYPESCRIPT_BIOME" in enabled
+    assert "CSS_BIOME" in enabled
+    assert "JSON_BIOME" in enabled
+    assert megalinter.get("JSON_BIOME_FILE_EXTENSIONS") == [".json", ".jsonc"]
 
     root_package = json.loads((_ROOT / "package.json").read_text(encoding="utf-8"))
     assert isinstance(root_package, dict)
@@ -502,24 +454,148 @@ def test_json_eslint_replaces_jsonlint_with_local_ci_scope_contract() -> None:
     scripts = package.get("scripts")
     assert isinstance(dependencies, dict)
     assert isinstance(scripts, dict)
-    assert dependencies.get("@eslint/json") == "^2.0.1"
-    assert "lint:json" not in scripts
-
-    config_text = (_ROOT / "eslint-json.config.cjs").read_text(encoding="utf-8")
-    assert 'language: "json/json"' in config_text
-    assert 'language: "json/jsonc"' in config_text
-    assert '".vscode/*.json"' in config_text
-    assert "allowTrailingCommas: true" in config_text
-    assert all(marker in config_text for marker in _P08_JSON_IGNORE_MARKERS)
+    assert "@eslint/json" not in dependencies
+    assert "eslint" not in dependencies
+    assert "stylelint" not in dependencies
+    assert "typescript-eslint" not in dependencies
+    assert "lint:css" not in scripts
 
     precommit_hooks = _read_precommit_local_hooks(_read_yaml_mapping(_ROOT / ".pre-commit-config.yaml"))
-    json_hook = precommit_hooks["eslint-json"]
-    assert json_hook.get("files") == r".*(\.json|\.jsonc)$"
-    assert json_hook.get("pass_filenames") is False
-    assert json_hook.get("entry") == "uv run lint-json"
+    biome_hook = precommit_hooks["biome-frontend-check"]
+    assert biome_hook.get("pass_filenames", True) is True
+    assert "stages" not in biome_hook
+    assert "check --write" in biome_hook.get("entry", "")
+
+    workflow = (_ROOT / ".github/workflows/static.yml").read_text(encoding="utf-8")
+    assert "npm run lint:biome:ci\n" in workflow
 
     for path, expected in _P08_JSON_SCOPE_SAMPLES:
         assert bool(re.search(_P08_JSON_SCOPE, path)) is expected, path
+
+
+def test_biome_json_scope_excludes_generated_and_machine_managed_paths() -> None:
+    biome = json.loads((_ROOT / "biome.json").read_text(encoding="utf-8"))
+    assert isinstance(biome, dict)
+    files = biome.get("files")
+    assert isinstance(files, dict)
+    includes = files.get("includes")
+    assert isinstance(includes, list)
+    assert "**/*.json" in includes
+    assert "**/*.jsonc" in includes
+    assert all(isinstance(include, str) for include in includes)
+    assert {
+        "!**/.owlbear/delivery/packages",
+        "!**/.owlbear/delivery/runtime",
+        "!**/.owlbear/memory",
+        "!**/.owlbear/research",
+        "!**/.owlbear/sources",
+        "!**/.owlbear/legacy",
+        "!**/.owlbear/target",
+        "!**/scratch",
+        "!**/worktrees",
+    }.issubset(includes)
+
+
+@pytest.fixture
+def biome_workspace(tmp_path: Path) -> Path:
+    package = Path("serve/cockpit/web")
+    dependencies = _ROOT / package / "node_modules"
+    if shutil.which("node") is None or not (dependencies / "@biomejs/biome/bin/biome").exists():
+        pytest.skip("Cockpit Node dependencies are required for Biome integration checks")
+    for relative in (
+        Path("biome.json"),
+        Path(".editorconfig"),
+        Path(".gitignore"),
+        Path(".owlbear/.gitignore"),
+        package / "scripts/run-biome-check.mjs",
+        package / "plugins/pds-component-wrappers.grit",
+    ):
+        destination = tmp_path / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(_ROOT / relative, destination)
+    (tmp_path / package / "node_modules").symlink_to(dependencies, target_is_directory=True)
+    hook = _read_precommit_local_hooks(_read_yaml_mapping(_ROOT / ".pre-commit-config.yaml"))["biome-frontend-check"]
+    (tmp_path / ".pre-commit-config.yaml").write_text(
+        yaml.safe_dump({"repos": [{"repo": "local", "hooks": [hook]}]}), encoding="utf-8"
+    )
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)  # noqa: S603, S607
+    return tmp_path
+
+
+def _biome_probe(root: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(  # noqa: S603
+        ["node", str(root / "serve/cockpit/web/scripts/run-biome-check.mjs"), *arguments],  # noqa: S607
+        cwd=root / "serve/cockpit/web",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+@pytest.mark.cockpit
+def test_biome_applies_width_and_excludes_generated_json(biome_workspace: Path) -> None:
+    source = biome_workspace / "serve/cockpit/web/vite.config.ts"
+    expected = "export const settings = { alpha: 123456789, beta: 123456789, gamma: 123456789, delta: 123456789 };\n"
+    source.write_text(expected.replace(" = ", "="), encoding="utf-8")
+    for relative in ("nested/build/broken.json", "scratch/broken.json", ".owlbear/research/broken.json"):
+        ignored = biome_workspace / relative
+        ignored.parent.mkdir(parents=True, exist_ok=True)
+        ignored.write_text("{broken", encoding="utf-8")
+    result = _biome_probe(biome_workspace, "format", "--write", ".")
+    assert result.returncode == 0, result.stderr
+    assert source.read_text(encoding="utf-8") == expected
+    assert _biome_probe(biome_workspace, "ci", ".").returncode == 0
+    source.write_text("export const broken = ;", encoding="utf-8")
+    assert _biome_probe(biome_workspace, "check", ".").returncode == 1
+
+
+@pytest.mark.cockpit
+def test_biome_staged_checks_handle_empty_ignored_and_invalid_files(biome_workspace: Path) -> None:
+    arguments = ("check", "--staged", "--no-errors-on-unmatched")
+    assert _biome_probe(biome_workspace, *arguments).returncode == 0
+    lockfile = biome_workspace / "serve/cockpit/web/package-lock.json"
+    lockfile.write_text("{}\n", encoding="utf-8")
+    subprocess.run(["git", "add", str(lockfile)], cwd=biome_workspace, check=True)  # noqa: S603, S607
+    assert _biome_probe(biome_workspace, *arguments).returncode == 0
+    source = biome_workspace / "serve/cockpit/web/playwright.config.ts"
+    source.write_text("export const broken = ;", encoding="utf-8")
+    subprocess.run(["git", "add", str(source)], cwd=biome_workspace, check=True)  # noqa: S603, S607
+    assert _biome_probe(biome_workspace, *arguments).returncode == 1
+    assert source.read_text(encoding="utf-8") == "export const broken = ;"
+
+
+@pytest.mark.cockpit
+def test_biome_precommit_fixes_only_selected_files(biome_workspace: Path) -> None:
+    selected = "serve/cockpit/web/vite.config.ts"
+    other = "serve/cockpit/web/playwright.config.ts"
+    for relative in (selected, other):
+        (biome_workspace / relative).write_text("export const value=1;\n", encoding="utf-8")
+    subprocess.run(["git", "add", selected, other], cwd=biome_workspace, check=True)  # noqa: S603, S607
+    command = [sys.executable, "-m", "pre_commit", "run", "biome-frontend-check"]
+    result = subprocess.run(  # noqa: S603
+        [*command, "--files", selected], cwd=biome_workspace, capture_output=True, text=True, check=False
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert (biome_workspace / selected).read_text(encoding="utf-8") == "export const value = 1;\n"
+    assert (biome_workspace / other).read_text(encoding="utf-8") == "export const value=1;\n"
+    subprocess.run([*command, "--all-files"], cwd=biome_workspace, capture_output=True, check=False)  # noqa: S603
+    result = subprocess.run(  # noqa: S603
+        [*command, "--all-files"], cwd=biome_workspace, capture_output=True, text=True, check=False
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (biome_workspace / other).read_text(encoding="utf-8") == "export const value = 1;\n"
+
+
+def test_megalinter_biome_descriptors_match_owned_file_scopes() -> None:
+    megalinter = _read_yaml_mapping(_ROOT / ".mega-linter.yml")
+    enabled = megalinter.get("ENABLE_LINTERS")
+    assert isinstance(enabled, list)
+
+    for descriptor, (scope, extensions) in _BIOME_DESCRIPTORS.items():
+        assert descriptor in enabled
+        assert megalinter.get(f"{descriptor}_CLI_LINT_MODE") == "list_of_files"
+        assert megalinter.get(f"{descriptor}_FILTER_REGEX_INCLUDE") == scope
+        assert megalinter.get(f"{descriptor}_FILE_EXTENSIONS") == extensions
 
 
 def test_editorconfig_python_indentation_delegation_is_shared() -> None:
@@ -600,3 +676,22 @@ def test_frontend_typecheck_trigger_covers_project_inputs() -> None:
 
     for path, expected in _P06_SCOPE_SAMPLES:
         assert bool(typecheck_pattern.search(path)) is expected, path
+
+
+def test_scripts_run_outside_the_pinned_python_keep_python_312_syntax() -> None:
+    workflow_scripts = {
+        match
+        for workflow in (_ROOT / ".github" / "workflows").glob("*.yml")
+        for match in re.findall(r"python3 (?:\.\./)*([\w./-]+\.py)", workflow.read_text(encoding="utf-8"))
+    }
+    hooks = {
+        path.relative_to(_ROOT).as_posix()
+        for pattern in (".owlbear/hooks/*.py", "seed/.owlbear/hooks/*.py")
+        for path in _ROOT.glob(pattern)
+    }
+    assert workflow_scripts
+    assert hooks
+
+    for relative in sorted(workflow_scripts | hooks):
+        source = (_ROOT / relative).read_text(encoding="utf-8")
+        ast.parse(source, filename=relative, feature_version=(3, 12))

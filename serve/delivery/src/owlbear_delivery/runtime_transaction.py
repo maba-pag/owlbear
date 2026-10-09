@@ -3,19 +3,39 @@
 from __future__ import annotations
 
 import contextlib
+import fcntl
 import hashlib
 import os
+import re
 import secrets
+import stat
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Never
 
 import yaml
 
-from owlbear_delivery.storage_io import locked_roots
+from owlbear_delivery.storage_io import locked_roots, refuse_read_only_write, state_is_read_only
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
+
+_MAX_CONTAINED_MANIFEST_BYTES = 131_072
+_MAX_CONTAINED_MANIFESTS = 256
+_MAX_CONTAINED_PARTICIPANTS = 2
+_MAX_CONTAINED_TEMPORARIES = 256
+_MAX_CONTAINED_TEMPORARY_BYTES = _MAX_CONTAINED_MANIFEST_BYTES * _MAX_CONTAINED_TEMPORARIES
+_CONTAINED_TEMPORARY_PATTERN = re.compile(r"^\.tmp-[0-9a-f]{24}$")
+_CONTAINED_TEMPORARY_MODE = stat.S_IRUSR | stat.S_IWUSR
+_CONTAINED_TEMPORARY_PUBLISHED_LINK_COUNT = 2
+
+
+@dataclass(frozen=True)
+class ContainedWriteLimits:
+    """Resource bounds for one contained atomic write."""
+
+    max_content_bytes: int = _MAX_CONTAINED_MANIFEST_BYTES
+    max_temporary_bytes: int = _MAX_CONTAINED_TEMPORARY_BYTES
 
 
 class TransactionConflictError(RuntimeError):
@@ -98,6 +118,64 @@ def _contained_path(root: Path, relative_path: Path) -> Path:
     return path
 
 
+type Participant = TransactionParticipant | ReplacementTransactionParticipant | MoveTransactionParticipant
+
+
+@dataclass(frozen=True)
+class PendingTransaction:
+    """One pending manifest validated by its root's owner validator, never published by reading it."""
+
+    manifest_root: Path
+    name: str
+    content: bytes
+    transaction: RuntimeTransaction
+    contained: bool
+
+    @property
+    def sha256(self) -> str:
+        """Return the digest of the exact manifest bytes."""
+        return hashlib.sha256(self.content).hexdigest()
+
+    @property
+    def path(self) -> Path:
+        """Return the manifest path under ``<manifest_root>/transactions``."""
+        return self.manifest_root / "transactions" / self.name
+
+    def replay(self, *, failure: Callable[[str], None] | None = None, guard: Callable[[], None] | None = None) -> None:
+        """Publish exactly these verified participants and remove the manifest, as its owner's recovery does.
+
+        ``guard`` runs immediately before every participant write, move-source removal and manifest removal.
+        """
+        if not self.contained:
+            self.transaction.recover(failure=failure, guard=guard)
+            return
+        root_fd = os.open(self.manifest_root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            lock_fd = os.open(
+                ".storage.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600, dir_fd=root_fd
+            )
+            try:
+                if not stat.S_ISREG(os.fstat(lock_fd).st_mode):
+                    raise TransactionPathError
+                fcntl.flock(lock_fd, fcntl.LOCK_EX)
+                if (
+                    read_contained(root_fd, Path("transactions") / self.name, limit=_MAX_CONTAINED_MANIFEST_BYTES)
+                    is None
+                ):
+                    return
+                self.transaction._publish_contained(root_fd, failure, guard)  # noqa: SLF001 - the contained path.
+                if failure:
+                    failure("before-manifest-cleanup")
+                _before_write(guard)
+                with contained_directory(root_fd, Path("transactions")) as directory_fd:
+                    os.unlink(self.name, dir_fd=directory_fd)
+                    os.fsync(directory_fd)
+            finally:
+                os.close(lock_fd)
+        finally:
+            os.close(root_fd)
+
+
 class RuntimeTransaction:
     """Publish immutable participants with a recoverable commit manifest."""
 
@@ -122,11 +200,17 @@ class RuntimeTransaction:
         return self._manifest_root / "transactions"
 
     @property
+    def participants(self) -> tuple[Participant, ...]:
+        """Return the participants in publication order."""
+        return self._participants
+
+    @property
     def _manifest_path(self) -> Path:
         return self._directory / f"{self._transaction_id}.yaml"
 
     def commit(self, *, failure: Callable[[str], None] | None = None) -> None:
         """Stage, record, and publish all participants exactly once."""
+        refuse_read_only_write()
         with locked_roots(self._locked_roots()):
             self._prepare_manifest()
             if failure:
@@ -136,15 +220,23 @@ class RuntimeTransaction:
                 failure("before-manifest-cleanup")
             self._cleanup()
 
-    def recover(self) -> None:
-        """Deterministically complete a previously staged transaction."""
+    def recover(self, *, failure: Callable[[str], None] | None = None, guard: Callable[[], None] | None = None) -> None:
+        """Deterministically complete a previously staged transaction; ``guard`` precedes every write."""
+        if state_is_read_only():
+            if self._manifest_path.exists():
+                refuse_read_only_write()
+            return
         with locked_roots(self._locked_roots()):
             if self._manifest_path.exists():
-                self._publish(None)
+                self._publish(failure, guard)
+                if failure:
+                    failure("before-manifest-cleanup")
+                _before_write(guard)
                 self._cleanup()
 
     def abort(self) -> None:
         """Restore prepared participant bytes after a handled publication failure."""
+        refuse_read_only_write()
         with locked_roots(self._locked_roots()):
             if not self._manifest_path.exists():
                 return
@@ -156,6 +248,133 @@ class RuntimeTransaction:
 
     def _locked_roots(self) -> tuple[Path, ...]:
         return (self._manifest_root, *(participant.root for participant in self._participants))
+
+    def commit_contained(self, root_fd: int, *, failure: Callable[[str], None] | None = None) -> None:
+        """Publish report participants under a caller-held descriptor-backed lock."""
+        refuse_read_only_write()
+        self._require_contained_root(root_fd)
+        manifest = self._contained_manifest()
+        path = Path("transactions") / f"{self._transaction_id}.yaml"
+        content = yaml.safe_dump(manifest, sort_keys=True).encode()
+        if len(content) > _MAX_CONTAINED_MANIFEST_BYTES:
+            raise TransactionManifestError
+        for participant in self._participants:
+            self._check_contained_participant(root_fd, participant)
+        write_contained(root_fd, path, content)
+        if failure:
+            failure("before-publication")
+        self._publish_contained(root_fd, failure)
+        if failure:
+            failure("before-manifest-cleanup")
+        self._require_contained_root(root_fd)
+        with contained_directory(root_fd, Path("transactions")) as directory_fd:
+            os.unlink(path.name, dir_fd=directory_fd)
+            os.fsync(directory_fd)
+
+    def _require_contained_root(self, root_fd: int) -> None:
+        observed = self._manifest_root.lstat()
+        pinned = os.fstat(root_fd)
+        if (
+            self._manifest_root.resolve() != self._manifest_root
+            or not stat.S_ISDIR(observed.st_mode)
+            or (observed.st_dev, observed.st_ino) != (pinned.st_dev, pinned.st_ino)
+        ):
+            raise TransactionPathError
+
+    def _contained_manifest(self) -> dict[str, object]:
+        if Path(self._transaction_id).name != self._transaction_id or self._transaction_id in (".", ".."):
+            raise TransactionPathError
+        for participant in self._participants:
+            if isinstance(participant, MoveTransactionParticipant) or participant.root != self._manifest_root:
+                raise TransactionPathError
+            _relative_parts(participant.relative_path)
+        manifest = self._manifest()
+        if any(entry["root"] != str(self._manifest_root) for entry in manifest["participants"]):
+            raise TransactionPathError
+        return manifest
+
+    @staticmethod
+    def _check_contained_participant(
+        root_fd: int, participant: TransactionParticipant | ReplacementTransactionParticipant
+    ) -> None:
+        current = read_contained(root_fd, participant.relative_path, limit=16_384)
+        allowed = (
+            (participant.expected_content, participant.replacement_content)
+            if isinstance(participant, ReplacementTransactionParticipant)
+            else (None, participant.content)
+        )
+        if current not in allowed:
+            raise TransactionConflictError
+
+    def _publish_contained(
+        self, root_fd: int, failure: Callable[[str], None] | None, guard: Callable[[], None] | None = None
+    ) -> None:
+        for index, participant in enumerate(self._participants):
+            self._require_contained_root(root_fd)
+            if isinstance(participant, MoveTransactionParticipant):
+                raise TransactionPathError
+            self._check_contained_participant(root_fd, participant)
+            replacement = isinstance(participant, ReplacementTransactionParticipant)
+            content = participant.replacement_content if replacement else participant.content
+            expected = participant.expected_content if replacement else None
+            _before_write(guard)
+            write_contained(root_fd, participant.relative_path, content, expected=expected)
+            if failure and index == 0:
+                failure("after-first-publication")
+
+    @classmethod
+    def recover_contained(cls, root: Path, root_fd: int) -> None:
+        """Recover only report transactions whose participants share the explicit root."""
+        try:
+            with (
+                contained_directory(root_fd, Path("transactions")) as directory_fd,
+                os.scandir(directory_fd) as entries,
+            ):
+                _contained_temporary_usage(directory_fd, additional_bytes=0)
+                names = []
+                for entry in entries:
+                    if _CONTAINED_TEMPORARY_PATTERN.fullmatch(entry.name):
+                        continue
+                    names.append(entry.name)
+        except FileNotFoundError:
+            return
+        names = tuple(sorted(names))
+        if len(names) > _MAX_CONTAINED_MANIFESTS:
+            raise TransactionManifestError
+        if names:
+            refuse_read_only_write()
+        for name in names:
+            transaction = cls._contained_manifest_transaction(root, root_fd, name)
+            cls._publish_contained(transaction, root_fd, None)
+            with contained_directory(root_fd, Path("transactions")) as directory_fd:
+                os.unlink(name, dir_fd=directory_fd)
+                os.fsync(directory_fd)
+
+    @classmethod
+    def _contained_manifest_transaction(cls, root: Path, root_fd: int, name: str) -> RuntimeTransaction:
+        if not name.endswith(".yaml"):
+            raise TransactionManifestError
+        content = read_contained(root_fd, Path("transactions") / name, limit=_MAX_CONTAINED_MANIFEST_BYTES)
+        return cls._contained_transaction_from_content(root, name, content)
+
+    @classmethod
+    def _contained_transaction_from_content(cls, root: Path, name: str, content: bytes | None) -> RuntimeTransaction:
+        if not name.endswith(".yaml") or content is None:
+            raise TransactionManifestError
+        try:
+            manifest = yaml.safe_load(content)
+        except yaml.YAMLError as exc:
+            raise TransactionManifestError from exc
+        if not isinstance(manifest, dict) or manifest.get("schema_version") not in (1, 2):
+            raise TransactionManifestError
+        entries = manifest.get("participants")
+        if not isinstance(entries, list) or not entries or len(entries) > _MAX_CONTAINED_PARTICIPANTS:
+            raise TransactionManifestError
+        participants = tuple(_participant_from_manifest(entry, (root,)) for entry in entries)
+        transaction = cls(root, Path(name).stem, participants)
+        if transaction._contained_manifest() != manifest:
+            raise TransactionManifestError
+        return transaction
 
     @classmethod
     def recover_all(cls, manifest_root: Path, *, roots: tuple[Path, ...] | None = None) -> None:
@@ -175,7 +394,16 @@ class RuntimeTransaction:
         manifest_path: Path,
         allowed_roots: tuple[Path, ...],
     ) -> RuntimeTransaction:
-        manifest = _load_yaml(manifest_path)
+        return cls._from_manifest_value(manifest_root, manifest_path.stem, _load_yaml(manifest_path), allowed_roots)
+
+    @classmethod
+    def _from_manifest_value(
+        cls,
+        manifest_root: Path,
+        transaction_id: str,
+        manifest: dict[str, object],
+        allowed_roots: tuple[Path, ...],
+    ) -> RuntimeTransaction:
         entries = manifest.get("participants")
         if manifest.get("schema_version") not in (1, 2) or not isinstance(entries, list):
             raise TransactionManifestError
@@ -186,7 +414,80 @@ class RuntimeTransaction:
         participants = tuple(_participant_from_manifest(entry, allowed_roots) for entry in entries)
         if not participants:
             raise TransactionManifestError
-        return cls(manifest_root, manifest_path.stem, participants)
+        return cls(manifest_root, transaction_id, participants)
+
+    @classmethod
+    def pending_from_content(
+        cls,
+        manifest_root: Path,
+        name: str,
+        content: bytes,
+        *,
+        roots: tuple[Path, ...] | None = None,
+        contained: bool = False,
+    ) -> PendingTransaction:
+        """Validate exact manifest bytes with the root's owner validator (generic or contained)."""
+        resolved_root = manifest_root.resolve()
+        if contained:
+            transaction = cls._contained_transaction_from_content(resolved_root, name, content)
+        else:
+            if not name.endswith(".yaml"):
+                raise TransactionManifestError
+            try:
+                value = yaml.safe_load(content)
+            except yaml.YAMLError as exc:
+                raise TransactionManifestError from exc
+            allowed = tuple(root.resolve() for root in (roots or (resolved_root,)))
+            transaction = cls._from_manifest_value(
+                resolved_root, Path(name).stem, value if isinstance(value, dict) else {}, allowed
+            )
+        return PendingTransaction(resolved_root, name, content, transaction, contained)
+
+    @classmethod
+    def read_pending(
+        cls, manifest_root: Path, *, roots: tuple[Path, ...] | None = None, contained: bool = False
+    ) -> tuple[PendingTransaction, ...]:
+        """Validate every pending manifest of one root without publishing; any invalid one raises.
+
+        Generic roots list ``transactions/*.yaml`` as ``recover_all`` does; contained roots apply
+        ``recover_contained``'s name, count, temporary and reconstructed-manifest bounds.
+        """
+        resolved_root = manifest_root.resolve()
+        try:
+            root_fd = os.open(resolved_root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        except FileNotFoundError:
+            return ()
+        try:
+            names = cls._pending_names(root_fd, contained=contained)
+            pending = []
+            for name in names:
+                content = read_contained(
+                    root_fd, Path("transactions") / name, limit=_MAX_CONTAINED_MANIFEST_BYTES if contained else 1 << 26
+                )
+                if content is None:
+                    continue
+                pending.append(cls.pending_from_content(resolved_root, name, content, roots=roots, contained=contained))
+            return tuple(pending)
+        finally:
+            os.close(root_fd)
+
+    @staticmethod
+    def _pending_names(root_fd: int, *, contained: bool) -> tuple[str, ...]:
+        try:
+            with contained_directory(root_fd, Path("transactions")) as directory_fd:
+                if contained:
+                    _contained_temporary_usage(directory_fd, additional_bytes=0)
+                with os.scandir(directory_fd) as entries:
+                    names = sorted(entry.name for entry in entries)
+        except FileNotFoundError:
+            return ()
+        if not contained:
+            # ``recover_all`` globs ``*.yaml``, which also matches dot-prefixed names.
+            return tuple(name for name in names if name.endswith(".yaml"))
+        names = [name for name in names if not _CONTAINED_TEMPORARY_PATTERN.fullmatch(name)]
+        if len(names) > _MAX_CONTAINED_MANIFESTS:
+            raise TransactionManifestError
+        return tuple(names)
 
     def _prepare_manifest(self) -> None:
         self._directory.mkdir(parents=True, exist_ok=True)
@@ -241,7 +542,7 @@ class RuntimeTransaction:
             "participants": [_participant_manifest(participant) for participant in self._participants],
         }
 
-    def _publish(self, failure: Callable[[str], None] | None) -> None:
+    def _publish(self, failure: Callable[[str], None] | None, guard: Callable[[], None] | None = None) -> None:
         for index, participant in enumerate(self._participants):
             destination = participant.destination()
             if isinstance(participant, MoveTransactionParticipant):
@@ -250,12 +551,13 @@ class RuntimeTransaction:
                     destination,
                     participant.expected_content,
                     participant.destination_content,
+                    guard,
                 )
                 if failure and index == 0:
                     failure("after-first-publication")
                 continue
-            destination.parent.mkdir(parents=True, exist_ok=True)
             if isinstance(participant, ReplacementTransactionParticipant):
+                _before_write(guard)
                 _publish_replacement(destination, participant)
                 if failure and index == 0:
                     failure("after-first-publication")
@@ -264,6 +566,8 @@ class RuntimeTransaction:
                 if destination.read_bytes() != participant.content:
                     raise TransactionConflictError
                 continue
+            _before_write(guard)
+            destination.parent.mkdir(parents=True, exist_ok=True)
             temporary = destination.with_name(f".tmp-{secrets.token_hex(12)}-{destination.name}")
             try:
                 with temporary.open("xb") as handle:
@@ -282,6 +586,149 @@ class RuntimeTransaction:
         self._manifest_path.unlink(missing_ok=True)
         _fsync_directory(self._directory)
         self._abort_snapshot = None
+
+
+def _relative_parts(path: Path) -> tuple[str, ...]:
+    if path.is_absolute() or not path.parts or any(part in (".", "..") for part in path.parts):
+        raise TransactionPathError
+    return path.parts
+
+
+@contextlib.contextmanager
+def contained_directory(root_fd: int, path: Path, *, create: bool = False) -> Iterator[int]:
+    """Open each relative directory component without following links."""
+    descriptor = os.dup(root_fd)
+    try:
+        for part in _relative_parts(path):
+            if create:
+                with contextlib.suppress(FileExistsError):
+                    os.mkdir(part, mode=0o700, dir_fd=descriptor)
+                    os.fsync(descriptor)
+            successor = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = successor
+        yield descriptor
+    finally:
+        os.close(descriptor)
+
+
+@contextlib.contextmanager
+def _contained_parent(root_fd: int, path: Path, *, create: bool = False) -> Iterator[int]:
+    parts = _relative_parts(path)
+    if len(parts) == 1:
+        yield root_fd
+    else:
+        with contained_directory(root_fd, Path(*parts[:-1]), create=create) as descriptor:
+            yield descriptor
+
+
+def read_contained(root_fd: int, path: Path, *, limit: int) -> bytes | None:
+    """Read a bounded regular file using only pinned directory descriptors."""
+    try:
+        with _contained_parent(root_fd, path) as parent_fd:
+            descriptor = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent_fd)
+    except FileNotFoundError:
+        return None
+    with os.fdopen(descriptor, "rb") as handle:
+        metadata = os.fstat(handle.fileno())
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > limit:
+            raise TransactionPathError
+        content = handle.read(limit + 1)
+        if len(content) > limit:
+            raise TransactionPathError
+        return content
+
+
+def _contained_temporary_usage(
+    directory_fd: int,
+    *,
+    additional_bytes: int,
+    max_content_bytes: int = _MAX_CONTAINED_MANIFEST_BYTES,
+    max_temporary_bytes: int = _MAX_CONTAINED_TEMPORARY_BYTES,
+) -> tuple[int, int]:
+    if additional_bytes < 0 or additional_bytes > max_content_bytes:
+        raise TransactionManifestError
+    temporary_count = 0
+    temporary_bytes = 0
+    try:
+        with os.scandir(directory_fd) as scanned:
+            entries = tuple(scanned)
+        published_identities = set()
+        metadata_by_name = {}
+        for entry in entries:
+            try:
+                metadata = entry.stat(follow_symlinks=False)
+            except OSError as exc:
+                raise TransactionManifestError from exc
+            metadata_by_name[entry.name] = metadata
+            if _CONTAINED_TEMPORARY_PATTERN.fullmatch(entry.name) is None and stat.S_ISREG(metadata.st_mode):
+                published_identities.add((metadata.st_dev, metadata.st_ino))
+        for entry in entries:
+            if _CONTAINED_TEMPORARY_PATTERN.fullmatch(entry.name) is None:
+                continue
+            metadata = metadata_by_name[entry.name]
+            linked_to_published = (
+                metadata.st_nlink == _CONTAINED_TEMPORARY_PUBLISHED_LINK_COUNT
+                and (metadata.st_dev, metadata.st_ino) in published_identities
+            )
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or (metadata.st_nlink != 1 and not linked_to_published)
+                or stat.S_IMODE(metadata.st_mode) != _CONTAINED_TEMPORARY_MODE
+                or metadata.st_size < 0
+                or metadata.st_size > max_content_bytes
+            ):
+                raise TransactionManifestError
+            temporary_count += 1
+            temporary_bytes += metadata.st_size
+    except OSError as exc:
+        raise TransactionManifestError from exc
+    if (
+        temporary_count + (1 if additional_bytes else 0) > _MAX_CONTAINED_TEMPORARIES
+        or temporary_bytes + additional_bytes > max_temporary_bytes
+    ):
+        raise TransactionManifestError
+    return temporary_count, temporary_bytes
+
+
+def write_contained(
+    root_fd: int,
+    path: Path,
+    content: bytes,
+    *,
+    expected: bytes | None = None,
+    limits: ContainedWriteLimits | None = None,
+) -> None:
+    """Atomically publish exact bytes without following directory or file links."""
+    refuse_read_only_write()
+    write_limits = limits if limits is not None else ContainedWriteLimits()
+    with _contained_parent(root_fd, path, create=True) as parent_fd:
+        current = read_contained(parent_fd, Path(path.name), limit=max(len(content), len(expected or b"")))
+        if current == content:
+            return
+        if current != expected:
+            raise TransactionConflictError
+        _contained_temporary_usage(
+            parent_fd,
+            additional_bytes=len(content),
+            max_content_bytes=write_limits.max_content_bytes,
+            max_temporary_bytes=write_limits.max_temporary_bytes,
+        )
+        temporary = f".tmp-{secrets.token_hex(12)}"
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=parent_fd)
+        try:
+            with os.fdopen(descriptor, "wb") as handle:
+                handle.write(content)
+                handle.flush()
+                os.fsync(handle.fileno())
+            if expected is None:
+                os.link(temporary, path.name, src_dir_fd=parent_fd, dst_dir_fd=parent_fd, follow_symlinks=False)
+            else:
+                os.replace(temporary, path.name, src_dir_fd=parent_fd, dst_dir_fd=parent_fd)
+            os.fsync(parent_fd)
+        finally:
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(temporary, dir_fd=parent_fd)
 
 
 def _atomic_write_yaml(path: Path, value: dict[str, object]) -> None:
@@ -458,6 +905,11 @@ def _move_participant_from_manifest(
     return participant
 
 
+def _before_write(guard: Callable[[], None] | None) -> None:
+    if guard is not None:
+        guard()
+
+
 def _publish_replacement(destination: Path, participant: ReplacementTransactionParticipant) -> None:
     if not destination.exists() or destination.read_bytes() not in (
         participant.expected_content,
@@ -484,6 +936,7 @@ def _publish_move(
     destination: Path,
     expected_content: bytes,
     destination_content: bytes,
+    guard: Callable[[], None] | None = None,
 ) -> None:
     if destination.exists():
         if destination.read_bytes() != destination_content:
@@ -491,11 +944,13 @@ def _publish_move(
         if source.exists():
             if source.read_bytes() != expected_content:
                 raise TransactionConflictError
+            _before_write(guard)
             source.unlink()
             _fsync_directory(source.parent)
         return
     if not source.exists() or source.read_bytes() != expected_content:
         raise TransactionConflictError
+    _before_write(guard)
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_name(f".tmp-{secrets.token_hex(12)}-{destination.name}")
     try:
@@ -508,6 +963,7 @@ def _publish_move(
     finally:
         with contextlib.suppress(FileNotFoundError):
             temporary.unlink()
+    _before_write(guard)
     source.unlink()
     _fsync_directory(source.parent)
 
@@ -548,6 +1004,7 @@ def _fsync_directory(directory: Path) -> None:
 
 __all__ = [
     "MoveTransactionParticipant",
+    "PendingTransaction",
     "ReplacementTransactionParticipant",
     "RuntimeTransaction",
     "TransactionConflictError",

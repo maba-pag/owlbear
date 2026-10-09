@@ -12,16 +12,16 @@ Before running setup, ensure the following are installed on your machine:
 
 | Requirement | Why | How to get it |
 | --- | --- | --- |
-| Python 3.12.14+ | OwlBear runtime; the checkout defaults to Python 3.14.7 | [python.org](https://www.python.org/downloads/) |
+| Python 3.14.8 | OwlBear runtime; OwlBear supports the 3.14 series only | [python.org](https://www.python.org/downloads/) |
+| macOS or Linux (Ubuntu) | Supported operating systems | — |
 | [uv](https://docs.astral.sh/uv/) | Package manager and MCP server launcher | [Installation guide](https://docs.astral.sh/uv/getting-started/installation/) |
 | VS Code | IDE | [code.visualstudio.com](https://code.visualstudio.com/) |
 | GitHub Copilot extension | Chat and agents | VS Code Extensions marketplace |
 | [GitHub CLI](https://cli.github.com/) | GitHub publication and pull-request operations | [Installation guide](https://cli.github.com/manual/installation) |
 | Git | Clone and version control | [git-scm.com](https://git-scm.com/) |
 
-> **Windows limitation:** owlbear and your project must be on the **same drive**.
-> `init.py` uses relative paths, and `os.path.relpath` raises `ValueError` when
-> resolving paths across different Windows drive letters (e.g., `C:\` vs `D:\`).
+> **Windows:** Windows is unsupported. Setup uses relative paths; if running it experimentally,
+> keep OwlBear and the project on the same drive because cross-drive paths cannot be resolved.
 
 <!-- separate blockquotes -->
 
@@ -51,8 +51,8 @@ cd my-project
 ```
 
 **Expected result:** the OwlBear checkout and the project are siblings, for example
-`~/work/owlbear` and `~/work/my-project`. On Windows they are on the same drive. The OwlBear clone
-is on `main`, its default branch and the supported consumer surface.
+`~/work/owlbear` and `~/work/my-project`. The OwlBear clone is on `main`, its default branch and the
+supported consumer surface.
 
 ### 2. Run setup from the project root
 
@@ -109,8 +109,11 @@ check below because it also depends on the selected browser and its allowlist.
 
 `MCP: List Servers` confirms that the stdio processes started; it does not prove that the selected
 browser launched or that a target is authenticated. On macOS, an unset `BROWSER_MODE` selects
-managed Edge and its fixed OwlBear profile. Confirm stable Microsoft Edge is installed before
-starting the Browser MCP. On other platforms the default is Chromium.
+managed Edge and its fixed OwlBear profile; elsewhere it selects Chromium. The browser launches on
+the first action call, so `browser_status` initially reports `not-launched`. After the first action
+it reports whether a live browser is available, not whether the selected target is authenticated.
+Confirm stable Microsoft Edge is installed before starting the Browser MCP on macOS. To enable and
+verify the supported alpha path:
 
 1. If you use Chromium mode or Cockpit's browser-backed tests, install Playwright Chromium from the
   consumer project root:
@@ -123,7 +126,8 @@ starting the Browser MCP. On other platforms the default is Chromium.
   required for macOS managed Edge mode.
 2. If selecting Chromium explicitly on macOS, set `BROWSER_MODE` to `chromium` in the local
   `owlbear-browser` server environment. `PLAYWRIGHT_USER_DATA_DIR` only affects Chromium; managed
-  Edge always uses `~/.owlbear/edge-profile` and ignores that override.
+  Edge always uses `~/.owlbear/edge-profile` and ignores that override. Use an absolute path for a
+  Chromium profile override.
 
   **Expected result:** the MCP server uses the selected mode; an invalid mode is reported as
   `invalid-mode` rather than silently falling back to another browser.
@@ -133,21 +137,41 @@ starting the Browser MCP. On other platforms the default is Chromium.
   ```json
   {
     "env": {
-     "BROWSER_ALLOWED_DOMAINS": "example.com,docs.example.com"
+      "BROWSER_ALLOWED_DOMAINS": "example.com,docs.example.com"
     }
   }
   ```
 
-  **Expected result:** Browser requests are limited to the exact hostnames you named. For local
-  testing across public sites only, keep `"*"`; keep exact hostnames for production. SSRF checks
-  still reject private, loopback, link-local, reserved, and unspecified DNS results.
-4. Restart the `owlbear-browser` MCP server and try `acquire` or `navigate` against an allowed
-  public URL.
+  **Expected result:** requests are limited to the exact hostnames you named. Exact entries also
+  explicitly permit that hostname's private, loopback, or link-local DNS results; reserved and
+  unspecified addresses are always rejected. Wildcard mode does not grant private-address access.
+4. Restart the `owlbear-browser` MCP server and call `browser_status`; it should report
+  `not-launched` before any browser action. Then try `acquire` or `navigate` against an allowed URL.
+  This first action launches the selected visible browser; complete the organization's login flow
+  manually if needed.
 
-  **Expected result:** the tool returns page content or its typed acquisition result. A running
-  server with no configured domains still denies every hostname. `browser_status` reports startup
-  mechanics but does not prove sign-in or authenticated access. See the
-  [Browser MCP guide](../serve/browser-mcp/README.md) for the full boundary and limitations.
+  **Expected result:** the tool returns page content or its typed acquisition result. `browser_status`
+  reports `ready` only when a live browser session is available; it does not prove sign-in or
+  authenticated access. See the [Browser MCP guide](../serve/browser-mcp/README.md) for the full
+  boundary and limitations.
+
+- **Managed SSO readiness:** Treat managed SSO as a separate readiness check. The launcher can load an extension directory
+- **Managed SSO readiness:** On macOS, the default is a visible managed Edge session using the fixed
+  `~/.owlbear/edge-profile`; `PLAYWRIGHT_USER_DATA_DIR` and `SSO_EXTENSION_PATH` do not configure
+  managed Edge. Call an allowed `navigate` or `acquire` action to launch the browser, then verify one
+  permitted target site with the organization's normal login flow. Chromium mode uses a separate
+  profile and can load only an explicitly configured extension directory. A ready browser or loaded
+  extension is not proof of tenant authentication, MFA, Conditional Access, or device compliance.
+  Do not collect cookies or tokens, weaken enterprise policy, or claim SSO support from MCP startup.
+
+- **Knowledge ingestion readiness:** Treat Knowledge ingestion as a separate, currently agent-mediated check. After inspecting a
+  successful `acquire` result, call `knowledge_ingest` with the captured text, an intentional
+  scope, and an optional `source_url`. Direct ingestion creates or reuses a non-refreshable inline
+  source for that scope; `source_url` supplies document identity but does not attach the capture to
+  a registered browser source. Registered `authenticated_web` refresh is not a working end-to-end
+  Browser-to-Knowledge path in the current Knowledge MCP process. Use the
+  [Knowledge operations guide](../share/skills/h-knowledge-ops/SKILL.md) for the current result
+  and limitation contract.
 
 If a customization root is missing, inspect `.vscode/settings.json` and compare its relative
 OwlBear path with the location of the checkout. If a server is missing, inspect `.vscode/mcp.json`,
@@ -168,9 +192,9 @@ data:
 
   | Model | Reasoning effort |
   | --- | --- |
-  | `gpt-5.6-luna` | `max` |
-  | `gpt-5.6-sol` | `high` |
-  | `claude-opus-5` | `medium` |
+  | `gpt-6-luna` | `max` |
+  | `gpt-6-sol` | `high` |
+  | `claude-opus-5.5` | `medium` |
 
 The file is written atomically, unrelated profile entries are preserved, and a missing file or
 Copilot entry is created minimally. Malformed profile JSON is left unchanged with a warning. To
@@ -188,29 +212,37 @@ approved target URLs local; do not put URLs, hostnames, page content, credential
 the repository, Delivery requests, or status.
 
 1. Install stable Microsoft Edge and start the `owlbear-browser` MCP server. Leave
-  `BROWSER_MODE` and `PLAYWRIGHT_USER_DATA_DIR` unset for the managed default.
+  `BROWSER_MODE` and `PLAYWRIGHT_USER_DATA_DIR` unset for the managed default. Configure
+  `BROWSER_ALLOWED_DOMAINS` locally for only the two approved target hosts.
 
-  **Expected result:** `browser_status` reports `managed-edge`, `per-user-owned`, and `ready`. A
-  startup reason such as `edge-unavailable` or `profile-in-use` means stop and report the bounded
-  reason; do not switch to the operator's daily Edge profile.
-2. In the visible Edge window owned by the Browser MCP, locally open one operator-approved
-  SharePoint URL and one operator-approved Confluence URL. Complete first-use sign-in, site trust,
-  consent, or MFA directly in that window. Do not send credentials or session material through an
-  OwlBear tool.
+  **Expected result:** before any browser action, `browser_status` reports `managed-edge`,
+  `per-user-owned`, `not-launched`, null startup reason, and unavailable visible authentication.
+  Stop if the mode is invalid; do not switch to Chromium or the operator's daily Edge profile.
+2. Call `acquire` or `navigate` with one locally supplied, operator-approved SharePoint URL. The
+  first action launches the visible Edge window with the fixed OwlBear profile. Complete first-use
+  sign-in, site trust, consent, or MFA directly in that window. Do not send credentials or session
+  material through an OwlBear tool.
 
-  **Expected result:** authenticated content for each target is visible in the OwlBear-owned Edge
-  window. Browser readiness or extension presence alone does not count as authentication.
-3. Restart the `owlbear-browser` MCP server using VS Code's MCP controls and check both targets again.
+  **Expected result:** the Edge window is live and the operator confirms authenticated SharePoint
+  content. Browser readiness alone does not count as authentication.
+3. Repeat the action with one locally supplied, operator-approved Confluence URL and confirm its
+  authenticated content in the owned Edge window.
 
-  **Expected result:** the same authenticated access is available after the fixed Edge profile is
-  reopened, with no `--no-sandbox` or unsupported-flag warning.
-4. Stop the Browser MCP server normally and let its lifespan close its owned browser resources. Do
-  not close the operator's daily Edge windows or terminate Edge processes indiscriminately.
+  **Expected result:** the operator confirms authenticated Confluence content in the same owned
+  session; record no page content, URL, or hostname.
+4. Close the OwlBear-owned Edge window and call `browser_status`, then repeat an allowed action for
+  one approved target.
 
-  **Expected result:** only the OwlBear-owned Edge resources close. Record only the target class
-  (`SharePoint` or `Confluence`) and `pass` or `fail`; include no URL, hostname, page content,
-  credential, or session data. If a Delivery pilot request is active, answer it in Cockpit using
-  only those bounded outcomes.
+  **Expected result:** status reports `not-launched` after the window closes; the next action
+  relaunches the fixed profile and the operator confirms the target remains authenticated.
+5. Restart the `owlbear-browser` MCP server, repeat an allowed action for each target, and confirm
+  that the fixed profile retains session availability. Stop the server normally afterward.
+
+  **Expected result:** both targets remain authenticated after restart, no `--no-sandbox` or
+  unsupported-flag warning appears, and only OwlBear-owned browser resources close. Record only each
+  target class (`SharePoint` or `Confluence`) and `pass` or `fail`; include no URL, hostname, page
+  content, credential, or session data. If a Delivery pilot request is active, answer it in Cockpit
+  using only those bounded outcomes.
 
 ## First successful workflow
 
@@ -221,17 +253,20 @@ After verification, prove the installation with one small outcome:
    **Expected result:** the Designer records a refined outcome and asks the next bounded question
    when more detail is needed.
 2. Continue with `/design`, review the proposed work, and approve admission. When it succeeds,
-   note the returned lowercase, hyphenated Change ID, for example `improve-search`.
+   note the returned lowercase, hyphenated Change ID, for example `improve-search`, and the next
+   prompt, `/continue-change improve-search`.
 
   **Expected result:** one approved Change is admitted, its verified package is backed up on the
   managed Change branch, its initial checkpoint is queued or published, and its ID is available
   for later commands. The remote recovery guarantee begins at this boundary; earlier drafts remain
   local.
-3. Run `/orchestrate` after admission. It acquires currently eligible work across the portfolio;
-  Planning and Build then proceed in order.
+3. Run `/continue-change improve-search` in Copilot Chat. It continues only that Change: Planning,
+  Build, finalization, and publication proceed in order until the chat stops for you or the pull
+  request is ready.
 
-   **Expected result:** the Change advances through currently eligible Planning and Build work, or
-   Cockpit shows a typed request or block that needs your action.
+   **Expected result:** the Change advances through Planning and Build, or the chat stops and
+   Cockpit shows a typed request or block that needs your action. After you act, run the same
+   prompt again.
 4. Launch Cockpit from the project root and confirm the Change is visible.
 
    ```shell
@@ -239,15 +274,19 @@ After verification, prove the installation with one small outcome:
    ```
 
    **Expected result:** Cockpit opens at `http://127.0.0.1:8420`, reads the current project, and
-   shows the Change, its current stage, and the next available action.
-5. Run `/finalize-change improve-search` after the Change is complete, then review and merge the
-  pull request in GitHub.
+   shows the Change, its progress, and the next available action, such as
+   **Copy continuation prompt**.
+5. When Cockpit shows **Your decision** with the headline **Ready to merge**, review the pull
+   request and approve it with
+  **Approve merge**, or merge it in GitHub.
 
-   **Expected result:** Delivery prepares the exact reviewed Change for publication; GitHub remains
-   the place where a person reviews and merges the pull request.
+   **Expected result:** an approval merges only the exact reviewed head. After the merge, Delivery
+   observes it on GitHub and the Change shows **Done**.
 
 If a worker returns a request or block, answer the request or clear the requestless block in Cockpit
-and then resume the named workflow. Do not edit `.owlbear` Delivery state by hand.
+and then run `/continue-change <change-id>` again. Do not edit `.owlbear` Delivery state by hand.
+Other prompts handle exceptions; see
+[Exceptional entries](operating-owlbear.md#exceptional-entries).
 
 Use the [Delivery workflow reference](operating-owlbear.md#delivery-workflow) when you need the
 detailed correction, publication, acceptance, or recovery procedure.
@@ -263,11 +302,12 @@ detailed correction, publication, acceptance, or recovery procedure.
 | Instructions ignored | `chat.instructionsFilesLocations` missing | Check `.vscode/settings.json`; verify `*.instructions.md` files exist in the registered directory |
 | MCP server fails to start | Missing dependency or `uv` not on PATH | Run `uv --version` to confirm installation; check MCP server logs in VS Code Output panel |
 | `owlbear-delivery` reports `ERR_DELIVERY_STARTUP_UNCONFIGURED` | `.owlbear/delivery/config.json` is absent from the project root | Re-run `init.py`; setup recreates the file only when it is missing |
+| `owlbear-delivery` refuses to start with `state-migration-required` | The OwlBear checkout moved to a release that needs a newer Delivery state format | Run `/upgrade-delivery` from the project; see [Upgrading OwlBear](operating-owlbear.md#upgrading-owlbear) |
+| `owlbear-delivery` refuses to start with `state-newer-than-controller` | The OwlBear checkout is older than the project's Delivery state | Move the checkout forward with `/upgrade-delivery`; going back needs the upgrade backup restored first |
 | Delivery reports that remote Delivery-state snapshots are unavailable | The configured `delivery_state_branch` cannot be read from the configured remote | Verify remote access and the tracked branch name, then retry from the project root; do not copy hidden refs or ignored runtime files |
 | Delivery reports that local state differs from a remote snapshot | Local runtime, package, or Change coordination no longer matches the last published checkpoint | Preserve the local checkout and remote branches, inspect the typed Change attention in Cockpit, and resolve the exact divergence before acquisition |
 | `uv run cockpit` says the command is missing | Command was run from the consumer project without `--project` | Use `uv run --project ../owlbear cockpit` from the project root |
 | Cockpit shows the wrong workspace or cannot find `.owlbear/delivery/config.json` | Cockpit was launched from the wrong working directory | Run from the project root or add `--directory /path/to/project` |
-| `ValueError` on setup | Cross-drive path resolution | Place owlbear and your project on the same Windows drive |
 | Hook file not refreshed on rerun | Existing local `.owlbear/hooks/` file differs from seed | Re-run `init.py --replace-hooks` to overwrite, or choose `replace` when prompted interactively |
 | Agent name conflict | Same-name agent in both owlbear and project locations | Give project agents unique names; see [Adding local agents](operating-owlbear.md#adding-local-agents) |
 
@@ -279,6 +319,7 @@ raw LLM request/response payloads.
 | You want to... | Go to |
 | --- | --- |
 | Know exactly what setup wrote, and how to undo it | [Operating OwlBear](operating-owlbear.md) |
+| Upgrade OwlBear and migrate Delivery state | [Upgrading OwlBear](operating-owlbear.md#upgrading-owlbear) |
 | Run, correct, publish, and accept changes | [Delivery Workflow](operating-owlbear.md#delivery-workflow) |
 | Add project-local agents, instructions, or MCP servers | [Project-Specific Customization](operating-owlbear.md#project-specific-customization) |
 | Set a teammate up on the same installation | [Sharing guide](sharing-guide.md) |
