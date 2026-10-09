@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import sqlite3
 from contextlib import asynccontextmanager
@@ -32,7 +33,7 @@ from owlbear_knowledge.protocols.enrichment import (
     ExtractedEntity,
     ExtractedRelation,
 )
-from owlbear_knowledge.protocols.failures import KnowledgeFailure, KnowledgeOperationError
+from owlbear_knowledge.protocols.failures import KnowledgeFailure, KnowledgeFailureStage, KnowledgeOperationError
 from owlbear_knowledge.protocols.ingest import IngestDocument, IngestRequest, RefreshError, RefreshRequest
 from owlbear_knowledge.protocols.query import EntityLookupRequest, QueryRequest, QueryResult
 from owlbear_knowledge.protocols.sources import (
@@ -41,6 +42,7 @@ from owlbear_knowledge.protocols.sources import (
     SourceKind,
     SourceRegistration,
     SourceState,
+    UrlListConfig,
 )
 from owlbear_knowledge.qdrant import QdrantVectorStore
 from owlbear_knowledge.query_facade import QueryFacade
@@ -56,6 +58,7 @@ from ._helpers import (
     _normalize_optional_scope,
     _normalize_read_limit,
     _normalize_scope_list,
+    _prepare_capture_round,
     _sanitize_error,
     _serialize_graph_context,
     _serialize_related_sources,
@@ -67,7 +70,9 @@ from ._types import (
     _DEFAULT_KB_PATH,
     _DEFAULT_QDRANT_PATH,
     _MAX_ENRICHMENT_BATCH_SIZE,
+    CaptureEntry,
     EnrichmentChunk,
+    KnowledgeIngestResult,
     RetryEnrichmentResult,
     SearchResult,
     SourceInfo,
@@ -450,6 +455,18 @@ def _serialize_knowledge_failure(failure: KnowledgeFailure) -> KnowledgeFailureR
     }
 
 
+def _serialize_ingest_tool_failure() -> KnowledgeFailureResult:
+    """Return a fixed failure result for unexpected ingestion errors."""
+    return _serialize_knowledge_failure(
+        KnowledgeFailure(
+            stage=KnowledgeFailureStage.PERSISTENCE,
+            code="persistence_failed",
+            retryable=True,
+            message="Knowledge ingestion failed",
+        ),
+    )
+
+
 def _serialize_refresh_error(error: RefreshError) -> RefreshErrorResult:
     """Add refresh context to a typed core failure."""
     failure = error.failure
@@ -786,33 +803,96 @@ async def register_knowledge_source(  # noqa: PLR0913
     }
 
 
-@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False))
-async def knowledge_ingest(
-    ctx: Context,
-    text: str,
-    metadata: dict[str, Any] | None = None,
-    scope: str = "global",
-    source_url: str | None = None,
-) -> str:
-    """Ingest a text document into the knowledge base."""
-    app_ctx: AppContext = ctx.request_context.lifespan_context
-    coordinator = app_ctx.ingest_coordinator
-    source_store = app_ctx.source_store_v2
-    if coordinator is None:
-        msg = "ingest coordinator not available"
+def _validate_bound_ingest_mode(
+    text: str | None,
+    source_url: str | None,
+    scope: str | None,
+    captures: list[CaptureEntry] | None,
+) -> None:
+    if text is not None or source_url is not None or scope is not None:
+        msg = "source-bound ingestion does not accept inline fields"
         raise ToolError(msg)
-    if source_store is None:
-        msg = "source store not available"
+    if captures is None:
+        msg = "source-bound ingestion requires captures"
+        raise ToolError(msg)
+
+
+def _validate_inline_ingest_mode(
+    text: str | None,
+    source_url: str | None,
+    scope: str | None,
+    captures: list[CaptureEntry] | None,
+) -> None:
+    if captures is not None:
+        msg = "captures require source_id"
+        raise ToolError(msg)
+    if not isinstance(text, str):
+        msg = "text is required for inline ingestion"
+        raise ToolError(msg)
+    if scope is not None and not isinstance(scope, str):
+        msg = "scope must be a string"
+        raise ToolError(msg)
+    if source_url is not None and not isinstance(source_url, str):
+        msg = "source_url must be a string"
+        raise ToolError(msg)
+
+
+def _prepare_bound_ingest_request(
+    source_store: SqliteSourceStore,
+    source_id: str,
+    captures: list[CaptureEntry] | None,
+    metadata: dict[str, Any] | None,
+) -> IngestRequest | KnowledgeFailureResult:
+    try:
+        source = source_store.get_source(source_id)
+    except Exception:  # noqa: BLE001
+        return _serialize_ingest_tool_failure()
+    if source is None:
+        msg = "source not found"
+        raise ToolError(msg)
+
+    config = getattr(source, "config", None)
+    if (
+        getattr(source, "state", None) != SourceState.ACTIVE
+        or getattr(source, "kind", None) != SourceKind.URL_LIST
+        or getattr(source, "fetch_method", None) != FetchTransport.BROWSER
+        or not isinstance(config, UrlListConfig)
+    ):
+        msg = "source must be an active browser url_list source"
+        raise ToolError(msg)
+    if captures is None:
+        msg = "source-bound ingestion requires captures"
         raise ToolError(msg)
 
     try:
-        source_name = f"mcp-inline-{scope}"
-        # SourceStore shares the app lifespan SQLite connection; keep operations
-        # on the request thread to avoid cross-thread SQLite access errors.
-        sources = source_store.list_sources(
-            scope=scope,
-            state=SourceState.ACTIVE,
+        documents, acquisition_failures = _prepare_capture_round(
+            captures,
+            config.urls,
+            metadata=metadata,
         )
+        return IngestRequest(
+            source_id=source_id,
+            documents=documents,
+            acquisition_failures=acquisition_failures,
+            enrich=source.enrich,
+        )
+    except ToolError:
+        raise
+    except Exception:  # noqa: BLE001
+        return _serialize_ingest_tool_failure()
+
+
+def _prepare_inline_ingest_request(
+    source_store: SqliteSourceStore,
+    text: str,
+    metadata: dict[str, Any] | None,
+    scope: str | None,
+    source_url: str | None,
+) -> IngestRequest | KnowledgeFailureResult:
+    inline_scope = "global" if scope is None else scope
+    source_name = f"mcp-inline-{inline_scope}"
+    try:
+        sources = source_store.list_sources(scope=inline_scope, state=SourceState.ACTIVE)
         source = next(
             (item for item in sources if item.name == source_name and item.kind == SourceKind.INLINE),
             None,
@@ -824,35 +904,105 @@ async def knowledge_ingest(
                     kind=SourceKind.INLINE,
                     fetch_method=FetchTransport.NONE,
                     config=InlineConfig(),
-                    scope=scope,
+                    scope=inline_scope,
                     enrich=True,
                     refreshable=False,
                 ),
             )
+    except Exception:  # noqa: BLE001
+        return _serialize_ingest_tool_failure()
 
-        document_metadata = metadata or {}
-        request = IngestRequest(
+    document_metadata = {} if metadata is None else dict(metadata)
+    metadata_title = document_metadata.get("title")
+    has_metadata_title = isinstance(metadata_title, str) and bool(metadata_title)
+    document_uri = source_url or None
+    document_title = metadata_title if has_metadata_title else document_uri or "Untitled inline document"
+    external_id = None
+    if document_uri is None and not has_metadata_title:
+        external_id = f"mcp-inline:{hashlib.sha256(text.encode('utf-8')).hexdigest()}"
+    try:
+        return IngestRequest(
             source_id=source.id,
             documents=(
                 IngestDocument(
-                    title=document_metadata.get("title", source_url or "Untitled inline document"),
+                    title=document_title,
                     text=text,
-                    uri=source_url,
+                    uri=document_uri,
+                    external_id=external_id,
                     metadata=document_metadata,
                 ),
             ),
             enrich=True,
         )
-        result = await coordinator.ingest(request)
-    except Exception as exc:  # noqa: BLE001
-        return f"error: ingestion failed: {exc}"
+    except Exception:  # noqa: BLE001
+        return _serialize_ingest_tool_failure()
 
-    return (
-        "Ingested: "
-        f"documents_processed={result.documents_processed}, "
-        f"chunks_created={result.chunks_created}, "
-        f"chunks_enqueued={result.chunks_enqueued}"
-    )
+
+async def _execute_ingest_request(
+    coordinator: IngestCoordinator,
+    source_store: SqliteSourceStore,
+    request: IngestRequest,
+) -> KnowledgeIngestResult | KnowledgeFailureResult:
+    try:
+        result = await coordinator.ingest(request)
+        recorded_source = source_store.get_source(request.source_id)
+    except KnowledgeOperationError as exc:
+        return _serialize_knowledge_failure(exc.failure)
+    except Exception:  # noqa: BLE001
+        return _serialize_ingest_tool_failure()
+    if recorded_source is None:
+        return _serialize_ingest_tool_failure()
+
+    return {
+        "source_id": request.source_id,
+        "documents_created": result.documents_created,
+        "documents_replaced": result.documents_replaced,
+        "documents_unchanged": result.documents_unchanged,
+        "documents_failed": len(result.errors),
+        "chunks_created": result.chunks_created,
+        "chunks_replaced": result.chunks_replaced,
+        "document_ids": [item.document_id for item in result.content_results],
+        "health": str(getattr(recorded_source, "health", "unknown")),
+        "errors": [_serialize_knowledge_failure(error) for error in result.errors],
+    }
+
+
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False))
+async def knowledge_ingest(  # noqa: PLR0913, PLR0917
+    ctx: Context,
+    text: str | None = None,
+    metadata: dict[str, Any] | None = None,
+    scope: str | None = None,
+    source_url: str | None = None,
+    source_id: str | None = None,
+    captures: list[CaptureEntry] | None = None,
+) -> KnowledgeIngestResult | KnowledgeFailureResult:
+    """Ingest inline text or one browser-captured round for a registered source."""
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    coordinator = app_ctx.ingest_coordinator
+    source_store = app_ctx.source_store_v2
+    if coordinator is None:
+        msg = "ingest coordinator not available"
+        raise ToolError(msg)
+    if source_store is None:
+        msg = "source store not available"
+        raise ToolError(msg)
+    if metadata is not None and not isinstance(metadata, dict):
+        msg = "metadata must be an object"
+        raise ToolError(msg)
+
+    if source_id is not None:
+        if not isinstance(source_id, str) or not source_id.strip():
+            msg = "source_id is invalid"
+            raise ToolError(msg)
+        _validate_bound_ingest_mode(text, source_url, scope, captures)
+        request = _prepare_bound_ingest_request(source_store, source_id, captures, metadata)
+    else:
+        _validate_inline_ingest_mode(text, source_url, scope, captures)
+        request = _prepare_inline_ingest_request(source_store, text, metadata, scope, source_url)
+    if not isinstance(request, IngestRequest):
+        return request
+    return await _execute_ingest_request(coordinator, source_store, request)
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True))

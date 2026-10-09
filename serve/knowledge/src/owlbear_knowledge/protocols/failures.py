@@ -20,6 +20,7 @@ class KnowledgeFailureStage(StrEnum):
 
 KnowledgeFailureCode = Literal[
     "agent_capture_required",
+    "browser_capture_failed",
     "url_rejected",
     "dns_failure",
     "transport_failure",

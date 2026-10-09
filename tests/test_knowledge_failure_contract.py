@@ -191,6 +191,7 @@ async def _failing_resolver(_hostname: str, _port: int) -> list[tuple[int, int, 
 def test_failure_code_literal_is_complete_and_protocol_is_public() -> None:
     assert get_args(KnowledgeFailureCode) == (
         "agent_capture_required",
+        "browser_capture_failed",
         "url_rejected",
         "dns_failure",
         "transport_failure",
