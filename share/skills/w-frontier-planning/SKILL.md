@@ -50,6 +50,10 @@ procedure so the Builder can ask the user to confirm it. Bind such evidence by a
 exact procedure, which the Builder matches against an answered request's `applies_to`; never name a
 request ID in a task, since only the Builder's own pause creates and cites it.
 
+When a task must start from a target-branch commit the Change does not yet contain, name the full
+commit in a constraint. The Builder then returns a target-sync block and Delivery merges the target;
+never plan a user request or user action to synchronize the target.
+
 Repeat every `DeliveryPlanContext.retained_tasks` entry verbatim (completed work), then plan only the
 delta for criteria whose `coverage` status is not `covered` or `waived`, publishing the retained
 tasks alone when none remain.

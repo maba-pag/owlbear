@@ -626,6 +626,15 @@ function ChangePauseSection(props: WorkItemDetailProps) {
   );
 }
 
+/** The commit a requestless Builder block's `target-commit:` locator requires; Delivery syncs until it is in. */
+function requiredTargetCommit(block: { request_id: string | null; locators: string[] }): string | null {
+  if (block.request_id !== null) return null;
+  const commits = new Set(
+    block.locators.flatMap((locator) => /^target-commit:([0-9a-f]{40})$/.exec(locator)?.slice(1, 2) ?? []),
+  );
+  return commits.size === 1 ? [...commits][0] : null;
+}
+
 function BlockSection({ detail, pendingAction, onClearBlock, onGrantAttempt }: WorkItemDetailProps) {
   const block = detail.item.block;
   const [note, setNote] = useState("");
@@ -648,6 +657,12 @@ function BlockSection({ detail, pendingAction, onClearBlock, onGrantAttempt }: W
       <p className="mt-static-xs text-sm text-contrast-medium">
         Clear when: <CommitText text={block.unblock_condition} />
       </p>
+      {requiredTargetCommit(block) && !block.resolution_note ? (
+        <p className="mt-static-xs text-sm" data-testid="block-target-sync">
+          Delivery clears this itself: it keeps the Builder's unfinished work under refs, merges the target branch so
+          the Change contains <CommitText text={requiredTargetCommit(block) ?? ""} />, and restarts the task.
+        </p>
+      ) : null}
       {reviseDesign?.command ? (
         <div className="mt-static-md grid gap-static-sm" data-testid="block-revise-design">
           <p className="text-sm">
@@ -2773,6 +2788,24 @@ export default function WorkItemDetail(
             onApproveMerge={props.onApproveMerge}
           />
           <RetryGrantControl {...available} />
+          {card.scope === "outcome" &&
+          props.detail.item.readiness?.operation === "sync-target" &&
+          props.detail.item.readiness.executable ? (
+            <div className="mt-static-sm grid gap-static-xs" data-testid="outcome-target-sync">
+              <PButton
+                className="w-fit"
+                type="button"
+                compact
+                disabled={props.pendingAction !== null}
+                onClick={() => void props.onSyncTarget()}
+              >
+                {props.pendingAction === "target-sync" ? "Merging target..." : "Merge target into Change"}
+              </PButton>
+              <span className="text-xs text-contrast-medium">
+                Or run the prompt below. A conflict stops the merge for you to resolve.
+              </span>
+            </div>
+          ) : null}
         </ReadinessSection>
         <RequestsSection {...available} />
         <BlockSection {...available} />

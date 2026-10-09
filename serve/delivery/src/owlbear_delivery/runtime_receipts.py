@@ -37,6 +37,7 @@ from owlbear_delivery.runtime_models import (
     _receipt_digest,
     binding_has_n03_content,
     derive_change_stage,
+    required_target_commit,
     retained_requests,
 )
 
@@ -121,14 +122,22 @@ class DeliveryBuilderInvocationSettlement(_DeliveryModel):
                 message = "Builder retry request does not match its attempt"
                 raise ValueError(message)
         elif isinstance(request, BlockDelivery):
-            if request.request is None or request.request.resolution is not None:
-                message = "Builder block settlement requires an unanswered bounded user request"
-                raise ValueError(message)
-            if request.request.outcome_id != self.outcome_id:
-                message = "Builder block request does not match its outcome"
-                raise ValueError(message)
+            self._validate_block_request(request)
         elif request.attempt_id != self.attempt_id:
             message = "Builder return request does not match its attempt"
+            raise ValueError(message)
+
+    def _validate_block_request(self, request: BlockDelivery) -> None:
+        if request.request is None:
+            if required_target_commit(request.locators) is None:
+                message = "Builder block settlement requires an unanswered request or one target-commit locator"
+                raise ValueError(message)
+            return
+        if request.request.resolution is not None:
+            message = "Builder block settlement requires an unanswered bounded user request"
+            raise ValueError(message)
+        if request.request.outcome_id != self.outcome_id:
+            message = "Builder block request does not match its outcome"
             raise ValueError(message)
 
 
@@ -412,6 +421,20 @@ def is_builder_attempt_grant_block(binding: OutcomeAuthorityBinding) -> bool:
         return False
     stage = DeliveryStage.IMPLEMENTATION if context.route == "same-task" else DeliveryStage.PLANNING
     return binding.stage == stage and block.block_id == builder_attempt_grant_block_id(context)
+
+
+def target_sync_commit(binding: OutcomeAuthorityBinding) -> str | None:
+    """Return the commit an unresolved Builder target-sync block still requires, if any (N13)."""
+    block = binding.block
+    if binding.stage != DeliveryStage.IMPLEMENTATION or block is None or block.resolved or block.request_id:
+        return None
+    return required_target_commit(block.locators)
+
+
+def is_builder_target_sync_handoff(binding: OutcomeAuthorityBinding) -> bool:
+    """Return whether a same-task Builder handoff is held only for an engine target sync (N13)."""
+    context = binding.builder_handoff_context
+    return context is not None and context.route == "same-task" and target_sync_commit(binding) is not None
 
 
 def is_builder_return_limit(binding: OutcomeAuthorityBinding) -> bool:

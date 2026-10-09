@@ -66,6 +66,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryChangeDispositionKind,
     DeliveryChangePublicationHistory,
     DeliveryChangePublicationIdentity,
+    DeliveryChangeStage,
     DeliveryCheckpointPublicationState,
     DeliveryCheckpointTriggerKind,
     DeliveryFinalizationInvalidationReceipt,
@@ -74,6 +75,9 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryPendingStatePublication,
     DeliveryRuntime,
     DeliveryRuntimeConflictError,
+    is_builder_target_sync_handoff,
+    parse_delivery_frontier,
+    target_sync_commit,
 )
 from owlbear_delivery.draft_pull_request import (
     CreateOrReconcileDraftPullRequest,
@@ -171,6 +175,7 @@ class _PublicationMixin:
             self._require_no_review_repair(runtime, "target synchronization")
             if runtime.change_disposition() is not None:
                 self._fail("target synchronization requires Change attention resolution first")
+            self._release_target_sync_handoff(change_id, runtime)
             if runtime.active_claims() or runtime.integration_repair_claim() is not None:
                 self._fail("target synchronization cannot overlap an active Delivery claim")
             direct = (
@@ -190,6 +195,52 @@ class _PublicationMixin:
         """Write ``finished.json`` before a direct entry returns, when its own start marker exists."""
         if direct is not None and self._coordinator.direct_operation_state(direct) == "started":
             self._coordinator.finish_direct_operation(direct)
+
+    def _release_target_sync_handoff(self, change_id: str, runtime: DeliveryRuntime) -> bool:
+        """Preserve and release a Builder handoff held only for a target sync (N13); False when none is released.
+
+        A requested Pause keeps the handoff: the sync it would serve cannot start either.
+        """
+        frontier = parse_delivery_frontier(runtime.frontier_bytes())[0]
+        if not any(is_builder_target_sync_handoff(binding) for binding in frontier.bindings):
+            return False
+        if self._workspace_manager.show(change_id).pause_request is not None:
+            return False
+        runtime.release_target_sync_handoff()
+        return True
+
+    def _prepare_target_sync(self, change_id: str, runtime: DeliveryRuntime) -> None:
+        """Before selecting a continuation, free a target-sync handoff and clear blocks a sync already met (N13)."""
+        coordination = self._workspace_manager.show(change_id)
+        if coordination.pause_request is not None or runtime.change_stage() is not DeliveryChangeStage.BUILDING:
+            return
+        receipt = coordination.target_sync_receipt
+        locators = (f"target-sync:{receipt.receipt_id}",) if receipt is not None else ()
+        released = self._release_target_sync_handoff(change_id, runtime)
+        cleared = self._clear_satisfied_target_sync_blocks(change_id, runtime, locators)
+        if released or cleared:
+            digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
+            self._publish_attention_best_effort(change_id, runtime, f"target-sync-prerequisite-{digest}")
+
+    def _clear_satisfied_target_sync_blocks(
+        self, change_id: str, runtime: DeliveryRuntime, locators: tuple[str, ...] = ()
+    ) -> bool:
+        """Resolve target-sync blocks whose commit the reviewed head now includes (N13); True when any cleared."""
+        frontier = parse_delivery_frontier(runtime.frontier_bytes())[0]
+        pending = tuple(
+            binding.outcome_id
+            for binding in frontier.bindings
+            if target_sync_commit(binding) is not None and binding.builder_handoff_context is None
+        )
+        if not pending:
+            return False
+        reviewed_head = self._workspace_manager.show(change_id).last_reviewed_commit
+        cleared = False
+        for outcome_id in pending:
+            commit = target_sync_commit(runtime.show_binding(outcome_id))
+            if commit is not None and self._workspace_manager.includes_commit(commit, reviewed_head):
+                cleared = runtime.clear_target_sync_block(outcome_id, reviewed_head, locators) or cleared
+        return cleared
 
     def _sync_change_with_target_owned(
         self,
@@ -244,6 +295,7 @@ class _PublicationMixin:
             # Strict proof: a new target returns the PR to draft even when the Change head is unchanged.
             self._return_publication_to_draft_before_head_change(change_id, runtime, operation_id)
         runtime.record_target_sync(receipt, _timestamp(self._clock()))
+        self._clear_satisfied_target_sync_blocks(change_id, runtime, (f"target-sync:{receipt.receipt_id}",))
         self._publish_target_sync_branch(change_id, runtime, receipt.merged_head)
         self._publish_delivery_state(change_id, runtime, f"target-sync-{receipt.receipt_id}")
         self._acknowledge_published_target_sync_checkpoint(runtime, receipt.merged_head)

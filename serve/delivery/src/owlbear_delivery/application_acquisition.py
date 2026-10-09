@@ -349,6 +349,7 @@ class _AcquisitionMixin:
                     readiness=unavailable,
                 )
             self._settle_stalled_workers((request.change_id,), checkpoint_locked=True)
+            self._prepare_target_sync(request.change_id, runtime)
         replay = self._replay_continuation_action(request, observed)
         if replay is not None:
             return replay

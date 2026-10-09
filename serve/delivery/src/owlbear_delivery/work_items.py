@@ -32,7 +32,11 @@ from owlbear_delivery.evidence import DeliveryEvidenceProjection, build_evidence
 from owlbear_delivery.finalization_reports import FinalizationAttempt
 from owlbear_delivery.merge_offer import MergeBlock, MergeBlockReason, MergeFacts, MergeOffer
 from owlbear_delivery.recovery import MAX_RETRY_HISTORY_ATTEMPTS, DeliveryRetryAttemptView
-from owlbear_delivery.runtime_receipts import is_builder_attempt_grant_block, is_builder_return_limit
+from owlbear_delivery.runtime_receipts import (
+    is_builder_attempt_grant_block,
+    is_builder_return_limit,
+    target_sync_commit,
+)
 from owlbear_delivery.target_contract import DeliveryCommitment, DeliveryContract, DeliveryDecision, DeliveryOutcome
 
 
@@ -291,6 +295,7 @@ DeliveryReadinessReason = Literal[
     "engine-action-failed",
     "engine-action-incomplete",
     "target-sync-required",
+    "target-commit-missing",
     "claim-custody-unreconciled",
     "runtime-unavailable",
     "dependency-wait",
@@ -681,6 +686,10 @@ _ATTENTION_HEADLINES: dict[str, str] = {
     "retry-ledger-unavailable": "Delivery cannot read its retry records; inspect the Change.",
     "settled-attention-target-drift": "The target moved after a failed verification; inspect the Change.",
     "merge-blocked": "GitHub reports the pull request cannot merge; open it to check.",
+    "target-commit-missing": (
+        "The Builder needs a commit the target branch does not have yet; get it onto the target, or revise the "
+        "Design if the Builder named the wrong commit."
+    ),
 }
 _ATTEMPT_GRANT_HEADLINE = "Automatic retries are used up; grant one more attempt or inspect the Change."
 _GRANT_ATTEMPT_ACTION = WorkItemAction(kind=WorkItemActionKind.GRANT_ATTEMPT, label="Grant one more attempt")
@@ -1478,7 +1487,7 @@ class WorkItemProjector:
             action=action,
         )
 
-    def _outcome_needs(
+    def _outcome_needs(  # noqa: PLR0911 - one return per blocking condition, in precedence order.
         self,
         outcome: DeliveryOutcome,
         binding: OutcomeAuthorityBinding,
@@ -1488,6 +1497,8 @@ class WorkItemProjector:
         if binding.retry_diagnostic is not None:
             return WorkItemNeed.NONE, "Retry refused; host worker-exclusion evidence required"
         pending_request = next((item for item in binding.requests if item.resolution is None), None)
+        if pending_request is None and target_sync_commit(binding) is not None:
+            return WorkItemNeed.NONE, "Synchronize with the target"
         if pending_request is not None or (binding.block is not None and not binding.block.resolved):
             if pending_request is not None:
                 headline = "Decision required" if pending_request.kind.value == "decision" else "Action required"
@@ -1557,7 +1568,9 @@ class WorkItemProjector:
         return WorkItemActivity(state=WorkItemActivityState.READY)
 
     @staticmethod
-    def _outcome_action(binding: OutcomeAuthorityBinding, change_id: str) -> WorkItemAction:
+    def _outcome_action(  # noqa: PLR0911 - one return per action, in precedence order.
+        binding: OutcomeAuthorityBinding, change_id: str
+    ) -> WorkItemAction:
         if binding.retry_diagnostic is not None or (
             binding.recovery_attention is not None and binding.recovery_attention.diagnostic_transition is not None
         ):
@@ -1572,6 +1585,8 @@ class WorkItemProjector:
         pending_request = next((item for item in binding.requests if item.resolution is None), None)
         if pending_request is not None:
             return WorkItemAction(kind=WorkItemActionKind.ANSWER_REQUEST, label="Answer request")
+        if target_sync_commit(binding) is not None:
+            return WorkItemAction(kind=WorkItemActionKind.SYNC_TARGET, label="Synchronize target")
         if binding.block is not None and not binding.block.resolved and binding.block.request_id is None:
             return (
                 WorkItemAction(kind=WorkItemActionKind.GRANT_ATTEMPT, label="Grant one more attempt")

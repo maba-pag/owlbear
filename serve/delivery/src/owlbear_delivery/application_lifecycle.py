@@ -102,6 +102,7 @@ _SYNC_DRAIN_MUTATIONS = (
     "capture_target_sync_conflict",
     "clear_ready_for_head_change",
     "capture_change_disposition",
+    "clear_target_sync_block",
 )
 _READY_DRAIN_MUTATIONS = ("mark_awaiting_merge", "capture_change_disposition")
 _SNAPSHOT_DRAIN_MUTATIONS = ("record_design_package_snapshot", "reconcile_finalization_head")

@@ -650,6 +650,7 @@ _EXPECTED: dict[str, tuple[str, WorkItemActionKind | None, bool, str | None, Del
     "merge-approval-required": ("waiting", None, False, None, "your-decision"),
     "merge-checking": ("waiting", None, False, None, "waiting-on-github"),
     "merge-blocked": ("blocked", None, False, None, "needs-attention"),
+    "target-commit-missing": ("blocked", None, False, None, "needs-attention"),
     "checks-running": ("waiting", None, False, None, "waiting-on-github"),
     "provider-unavailable": ("waiting", None, False, None, "waiting-on-github"),
     "merge-in-progress": ("waiting", None, False, None, "waiting-on-github"),
