@@ -179,8 +179,11 @@ be shown complete without user input now. To ask the user to waive a criterion o
 only a person can make, block with a Decision `request` whose `applies_to` names `kind`
 (`waive` or `confirm-check`), the `acceptance` references from the context, and the exact
 `procedure`, with options exactly `waive` and `keep-required` or `passed` and `failed` and no
-`resolution`. The user answers it in Cockpit; the `answer` tool refuses it with
-`ERR_DELIVERY_CONFIRMATION`. A resumed claim cites the answered request by `request_id` from a
+`resolution`. Every `procedure`, here and in observations, is at most 512 characters: state the
+check itself and put longer steps in the observation `locator` or a committed file, because Delivery
+rejects a longer request and the claim then stays unsettled. The user answers it in Cockpit; the
+`answer` tool refuses it with `ERR_DELIVERY_CONFIRMATION`. A resumed claim cites the answered request
+by `request_id` from a
 `waived` record, or a `human-confirmed` manual or artifact record, whose `covers` lie in that scope
 and whose `procedure` equals it; `keep-required` or `failed` confirms nothing.
 Keep these observation values for Step 3, which obtains their receipts; never calculate, copy, or
