@@ -7,6 +7,7 @@ import ipaddress
 import logging
 import os
 import socket
+from collections.abc import Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -80,13 +81,27 @@ def _is_trusted_internal_ip(ip_str: str) -> bool:
     )
 
 
-async def _check_ssrf(url: str, *, allowlist: DomainAllowlist | None = None) -> None:
+AddressResolver = Callable[[str, int], list[tuple[Any, ...]]]
+
+
+def _system_resolver(hostname: str, port: int) -> list[tuple[Any, ...]]:
+    """Resolve through the current system resolver, preserving runtime patchability."""
+    return socket.getaddrinfo(hostname, port)
+
+
+async def _check_ssrf(
+    url: str,
+    *,
+    allowlist: DomainAllowlist | None = None,
+    resolver: AddressResolver = _system_resolver,
+) -> None:
     """Pre-flight SSRF check for *url* (CWE-918).
 
     Args:
         url: URL to resolve and validate.
         allowlist: Configured hostname allowlist used to identify an exact
             trusted-internal hostname. Wildcard mode never permits private IPs.
+        resolver: Callable used to resolve the hostname and port.
 
     Raises :class:`~mcp.server.mcpserver.exceptions.ToolError` if:
 
@@ -129,7 +144,7 @@ async def _check_ssrf(url: str, *, allowlist: DomainAllowlist | None = None) -> 
     )
 
     try:
-        addrs = await asyncio.to_thread(socket.getaddrinfo, hostname, port)
+        addrs = await asyncio.to_thread(resolver, hostname, port)
     except OSError as exc:
         msg = f"DNS resolution failed for '{hostname}': {exc}"
         raise ToolError(msg) from exc
@@ -149,6 +164,7 @@ class AppContext:
     launcher: PlaywrightLauncher | None = None
     page: Any = None
     browser_diagnostic: str | None = None
+    resolver: AddressResolver = _system_resolver
 
 
 def _safe_browser_diagnostic(stage: str, error: BaseException) -> str:
@@ -277,7 +293,7 @@ async def acquire(  # noqa: PLR0913
     app_ctx = ctx.request_context.lifespan_context
     if not isinstance(app_ctx, AppContext) or app_ctx.launcher is None:
         raise ToolError(_browser_unavailable_message(app_ctx))
-    await _check_ssrf(url, allowlist=app_ctx.allowlist)
+    await _check_ssrf(url, allowlist=app_ctx.allowlist, resolver=app_ctx.resolver)
     try:
         app_ctx.allowlist.check(url)
     except PermissionError as exc:
@@ -311,7 +327,7 @@ async def navigate(ctx: Context, url: str) -> str:
     """Navigate the browser to *url*."""
     page = _require_page(ctx)
     app_ctx = ctx.request_context.lifespan_context
-    await _check_ssrf(url, allowlist=app_ctx.allowlist)
+    await _check_ssrf(url, allowlist=app_ctx.allowlist, resolver=app_ctx.resolver)
     try:
         app_ctx.allowlist.check(url)
     except PermissionError as exc:
