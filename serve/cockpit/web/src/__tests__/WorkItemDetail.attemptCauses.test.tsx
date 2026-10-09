@@ -1,5 +1,6 @@
 import { screen, within } from "@testing-library/react";
 import { expect, it } from "vitest";
+import { retryAttemptCause } from "../components/workItemPresentation";
 import {
   detail,
   fixtureState,
@@ -55,4 +56,23 @@ it("states each exhausted attempt's recorded cause in plain language without rec
   ]);
   // The recorded codes stay available in the technical history.
   expect(screen.getByTestId("readiness-retry-history")).toHaveTextContent("finalizer-ended-without-report");
+});
+
+it.each([
+  ["worker-returned", "The agent returned the work to an earlier stage."],
+  ["maintained-check-unavailable", "A required verification result was unavailable."],
+  ["independent-review-unavailable", "An acceptable independent review result was unavailable."],
+  ["engine-action-failed", "A Delivery operation failed."],
+])("states %s without claiming more than the code records", (code, cause) => {
+  expect(
+    retryAttemptCause({ ordinal: 1, kind: "original", status: "failed", failure_code: code, observed_at: null }),
+  ).toBe(cause);
+});
+
+it("never presents an unsettled or contained attempt as a result", () => {
+  const attempt = { ordinal: 1, kind: "original" as const, failure_code: null, observed_at: null };
+  expect(retryAttemptCause({ ...attempt, status: "pending" })).toBe("No result recorded yet.");
+  expect(retryAttemptCause({ ...attempt, status: "contained" })).toBe(
+    "No result was recorded; this attempt's outcome is unknown.",
+  );
 });
