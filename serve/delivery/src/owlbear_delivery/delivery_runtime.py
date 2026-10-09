@@ -2173,7 +2173,11 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
         return _find_binding(replacement, request.outcome_id)
 
     def settle_planning_retry(
-        self, envelope: DeliveryPlanningRetrySettlement, *, retry_observed_at: datetime | str | None = None
+        self,
+        envelope: DeliveryPlanningRetrySettlement,
+        *,
+        retry_observed_at: datetime | str | None = None,
+        retry_reason: str | None = None,
     ) -> OutcomeAuthorityBinding:
         """Settle one exact normally returned, completed-timeout, or ended-without-result Planner invocation."""
         envelope_type = type(envelope)
@@ -2205,9 +2209,9 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
             if request is None:
                 _conflict("normal Planner retry settlement requires its unchanged RetryDelivery")
             self._validate_retry_identity(binding, request, claim)
-            failure_code, reason = request.failure_code, request.reason
+            failure_code = request.failure_code
         else:
-            failure_code, reason = REQUESTLESS_WORKER_SETTLEMENT_FAILURE_CODES[envelope.disposition], None
+            failure_code = REQUESTLESS_WORKER_SETTLEMENT_FAILURE_CODES[envelope.disposition]
 
         result = binding.model_copy(
             update={
@@ -2225,9 +2229,9 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
                 accepted=False,
                 accepted_progress=True,
                 failure_code=failure_code,
-                reason=reason,
                 now=retry_observed_at or datetime.now(UTC),
             ),
+            *self.retry_ledger().reason_participants(claim.attempt_id, retry_reason),
             self._planning_retry_settlement_participant(receipt),
         )
         self._replace(
@@ -2243,6 +2247,7 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
         envelope: DeliveryBuilderInvocationSettlement,
         *,
         retry_observed_at: datetime | str | None = None,
+        retry_reason: str | None = None,
     ) -> OutcomeAuthorityBinding:
         """Settle one exact Builder invocation without rewriting its registered worktree."""
         envelope_type = type(envelope)
@@ -2302,9 +2307,9 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
                     accepted_progress=not refunded,
                     paused=refunded,
                     failure_code=failure_code,
-                    reason=envelope.request.reason if isinstance(envelope.request, RetryDelivery) else None,
                     now=retry_observed_at or datetime.now(UTC),
                 ),
+                *ledger.reason_participants(claim.attempt_id, retry_reason),
                 self._builder_invocation_settlement_participant(receipt),
                 prepared.participant,
             )

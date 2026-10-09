@@ -91,7 +91,8 @@ from owlbear_delivery.portfolio_operating import (
     DeliveryHealthStatus,
     DeliveryHealthView,
 )
-from owlbear_delivery.runtime_models import MAX_EVIDENCE_GAPS, DeliveryEvidenceGap
+from owlbear_delivery.recovery import MAX_RETRY_REASON_LENGTH, RETRY_REASON_PATTERN
+from owlbear_delivery.runtime_models import MAX_EVIDENCE_GAPS, DeliveryEvidenceGap, RetryDelivery
 
 
 class _TargetProtocolModel(BaseModel):
@@ -1110,6 +1111,12 @@ class SettleWorkerInvocationParams(_TargetProtocolModel):
     settlement: FinalizerSettlement | DeliveryPlanningRetrySettlement | DeliveryBuilderInvocationSettlement
     host_id: str | None = Field(default=None, min_length=1)
     session_id: str | None = Field(default=None, min_length=1)
+    retry_reason: str | None = Field(
+        default=None,
+        max_length=MAX_RETRY_REASON_LENGTH,
+        pattern=RETRY_REASON_PATTERN,
+        description="The worker's one-line reason, only for a normally returned Planner or Builder retry.",
+    )
 
     @model_validator(mode="after")
     def _validate_finalizer_identity_location(self) -> SettleWorkerInvocationParams:
@@ -1117,6 +1124,13 @@ class SettleWorkerInvocationParams(_TargetProtocolModel):
             value is not None for value in (self.host_id, self.session_id)
         ):
             message = "Finalizer host and session identities belong in the settlement"
+            raise ValueError(message)
+        if self.retry_reason is not None and (
+            isinstance(self.settlement, FinalizerSettlement)
+            or self.settlement.disposition != "normal-return"
+            or not isinstance(self.settlement.request, RetryDelivery)
+        ):
+            message = "a retry reason accompanies only a normally returned retry"
             raise ValueError(message)
         return self
 

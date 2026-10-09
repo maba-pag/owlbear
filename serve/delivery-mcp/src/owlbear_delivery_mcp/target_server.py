@@ -1110,6 +1110,7 @@ class TargetMCPAdapter:
                 params.settlement,
                 host_id=params.host_id,
                 session_id=params.session_id,
+                retry_reason=params.retry_reason,
             ),
         )
 

@@ -991,8 +991,9 @@ def test_owner_result_reason_survives_reconciliation_into_attempt_history(tmp_pa
     key = _engine_key()
     ledger.reserve(key, failure_class="mechanical", now=_START, attempt_id="attempt-1")
     reason = "Fixture DB locked by a parallel test; retry after it is released"
-    owner = ledger.owner_result_participants(
-        "attempt-1", accepted=False, failure_code="builder-flaky", reason=reason, now=_START
+    owner = (
+        *ledger.owner_result_participants("attempt-1", accepted=False, failure_code="builder-flaky", now=_START),
+        *ledger.reason_participants("attempt-1", reason),
     )
     RuntimeTransaction(tmp_path, "owner-result", owner).commit()
     restarted = RetryLedger(tmp_path, "change-a")
@@ -1012,3 +1013,7 @@ def test_owner_result_reason_survives_reconciliation_into_attempt_history(tmp_pa
         ("builder-failed", None),
     ]
     assert "reason" not in history[1].model_dump(mode="json")
+    assert ledger.reason_participants("attempt-2", None) == ()
+    (tmp_path / "changes/change-a/retry-ledger/reasons/attempt-1.json").write_text("{}", encoding="utf-8")
+    with pytest.raises(RetryLedgerCorruptError):
+        restarted.attempt_history(episode)

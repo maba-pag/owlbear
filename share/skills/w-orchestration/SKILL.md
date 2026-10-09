@@ -323,13 +323,15 @@ The real `settle_worker_invocation` MCP envelope has only these top-level fields
 {
   "settlement": {},
   "host_id": "<optional exact claim owner>",
-  "session_id": "<optional exact claim process>"
+  "session_id": "<optional exact claim process>",
+  "retry_reason": "<optional worker retry reason>"
 }
 ```
 
 `settlement` is required and is one typed model. For a Planner retry, copy `change_id`, `outcome_id`,
 `claim_id`, and `attempt_id` from the acquired launch, set `disposition: normal-return`, and copy the
-returned `RetryDelivery` unchanged to `request`. For a Builder retry, block, or return to Planning or Design,
+returned `RetryDelivery` unchanged to `request`. With a normally returned `retry`, copy the worker's
+one-line `retry_reason` unchanged when it gave one; omit it otherwise. For a Builder retry, block, or return to Planning or Design,
 use the same launch identities plus `task_id=launch.task_id` and
 `expected_last_reviewed_commit=launch.last_reviewed_commit`,
 set `disposition: normal-return`, and copy the returned transition unchanged to `request`. When the

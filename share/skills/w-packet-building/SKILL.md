@@ -70,7 +70,7 @@ reason: <recorded prerequisite failure>
 A same-task Builder claim may start with dirty, staged, or committed predecessor work, including
 work left by a `dispatch_failure`, a crash, or a settled `worker-host-lost` or
 `worker-released-stuck` attempt. Each settled no-result receipt preserves that material and records
-the failed attempt; fresh Build context supplies `prior_attempts`, with any predecessor's retry
+the failed attempt; fresh Build context supplies `prior_attempts`, with any predecessor's
 `reason`. The new Builder must inspect and
 triage this state under the rules below before editing. Orchestrator does not clean the worktree or
 ask the user to do Git recovery. A dispatch that has not returned or whose owned mutator may still
@@ -250,11 +250,12 @@ outcome_id: <context outcome ID>
 claim_id: <launch claim ID>
 attempt_id: <launch attempt ID>
 abandoned_commit: <exact current branch HEAD>
-reason: <one line, at most 240 characters: what failed and what the next Builder should do first>
 ```
 
-Use `retry` for an implementation failure that cannot be repaired in this invocation. The
-`reason` is shown on the Cockpit card and in the next Builder's `prior_attempts`; omit secrets.
+Use `retry` for an implementation failure that cannot be repaired in this invocation. Beside the
+unchanged transition, return `retry_reason`: one line of at most 240 characters on what failed and
+what the next Builder should do first. Delivery shows it on the Cockpit card and in the next
+Builder's `prior_attempts`; omit secrets.
 
 ```yaml
 action: return

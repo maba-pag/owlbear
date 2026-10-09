@@ -2247,7 +2247,7 @@ async def test_registered_planner_retry_settlement_has_exact_client_contract(tmp
         )
 
     tool = tools["settle_worker_invocation"]
-    assert set(tool.input_schema["properties"]) == {"settlement", "host_id", "session_id"}
+    assert set(tool.input_schema["properties"]) == {"settlement", "host_id", "session_id", "retry_reason"}
     assert tool.input_schema["additionalProperties"] is False
     settlement_schema = tool.input_schema["properties"]["settlement"]
     settlement_refs = {item["$ref"].rsplit("/", 1)[-1] for item in settlement_schema["anyOf"]}
@@ -4160,3 +4160,31 @@ async def test_registered_continuation_view_keeps_every_field_but_evidence_bodie
         assert full["detail"]["evidence"]["criteria"]
         assert compact["evidence_counts"] == full["evidence"]["counts"]
         assert len(json.dumps(compact)) < len(json.dumps(full)) / 2
+
+
+@pytest.mark.asyncio
+async def test_registered_settlement_keeps_the_retry_reason_for_the_next_builder(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, _runtime, _coordinator, _state_root, first, _head, _workspace, settlement = (
+        _builder_retry_handoff_setup(tmp_path, now, add_workspace_changes=False)
+    )
+    payload = {
+        "settlement": settlement.model_dump(mode="json"),
+        "host_id": first.claim.owner_id,
+        "session_id": first.claim.process_id,
+    }
+    reason = "Snapshot fixture drifted; regenerate it before editing"
+
+    async with Client(assemble_target_server(application)) as client:
+        refused = await client.call_tool("settle_worker_invocation", {**payload, "retry_reason": "two\nlines"})
+        settled = await client.call_tool("settle_worker_invocation", {**payload, "retry_reason": reason})
+
+    assert refused.is_error
+    assert not settled.is_error
+    now[0] = "2026-08-04T01:00:00Z"
+    second = application.acquire_change_action(_continuation_request(application, "change-a")).launch
+    assert second is not None
+    context = application.show_build_context(
+        second.change_id, second.outcome_id, second.claim.attempt_id, second.claim.claim_id
+    )
+    assert [(item.failure_code, item.reason) for item in context.prior_attempts] == [("builder-failed", reason)]

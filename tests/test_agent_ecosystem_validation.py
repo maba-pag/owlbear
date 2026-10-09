@@ -867,7 +867,7 @@ async def test_orchestration_transition_envelope_matches_registered_field() -> N
         transition_field = transition_fields[0]
         assert transition_field != "request"
         assert transition_field in transition_schema["required"]
-        assert set(settlement_schema["properties"]) == {"settlement", "host_id", "session_id"}
+        assert set(settlement_schema["properties"]) == {"settlement", "host_id", "session_id", "retry_reason"}
         assert settlement_schema["additionalProperties"] is False
         settlement_variants = settlement_schema["properties"]["settlement"]["anyOf"]
         settlement_refs = {item["$ref"].rsplit("/", 1)[-1] for item in settlement_variants}

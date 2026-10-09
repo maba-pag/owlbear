@@ -4831,13 +4831,12 @@ def test_normal_planning_retry_records_the_planner_reason(tmp_path: Path) -> Non
                 outcome_id="OUT-001",
                 claim_id="planner-claim",
                 failure_code="planner-failed",
-                reason=reason,
             ),
-        )
+        ),
+        retry_reason=reason,
     )
 
-    owner_result_path = tmp_path / "changes/delivery-runtime/retry-ledger/owner-results" / f"{attempt_id}.json"
-    assert RetryOwnerResult.model_validate_json(owner_result_path.read_bytes()).reason == reason
+    assert (tmp_path / "changes/delivery-runtime/retry-ledger/reasons" / f"{attempt_id}.json").exists()
     ledger.reconcile_owner_results()
     episode = ledger.episode(key)
     assert episode is not None

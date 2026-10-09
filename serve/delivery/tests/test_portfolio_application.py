@@ -3188,12 +3188,36 @@ def _settle_builder_handoff_attempt(
     application: PortfolioApplication,
     claim: DeliveryActiveClaim,
     settlement: DeliveryBuilderInvocationSettlement,
+    *,
+    retry_reason: str | None = None,
 ) -> OutcomeAuthorityBinding:
     return application.settle_worker_invocation(
         settlement,
         host_id=claim.owner_id,
         session_id=claim.process_id,
+        retry_reason=retry_reason,
     )
+
+
+@pytest.mark.parametrize(
+    ("disposition", "reason"),
+    [("completed-timeout", "The worker said why"), ("normal-return", "two\nlines"), ("normal-return", " padded")],
+)
+def test_a_retry_reason_is_refused_before_any_effect_outside_a_one_line_normal_retry(
+    tmp_path: Path, disposition: str, reason: str
+) -> None:
+    application, runtime, _coordinator, state_root, first, _head, _workspace, settlement = _builder_retry_handoff_setup(
+        tmp_path, ["2026-08-04T00:00:00Z"], add_workspace_changes=False
+    )
+    if disposition != "normal-return":
+        settlement = settlement.model_copy(update={"disposition": disposition, "request": None})
+    before = (runtime.frontier_bytes(), runtime.retry_ledger().read())
+
+    with pytest.raises(PortfolioApplicationError, match="retry reason"):
+        _settle_builder_handoff_attempt(application, first.claim, settlement, retry_reason=reason)
+
+    assert (runtime.frontier_bytes(), runtime.retry_ledger().read()) == before
+    assert not (state_root / "changes/change-a/retry-ledger/reasons").exists()
 
 
 def _seed_two_task_builder(application, runtimes, coordinator, state_root):
@@ -4361,8 +4385,7 @@ def _exhaust_builder_retry_with_distinct_codes(tmp_path: Path):
     application, runtime, _coordinator, state_root, first, _head, _workspace, settlement = _builder_retry_handoff_setup(
         tmp_path, now, add_workspace_changes=False
     )
-    first_request = settlement.request.model_copy(update={"reason": _FIRST_BUILDER_RETRY_REASON})
-    _settle_builder_handoff_attempt(application, first.claim, settlement.model_copy(update={"request": first_request}))
+    _settle_builder_handoff_attempt(application, first.claim, settlement, retry_reason=_FIRST_BUILDER_RETRY_REASON)
     contexts = []
 
     now[0] = "2026-08-04T01:00:00Z"
@@ -4418,9 +4441,9 @@ def _exhaust_builder_retry_with_distinct_codes(tmp_path: Path):
                 attempt_id=third.claim.attempt_id,
                 abandoned_commit=third.source_head,
                 failure_code="builder-review-failed",
-                reason=_THIRD_BUILDER_RETRY_REASON,
             ),
         ),
+        retry_reason=_THIRD_BUILDER_RETRY_REASON,
     )
     return reopened, runtime, contexts
 

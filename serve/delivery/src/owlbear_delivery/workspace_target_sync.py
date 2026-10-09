@@ -54,7 +54,6 @@ if TYPE_CHECKING:
 
 _TARGET_SYNC_REF_PREFIX = "refs/owlbear/target-sync/"
 _TARGET_OBSERVATION_REF_PREFIX = "refs/owlbear/target-observation/"
-_TARGET_OVERLAP_REF_PREFIX = "refs/owlbear/target-overlap/"
 _MERGE_TREE_CONFLICT = 1
 _ZERO_OID = "0" * 40
 _TARGET_REF_TRANSACTION_ATTEMPTS = 3
@@ -222,7 +221,7 @@ class _TargetSyncMixin:
                 start = _TargetFetchStart(
                     target_ref, self._resolve(target_ref, missing_ok=True), self._target_observations()
                 )
-            private_ref = f"{_TARGET_OVERLAP_REF_PREFIX}{secrets.token_hex(16)}"
+            private_ref = f"{_TARGET_SYNC_REF_PREFIX}overlap-{secrets.token_hex(16)}"
             fetch = run_remote_git(
                 self._repository,
                 (

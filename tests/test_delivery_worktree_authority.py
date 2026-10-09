@@ -2101,6 +2101,8 @@ _MANAGER_PAUSE_CLASSES: dict[str, frozenset[str]] = {
             "observe_worktree_activity",
             "observed_change_head",
             "observed_target_head",
+            # Records only the engine's shared target observation, like a stale target-sync fetch.
+            "probe_target_overlap",
             "recovery_snapshot",
             "repository_automation_paths",
             "require_preservation_environment",

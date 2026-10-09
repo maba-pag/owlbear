@@ -366,7 +366,7 @@ def test_target_overlap_between_tasks_routes_the_next_task_through_the_target_sy
     assert overlap.reviewed_head == builder.last_reviewed_commit
     assert _git(repository, "rev-parse", "refs/remotes/origin/main") == stale
     assert application._workspace_manager.observed_target_head() == target
-    assert _git(repository, "for-each-ref", "refs/owlbear/target-overlap/") == ""
+    assert _git(repository, "for-each-ref", "refs/owlbear/target-sync/") == ""
 
     # The Builder follows its context: no edits, only the existing target-sync block.
     application.settle_worker_invocation(

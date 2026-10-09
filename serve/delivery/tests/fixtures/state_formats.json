@@ -306,6 +306,12 @@
     },
     "version": 1
   },
+  "retry_reason": {
+    "fingerprints": {
+      "owlbear_delivery.recovery:RetryAttemptReason": "7ca616a026e424ec83324c2a03e8840ad608063bbaf49ddda5fe366900d2ee65"
+    },
+    "version": 1
+  },
   "retry_repair_binding": {
     "fingerprints": {
       "owlbear_delivery.recovery:RetryRepairBinding": "7d07a037e3d06fb5256ac4cf6b7de04196d88f7aac75a7534fc7e1f643cefbee"
