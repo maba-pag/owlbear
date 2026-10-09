@@ -77,8 +77,7 @@ The typed result fields are `source_id`, `documents_created`, `documents_replace
 `retryable`, and redacted `message` fields. `browser_capture_failed` and `agent_capture_required`
 are acquisition-stage failures; `processing_failed` and `persistence_failed` are persistence-stage
 failures. Round health is `ok` when every entry succeeds, `degraded` when some succeed and some
-fail, and `failed` when none succeed. A failed acquisition or processing attempt keeps the last good
-document.
+fail, and `failed` when none succeed. A failed acquisition keeps the last good document.
 
 Missing, duplicate, or unregistered capture entries, a missing or deleted source, a source that is
 not an active browser `url_list`, or `text` supplied with `source_id` raise `ToolError`. For a

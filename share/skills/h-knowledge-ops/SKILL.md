@@ -60,8 +60,7 @@ Modes and behavior:
   deleted, or inactive source; a non-browser source; or `text` supplied with `source_id` raises
   `ToolError`.
 - Round health is `ok` when all entries succeed, `degraded` when successes and failures coexist,
-  and `failed` when none succeed. Failed acquisitions and processing attempts keep the last good
-  document.
+  and `failed` when none succeed. Failed acquisitions keep the last good document.
 - `browser_capture_failed` and `agent_capture_required` are acquisition-stage failures.
   `processing_failed` and `persistence_failed` are persistence-stage failures.
 
@@ -100,8 +99,8 @@ Current connector boundary:
 
 - `url_list` with `fetch_method="http"` and `file_glob` with `fetch_method="filesystem"` use the
   maintained source-fetcher paths.
-- Browser `url_list` sources are updated through the [browser capture round](#browser-capture-rounds)
-  in `knowledge_ingest`. `refresh_knowledge_source` returns acquisition-stage
+- Browser `url_list` sources are updated through the browser capture-round workflow in
+  `knowledge_ingest`. `refresh_knowledge_source` returns acquisition-stage
   `agent_capture_required` instead of fetching those pages.
 - `inline` sources have no refresh operation. Direct `knowledge_ingest` is the manual capture path.
 
@@ -349,7 +348,8 @@ tool set.
 
 ## Known Gotchas
 
-- **Always set `scope`** to `project:{id}` when a project is active; use `global` otherwise.
+- **For inline ingestion, set `scope`** to `project:{id}` when a project is active; use `global`
+  otherwise. Omit `scope` for bound Browser capture rounds.
 - **Search before ingesting** to avoid duplicates — identity is scoped to a source and document
   identity, then content hashing distinguishes unchanged content from a replacement.
 - **Do not infer source binding from `source_url`** in `knowledge_ingest`; it supplies document URI
