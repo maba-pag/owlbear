@@ -55,6 +55,7 @@ import {
   READINESS_STATUS_LABELS,
   REVISION_PROMPT_HELP,
   readinessTone,
+  retryAttemptCause,
   workItemStatus,
   workItemStatusLabel,
 } from "./workItemPresentation";
@@ -1463,6 +1464,16 @@ function ReadinessSection({
       ) : null}
       {readiness.merge_offer ? <MergeOfferSummary offer={readiness.merge_offer} /> : null}
       {children}
+      {readiness.reason_code === "retry-exhausted" && readiness.retry_history?.length ? (
+        <div className="mt-static-sm" data-testid="readiness-attempt-causes">
+          <strong className="text-sm">What happened in each attempt</strong>
+          <ol className="mt-static-xs list-decimal pl-static-md text-sm">
+            {readiness.retry_history.map((attempt) => (
+              <li key={attempt.ordinal}>{retryAttemptCause(attempt)}</li>
+            ))}
+          </ol>
+        </div>
+      ) : null}
       {readiness.merge_attempt ? (
         <p className="mt-static-xs text-sm leading-relaxed" data-testid="merge-attempt">
           <a
