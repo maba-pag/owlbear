@@ -690,7 +690,7 @@ every new item exactly one lane.
 | N12-P | done | [N12 plan](delivery-n12-plan.md); stacked on N11-A; Sol plan gate round 1 `revision-required`, F1–F4 fix-now applied (successive handoff predecessor, legacy grant receipt and Planner baseline, Cockpit clearance gating, preserved-commit carry-forward); gate closed |
 | N12-A–D | merged (PR #420, `a304a31a9`) and activated 2026-10-08: live grant, Planner correction and funded TASK-004 Builder passed (N12 plan §3.7) | `0055ae06d` + gate fixes + E2E repair `512499c8f`; Sol implementation round 1 `revision-required` (F1 fixed), round 2 no findings; LC amended by user decision U4 (option A1, 2026-10-08): the offline read-only load of an isolated copy shows all 10 live Changes available, and the incident card offers the user grant on the real records. The tool verdict is `passed: false` because of the inspector's 256-entry budget, which U4 accepts (G4, own PR). The grant cannot run on a copy (handoff fingerprint), so the continuation is proven by the guarded live activation (N12 plan §3.6, G1) |
 | N13-B | merged (#427, `2d7b33a76`) | [N13 plan](delivery-n13-plan.md); Cockpit detail puts the open request first; Sol `implementation-sound` |
-| N13-A | in progress | [N13 plan](delivery-n13-plan.md); engine-owned target-sync block, preserving release and sync before finalization |
+| N13-A | implemented (`42ee7852e`) | [N13 plan](delivery-n13-plan.md); engine-owned target-sync block, preserving release and sync before finalization; LC load pass; Sol round 1 P2 fixed, delta `implementation-sound` |
 
 ## 5. Packages
 

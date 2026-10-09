@@ -77,7 +77,7 @@ resolution; `runtime.unblock`-style resolution; the engine `sync-target` continu
 | Phase | Scope | Proof |
 | --- | --- | --- |
 | N13-B | Cockpit detail UX: open request first, anchored link, answered history, hints, short commits | Merged #427 |
-| N13-A | R1–R7, Builder skill | `test_target_sync_prerequisite.py`, Cockpit component test, changed-scope suite, LC load |
+| N13-A | R1–R7, Builder and Planner skills | Code `a88f2fb91` + repair `42ee7852e`. N13 tests 13 passed (incl. default-loader restart at capture and release boundaries); changed-scope `uv run test --changed` 3533 passed, 4 failures fixed or isolated-pass flakes; `npm test` 397 passed; build ok; LC load form on `42ee7852e`: 10 live Changes available, copy records unchanged, inspector healthy. Sol round 1 `repair-required` (P2 current-target selector, fixed); delta `implementation-sound` |
 
 ## 3. Activation (live, after merge)
 
