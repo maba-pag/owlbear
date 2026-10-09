@@ -83,7 +83,7 @@ Pydantic `BaseModel` representing a single markdown-backed memory entry.
 | `created_at` | `str` | Timezone-aware ISO 8601 timestamp |
 | `updated_at` | `str` | Timezone-aware ISO 8601 timestamp |
 | `approved_at` | `str \| None` | Timezone-aware ISO 8601 timestamp; optional |
-| `contested_by_task` | `str \| None` | Task ID that triggered the first factually-wrong confirmation; `None` until first confirmation; cleared on `resolve()` |
+| `challenges` | `list[ChallengeRecord]` | Default `[]`; at most two records with `task_id`, challenged `revision`, and `recorded_at`; legacy values migrate on load; cleared by `resolve()` and kept by edits and tombstone deletion |
 
 ### `MemoryCategory` (StrEnum)
 
@@ -250,7 +250,7 @@ string. The universal `*` member is allowed; an empty list is allowed for pendin
 | `get_entry(id)` | `(str) → MemoryEntry` | Raises `NotFoundError` |
 | `save(...)` | `(title, content, categories, confidence, source_agent, scope_agents) → MemoryEntry` | Creates pending entry; initializes `score = confidence`, all counters to `0`; no OCC |
 | `approve(id, expected_updated_at=None, *, expected_revision=None)` | `(str, str \| None) → MemoryEntry` | curated → approved; exactly one OCC token; raises `TransitionError` / `ConcurrencyError` |
-| `resolve(id, expected_updated_at)` | `(str, str) → MemoryEntry` | contested/disputed/stale → approved; sets `approved_at`; raises `TransitionError` / `ConcurrencyError` |
+| `resolve(id, expected_updated_at)` | `(str, str) → MemoryEntry` | contested/disputed/stale → approved; sets `approved_at` and clears challenges; raises `TransitionError` / `ConcurrencyError` |
 | `record_factually_wrong(entry_id, task_id, *, expected_revision)` | `(str, str, *, expected_revision: str) → AssessmentResult` | Records the factually-wrong confirmation cycle. A repeated task, entry, and revision returns the first result; raises `TransitionError`, `ConcurrencyError` (revision mismatch), or `ValidationError` (invalid `task_id`). |
 | `record_assessment(entry_id, bucket, *, task_id, expected_revision)` | `(str, str, *, task_id: str, expected_revision: str) → AssessmentResult` | Increments the selected counter, recomputes `score`, and may transition the entry to `stale`. A repeated task, entry, and revision returns the first recorded bucket without applying again; raises `TransitionError`, `ConcurrencyError`, or `ValidationError`. |
 | `edit(id, fields, expected_updated_at=None, *, expected_revision=None)` | `(str, EditPayload, str \| None) → MemoryEntry` | State-machine rules apply; exactly one OCC token; contested/disputed/stale preserve their state while fields are updated; deleted entries are blocked; raises `TransitionError` / `ConcurrencyError` |
@@ -268,10 +268,12 @@ string. The universal `*` member is allowed; an empty list is allowed for pendin
 | `curated` | `approve` | `approved` | Sets `approved_at` |
 | `curated` | `edit` | `curated` | Field update only |
 | `curated` | `delete` | `deleted` | Soft-delete |
-| `approved` | `record_factually_wrong` | `contested` | Stores `contested_by_task`; clears `approved_at` |
-| `curated` | `record_factually_wrong` | `contested` | Stores `contested_by_task` |
-| `contested` | `record_factually_wrong` (same `task_id`) | `contested` | No-op; returns entry unchanged |
-| `contested` | `record_factually_wrong` (different `task_id`) | `disputed` | Excluded from recall; clears `contested_by_task` |
+| `approved` | `record_factually_wrong` | `contested` | Records the first challenge; clears `approved_at` |
+| `curated` | `record_factually_wrong` | `contested` | Records the first challenge |
+| `contested` | `record_factually_wrong` (no challenges) | `contested` | Records the first challenge on a legacy entry |
+| `contested`/`disputed` | `record_factually_wrong` (task already challenged) | (unchanged) | Returns `already_applied` without writing |
+| `contested` | `record_factually_wrong` (new task, one challenge) | `disputed` | Appends the second challenge; excluded from recall |
+| any other state | `record_factually_wrong` (new task) | — | Raises `TransitionError` |
 | `approved` | `edit` | `curated` | Clears `approved_at` |
 | `approved` | `delete` | `deleted` | Soft-delete |
 | `contested` | `resolve` | `approved` | Sets `approved_at` |

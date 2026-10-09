@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from owlbear_memory import MemoryEngine, MemoryEntry, MemoryState, storage
 from owlbear_memory.errors import ConcurrencyError, TransitionError, ValidationError
+from owlbear_memory.models import ChallengeRecord
 
 # Mined from #1845: factually-wrong confirmation, disputed transitions, and OCC ordering.
 
@@ -40,7 +41,7 @@ def _make_entry_base(
     updated_at: str = _TS,
     approved_at: str | None = None,
 ) -> MemoryEntry:
-    """Create a MemoryEntry without contested_by_task (uses only pre-existing fields)."""
+    """Create a MemoryEntry without challenge records."""
     return MemoryEntry(
         id=entry_id,
         title="Test Entry",
@@ -61,28 +62,47 @@ def _make_entry(
     state: MemoryState,
     updated_at: str = _TS,
     approved_at: str | None = None,
-    contested_by_task: str | None = None,
+    challenge_task_id: str | None = None,
 ) -> MemoryEntry:
-    """Create a MemoryEntry WITH contested_by_task field (fails in RED when field is missing)."""
-    return MemoryEntry(
-        id=entry_id,
-        title="Test Entry",
-        content="Some content",
-        categories=["domain-knowledge"],
-        confidence=0.9,
-        state=state,
-        scope_agents=["test-agent"],
-        source_agent="test-agent",
-        created_at=_TS,
-        updated_at=updated_at,
-        approved_at=approved_at,
-        contested_by_task=contested_by_task,
+    """Create a MemoryEntry with an optional existing challenge."""
+    entry = _make_entry_base(entry_id, state, updated_at=updated_at, approved_at=approved_at)
+    if challenge_task_id is None:
+        return entry
+    challenge = ChallengeRecord(
+        task_id=challenge_task_id,
+        revision=entry.revision,
+        recorded_at=updated_at,
     )
+    return entry.model_copy(update={"challenges": [challenge]})
 
 
 def _write_entry(directory: Path, entry: MemoryEntry) -> Path:
     path = directory / f"{entry.id}.md"
     storage.write_entry(path, entry, memory_dir=directory)
+    return path
+
+
+def _write_legacy_entry(directory: Path, task_id: str | None) -> Path:
+    path = directory / f"{_ID_CONTESTED}.md"
+    legacy_task = "null" if task_id is None else task_id
+    path.write_text(
+        "---\n"
+        f"id: {_ID_CONTESTED}\n"
+        "title: Test Entry\n"
+        "categories:\n"
+        "- domain-knowledge\n"
+        "confidence: 0.9\n"
+        "state: contested\n"
+        "scope_agents:\n"
+        "- test-agent\n"
+        "source_agent: test-agent\n"
+        f"created_at: '{_TS}'\n"
+        f"updated_at: '{_TS}'\n"
+        "approved_at: null\n"
+        f"contested_by_task: {legacy_task}\n"
+        "---\n\nSome content\n",
+        encoding="utf-8",
+    )
     return path
 
 
@@ -110,33 +130,59 @@ def _record_factually_wrong(engine: MemoryEngine, entry_id: str, task_id: str) -
 class TestConfirmationCycle:
     """Confirmation cycle: record_factually_wrong() transitions and field contract."""
 
+    def test_legacy_challenge_migrates_with_entry_revision_and_timestamp(self, tmp_path: Path) -> None:
+        path = _write_legacy_entry(tmp_path, _TASK_A)
+        engine = MemoryEngine(memory_dir=tmp_path)
+        migrated = engine.get_entry(_ID_CONTESTED)
+
+        assert len(migrated.challenges) == 1
+        assert migrated.challenges[0].task_id == _TASK_A
+        assert migrated.challenges[0].revision == migrated.revision
+        assert migrated.challenges[0].recorded_at == migrated.updated_at == _TS
+        assert "contested_by_task" not in MemoryEntry.model_fields
+
+        updated = engine.edit(_ID_CONTESTED, {"title": "Updated"}, expected_revision=migrated.revision)
+        reloaded = MemoryEngine(memory_dir=tmp_path).get_entry(_ID_CONTESTED)
+        serialized = path.read_text(encoding="utf-8")
+
+        assert updated.revision != migrated.revision
+        assert reloaded.challenges == migrated.challenges
+        assert "challenges:" in serialized
+        assert "contested_by_task" not in serialized
+
+    def test_legacy_null_challenge_migrates_to_empty_list_and_is_removed_on_write(self, tmp_path: Path) -> None:
+        path = _write_legacy_entry(tmp_path, None)
+        engine = MemoryEngine(memory_dir=tmp_path)
+        migrated = engine.get_entry(_ID_CONTESTED)
+
+        assert migrated.challenges == []
+
+        updated = engine.edit(_ID_CONTESTED, {"title": "Updated"}, expected_revision=migrated.revision)
+        serialized = path.read_text(encoding="utf-8")
+
+        assert updated.challenges == []
+        assert "challenges:" in serialized
+        assert "contested_by_task" not in serialized
+
     # ------------------------------------------------------------------
-    # AC1 — contested_by_task field existence
+    # AC1 — challenge field and storage contract
     # ------------------------------------------------------------------
 
-    def test_memory_entry_has_contested_by_task_default_none(self) -> None:
-        """AC1: MemoryEntry has contested_by_task with default None."""
-        entry = MemoryEntry(
-            id=_ID_APPROVED,
-            title="Test",
-            content="Content",
-            categories=["domain-knowledge"],
-            confidence=0.9,
-            state=MemoryState.APPROVED,
-            scope_agents=["a"],
-            source_agent="agent",
-            created_at=_TS,
-            updated_at=_TS,
-        )
-        assert entry.contested_by_task is None
+    def test_memory_entry_has_empty_challenges_by_default(self) -> None:
+        entry = _make_entry_base(_ID_APPROVED, MemoryState.APPROVED)
+        assert entry.challenges == []
+        assert "contested_by_task" not in MemoryEntry.model_fields
 
-    def test_contested_by_task_survives_storage_roundtrip_owlbear_memory(self, tmp_path: Path) -> None:
-        """AC1: contested_by_task is frontmatter-serialized and survives write/read roundtrip."""
-        entry = _make_entry(_ID_APPROVED, MemoryState.APPROVED, contested_by_task=_TASK_A)
+    def test_challenges_survive_storage_roundtrip(self, tmp_path: Path) -> None:
+        entry = _make_entry(_ID_APPROVED, MemoryState.APPROVED, challenge_task_id=_TASK_A)
         path = _write_entry(tmp_path, entry)
+        serialized = path.read_text(encoding="utf-8")
         reloaded = storage.read_entry(path)
+
         assert reloaded is not None
-        assert reloaded.contested_by_task == _TASK_A
+        assert reloaded.challenges == entry.challenges
+        assert "challenges:" in serialized
+        assert "contested_by_task" not in serialized
 
     # ------------------------------------------------------------------
     # AC1 — approved and curated transitions to contested
@@ -156,12 +202,14 @@ class TestConfirmationCycle:
         result = _record_factually_wrong(engine, _ID_CURATED, _TASK_A)
         assert result.state == MemoryState.CONTESTED
 
-    def test_contested_by_task_stored_on_initial_call(self, tmp_path: Path) -> None:
-        """AC1: contested_by_task is set to task_id on initial transition to contested."""
+    def test_challenge_stored_on_initial_call(self, tmp_path: Path) -> None:
         entry = _make_entry_base(_ID_APPROVED, MemoryState.APPROVED)
         engine = _engine_with_entries(tmp_path, entry)
         result = _record_factually_wrong(engine, _ID_APPROVED, _TASK_A)
-        assert result.contested_by_task == _TASK_A
+        assert len(result.challenges) == 1
+        assert result.challenges[0].task_id == _TASK_A
+        assert result.challenges[0].revision == entry.revision
+        assert result.challenges[0].recorded_at == result.updated_at
 
     def test_contested_entry_remains_in_recall_results(self, tmp_path: Path) -> None:
         """AC1: contested entry is still returned by get_entries (not excluded from recall)."""
@@ -207,20 +255,25 @@ class TestConfirmationCycle:
     # AC2 — second confirmation: different task → disputed; None → initial
     # ------------------------------------------------------------------
 
-    def test_different_task_id_on_contested_transitions_to_disputed(self, tmp_path: Path) -> None:
-        """AC2: contested entry with non-None contested_by_task ≠ task_id → disputed."""
-        entry = _make_entry(_ID_CONTESTED, MemoryState.CONTESTED, contested_by_task=_TASK_A)
+    def test_different_task_appends_second_challenge_and_transitions_to_disputed(self, tmp_path: Path) -> None:
+        entry = _make_entry(_ID_CONTESTED, MemoryState.CONTESTED, challenge_task_id=_TASK_A)
         engine = _engine_with_entries(tmp_path, entry)
         result = _record_factually_wrong(engine, _ID_CONTESTED, _TASK_B)
-        assert result.state == MemoryState.DISPUTED
 
-    def test_contested_with_none_contested_by_task_treated_as_initial_confirmation(self, tmp_path: Path) -> None:
-        """AC2 edge: contested with contested_by_task=None → stays contested, stores task_id."""
-        entry = _make_entry(_ID_CONTESTED, MemoryState.CONTESTED, contested_by_task=None)
+        assert result.state == MemoryState.DISPUTED
+        assert [challenge.task_id for challenge in result.challenges] == [_TASK_A, _TASK_B]
+        assert all(challenge.revision == entry.revision for challenge in result.challenges)
+        assert result.challenges[1].recorded_at == result.updated_at
+        assert MemoryEngine(memory_dir=tmp_path).get_entry(_ID_CONTESTED).challenges == result.challenges
+
+    def test_contested_with_no_challenges_stays_contested_and_records_first(self, tmp_path: Path) -> None:
+        entry = _make_entry(_ID_CONTESTED, MemoryState.CONTESTED)
         engine = _engine_with_entries(tmp_path, entry)
         result = _record_factually_wrong(engine, _ID_CONTESTED, _TASK_B)
+
         assert result.state == MemoryState.CONTESTED
-        assert result.contested_by_task == _TASK_B
+        assert [challenge.task_id for challenge in result.challenges] == [_TASK_B]
+        assert result.challenges[0].revision == entry.revision
 
     # ------------------------------------------------------------------
     # AC3 — same-task no-op + non-voteable state guard
@@ -228,7 +281,7 @@ class TestConfirmationCycle:
 
     def test_same_task_id_on_contested_returns_entry_unchanged(self, tmp_path: Path) -> None:
         """A replay returns the stored result without rewriting the receipt or entry."""
-        entry = _make_entry(_ID_CONTESTED, MemoryState.CONTESTED, contested_by_task=_TASK_A)
+        entry = _make_entry(_ID_CONTESTED, MemoryState.CONTESTED)
         engine = _engine_with_entries(tmp_path, entry)
         first = _record_factually_wrong(engine, _ID_CONTESTED, _TASK_A)
         path = tmp_path / f"{_ID_CONTESTED}.md"
@@ -242,8 +295,48 @@ class TestConfirmationCycle:
 
         assert replay.already_applied is True
         assert replay.entry.state == MemoryState.CONTESTED
-        assert replay.entry.contested_by_task == _TASK_A
+        assert [challenge.task_id for challenge in replay.entry.challenges] == [_TASK_A]
         assert replay.entry.updated_at == first.updated_at
+        assert path.read_bytes() == before_replay
+
+    def test_challenge_without_receipt_is_deduplicated_before_state_guard(self, tmp_path: Path) -> None:
+        entry = _make_entry(_ID_CONTESTED, MemoryState.CONTESTED, challenge_task_id=_TASK_A)
+        engine = _engine_with_entries(tmp_path, entry)
+        path = tmp_path / f"{_ID_CONTESTED}.md"
+        before_replay = path.read_bytes()
+
+        replay = engine.record_factually_wrong(
+            _ID_CONTESTED,
+            task_id=_TASK_A,
+            expected_revision=entry.revision,
+        )
+
+        assert replay.already_applied is True
+        assert replay.recorded_bucket == "factually_wrong"
+        assert path.read_bytes() == before_replay
+
+    def test_second_task_replay_after_dispute_is_already_applied(self, tmp_path: Path) -> None:
+        entry = _make_entry_base(_ID_APPROVED, MemoryState.APPROVED)
+        engine = _engine_with_entries(tmp_path, entry)
+        _record_factually_wrong(engine, _ID_APPROVED, _TASK_A)
+        contested = engine.get_entry(_ID_APPROVED)
+
+        first = engine.record_factually_wrong(
+            _ID_APPROVED,
+            task_id=_TASK_B,
+            expected_revision=contested.revision,
+        )
+        path = tmp_path / f"{_ID_APPROVED}.md"
+        before_replay = path.read_bytes()
+        replay = engine.record_factually_wrong(
+            _ID_APPROVED,
+            task_id=_TASK_B,
+            expected_revision=contested.revision,
+        )
+
+        assert first.entry.state == MemoryState.DISPUTED
+        assert replay.already_applied is True
+        assert replay.entry.challenges == first.entry.challenges
         assert path.read_bytes() == before_replay
 
     def test_pending_state_raises_transition_error(self, tmp_path: Path) -> None:

@@ -142,7 +142,7 @@ def _serialize_entry(entry: MemoryEntry) -> bytes:
         "created_at": entry.created_at,
         "updated_at": entry.updated_at,
         "approved_at": entry.approved_at,
-        "contested_by_task": entry.contested_by_task,
+        "challenges": [challenge.model_dump() for challenge in entry.challenges],
     }
     if entry.assessment_receipts:
         frontmatter["assessment_receipts"] = [receipt.model_dump() for receipt in entry.assessment_receipts]

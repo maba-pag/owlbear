@@ -21,6 +21,7 @@ from owlbear_memory.errors import (
 from owlbear_memory.models import (
     AssessmentReceipt,
     AssessmentResult,
+    ChallengeRecord,
     MemoryCategory,
     MemoryEntry,
     MemoryHealth,
@@ -265,7 +266,7 @@ class MemoryEngine:
                     "state": MemoryState.APPROVED,
                     "approved_at": now,
                     "updated_at": now,
-                    "contested_by_task": None,
+                    "challenges": [],
                     "didnt_use_count": 0 if entry.state == MemoryState.STALE else entry.didnt_use_count,
                 }
             )
@@ -474,37 +475,46 @@ class MemoryEngine:
                 return previous
             self._validate_assessment_task_id(task_id)
 
-            if entry.state in {MemoryState.APPROVED, MemoryState.CURATED}:
-                updated = entry.model_copy(
-                    update={
-                        "state": MemoryState.CONTESTED,
-                        "contested_by_task": task_id,
-                        "approved_at": None,
-                    }
+            if any(challenge.task_id == task_id for challenge in entry.challenges):
+                return AssessmentResult(
+                    entry=entry,
+                    already_applied=True,
+                    recorded_bucket="factually_wrong",
                 )
+
+            if entry.state in {MemoryState.APPROVED, MemoryState.CURATED}:
+                next_state = MemoryState.CONTESTED
+                initial_confirmation = True
             elif entry.state == MemoryState.CONTESTED:
-                if entry.contested_by_task == task_id:
-                    updated = entry
+                if not entry.challenges:
+                    next_state = MemoryState.CONTESTED
+                elif len(entry.challenges) == 1:
+                    next_state = MemoryState.DISPUTED
                 else:
-                    updated_state = (
-                        MemoryState.DISPUTED if entry.contested_by_task is not None else MemoryState.CONTESTED
-                    )
-                    updated = entry.model_copy(
-                        update={
-                            "state": updated_state,
-                            "contested_by_task": None if updated_state == MemoryState.DISPUTED else task_id,
-                        }
-                    )
+                    msg = "record_factually_wrong() cannot add a third challenge"
+                    raise TransitionError(msg)
+                initial_confirmation = False
             else:
                 msg = f"record_factually_wrong() not allowed from state {entry.state}"
                 raise TransitionError(msg)
 
+            write_timestamp = self._now_iso()
+            challenge = ChallengeRecord(
+                task_id=task_id,
+                revision=expected_revision,
+                recorded_at=write_timestamp,
+            )
+            challenges = [challenge] if initial_confirmation else [*entry.challenges, challenge]
+            updates: dict[str, object] = {"state": next_state, "challenges": challenges}
+            if initial_confirmation:
+                updates["approved_at"] = None
+            updated = entry.model_copy(update=updates)
+
             return self._write_assessment(
                 entry,
                 updated,
-                task_id=task_id,
-                expected_revision=expected_revision,
-                bucket="factually_wrong",
+                AssessmentReceipt(task_id=task_id, revision=expected_revision, bucket="factually_wrong"),
+                write_timestamp=write_timestamp,
             )
 
     def record_assessment(
@@ -560,9 +570,7 @@ class MemoryEngine:
             return self._write_assessment(
                 entry,
                 updated,
-                task_id=task_id,
-                expected_revision=expected_revision,
-                bucket=bucket,
+                AssessmentReceipt(task_id=task_id, revision=expected_revision, bucket=bucket),
             )
 
     @staticmethod
@@ -603,20 +611,18 @@ class MemoryEngine:
         self,
         original: MemoryEntry,
         updated: MemoryEntry,
+        receipt: AssessmentReceipt,
         *,
-        task_id: str,
-        expected_revision: str,
-        bucket: str,
+        write_timestamp: str | None = None,
     ) -> AssessmentResult:
-        receipt = AssessmentReceipt(task_id=task_id, revision=expected_revision, bucket=bucket)
         updated = updated.model_copy(
             update={
                 "assessment_receipts": [*original.assessment_receipts, receipt],
-                "updated_at": self._now_iso(),
+                "updated_at": write_timestamp if write_timestamp is not None else self._now_iso(),
             }
         )
         persisted = self._write_updated_entry(updated)
-        return AssessmentResult(entry=persisted, already_applied=False, recorded_bucket=bucket)
+        return AssessmentResult(entry=persisted, already_applied=False, recorded_bucket=receipt.bucket)
 
     def save(  # noqa: PLR0913
         self,

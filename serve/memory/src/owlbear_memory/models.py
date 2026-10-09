@@ -87,6 +87,36 @@ class AssessmentReceipt(BaseModel):
     bucket: AssessmentBucket
 
 
+class ChallengeRecord(BaseModel):
+    """Record one task's challenge to a memory revision."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    task_id: str = Field(pattern=r"^[\x21-\x7e]{1,128}$")
+    revision: str = Field(pattern=r"^[0-9a-f]{16}$")
+    recorded_at: str
+
+    @field_validator("recorded_at")
+    @classmethod
+    def _validate_recorded_at(cls, value: str) -> str:
+        if "T" not in value and "t" not in value:
+            msg = "timestamp must include date and time"
+            raise ValueError(msg)
+
+        normalized = value.replace("Z", "+00:00")
+        try:
+            parsed = datetime.fromisoformat(normalized)
+        except ValueError as exc:
+            msg = "timestamp must be a valid ISO 8601 datetime"
+            raise ValueError(msg) from exc
+
+        if parsed.tzinfo is None or parsed.utcoffset() is None:
+            msg = "timestamp must include timezone information"
+            raise ValueError(msg)
+
+        return value
+
+
 class MemoryEntry(BaseModel):
     """A single markdown-backed memory entry."""
 
@@ -107,7 +137,7 @@ class MemoryEntry(BaseModel):
     created_at: str
     updated_at: str
     approved_at: str | None = None
-    contested_by_task: str | None = None
+    challenges: list[ChallengeRecord] = Field(default_factory=list, max_length=2)
     assessment_receipts: list[AssessmentReceipt] = Field(default_factory=list)
 
     @property
@@ -138,6 +168,16 @@ class MemoryEntry(BaseModel):
         if isinstance(data, dict):
             data = dict(data)
             data.pop("approval_state", None)
+            legacy_task_id = data.pop("contested_by_task", None)
+            if legacy_task_id is not None and "challenges" not in data:
+                legacy_entry = cls.model_validate(data)
+                data["challenges"] = [
+                    {
+                        "task_id": legacy_task_id,
+                        "revision": legacy_entry.revision,
+                        "recorded_at": legacy_entry.updated_at,
+                    }
+                ]
         return data
 
     @field_validator("title")
