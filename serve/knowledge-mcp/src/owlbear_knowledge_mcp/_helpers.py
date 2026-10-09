@@ -19,6 +19,7 @@ from ._types import (
     RelatedSource,
     SearchEntity,
     SearchSource,
+    SearchSourceProvenance,
     _BrowserContentFetcher,
 )
 
@@ -254,8 +255,14 @@ def _serialize_related_sources(value: object) -> list[RelatedSource]:
     return related_sources
 
 
-def _serialize_source(value: object) -> SearchSource:
-    """Normalize source metadata to a {name, url} object."""
+def _serialize_source(
+    value: object,
+    *,
+    source_id: str,
+    uri: str | None,
+    document_metadata: dict[str, Any] | None,
+) -> SearchSource:
+    """Normalize source identity, URL, and stored capture provenance."""
     name = getattr(value, "name", None)
     raw_url = getattr(value, "url", None)
     url = raw_url.strip() if isinstance(raw_url, str) and raw_url.strip() else None
@@ -272,9 +279,24 @@ def _serialize_source(value: object) -> SearchSource:
             elif isinstance(config_urls, str):
                 url = next((item.strip() for item in config_urls.split(",") if item.strip()), None)
 
+    provenance: SearchSourceProvenance | None = None
+    if document_metadata is not None:
+        canonical_url = document_metadata.get("canonical_url")
+        if isinstance(canonical_url, str):
+            provenance = {"canonical_url": canonical_url}
+            fetched_at = document_metadata.get("fetched_at")
+            if isinstance(fetched_at, str):
+                provenance["fetched_at"] = fetched_at
+            content_hash = document_metadata.get("content_hash")
+            if isinstance(content_hash, str):
+                provenance["content_hash"] = content_hash
+
     return {
+        "id": source_id,
+        "uri": uri or "",
         "name": name if isinstance(name, str) else "",
         "url": url or "",
+        "provenance": provenance,
     }
 
 

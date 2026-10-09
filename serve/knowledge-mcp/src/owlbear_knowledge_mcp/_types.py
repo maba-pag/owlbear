@@ -103,11 +103,22 @@ class RelatedSource(TypedDict):
     entity: str
 
 
+class SearchSourceProvenance(TypedDict, total=False):
+    """Capture provenance stored for a searched document."""
+
+    canonical_url: str
+    fetched_at: str
+    content_hash: str
+
+
 class SearchSource(TypedDict):
     """Source metadata attached to a search result."""
 
+    id: str
+    uri: str
     name: str
     url: str
+    provenance: SearchSourceProvenance | None
 
 
 class SourceInfo(TypedDict):

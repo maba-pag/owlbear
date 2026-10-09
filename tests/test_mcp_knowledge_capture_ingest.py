@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -11,7 +12,7 @@ from unittest.mock import patch
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
-from owlbear_knowledge.fetcher import MAX_RESPONSE_BYTES, HttpxContentFetcher
+from owlbear_knowledge.fetcher import MAX_RESPONSE_BYTES, HttpResponse, HttpResponseFetcher, HttpxContentFetcher
 from owlbear_knowledge_mcp import server
 
 _URL_A = "https://fixture.example/a"
@@ -59,6 +60,11 @@ class _DeterministicVectorStore:
         return ranked[:top_k]
 
 
+class _FixedHttpResponseFetcher:
+    async def fetch_response(self, url: str) -> HttpResponse:
+        return HttpResponse(content=f"HTTP refresh projection for {url}", media_type="text/plain")
+
+
 class _FailingContentReadConnection(sqlite3.Connection):
     fail_content_reads = False
 
@@ -73,6 +79,7 @@ def _assembled_context(
     tmp_path: Path,
     *,
     connection_factory: type[sqlite3.Connection] = sqlite3.Connection,
+    http_response_fetcher_factory: Callable[[], HttpResponseFetcher] | None = None,
 ) -> tuple[SimpleNamespace, server.AppContext]:
     marker = tmp_path / ".owlbear"
     marker.mkdir(parents=True, exist_ok=True)
@@ -86,7 +93,7 @@ def _assembled_context(
         workspace_root=tmp_path,
         conn=connection,
         factories=server.KnowledgeRuntimeFactories(
-            http_response_fetcher_factory=lambda: http_fetcher,
+            http_response_fetcher_factory=http_response_fetcher_factory or (lambda: http_fetcher),
             embedding_provider_factory=lambda: embedding_provider,
             vector_store_factory=lambda _location: vector_store,
         ),
@@ -154,17 +161,17 @@ async def test_bound_capture_round_is_typed_idempotent_and_replaces_documents(tm
                 _URL_A,
                 "alpha original capture",
                 title="Alpha article",
-                canonical_url="https://fixture.example/a?view=full",
+                canonical_url="https://fixture.example/a-canonical",
                 fetched_at="2026-10-09T00:00:00Z",
-                content_hash="alpha-original-hash",
+                content_hash="a" * 64,
             ),
             _captured(
                 _URL_B,
                 "beta original capture",
                 title="Beta article",
-                canonical_url=_URL_B,
-                fetched_at="2026-10-09T00:00:00Z",
-                content_hash="beta-original-hash",
+                canonical_url="https://fixture.example/b-canonical",
+                fetched_at="2026-10-09T00:01:00Z",
+                content_hash="b" * 64,
             ),
         ]
 
@@ -187,10 +194,28 @@ async def test_bound_capture_round_is_typed_idempotent_and_replaces_documents(tm
         document_a = app_context.content_store.get_document(initial["document_ids"][0])
         assert document_a is not None
         assert document_a.metadata == {
-            "canonical_url": "https://fixture.example/a?view=full",
+            "canonical_url": "https://fixture.example/a-canonical",
             "title": "Alpha article",
             "fetched_at": "2026-10-09T00:00:00Z",
-            "content_hash": "alpha-original-hash",
+            "content_hash": "a" * 64,
+        }
+
+        search_results = await server.knowledge_search(tool_context, query="capture", scopes=[scope], limit=10)
+        assert isinstance(search_results, list)
+        sources_by_uri = {item["source"]["uri"]: item["source"] for item in search_results}
+        assert set(sources_by_uri) == {_URL_A, _URL_B}
+        assert sources_by_uri[_URL_A]["id"] == source_id
+        assert sources_by_uri[_URL_A]["name"] == f"Browser fixture {scope}"
+        assert sources_by_uri[_URL_A]["provenance"] == {
+            "canonical_url": "https://fixture.example/a-canonical",
+            "fetched_at": "2026-10-09T00:00:00Z",
+            "content_hash": "a" * 64,
+        }
+        assert sources_by_uri[_URL_B]["id"] == source_id
+        assert sources_by_uri[_URL_B]["provenance"] == {
+            "canonical_url": "https://fixture.example/b-canonical",
+            "fetched_at": "2026-10-09T00:01:00Z",
+            "content_hash": "b" * 64,
         }
 
         identical = await server.knowledge_ingest(tool_context, source_id=source_id, captures=original_captures)
@@ -371,6 +396,21 @@ async def test_capture_provenance_is_redacted_oversize_is_refused_and_delete_pur
         assert "pass" not in document.metadata["canonical_url"]
         assert "secret" not in document.metadata["canonical_url"]
 
+        search_results = await server.knowledge_search(
+            tool_context,
+            query="unique retained capture text",
+            scopes=[scope],
+            limit=10,
+        )
+        assert isinstance(search_results, list)
+        search_source = next(item["source"] for item in search_results if item["source"]["uri"] == _URL_A)
+        assert search_source["id"] == source_id
+        search_provenance = search_source["provenance"]
+        assert search_provenance is not None
+        assert search_provenance["canonical_url"] == document.metadata["canonical_url"]
+        assert "pass" not in str(search_provenance)
+        assert "secret" not in str(search_provenance)
+
         before = await _source_snapshot(tool_context, app_context, source_id)
         with pytest.raises(ToolError):
             await server.knowledge_ingest(
@@ -382,6 +422,39 @@ async def test_capture_provenance_is_redacted_oversize_is_refused_and_delete_pur
 
         await server.delete_knowledge_source(tool_context, source_id)
         assert not any("unique retained capture text" in snippet for snippet in await _snippets(tool_context, scope))
+    finally:
+        app_context.conn.close()
+
+
+@pytest.mark.asyncio
+async def test_http_refresh_search_source_has_identity_without_capture_provenance(tmp_path: Path) -> None:
+    response_fetcher = _FixedHttpResponseFetcher()
+    tool_context, app_context = _assembled_context(
+        tmp_path,
+        http_response_fetcher_factory=lambda: response_fetcher,
+    )
+    try:
+        scope = "http-refresh-search"
+        source_id = await _register_browser_source(
+            tool_context,
+            [_URL_A],
+            scope=scope,
+            fetch_method="http",
+        )
+        refresh = await server.refresh_knowledge_source(tool_context, source_id)
+        assert refresh["documents_created"] == 1
+
+        search_results = await server.knowledge_search(
+            tool_context,
+            query="HTTP refresh projection",
+            scopes=[scope],
+            limit=10,
+        )
+        assert isinstance(search_results, list)
+        result = next(item for item in search_results if "HTTP refresh projection" in item["snippet"])
+        assert result["source"]["id"] == source_id
+        assert result["source"]["uri"] == _URL_A
+        assert result["source"]["provenance"] is None
     finally:
         app_context.conn.close()
 

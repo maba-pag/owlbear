@@ -567,17 +567,20 @@ def _serialize_query_facade_results(app_ctx: AppContext, result: QueryResult) ->
         chunk = item.chunk
         provenance = provenance_by_chunk.get(chunk.id)
         title = provenance.title if provenance is not None else ""
-
-        source_name = provenance.source_id if provenance is not None else ""
+        source_id = provenance.source_id if provenance is not None else chunk.source_id
+        document_id = provenance.document_id if provenance is not None else chunk.document_id
+        document_uri = provenance.uri if provenance is not None else chunk.uri
+        source_name = source_id
         source_obj: object = SimpleNamespace(name=source_name, url="")
         if provenance is not None:
             source_store_v2 = getattr(app_ctx, "source_store_v2", None)
             if source_store_v2 is not None:
-                source_record = source_store_v2.get_source(provenance.source_id)
+                source_record = source_store_v2.get_source(source_id)
                 if source_record is not None:
                     source_obj = source_record
             if isinstance(source_obj, SimpleNamespace):
                 source_obj.url = provenance.uri or ""
+        document = app_ctx.content_store.get_document(document_id) if app_ctx.content_store is not None else None
 
         related_candidates = [
             {
@@ -599,7 +602,12 @@ def _serialize_query_facade_results(app_ctx: AppContext, result: QueryResult) ->
                 "graph_context": _serialize_graph_context(graph_context_text),
                 "entities": serialized_entities,
                 "related_sources": _serialize_related_sources(related_candidates),
-                "source": _serialize_source(source_obj),
+                "source": _serialize_source(
+                    source_obj,
+                    source_id=source_id,
+                    uri=document_uri,
+                    document_metadata=document.metadata if document is not None else None,
+                ),
             }
         )
     return serialized
