@@ -82,6 +82,7 @@ export type DeliveryReadinessReasonCode =
   | "engine-action-failed"
   | "engine-action-incomplete"
   | "target-sync-required"
+  | "target-commit-missing"
   | "claim-custody-unreconciled"
   | "runtime-unavailable"
   | "dependency-wait"

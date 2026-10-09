@@ -115,6 +115,7 @@ from owlbear_delivery.runtime_receipts import (
     GRANTABLE_RETRY_ACTION_KINDS,
     builder_attempt_grant_block_id,
     is_builder_attempt_grant_block,
+    target_sync_commit,
 )
 from owlbear_delivery.runtime_transaction import (
     TransactionPathError,
@@ -1650,7 +1651,7 @@ class _ReadinessViewsMixin:
             return reason
         return "target-sync-required"
 
-    def _capture_action_basis(  # noqa: C901 - one ordered row per workspace and target state.
+    def _capture_action_basis(  # noqa: C901, PLR0911 - one ordered row per workspace and target state.
         self,
         snapshot: DeliveryPortfolioSnapshot,
         cards: tuple[WorkItemCardView, ...],
@@ -1668,6 +1669,12 @@ class _ReadinessViewsMixin:
         if action is not None and action.finished_at is None:
             reason, guidance = self._continuation_journal_readiness(action)
             return basis, reason, guidance
+        required = next(
+            (commit for binding in snapshot.frontier.bindings if (commit := target_sync_commit(binding)) is not None),
+            None,
+        )
+        if required is not None and not self._snapshot_has_active_claims(snapshot):
+            return (*self._target_sync_basis(basis, coordination, required), None)
         needs_workspace = self._supports_finalization(snapshot.frontier) or any(
             card.action.kind
             in {
@@ -1896,6 +1903,26 @@ class _ReadinessViewsMixin:
         if attempt.target_head != basis.target_head:
             return "settled-attention-target-drift"
         return workspace_reason if workspace_reason not in {None, "active-custody"} else None
+
+    def _target_sync_basis(
+        self, basis: DeliveryReadinessBasis, coordination: ChangeCoordination, required: str
+    ) -> tuple[DeliveryReadinessBasis, str]:
+        """Bind a Builder's required target commit to the reviewed and target heads a sync would merge (N13).
+
+        A commit the observed target lacks is missing once that target was merged or the commit is known locally;
+        otherwise the sync's own fetch may still bring it.
+        """
+        try:
+            target = self._workspace_manager.observed_target_head()
+            available = self._workspace_manager.includes_commit(required, target)
+            if not available and not self._workspace_manager.has_commit(required):
+                synced = coordination.target_sync_receipt
+                available = synced is None or synced.target_head != target
+        except OSError, RuntimeError, subprocess.SubprocessError, ValueError:
+            return basis, "workspace-inspection-failed"
+        reviewed = coordination.last_reviewed_commit
+        basis = basis.model_copy(update={"reviewed_head": reviewed, "candidate_head": reviewed, "target_head": target})
+        return basis, "target-sync-required" if available else "target-commit-missing"
 
     def _capture_readiness_workspace(
         self,
@@ -2193,6 +2220,8 @@ class _ReadinessViewsMixin:
             next_actor=(
                 WorkItemNextActor.NONE
                 if reason == "provider-unavailable"
+                else WorkItemNextActor.YOU
+                if reason == "target-commit-missing"
                 else WorkItemNextActor.AGENT
                 if finalization
                 else card.next_actor

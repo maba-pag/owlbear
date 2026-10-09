@@ -282,8 +282,16 @@ request:
 
 Use `block` only when user-owned input is required. Never substitute `unblock_evidence` for the
 required `unblock_condition` and `expected_evidence` fields. Every Build block includes one bounded
-`request`; a missing tool, unavailable context, custody mismatch, or other pre-execution failure is
-`dispatch_failure`, not `block`.
+`request`, except a target-sync block; a missing tool, unavailable context, custody mismatch, or other
+pre-execution failure is `dispatch_failure`, not `block`.
+
+When the task needs a target-branch commit that `launch.source_head` does not contain (for example a
+constraint naming a commit that must be an ancestor), make no edits or commits and return a
+target-sync block: the same `block` fields without `request`, with exactly one locator
+`target-commit:<full 40-character commit>`. Delivery then preserves the worktree under refs, synchronizes the Change with
+its target, routes any conflict to `/resolve-target-conflict`, and starts a fresh claim for this task
+once the commit is included. That claim's `return_context` names the preserved refs; reconcile what
+still applies. Never ask the user to synchronize the target.
 
 For a normal Builder return, Orchestrator uses `settle_worker_invocation` for `retry`, `block`, or
 `return` to Planning or Design; it validates exact workspace custody and persists any bounded request

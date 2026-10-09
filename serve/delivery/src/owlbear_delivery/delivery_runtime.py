@@ -155,6 +155,8 @@ from owlbear_delivery.runtime_receipts import (  # noqa: F401
     builder_attempt_limit_block_id,
     is_builder_attempt_grant_block,
     is_builder_return_limit,
+    is_builder_target_sync_handoff,
+    target_sync_commit,
 )
 from owlbear_delivery.runtime_settlement import (
     _SettlementReplayMixin,
@@ -2365,6 +2367,96 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
                 additional_participants=(participant,),
             )
             return released
+
+    def release_target_sync_handoff(self) -> OutcomeAuthorityBinding:
+        """Preserve one same-task handoff held for a target sync under refs and release it (N13).
+
+        The Builder's head, index and worktree go to the Design-return refs; the worktree resets to its reviewed
+        head so the sync starts clean. The block stays until the sync includes its commit; the next Builder for
+        the task finds the preserved refs in its return context.
+        """
+        manager = self._require_workspace()
+        change_id = self._contract.change_id
+        with manager._coordinator.publication_lock(change_id) as lock:  # noqa: SLF001
+            frontier, previous = self._read()
+            _require_change_mutable(frontier, "release_target_sync_handoff")
+            _require_no_active_change_claim(frontier, "target-sync handoff release")
+            binding = next((item for item in frontier.bindings if item.builder_handoff_context is not None), None)
+            context = binding.builder_handoff_context if binding is not None else None
+            handoff = manager.show(change_id).builder_handoff
+            if (
+                binding is None
+                or context is None
+                or not is_builder_target_sync_handoff(binding)
+                or handoff is None
+                or handoff.settlement_id != context.settlement_id
+                or handoff.branch_head != context.branch_head
+                or handoff.metadata_fingerprint != context.metadata_fingerprint
+            ):
+                _conflict("target-sync handoff release requires one exact retained same-task target-sync handoff")
+            participant = manager.release_design_return(change_id, handoff, lock, target_sync=True)
+            attempt = context.attempt_id
+            preserved = (
+                f"ref:refs/owlbear/attempts/{change_id}/{attempt}",
+                f"ref:refs/owlbear/quarantine-index/{change_id}/{attempt}",
+                f"ref:refs/owlbear/quarantine/{change_id}/{attempt}",
+            )
+            released = binding.model_copy(
+                update={
+                    "builder_handoff_context": None,
+                    "return_context": DeliveryReturnContext(
+                        target=DeliveryStage.IMPLEMENTATION,
+                        reason=(
+                            f"Delivery preserved Builder attempt {attempt} under refs before synchronizing with the "
+                            "target; reconcile any of it that still applies. A ref that does not resolve held no "
+                            "changes."
+                        ),
+                        locators=preserved,
+                        preserved_commit=context.branch_head,
+                        completed_boundary=context.last_reviewed_commit,
+                    ),
+                }
+            )
+            marker = (
+                DeliveryPendingStatePublication.model_validate_json(
+                    self._pending_publication_path.read_bytes(), strict=True
+                )
+                if self._pending_publication_path.is_file()
+                else None
+            )
+            base = (
+                self.publication_base_digest(previous)
+                if marker is None
+                else marker.frontier_digest
+                if marker.status == "acknowledged"
+                else marker.base_frontier_digest
+            )
+            self._replace_content(
+                previous,
+                _model_content(_replace_binding(frontier, binding, released)),
+                base_frontier_digest=base,
+                additional_participants=(participant,),
+            )
+            return released
+
+    def clear_target_sync_block(self, outcome_id: str, reviewed_head: str, locators: tuple[str, ...]) -> bool:
+        """Resolve one target-sync block whose commit the reviewed head now includes (N13); False if none."""
+        frontier, previous = self._read()
+        binding = _find_binding(frontier, outcome_id)
+        commit = target_sync_commit(binding)
+        if commit is None or binding.builder_handoff_context is not None or binding.block is None:
+            return False
+        _require_change_mutable(frontier, "clear_target_sync_block")
+        _require_no_active_change_claim(frontier, "target-sync block resolution")
+        cleared = binding.block.model_copy(
+            update={
+                "resolution_note": f"Delivery synchronized the Change with its target; reviewed head {reviewed_head} "
+                f"includes required commit {commit}.",
+                "resolution_locators": (f"commit:{commit}", f"commit:{reviewed_head}", *locators),
+            }
+        )
+        self._replace(previous, _replace_binding(frontier, binding, binding.model_copy(update={"block": cleared})))
+        return True
 
     def resolve_request(
         self,

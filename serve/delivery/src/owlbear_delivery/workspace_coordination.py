@@ -1385,8 +1385,13 @@ class PortfolioCoordinator:
         change_id: str,
         handoff: ChangeBuilderHandoff,
         lock: PublicationLock,
+        *,
+        release_quarantine: bool = False,
     ) -> ReplacementTransactionParticipant:
-        """Prepare the exact retained Design-return handoff release for its runtime transaction (N04 §1.7)."""
+        """Prepare the exact retained Design-return handoff release for its runtime transaction (N04 §1.7).
+
+        ``release_quarantine`` (N13 target sync) also drops the capture receipt; its refs stay.
+        """
         self._require_publication_lock(lock, change_id)
         self.require_no_pending_recovery(change_id)
         coordination, previous = self._read_coordination(change_id)
@@ -1394,5 +1399,8 @@ class PortfolioCoordinator:
             update={"kind": "handoff"}
         ):
             _coordination_conflict("Design return release does not match its retained Builder handoff")
-        released = coordination.model_copy(update={"writer": None, "builder_handoff": None})
+        update: dict[str, object] = {"writer": None, "builder_handoff": None}
+        if release_quarantine:
+            update["dirty_worktree_quarantine"] = None
+        released = coordination.model_copy(update=update)
         return _replacement(self._state_root, self._coordination_path(change_id), previous, released)

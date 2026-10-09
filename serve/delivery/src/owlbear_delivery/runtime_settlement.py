@@ -48,6 +48,7 @@ from owlbear_delivery.runtime_models import (
     _DeliveryModel,
     _model_content,
     _reference,
+    required_target_commit,
 )
 from owlbear_delivery.runtime_receipts import (
     DeliveryBuilderInvocationSettlement,
@@ -552,19 +553,21 @@ class _SettlementReplayMixin:
         request: BlockDelivery,
     ) -> OutcomeAuthorityBinding:
         delivery_request = request.request
-        if delivery_request is None or any(
-            existing.request_id == delivery_request.request_id for existing in binding.requests
-        ):
-            _conflict("Builder pause request is absent or already active")
+        if delivery_request is None:
+            if required_target_commit(request.locators) is None:
+                _conflict("Builder pause needs a request or one target-commit locator")
+        elif any(existing.request_id == delivery_request.request_id for existing in binding.requests):
+            _conflict("Builder pause request is already active")
         block = DeliveryBlock(
             block_id=request.block_id,
             reason=request.reason,
             unblock_condition=request.unblock_condition,
             expected_evidence=request.expected_evidence,
             locators=request.locators,
-            request_id=delivery_request.request_id,
+            request_id=delivery_request.request_id if delivery_request is not None else None,
             resume_commit=request.resume_commit,
         )
+        requests = (*binding.requests, delivery_request) if delivery_request is not None else binding.requests
         return binding.model_copy(
             update={
                 "active_claim": None,
@@ -576,7 +579,7 @@ class _SettlementReplayMixin:
                 "retry_diagnostic": None,
                 "return_context": None,
                 "block": block,
-                "requests": (*binding.requests, delivery_request),
+                "requests": requests,
             }
         )
 

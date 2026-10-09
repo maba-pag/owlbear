@@ -2092,6 +2092,8 @@ _MANAGER_PAUSE_CLASSES: dict[str, frozenset[str]] = {
     "read": frozenset(
         {
             "baseline_scope_kinds",
+            "has_commit",
+            "includes_commit",
             "inspect_retained",
             "integration_context",
             "is_design_package_snapshot_child",
