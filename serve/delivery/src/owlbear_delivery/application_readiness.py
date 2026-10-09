@@ -2210,7 +2210,7 @@ class _ReadinessViewsMixin:
                 else WorkItemNextActor.YOU
                 if reason == "target-commit-missing"
                 else WorkItemNextActor.AGENT
-                if finalization or reason in _ENGINE_ACTION_CUSTODY
+                if finalization or (reason in _ENGINE_ACTION_CUSTODY and card.next_actor is WorkItemNextActor.NONE)
                 else card.next_actor
             ),
             reason_code=reason,
