@@ -1302,6 +1302,9 @@ _FINALIZER = "share/agents/finalizer.agent.md"
         (_PACKET_SKILL, "the `answer` tool refuses it with `ERR_DELIVERY_CONFIRMATION`"),
         (_PACKET_SKILL, "never answer such a request yourself"),
         (_PACKET_SKILL, "`keep-required` or `failed` confirms nothing"),
+        (_PACKET_SKILL, "`git log --oneline <launch.last_reviewed_commit>..HEAD`"),
+        (_PACKET_SKILL, "`launch.last_reviewed_commit` as the review base"),
+        (_PACKET_SKILL, "Never use `launch.source_head` as the base: inherited predecessor commits must reach review"),
         ("share/agents/builder.agent.md", "only through a scoped block request; never answer such a request yourself"),
         ("share/skills/w-frontier-planning/SKILL.md", "Cover every criterion"),
         (

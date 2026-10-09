@@ -76,9 +76,12 @@ ask the user to do Git recovery. A dispatch that has not returned or whose owned
 run remains contained and does not authorize this handoff.
 
 Inspect the assigned worktree before editing with `git status --short`, `git diff`,
-`git diff --cached`, and `git ls-files --others --exclude-standard`. Compare every changed path and
-hunk with `DeliveryBuildContext.task.maintained_surfaces`, constraints, exclusions, and the exact
-launch identity.
+`git diff --cached`, `git ls-files --others --exclude-standard`, and
+`git log --oneline <launch.last_reviewed_commit>..HEAD`. A same-task handoff's `launch.source_head`
+may be ahead of the captured `builder_handoff_context.branch_head` when a released predecessor kept
+committing; those commits are predecessor work to triage, not reviewed authority. Compare every
+changed path and hunk with `DeliveryBuildContext.task.maintained_surfaces`, constraints, exclusions,
+and the exact launch identity.
 
 - **Reuse:** When every change is compatible with this exact task, keep it, validate it, and include
   it in the eventual explicit scoped commit. Do not infer ownership from file timestamps or from the
@@ -191,8 +194,10 @@ fresh review. Never amend or erase a reviewed head.
 
 Dispatch only `launch.policy.reviewer_agent` to `build-reviewer`; the reviewer agent's frontmatter
 owns its model.
-Supply the unchanged launch identity, full Build context, source and exact candidate commits, changed
-paths, focused proof, custody, ancestry, and prior evidence. The reviewer must independently resolve
+Supply the unchanged launch identity, full Build context, `launch.last_reviewed_commit` as the review
+base, the exact candidate commit, changed paths over that whole range, focused proof, custody,
+ancestry, and prior evidence. Never use `launch.source_head` as the base: inherited predecessor
+commits must reach review. The reviewer must independently resolve
 the candidate and inspect its complete diff with read-only Git; a caller summary or mutable worktree
 read does not satisfy exact-commit evidence. Require the reviewer to echo the exact commit and return
 disposition `pass | finding`, matching `finding_boundary`, and non-empty evidence.
