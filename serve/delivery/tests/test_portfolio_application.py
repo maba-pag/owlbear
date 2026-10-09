@@ -5759,10 +5759,15 @@ def test_engine_target_sync_conflict_exit_releases_retained_engine_custody(tmp_p
     action = _engine_action(application)
     assert action.target_head == target
     blocked = _execute_engine(application, action)
-    assert blocked.kind == "blocked", blocked
-    assert blocked.failure.code == "ERR_TARGET_SYNC_CONFLICT"
+    assert (blocked.kind, blocked.failure and blocked.failure.code) == ("blocked", "ERR_TARGET_SYNC_CONFLICT"), blocked
     readiness = application.get_change("change-a").readiness
-    assert (readiness.reason_code, readiness.next_actor) == ("engine-action-failed", WorkItemNextActor.YOU)
+    outcome = application.show_work_item_view("change-a", "outcome:OUT-001").card.readiness
+    assert (readiness.reason_code, readiness.next_actor, outcome.reason_code, outcome.next_actor) == (
+        "engine-action-failed",
+        WorkItemNextActor.YOU,
+        "engine-action-failed",
+        WorkItemNextActor.NONE,
+    )
     assert readiness.prompt.startswith("/resolve-target-conflict change-a ")
     conflict_progress = DeliveryProgress(
         situation="ready-for-next-step",
