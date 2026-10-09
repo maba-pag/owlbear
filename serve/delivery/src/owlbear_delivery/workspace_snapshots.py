@@ -50,13 +50,11 @@ class _SnapshotMixin:
         current = self._coordinator.show(change_id)
         attempt = current.finalization_attempt
         active = attempt is not None and attempt.finished_at is None
+        # A target-only move never refuses completion: proof stays bound to the recorded target sync (D2).
         if active and (
-            completion is None
-            or attempt.writer.attempt_id != completion[0]
-            or attempt.exact_head != exact_head
-            or attempt.target_head != self.observed_target_head()
+            completion is None or attempt.writer.attempt_id != completion[0] or attempt.exact_head != exact_head
         ):
-            _coordination_conflict("finalization attempt or target head changed")
+            _coordination_conflict("finalization attempt or head changed")
         coordination = self.validate_finalization_head(
             change_id, exact_head, promoted_commits, expected_writer=attempt.writer if active else None
         )

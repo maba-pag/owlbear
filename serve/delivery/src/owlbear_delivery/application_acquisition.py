@@ -903,7 +903,8 @@ class _AcquisitionMixin:
             reports,
             receipt,
         )
-        return reason == "settled-attention-target-drift"
+        # A retained, still-valid attention may sync while its retry waits; its target no longer has to have moved.
+        return reason is None
 
     def _engine_action_preflight(
         self, action: ChangeContinuationAction, runtime: DeliveryRuntime
