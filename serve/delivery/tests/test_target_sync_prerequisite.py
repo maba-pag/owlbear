@@ -25,7 +25,7 @@ from owlbear_delivery import (
     DeliveryRequest,
     DeliveryRequestKind,
 )
-from owlbear_delivery.change_workspace import ChangeTargetSyncConflictError
+from owlbear_delivery.change_workspace import ChangeTargetSyncConflictError, ChangeTargetSyncStaleError
 from owlbear_delivery.runtime_models import required_target_commit
 from owlbear_delivery.work_items import WorkItemActionKind
 
@@ -57,23 +57,24 @@ def _settlement(launch, request: BlockDelivery) -> DeliveryBuilderInvocationSett
     )
 
 
-def _with_remote_target(application, tmp_path: Path) -> str:
+def _with_remote_target(application, tmp_path: Path, *, fetch: bool = True) -> str:
     repository = application._workspace_manager.repository
     remote = tmp_path / "remote.git"
     subprocess.run(("git", "init", "--bare", "-b", "main", str(remote)), check=True, capture_output=True)  # noqa: S603, S607
     _git(repository, "remote", "add", "origin", str(remote))
     _git(repository, "push", "origin", "refs/heads/main:refs/heads/main")
     target_head = _advance_remote_target(tmp_path, remote)
-    _git(repository, "fetch", "origin")
+    if fetch:
+        _git(repository, "fetch", "origin")
     return target_head
 
 
-def _blocked_for_target(tmp_path: Path):
+def _blocked_for_target(tmp_path: Path, *, fetch: bool = True):
     now = ["2026-08-04T00:00:00Z"]
     application, runtime, coordinator, _state_root, launch, branch_head, before_workspace, _retry = (
         _builder_retry_handoff_setup(tmp_path, now)
     )
-    target_head = _with_remote_target(application, tmp_path)
+    target_head = _with_remote_target(application, tmp_path, fetch=fetch)
     settled = application.settle_worker_invocation(
         _settlement(launch, _target_block(launch, branch_head, target_head)),
         host_id=launch.claim.owner_id,
@@ -274,3 +275,17 @@ def test_requested_pause_keeps_the_target_sync_handoff(tmp_path: Path) -> None:
     application.acquire_change_action(_continuation_request(application, "change-a"))
 
     assert coordinator.show("change-a").builder_handoff is not None
+
+
+def test_current_target_merge_fetches_an_unfetched_commit_then_merges_it(tmp_path: Path) -> None:
+    application, runtime, _coordinator, _launch, _head, _before, target_head, _settled = _blocked_for_target(
+        tmp_path, fetch=False
+    )
+    assert application.get_change("change-a").readiness.operation is WorkItemActionKind.SYNC_TARGET
+
+    with pytest.raises(ChangeTargetSyncStaleError):
+        application.sync_change_with_current_target("change-a", "sync-first")
+    receipt = application.sync_change_with_current_target("change-a", "sync-second")
+
+    assert receipt.target_head == target_head
+    assert runtime.show_binding("OUT-001").block.resolved

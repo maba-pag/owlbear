@@ -306,9 +306,12 @@ class _PublicationMixin:
         change_id: str,
         operation_id: str,
     ) -> ChangeTargetSyncReceipt:
-        """Bind the current remote-tracking target and perform one exact sync operation."""
+        """Bind the engine's observed target, as readiness does, and perform one exact sync operation.
+
+        A stale sync records the newer head it fetched; binding that observation lets the next attempt merge it.
+        """
         try:
-            expected_target = self._workspace_manager.integration_context(change_id).target_head
+            expected_target = self._workspace_manager.observed_target_head()
         except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
             self._fail("target synchronization target head is unavailable", exc)
         return self.sync_change_with_target(change_id, expected_target, operation_id)
