@@ -226,6 +226,7 @@ from owlbear_delivery.runtime_models import _receipt_digest
 from owlbear_delivery.runtime_transaction import ReplacementTransactionParticipant, RuntimeTransaction
 from owlbear_delivery.state_formats import classify_kind, format_marker_bytes
 from owlbear_delivery.storage_io import locked_roots
+from owlbear_delivery.work_items import DeliveryProgress, WorkItemActionKind
 from owlbear_delivery_github import GitHubCliPublicationProvider
 
 _USER_CHECKOUT_STATES = (
@@ -5714,6 +5715,9 @@ def test_engine_target_fetch_drift_is_stale_then_syncs_exact_target(tmp_path: Pa
     pending_attempt_ids = {attempt.attempt_id for attempt in RetryLedger(state_root, "change-a").pending_attempts()}
     assert action.operation_id in pending_attempt_ids
     assert coordinator.show("change-a").last_reviewed_commit == action.exact_head
+    pending_sync = application.get_change("change-a").detail.card
+    assert pending_sync.readiness.operation is WorkItemActionKind.SYNC_TARGET
+    assert pending_sync.next_step.startswith("Next: merge the latest target into this Change"), pending_sync
     fresh = _engine_action(application)
     assert fresh.operation_id != action.operation_id
     assert fresh.target_head == target
@@ -5762,6 +5766,18 @@ def test_engine_target_sync_conflict_exit_releases_retained_engine_custody(tmp_p
     readiness = application.get_change("change-a").readiness
     assert readiness.reason_code == "engine-action-failed"
     assert readiness.prompt.startswith("/resolve-target-conflict change-a ")
+    conflict_progress = DeliveryProgress(
+        situation="ready-for-next-step",
+        headline=(
+            "Merging the latest target stopped on a conflict in product.txt; resolve it with /resolve-target-conflict."
+        ),
+        waiting_on="you",
+        target_sync="unavailable",
+    )
+    assert (readiness.progress, application.get_change("change-a").detail.change_progress) == (
+        conflict_progress,
+        conflict_progress.model_copy(update={"target_sync": None}),
+    )
     disposition_id = runtime.change_disposition().disposition_id
     worktree = Path(coordinator.show("change-a").worktree_path)
     intent = coordinator.continuation_record_path("change-a", action.operation_id)
@@ -5781,11 +5797,39 @@ def test_engine_target_sync_conflict_exit_releases_retained_engine_custody(tmp_p
     assert coordinator.show("change-a").continuation_action is None
     assert (intent.read_bytes(), result.read_bytes()) == journals
     assert runtime.change_disposition() is None
-    assert application.get_change("change-a").readiness.reason_code != "engine-action-failed"
+    after = application.get_change("change-a").readiness
+    assert after.reason_code != "engine-action-failed"
+    assert "stopped on a conflict" not in after.progress.headline
+    if exit_kind == "abort":
+        assert after.basis.target_head == target
+        assert after.progress.headline.startswith("You aborted merging this target;"), after.progress
+    else:
+        assert not after.progress.headline.startswith("You aborted")
     assert _execute_engine(application, action) == blocked
     following = application.acquire_change_action(_continuation_request(application))
     assert following.kind != "unavailable", following
     assert following.engine_action is None or following.engine_action.operation_id != action.operation_id
+    if exit_kind == "abort":
+        _assert_same_target_retry_resolves(application, worktree, target, conflict_progress.headline)
+
+
+def _assert_same_target_retry_resolves(
+    application: PortfolioApplication, worktree: Path, target: str, conflict_headline: str
+) -> None:
+    """Re-merging an aborted target preserves a fresh, readable conflict that resolves normally."""
+    coordinator = application._workspace_manager._coordinator
+    with pytest.raises(ChangeTargetSyncConflictError):
+        application.sync_change_with_target("change-a", target, "retry-same-target")
+    assert coordinator.show("change-a").target_sync_abort_receipt is None
+    retried = application.get_change("change-a").readiness
+    assert retried.prompt.startswith("/resolve-target-conflict change-a ")
+    assert retried.progress.headline == conflict_headline
+    disposition_id = application._runtimes["change-a"].change_disposition().disposition_id
+    (worktree / "product.txt").write_text("Change implementation\nCompeting target edit\n")
+    _git(worktree, "add", "product.txt")
+    receipt = application.resolve_target_sync_conflict("change-a", disposition_id, target, "retry-same-target")
+    assert _git(worktree, "rev-parse", "HEAD") == receipt.merged_head
+    assert "/resolve-target-conflict" not in (application.get_change("change-a").readiness.prompt or "")
 
 
 def test_engine_exact_sync_after_remote_rewind_selects_the_rewound_target(tmp_path: Path) -> None:

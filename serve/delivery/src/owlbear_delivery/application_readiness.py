@@ -154,6 +154,7 @@ if TYPE_CHECKING:
 # Cached in place of an observation so readiness and cache-only acquisition both see the outage (D8, I9).
 _PUBLICATION_READ_FAILED: Literal["provider-unavailable"] = "provider-unavailable"
 _PROVIDER_PUBLICATION_STEPS = frozenset({WorkItemActionKind.MARK_READY, WorkItemActionKind.OBSERVE_ACCEPTANCE})
+_CONFLICT_PROMPT_KEEPS = frozenset({"change-paused", "worker-stall-wait"})
 
 
 class _ReadinessViewsMixin:
@@ -868,17 +869,6 @@ class _ReadinessViewsMixin:
         held_finalizer = self._held_finalizer_view(snapshot.contract.change_id)
         if held_finalizer is not None:
             decisions = self._with_held_finalizer_prompt(snapshot, cards, decisions)
-        if (
-            workspace_reason == "engine-action-failed"
-            and self._retained_target_sync_conflict(snapshot.contract.change_id) is not None
-        ):
-            prompt = _target_sync_conflict_prompt(snapshot.contract.change_id)
-            decisions = tuple(
-                decision.model_copy(update={"prompt": prompt})
-                if decision.reason_code == "engine-action-failed"
-                else decision
-                for decision in decisions
-            )
         if settled_attention:
             # Settled Finalizer attention names /inspect-change in its card guidance instead.
             decisions = tuple(
@@ -890,8 +880,18 @@ class _ReadinessViewsMixin:
         pause_requested, pause_drained = self._pause_request_state(snapshot)
         if pause_requested:
             decisions = self._with_pause_request_readiness(snapshot, cards, decisions)
+        conflict_paths, aborted_target = self._target_sync_exit_evidence(snapshot.contract.change_id)
+        if conflict_paths is not None:
+            decisions = self._with_target_sync_conflict_prompt(snapshot, cards, decisions)
         decisions, card_guidance = self._with_progress(
-            snapshot, cards, decisions, readiness_guidance, pause_requested=pause_requested, pause_drained=pause_drained
+            snapshot,
+            cards,
+            decisions,
+            readiness_guidance,
+            pause_requested=pause_requested,
+            pause_drained=pause_drained,
+            sync_conflict_paths=conflict_paths,
+            aborted_sync_target=aborted_target,
         )
         return WorkItemProjector(
             snapshot,
@@ -974,6 +974,8 @@ class _ReadinessViewsMixin:
         *,
         pause_requested: bool = False,
         pause_drained: bool = False,
+        sync_conflict_paths: tuple[str, ...] | None = None,
+        aborted_sync_target: str | None = None,
     ) -> tuple[tuple[DeliveryReadiness, ...], tuple[str | None, ...]]:
         """Project progress from final readiness plus read-only issuer, occupancy and provider evidence."""
         at_capacity: bool | None = None
@@ -1007,10 +1009,42 @@ class _ReadinessViewsMixin:
                 merged_unrecorded=self._merged_unrecorded(snapshot, card),
                 dependency_id=dependency_id,
                 request=request,
+                sync_conflict_paths=sync_conflict_paths,
+                aborted_sync_target=aborted_sync_target,
             )
             updated.append(decision.model_copy(update={"progress": progress}))
             card_guidance.append(custody if custody is not None else guidance)
         return tuple(updated), tuple(card_guidance)
+
+    @staticmethod
+    def _with_target_sync_conflict_prompt(
+        snapshot: DeliveryPortfolioSnapshot,
+        cards: tuple[WorkItemCardView, ...],
+        decisions: tuple[DeliveryReadiness, ...],
+    ) -> tuple[DeliveryReadiness, ...]:
+        """A preserved target merge, engine-run or direct, has one exit route; held or paused steps keep theirs."""
+        prompt = _target_sync_conflict_prompt(snapshot.contract.change_id)
+        return tuple(
+            decision.model_copy(update={"prompt": prompt})
+            if decision.status not in {"running", "complete"}
+            and decision.reason_code not in _CONFLICT_PROMPT_KEEPS
+            and (card.scope is WorkItemScope.CHANGE_PUBLICATION or decision.reason_code == "engine-action-failed")
+            else decision
+            for card, decision in zip(cards, decisions, strict=True)
+        )
+
+    def _target_sync_exit_evidence(self, change_id: str) -> tuple[tuple[str, ...] | None, str | None]:
+        """Return the preserved target-merge conflict paths and the last aborted target head, read-only."""
+        try:
+            coordination = self._workspace_manager.show(change_id)
+        except OSError, RuntimeError, ValueError:
+            return None, None
+        conflict = coordination.target_sync_conflict
+        abort = coordination.target_sync_abort_receipt
+        return (
+            conflict.conflict_paths if conflict is not None else None,
+            abort.target_head if abort is not None else None,
+        )
 
     @staticmethod
     def _merged_unrecorded(snapshot: DeliveryPortfolioSnapshot, card: WorkItemCardView) -> bool:

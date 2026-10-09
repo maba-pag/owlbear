@@ -1162,7 +1162,7 @@ it("disables publication actions while publication-check observation is pending"
 it.each([
   ["required", "Update required", true],
   ["optional", "You can merge now, or update it first", true],
-  ["unavailable", "unavailable while Delivery or an agent holds it", false],
+  ["unavailable", "Updating the Change from its target is not offered in its current state.", false],
   ["unnecessary", null, false],
 ] as const)("follows Delivery's %s target-sync availability", async (availability, copy, offered) => {
   const publicationCard = publicationCardForChecks();

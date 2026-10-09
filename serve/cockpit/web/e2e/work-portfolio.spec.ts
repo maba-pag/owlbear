@@ -427,7 +427,8 @@ test.describe("assembled Delivery portfolio", () => {
 
     inspected = await inspect(page, "Publication");
     await expect(inspected.detail).toContainText("Ready for finalization");
-    await expect(inspected.detail).toContainText("Finalize the reviewed Change");
+    await expect(inspected.detail).toContainText("Next: merge the latest target into this Change");
+    await expect(inspected.detail).not.toContainText("Finalize the reviewed Change");
     await expect(inspected.detail.getByTestId("publication-readiness-status")).toHaveText("Ready for next step");
     await expect(
       inspected.detail.locator('section[aria-labelledby="work-publication-heading"] [data-section-tone="neutral"]'),
