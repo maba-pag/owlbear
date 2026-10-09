@@ -31,39 +31,6 @@ Raises `ToolError` when the Knowledge service is unavailable or the search reque
 
 ### knowledge_ingest
 
-Ingest a text document into the knowledge base.
-
-| Param | Type | Default | Notes |
-| --- | --- | --- | --- |
-| `text` | str | required | Text content to ingest |
-| `metadata` | dict | None | Optional metadata dict |
-| `scope` | str | `global` | Knowledge scope for ingested document |
-| `source_url` | str | None | Optional document URI/identity for the inline ingest; does not create a refreshable source |
-
-Returns a human-readable `str`, not a typed result envelope. A successful call currently looks
-like:
-
-```text
-Ingested: documents_processed=1, chunks_created=4, chunks_enqueued=4
-```
-
-Failures currently return a string beginning with `error: ingestion failed:`. The text adapter does
-not expose document IDs, replacement/unchanged status, per-document `IngestResult.errors`, or graph
-warnings as structured MCP fields. Do not parse the summary as a stable machine-readable contract.
-
-Behavior:
-
-  active and enrichment-eligible but `refreshable` is false.
-  reuse a URL, file, or authenticated-browser source, and it does not make the inline source
-  refreshable.
-  promoted into a registered source by this tool.
-  persistence. Choose `project:{id}` explicitly for project-scoped direct captures.
-  `Untitled inline document` within `mcp-inline-{scope}`; a later anonymous capture replaces the
-  earlier one. Set `source_url` or `metadata.title` for each capture that must remain distinct.
-  failures. Inspect source health or use the typed refresh path when failure detail matters.
-
-Automatic graph extraction and persistence details are recorded by the coordinator, but this string
-adapter does not expose a separate `partial` status or warning field.
 Ingest one inline text document or one Browser capture round bound to a registered source.
 
 | Param | Type | Default | Notes |
@@ -149,7 +116,6 @@ Operational failures use a closed vocabulary. The runtime emits a valid `stage` 
 | `acquisition` | `url_rejected`, `dns_failure`, `transport_failure`, `http_status`, `timeout`, `response_too_large`, `browser_capture_failed`, `agent_capture_required` |
 | `extraction` | `unsupported_media_type`, `content_boundary_missing`, `extraction_failed` |
 | `indexing` | `embedding_failed`, `vector_write_failed` |
-| `persistence` | `persistence_failed` |
 | `persistence` | `persistence_failed`, `processing_failed` |
 | `query` | `query_embedding_failed`, `vector_query_failed` |
 
