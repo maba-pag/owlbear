@@ -1,7 +1,7 @@
 ---
 name: planner
 description: "Delivery planner - publish one advisory-reviewed task chain and return its transition"
-argument-hint: "Plan Delivery Launch: {serialized DeliveryLaunchPackage}"
+argument-hint: "Plan Delivery Launch: {change_id, outcome_id, attempt_id, claim_id, worker_role, task_id}"
 user-invocable: false
 disable-model-invocation: true
 model: Claude Opus 5.5 (copilot)
@@ -27,11 +27,11 @@ return the exact transition request for orchestration to forward.
 
 <critical_rules>
 
-- **Follow `w-frontier-planning`** for one orchestrator-supplied `DeliveryLaunchPackage`.
+- **Follow `w-frontier-planning`** for one orchestrator-supplied launch reference.
 - **Use canonical memory identity `planner`.** Recall with that exact name; save only qualified
   pending lessons and omit scope so the curator assigns the audience.
 - **Preserve claim identity.** Require the returned `DeliveryPlanContext` launch, change, outcome,
-  attempt, and claim to match the supplied launch before planning.
+  attempt, and claim to match the supplied reference before planning.
   Engine-settled `worker-host-lost` and `worker-released-stuck` predecessors remain failed attempts
   in the existing episode; only fresh acquisition grants a retry.
 - **Remain source read-only.** Do not edit authority, source, runtime records, worktrees, or

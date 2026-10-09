@@ -14,9 +14,6 @@ from fastapi.responses import JSONResponse
 from owlbear_cockpit.deps import get_target_context
 from owlbear_cockpit.target_models import (
     AbandonChangeBody,
-    AcceptanceReconciliationOutcomeResponse,
-    AcceptanceReconciliationRequest,
-    AcceptanceReconciliationResponse,
     ActivityCounts,
     AdoptExternalHeadAfterAcceptanceAttentionBody,
     AnswerRequestBody,
@@ -36,6 +33,7 @@ from owlbear_cockpit.target_models import (
     DeliveryUnavailableChangeResponse,
     DesignWorkDetailResponse,
     ExternalHeadAdoptionResponse,
+    GrantAttemptBody,
     MergeApprovalResponse,
     NeedsCounts,
     PortfolioOperatingResponse,
@@ -176,6 +174,33 @@ class TargetCockpitService:
             )
         )
 
+    def grant_attempt(
+        self,
+        change_id: str,
+        outcome_id: str,
+        block_id: str,
+        body: GrantAttemptBody,
+    ) -> object:
+        """Grant one more attempt to an exhausted Builder block (same-task, or a pre-N12 Planning return)."""
+        answer = DeliveryAnswer(
+            change_id=change_id,
+            kind=DeliveryAnswerKind.GRANT_ATTEMPT,
+            expected_frontier_digest=body.expected_frontier_digest,
+            outcome_id=outcome_id,
+            block_id=block_id,
+        )
+        return self._invoke(lambda: self._application.answer(answer, allow_user_only=True))
+
+    def grant_retry_attempt(self, change_id: str, attempt_id: str, body: GrantAttemptBody) -> object:
+        """Grant one more Planner or Finalizer attempt past its exact exhausted retry attempt."""
+        answer = DeliveryAnswer(
+            change_id=change_id,
+            kind=DeliveryAnswerKind.GRANT_ATTEMPT,
+            expected_frontier_digest=body.expected_frontier_digest,
+            attempt_id=attempt_id,
+        )
+        return self._invoke(lambda: self._application.answer(answer, allow_user_only=True))
+
     def recover_claim(
         self,
         change_id: str,
@@ -312,16 +337,6 @@ class TargetCockpitService:
         """Observe provider checks at the current exact published Change head."""
         receipt = self._invoke(lambda: self._application.observe_change_publication_checks(change_id))
         return PublicationChecksObservationResponse.from_receipt(receipt)
-
-    def reconcile_acceptance(
-        self,
-        change_ids: tuple[str, ...] | None,
-    ) -> AcceptanceReconciliationResponse:
-        """Reconcile visible awaiting-merge Changes as one isolated batch."""
-        outcomes = self._invoke(lambda: self._application.reconcile_awaiting_acceptance(change_ids))
-        return AcceptanceReconciliationResponse(
-            outcomes=tuple(AcceptanceReconciliationOutcomeResponse.from_result(item) for item in outcomes),
-        )
 
     def resolve_attention(self, change_id: str, body: ResolveChangeAttentionBody) -> object:
         """Resolve one exact Change attention record without restoring provider authority."""
@@ -605,6 +620,25 @@ def _register_outcome_controls(router: APIRouter) -> None:
     ) -> object:
         return service.clear_block(change_id, outcome_id, block_id, body)
 
+    @router.post("/changes/{change_id}/outcomes/{outcome_id}/blocks/{block_id}/grant-attempt")
+    def grant_attempt(
+        change_id: str,
+        outcome_id: str,
+        block_id: str,
+        body: GrantAttemptBody,
+        service: _TargetService,
+    ) -> object:
+        return service.grant_attempt(change_id, outcome_id, block_id, body)
+
+    @router.post("/changes/{change_id}/retry-attempts/{attempt_id}/grant")
+    def grant_retry_attempt(
+        change_id: str,
+        attempt_id: str,
+        body: GrantAttemptBody,
+        service: _TargetService,
+    ) -> object:
+        return service.grant_retry_attempt(change_id, attempt_id, body)
+
     @router.post("/changes/{change_id}/outcomes/{outcome_id}/claims/recover")
     def recover_claim(
         change_id: str,
@@ -642,16 +676,6 @@ def _register_outcome_controls(router: APIRouter) -> None:
 
 
 def _register_publication_controls(router: APIRouter) -> None:  # noqa: C901
-    @router.post(
-        "/work-items/acceptance/reconcile",
-        response_model=AcceptanceReconciliationResponse,
-    )
-    def reconcile_acceptance(
-        body: AcceptanceReconciliationRequest,
-        service: _TargetService,
-    ) -> AcceptanceReconciliationResponse:
-        return service.reconcile_acceptance(tuple(body.change_ids) if body.change_ids is not None else None)
-
     @router.post(
         "/changes/{change_id}/publication/reconcile",
         response_model=WorkItemPublicationReconciliationResponse,

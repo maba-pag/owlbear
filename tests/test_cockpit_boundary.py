@@ -15,10 +15,11 @@ from owlbear_delivery.finalization_reports import FinalizationFailureCode, Repor
 from owlbear_delivery.merge_offer import MergeBlockReason
 from owlbear_delivery.portfolio_operating import DeliveryHealthReason
 from owlbear_delivery.runtime_models import DeliveryEvidenceVerdict
+from owlbear_delivery.target_contract import DeliveryDecision, DeliveryDecisionOrigin
 from owlbear_delivery.work_items import (
     ChangePauseUnavailableReason,
-    DeliveryProgress,
     DeliveryReadinessReason,
+    DeliverySituation,
     WorkItemDetailView,
 )
 
@@ -101,16 +102,16 @@ def test_delivery_readiness_reason_typescript_parity(project_root: Path) -> None
     assert set(re.findall(r'"([^"]+)"', union.group(1))) == set(get_args(DeliveryReadinessReason))
 
 
-def test_delivery_progress_typescript_parity(project_root: Path) -> None:
-    """Every engine progress key, including reserved ones, has a Cockpit mirror and label."""
+def test_delivery_situation_typescript_parity(project_root: Path) -> None:
+    """Every engine situation has a Cockpit mirror and label."""
     api = (project_root / "serve/cockpit/web/src/api/workItems.ts").read_text()
-    union = re.search(r"export type DeliveryProgress\s*=\s*(.*?);", api, re.DOTALL)
+    union = re.search(r"export type DeliverySituation\s*=\s*(.*?);", api, re.DOTALL)
     assert union is not None
-    assert set(re.findall(r'"([^"]+)"', union.group(1))) == set(get_args(DeliveryProgress))
+    assert set(re.findall(r'"([^"]+)"', union.group(1))) == set(get_args(DeliverySituation))
     presentation = (project_root / "serve/cockpit/web/src/components/workItemPresentation.ts").read_text()
-    labels = re.search(r"DELIVERY_PROGRESS_LABELS[^=]*=\s*\{(.*?)\};", presentation, re.DOTALL)
+    labels = re.search(r"SITUATION_LABELS[^=]*=\s*\{(.*?)\};", presentation, re.DOTALL)
     assert labels is not None
-    assert set(re.findall(r'^\s*"?([a-z-]+)"?:', labels.group(1), re.MULTILINE)) == set(get_args(DeliveryProgress))
+    assert set(re.findall(r'^\s*"?([a-z-]+)"?:', labels.group(1), re.MULTILINE)) == set(get_args(DeliverySituation))
 
 
 def test_change_pause_unavailable_reason_typescript_parity(project_root: Path) -> None:
@@ -153,6 +154,22 @@ def test_work_item_detail_view_typescript_parity(project_root: Path) -> None:
     interface = re.search(r"^export interface WorkItemDetailView \{\n(.*?)^\}", api, re.DOTALL | re.MULTILINE)
     assert interface is not None
     assert set(re.findall(r"^  (\w+)\??:", interface.group(1), re.MULTILINE)) == set(WorkItemDetailView.model_fields)
+
+
+def test_decision_origin_typescript_parity(project_root: Path) -> None:
+    """Every decision origin and decision field has a Cockpit mirror and label."""
+    api = (project_root / "serve/cockpit/web/src/api/workItems.ts").read_text()
+    union = re.search(r"export type DeliveryDecisionOrigin\s*=\s*(.*?);", api, re.DOTALL)
+    interface = re.search(r"^export interface DeliveryDecision \{\n(.*?)^\}", api, re.DOTALL | re.MULTILINE)
+    assert union is not None
+    assert interface is not None
+    assert set(re.findall(r'"([^"]+)"', union.group(1))) == {origin.value for origin in DeliveryDecisionOrigin}
+    assert set(re.findall(r"^  (\w+)\??:", interface.group(1), re.MULTILINE)) == set(DeliveryDecision.model_fields)
+    presentation = (project_root / "serve/cockpit/web/src/components/workItemPresentation.ts").read_text()
+    labels = re.search(r"DECISION_ORIGIN_LABELS[^=]*=\s*\{(.*?)\};", presentation, re.DOTALL)
+    assert labels is not None
+    keys = set(re.findall(r'^\s*"?([a-z-]+)"?:', labels.group(1), re.MULTILINE))
+    assert keys == {origin.value for origin in DeliveryDecisionOrigin}
 
 
 def _collect_forbidden_imports(

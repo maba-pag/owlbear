@@ -76,7 +76,8 @@ authority bytes, and package ID. Also inspect focused research. Build private se
 
 - confirmed intent and Product Promise;
 - accepted exclusions and preserved remainder;
-- accepted, pending, and superseded decisions;
+- accepted, pending, and superseded decisions with their `DEC` identities, origins, and
+  supersession links;
 - observed, documented, assumed, and user-confirmed claims;
 - current architecture, interfaces, migrations, risks, and proof boundaries;
 - derived commitments, outcomes, task-plan scopes, ownership, and dependencies when generated
@@ -187,6 +188,21 @@ the answer, persist the decision and affected intent or design through Step 3, m
 decisions explicitly in authored bytes, and recompute dependent open questions. Ambiguous answers
 remain pending and do not authorize downstream admission.
 
+Ask every decision you consider important through this step, even when it is not material by the
+list above, so the user decides it directly; never leave an important choice only inside the package
+for approval. Record each answer as a `decided` decision block (Step 8).
+
+Prior decisions follow their origin (system instructions §1):
+
+- `decided`: change it only through this step; the new decision is `decided`.
+- `approved` or `autonomous`: supersede it with a new decision block that records the reason, and
+  name it in the approval delta and the report. If it already supersedes an earlier decision, ask
+  the user through this step instead.
+- An answered Decision Request (`REQ-…`) without `applies_to` is a `decided` decision. A Planner or
+  Builder return that questions one reaches you here; ask the user, and record a `decided` decision
+  whose `supersedes` names the request. Never supersede a waiver or person-only confirmation; change
+  its criterion instead, which ends the answer's applicability.
+
 ## Step 7 - Review Adaptive Architecture
 
 Once product intent is stable enough to constrain implementation, load `h-module-design` and review
@@ -210,8 +226,24 @@ Encode confirmed intent and design in the compiler-owned target-contract blocks 
 `derive_delivery_contract`. Use stable uppercase typed IDs and complete each active semantic
 identity before admission:
 
-- provenance-classed commitments for dealbreakers, protected requests, important reviewed meaning,
-  agreed paths, and implementation discretion;
+- one decision block for every decision a commitment rests on:
+
+  ```yaml
+  kind: decision
+  id: DEC-001
+  origin: decided        # decided | approved | autonomous
+  basis: askQuestions 2026-10-08 "<question>"   # or: request REQ-…, or the user's prompt wording
+  statement: <the decision>
+  supersedes: []         # optional; earlier DEC or answered REQ identities
+  ```
+
+  Use `decided` for answers to direct questions, Cockpit request answers (`basis: request REQ-…`), and
+  the user's own wording; `approved` for your proposals that the user sees only in the approval; and
+  `autonomous` for choices the user delegated ("decide yourself"). Carry every existing decision block
+  forward unchanged in each revision, including superseded ones; supersede instead of editing or
+  deleting. Never reuse a `DEC` identity;
+- commitments for dealbreakers, protected requests, important reviewed meaning, agreed paths, and
+  implementation discretion, each with `decisions: [DEC-…]` naming the active decisions it rests on;
 - user-facing outcomes with promises, observable acceptance, commitment links, and dependency IDs;
   write every acceptance item as one quoted YAML string `"AC-NNN: <statement>"` with an ID unique
   across the Change and stable across revisions (first admission refuses unprefixed items; never
@@ -234,7 +266,7 @@ Run these gates against one unchanged package ID:
 2. Call a fresh read-only designer challenger with the change ID, unchanged package ID, contract
   digest, and declared entity IDs. Require one source-grounded
   `{disposition, evidence}` entry using `pass`, `warning`, or `error` for the change identity and
-  every commitment, outcome, and task-plan scope. Free-form approval is invalid.
+  every decision, commitment, outcome, and task-plan scope. Free-form approval is invalid.
 3. Run proportionate clean baselines: affected builds or typechecks, generated-contract checks,
    focused tests, and the cheapest existing normal-boundary smoke. Baselines establish starting
    feasibility; they do not prove unimplemented behavior.
@@ -287,8 +319,13 @@ A requirement change on an admitted, nonterminal Change follows one route:
    deferred. A pending Pause request first lets started work drain.
 2. **Revise.** Rehydrate (Step 2), persist the revision (Step 3) and pass the same challenge,
    baseline, checkpoint and validation gates as a first admission. Show the user the delta: changed,
-   new and removed `AC-NNN` criteria, the outcomes that return to Planning, and the confirmations
-   that stay valid or must be asked again.
+   new and removed `AC-NNN` criteria, the outcomes that return to Planning, the confirmations
+   that stay valid or must be asked again, and the `decision_delta` that `derive_delivery_contract`
+   returns, grouped by origin, with one line per superseded `approved` or `autonomous` decision.
+   A package still on schema 2 has no decision blocks: convert it in this revision by replacing each
+   commitment's `provenance` with decision blocks classified best-effort (system instructions §1),
+   keeping every evidenced earlier decision and supersession, and state each classification in the
+   delta.
 3. **Approve and activate.** After explicit approval, call `admit_change` with the approved
    `expected_package_id` and the `expected_frontier_digest` that `get_change` reports. Activation
    snapshots the package on the reviewed head and resumes the Change. Unchanged outcomes keep their

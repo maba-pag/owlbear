@@ -42,7 +42,6 @@ if TYPE_CHECKING:
     from owlbear_delivery.draft_pull_request import PublicationCheckObservationReceipt
     from owlbear_delivery.merge_approval import MergeApprovalResult
     from owlbear_delivery.portfolio_application import (
-        DeliveryAcceptanceReconciliationOutcome,
         DeliveryChangePublicationSupersessionReceipt,
         DeliveryChangeWorktreeCleanup,
         DeliveryChangeWorktreeRecovery,
@@ -306,33 +305,6 @@ class PublicationChecksObservationResponse(_TargetHTTPModel):
         )
 
 
-class AcceptanceReconciliationRequest(_TargetHTTPModel):
-    """Optional current Change IDs supplied by one visible Cockpit page."""
-
-    change_ids: list[Annotated[str, Field(min_length=1)]] | None = Field(default=None, max_length=100)
-
-
-class AcceptanceReconciliationOutcomeResponse(_TargetHTTPModel):
-    """One bounded provider reconciliation result."""
-
-    change_id: str = Field(min_length=1)
-    status: str = Field(min_length=1)
-    code: str | None = Field(default=None, min_length=1)
-    detail: str | None = Field(default=None, min_length=1)
-    completion_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
-
-    @classmethod
-    def from_result(cls, result: DeliveryAcceptanceReconciliationOutcome) -> AcceptanceReconciliationOutcomeResponse:
-        """Convert one Delivery outcome without adding transport semantics."""
-        return cls(**result.model_dump(mode="json"))
-
-
-class AcceptanceReconciliationResponse(_TargetHTTPModel):
-    """Batch of isolated acceptance reconciliation outcomes."""
-
-    outcomes: tuple[AcceptanceReconciliationOutcomeResponse, ...]
-
-
 class WorkItemPublicationReconciliationResponse(_TargetHTTPModel):
     """Expose one checkpoint attempt and its durable remaining queue state."""
 
@@ -396,6 +368,12 @@ class ClearBlockBody(_TargetHTTPModel):
 
     operator_note: str = Field(min_length=1)
     locators: list[str] = Field(min_length=1)
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class GrantAttemptBody(_TargetHTTPModel):
+    """User decision funding one more attempt for an exhausted same-task Builder retry block."""
+
     expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
@@ -702,9 +680,6 @@ class BackwardMovePreviewBody(_TargetHTTPModel):
 
 __all__ = [
     "AbandonChangeBody",
-    "AcceptanceReconciliationOutcomeResponse",
-    "AcceptanceReconciliationRequest",
-    "AcceptanceReconciliationResponse",
     "ActivityCounts",
     "AdoptExternalHeadAfterAcceptanceAttentionBody",
     "AnswerRequestBody",
@@ -720,6 +695,7 @@ __all__ = [
     "ConfirmLostClaimBody",
     "DesignWorkDetailResponse",
     "ExternalHeadAdoptionResponse",
+    "GrantAttemptBody",
     "MergeApprovalResponse",
     "NeedsCounts",
     "PortfolioChangeLifecycleStatusResponse",

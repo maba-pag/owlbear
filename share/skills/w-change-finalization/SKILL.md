@@ -25,9 +25,9 @@ exact values for the attempt:
 - current `change_head` and `reviewed_change_head`;
 - `publication_phase`.
 
-For a user-invoked attempt, proceed only when the phase is `ready-for-finalization` or
-`finalization-invalidated` and the context reports `ready_for_finalization`. Normally its Change head
-equals its reviewed head. The engine may also admit a clean
+For a user-invoked attempt, proceed only when the phase is `ready-for-finalization`,
+`finalization-invalidated`, or `review-repair` and the context reports `ready_for_finalization`.
+Normally its Change head equals its reviewed head. The engine may also admit a clean
 local descendant for finalization; the Change head is the exact head that observations and review
 must bind. After an engine-validated external head adoption, the Change head may differ and remains
 the exact head that observations and review must bind. Adoption is provenance only; Builder

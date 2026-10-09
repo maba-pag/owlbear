@@ -55,6 +55,7 @@ from owlbear_delivery.workspace_models import (  # noqa: F401
     ChangeFinalizationAttention,
     ChangePauseRequest,
     ChangePauseRequestedError,
+    ChangeTargetOverlap,
     ChangeTargetSyncAbortReceipt,
     ChangeTargetSyncConflictError,
     ChangeTargetSyncConflictState,
@@ -184,6 +185,16 @@ class ChangeWorkspaceManager(_WorktreeStateMixin, _PreservationMixin, _SnapshotM
         prefix = self._target_observation_ref(shared)
         heads = [head for ref, head in observations.items() if ref.startswith(prefix)]
         return heads[0] if len(heads) == 1 else shared
+
+    def includes_commit(self, commit: str, head: str) -> bool:
+        """Return whether ``head`` contains ``commit``; a commit this repository does not have is not included."""
+        if not self.has_commit(commit):
+            return False
+        return self._is_ancestor(commit, head, cwd=self._repository)
+
+    def has_commit(self, commit: str) -> bool:
+        """Return whether this repository has ``commit`` without fetching."""
+        return self._resolve(commit, missing_ok=True) is not None
 
     def prepare_runtime_custody_guard(
         self,
@@ -318,7 +329,6 @@ class ChangeWorkspaceManager(_WorktreeStateMixin, _PreservationMixin, _SnapshotM
             captured, head, fingerprint, paths, reason = self.capture_finalization_workspace(
                 change_id, finalizer.promoted_commits
             )
-            target_head = self.observed_target_head()
             expected_reason = "active-custody" if finalizer.expected_attention is not None else None
             if (
                 current != captured
@@ -326,7 +336,6 @@ class ChangeWorkspaceManager(_WorktreeStateMixin, _PreservationMixin, _SnapshotM
                 or fingerprint != finalizer.expected_workspace_fingerprint
                 or paths
                 or reason != expected_reason
-                or target_head != finalizer.attempt.target_head
             ):
                 _coordination_conflict("Finalizer workspace changed before acquisition")
             if finalizer.before_acquire is not None:
@@ -338,7 +347,7 @@ class ChangeWorkspaceManager(_WorktreeStateMixin, _PreservationMixin, _SnapshotM
                 expected_finalization_attention=finalizer.expected_attention,
             )
 
-    def prepare_builder_handoff_acquisition(
+    def prepare_builder_handoff_acquisition(  # noqa: PLR0913 - consumption binds each exact handoff identity.
         self,
         change_id: str,
         writer: ChangeWriter,
@@ -346,8 +355,12 @@ class ChangeWorkspaceManager(_WorktreeStateMixin, _PreservationMixin, _SnapshotM
         lock: PublicationLock,
         *,
         task_id: str,
+        expected_head: str | None = None,
     ) -> ReplacementTransactionParticipant:
-        """Prepare a same-task handoff replacement without activating a claim independently."""
+        """Prepare a same-task handoff replacement without activating a claim independently.
+
+        ``expected_head`` pins consumption to the head the successor's source was prepared from.
+        """
         self._coordinator._require_publication_lock(lock, change_id)  # noqa: SLF001
         self._coordinator.require_no_pending_recovery(change_id)
         coordination = self._coordinator.show(change_id)
@@ -356,8 +369,11 @@ class ChangeWorkspaceManager(_WorktreeStateMixin, _PreservationMixin, _SnapshotM
         if writer.kind != "build":
             _coordination_conflict("only a new Builder claim can consume Builder handoff custody")
         metadata = self._capture_builder_handoff_metadata(coordination)
-        if metadata.fingerprint != handoff.metadata_fingerprint:
-            message = "Builder handoff workspace metadata changed before acquisition"
+        if (expected_head is not None and metadata.branch_head != expected_head) or not (
+            metadata.branch_head == handoff.branch_head
+            or self._is_ancestor(handoff.branch_head, metadata.branch_head, cwd=self._repository)
+        ):
+            message = "Builder handoff workspace head changed before acquisition"
             raise PreservationFenceError(message)
         return self._coordinator._prepare_builder_handoff_acquisition(  # noqa: SLF001
             change_id, writer, handoff, metadata, lock
@@ -1314,11 +1330,13 @@ class ChangeWorkspaceManager(_WorktreeStateMixin, _PreservationMixin, _SnapshotM
             return self._coordinator.release(change_id, coordination.writer.claim_id)
 
     def release_design_return(
-        self, change_id: str, handoff: ChangeBuilderHandoff, lock: PublicationLock
+        self, change_id: str, handoff: ChangeBuilderHandoff, lock: PublicationLock, *, target_sync: bool = False
     ) -> ReplacementTransactionParticipant:
         """Capture one retained Design-return handoff under refs, reset to the reviewed head, prepare release.
 
         Capture order (N04 §1.7): attempt ref, index tree ref, quarantine ref, receipt; reset only after it.
+        A ``target_sync`` release (N13) captures drifted uncommitted content as found and drops the capture
+        receipt with the handoff; the refs stay and the sync preflight sees a clean, unclaimed worktree.
         """
         self._coordinator._require_publication_lock(lock, change_id)  # noqa: SLF001
         coordination = self._coordinator.show(change_id)
@@ -1327,13 +1345,15 @@ class ChangeWorkspaceManager(_WorktreeStateMixin, _PreservationMixin, _SnapshotM
         worktree = coordination.worktree_path
         self._refuse_unclean_design_return_submodules(worktree, handoff.branch_head)
         if not self._design_return_captured(coordination, handoff):
-            self._capture_design_return(coordination, handoff, lock)
+            self._capture_design_return(coordination, handoff, lock, exact_metadata=not target_sync)
         self._git("-c", "submodule.recurse=false", "reset", "--hard", coordination.last_reviewed_commit, cwd=worktree)
         self._git("clean", "-fd", cwd=worktree)
         if self._worktree_change_paths(worktree):
             _workspace_failure("Design return release did not clean the managed worktree")
         self._require_worktree(change_id, worktree, coordination.branch, coordination.last_reviewed_commit)
-        return self._coordinator._prepare_design_return_release(change_id, handoff, lock)  # noqa: SLF001
+        return self._coordinator._prepare_design_return_release(  # noqa: SLF001
+            change_id, handoff, lock, release_quarantine=target_sync
+        )
 
     def _refuse_unclean_design_return_submodules(self, worktree: Path, branch_head: str) -> None:
         """Refuse submodule work a parent capture would hold only as a gitlink (N04 §1.7)."""
@@ -1394,7 +1414,12 @@ class ChangeWorkspaceManager(_WorktreeStateMixin, _PreservationMixin, _SnapshotM
         return True
 
     def _capture_design_return(
-        self, coordination: ChangeCoordination, handoff: ChangeBuilderHandoff, lock: PublicationLock
+        self,
+        coordination: ChangeCoordination,
+        handoff: ChangeBuilderHandoff,
+        lock: PublicationLock,
+        *,
+        exact_metadata: bool = True,
     ) -> None:
         """Preserve head, index and worktree without changing the worktree or the managed index."""
         change_id = coordination.change_id
@@ -1403,7 +1428,9 @@ class ChangeWorkspaceManager(_WorktreeStateMixin, _PreservationMixin, _SnapshotM
             metadata = self._capture_builder_handoff_metadata(coordination)
         except PreservationFenceError as exc:
             raise DesignReturnWorkspaceError.workspace_changed() from exc
-        if metadata.fingerprint != handoff.metadata_fingerprint or metadata.branch_head != handoff.branch_head:
+        if (exact_metadata and metadata.fingerprint != handoff.metadata_fingerprint) or (
+            metadata.branch_head != handoff.branch_head
+        ):
             raise DesignReturnWorkspaceError.workspace_changed()
         worktree = coordination.worktree_path
         if self._preservation_git("ls-files", "--unmerged", cwd=worktree).stdout:

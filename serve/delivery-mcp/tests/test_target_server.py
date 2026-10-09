@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import builtins
+import copy
 import hashlib
 import io
 import json
@@ -30,6 +31,8 @@ from serve.delivery.tests.confirmation_support import (
 )
 from serve.delivery.tests.test_delivery_progress import _complete_first_outcome, _progress_portfolio
 from serve.delivery.tests.test_portfolio_application import (
+    _FIRST_BUILDER_RETRY_REASON,
+    _THIRD_BUILDER_RETRY_REASON,
     _assert_checkpoint_branch_operation,
     _assert_loader_observation_only,
     _assert_loader_retry_recording,
@@ -38,6 +41,7 @@ from serve.delivery.tests.test_portfolio_application import (
     _canonical,
     _continuation_request,
     _engine_action,
+    _engine_target_sync_conflict,
     _exhaust_builder_retry_with_distinct_codes,
     _failure_request,
     _loader_activation_state_snapshot,
@@ -51,6 +55,7 @@ from serve.delivery.tests.test_portfolio_application import (
     _workspace_content_snapshot,
     _workspace_mutation_snapshot,
     acceptance_budget_case,
+    retain_contained_transition,
 )
 from serve.delivery.tests.test_recovery import (
     absent_host_process_case,
@@ -70,6 +75,7 @@ from owlbear_delivery import (
     ChangeContinuationAction,
     ChangeCoordination,
     DeliveryAdmissionReceipt,
+    DeliveryAnswerKind,
     DeliveryBuilderInvocationSettlement,
     DeliveryCommitment,
     DeliveryCommitmentClass,
@@ -127,7 +133,7 @@ from owlbear_delivery_mcp.server import (
     load_delivery_config,
     mcp,
 )
-from owlbear_delivery_mcp.target_models import DeliveryStartupDiagnostic
+from owlbear_delivery_mcp.target_models import AnswerParams, DeliveryStartupDiagnostic
 from owlbear_delivery_mcp.target_server import TargetMCPAdapter, assemble_target_server
 
 
@@ -210,7 +216,8 @@ async def test_registered_get_change_exposes_exhausted_builder_retry_history(tmp
     exhausted = next(item for item in payload["unresolved_outcomes"] if item["outcome_id"] == "OUT-001")
     readiness = exhausted["card"]["readiness"]
     assert readiness["reason_code"] == "retry-exhausted"
-    assert readiness["next_actor"] == "agent"
+    assert readiness["next_actor"] == "you"
+    assert exhausted["card"]["action"]["kind"] == "grant-attempt"
     assert readiness["retry_history"] == [
         {
             "ordinal": 1,
@@ -218,6 +225,7 @@ async def test_registered_get_change_exposes_exhausted_builder_retry_history(tmp
             "status": "failed",
             "failure_code": "builder-failed",
             "observed_at": "2026-08-04T00:00:00Z",
+            "reason": _FIRST_BUILDER_RETRY_REASON,
         },
         {
             "ordinal": 2,
@@ -232,9 +240,54 @@ async def test_registered_get_change_exposes_exhausted_builder_retry_history(tmp
             "status": "failed",
             "failure_code": "builder-review-failed",
             "observed_at": "2026-08-04T02:00:00Z",
+            "reason": _THIRD_BUILDER_RETRY_REASON,
         },
     ]
     assert runtime.retry_ledger().read() == ledger_before
+
+
+@pytest.mark.asyncio
+async def test_registered_answer_refuses_the_user_only_attempt_grant(tmp_path: Path) -> None:
+    application, runtime, _contexts = _exhaust_builder_retry_with_distinct_codes(tmp_path)
+    block = runtime.show_binding("OUT-001").block
+    frontier_before = runtime.frontier_bytes()
+    ledger_before = runtime.retry_ledger().read()
+
+    async with Client(assemble_target_server(application)) as client:
+        result = await client.call_tool(
+            "answer",
+            {
+                "change_id": "change-a",
+                "kind": "grant-attempt",
+                "expected_frontier_digest": hashlib.sha256(frontier_before).hexdigest(),
+                "outcome_id": "OUT-001",
+                "block_id": block.block_id,
+            },
+        )
+        episode_grant = await client.call_tool(
+            "answer",
+            {
+                "change_id": "change-a",
+                "kind": "grant-attempt",
+                "expected_frontier_digest": hashlib.sha256(frontier_before).hexdigest(),
+                "attempt_id": ledger_before.episodes[0].attempt_ids[-1],
+            },
+        )
+
+    assert result.is_error
+    assert "ERR_TARGET_PARAM_VALIDATION" in result.content[0].text
+    assert episode_grant.is_error
+    assert "ERR_TARGET_PARAM_VALIDATION" in episode_grant.content[0].text
+    assert runtime.frontier_bytes() == frontier_before
+    assert runtime.retry_ledger().read() == ledger_before
+    with pytest.raises(ValidationError, match="granted only by the user in Cockpit"):
+        AnswerParams(
+            change_id="change-a",
+            kind=DeliveryAnswerKind.GRANT_ATTEMPT,
+            expected_frontier_digest=hashlib.sha256(frontier_before).hexdigest(),
+            outcome_id="OUT-001",
+            block_id=block.block_id,
+        )
 
 
 def _evidence_statuses(projection: dict[str, Any]) -> dict[str, str]:
@@ -292,16 +345,19 @@ async def test_registered_change_reads_carry_progress_and_change_activity(tmp_pa
     assert "progress" in ready["readiness"]
     assert "change_progress" in ready["detail"]
     assert ready["detail"]["card"]["work_item_id"] == "OUT-001"
-    assert ready["detail"]["card"]["readiness"]["progress"] == "completed"
-    assert ready["detail"]["change_progress"] == "waiting-for-chat"
+    assert ready["detail"]["card"]["readiness"]["progress"]["situation"] == "done"
+    assert ready["detail"]["change_progress"]["situation"] == "ready-for-next-step"
     assert (ready["detail"]["pause_available"], ready["detail"]["pause_unavailable_reason"]) == (True, None)
-    assert held["detail"]["change_progress"] == "needs-decision"
+    assert held["detail"]["change_progress"]["situation"] == "needs-attention"
     # N09-A2: Pause is admissible under custody; the request drains the running step first.
     assert (held["detail"]["pause_available"], held["detail"]["pause_unavailable_reason"]) == (True, None)
     held_card = next(item for item in held["unresolved_outcomes"] if item["outcome_id"] == "OUT-002")["card"]
-    assert (held_card["readiness"]["progress"], held_card["next_step"]) == ("needs-decision", "Claimed by Builder")
+    assert (held_card["readiness"]["progress"]["situation"], held_card["next_step"]) == (
+        "needs-attention",
+        "Claimed by Builder",
+    )
     (group,) = listed["groups"]
-    assert group["progress"] == "needs-decision"
+    assert group["progress"]["situation"] == "needs-attention"
     assert (group["pause_available"], group["pause_unavailable_reason"]) == (True, None)
 
 
@@ -1896,6 +1952,9 @@ class _BlockingFoundationalApplication(_RecordingApplication):
     def acquire_actions(self) -> _Result:
         return self._run_foundational_operation()
 
+    def show_build_context(self, **_identity: str) -> _Result:
+        return self._run_foundational_operation()
+
     def delivery_health(self) -> DeliveryHealthView:
         self.calls.append("delivery_health")
         self.health_observations.append(self.mutation_count)
@@ -2188,7 +2247,7 @@ async def test_registered_planner_retry_settlement_has_exact_client_contract(tmp
         )
 
     tool = tools["settle_worker_invocation"]
-    assert set(tool.input_schema["properties"]) == {"settlement", "host_id", "session_id"}
+    assert set(tool.input_schema["properties"]) == {"settlement", "host_id", "session_id", "retry_reason"}
     assert tool.input_schema["additionalProperties"] is False
     settlement_schema = tool.input_schema["properties"]["settlement"]
     settlement_refs = {item["$ref"].rsplit("/", 1)[-1] for item in settlement_schema["anyOf"]}
@@ -3487,6 +3546,27 @@ async def test_foundational_operations_yield_to_independent_health_requests(
 
 
 @pytest.mark.asyncio
+async def test_build_context_target_probe_yields_the_mcp_event_loop() -> None:
+    started = threading.Event()
+    release = threading.Event()
+    fallback_release = threading.Timer(1, release.set)
+    fallback_release.start()
+    adapter = TargetMCPAdapter(_BlockingFoundationalApplication("show_build_context", started, release))  # type: ignore[arg-type]
+    identity = {"change_id": "change-a", "outcome_id": "OUT-001", "attempt_id": "attempt", "claim_id": "claim"}
+    launched_at = time.monotonic()
+
+    task = asyncio.create_task(adapter.show_build_context(identity))
+    assert await asyncio.to_thread(started.wait, 2)
+    elapsed = time.monotonic() - launched_at
+    release.set()
+    result = await task
+    fallback_release.cancel()
+
+    assert elapsed < 0.5
+    assert result == {"operation": "show_build_context"}
+
+
+@pytest.mark.asyncio
 async def test_cancelled_admission_is_reconciled_without_a_blind_retry() -> None:
     started = threading.Event()
     release = threading.Event()
@@ -3725,7 +3805,7 @@ def test_entry_point_prints_one_refusal_line_for_newer_state_format(tmp_path: Pa
     _write_config(path, _config())
     runtime_root = repository / ".owlbear/delivery/runtime"
     runtime_root.mkdir()
-    runtime_root.joinpath("format.json").write_bytes(format_marker_bytes(4))
+    runtime_root.joinpath("format.json").write_bytes(format_marker_bytes(5))
 
     completed = subprocess.run(
         (sys.executable, "-m", "owlbear_delivery_mcp"),
@@ -4017,3 +4097,94 @@ async def test_assembled_work_item_tools_observe_runtime_transition(
     assert before.structured_content["projection"]["stage"] == "completed"
     assert listed.structured_content["result"][0]["stage"] == "planning"
     assert after.structured_content["projection"]["stage"] == "planning"
+
+
+def _continuation_change_state(tmp_path: Path, state: str):
+    if state == "evidence":
+        return evidence_projection_case(tmp_path)[0]
+    if state in {"running", "held"}:
+        application, *_setup, settlement = _builder_retry_handoff_setup(
+            tmp_path, ["2026-08-04T00:00:00Z"], add_workspace_changes=False
+        )
+        if state == "held":
+            retain_contained_transition(application, "change-a", settlement.request)
+        return application
+    if state == "conflicted":
+        return _engine_target_sync_conflict(tmp_path)[0]
+    if state == "exhausted":
+        return _exhaust_builder_retry_with_distinct_codes(tmp_path)[0]
+    repository, _runtime_root, _remote, provider, application, _head_a, _head_b = _loader_composed_engine_fixture(
+        tmp_path
+    )
+    coordination = application._coordinator.runtime_root / "coordination/changes/change-a.json"  # noqa: SLF001
+    coordination.write_bytes(b"{")
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    _git(repository, "config", f"url.{_remote}.insteadOf", "https://github.com/example/project.git")
+    return load_core_delivery_application(_startup_config(), workspace_root=repository, publication_provider=provider)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("state", "marker"),
+    [
+        ("evidence", None),
+        ("running", "active-custody"),
+        ("held", "retry-transition-contained"),
+        ("conflicted", "engine-action-failed"),
+        ("exhausted", "retry-exhausted"),
+        ("unavailable", "coordination-unavailable"),
+    ],
+)
+async def test_registered_continuation_view_keeps_every_field_but_evidence_bodies(
+    tmp_path: Path, state: str, marker: str | None
+) -> None:
+    application = _continuation_change_state(tmp_path, state)
+
+    async with Client(assemble_target_server(application)) as client:
+        full = (await client.call_tool("get_change", {"change_id": "change-a"})).structured_content
+        compact = (
+            await client.call_tool("get_change", {"change_id": "change-a", "view": "continuation"})
+        ).structured_content
+
+    assert full is not None
+    if marker is not None:
+        assert full["readiness"]["reason_code"] == marker
+    expected = copy.deepcopy(full)
+    if full["kind"] == "available":
+        expected["evidence"] = None
+        expected["detail"]["evidence"] = None
+        expected["evidence_counts"] = None if full["evidence"] is None else full["evidence"]["counts"]
+    assert compact == expected
+    if state == "evidence":
+        assert full["evidence"]["criteria"]
+        assert full["detail"]["evidence"]["criteria"]
+        assert compact["evidence_counts"] == full["evidence"]["counts"]
+        assert len(json.dumps(compact)) < len(json.dumps(full)) / 2
+
+
+@pytest.mark.asyncio
+async def test_registered_settlement_keeps_the_retry_reason_for_the_next_builder(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, _runtime, _coordinator, _state_root, first, _head, _workspace, settlement = (
+        _builder_retry_handoff_setup(tmp_path, now, add_workspace_changes=False)
+    )
+    payload = {
+        "settlement": settlement.model_dump(mode="json"),
+        "host_id": first.claim.owner_id,
+        "session_id": first.claim.process_id,
+    }
+    reason = "Snapshot fixture drifted; regenerate it before editing"
+
+    async with Client(assemble_target_server(application)) as client:
+        refused = await client.call_tool("settle_worker_invocation", {**payload, "retry_reason": "two\nlines"})
+        settled = await client.call_tool("settle_worker_invocation", {**payload, "retry_reason": reason})
+
+    assert refused.is_error
+    assert not settled.is_error
+    now[0] = "2026-08-04T01:00:00Z"
+    second = application.acquire_change_action(_continuation_request(application, "change-a")).launch
+    assert second is not None
+    context = application.show_build_context(
+        second.change_id, second.outcome_id, second.claim.attempt_id, second.claim.claim_id
+    )
+    assert [(item.failure_code, item.reason) for item in context.prior_attempts] == [("builder-failed", reason)]

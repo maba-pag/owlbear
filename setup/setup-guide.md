@@ -203,11 +203,12 @@ After verification, prove the installation with one small outcome:
    **Expected result:** Cockpit opens at `http://127.0.0.1:8420`, reads the current project, and
    shows the Change, its progress, and the next available action, such as
    **Copy continuation prompt**.
-5. When Cockpit shows **Ready to merge**, review the pull request and approve it with
+5. When Cockpit shows **Your decision** with the headline **Ready to merge**, review the pull
+   request and approve it with
   **Approve merge**, or merge it in GitHub.
 
    **Expected result:** an approval merges only the exact reviewed head. After the merge, Delivery
-   observes it on GitHub and the Change shows **Completed**.
+   observes it on GitHub and the Change shows **Done**.
 
 If a worker returns a request or block, answer the request or clear the requestless block in Cockpit
 and then run `/continue-change <change-id>` again. Do not edit `.owlbear` Delivery state by hand.

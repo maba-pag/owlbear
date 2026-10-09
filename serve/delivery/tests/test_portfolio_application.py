@@ -48,7 +48,11 @@ from owlbear_delivery import (
     ChangeWorktreeAttentionError,
     ChangeWriter,
     CompletedHistoryCatalog,
+    CompletionDisplayMetadata,
+    CompletionEvidence,
+    CompletionPullRequestIdentity,
     CompletionReceipt,
+    CompletionReceiptStore,
     CoordinationConflictError,
     CreateOrReconcileDraftPullRequest,
     DeliveryAcceptanceAttentionReason,
@@ -80,6 +84,7 @@ from owlbear_delivery import (
     DeliveryCommandResult,
     DeliveryCommitment,
     DeliveryCommitmentClass,
+    DeliveryConfirmationError,
     DeliveryContract,
     DeliveryDesignPut,
     DeliveryEngineActionResult,
@@ -161,6 +166,7 @@ from owlbear_delivery import (
     classify_publication_check,
     load_delivery_application,
     remote_git,
+    runtime_settlement,
 )
 from owlbear_delivery.change_workspace import (
     ChangeContinuationAction,
@@ -209,6 +215,7 @@ from owlbear_delivery.publication_provider import (
     PublicationRepository,
 )
 from owlbear_delivery.recovery import (
+    DeliverySettlementRequiredError,
     DeliveryWorkerExclusionRequiredError,
     RetryEpisodeKey,
     RetryFailureClass,
@@ -220,6 +227,7 @@ from owlbear_delivery.runtime_models import _receipt_digest
 from owlbear_delivery.runtime_transaction import ReplacementTransactionParticipant, RuntimeTransaction
 from owlbear_delivery.state_formats import classify_kind, format_marker_bytes
 from owlbear_delivery.storage_io import locked_roots
+from owlbear_delivery.work_items import DeliveryProgress, WorkItemActionKind, WorkItemNextActor
 from owlbear_delivery_github import GitHubCliPublicationProvider
 
 _USER_CHECKOUT_STATES = (
@@ -2730,9 +2738,9 @@ def test_worker_budget_survives_resolved_blocks_and_leaves_sibling_runnable(tmp_
         assert not application.get_change("change-a").readiness.executable
     reopened, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes, clock=clock, execution_capacity=1)
     assert reopened.get_change("change-a").readiness.reason_code == "retry-exhausted"
-    assert reopened.get_change("change-a").readiness.next_actor.value == "agent"
-    assert reopened.get_change("change-a").readiness.prompt is not None
-    assert reopened.get_change("change-a").readiness.prompt.startswith("/inspect-change change-a")
+    assert reopened.get_change("change-a").readiness.next_actor.value == "you"
+    assert reopened.get_change("change-a").readiness.grant_attempt_id is not None
+    assert reopened.get_change("change-a").readiness.prompt is None
     assert reopened.acquire_change_action(_continuation_request(reopened)).launch is None
     if batch:
         acquired = reopened.acquire_frontier_work()
@@ -2941,9 +2949,9 @@ def test_planning_decisions_suspend_retry_budget_across_restart(tmp_path: Path, 
         now += timedelta(seconds=2)
     application, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes, clock=clock)
     assert application.get_change("change-a").readiness.reason_code == "retry-exhausted"
-    assert application.get_change("change-a").readiness.next_actor.value == "agent"
-    assert application.get_change("change-a").readiness.prompt is not None
-    assert application.get_change("change-a").readiness.prompt.startswith("/inspect-change change-a")
+    assert application.get_change("change-a").readiness.next_actor.value == "you"
+    assert application.get_change("change-a").readiness.grant_attempt_id is not None
+    assert application.get_change("change-a").readiness.prompt is None
 
 
 @pytest.mark.parametrize(
@@ -3008,12 +3016,12 @@ def test_settled_planner_retries_exhaust_after_three_exact_attempts(
             assert application.get_change("change-a").readiness.reason_code == "retry-backoff"
     readiness = application.get_change("change-a").readiness
     assert readiness.reason_code == "retry-exhausted"
-    assert readiness.next_actor.value == "agent"
-    assert readiness.prompt is not None
-    assert readiness.prompt.startswith("/inspect-change change-a")
+    assert readiness.next_actor.value == "you"
+    assert readiness.grant_attempt_id == claim.attempt_id
+    assert readiness.prompt is None
     view = application.show_work_item_view("change-a", "outcome:OUT-001")
-    assert view.card.next_actor.value == "agent"
-    assert view.card.action.kind.value == "none"
+    assert view.card.next_actor.value == "you"
+    assert view.card.action.kind.value == "grant-attempt"
     assert "Planner" in view.card.next_step
     assert application.acquire_actions().launch_packages == ()
     assert RetryLedger(state_root, "change-a").read().episodes[0].total_attempts == 3
@@ -3180,12 +3188,36 @@ def _settle_builder_handoff_attempt(
     application: PortfolioApplication,
     claim: DeliveryActiveClaim,
     settlement: DeliveryBuilderInvocationSettlement,
+    *,
+    retry_reason: str | None = None,
 ) -> OutcomeAuthorityBinding:
     return application.settle_worker_invocation(
         settlement,
         host_id=claim.owner_id,
         session_id=claim.process_id,
+        retry_reason=retry_reason,
     )
+
+
+@pytest.mark.parametrize(
+    ("disposition", "reason"),
+    [("completed-timeout", "The worker said why"), ("normal-return", "two\nlines"), ("normal-return", " padded")],
+)
+def test_a_retry_reason_is_refused_before_any_effect_outside_a_one_line_normal_retry(
+    tmp_path: Path, disposition: str, reason: str
+) -> None:
+    application, runtime, _coordinator, state_root, first, _head, _workspace, settlement = _builder_retry_handoff_setup(
+        tmp_path, ["2026-08-04T00:00:00Z"], add_workspace_changes=False
+    )
+    if disposition != "normal-return":
+        settlement = settlement.model_copy(update={"disposition": disposition, "request": None})
+    before = (runtime.frontier_bytes(), runtime.retry_ledger().read())
+
+    with pytest.raises(PortfolioApplicationError, match="retry reason"):
+        _settle_builder_handoff_attempt(application, first.claim, settlement, retry_reason=reason)
+
+    assert (runtime.frontier_bytes(), runtime.retry_ledger().read()) == before
+    assert not (state_root / "changes/change-a/retry-ledger/reasons").exists()
 
 
 def _seed_two_task_builder(application, runtimes, coordinator, state_root):
@@ -3360,10 +3392,12 @@ def _assert_returned_handoff_metadata_fences(application, builder, before_worksp
     builder_episode = runtime.retry_ledger().episode_for_attempt(builder.claim.attempt_id)
     assert builder_episode is not None
     assert builder_episode.key.exact_head == builder.last_reviewed_commit
-    assert builder_episode.total_attempts == 1
+    # The Planning return is refunded and counted as a return (N12 I2, I3).
+    assert builder_episode.total_attempts == 0
+    assert runtime.retry_ledger().returned_attempts(builder_episode) == 1
     assert builder_episode.reset_count == 0
     retained_metadata = application._workspace_manager._capture_builder_handoff_metadata(before_coordination)
-    stale_metadata = replace(retained_metadata, status_digest="0" * 64)
+    stale_metadata = replace(retained_metadata, branch_head="0" * 40)
     with patch.object(
         application._workspace_manager,
         "_capture_builder_handoff_metadata",
@@ -3385,7 +3419,7 @@ def _assert_returned_handoff_metadata_fences(application, builder, before_worksp
             "_capture_builder_handoff_metadata",
             side_effect=(retained_metadata, stale_metadata),
         ),
-        pytest.raises(PreservationFenceError, match="metadata changed before source preparation"),
+        pytest.raises(PreservationFenceError, match="head changed before source preparation"),
     ):
         application.acquire_change_action(_continuation_request(application, "change-a"))
     assert runtime.active_claims() == ()
@@ -3526,7 +3560,8 @@ def _assert_returned_builder_reacquisition(application, builder, advanced, now, 
     runtime = application._runtimes["change-a"]
     episode_before = runtime.retry_ledger().episode_for_attempt(builder.claim.attempt_id)
     assert episode_before is not None
-    assert episode_before.total_attempts == 1
+    # The Planning return was refunded (N12 I2); the reacquired Builder still joins its episode.
+    assert episode_before.total_attempts == 0
     assert episode_before.reset_count == 0
     now[0] = "2026-08-04T01:00:00Z"
     result = application.acquire_actions(
@@ -3554,7 +3589,7 @@ def _assert_returned_builder_reacquisition(application, builder, advanced, now, 
     assert _workspace_content_snapshot(builder.worktree_path) == before_workspace
     episode_after = runtime.retry_ledger().episode_for_attempt(builder.claim.attempt_id)
     assert episode_after is not None
-    assert episode_after.total_attempts == 2
+    assert episode_after.total_attempts == 1
     assert episode_after.reset_count == 0
     assert builder.claim.attempt_id in episode_after.attempt_ids
     assert resumed.claim.attempt_id in episode_after.attempt_ids
@@ -3920,7 +3955,7 @@ def test_builder_decision_answer_survives_restart_and_reacquires_same_task(tmp_p
     assert set(episode.attempt_ids) == {first.claim.attempt_id, resumed.claim.attempt_id}
 
 
-def test_builder_retry_handoff_refuses_foreign_task_and_workspace_drift(tmp_path: Path) -> None:
+def test_builder_retry_handoff_refuses_foreign_task_and_keeps_workspace_drift(tmp_path: Path) -> None:
     now = ["2026-08-04T00:00:00Z"]
     application, runtime, coordinator, _state_root, first, branch_head, before_workspace, settlement = (
         _builder_retry_handoff_setup(tmp_path, now)
@@ -3981,13 +4016,12 @@ def test_builder_retry_handoff_refuses_foreign_task_and_workspace_drift(tmp_path
     drift_file.write_text("workspace changed after handoff\n", encoding="utf-8")
     drift_snapshot = _workspace_content_snapshot(first.worktree_path)
     drift_result = application.acquire_change_action(_continuation_request(application, "change-a"))
-    assert drift_result.kind == "unavailable", drift_result
-    assert drift_result.launch is None
-    assert runtime.active_claims() == ()
-    assert coordinator.show("change-a").builder_handoff == handoff
+    assert drift_result.launch is not None, drift_result
+    assert drift_result.launch.claim.worker_role is DeliveryWorkerRole.BUILDER
+    assert drift_result.launch.claim.task_id == first.claim.task_id
+    assert drift_result.launch.claim.claim_id != first.claim.claim_id
+    assert coordinator.show("change-a").builder_handoff is None
     assert _workspace_content_snapshot(first.worktree_path) == drift_snapshot
-    drift_file.unlink()
-    assert _workspace_content_snapshot(first.worktree_path) == before_workspace
 
 
 def test_batch_handoff_selects_exact_task_over_higher_ranked_independent_outcome(tmp_path: Path) -> None:
@@ -4144,38 +4178,58 @@ def test_builder_handoff_readiness_uses_original_task_retry_episode(
     assert runtime.retry_ledger().episode_for_attempt(first.claim.attempt_id) == episode
 
 
-def test_exhausted_builder_retry_projects_read_only_diagnostic_without_clear_action(tmp_path: Path) -> None:
-    now = ["2026-08-04T00:00:00Z"]
-    application, runtime, _coordinator, _state_root, first, _head, _workspace, settlement = (
-        _builder_retry_handoff_setup(tmp_path, now, add_workspace_changes=False)
+def _exhaust_same_task_builder_retry(tmp_path: Path, now: list[str]):
+    """Fail one same-task Builder handoff three times; return the application, runtime and attempt ids."""
+    application, runtime, _coordinator, state_root, first, _head, _workspace, settlement = _builder_retry_handoff_setup(
+        tmp_path, now, add_workspace_changes=False
     )
     _settle_builder_handoff_attempt(application, first.claim, settlement)
     attempt_ids = [first.claim.attempt_id]
-
     for hour in (1, 2):
         now[0] = f"2026-08-04T{hour:02}:00:00Z"
-        acquired = application.acquire_change_action(_continuation_request(application, "change-a"))
-        assert acquired.launch is not None, acquired
-        resumed = acquired.launch
-        attempt_ids.append(resumed.claim.attempt_id)
-        retry_settlement = DeliveryBuilderInvocationSettlement(
-            change_id=resumed.change_id,
+        attempt_ids.append(_fail_resumed_builder_attempt(application))
+    return application, runtime, state_root, attempt_ids
+
+
+def _fail_resumed_builder_attempt(application: PortfolioApplication) -> str:
+    acquired = application.acquire_change_action(_continuation_request(application, "change-a"))
+    assert acquired.launch is not None, acquired
+    resumed = acquired.launch
+    retry_settlement = DeliveryBuilderInvocationSettlement(
+        change_id=resumed.change_id,
+        outcome_id=resumed.outcome_id,
+        claim_id=resumed.claim.claim_id,
+        attempt_id=resumed.claim.attempt_id,
+        task_id=resumed.task_id,
+        expected_last_reviewed_commit=resumed.last_reviewed_commit,
+        disposition="normal-return",
+        request=RetryDelivery(
+            action="retry",
             outcome_id=resumed.outcome_id,
             claim_id=resumed.claim.claim_id,
             attempt_id=resumed.claim.attempt_id,
-            task_id=resumed.task_id,
-            expected_last_reviewed_commit=resumed.last_reviewed_commit,
-            disposition="normal-return",
-            request=RetryDelivery(
-                action="retry",
-                outcome_id=resumed.outcome_id,
-                claim_id=resumed.claim.claim_id,
-                attempt_id=resumed.claim.attempt_id,
-                abandoned_commit=resumed.source_head,
-                failure_code="builder-failed",
-            ),
-        )
-        _settle_builder_handoff_attempt(application, resumed.claim, retry_settlement)
+            abandoned_commit=resumed.source_head,
+            failure_code="builder-failed",
+        ),
+    )
+    _settle_builder_handoff_attempt(application, resumed.claim, retry_settlement)
+    return resumed.claim.attempt_id
+
+
+def _grant_answer(application: PortfolioApplication, block_id: str, digest: str | None = None) -> DeliveryAnswer:
+    return DeliveryAnswer(
+        change_id="change-a",
+        kind=DeliveryAnswerKind.GRANT_ATTEMPT,
+        expected_frontier_digest=digest
+        or hashlib.sha256(application._runtime("change-a").frontier_bytes()).hexdigest(),
+        outcome_id="OUT-001",
+        block_id=block_id,
+    )
+
+
+def test_exhausted_builder_retry_offers_only_the_user_attempt_grant(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtime, _state_root, attempt_ids = _exhaust_same_task_builder_retry(tmp_path, now)
 
     binding = runtime.show_binding("OUT-001")
     assert binding.block is not None
@@ -4190,24 +4244,139 @@ def test_exhausted_builder_retry_projects_read_only_diagnostic_without_clear_act
 
     view = application.show_work_item_view("change-a", "outcome:OUT-001")
     assert view.readiness is not None
-    assert view.card.needs.value == "none"
-    assert view.card.next_actor.value == "agent"
-    assert view.card.action.kind.value == "none"
+    assert view.card.needs.value == "you"
+    assert view.card.next_actor.value == "you"
+    assert view.card.action.kind.value == "grant-attempt"
+    assert view.card.action.label == "Grant one more attempt"
     assert view.card.action.command is None
     assert view.readiness.reason_code == "retry-exhausted"
     assert view.readiness.attempts == 3
     assert view.readiness.executable is False
     assert view.readiness.operation is None
-    assert view.readiness.prompt is not None
-    assert view.readiness.prompt.startswith("/inspect-change change-a")
-    assert "read-only" in view.readiness.prompt
-    assert "do not clear the block, retry, dispatch, or reset the budget" in view.readiness.prompt
-    assert "Builder" in view.card.next_step
-    assert "approved current authority" in view.card.next_step
+    assert view.readiness.action is None
+    assert view.readiness.grant_attempt_id is None
+    assert view.readiness.prompt is None
+    assert view.readiness.progress.situation == "your-decision"
+    assert "Grant one more attempt" in view.card.next_step
+    assert "/inspect-change change-a" in view.card.next_step
+
+    refused = application.acquire_change_action(_continuation_request(application, "change-a"))
+    assert refused.launch is None
+
+
+def test_attempt_grant_is_user_only_and_funds_exactly_one_more_attempt(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtime, state_root, attempt_ids = _exhaust_same_task_builder_retry(tmp_path, now)
+    block = runtime.show_binding("OUT-001").block
+    before = runtime.frontier_bytes()
+
+    with pytest.raises(DeliveryConfirmationError, match="only by the user in Cockpit"):
+        application.answer(_grant_answer(application, block.block_id))
+    with pytest.raises(DeliveryRuntimeConflictError, match="exact exhausted Builder block"):
+        application.answer(_grant_answer(application, "builder-attempt-limit-other"), allow_user_only=True)
+    assert runtime.frontier_bytes() == before
+
+    stale_digest = hashlib.sha256(before).hexdigest()
+    result = application.answer(_grant_answer(application, block.block_id), allow_user_only=True)
+    granted = runtime.show_binding("OUT-001")
+    assert result.binding == granted
+    assert granted.block.resolved
+    assert granted.block.resolution_note == "The user granted one more Builder attempt."
+    assert granted.block.resolution_locators == (granted.builder_handoff_context.settlement_id,)
+    assert granted.block.model_copy(update={"resolution_note": None, "resolution_locators": ()}) == block
+    summary = runtime.retry_ledger().read()
+    episode = summary.episodes[0]
+    assert summary.schema_version == 2
+    assert (episode.total_attempts, episode.granted_attempts, episode.stop_code) == (3, 1, None)
+    assert episode.attempt_ids == tuple(attempt_ids)
+    receipts = list((state_root / "changes" / "change-a" / "builder-attempt-grant-receipts").iterdir())
+    assert [path.name for path in receipts] == [f"{granted.builder_handoff_context.settlement_id}.json"]
+
+    replay = application.answer(_grant_answer(application, block.block_id, stale_digest), allow_user_only=True)
+    assert replay.binding == granted
+    assert runtime.retry_ledger().read() == summary
+
+    view = application.show_work_item_view("change-a", "outcome:OUT-001")
+    assert view.readiness.reason_code != "retry-exhausted"
+    assert view.card.action.kind.value != "grant-attempt"
+
+    now[0] = "2026-08-04T03:00:00Z"
+    attempt_ids.append(_fail_resumed_builder_attempt(application))
+    regranted = runtime.show_binding("OUT-001")
+    assert regranted.block is not None
+    assert not regranted.block.resolved
+    assert regranted.block.block_id != block.block_id
+    episode = runtime.retry_ledger().read().episodes[0]
+    assert (episode.total_attempts, episode.granted_attempts) == (4, 1)
+    assert episode.stop_code.value == "retry-exhausted"
+    assert episode.attempt_ids == tuple(attempt_ids)
+    view = application.show_work_item_view("change-a", "outcome:OUT-001")
+    assert view.card.action.kind.value == "grant-attempt"
+    assert application.acquire_change_action(_continuation_request(application, "change-a")).launch is None
+
+    application.answer(_grant_answer(application, regranted.block.block_id), allow_user_only=True)
+    episode = runtime.retry_ledger().read().episodes[0]
+    assert (episode.total_attempts, episode.granted_attempts, episode.stop_code) == (4, 2, None)
+
+
+def test_stale_attempt_grant_replay_requires_its_receipt(tmp_path: Path) -> None:
+    application, runtime, state_root, _attempt_ids = _exhaust_same_task_builder_retry(
+        tmp_path, ["2026-08-04T00:00:00Z"]
+    )
+    block = runtime.show_binding("OUT-001").block
+    stale_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
+    application.answer(_grant_answer(application, block.block_id), allow_user_only=True)
+    granted_frontier = runtime.frontier_bytes()
+    summary = runtime.retry_ledger().read()
+    receipts = state_root / "changes" / "change-a" / "builder-attempt-grant-receipts"
+    for receipt in receipts.iterdir():
+        receipt.unlink()
+
+    with pytest.raises(DeliveryRuntimeConflictError, match="already resolved"):
+        application.answer(_grant_answer(application, block.block_id, stale_digest), allow_user_only=True)
+    assert runtime.frontier_bytes() == granted_frontier
+    assert runtime.retry_ledger().read() == summary
+    assert list(receipts.iterdir()) == []
+
+
+@pytest.mark.parametrize("stage", ["before-publication", "after-first-publication"])
+def test_interrupted_attempt_grant_recovers_to_the_whole_grant(tmp_path: Path, stage: str) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtime, state_root, _attempt_ids = _exhaust_same_task_builder_retry(tmp_path, now)
+    block = runtime.show_binding("OUT-001").block
+    receipts = state_root / "changes" / "change-a" / "builder-attempt-grant-receipts"
+    original_commit = RuntimeTransaction.commit
+
+    def interrupted(transaction):
+        def fail(current):
+            if current == stage:
+                message = "injected attempt grant interruption"
+                raise RuntimeError(message)
+
+        grant = any(
+            "builder-attempt-grant-receipts" in str(getattr(item, "relative_path", ""))
+            for item in transaction.participants
+        )
+        original_commit(transaction, failure=fail if grant else None)
+
+    with patch.object(RuntimeTransaction, "commit", interrupted), pytest.raises(RuntimeError, match="injected"):
+        application.answer(_grant_answer(application, block.block_id), allow_user_only=True)
+
+    _reopened, _coordinator, _manager = _reopen_portfolio(tmp_path, state_root, {"change-a": runtime})
+    recovered = DeliveryRuntime(state_root, runtime.contract).show_binding("OUT-001")
+    assert recovered.block is not None
+    assert recovered.block.resolution_note == "The user granted one more Builder attempt."
+    assert [path.name for path in receipts.iterdir()] == [f"{recovered.builder_handoff_context.settlement_id}.json"]
+    episode = RetryLedger(state_root, "change-a").read().episodes[0]
+    assert (episode.total_attempts, episode.granted_attempts, episode.stop_code) == (3, 1, None)
 
 
 def _builder_retry_history(items) -> list[tuple[int, str, str, str | None]]:
     return [(item.ordinal, item.kind, item.status, item.failure_code) for item in items]
+
+
+_FIRST_BUILDER_RETRY_REASON = "Snapshot fixture drifted from the reviewed head; regenerate before editing"
+_THIRD_BUILDER_RETRY_REASON = "Reviewer rejected the same flaky ordering twice"
 
 
 def _exhaust_builder_retry_with_distinct_codes(tmp_path: Path):
@@ -4216,7 +4385,7 @@ def _exhaust_builder_retry_with_distinct_codes(tmp_path: Path):
     application, runtime, _coordinator, state_root, first, _head, _workspace, settlement = _builder_retry_handoff_setup(
         tmp_path, now, add_workspace_changes=False
     )
-    _settle_builder_handoff_attempt(application, first.claim, settlement)
+    _settle_builder_handoff_attempt(application, first.claim, settlement, retry_reason=_FIRST_BUILDER_RETRY_REASON)
     contexts = []
 
     now[0] = "2026-08-04T01:00:00Z"
@@ -4274,6 +4443,7 @@ def _exhaust_builder_retry_with_distinct_codes(tmp_path: Path):
                 failure_code="builder-review-failed",
             ),
         ),
+        retry_reason=_THIRD_BUILDER_RETRY_REASON,
     )
     return reopened, runtime, contexts
 
@@ -4303,7 +4473,7 @@ def test_builder_retry_history_reaches_fresh_builder_and_exhaustion_diagnosis(tm
     view = application.show_work_item_view("change-a", "outcome:OUT-001")
     assert view.readiness is not None
     assert view.readiness.reason_code == "retry-exhausted"
-    assert view.readiness.next_actor.value == "agent"
+    assert view.readiness.next_actor.value == "you"
     assert view.readiness.attempts == 3
     assert _builder_retry_history(view.readiness.retry_history) == expected
     change = application.get_change("change-a")
@@ -4311,6 +4481,11 @@ def test_builder_retry_history_reaches_fresh_builder_and_exhaustion_diagnosis(tm
     exhausted = next(item for item in change.unresolved_outcomes if item.outcome_id == "OUT-001")
     assert exhausted.card.readiness is not None
     assert _builder_retry_history(exhausted.card.readiness.retry_history) == expected
+    reasons = [_FIRST_BUILDER_RETRY_REASON, None, _THIRD_BUILDER_RETRY_REASON]
+    assert [item.reason for item in second_context.prior_attempts] == reasons[:1]
+    assert [item.reason for item in third_context.prior_attempts] == reasons[:2]
+    assert [item.reason for item in view.readiness.retry_history] == reasons
+    assert [item.reason for item in exhausted.card.readiness.retry_history] == reasons
 
 
 def _requestless_builder_settlement(launch, disposition: str) -> DeliveryBuilderInvocationSettlement:
@@ -4467,7 +4642,10 @@ def test_ended_without_result_builder_attempts_share_one_exhausting_budget(
     ]
 
 
-def test_exhausted_builder_return_to_planning_projects_read_only_diagnostic(tmp_path: Path) -> None:
+def test_exhausted_builder_return_to_planning_projects_read_only_diagnostic(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(runtime_settlement, "_refunds_planning_return", lambda _request: False)
     now = ["2026-08-04T00:00:00Z"]
     application, runtime, coordinator, _state_root, first, _head, _workspace, retry_settlement = (
         _builder_retry_handoff_setup(tmp_path, now, add_workspace_changes=False)
@@ -4529,11 +4707,12 @@ def test_exhausted_builder_return_to_planning_projects_read_only_diagnostic(tmp_
     assert view.readiness.attempts == 3
     assert view.readiness.operation is None
     assert not view.readiness.executable
-    assert view.readiness.prompt is not None
-    assert view.readiness.prompt.startswith("/inspect-change change-a")
-    assert "read-only" in view.readiness.prompt
-    assert view.card.next_actor.value == "agent"
-    assert view.card.action.kind.value == "none"
+    # A user grant is the one action, so no competing inspect prompt is authored.
+    assert view.readiness.prompt is None
+    # N12 I6: the pre-N12 exhausted Planning return is no longer read-only; only the user grant lifts it.
+    assert view.card.next_actor.value == "you"
+    assert view.card.action.kind.value == "grant-attempt"
+    assert "Builder retry budget is exhausted" in view.card.next_step
     assert view.card.action.command is None
     assert runtime.frontier_bytes() == before_frontier
     assert coordinator.show("change-a") == before_coordination
@@ -5260,6 +5439,46 @@ def builder_transition_case(tmp_path: Path, action: str):
     return application, runtimes, coordinator, state_root, launch, transition
 
 
+def retain_contained_transition(
+    application: PortfolioApplication,
+    change_id: str,
+    transition: BlockDelivery | ReturnDelivery | RetryDelivery,
+) -> None:
+    """Prove the application refuses before any effect, then retain the containment earlier releases left."""
+    runtime = application._runtimes[change_id]
+    before = runtime.frontier_bytes()
+    with pytest.raises(DeliverySettlementRequiredError, match="settle_worker_invocation"):
+        application.transition_delivery(change_id, transition)
+    assert runtime.frontier_bytes() == before
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
+        runtime.transition(transition)
+
+
+def test_raw_planner_retry_is_refused_before_any_effect_and_advance_still_applies(tmp_path: Path) -> None:
+    """A misrouted retry once left a held claim that only the dispatching chat could settle."""
+    application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING})
+    planner = application.acquire_change_action(_continuation_request(application)).launch
+    ledger = RetryLedger(state_root, "change-a")
+    before = (runtimes["change-a"].frontier_bytes(), coordinator.show("change-a"), ledger.read())
+    retry = RetryDelivery(action="retry", outcome_id=planner.outcome_id, claim_id=planner.claim.claim_id)
+
+    with pytest.raises(DeliverySettlementRequiredError, match="planner retry"):
+        application.transition_delivery("change-a", retry)
+
+    assert (runtimes["change-a"].frontier_bytes(), coordinator.show("change-a"), ledger.read()) == before
+    candidate = application.publish_delivery_plan(
+        "change-a",
+        PublishDeliveryPlan(outcome_id=planner.outcome_id, claim_id=planner.claim.claim_id, tasks=(_task(),)),
+    )
+    advanced = application.transition_delivery(
+        "change-a",
+        AdvanceDelivery(
+            action="advance", outcome_id=planner.outcome_id, claim_id=planner.claim.claim_id, output=candidate.output
+        ),
+    )
+    assert advanced.active_claim is None
+
+
 def _assert_contained_builder_views(
     application: PortfolioApplication, transition: BlockDelivery | ReturnDelivery, claim: DeliveryActiveClaim
 ) -> None:
@@ -5272,9 +5491,9 @@ def _assert_contained_builder_views(
         assert not readiness.executable
         assert readiness.operation is None
         assert readiness.action is None
-        assert "read-only" in readiness.prompt
-        assert "host worker-exclusion evidence is missing" in readiness.prompt
-        assert "does not establish" in readiness.prompt
+        assert readiness.prompt.startswith("/continue-change change-a ")
+        assert "settle_worker_invocation" in readiness.prompt
+        assert "answer its stopped-run question" in readiness.prompt
     for attention in (
         detail.recovery_attention,
         operator.recovery_attention,
@@ -5322,8 +5541,7 @@ def test_refused_builder_transition_does_not_refresh_stat_dirty_index(tmp_path: 
     before_coordination = coordinator.show("change-a")
     retry_ledger = RetryLedger(state_root, "change-a")
     before_retry_ledger = retry_ledger.read()
-    with pytest.raises(DeliveryWorkerExclusionRequiredError):
-        application.transition_delivery("change-a", transition)
+    retain_contained_transition(application, "change-a", transition)
     assert index.read_bytes() == before_index
     assert index.stat().st_mtime_ns == before_index_mtime
     assert product.read_bytes() == before_product
@@ -5345,8 +5563,7 @@ def test_refused_builder_transition_does_not_refresh_stat_dirty_index(tmp_path: 
 
 def test_change_selection_prioritizes_contained_builder_over_other_outcomes(tmp_path: Path) -> None:
     application, runtimes, _coordinator, _state_root, _launch, transition = builder_transition_case(tmp_path, "block")
-    with pytest.raises(DeliveryWorkerExclusionRequiredError):
-        application.transition_delivery("change-a", transition)
+    retain_contained_transition(application, "change-a", transition)
     snapshot = application._delivery_snapshot(runtimes["change-a"])
     card = application.show_work_item_view("change-a", "outcome:OUT-001").card
     other = card.model_copy(
@@ -5400,8 +5617,7 @@ def test_builder_return_without_exclusion_keeps_custody_and_retry_reservation(tm
     assert reserved.last_status == "reserved"
     assert reserved.outcome_ids == ()
 
-    with pytest.raises(DeliveryWorkerExclusionRequiredError):
-        application.transition_delivery("change-a", request)
+    retain_contained_transition(application, "change-a", request)
 
     before = DeliveryFrontier.model_validate_json(before_frontier)
     after = DeliveryFrontier.model_validate_json(runtimes["change-a"].frontier_bytes())
@@ -5470,21 +5686,18 @@ def test_builder_return_stays_contained_after_reload_and_elapsed_backoff(tmp_pat
     before_coordination = coordinator.show("change-a")
     ledger = RetryLedger(state_root, "change-a")
     before_ledger = ledger.read()
-    with pytest.raises(DeliveryWorkerExclusionRequiredError):
-        application.transition_delivery("change-a", request)
+    retain_contained_transition(application, "change-a", request)
 
     attention = runtimes["change-a"].show_binding("OUT-001").recovery_attention
     assert attention is not None
     assert attention.reason == request.reason
 
     retained_frontier = runtimes["change-a"].frontier_bytes()
-    with pytest.raises(DeliveryWorkerExclusionRequiredError):
-        application.transition_delivery("change-a", request)
+    retain_contained_transition(application, "change-a", request)
     assert runtimes["change-a"].frontier_bytes() == retained_frontier
     now += timedelta(days=1)
     reopened, reopened_coordinator, _manager = _reopen_portfolio(tmp_path, state_root, runtimes, clock=clock)
-    with pytest.raises(DeliveryWorkerExclusionRequiredError):
-        reopened.transition_delivery("change-a", request)
+    retain_contained_transition(reopened, "change-a", request)
     _assert_contained_builder_views(reopened, request, builder.claim)
     result = reopened.acquire_change_action(_continuation_request(reopened, session_id="fresh-session"))
 
@@ -5494,7 +5707,7 @@ def test_builder_return_stays_contained_after_reload_and_elapsed_backoff(tmp_pat
     assert not result.readiness.executable
     assert result.readiness.action is None
     assert result.readiness.prompt is not None
-    assert "read-only" in result.readiness.prompt
+    assert "settle_worker_invocation" in result.readiness.prompt
     assert reopened._runtimes["change-a"].show_binding("OUT-001").active_claim.claim_id == builder.claim.claim_id
     assert reopened_coordinator.show("change-a").writer.claim_id == builder.claim.claim_id
     assert reopened_coordinator.show("change-a") == before_coordination
@@ -5569,6 +5782,9 @@ def test_engine_target_fetch_drift_is_stale_then_syncs_exact_target(tmp_path: Pa
     pending_attempt_ids = {attempt.attempt_id for attempt in RetryLedger(state_root, "change-a").pending_attempts()}
     assert action.operation_id in pending_attempt_ids
     assert coordinator.show("change-a").last_reviewed_commit == action.exact_head
+    pending_sync = application.get_change("change-a").detail.card
+    assert pending_sync.readiness.operation is WorkItemActionKind.SYNC_TARGET
+    assert pending_sync.next_step.startswith("Next: merge the latest target into this Change"), pending_sync
     fresh = _engine_action(application)
     assert fresh.operation_id != action.operation_id
     assert fresh.target_head == target
@@ -5587,6 +5803,111 @@ def test_engine_target_fetch_drift_is_stale_then_syncs_exact_target(tmp_path: Pa
     assert synchronized.target_sync.target_head == target
     assert synchronized.target_sync.merged_head != action.exact_head
     assert _execute_engine(application, fresh) == synchronized
+
+
+def _engine_target_sync_conflict(tmp_path: Path):
+    """Stop a completed Change's engine publication on a real target merge conflict in product.txt."""
+    application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
+    runtime = runtimes["change-a"]
+    head = _commit_reviewed_head(
+        application, coordinator.show("change-a"), "product.txt", "Change implementation\n", "Change edit"
+    )
+    _set_checkpoint(
+        runtime,
+        state_root,
+        DeliveryPendingCheckpoint(
+            head=head,
+            triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK),),
+        ),
+    )
+    _provider, remote = _attach_engine_publication(application, tmp_path)
+    assert _execute_engine(application, _engine_action(application)).kind == "completed"
+    stale = _engine_action(application)
+    target = _advance_remote_target(tmp_path, remote, product="Competing target edit\n")
+    assert _execute_engine(application, stale).kind == "stale"
+    action = _engine_action(application)
+    assert action.target_head == target
+    blocked = _execute_engine(application, action)
+    assert (blocked.kind, blocked.failure and blocked.failure.code) == ("blocked", "ERR_TARGET_SYNC_CONFLICT"), blocked
+    return application, runtimes["change-a"], coordinator, target, action, blocked
+
+
+@pytest.mark.parametrize("exit_kind", ["resolve", "abort"])
+def test_engine_target_sync_conflict_exit_releases_retained_engine_custody(tmp_path: Path, exit_kind: str) -> None:
+    application, runtime, coordinator, target, action, blocked = _engine_target_sync_conflict(tmp_path)
+    readiness = application.get_change("change-a").readiness
+    outcome = application.show_work_item_view("change-a", "outcome:OUT-001").card.readiness
+    assert (readiness.reason_code, readiness.next_actor, outcome.reason_code, outcome.next_actor) == (
+        "engine-action-failed",
+        WorkItemNextActor.YOU,
+        "engine-action-failed",
+        WorkItemNextActor.NONE,
+    )
+    assert readiness.prompt.startswith("/resolve-target-conflict change-a ")
+    conflict_progress = DeliveryProgress(
+        situation="ready-for-next-step",
+        headline=(
+            "Merging the latest target stopped on a conflict in product.txt; resolve it with /resolve-target-conflict."
+        ),
+        waiting_on="you",
+        target_sync="unavailable",
+    )
+    assert (readiness.progress, application.get_change("change-a").detail.change_progress) == (
+        conflict_progress,
+        conflict_progress.model_copy(update={"target_sync": None}),
+    )
+    disposition_id = runtime.change_disposition().disposition_id
+    worktree = Path(coordinator.show("change-a").worktree_path)
+    intent = coordinator.continuation_record_path("change-a", action.operation_id)
+    result = coordinator.continuation_record_path("change-a", action.operation_id, result=True)
+    journals = (intent.read_bytes(), result.read_bytes())
+
+    if exit_kind == "resolve":
+        (worktree / "product.txt").write_text("Change implementation\nCompeting target edit\n")
+        _git(worktree, "add", "product.txt")
+        receipt = application.resolve_target_sync_conflict("change-a", disposition_id, target, action.operation_id)
+        assert receipt.target_head == target
+        assert _git(worktree, "rev-parse", "HEAD") == receipt.merged_head
+    else:
+        application.abort_target_sync_conflict("change-a", disposition_id, target, action.operation_id)
+        assert _git(worktree, "rev-parse", "HEAD") == action.exact_head
+
+    assert coordinator.show("change-a").continuation_action is None
+    assert (intent.read_bytes(), result.read_bytes()) == journals
+    assert runtime.change_disposition() is None
+    after = application.get_change("change-a").readiness
+    assert after.reason_code != "engine-action-failed"
+    assert "stopped on a conflict" not in after.progress.headline
+    if exit_kind == "abort":
+        assert after.basis.target_head == target
+        assert after.progress.headline.startswith("You aborted merging this target;"), after.progress
+    else:
+        assert not after.progress.headline.startswith("You aborted")
+    assert _execute_engine(application, action) == blocked
+    following = application.acquire_change_action(_continuation_request(application))
+    assert following.kind != "unavailable", following
+    assert following.engine_action is None or following.engine_action.operation_id != action.operation_id
+    if exit_kind == "abort":
+        _assert_same_target_retry_resolves(application, worktree, target, conflict_progress.headline)
+
+
+def _assert_same_target_retry_resolves(
+    application: PortfolioApplication, worktree: Path, target: str, conflict_headline: str
+) -> None:
+    """Re-merging an aborted target preserves a fresh, readable conflict that resolves normally."""
+    coordinator = application._workspace_manager._coordinator
+    with pytest.raises(ChangeTargetSyncConflictError):
+        application.sync_change_with_target("change-a", target, "retry-same-target")
+    assert coordinator.show("change-a").target_sync_abort_receipt is None
+    retried = application.get_change("change-a").readiness
+    assert retried.prompt.startswith("/resolve-target-conflict change-a ")
+    assert retried.progress.headline == conflict_headline
+    disposition_id = application._runtimes["change-a"].change_disposition().disposition_id
+    (worktree / "product.txt").write_text("Change implementation\nCompeting target edit\n")
+    _git(worktree, "add", "product.txt")
+    receipt = application.resolve_target_sync_conflict("change-a", disposition_id, target, "retry-same-target")
+    assert _git(worktree, "rev-parse", "HEAD") == receipt.merged_head
+    assert "/resolve-target-conflict" not in (application.get_change("change-a").readiness.prompt or "")
 
 
 def test_engine_exact_sync_after_remote_rewind_selects_the_rewound_target(tmp_path: Path) -> None:
@@ -5743,20 +6064,67 @@ def test_continuation_acquisition_fences_a_prepared_runtime_mutation(tmp_path: P
     assert coordinator.show("change-a").writer == acquired[0].finalization.attempt.writer
 
 
-def test_continuation_finalizer_rejects_target_drift_without_releasing_custody(tmp_path: Path) -> None:
+def test_continuation_finalizer_completes_after_a_target_only_move(tmp_path: Path) -> None:
     application, runtimes, coordinator, _state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
     acquired = application.acquire_change_action(_continuation_request(application))
     attempt = acquired.finalization.attempt
     repository = application._workspace_manager.repository
     _git(repository, "commit", "--allow-empty", "-m", "target advances")
     _git(repository, "update-ref", "refs/remotes/origin/main", "HEAD")
+    assert application._workspace_manager.observed_target_head() != attempt.target_head
 
-    with pytest.raises(CoordinationConflictError, match="target head changed"):
-        application.finalize_change(
-            "change-a", _finalization_request("change-a", attempt.exact_head, attempt.writer.attempt_id)
-        )
-    assert runtimes["change-a"].finalization() is None
-    assert coordinator.show("change-a").writer == attempt.writer
+    finalized = application.finalize_change(
+        "change-a", _finalization_request("change-a", attempt.exact_head, attempt.writer.attempt_id)
+    )
+    assert finalized.exact_head == attempt.exact_head
+    assert runtimes["change-a"].finalization() == finalized
+    assert coordinator.show("change-a").writer is None
+
+
+def _advance_target(tmp_path: Path, application: PortfolioApplication, remote: Path, name: str) -> str:
+    clone = tmp_path / name
+    _git(tmp_path, "clone", str(remote), str(clone))
+    _git(clone, "config", "user.name", "Target User")
+    _git(clone, "config", "user.email", "target@example.invalid")
+    _git(clone, "commit", "--allow-empty", "-m", f"advance target ({name})")
+    _git(clone, "push", "origin", "HEAD:refs/heads/main")
+    target = _git(clone, "rev-parse", "HEAD")
+    _git(application._workspace_manager.repository, "fetch", "--no-prune", "origin", "main:refs/remotes/origin/main")
+    assert application._workspace_manager.observed_target_head() == target
+    return target
+
+
+def test_moved_target_after_sync_neither_forces_a_sync_nor_refuses_finalization(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path, {"change-a": DeliveryStage.COMPLETED}, clock=lambda: now[0]
+    )
+    _provider, remote = _attach_engine_publication(application, tmp_path)
+    synced_target = _advance_target(tmp_path, application, remote, "first")
+    sync_owner = application.acquire_change_action(_continuation_request(application))
+    assert sync_owner.engine_action is not None
+    assert sync_owner.engine_action.kind == "sync-target"
+    synchronized = _execute_engine(application, sync_owner.engine_action)
+    assert synchronized.kind == "completed", synchronized
+    assert synchronized.target_sync.target_head == synced_target
+
+    # Before finalization: dev moves again; finalization is offered against the recorded sync.
+    _advance_target(tmp_path, application, remote, "second")
+    now[0] = "2026-08-04T00:00:01Z"
+    readiness = application.get_change("change-a").readiness
+    assert (readiness.status, readiness.operation.value) == ("ready", "finalize"), readiness
+    acquired = application.acquire_change_action(_continuation_request(application))
+    assert acquired.kind == "acquired", acquired
+    attempt = acquired.finalization.attempt
+
+    # During finalization: dev moves once more; completion still succeeds.
+    _advance_target(tmp_path, application, remote, "third")
+    finalized = application.finalize_change(
+        "change-a", _finalization_request("change-a", attempt.exact_head, attempt.writer.attempt_id)
+    )
+    assert finalized.exact_head == synchronized.target_sync.merged_head
+    assert coordinator.show("change-a").writer is None
+    assert runtimes["change-a"].target_sync_receipt().target_head == synced_target
 
 
 def _owns_finalization_frontier_publication(transaction: RuntimeTransaction) -> bool:
@@ -8540,7 +8908,20 @@ def test_settled_finalizer_attention_continues_target_drift_through_engine_owner
         )
 
     state_before = protected_state()
-    if not publisher_configured or damage not in {
+    if not publisher_configured:
+        # D2: a target-only move no longer stops the retry of a settled Finalizer attention.
+        readiness = application.get_change("change-a").readiness
+        assert (readiness.status, readiness.operation.value) == ("ready", "finalize"), readiness
+        retried = application.acquire_change_action(_continuation_request(application))
+        assert retried.kind == "acquired", retried
+        assert retried.finalization.attempt.exact_head == attempt.exact_head
+        continued = RetryLedger(state_root, "change-a").episode_for_attempt(
+            retried.finalization.attempt.writer.attempt_id
+        )
+        assert continued.episode_id == finalizer_budget.episode_id
+        assert continued.total_attempts == finalizer_budget.total_attempts + 1
+        return
+    if damage not in {
         None,
         "receipt-after-reservation",
         "receipt-before-registration",
@@ -8557,18 +8938,10 @@ def test_settled_finalizer_attention_continues_target_drift_through_engine_owner
                 assert readiness.operation is None or readiness.operation.value != "sync-target"
                 assert not readiness.executable
                 assert readiness.action is None
-                if not publisher_configured:
-                    assert readiness.reason_code == "settled-attention-target-drift"
-                    assert readiness.prompt is not None
-                    assert readiness.prompt.startswith("/inspect-change change-a ")
-                    assert "Read-only" in readiness.prompt
-                    assert "Do not synchronize the target" in readiness.prompt
 
                 blocked = application.acquire_change_action(_continuation_request(application))
                 assert blocked.kind != "acquired"
                 assert blocked.reason_code != "ready"
-                if not publisher_configured:
-                    assert blocked.reason_code == "settled-attention-target-drift"
                 assert blocked.readiness is not None
                 assert blocked.readiness.status in {"blocked", "unavailable"}
                 assert not blocked.readiness.executable
@@ -8580,12 +8953,6 @@ def test_settled_finalizer_attention_continues_target_drift_through_engine_owner
         sync_with_target.assert_not_called()
         assert provider.create_calls == 0
         assert provider.draft_state_calls == 0
-        if not publisher_configured:
-            assert coordinator.show("change-a").finalization_attention == attention
-            assert coordinator.show("change-a").finalization_attempt == attempt.model_copy(
-                update={"finished_at": attention.finished_at}
-            )
-            assert runtimes["change-a"].finalization() is None
         return
 
     readiness = application.get_change("change-a").readiness
@@ -8740,6 +9107,135 @@ def _settle_failed_finalizer_attempt(application: PortfolioApplication) -> Chang
     receipt = application.settle_finalizer_invocation(_finalizer_settlement(application, attempt, report))
     assert isinstance(receipt, FinalizerSettlementReceipt)
     return attempt
+
+
+def _retry_grant_answer(application: PortfolioApplication, attempt_id: str) -> DeliveryAnswer:
+    return DeliveryAnswer(
+        change_id="change-a",
+        kind=DeliveryAnswerKind.GRANT_ATTEMPT,
+        expected_frontier_digest=hashlib.sha256(application._runtime("change-a").frontier_bytes()).hexdigest(),
+        attempt_id=attempt_id,
+    )
+
+
+def test_exhausted_finalizer_is_granted_one_more_attempt_only_by_the_user(  # noqa: PLR0915 - lifecycle proof.
+    tmp_path: Path,
+) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path, {"change-a": DeliveryStage.COMPLETED}, clock=lambda: now[0]
+    )
+    attempts = []
+    for index in range(3):
+        now[0] = f"2026-08-04T00:00:{index * 10:02d}Z"
+        attempts.append(_settle_failed_finalizer_attempt(application))
+    last = attempts[-1].writer.attempt_id
+    now[0] = "2026-08-04T00:01:00Z"
+
+    readiness = application.get_change("change-a").readiness
+    assert (readiness.reason_code, readiness.next_actor.value, readiness.grant_attempt_id) == (
+        "retry-exhausted",
+        "you",
+        last,
+    )
+    assert readiness.prompt is None
+    card = application.show_work_item_view("change-a", "publication").card
+    assert (card.action.kind.value, card.action.label, card.needs.value) == (
+        "grant-attempt",
+        "Grant one more attempt",
+        "you",
+    )
+    assert "one more Finalizer attempt" in card.next_step
+    assert application.acquire_change_action(_continuation_request(application)).kind != "acquired"
+
+    ledger = RetryLedger(state_root, "change-a")
+    exhausted = ledger.read()
+    with pytest.raises(DeliveryConfirmationError, match="only by the user in Cockpit"):
+        application.answer(_retry_grant_answer(application, last))
+    with pytest.raises(DeliveryRuntimeConflictError, match="latest failure of an exhausted"):
+        application.answer(_retry_grant_answer(application, attempts[0].writer.attempt_id), allow_user_only=True)
+    with pytest.raises(PortfolioApplicationError, match="answer frontier changed"):
+        application.answer(
+            _retry_grant_answer(application, last).model_copy(update={"expected_frontier_digest": "0" * 64}),
+            allow_user_only=True,
+        )
+    assert ledger.read() == exhausted
+
+    result = application.answer(_retry_grant_answer(application, last), allow_user_only=True)
+    assert result.granted_attempt_id == last
+    granted = ledger.read()
+    episode = ledger.episode_for_attempt(last)
+    assert (episode.total_attempts, episode.granted_attempts, episode.stop_code) == (3, 1, None)
+    receipts = list((state_root / "changes/change-a/attempt-grant-receipts").iterdir())
+    assert len(receipts) == 1
+    assert json.loads(receipts[0].read_text(encoding="utf-8"))["action_kind"] == "finalize"
+    replay = application.answer(_retry_grant_answer(application, last), allow_user_only=True)
+    assert replay.granted_attempt_id == last
+    assert ledger.read() == granted
+
+    reopened, _coordinator, _manager = _reopen_portfolio(
+        tmp_path, state_root, {"change-a": runtimes["change-a"]}, clock=lambda: now[0]
+    )
+    assert reopened.get_change("change-a").readiness.reason_code != "retry-exhausted"
+    funded = reopened.acquire_change_action(_continuation_request(reopened))
+    assert funded.kind == "acquired", funded
+    assert funded.finalization is not None
+    fourth = funded.finalization.attempt.writer.attempt_id
+    report = reopened.report_finalization_failure(_failure_request(reopened, attempt_key=fourth))
+    reopened.settle_finalizer_invocation(_finalizer_settlement(reopened, funded.finalization.attempt, report))
+
+    episode = RetryLedger(state_root, "change-a").episode_for_attempt(fourth)
+    assert (episode.total_attempts, episode.granted_attempts) == (4, 1)
+    assert episode.stop_code.value == "retry-exhausted"
+    regrant = reopened.get_change("change-a").readiness
+    assert (regrant.reason_code, regrant.grant_attempt_id) == ("retry-exhausted", fourth)
+    assert reopened.acquire_change_action(_continuation_request(reopened)).kind != "acquired"
+    # Replaying the first grant never funds the re-exhausted episode.
+    reopened.answer(_retry_grant_answer(reopened, last), allow_user_only=True)
+    assert RetryLedger(state_root, "change-a").episode_for_attempt(fourth).stop_code.value == "retry-exhausted"
+    assert coordinator.show("change-a").finalization_attention is not None
+
+
+def test_exhausted_planner_is_granted_exactly_one_more_attempt(tmp_path: Path) -> None:
+    now = datetime(2026, 8, 4, tzinfo=UTC)
+
+    def clock() -> str:
+        return now.isoformat()
+
+    application, _runtimes, _coordinator, state_root = _portfolio(
+        tmp_path, {"change-a": DeliveryStage.PLANNING}, clock=clock
+    )
+
+    def fail_planner() -> str:
+        claim = application.acquire_actions().launch_packages[0].claim
+        application.settle_worker_invocation(
+            DeliveryPlanningRetrySettlement(
+                change_id="change-a",
+                outcome_id="OUT-001",
+                claim_id=claim.claim_id,
+                attempt_id=claim.attempt_id,
+                disposition="ended-without-result",
+            ),
+        )
+        return claim.attempt_id
+
+    attempt_ids = []
+    for elapsed in (0, 1, 3):
+        now = datetime(2026, 8, 4, tzinfo=UTC) + timedelta(seconds=elapsed)
+        attempt_ids.append(fail_planner())
+    view = application.show_work_item_view("change-a", "outcome:OUT-001")
+    assert view.readiness.grant_attempt_id == attempt_ids[-1]
+    assert (view.card.action.kind.value, view.card.next_actor.value) == ("grant-attempt", "you")
+    assert "one more Planner attempt" in view.card.next_step
+    assert application.acquire_actions().launch_packages == ()
+
+    application.answer(_retry_grant_answer(application, attempt_ids[-1]), allow_user_only=True)
+    now = datetime(2026, 8, 4, tzinfo=UTC) + timedelta(seconds=10)
+    attempt_ids.append(fail_planner())
+    episode = RetryLedger(state_root, "change-a").read().episodes[0]
+    assert (episode.total_attempts, episode.granted_attempts) == (4, 1)
+    assert episode.stop_code.value == "retry-exhausted"
+    assert application.acquire_actions().launch_packages == ()
 
 
 def test_successful_finalizer_syncs_after_target_conflict_abort(tmp_path: Path) -> None:
@@ -8921,6 +9417,9 @@ def test_finalizer_retry_budget_survives_settled_target_sync(  # noqa: PLR0915 -
         assert readiness.attempts == failed_attempts
         assert readiness.operation is None
         assert not readiness.executable
+        assert readiness.next_actor.value == "you"
+        assert readiness.grant_attempt_id == attempts[-1].writer.attempt_id
+        assert readiness.prompt is None
 
         blocked = application.acquire_change_action(_continuation_request(application))
         assert blocked.kind != "acquired"
@@ -8928,7 +9427,10 @@ def test_finalizer_retry_budget_survives_settled_target_sync(  # noqa: PLR0915 -
         assert runtimes["change-a"].target_sync_receipt() is None
         assert _git(worktree, "rev-parse", "HEAD") == head_before_sync
         assert coordinator.show("change-a").finalization_attention is not None
-        return
+
+        # The user's grant lifts exhaustion in place: the moved target is synchronized and finalized next.
+        application.answer(_retry_grant_answer(application, attempts[-1].writer.attempt_id), allow_user_only=True)
+        readiness = application.get_change("change-a").readiness
 
     assert readiness.status == "ready", readiness
     assert readiness.operation is not None
@@ -9030,8 +9532,9 @@ def test_refunded_settled_finalizer_retry_syncs_target_under_original_budget(
     assert runtimes["change-a"].active_claims() == ()
 
 
-@pytest.mark.parametrize("mismatched_field", ["contract_digest", "frontier_digest", "target_head"])
-def test_manager_rejects_stale_finalizer_attention_before_registration(  # noqa: PLR0915 - custody proof.
+# A target-only move is not stale attention (D2); see the no-publisher target-drift retry case.
+@pytest.mark.parametrize("mismatched_field", ["contract_digest", "frontier_digest"])
+def test_manager_rejects_stale_finalizer_attention_before_registration(
     tmp_path: Path, *, mismatched_field: str
 ) -> None:
     application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
@@ -9051,9 +9554,6 @@ def test_manager_rejects_stale_finalizer_attention_before_registration(  # noqa:
     assert retained_attempt is not None
     manager = application._workspace_manager
     repository = manager.repository
-    if mismatched_field == "target_head":
-        _git(repository, "commit", "--allow-empty", "-m", "advance target")
-        _git(repository, "update-ref", "refs/remotes/origin/main", "HEAD")
 
     writer = retained_attempt.writer.model_copy(
         update={
@@ -9065,11 +9565,7 @@ def test_manager_rejects_stale_finalizer_attention_before_registration(  # noqa:
         }
     )
     attempt_updates = {"writer": writer, "finished_at": None}
-    attempt_updates[mismatched_field] = (
-        manager.observed_target_head()
-        if mismatched_field == "target_head"
-        else hashlib.sha256(f"stale-{mismatched_field}".encode()).hexdigest()
-    )
+    attempt_updates[mismatched_field] = hashlib.sha256(f"stale-{mismatched_field}".encode()).hexdigest()
     retry_attempt = retained_attempt.model_copy(update=attempt_updates)
     promoted_commits = tuple(
         result.completed_commit for binding in runtimes["change-a"].bindings() for result in binding.results
@@ -9266,17 +9762,15 @@ def test_settled_finalizer_retries_stop_at_three_attempts_without_recovery(tmp_p
     )
 
     blocked = application.acquire_change_action(_continuation_request(application))
-    assert blocked.kind == "unsupported"
+    assert blocked.kind == "human"
     assert blocked.reason_code == "retry-exhausted"
     assert blocked.readiness is not None
     assert blocked.readiness.attempts == 3
     assert not blocked.readiness.executable
     assert blocked.readiness.action is None
-    assert blocked.readiness.next_actor.value == "agent"
-    assert blocked.readiness.prompt is not None
-    assert blocked.readiness.prompt.startswith("/inspect-change change-a Diagnose")
-    assert "read-only" in blocked.readiness.prompt
-    assert "do not clear the block, retry, dispatch, or reset the budget" in blocked.readiness.prompt
+    assert blocked.readiness.next_actor.value == "you"
+    assert blocked.readiness.grant_attempt_id == attempt_ids[-1]
+    assert blocked.readiness.prompt is None
     assert RetryLedger(state_root, "change-a").read().episodes[0].total_attempts == 3
     assert coordinator.show("change-a").finalization_attention is not None
     assert coordinator.show("change-a").finalization_attempt.finished_at is not None
@@ -9885,6 +10379,8 @@ def test_known_corrupt_change_remains_visible_without_relaxing_parser(tmp_path: 
     assert view.kind == "unavailable"
     assert view.readiness.basis.frontier_digest is None
     assert view.readiness.action is None
+    assert view.readiness.progress is not None
+    assert (view.readiness.progress.situation, view.readiness.progress.waiting_on) == ("needs-attention", "you")
     assert application.show_work_item_view("change-a", "publication") == view
     listing = application.list_changes()
     assert listing.unavailable_changes == (view,)
@@ -11633,6 +12129,55 @@ def test_change_worktree_cleanup_requires_terminal_authority(tmp_path: Path) -> 
         application.cleanup_change_worktree("change-a")
 
 
+def test_abandoned_readmitted_change_cleans_up_beside_an_earlier_completion(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    coordination = application._workspace_manager.show("change-a")
+    application.abandon_change("change-a", "User stopped the Change")
+    digest = hashlib.sha256(b"change-a").hexdigest()
+    completed_at = datetime(2026, 8, 11, 13, tzinfo=UTC)
+    earlier = CompletionReceipt.create(
+        CompletionEvidence(
+            change_id="change-a",
+            finalization_receipt_id=digest,
+            finalized_change_head=digest[:40],
+            repository_identity="example/project",
+            pull_request_identity=CompletionPullRequestIdentity(number=7, node_id="PR_node_7"),
+            accepted_target_ref="main",
+            accepted_merge_commit=digest[-40:],
+            merged_at=completed_at,
+            acceptance_observation_id=digest,
+            check_observation_ids=(digest,),
+            review_receipt_ids=(digest,),
+            completed_at=completed_at,
+        )
+    )
+    display = CompletionDisplayMetadata.create(
+        change_id="change-a",
+        completion_id=earlier.completion_id,
+        title="Earlier delivery",
+        outcome_titles=("Earlier result",),
+        outcome_promises=("Deliver the earlier result.",),
+    )
+    store = CompletionReceiptStore(runtimes["change-a"]._target_root)
+    for participant in (store.participant(earlier), store.display_participant(display)):
+        participant.destination().parent.mkdir(parents=True, exist_ok=True)
+        participant.destination().write_bytes(participant.content)
+
+    row = application.list_retained_change_worktrees()[0]
+    assert row.cleanup_eligible is True
+    assert row.cleanup_blocked_reason is None
+    assert runtimes["change-a"].completion_receipt() is None
+
+    application.cleanup_abandoned_change_worktree("change-a")
+
+    assert not coordination.worktree_path.exists()
+    assert application.list_retained_change_worktrees() == ()
+    assert store.read_bundle("change-a") is not None
+
+
 def test_abandoned_change_worktree_cleanup_surfaces_lost_worktree_attention(tmp_path: Path) -> None:
     application, _runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,
@@ -11783,10 +12328,18 @@ def test_portfolio_reader_reconciles_admitted_change_after_warm_start(tmp_path: 
     intent = b"""# Admitted Delivery
 
 ```yaml target-contract
+kind: decision
+id: DEC-001
+origin: approved
+basis: fixture approval
+statement: Fixture decision.
+```
+
+```yaml target-contract
 kind: commitment
 id: COM-001
 class: agreed-path
-provenance: characterization
+decisions: [DEC-001]
 statement: Preserve source-bound admission.
 ```
 
@@ -11845,10 +12398,18 @@ def test_warm_reader_reconciles_change_admitted_by_second_application(tmp_path: 
     intent = b"""# Admitted Delivery
 
 ```yaml target-contract
+kind: decision
+id: DEC-001
+origin: approved
+basis: fixture approval
+statement: Fixture decision.
+```
+
+```yaml target-contract
 kind: commitment
 id: COM-001
 class: agreed-path
-provenance: characterization
+decisions: [DEC-001]
 statement: Preserve source-bound admission.
 ```
 
@@ -11923,8 +12484,16 @@ def test_health_reconciliation_does_not_race_shared_runtime_admission(tmp_path: 
 kind: commitment
 id: COM-001
 class: agreed-path
-provenance: concurrency test
+decisions: [DEC-001]
 statement: Preserve concurrent runtime reconciliation.
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-001
+origin: approved
+basis: fixture approval
+statement: Fixture decision.
 ```
 
 ```yaml target-contract
@@ -13611,7 +14180,10 @@ def _loader_registered_engine_action_fixture(
     elif action_kind == "sync-target":
         frontier_path = runtime_root / "changes" / "change-a" / "frontier.json"
         frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=True)
-        frontier_path.write_bytes(_canonical(frontier.model_copy(update={"finalization": None})))
+        # Only a missing proof target requires a sync before finalization (D2), not a moved target.
+        frontier_path.write_bytes(
+            _canonical(frontier.model_copy(update={"finalization": None, "target_sync_receipt": None}))
+        )
         _git(
             application._coordinator.show("change-a").worktree_path,
             "push",
@@ -14166,8 +14738,16 @@ def _admit_discovery_change(application: PortfolioApplication, change_id: str):
 kind: commitment
 id: COM-001
 class: agreed-path
-provenance: discovery test
+decisions: [DEC-001]
 statement: Preserve persisted admission evidence.
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-001
+origin: approved
+basis: fixture approval
+statement: Fixture decision.
 ```
 
 ```yaml target-contract
@@ -14504,8 +15084,16 @@ def _assert_composed_delivery_admission(
 kind: commitment
 id: COM-001
 class: agreed-path
-provenance: composed test
+decisions: [DEC-001]
 statement: Preserve source ownership.
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-001
+origin: approved
+basis: fixture approval
+statement: Fixture decision.
 ```
 
 ```yaml target-contract
@@ -14658,8 +15246,16 @@ def test_interrupted_first_design_admission_replays_after_workspace_ensure(tmp_p
 kind: commitment
 id: COM-001
 class: agreed-path
-provenance: regression test
+decisions: [DEC-001]
 statement: Preserve the admitted Design source.
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-001
+origin: approved
+basis: fixture approval
+statement: Fixture decision.
 ```
 
 ```yaml target-contract
@@ -14848,10 +15444,20 @@ def test_design_return_release_refusal_changes_nothing(tmp_path: Path, case: str
     ) == before
 
 
-def _revision_intent(second: str = "AC-002: The report is retained.") -> bytes:
+def _revision_intent(
+    second: str = "AC-002: The report is retained.",
+    *,
+    extra_decisions: tuple[str, ...] = (),
+    launch_decisions: str = "DEC-001",
+) -> bytes:
     blocks = (
-        "kind: commitment\nid: COM-001\nclass: agreed-path\nprovenance: revision test\nstatement: Keep launches.",
-        "kind: commitment\nid: COM-002\nclass: agreed-path\nprovenance: revision test\nstatement: Keep reports.",
+        "kind: decision\nid: DEC-001\norigin: approved\nbasis: package approval\nstatement: Revise in place.",
+        *extra_decisions,
+        (
+            f"kind: commitment\nid: COM-001\nclass: agreed-path\ndecisions: [{launch_decisions}]\n"
+            "statement: Keep launches."
+        ),
+        "kind: commitment\nid: COM-002\nclass: agreed-path\ndecisions: [DEC-001]\nstatement: Keep reports.",
         (
             "kind: outcome\nid: OUT-001\ntitle: Launch\npromise: Make the launch observable.\n"
             f'acceptance: ["AC-001: The launch is observable.", "{second}"]\ncommitments: [COM-001]\ndependencies: []'
@@ -14960,6 +15566,64 @@ def test_paused_change_revision_replans_changed_outcome_and_replays(tmp_path: Pa
     assert [(launch.outcome_id, launch.claim.worker_role) for launch in launches] == [
         ("OUT-001", DeliveryWorkerRole.PLANNER)
     ]
+
+
+def test_revision_reports_decision_delta_and_plan_context_carries_decisions(tmp_path: Path) -> None:
+    application, _coordinator, state_root, seeded = _paused_revision_change(tmp_path, pause=False)
+    answered = DeliveryRequest(
+        request_id="REQ-PATH",
+        kind=DeliveryRequestKind.DECISION,
+        outcome_id="OUT-001",
+        summary="Choose the launch path",
+        options=(DeliveryRequestOption(option_id="a", label="a"), DeliveryRequestOption(option_id="b", label="b")),
+        resolution=DeliveryRequestResolution(selected_option_id="a", provenance="user-confirmed"),
+    )
+    launch, report = seeded.bindings
+    (state_root / "changes/change-r/frontier.json").write_bytes(
+        _canonical(
+            seeded.model_copy(update={"bindings": (launch.model_copy(update={"requests": (answered,)}), report)})
+        )
+    )
+    _change_intent(application, "change-r", DeliveryChangeIntentKind.DEFER, reason="Revise requirements")
+    current = application.read_design_session("change-r")
+    path_b = (
+        'kind: decision\nid: DEC-002\norigin: decided\nbasis: askQuestions 2026-10-08 "Launch path?"\n'
+        "statement: Launch through path b.\nsupersedes: [REQ-PATH]"
+    )
+    revised = _revision_intent("AC-002: The report is revised.", extra_decisions=(path_b,))
+    application.revise_design_session("change-r", current.package_id, revised, current.design_bytes)
+
+    derived = application.derive_delivery_contract("change-r")
+
+    assert derived.decision_delta is not None
+    assert [item.decision_id for item in derived.decision_delta.added] == ["DEC-002"]
+    assert derived.decision_delta.superseded_request_ids == ("REQ-PATH",)
+    assert derived.decision_delta.changed_admitted_ids == ()
+    application.admit_change(_revision_request(application))
+    (planner,) = application.acquire_frontier_work().launch_packages
+    context = application.show_plan_context(
+        "change-r", planner.outcome_id, planner.claim.attempt_id, planner.claim.claim_id
+    )
+    assert [(item.decision_id, item.origin.value) for item in context.decisions] == [
+        ("DEC-001", "approved"),
+        ("DEC-002", "decided"),
+    ]
+    assert [item.request_id for item in context.requests] == ["REQ-PATH"]
+    assert context.superseded_request_ids == ("REQ-PATH",)
+    returned = application.transition_delivery(
+        "change-r",
+        ReturnDelivery(
+            action="return",
+            outcome_id=planner.outcome_id,
+            claim_id=planner.claim.claim_id,
+            target=DeliveryStage.DESIGN,
+            reason="The launch path needs another decision.",
+            locators=("OUT-001",),
+            source_boundary=derived.digest,
+        ),
+    )
+    assert returned.stage is DeliveryStage.DESIGN
+    assert [item.request_id for item in returned.requests] == ["REQ-PATH"]
 
 
 @pytest.mark.parametrize("revision", ["delta", "zero-delta"])
@@ -15212,8 +15876,16 @@ Publish the stable package before workers run.
 kind: commitment
 id: COM-001
 class: agreed-path
-provenance: admission test
+decisions: [DEC-001]
 statement: Preserve the admitted package.
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-001
+origin: approved
+basis: admission fixture
+statement: Fixture decision.
 ```
 
 ```yaml target-contract
@@ -15305,8 +15977,16 @@ The intent contains <script>, Fixes #456, @team, https://example.test/path, and 
 kind: commitment
 id: COM-001
 class: agreed-path
-provenance: summary test
+decisions: [DEC-001]
 statement: Preserve safe summary rendering.
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-001
+origin: approved
+basis: fixture approval
+statement: Fixture decision.
 ```
 
 ```yaml target-contract
@@ -15977,8 +16657,16 @@ def test_admit_change_uses_the_existing_source_bound_admission_authority(tmp_pat
 kind: commitment
 id: COM-001
 class: agreed-path
-provenance: facade test
+decisions: [DEC-001]
 statement: Preserve the admitted package.
+```
+
+```yaml target-contract
+kind: decision
+id: DEC-001
+origin: approved
+basis: facade fixture
+statement: Fixture decision.
 ```
 
 ```yaml target-contract
@@ -16205,8 +16893,7 @@ def test_live_implementation_block_does_not_publish_or_release_without_exclusion
     before_workspace = _workspace_mutation_snapshot(launch.worktree_path)
     ledger = RetryLedger(state_root, "change-a")
     before_ledger = ledger.read()
-    with pytest.raises(DeliveryWorkerExclusionRequiredError):
-        application.transition_delivery("change-a", transition)
+    retain_contained_transition(application, "change-a", transition)
 
     attention = runtime.show_binding("OUT-001").recovery_attention
     assert attention is not None
@@ -16226,12 +16913,10 @@ def test_live_implementation_block_does_not_publish_or_release_without_exclusion
     assert _git(launch.worktree_path, "rev-parse", "HEAD") == candidate_head
     assert application.show_operator_context("change-a", "OUT-001").block is None
     retained_frontier = runtime.frontier_bytes()
-    with pytest.raises(DeliveryWorkerExclusionRequiredError):
-        application.transition_delivery("change-a", transition)
+    retain_contained_transition(application, "change-a", transition)
     assert runtime.frontier_bytes() == retained_frontier
     reopened, reopened_coordinator, _manager = _reopen_portfolio(tmp_path, state_root, runtimes)
-    with pytest.raises(DeliveryWorkerExclusionRequiredError):
-        reopened.transition_delivery("change-a", transition)
+    retain_contained_transition(reopened, "change-a", transition)
     _assert_contained_builder_views(reopened, transition, launch.claim)
     with pytest.raises(DeliveryRuntimeReferenceError):
         reopened.resolve_request(
@@ -16272,7 +16957,12 @@ def test_foreign_builder_transition_cannot_publish_diagnostic_attention(
     ledger = RetryLedger(state_root, "change-a")
     before_ledger = ledger.read()
     with pytest.raises(
-        (DeliveryRuntimeConflictError, DeliveryRuntimeReferenceError, DeliveryWorkerExclusionRequiredError)
+        (
+            DeliveryRuntimeConflictError,
+            DeliveryRuntimeReferenceError,
+            DeliverySettlementRequiredError,
+            DeliveryWorkerExclusionRequiredError,
+        )
     ):
         application.transition_delivery("change-a", transition)
     assert runtime.frontier_bytes() == before_frontier
@@ -16399,6 +17089,73 @@ def test_acquisition_replays_pending_state_when_remote_matches_current_frontier(
     assert acquisition.failures == ()
     assert runtimes["change-a"].pending_state_publication() is None
     assert state_publisher.publish.call_count == 2
+
+
+def _fail_first_state_publication(application: PortfolioApplication, state_publisher: Mock) -> None:
+    application._delivery_state_publisher = state_publisher
+    launch = application.acquire_frontier_work().launch_packages[0]
+    with pytest.raises(DeliveryStatePublicationError, match="state unavailable"):
+        application.transition_delivery(
+            "change-a",
+            BlockDelivery(
+                action="block",
+                outcome_id=launch.outcome_id,
+                claim_id=launch.claim.claim_id,
+                block_id="block-first-publication",
+                reason="Remote state is temporarily unavailable.",
+                unblock_condition="Remote state publication succeeds.",
+                expected_evidence=("Published state",),
+                locators=("test_portfolio_application.py",),
+            ),
+        )
+
+
+def test_acquisition_replays_first_state_publication_without_remote_snapshot(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    state_publisher = Mock()
+    state_publisher.publish.side_effect = [
+        DeliveryStatePublicationError("state unavailable", retry_safe=True),
+        object(),
+    ]
+    state_publisher.read_snapshot_inventory.return_value = Mock(
+        remote_head="remote-head",
+        snapshots=(),
+        diagnostics=(),
+    )
+    _fail_first_state_publication(application, state_publisher)
+
+    acquisition = application.acquire_frontier_work()
+
+    assert acquisition.failures == ()
+    assert runtimes["change-a"].pending_state_publication() is None
+    assert state_publisher.publish.call_count == 2
+    assert state_publisher.publish.call_args.kwargs["expected_remote_head"] == "remote-head"
+
+
+def test_acquisition_retains_pending_state_when_remote_snapshot_is_quarantined(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    state_publisher = Mock()
+    state_publisher.publish.side_effect = [DeliveryStatePublicationError("state unavailable", retry_safe=True)]
+    state_publisher.read_snapshot_inventory.return_value = Mock(
+        remote_head="remote-head",
+        snapshots=(),
+        diagnostics=(Mock(change_id="change-a"),),
+    )
+    _fail_first_state_publication(application, state_publisher)
+
+    acquisition = application.acquire_frontier_work()
+
+    assert [failure.detail for failure in acquisition.failures] == [
+        "remote Delivery snapshot is unavailable for pending replay"
+    ]
+    assert runtimes["change-a"].pending_state_publication() is not None
+    assert state_publisher.publish.call_count == 1
 
 
 def test_acquisition_reanchors_pending_publication_after_authority_revision(tmp_path: Path) -> None:

@@ -132,6 +132,16 @@ def _omit_when_none(value: object) -> bool:
     return value is None
 
 
+TARGET_COMMIT_LOCATOR = "target-commit:"
+_TARGET_COMMIT = re.compile(r"target-commit:([0-9a-f]{40})")
+
+
+def required_target_commit(locators: tuple[str, ...]) -> str | None:
+    """Return the one full commit a Builder block's ``target-commit:`` locator requires (N13), if any."""
+    commits = {match.group(1) for item in locators if (match := _TARGET_COMMIT.fullmatch(item))}
+    return next(iter(commits)) if len(commits) == 1 else None
+
+
 class DeliveryChangePublicationIdentity(_DeliveryModel):
     """Provider pull-request identity retained while Change attention clears ready authority."""
 
@@ -1130,8 +1140,13 @@ class DeliveryRequest(_DeliveryModel):
 
 
 def retained_requests(requests: tuple[DeliveryRequest, ...]) -> tuple[DeliveryRequest, ...]:
-    """Return the answered scoped requests that promotion keeps, since evidence may cite them."""
-    return tuple(request for request in requests if request.applies_to is not None and request.resolution is not None)
+    """Return the answered requests promotion keeps: scoped ones for evidence, decisions as user decisions."""
+    return tuple(
+        request
+        for request in requests
+        if request.resolution is not None
+        and (request.applies_to is not None or request.kind is DeliveryRequestKind.DECISION)
+    )
 
 
 class DeliveryBlock(_DeliveryModel):
@@ -1408,7 +1423,11 @@ class OutcomeAuthorityBinding(_DeliveryModel):
             or (isinstance(diagnostic, ReturnDelivery) and diagnostic.attempt_id != self.active_claim.attempt_id)
             or (
                 isinstance(diagnostic, BlockDelivery)
-                and (diagnostic.request is None or diagnostic.request.outcome_id != self.outcome_id)
+                and (
+                    diagnostic.request.outcome_id != self.outcome_id
+                    if diagnostic.request is not None
+                    else required_target_commit(diagnostic.locators) is None
+                )
             )
         ):
             message = "diagnostic transition must bind the current active Builder claim and outcome"
@@ -1838,6 +1857,9 @@ class BlockDelivery(_DeliveryModel):
         if self.request is not None and self.request.applies_to is not None and self.request.resolution is not None:
             message = "a scoped request cannot carry a resolution when it is created"
             raise ValueError(message)
+        if self.request is not None and required_target_commit(self.locators) is not None:
+            message = "a target-commit locator is an engine prerequisite and carries no user request"
+            raise ValueError(message)
         return self
 
 
@@ -2042,8 +2064,12 @@ _NORMAL_CHANGE_MUTATIONS = frozenset(
         "_retry",
         "resolve_request",
         "unblock",
+        "grant_builder_attempt",
+        "grant_attempt",
         "administrative_move",
         "release_design_return",
+        "release_target_sync_handoff",
+        "clear_target_sync_block",
         "defer_change",
         "resume_change",
         "abandon_change",
@@ -2091,6 +2117,7 @@ _PAUSE_OWNER_DRAIN_MUTATIONS = frozenset(
         "complete_change",
         "capture_change_disposition",
         "record_external_head_promotion",
+        "clear_target_sync_block",
     }
 )
 # Pause-gated: new work; refused while a request exists.
@@ -2107,9 +2134,12 @@ _PAUSE_GATED_MUTATIONS = frozenset(
         "activate_claim",
         "resolve_request",
         "unblock",
+        "grant_builder_attempt",
+        "grant_attempt",
         "administrative_move",
         "resolve_change_disposition",
         "release_design_return",
+        "release_target_sync_handoff",
     }
 )
 

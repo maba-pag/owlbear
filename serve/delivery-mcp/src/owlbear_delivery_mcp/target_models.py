@@ -6,7 +6,7 @@ import json
 from functools import partial
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator, model_validator
 
 from owlbear_delivery.change_publication import ChangeBranchSupersessionReceipt
 from owlbear_delivery.change_workspace import (
@@ -91,7 +91,8 @@ from owlbear_delivery.portfolio_operating import (
     DeliveryHealthStatus,
     DeliveryHealthView,
 )
-from owlbear_delivery.runtime_models import MAX_EVIDENCE_GAPS, DeliveryEvidenceGap
+from owlbear_delivery.recovery import MAX_RETRY_REASON_LENGTH, RETRY_REASON_PATTERN
+from owlbear_delivery.runtime_models import MAX_EVIDENCE_GAPS, DeliveryEvidenceGap, RetryDelivery
 
 
 class _TargetProtocolModel(BaseModel):
@@ -182,6 +183,12 @@ class ChangeParams(_TargetProtocolModel):
     change_id: ChangeId
 
 
+class GetChangeParams(ChangeParams):
+    """Validate one Change read; ``continuation`` omits acceptance-evidence bodies and keeps their counts."""
+
+    view: Literal["full", "continuation"] = "full"
+
+
 class ReportFinalizationFailureParams(ReportFinalizationFailure):
     """Validate one bounded finalization diagnostic through MCP."""
 
@@ -198,6 +205,14 @@ class AnswerParams(ChangeParams):
     operator_note: str | None = None
     locators: tuple[str, ...] = ()
     expected_disposition_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+    @field_validator("kind")
+    @classmethod
+    def _refuse_user_only_kind(cls, kind: DeliveryAnswerKind) -> DeliveryAnswerKind:
+        if kind is DeliveryAnswerKind.GRANT_ATTEMPT:
+            message = "one more Builder, Planner, or Finalizer attempt is granted only by the user in Cockpit"
+            raise ValueError(message)
+        return kind
 
     @model_validator(mode="after")
     def _validate_target(self) -> AnswerParams:
@@ -1096,6 +1111,12 @@ class SettleWorkerInvocationParams(_TargetProtocolModel):
     settlement: FinalizerSettlement | DeliveryPlanningRetrySettlement | DeliveryBuilderInvocationSettlement
     host_id: str | None = Field(default=None, min_length=1)
     session_id: str | None = Field(default=None, min_length=1)
+    retry_reason: str | None = Field(
+        default=None,
+        max_length=MAX_RETRY_REASON_LENGTH,
+        pattern=RETRY_REASON_PATTERN,
+        description="The worker's one-line reason, only for a normally returned Planner or Builder retry.",
+    )
 
     @model_validator(mode="after")
     def _validate_finalizer_identity_location(self) -> SettleWorkerInvocationParams:
@@ -1103,6 +1124,13 @@ class SettleWorkerInvocationParams(_TargetProtocolModel):
             value is not None for value in (self.host_id, self.session_id)
         ):
             message = "Finalizer host and session identities belong in the settlement"
+            raise ValueError(message)
+        if self.retry_reason is not None and (
+            isinstance(self.settlement, FinalizerSettlement)
+            or self.settlement.disposition != "normal-return"
+            or not isinstance(self.settlement.request, RetryDelivery)
+        ):
+            message = "a retry reason accompanies only a normally returned retry"
             raise ValueError(message)
         return self
 
@@ -1138,6 +1166,7 @@ type AdmitDeliveryChangeRequest = Annotated[
     BeforeValidator(partial(_parse_json_model, DeliveryAdmissionRequest)),
 ]
 type ChangeRequest = Annotated[ChangeParams, BeforeValidator(partial(_parse_json_model, ChangeParams))]
+type GetChangeRequest = Annotated[GetChangeParams, BeforeValidator(partial(_parse_json_model, GetChangeParams))]
 type AnswerRequest = Annotated[AnswerParams, BeforeValidator(partial(_parse_json_model, AnswerParams))]
 type PutDesignRequest = Annotated[
     PutDesignParams,
@@ -1362,6 +1391,8 @@ __all__ = [
     "ExternalHeadPromotionRequest",
     "FinalizeDeliveryChangeParams",
     "FinalizeDeliveryChangeRequest",
+    "GetChangeParams",
+    "GetChangeRequest",
     "MarkChangeReadyRequest",
     "OperatorContextParams",
     "OperatorContextRequest",

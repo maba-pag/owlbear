@@ -80,6 +80,7 @@ from owlbear_delivery import (
     ReturnDelivery,
     integration_attention_disposition,
     repair_missing_request_provenance,
+    runtime_settlement,
 )
 from owlbear_delivery.delivery_runtime import (
     DeliveryBlock,
@@ -99,6 +100,7 @@ from owlbear_delivery.delivery_runtime import (
 )
 from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
 from owlbear_delivery.recovery import (
+    BUILDER_RETURN_FAILURE_CODE,
     DeliveryWorkerExclusionRequiredError,
     RetryEpisodeKey,
     RetryFailureClass,
@@ -3787,10 +3789,19 @@ def test_builder_return_to_planning_preserves_history_and_retains_partial_handof
     assert "OUT-001" in runtime.claimable_outcome_ids()
     assert coordinator.show("delivery-runtime").builder_handoff is not None
     ledger.reconcile_owner_results()
+    ledger.reconcile_owner_results()
     episode = ledger.episode(key)
     assert episode is not None
-    assert episode.total_attempts == 1
+    assert episode.total_attempts == 0
+    assert episode.last_status == "paused"
+    assert ledger.returned_attempts(episode) == 1
+    assert ledger.attempt_history(episode)[-1].failure_code == BUILDER_RETURN_FAILURE_CODE
     assert episode.reset_count == 0
+
+
+def _charge_planning_returns(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Reproduce the pre-N12 settlement that charged a Planning return as a failed attempt."""
+    monkeypatch.setattr(runtime_settlement, "_refunds_planning_return", lambda _request: False)
 
 
 def _settle_builder_return_to_planning(tmp_path: Path, *, total_attempts: int = 1):
@@ -3985,7 +3996,10 @@ def test_planner_return_handoff_refuses_foreign_or_unrecorded_answers_without_mu
     assert runtime.frontier_bytes() == before
 
 
-def test_planner_return_exhaustion_block_stays_refused_for_unblock(tmp_path: Path) -> None:
+def test_planner_return_exhaustion_block_stays_refused_for_unblock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _charge_planning_returns(monkeypatch)
     runtime, _coordinator, _coordination, returned, _tasks = _settle_builder_return_to_planning(
         tmp_path,
         total_attempts=3,
@@ -4003,7 +4017,10 @@ def test_planner_return_exhaustion_block_stays_refused_for_unblock(tmp_path: Pat
 def test_third_builder_failure_persists_requestless_exhaustion_block(
     tmp_path: Path,
     settlement_kind: str,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    if settlement_kind == "planning-return":
+        _charge_planning_returns(monkeypatch)
     runtime, coordinator, coordination, _initial, branch_head, _first_result, _tasks = _active_second_task(tmp_path)
     ledger, key = _reserve_builder_settlement(
         runtime,
@@ -4054,6 +4071,23 @@ def test_third_builder_failure_persists_requestless_exhaustion_block(
     assert episode.last_status == "failed"
     assert episode.reset_count == 0
     assert coordinator.show("delivery-runtime").builder_handoff is not None
+
+
+def test_planning_return_after_two_failures_is_refunded_without_a_block(tmp_path: Path) -> None:
+    runtime, coordinator, coordination, returned, _tasks = _settle_builder_return_to_planning(
+        tmp_path,
+        total_attempts=3,
+    )
+
+    assert returned.block is None
+    assert runtime.claimable_outcome_ids() == ("OUT-001",)
+    ledger = runtime.retry_ledger()
+    episode = ledger.episode_for_attempt("attempt-002")
+    assert episode is not None
+    assert (episode.total_attempts, episode.repair_attempts, episode.stop_code) == (2, 1, None)
+    assert ledger.returned_attempts(episode) == 1
+    assert coordinator.show("delivery-runtime").builder_handoff is not None
+    assert coordination.last_reviewed_commit == returned.return_context.completed_boundary
 
 
 @pytest.mark.parametrize(
@@ -4776,3 +4810,36 @@ def test_fresh_process_exports_only_complete_models() -> None:
     observed = json.loads(result.stdout.strip().splitlines()[-1])
     assert observed["incomplete"] == []
     assert observed["binding"]["outcome_id"] == "OUT-001"
+
+
+def test_normal_planning_retry_records_the_planner_reason(tmp_path: Path) -> None:
+    attempt_id = "planning-reason-attempt"
+    runtime = _runtime(tmp_path)
+    _activate(runtime, "OUT-001", "planner-claim", attempt_id=attempt_id)
+    ledger, key = _reserve_planning_settlement(runtime, attempt_id)
+    reason = "Design names two owners for the cache; planning needs one before tasks"
+
+    runtime.settle_planning_retry(
+        DeliveryPlanningRetrySettlement(
+            change_id="delivery-runtime",
+            outcome_id="OUT-001",
+            claim_id="planner-claim",
+            attempt_id=attempt_id,
+            disposition="normal-return",
+            request=RetryDelivery(
+                action="retry",
+                outcome_id="OUT-001",
+                claim_id="planner-claim",
+                failure_code="planner-failed",
+            ),
+        ),
+        retry_reason=reason,
+    )
+
+    assert (tmp_path / "changes/delivery-runtime/retry-ledger/reasons" / f"{attempt_id}.json").exists()
+    ledger.reconcile_owner_results()
+    episode = ledger.episode(key)
+    assert episode is not None
+    assert [(item.failure_code, item.reason) for item in ledger.attempt_history(episode)] == [
+        ("planner-failed", reason)
+    ]

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import stat
 import subprocess
 from contextlib import ExitStack, suppress
@@ -67,6 +68,8 @@ from owlbear_delivery.delivery_runtime import (
     EngineWorkerDisposition,
     OutcomeAuthorityBinding,
     PrepareCompletedOutcomeRepair,
+    RetryDelivery,
+    ReturnDelivery,
     parse_delivery_frontier,
     repair_missing_request_provenance,
 )
@@ -88,6 +91,9 @@ from owlbear_delivery.portfolio_operating import (
 )
 from owlbear_delivery.recovery import (
     MAX_RECOVERY_INTENTS,
+    MAX_RETRY_REASON_LENGTH,
+    RETRY_REASON_PATTERN,
+    DeliverySettlementRequiredError,
     DeliveryWorkerExclusionRequiredError,
     RecoveryEvidence,
     RecoveryEvidenceReference,
@@ -118,6 +124,7 @@ from owlbear_delivery.runtime_transaction import (
 from owlbear_delivery.storage_io import locked_roots, state_is_read_only
 from owlbear_delivery.work_items import (
     DeliveryPortfolioSnapshot,
+    DeliveryProgress,
     DeliveryReadiness,
     DeliveryReadinessBasis,
     WorkItemCardView,
@@ -130,6 +137,26 @@ from owlbear_delivery.worker_stall import (
     is_issuable_attempt_id,
 )
 from owlbear_delivery.workspace_models import recovery_authority_digest
+
+
+def _refuse_settlement_only_transition(runtime: DeliveryRuntime, request: DeliveryTransition) -> None:
+    """Refuse, before any effect, a worker-ending result that only typed settlement may apply."""
+    binding = runtime.show_binding(request.outcome_id)
+    claim = binding.active_claim
+    if claim is None or claim.claim_id != request.claim_id:
+        return
+    role = claim.worker_role
+    builder_end = (
+        role is DeliveryWorkerRole.BUILDER
+        and binding.stage is DeliveryStage.IMPLEMENTATION
+        and isinstance(request, (BlockDelivery, ReturnDelivery))
+    )
+    worker_retry = isinstance(request, RetryDelivery) and role in {
+        DeliveryWorkerRole.PLANNER,
+        DeliveryWorkerRole.BUILDER,
+    }
+    if builder_end or worker_retry:
+        raise DeliverySettlementRequiredError(role.value, request.action)
 
 
 class _RecoveryMixin:
@@ -401,6 +428,7 @@ class _RecoveryMixin:
     ) -> OutcomeAuthorityBinding:
         """Apply one validated mechanical transition through its exact runtime."""
         runtime = self._runtime(change_id, for_mutation=True)
+        _refuse_settlement_only_transition(runtime, request)
         with (
             locked_roots((self._checkpoint_lock_root(change_id),)),
             self._worker_drain_authority(
@@ -446,10 +474,22 @@ class _RecoveryMixin:
         *,
         host_id: str | None = None,
         session_id: str | None = None,
+        retry_reason: str | None = None,
     ) -> OutcomeAuthorityBinding:
-        """Settle one ended Planner or Builder invocation through its exact owner receipt."""
+        """Settle one ended Planner or Builder invocation through its exact owner receipt.
+
+        ``retry_reason`` is the worker's one-line reason for a normally returned retry; Delivery keeps it
+        beside the attempt for the card and the next Builder's ``prior_attempts``.
+        """
         if type(settlement) not in {DeliveryPlanningRetrySettlement, DeliveryBuilderInvocationSettlement}:
             self._fail("worker settlement requires its typed caller-reported invocation envelope")
+        if retry_reason is not None and not (
+            settlement.disposition == "normal-return"
+            and isinstance(settlement.request, RetryDelivery)
+            and len(retry_reason) <= MAX_RETRY_REASON_LENGTH
+            and re.fullmatch(RETRY_REASON_PATTERN, retry_reason)
+        ):
+            self._fail("a retry reason is one line for a normally returned retry")
         change_id = settlement.change_id
         runtime = self._runtime(change_id, for_mutation=True)
         with (
@@ -477,7 +517,9 @@ class _RecoveryMixin:
                 settlement.claim_id,
                 replay_digest=hashlib.sha256(_canonical_model_bytes(settlement)).hexdigest(),
             ):
-                binding = self._retry_pause_field_conflict(lambda: self._apply_worker_settlement(runtime, settlement))
+                binding = self._retry_pause_field_conflict(
+                    lambda: self._apply_worker_settlement(runtime, settlement, retry_reason=retry_reason)
+                )
             self._try_convert_pause_request(change_id, runtime)
             return binding
 
@@ -485,14 +527,18 @@ class _RecoveryMixin:
         self,
         runtime: DeliveryRuntime,
         settlement: DeliveryPlanningRetrySettlement | DeliveryBuilderInvocationSettlement,
+        *,
+        retry_reason: str | None = None,
     ) -> OutcomeAuthorityBinding:
         """Settle through the exact runtime owner and publish its state; callers hold the Change locks."""
         change_id = runtime.contract.change_id
         frontier_before = runtime.frontier_bytes()
         result = (
-            runtime.settle_planning_retry(settlement, retry_observed_at=self._clock())
+            runtime.settle_planning_retry(settlement, retry_observed_at=self._clock(), retry_reason=retry_reason)
             if isinstance(settlement, DeliveryPlanningRetrySettlement)
-            else runtime.settle_builder_invocation(settlement, retry_observed_at=self._clock())
+            else runtime.settle_builder_invocation(
+                settlement, retry_observed_at=self._clock(), retry_reason=retry_reason
+            )
         )
         frontier_after = runtime.frontier_bytes()
         settlement_digest = hashlib.sha256(_canonical_model_bytes(settlement)).hexdigest()
@@ -585,6 +631,7 @@ class _RecoveryMixin:
                 self._raise_finalizer_settlement_conflict(
                     "Finalizer attempt is already settled with different authority"
                 )
+            self._reconcile_retry_results_fail_closed(runtime)
             return prior
         attempt = self._active_finalizer_writer_attempt(change_id)
         if attempt is None or attempt.writer.attempt_id != attempt_id or attempt.writer.claim_id != claim_id:
@@ -638,7 +685,10 @@ class _RecoveryMixin:
                 session_id=attempt.writer.process_id,
             )
             evidence = self._finalizer_settlement_evidence(runtime, settlement, coordination, attempt)
-            return self._publish_finalizer_settlement(runtime, settlement, attempt, evidence, lock)
+            receipt = self._publish_finalizer_settlement(runtime, settlement, attempt, evidence, lock)
+        # Readiness requires the settled failure, not only its owner result, once attention exists.
+        self._reconcile_retry_results_fail_closed(runtime)
+        return receipt
 
     def _stalled_finalizer_report(
         self, coordination: ChangeCoordination, attempt: ChangeFinalizationAttempt
@@ -1619,6 +1669,11 @@ class _RecoveryMixin:
                     f"Use /repair-delivery Diagnose Change {change_id} read-only; preserve existing custody and "
                     "journals. This does not repair authority or prove host/worker closure; the responsible owner "
                     "must resolve the condition separately before Delivery rereads it."
+                ),
+                progress=DeliveryProgress(
+                    situation="needs-attention",
+                    headline="Delivery cannot read this Change's state; diagnose it before continuing.",
+                    waiting_on="you",
                 ),
             ),
         )

@@ -11,7 +11,9 @@ from unittest.mock import patch
 import pytest
 
 from owlbear_delivery.recovery import (
+    BUILDER_RETURN_FAILURE_CODE,
     MAX_RETRY_HISTORY_ATTEMPTS,
+    RetryAttemptGrantError,
     RetryEpisodeKey,
     RetryFailureClass,
     RetryLedger,
@@ -319,6 +321,31 @@ def test_attempt_history_restarts_with_the_budget_after_accepted_progress(tmp_pa
     assert [(item.ordinal, item.status) for item in ledger.attempt_history(episode)] == [(1, "pending")]
 
 
+def test_builder_returns_are_refunded_and_counted_over_the_whole_current_budget(tmp_path: Path) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    key = _engine_key()
+    legacy = ledger.reserve(key, failure_class="mechanical", now=_START, attempt_id="legacy-return")
+    ledger.record_failure(legacy, failure_code=BUILDER_RETURN_FAILURE_CODE, now=_START)
+    at = _START + timedelta(seconds=2)
+    for index in range(MAX_RETRY_HISTORY_ATTEMPTS + 1):
+        reservation = ledger.reserve(key, failure_class="mechanical", now=at, attempt_id=f"return-{index}")
+        ledger.record_pause(reservation.attempt_id, now=at, failure_code=BUILDER_RETURN_FAILURE_CODE)
+    paused = ledger.reserve(key, failure_class="mechanical", now=at, attempt_id="request-pause")
+    episode = ledger.record_pause(paused.attempt_id, now=at)
+
+    assert episode.total_attempts == 1
+    assert ledger.returned_attempts(episode) == MAX_RETRY_HISTORY_ATTEMPTS + 2
+    assert ledger.record_pause("return-0", now=at, failure_code=BUILDER_RETURN_FAILURE_CODE) == episode
+    assert [item.failure_code for item in ledger.attempt_history(episode)][-2:] == [
+        BUILDER_RETURN_FAILURE_CODE,
+        None,
+    ]
+
+    accepted = ledger.reserve(key, failure_class="mechanical", now=at, attempt_id="accepted")
+    episode = ledger.record_accepted_progress(accepted, now=at)
+    assert ledger.returned_attempts(episode) == 0
+
+
 def test_attempt_history_fails_closed_when_an_outcome_record_is_missing(tmp_path: Path) -> None:
     ledger = RetryLedger(tmp_path, "change-a")
     key = _engine_key()
@@ -475,6 +502,78 @@ def test_recovery_release_preserves_failed_backoff_and_fractional_clock(tmp_path
     assert not ledger.reserve(key, failure_class="mechanical", now=at - timedelta(seconds=1)).allowed
     assert not ledger.reserve(key, failure_class="mechanical", now=at + timedelta(milliseconds=999)).allowed
     assert ledger.reserve(key, failure_class="mechanical", now=at + timedelta(seconds=1)).allowed
+
+
+def _exhaust_mechanical_episode(ledger: RetryLedger, key: RetryEpisodeKey) -> None:
+    for index, offset in enumerate((0, 1, 3), start=1):
+        observed = _START + timedelta(seconds=offset)
+        reservation = ledger.reserve(key, failure_class="mechanical", now=observed, attempt_id=f"attempt-{index}")
+        ledger.record_failure(reservation, failure_code="builder-failed", now=observed)
+    exhausted = ledger.reserve(key, failure_class="mechanical", now=_START + timedelta(seconds=10))
+    assert exhausted.reason_code == RetryStopCode.EXHAUSTED.value
+
+
+def _commit_grant(ledger: RetryLedger, tmp_path: Path, attempt_id: str = "attempt-3") -> None:
+    participant, _episode = ledger.prepare_attempt_grant(attempt_id, now=_START + timedelta(seconds=20))
+    RuntimeTransaction(tmp_path, f"grant-{attempt_id}", (participant,)).commit()
+
+
+def test_attempt_grant_funds_exactly_one_more_attempt_of_an_unchanged_v1_episode(tmp_path: Path) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    key = _engine_key()
+    _exhaust_mechanical_episode(ledger, key)
+    v1_bytes = ledger.summary_path.read_bytes()
+    assert RetryLedger(tmp_path, "change-a").read().schema_version == 1
+
+    for attempt_id in ("attempt-2", "attempt-unknown"):
+        with pytest.raises(RetryAttemptGrantError):
+            ledger.prepare_attempt_grant(attempt_id, now=_START)
+    participant, prepared = ledger.prepare_attempt_grant("attempt-3", now=_START + timedelta(seconds=20))
+    assert (prepared.granted_attempts, prepared.stop_code, prepared.next_eligible_at) == (1, None, None)
+    assert ledger.summary_path.read_bytes() == v1_bytes
+    RuntimeTransaction(tmp_path, "grant", (participant,)).commit()
+
+    summary = RetryLedger(tmp_path, "change-a").read()
+    assert summary.schema_version == 2
+    episode = summary.episodes[0]
+    assert (episode.total_attempts, episode.granted_attempts, episode.stop_code) == (3, 1, None)
+    with pytest.raises(RetryAttemptGrantError):
+        ledger.prepare_attempt_grant("attempt-3", now=_START + timedelta(seconds=20))
+
+    granted = ledger.reserve(
+        key, failure_class="mechanical", now=_START + timedelta(seconds=20), attempt_id="attempt-4"
+    )
+    assert granted.allowed
+    ledger.record_failure(granted, failure_code="builder-failed", now=_START + timedelta(seconds=20))
+    refused = ledger.reserve(key, failure_class="mechanical", now=_START + timedelta(seconds=60))
+    assert refused.reason_code == RetryStopCode.EXHAUSTED.value
+    assert refused.attempts == 4
+    _commit_grant(ledger, tmp_path, "attempt-4")
+    assert ledger.episode(key).granted_attempts == 2
+    second = ledger.reserve(key, failure_class="mechanical", now=_START + timedelta(seconds=60), attempt_id="attempt-5")
+    assert second.allowed
+    ledger.record_failure(second, failure_code="builder-failed", now=_START + timedelta(seconds=60))
+    denied = ledger.reserve(key, failure_class="mechanical", now=_START + timedelta(seconds=120))
+    assert (denied.allowed, denied.reason_code, denied.attempts) == (False, RetryStopCode.EXHAUSTED.value, 5)
+
+
+@pytest.mark.parametrize("clearance", ["reset", "accepted-progress"])
+def test_attempt_grant_ends_with_its_retry_episode(tmp_path: Path, clearance: str) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    key = _engine_key()
+    _exhaust_mechanical_episode(ledger, key)
+    _commit_grant(ledger, tmp_path)
+
+    if clearance == "reset":
+        episode = ledger.reset(key, accepted_progress=True, now=_START + timedelta(seconds=30))
+    else:
+        accepted = ledger.reserve(
+            key, failure_class="mechanical", now=_START + timedelta(seconds=30), attempt_id="attempt-4"
+        )
+        episode = ledger.record_accepted_progress(accepted, now=_START + timedelta(seconds=30))
+
+    assert episode.granted_attempts == 0
+    assert ledger.read().schema_version == 1
 
 
 def test_old_accepted_result_cannot_reset_successor_episode(tmp_path: Path) -> None:
@@ -885,3 +984,36 @@ def test_engine_contexts_do_not_share_exhausted_budget(tmp_path: Path, field: st
     assert other.episode_id != first_key.identity
     assert ledger.episode(first_key).stop_code is RetryStopCode.EXHAUSTED
     assert not ledger.reserve(first_key, failure_class="mechanical", now=_START + timedelta(days=1)).allowed
+
+
+def test_owner_result_reason_survives_reconciliation_into_attempt_history(tmp_path: Path) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    key = _engine_key()
+    ledger.reserve(key, failure_class="mechanical", now=_START, attempt_id="attempt-1")
+    reason = "Fixture DB locked by a parallel test; retry after it is released"
+    owner = (
+        *ledger.owner_result_participants("attempt-1", accepted=False, failure_code="builder-flaky", now=_START),
+        *ledger.reason_participants("attempt-1", reason),
+    )
+    RuntimeTransaction(tmp_path, "owner-result", owner).commit()
+    restarted = RetryLedger(tmp_path, "change-a")
+    restarted.reconcile_owner_results()
+    restarted.reserve(key, failure_class="mechanical", now=_START + timedelta(seconds=2), attempt_id="attempt-2")
+    silent = restarted.owner_result_participants(
+        "attempt-2", accepted=False, failure_code="builder-failed", now=_START + timedelta(seconds=2)
+    )
+    RuntimeTransaction(tmp_path, "owner-result-2", silent).commit()
+    restarted.reconcile_owner_results()
+    episode = restarted.episode(key)
+    assert episode is not None
+    history = restarted.attempt_history(episode)
+
+    assert [(item.failure_code, item.reason) for item in history] == [
+        ("builder-flaky", reason),
+        ("builder-failed", None),
+    ]
+    assert "reason" not in history[1].model_dump(mode="json")
+    assert ledger.reason_participants("attempt-2", None) == ()
+    (tmp_path / "changes/change-a/retry-ledger/reasons/attempt-1.json").write_text("{}", encoding="utf-8")
+    with pytest.raises(RetryLedgerCorruptError):
+        restarted.attempt_history(episode)

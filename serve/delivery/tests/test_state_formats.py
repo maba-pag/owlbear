@@ -355,6 +355,7 @@ _WRITER_FORMATS: dict[str, tuple[str, ...]] = {
     "retry_attempt": ("compact",),
     "retry_outcome": ("compact",),
     "retry_owner_result": ("compact",),
+    "retry_reason": ("compact",),
     "retry_repair_binding": ("compact",),
     **{kind.kind_id: ("indented",) for kind in RECORD_KINDS if kind.family_id.startswith("pull_request_")},
 }
@@ -544,7 +545,7 @@ _NEWER_STATE = {
         },
     ),
     "claim-issuer-2": ("runtime/changes/demo/claim-issuers/attempt-1.json", {"schema_version": 2, "window": None}),
-    "format-4": ("runtime/format.json", {"format": 4}),
+    "format-5": ("runtime/format.json", {"format": 5}),
 }
 
 
@@ -554,6 +555,29 @@ def test_a_format_2_controller_refuses_state_with_merge_attempts(tmp_path: Path,
     _write(tmp_path, "runtime/changes/change-a/merge-attempts/" + attempt.name, json.loads(attempt.read_bytes()))
     _mark_format(tmp_path)
     monkeypatch.setattr(state_formats, "SUPPORTED_FORMAT", 2)
+
+    report = scan_capability(tmp_path)
+
+    assert [(refusal.code, refusal.locator) for refusal in report.refusals] == [
+        ("state-newer-than-controller", "runtime/format.json")
+    ]
+
+
+def test_a_format_3_controller_refuses_state_with_schema_3_contracts(tmp_path: Path, monkeypatch) -> None:
+    """Decision origin: a schema-3 contract is newer than a format-3 controller; the marker refuses first."""
+    stored = json.loads((_GOLDEN / "runtime/changes/source-bound-change/contract.json").read_bytes())
+    commitments = [
+        {key: value for key, value in item.items() if key != "provenance"} | {"decision_ids": ["DEC-001"]}
+        for item in stored["commitments"]
+    ]
+    decision = {"decision_id": "DEC-001", "origin": "approved", "basis": "fixture", "statement": "Fixture."}
+    _write(
+        tmp_path,
+        "runtime/changes/change-a/contract.json",
+        stored | {"schema_version": 3, "commitments": commitments, "decisions": [decision]},
+    )
+    _mark_format(tmp_path)
+    monkeypatch.setattr(state_formats, "SUPPORTED_FORMAT", 3)
 
     report = scan_capability(tmp_path)
 

@@ -9,7 +9,7 @@ import os
 import socket
 from collections.abc import Callable
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
@@ -165,6 +165,8 @@ class AppContext:
     page: Any = None
     browser_diagnostic: str | None = None
     resolver: AddressResolver = _system_resolver
+    user_data_dir: str = str(_DEFAULT_USER_DATA_DIR)
+    launch_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 
 def _safe_browser_diagnostic(stage: str, error: BaseException) -> str:
@@ -200,45 +202,21 @@ async def _close_browser_resources(
 
 @asynccontextmanager
 async def app_lifespan(_server: MCPServer) -> AsyncGenerator[AppContext]:
-    """Configure DomainAllowlist, attempt Playwright launch, and yield AppContext."""
+    """Configure the allowlist and profile; the browser launches on first use."""
     domains_env = os.environ.get(_ALLOWED_DOMAINS_ENV, "")
     domains = [d.strip() for d in domains_env.split(",") if d.strip()]
-    allowlist = DomainAllowlist(domains=domains)
-
-    launcher: PlaywrightLauncher | None = None
-    page: Any = None
-    browser_diagnostic: str | None = None
-    try:
-        user_data_dir = os.environ.get(_USER_DATA_DIR_ENV, str(_DEFAULT_USER_DATA_DIR))
-        launcher = PlaywrightLauncher(user_data_dir=user_data_dir)
-        await launcher.launch()
-        page = await launcher.page()
-    except BaseException as exc:  # cleanup precedes control-flow re-raise or degradation.
-        diagnostics = [_safe_browser_diagnostic("browser startup", exc)]
-        diagnostics.extend(await _close_browser_resources(page, launcher))
-        if not isinstance(exc, Exception):
-            raise
-        browser_diagnostic = "; ".join(diagnostics)
-        launcher = None
-        page = None
-
     app_context = AppContext(
-        allowlist=allowlist,
-        launcher=launcher,
-        page=page,
-        browser_diagnostic=browser_diagnostic,
+        allowlist=DomainAllowlist(domains=domains),
+        user_data_dir=os.environ.get(_USER_DATA_DIR_ENV, str(_DEFAULT_USER_DATA_DIR)),
     )
     try:
         yield app_context
     finally:
-        try:
-            for diagnostic in await _close_browser_resources(page, launcher):
-                _LOGGER.warning(diagnostic)
-        finally:
-            app_context.page = None
-            app_context.launcher = None
-            page = None
-            launcher = None
+        page, launcher = app_context.page, app_context.launcher
+        app_context.page = None
+        app_context.launcher = None
+        for diagnostic in await _close_browser_resources(page, launcher):
+            _LOGGER.warning(diagnostic)
 
 
 _MSG_NO_PAGE = "No browser session"
@@ -252,6 +230,73 @@ def _browser_unavailable_message(app_ctx: object) -> str:
     if app_ctx.browser_diagnostic:
         return f"{_MSG_BROWSER_UNAVAILABLE}: {app_ctx.browser_diagnostic}"
     return _MSG_NO_PAGE
+
+
+async def _launch_browser(app_ctx: AppContext) -> None:
+    """Launch the owned browser and its first page, recording a safe diagnostic on failure."""
+    launcher: PlaywrightLauncher | None = None
+    page: Any = None
+    try:
+        launcher = PlaywrightLauncher(user_data_dir=app_ctx.user_data_dir)
+        await launcher.launch()
+        page = await launcher.page()
+    except BaseException as exc:  # cleanup precedes control-flow re-raise or degradation.
+        diagnostics = [_safe_browser_diagnostic("browser startup", exc)]
+        diagnostics.extend(await _close_browser_resources(page, launcher))
+        if not isinstance(exc, Exception):
+            raise
+        app_ctx.browser_diagnostic = "; ".join(diagnostics)
+        raise ToolError(_browser_unavailable_message(app_ctx)) from None
+    app_ctx.launcher = launcher
+    app_ctx.page = page
+    app_ctx.browser_diagnostic = None
+
+
+async def _ensure_browser(app_ctx: object, *, need_page: bool = True) -> Any:  # noqa: ANN401 - Playwright page.
+    """Launch or reopen the owned browser when needed; return the live page when requested."""
+    if not isinstance(app_ctx, AppContext):
+        raise ToolError(_MSG_BROWSER_UNAVAILABLE)
+    async with app_ctx.launch_lock:
+        if app_ctx.launcher is not None and not app_ctx.launcher.is_running:
+            stale_launcher = app_ctx.launcher
+            app_ctx.launcher = None
+            app_ctx.page = None
+            for diagnostic in await _close_browser_resources(None, stale_launcher):
+                _LOGGER.warning(diagnostic)
+        if app_ctx.launcher is None:
+            await _launch_browser(app_ctx)
+        elif need_page and (app_ctx.page is None or app_ctx.page.is_closed()):
+            try:
+                app_ctx.page = await app_ctx.launcher.page()
+            except Exception as exc:  # noqa: BLE001 - any page failure becomes a safe typed tool error.
+                app_ctx.page = None
+                msg = f"{_MSG_BROWSER_UNAVAILABLE}: {_safe_browser_diagnostic('browser page', exc)}"
+                raise ToolError(msg) from None
+        return app_ctx.page
+
+
+def _require_live_page(app_ctx: object) -> Any:  # noqa: ANN401 - Playwright page objects are external runtime values.
+    """Return the current live page without launching, or raise a typed unavailable error."""
+    if (
+        not isinstance(app_ctx, AppContext)
+        or app_ctx.launcher is None
+        or not app_ctx.launcher.is_running
+        or app_ctx.page is None
+        or app_ctx.page.is_closed()
+    ):
+        raise ToolError(_browser_unavailable_message(app_ctx))
+    return app_ctx.page
+
+
+async def _validate_destination(app_ctx: object, url: str) -> None:
+    """Apply the DNS/IP preflight and allowlist before any browser work."""
+    if not isinstance(app_ctx, AppContext):
+        raise ToolError(_MSG_BROWSER_UNAVAILABLE)
+    await _check_ssrf(url, allowlist=app_ctx.allowlist, resolver=app_ctx.resolver)
+    try:
+        app_ctx.allowlist.check(url)
+    except PermissionError as exc:
+        raise ToolError(str(exc)) from exc
 
 
 mcp = MCPServer("owlbear-browser", lifespan=app_lifespan)
@@ -291,13 +336,7 @@ async def acquire(  # noqa: PLR0913
 ) -> dict[str, Any]:
     """Acquire one rendered page through the shared browser acquisition contract."""
     app_ctx = ctx.request_context.lifespan_context
-    if not isinstance(app_ctx, AppContext) or app_ctx.launcher is None:
-        raise ToolError(_browser_unavailable_message(app_ctx))
-    await _check_ssrf(url, allowlist=app_ctx.allowlist, resolver=app_ctx.resolver)
-    try:
-        app_ctx.allowlist.check(url)
-    except PermissionError as exc:
-        raise ToolError(str(exc)) from exc
+    await _validate_destination(app_ctx, url)
     try:
         request = AcquisitionRequest(
             url=url,
@@ -306,6 +345,10 @@ async def acquire(  # noqa: PLR0913
             navigation_timeout_ms=navigation_timeout_ms,
             readiness_timeout_ms=readiness_timeout_ms,
         )
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
+    await _ensure_browser(app_ctx, need_page=False)
+    try:
         result = await app_ctx.launcher.acquire(request)
     except PermissionError as exc:
         raise ToolError(str(exc)) from exc
@@ -314,24 +357,12 @@ async def acquire(  # noqa: PLR0913
     return _serialize_acquisition(result)
 
 
-def _require_page(ctx: Context) -> Any:  # noqa: ANN401 - Playwright page objects are external runtime values.
-    """Return the live lifespan page or raise a typed unavailable error."""
-    app_ctx = ctx.request_context.lifespan_context
-    if not isinstance(app_ctx, AppContext) or app_ctx.launcher is None or app_ctx.page is None:
-        raise ToolError(_browser_unavailable_message(app_ctx))
-    return app_ctx.page
-
-
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=True, destructive_hint=False))
 async def navigate(ctx: Context, url: str) -> str:
     """Navigate the browser to *url*."""
-    page = _require_page(ctx)
     app_ctx = ctx.request_context.lifespan_context
-    await _check_ssrf(url, allowlist=app_ctx.allowlist, resolver=app_ctx.resolver)
-    try:
-        app_ctx.allowlist.check(url)
-    except PermissionError as exc:
-        raise ToolError(str(exc)) from exc
+    await _validate_destination(app_ctx, url)
+    page = await _ensure_browser(app_ctx)
 
     try:
         await page.goto(url, wait_until="domcontentloaded")
@@ -344,7 +375,7 @@ async def navigate(ctx: Context, url: str) -> str:
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=True))
 async def click(ctx: Context, selector: str) -> str:
     """Click the element identified by *selector*."""
-    page = _require_page(ctx)
+    page = await _ensure_browser(ctx.request_context.lifespan_context)
     await page.locator(selector).click()
     return selector
 
@@ -352,7 +383,7 @@ async def click(ctx: Context, selector: str) -> str:
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=True, destructive_hint=False))
 async def type_input(ctx: Context, selector: str, text: str) -> str:
     """Fill *text* into the element identified by *selector*."""
-    page = _require_page(ctx)
+    page = await _ensure_browser(ctx.request_context.lifespan_context)
     await page.locator(selector).fill(text)
     return selector
 
@@ -360,7 +391,7 @@ async def type_input(ctx: Context, selector: str, text: str) -> str:
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=True, destructive_hint=False))
 async def select(ctx: Context, selector: str, value: str) -> str:
     """Select *value* in the element identified by *selector*."""
-    page = _require_page(ctx)
+    page = await _ensure_browser(ctx.request_context.lifespan_context)
     await page.locator(selector).select_option(value)
     return f"{selector}:{value}"
 
@@ -368,7 +399,7 @@ async def select(ctx: Context, selector: str, value: str) -> str:
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False))
 async def read_text(ctx: Context) -> str:
     """Read the visible text content of the current page."""
-    page = _require_page(ctx)
+    page = _require_live_page(ctx.request_context.lifespan_context)
     html = await page.content()
     return extract_content(html, page.url)
 
@@ -376,5 +407,5 @@ async def read_text(ctx: Context) -> str:
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False))
 async def snapshot(ctx: Context) -> str:
     """Take an ARIA accessibility snapshot of the current page in YAML."""
-    page = _require_page(ctx)
+    page = _require_live_page(ctx.request_context.lifespan_context)
     return await page.locator("body").aria_snapshot()

@@ -46,10 +46,12 @@ from owlbear_delivery.change_workspace import (
     ChangeCoordination,
     ChangeFinalizationAttempt,
     ChangePauseRequestedError,
+    ChangeTargetSyncConflictError,
     ChangeTargetSyncStaleError,
     ChangeWriter,
     CoordinationConflictError,
     FinalizerAcquisition,
+    PreservationFenceError,
     PromoteExternalHead,
 )
 from owlbear_delivery.delivery_contract_discovery import (
@@ -348,6 +350,7 @@ class _AcquisitionMixin:
                     readiness=unavailable,
                 )
             self._settle_stalled_workers((request.change_id,), checkpoint_locked=True)
+            self._prepare_target_sync(request.change_id, runtime)
         replay = self._replay_continuation_action(request, observed)
         if replay is not None:
             return replay
@@ -767,6 +770,26 @@ class _AcquisitionMixin:
             raise DeliveryRuntimeReconciliationError(request.change_id, "continuation result lacks its original intent")
         return result
 
+    def _retained_target_sync_conflict(self, change_id: str) -> ChangeContinuationAction | None:
+        """Return the unfinished engine sync whose exact recorded result is a preserved target conflict."""
+        try:
+            action = self._coordinator.show(change_id).continuation_action
+            if action is None or action.finished_at is not None or action.kind != "sync-target":
+                return None
+            result = self._read_engine_result(
+                ExecuteDeliveryChangeAction(change_id=change_id, operation_id=action.operation_id)
+            )
+        except OSError, RuntimeError, ValueError:
+            return None
+        if (
+            result is None
+            or result.kind != "blocked"
+            or result.failure is None
+            or result.failure.code != ChangeTargetSyncConflictError.code
+        ):
+            return None
+        return action
+
     def execute_change_action(self, request: ExecuteDeliveryChangeAction) -> DeliveryEngineActionResult:
         """Execute the fixed retained owner once, or return its exact durable result."""
         with self._selected_action_checkpoint_lock(request.change_id):
@@ -881,7 +904,8 @@ class _AcquisitionMixin:
             reports,
             receipt,
         )
-        return reason == "settled-attention-target-drift"
+        # A retained, still-valid attention may sync while its retry waits; its target no longer has to have moved.
+        return reason is None
 
     def _engine_action_preflight(
         self, action: ChangeContinuationAction, runtime: DeliveryRuntime
@@ -1393,11 +1417,14 @@ class _AcquisitionMixin:
         completed = {result.task_id for result in binding.results}
         frontier = parse_delivery_frontier(runtime.frontier_bytes())[0].model_copy(update={"finalization": None})
         coverage = evaluate_acceptance_evidence(runtime.contract, frontier).criteria
+        superseded_request_ids = self._superseded_request_ids(runtime, binding)
         return DeliveryPlanContext(
             launch=launch,
             outcome=outcome,
             commitments=self._commitments(runtime, outcome.commitment_ids),
+            decisions=runtime.contract.applicable_decisions(outcome.commitment_ids, superseded_request_ids),
             requests=binding.requests,
+            superseded_request_ids=superseded_request_ids,
             return_context=binding.return_context,
             acceptance=self._outcome_acceptance(runtime, outcome_id),
             retained_tasks=tuple(task for task in binding.tasks if task.task_id in completed),
@@ -1442,18 +1469,30 @@ class _AcquisitionMixin:
             )
         ):
             self._fail("Build retry history does not match the active claim")
+        superseded_request_ids = self._superseded_request_ids(runtime, binding)
         return DeliveryBuildContext(
             launch=launch,
             task=task,
             task_digest=task.digest,
             commitments=self._commitments(runtime, task.commitment_ids),
+            decisions=runtime.contract.applicable_decisions(outcome.commitment_ids, superseded_request_ids),
             predecessor_results=predecessor_results,
             requests=binding.requests,
+            superseded_request_ids=superseded_request_ids,
             return_context=binding.return_context,
             recovery_attention=binding.recovery_attention,
             prior_attempts=prior_attempts,
             acceptance=self._outcome_acceptance(runtime, outcome_id),
+            # D2: once finalized, a target move alone needs no sync, so only unfinalized Build work probes it.
+            target_overlap=(
+                self._workspace_manager.probe_target_overlap(change_id) if runtime.finalization() is None else None
+            ),
         )
+
+    @staticmethod
+    def _superseded_request_ids(runtime: DeliveryRuntime, binding: OutcomeAuthorityBinding) -> tuple[str, ...]:
+        superseded = runtime.contract.superseded_request_ids()
+        return tuple(request.request_id for request in binding.requests if request.request_id in superseded)
 
     @staticmethod
     def _outcome_acceptance(runtime: DeliveryRuntime, outcome_id: str) -> tuple[DeliveryAcceptanceCriterion, ...]:
@@ -1649,6 +1688,7 @@ class _AcquisitionMixin:
                         last_reviewed_commit=handoff_context.last_reviewed_commit,
                         metadata_fingerprint=handoff_context.metadata_fingerprint,
                         retained_handoff=handoff,
+                        allow_descendant=worker_role is DeliveryWorkerRole.BUILDER,
                     ),
                 )
                 is_handoff_source = True
@@ -1722,12 +1762,18 @@ class _AcquisitionMixin:
                     retry_condition="Promote the exact adopted Change head before acquiring Build work.",
                 )
         except (OSError, RuntimeError, ValueError) as exc:
+            retry_condition = (
+                "Keep the preserved worktree and commits; resolve the reported handoff custody or ancestry "
+                "mismatch before acquiring again."
+                if isinstance(exc, PreservationFenceError)
+                else "Restore the admitted package and clean reviewed source boundary."
+            )
             return DeliveryAcquisitionFailure(
                 change_id=change_id,
                 outcome_id=outcome_id,
                 code=getattr(exc, "code", PortfolioApplicationError.code),
                 detail=str(exc),
-                retry_condition="Restore the admitted package and clean reviewed source boundary.",
+                retry_condition=retry_condition,
             )
         return _PreparedSource(package, coordination, source_head)
 
@@ -2032,12 +2078,14 @@ class _AcquisitionMixin:
                 handoff,
                 lock,
                 task_id=candidate.task_id,
+                expected_head=source.source_head,
             )
             self._publish_claim_issuer(candidate.change_id, candidate.binding.outcome_id, claim)
             candidate.runtime.activate_claim(
                 activation,
                 builder_handoff_participant=participant,
                 builder_handoff_lock=lock,
+                builder_handoff_source_head=source.source_head,
             )
         return writer
 

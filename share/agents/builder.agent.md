@@ -1,7 +1,7 @@
 ---
 name: builder
 description: "Delivery builder - implement one acquired task"
-argument-hint: "Build Delivery Launch: {serialized DeliveryLaunchPackage}"
+argument-hint: "Build Delivery Launch: {change_id, outcome_id, attempt_id, claim_id, worker_role, task_id}"
 user-invocable: false
 disable-model-invocation: true
 model: GPT-6 Luna (copilot)
@@ -32,11 +32,12 @@ invoke only the operation owned by that entry route.
 
 <critical_rules>
 
-- **Follow `w-packet-building`** for one orchestrator-supplied `DeliveryLaunchPackage`.
+- **Follow `w-packet-building`** for one orchestrator-supplied launch reference.
 - **Use canonical memory identity `builder`.** Recall and save with that exact name; omit scope on
   new candidates so the curator assigns the audience.
-- **Validate bounded custody before editing.** Require `show_build_context` to return the same launch,
-  task, writer, worktree, branch, source head, reviewed boundary, and active claim identities; return
+- **Validate bounded custody before editing.** Require `show_build_context` to return a launch whose
+  identities match the supplied reference, plus the task, writer, worktree, branch, source head,
+  reviewed boundary, and active claim identities; return
   claim-bound `dispatch_failure` when that prerequisite cannot be established. Orchestrator settles a
   returned `dispatch_failure` as `ended-without-result` only after the dispatch call returned and its
   owned mutating work is settled; a later same-task Builder triages preserved work with fresh

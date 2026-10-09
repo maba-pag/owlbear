@@ -3,13 +3,15 @@ import type {
   DeliveryAcceptanceIdentitySource,
   DeliveryConfirmationKind,
   DeliveryCriterionStatus,
+  DeliveryDecisionOrigin,
   DeliveryEvidenceVerdict,
   DeliveryFinalizationRules,
   DeliveryProgress,
-  DeliveryReadiness,
   DeliveryReadinessChecksState,
-  DeliveryReadinessReasonCode,
   DeliveryReadinessStatus,
+  DeliveryRetryAttempt,
+  DeliverySituation,
+  DeliveryWaitingOn,
   DeliveryWorkerRole,
   MergeBlockReason,
   WorkItemActionKind,
@@ -33,61 +35,6 @@ export const READINESS_STATUS_LABELS: Record<DeliveryReadinessStatus, string> = 
   blocked: "Blocked",
   unavailable: "Unavailable",
   complete: "Complete",
-};
-
-export const READINESS_REASON_LABELS: Record<DeliveryReadinessReasonCode, string> = {
-  ready: "Delivery reports this operation is eligible now.",
-  "design-attention": "The returned Design needs human review before re-admission.",
-  "active-custody": "An active operation retains Change custody.",
-  "builder-transition-contained":
-    "The Builder transition was refused; custody is retained and host worker-exclusion evidence is missing.",
-  "retry-transition-contained":
-    "The worker retry was refused; its claim remains held until host worker-exclusion is verified.",
-  "finalization-failed": "A recorded finalization diagnostic retains that attempt.",
-  "settled-attention-target-drift":
-    "The target changed after failed verification. Inspection only; sync, retry, and reset remain blocked.",
-  "claim-activation-failed": "Delivery could not activate custody for the selected action.",
-  "coordination-unavailable": "This Change has no readable coordination record.",
-  "execution-occupancy-unavailable": "Delivery could not read current execution occupancy.",
-  "engine-action-pending": "A retained engine action is acquired but has not started.",
-  "engine-action-blocked": "A retained engine action journal is unverifiable; custody remains retained.",
-  "engine-action-interrupted": "A retained engine action started without an authoritative result.",
-  "engine-action-failed": "A retained engine action has a recorded failure.",
-  "engine-action-incomplete": "A retained engine action has a recorded incomplete result.",
-  "target-sync-required": "The Change must be synchronized with its integration target first.",
-  "claim-custody-unreconciled": "Claim custody has not been reconciled with the workspace.",
-  "runtime-unavailable": "Delivery could not compose this Change runtime.",
-  "dependency-wait": "A dependency has not completed yet.",
-  "request-action": "An open request needs an answer first.",
-  "change-paused": "This Change is paused.",
-  "change-terminal": "This Change reached a terminal state.",
-  "outcome-complete": "This outcome is complete.",
-  "task-incomplete": "Planned tasks are not complete yet.",
-  "workspace-inspection-failed": "Managed workspace readiness could not be observed.",
-  "workspace-dirty": "Managed workspace preflight is blocked by local changes.",
-  "workspace-preflight-failed": "Managed workspace preflight did not pass.",
-  "review-repair": "Review repair requires a new Change commit before verification.",
-  "publication-wait": "Publication is waiting on an external result.",
-  "checkpoint-pending": "A durable checkpoint is still pending.",
-  "report-store-unavailable": "Finalization diagnostics could not be read.",
-  "retry-backoff": "Automatic recovery is waiting for its next eligible time.",
-  "retry-exhausted": "Automatic retries are exhausted; Delivery offers no action to reset this budget.",
-  "acceptance-wait": "Acceptance is unchanged; observe later without repeating the effect.",
-  "retry-containment":
-    "A prior attempt has no authoritative outcome. Preserve custody; no caller action can retry or release it.",
-  "retry-ledger-unavailable": "Retry authority could not be read safely.",
-  "worker-stall-wait":
-    "The VS Code window that ran this worker closed. Delivery records a failed attempt once no process uses " +
-    "the worktree and it has stayed unchanged for 30 seconds.",
-  "merge-approval-required": "Approve the merge below, or merge the pull request in GitHub.",
-  "merge-checking": "GitHub is still computing mergeability.",
-  "merge-blocked": "The pull request cannot be merged as offered; the next step is shown below.",
-  "checks-running": "Required checks are still running.",
-  "provider-unavailable": "GitHub could not be read; Delivery will read it again shortly.",
-  "merge-in-progress": "GitHub is merging the pull request; Delivery records the result shortly.",
-  "merge-response-unknown":
-    "GitHub has not confirmed this merge. It may still run. Check the PR in GitHub: merge it there, " +
-    "Check again, or Pause or Abandon the Change.",
 };
 
 export const MERGE_BLOCK_LABELS: Record<MergeBlockReason, string> = {
@@ -160,6 +107,50 @@ export const CONFIRMATION_KIND_LABELS: Record<DeliveryConfirmationKind, string> 
   "confirm-check": "Person-only check",
 };
 
+/** Who made a recorded decision; only `decided` ones were asked of the user directly. */
+export const DECISION_ORIGIN_LABELS: Record<DeliveryDecisionOrigin, string> = {
+  decided: "Decided by you",
+  approved: "Approved by you",
+  autonomous: "Made by an agent",
+};
+
+// Recorded retry failure codes in plain language; Delivery keeps only codes, so causes are never reconstructed.
+const RETRY_FAILURE_CAUSES: Readonly<Record<string, string>> = {
+  "finalizer-ended-without-report": "The Finalizer ended without a report; no result was recorded.",
+  "worker-ended-without-result": "The agent ended without a result.",
+  "worker-timeout": "The agent ran out of time.",
+  "worker-host-lost": "The agent's VS Code window closed before it finished.",
+  "worker-released-stuck": "You released the stopped agent; no result was recorded.",
+  "worker-returned": "The agent returned the work to an earlier stage.",
+  "worker-blocked": "The agent stopped on a block.",
+  "worker-retry": "The agent asked for another attempt.",
+  "maintained-check-failed": "A verification check failed.",
+  "maintained-check-unavailable": "A required verification result was unavailable.",
+  "independent-review-failed": "Independent review found a problem.",
+  "independent-review-unavailable": "An acceptable independent review result was unavailable.",
+  "proof-mutated-worktree": "Verification changed files in the Change's worktree.",
+  "workspace-dirty": "The Change's worktree had uncommitted changes.",
+  "workspace-preflight-failed": "The worktree check before verification failed.",
+  "owner-publication-failed-before-start": "Delivery could not start the step.",
+  "engine-action-failed": "A Delivery operation failed.",
+  "acceptance-interrupted": "Reading the pull request from GitHub was interrupted.",
+};
+
+const RETRY_STATUS_CAUSES: Record<Exclude<DeliveryRetryAttempt["status"], "failed">, string> = {
+  pending: "No result recorded yet.",
+  waiting: "Waiting for GitHub.",
+  succeeded: "Succeeded.",
+  contained: "No result was recorded; this attempt's outcome is unknown.",
+  paused: "Paused; this attempt did not count.",
+};
+
+/** One recorded attempt's cause in plain language; an unmapped code is shown as recorded. */
+export function retryAttemptCause(attempt: DeliveryRetryAttempt): string {
+  if (attempt.status !== "failed") return RETRY_STATUS_CAUSES[attempt.status];
+  if (attempt.failure_code === null) return "Failed; no cause was recorded.";
+  return RETRY_FAILURE_CAUSES[attempt.failure_code] ?? `Failed with code ${attempt.failure_code}.`;
+}
+
 export function readinessTone(status: DeliveryReadinessStatus): WorkItemStatusTone {
   switch (status) {
     case "ready":
@@ -184,77 +175,90 @@ const WORKER_STATUS_LABELS: Record<DeliveryWorkerRole, string> = {
 
 export type WorkItemStatusTone = "attention" | "blocked" | "active" | "ready" | "complete" | "neutral";
 
-/** Labels for engine-projected progress; Delivery decides which key applies. */
-export const DELIVERY_PROGRESS_LABELS: Record<DeliveryProgress, string> = {
-  preparing: "Preparing",
-  working: "Working",
-  checking: "Checking",
-  repairing: "Repairing",
-  "needs-decision": "Needs your decision",
-  "needs-sign-in": "Needs your sign-in",
-  "waiting-for-service": "Waiting for service",
-  "waiting-for-change": "Waiting for another Change",
-  "ready-to-merge": "Ready to merge",
-  completed: "Completed",
+/** Labels for Delivery's situation; Delivery decides which key applies and writes the headline. */
+export const SITUATION_LABELS: Record<DeliverySituation, string> = {
+  "with-agent": "With an agent",
+  "ready-for-next-step": "Ready for next step",
+  "your-decision": "Your decision",
+  "waiting-on-github": "Waiting on GitHub",
+  "waiting-on-delivery": "Waiting on Delivery",
+  "waiting-on-dependency": "Waiting on another Outcome",
+  "retrying-automatically": "Retrying automatically",
+  "needs-attention": "Needs attention",
+  pausing: "Pausing",
   paused: "Paused",
-  "waiting-for-chat": "Run prompt in Copilot Chat",
+  abandoned: "Abandoned",
+  done: "Done",
 };
 
-const DELIVERY_PROGRESS_TONES: Record<DeliveryProgress, WorkItemStatusTone> = {
-  preparing: "active",
-  working: "active",
-  checking: "active",
-  repairing: "active",
-  "needs-decision": "attention",
-  "needs-sign-in": "attention",
-  "waiting-for-service": "neutral",
-  "waiting-for-change": "neutral",
-  "ready-to-merge": "ready",
-  completed: "complete",
+const SITUATION_TONES: Record<DeliverySituation, WorkItemStatusTone> = {
+  "with-agent": "active",
+  "ready-for-next-step": "ready",
+  "your-decision": "attention",
+  "waiting-on-github": "neutral",
+  "waiting-on-delivery": "neutral",
+  "waiting-on-dependency": "neutral",
+  "retrying-automatically": "neutral",
+  "needs-attention": "blocked",
+  pausing: "neutral",
   paused: "neutral",
-  "waiting-for-chat": "ready",
+  abandoned: "neutral",
+  done: "complete",
 };
 
 export function progressTone(progress: DeliveryProgress): WorkItemStatusTone {
-  return DELIVERY_PROGRESS_TONES[progress];
+  return SITUATION_TONES[progress.situation];
 }
 
-/** Nothing runs until the user starts a chat; a held or backed-off step says when that helps. */
-export function progressLabel(progress: DeliveryProgress, readiness?: DeliveryReadiness | null): string {
-  if (progress === "waiting-for-chat" && readiness && !readiness.executable) {
-    const eligible = readiness.next_eligible_at ? new Date(readiness.next_eligible_at) : null;
-    if (eligible && eligible.getTime() > Date.now()) {
-      const time = eligible.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      return `Wait until ${time}, then run prompt`;
-    }
-    if (readiness.reason_code === "worker-stall-wait") return "Waiting for worker cleanup";
-  }
-  return DELIVERY_PROGRESS_LABELS[progress];
+export function progressLabel(progress: DeliveryProgress): string {
+  if (progress.situation === "waiting-on-dependency" && progress.waiting_on === "change")
+    return "Waiting on another Change";
+  // The portfolio counts these as "Needs you"; the same item keeps that name everywhere.
+  if (progress.situation === "needs-attention" && progress.waiting_on === "you") return "Needs you";
+  return SITUATION_LABELS[progress.situation];
 }
 
-/** The readiness behind the Change's progress; held custody wins, as in Delivery's Change activity choice. */
-export function changeProgressReadiness(
-  items: WorkItemCardView[],
-  progress: DeliveryProgress,
-): DeliveryReadiness | null {
-  const matching = items.flatMap((item) => (item.readiness?.progress === progress ? [item.readiness] : []));
-  const held = matching.find(
-    (readiness) =>
-      readiness.status === "running" ||
-      readiness.reason_code === "engine-action-pending" ||
-      readiness.reason_code === "worker-stall-wait",
-  );
-  // Any runnable step means running the prompt helps now, whichever card Delivery ranks first.
-  return held ?? matching.find((readiness) => readiness.executable) ?? matching[0] ?? null;
+/** Element id of a Work Item's first open request; links ending in this hash focus it. */
+export const OPEN_REQUEST_ANCHOR = "open-request";
+
+function formatClock(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const at = new Date(iso);
+  return Number.isNaN(at.getTime()) ? null : at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-/** The Change advances only after the user runs its prompt in a new chat, and nothing says to wait first. */
-export function changeAwaitsPrompt(group: { progress?: DeliveryProgress | null; items: WorkItemCardView[] }): boolean {
-  return (
-    group.progress === "waiting-for-chat" &&
-    progressLabel(group.progress, changeProgressReadiness(group.items, group.progress)) ===
-      DELIVERY_PROGRESS_LABELS["waiting-for-chat"]
-  );
+const WAITING_ON_LABELS: Record<Exclude<DeliveryWaitingOn, "none">, string> = {
+  you: "you",
+  agent: "an agent",
+  delivery: "Delivery",
+  github: "GitHub",
+  outcome: "an Outcome",
+  change: "another Change",
+};
+
+/** "Waiting on X since T · not before T", from the facts Delivery supplied with its situation. */
+export function progressWaitLine(progress: DeliveryProgress): string | null {
+  const parts: string[] = [];
+  const since = formatClock(progress.since);
+  if (progress.waiting_on !== "none")
+    parts.push(`Waiting on ${WAITING_ON_LABELS[progress.waiting_on]}${since ? ` since ${since}` : ""}`);
+  const eligible = progress.next_eligible_at ? new Date(progress.next_eligible_at) : null;
+  const next = formatClock(progress.next_eligible_at);
+  if (eligible && next && eligible.getTime() > Date.now()) parts.push(`not before ${next}`);
+  return parts.length ? parts.join(" · ") : null;
+}
+
+/** The Change advances once the user runs its prompt in a new chat, and nothing says to wait first. */
+export function changeAwaitsPrompt(group: {
+  change_id: string;
+  progress?: DeliveryProgress | null;
+  items: WorkItemCardView[];
+}): boolean {
+  const progress = group.progress;
+  if (progress?.situation !== "ready-for-next-step") return false;
+  const eligible = progress.next_eligible_at ? Date.parse(progress.next_eligible_at) : Number.NaN;
+  if (eligible > Date.now()) return false;
+  return group.items.some((item) => isContinuationPrompt(item.readiness?.prompt, group.change_id));
 }
 
 /** Only the engine-authored `/continue-change <this Change> …` prompt is a continuation prompt. */
@@ -337,6 +341,9 @@ const PUBLICATION_PHASE_LABELS: Record<WorkItemPublicationPhase, string> = {
 
 function publicationStatus(item: WorkItemCardView): WorkItemStatusPresentation | null {
   if (item.scope !== "change-publication" || !item.publication_phase) return null;
+  // Delivery's composed situation is the one answer; phase-specific copy is only a fallback.
+  const progress = item.readiness?.progress;
+  if (progress) return progressStatus(progress);
   if (item.action.kind === "resolve-attention" || item.action.kind === "adopt-external-head") {
     return {
       label: "Publication attention",
@@ -352,11 +359,6 @@ function publicationStatus(item: WorkItemCardView): WorkItemStatusPresentation |
     };
   }
   const phaseLabel = PUBLICATION_PHASE_LABELS[item.publication_phase];
-  const progress = item.readiness?.progress;
-  if (progress) {
-    const label = progressLabel(progress, item.readiness);
-    return { label, tone: progressTone(progress), detail: distinctDetail(label, phaseLabel) };
-  }
   // Engine readiness owns the reported state; the lifecycle phase is identified separately.
   if (item.readiness) {
     const label = READINESS_STATUS_LABELS[item.readiness.status];
@@ -385,14 +387,16 @@ function publicationStatus(item: WorkItemCardView): WorkItemStatusPresentation |
   };
 }
 
+export function progressStatus(progress: DeliveryProgress): WorkItemStatusPresentation {
+  const label = progressLabel(progress);
+  return { label, tone: progressTone(progress), detail: distinctDetail(label, progress.headline) };
+}
+
 export function workItemStatus(item: WorkItemCardView): WorkItemStatusPresentation {
   const publication = publicationStatus(item);
   if (publication) return publication;
   const progress = item.readiness?.progress;
-  if (progress) {
-    const label = progressLabel(progress, item.readiness);
-    return { label, tone: progressTone(progress), detail: distinctDetail(label, item.needs_headline) };
-  }
+  if (progress) return progressStatus(progress);
   if (item.readiness) {
     const label = READINESS_STATUS_LABELS[item.readiness.status];
     // Held custody without progress is neutral: the step names who holds it, never that work runs.

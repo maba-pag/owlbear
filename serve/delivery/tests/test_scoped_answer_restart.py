@@ -291,7 +291,7 @@ def test_cockpit_answer_to_a_scoped_handoff_request_survives_restart_and_restore
     assert submitted is not None
     assert _state_head(restart) != published
     snapshot = json.loads(_git(restart.remote, "show", f"{_STATE_BRANCH}:{restart.remote_snapshot_path}").encode())
-    assert snapshot["schema_version"] == 3
+    assert snapshot["schema_version"] == 4
 
     host = _fresh_host(restart, tmp_path)
     restored = DeliveryFrontier.model_validate_json(host._runtimes[change_id].frontier_bytes(), strict=True)

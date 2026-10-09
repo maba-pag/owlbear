@@ -41,6 +41,7 @@ from owlbear_delivery.recovery import (
     RecoveryReceipt,
     RetryAttempt,
     RetryAttemptOutcome,
+    RetryAttemptReason,
     RetryLedgerSummary,
     RetryOwnerResult,
     RetryRepairBinding,
@@ -71,7 +72,7 @@ def _root(tmp_path: Path) -> Path:
         '{"schema_version":2,"remote":"origin","target_branch":"dev","github_repository":"safe/project"}\n',
         encoding="utf-8",
     )
-    (delivery / "runtime/format.json").write_text('{"format":3}\n', encoding="utf-8")
+    (delivery / "runtime/format.json").write_text('{"format":4}\n', encoding="utf-8")
     return tmp_path
 
 
@@ -188,7 +189,7 @@ def test_valid_structure_is_bounded_and_healthy(tmp_path: Path) -> None:
     coordination.write_text('{"schema_version":2,"change_id":"example"}\n', encoding="utf-8")
     snapshot = root / ".owlbear/delivery/state/example"
     snapshot.mkdir(parents=True)
-    (snapshot / "snapshot.json").write_text('{"schema_version":3,"frontier":{}}\n', encoding="utf-8")
+    (snapshot / "snapshot.json").write_text('{"schema_version":4,"frontier":{}}\n', encoding="utf-8")
 
     result = inspect_delivery(root)
 
@@ -196,7 +197,7 @@ def test_valid_structure_is_bounded_and_healthy(tmp_path: Path) -> None:
     assert result["writes_performed"] is False
     assert all(
         result["versions"][key] == value
-        for key, value in {"config": 2, "coordination": 2, "frontier": 19, "host": 1, "snapshot": 3}.items()
+        for key, value in {"config": 2, "coordination": 2, "frontier": 19, "host": 1, "snapshot": 4}.items()
     )
     assert result["versions"]["python"]["major"] >= 3
     assert result["counts"]["frontier"] == 1
@@ -446,10 +447,13 @@ def _write_every_change_family(change: Path) -> dict[str, int]:
         change / "retry-ledger/outcomes" / f"{digest}.json": v1,
         change / "retry-ledger/repair-bindings" / f"{digest}.json": v1,
         change / "retry-ledger/owner-results/builder-claim:attempt.1.json": v1,
+        change / "retry-ledger/reasons/builder-claim:attempt.1.json": v1,
         change / "planning-pause-receipts/OUT-001" / f"{digest}.json": v1,
         change / "planning-retry-receipts/OUT-001" / f"{digest}.json": v1,
         change / "builder-invocation-receipts" / f"{digest}.json": v1,
         change / "builder-plan-promotion-receipts" / f"{digest}.json": v1,
+        change / "builder-attempt-grant-receipts" / f"{digest}.json": v1,
+        change / "attempt-grant-receipts" / f"{digest}.json": v1,
         change / "builder-request-resolution-receipts" / f"{digest}.json": v1,
         change / "builder-handoff-change-intent-receipts" / digest / "head.json": v1,
         change / "builder-handoff-change-intent-receipts" / digest / f"{other}.json": v1,
@@ -482,10 +486,13 @@ def _write_every_change_family(change: Path) -> dict[str, int]:
         "retry_outcome": 1,
         "retry_repair_binding": 1,
         "retry_owner_result": 1,
+        "retry_reason": 1,
         "planning_pause_receipt": 1,
         "planning_retry_receipt": 1,
         "builder_invocation_receipt": 1,
         "builder_plan_promotion_receipt": 1,
+        "builder_attempt_grant_receipt": 1,
+        "attempt_grant_receipt": 1,
         "builder_request_resolution_receipt": 1,
         "builder_handoff_change_intent_head": 1,
         "builder_handoff_change_intent_receipt": 1,
@@ -552,7 +559,7 @@ def test_portfolio_truncation_keeps_current_records_ahead_of_receipts(tmp_path: 
     for change_id in ("change-a", "change-b", "change-c"):
         change = _add_change_authority(root, change_id)
         _write_every_change_family(change)
-        _add_action_receipt_volume(change, 30, payload_marker="PORTFOLIO-RECEIPT-SECRET")
+        _add_action_receipt_volume(change, MAX_ENTRIES // 3 + 1, payload_marker="PORTFOLIO-RECEIPT-SECRET")
 
     completed = _run_cli(root, "inspect", "--project-root", os.fspath(root), "--format", "json")
 
@@ -580,8 +587,8 @@ def test_portfolio_truncation_keeps_current_records_ahead_of_receipts(tmp_path: 
 def test_many_change_current_records_obey_entry_budget(tmp_path: Path) -> None:
     root = _root(tmp_path)
     changes = root / ".owlbear/delivery/runtime/changes"
-    for index in range(300):
-        change = changes / f"change-{index:03}"
+    for index in range(MAX_ENTRIES // 3 + 1):
+        change = changes / f"change-{index:04}"
         (change / "retry-ledger").mkdir(parents=True)
         (change / "frontier.json").write_bytes(b'{"schema_version":19,"bindings":[]}\n')
         (change / "retry-ledger/current.json").write_bytes(b'{"schema_version":1}\n')
@@ -786,6 +793,7 @@ def test_change_record_versions_match_owner_models() -> None:
         "retry_outcome": (RetryAttemptOutcome,),
         "retry_repair_binding": (RetryRepairBinding,),
         "retry_owner_result": (RetryOwnerResult,),
+        "retry_reason": (RetryAttemptReason,),
     }
     runtime_models = vars(delivery_runtime)
     owners |= {
@@ -795,6 +803,8 @@ def test_change_record_versions_match_owner_models() -> None:
             "planning_retry_receipt": "_DeliveryPlanningRetrySettlementReceipt",
             "builder_invocation_receipt": "_DeliveryBuilderInvocationSettlementReceipt",
             "builder_plan_promotion_receipt": "_DeliveryBuilderPlanPromotionReceipt",
+            "builder_attempt_grant_receipt": "_DeliveryBuilderAttemptGrantReceipt",
+            "attempt_grant_receipt": "_DeliveryAttemptGrantReceipt",
             "builder_request_resolution_receipt": "_DeliveryBuilderRequestResolutionReceipt",
             "builder_handoff_change_intent_head": "_DeliveryBuilderHandoffChangeIntentHead",
             "builder_handoff_change_intent_receipt": "_DeliveryBuilderHandoffChangeIntentReceipt",
@@ -1265,7 +1275,7 @@ _JOURNAL_CASES = {
         ("fresh", [], []),
         ("format-0-with-records", ["FORMAT_MIGRATION_REQUIRED"], ["state-migration-required"]),
         ("format-previous-with-records", ["FORMAT_MIGRATION_REQUIRED"], ["state-migration-required"]),
-        ("format-4", ["FORMAT_UNSUPPORTED"], ["state-newer-than-controller"]),
+        ("format-5", ["FORMAT_UNSUPPORTED"], ["state-newer-than-controller"]),
         ("journal-applied", ["MIGRATION_INCOMPLETE"], ["state-migration-incomplete"]),
         ("journal-verified", [], []),
         ("journal-newer", ["MIGRATION_JOURNAL_UNSUPPORTED"], ["state-newer-than-controller"]),
@@ -1287,8 +1297,8 @@ def test_inspector_mirrors_the_gate_format_and_journal_classification(
         (runtime / "format.json").unlink()
     elif case == "format-previous-with-records":
         (runtime / "format.json").write_bytes(state_formats.format_marker_bytes(state_formats.SUPPORTED_FORMAT - 1))
-    elif case == "format-4":
-        (runtime / "format.json").write_text('{"format":4}\n', encoding="utf-8")
+    elif case == "format-5":
+        (runtime / "format.json").write_text('{"format":5}\n', encoding="utf-8")
     elif case == "namespace-file":
         (runtime / "migrations").write_text("not a directory\n", encoding="utf-8")
     elif case.startswith("journal-"):
@@ -1881,6 +1891,18 @@ def test_entry_and_size_limits_are_reported_without_reading_unbounded_data(tmp_p
     assert result["counts"]["frontier"] <= MAX_ENTRIES
     assert result["counts"]["config"] == 0
     assert result["counts"]["pending_transactions"] == 0
+
+
+def test_portfolio_beyond_the_former_256_entry_budget_inspects_completely(tmp_path: Path) -> None:
+    root = _root(tmp_path)
+    changes = root / ".owlbear/delivery/runtime/changes"
+    for index in range(300):
+        (changes / f"change-{index}").mkdir()
+
+    result = inspect_delivery(root)
+
+    assert "ENTRY_LIMIT_EXCEEDED" not in result["diagnostic_codes"]
+    assert "PENDING_EFFECTS_UNKNOWN" not in result["diagnostic_codes"]
 
 
 def test_entry_limit_is_global_across_fixed_directories(tmp_path: Path) -> None:

@@ -54,17 +54,19 @@ from owlbear_delivery.target_contract import (
     DeliveryCommitment,
     DeliveryCommitmentClass,
     DeliveryContract,
+    DeliveryDecision,
+    DeliveryDecisionOrigin,
     DeliveryOutcome,
     DeliveryPlanScope,
 )
 from owlbear_delivery.work_items import (
     DeliveryPortfolioSnapshot,
+    DeliveryProgress,
     DeliveryReadiness,
     DeliveryReadinessBasis,
     WorkItemAction,
     WorkItemActionKind,
     WorkItemActivityState,
-    WorkItemAttention,
     WorkItemNeed,
     WorkItemNextActor,
     WorkItemProjector,
@@ -374,7 +376,6 @@ def test_design_return_is_user_owned_and_not_projected_as_planning() -> None:
     assert card.action.command == "/design portfolio-change"
     assert card.progress.label == "Returned to Design"
     detail = projector.show("OUT-001")
-    assert detail.projection.attention == WorkItemAttention.USER
     assert detail.return_context == return_context
     assert projector.group_view().lifecycle == "in-delivery"
 
@@ -432,6 +433,75 @@ def test_detail_exposes_operator_directed_course_changes() -> None:
     detail = projector.show_view("outcome:OUT-001")
 
     assert detail.operator_moves == (move,)
+
+
+def test_detail_projects_decisions_behind_outcome_commitments_and_all_on_the_change() -> None:
+    origin = DeliveryDecisionOrigin
+    decisions = (
+        DeliveryDecision(decision_id="DEC-001", origin=origin.APPROVED, basis="package approval", statement="One."),
+        DeliveryDecision(
+            decision_id="DEC-002",
+            origin=origin.DECIDED,
+            basis="askQuestions",
+            statement="Two.",
+            supersedes=("DEC-001",),
+        ),
+        DeliveryDecision(decision_id="DEC-003", origin=origin.AUTONOMOUS, basis="decide yourself", statement="Sort."),
+        DeliveryDecision(
+            decision_id="DEC-004",
+            origin=origin.DECIDED,
+            basis="askQuestions",
+            statement="Replace the answer.",
+            supersedes=("REQ-002",),
+        ),
+        DeliveryDecision(
+            decision_id="DEC-005",
+            origin=origin.DECIDED,
+            basis="askQuestions",
+            statement="Replace it again.",
+            supersedes=("DEC-004",),
+        ),
+    )
+    legacy = _contract()
+    contract = legacy.model_copy(
+        update={
+            "schema_version": 3,
+            "decisions": decisions,
+            "commitments": tuple(
+                item.model_copy(update={"provenance": None, "decision_ids": ("DEC-002",)})
+                for item in legacy.commitments
+            ),
+        }
+    )
+    replaced = DeliveryRequest(
+        request_id="REQ-002",
+        kind=DeliveryRequestKind.DECISION,
+        outcome_id="OUT-002",
+        summary="Choose the report format.",
+        options=({"option_id": "keep", "label": "Keep it"},),
+    )
+    frontier = DeliveryFrontier(
+        bindings=(
+            _binding("OUT-001", DeliveryStage.PLANNING),
+            _binding("OUT-002", DeliveryStage.DESIGN, requests=(replaced,)),
+        )
+    )
+    content = (json.dumps(frontier.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n").encode()
+    projector = WorkItemProjector(DeliveryPortfolioSnapshot.capture(contract, content))
+    completed = (_binding("OUT-001", DeliveryStage.COMPLETED), _binding("OUT-002", DeliveryStage.COMPLETED))
+    finished = DeliveryFrontier(bindings=completed)
+    finished_content = (
+        json.dumps(finished.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n"
+    ).encode()
+
+    assert [item.decision_id for item in projector.show_view("outcome:OUT-001").decisions] == ["DEC-002"]
+    assert projector.show_view("outcome:OUT-001").superseded_request_ids == ()
+    report = projector.show_view("outcome:OUT-002")
+    assert [item.decision_id for item in report.decisions] == ["DEC-004", "DEC-005"]
+    assert report.superseded_request_ids == ("REQ-002",)
+    publication = WorkItemProjector(DeliveryPortfolioSnapshot.capture(contract, finished_content))
+    assert publication.show_view("publication").decisions == decisions
+    assert WorkItemProjector(_snapshot(completed)).show_view("publication").decisions == ()
 
 
 def test_request_and_requestless_block_share_need_but_keep_distinct_actions() -> None:
@@ -499,13 +569,14 @@ def test_dependency_and_active_claim_are_independent_axes() -> None:
 
 
 def test_projector_carries_change_activity_and_continuation_next_step() -> None:
+    progress = DeliveryProgress(situation="ready-for-next-step", headline="Run the prompt.", waiting_on="you")
     projector = WorkItemProjector(
         _snapshot((_binding("OUT-001", DeliveryStage.PLANNING), _binding("OUT-002", DeliveryStage.PLANNING))),
-        change_progress="waiting-for-chat",
+        change_progress=progress,
     )
 
-    assert projector.group_view().progress == "waiting-for-chat"
-    assert projector.show_view("outcome:OUT-002").change_progress == "waiting-for-chat"
+    assert projector.group_view().progress == progress
+    assert projector.show_view("outcome:OUT-002").change_progress == progress
     assert projector.group_view().items[0].next_step == "Run the continuation prompt in Copilot Chat"
     assert WorkItemProjector(projector._snapshot).group_view().progress is None  # noqa: SLF001
 
@@ -522,6 +593,14 @@ def test_projector_carries_change_pause_availability_and_fails_closed_by_default
     assert (default.pause_available, default.pause_unavailable_reason) == (False, "state-unavailable")
     with pytest.raises(ValidationError):
         default.model_validate({**default.model_dump(), "pause_available": True})
+
+
+def test_change_without_terminal_record_projects_abandon_available_for_every_detail() -> None:
+    projector = WorkItemProjector(
+        _snapshot((_binding("OUT-001", DeliveryStage.PLANNING), _binding("OUT-002", DeliveryStage.PLANNING)))
+    )
+
+    assert all(projector.show_view(item_key).abandon_available for item_key in ("outcome:OUT-001", "outcome:OUT-002"))
 
 
 def test_completed_outcome_progress_and_detail_contain_result_evidence() -> None:
@@ -952,6 +1031,10 @@ def test_deferred_change_projects_paused_outcomes_and_resume_action() -> None:
     prompt = "/design portfolio-change Change requirements:"
     assert projector.show_view("outcome:OUT-001").revision_prompt == prompt
     assert projector.show_view("publication").revision_prompt == prompt
+    assert all(
+        projector.show_view(item_key).abandon_available
+        for item_key in ("outcome:OUT-001", "outcome:OUT-002", "publication")
+    )
 
 
 def test_abandoned_change_projects_terminal_publication_without_action() -> None:
@@ -975,6 +1058,10 @@ def test_abandoned_change_projects_terminal_publication_without_action() -> None
     assert group.items[-1].next_step == "Change abandoned"
     assert group.items[-1].action.kind == WorkItemActionKind.NONE
     assert projector.show_view("publication").revision_prompt is None
+    assert all(
+        not projector.show_view(item_key).abandon_available
+        for item_key in ("outcome:OUT-001", "outcome:OUT-002", "publication")
+    )
 
 
 def test_ready_pull_request_waits_for_user_merge_without_merge_control() -> None:
@@ -1013,14 +1100,14 @@ def test_ready_pull_request_waits_for_user_merge_without_merge_control() -> None
             "ready",
             WorkItemNextActor.AGENT,
             WorkItemActionKind.SYNC_TARGET,
-            (WorkItemNeed.NONE, None, WorkItemActivityState.READY, "Target sync needed", WorkItemAttention.AGENT),
+            (WorkItemNeed.NONE, None, WorkItemActivityState.READY, "Target sync needed"),
         ),
         (
             "checks-running",
             "waiting",
             WorkItemNextActor.NONE,
             None,
-            (WorkItemNeed.NONE, None, WorkItemActivityState.IDLE, "Awaiting merge in GitHub", WorkItemAttention.NONE),
+            (WorkItemNeed.NONE, None, WorkItemActivityState.IDLE, "Awaiting merge in GitHub"),
         ),
         (
             "merge-approval-required",
@@ -1032,7 +1119,6 @@ def test_ready_pull_request_waits_for_user_merge_without_merge_control() -> None
                 "Merge pull request in GitHub",
                 WorkItemActivityState.IDLE,
                 "Awaiting merge in GitHub",
-                WorkItemAttention.USER,
             ),
         ),
     ],
@@ -1067,9 +1153,8 @@ def test_awaiting_merge_ownership_follows_final_readiness(reason, status, next_a
     projector = WorkItemProjector(snapshot, (done, done, publication))
 
     card = projector.group_view().items[-1]
-    attention = projector.list_items()[-1].attention
 
-    assert (card.needs, card.needs_headline, card.activity.state, card.progress.label, attention) == expected
+    assert (card.needs, card.needs_headline, card.activity.state, card.progress.label) == expected
     assert card.next_actor is next_actor
 
 
@@ -1148,3 +1233,7 @@ def test_merged_latch_projects_distinct_finalized_and_accepted_heads() -> None:
     assert detail.publication.finalized_head != detail.publication.accepted_merge_commit
     assert detail.revision_prompt is None
     assert completed.show_view("publication").revision_prompt is None
+    assert all(
+        not completed.show_view(item_key).abandon_available
+        for item_key in ("outcome:OUT-001", "outcome:OUT-002", "publication")
+    )

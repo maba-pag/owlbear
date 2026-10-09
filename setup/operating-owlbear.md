@@ -239,7 +239,7 @@ with deterministic outcomes, dependencies, commitments, and proof boundaries.
 
 Admission ends with the continuation prompt `/continue-change <change-id>`. Run it in Copilot Chat;
 Cockpit's **Copy continuation prompt** copies the same prompt for a Change that is
-**Run prompt in Copilot Chat**. Copying does not start an agent. One continuation chat carries exactly
+**Ready for next step**. Copying does not start an agent. One continuation chat carries exactly
 one Change: it reads the Change, acquires its next action from Delivery, and dispatches only that
 action: a Planner or Builder launch, the issued finalization, or an engine action that publishes a
 checkpoint, synchronizes with the target, marks the pull request ready, or observes acceptance. It
@@ -263,9 +263,12 @@ advance the Change branch directly.
 
 Expected outcome: outcomes move through Planning and Build under one shared execution budget, with
 exact per-Change writer custody, without scheduling judgment in the chat or conversation-derived
-authority. Cockpit shows each Change's progress, such as **Needs your decision**,
-**Waiting for another Change**, **Paused**, **Ready to merge**, and **Completed**, with its requests,
-**Pause** and **Resume**, and the **Acceptance evidence** for its criteria.
+authority. Cockpit shows each Change's situation, such as **Ready for next step**,
+**With an agent**, **Your decision**, **Waiting on GitHub**, **Waiting on another Change**,
+**Needs attention**, **Paused**, and **Done**, with a one-line headline, who it waits on and since
+when, its requests, **Pause** and **Resume**, and the **Acceptance evidence** for its criteria.
+Technical detail stays under **Details**; **Merge latest target into Change** appears only when
+Delivery says an update is required or optional.
 
 For exact ended invocations, the continuation chat (the `orchestrator` agent) uses the typed
 `settle_worker_invocation` route for retries, Builder request pauses/returns and report-backed
@@ -331,8 +334,10 @@ has its cwd or an open file under the managed worktree or Git admin directory. A
 shell whose only link is its worktree cwd and which has no live child is ignored; open files still block. If the
 guard is incomplete, readiness reports `worker-stall-wait`: a `next_eligible_at` means the write
 guard is still running; without a time, the prompt reports active process names or bounded scan
-detail. Yield without settling or recovering. Restarting the MCP server while the issuing window is
-alive does not trigger automatic settlement.
+detail. Yield without settling or recovering. During `worker-stall-wait`, avoid Git commands against
+the managed worktree: commands such as `git status` and `git diff` can update Git metadata and restart
+the quiet period. Restarting the MCP server while the issuing window is alive does not trigger
+automatic settlement.
 
 When the user states that a specific worker chat was stopped, use Cockpit's **Release stuck worker**
 action, or answer `stopped/closed` to the question `/continue-change` asks for that exact active claim.

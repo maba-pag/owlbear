@@ -78,7 +78,9 @@ and `show_work_item` uses the MCP Work Item ID (the Change ID
 for a publication projection), not Cockpit's `publication` item key. `show_work_item_view` accepts
 a detailed view key such as `publication` when a workflow needs richer publication and conflict evidence.
 `get_change` and `show_finalization_context` preserve the core readiness decision, including tagged
-unavailable results. `report_finalization_failure` accepts only bounded structural diagnostic fields
+unavailable results. `get_change` with `view: "continuation"` returns the same Change read without
+acceptance-evidence bodies, keeping only `evidence_counts`; Change continuation uses it.
+`report_finalization_failure` accepts only bounded structural diagnostic fields
 and retains a report without creating finalization proof or changing worker custody.
 
 `settle_worker_invocation` accepts strict typed Planner, Builder or Finalizer settlement for an exact
@@ -105,6 +107,9 @@ Elapsed time, disconnection, and `confirmed_lost` are not settlement evidence.
 `worker-host-lost` and `worker-released-stuck` are engine-only and never pass through
 `settle_worker_invocation`. Both count in the same three-attempt episode and preserve work, staging,
 commits, and refs. A fresh Builder triages from Build context and `prior_attempts`; Planner retries.
+Before a finalized proof exists, Build context also carries `target_overlap`: Delivery fetches the
+configured target and test-merges the reviewed head with it. On `conflict` the Builder returns the
+target-sync block for that commit before any edit; `unknown` is never treated as clean.
 A lost or released Finalizer without a report gets a `worker-ended` report with code
 `finalizer-ended-without-report` and `checks_state: unknown`. It is not proof; a fresh Finalizer needs
 new exact-head evidence and review under the original budget.

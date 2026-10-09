@@ -1508,7 +1508,12 @@ def test_unconverted_request_projects_no_executable_new_work(tmp_path: Path) -> 
         readiness = application.show_work_item_view("change-a", "outcome:OUT-001").card.readiness
         view = application.get_change("change-a")
 
-    assert (readiness.status, readiness.reason_code, readiness.progress) == ("blocked", "change-paused", "paused")
+    assert readiness.progress is not None
+    assert (readiness.status, readiness.reason_code, readiness.progress.situation) == (
+        "blocked",
+        "change-paused",
+        "paused",
+    )
     assert not readiness.executable
     assert readiness.action is None
     assert view.readiness.executable is False
@@ -1914,10 +1919,10 @@ def test_f8_builder_settlement_replay_publishes_then_converts(tmp_path: Path) ->
     apply_settlement = type(reopened)._apply_worker_settlement
     inside: list[bool] = []
 
-    def settle_inside_replay(self, owner_runtime, envelope):
+    def settle_inside_replay(self, owner_runtime, envelope, **options):
         _assert_foreign_starts_refused(reopened_coordinator)
         inside.append(True)
-        return apply_settlement(self, owner_runtime, envelope)
+        return apply_settlement(self, owner_runtime, envelope, **options)
 
     with patch.object(type(reopened), "_apply_worker_settlement", settle_inside_replay):
         reopened.settle_worker_invocation(settlement, **hosted)
