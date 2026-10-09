@@ -1030,7 +1030,10 @@ def _is_unpublished_claim_successor(
     local_without_claims = local_frontier.model_copy(
         update={"bindings": tuple(binding.model_copy(update=transient_fields) for binding in local_frontier.bindings)}
     )
-    return local_has_claim and snapshot_without_claims == local_without_claims
+    return local_has_claim and (
+        snapshot_without_claims == local_without_claims
+        or _is_unpublished_checkpoint_successor(snapshot_without_claims, local_without_claims)
+    )
 
 
 def _is_unpublished_builder_handoff_successor(
