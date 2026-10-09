@@ -9,6 +9,7 @@ import type {
   DeliveryProgress,
   DeliveryReadinessChecksState,
   DeliveryReadinessStatus,
+  DeliveryRetryAttempt,
   DeliverySituation,
   DeliveryWaitingOn,
   DeliveryWorkerRole,
@@ -112,6 +113,43 @@ export const DECISION_ORIGIN_LABELS: Record<DeliveryDecisionOrigin, string> = {
   approved: "Approved by you",
   autonomous: "Made by an agent",
 };
+
+// Recorded retry failure codes in plain language; Delivery keeps only codes, so causes are never reconstructed.
+const RETRY_FAILURE_CAUSES: Readonly<Record<string, string>> = {
+  "finalizer-ended-without-report": "The Finalizer ended without a report; no result was recorded.",
+  "worker-ended-without-result": "The agent ended without a result.",
+  "worker-timeout": "The agent ran out of time.",
+  "worker-host-lost": "The agent's VS Code window closed before it finished.",
+  "worker-released-stuck": "You released the stopped agent; no result was recorded.",
+  "worker-returned": "The agent returned the work to an earlier stage.",
+  "worker-blocked": "The agent stopped on a block.",
+  "worker-retry": "The agent asked for another attempt.",
+  "maintained-check-failed": "A verification check failed.",
+  "maintained-check-unavailable": "A required verification result was unavailable.",
+  "independent-review-failed": "Independent review found a problem.",
+  "independent-review-unavailable": "An acceptable independent review result was unavailable.",
+  "proof-mutated-worktree": "Verification changed files in the Change's worktree.",
+  "workspace-dirty": "The Change's worktree had uncommitted changes.",
+  "workspace-preflight-failed": "The worktree check before verification failed.",
+  "owner-publication-failed-before-start": "Delivery could not start the step.",
+  "engine-action-failed": "A Delivery operation failed.",
+  "acceptance-interrupted": "Reading the pull request from GitHub was interrupted.",
+};
+
+const RETRY_STATUS_CAUSES: Record<Exclude<DeliveryRetryAttempt["status"], "failed">, string> = {
+  pending: "No result recorded yet.",
+  waiting: "Waiting for GitHub.",
+  succeeded: "Succeeded.",
+  contained: "No result was recorded; this attempt's outcome is unknown.",
+  paused: "Paused; this attempt did not count.",
+};
+
+/** One recorded attempt's cause in plain language; an unmapped code is shown as recorded. */
+export function retryAttemptCause(attempt: DeliveryRetryAttempt): string {
+  if (attempt.status !== "failed") return RETRY_STATUS_CAUSES[attempt.status];
+  if (attempt.failure_code === null) return "Failed; no cause was recorded.";
+  return RETRY_FAILURE_CAUSES[attempt.failure_code] ?? `Failed with code ${attempt.failure_code}.`;
+}
 
 export function readinessTone(status: DeliveryReadinessStatus): WorkItemStatusTone {
   switch (status) {
