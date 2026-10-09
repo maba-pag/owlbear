@@ -343,7 +343,8 @@ Cockpit's next step for it, then Pause and revise again),
 `publication-pending` (retry after state publication succeeds), `reviewed-head-moved` (repair the
 branch first), and `change-terminal` or `change-merged` (start a successor Change). A Change paused
 after a Builder's Design return is released by the revision itself: its work is preserved under refs and
-the worktree reset. `design-return-workspace-changed` or `design-return-unmerged-index` means the retained
+the worktree reset. Clean Finalizer attention settled after a `review-failed` or `proof-failed` return is
+also released by the revision; its settlement receipt and report remain. `design-return-workspace-changed` or `design-return-unmerged-index` means the retained
 worktree no longer matches its handoff or holds an unmerged index; report it and do not touch the
 worktree. To drop a revision before activation, revise the package back to the approved bytes and
 activate it.
