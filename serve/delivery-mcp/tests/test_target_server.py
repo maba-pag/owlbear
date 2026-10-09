@@ -30,6 +30,8 @@ from serve.delivery.tests.confirmation_support import (
 )
 from serve.delivery.tests.test_delivery_progress import _complete_first_outcome, _progress_portfolio
 from serve.delivery.tests.test_portfolio_application import (
+    _FIRST_BUILDER_RETRY_REASON,
+    _THIRD_BUILDER_RETRY_REASON,
     _assert_checkpoint_branch_operation,
     _assert_loader_observation_only,
     _assert_loader_retry_recording,
@@ -220,6 +222,7 @@ async def test_registered_get_change_exposes_exhausted_builder_retry_history(tmp
             "status": "failed",
             "failure_code": "builder-failed",
             "observed_at": "2026-08-04T00:00:00Z",
+            "reason": _FIRST_BUILDER_RETRY_REASON,
         },
         {
             "ordinal": 2,
@@ -234,6 +237,7 @@ async def test_registered_get_change_exposes_exhausted_builder_retry_history(tmp
             "status": "failed",
             "failure_code": "builder-review-failed",
             "observed_at": "2026-08-04T02:00:00Z",
+            "reason": _THIRD_BUILDER_RETRY_REASON,
         },
     ]
     assert runtime.retry_ledger().read() == ledger_before

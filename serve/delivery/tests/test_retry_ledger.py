@@ -984,3 +984,31 @@ def test_engine_contexts_do_not_share_exhausted_budget(tmp_path: Path, field: st
     assert other.episode_id != first_key.identity
     assert ledger.episode(first_key).stop_code is RetryStopCode.EXHAUSTED
     assert not ledger.reserve(first_key, failure_class="mechanical", now=_START + timedelta(days=1)).allowed
+
+
+def test_owner_result_reason_survives_reconciliation_into_attempt_history(tmp_path: Path) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    key = _engine_key()
+    ledger.reserve(key, failure_class="mechanical", now=_START, attempt_id="attempt-1")
+    reason = "Fixture DB locked by a parallel test; retry after it is released"
+    owner = ledger.owner_result_participants(
+        "attempt-1", accepted=False, failure_code="builder-flaky", reason=reason, now=_START
+    )
+    RuntimeTransaction(tmp_path, "owner-result", owner).commit()
+    restarted = RetryLedger(tmp_path, "change-a")
+    restarted.reconcile_owner_results()
+    restarted.reserve(key, failure_class="mechanical", now=_START + timedelta(seconds=2), attempt_id="attempt-2")
+    silent = restarted.owner_result_participants(
+        "attempt-2", accepted=False, failure_code="builder-failed", now=_START + timedelta(seconds=2)
+    )
+    RuntimeTransaction(tmp_path, "owner-result-2", silent).commit()
+    restarted.reconcile_owner_results()
+    episode = restarted.episode(key)
+    assert episode is not None
+    history = restarted.attempt_history(episode)
+
+    assert [(item.failure_code, item.reason) for item in history] == [
+        ("builder-flaky", reason),
+        ("builder-failed", None),
+    ]
+    assert "reason" not in history[1].model_dump(mode="json")

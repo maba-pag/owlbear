@@ -2203,9 +2203,9 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
             if request is None:
                 _conflict("normal Planner retry settlement requires its unchanged RetryDelivery")
             self._validate_retry_identity(binding, request, claim)
-            failure_code = request.failure_code
+            failure_code, reason = request.failure_code, request.reason
         else:
-            failure_code = REQUESTLESS_WORKER_SETTLEMENT_FAILURE_CODES[envelope.disposition]
+            failure_code, reason = REQUESTLESS_WORKER_SETTLEMENT_FAILURE_CODES[envelope.disposition], None
 
         result = binding.model_copy(
             update={
@@ -2223,6 +2223,7 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
                 accepted=False,
                 accepted_progress=True,
                 failure_code=failure_code,
+                reason=reason,
                 now=retry_observed_at or datetime.now(UTC),
             ),
             self._planning_retry_settlement_participant(receipt),
@@ -2299,6 +2300,7 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
                     accepted_progress=not refunded,
                     paused=refunded,
                     failure_code=failure_code,
+                    reason=envelope.request.reason if isinstance(envelope.request, RetryDelivery) else None,
                     now=retry_observed_at or datetime.now(UTC),
                 ),
                 self._builder_invocation_settlement_participant(receipt),

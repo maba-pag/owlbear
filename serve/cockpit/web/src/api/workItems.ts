@@ -256,13 +256,15 @@ export interface FinalizationAttempt {
   applicability: "current" | "historical";
 }
 
-/** Bounded metadata for one durable retry attempt; never failure prose or paths. */
+/** Bounded metadata for one durable retry attempt; never engine failure detail. */
 export interface DeliveryRetryAttempt {
   ordinal: number;
   kind: "original" | "repair" | "observation";
   status: "pending" | "failed" | "waiting" | "succeeded" | "contained" | "paused";
   failure_code: string | null;
   observed_at: string | null;
+  /** The retrying agent's own one-line reason, when it gave one. */
+  reason?: string;
 }
 
 /** Engine-computed eligibility for one supported action at a captured basis. */

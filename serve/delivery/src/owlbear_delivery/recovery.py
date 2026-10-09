@@ -33,6 +33,9 @@ _MAX_REPAIR_BINDINGS = 256
 MAX_RETRY_HISTORY_ATTEMPTS = 6
 _RETRY_FAILURE_CODE_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
 BUILDER_RETURN_FAILURE_CODE = "worker-returned"
+# A worker's own one-line retry reason: no control characters and no surrounding whitespace.
+RETRY_REASON_PATTERN = r"^[^\s\x00-\x1f\x7f](?:[^\x00-\x1f\x7f]*[^\s\x00-\x1f\x7f])?$"
+MAX_RETRY_REASON_LENGTH = 240
 MAX_ADMITTED_PATH_LENGTH = 4096
 _ADMITTED_AUTHORITY_FIELDS = frozenset(
     {"admitted_task_id", "admitted_task_digest", "admitted_task_scope", "admitted_paths"}
@@ -588,16 +591,31 @@ class RetryAttemptOutcome(_RecoveryModel):
     failure_detail: str | None = Field(default=None, max_length=240)
     next_eligible_at: str | None = Field(default=None, max_length=64)
     stop_code: RetryStopCode | None = None
+    reason: str | None = Field(
+        default=None,
+        max_length=MAX_RETRY_REASON_LENGTH,
+        pattern=RETRY_REASON_PATTERN,
+        exclude_if=lambda value: value is None,
+    )
 
 
 class DeliveryRetryAttemptView(_RecoveryModel):
-    """Bounded public metadata for one durable retry attempt; never detail text or paths."""
+    """Bounded public metadata for one durable retry attempt; never engine failure detail.
+
+    ``reason`` is the one-line reason the retrying worker gave, shown to the user and the next worker.
+    """
 
     ordinal: int = Field(ge=1)
     kind: Literal["original", "repair", "observation"]
     status: Literal["pending", "failed", "waiting", "succeeded", "contained", "paused"]
     failure_code: str | None = Field(default=None, pattern=_RETRY_FAILURE_CODE_PATTERN)
     observed_at: str | None = Field(default=None, max_length=64)
+    reason: str | None = Field(
+        default=None,
+        max_length=MAX_RETRY_REASON_LENGTH,
+        pattern=RETRY_REASON_PATTERN,
+        exclude_if=lambda value: value is None,
+    )
 
 
 class RetryRepairBinding(_RecoveryModel):
@@ -658,6 +676,12 @@ class RetryOwnerResult(_RecoveryModel):
     failure_code: str = "worker-blocked"
     accepted_progress: bool = True
     paused: bool = False
+    reason: str | None = Field(
+        default=None,
+        max_length=MAX_RETRY_REASON_LENGTH,
+        pattern=RETRY_REASON_PATTERN,
+        exclude_if=lambda value: value is None,
+    )
     repair_outcome_id: str | None = Field(default=None, pattern=r"^OUT-[0-9]{3}$")
     repair_task_id: str | None = Field(default=None, min_length=1, max_length=256)
     completed_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
@@ -897,6 +921,7 @@ class RetryLedger:
             status=outcome.status,
             failure_code=code if code is not None and re.fullmatch(_RETRY_FAILURE_CODE_PATTERN, code) else None,
             observed_at=outcome.observed_at,
+            reason=outcome.reason,
         )
 
     def returned_attempts(self, episode: RetryEpisodeSummary) -> int:
@@ -1013,6 +1038,7 @@ class RetryLedger:
         repair_outcome_id: str | None = None,
         repair_task_id: str | None = None,
         completed_commit: str | None = None,
+        reason: str | None = None,
     ) -> tuple[TransactionParticipant, ...]:
         """Prepare evidence for the owner's transaction, not a separate accounting write."""
         episode = _episode_for_attempt(self.read(), attempt_id)
@@ -1029,6 +1055,7 @@ class RetryLedger:
             repair_outcome_id=repair_outcome_id,
             repair_task_id=repair_task_id,
             completed_commit=completed_commit,
+            reason=reason,
         )
         return (
             TransactionParticipant(
@@ -1275,7 +1302,9 @@ class RetryLedger:
                         accepted_progress=result.accepted_progress,
                     )
                 else:
-                    self.record_failure(attempt_id, failure_code=result.failure_code, now=result.observed_at)
+                    self.record_failure(
+                        attempt_id, failure_code=result.failure_code, reason=result.reason, now=result.observed_at
+                    )
 
     def pending_attempts(self) -> tuple[RetryAttempt, ...]:
         """Read unresolved immutable reservations for exact owner reconciliation."""
@@ -1628,6 +1657,7 @@ class RetryLedger:
         *,
         failure_code: str,
         failure_detail: str | None = None,
+        reason: str | None = None,
         now: datetime | str | None = None,
     ) -> RetryEpisodeSummary:
         """Persist one bounded failure outcome and its next eligible time."""
@@ -1677,6 +1707,7 @@ class RetryLedger:
             observed_at=_retry_timestamp(observed),
             failure_code=failure_code,
             failure_detail=failure_detail,
+            reason=reason,
             next_eligible_at=None if stop is not None else _retry_timestamp(next_at),
             stop_code=stop,
         )

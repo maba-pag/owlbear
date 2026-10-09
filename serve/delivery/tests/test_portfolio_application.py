@@ -4351,13 +4351,18 @@ def _builder_retry_history(items) -> list[tuple[int, str, str, str | None]]:
     return [(item.ordinal, item.kind, item.status, item.failure_code) for item in items]
 
 
+_FIRST_BUILDER_RETRY_REASON = "Snapshot fixture drifted from the reviewed head; regenerate before editing"
+_THIRD_BUILDER_RETRY_REASON = "Reviewer rejected the same flaky ordering twice"
+
+
 def _exhaust_builder_retry_with_distinct_codes(tmp_path: Path):
     """Fail one Builder task three times with distinct codes across a restart; return the reopened application."""
     now = ["2026-08-04T00:00:00Z"]
     application, runtime, _coordinator, state_root, first, _head, _workspace, settlement = _builder_retry_handoff_setup(
         tmp_path, now, add_workspace_changes=False
     )
-    _settle_builder_handoff_attempt(application, first.claim, settlement)
+    first_request = settlement.request.model_copy(update={"reason": _FIRST_BUILDER_RETRY_REASON})
+    _settle_builder_handoff_attempt(application, first.claim, settlement.model_copy(update={"request": first_request}))
     contexts = []
 
     now[0] = "2026-08-04T01:00:00Z"
@@ -4413,6 +4418,7 @@ def _exhaust_builder_retry_with_distinct_codes(tmp_path: Path):
                 attempt_id=third.claim.attempt_id,
                 abandoned_commit=third.source_head,
                 failure_code="builder-review-failed",
+                reason=_THIRD_BUILDER_RETRY_REASON,
             ),
         ),
     )
@@ -4452,6 +4458,11 @@ def test_builder_retry_history_reaches_fresh_builder_and_exhaustion_diagnosis(tm
     exhausted = next(item for item in change.unresolved_outcomes if item.outcome_id == "OUT-001")
     assert exhausted.card.readiness is not None
     assert _builder_retry_history(exhausted.card.readiness.retry_history) == expected
+    reasons = [_FIRST_BUILDER_RETRY_REASON, None, _THIRD_BUILDER_RETRY_REASON]
+    assert [item.reason for item in second_context.prior_attempts] == reasons[:1]
+    assert [item.reason for item in third_context.prior_attempts] == reasons[:2]
+    assert [item.reason for item in view.readiness.retry_history] == reasons
+    assert [item.reason for item in exhausted.card.readiness.retry_history] == reasons
 
 
 def _requestless_builder_settlement(launch, disposition: str) -> DeliveryBuilderInvocationSettlement:

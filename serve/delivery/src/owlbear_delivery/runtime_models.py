@@ -23,6 +23,7 @@ from owlbear_delivery.change_workspace import (
 from owlbear_delivery.draft_pull_request import (
     PullRequestReadyReceipt,
 )
+from owlbear_delivery.recovery import MAX_RETRY_REASON_LENGTH, RETRY_REASON_PATTERN
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -1198,6 +1199,12 @@ class RetryDelivery(_DeliveryModel):
     abandoned_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     attempt_id: str | None = None
     failure_code: str = Field(default="worker-retry", pattern=r"^[a-z0-9][a-z0-9._-]{0,63}$")
+    reason: str | None = Field(
+        default=None,
+        max_length=MAX_RETRY_REASON_LENGTH,
+        pattern=RETRY_REASON_PATTERN,
+        exclude_if=_omit_when_none,
+    )
 
 
 class DeliveryRetryDiagnostic(_DeliveryModel):
