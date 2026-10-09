@@ -1469,7 +1469,10 @@ function ReadinessSection({
           <strong className="text-sm">What happened in each attempt</strong>
           <ol className="mt-static-xs list-decimal pl-static-md text-sm">
             {readiness.retry_history.map((attempt) => (
-              <li key={attempt.ordinal}>{retryAttemptCause(attempt)}</li>
+              <li key={attempt.ordinal}>
+                {retryAttemptCause(attempt)}
+                {attempt.reason ? ` The agent said: ${attempt.reason}` : null}
+              </li>
             ))}
           </ol>
         </div>
@@ -1577,6 +1580,7 @@ function ReadinessSection({
                     </>
                   ) : null}
                   {attempt.observed_at ? ` at ${attempt.observed_at}` : null}
+                  {attempt.reason ? `: ${attempt.reason}` : null}
                 </li>
               ))}
             </ol>

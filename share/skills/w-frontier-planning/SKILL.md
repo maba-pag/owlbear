@@ -22,7 +22,8 @@ and reviewed boundary to remain unchanged.
 
 Do not infer or repair malformed launch identity. Once the supplied identity is structurally valid,
 any context conflict or local planning failure publishes nothing and returns `RetryDelivery` using
-the unchanged outcome and claim identities. A normal Planner return with this retry is settled by
+the unchanged outcome and claim identities, with a one-line `retry_reason` (at most 240 characters)
+beside it that Cockpit shows the user. A normal Planner return with this retry is settled by
 Orchestrator through `settle_worker_invocation` using the exact launch identity; Planner returns the
 `RetryDelivery` unchanged and never calls the settlement operation itself. Settlement records the
 completed attempt without publishing a plan; fresh acquisition owns any later attempt.

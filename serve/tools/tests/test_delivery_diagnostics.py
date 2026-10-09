@@ -41,6 +41,7 @@ from owlbear_delivery.recovery import (
     RecoveryReceipt,
     RetryAttempt,
     RetryAttemptOutcome,
+    RetryAttemptReason,
     RetryLedgerSummary,
     RetryOwnerResult,
     RetryRepairBinding,
@@ -446,6 +447,7 @@ def _write_every_change_family(change: Path) -> dict[str, int]:
         change / "retry-ledger/outcomes" / f"{digest}.json": v1,
         change / "retry-ledger/repair-bindings" / f"{digest}.json": v1,
         change / "retry-ledger/owner-results/builder-claim:attempt.1.json": v1,
+        change / "retry-ledger/reasons/builder-claim:attempt.1.json": v1,
         change / "planning-pause-receipts/OUT-001" / f"{digest}.json": v1,
         change / "planning-retry-receipts/OUT-001" / f"{digest}.json": v1,
         change / "builder-invocation-receipts" / f"{digest}.json": v1,
@@ -484,6 +486,7 @@ def _write_every_change_family(change: Path) -> dict[str, int]:
         "retry_outcome": 1,
         "retry_repair_binding": 1,
         "retry_owner_result": 1,
+        "retry_reason": 1,
         "planning_pause_receipt": 1,
         "planning_retry_receipt": 1,
         "builder_invocation_receipt": 1,
@@ -790,6 +793,7 @@ def test_change_record_versions_match_owner_models() -> None:
         "retry_outcome": (RetryAttemptOutcome,),
         "retry_repair_binding": (RetryRepairBinding,),
         "retry_owner_result": (RetryOwnerResult,),
+        "retry_reason": (RetryAttemptReason,),
     }
     runtime_models = vars(delivery_runtime)
     owners |= {

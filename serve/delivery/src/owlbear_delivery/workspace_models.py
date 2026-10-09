@@ -930,6 +930,33 @@ class ChangeTargetSyncReceipt(_WorkspaceModel):
         return self
 
 
+MAX_TARGET_OVERLAP_PATHS = 100
+
+
+class ChangeTargetOverlap(_WorkspaceModel):
+    """Test merge of the reviewed Change head with the freshly fetched target; ``unknown`` is never clean."""
+
+    status: Literal["clean", "conflict", "unknown"]
+    reviewed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    target_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    conflict_paths: tuple[str, ...] = Field(default=(), max_length=MAX_TARGET_OVERLAP_PATHS)
+
+    @field_validator("conflict_paths", mode="before")
+    @classmethod
+    def _normalize_conflict_paths(cls, value: object) -> object:
+        return tuple(value) if isinstance(value, list) else value
+
+    @model_validator(mode="after")
+    def _validate_status(self) -> Self:
+        if self.status != "unknown" and self.target_head is None:
+            message = "a known target overlap names the fetched target head"
+            raise ValueError(message)
+        if self.status != "conflict" and self.conflict_paths:
+            message = "only a conflicting target overlap names conflict paths"
+            raise ValueError(message)
+        return self
+
+
 class ChangeTargetSyncConflictState(_WorkspaceModel):
     """Durable identity of one preserved target merge conflict."""
 
@@ -1965,8 +1992,34 @@ class ChangeTargetSyncConflictError(RuntimeError):
         self.operation_id = operation_id
         self.target_head = target_head
         self.conflict_paths = conflict_paths
-        detail = ", ".join(conflict_paths) if conflict_paths else "unclassified paths"
-        super().__init__(f"target synchronization requires conflict resolution: {detail}")
+        super().__init__(_target_sync_conflict_message(conflict_paths))
+
+
+_TARGET_SYNC_CONFLICT_PREFIX = "target synchronization requires conflict resolution: "
+# Retained failure detail is cut at 240 characters; never let that cut land inside a path.
+_MAX_TARGET_SYNC_CONFLICT_MESSAGE = 240
+
+
+def _target_sync_conflict_message(conflict_paths: tuple[str, ...]) -> str:
+    """Name whole conflict paths within the retained bound and count the ones left out."""
+    if not conflict_paths:
+        return f"{_TARGET_SYNC_CONFLICT_PREFIX}unclassified paths"
+    complete = _TARGET_SYNC_CONFLICT_PREFIX + ", ".join(conflict_paths)
+    if len(complete) <= _MAX_TARGET_SYNC_CONFLICT_MESSAGE:
+        return complete
+    shown: list[str] = []
+    for path in conflict_paths:
+        omitted = len(conflict_paths) - len(shown) - 1
+        tail = f" (+{omitted} more of {len(conflict_paths)}; full list in publication.target_sync_conflict)"
+        if len(_TARGET_SYNC_CONFLICT_PREFIX + ", ".join([*shown, path]) + tail) > _MAX_TARGET_SYNC_CONFLICT_MESSAGE:
+            break
+        shown.append(path)
+    omitted = len(conflict_paths) - len(shown)
+    listed = ", ".join(shown) if shown else "conflicts"
+    return (
+        f"{_TARGET_SYNC_CONFLICT_PREFIX}{listed} (+{omitted} more of {len(conflict_paths)}; "
+        "full list in publication.target_sync_conflict)"
+    )
 
 
 class CapacityLedger(_WorkspaceModel):

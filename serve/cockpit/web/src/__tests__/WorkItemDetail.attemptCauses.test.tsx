@@ -33,7 +33,14 @@ it("states each exhausted attempt's recorded cause in plain language without rec
         observed_at: "2026-10-08T10:00:00Z",
       },
       { ordinal: 3, kind: "repair", status: "failed", failure_code: "maintained-check-failed", observed_at: null },
-      { ordinal: 4, kind: "repair", status: "failed", failure_code: "agent-specific-code", observed_at: null },
+      {
+        ordinal: 4,
+        kind: "repair",
+        status: "failed",
+        failure_code: "agent-specific-code",
+        observed_at: null,
+        reason: "Fixture DB locked by a parallel test",
+      },
     ],
   });
   fixtureState.currentDetail = detail({
@@ -52,10 +59,12 @@ it("states each exhausted attempt's recorded cause in plain language without rec
     "Failed; no cause was recorded.",
     "The Finalizer ended without a report; no result was recorded.",
     "A verification check failed.",
-    "Failed with code agent-specific-code.",
+    "Failed with code agent-specific-code. The agent said: Fixture DB locked by a parallel test",
   ]);
   // The recorded codes stay available in the technical history.
-  expect(screen.getByTestId("readiness-retry-history")).toHaveTextContent("finalizer-ended-without-report");
+  const history = screen.getByTestId("readiness-retry-history");
+  expect(history).toHaveTextContent("finalizer-ended-without-report");
+  expect(history).toHaveTextContent("agent-specific-code: Fixture DB locked by a parallel test");
 });
 
 it.each([

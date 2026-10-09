@@ -47,6 +47,7 @@ from serve.delivery.tests.test_portfolio_application import (
     _workspace_mutation_snapshot,
     acceptance_budget_case,
     builder_transition_case,
+    retain_contained_transition,
 )
 from serve.delivery.tests.test_recovery import (
     absent_host_process_case,
@@ -834,8 +835,7 @@ def test_http_builder_transition_diagnostic_is_blocked_without_active_request(tm
     application, runtimes, coordinator, _state_root, launch, transition = builder_transition_case(tmp_path, action)
     before_workspace = _workspace_mutation_snapshot(launch.worktree_path)
     before_coordination = coordinator.show("change-a")
-    with pytest.raises(DeliveryWorkerExclusionRequiredError):
-        application.transition_delivery("change-a", transition)
+    retain_contained_transition(application, "change-a", transition)
     retained = runtimes["change-a"].frontier_bytes()
     with TestClient(assemble_target_app(application)) as client:
         detail_response = client.get("/api/changes/change-a/work-items/outcome:OUT-001")
@@ -855,14 +855,14 @@ def test_http_builder_transition_diagnostic_is_blocked_without_active_request(tm
         assert readiness["reason_code"] == "builder-transition-contained"
         assert readiness["executable"] is False
         assert readiness["action"] is None
-        assert "read-only" in readiness["prompt"]
     prompt = detail["readiness"]["prompt"]
     assert change["readiness"]["prompt"] == prompt
-    assert prompt.startswith("/repair-delivery Inspect only Change change-a")
-    assert "`delivery-diagnose inspect --change-id change-a`" in prompt
-    assert "preserve custody, stage, worktree, inspected files, and retry budget" in prompt
-    assert "do not answer, unblock, restart, release, edit, repair, or dispatch a replacement" in prompt
-    for unsupported_tool in ("get_change", "show_operator_context", "acquire_change_action", "transition_delivery"):
+    assert prompt.startswith("/continue-change change-a A worker block or return reached Delivery")
+    assert "In the chat that dispatched that worker" in prompt
+    assert "settle_worker_invocation" in prompt
+    assert "answer its stopped-run question" in prompt
+    assert "Do not retry, rewrite, or dispatch a replacement" in prompt
+    for unsupported_tool in ("show_operator_context", "acquire_change_action", "transition_delivery"):
         assert unsupported_tool not in prompt
     assert runtimes["change-a"].frontier_bytes() == retained
     assert coordinator.show("change-a") == before_coordination
@@ -4076,8 +4076,7 @@ def test_http_retry_diagnostic_is_blocked_and_projected(tmp_path: Path) -> None:
     before_coordination = coordinator.show("change-a")
     before_workspace = _workspace_mutation_snapshot(launch.worktree_path)
 
-    with pytest.raises(DeliveryWorkerExclusionRequiredError):
-        application.transition_delivery("change-a", transition)
+    retain_contained_transition(application, "change-a", transition)
 
     with TestClient(assemble_target_app(application)) as client:
         detail_response = client.get("/api/changes/change-a/work-items/outcome:OUT-001")
@@ -4106,12 +4105,12 @@ def test_http_retry_diagnostic_is_blocked_and_projected(tmp_path: Path) -> None:
         assert readiness["operation"] is None
         assert readiness["action"] is None
         assert readiness["prompt"] == prompt
-    assert prompt.startswith("/repair-delivery Inspect only Change change-a")
-    assert "`delivery-diagnose inspect --change-id change-a`" in prompt
-    assert "Make no MCP calls" in prompt
-    assert "do not retry" in prompt
-    assert "retry budget" in prompt
-    for unsupported_tool in ("get_change", "show_operator_context", "acquire_change_action", "transition_delivery"):
+    assert prompt.startswith("/continue-change change-a A worker retry reached Delivery")
+    assert "In the chat that dispatched that worker" in prompt
+    assert "settle_worker_invocation" in prompt
+    assert "answer its stopped-run question" in prompt
+    assert "Do not retry, rewrite, or dispatch a replacement" in prompt
+    for unsupported_tool in ("show_operator_context", "acquire_change_action", "transition_delivery"):
         assert unsupported_tool not in prompt
 
     after_payload = json.loads(runtimes["change-a"].frontier_bytes())

@@ -1483,6 +1483,10 @@ class _AcquisitionMixin:
             recovery_attention=binding.recovery_attention,
             prior_attempts=prior_attempts,
             acceptance=self._outcome_acceptance(runtime, outcome_id),
+            # D2: once finalized, a target move alone needs no sync, so only unfinalized Build work probes it.
+            target_overlap=(
+                self._workspace_manager.probe_target_overlap(change_id) if runtime.finalization() is None else None
+            ),
         )
 
     @staticmethod

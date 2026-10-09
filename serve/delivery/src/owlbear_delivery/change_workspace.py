@@ -55,6 +55,7 @@ from owlbear_delivery.workspace_models import (  # noqa: F401
     ChangeFinalizationAttention,
     ChangePauseRequest,
     ChangePauseRequestedError,
+    ChangeTargetOverlap,
     ChangeTargetSyncAbortReceipt,
     ChangeTargetSyncConflictError,
     ChangeTargetSyncConflictState,

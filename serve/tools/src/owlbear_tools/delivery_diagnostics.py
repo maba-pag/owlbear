@@ -154,6 +154,7 @@ _CHANGE_RECORD_LAYOUT: dict[str, object] = {
         "outcomes": {"$digest.json": "retry_outcome"},
         "repair-bindings": {"$digest.json": "retry_repair_binding"},
         "owner-results": {"$attempt.json": "retry_owner_result"},
+        "reasons": {"$attempt.json": "retry_reason"},
     },
     "planning-pause-receipts": {"$outcome": {"$digest.json": "planning_pause_receipt"}},
     "planning-retry-receipts": {"$outcome": {"$digest.json": "planning_retry_receipt"}},
@@ -199,6 +200,7 @@ _CHANGE_RECORD_VERSIONS: dict[str, tuple[int, ...] | None] = {
     "retry_outcome": (1,),
     "retry_repair_binding": (1,),
     "retry_owner_result": (1,),
+    "retry_reason": (1,),
     "planning_pause_receipt": (1, 2),
     "planning_retry_receipt": (1, 2),
     "builder_invocation_receipt": (1, 2),
@@ -334,6 +336,7 @@ _SAFE_LOCATORS = {
     "retry_outcome": ".owlbear/delivery/runtime/changes/<redacted>/retry-ledger/outcomes/<opaque>.json",
     "retry_repair_binding": ".owlbear/delivery/runtime/changes/<redacted>/retry-ledger/repair-bindings/<opaque>.json",
     "retry_owner_result": ".owlbear/delivery/runtime/changes/<redacted>/retry-ledger/owner-results/<opaque>.json",
+    "retry_reason": ".owlbear/delivery/runtime/changes/<redacted>/retry-ledger/reasons/<opaque>.json",
     "planning_pause_receipt": (
         ".owlbear/delivery/runtime/changes/<redacted>/planning-pause-receipts/<outcome>/<opaque>.json"
     ),

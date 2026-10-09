@@ -325,6 +325,14 @@ RECORD_KINDS: Final[tuple[RecordKind, ...]] = (
         1,
     ),
     _kind(
+        "retry_reason",
+        "retry",
+        rf"{_CH}/retry-ledger/reasons/{_N}\.json",
+        (f"{_RECOVERY}:RetryAttemptReason",),
+        "R",
+        1,
+    ),
+    _kind(
         "retry_owner_result",
         "retry",
         rf"{_CH}/retry-ledger/owner-results/{_N}\.json",

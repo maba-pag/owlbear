@@ -1,0 +1,1 @@
+{"schema_version":1,"attempt_id":"repair-attempt","reason":"Fixture DB locked by a parallel test; retry after it is released"}

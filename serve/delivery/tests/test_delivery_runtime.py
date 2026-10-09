@@ -4810,3 +4810,36 @@ def test_fresh_process_exports_only_complete_models() -> None:
     observed = json.loads(result.stdout.strip().splitlines()[-1])
     assert observed["incomplete"] == []
     assert observed["binding"]["outcome_id"] == "OUT-001"
+
+
+def test_normal_planning_retry_records_the_planner_reason(tmp_path: Path) -> None:
+    attempt_id = "planning-reason-attempt"
+    runtime = _runtime(tmp_path)
+    _activate(runtime, "OUT-001", "planner-claim", attempt_id=attempt_id)
+    ledger, key = _reserve_planning_settlement(runtime, attempt_id)
+    reason = "Design names two owners for the cache; planning needs one before tasks"
+
+    runtime.settle_planning_retry(
+        DeliveryPlanningRetrySettlement(
+            change_id="delivery-runtime",
+            outcome_id="OUT-001",
+            claim_id="planner-claim",
+            attempt_id=attempt_id,
+            disposition="normal-return",
+            request=RetryDelivery(
+                action="retry",
+                outcome_id="OUT-001",
+                claim_id="planner-claim",
+                failure_code="planner-failed",
+            ),
+        ),
+        retry_reason=reason,
+    )
+
+    assert (tmp_path / "changes/delivery-runtime/retry-ledger/reasons" / f"{attempt_id}.json").exists()
+    ledger.reconcile_owner_results()
+    episode = ledger.episode(key)
+    assert episode is not None
+    assert [(item.failure_code, item.reason) for item in ledger.attempt_history(episode)] == [
+        ("planner-failed", reason)
+    ]

@@ -70,7 +70,8 @@ reason: <recorded prerequisite failure>
 A same-task Builder claim may start with dirty, staged, or committed predecessor work, including
 work left by a `dispatch_failure`, a crash, or a settled `worker-host-lost` or
 `worker-released-stuck` attempt. Each settled no-result receipt preserves that material and records
-the failed attempt; fresh Build context supplies `prior_attempts`. The new Builder must inspect and
+the failed attempt; fresh Build context supplies `prior_attempts`, with any predecessor's
+`reason`. The new Builder must inspect and
 triage this state under the rules below before editing. Orchestrator does not clean the worktree or
 ask the user to do Git recovery. A dispatch that has not returned or whose owned mutator may still
 run remains contained and does not authorize this handoff.
@@ -254,7 +255,10 @@ attempt_id: <launch attempt ID>
 abandoned_commit: <exact current branch HEAD>
 ```
 
-Use `retry` for an implementation failure that cannot be repaired in this invocation.
+Use `retry` for an implementation failure that cannot be repaired in this invocation. Beside the
+unchanged transition, return `retry_reason`: one line of at most 240 characters on what failed and
+what the next Builder should do first. Delivery shows it on the Cockpit card and in the next
+Builder's `prior_attempts`; omit secrets.
 
 ```yaml
 action: return
@@ -300,6 +304,11 @@ target-sync block: the same `block` fields without `request`, with exactly one l
 its target, routes any conflict to `/resolve-target-conflict`, and starts a fresh claim for this task
 once the commit is included. That claim's `return_context` names the preserved refs; reconcile what
 still applies. Never ask the user to synchronize the target.
+
+Build context's `target_overlap` is Delivery's test merge of the reviewed head with the freshly fetched
+target. When its `status` is `conflict`, return that target-sync block before any edit, naming
+`target-commit:<target_overlap.target_head>`. `unknown` is not clean: proceed with the task, but never
+report the Change as free of target conflicts.
 
 For a normal Builder return, Orchestrator uses `settle_worker_invocation` for `retry`, `block`, or
 `return` to Planning or Design; it validates exact workspace custody and persists any bounded request

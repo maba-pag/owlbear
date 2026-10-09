@@ -486,7 +486,9 @@ def test_repair_delivery_prompt_bootstraps_read_only_then_routes_through_the_rep
     assert "../skills/w-delivery-repair/SKILL.md" in prompt
     assert "delivery-diagnose inspect" in prompt
     assert "PYTHONDONTWRITEBYTECODE=1" in prompt
-    assert "python -B serve/tools/src/owlbear_tools/delivery_diagnostics.py inspect" in prompt
+    assert "uv run --no-sync delivery-diagnose inspect" in prompt
+    assert "uv run --no-sync python -B serve/tools/src/owlbear_tools/delivery_diagnostics.py inspect" in prompt
+    assert "`python -B serve/tools" not in prompt
     assert "terminal is unavailable" in prompt
     assert "do not substitute another tool" in prompt
     assert "automation-permission bypass" in prompt
@@ -865,7 +867,7 @@ async def test_orchestration_transition_envelope_matches_registered_field() -> N
         transition_field = transition_fields[0]
         assert transition_field != "request"
         assert transition_field in transition_schema["required"]
-        assert set(settlement_schema["properties"]) == {"settlement", "host_id", "session_id"}
+        assert set(settlement_schema["properties"]) == {"settlement", "host_id", "session_id", "retry_reason"}
         assert settlement_schema["additionalProperties"] is False
         settlement_variants = settlement_schema["properties"]["settlement"]["anyOf"]
         settlement_refs = {item["$ref"].rsplit("/", 1)[-1] for item in settlement_variants}
@@ -1077,12 +1079,12 @@ def _assert_session_start_claim_guidance(orchestration: str) -> None:
     session_start_end = orchestration.index("## Change Continuation Entry")
     session_start = orchestration[session_start_begin:session_start_end]
 
-    assert "For `/continue-change <change_id>`, call `get_change(change_id)` and" in session_start
+    assert 'For `/continue-change <change_id>`, call `get_change(change_id, view: "continuation")` and' in session_start
     assert "inspect only that Change's running claims" in session_start
     assert "Do not call `list_changes` or inspect sibling Changes on this route." in session_start
     assert 'readiness.status == "running"' in session_start
-    assert "call `get_change(change_id)`" in session_start
-    assert "Ask once per revalidated running claim through `vscode/askQuestions`" in session_start
+    assert "use it for every `get_change` read on this route" in orchestration
+    assert "Ask once per revalidated claim through `vscode/askQuestions`" in session_start
     assert "role, Change ID, outcome (or Finalizer), and start time" in session_start
     assert "A pre-existing running claim was not dispatched by this session" in orchestration
     assert "may belong to a prior run or another live chat" in orchestration
@@ -1422,6 +1424,18 @@ def test_continuation_loads_each_missing_tool_by_exact_name() -> None:
     assert "Never combine several names in one query" in bindings
     assert "`OwlBear Delivery " not in orchestration
     assert _AGENT_VALIDATOR._check_tool_search_queries() == []  # noqa: SLF001
+
+
+def test_continuation_relays_the_engine_command_after_a_blocked_or_human_result() -> None:
+    """A blocked target sync was paraphrased from truncated detail instead of its engine prompt."""
+    orchestration = " ".join((_SKILLS_ROOT / "w-orchestration/SKILL.md").read_text(encoding="utf-8").split())
+
+    assert (
+        "After `blocked`, re-read `get_change` once and report its engine-authored `readiness.prompt` "
+        "unchanged as the user's next command"
+    ) in orchestration
+    assert "never derive paths, commands, or a paraphrased next step from it" in orchestration
+    assert "reporting the returned `readiness.prompt` unchanged when present" in orchestration
 
 
 def test_pr_feedback_start_reentry_prepares_and_maps_before_triage() -> None:

@@ -33,6 +33,9 @@ _MAX_REPAIR_BINDINGS = 256
 MAX_RETRY_HISTORY_ATTEMPTS = 6
 _RETRY_FAILURE_CODE_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
 BUILDER_RETURN_FAILURE_CODE = "worker-returned"
+# A worker's own one-line retry reason: no control characters and no surrounding whitespace.
+RETRY_REASON_PATTERN = r"^[^\s\x00-\x1f\x7f](?:[^\x00-\x1f\x7f]*[^\s\x00-\x1f\x7f])?$"
+MAX_RETRY_REASON_LENGTH = 240
 MAX_ADMITTED_PATH_LENGTH = 4096
 _ADMITTED_AUTHORITY_FIELDS = frozenset(
     {"admitted_task_id", "admitted_task_digest", "admitted_task_scope", "admitted_paths"}
@@ -414,6 +417,22 @@ class DeliveryWorkerExclusionRequiredError(RuntimeError):
         )
 
 
+class DeliverySettlementRequiredError(RuntimeError):
+    """A worker-ending transition reached `transition_delivery` instead of its typed settlement."""
+
+    code = "ERR_DELIVERY_SETTLEMENT_REQUIRED"
+
+    def __init__(self, role: str, action: str) -> None:
+        self.role = role
+        self.action = action
+        super().__init__(
+            f"Nothing was recorded: a {role} {action} ends its worker invocation and is accepted only through "
+            "settle_worker_invocation. From the session that dispatched this worker, after its dispatch returned, "
+            "call settle_worker_invocation with disposition normal-return, the launch identities, and this "
+            "transition unchanged as request."
+        )
+
+
 class RetryFailureClass(StrEnum):
     """Failure classes with deliberately small, persisted retry policies."""
 
@@ -575,13 +594,30 @@ class RetryAttemptOutcome(_RecoveryModel):
 
 
 class DeliveryRetryAttemptView(_RecoveryModel):
-    """Bounded public metadata for one durable retry attempt; never detail text or paths."""
+    """Bounded public metadata for one durable retry attempt; never engine failure detail.
+
+    ``reason`` is the one-line reason the retrying worker gave, shown to the user and the next worker.
+    """
 
     ordinal: int = Field(ge=1)
     kind: Literal["original", "repair", "observation"]
     status: Literal["pending", "failed", "waiting", "succeeded", "contained", "paused"]
     failure_code: str | None = Field(default=None, pattern=_RETRY_FAILURE_CODE_PATTERN)
     observed_at: str | None = Field(default=None, max_length=64)
+    reason: str | None = Field(
+        default=None,
+        max_length=MAX_RETRY_REASON_LENGTH,
+        pattern=RETRY_REASON_PATTERN,
+        exclude_if=lambda value: value is None,
+    )
+
+
+class RetryAttemptReason(_RecoveryModel):
+    """Immutable one-line reason a worker gave for retrying one exact attempt."""
+
+    schema_version: Literal[1] = 1
+    attempt_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$", max_length=256)
+    reason: str = Field(max_length=MAX_RETRY_REASON_LENGTH, pattern=RETRY_REASON_PATTERN)
 
 
 class RetryRepairBinding(_RecoveryModel):
@@ -804,6 +840,7 @@ class RetryLedger:
         self._summary_path = self._directory / "current.json"
         self._attempts_path = self._directory / "attempts"
         self._outcomes_path = self._directory / "outcomes"
+        self._reasons_path = self._directory / "reasons"
         self._repair_bindings_path = self._directory / "repair-bindings"
 
     @property
@@ -881,7 +918,30 @@ class RetryLedger:
             status=outcome.status,
             failure_code=code if code is not None and re.fullmatch(_RETRY_FAILURE_CODE_PATTERN, code) else None,
             observed_at=outcome.observed_at,
+            reason=self._attempt_reason(attempt_id),
         )
+
+    def _attempt_reason(self, attempt_id: str) -> str | None:
+        try:
+            stored = read_record(self.runtime_root, self._reasons_path / f"{attempt_id}.json")
+        except FileNotFoundError:
+            return None
+        except OSError as exc:
+            raise RetryLedgerCorruptError from exc
+        try:
+            record = RetryAttemptReason.model_validate_json(stored)
+        except (TypeError, ValueError) as exc:
+            raise RetryLedgerCorruptError from exc
+        if record.attempt_id != attempt_id:
+            raise RetryLedgerCorruptError
+        return record.reason
+
+    def reason_participants(self, attempt_id: str, reason: str | None) -> tuple[TransactionParticipant, ...]:
+        """Prepare the worker's retry reason for the owning settlement transaction; ``None`` writes nothing."""
+        if reason is None:
+            return ()
+        record = RetryAttemptReason(attempt_id=attempt_id, reason=reason)
+        return (TransactionParticipant(self.runtime_root, self._reasons_path / f"{attempt_id}.json", encoded(record)),)
 
     def returned_attempts(self, episode: RetryEpisodeSummary) -> int:
         """Count Builder returns to Planning in the episode's whole current budget, refunded or legacy-charged."""

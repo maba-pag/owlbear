@@ -29,6 +29,7 @@ from owlbear_delivery.change_workspace import (
     ChangeDesignPackageSnapshotReceipt,
     ChangeFinalizationAttempt,
     ChangePauseRequest,
+    ChangeTargetOverlap,
     ChangeTargetSyncReceipt,
     ChangeWorkspaceManager,
     ChangeWorktreeAttentionCode,
@@ -814,6 +815,7 @@ class DeliveryBuildContext(_ApplicationModel):
     return_context: DeliveryReturnContext | None = None
     recovery_attention: DeliveryRecoveryAttention | None = None
     prior_attempts: tuple[DeliveryRetryAttemptView, ...] = Field(default=(), max_length=MAX_RETRY_HISTORY_ATTEMPTS)
+    target_overlap: ChangeTargetOverlap | None = None
     acceptance: tuple[DeliveryAcceptanceCriterion, ...] = ()
 
 

@@ -1919,10 +1919,10 @@ def test_f8_builder_settlement_replay_publishes_then_converts(tmp_path: Path) ->
     apply_settlement = type(reopened)._apply_worker_settlement
     inside: list[bool] = []
 
-    def settle_inside_replay(self, owner_runtime, envelope):
+    def settle_inside_replay(self, owner_runtime, envelope, **options):
         _assert_foreign_starts_refused(reopened_coordinator)
         inside.append(True)
-        return apply_settlement(self, owner_runtime, envelope)
+        return apply_settlement(self, owner_runtime, envelope, **options)
 
     with patch.object(type(reopened), "_apply_worker_settlement", settle_inside_replay):
         reopened.settle_worker_invocation(settlement, **hosted)

@@ -13,9 +13,13 @@ from serve.delivery.tests.test_portfolio_application import (
     _advance_remote_target,
     _builder_retry_handoff_setup,
     _change_intent,
+    _commit_reviewed_head,
     _continuation_request,
     _git,
+    _portfolio,
     _reopen_portfolio,
+    _seed_two_task_builder,
+    _workspace_content_snapshot,
 )
 
 from owlbear_delivery import (
@@ -24,10 +28,41 @@ from owlbear_delivery import (
     DeliveryChangeIntentKind,
     DeliveryRequest,
     DeliveryRequestKind,
+    DeliveryStage,
 )
+from owlbear_delivery.application_support import _checkpoint_error_detail
 from owlbear_delivery.change_workspace import ChangeTargetSyncConflictError, ChangeTargetSyncStaleError
 from owlbear_delivery.runtime_models import required_target_commit
 from owlbear_delivery.work_items import WorkItemActionKind
+from owlbear_delivery.workspace_target_sync import merge_tree_overlap
+
+_INCIDENT_CONFLICT_PATHS = (
+    "serve/memory-mcp/README.md",
+    "serve/memory-mcp/src/owlbear_memory_mcp/tools.py",
+    "serve/memory-mcp/tests/test_server.py",
+    "serve/memory/README.md",
+    "serve/memory/src/owlbear_memory/__init__.py",
+    "serve/memory/src/owlbear_memory/engine.py",
+)
+
+
+def test_bounded_conflict_detail_names_whole_paths_and_counts_the_rest() -> None:
+    """A six-path conflict was cut mid-path by the 240-character retained detail bound."""
+    error = ChangeTargetSyncConflictError("change-a", "operation-a", "a" * 40, _INCIDENT_CONFLICT_PATHS)
+    detail = _checkpoint_error_detail(str(error), "fallback")
+
+    assert detail == str(error)
+    listed = detail.removeprefix("target synchronization requires conflict resolution: ").split(" (+")[0]
+    shown = listed.split(", ")
+    assert shown == list(_INCIDENT_CONFLICT_PATHS[: len(shown)])
+    assert f"(+{6 - len(shown)} more of 6; full list in publication.target_sync_conflict)" in detail
+    assert error.conflict_paths == _INCIDENT_CONFLICT_PATHS
+
+
+def test_short_conflict_detail_lists_every_path_unchanged() -> None:
+    error = ChangeTargetSyncConflictError("change-a", "operation-a", "a" * 40, ("a.txt", "b.txt"))
+
+    assert str(error) == "target synchronization requires conflict resolution: a.txt, b.txt"
 
 
 def _target_block(launch, branch_head: str, required: str) -> BlockDelivery:
@@ -289,3 +324,124 @@ def test_current_target_merge_fetches_an_unfetched_commit_then_merges_it(tmp_pat
 
     assert receipt.target_head == target_head
     assert runtime.show_binding("OUT-001").block.resolved
+
+
+def _two_task_builder_with_remote(tmp_path: Path, *, competing: str | None):
+    """Accept TASK-001 on a reviewed edit, push the base, move only the remote target, then launch TASK-002."""
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path, {"change-a": DeliveryStage.IMPLEMENTATION, "change-b": DeliveryStage.PLANNING}
+    )
+    _commit_reviewed_head(application, coordinator.show("change-a"), "product.txt", "Change implementation\n", "edit")
+    repository = application._workspace_manager.repository
+    remote = tmp_path / "remote.git"
+    subprocess.run(("git", "init", "--bare", "-b", "main", str(remote)), check=True, capture_output=True)  # noqa: S603, S607
+    _git(repository, "remote", "add", "origin", str(remote))
+    _git(repository, "push", "origin", "refs/heads/main:refs/heads/main")
+    stale = _git(repository, "rev-parse", "refs/remotes/origin/main")
+    target = _advance_remote_target(tmp_path, remote, product=competing)
+    _completed, _original, _first, builder = _seed_two_task_builder(application, runtimes, coordinator, state_root)
+    return application, runtimes["change-a"], builder, stale, target
+
+
+def _build_context(application, builder):
+    return application.show_build_context(
+        builder.change_id, builder.outcome_id, builder.claim.attempt_id, builder.claim.claim_id
+    )
+
+
+def test_target_overlap_between_tasks_routes_the_next_task_through_the_target_sync(tmp_path: Path) -> None:
+    application, runtime, builder, stale, target = _two_task_builder_with_remote(
+        tmp_path, competing="Competing target edit\n"
+    )
+    repository = application._workspace_manager.repository
+    files, index, refs = _workspace_content_snapshot(builder.worktree_path)
+
+    overlap = _build_context(application, builder).target_overlap
+    worktree_before = _workspace_content_snapshot(builder.worktree_path)
+    assert worktree_before[:2] == (files, index)
+    assert [ref for ref in worktree_before[2] if "target-observation" not in ref] == list(refs)
+
+    assert overlap is not None
+    assert (overlap.status, overlap.target_head, overlap.conflict_paths) == ("conflict", target, ("product.txt",))
+    assert overlap.reviewed_head == builder.last_reviewed_commit
+    assert _git(repository, "rev-parse", "refs/remotes/origin/main") == stale
+    assert application._workspace_manager.observed_target_head() == target
+    assert _git(repository, "for-each-ref", "refs/owlbear/target-sync/") == ""
+
+    # The Builder follows its context: no edits, only the existing target-sync block.
+    application.settle_worker_invocation(
+        _settlement(builder, _target_block(builder, builder.source_head, overlap.target_head)),
+        host_id=builder.claim.owner_id,
+        session_id=builder.claim.process_id,
+    )
+    assert _workspace_content_snapshot(builder.worktree_path) == worktree_before
+    application.acquire_change_action(_continuation_request(application, "change-a"))
+    readiness = application.get_change("change-a").readiness
+    assert readiness.operation is WorkItemActionKind.SYNC_TARGET
+    assert readiness.basis.target_head == target
+
+    with pytest.raises(ChangeTargetSyncConflictError) as raised:
+        application.sync_change_with_current_target("change-a", "sync-overlap")
+
+    assert raised.value.conflict_paths == ("product.txt",)
+    assert not runtime.show_binding("OUT-001").block.resolved
+    assert application.get_change("change-a").readiness.prompt.startswith("/resolve-target-conflict change-a ")
+
+
+def test_target_overlap_reports_a_clean_merge_and_never_counts_unknown_as_clean(tmp_path: Path) -> None:
+    application, _runtime, builder, _stale, target = _two_task_builder_with_remote(tmp_path, competing=None)
+
+    clean = _build_context(application, builder).target_overlap
+    assert (clean.status, clean.target_head, clean.conflict_paths) == ("clean", target, ())
+
+    repository = application._workspace_manager.repository
+    _git(repository, "remote", "set-url", "origin", str(tmp_path / "missing.git"))
+    unknown = _build_context(application, builder).target_overlap
+    assert (unknown.status, unknown.target_head, unknown.conflict_paths) == ("unknown", None, ())
+
+
+def test_target_overlap_is_not_probed_after_finalization(tmp_path: Path) -> None:
+    application, runtime, builder, _stale, _target = _two_task_builder_with_remote(
+        tmp_path, competing="Competing target edit\n"
+    )
+    with (
+        patch.object(type(runtime), "finalization", return_value=object()),
+        patch.object(application._workspace_manager, "probe_target_overlap") as probe,
+    ):
+        context = _build_context(application, builder)
+
+    assert context.target_overlap is None
+    assert not probe.called
+
+
+@pytest.mark.parametrize(
+    ("returncode", "stdout", "expected"),
+    [
+        (0, b"a" * 40 + b"\0", ("clean", ())),
+        (1, b"a" * 40 + b"\0product.txt\0", ("conflict", ("product.txt",))),
+        (1, b"a" * 40 + b"\0", ("conflict", ())),
+        (1, b"", ("unknown", ())),
+        (0, b"a" * 40 + b"\0stray\0", ("unknown", ())),
+        (128, b"a" * 40 + b"\0", ("unknown", ())),
+    ],
+)
+def test_merge_tree_overlap_counts_only_a_written_tree_and_any_exit_one_conflict(
+    returncode: int, stdout: bytes, expected: tuple[str, tuple[str, ...]]
+) -> None:
+    overlap = merge_tree_overlap(returncode, stdout, "b" * 40, "c" * 40)
+
+    assert (overlap.status, overlap.conflict_paths) == expected
+    assert overlap.target_head == (None if expected[0] == "unknown" else "c" * 40)
+
+
+def test_target_overlap_is_unknown_when_its_observation_loses_to_another_fetch(tmp_path: Path) -> None:
+    application, _runtime, builder, stale, _target = _two_task_builder_with_remote(
+        tmp_path, competing="Competing target edit\n"
+    )
+    manager = application._workspace_manager
+
+    with patch.object(type(manager), "_record_target_observation", return_value=None):
+        overlap = _build_context(application, builder).target_overlap
+
+    assert (overlap.status, overlap.target_head) == ("unknown", None)
+    assert manager.observed_target_head() == stale
