@@ -2056,8 +2056,9 @@ class _ReadinessViewsMixin:
                 "is retained while the claim stays held. In the chat that dispatched that worker, once its "
                 "dispatch has returned, settle it with settle_worker_invocation (disposition normal-return, the "
                 "launch identities, the retained transition unchanged as request). If that chat is gone or the "
-                "worker was stopped, answer the stopped-run question or use Release stuck worker in Cockpit once "
-                "no process uses the worktree. Do not retry, rewrite, or dispatch a replacement while it is held."
+                "worker was stopped, run this prompt in a new chat and answer its stopped-run question; Delivery "
+                "releases the claim once no process uses the worktree. Do not retry, rewrite, or dispatch a "
+                "replacement while it is held."
             )
         if reason == "engine-action-interrupted":
             return (

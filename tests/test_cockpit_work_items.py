@@ -860,7 +860,7 @@ def test_http_builder_transition_diagnostic_is_blocked_without_active_request(tm
     assert prompt.startswith("/continue-change change-a A worker block or return reached Delivery")
     assert "In the chat that dispatched that worker" in prompt
     assert "settle_worker_invocation" in prompt
-    assert "Release stuck worker in Cockpit" in prompt
+    assert "answer its stopped-run question" in prompt
     assert "Do not retry, rewrite, or dispatch a replacement" in prompt
     for unsupported_tool in ("show_operator_context", "acquire_change_action", "transition_delivery"):
         assert unsupported_tool not in prompt
@@ -4108,7 +4108,7 @@ def test_http_retry_diagnostic_is_blocked_and_projected(tmp_path: Path) -> None:
     assert prompt.startswith("/continue-change change-a A worker retry reached Delivery")
     assert "In the chat that dispatched that worker" in prompt
     assert "settle_worker_invocation" in prompt
-    assert "Release stuck worker in Cockpit" in prompt
+    assert "answer its stopped-run question" in prompt
     assert "Do not retry, rewrite, or dispatch a replacement" in prompt
     for unsupported_tool in ("show_operator_context", "acquire_change_action", "transition_delivery"):
         assert unsupported_tool not in prompt

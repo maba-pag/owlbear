@@ -5459,7 +5459,7 @@ def _assert_contained_builder_views(
         assert readiness.action is None
         assert readiness.prompt.startswith("/continue-change change-a ")
         assert "settle_worker_invocation" in readiness.prompt
-        assert "Release stuck worker" in readiness.prompt
+        assert "answer its stopped-run question" in readiness.prompt
     for attention in (
         detail.recovery_attention,
         operator.recovery_attention,

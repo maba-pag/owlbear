@@ -369,7 +369,7 @@ async def test_builder_transition_diagnostics_survive_mcp_refusal_and_restart(tm
     assert prompt.startswith(f"/continue-change {CHANGE} ")
     assert "In the chat that dispatched that worker" in prompt
     assert "settle_worker_invocation" in prompt
-    assert "Release stuck worker" in prompt
+    assert "answer its stopped-run question" in prompt
     assert "/repair-delivery" not in prompt
     assert runtimes[CHANGE].frontier_bytes() == retained
     assert reopened_coordinator.show(CHANGE) == before_coordination
