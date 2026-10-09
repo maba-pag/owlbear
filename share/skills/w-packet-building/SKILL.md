@@ -20,11 +20,13 @@ predecessor, the next same-task Builder must triage its work before edits. Use f
 predecessor crashed or its chat was stopped without returning a transition. An unsettled dispatch or
 owned mutator that may still run remains contained and does not permit a replacement claim.
 
-Require one serialized `DeliveryLaunchPackage` whose policy and claim roles are `builder`, whose
-task IDs match, and whose writer identity matches the claim attempt, claim, owner, and process. Call
-`show_build_context` with the launch change, outcome, attempt, and claim IDs. Require the returned
-`DeliveryBuildContext.launch` to equal the supplied launch and the context task to match its task,
-outcome, and plan-scope identities.
+Require one launch reference whose `worker_role` is `builder` and whose `change_id`, `outcome_id`,
+`attempt_id`, `claim_id`, and `task_id` are present. Call `show_build_context` with exactly those
+change, outcome, attempt, and claim IDs; never search for or substitute another claim when it
+refuses. Use the returned `DeliveryBuildContext.launch` as the launch for every later step. Require
+its change, outcome, attempt, claim, role, and task identities to equal the reference, its policy and
+claim roles to be `builder`, its writer identity to match the claim attempt, claim, owner, and
+process, and the context task to match its task, outcome, and plan-scope identities.
 
 For this custody read, inspect the actual callable tool definitions before declaring a capability
 failure. Use a directly bound `show_build_context` as granted even if a separate discovery inventory
@@ -129,7 +131,9 @@ not authority.
 Do not edit Design, task definitions, Delivery runtime, package internals, coordination records, or
 unlisted surfaces. A missing task premise belongs to Planning or Design, not local implementation.
 Builder may choose internal implementation details only when their alternatives are not observable
-at the supplied task boundary.
+at the supplied task boundary. `DeliveryBuildContext.decisions` lists the decisions behind the
+task's commitments with their origin; never change one. A decision or answered request that no
+longer serves the task is a `return` to its owner, named in the locators.
 
 If context contains a request or a request may be needed, load `h-decision-requests` before consuming
 or constructing it. Choose among authority-equivalent implementation alternatives; use a request
@@ -278,8 +282,16 @@ request:
 
 Use `block` only when user-owned input is required. Never substitute `unblock_evidence` for the
 required `unblock_condition` and `expected_evidence` fields. Every Build block includes one bounded
-`request`; a missing tool, unavailable context, custody mismatch, or other pre-execution failure is
-`dispatch_failure`, not `block`.
+`request`, except a target-sync block; a missing tool, unavailable context, custody mismatch, or other
+pre-execution failure is `dispatch_failure`, not `block`.
+
+When the task needs a target-branch commit that `launch.source_head` does not contain (for example a
+constraint naming a commit that must be an ancestor), make no edits or commits and return a
+target-sync block: the same `block` fields without `request`, with exactly one locator
+`target-commit:<full 40-character commit>`. Delivery then preserves the worktree under refs, synchronizes the Change with
+its target, routes any conflict to `/resolve-target-conflict`, and starts a fresh claim for this task
+once the commit is included. That claim's `return_context` names the preserved refs; reconcile what
+still applies. Never ask the user to synchronize the target.
 
 For a normal Builder return, Orchestrator uses `settle_worker_invocation` for `retry`, `block`, or
 `return` to Planning or Design; it validates exact workspace custody and persists any bounded request

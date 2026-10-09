@@ -184,7 +184,8 @@ Raises `ValueError` on containment or symlink violations.
 | Exception | Raised when |
 | --- | --- |
 | `NotFoundError` | An entry file does not exist |
-| `ConcurrencyError` | Optimistic concurrency validation fails (caller use) |
+| `ConcurrencyError` | A stale optimistic-concurrency token does not match the freshly loaded entry |
+| `MemoryBusyError` | The writer lock cannot be acquired before its deadline; a `ConcurrencyError` subtype |
 | `ValidationError` | User input or payload validation fails (caller use) |
 | `TransitionError` | A memory state transition is not permitted (caller use) |
 | `LifecycleRollbackFailure` | Describes a failed rollback for one affected entry, including its ID, path, and exception |
@@ -204,8 +205,8 @@ inspect all diagnostic fields. Process interruption should be treated as `uncert
 ### `MemoryEngine`
 
 Orchestrates storage primitives with state-machine enforcement, optimistic concurrency
-control (OCC), and mtime-based caching. This is the primary entry point for consumers
-that need to read or mutate memory entries.
+control (OCC), and per-file stat-signature freshness checks. This is the primary entry point
+for consumers that need to read or mutate memory entries.
 
 ```python
 engine = MemoryEngine(memory_dir)  # memory_dir created if absent
@@ -246,7 +247,7 @@ string. The universal `*` member is allowed; an empty list is allowed for pendin
 
 | Method | Signature | Notes |
 | --- | --- | --- |
-| `get_entries()` | `() → list[MemoryEntry]` | Reparsed only when directory mtime changes |
+| `get_entries()` | `() → list[MemoryEntry]` | Reparsed when an entry file's name, inode, size, or `mtime_ns` changes |
 | `get_entry(id)` | `(str) → MemoryEntry` | Raises `NotFoundError` |
 | `save(...)` | `(title, content, categories, confidence, source_agent, scope_agents) → MemoryEntry` | Creates pending entry; initializes `score = confidence`, all counters to `0`; no OCC |
 | `approve(id, expected_updated_at=None, *, expected_revision=None)` | `(str, str \| None) → MemoryEntry` | curated → approved; exactly one OCC token; raises `TransitionError` / `ConcurrencyError` |
@@ -255,7 +256,7 @@ string. The universal `*` member is allowed; an empty list is allowed for pendin
 | `record_assessment(entry_id, bucket, *, task_id, expected_revision)` | `(str, str, *, task_id: str, expected_revision: str) → AssessmentResult` | Increments the selected counter, recomputes `score`, and may transition the entry to `stale`. A repeated task, entry, and revision returns the first recorded bucket without applying again; raises `TransitionError`, `ConcurrencyError`, or `ValidationError`. |
 | `edit(id, fields, expected_updated_at=None, *, expected_revision=None)` | `(str, EditPayload, str \| None) → MemoryEntry` | State-machine rules apply; exactly one OCC token; contested/disputed/stale preserve their state while fields are updated; deleted entries are blocked; raises `TransitionError` / `ConcurrencyError` |
 | `delete(id, expected_updated_at=None, *, expected_revision=None)` | `(str, str \| None) → MemoryEntry` | Hard-delete for pending, soft-delete for curated/approved/contested/disputed/stale; exactly one OCC token; raises `TransitionError` / `ConcurrencyError` |
-| `try_stale_transition(entry)` | `(MemoryEntry) → MemoryEntry` | Calls `check_slot_efficiency`; when True and state in {approved, curated, contested}, writes state=stale with refreshed updated_at. Returns unchanged entry (no error) when predicate is False or state is ineligible. No OCC. Logs INFO on transition. |
+| `try_stale_transition(entry)` | `(MemoryEntry) → MemoryEntry` | Reloads under the writer lock and checks the passed entry's `updated_at`; raises `ConcurrencyError` if stale, even when no transition would occur. Returns unchanged entry when the predicate is False or state is ineligible; otherwise eligible entries become stale. |
 | `load()` | `() → list[MemoryEntry]` | Force full reparse; skips malformed files (lenient) |
 
 #### State Machine
@@ -284,8 +285,8 @@ string. The universal `*` member is allowed; an empty list is allowed for pendin
 | `stale` | `delete` | `deleted` | Soft-delete |
 | `contested`/`disputed`/`stale` | `edit` | (unchanged) | Field update only; preserves the exceptional state |
 | any | `approve`/`edit`/`delete` when `deleted` | — | Raises `TransitionError` |
-| `approved`/`curated`/`contested` | `try_stale_transition` (auto) | `stale` | Fires when `check_slot_efficiency` returns True; no OCC |
-| `stale`/`disputed`/`deleted`/`pending` | `try_stale_transition` | (unchanged) | Predicate False or ineligible state — no-op, no error |
+| `approved`/`curated`/`contested` | `try_stale_transition` (auto) | `stale` | After the OCC check, fires when `check_slot_efficiency` returns True |
+| any | `try_stale_transition` | (unchanged) | After the OCC check, no-op when the predicate is False or the state is ineligible |
 
 #### OCC
 
@@ -300,22 +301,70 @@ also accepts `expected_revision`; each call must supply exactly one token. Cockp
 `expected_updated_at`, while the MCP adapter uses `revision` as `expected_revision`. Both token
 forms are validated by the same `MemoryEngine` against the current entry before mutation.
 
+Before a mutation, the engine reloads under the writer lock and checks the token against the
+freshly loaded entry, so a stale token raises `ConcurrencyError` instead of overwriting a newer
+entry. `try_stale_transition(entry)` uses the passed entry's `updated_at` as its token.
+
+#### Writer model
+
+Use `MemoryEngine` for coordinated entry writes; the Memory MCP batch commit uses the same lock.
+It is an exclusive advisory `flock` on the resolved memory directory, serializes same-process
+engines and other processes, and is re-entrant on the owning thread. One bounded deadline covers
+in-process and cross-process contention (30 seconds by default). A timeout raises
+`MemoryBusyError`, a `ConcurrencyError` subtype. Reads stay lock-free; low-level `storage` writes
+do not acquire this lock. No lock file or second locking protocol is used.
+
 #### Lenient Read
 
 `get_entries()` and `load()` skip unparseable files and track the count of skipped
 files in `engine.parse_errors`. When duplicate UUIDs are found across files, the entry
-with the later `updated_at` (parsed chronologically) is kept and a warning is logged.
+with the latest `updated_at` is canonical. Ties prefer `<id>.md`, then the lexicographically
+first relative path. Reads and `health()` report or select duplicates without writing.
 
-### `MtimeScanCache`
+Before every mutation, the engine reloads under the writer lock and repairs duplicate IDs.
+Identical copies are removed. Each differing copy is preserved as a new pending entry with a
+`[Recovered duplicate ID <id>]` title prefix, reset assessment counters, and its original
+content, provenance, and scope. The canonical file keeps the original ID. If repair cannot
+complete, `DuplicateEntryError` names the ID and relative paths and the triggering mutation
+does not run. A partial repair keeps any new entries already written and leaves remaining
+duplicate source files for a later retry. `repair_duplicate_ids(memory_dir)` is exported for
+batch operations; callers must hold `writer_lock` for that directory.
 
-Lightweight directory-mtime tracker. `has_changed()` returns `True` on first call and
-whenever the directory `mtime_ns` differs from the last recorded value.
+### Read freshness
 
-```python
-cache = MtimeScanCache(memory_dir)
-cache.has_changed()  # True (first call)
-cache.has_changed()  # False (mtime unchanged)
-```
+Before each `get_entries()` call, the engine scans the memory directory once and records
+the name, inode, size, and `mtime_ns` of each `.md` entry. A changed signature triggers the
+existing full parse; an unchanged signature returns cached entries without opening or
+parsing entry files. This detects in-place rewrites that preserve the inode and directory
+mtime but change file size or `mtime_ns`. `load()` remains the explicit force refresh.
+Reads do not acquire the writer lock or write to the memory directory.
+
+The per-call cost was measured on a temporary filesystem store containing 100 synthetic
+entries. After warming the engine with one `get_entries()` call, 1,000 repeated calls were
+timed with `time.perf_counter_ns()`: median 0.195 ms, p95 0.230 ms, and maximum 0.489 ms.
+An unchanged call is bounded to one directory scan and one metadata stat per `.md` entry
+(100 stats for this store), or O(n) metadata operations; entry contents are not read. The
+timing includes the returned-list copy and is an observation from this machine, not a
+portable latency guarantee.
+
+### Batch commit integration
+
+The Memory MCP batch operation holds the same writer lock from its fresh snapshot and validation
+through `git commit`. It stages only validated non-pending memory entries and permitted tracked
+deletions; unrelated staged paths remain staged and are not committed. Before committing, it
+rechecks working-tree bytes and staged blobs against the snapshot. Afterwards it verifies both the
+complete committed path set and each committed blob.
+
+A tracked duplicate-copy deletion is allowed when another file still carries the ID. If that
+survivor is pending, the deletion remains unstaged and is reported in `deferred_deletions`; the MCP
+result includes that field and the CLI prints a `note: deferred duplicate deletions: ...` line.
+Curate the survivor, then run the batch again to commit the deferred removal. Other reviewed entries
+must be soft-deleted and committed as tombstones before their files are purged.
+
+Pre-commit recheck failures, later validation failures, and Git or hook failures can leave memory
+paths staged; the operation does not restore the index. A post-commit verification failure is
+reported after `HEAD` may have moved and does not reset Git state. Inspect `git status`, the staged
+diff, and `git show --stat HEAD` before retrying. See the [Memory MCP batch-commit contract](../memory-mcp/README.md#batch-commits).
 
 ---
 

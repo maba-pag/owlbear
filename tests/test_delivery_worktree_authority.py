@@ -2002,6 +2002,7 @@ _COORDINATOR_PAUSE_CLASSES: dict[str, frozenset[str]] = {
             "finish_direct_operation",
             "release",
             "release_publication",
+            "release_target_sync_conflict_action",
             "prepare_finalization_attention",
             "prepare_finalization_completion",
             "prepare_finalization_repair_release",
@@ -2091,6 +2092,8 @@ _MANAGER_PAUSE_CLASSES: dict[str, frozenset[str]] = {
     "read": frozenset(
         {
             "baseline_scope_kinds",
+            "has_commit",
+            "includes_commit",
             "inspect_retained",
             "integration_context",
             "is_design_package_snapshot_child",

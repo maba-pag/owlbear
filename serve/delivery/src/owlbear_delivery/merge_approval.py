@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import TYPE_CHECKING, Literal
 
@@ -41,6 +42,8 @@ class MergeAttemptState(StrEnum):
 
 
 NONTERMINAL_MERGE_STATES = frozenset({MergeAttemptState.INTENT, MergeAttemptState.RELEASED, MergeAttemptState.PENDING})
+MERGE_RESPONSE_DEADLINE = timedelta(minutes=10)
+MERGE_OBSERVATION_WINDOW = timedelta(hours=24)
 
 
 class MergeRace(StrEnum):
@@ -187,6 +190,17 @@ class MergeAttemptStore:
         """Return the one attempt readback may still settle, if any (D4)."""
         return next((record for record in self.attempts() if record.nonterminal), None)
 
+    def observed(self) -> MergeAttemptRecord | None:
+        """Return the approval acceptance still observes: open, or merged on the approved target."""
+        return self.nonterminal() or next(
+            (
+                record
+                for record in self.attempts()
+                if record.state is MergeAttemptState.MERGED and record.race is MergeRace.NONE
+            ),
+            None,
+        )
+
     def raced(self) -> MergeAttemptRecord | None:
         """Return a merged attempt whose merge differs from the approved target or scope (I4, Q4)."""
         return next(
@@ -215,6 +229,21 @@ def _race(attempt: MergeAttemptRecord, evidence: PublicationMergeEvidence) -> Me
     if evidence.merge_commit_parents[0] != attempt.target_head:
         return MergeRace.TARGET_ADVANCED
     return MergeRace.NONE
+
+
+def _merge_age(attempt: MergeAttemptRecord, now: str) -> timedelta:
+    started = attempt.released_at or attempt.approved_at
+    return datetime.fromisoformat(now) - datetime.fromisoformat(started)
+
+
+def merge_response_overdue(attempt: MergeAttemptRecord, now: str) -> bool:
+    """Return whether the provider has left this approval unsettled past its deadline; never refuses or resends."""
+    return _merge_age(attempt, now) > MERGE_RESPONSE_DEADLINE
+
+
+def merge_observation_expired(attempt: MergeAttemptRecord, now: str) -> bool:
+    """Return whether automatic acceptance reads for this approval have ended; Check again still reads."""
+    return _merge_age(attempt, now) > MERGE_OBSERVATION_WINDOW
 
 
 def settle_merge_attempt(  # noqa: PLR0911 - one return per settlement row, in match order.
@@ -256,6 +285,8 @@ def settle_merge_attempt(  # noqa: PLR0911 - one return per settlement row, in m
 
 
 __all__ = [
+    "MERGE_OBSERVATION_WINDOW",
+    "MERGE_RESPONSE_DEADLINE",
     "NONTERMINAL_MERGE_STATES",
     "ApproveChangeMerge",
     "MergeApprovalResult",
@@ -265,6 +296,8 @@ __all__ = [
     "MergeAttemptStore",
     "MergeRace",
     "approval_id",
+    "merge_observation_expired",
+    "merge_response_overdue",
     "new_merge_attempt",
     "settle_merge_attempt",
 ]

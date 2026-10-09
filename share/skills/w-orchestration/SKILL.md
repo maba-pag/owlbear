@@ -47,7 +47,8 @@ worktree or Git admin directory. An MCP-server restart while the issuing window 
 not trigger host loss. The process guard ignores a terminal-attached idle shell whose only link is its
 worktree cwd and which has no live children; open files still block. While the guard is unmet, `worker-stall-wait`
 with `next_eligible_at` indicates the write guard; without a time, report the process names in the
-prompt (or its bounded scan detail) and yield.
+prompt (or its bounded scan detail) and yield. Do not inspect the managed worktree meanwhile: Git
+commands such as `git status` and `git diff` can update Git metadata and restart the quiet period.
 
 ## Change Continuation Entry
 
@@ -75,6 +76,12 @@ Call `get_change(change_id)` once per continuation cycle. Pass its returned `rea
 unchanged as `expected_basis`. Do not edit, complete, reorder, recompute, or infer basis fields; the
 engine compares the observed basis exactly and answers `stale` when it no longer matches.
 
+When the host writes any tool or worker response to a file and returns only its path, copy that
+path verbatim into the read; never retype it. If the read reports that the file does not exist,
+compare the attempted path with the returned path character by character and retry once with the
+exact returned path. If that read also fails, report the exact path and error and yield without
+acquiring or settling. Never substitute an earlier, inferred, or reconstructed response.
+
 Declare `capabilities` truthfully for this session only:
 
 - `planner` and `builder` only while their dispatch bindings are callable here;
@@ -98,7 +105,7 @@ strictly what it carries and nothing else:
 
 | Acquired field | The only permitted action |
 | --- | --- |
-| `launch` | Dispatch `launch.policy.worker_agent` with only the serialized `DeliveryLaunchPackage`, then apply Steps 2 and 3 unchanged |
+| `launch` | Dispatch `launch.policy.worker_agent` with only the launch reference defined in Step 2, then apply Steps 2 and 3 unchanged |
 | `finalization` | Dispatch `finalizer` with only the serialized `DeliveryFinalizationLaunch`; its `attempt` is the issued finalization identity and its `context` is the retained pre-acquisition context |
 | `engine_action` | Call `execute_change_action` once with exactly `change_id` and `engine_action.operation_id` |
 
@@ -128,8 +135,12 @@ proof or as evidence that the Finalizer process is closed.
 
 A missing or malformed report identity, missing or mismatched operation identity, malformed result,
 `dispatch_failure`, or a dispatch/transport that may still be running is unknown execution: do not call
-`settle_worker_invocation`, `recover_claim`, reacquire, or redispatch. If the user explicitly states that
-this exact Finalizer chat was stopped, use the separate `release_stuck_worker` route in Step 2 once;
+`settle_worker_invocation`, `recover_claim`, reacquire, or redispatch. Such a Finalizer is known ended
+only after this session's dispatch call has returned and its owned mutating terminals and asynchronous
+jobs are settled; then call `release_stuck_worker` once with the issued launch identity and
+`outcome_id: null` (Step 2), even without a user statement. Delivery records a counted
+`finalizer-ended-without-report` and refuses with `ERR_DELIVERY_WORKER_ACTIVE` while the worktree is in
+use. If the user explicitly states that this exact Finalizer chat was stopped, use the same route once;
 otherwise report the issued attempt and retain custody. A Delivery-authored
 `finalizer-ended-without-report` has `checks_state: unknown` and is not proof. If the settlement call
 errors or returns a malformed result, re-read `get_change` before retrying the identical settlement;
@@ -192,8 +203,9 @@ No agent tool approves a merge; only the user approves, in Cockpit.
 ### Continuation Refresh And Output
 
 After a `release_stuck_worker` result, report it and stop the current cycle; do not reacquire or
-dispatch a replacement in that cycle. After a released engine action, ordinary worker settlement, or
-worker transition, re-observe with `get_change` and acquire again for the same Change. Stop on the
+dispatch a replacement in that cycle. After a host-tool `dispatch_failure` (Step 2), report it and end
+the session without reacquiring or dispatching. After a released engine action, ordinary worker
+settlement, or worker transition, re-observe with `get_change` and acquire again for the same Change. Stop on the
 first yielding, unsupported, unavailable, or terminal disposition, or when readiness offers no
 further action. Report the Change identity, each acquired action and its exact disposition, forwarded
 transitions and worker settlement results, preserved engine results and failure envelopes, the
@@ -203,15 +215,32 @@ one.
 ## Step 2 - Dispatch Or Recover Each Launch
 
 For an acquired launch with worker role `planner` or `builder`, dispatch exactly
-`launch.policy.worker_agent` and pass only the serialized `DeliveryLaunchPackage`. The selected
-agent's frontmatter owns its model. Do not substitute a role, agent, reviewer, worktree, branch, or
-source head.
+`launch.policy.worker_agent` and pass only this launch reference, copied verbatim from the acquired
+launch:
+
+```yaml
+change_id: <launch.change_id>
+outcome_id: <launch.outcome_id>
+attempt_id: <launch.claim.attempt_id>
+claim_id: <launch.claim.claim_id>
+worker_role: <launch.claim.worker_role>
+task_id: <launch.task_id or null>
+```
+
+Never retype or serialize the full `DeliveryLaunchPackage`; the worker loads the authoritative launch
+from its Delivery context operation, which refuses a reference that does not name the active claim.
+The selected agent's frontmatter owns its model. Do not substitute a role, agent, reviewer, worktree,
+branch, or source head. Settlement still uses the acquired launch held by Orchestrator.
 
 Treat `dispatch_failure` as a no-result outcome; settle it with `settle_worker_invocation` and
 `disposition: ended-without-result`, using only the acquired launch identities. Never forward it to
 `transition_delivery` or use returned identity values. Apply the same no-result route to a returned
 Planner/Builder dispatch error, empty or `no response` result, malformed or schema-invalid output,
 or identity-mismatched result. Preserve any available failure diagnostics for the report.
+
+When a returned `dispatch_failure` reports that the worker's terminal or other host tools returned no
+output or were unavailable, this chat's host is suspect: settle it as above, then end the session
+without reacquiring or dispatching, and tell the user to continue the Change from a new chat.
 
 Only settle after Orchestrator observes that the dispatch call returned and all owned mutating
 terminals and asynchronous jobs are settled. A dispatch call that has not returned, or any owned
@@ -223,7 +252,8 @@ and yield when the guard is not yet eligible.
 ### Release A User-Stopped Worker
 
 Use `release_stuck_worker` only when the user explicitly states that the specific worker chat/window
-was stopped. If that statement is ambiguous, ask which exact worker was stopped before mutating. Take
+was stopped, or for a known-ended Finalizer whose dispatch returned in this session without a valid
+report (Step 2). If a user statement is ambiguous, ask which exact worker was stopped before mutating. Take
 `change_id`, `outcome_id`, `attempt_id`, and `claim_id` unchanged from the acquisition result or one
 fresh `get_change` view; for a Finalizer attempt, pass `outcome_id: null`. Never infer identity from
 conversation, elapsed time, or a worker's missing response. Require a callable `release_stuck_worker`
@@ -328,8 +358,8 @@ settled by Orchestrator. The separate user-stopped route above may call `release
 previous-session loss is handled by Delivery at acquisition. Elapsed time and `confirmed_lost` are not
 evidence for normal settlement or `recover_claim`. Malformed Planner/Builder output is not a timeout;
 use `ended-without-result` only when its observation precondition is met. Finalizer without a valid
-report remains unknown unless Delivery settles a lost or explicitly released attempt, in which case
-its engine-authored `finalizer-ended-without-report` remains non-proof.
+report remains unknown unless Delivery settles a lost, known-ended (Step 2), or explicitly released
+attempt, in which case its engine-authored `finalizer-ended-without-report` remains non-proof.
 
 A normal Builder `return` to `design` is settled through the same typed envelope. Settlement clears
 the exact active claim, records its failed attempt, and retains the task/results lineage and managed

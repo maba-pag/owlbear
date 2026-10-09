@@ -37,6 +37,7 @@ from owlbear_delivery.runtime_models import (
     _receipt_digest,
     binding_has_n03_content,
     derive_change_stage,
+    required_target_commit,
     retained_requests,
 )
 
@@ -121,14 +122,22 @@ class DeliveryBuilderInvocationSettlement(_DeliveryModel):
                 message = "Builder retry request does not match its attempt"
                 raise ValueError(message)
         elif isinstance(request, BlockDelivery):
-            if request.request is None or request.request.resolution is not None:
-                message = "Builder block settlement requires an unanswered bounded user request"
-                raise ValueError(message)
-            if request.request.outcome_id != self.outcome_id:
-                message = "Builder block request does not match its outcome"
-                raise ValueError(message)
+            self._validate_block_request(request)
         elif request.attempt_id != self.attempt_id:
             message = "Builder return request does not match its attempt"
+            raise ValueError(message)
+
+    def _validate_block_request(self, request: BlockDelivery) -> None:
+        if request.request is None:
+            if required_target_commit(request.locators) is None:
+                message = "Builder block settlement requires an unanswered request or one target-commit locator"
+                raise ValueError(message)
+            return
+        if request.request.resolution is not None:
+            message = "Builder block settlement requires an unanswered bounded user request"
+            raise ValueError(message)
+        if request.request.outcome_id != self.outcome_id:
+            message = "Builder block request does not match its outcome"
             raise ValueError(message)
 
 
@@ -375,6 +384,125 @@ class _DeliveryBuilderRequestResolutionReceipt(_DeliveryModel):
             message = "Builder request resolution receipt does not match its exact handoff"
             raise ValueError(message)
         return self
+
+
+BUILDER_ATTEMPT_GRANT_NOTE = "The user granted one more Builder attempt."
+
+
+def builder_attempt_limit_block_id(context: DeliveryBuilderHandoffContext) -> str:
+    """Return the requestless block identity that marks one exhausted same-task Builder episode."""
+    return f"builder-attempt-limit-{context.settlement_id}"
+
+
+def builder_planning_route_block_id(context: DeliveryBuilderHandoffContext) -> str:
+    """Return the pre-N12 block identity of a Builder return to Planning that exhausted its episode."""
+    return f"builder-planning-route-{context.settlement_id}"
+
+
+def builder_return_limit_block_id(context: DeliveryBuilderHandoffContext) -> str:
+    """Return the block identity of a Builder return to Planning that reached the return limit."""
+    return f"builder-return-limit-{context.settlement_id}"
+
+
+def builder_attempt_grant_block_id(context: DeliveryBuilderHandoffContext) -> str | None:
+    """Return the exhausted block identity a user attempt grant may lift for this handoff route (N11, N12 I6)."""
+    if context.route == "same-task":
+        return builder_attempt_limit_block_id(context)
+    if context.route == "same-outcome-planner":
+        return builder_planning_route_block_id(context)
+    return None
+
+
+def is_builder_attempt_grant_block(binding: OutcomeAuthorityBinding) -> bool:
+    """Return whether the binding retains an unresolved exhausted Builder block that only a user grant lifts."""
+    context = binding.builder_handoff_context
+    block = binding.block
+    if context is None or block is None or block.request_id is not None or block.resolved:
+        return False
+    stage = DeliveryStage.IMPLEMENTATION if context.route == "same-task" else DeliveryStage.PLANNING
+    return binding.stage == stage and block.block_id == builder_attempt_grant_block_id(context)
+
+
+def target_sync_commit(binding: OutcomeAuthorityBinding) -> str | None:
+    """Return the commit an unresolved Builder target-sync block still requires, if any (N13)."""
+    block = binding.block
+    if binding.stage != DeliveryStage.IMPLEMENTATION or block is None or block.resolved or block.request_id:
+        return None
+    return required_target_commit(block.locators)
+
+
+def is_builder_target_sync_handoff(binding: OutcomeAuthorityBinding) -> bool:
+    """Return whether a same-task Builder handoff is held only for an engine target sync (N13)."""
+    context = binding.builder_handoff_context
+    return context is not None and context.route == "same-task" and target_sync_commit(binding) is not None
+
+
+def is_builder_return_limit(binding: OutcomeAuthorityBinding) -> bool:
+    """Return whether the binding retains a Planning-route handoff stopped at its unresolved return limit."""
+    context = binding.builder_handoff_context
+    block = binding.block
+    return (
+        context is not None
+        and context.route == "same-outcome-planner"
+        and block is not None
+        and block.request_id is None
+        and not block.resolved
+        and block.block_id == builder_return_limit_block_id(context)
+    )
+
+
+class _DeliveryBuilderAttemptGrantReceipt(_DeliveryModel):
+    """Immutable user grant of one more Builder attempt for one exact exhausted handoff."""
+
+    schema_version: Literal[1] = 1
+    change_id: str = Field(min_length=1, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    settlement_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    attempt_id: str = Field(min_length=1, max_length=128)
+    episode_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    granted_attempts: int = Field(ge=1)
+    builder_handoff_context: DeliveryBuilderHandoffContext
+    granted_block: DeliveryBlock
+    updated_block: DeliveryBlock
+
+    @model_validator(mode="after")
+    def _validate_receipt(self) -> _DeliveryBuilderAttemptGrantReceipt:
+        context = self.builder_handoff_context
+        block_id = builder_attempt_grant_block_id(context)
+        if (
+            block_id is None
+            or context.outcome_id != self.outcome_id
+            or context.settlement_id != self.settlement_id
+            or context.attempt_id != self.attempt_id
+            or self.granted_block.block_id != block_id
+            or self.granted_block.request_id is not None
+            or self.granted_block.resolved
+            or self.updated_block
+            != self.granted_block.model_copy(
+                update={
+                    "resolution_note": BUILDER_ATTEMPT_GRANT_NOTE,
+                    "resolution_locators": (self.settlement_id,),
+                }
+            )
+        ):
+            message = "Builder attempt grant receipt does not match its exact exhausted handoff"
+            raise ValueError(message)
+        return self
+
+
+# Planner and Finalizer retry episodes stop without an Outcome block; their user grant is episode-scoped.
+GRANTABLE_RETRY_ACTION_KINDS: frozenset[str] = frozenset({"finalize", "planner-claim"})
+
+
+class _DeliveryAttemptGrantReceipt(_DeliveryModel):
+    """Immutable user grant of one more Planner or Finalizer attempt after its exact exhausted attempt."""
+
+    schema_version: Literal[1] = 1
+    change_id: str = Field(min_length=1, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    attempt_id: str = Field(min_length=1, max_length=256)
+    episode_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    action_kind: Literal["finalize", "planner-claim"]
+    granted_attempts: int = Field(ge=1)
 
 
 class _DeliveryBuilderHandoffChangeIntentReceipt(_DeliveryModel):

@@ -59,14 +59,16 @@ _LAUNCHER_HINT: Final = (
     "start Delivery through .owlbear/controller/bin/delivery-mcp or .owlbear/controller/bin/cockpit, "
     "or change the pin with delivery-controller switch"
 )
-SUPPORTED_FORMAT: Final = 3
+SUPPORTED_FORMAT: Final = 4
 # Registered format migrations in order (name, source, target); a copy runs every step from its observed
 # format. format-0-to-1 (N02-B): registered record rewrites and marker 1; format-1-to-2 (N03-A) and
-# format-2-to-3 (N05-B2, merge attempts an older controller must not act on): marker only.
+# format-2-to-3 (N05-B2, merge attempts an older controller must not act on) and format-3-to-4 (schema-3
+# contracts in schema-4 snapshots, which an older controller cannot read): marker only.
 FORMAT_MIGRATIONS: Final[tuple[tuple[str, int, int], ...]] = (
     ("format-0-to-1", 0, 1),
     ("format-1-to-2", 1, 2),
     ("format-2-to-3", 2, 3),
+    ("format-3-to-4", 3, 4),
 )
 # Version 2 journals carry an explicit operation ``kind`` (``repair``); migration journals keep
 # version 1 bytes so every N02 release still reads retained migration history (N08 I3, D3).
@@ -187,7 +189,13 @@ RECORD_KINDS: Final[tuple[RecordKind, ...]] = (
         rewrites=((17, "owlbear_delivery.state_migration:frontier_17_to_18"),),
     ),
     _kind(
-        "contract", "contract", rf"{_CH}/contract\.json", ("owlbear_delivery.target_contract:DeliveryContract",), "R", 2
+        "contract",
+        "contract",
+        rf"{_CH}/contract\.json",
+        ("owlbear_delivery.target_contract:DeliveryContract",),
+        "R",
+        3,
+        read_upcasts=((2, "owlbear_delivery.target_contract:parse_delivery_contract"),),
     ),
     _kind(
         "admission",
@@ -290,7 +298,15 @@ RECORD_KINDS: Final[tuple[RecordKind, ...]] = (
         None,
         read=False,
     ),
-    _kind("retry_ledger", "retry", rf"{_CH}/retry-ledger/current\.json", (f"{_RECOVERY}:RetryLedgerSummary",), "M", 1),
+    _kind(
+        "retry_ledger",
+        "retry",
+        rf"{_CH}/retry-ledger/current\.json",
+        (f"{_RECOVERY}:RetryLedgerSummary",),
+        "M",
+        2,
+        read_upcasts=((1, f"{_RECOVERY}:parse_retry_ledger_summary"),),
+    ),
     _kind("retry_attempt", "retry", rf"{_CH}/retry-ledger/attempts/{_N}\.json", (f"{_RECOVERY}:RetryAttempt",), "R", 1),
     _kind(
         "retry_outcome",
@@ -351,6 +367,22 @@ RECORD_KINDS: Final[tuple[RecordKind, ...]] = (
         "R",
         2,
         read_upcasts=((1, f"{_RUNTIME_RECEIPTS}:parse_builder_plan_promotion_receipt"),),
+    ),
+    _kind(
+        "builder_attempt_grant_receipt",
+        "builder",
+        rf"{_CH}/builder-attempt-grant-receipts/{_D}\.json",
+        (f"{_RUNTIME_RECEIPTS}:_DeliveryBuilderAttemptGrantReceipt",),
+        "R",
+        1,
+    ),
+    _kind(
+        "attempt_grant_receipt",
+        "retry",
+        rf"{_CH}/attempt-grant-receipts/{_D}\.json",
+        (f"{_RUNTIME_RECEIPTS}:_DeliveryAttemptGrantReceipt",),
+        "R",
+        1,
     ),
     _kind(
         "builder_request_resolution_receipt",
@@ -567,7 +599,8 @@ RECORD_KINDS: Final[tuple[RecordKind, ...]] = (
         rf"packages/{_C}/authority\.json",
         ("owlbear_delivery.target_contract:DeliveryContract",),
         "R",
-        2,
+        3,
+        read_upcasts=((2, "owlbear_delivery.target_contract:parse_delivery_contract"),),
         allow_empty=True,
     ),
     _kind("package_document", "package", rf"packages/{_C}/(?:intent|design)\.md", (), "T", None, read=False),
@@ -577,10 +610,11 @@ RECORD_KINDS: Final[tuple[RecordKind, ...]] = (
         rf"state/{_C}/snapshot\.json",
         ("owlbear_delivery.delivery_state:DeliveryStateSnapshot",),
         "R",
-        3,
+        4,
         read_upcasts=(
             (1, "owlbear_delivery.delivery_state:parse_delivery_state_snapshot"),
             (2, "owlbear_delivery.delivery_state:parse_delivery_state_snapshot"),
+            (3, "owlbear_delivery.delivery_state:parse_delivery_state_snapshot"),
         ),
     ),
     _kind("format_marker", "format_marker", r"runtime/format\.json", (), "M", None, read=False),

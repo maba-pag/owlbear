@@ -891,7 +891,9 @@ Show a friendly Change title rather than making shorthand such as B1 the primary
 
 Use distinct progress descriptions: **Preparing**, **Working**, **Checking**, **Repairing**, **Needs your decision**, **Needs your sign-in**, **Waiting for service**, **Waiting for another Change**, **Ready to merge**, **Completed**, and **Paused**. These are projections, not a second editable lifecycle stored in Cockpit.
 
-Do not say **Working** without evidence of a current dispatch. When no host is running, say **Waiting for chat to resume**. A future retry time does not imply that a Copilot agent can be started by the Python checkpoint supervisor.
+Do not say **Working** without evidence of a current dispatch. When no host is running, say **Run prompt in Copilot Chat**; when a retry or worker-cleanup time applies, say **Wait until** that time **, then run prompt**. A future retry time does not imply that a Copilot agent can be started by the Python checkpoint supervisor.
+
+*Requirement revision, 2026-10-07 (approved by the user in chat):* the old text said **Waiting for chat to resume**. That wording fit automatic dispatch; without it nothing resumes until the user runs the prompt, so the description now names the user's action. Cockpit counts such Changes as a separate **Run prompt** item, distinct from **Needs your decision**.
 
 ## 5. Target Architecture and Ownership
 
@@ -1237,6 +1239,16 @@ options and pro/con briefing; [N05 plan](delivery-n05-plan.md#19-user-decisions)
   periods (N05 plan §1.11 rows M6–M9). Unintended merges can occur in that interval; detection
   reports them afterwards but cannot undo them.
 
+**Requirement revision, 2026-10-07 (approved by the user in chat; [N05 plan](delivery-n05-plan.md#19-user-decisions) U3 amendment).**
+
+- *Old text:* "A changed target requires synchronization/revalidation if the proof contract depended on it."
+- *Revision:* a changed target alone does not withdraw the merge offer. The offer binds the current
+  target and shows the finalized proof target beside it; the user approves knowing the proof does
+  not cover the newer target commits. Conflicts and an up-to-date requirement still route to
+  synchronization.
+- *Reason:* every re-proof needs a user-started chat, and the target moved faster than that cycle
+  completed, so the strict rule never converged and pushed merges to GitHub without any offer.
+
 Read back unknown merge responses before another mutation. A successful provider call is not a completion receipt; the existing acceptance observer verifies the actual merged evidence, then records completion exactly once. A merge performed manually in GitHub must be recognized too, although the preferred journey does not require leaving Cockpit/chat.
 
 There is a current instruction conflict to resolve deliberately: governance says the user pushes manually while Delivery already owns publication. The cutover must specify that authorized engine/provider publication is system work and agents do not run arbitrary pushes. Do not leave contradictory instructions for the implementing model.
@@ -1245,7 +1257,7 @@ There is a current instruction conflict to resolve deliberately: governance says
 
 Completion means accepted merge, not deployment, successful cleanup, or universal production behavior. Keep branch/receipt history. Cleanup of an eligible owned worktree is automatic after completion; unexpected files remain preserved and become a separate maintenance action without reversing completion.
 
-Required CI running, a provider outage, or pending user merge are distinct waits. Background Python supervision may observe/retry deterministic operations with durable budgets and fair scheduling. If no host is running, show the last observation time and **Waiting for chat to resume** rather than promising polling continues indefinitely.
+Required CI running, a provider outage, or pending user merge are distinct waits. Background Python supervision may observe/retry deterministic operations with durable budgets and fair scheduling. If no host is running, show the last observation time and **Run prompt in Copilot Chat** (§4.3, revised 2026-10-07) rather than promising polling continues indefinitely.
 
 ## 11. Controller Repair and Upgrade Without a Circular Dependency
 

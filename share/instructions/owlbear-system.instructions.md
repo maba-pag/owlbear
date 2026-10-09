@@ -14,6 +14,19 @@ applyTo: "**"
   or safety.
 - **No legacy, no backwards compatibility.** Break things to improve them.
 - **Think before acting.** Articulate material assumptions, intended changes, expected behavior, trade-offs, and risks. Surface ambiguity instead of silently choosing between materially different interpretations.
+- **Prior decisions by origin.** A recorded decision is `decided` (the user chose it directly: an
+  `askQuestions` answer, a Cockpit request answer, or the user's own words in a prompt or chat),
+  `approved` (part of a plan, package, or amendment the user approved without being asked about it
+  individually), or `autonomous` (made by an agent or the lead, including anything under "decide
+  yourself"). Ask the user directly about any decision you consider important instead of leaving it
+  inside a plan or package. Only the owner of the artifact that records a decision changes it; other
+  roles route the change to that owner. A `decided` decision changes only after the user re-decides
+  it, shown its record, what changed, and the options. An `approved` or `autonomous` decision may be
+  superseded with the reason recorded and at least one report line; a second reversal of the same
+  decision goes to the user. Classify unlabelled records best-effort: a user-decision label, an
+  answered question or request, or the user's own wording means `decided`; content of an approved
+  collection means `approved`; anything else is `autonomous`. Choices inside one task chain or
+  implementation are not recorded decisions.
 - **Minimum necessary change.** Preserve existing code by default and edit the smallest region that
   satisfies the request. Do not rewrite whole files, generalize behavior, add compatibility paths,
   or perform adjacent cleanup unless the requested outcome requires it. Stop when the requested

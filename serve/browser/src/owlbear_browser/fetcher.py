@@ -59,8 +59,10 @@ class BrowserContentFetcher:
                 AcquisitionStatus.UNSUPPORTED_TARGET,
                 Diagnostics("validation", {"reason": "unsupported_url"}),
             )
-        page = self._pending_page or await self._context.new_page()
+        page = self._pending_page
         self._pending_page = None
+        if page is None or page.is_closed():
+            page = await self._context.new_page()
         keep_page_open = False
         download_detected = False
 

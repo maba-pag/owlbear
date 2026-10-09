@@ -685,6 +685,12 @@ every new item exactly one lane.
 | N10-H | merged | fixes #383 (H1, non-ASCII contract digest), #384 (H7, actionable `custody-retained` refusal), #385 (H12, finalization preflight build order; F1 `/upgrade-delivery` fetches first), #386 (H2, H10, H11 agent findings), #387 (H4, H6, H8, H13 Cockpit findings), #388 (H15, one-line startup refusal); no format change; journey steps 1–8 complete ([N10 plan](delivery-n10-plan.md) §3.2.1); D7 gate passed on `b4514b34b` (pytest 4740 passed, 1 skipped; vitest 379 passed; build ok; `test:e2e:work` 31 passed; LC passed with the N10-A proposal); H9 and H14 to N10-N; evidence docs PR |
 | N10-M | done 2026-10-06 | record PR ([N10 plan](delivery-n10-plan.md) §3.3.1): live upgraded with the rehearsed proposal (format 2 → 3, marker only), pinned to `d25349567`, `previous` `841b1cffb`, health healthy and the three Changes unchanged across the upgrade; main checkout fast-forwarded to `d25349567`; `frontier-serialization-contract` and `delivery-action-readiness` abandoned with cleaned worktrees, PR #314 closed; B1 waits on its pilot request; #213, #215, #216, #219–#222 closed with evidence, #225 open |
 | N10-N | merged | plan #391; N10-N-A code `7243d9042`, gate fix `e3ec4ae28` ([N10 plan](delivery-n10-plan.md) §3.4, §4): H9 read-only `derive_evidence_receipts` tool used by Builder and Finalizer; H14 decided (Delivery keeps Change branches; GitHub's automatic head-branch deletion proven tolerated by the journey test); changed-scope pytest 488 passed; Sol gate finding fixed; LC not applicable; M1 and M2 run by the user as ordinary Changes |
+| N11-P | done | [N11 plan](delivery-n11-plan.md); Sol plan gate round 1 `revision-required`, F1–F3 fix-now applied (persisted settlement unchanged, grant carry-forward and reset, assembled readiness contract); gate closed |
+| N11-A | merged with N12 (PR #420, `a304a31a9`) and activated 2026-10-08 ([N11 plan](delivery-n11-plan.md) §4) | code `356a94501`, Sol implementation gate `blocked`: F1 (stale replay skipped the receipt check) and F3 (P5–P7, N6 evidence) fixed in `040a1fda9`, F2 (LC) carried by N12's U4 LC; on the N11 head ruff clean, changed-scope pytest 4009 passed, 1 skipped, Vitest 382, build ok; `test:e2e:work` seed failure reproduces on base `a22319bca`; G1 closed by N12's live activation |
+| N12-P | done | [N12 plan](delivery-n12-plan.md); stacked on N11-A; Sol plan gate round 1 `revision-required`, F1–F4 fix-now applied (successive handoff predecessor, legacy grant receipt and Planner baseline, Cockpit clearance gating, preserved-commit carry-forward); gate closed |
+| N12-A–D | merged (PR #420, `a304a31a9`) and activated 2026-10-08: live grant, Planner correction and funded TASK-004 Builder passed (N12 plan §3.7) | `0055ae06d` + gate fixes + E2E repair `512499c8f`; Sol implementation round 1 `revision-required` (F1 fixed), round 2 no findings; LC amended by user decision U4 (option A1, 2026-10-08): the offline read-only load of an isolated copy shows all 10 live Changes available, and the incident card offers the user grant on the real records. The tool verdict is `passed: false` because of the inspector's 256-entry budget, which U4 accepts (G4, own PR). The grant cannot run on a copy (handoff fingerprint), so the continuation is proven by the guarded live activation (N12 plan §3.6, G1) |
+| N13-B | merged (#427, `2d7b33a76`) | [N13 plan](delivery-n13-plan.md); Cockpit detail puts the open request first; Sol `implementation-sound` |
+| N13-A | implemented (`42ee7852e`) | [N13 plan](delivery-n13-plan.md); engine-owned target-sync block, preserving release and sync before finalization; LC load pass; Sol round 1 P2 fixed, delta `implementation-sound` |
 
 ## 5. Packages
 
@@ -1086,7 +1092,8 @@ rehearsal for C.
   proof.
 - Cockpit uses the programme section 4.2 labels: **Copy continuation prompt**, and **Pause/Resume**
   as policy state.
-- Cockpit shows the section 4.3 progress descriptions, including **Waiting for chat to resume**.
+- Cockpit shows the section 4.3 progress descriptions, including **Run prompt in Copilot Chat**
+  (revised 2026-10-07 from **Waiting for chat to resume**).
 - Memory curation no longer blocks acquisition (#218): verified fixed on `dev` by PR #308 (N09
   plan D10); N09-A1 records the closure evidence.
 - WIRING, operating docs, setup guide and READMEs are reconciled (P22).
@@ -1138,6 +1145,38 @@ Reduced 2026-10-04 ([7](#7-decisions)).
 - N10-N: follow-ups from the host journey (H9 receipts tool, H14 Change-branch deletion), after N10-M; it does
   not block programme closure.
 
+### N11 — Grant one more Builder attempt
+
+Added 2026-10-06 after programme completion (user decision, option C).
+
+**Result:** an exhausted same-task Builder retry block
+(`builder-attempt-limit-<settlement_id>`) gets a user-only Cockpit action that adds exactly one
+attempt to the episode, keeps its history, and commits frontier, retry ledger and an immutable grant
+receipt atomically. Agent tools cannot grant. The retry ledger gains a version 2, written only when
+a grant exists.
+
+**Plan:** [N11 plan](delivery-n11-plan.md).
+
+**Phases:**
+
+- N11-P: plan and plan gate.
+- N11-A: implementation; LC full form. By user direction, N11-P and N11-A share one PR.
+
+### N12 — Recoverable Builder returns to Planning
+
+Added 2026-10-08 after the live Change `macos-managed-browser-authentication` was left with Abandon
+as its only exit (user decisions U1, U2 in the N12 plan).
+
+**Result:** a Builder return to Planning is refunded instead of charged; the third return of the same
+original task under one contract stops behind a return-limit block whose exit is a Design revision
+that first preserves the Builder head and keeps completed work; an already settled exhausted
+Planning-route block gets N11's user-only grant.
+
+**Plan:** [N12 plan](delivery-n12-plan.md).
+
+**Phases:** N12-P plan and plan gate; N12-A return accounting and bound; N12-B preserving release;
+N12-C legacy grant; N12-D guidance and records. By user direction all share one PR, stacked on N11.
+
 ## 6. Programme Completion
 
 The programme is complete when all of the following hold:
@@ -1156,6 +1195,12 @@ The programme is complete when all of the following hold:
 - No `fix-now` finding is open.
 
 ## 7. Decisions
+
+Decision origins follow the system instructions (§1): "Decided by the user" entries are `decided`,
+"Decided by the lead" entries are `autonomous`, and plan content the user approved without a direct
+question is `approved`. New entries in this and package plans carry an inline label: `[decided
+YYYY-MM-DD]`, `[approved YYYY-MM-DD]` or `[autonomous: <role> YYYY-MM-DD]`; a reversal adds
+`[supersedes <locator>: <reason>]`.
 
 **Decided by the user on 2026-10-02:**
 

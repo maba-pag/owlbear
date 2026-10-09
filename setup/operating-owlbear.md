@@ -29,7 +29,7 @@ Running `init.py` writes the following files into your project directory:
 | `.vscode/settings.json` | Points VS Code at OwlBear agents, skills, and instructions, and carries the seeded Copilot workspace settings | Merged (OwlBear keys as defaults; your existing keys are preserved) |
 | `.vscode/mcp.json` | Registers 5 MCP servers (4 OwlBear stdio, including Browser access seeded for wildcard testing, + markitdown) | Merged (OwlBear servers as defaults; your existing servers are preserved) |
 | `.owlbear/delivery/config.json` | Declares the Git remote, pull-request target branch, exact GitHub `owner/name` identity, and remote Delivery-state branch | Tracked in Git; exact schema-1 policy is migrated once and schema-2 project edits are preserved on rerun |
-| `.owlbear/delivery/runtime/host.json` | Shows the tracked baseline for the shared execution budget and the 60-minute claim timeout | Seeded with `execution_capacity: 3`; existing values are preserved on rerun |
+| `.owlbear/delivery/runtime/host.json` | Shows the tracked baseline for the shared execution budget and the 60-minute claim timeout | Seeded with `execution_capacity: 8`; existing values are preserved on rerun |
 | `.owlbear/delivery/runtime/host.local.json` | Optional per-host overrides for any `host.json` setting | Not seeded; ignored by Git and preserved when present |
 | `.owlbear/install-manifest.json` | Records seed paths created or merged by setup, their installed digests, claimed settings/MCP values, and setup-created directories for conservative uninstall | Rewritten atomically on each successful setup; removed when uninstall completes unchanged |
 | `.owlbear/hooks/allow-stances-only.py` | Restricts ideation agents to approved stance outputs | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
@@ -63,7 +63,7 @@ The seeded Browser MCP entry uses `BROWSER_ALLOWED_DOMAINS: "*"` for local testi
 exact hostnames before using Browser against production or sensitive sites.
 
 For a fresh workspace, `init.py` writes tracked Delivery configuration and the visible default
-`host.json` with one shared execution budget for Planner and Builder claims (`execution_capacity: 3`).
+`host.json` with one shared execution budget for Planner and Builder claims (`execution_capacity: 8`).
 Builds retain exact per-Change writer custody; there is no separate global `writer_capacity` limit.
 Create `host.local.json` only for machine-specific execution or timeout overrides; it is ignored and
 is not synced to other hosts. Setup does not create mutable Delivery runtime state, worktrees, verification
@@ -239,7 +239,7 @@ with deterministic outcomes, dependencies, commitments, and proof boundaries.
 
 Admission ends with the continuation prompt `/continue-change <change-id>`. Run it in Copilot Chat;
 Cockpit's **Copy continuation prompt** copies the same prompt for a Change that is
-**Waiting for chat to resume**. Copying does not start an agent. One continuation chat carries exactly
+**Ready for next step**. Copying does not start an agent. One continuation chat carries exactly
 one Change: it reads the Change, acquires its next action from Delivery, and dispatches only that
 action: a Planner or Builder launch, the issued finalization, or an engine action that publishes a
 checkpoint, synchronizes with the target, marks the pull request ready, or observes acceptance. It
@@ -263,9 +263,12 @@ advance the Change branch directly.
 
 Expected outcome: outcomes move through Planning and Build under one shared execution budget, with
 exact per-Change writer custody, without scheduling judgment in the chat or conversation-derived
-authority. Cockpit shows each Change's progress, such as **Needs your decision**,
-**Waiting for another Change**, **Paused**, **Ready to merge**, and **Completed**, with its requests,
-**Pause** and **Resume**, and the **Acceptance evidence** for its criteria.
+authority. Cockpit shows each Change's situation, such as **Ready for next step**,
+**With an agent**, **Your decision**, **Waiting on GitHub**, **Waiting on another Change**,
+**Needs attention**, **Paused**, and **Done**, with a one-line headline, who it waits on and since
+when, its requests, **Pause** and **Resume**, and the **Acceptance evidence** for its criteria.
+Technical detail stays under **Details**; **Merge latest target into Change** appears only when
+Delivery says an update is required or optional.
 
 For exact ended invocations, the continuation chat (the `orchestrator` agent) uses the typed
 `settle_worker_invocation` route for retries, Builder request pauses/returns and report-backed
@@ -331,8 +334,10 @@ has its cwd or an open file under the managed worktree or Git admin directory. A
 shell whose only link is its worktree cwd and which has no live child is ignored; open files still block. If the
 guard is incomplete, readiness reports `worker-stall-wait`: a `next_eligible_at` means the write
 guard is still running; without a time, the prompt reports active process names or bounded scan
-detail. Yield without settling or recovering. Restarting the MCP server while the issuing window is
-alive does not trigger automatic settlement.
+detail. Yield without settling or recovering. During `worker-stall-wait`, avoid Git commands against
+the managed worktree: commands such as `git status` and `git diff` can update Git metadata and restart
+the quiet period. Restarting the MCP server while the issuing window is alive does not trigger
+automatic settlement.
 
 When the user states that a specific worker chat was stopped, use Cockpit's **Release stuck worker**
 action, or answer `stopped/closed` to the question `/continue-change` asks for that exact active claim.
@@ -389,9 +394,11 @@ the finalized head is unchanged. Target synchronization, when required, merges o
 remote-tracking target into the managed Change worktree; it never updates the target branch or the
 user checkout.
 
-When the PR is ready, mergeable and its required checks pass at the finalized head, and the proof
-target equals the current target branch head, Cockpit offers **Approve merge** with the repository,
-PR, exact head, target, proof and check summary and merge method. The continuation chat shows the same
+When the PR is ready, mergeable and its required checks pass at the finalized head, Cockpit offers
+**Approve merge** with the repository, PR, exact head, target, proof and check summary and merge
+method. If the target branch moved after the proof, the offer stays and says so: it names the proof
+target and the current target, and approving merges commits the proof did not cover. Conflicts and an
+up-to-date requirement still route to target synchronization. The continuation chat shows the same
 offer and stops; only you approve, in Cockpit. One approval sends one merge-commit
 request fenced to that exact head; Delivery never enables auto-merge, uses a merge queue, bypasses
 rules or updates the target branch. You can also merge the PR in GitHub yourself. If GitHub never
@@ -473,7 +480,8 @@ the `uv --project <owlbear clone>` entries that setup writes start the checkout'
 [Upgrading OwlBear](#upgrading-owlbear) moves it forward.
 
 Pinning is optional for a consumer project. It keeps Delivery on an installed release while the
-OwlBear checkout moves; each release holds a full OwlBear environment of about 1.3 GB. To opt in,
+OwlBear checkout moves; each release holds a controller-only environment (Delivery MCP, Cockpit and
+the maintenance tools, without knowledge or browser packages) of about 90 MB. To opt in,
 upgrade first so the state is current, stop `owlbear-delivery` and Cockpit, and run from the project
 root:
 
@@ -488,7 +496,7 @@ with `.owlbear/controller/bin/cockpit`. Rerunning setup keeps your edited entry.
 
 | Path | Content |
 | --- | --- |
-| `.owlbear/controller/releases/<commit>/` | Read-only `git archive` of the commit, its locked `.venv`, the Cockpit bundle and `RELEASE.json` (commit, supported format, interpreter identity, tree digest) |
+| `.owlbear/controller/releases/<commit>/` | Read-only `git archive` of the commit, its locked controller-only `.venv`, the Cockpit bundle and `RELEASE.json` (commit, supported format, interpreter identity, tree digest) |
 | `.owlbear/controller/pin.json` | Pinned release `commit`, its `previous` (rollback) release and the digest of its `RELEASE.json` |
 | `.owlbear/controller/bin/delivery-mcp`, `bin/cockpit` | Generated launchers; `.vscode/mcp.json` starts `owlbear-delivery` through `bin/delivery-mcp` |
 
@@ -497,6 +505,9 @@ On a pinned workspace every controller whose code is not the pinned release refu
 `uv run python -m owlbear_delivery_mcp` from the checkout. Start Cockpit with
 `.owlbear/controller/bin/cockpit`. A clone without a release shows `owlbear-delivery` as failed to
 start until `uv run delivery-controller install --pin <commit>` installs and pins one.
+
+Install refuses a release whose Delivery MCP server, Cockpit app or maintenance commands cannot be
+imported from its own environment.
 
 Release integrity protects against accidental and ordinary-tool changes: editor saves, Git commands
 in the wrong directory, interrupted installs, package-manager writes and restores. Install seals
@@ -512,6 +523,9 @@ install, online preflight, stop, offline `preflight`, `backup`, migration, `swit
 exclusively and refuse while any controller runs. `switch <previous>` rolls back only when that
 release's own gate accepts the current state; otherwise restoring the backup is your decision.
 `verify` detects a release modified after install. `prune` keeps the current and previous releases.
+The upgrade builds the new release with the current release's `delivery-controller` and reuses an
+intact installed release, so a change to the installer applies from the upgrade after the one that
+activates it.
 
 ---
 

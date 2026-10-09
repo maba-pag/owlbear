@@ -119,13 +119,14 @@ class InMemoryPublicationProvider:
             ) from exc
 
     def find_pull_request(self, request: FindPublicationPullRequest) -> PublicationPullRequest | None:
-        """Find the unique open or closed pull request for one head/base identity."""
+        """Find the unique open pull request for one head/base identity."""
         matches = tuple(
             pull_request
             for pull_request in self.pull_requests.values()
             if pull_request.repository == request.repository
             and pull_request.head_branch == request.head_branch
             and pull_request.base_branch == request.base_branch
+            and pull_request.state == "open"
         )
         if len(matches) > 1:
             raise PublicationProviderError(

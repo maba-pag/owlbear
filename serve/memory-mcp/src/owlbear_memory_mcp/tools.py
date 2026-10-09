@@ -10,7 +10,9 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal
 from mcp.server.mcpserver.exceptions import ToolError
 from owlbear_memory import (
     ConcurrencyError,
+    DuplicateEntryError,
     LifecycleRecoveryError,
+    MemoryBusyError,
     MemoryCategory,
     MemoryEngine,
     MemoryEntry,
@@ -281,6 +283,8 @@ async def save_memory(  # noqa: PLR0913
             scope_agents=[],
             source_agent=source_agent,
         )
+    except (DuplicateEntryError, ConcurrencyError) as exc:
+        raise ToolError(str(exc)) from exc
     except ValidationError as exc:
         raise ToolError(_teaching_validation_message(exc)) from exc
     hint = "Saved as pending and unscoped. The memory curator assigns relevance scope before promotion."
@@ -291,7 +295,7 @@ async def commit_memory_batch(ctx: Context, *, session_type: str) -> dict[str, A
     """Commit non-pending memory entries through the state-aware Git helper."""
     memory_dir = _memory_dir_from_ctx(ctx)
     try:
-        commit_sha = commit_batch(memory_dir, session_type=session_type)
+        result = commit_batch(memory_dir, session_type=session_type)
     except ValueError as exc:
         raise ToolError(str(exc)) from exc
     except subprocess.CalledProcessError as exc:
@@ -308,18 +312,17 @@ async def commit_memory_batch(ctx: Context, *, session_type: str) -> dict[str, A
         msg = f"memory batch commit failed: {detail}"
         raise ToolError(msg) from exc
 
-    if not commit_sha:
-        return {
-            "session_type": session_type,
-            "commit_sha": None,
-            "committed": False,
-            "hint": "No memory changes to commit.",
-        }
+    committed = result.commit_sha is not None
+    hint = "Reviewed memory changes committed." if committed else "No memory changes to commit."
+    deferred_deletions = list(result.deferred_deletions)
+    if deferred_deletions:
+        hint += " Curate the surviving pending entry before retrying the batch commit."
     return {
         "session_type": session_type,
-        "commit_sha": commit_sha,
-        "committed": True,
-        "hint": "Reviewed memory changes committed.",
+        "commit_sha": result.commit_sha,
+        "committed": committed,
+        "deferred_deletions": deferred_deletions,
+        "hint": hint,
     }
 
 
@@ -506,9 +509,11 @@ async def _update_entry(  # noqa: C901, PLR0912, PLR0913
             payload,
             expected_revision=revision,
         )
+    except MemoryBusyError as exc:
+        raise ToolError(str(exc)) from exc
     except ConcurrencyError as exc:
         raise _stale_revision_error(exc) from exc
-    except (TransitionError, NotFoundError) as exc:
+    except (TransitionError, NotFoundError, DuplicateEntryError) as exc:
         raise ToolError(str(exc)) from exc
     except ValidationError as exc:
         raise ToolError(_teaching_validation_message(exc)) from exc
@@ -530,9 +535,11 @@ async def _delete_entry(ctx: Context, *, entry_id: str, revision: str) -> dict[s
 
     try:
         deleted = engine.delete(current.id, expected_revision=revision)
+    except MemoryBusyError as exc:
+        raise ToolError(str(exc)) from exc
     except ConcurrencyError as exc:
         raise _stale_revision_error(exc) from exc
-    except (TransitionError, NotFoundError) as exc:
+    except (TransitionError, NotFoundError, DuplicateEntryError) as exc:
         raise ToolError(str(exc)) from exc
 
     if current.state == MemoryState.PENDING:
@@ -598,7 +605,7 @@ async def rename_agent_memories(ctx: Context, *, old_name: str, new_name: str) -
     engine = _engine_from_ctx(ctx)
     try:
         result = engine.rename_agent(old_name, new_name)
-    except (LifecycleRecoveryError, ValidationError) as exc:
+    except (ConcurrencyError, DuplicateEntryError, LifecycleRecoveryError, ValidationError) as exc:
         raise ToolError(str(exc)) from exc
     if result["entries_updated"] == 0:
         msg = f"No memory references found for agent {old_name!r}."
@@ -614,7 +621,7 @@ async def delete_agent_memories(ctx: Context, *, agent: str) -> dict[str, int]:
     engine = _engine_from_ctx(ctx)
     try:
         result = engine.delete_agent(agent)
-    except (LifecycleRecoveryError, ValidationError) as exc:
+    except (ConcurrencyError, DuplicateEntryError, LifecycleRecoveryError, ValidationError) as exc:
         raise ToolError(str(exc)) from exc
     if result["entries_deleted"] == 0 and result["scopes_updated"] == 0:
         msg = f"No memory references found for agent {agent!r}."
@@ -629,9 +636,11 @@ async def _approve_entry(ctx: Context, *, entry_id: str, revision: str) -> dict[
 
     try:
         updated = engine.approve(current.id, expected_revision=revision)
+    except MemoryBusyError as exc:
+        raise ToolError(str(exc)) from exc
     except ConcurrencyError as exc:
         raise _stale_revision_error(exc) from exc
-    except (TransitionError, NotFoundError) as exc:
+    except (TransitionError, NotFoundError, DuplicateEntryError) as exc:
         raise ToolError(str(exc)) from exc
 
     return _entry_to_dict(updated)
@@ -688,7 +697,14 @@ async def assess_memories(
                     "recorded_bucket": outcome.recorded_bucket,
                 }
             )
-        except (NotFoundError, TransitionError, ConcurrencyError, MemoryValidationError) as exc:
+        except (
+            NotFoundError,
+            TransitionError,
+            ConcurrencyError,
+            DuplicateEntryError,
+            MemoryValidationError,
+            ValidationError,
+        ) as exc:
             results.append({"entry_id": entry_id, "success": False, "error": str(exc)})
 
     return {"results": results}

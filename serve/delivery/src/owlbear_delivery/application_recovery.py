@@ -118,6 +118,7 @@ from owlbear_delivery.runtime_transaction import (
 from owlbear_delivery.storage_io import locked_roots, state_is_read_only
 from owlbear_delivery.work_items import (
     DeliveryPortfolioSnapshot,
+    DeliveryProgress,
     DeliveryReadiness,
     DeliveryReadinessBasis,
     WorkItemCardView,
@@ -585,6 +586,7 @@ class _RecoveryMixin:
                 self._raise_finalizer_settlement_conflict(
                     "Finalizer attempt is already settled with different authority"
                 )
+            self._reconcile_retry_results_fail_closed(runtime)
             return prior
         attempt = self._active_finalizer_writer_attempt(change_id)
         if attempt is None or attempt.writer.attempt_id != attempt_id or attempt.writer.claim_id != claim_id:
@@ -638,7 +640,10 @@ class _RecoveryMixin:
                 session_id=attempt.writer.process_id,
             )
             evidence = self._finalizer_settlement_evidence(runtime, settlement, coordination, attempt)
-            return self._publish_finalizer_settlement(runtime, settlement, attempt, evidence, lock)
+            receipt = self._publish_finalizer_settlement(runtime, settlement, attempt, evidence, lock)
+        # Readiness requires the settled failure, not only its owner result, once attention exists.
+        self._reconcile_retry_results_fail_closed(runtime)
+        return receipt
 
     def _stalled_finalizer_report(
         self, coordination: ChangeCoordination, attempt: ChangeFinalizationAttempt
@@ -1619,6 +1624,11 @@ class _RecoveryMixin:
                     f"Use /repair-delivery Diagnose Change {change_id} read-only; preserve existing custody and "
                     "journals. This does not repair authority or prove host/worker closure; the responsible owner "
                     "must resolve the condition separately before Delivery rereads it."
+                ),
+                progress=DeliveryProgress(
+                    situation="needs-attention",
+                    headline="Delivery cannot read this Change's state; diagnose it before continuing.",
+                    waiting_on="you",
                 ),
             ),
         )

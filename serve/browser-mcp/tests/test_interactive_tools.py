@@ -25,6 +25,8 @@ _TOOLS_AND_ARGUMENTS = [
     pytest.param(read_text, (), id="read_text"),
     pytest.param(snapshot, (), id="snapshot"),
 ]
+_ACTION_TOOLS_AND_ARGUMENTS = _TOOLS_AND_ARGUMENTS[:4]
+_READER_TOOLS = [pytest.param(read_text, id="read_text"), pytest.param(snapshot, id="snapshot")]
 
 
 def _tool_context(app_ctx: object) -> MagicMock:
@@ -35,6 +37,7 @@ def _tool_context(app_ctx: object) -> MagicMock:
 
 def _fake_page() -> MagicMock:
     page = MagicMock()
+    page.is_closed.return_value = False
     page.goto = AsyncMock()
     page.content = AsyncMock(return_value="<html><body><main>Rendered browser page</main></body></html>")
     page.url = _URL
@@ -57,14 +60,12 @@ def _live_context(page: MagicMock) -> MagicMock:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(("tool", "arguments"), _TOOLS_AND_ARGUMENTS)
+@pytest.mark.parametrize("tool", _READER_TOOLS)
 @pytest.mark.parametrize("availability", ["startup-failed", "no-session", "non-app-context"])
-async def test_interactive_tools_raise_when_no_app_context_page(
+async def test_reader_tools_raise_without_live_page_and_never_launch(
     tool: Callable[..., Awaitable[str]],
-    arguments: tuple[str, ...],
     availability: str,
 ) -> None:
-    page = _fake_page() if availability == "non-app-context" else None
     if availability == "startup-failed":
         app_ctx = AppContext(
             allowlist=DomainAllowlist(domains=["target.example.com"]),
@@ -72,33 +73,69 @@ async def test_interactive_tools_raise_when_no_app_context_page(
         )
         expected_error = "Browser unavailable"
     elif availability == "no-session":
-        app_ctx = AppContext(
-            allowlist=DomainAllowlist(domains=["target.example.com"]),
-            launcher=MagicMock(),
-        )
+        app_ctx = AppContext(allowlist=DomainAllowlist(domains=["target.example.com"]))
         app_ctx.last_content = "cached content"
         expected_error = "No browser session"
     else:
         app_ctx = SimpleNamespace(
             allowlist=DomainAllowlist(domains=["target.example.com"]),
-            page=page,
+            page=_fake_page(),
             last_content="cached content",
         )
         expected_error = "Browser unavailable"
 
-    ctx = _tool_context(app_ctx)
+    with (
+        patch("owlbear_browser_mcp.server.PlaywrightLauncher") as factory,
+        pytest.raises(ToolError, match=expected_error),
+    ):
+        await tool(_tool_context(app_ctx))
+
+    factory.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("tool", "arguments"), _ACTION_TOOLS_AND_ARGUMENTS)
+async def test_action_tools_reject_non_app_context_without_touching_page(
+    tool: Callable[..., Awaitable[str]],
+    arguments: tuple[str, ...],
+) -> None:
+    page = _fake_page()
+    app_ctx = SimpleNamespace(allowlist=DomainAllowlist(domains=["target.example.com"]), page=page)
+
     with (
         patch("socket.getaddrinfo", return_value=_PUBLIC_ADDRESS_INFO) as mock_dns,
-        pytest.raises(ToolError, match=expected_error) as error,
+        pytest.raises(ToolError, match="Browser unavailable") as error,
     ):
-        await tool(ctx, *arguments)
+        await tool(_tool_context(app_ctx), *arguments)
 
-    if tool is navigate:
-        mock_dns.assert_not_called()
-        assert _URL not in str(error.value)
-    if page is not None:
-        page.goto.assert_not_awaited()
-        page.locator.assert_not_called()
+    mock_dns.assert_not_called()
+    assert _URL not in str(error.value)
+    page.goto.assert_not_awaited()
+    page.locator.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("tool", "arguments"), _ACTION_TOOLS_AND_ARGUMENTS)
+async def test_action_tools_launch_on_demand_and_report_safe_launch_failure(
+    tool: Callable[..., Awaitable[str]],
+    arguments: tuple[str, ...],
+) -> None:
+    app_ctx = AppContext(allowlist=DomainAllowlist(domains=["target.example.com"]))
+    launcher = MagicMock()
+    launcher.launch = AsyncMock(side_effect=RuntimeError("/private/profile"))
+    launcher.close = AsyncMock()
+
+    with (
+        patch("owlbear_browser_mcp.server.PlaywrightLauncher", return_value=launcher) as factory,
+        patch("socket.getaddrinfo", return_value=_PUBLIC_ADDRESS_INFO),
+        pytest.raises(ToolError, match=r"Browser unavailable: browser startup failed \(RuntimeError\)") as error,
+    ):
+        await tool(_tool_context(app_ctx), *arguments)
+
+    factory.assert_called_once()
+    launcher.close.assert_awaited_once()
+    assert "/private/profile" not in str(error.value)
+    assert _URL not in str(error.value)
 
 
 @pytest.mark.asyncio

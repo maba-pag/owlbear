@@ -49,9 +49,9 @@ diagnostic for that repair route. Reject missing, extra, or malformed identities
 Use any directly callable Delivery operation as granted; a deferred inventory listing does not
 override that binding. If a required Delivery operation has no direct callable binding, run one
 `tool_search` whose query is exactly that operation name, immediately before its first use.
-For a 64-character attention identity, call `list_work_items` and require the Change publication card's
-`action.attention_id` to equal the supplied disposition identity; use `show_work_item` for the
-publication detail when needed. For an Integration attention, call
+For a 64-character attention identity, call `show_work_item_view(change_id, "publication")` and
+require its `card.action.attention_id` to equal the supplied disposition identity. For an
+Integration attention, call
 `show_integration_attention(change_id)` and require its change and attention identities to equal
 the supplied values. An ordinary open and unmerged provider pull request is retry-safe waiting,
 not an attention; report that state and stop without resolution. If no attention exists, its

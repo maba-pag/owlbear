@@ -26,7 +26,7 @@ The CLI adapter runs only code-owned `gh api` argument vectors for repository an
 
 The adapter sends GitHub REST API version `2026-03-10`. That version removes `merge_commit_sha` from pull-request responses, so the field is optional in the REST payload. An open pull request with the field omitted is a normal open `PublicationPullRequest` with no merge OID, and the provider does not issue a merged-evidence GraphQL read.
 
-For a merged public read, `read_pull_request` first treats REST as publication metadata and then issues the fixed named GraphQL query `ReadMergedPullRequest`. The query enriches the result from `mergeCommit.oid` and `mergedAt`; `find_pull_request` results that reach `read_pull_request` receive the same enrichment. The GraphQL fields are canonical merged evidence, while REST remains the publication metadata source.
+For a merged public read, `read_pull_request` first treats REST as publication metadata and then issues the fixed named GraphQL query `ReadMergedPullRequest`. The query enriches the result from `mergeCommit.oid` and `mergedAt`. `find_pull_request` lists only open pull requests, so merged or closed pull requests from an earlier delivery on the same Change branch never block or bind a new draft publication; receipt-bound reads by number still observe closed and merged state. The GraphQL fields are canonical merged evidence, while REST remains the publication metadata source.
 
 Before returning a merged `PublicationPullRequest`, the provider requires all of these cross-source checks:
 

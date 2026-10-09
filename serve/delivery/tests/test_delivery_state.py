@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import time
 from datetime import UTC, datetime, timedelta
@@ -24,6 +25,8 @@ from owlbear_delivery import (
     DeliveryActiveClaim,
     DeliveryAdmissionReceipt,
     DeliveryAdmissionRequest,
+    DeliveryAnswer,
+    DeliveryAnswerKind,
     DeliveryBlock,
     DeliveryBuilderInvocationSettlement,
     DeliveryChangeCompletion,
@@ -84,6 +87,7 @@ from owlbear_delivery import (
     SyncChangeWithTarget,
     WindowHostIdentity,
     remote_git,
+    runtime_settlement,
     state_migration,
 )
 from owlbear_delivery.acceptance import (
@@ -91,6 +95,7 @@ from owlbear_delivery.acceptance import (
     CompletionEvidence,
     CompletionPullRequestIdentity,
     CompletionReceipt,
+    CompletionReceiptStore,
 )
 from owlbear_delivery.change_workspace import ChangeWorkspaceManager
 from owlbear_delivery.delivery_admission import DeliveryRevisionError
@@ -836,7 +841,7 @@ def test_state_snapshot_migrates_schema_1_and_retains_predecessor_identity(tmp_p
 
     migrated = parse_delivery_state_snapshot(raw)
 
-    assert migrated.schema_version == 3
+    assert migrated.schema_version == 4
     assert migrated.migrated_from_snapshot_id == legacy_snapshot_id
     assert migrated.frontier.schema_version == 18
     assert migrated.frontier.bindings[0].retry_count == 0
@@ -887,7 +892,7 @@ def test_state_publisher_rewrites_migrated_snapshot_to_current_schema(tmp_path: 
     assert rewritten.published_head != legacy_head
     current = publisher.read_snapshot("legacy-publish")
     assert current is not None
-    assert current.schema_version == 3
+    assert current.schema_version == 4
     assert current.migrated_from_snapshot_id is None
     assert current.parent_snapshot_id is not None
     assert publisher._git_blob(legacy_head, snapshot_path) == legacy_raw  # noqa: SLF001
@@ -922,7 +927,7 @@ def test_schema_1_remote_snapshot_reads_as_pure_upcast_with_verified_stored_iden
     assert inventory.diagnostics == ()
     assert inventory.remote_head == legacy_head
     snapshot = inventory.snapshots[0]
-    assert snapshot.schema_version == 3
+    assert snapshot.schema_version == 4
     assert snapshot.migrated_from_snapshot_id == stored_id
     assert snapshot.snapshot_id != stored_id
     assert snapshot.frontier.schema_version == 18
@@ -942,7 +947,7 @@ def test_newer_remote_snapshot_is_unsupported_never_restored_published_over_or_r
     first = _publish(publisher, runtime, manager, change_id, package_id, "newer-state-one")
     snapshot_path = f".owlbear/delivery/state/{change_id}/snapshot.json"
     newer_payload = json.loads(publisher._git_blob(first.published_head, snapshot_path))  # noqa: SLF001
-    newer_payload["schema_version"] = 4
+    newer_payload["schema_version"] = 5
     newer_payload["future_field"] = {"written": "by a newer controller"}
     newer_raw = _canonical_payload(newer_payload)
     newer_head = _commit_corrupt_snapshot(repository, first.published_head, change_id, newer_raw)
@@ -1443,6 +1448,39 @@ def test_loader_claim_successor_never_allows_advanced_branch(tmp_path: Path) -> 
         _require_local_snapshot_branch(snapshot, repository)
 
 
+@pytest.mark.parametrize("remote_branch", ["present", "deleted"])
+def test_builder_claim_commit_survives_default_loader_restart(tmp_path: Path, remote_branch: str) -> None:
+    change_id = "builder-claim-restart"
+    restart = _builder_return_restart_fixture(tmp_path, change_id)
+    launch = restart.application.acquire_frontier_work().launch_packages[0]
+    assert launch.claim.worker_role is DeliveryWorkerRole.BUILDER
+    _git(restart.fresh, "config", "user.name", "Delivery State Test")
+    _git(restart.fresh, "config", "user.email", "delivery-state@example.invalid")
+    branch_head = _commit_descendant(launch.worktree_path, "unsubmitted.txt", "unsubmitted Builder work")
+    if remote_branch == "deleted":
+        _git(restart.remote, "update-ref", "-d", f"refs/heads/{launch.branch}")
+
+    restarted = _healthy_restart(restart)
+
+    with patch.object(restarted, "_clock", return_value="1970-01-02T00:00:00Z"):
+        settled = restarted.settle_worker_invocation(
+            DeliveryBuilderInvocationSettlement(
+                change_id=change_id,
+                outcome_id=launch.outcome_id,
+                claim_id=launch.claim.claim_id,
+                attempt_id=launch.claim.attempt_id,
+                task_id=launch.task_id,
+                expected_last_reviewed_commit=launch.last_reviewed_commit,
+                disposition="ended-without-result",
+            ),
+            host_id=launch.claim.owner_id,
+            session_id=launch.claim.process_id,
+        )
+    assert settled.active_claim is None
+    assert settled.builder_handoff_context is not None
+    assert settled.builder_handoff_context.branch_head == branch_head
+
+
 def test_state_publisher_exposes_response_unknown_and_replays_after_remote_push(tmp_path: Path) -> None:
     repository, remote, _initial = _repository(tmp_path)
     contract, _intent, _design = _contract("state-response-unknown")
@@ -1834,6 +1872,18 @@ def _tamper_builder_handoff_frontier(
         }
     )
     frontier_path.write_bytes(_canonical_payload(updated.model_dump(mode="json")))
+
+
+def _drift_retained_builder_workspace(worktree: Path, scenario: str) -> bytes:
+    """Rewrite retained files after settlement as an editor restore or index refresh would."""
+    dirty = worktree / "dirty-retry.txt"
+    content = dirty.read_bytes() if scenario == "drifted-same-bytes" else b"changed after settlement\n"
+    for path, data in ((dirty, content), (worktree / "committed-retry.txt", None)):
+        retained = path.read_bytes() if data is None else data
+        path.unlink()
+        path.write_bytes(retained)
+    _git(worktree, "status")
+    return content
 
 
 def _tamper_builder_handoff_host_state(
@@ -2272,7 +2322,9 @@ def test_builder_return_handoff_survives_default_loader_restart(  # noqa: PLR091
     builder_ledger.reconcile_owner_results()
     builder_episode = builder_ledger.episode_for_attempt(builder_launch.claim.attempt_id)
     assert builder_episode is not None
-    assert builder_episode.total_attempts == 1
+    # A Planning return is refunded (N12 I2) and counted by its return code instead.
+    assert builder_episode.total_attempts == (0 if return_target is DeliveryStage.PLANNING else 1)
+    assert builder_ledger.returned_attempts(builder_episode) == 1
     assert builder_episode.reset_count == 0
     builder_retry_budget = (builder_episode.episode_id, builder_episode.total_attempts, builder_episode.reset_count)
 
@@ -2385,6 +2437,106 @@ def test_builder_return_handoff_survives_default_loader_restart(  # noqa: PLR091
     assert acquired_episode.episode_id == builder_retry_budget[0]
     assert acquired_episode.total_attempts == builder_retry_budget[1] + 1
     assert acquired_episode.reset_count == builder_retry_budget[2] == 0
+
+
+@pytest.mark.parametrize("missing_receipt", [False, True])
+def test_builder_attempt_grant_survives_default_loader_restart(tmp_path: Path, *, missing_receipt: bool) -> None:
+    change_id = "attempt-grant-restart"
+    restart = _builder_return_restart_fixture(tmp_path, change_id)
+    fresh, config, application = restart.fresh, restart.config, restart.application
+    task_id = restart.original_task.task_id
+
+    def acquire(current: PortfolioApplication) -> DeliveryLaunchPackage | None:
+        episodes = current._runtimes[change_id].retry_ledger().read().episodes  # noqa: SLF001
+        eligible = [episode.next_eligible_at for episode in episodes if episode.next_eligible_at is not None]
+        if eligible:
+            resume = datetime.fromisoformat(max(eligible)) + timedelta(seconds=1)
+            current._clock = lambda: resume.isoformat().replace("+00:00", "Z")  # noqa: SLF001
+        launches = current.acquire_frontier_work().launch_packages
+        return launches[0] if launches else None
+
+    for _ in range(3):
+        launch = acquire(application)
+        assert launch is not None
+        assert launch.claim.worker_role is DeliveryWorkerRole.BUILDER
+        assert launch.task_id == task_id
+        application.settle_worker_invocation(
+            DeliveryBuilderInvocationSettlement(
+                change_id=change_id,
+                outcome_id=launch.outcome_id,
+                claim_id=launch.claim.claim_id,
+                attempt_id=launch.claim.attempt_id,
+                task_id=launch.task_id,
+                expected_last_reviewed_commit=launch.last_reviewed_commit,
+                disposition="normal-return",
+                request=RetryDelivery(
+                    action="retry",
+                    outcome_id=launch.outcome_id,
+                    claim_id=launch.claim.claim_id,
+                    attempt_id=launch.claim.attempt_id,
+                    abandoned_commit=launch.source_head,
+                    failure_code="builder-failed",
+                ),
+            ),
+            host_id=launch.claim.owner_id,
+            session_id=launch.claim.process_id,
+        )
+        application = load_delivery_application(config, workspace_root=fresh)
+        assert application.delivery_health().status.value == "healthy"
+
+    runtime = application._runtimes[change_id]  # noqa: SLF001
+    block = runtime.show_binding("OUT-001").block
+    assert block is not None
+    assert not block.resolved
+    exhausted = application.show_work_item_view(change_id, "outcome:OUT-001")
+    assert exhausted.readiness.reason_code == "retry-exhausted"
+    assert exhausted.card.action.kind.value == "grant-attempt"
+    assert acquire(application) is None
+
+    application.answer(
+        DeliveryAnswer(
+            change_id=change_id,
+            kind=DeliveryAnswerKind.GRANT_ATTEMPT,
+            expected_frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+            outcome_id="OUT-001",
+            block_id=block.block_id,
+        ),
+        allow_user_only=True,
+    )
+    granted_frontier = runtime.frontier_bytes()
+    receipt_path = next(
+        (fresh / ".owlbear/delivery/runtime/changes" / change_id / "builder-attempt-grant-receipts").iterdir()
+    )
+    if missing_receipt:
+        receipt_path.unlink()
+
+    reloaded = load_delivery_application(config, workspace_root=fresh)
+    health = reloaded.delivery_health()
+    if missing_receipt:
+        assert health.status.value == "attention"
+        assert any(diagnostic.code == "remote-state-reconciliation-required" for diagnostic in health.diagnostics)
+        assert runtime.frontier_bytes() == granted_frontier
+        return
+    assert health.status.value == "healthy", health.diagnostics
+    view = reloaded.show_work_item_view(change_id, "outcome:OUT-001")
+    assert view.readiness.reason_code != "retry-exhausted"
+    episode = reloaded._runtimes[change_id].retry_ledger().read().episodes[0]  # noqa: SLF001
+    assert (episode.total_attempts, episode.granted_attempts, episode.stop_code) == (3, 1, None)
+    resumed = acquire(reloaded)
+    assert resumed is not None
+    assert resumed.claim.worker_role is DeliveryWorkerRole.BUILDER
+    assert resumed.task_id == task_id
+    _assert_granted_claim_reloads(config, fresh, change_id, resumed.claim.attempt_id)
+
+
+def _assert_granted_claim_reloads(config: DeliveryStartupConfig, fresh: Path, change_id: str, attempt_id: str) -> None:
+    claimed = load_delivery_application(config, workspace_root=fresh)
+    assert claimed.delivery_health().status.value == "healthy"
+    binding = claimed._runtimes[change_id].show_binding("OUT-001")  # noqa: SLF001
+    assert binding.active_claim is not None
+    assert binding.active_claim.attempt_id == attempt_id
+    assert binding.block is not None
+    assert binding.block.resolution_note == "The user granted one more Builder attempt."
 
 
 def _settle_default_loader_planning_return(
@@ -2888,7 +3040,10 @@ def test_change_intents_on_planner_pause_of_builder_planning_return_survive_defa
 def _exhaust_default_loader_planning_return(
     restart: _BuilderReturnRestartFixture,
     change_id: str,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> OutcomeAuthorityBinding:
+    """Settle the pre-N12 shape: a third, charged Planning return behind its exhaustion block."""
+    monkeypatch.setattr(runtime_settlement, "_refunds_planning_return", lambda _request: False)
     application = restart.application
     for minutes in (5, 10):
         launch = application.acquire_frontier_work().launch_packages[0]
@@ -2936,10 +3091,12 @@ def _assert_exhausted_planning_return_readiness(application: PortfolioApplicatio
     assert application.acquire_frontier_work().launch_packages == ()
 
 
-def test_exhausted_builder_planning_return_survives_default_loader_restart(tmp_path: Path) -> None:
+def test_exhausted_builder_planning_return_survives_default_loader_restart(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     change_id = "return-planning-exhausted"
     restart = _builder_return_restart_fixture(tmp_path, change_id)
-    settled = _exhaust_default_loader_planning_return(restart, change_id)
+    settled = _exhaust_default_loader_planning_return(restart, change_id, monkeypatch)
 
     restarted = _healthy_restart(restart)
     assert restarted._runtimes[change_id].show_binding("OUT-001") == settled  # noqa: SLF001
@@ -2962,10 +3119,11 @@ def test_default_loader_rejects_planner_pause_over_exhausted_builder_planning_re
     tmp_path: Path,
     tamper: str,
     expected_detail: str,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     change_id = "return-planning-exhausted-forgery"
     restart = _builder_return_restart_fixture(tmp_path, change_id)
-    settled = _exhaust_default_loader_planning_return(restart, change_id)
+    settled = _exhaust_default_loader_planning_return(restart, change_id, monkeypatch)
     assert settled.block is not None
     frontier_path = restart.fresh / ".owlbear/delivery/runtime/changes" / change_id / "frontier.json"
     frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=True)
@@ -3120,6 +3278,8 @@ def test_default_loader_rejects_unrecorded_repeated_planner_pause_on_builder_pla
         "ended-without-result",
         "host-lost",
         "released-stuck",
+        "drifted-same-bytes",
+        "drifted-content",
         "deferred",
         "forged-context",
         "missing-receipt",
@@ -3230,6 +3390,8 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
         _git(launch.worktree_path, "add", retry_file.name)
         _git(launch.worktree_path, "commit", "-m", "preserve Builder retry work")
         branch_head = _git(launch.worktree_path, "rev-parse", "HEAD")
+        if scenario.startswith("drifted-"):
+            (launch.worktree_path / "dirty-retry.txt").write_text("uncommitted retry work\n", encoding="utf-8")
         retry = RetryDelivery(
             action="retry",
             outcome_id=launch.outcome_id,
@@ -3291,6 +3453,16 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
         )
         deferred_frontier_bytes = retry_runtime.frontier_bytes()
 
+    drifted_dirty_bytes = None
+    if scenario.startswith("drifted-"):
+        assert handoff_context is not None
+        drifted_dirty_bytes = _drift_retained_builder_workspace(launch.worktree_path, scenario)
+        drifted_metadata = application._workspace_manager._capture_builder_handoff_metadata(  # noqa: SLF001
+            application._coordinator.show(change_id)  # noqa: SLF001
+        )
+        assert drifted_metadata.fingerprint != handoff_context.metadata_fingerprint
+        assert drifted_metadata.branch_head == handoff_context.branch_head
+
     negative_scenarios = {
         "forged-context",
         "missing-receipt",
@@ -3326,10 +3498,20 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
         (fresh / ".owlbear/delivery/runtime/changes" / change_id / "frontier.json").read_bytes(), strict=True
     )
     binding = next(item for item in persisted_frontier.bindings if item.outcome_id == "OUT-001")
-    if scenario in {"settled", "completed-timeout", "ended-without-result", "host-lost", "released-stuck"}:
+    if scenario in {
+        "settled",
+        "completed-timeout",
+        "ended-without-result",
+        "host-lost",
+        "released-stuck",
+        "drifted-same-bytes",
+        "drifted-content",
+    }:
         assert binding.active_claim is None
         assert binding.builder_handoff_context == handoff_context
         resumed = reloaded.acquire_frontier_work().launch_packages[0]
+        if drifted_dirty_bytes is not None:
+            assert (resumed.worktree_path / "dirty-retry.txt").read_bytes() == drifted_dirty_bytes
         assert resumed.claim.task_id == launch.task_id
         assert resumed.claim.claim_id != launch.claim.claim_id
         assert resumed.builder_handoff_context == handoff_context
@@ -4473,6 +4655,114 @@ def test_loader_reconciles_a_legacy_local_frontier_with_its_legacy_remote_snapsh
     assert _git(remote, "rev-parse", "refs/heads/owlbear/delivery-state") == legacy_head
 
 
+def _retain_earlier_completion(runtime_root: Path, change_id: str) -> None:
+    digest = hashlib.sha256(change_id.encode()).hexdigest()
+    completed_at = datetime(2026, 8, 11, 13, tzinfo=UTC)
+    receipt = CompletionReceipt.create(
+        CompletionEvidence(
+            change_id=change_id,
+            finalization_receipt_id=digest,
+            finalized_change_head=digest[:40],
+            repository_identity="example/project",
+            pull_request_identity=CompletionPullRequestIdentity(number=7, node_id="PR_node_7"),
+            accepted_target_ref="main",
+            accepted_merge_commit=digest[-40:],
+            merged_at=completed_at,
+            acceptance_observation_id=digest,
+            check_observation_ids=(digest,),
+            review_receipt_ids=(digest,),
+            completed_at=completed_at,
+        )
+    )
+    display = CompletionDisplayMetadata.create(
+        change_id=change_id,
+        completion_id=receipt.completion_id,
+        title="Earlier delivery",
+        outcome_titles=("Earlier result",),
+        outcome_promises=("Deliver the earlier result.",),
+    )
+    store = CompletionReceiptStore(runtime_root)
+    for participant in (store.participant(receipt), store.display_participant(display)):
+        destination = participant.destination()
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(participant.content)
+
+
+def test_readmitted_change_id_publishes_and_restarts_without_earlier_completion(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    _git(repository, "config", "url." + str(remote) + ".insteadOf", "https://github.com/example/project.git")
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    change_id = "readmitted-change"
+    contract, intent, design = _contract(change_id)
+    runtime_root = repository / ".owlbear/delivery/runtime"
+    package_store = DesignPackageStore(
+        repository / ".owlbear/delivery/packages", repository, transaction_root=runtime_root
+    )
+    package = package_store.create(change_id, intent, design)
+    contract_bytes = _canonical_payload(contract.model_dump(mode="json"))
+    package_store.publish_contract(change_id, package.package_id, contract_bytes, lambda *_content: None)
+    package = package_store.read_verified(change_id)
+    change_root = runtime_root / "changes" / change_id
+    change_root.mkdir(parents=True)
+    (change_root / "contract.json").write_bytes(contract_bytes)
+    manager = ChangeWorkspaceManager(
+        repository, repository / ".owlbear/delivery/worktrees", PortfolioCoordinator(runtime_root), "main", "origin"
+    )
+    coordination = manager.ensure(change_id)
+    frontier = DeliveryFrontier(bindings=(OutcomeAuthorityBinding(outcome_id="OUT-001", plan_scope_id="SCOPE-001"),))
+    (change_root / "frontier.json").write_bytes(_canonical_payload(frontier.model_dump(mode="json")))
+    _retain_earlier_completion(runtime_root, change_id)
+    runtime = DeliveryRuntime(runtime_root, contract, workspace_manager=manager)
+    package_snapshot = manager.snapshot_design_package(
+        change_id,
+        package.package_id,
+        {
+            "authority.json": package.authority_bytes,
+            "design.md": package.design_bytes,
+            "intent.md": package.intent_bytes,
+            "manifest.json": package.manifest.canonical_bytes(),
+        },
+        "readmitted-package",
+    )
+    _git(repository, "push", "origin", f"{package_snapshot.snapshot_head}:refs/heads/{coordination.branch}")
+    admission = _admission(runtime, manager, change_id)
+    (change_root / "admission.json").write_bytes(_canonical_payload(admission.model_dump(mode="json")))
+    publisher = DeliveryStatePublisher(repository, remote="origin", state_branch="owlbear/delivery-state")
+
+    published = publisher.publish(
+        change_id=change_id,
+        package_id=package.package_id,
+        coordination=manager.show(change_id),
+        runtime=runtime,
+        admission=admission,
+        operation_id="readmitted-initial",
+        captured_at=datetime(2026, 8, 23, tzinfo=UTC),
+    )
+    config = DeliveryStartupConfig(
+        schema_version=2,
+        remote="origin",
+        target_branch="main",
+        github_repository="example/project",
+        delivery_state_branch="owlbear/delivery-state",
+    )
+    (runtime_root / "format.json").write_bytes(format_marker_bytes())
+    health = load_delivery_application(config, workspace_root=repository).delivery_health()
+
+    snapshot_path = f".owlbear/delivery/state/{change_id}/snapshot.json"
+    stored = json.loads(publisher._git_blob(published.published_head, snapshot_path))  # noqa: SLF001
+    assert stored["completion"] is None
+    assert stored["frontier"]["change_completion"] is None
+    assert [item.reason for item in health.diagnostics if item.source == "remote-state"] == []
+    assert CompletionReceiptStore(runtime_root).read_bundle(change_id) is not None
+
+    shutil.rmtree(change_root)
+    restored = load_delivery_application(config, workspace_root=repository).delivery_health()
+
+    assert [item.reason for item in restored.diagnostics if item.source == "remote-state"] == []
+    assert (change_root / "frontier.json").read_bytes() == _canonical_payload(stored["frontier"])
+    assert CompletionReceiptStore(runtime_root).read_bundle(change_id) is not None
+
+
 def test_target_sync_state_snapshot_is_restartable_after_branch_publication(tmp_path: Path) -> None:
     repository, remote, _initial = _repository(tmp_path)
     change_id = "state-target-sync"
@@ -4588,7 +4878,8 @@ class _Crash(BaseException):
 
 def _revision_sources(second: str) -> bytes:
     blocks = (
-        "kind: commitment\nid: COM-001\nclass: agreed-path\nprovenance: restart test\nstatement: Keep launches.",
+        "kind: decision\nid: DEC-001\norigin: approved\nbasis: fixture\nstatement: Restart fixture.",
+        "kind: commitment\nid: COM-001\nclass: agreed-path\ndecisions: [DEC-001]\nstatement: Keep launches.",
         (
             "kind: outcome\nid: OUT-001\ntitle: Launch\npromise: Make the launch observable.\n"
             f'acceptance: ["AC-001: The launch is observable.", "{second}"]\ncommitments: [COM-001]\ndependencies: []'
@@ -5069,3 +5360,142 @@ def test_design_return_revision_waits_for_its_release_publication(tmp_path: Path
     assert activated.frontier.bindings[0].return_context.preserved_commit == branch_head
     assert [launch.outcome_id for launch in application.acquire_frontier_work().launch_packages] == ["OUT-001"]
     close_delivery_application(application)
+
+
+def _settle_builder_launch(
+    application: PortfolioApplication,
+    change_id: str,
+    launch: DeliveryLaunchPackage,
+    request: BlockDelivery | ReturnDelivery,
+) -> OutcomeAuthorityBinding:
+    return application.settle_worker_invocation(
+        DeliveryBuilderInvocationSettlement(
+            change_id=change_id,
+            outcome_id=launch.outcome_id,
+            claim_id=launch.claim.claim_id,
+            attempt_id=launch.claim.attempt_id,
+            task_id=launch.task_id,
+            expected_last_reviewed_commit=launch.last_reviewed_commit,
+            disposition="normal-return",
+            request=request,
+        ),
+        host_id=launch.claim.owner_id,
+        session_id=launch.claim.process_id,
+    )
+
+
+def _planning_return(launch: DeliveryLaunchPackage, task_id: str) -> ReturnDelivery:
+    return ReturnDelivery(
+        action="return",
+        outcome_id=launch.outcome_id,
+        claim_id=launch.claim.claim_id,
+        target=DeliveryStage.PLANNING,
+        reason="Clarify the remaining implementation task.",
+        locators=(task_id,),
+        preserved_commit=launch.source_head,
+        attempt_id=launch.claim.attempt_id,
+    )
+
+
+def _promote_corrected_plan(restart: _BuilderReturnRestartFixture, change_id: str, title: str) -> None:
+    application = _healthy_restart(restart)
+    planner = application.acquire_frontier_work().launch_packages[0]
+    assert planner.claim.worker_role is DeliveryWorkerRole.PLANNER
+    revised = restart.original_task.model_copy(update={"title": title})
+    candidate = application.publish_delivery_plan(
+        change_id,
+        PublishDeliveryPlan(
+            outcome_id=planner.outcome_id,
+            claim_id=planner.claim.claim_id,
+            tasks=(restart.completed_task, revised),
+        ),
+    )
+    application.transition_delivery(
+        change_id,
+        AdvanceDelivery(
+            action="advance", outcome_id=planner.outcome_id, claim_id=planner.claim.claim_id, output=candidate.output
+        ),
+    )
+
+
+# N12 I8: an unpublished settlement after an answered pause restarts from its receipt-derived predecessor.
+def test_builder_return_after_answered_pause_survives_default_loader_restart(tmp_path: Path) -> None:
+    change_id = "pause-then-return"
+    restart = _builder_return_restart_fixture(tmp_path, change_id)
+    launch = restart.application.acquire_frontier_work().launch_packages[0]
+    request = DeliveryRequest(
+        request_id="REQ-PILOT",
+        kind=DeliveryRequestKind.DECISION,
+        outcome_id=launch.outcome_id,
+        summary="Run the person-only check.",
+        options=(
+            DeliveryRequestOption(option_id="passed", label="passed"),
+            DeliveryRequestOption(option_id="failed", label="failed"),
+        ),
+    )
+    _settle_builder_launch(
+        restart.application,
+        change_id,
+        launch,
+        BlockDelivery(
+            action="block",
+            outcome_id=launch.outcome_id,
+            claim_id=launch.claim.claim_id,
+            block_id="BLOCK-PILOT",
+            reason="The check needs the user.",
+            unblock_condition="The user answers.",
+            expected_evidence=("Answer",),
+            locators=(restart.original_task.task_id,),
+            request=request,
+            resume_commit=launch.source_head,
+        ),
+    )
+    answer = DeliveryRequestResolution(selected_option_id="passed", provenance="user-confirmed")
+    _healthy_restart(restart).resolve_request(change_id, request.request_id, answer)
+    application = _healthy_restart(restart)
+    resumed = application.acquire_frontier_work().launch_packages[0]
+    assert resumed.claim.worker_role is DeliveryWorkerRole.BUILDER
+    returned = _settle_builder_launch(
+        application, change_id, resumed, _planning_return(resumed, restart.original_task.task_id)
+    )
+
+    reloaded = _healthy_restart(restart)
+    binding = reloaded._runtimes[change_id].show_binding("OUT-001")  # noqa: SLF001
+    assert binding == returned
+    assert binding.requests == (request.model_copy(update={"resolution": answer}),)
+    assert reloaded.acquire_frontier_work().launch_packages[0].claim.worker_role is DeliveryWorkerRole.PLANNER
+
+
+# N12 I3, I4, I8: refunded returns of one task are bounded; each unpublished return restarts.
+def test_third_planning_return_stops_at_the_return_limit_across_restarts(tmp_path: Path) -> None:
+    change_id = "planning-return-limit"
+    restart = _builder_return_restart_fixture(tmp_path, change_id)
+    task_id = restart.original_task.task_id
+    application = restart.application
+    for ordinal in range(1, 4):
+        launch = application.acquire_frontier_work().launch_packages[0]
+        assert launch.claim.worker_role is DeliveryWorkerRole.BUILDER
+        assert launch.task_id == task_id
+        returned = _settle_builder_launch(application, change_id, launch, _planning_return(launch, task_id))
+        application = _healthy_restart(restart)
+        if ordinal < 3:
+            assert returned.block is None
+            _promote_corrected_plan(restart, change_id, f"Implement the clarified task, revision {ordinal}")
+            application = _healthy_restart(restart)
+
+    assert returned.block is not None
+    assert returned.block.block_id == f"builder-return-limit-{returned.builder_handoff_context.settlement_id}"
+    assert returned.block.request_id is None
+    runtime = application._runtimes[change_id]  # noqa: SLF001
+    assert runtime.show_binding("OUT-001") == returned
+    assert application.acquire_frontier_work().launch_packages == ()
+    ledger = runtime.retry_ledger()
+    ledger.reconcile_owner_results()
+    episode = ledger.episode_for_attempt(launch.claim.attempt_id)
+    assert episode is not None
+    assert (episode.total_attempts, episode.stop_code) == (0, None)
+    assert ledger.returned_attempts(episode) == 3
+    before = runtime.frontier_bytes()
+    with pytest.raises(DeliveryRuntimeConflictError, match="requestless unblock cannot mutate"):
+        application.clear_block(change_id, "OUT-001", returned.block.block_id, "Operator verified.", (task_id,))
+    assert runtime.frontier_bytes() == before

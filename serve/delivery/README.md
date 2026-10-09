@@ -173,15 +173,15 @@ same typed configuration directly.
 | File | Optional? | Fields and defaults | Ownership |
 | --- | --- | --- | --- |
 | `.owlbear/delivery/config.json` | Required for canonical MCP/Cockpit startup | `schema_version` must be `2`; `remote`, `target_branch`, and `github_repository` are required and have no loader defaults. `delivery_state_branch` defaults to `owlbear/delivery-state` and is written by setup. `setup/init.py` defaults `remote` to `origin`, uses `main` as the non-interactive target-branch fallback, suggests the current branch interactively, and infers `github_repository` from the configured remote. | Tracked project policy |
-| `.owlbear/delivery/runtime/host.json` | Seeded and trackable | Shared baseline defaults: `execution_capacity` defaults to `3`, and `claim_timeout_seconds` defaults to `3600` (60 minutes). Setup preserves existing values on rerun. `schema_version` must be `1`; both values must be positive integers. | Tracked baseline configuration |
+| `.owlbear/delivery/runtime/host.json` | Seeded and trackable | Shared baseline defaults: `execution_capacity` defaults to `8`, and `claim_timeout_seconds` defaults to `3600` (60 minutes). Setup preserves existing values on rerun. `schema_version` must be `1`; both values must be positive integers. | Tracked baseline configuration |
 | `.owlbear/delivery/runtime/host.local.json` | Optional and ignored | Any subset of the three host settings may override the tracked baseline for one machine. The file may omit `schema_version`; supplied values must be positive integers, and unknown keys are rejected at startup. | Host-local override configuration |
 
 `execution_capacity` is the maximum number of active Planner or Builder outcome claims across the
 portfolio. Each acquired Change has exact per-Change writer custody; there is no separate global
-`writer_capacity` admission limit. The tracked baseline allows three active claims:
+`writer_capacity` admission limit. The tracked baseline allows eight active claims:
 
 ```json
-{"schema_version": 1, "execution_capacity": 3, "claim_timeout_seconds": 3600}
+{"schema_version": 1, "execution_capacity": 8, "claim_timeout_seconds": 3600}
 ```
 
 When upgrading an existing workspace, remove the obsolete `writer_capacity` field from

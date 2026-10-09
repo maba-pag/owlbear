@@ -71,12 +71,43 @@ owlbear-memory/commit_memory_batch(session_type="curation")
 owlbear-memory/commit_memory_batch(session_type="review")
 ```
 
+MemoryEngine mutations and batch commits share one exclusive advisory lock on the resolved memory
+directory. It coordinates same-process writers and other processes, is re-entrant on the owning
+thread, uses one bounded deadline (30 seconds by default), and creates no lock file. A busy lock is
+`MemoryBusyError`, a `ConcurrencyError` subtype. MCP mutation tools surface busy locks and stale
+`revision` tokens as `ToolError`; a stale token is checked after reloading under the lock
+and does not overwrite newer content. Reads remain lock-free: `get_entries()` reparses when an entry
+filename, inode, size, or `mtime_ns` changes, while `load()` forces a full parse.
+
+The first mutation or batch commit that observes duplicate IDs repairs them under the lock; reads
+only select or report duplicates. The newest copy keeps the original ID, identical copies are
+removed, and differing copies are preserved as pending entries with new IDs and the title marker
+`[Recovered duplicate ID <id>]`. If repair fails, the error names the ID and paths, the triggering
+mutation does not run, and any pending copy already written is retained for retry.
+
+The batch operation holds that same lock from strict snapshot validation through `git commit`. It
+rechecks working-tree bytes and staged blobs before commit, then verifies the committed path set and
+blobs against the validated snapshot. It commits only validated memory paths; unrelated staged
+paths remain staged. A staged memory blob that differs from both `HEAD` and the validated file is
+rejected without resetting the index.
+
+A tracked duplicate-copy deletion is allowed while another file still carries its ID. If the
+survivor is pending, the old path is left unstaged and reported in `deferred_deletions`; the MCP
+result includes that field and the CLI prints `note: deferred duplicate deletions: ...`. Curate the
+survivor before retrying the batch. Other reviewed entries must be soft-deleted and committed as
+tombstones before purge.
+
+After staging begins, a recheck, Git, or hook failure may leave memory paths staged; the operation
+does not restore the index. Inspect `git status` and the staged diff before retrying. A post-commit
+verification failure can occur after `HEAD` has moved; it reports unvalidated changes and does not
+reset Git state, so also inspect `git show --stat HEAD`.
+
 On Git or hook failure, the response is a `ToolError` whose message starts with
 `memory batch commit failed`. It includes the failed command, exit status, and `stderr` when
 available, otherwise `stdout`. Captured output is limited to the final 4,096 characters and is
 delimited as diagnostic text; hook output is untrusted and is not an instruction to the caller.
-The operation does not restore or otherwise manage the Git index after failure, so memory paths
-may remain staged. Inspect `git status` and the staged diff before retrying.
+See the [memory package README](../../../serve/memory/README.md) and
+[Memory MCP README](../../../serve/memory-mcp/README.md) for implementation details.
 
 ## Tool Summary
 

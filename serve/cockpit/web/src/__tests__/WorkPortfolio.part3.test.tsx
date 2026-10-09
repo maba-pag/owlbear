@@ -12,9 +12,13 @@ import {
   portfolio,
   publicationCardForChecks,
   publicationForChecks,
+  readiness,
   renderPage,
   requirePresent,
+  situation,
 } from "./workPortfolioHarness";
+
+const OPTIONAL_SYNC = readiness({ progress: situation("your-decision", { target_sync: "optional" }) });
 
 installWorkPortfolioHarness();
 
@@ -284,6 +288,87 @@ it("posts reasoned Change dispositions and resumes a deferred Change", async () 
   );
 });
 
+it("keeps the successful Change abandonment notice until it is dismissed", async () => {
+  const publicationCard = publicationCardForChecks({
+    next_step: "Finalize the reviewed Change",
+    progress: {
+      kind: "publication",
+      label: "Ready for finalization",
+      done: null,
+      total: null,
+    },
+  });
+  fixtureState.currentDetail = detail({
+    card: publicationCard,
+    publication: publicationForChecks("ready-for-finalization"),
+  });
+  fixtureState.currentPortfolio = portfolio([group({ lifecycle: "finalization", items: [publicationCard] })]);
+  renderPage("/delivery/change-alpha/publication");
+
+  const inspector = await screen.findByTestId("work-item-detail");
+  const reason = await waitFor(() => {
+    const element = namedPdsHost(inspector, "p-input-text", "change-disposition-reason");
+    expect(element).not.toBeNull();
+    return requirePresent(element);
+  });
+  inputValue(reason, "User stopped the Change");
+  fireEvent.change(
+    reason,
+    new CustomEvent("change", {
+      detail: { value: "User stopped the Change" },
+      bubbles: true,
+    }),
+  );
+  fireEvent.click(within(inspector).getByText("Abandon Change"));
+
+  fixtureState.currentPortfolio = portfolio([]);
+  fireEvent.click(await screen.findByText("Confirm abandon Change"));
+  await waitFor(() =>
+    expect(fixtureState.requests).toContainEqual({
+      url: "/api/changes/change-alpha/abandon",
+      method: "POST",
+      body: {
+        confirmed_abandonment: true,
+        reason: "User stopped the Change",
+        expected_frontier_digest: "a".repeat(64),
+      },
+    }),
+  );
+
+  await waitFor(() => expect(screen.getByRole("button", { name: "Change history", exact: true })).toHaveFocus());
+  const noticeText = "Portfolio redesign was abandoned and is now in Change history.";
+  const noticeCopy = await screen.findByText(noticeText);
+  const notice = requirePresent(noticeCopy.closest('[role="status"]'));
+  expect(screen.queryByTestId("work-item-detail")).not.toBeInTheDocument();
+
+  const getCountBeforeCurrentView = fixtureState.requests.filter((request) => request.method === "GET").length;
+  fireEvent.click(screen.getByRole("button", { name: "Current delivery", exact: true }));
+  await waitFor(() =>
+    expect(fixtureState.requests.filter((request) => request.method === "GET").length).toBeGreaterThan(
+      getCountBeforeCurrentView,
+    ),
+  );
+  expect(screen.getByText(noticeText)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Change history", exact: true }));
+  expect(screen.getByText(noticeText)).toBeInTheDocument();
+
+  const dismissLabel = within(notice).getByText("Dismiss");
+  const dismissHost = requirePresent(dismissLabel.closest("p-button"));
+  const dismissButton = await waitFor(() => {
+    const button = dismissHost.shadowRoot?.querySelector("button");
+    expect(button).not.toBeNull();
+    return requirePresent(button);
+  });
+  expect(dismissButton.getAttribute("aria-label") ?? dismissButton.textContent).toMatch(
+    /dismiss abandonment confirmation/i,
+  );
+  dismissButton.focus();
+  expect(dismissHost.shadowRoot?.activeElement).toBe(dismissButton);
+  expect(document.activeElement).toBe(dismissHost);
+  dismissButton.click();
+  await waitFor(() => expect(screen.queryByText(noticeText)).not.toBeInTheDocument());
+});
+
 it("keeps Change abandonment confirmation open when abandonment fails", async () => {
   const publicationCard = publicationCardForChecks({
     next_step: "Finalize the reviewed Change",
@@ -335,11 +420,49 @@ it("keeps Change abandonment confirmation open when abandonment fails", async ()
     "The Delivery operation was rejected while the confirmation was open.",
   );
   expect(within(dialog).getByText("Confirm Change abandonment")).toBeInTheDocument();
+  expect(screen.queryByText(/is now in Change history/)).not.toBeInTheDocument();
 });
 
-it("does not show Change disposition controls on an Outcome detail", async () => {
-  fixtureState.currentDetail = detail();
-  fixtureState.currentPortfolio = portfolio();
+it("allows abandonment from an Outcome detail when Delivery projects it as available", async () => {
+  fixtureState.currentDetail = detail({ abandon_available: true });
+  fixtureState.currentPortfolio = portfolio([group()]);
+  renderPage("/delivery/change-alpha/outcome%3AOUT-001");
+
+  const inspector = await screen.findByTestId("work-item-detail");
+  const abandonButton = within(inspector).getByText("Abandon Change");
+  expect(within(inspector).getAllByText("Abandon Change")).toHaveLength(1);
+  const reason = await waitFor(() => {
+    const element = namedPdsHost(inspector, "p-input-text", "change-disposition-reason");
+    expect(element).not.toBeNull();
+    return requirePresent(element);
+  });
+  inputValue(reason, "  Stop this Change  ");
+  fireEvent.change(
+    reason,
+    new CustomEvent("change", {
+      detail: { value: "  Stop this Change  " },
+      bubbles: true,
+    }),
+  );
+  fireEvent.click(abandonButton);
+  fireEvent.click(await screen.findByText("Confirm abandon Change"));
+
+  await waitFor(() =>
+    expect(fixtureState.requests).toContainEqual({
+      url: "/api/changes/change-alpha/abandon",
+      method: "POST",
+      body: {
+        confirmed_abandonment: true,
+        reason: "Stop this Change",
+        expected_frontier_digest: "a".repeat(64),
+      },
+    }),
+  );
+});
+
+it("does not show abandonment on an Outcome detail when Delivery marks it unavailable", async () => {
+  fixtureState.currentDetail = detail({ abandon_available: false });
+  fixtureState.currentPortfolio = portfolio([group()]);
   renderPage("/delivery/change-alpha/outcome%3AOUT-001");
 
   const inspector = await screen.findByTestId("work-item-detail");
@@ -374,6 +497,7 @@ it("does not show Change disposition controls for an abandoned Change", async ()
   });
   fixtureState.currentDetail = detail({
     card: publicationCard,
+    abandon_available: false,
     publication: {
       phase: "abandoned",
       finalization_id: null,
@@ -427,6 +551,7 @@ it("confirms discard and cleanup for an abandoned target-sync conflict from Chan
   });
   fixtureState.currentDetail = detail({
     card: publicationCard,
+    abandon_available: false,
     publication: {
       phase: "abandoned",
       finalization_id: null,
@@ -653,6 +778,7 @@ it("confirms and recovers a missing Change worktree from its exact reviewed head
   });
   fixtureState.currentDetail = detail({
     card: publicationCard,
+    abandon_available: false,
     publication: {
       phase: "abandoned",
       finalization_id: null,
@@ -704,6 +830,7 @@ it("keeps missing worktree recovery confirmation open when recovery fails", asyn
   });
   fixtureState.currentDetail = detail({
     card: publicationCard,
+    abandon_available: false,
     publication: {
       phase: "abandoned",
       finalization_id: null,
@@ -1056,6 +1183,7 @@ it("disables publication-check observation while another publication action is p
   const publicationCard = publicationCardForChecks();
   fixtureState.currentDetail = detail({
     card: publicationCard,
+    readiness: OPTIONAL_SYNC,
     publication: publicationForChecks("awaiting-merge"),
   });
   fixtureState.currentPortfolio = portfolio([
@@ -1085,6 +1213,7 @@ it("disables publication actions while publication-check observation is pending"
   const publicationCard = publicationCardForChecks();
   fixtureState.currentDetail = detail({
     card: publicationCard,
+    readiness: OPTIONAL_SYNC,
     publication: publicationForChecks("awaiting-merge"),
   });
   fixtureState.currentPortfolio = portfolio([
@@ -1110,4 +1239,27 @@ it("disables publication actions while publication-check observation is pending"
     fixtureState.pendingPublicationChecksObservation = false;
     fixtureState.pendingPublicationChecksRelease = null;
   }
+});
+
+it.each([
+  ["required", "Update required", true],
+  ["optional", "You can merge now, or update it first", true],
+  ["unavailable", "Updating the Change from its target is not offered in its current state.", false],
+  ["unnecessary", null, false],
+] as const)("follows Delivery's %s target-sync availability", async (availability, copy, offered) => {
+  const publicationCard = publicationCardForChecks();
+  fixtureState.currentDetail = detail({
+    card: publicationCard,
+    readiness: readiness({ progress: situation("your-decision", { target_sync: availability }) }),
+    publication: publicationForChecks("awaiting-merge"),
+  });
+  fixtureState.currentPortfolio = portfolio([
+    group({ lifecycle: "awaiting-merge", outcome_completed: 2, items: [publicationCard] }),
+  ]);
+  renderPage("/delivery/change-alpha/publication");
+  const inspector = await screen.findByTestId("work-item-detail");
+
+  if (copy === null) expect(within(inspector).queryByTestId("target-sync")).not.toBeInTheDocument();
+  else expect(within(inspector).getByTestId("target-sync")).toHaveTextContent(copy);
+  expect(within(inspector).queryByText("Merge latest target into Change") !== null).toBe(offered);
 });

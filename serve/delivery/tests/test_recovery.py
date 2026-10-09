@@ -1339,7 +1339,7 @@ def test_clean_finalizer_recovery_of_a_stored_v18_frontier_records_one_marker_on
     published = _git(repository, "rev-parse", "refs/remotes/origin/owlbear/delivery-state")
     assert _git(repository, "rev-list", "--count", f"{state_head}..{published}") == "1"
     republished = json.loads(_git(repository, "show", f"{published}:.owlbear/delivery/state/change-a/snapshot.json"))
-    assert republished["schema_version"] == 3
+    assert republished["schema_version"] == 4
     assert republished["parent_snapshot_id"] == snapshot["snapshot_id"]
     assert reopened._runtimes["change-a"].pending_state_publication() is None
     assert reopened._replay_pending_state_publications() == ()
@@ -1558,7 +1558,7 @@ def _assert_default_loader_republishes_once(repository: Path, state_head: str, m
     republished_head = _git(repository, "rev-parse", "refs/remotes/origin/owlbear/delivery-state")
     assert _git(repository, "rev-list", "--count", f"{state_head}..{republished_head}") == "1"
     republished = json.loads(_git(repository, "show", f"{republished_head}:{_LOADER_SNAPSHOT_PATH}"))
-    assert republished["schema_version"] == 3
+    assert republished["schema_version"] == 4
     assert republished["parent_snapshot_id"] == snapshot_2["snapshot_id"]
 
     converged = load_delivery_application(_LOADER_CONFIG, workspace_root=repository)
@@ -1743,15 +1743,15 @@ def test_review_repair_finalizer_readiness_and_acquisition_share_retry_identity(
     assert readiness.attempts == (3 if exhausted else 1)
 
     blocked = application.acquire_change_action(_continuation_request(application))
-    assert blocked.kind == ("unsupported" if exhausted else "waiting")
+    assert blocked.kind == ("human" if exhausted else "waiting")
     assert blocked.reason_code == ("retry-exhausted" if exhausted else "retry-backoff")
     assert blocked.readiness is not None
     assert blocked.readiness.attempts == (3 if exhausted else 1)
     if exhausted:
         assert blocked.readiness.operation is None
-        assert blocked.readiness.next_actor.value == "agent"
-        assert blocked.readiness.prompt is not None
-        assert blocked.readiness.prompt.startswith("/inspect-change change-a Diagnose the exhausted retry episode")
+        assert blocked.readiness.next_actor.value == "you"
+        assert blocked.readiness.grant_attempt_id is not None
+        assert blocked.readiness.prompt is None
     assert RetryLedger(state_root, "change-a").episode(key).total_attempts == (3 if exhausted else 1)
     assert runtime.finalization() is None
 

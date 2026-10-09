@@ -65,3 +65,8 @@ On a newly acquired resumed claim:
 
 Resolved decisions constrain subsequent work. Action outcomes are evidence, not automatic proof
 that a node or change satisfies its acceptance boundary.
+
+An answered Decision Request is a `decided` decision. Never create a request to replace an answered
+one: return to Design, where the Designer asks the user and records a contract decision that
+supersedes it. The context's `superseded_request_ids` names such a request; consume the superseding
+decision from its `decisions` instead.

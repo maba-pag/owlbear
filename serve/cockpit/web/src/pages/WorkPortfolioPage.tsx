@@ -40,13 +40,12 @@ import { WorkspaceHeader } from "../components/WorkspaceHeader";
 import { WorkspaceViewCount } from "../components/WorkspaceViewHeader";
 import {
   CONTINUATION_PROMPT_HELP,
+  changeAwaitsPrompt,
   changeContinuationPrompt,
   changePauseUnavailableMessage,
   READINESS_CHECKS_LABELS,
-  READINESS_REASON_LABELS,
 } from "../components/workItemPresentation";
 import {
-  useAcceptanceReconciliation,
   useChangeIntent,
   useDesignWorkDetail,
   useWorkItemDetail,
@@ -325,14 +324,17 @@ function SelectedWorkItemDetail({
   onChanged,
   onClose,
   continuationPrompt,
+  onAbandoned,
 }: {
   identity: WorkItemIdentity;
   onChanged: () => void;
   onClose: () => void;
   continuationPrompt: string | null;
+  onAbandoned: (changeId: string, title: string) => void;
 }) {
   const selectedDetail = useWorkItemDetail(identity, onChanged);
-  if (selectedDetail.detail.data)
+  const detail = selectedDetail.detail.data;
+  if (detail)
     return (
       <>
         {selectedDetail.detail.error ? (
@@ -357,12 +359,14 @@ function SelectedWorkItemDetail({
           </div>
         ) : null}
         <WorkItemDetail
-          detail={selectedDetail.detail.data}
+          detail={detail}
           pendingAction={selectedDetail.pendingAction}
           actionError={selectedDetail.actionError}
           actionResult={selectedDetail.actionResult}
           onAnswerRequest={selectedDetail.answerRequest}
           onClearBlock={selectedDetail.clearBlock}
+          onGrantAttempt={selectedDetail.grantAttempt}
+          onGrantRetryAttempt={selectedDetail.grantRetryAttempt}
           onReleaseStuckWorker={selectedDetail.releaseStuckWorker}
           onPreviewBackward={selectedDetail.previewBackward}
           onMoveBackward={selectedDetail.moveBackward}
@@ -383,7 +387,13 @@ function SelectedWorkItemDetail({
           onResolveTargetSync={selectedDetail.resolveTargetSync}
           onDeferChange={selectedDetail.deferChange}
           onResumeChange={selectedDetail.resumeChange}
-          onAbandonChange={selectedDetail.abandonChange}
+          onAbandonChange={async (reason) => {
+            const error = await selectedDetail.abandonChange(reason);
+            if (error === null && "item" in detail) {
+              onAbandoned(identity.changeId, detail.item.change_title);
+            }
+            return error;
+          }}
           onCleanupAbandonedChange={selectedDetail.cleanupAbandonedChange}
           onDiscardAbandonedTargetSync={selectedDetail.discardAbandonedTargetSync}
           onCleanupCompletedChange={selectedDetail.cleanupCompletedChange}
@@ -401,6 +411,7 @@ function SelectedDetail(props: {
   onChanged: () => void;
   onClose: () => void;
   continuationPrompt: string | null;
+  onAbandoned: (changeId: string, title: string) => void;
 }) {
   if (props.identity.itemKey === "design") {
     return <SelectedDesignDetail changeId={props.identity.changeId} onClose={props.onClose} />;
@@ -431,7 +442,7 @@ function PortfolioWorkspace({
       renderGroupControls={(group) => (
         <ChangePauseControl
           changeId={group.change_id}
-          paused={group.progress === "paused" || group.lifecycle === "deferred"}
+          paused={group.progress?.situation === "paused" || group.lifecycle === "deferred"}
           pauseRequested={group.pause_requested === true}
           unavailableMessage={changePauseUnavailableMessage(group)}
           pendingAction={intent.pendingAction(group.change_id)}
@@ -648,7 +659,9 @@ function DeliveryIssuesSection({
                 </Link>
                 <span className="text-xs text-contrast-medium">Delivery</span>
               </div>
-              <p className="mt-1 font-medium text-primary">{READINESS_REASON_LABELS[change.readiness.reason_code]}</p>
+              <p className="mt-1 font-medium text-primary">
+                {change.readiness.progress?.headline ?? "Delivery cannot read this Change's state."}
+              </p>
               <p className="mt-1 text-xs text-contrast-medium">
                 Read-only inspection only. Checks: {READINESS_CHECKS_LABELS[change.readiness.checks_state]}.
               </p>
@@ -756,8 +769,8 @@ export default function WorkPortfolioPage() {
   const [workspace, setWorkspace] = useState<"current" | "history">(() =>
     isHistoryRoute(location.pathname) ? "history" : "current",
   );
+  const [abandonedNotice, setAbandonedNotice] = useState<{ changeId: string; title: string } | null>(null);
   const { portfolio, hasData, error, isLoading, retry } = useWorkPortfolio(workspace === "history");
-  const acceptanceReconciliation = useAcceptanceReconciliation(portfolio, retry, workspace === "history");
   const [changeFilter, setChangeFilter] = useState("");
   const [needsFilter, setNeedsFilter] = useState<WorkItemNeed | "">("");
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -1008,6 +1021,7 @@ export default function WorkPortfolioPage() {
             <PortfolioHeaderSummary
               operating={portfolio.operating}
               totals={portfolio.totals}
+              runPromptCount={portfolio.groups.filter(changeAwaitsPrompt).length}
               needsFilter={needsFilter}
               onNeedsFilter={setNeedsFilter}
             />
@@ -1046,6 +1060,25 @@ export default function WorkPortfolioPage() {
         ].join(" ")}
         data-testid="work-scroll-surface"
       >
+        {abandonedNotice ? (
+          <section
+            className={[
+              "flex flex-wrap items-center gap-static-sm border-l-4",
+              "border-success bg-surface p-static-md",
+            ].join(" ")}
+            role="status"
+          >
+            <span className="min-w-0 flex-1">{abandonedNotice.title} was abandoned and is now in Change history.</span>
+            <PButton
+              type="button"
+              variant="secondary"
+              aria={{ "aria-label": "Dismiss abandonment confirmation" }}
+              onClick={() => setAbandonedNotice(null)}
+            >
+              Dismiss
+            </PButton>
+          </section>
+        ) : null}
         {workspace === "current" ? (
           <>
             {isLoading ? (
@@ -1069,27 +1102,6 @@ export default function WorkPortfolioPage() {
                 </span>
                 <PButton type="button" variant="secondary" onClick={retry}>
                   Retry portfolio
-                </PButton>
-              </section>
-            ) : null}
-            {acceptanceReconciliation.providerError ? (
-              <section
-                className="flex flex-wrap items-center gap-static-sm border-l-4 border-warning bg-surface p-static-md"
-                role="alert"
-              >
-                <PIcon name="warning" aria-hidden="true" />
-                <span className="min-w-0 flex-1">
-                  {"GitHub acceptance checks are unavailable for "}
-                  {acceptanceReconciliation.providerChangeIds.join(", ")}.{" "}
-                  {acceptanceReconciliation.providerError.message}
-                </span>
-                <PButton
-                  type="button"
-                  variant="secondary"
-                  loading={acceptanceReconciliation.isRetrying}
-                  onClick={acceptanceReconciliation.retry}
-                >
-                  {acceptanceReconciliation.isRetrying ? "Retrying acceptance check..." : "Retry acceptance check"}
                 </PButton>
               </section>
             ) : null}
@@ -1162,6 +1174,7 @@ export default function WorkPortfolioPage() {
               onChanged={retry}
               onClose={closeInspector}
               continuationPrompt={selectedContinuationPrompt}
+              onAbandoned={(changeId, title) => setAbandonedNotice({ changeId, title })}
             />
           ) : null}
         </div>
