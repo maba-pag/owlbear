@@ -15,6 +15,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from owlbear_browser import AcquisitionFailure, AcquisitionStatus, AcquisitionSuccess, Diagnostics
 from owlbear_browser.playwright_launcher import PlaywrightLauncher
+from owlbear_browser_mcp import server as server_module
 from owlbear_browser_mcp.allowlist import DomainAllowlist
 from owlbear_browser_mcp.server import AppContext, _serialize_acquisition, acquire, browser_status, mcp
 
@@ -63,6 +64,64 @@ async def test_acquire_delegates_allowed_public_url_after_security_checks() -> N
     assert result["markdown"] == "Rendered fixture content"
     assert app_ctx.latest_acquisition_status is AcquisitionStatus.SUCCESS
     assert (await browser_status(ctx))["latest_acquisition_status"] == AcquisitionStatus.SUCCESS.value
+
+
+@pytest.mark.asyncio
+async def test_first_acquire_lazily_launches_managed_edge() -> None:
+    url = "https://target.example.com/page"
+    page = MagicMock()
+    page.close = AsyncMock()
+    launcher = MagicMock()
+    launcher.is_running = False
+
+    async def start_launcher() -> None:
+        launcher.is_running = True
+
+    launcher.launch = AsyncMock(side_effect=start_launcher)
+    launcher.page = AsyncMock(return_value=page)
+    launcher.acquire = AsyncMock(
+        return_value=AcquisitionFailure(
+            status=AcquisitionStatus.ACCESS_DENIED,
+            diagnostics=Diagnostics("denied"),
+        )
+    )
+    launcher.close = AsyncMock()
+
+    with (
+        patch.object(server_module.sys, "platform", "darwin"),
+        patch.dict(
+            server_module.os.environ,
+            {"BROWSER_ALLOWED_DOMAINS": "target.example.com"},
+            clear=True,
+        ),
+        patch.object(server_module, "_check_ssrf", new_callable=AsyncMock) as ssrf_check,
+        patch.object(server_module, "PlaywrightLauncher", return_value=launcher) as launcher_factory,
+    ):
+        async with server_module.app_lifespan(mcp) as context:
+            ctx = MagicMock()
+            ctx.request_context = SimpleNamespace(lifespan_context=context)
+            assert (await browser_status(ctx))["startup_state"] == "not-launched"
+            launcher_factory.assert_not_called()
+
+            result = await acquire(ctx, url)
+
+            assert result["status"] == "access_denied"
+            assert context.page is page
+            status = await browser_status(ctx)
+            assert status["browser_mode"] == "managed-edge"
+            assert status["startup_state"] == "ready"
+            assert status["startup_reason"] is None
+            assert status["startup_diagnostic"] is None
+            assert launcher_factory.call_count == 1
+            assert launcher_factory.call_args.kwargs["mode"].value == "managed-edge"
+            assert launcher_factory.call_args.kwargs["user_data_dir"] == context.user_data_dir
+            ssrf_check.assert_awaited_once()
+
+    launcher.launch.assert_awaited_once()
+    launcher.page.assert_awaited_once()
+    launcher.acquire.assert_awaited_once()
+    launcher.close.assert_awaited_once()
+    page.close.assert_awaited_once()
 
 
 @pytest.mark.asyncio

@@ -79,6 +79,9 @@ class _FakeLauncher:
             return self._page_resource
         return _FakePage(self._calls)
 
+    def set_page_error(self, error: BaseException | None) -> None:
+        self._page_error = error
+
     async def close(self) -> None:
         self._calls.append("launcher")
         self.is_running = False
@@ -162,6 +165,36 @@ async def test_closed_page_is_reopened_without_relaunching() -> None:
 
 
 @pytest.mark.asyncio
+async def test_page_reopen_failure_does_not_mark_browser_startup_unavailable() -> None:
+    calls: list[str] = []
+    launcher = _FakeLauncher(calls)
+
+    with (
+        patch.object(server_module.sys, "platform", "darwin"),
+        patch.dict(server_module.os.environ, {}, clear=True),
+        patch.object(server_module, "PlaywrightLauncher", return_value=launcher) as factory,
+    ):
+        async with app_lifespan(mcp) as context:
+            ctx = _tool_ctx(context)
+            await click(ctx, "#a")
+            context.page.closed = True
+            calls_before_reopen = calls.copy()
+            launcher.set_page_error(RuntimeError("/private/profile/token"))
+
+            with pytest.raises(ToolError, match=r"browser page failed \(RuntimeError\)") as error:
+                await click(ctx, "#b")
+            assert "/private/profile/token" not in str(error.value)
+            assert calls == [*calls_before_reopen, "page-create"]
+
+            status = await browser_status(ctx)
+            assert status["startup_state"] == "ready"
+            assert status["startup_reason"] is None
+            assert status["startup_diagnostic"] is None
+            assert context.launcher is launcher
+            factory.assert_called_once()
+
+
+@pytest.mark.asyncio
 async def test_closed_browser_is_relaunched_and_only_current_resources_close_at_shutdown() -> None:
     calls: list[str] = []
     launchers: list[_FakeLauncher] = []
@@ -170,12 +203,33 @@ async def test_closed_browser_is_relaunched_and_only_current_resources_close_at_
         launchers.append(_FakeLauncher(calls))
         return launchers[-1]
 
-    with patch.object(server_module, "PlaywrightLauncher", side_effect=make_launcher):
+    with (
+        patch.object(server_module.sys, "platform", "darwin"),
+        patch.dict(server_module.os.environ, {}, clear=True),
+        patch.object(server_module, "PlaywrightLauncher", side_effect=make_launcher) as factory,
+    ):
         async with app_lifespan(mcp) as context:
             await click(_tool_ctx(context), "#a")
             launchers[0].is_running = False
+            calls_before_status = calls.copy()
+            status = await browser_status(_tool_ctx(context))
+            assert status["startup_state"] == "not-launched"
+            assert status["startup_reason"] is None
+            assert status["visible_authentication"] == "unavailable"
+            assert status["startup_diagnostic"] is None
+            assert calls == calls_before_status
+            assert len(launchers) == 1
+
             await click(_tool_ctx(context), "#b")
             assert context.launcher is launchers[1]
+            status = await browser_status(_tool_ctx(context))
+            assert status["startup_state"] == "ready"
+            assert status["startup_reason"] is None
+            assert status["startup_diagnostic"] is None
+            assert len(launchers) == 2
+            for launch_call in factory.call_args_list:
+                assert launch_call.kwargs["mode"] is BrowserMode.MANAGED_EDGE
+                assert launch_call.kwargs["user_data_dir"] == context.user_data_dir
             calls.append("shutdown")
 
     assert calls == ["launch", "page-create", "launcher", "launch", "page-create", "shutdown", "page", "launcher"]
@@ -302,15 +356,25 @@ async def test_invalid_mode_reports_unavailable_without_launching() -> None:
     with (
         patch.dict(server_module.os.environ, {"BROWSER_MODE": "safari"}, clear=False),
         patch.object(server_module, "PlaywrightLauncher") as launcher_factory,
+        patch.object(server_module, "_check_ssrf") as check_ssrf,
     ):
         async with app_lifespan(mcp) as context:
-            status = await browser_status(SimpleNamespace(request_context=SimpleNamespace(lifespan_context=context)))
+            ctx = SimpleNamespace(request_context=SimpleNamespace(lifespan_context=context))
+            status = await browser_status(ctx)
             assert status["startup_reason"] == "invalid-mode"
             assert status["startup_state"] == "unavailable"
             assert status["visible_authentication"] == "unavailable"
-            with pytest.raises(ToolError, match="InvalidBrowserModeError"):
-                await click(_tool_ctx(context), "#a")
+            for action, arguments in (
+                (server_module.acquire, ("https://target.example.com/page",)),
+                (server_module.navigate, ("https://target.example.com/page",)),
+                (server_module.click, ("#a",)),
+                (server_module.type_input, ("#a", "value")),
+                (server_module.select, ("#a", "value")),
+            ):
+                with pytest.raises(ToolError, match="InvalidBrowserModeError"):
+                    await action(ctx, *arguments)
     launcher_factory.assert_not_called()
+    check_ssrf.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -323,13 +387,21 @@ async def test_invalid_mode_reports_unavailable_without_launching() -> None:
     ],
 )
 async def test_startup_failure_reports_bounded_reason(error: Exception, reason: str) -> None:
-    launcher = _FakeLauncher([], launch_error=error)
-    with patch.object(server_module, "PlaywrightLauncher", return_value=launcher):
+    calls: list[str] = []
+    launchers = [_FakeLauncher(calls, launch_error=error), _FakeLauncher(calls)]
+    with (
+        patch.object(server_module.sys, "platform", "darwin"),
+        patch.dict(server_module.os.environ, {}, clear=True),
+        patch.object(server_module, "PlaywrightLauncher", side_effect=launchers) as factory,
+    ):
         async with app_lifespan(mcp) as context:
+            ctx = _tool_ctx(context)
             with pytest.raises(ToolError):
-                await click(_tool_ctx(context), "#a")
-            status = await browser_status(SimpleNamespace(request_context=SimpleNamespace(lifespan_context=context)))
+                await click(ctx, "#a")
+            status = await browser_status(ctx)
             assert status["startup_reason"] == reason
+            assert status["startup_state"] == "unavailable"
+            assert status["startup_diagnostic"] == f"browser startup failed ({type(error).__name__})"
             assert set(status) == {
                 "browser_mode",
                 "ownership",
@@ -340,6 +412,17 @@ async def test_startup_failure_reports_bounded_reason(error: Exception, reason: 
                 "startup_diagnostic",
             }
             assert "secret" not in str(status)
+            factory.assert_called_once()
+
+            await click(ctx, "#b")
+            status = await browser_status(ctx)
+            assert status["startup_state"] == "ready"
+            assert status["startup_reason"] is None
+            assert status["startup_diagnostic"] is None
+            assert factory.call_count == 2
+            for launch_call in factory.call_args_list:
+                assert launch_call.kwargs["mode"] is BrowserMode.MANAGED_EDGE
+                assert launch_call.kwargs["user_data_dir"] == context.user_data_dir
 
 
 @pytest.mark.asyncio

@@ -374,6 +374,8 @@ async def _validate_destination(app_ctx: object, url: str) -> None:
     """Apply the DNS/IP preflight and allowlist before any browser work."""
     if not isinstance(app_ctx, AppContext):
         raise ToolError(_MSG_BROWSER_UNAVAILABLE)
+    if app_ctx.startup_reason is StartupReason.INVALID_MODE:
+        raise ToolError(_browser_unavailable_message(app_ctx))
     await _check_ssrf(url, allowlist=app_ctx.allowlist)
     try:
         app_ctx.allowlist.check(url)
