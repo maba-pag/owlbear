@@ -1260,7 +1260,9 @@ def _validate_local_builder_handoff_frontier(
             receipt,
             paths.runtime_root,
         )
-    if expected_frontier != local_frontier:
+    if expected_frontier != local_frontier and not _is_unpublished_checkpoint_successor(
+        expected_frontier, local_frontier
+    ):
         _bootstrap_failure("local Delivery frontier contains state outside the exact Builder handoff")
 
 

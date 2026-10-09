@@ -1997,7 +1997,9 @@ class _BuilderReturnRestartFixture(NamedTuple):
     remote_snapshot: bytes
 
 
-def _builder_return_restart_fixture(tmp_path: Path, change_id: str) -> _BuilderReturnRestartFixture:
+def _builder_return_restart_fixture(
+    tmp_path: Path, change_id: str, *, published_head: bool = False
+) -> _BuilderReturnRestartFixture:
     repository, remote, initial = _repository(tmp_path)
     contract, intent, design = _contract(change_id)
     state_root = tmp_path / "state"
@@ -2109,6 +2111,13 @@ def _builder_return_restart_fixture(tmp_path: Path, change_id: str) -> _BuilderR
         "bootstrap-package",
     )
     _git(repository, "push", "origin", f"{snapshot.snapshot_head}:refs/heads/{coordination.branch}")
+    if published_head:
+        published = DeliveryFrontier.model_validate_json(frontier_path.read_bytes())
+        frontier_path.write_bytes(
+            _canonical_payload(
+                published.model_copy(update={"published_head": snapshot.snapshot_head}).model_dump(mode="json")
+            )
+        )
     publisher = DeliveryStatePublisher(repository, remote=str(remote), state_branch="owlbear/delivery-state")
     publisher.publish(
         change_id=change_id,
@@ -2576,6 +2585,77 @@ def _assert_granted_claim_reloads(config: DeliveryStartupConfig, fresh: Path, ch
     assert binding.active_claim.attempt_id == attempt_id
     assert binding.block is not None
     assert binding.block.resolution_note == "The user granted one more Builder attempt."
+
+
+def test_builder_handoff_with_pending_checkpoint_at_published_head_survives_restart(tmp_path: Path) -> None:
+    change_id = "attempt-grant-pending-checkpoint"
+    restart = _builder_return_restart_fixture(tmp_path, change_id, published_head=True)
+    fresh, config, application = restart.fresh, restart.config, restart.application
+
+    def acquire(current: PortfolioApplication) -> DeliveryLaunchPackage | None:
+        episodes = current._runtimes[change_id].retry_ledger().read().episodes  # noqa: SLF001
+        eligible = [episode.next_eligible_at for episode in episodes if episode.next_eligible_at is not None]
+        if eligible:
+            resume = datetime.fromisoformat(max(eligible)) + timedelta(seconds=1)
+            current._clock = lambda: resume.isoformat().replace("+00:00", "Z")  # noqa: SLF001
+        launches = current.acquire_frontier_work().launch_packages
+        return launches[0] if launches else None
+
+    for _ in range(3):
+        launch = acquire(application)
+        assert launch is not None
+        application.settle_worker_invocation(
+            DeliveryBuilderInvocationSettlement(
+                change_id=change_id,
+                outcome_id=launch.outcome_id,
+                claim_id=launch.claim.claim_id,
+                attempt_id=launch.claim.attempt_id,
+                task_id=launch.task_id,
+                expected_last_reviewed_commit=launch.last_reviewed_commit,
+                disposition="ended-without-result",
+            ),
+            host_id=launch.claim.owner_id,
+            session_id=launch.claim.process_id,
+        )
+        application = load_delivery_application(config, workspace_root=fresh)
+
+    runtime = application._runtimes[change_id]  # noqa: SLF001
+    frontier, previous = runtime._read()  # noqa: SLF001
+    assert frontier.published_head is not None
+    assert frontier.pending_checkpoint is None
+    # A verified result queued at the published head; remote snapshots drop such a checkpoint.
+    runtime._replace(
+        previous,
+        frontier.model_copy(
+            update={
+                "pending_checkpoint": DeliveryPendingCheckpoint(
+                    head=frontier.published_head,
+                    triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.VERIFIED_TASK),),
+                )
+            }
+        ),
+    )
+
+    reloaded = load_delivery_application(config, workspace_root=fresh)
+    health = reloaded.delivery_health()
+    assert health.status.value == "healthy", health.diagnostics
+    reloaded_runtime = reloaded._runtimes[change_id]  # noqa: SLF001
+    block = reloaded_runtime.show_binding("OUT-001").block
+    assert block is not None
+    reloaded.answer(
+        DeliveryAnswer(
+            change_id=change_id,
+            kind=DeliveryAnswerKind.GRANT_ATTEMPT,
+            expected_frontier_digest=hashlib.sha256(reloaded_runtime.frontier_bytes()).hexdigest(),
+            outcome_id="OUT-001",
+            block_id=block.block_id,
+        ),
+        allow_user_only=True,
+    )
+    granted = load_delivery_application(config, workspace_root=fresh)
+    assert granted.delivery_health().status.value == "healthy"
+    assert granted.show_work_item_view(change_id, "outcome:OUT-001").readiness.reason_code != "retry-exhausted"
+    assert granted._runtimes[change_id]._read()[0].pending_checkpoint is not None  # noqa: SLF001
 
 
 def _settle_default_loader_planning_return(
