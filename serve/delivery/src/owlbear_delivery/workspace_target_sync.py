@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import os
 import secrets
+import subprocess
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Literal, NamedTuple, Never
 
@@ -14,12 +15,14 @@ from owlbear_delivery.workspace_models import (
     _COMMIT_PATTERN,
     _MERGE_COMMIT_MIN_PARENTS,
     _PORCELAIN_WORKTREE_STATUS_INDEX,
+    MAX_TARGET_OVERLAP_PATHS,
     AdoptExternalHead,
     BuilderHandoffSource,
     ChangeCoordination,
     ChangeExternalHeadAdoptionIntent,
     ChangeExternalHeadAdoptionReceipt,
     ChangeExternalHeadPromotionReceipt,
+    ChangeTargetOverlap,
     ChangeTargetSyncAbortReceipt,
     ChangeTargetSyncConflictError,
     ChangeTargetSyncConflictState,
@@ -51,6 +54,8 @@ if TYPE_CHECKING:
 
 _TARGET_SYNC_REF_PREFIX = "refs/owlbear/target-sync/"
 _TARGET_OBSERVATION_REF_PREFIX = "refs/owlbear/target-observation/"
+_TARGET_OVERLAP_REF_PREFIX = "refs/owlbear/target-overlap/"
+_MERGE_TREE_CONFLICT = 1
 _ZERO_OID = "0" * 40
 _TARGET_REF_TRANSACTION_ATTEMPTS = 3
 
@@ -182,6 +187,59 @@ class _TargetSyncMixin:
         if target_head == coordination.target_head:
             return coordination
         return self._coordinator.update(coordination.model_copy(update={"target_head": target_head}))
+
+    def probe_target_overlap(self, change_id: str) -> ChangeTargetOverlap:
+        """Fetch the configured target and test-merge the reviewed Change head with it, changing no branch.
+
+        The fetch lands in a private ref and, like a stale target-sync fetch, records the newer head as the
+        engine's observed target, so a following target sync merges exactly the probed commit. A failed fetch,
+        recording or merge test reports ``unknown``, never ``clean``.
+        """
+        reviewed = self._coordinator.show(change_id).last_reviewed_commit
+        try:
+            source_ref, target_ref, _target_branch = self._target_refs()
+            with self._target_sync_lock():
+                start = _TargetFetchStart(
+                    target_ref, self._resolve(target_ref, missing_ok=True), self._target_observations()
+                )
+            private_ref = f"{_TARGET_OVERLAP_REF_PREFIX}{secrets.token_hex(16)}"
+            fetch = run_remote_git(
+                self._repository,
+                (
+                    "fetch",
+                    "--no-tags",
+                    "--no-write-fetch-head",
+                    "--refmap=",
+                    self._remote,
+                    f"+{source_ref}:{private_ref}",
+                ),
+                kind="read",
+            )
+            target = self._resolve(private_ref, missing_ok=True) if fetch.returncode == 0 else None
+            if target is None:
+                return ChangeTargetOverlap(status="unknown", reviewed_head=reviewed)
+            try:
+                self._record_target_observation(start, target)
+                merge = self._run_git(
+                    "merge-tree", "--write-tree", "--name-only", "--no-messages", "-z", reviewed, target, check=False
+                )
+            finally:
+                self._run_git("update-ref", "-d", private_ref, target, check=False)
+        except OSError, RuntimeError, subprocess.SubprocessError, ValueError:
+            return ChangeTargetOverlap(status="unknown", reviewed_head=reviewed)
+        tree, *paths = merge.stdout.decode(errors="replace").removesuffix("\0").split("\0")
+        if _COMMIT_PATTERN.fullmatch(tree) is None:
+            return ChangeTargetOverlap(status="unknown", reviewed_head=reviewed)
+        if merge.returncode == 0 and not paths:
+            return ChangeTargetOverlap(status="clean", reviewed_head=reviewed, target_head=target)
+        if merge.returncode == _MERGE_TREE_CONFLICT and paths:
+            return ChangeTargetOverlap(
+                status="conflict",
+                reviewed_head=reviewed,
+                target_head=target,
+                conflict_paths=tuple(paths[:MAX_TARGET_OVERLAP_PATHS]),
+            )
+        return ChangeTargetOverlap(status="unknown", reviewed_head=reviewed)
 
     def recover_publication_baseline(
         self,

@@ -107,6 +107,9 @@ Elapsed time, disconnection, and `confirmed_lost` are not settlement evidence.
 `worker-host-lost` and `worker-released-stuck` are engine-only and never pass through
 `settle_worker_invocation`. Both count in the same three-attempt episode and preserve work, staging,
 commits, and refs. A fresh Builder triages from Build context and `prior_attempts`; Planner retries.
+Before a finalized proof exists, Build context also carries `target_overlap`: Delivery fetches the
+configured target and test-merges the reviewed head with it. On `conflict` the Builder returns the
+target-sync block for that commit before any edit; `unknown` is never treated as clean.
 A lost or released Finalizer without a report gets a `worker-ended` report with code
 `finalizer-ended-without-report` and `checks_state: unknown`. It is not proof; a fresh Finalizer needs
 new exact-head evidence and review under the original budget.

@@ -296,6 +296,11 @@ its target, routes any conflict to `/resolve-target-conflict`, and starts a fres
 once the commit is included. That claim's `return_context` names the preserved refs; reconcile what
 still applies. Never ask the user to synchronize the target.
 
+Build context's `target_overlap` is Delivery's test merge of the reviewed head with the freshly fetched
+target. When its `status` is `conflict`, return that target-sync block before any edit, naming
+`target-commit:<target_overlap.target_head>`. `unknown` is not clean: proceed with the task, but never
+report the Change as free of target conflicts.
+
 For a normal Builder return, Orchestrator uses `settle_worker_invocation` for `retry`, `block`, or
 `return` to Planning or Design; it validates exact workspace custody and persists any bounded request
 or return context. A Design return creates only a passive handoff and human-owned `/design` attention;

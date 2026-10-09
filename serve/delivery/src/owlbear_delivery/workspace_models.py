@@ -928,6 +928,33 @@ class ChangeTargetSyncReceipt(_WorkspaceModel):
         return self
 
 
+MAX_TARGET_OVERLAP_PATHS = 100
+
+
+class ChangeTargetOverlap(_WorkspaceModel):
+    """Test merge of the reviewed Change head with the freshly fetched target; ``unknown`` is never clean."""
+
+    status: Literal["clean", "conflict", "unknown"]
+    reviewed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    target_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    conflict_paths: tuple[str, ...] = Field(default=(), max_length=MAX_TARGET_OVERLAP_PATHS)
+
+    @field_validator("conflict_paths", mode="before")
+    @classmethod
+    def _normalize_conflict_paths(cls, value: object) -> object:
+        return tuple(value) if isinstance(value, list) else value
+
+    @model_validator(mode="after")
+    def _validate_status(self) -> Self:
+        if self.status != "unknown" and self.target_head is None:
+            message = "a known target overlap names the fetched target head"
+            raise ValueError(message)
+        if (self.status == "conflict") != bool(self.conflict_paths):
+            message = "only a conflicting target overlap names conflict paths"
+            raise ValueError(message)
+        return self
+
+
 class ChangeTargetSyncConflictState(_WorkspaceModel):
     """Durable identity of one preserved target merge conflict."""
 
