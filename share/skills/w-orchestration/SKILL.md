@@ -113,7 +113,10 @@ strictly what it carries and nothing else:
 underlying checkpoint, target-sync, mark-ready, or acceptance operation, do not dispatch an agent to
 perform it, and do not author effect, target, receipt, success, or recovery arguments. Its returned
 `DeliveryEngineActionResult` is the complete outcome: `completed`, `waiting`, and `stale` release the
-action, while `blocked` retains custody and forbids a replacement operation.
+action, while `blocked` retains custody and forbids a replacement operation. After `blocked`, re-read
+`get_change` once and report its engine-authored `readiness.prompt` unchanged as the user's next
+command. `failure.detail` is bounded text: never derive paths, commands, or a paraphrased next step
+from it.
 
 A dispatched Builder that already called `submit_result` returns `kind: submitted`; record it and do
 not call `transition_delivery` again for that result. A structurally valid, launch-bound
@@ -174,7 +177,7 @@ A non-acquired result carries no launch. Respond to its `kind` exactly:
 | --- | --- |
 | `busy` | Yield. Report the in-progress operation; do not poll in a loop, revoke custody, or recover a claim |
 | `waiting` | Yield with reason; report `next_eligible_at` for `worker-stall-wait`. No dispatch or capability upgrade |
-| `human` | Yield to the user with the reason code and readiness; the next actor is not this loop |
+| `human` | Yield to the user with the reason code and readiness, reporting the returned `readiness.prompt` unchanged when present; the next actor is not this loop |
 | `stale` | Refresh once: re-read `get_change` and re-acquire once with the fresh basis. If the second attempt is stale again, report both observations and stop |
 | `reconciled` | Report the preserved `engine_result` unchanged; continue only from a fresh observation |
 | `unsupported` | Report the exact reason. There is no raw-operation fallback and no invented repair; `repair-required` uses the Step 4 Change repair route |

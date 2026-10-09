@@ -25,9 +25,38 @@ from owlbear_delivery import (
     DeliveryRequest,
     DeliveryRequestKind,
 )
+from owlbear_delivery.application_support import _checkpoint_error_detail
 from owlbear_delivery.change_workspace import ChangeTargetSyncConflictError, ChangeTargetSyncStaleError
 from owlbear_delivery.runtime_models import required_target_commit
 from owlbear_delivery.work_items import WorkItemActionKind
+
+_INCIDENT_CONFLICT_PATHS = (
+    "serve/memory-mcp/README.md",
+    "serve/memory-mcp/src/owlbear_memory_mcp/tools.py",
+    "serve/memory-mcp/tests/test_server.py",
+    "serve/memory/README.md",
+    "serve/memory/src/owlbear_memory/__init__.py",
+    "serve/memory/src/owlbear_memory/engine.py",
+)
+
+
+def test_bounded_conflict_detail_names_whole_paths_and_counts_the_rest() -> None:
+    """A six-path conflict was cut mid-path by the 240-character retained detail bound."""
+    error = ChangeTargetSyncConflictError("change-a", "operation-a", "a" * 40, _INCIDENT_CONFLICT_PATHS)
+    detail = _checkpoint_error_detail(str(error), "fallback")
+
+    assert detail == str(error)
+    listed = detail.removeprefix("target synchronization requires conflict resolution: ").split(" (+")[0]
+    shown = listed.split(", ")
+    assert shown == list(_INCIDENT_CONFLICT_PATHS[: len(shown)])
+    assert f"(+{6 - len(shown)} more of 6; full list in publication.target_sync_conflict)" in detail
+    assert error.conflict_paths == _INCIDENT_CONFLICT_PATHS
+
+
+def test_short_conflict_detail_lists_every_path_unchanged() -> None:
+    error = ChangeTargetSyncConflictError("change-a", "operation-a", "a" * 40, ("a.txt", "b.txt"))
+
+    assert str(error) == "target synchronization requires conflict resolution: a.txt, b.txt"
 
 
 def _target_block(launch, branch_head: str, required: str) -> BlockDelivery:

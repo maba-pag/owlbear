@@ -486,7 +486,9 @@ def test_repair_delivery_prompt_bootstraps_read_only_then_routes_through_the_rep
     assert "../skills/w-delivery-repair/SKILL.md" in prompt
     assert "delivery-diagnose inspect" in prompt
     assert "PYTHONDONTWRITEBYTECODE=1" in prompt
-    assert "python -B serve/tools/src/owlbear_tools/delivery_diagnostics.py inspect" in prompt
+    assert "uv run --no-sync delivery-diagnose inspect" in prompt
+    assert "uv run --no-sync python -B serve/tools/src/owlbear_tools/delivery_diagnostics.py inspect" in prompt
+    assert "`python -B serve/tools" not in prompt
     assert "terminal is unavailable" in prompt
     assert "do not substitute another tool" in prompt
     assert "automation-permission bypass" in prompt
@@ -1419,6 +1421,18 @@ def test_continuation_loads_each_missing_tool_by_exact_name() -> None:
     assert "Never combine several names in one query" in bindings
     assert "`OwlBear Delivery " not in orchestration
     assert _AGENT_VALIDATOR._check_tool_search_queries() == []  # noqa: SLF001
+
+
+def test_continuation_relays_the_engine_command_after_a_blocked_or_human_result() -> None:
+    """A blocked target sync was paraphrased from truncated detail instead of its engine prompt."""
+    orchestration = " ".join((_SKILLS_ROOT / "w-orchestration/SKILL.md").read_text(encoding="utf-8").split())
+
+    assert (
+        "After `blocked`, re-read `get_change` once and report its engine-authored `readiness.prompt` "
+        "unchanged as the user's next command"
+    ) in orchestration
+    assert "never derive paths, commands, or a paraphrased next step from it" in orchestration
+    assert "reporting the returned `readiness.prompt` unchanged when present" in orchestration
 
 
 def test_pr_feedback_start_reentry_prepares_and_maps_before_triage() -> None:
