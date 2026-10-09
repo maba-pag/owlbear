@@ -69,7 +69,8 @@ Modes and behavior:
 For a browser `url_list` source, read `urls` from `list_knowledge_sources` in registered order, call
 Browser `acquire` for each URL, and submit exactly one bound `knowledge_ingest` call with that
 source's `source_id` and the resulting `captures`. Do not call `refresh_knowledge_source` for a
-browser source; it returns acquisition-stage `agent_capture_required` instead of acquiring pages.
+browser source; for an active, refreshable browser source, it returns acquisition-stage
+`agent_capture_required` instead of acquiring pages.
 The [Browser-to-Knowledge vertical test](../../../tests/test_browser_knowledge_vertical.py)
 exercises this round, health reporting, and last-good-document behavior.
 
@@ -99,8 +100,8 @@ Current connector boundary:
 
 - `url_list` with `fetch_method="http"` and `file_glob` with `fetch_method="filesystem"` use the
   maintained source-fetcher paths.
-- Browser `url_list` sources are updated through the browser capture-round workflow in
-  `knowledge_ingest`. `refresh_knowledge_source` returns acquisition-stage
+- Browser `url_list` sources use the bound capture-round workflow in `knowledge_ingest`. For an
+  active, refreshable source, `refresh_knowledge_source` returns acquisition-stage
   `agent_capture_required` instead of fetching those pages.
 - `inline` sources have no refresh operation. Direct `knowledge_ingest` is the manual capture path.
 

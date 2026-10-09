@@ -32,7 +32,7 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 | `list_knowledge_sources` | List registered knowledge sources, optionally filtered by scope, with source health and registered URLs |
 | `knowledge_ingest` | Ingest inline text or one bound Browser capture round for a registered browser URL-list source; returns typed document and chunk counts, health, and failures |
 | `knowledge_stats` | Summary statistics: document, entity, edge, source, and chunk counts plus enrichment queue state and completion ratio |
-| `refresh_knowledge_source` | Re-ingest a registered source by source ID; response includes retained `source_id`, `sources_refreshed`, structured errors, and document/chunk counts; browser URL-list sources return `agent_capture_required` and must use a bound capture round |
+| `refresh_knowledge_source` | Re-ingest a registered source by source ID; response includes retained `source_id`, `sources_refreshed`, structured errors, and document/chunk counts; active, refreshable browser URL-list sources return `agent_capture_required` and must use a bound capture round |
 | `delete_knowledge_source` | Delete a source and all its associated data (vectors, documents, chunks, entities, enrichment) via coordinator-orchestrated purge; returns a purge-result summary with status (`complete`/`partial`), completed steps, failed step, error, and per-domain sub-results (source, content, enrichment, graph) |
 | `claim_enrichment_batch` | Atomically claim a batch of chunks ready for enrichment |
 | `store_enrichment` | Persist extracted entities and local-reference edges for a claimed chunk, then mark it enriched |
@@ -83,8 +83,9 @@ Missing, duplicate, or unregistered capture entries, a missing or deleted source
 not an active browser `url_list`, or `text` supplied with `source_id` raise `ToolError`. For a
 browser source, read `urls` from `list_knowledge_sources`, call Browser `acquire` for each URL, then
 submit one bound `knowledge_ingest` round with that `source_id` and `captures`. Do not call
-`refresh_knowledge_source` for a browser source; it returns `agent_capture_required` instead of
-acquiring pages. The [Browser-to-Knowledge vertical test](../../tests/test_browser_knowledge_vertical.py)
+`refresh_knowledge_source` for a browser source; for an active, refreshable source, the call returns
+acquisition-stage `agent_capture_required` without acquiring pages. The
+[Browser-to-Knowledge vertical test](../../tests/test_browser_knowledge_vertical.py)
 exercises this round, health reporting, and last-good-document behavior.
 
 `refresh_knowledge_source` always retains its source and additive outcome fields. Each item in
