@@ -71,6 +71,7 @@ from owlbear_delivery.delivery_runtime import (
     OutcomeAuthorityBinding,
     parse_delivery_frontier,
 )
+from owlbear_delivery.delivery_state import DeliveryStatePublicationError
 from owlbear_delivery.draft_pull_request import (
     MarkChangePullRequestReady,
     ObserveChangePublicationPullRequest,
@@ -81,6 +82,7 @@ from owlbear_delivery.finalization_reports import (
     FinalizationReportError,
     FinalizationReportStore,
 )
+from owlbear_delivery.publication_provider import PublicationProviderError
 from owlbear_delivery.recovery import (
     DeliveryWorkerExclusionRequiredError,
     RetryEpisodeKey,
@@ -830,6 +832,10 @@ class _AcquisitionMixin:
                 action.kind == WorkItemActionKind.MARK_READY.value
                 and isinstance(exc, _PreEffectReadyObservationError)
                 and exc.retry_safe
+            ) or (
+                action.kind == WorkItemActionKind.RECONCILE_CHECKPOINT.value
+                and isinstance(exc, (PublicationProviderError, DeliveryStatePublicationError))
+                and exc.retry_safe
             )
             return self._engine_action_failure(
                 action,
@@ -959,6 +965,9 @@ class _AcquisitionMixin:
             if reason == "engine-action-interrupted"
             else "The required-check read failed before the mark-ready owner write. The exact finalized head remains "
             "unchanged; the retry ledger permits only bounded attempts after backoff."
+            if pre_effect_retryable and action.kind == WorkItemActionKind.MARK_READY.value
+            else "The provider did not apply the checkpoint publication and the pending checkpoint remains durable; "
+            "background reconciliation and the retry ledger retry it after backoff."
             if pre_effect_retryable
             else "Preserve exact operation custody and owner journals. Automatic retry is unavailable for this "
             "recorded failure; the responsible owner must resolve the reported condition before resume. Do not "

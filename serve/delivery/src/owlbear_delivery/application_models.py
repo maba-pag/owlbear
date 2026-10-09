@@ -1309,9 +1309,12 @@ class DeliveryEngineActionResult(_ApplicationModel):
         if (
             self.failure is not None
             and self.failure.pre_effect_retryable
-            and (self.action.kind != "mark-ready" or self.reason_code != "engine-action-failed")
+            and (
+                self.action.kind not in {"mark-ready", "reconcile-checkpoint"}
+                or self.reason_code != "engine-action-failed"
+            )
         ):
-            message = "pre-effect retry is limited to failed mark-ready read observations"
+            message = "pre-effect retry is limited to failed mark-ready reads and unapplied checkpoint publication"
             raise ValueError(message)
 
     def _validate_exact_receipts(self) -> None:

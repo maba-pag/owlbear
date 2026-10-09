@@ -2372,6 +2372,7 @@ def test_pre_push_timeout_releases_reservation_for_new_operation(tmp_path: Path)
         "rate-limit",
         "remote-rejection",
         "remote-server-error",
+        "policy-rejection",
         "pre-write-timeout",
         "post-write-timeout",
     ],
@@ -2417,6 +2418,7 @@ def test_publication_incidents_preserve_checkout_and_classify_exact_operation(  
         "rate-limit": PublicationProviderFailureCode.RATE_LIMITED,
         "remote-rejection": PublicationProviderFailureCode.CONFLICT,
         "remote-server-error": PublicationProviderFailureCode.UNAVAILABLE,
+        "policy-rejection": PublicationProviderFailureCode.CONFLICT,
         "pre-write-timeout": PublicationProviderFailureCode.TIMEOUT,
         "post-write-timeout": PublicationProviderFailureCode.RESPONSE_UNKNOWN,
     }
@@ -2426,6 +2428,7 @@ def test_publication_incidents_preserve_checkout_and_classify_exact_operation(  
         "rate-limit": True,
         "remote-rejection": False,
         "remote-server-error": True,
+        "policy-rejection": False,
         "pre-write-timeout": True,
         "post-write-timeout": False,
     }
@@ -2436,6 +2439,7 @@ def test_publication_incidents_preserve_checkout_and_classify_exact_operation(  
         "rate-limit",
         "remote-rejection",
         "remote-server-error",
+        "policy-rejection",
     }:
         original_run = publisher._run_git
         diagnostics = {
@@ -2443,7 +2447,17 @@ def test_publication_incidents_preserve_checkout_and_classify_exact_operation(  
             "authentication-failure": "Authentication failed",
             "rate-limit": "rate limit exceeded",
             "remote-rejection": "remote rejected",
-            "remote-server-error": "!\tHEAD:refs/heads/branch\t[remote rejected] (Internal Server Error)",
+            "remote-server-error": (
+                "remote: Internal Server Error        \n"
+                "remote: Request ID DEC8:238C1F:24CDBD1:238745E:6AC66161        \n"
+                "error: failed to push some refs to 'https://github.com/example/repo.git'\n"
+                f"!\t{'a' * 40}:refs/heads/owlbear/change/{change_id}\t[remote rejected] (Internal Server Error)\n"
+            ),
+            "policy-rejection": (
+                "remote: error: GH013: Repository rule violations found for refs/heads/owlbear/change/x.\n"
+                f"!\t{'a' * 40}:refs/heads/owlbear/change/{change_id}\t[remote rejected] (push declined due to "
+                "repository rule violations)\n"
+            ),
         }
 
         def reject_push(*arguments: str) -> subprocess.CompletedProcess[bytes]:
@@ -2695,6 +2709,55 @@ def test_push_timeout_after_remote_applies_returns_receipt_and_releases_reservat
     assert receipt.published_head == reviewed
     assert _head(remote, "refs/heads/owlbear/change/lost-response-change") == reviewed
     assert coordinator.show("lost-response-change").publication_lease is None
+
+
+@pytest.mark.parametrize("push_response", ["verified", "lost"])
+def test_failed_readback_after_applied_push_is_response_unknown(tmp_path: Path, push_response: str) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    _worktree, reviewed = _reviewed_change(manager, "unobserved-push-change")
+    publisher = ChangeBranchPublisher(
+        repository,
+        coordinator,
+        remote="origin",
+        target_branch="main",
+        operation_root=tmp_path / "operations",
+    )
+    original_run = publisher._run_git
+    pushed = False
+
+    def push_then_fail_readback(*arguments: str) -> subprocess.CompletedProcess[bytes]:
+        nonlocal pushed
+        if arguments[0] == "push":
+            completed = original_run(*arguments)
+            assert completed.returncode == 0
+            pushed = True
+            if push_response == "lost":
+                raise subprocess.TimeoutExpired(arguments, 30)
+            return completed
+        if pushed and arguments[0] == "ls-remote":
+            return subprocess.CompletedProcess(arguments, 128, stdout=b"", stderr=b"Internal Server Error")
+        return original_run(*arguments)
+
+    request = PublishChangeBranch(
+        change_id="unobserved-push-change",
+        expected_remote_head=None,
+        operation_id="operation-unobserved-push",
+    )
+    with (
+        patch.object(publisher, "_run_git", side_effect=push_then_fail_readback),
+        pytest.raises(PublicationProviderError) as exc_info,
+    ):
+        publisher.publish(request)
+
+    assert exc_info.value.code is PublicationProviderFailureCode.RESPONSE_UNKNOWN
+    assert exc_info.value.retry_safe is False
+    assert _head(remote, "refs/heads/owlbear/change/unobserved-push-change") == reviewed
+
+    with patch.object(publisher, "_push_exact_head", side_effect=AssertionError("unexpected push")):
+        receipt = publisher.publish(request)
+
+    assert receipt.published_head == reviewed
 
 
 def test_hung_change_branch_push_reads_back_before_any_retry_and_kills_the_transport(

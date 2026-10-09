@@ -1893,7 +1893,7 @@ class _PublicationMixin:
         pending: DeliveryPendingStatePublication,
         current_frontier_digest: str | None = None,
         published_frontier_digest: str | None = None,
-    ) -> str:
+    ) -> str | None:
         """Return the remote state head only when its snapshot matches the pending base or current state."""
         publisher = self._delivery_state_publisher
         if publisher is None:
@@ -1903,8 +1903,6 @@ class _PublicationMixin:
             (item for item in inventory.snapshots if item.change_id == change_id),
             None,
         )
-        if inventory.remote_head is None:
-            self._fail("remote Delivery snapshot is unavailable for pending replay")
         if snapshot is None:
             if any(item.change_id == change_id for item in inventory.diagnostics):
                 self._fail("remote Delivery snapshot is unavailable for pending replay")
