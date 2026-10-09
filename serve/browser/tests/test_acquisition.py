@@ -133,17 +133,18 @@ async def test_acquire_waits_for_rendered_content_and_keeps_links_inert() -> Non
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("response_status", "expected_status"),
+    ("request_url", "response_status", "expected_status"),
     [
-        (404, AcquisitionStatus.HTTP_ERROR),
-        (500, AcquisitionStatus.HTTP_ERROR),
-        (401, AcquisitionStatus.ACCESS_DENIED),
-        (403, AcquisitionStatus.ACCESS_DENIED),
-        (200, AcquisitionStatus.SUCCESS),
+        ("http://pages.synthetic.example/page", 404, AcquisitionStatus.HTTP_ERROR),
+        ("http://pages.synthetic.example/page", 500, AcquisitionStatus.HTTP_ERROR),
+        ("http://pages.synthetic.example/page", 401, AcquisitionStatus.ACCESS_DENIED),
+        ("http://pages.synthetic.example/page", 403, AcquisitionStatus.ACCESS_DENIED),
+        ("http://pages.synthetic.example/page", 200, AcquisitionStatus.SUCCESS),
+        ("http://pages.synthetic.example:80/page", 404, AcquisitionStatus.HTTP_ERROR),
     ],
 )
 async def test_acquire_classifies_main_document_http_statuses(
-    response_status: int, expected_status: AcquisitionStatus
+    request_url: str, response_status: int, expected_status: AcquisitionStatus
 ) -> None:
     from playwright.async_api import Route, async_playwright  # noqa: PLC0415
 
@@ -162,7 +163,7 @@ async def test_acquire_classifies_main_document_http_statuses(
             await context.route("http://pages.synthetic.example/**", fulfill_document)
             result = await BrowserContentFetcher(context).acquire(
                 AcquisitionRequest(
-                    "http://pages.synthetic.example/page",
+                    request_url,
                     content_selector="#content",
                     readiness_timeout_ms=2_000,
                 )
