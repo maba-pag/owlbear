@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Annotated
 
 from fastapi import APIRouter, Depends
 from owlbear_memory.models import (
+    ChallengeRecord,
     MemoryCategory,
     MemoryEntry,
     MemoryState,
@@ -39,7 +40,8 @@ class MemoryEntryResponse(BaseModel):
     created_at: str
     updated_at: str
     approved_at: str | None
-    contested_by_task: str | None
+    revision: str
+    challenges: list[ChallengeRecord]
 
 
 class MemoriesResponse(BaseModel):
@@ -112,7 +114,7 @@ class PurgeRequest(BaseModel):
 
 
 def _to_response(entry: MemoryEntry) -> MemoryEntryResponse:
-    return MemoryEntryResponse.model_validate(entry.model_dump())
+    return MemoryEntryResponse.model_validate({**entry.model_dump(), "revision": entry.revision})
 
 
 @router.get("/memories", response_model=MemoriesResponse)

@@ -37,7 +37,7 @@ for (const [id, title, state, updatedAt] of entries) {
     `created_at: "${updatedAt}"`,
     `updated_at: "${updatedAt}"`,
     "approved_at: null",
-    "contested_by_task: null",
+    "challenges: []",
     "---",
     "",
     "Fixture content",

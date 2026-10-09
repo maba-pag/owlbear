@@ -40,7 +40,8 @@ function memoryEntry(overrides: Partial<MemoryEntry> = {}): MemoryEntry {
     created_at: "2026-01-01T00:00:00+00:00",
     updated_at: "2026-01-01T00:00:00+00:00",
     approved_at: "2026-01-01T00:00:00+00:00",
-    contested_by_task: null,
+    revision: "0123456789abcdef",
+    challenges: [],
     ...overrides,
   };
 }
@@ -54,6 +55,75 @@ async function openMemoryEntry(): Promise<void> {
   accordion.dispatchEvent(new CustomEvent("update", { detail: { open: true } }));
   await waitFor(() => expect(screen.getByTestId("memory-edit-btn")).toBeInTheDocument());
 }
+
+describe("MemoryTab challenge details", () => {
+  it("shows the challenge task, revision, and recorded time for contested entries", async () => {
+    const challenge = {
+      task_id: "task-contested",
+      revision: "aaaaaaaaaaaaaaaa",
+      recorded_at: "2026-01-02T03:04:05+00:00",
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          response({ entries: [memoryEntry({ state: "contested", challenges: [challenge] })], parse_errors: 0 }),
+        ),
+    );
+
+    render(<MemoryTab />);
+    await openMemoryEntry();
+
+    const list = screen.getByTestId("memory-challenges");
+    expect(list).toHaveTextContent(challenge.task_id);
+    expect(list).toHaveTextContent(challenge.revision);
+    expect(list).toHaveTextContent(challenge.recorded_at);
+    expect(screen.queryByText("Contested task")).not.toBeInTheDocument();
+  });
+
+  it("shows both challenge records for disputed entries", async () => {
+    const challenges = [
+      {
+        task_id: "task-dispute-a",
+        revision: "bbbbbbbbbbbbbbbb",
+        recorded_at: "2026-01-03T04:05:06+00:00",
+      },
+      {
+        task_id: "task-dispute-b",
+        revision: "cccccccccccccccc",
+        recorded_at: "2026-01-04T05:06:07+00:00",
+      },
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(response({ entries: [memoryEntry({ state: "disputed", challenges })], parse_errors: 0 })),
+    );
+
+    render(<MemoryTab />);
+    await openMemoryEntry();
+
+    const list = screen.getByTestId("memory-challenges");
+    expect(list.querySelectorAll("li")).toHaveLength(2);
+    for (const challenge of challenges) {
+      expect(list).toHaveTextContent(challenge.task_id);
+      expect(list).toHaveTextContent(challenge.revision);
+      expect(list).toHaveTextContent(challenge.recorded_at);
+    }
+    expect(screen.queryByText("Contested task")).not.toBeInTheDocument();
+  });
+
+  it("does not render challenges for entries outside contested states", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response({ entries: [memoryEntry()], parse_errors: 0 })));
+
+    render(<MemoryTab />);
+    await openMemoryEntry();
+
+    expect(screen.queryByTestId("memory-challenges")).not.toBeInTheDocument();
+  });
+});
 
 describe("MemoryTab load state", () => {
   it("shows retry instead of the empty state when the initial load fails", async () => {
@@ -117,7 +187,8 @@ describe("MemoryTab load state", () => {
         created_at: "2026-01-01T00:00:00+00:00",
         updated_at: "2026-01-01T00:00:00+00:00",
         approved_at: "2026-01-01T00:00:00+00:00",
-        contested_by_task: null,
+        revision: "0123456789abcdef",
+        challenges: [],
       },
     ];
     const fetchMock = vi
@@ -155,7 +226,8 @@ describe("MemoryTab load state", () => {
         created_at: "2026-01-01T00:00:00+00:00",
         updated_at: "2026-01-01T00:00:00+00:00",
         approved_at: "2026-01-01T00:00:00+00:00",
-        contested_by_task: null,
+        revision: "0123456789abcdef",
+        challenges: [],
       },
     ];
     const fetchMock = vi

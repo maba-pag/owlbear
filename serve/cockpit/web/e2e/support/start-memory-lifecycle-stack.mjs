@@ -12,15 +12,20 @@ const mcpProof = resolve(import.meta.dirname, "../../test-results/memory-lifecyc
 await mkdir(memoryDir, { recursive: true });
 
 const entries = [
-  ["11111111-1111-4111-8111-111111111111", "Approved memory", "approved", 0.95, null],
-  ["66666666-6666-4666-8666-666666666666", "Pending memory", "pending", 0.88, null],
-  ["77777777-7777-4777-8777-777777777777", "Curated memory", "curated", 0.84, null],
-  ["22222222-2222-4222-8222-222222222222", "Contested memory", "contested", 0.82, "1960"],
-  ["33333333-3333-4333-8333-333333333333", "Disputed memory", "disputed", 0.71, "1956"],
-  ["44444444-4444-4444-8444-444444444444", "Stale memory", "stale", 0.61, null],
-  ["55555555-5555-4555-8555-555555555555", "Deleted memory", "deleted", 0.2, null],
+  ["11111111-1111-4111-8111-111111111111", "Approved memory", "approved", 0.95, []],
+  ["66666666-6666-4666-8666-666666666666", "Pending memory", "pending", 0.88, []],
+  ["77777777-7777-4777-8777-777777777777", "Curated memory", "curated", 0.84, []],
+  ["22222222-2222-4222-8222-222222222222", "Contested memory", "contested", 0.82, ["1960"]],
+  ["33333333-3333-4333-8333-333333333333", "Disputed memory", "disputed", 0.71, ["1956", "1957"]],
+  ["44444444-4444-4444-8444-444444444444", "Stale memory", "stale", 0.61, []],
+  ["55555555-5555-4555-8555-555555555555", "Deleted memory", "deleted", 0.2, []],
 ];
-for (const [id, title, state, score, contestedByTask] of entries) {
+for (const [id, title, state, score, challengeTaskIds] of entries) {
+  const challenges = challengeTaskIds.map((taskId) => ({
+    task_id: taskId,
+    revision: "0123456789abcdef",
+    recorded_at: "2025-01-01T00:00:00Z",
+  }));
   const frontmatter = [
     "---",
     `id: ${id}`,
@@ -37,7 +42,7 @@ for (const [id, title, state, score, contestedByTask] of entries) {
     'created_at: "2025-01-01T00:00:00Z"',
     'updated_at: "2025-01-01T00:00:00Z"',
     "approved_at: null",
-    `contested_by_task: ${contestedByTask === null ? "null" : `"${contestedByTask}"`}`,
+    `challenges: ${JSON.stringify(challenges)}`,
     "---",
     "",
     `Lifecycle fixture content for ${title}.`,

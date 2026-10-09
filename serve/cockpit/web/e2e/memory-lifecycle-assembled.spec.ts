@@ -88,9 +88,8 @@ test.describe("assembled Memory lifecycle", () => {
 
       const contested = await openEntry(page, "Contested memory");
       await expect(contested.getByTestId("memory-entry-state")).toHaveText("contested");
-      const contestedTask = contested.getByText("Contested task", { exact: true }).locator("..");
-      await expect(contestedTask).toContainText("1960");
-      await expect(contestedTask.getByRole("button")).toHaveCount(0);
+      const challengeList = contested.getByTestId("memory-challenges");
+      await expect(challengeList.getByText("1960", { exact: true })).toBeVisible();
       await expect(contested.getByTestId("memory-edit-btn")).toBeVisible();
       await expect(contested.getByTestId("memory-resolve-btn")).toBeVisible();
       await expect(contested).not.toContainText("Unremarkable");

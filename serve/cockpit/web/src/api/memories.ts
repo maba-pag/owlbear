@@ -3,6 +3,12 @@ import { ApiError } from "./errors";
 
 export type MemoryState = "pending" | "curated" | "approved" | "contested" | "disputed" | "stale" | "deleted";
 
+export interface MemoryChallenge {
+  task_id: string;
+  revision: string;
+  recorded_at: string;
+}
+
 export interface MemoryEntry {
   id: string;
   title: string;
@@ -17,7 +23,8 @@ export interface MemoryEntry {
   created_at: string;
   updated_at: string;
   approved_at: string | null;
-  contested_by_task: string | null;
+  revision: string;
+  challenges: MemoryChallenge[];
 }
 
 export interface MemoryEditPayload {

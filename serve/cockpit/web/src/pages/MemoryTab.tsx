@@ -1306,10 +1306,33 @@ function MemoryTab() {
                                 <dt className="font-semibold text-contrast-high">Score</dt>
                                 <dd className="m-0 break-words text-primary">{formatConfidence(entry.score)}</dd>
                               </div>
-                              <div className="min-w-0">
-                                <dt className="font-semibold text-contrast-high">Contested task</dt>
-                                <dd className="m-0 break-words text-primary">{entry.contested_by_task ?? "—"}</dd>
-                              </div>
+                              {entry.state === "contested" || entry.state === "disputed" ? (
+                                <div data-testid="memory-challenges" className="min-w-0 sm:col-span-2 lg:col-span-3">
+                                  <dt className="font-semibold text-contrast-high">Challenges</dt>
+                                  <dd className="m-0">
+                                    <ul className="m-0 grid list-none gap-static-xs p-0">
+                                      {entry.challenges.map((challenge) => (
+                                        <li key={challenge.task_id} className="min-w-0">
+                                          <dl className="m-0 grid gap-x-static-lg gap-y-static-xs sm:grid-cols-3">
+                                            <div className="min-w-0">
+                                              <dt className="font-semibold text-contrast-high">Task ID</dt>
+                                              <dd className="m-0 break-words text-primary">{challenge.task_id}</dd>
+                                            </div>
+                                            <div className="min-w-0">
+                                              <dt className="font-semibold text-contrast-high">Revision</dt>
+                                              <dd className="m-0 break-words text-primary">{challenge.revision}</dd>
+                                            </div>
+                                            <div className="min-w-0">
+                                              <dt className="font-semibold text-contrast-high">Recorded</dt>
+                                              <dd className="m-0 break-words text-primary">{challenge.recorded_at}</dd>
+                                            </div>
+                                          </dl>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </dd>
+                                </div>
+                              ) : null}
                               <div className="min-w-0">
                                 <dt className="font-semibold text-contrast-high">Created</dt>
                                 <dd className="m-0 break-words text-primary">{entry.created_at}</dd>
