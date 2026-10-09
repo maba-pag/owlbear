@@ -521,7 +521,7 @@ def test_builder_handoff_consumption_can_join_a_shared_transaction(tmp_path: Pat
     assert _builder_handoff_workspace_state(repository, manager, coordination) == before
 
 
-@pytest.mark.parametrize("mismatch", ["settlement", "task", "new-task", "fingerprint", "moved-head"])
+@pytest.mark.parametrize("mismatch", ["settlement", "task", "new-task", "fingerprint", "sibling-head"])
 def test_builder_handoff_acquire_rejects_foreign_binding_or_moved_head(tmp_path: Path, mismatch: str) -> None:
     repository, coordinator, manager, coordination, _original_writer, prepared, before = _prepared_builder_handoff(
         tmp_path
@@ -544,8 +544,8 @@ def test_builder_handoff_acquire_rejects_foreign_binding_or_moved_head(tmp_path:
         handoff = handoff.model_copy(update={"metadata_fingerprint": "0" * 64})
     else:
         head = handoff.branch_head
-        foreign = _git(repository, "commit-tree", f"{head}^{{tree}}", "-p", head, "-m", "foreign")
-        _git(repository, "update-ref", f"refs/heads/{coordination.branch}", foreign)
+        sibling = _git(repository, "commit-tree", f"{head}^{{tree}}", "-p", f"{head}^", "-m", "sibling")
+        _git(repository, "update-ref", f"refs/heads/{coordination.branch}", sibling)
         expected_error = PreservationFenceError
         before = _builder_handoff_workspace_state(repository, manager, coordination)
 
@@ -560,6 +560,59 @@ def test_builder_handoff_acquire_rejects_foreign_binding_or_moved_head(tmp_path:
 
     assert coordinator.show(coordination.change_id) == retained_before
     assert _builder_handoff_workspace_state(repository, manager, coordination) == before
+
+
+def test_builder_handoff_consumption_refuses_a_head_other_than_its_prepared_source(tmp_path: Path) -> None:
+    repository, coordinator, manager, coordination, _original_writer, prepared, before = _prepared_builder_handoff(
+        tmp_path
+    )
+    RuntimeTransaction(
+        manager.runtime_root,
+        f"builder-handoff-{coordination.change_id}",
+        (prepared.participant,),
+    ).commit()
+    retained_before = coordinator.show(coordination.change_id)
+
+    with coordinator.publication_lock(coordination.change_id) as lock, pytest.raises(PreservationFenceError):
+        manager.prepare_builder_handoff_acquisition(
+            coordination.change_id,
+            _next_builder_writer(coordination.change_id),
+            prepared.handoff,
+            lock,
+            task_id=prepared.handoff.original_task_id,
+            expected_head=coordination.last_reviewed_commit,
+        )
+
+    assert coordinator.show(coordination.change_id) == retained_before
+    assert _builder_handoff_workspace_state(repository, manager, coordination) == before
+
+
+def test_builder_handoff_acquire_accepts_later_commits_on_its_retained_head(tmp_path: Path) -> None:
+    repository, _coordinator, manager, coordination, _original_writer, prepared, _before = _prepared_builder_handoff(
+        tmp_path
+    )
+    RuntimeTransaction(
+        manager.runtime_root,
+        f"builder-handoff-{coordination.change_id}",
+        (prepared.participant,),
+    ).commit()
+    head = prepared.handoff.branch_head
+    later = _git(repository, "commit-tree", f"{head}^{{tree}}", "-p", head, "-m", "late work")
+    _git(repository, "update-ref", f"refs/heads/{coordination.branch}", later)
+    drifted = _builder_handoff_workspace_state(repository, manager, coordination)
+    next_writer = _next_builder_writer(coordination.change_id)
+
+    acquired = manager.acquire(
+        coordination.change_id,
+        next_writer,
+        handoff=prepared.handoff,
+        handoff_task_id=prepared.handoff.original_task_id,
+    )
+
+    assert acquired.writer == next_writer
+    assert acquired.builder_handoff is None
+    assert acquired.last_reviewed_commit == coordination.last_reviewed_commit
+    assert _builder_handoff_workspace_state(repository, manager, coordination) == drifted
 
 
 def test_builder_handoff_acquire_keeps_drifted_uncommitted_material_for_triage(tmp_path: Path) -> None:

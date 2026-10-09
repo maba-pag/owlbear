@@ -3277,6 +3277,7 @@ def test_default_loader_rejects_unrecorded_repeated_planner_pause_on_builder_pla
         "ended-without-result",
         "host-lost",
         "released-stuck",
+        "released-late-commit",
         "drifted-same-bytes",
         "drifted-content",
         "deferred",
@@ -3410,8 +3411,10 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
             disposition=scenario if requestless else "normal-return",
             request=None if requestless else retry,
         )
-        if scenario in {"host-lost", "released-stuck"}:
-            settled = _settle_engine_worker_ending(application, launch, scenario)
+        if scenario in {"host-lost", "released-stuck", "released-late-commit"}:
+            settled = _settle_engine_worker_ending(
+                application, launch, "released-stuck" if scenario == "released-late-commit" else scenario
+            )
         else:
             with patch.object(application, "_clock", return_value="1970-01-02T00:00:00Z"):
                 settled = application.settle_worker_invocation(
@@ -3465,6 +3468,15 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
         assert drifted_metadata.fingerprint != handoff_context.metadata_fingerprint
         assert drifted_metadata.branch_head == handoff_context.branch_head
 
+    late_head = None
+    if scenario == "released-late-commit":
+        # The released chat resumes and commits more of its own task before it learns of the release.
+        late_file = launch.worktree_path / "late-retry.txt"
+        late_file.write_text("committed after release\n", encoding="utf-8")
+        _git(launch.worktree_path, "add", late_file.name)
+        _git(launch.worktree_path, "commit", "-m", "commit after release")
+        late_head = _git(launch.worktree_path, "rev-parse", "HEAD")
+
     negative_scenarios = {
         "forged-context",
         "missing-receipt",
@@ -3506,6 +3518,7 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
         "ended-without-result",
         "host-lost",
         "released-stuck",
+        "released-late-commit",
         "drifted-same-bytes",
         "drifted-content",
     }:
@@ -3514,6 +3527,9 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
         resumed = reloaded.acquire_frontier_work().launch_packages[0]
         if drifted_dirty_bytes is not None:
             assert (resumed.worktree_path / "dirty-retry.txt").read_bytes() == drifted_dirty_bytes
+        if late_head is not None:
+            assert resumed.source_head == late_head
+            assert resumed.last_reviewed_commit == launch.last_reviewed_commit
         assert resumed.claim.task_id == launch.task_id
         assert resumed.claim.claim_id != launch.claim.claim_id
         assert resumed.builder_handoff_context == handoff_context

@@ -496,6 +496,8 @@ class BuilderHandoffSource:
     last_reviewed_commit: str
     metadata_fingerprint: str
     retained_handoff: ChangeBuilderHandoff | None = None
+    # Same-task Builder only: later commits on the retained head are preserved work the successor triages.
+    allow_descendant: bool = False
 
 
 class ChangeFinalizationAttempt(_WorkspaceModel):

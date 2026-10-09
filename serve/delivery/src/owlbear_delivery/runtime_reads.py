@@ -336,6 +336,7 @@ class _RuntimeReadsMixin:
         binding: OutcomeAuthorityBinding,
         participant: ReplacementTransactionParticipant | None,
         lock: PublicationLock | None,
+        source_head: str | None = None,
     ) -> ReplacementTransactionParticipant | None:
         context = binding.builder_handoff_context
         if context is None:
@@ -387,6 +388,7 @@ class _RuntimeReadsMixin:
             handoff,
             lock,
             task_id=context.original_task_id,
+            expected_head=source_head,
         )
         if (
             participant.root != prepared.root

@@ -1368,7 +1368,6 @@ class PortfolioCoordinator:
             or metadata.branch != coordination.branch
             or metadata.worktree_path != coordination.worktree_path
             or metadata.last_reviewed_commit != handoff.last_reviewed_commit
-            or metadata.branch_head != handoff.branch_head
             or coordination.last_reviewed_commit != handoff.last_reviewed_commit
             or coordination.publication_lease is not None
             or coordination.worktree_cleanup_intent is not None

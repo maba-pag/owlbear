@@ -227,7 +227,7 @@ from owlbear_delivery.runtime_models import _receipt_digest
 from owlbear_delivery.runtime_transaction import ReplacementTransactionParticipant, RuntimeTransaction
 from owlbear_delivery.state_formats import classify_kind, format_marker_bytes
 from owlbear_delivery.storage_io import locked_roots
-from owlbear_delivery.work_items import DeliveryProgress, WorkItemActionKind
+from owlbear_delivery.work_items import DeliveryProgress, WorkItemActionKind, WorkItemNextActor
 from owlbear_delivery_github import GitHubCliPublicationProvider
 
 _USER_CHECKOUT_STATES = (
@@ -5805,8 +5805,7 @@ def _engine_target_sync_conflict(tmp_path: Path):
     action = _engine_action(application)
     assert action.target_head == target
     blocked = _execute_engine(application, action)
-    assert blocked.kind == "blocked", blocked
-    assert blocked.failure.code == "ERR_TARGET_SYNC_CONFLICT"
+    assert (blocked.kind, blocked.failure and blocked.failure.code) == ("blocked", "ERR_TARGET_SYNC_CONFLICT"), blocked
     return application, runtimes["change-a"], coordinator, target, action, blocked
 
 
@@ -5814,7 +5813,13 @@ def _engine_target_sync_conflict(tmp_path: Path):
 def test_engine_target_sync_conflict_exit_releases_retained_engine_custody(tmp_path: Path, exit_kind: str) -> None:
     application, runtime, coordinator, target, action, blocked = _engine_target_sync_conflict(tmp_path)
     readiness = application.get_change("change-a").readiness
-    assert readiness.reason_code == "engine-action-failed"
+    outcome = application.show_work_item_view("change-a", "outcome:OUT-001").card.readiness
+    assert (readiness.reason_code, readiness.next_actor, outcome.reason_code, outcome.next_actor) == (
+        "engine-action-failed",
+        WorkItemNextActor.YOU,
+        "engine-action-failed",
+        WorkItemNextActor.NONE,
+    )
     assert readiness.prompt.startswith("/resolve-target-conflict change-a ")
     conflict_progress = DeliveryProgress(
         situation="ready-for-next-step",

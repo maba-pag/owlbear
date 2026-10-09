@@ -1193,17 +1193,21 @@ def _validate_local_builder_handoff_workspace(
         f"refs/heads/{snapshot.branch}^{{commit}}",
     )
     # Retained uncommitted material may drift (editor restore, index refresh); the next Builder triages it.
+    head_matches = metadata.branch_head == context.branch_head or (
+        context.route == "same-task"
+        and _loader_git_is_ancestor(paths.repository_root, context.branch_head, metadata.branch_head)
+    )
     if not all(
         (
             metadata.change_id == snapshot.change_id,
             metadata.branch == snapshot.branch,
             metadata.worktree_path == coordination.worktree_path,
             metadata.last_reviewed_commit == context.last_reviewed_commit,
-            metadata.branch_head == context.branch_head,
+            head_matches,
             metadata.registration.path == metadata.worktree_path,
             metadata.registration.branch == metadata.branch,
             metadata.registration.head == metadata.branch_head,
-            local_branch_head == context.branch_head,
+            local_branch_head == metadata.branch_head,
             _loader_git_is_ancestor(paths.repository_root, snapshot.change_head, context.branch_head),
         )
     ):

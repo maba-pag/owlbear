@@ -347,7 +347,7 @@ class ChangeWorkspaceManager(_WorktreeStateMixin, _PreservationMixin, _SnapshotM
                 expected_finalization_attention=finalizer.expected_attention,
             )
 
-    def prepare_builder_handoff_acquisition(
+    def prepare_builder_handoff_acquisition(  # noqa: PLR0913 - consumption binds each exact handoff identity.
         self,
         change_id: str,
         writer: ChangeWriter,
@@ -355,8 +355,12 @@ class ChangeWorkspaceManager(_WorktreeStateMixin, _PreservationMixin, _SnapshotM
         lock: PublicationLock,
         *,
         task_id: str,
+        expected_head: str | None = None,
     ) -> ReplacementTransactionParticipant:
-        """Prepare a same-task handoff replacement without activating a claim independently."""
+        """Prepare a same-task handoff replacement without activating a claim independently.
+
+        ``expected_head`` pins consumption to the head the successor's source was prepared from.
+        """
         self._coordinator._require_publication_lock(lock, change_id)  # noqa: SLF001
         self._coordinator.require_no_pending_recovery(change_id)
         coordination = self._coordinator.show(change_id)
@@ -365,7 +369,10 @@ class ChangeWorkspaceManager(_WorktreeStateMixin, _PreservationMixin, _SnapshotM
         if writer.kind != "build":
             _coordination_conflict("only a new Builder claim can consume Builder handoff custody")
         metadata = self._capture_builder_handoff_metadata(coordination)
-        if metadata.branch_head != handoff.branch_head:
+        if (expected_head is not None and metadata.branch_head != expected_head) or not (
+            metadata.branch_head == handoff.branch_head
+            or self._is_ancestor(handoff.branch_head, metadata.branch_head, cwd=self._repository)
+        ):
             message = "Builder handoff workspace head changed before acquisition"
             raise PreservationFenceError(message)
         return self._coordinator._prepare_builder_handoff_acquisition(  # noqa: SLF001
