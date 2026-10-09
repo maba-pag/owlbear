@@ -689,6 +689,8 @@ class DeliveryAnswer(_ApplicationModel):
     operator_note: str | None = None
     locators: tuple[str, ...] = ()
     expected_disposition_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    # The exhausted Planner or Finalizer attempt a blockless grant funds past; Builder grants name their block.
+    attempt_id: str | None = Field(default=None, min_length=1, max_length=256)
 
     @model_validator(mode="after")
     def _validate_target(self) -> DeliveryAnswer:
@@ -724,9 +726,14 @@ class DeliveryAnswer(_ApplicationModel):
     @model_validator(mode="after")
     def _validate_attempt_grant(self) -> DeliveryAnswer:
         if self.kind is not DeliveryAnswerKind.GRANT_ATTEMPT:
+            if self.attempt_id is not None:
+                message = "only attempt grants name a retry attempt"
+                raise ValueError(message)
             return self
-        if self.outcome_id is None or self.block_id is None:
-            message = "attempt grants require outcome and block identity"
+        builder_grant = self.outcome_id is not None and self.block_id is not None and self.attempt_id is None
+        episode_grant = self.attempt_id is not None and self.outcome_id is None and self.block_id is None
+        if not (builder_grant or episode_grant):
+            message = "attempt grants require either outcome and block identity or one retry attempt identity"
             raise ValueError(message)
         if any((self.request_id, self.resolution, self.operator_note, self.expected_disposition_id)) or self.locators:
             message = "attempt grants cannot include request, note, locator, or disposition evidence"
@@ -743,14 +750,21 @@ class DeliveryAnswerResult(_ApplicationModel):
     request: DeliveryRequest | None = None
     binding: OutcomeAuthorityBinding | None = None
     disposition: DeliveryChangeDispositionResolution | None = None
+    # The exact exhausted attempt a blockless Planner or Finalizer grant funded past.
+    granted_attempt_id: str | None = Field(default=None, min_length=1, max_length=256)
 
     @model_validator(mode="after")
     def _validate_result(self) -> DeliveryAnswerResult:
         if self.kind is DeliveryAnswerKind.REQUEST and self.request is None:
             message = "request answer results require the resolved request"
             raise ValueError(message)
-        if self.kind in {DeliveryAnswerKind.BLOCK, DeliveryAnswerKind.GRANT_ATTEMPT} and self.binding is None:
+        if self.kind is DeliveryAnswerKind.BLOCK and self.binding is None:
             message = "block answer results require the updated binding"
+            raise ValueError(message)
+        if self.kind is DeliveryAnswerKind.GRANT_ATTEMPT and (self.binding is None) == (
+            self.granted_attempt_id is None
+        ):
+            message = "attempt grant results require the updated binding or the granted attempt"
             raise ValueError(message)
         if self.kind is DeliveryAnswerKind.DISPOSITION and self.disposition is None:
             message = "disposition answer results require the resolution receipt"

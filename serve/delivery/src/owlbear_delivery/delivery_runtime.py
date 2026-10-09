@@ -135,6 +135,7 @@ from owlbear_delivery.runtime_reads import (
 )
 from owlbear_delivery.runtime_receipts import (  # noqa: F401
     BUILDER_ATTEMPT_GRANT_NOTE,
+    GRANTABLE_RETRY_ACTION_KINDS,
     AdministrativeDeliveryMove,
     AdministrativeDeliveryMovePreview,
     AdministrativeDeliveryMoveResult,
@@ -142,6 +143,7 @@ from owlbear_delivery.runtime_receipts import (  # noqa: F401
     DeliveryEngineBuilderSettlement,
     DeliveryEnginePlanningSettlement,
     DeliveryPlanningRetrySettlement,
+    _DeliveryAttemptGrantReceipt,
     _DeliveryBuilderAttemptGrantReceipt,
     _DeliveryBuilderHandoffChangeIntentHead,
     _DeliveryBuilderHandoffChangeIntentReceipt,
@@ -159,6 +161,7 @@ from owlbear_delivery.runtime_settlement import (
 )
 from owlbear_delivery.runtime_support import (  # noqa: F401
     _administrative_move_closure,
+    _attempt_grant_receipt_path,
     _attention_conflict,
     _builder_attempt_grant_receipt_path,
     _checkpoint_with_head,
@@ -172,6 +175,7 @@ from owlbear_delivery.runtime_support import (  # noqa: F401
     _pull_request_identity,
     _queue_finalization_checkpoint,
     _queue_promoted_result_checkpoint,
+    _read_attempt_grant_receipt,
     _read_builder_attempt_grant_receipt,
     _read_builder_handoff_change_intent_receipts,
     _read_builder_request_resolution_receipt,
@@ -2541,6 +2545,79 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
             ),
         )
         return updated
+
+    def has_attempt_grant(self, attempt_id: str) -> bool:
+        """Return whether the user already granted one more attempt after this exact exhausted attempt."""
+        return _read_attempt_grant_receipt(self._target_root, self._contract.change_id, attempt_id) is not None
+
+    def grant_attempt(
+        self,
+        attempt_id: str,
+        *,
+        now: datetime | str | None = None,
+    ) -> _DeliveryAttemptGrantReceipt:
+        """Fund one more Planner or Finalizer attempt after its exact retry episode was exhausted.
+
+        These episodes stop without an Outcome block, so the grant names the latest settled failure. The retry
+        ledger and an immutable receipt commit in one transaction fenced by the unchanged frontier and custody; a
+        replay of the same grant returns its receipt and never funds a second attempt.
+        """
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "grant_attempt")
+        operation = _consume_declared_mutation()
+        change_id = self._contract.change_id
+        receipt_path = _attempt_grant_receipt_path(self._target_root, change_id, attempt_id)
+        if any(path.is_symlink() for path in (self._target_root / "changes", receipt_path.parent, receipt_path)):
+            _reference("attempt grant receipt path is unsafe")
+        ledger = self.retry_ledger()
+        existing = _read_attempt_grant_receipt(self._target_root, change_id, attempt_id)
+        if existing is not None:
+            episode = ledger.episode_for_attempt(attempt_id)
+            if (
+                episode is None
+                or episode.episode_id != existing.episode_id
+                or episode.granted_attempts < existing.granted_attempts
+            ):
+                _reference("attempt grant receipt does not match its retry episode")
+            return existing
+        _require_no_active_change_claim(frontier, "attempt grant")
+        message = "attempt grant requires the latest failure of an exhausted Planner or Finalizer retry episode"
+        try:
+            ledger_participant, episode = ledger.prepare_attempt_grant(attempt_id, now=now)
+        except (RetryAttemptGrantError, RetryLedgerConflictError, RetryLedgerCorruptError) as exc:
+            raise DeliveryRuntimeConflictError(message) from exc
+        if episode.key.action_kind not in GRANTABLE_RETRY_ACTION_KINDS or episode.key.change_id != change_id:
+            _conflict(message)
+        receipt = _DeliveryAttemptGrantReceipt(
+            change_id=change_id,
+            attempt_id=attempt_id,
+            episode_id=episode.episode_id,
+            action_kind=episode.key.action_kind,
+            granted_attempts=episode.granted_attempts,
+        )
+        participants: tuple[TransactionParticipant | ReplacementTransactionParticipant, ...] = (
+            ReplacementTransactionParticipant(
+                self._target_root, self._frontier_path.relative_to(self._target_root), previous, previous
+            ),
+            TransactionParticipant(
+                self._target_root, receipt_path.relative_to(self._target_root), _model_content(receipt)
+            ),
+            ledger_participant,
+        )
+        if self._workspace_manager is not None:
+            # A settled Finalizer keeps its attention custody; only that exact attention may stand during the grant.
+            attention = self._workspace_manager.show(change_id).finalization_attention
+            participants = (
+                *participants,
+                self._workspace_manager.prepare_runtime_custody_guard(
+                    change_id,
+                    expected_finalization_attention=attention,
+                    operation=operation,
+                    mutation_class=pause_mutation_class(operation),
+                ),
+            )
+        RuntimeTransaction(self._target_root, f"delivery-attempt-grant-{receipt_path.stem}", participants).commit()
+        return receipt
 
     def administrative_move(
         self,

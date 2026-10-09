@@ -1743,15 +1743,15 @@ def test_review_repair_finalizer_readiness_and_acquisition_share_retry_identity(
     assert readiness.attempts == (3 if exhausted else 1)
 
     blocked = application.acquire_change_action(_continuation_request(application))
-    assert blocked.kind == ("unsupported" if exhausted else "waiting")
+    assert blocked.kind == ("human" if exhausted else "waiting")
     assert blocked.reason_code == ("retry-exhausted" if exhausted else "retry-backoff")
     assert blocked.readiness is not None
     assert blocked.readiness.attempts == (3 if exhausted else 1)
     if exhausted:
         assert blocked.readiness.operation is None
-        assert blocked.readiness.next_actor.value == "agent"
-        assert blocked.readiness.prompt is not None
-        assert blocked.readiness.prompt.startswith("/inspect-change change-a Diagnose the exhausted retry episode")
+        assert blocked.readiness.next_actor.value == "you"
+        assert blocked.readiness.grant_attempt_id is not None
+        assert blocked.readiness.prompt is None
     assert RetryLedger(state_root, "change-a").episode(key).total_attempts == (3 if exhausted else 1)
     assert runtime.finalization() is None
 

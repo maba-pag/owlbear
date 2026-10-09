@@ -397,6 +397,8 @@ class DeliveryReadiness(_ProjectionModel):
     next_eligible_at: str | None = None
     stop_reason: str | None = None
     retry_history: tuple[DeliveryRetryAttemptView, ...] = Field(default=(), max_length=MAX_RETRY_HISTORY_ATTEMPTS)
+    # The exhausted Planner or Finalizer attempt the user may grant one more attempt past (no Outcome block).
+    grant_attempt_id: str | None = Field(default=None, min_length=1, max_length=256)
     prompt: str | None = None
     progress: DeliveryProgress | None = None
     merge_offer: MergeOffer | None = None
@@ -415,6 +417,11 @@ class DeliveryReadiness(_ProjectionModel):
             raise ValueError(msg)
         if self.executable and self.status != "ready":
             msg = "only ready operations can be executable"
+            raise ValueError(msg)
+        if self.grant_attempt_id is not None and (
+            self.reason_code != "retry-exhausted" or self.next_actor is not WorkItemNextActor.YOU
+        ):
+            msg = "only exhausted retries the user decides offer an attempt grant"
             raise ValueError(msg)
         return self
 
@@ -675,15 +682,16 @@ _ATTENTION_HEADLINES: dict[str, str] = {
     "settled-attention-target-drift": "The target moved after a failed verification; inspect the Change.",
     "merge-blocked": "GitHub reports the pull request cannot merge; open it to check.",
 }
-_ATTEMPT_GRANT_HEADLINE = "Automatic Builder retries are used up; grant one more attempt or inspect the Change."
+_ATTEMPT_GRANT_HEADLINE = "Automatic retries are used up; grant one more attempt or inspect the Change."
+_GRANT_ATTEMPT_ACTION = WorkItemAction(kind=WorkItemActionKind.GRANT_ATTEMPT, label="Grant one more attempt")
 
 
 def _is_attempt_grant(card: WorkItemCardView, readiness: DeliveryReadiness) -> bool:
-    """Return whether exhausted Builder readiness offers the user-only attempt grant on this card."""
+    """Return whether exhausted readiness offers the user-only attempt grant on this card."""
     return (
         readiness.reason_code == "retry-exhausted"
         and readiness.next_actor is WorkItemNextActor.YOU
-        and card.action.kind is WorkItemActionKind.GRANT_ATTEMPT
+        and (card.action.kind is WorkItemActionKind.GRANT_ATTEMPT or readiness.grant_attempt_id is not None)
     )
 
 
@@ -1171,6 +1179,8 @@ class WorkItemProjector:
                         "action": (
                             decision.action
                             if decision.action is not None
+                            else _GRANT_ATTEMPT_ACTION
+                            if _is_attempt_grant(card, decision) and decision.grant_attempt_id is not None
                             else card.action
                             if _is_attempt_grant(card, decision)
                             else card.action
@@ -1193,7 +1203,7 @@ class WorkItemProjector:
                         ),
                         "next_actor": decision.next_actor,
                         "needs": (
-                            card.needs
+                            WorkItemNeed.YOU
                             if _is_attempt_grant(card, decision)
                             else WorkItemNeed.NONE
                             if decision.reason_code in retained_reasons
@@ -1275,15 +1285,18 @@ class WorkItemProjector:
             return sync_step
         if readiness.reason_code == "retry-exhausted":
             grant = _is_attempt_grant(card, readiness)
+            builder_grant = grant and readiness.grant_attempt_id is None
             owner = (
                 "Builder"
-                if card.scope is WorkItemScope.OUTCOME and (card.stage is WorkItemStage.IMPLEMENTATION or grant)
+                if card.scope is WorkItemScope.OUTCOME and (card.stage is WorkItemStage.IMPLEMENTATION or builder_grant)
                 else "Planner"
                 if card.scope is WorkItemScope.OUTCOME
+                else "Finalizer"
+                if grant
                 else "Delivery"
             )
             remedy = (
-                "Use Grant one more attempt in Cockpit to fund exactly one more Builder attempt, or inspect this "
+                f"Use Grant one more attempt in Cockpit to fund exactly one more {owner} attempt, or inspect this "
                 f"Change read-only with /inspect-change {card.change_id} first."
                 if grant
                 else f"Orchestrator can inspect this Change read-only with /inspect-change {card.change_id}; any "

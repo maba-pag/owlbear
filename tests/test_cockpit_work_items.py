@@ -42,6 +42,7 @@ from serve.delivery.tests.test_portfolio_application import (
     _make_provider_readback_unavailable,
     _portfolio,
     _seed_loader_composed_completed_change,
+    _settle_failed_finalizer_attempt,
     _startup_config,
     _workspace_mutation_snapshot,
     acceptance_budget_case,
@@ -130,7 +131,7 @@ from owlbear_delivery.portfolio_operating import (
     PortfolioWorkReference,
     PortfolioWorkScope,
 )
-from owlbear_delivery.recovery import DeliveryWorkerExclusionRequiredError
+from owlbear_delivery.recovery import DeliveryWorkerExclusionRequiredError, RetryLedger
 from owlbear_delivery.storage_io import locked_roots
 from owlbear_delivery.work_items import (
     ChangeGroupView,
@@ -2912,6 +2913,7 @@ def test_list_and_detail_preserve_known_unavailable_change_projection() -> None:
                 "next_eligible_at": None,
                 "stop_reason": None,
                 "retry_history": [],
+                "grant_attempt_id": None,
                 "prompt": None,
                 "progress": None,
                 "merge_offer": None,
@@ -3292,6 +3294,55 @@ def test_real_http_attempt_grant_resumes_the_builder_and_replays(tmp_path: Path)
     episode = runtime.retry_ledger().read().episodes[0]
     assert (episode.total_attempts, episode.granted_attempts, episode.stop_code) == (3, 1, None)
     assert application.acquire_change_action(_continuation_request(application, "change-a")).launch is not None
+
+
+def test_retry_attempt_grant_route_binds_the_exact_exhausted_attempt() -> None:
+    client, application = _client()
+    route = "/api/changes/change-a/retry-attempts/attempt-3/grant"
+
+    rejected = client.post(route, json={"expected_frontier_digest": "a" * 64, "outcome_id": "OUT-001"})
+    granted = client.post(route, json={"expected_frontier_digest": "a" * 64})
+
+    assert (rejected.status_code, granted.status_code) == (422, 200)
+    assert [name for name, _args in application.calls] == ["grant-attempt"]
+    answer = application.calls[0][1][0]
+    assert isinstance(answer, DeliveryAnswer)
+    assert (answer.kind, answer.attempt_id, answer.outcome_id, answer.block_id) == (
+        DeliveryAnswerKind.GRANT_ATTEMPT,
+        "attempt-3",
+        None,
+        None,
+    )
+
+
+def test_real_http_finalizer_grant_funds_one_more_attempt_and_replays(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtimes, _coordinator, state_root = _portfolio(
+        tmp_path, {"change-a": DeliveryStage.COMPLETED}, clock=lambda: now[0]
+    )
+    attempts = []
+    for index in range(3):
+        now[0] = f"2026-08-04T00:00:{index * 10:02d}Z"
+        attempts.append(_settle_failed_finalizer_attempt(application))
+    now[0] = "2026-08-04T00:01:00Z"
+    last = attempts[-1].writer.attempt_id
+    digest = hashlib.sha256(runtimes["change-a"].frontier_bytes()).hexdigest()
+    route = f"/api/changes/change-a/retry-attempts/{last}/grant"
+
+    with TestClient(assemble_target_app(application)) as client:
+        before = client.get("/api/changes/change-a/work-items/publication").json()["item"]
+        granted = client.post(route, json={"expected_frontier_digest": digest})
+        replay = client.post(route, json={"expected_frontier_digest": digest})
+        after = client.get("/api/changes/change-a/work-items/publication").json()["item"]
+
+    assert (before["card"]["action"]["kind"], before["card"]["needs"]) == ("grant-attempt", "you")
+    assert before["readiness"]["grant_attempt_id"] == last
+    assert (granted.status_code, replay.status_code) == (200, 200), (granted.json(), replay.json())
+    assert granted.json()["granted_attempt_id"] == replay.json()["granted_attempt_id"] == last
+    assert after["card"]["action"]["kind"] != "grant-attempt"
+    episode = RetryLedger(state_root, "change-a").episode_for_attempt(last)
+    assert (episode.total_attempts, episode.granted_attempts, episode.stop_code) == (3, 1, None)
+    assert application.acquire_change_action(_continuation_request(application, "change-a")).kind == "acquired"
 
 
 def test_bulk_expired_claim_recovery_route_is_removed_without_delivery_call() -> None:

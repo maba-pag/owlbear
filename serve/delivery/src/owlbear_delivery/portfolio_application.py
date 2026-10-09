@@ -1730,6 +1730,10 @@ class PortfolioApplication(
                     )
 
                 if answer.kind is DeliveryAnswerKind.GRANT_ATTEMPT:
+                    if answer.attempt_id is not None:
+                        return self._grant_retry_attempt(
+                            runtime, answer, answer.attempt_id, current_digest, allow_user_only=allow_user_only
+                        )
                     return self._grant_builder_attempt(runtime, answer, current_digest, allow_user_only=allow_user_only)
 
                 if answer.kind is DeliveryAnswerKind.BLOCK:
@@ -1841,6 +1845,29 @@ class PortfolioApplication(
             kind=answer.kind,
             binding=granted,
             frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+        )
+
+    def _grant_retry_attempt(
+        self,
+        runtime: DeliveryRuntime,
+        answer: DeliveryAnswer,
+        attempt_id: str,
+        current_digest: str,
+        *,
+        allow_user_only: bool,
+    ) -> DeliveryAnswerResult:
+        """Apply the user's one-attempt grant to an exhausted Planner or Finalizer retry episode."""
+        if not allow_user_only:
+            message = "one more Planner or Finalizer attempt is granted only by the user in Cockpit"
+            raise DeliveryConfirmationError(message)
+        if current_digest != answer.expected_frontier_digest and not runtime.has_attempt_grant(attempt_id):
+            self._fail("answer frontier changed")
+        runtime.grant_attempt(attempt_id, now=self._clock())
+        return DeliveryAnswerResult(
+            change_id=answer.change_id,
+            kind=answer.kind,
+            granted_attempt_id=attempt_id,
+            frontier_digest=current_digest,
         )
 
     @staticmethod

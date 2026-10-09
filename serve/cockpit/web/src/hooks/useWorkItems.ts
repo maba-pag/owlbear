@@ -17,6 +17,7 @@ import {
   deferWorkItemChange,
   designWorkDetailUrl,
   discardAbandonedTargetSyncAndCleanup,
+  grantRetryAttempt,
   grantWorkItemAttempt,
   isUnavailableDetail,
   listCompletedChanges,
@@ -510,6 +511,12 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
             currentDetail().item.snapshot_version,
           ),
         "One more Builder attempt granted.",
+      ),
+    grantRetryAttempt: (attemptId: string) =>
+      mutate(
+        "grant-attempt",
+        () => grantRetryAttempt(identity.changeId, attemptId, currentDetail().item.snapshot_version),
+        "One more attempt granted.",
       ),
     releaseStuckWorker: (attemptId: string, claimId: string) =>
       mutate(

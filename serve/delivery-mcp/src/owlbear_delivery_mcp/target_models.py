@@ -203,7 +203,7 @@ class AnswerParams(ChangeParams):
     @classmethod
     def _refuse_user_only_kind(cls, kind: DeliveryAnswerKind) -> DeliveryAnswerKind:
         if kind is DeliveryAnswerKind.GRANT_ATTEMPT:
-            message = "one more Builder attempt is granted only by the user in Cockpit"
+            message = "one more Builder, Planner, or Finalizer attempt is granted only by the user in Cockpit"
             raise ValueError(message)
         return kind
 

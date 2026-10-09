@@ -467,6 +467,21 @@ class _DeliveryBuilderAttemptGrantReceipt(_DeliveryModel):
         return self
 
 
+# Planner and Finalizer retry episodes stop without an Outcome block; their user grant is episode-scoped.
+GRANTABLE_RETRY_ACTION_KINDS: frozenset[str] = frozenset({"finalize", "planner-claim"})
+
+
+class _DeliveryAttemptGrantReceipt(_DeliveryModel):
+    """Immutable user grant of one more Planner or Finalizer attempt after its exact exhausted attempt."""
+
+    schema_version: Literal[1] = 1
+    change_id: str = Field(min_length=1, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    attempt_id: str = Field(min_length=1, max_length=256)
+    episode_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    action_kind: Literal["finalize", "planner-claim"]
+    granted_attempts: int = Field(ge=1)
+
+
 class _DeliveryBuilderHandoffChangeIntentReceipt(_DeliveryModel):
     """Immutable proof of one supported lifecycle intent during a retained Builder handoff."""
 

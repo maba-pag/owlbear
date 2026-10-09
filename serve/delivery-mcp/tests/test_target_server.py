@@ -257,9 +257,20 @@ async def test_registered_answer_refuses_the_user_only_attempt_grant(tmp_path: P
                 "block_id": block.block_id,
             },
         )
+        episode_grant = await client.call_tool(
+            "answer",
+            {
+                "change_id": "change-a",
+                "kind": "grant-attempt",
+                "expected_frontier_digest": hashlib.sha256(frontier_before).hexdigest(),
+                "attempt_id": ledger_before.episodes[0].attempt_ids[-1],
+            },
+        )
 
     assert result.is_error
     assert "ERR_TARGET_PARAM_VALIDATION" in result.content[0].text
+    assert episode_grant.is_error
+    assert "ERR_TARGET_PARAM_VALIDATION" in episode_grant.content[0].text
     assert runtime.frontier_bytes() == frontier_before
     assert runtime.retry_ledger().read() == ledger_before
     with pytest.raises(ValidationError, match="granted only by the user in Cockpit"):
