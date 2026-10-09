@@ -949,7 +949,7 @@ class ChangeTargetOverlap(_WorkspaceModel):
         if self.status != "unknown" and self.target_head is None:
             message = "a known target overlap names the fetched target head"
             raise ValueError(message)
-        if (self.status == "conflict") != bool(self.conflict_paths):
+        if self.status != "conflict" and self.conflict_paths:
             message = "only a conflicting target overlap names conflict paths"
             raise ValueError(message)
         return self

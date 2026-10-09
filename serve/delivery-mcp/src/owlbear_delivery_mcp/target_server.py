@@ -762,7 +762,10 @@ class TargetMCPAdapter:
     async def show_build_context(self, request: ClaimContextRequest) -> dict[str, object]:
         """Show bounded Build context for one claim."""
         params = self._validate(ClaimContextParams, request)
-        return self._call(params, lambda: self._application.show_build_context(**params.model_dump()))
+        # Build context fetches the target for its overlap probe; keep the event loop free meanwhile.
+        return await asyncio.to_thread(
+            self._call, params, lambda: self._application.show_build_context(**params.model_dump())
+        )
 
     async def show_finalization_context(self, request: ChangeRequest) -> dict[str, object]:
         """Show engine-resolved context for one exact Change finalization."""

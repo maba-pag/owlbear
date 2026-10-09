@@ -68,6 +68,26 @@ class _TargetFetchStart(NamedTuple):
     observations: Mapping[str, str]
 
 
+def merge_tree_overlap(returncode: int, stdout: bytes, reviewed: str, target: str) -> ChangeTargetOverlap:
+    """Classify ``git merge-tree --write-tree --name-only --no-messages -z``; only a written tree is known.
+
+    Exit 1 with a tree is a conflict even when Git lists no conflicted path; every other shape is unknown.
+    """
+    tree, *paths = stdout.decode(errors="replace").removesuffix("\0").split("\0")
+    if _COMMIT_PATTERN.fullmatch(tree) is None:
+        return ChangeTargetOverlap(status="unknown", reviewed_head=reviewed)
+    if returncode == 0 and not paths:
+        return ChangeTargetOverlap(status="clean", reviewed_head=reviewed, target_head=target)
+    if returncode == _MERGE_TREE_CONFLICT:
+        return ChangeTargetOverlap(
+            status="conflict",
+            reviewed_head=reviewed,
+            target_head=target,
+            conflict_paths=tuple(path for path in paths[:MAX_TARGET_OVERLAP_PATHS] if path),
+        )
+    return ChangeTargetOverlap(status="unknown", reviewed_head=reviewed)
+
+
 class _TargetSyncMixin:
     """Target synchronization, external-head adoption and promotion, and publication-baseline recovery."""
 
@@ -220,6 +240,9 @@ class _TargetSyncMixin:
                 return ChangeTargetOverlap(status="unknown", reviewed_head=reviewed)
             try:
                 self._record_target_observation(start, target)
+                # A concurrent recording may win; a sync must then be able to merge exactly this commit.
+                if self.observed_target_head() != target:
+                    return ChangeTargetOverlap(status="unknown", reviewed_head=reviewed)
                 merge = self._run_git(
                     "merge-tree", "--write-tree", "--name-only", "--no-messages", "-z", reviewed, target, check=False
                 )
@@ -227,19 +250,7 @@ class _TargetSyncMixin:
                 self._run_git("update-ref", "-d", private_ref, target, check=False)
         except OSError, RuntimeError, subprocess.SubprocessError, ValueError:
             return ChangeTargetOverlap(status="unknown", reviewed_head=reviewed)
-        tree, *paths = merge.stdout.decode(errors="replace").removesuffix("\0").split("\0")
-        if _COMMIT_PATTERN.fullmatch(tree) is None:
-            return ChangeTargetOverlap(status="unknown", reviewed_head=reviewed)
-        if merge.returncode == 0 and not paths:
-            return ChangeTargetOverlap(status="clean", reviewed_head=reviewed, target_head=target)
-        if merge.returncode == _MERGE_TREE_CONFLICT and paths:
-            return ChangeTargetOverlap(
-                status="conflict",
-                reviewed_head=reviewed,
-                target_head=target,
-                conflict_paths=tuple(paths[:MAX_TARGET_OVERLAP_PATHS]),
-            )
-        return ChangeTargetOverlap(status="unknown", reviewed_head=reviewed)
+        return merge_tree_overlap(merge.returncode, merge.stdout, reviewed, target)
 
     def recover_publication_baseline(
         self,

@@ -1952,6 +1952,9 @@ class _BlockingFoundationalApplication(_RecordingApplication):
     def acquire_actions(self) -> _Result:
         return self._run_foundational_operation()
 
+    def show_build_context(self, **_identity: str) -> _Result:
+        return self._run_foundational_operation()
+
     def delivery_health(self) -> DeliveryHealthView:
         self.calls.append("delivery_health")
         self.health_observations.append(self.mutation_count)
@@ -3540,6 +3543,27 @@ async def test_foundational_operations_yield_to_independent_health_requests(
     assert health.status is DeliveryHealthStatus.HEALTHY
     assert result == {"operation": operation_name}
     assert application.calls == [operation_name, "delivery_health"]
+
+
+@pytest.mark.asyncio
+async def test_build_context_target_probe_yields_the_mcp_event_loop() -> None:
+    started = threading.Event()
+    release = threading.Event()
+    fallback_release = threading.Timer(1, release.set)
+    fallback_release.start()
+    adapter = TargetMCPAdapter(_BlockingFoundationalApplication("show_build_context", started, release))  # type: ignore[arg-type]
+    identity = {"change_id": "change-a", "outcome_id": "OUT-001", "attempt_id": "attempt", "claim_id": "claim"}
+    launched_at = time.monotonic()
+
+    task = asyncio.create_task(adapter.show_build_context(identity))
+    assert await asyncio.to_thread(started.wait, 2)
+    elapsed = time.monotonic() - launched_at
+    release.set()
+    result = await task
+    fallback_release.cancel()
+
+    assert elapsed < 0.5
+    assert result == {"operation": "show_build_context"}
 
 
 @pytest.mark.asyncio

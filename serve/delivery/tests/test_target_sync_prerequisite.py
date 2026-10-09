@@ -34,6 +34,7 @@ from owlbear_delivery.application_support import _checkpoint_error_detail
 from owlbear_delivery.change_workspace import ChangeTargetSyncConflictError, ChangeTargetSyncStaleError
 from owlbear_delivery.runtime_models import required_target_commit
 from owlbear_delivery.work_items import WorkItemActionKind
+from owlbear_delivery.workspace_target_sync import merge_tree_overlap
 
 _INCIDENT_CONFLICT_PATHS = (
     "serve/memory-mcp/README.md",
@@ -411,3 +412,36 @@ def test_target_overlap_is_not_probed_after_finalization(tmp_path: Path) -> None
 
     assert context.target_overlap is None
     assert not probe.called
+
+
+@pytest.mark.parametrize(
+    ("returncode", "stdout", "expected"),
+    [
+        (0, b"a" * 40 + b"\0", ("clean", ())),
+        (1, b"a" * 40 + b"\0product.txt\0", ("conflict", ("product.txt",))),
+        (1, b"a" * 40 + b"\0", ("conflict", ())),
+        (1, b"", ("unknown", ())),
+        (0, b"a" * 40 + b"\0stray\0", ("unknown", ())),
+        (128, b"a" * 40 + b"\0", ("unknown", ())),
+    ],
+)
+def test_merge_tree_overlap_counts_only_a_written_tree_and_any_exit_one_conflict(
+    returncode: int, stdout: bytes, expected: tuple[str, tuple[str, ...]]
+) -> None:
+    overlap = merge_tree_overlap(returncode, stdout, "b" * 40, "c" * 40)
+
+    assert (overlap.status, overlap.conflict_paths) == expected
+    assert overlap.target_head == (None if expected[0] == "unknown" else "c" * 40)
+
+
+def test_target_overlap_is_unknown_when_its_observation_loses_to_another_fetch(tmp_path: Path) -> None:
+    application, _runtime, builder, stale, _target = _two_task_builder_with_remote(
+        tmp_path, competing="Competing target edit\n"
+    )
+    manager = application._workspace_manager
+
+    with patch.object(type(manager), "_record_target_observation", return_value=None):
+        overlap = _build_context(application, builder).target_overlap
+
+    assert (overlap.status, overlap.target_head) == ("unknown", None)
+    assert manager.observed_target_head() == stale
