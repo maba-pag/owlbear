@@ -2737,9 +2737,9 @@ def test_worker_budget_survives_resolved_blocks_and_leaves_sibling_runnable(tmp_
         assert not application.get_change("change-a").readiness.executable
     reopened, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes, clock=clock, execution_capacity=1)
     assert reopened.get_change("change-a").readiness.reason_code == "retry-exhausted"
-    assert reopened.get_change("change-a").readiness.next_actor.value == "agent"
-    assert reopened.get_change("change-a").readiness.prompt is not None
-    assert reopened.get_change("change-a").readiness.prompt.startswith("/inspect-change change-a")
+    assert reopened.get_change("change-a").readiness.next_actor.value == "you"
+    assert reopened.get_change("change-a").readiness.grant_attempt_id is not None
+    assert reopened.get_change("change-a").readiness.prompt is None
     assert reopened.acquire_change_action(_continuation_request(reopened)).launch is None
     if batch:
         acquired = reopened.acquire_frontier_work()
@@ -2948,9 +2948,9 @@ def test_planning_decisions_suspend_retry_budget_across_restart(tmp_path: Path, 
         now += timedelta(seconds=2)
     application, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes, clock=clock)
     assert application.get_change("change-a").readiness.reason_code == "retry-exhausted"
-    assert application.get_change("change-a").readiness.next_actor.value == "agent"
-    assert application.get_change("change-a").readiness.prompt is not None
-    assert application.get_change("change-a").readiness.prompt.startswith("/inspect-change change-a")
+    assert application.get_change("change-a").readiness.next_actor.value == "you"
+    assert application.get_change("change-a").readiness.grant_attempt_id is not None
+    assert application.get_change("change-a").readiness.prompt is None
 
 
 @pytest.mark.parametrize(
@@ -3015,12 +3015,12 @@ def test_settled_planner_retries_exhaust_after_three_exact_attempts(
             assert application.get_change("change-a").readiness.reason_code == "retry-backoff"
     readiness = application.get_change("change-a").readiness
     assert readiness.reason_code == "retry-exhausted"
-    assert readiness.next_actor.value == "agent"
-    assert readiness.prompt is not None
-    assert readiness.prompt.startswith("/inspect-change change-a")
+    assert readiness.next_actor.value == "you"
+    assert readiness.grant_attempt_id == claim.attempt_id
+    assert readiness.prompt is None
     view = application.show_work_item_view("change-a", "outcome:OUT-001")
-    assert view.card.next_actor.value == "agent"
-    assert view.card.action.kind.value == "none"
+    assert view.card.next_actor.value == "you"
+    assert view.card.action.kind.value == "grant-attempt"
     assert "Planner" in view.card.next_step
     assert application.acquire_actions().launch_packages == ()
     assert RetryLedger(state_root, "change-a").read().episodes[0].total_attempts == 3
@@ -4229,9 +4229,8 @@ def test_exhausted_builder_retry_offers_only_the_user_attempt_grant(tmp_path: Pa
     assert view.readiness.executable is False
     assert view.readiness.operation is None
     assert view.readiness.action is None
-    assert view.readiness.prompt is not None
-    assert view.readiness.prompt.startswith("/inspect-change change-a")
-    assert "do not clear the block, retry, dispatch, or reset the budget" in view.readiness.prompt
+    assert view.readiness.grant_attempt_id is None
+    assert view.readiness.prompt is None
     assert view.readiness.progress.situation == "your-decision"
     assert "Grant one more attempt" in view.card.next_step
     assert "/inspect-change change-a" in view.card.next_step
@@ -4673,9 +4672,8 @@ def test_exhausted_builder_return_to_planning_projects_read_only_diagnostic(
     assert view.readiness.attempts == 3
     assert view.readiness.operation is None
     assert not view.readiness.executable
-    assert view.readiness.prompt is not None
-    assert view.readiness.prompt.startswith("/inspect-change change-a")
-    assert "read-only" in view.readiness.prompt
+    # A user grant is the one action, so no competing inspect prompt is authored.
+    assert view.readiness.prompt is None
     # N12 I6: the pre-N12 exhausted Planning return is no longer read-only; only the user grant lifts it.
     assert view.card.next_actor.value == "you"
     assert view.card.action.kind.value == "grant-attempt"
@@ -8985,6 +8983,135 @@ def _settle_failed_finalizer_attempt(application: PortfolioApplication) -> Chang
     return attempt
 
 
+def _retry_grant_answer(application: PortfolioApplication, attempt_id: str) -> DeliveryAnswer:
+    return DeliveryAnswer(
+        change_id="change-a",
+        kind=DeliveryAnswerKind.GRANT_ATTEMPT,
+        expected_frontier_digest=hashlib.sha256(application._runtime("change-a").frontier_bytes()).hexdigest(),
+        attempt_id=attempt_id,
+    )
+
+
+def test_exhausted_finalizer_is_granted_one_more_attempt_only_by_the_user(  # noqa: PLR0915 - lifecycle proof.
+    tmp_path: Path,
+) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path, {"change-a": DeliveryStage.COMPLETED}, clock=lambda: now[0]
+    )
+    attempts = []
+    for index in range(3):
+        now[0] = f"2026-08-04T00:00:{index * 10:02d}Z"
+        attempts.append(_settle_failed_finalizer_attempt(application))
+    last = attempts[-1].writer.attempt_id
+    now[0] = "2026-08-04T00:01:00Z"
+
+    readiness = application.get_change("change-a").readiness
+    assert (readiness.reason_code, readiness.next_actor.value, readiness.grant_attempt_id) == (
+        "retry-exhausted",
+        "you",
+        last,
+    )
+    assert readiness.prompt is None
+    card = application.show_work_item_view("change-a", "publication").card
+    assert (card.action.kind.value, card.action.label, card.needs.value) == (
+        "grant-attempt",
+        "Grant one more attempt",
+        "you",
+    )
+    assert "one more Finalizer attempt" in card.next_step
+    assert application.acquire_change_action(_continuation_request(application)).kind != "acquired"
+
+    ledger = RetryLedger(state_root, "change-a")
+    exhausted = ledger.read()
+    with pytest.raises(DeliveryConfirmationError, match="only by the user in Cockpit"):
+        application.answer(_retry_grant_answer(application, last))
+    with pytest.raises(DeliveryRuntimeConflictError, match="latest failure of an exhausted"):
+        application.answer(_retry_grant_answer(application, attempts[0].writer.attempt_id), allow_user_only=True)
+    with pytest.raises(PortfolioApplicationError, match="answer frontier changed"):
+        application.answer(
+            _retry_grant_answer(application, last).model_copy(update={"expected_frontier_digest": "0" * 64}),
+            allow_user_only=True,
+        )
+    assert ledger.read() == exhausted
+
+    result = application.answer(_retry_grant_answer(application, last), allow_user_only=True)
+    assert result.granted_attempt_id == last
+    granted = ledger.read()
+    episode = ledger.episode_for_attempt(last)
+    assert (episode.total_attempts, episode.granted_attempts, episode.stop_code) == (3, 1, None)
+    receipts = list((state_root / "changes/change-a/attempt-grant-receipts").iterdir())
+    assert len(receipts) == 1
+    assert json.loads(receipts[0].read_text(encoding="utf-8"))["action_kind"] == "finalize"
+    replay = application.answer(_retry_grant_answer(application, last), allow_user_only=True)
+    assert replay.granted_attempt_id == last
+    assert ledger.read() == granted
+
+    reopened, _coordinator, _manager = _reopen_portfolio(
+        tmp_path, state_root, {"change-a": runtimes["change-a"]}, clock=lambda: now[0]
+    )
+    assert reopened.get_change("change-a").readiness.reason_code != "retry-exhausted"
+    funded = reopened.acquire_change_action(_continuation_request(reopened))
+    assert funded.kind == "acquired", funded
+    assert funded.finalization is not None
+    fourth = funded.finalization.attempt.writer.attempt_id
+    report = reopened.report_finalization_failure(_failure_request(reopened, attempt_key=fourth))
+    reopened.settle_finalizer_invocation(_finalizer_settlement(reopened, funded.finalization.attempt, report))
+
+    episode = RetryLedger(state_root, "change-a").episode_for_attempt(fourth)
+    assert (episode.total_attempts, episode.granted_attempts) == (4, 1)
+    assert episode.stop_code.value == "retry-exhausted"
+    regrant = reopened.get_change("change-a").readiness
+    assert (regrant.reason_code, regrant.grant_attempt_id) == ("retry-exhausted", fourth)
+    assert reopened.acquire_change_action(_continuation_request(reopened)).kind != "acquired"
+    # Replaying the first grant never funds the re-exhausted episode.
+    reopened.answer(_retry_grant_answer(reopened, last), allow_user_only=True)
+    assert RetryLedger(state_root, "change-a").episode_for_attempt(fourth).stop_code.value == "retry-exhausted"
+    assert coordinator.show("change-a").finalization_attention is not None
+
+
+def test_exhausted_planner_is_granted_exactly_one_more_attempt(tmp_path: Path) -> None:
+    now = datetime(2026, 8, 4, tzinfo=UTC)
+
+    def clock() -> str:
+        return now.isoformat()
+
+    application, _runtimes, _coordinator, state_root = _portfolio(
+        tmp_path, {"change-a": DeliveryStage.PLANNING}, clock=clock
+    )
+
+    def fail_planner() -> str:
+        claim = application.acquire_actions().launch_packages[0].claim
+        application.settle_worker_invocation(
+            DeliveryPlanningRetrySettlement(
+                change_id="change-a",
+                outcome_id="OUT-001",
+                claim_id=claim.claim_id,
+                attempt_id=claim.attempt_id,
+                disposition="ended-without-result",
+            ),
+        )
+        return claim.attempt_id
+
+    attempt_ids = []
+    for elapsed in (0, 1, 3):
+        now = datetime(2026, 8, 4, tzinfo=UTC) + timedelta(seconds=elapsed)
+        attempt_ids.append(fail_planner())
+    view = application.show_work_item_view("change-a", "outcome:OUT-001")
+    assert view.readiness.grant_attempt_id == attempt_ids[-1]
+    assert (view.card.action.kind.value, view.card.next_actor.value) == ("grant-attempt", "you")
+    assert "one more Planner attempt" in view.card.next_step
+    assert application.acquire_actions().launch_packages == ()
+
+    application.answer(_retry_grant_answer(application, attempt_ids[-1]), allow_user_only=True)
+    now = datetime(2026, 8, 4, tzinfo=UTC) + timedelta(seconds=10)
+    attempt_ids.append(fail_planner())
+    episode = RetryLedger(state_root, "change-a").read().episodes[0]
+    assert (episode.total_attempts, episode.granted_attempts) == (4, 1)
+    assert episode.stop_code.value == "retry-exhausted"
+    assert application.acquire_actions().launch_packages == ()
+
+
 def test_successful_finalizer_syncs_after_target_conflict_abort(tmp_path: Path) -> None:
     now = ["2026-08-04T00:00:00Z"]
     application, runtimes, coordinator, _state_root = _portfolio(
@@ -9164,6 +9291,9 @@ def test_finalizer_retry_budget_survives_settled_target_sync(  # noqa: PLR0915 -
         assert readiness.attempts == failed_attempts
         assert readiness.operation is None
         assert not readiness.executable
+        assert readiness.next_actor.value == "you"
+        assert readiness.grant_attempt_id == attempts[-1].writer.attempt_id
+        assert readiness.prompt is None
 
         blocked = application.acquire_change_action(_continuation_request(application))
         assert blocked.kind != "acquired"
@@ -9171,7 +9301,10 @@ def test_finalizer_retry_budget_survives_settled_target_sync(  # noqa: PLR0915 -
         assert runtimes["change-a"].target_sync_receipt() is None
         assert _git(worktree, "rev-parse", "HEAD") == head_before_sync
         assert coordinator.show("change-a").finalization_attention is not None
-        return
+
+        # The user's grant lifts exhaustion in place: the moved target is synchronized and finalized next.
+        application.answer(_retry_grant_answer(application, attempts[-1].writer.attempt_id), allow_user_only=True)
+        readiness = application.get_change("change-a").readiness
 
     assert readiness.status == "ready", readiness
     assert readiness.operation is not None
@@ -9509,17 +9642,15 @@ def test_settled_finalizer_retries_stop_at_three_attempts_without_recovery(tmp_p
     )
 
     blocked = application.acquire_change_action(_continuation_request(application))
-    assert blocked.kind == "unsupported"
+    assert blocked.kind == "human"
     assert blocked.reason_code == "retry-exhausted"
     assert blocked.readiness is not None
     assert blocked.readiness.attempts == 3
     assert not blocked.readiness.executable
     assert blocked.readiness.action is None
-    assert blocked.readiness.next_actor.value == "agent"
-    assert blocked.readiness.prompt is not None
-    assert blocked.readiness.prompt.startswith("/inspect-change change-a Diagnose")
-    assert "read-only" in blocked.readiness.prompt
-    assert "do not clear the block, retry, dispatch, or reset the budget" in blocked.readiness.prompt
+    assert blocked.readiness.next_actor.value == "you"
+    assert blocked.readiness.grant_attempt_id == attempt_ids[-1]
+    assert blocked.readiness.prompt is None
     assert RetryLedger(state_root, "change-a").read().episodes[0].total_attempts == 3
     assert coordinator.show("change-a").finalization_attention is not None
     assert coordinator.show("change-a").finalization_attempt.finished_at is not None

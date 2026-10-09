@@ -645,6 +645,10 @@ export function installFetch() {
         fixtureState.currentDetail = detail({ ...fixtureState.currentDetail.item, block: null });
         return response({});
       }
+      if (method === "POST" && url.includes("/retry-attempts/")) {
+        const attemptId = decodeURIComponent(url.split("/retry-attempts/")[1].replace(/\/grant$/, ""));
+        return response({ change_id: "change-alpha", kind: "grant-attempt", granted_attempt_id: attemptId });
+      }
       if (method === "POST" && url.endsWith("/workers/release-stuck")) {
         if (fixtureState.releaseStuckWorkerActive === "write") {
           return response(

@@ -119,6 +119,7 @@ interface WorkItemDetailProps {
   onAnswerRequest: (requestId: string, resolution: DeliveryRequestResolution) => Promise<Error | null>;
   onClearBlock: (blockId: string, note: string, locators: string[]) => Promise<Error | null>;
   onGrantAttempt: (blockId: string) => Promise<Error | null>;
+  onGrantRetryAttempt: (attemptId: string) => Promise<Error | null>;
   onReleaseStuckWorker: (attemptId: string, claimId: string) => Promise<Error | null>;
   onPreviewBackward: (target: WorkItemStage) => Promise<BackwardMovePreview | null>;
   onMoveBackward: (target: WorkItemStage, reason: string, snapshotVersion: string) => Promise<Error | null>;
@@ -705,6 +706,31 @@ function BlockSection({ detail, pendingAction, onClearBlock, onGrantAttempt }: W
         </div>
       ) : null}
     </section>
+  );
+}
+
+/** Planner and Finalizer retries stop without a block; the grant names their latest exhausted attempt. */
+function RetryGrantControl({ detail, pendingAction, onGrantRetryAttempt }: WorkItemDetailProps) {
+  const { card, readiness } = detail.item;
+  const attemptId = readiness?.grant_attempt_id;
+  if (card.action.kind !== "grant-attempt" || !attemptId) return null;
+  const role = card.scope === "change-publication" ? "Finalizer" : "Planner";
+  return (
+    <div className="mt-static-sm grid gap-static-sm" data-testid="retry-grant">
+      <p className="text-sm">
+        Granting adds exactly one more {role} attempt. Earlier attempts stay recorded; if it fails again, this step
+        stops here for your decision.
+      </p>
+      <PButton
+        className="w-fit"
+        type="button"
+        compact
+        disabled={pendingAction !== null}
+        onClick={() => void onGrantRetryAttempt(attemptId)}
+      >
+        {pendingAction === "grant-attempt" ? "Granting..." : "Grant one more attempt"}
+      </PButton>
+    </div>
   );
 }
 
@@ -2746,6 +2772,7 @@ export default function WorkItemDetail(
             pendingAction={props.pendingAction}
             onApproveMerge={props.onApproveMerge}
           />
+          <RetryGrantControl {...available} />
         </ReadinessSection>
         <RequestsSection {...available} />
         <BlockSection {...available} />

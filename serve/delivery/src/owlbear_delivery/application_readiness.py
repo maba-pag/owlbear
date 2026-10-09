@@ -111,7 +111,11 @@ from owlbear_delivery.recovery import (
     RetryLedgerCorruptError,
     RetryStopCode,
 )
-from owlbear_delivery.runtime_receipts import builder_attempt_grant_block_id, is_builder_attempt_grant_block
+from owlbear_delivery.runtime_receipts import (
+    GRANTABLE_RETRY_ACTION_KINDS,
+    builder_attempt_grant_block_id,
+    is_builder_attempt_grant_block,
+)
 from owlbear_delivery.runtime_transaction import (
     TransactionPathError,
     contained_directory,
@@ -155,6 +159,19 @@ if TYPE_CHECKING:
 _PUBLICATION_READ_FAILED: Literal["provider-unavailable"] = "provider-unavailable"
 _PROVIDER_PUBLICATION_STEPS = frozenset({WorkItemActionKind.MARK_READY, WorkItemActionKind.OBSERVE_ACCEPTANCE})
 _CONFLICT_PROMPT_KEEPS = frozenset({"change-paused", "worker-stall-wait"})
+
+
+def _blockless_grant_attempt_id(episode: RetryEpisodeSummary) -> str | None:
+    """Planner and Finalizer episodes stop without a block; the user grants past their latest settled failure."""
+    latest = episode.attempt_ids[-1] if episode.attempt_ids else None
+    if (
+        latest is None
+        or episode.key.action_kind not in GRANTABLE_RETRY_ACTION_KINDS
+        or episode.failure_class is not RetryFailureClass.MECHANICAL
+        or not episode.settled_failure(latest)
+    ):
+        return None
+    return latest
 
 
 class _ReadinessViewsMixin:
@@ -1570,6 +1587,7 @@ class _ReadinessViewsMixin:
             grantable = (
                 handoff_attempt_id is not None and binding is not None and is_builder_attempt_grant_block(binding)
             )
+            grant_attempt_id = None if handoff_attempt_id is not None else _blockless_grant_attempt_id(episode)
             updates.update(
                 {
                     "status": "blocked",
@@ -1577,7 +1595,10 @@ class _ReadinessViewsMixin:
                     "operation": None,
                     "executable": False,
                     "action": None,
-                    "next_actor": WorkItemNextActor.YOU if grantable else WorkItemNextActor.AGENT,
+                    "next_actor": (
+                        WorkItemNextActor.YOU if grantable or grant_attempt_id is not None else WorkItemNextActor.AGENT
+                    ),
+                    "grant_attempt_id": grant_attempt_id,
                 }
             )
         elif episode.stop_code is RetryStopCode.ACCEPTANCE_WAIT:
@@ -1604,6 +1625,9 @@ class _ReadinessViewsMixin:
 
     @classmethod
     def _with_engine_action_prompt(cls, change_id: str, readiness: DeliveryReadiness) -> DeliveryReadiness:
+        if readiness.reason_code == "retry-exhausted" and readiness.next_actor is WorkItemNextActor.YOU:
+            # The user's attempt grant is the primary action; an inspect prompt would compete with it.
+            return readiness.model_copy(update={"prompt": None})
         prompt = cls._engine_action_prompt(
             change_id,
             readiness.reason_code,

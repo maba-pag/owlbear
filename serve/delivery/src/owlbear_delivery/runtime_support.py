@@ -37,6 +37,7 @@ from owlbear_delivery.runtime_models import (
     _reference,
 )
 from owlbear_delivery.runtime_receipts import (
+    _DeliveryAttemptGrantReceipt,
     _DeliveryBuilderAttemptGrantReceipt,
     _DeliveryBuilderHandoffChangeIntentHead,
     _DeliveryBuilderHandoffChangeIntentReceipt,
@@ -442,6 +443,36 @@ def _read_builder_attempt_grant_receipt(
         or receipt.builder_handoff_context != builder_handoff_context
     ):
         _reference("Builder attempt grant receipt does not match its exact handoff")
+    return receipt
+
+
+def _attempt_grant_receipt_path(runtime_root: Path, change_id: str, attempt_id: str) -> Path:
+    name = hashlib.sha256(attempt_id.encode()).hexdigest()
+    return runtime_root / "changes" / change_id / "attempt-grant-receipts" / f"{name}.json"
+
+
+def _read_attempt_grant_receipt(
+    runtime_root: Path,
+    change_id: str,
+    attempt_id: str,
+) -> _DeliveryAttemptGrantReceipt | None:
+    """Read the user's grant after one exact exhausted Planner or Finalizer attempt, or ``None``."""
+    receipt_path = _attempt_grant_receipt_path(runtime_root, change_id, attempt_id)
+    change_root = runtime_root / "changes" / change_id
+    if any(path.is_symlink() for path in (runtime_root / "changes", change_root, receipt_path.parent, receipt_path)):
+        _reference("attempt grant receipt path is unsafe")
+    try:
+        content = receipt_path.read_bytes()
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        _reference("attempt grant receipt is unavailable", exc)
+    try:
+        receipt = _DeliveryAttemptGrantReceipt.model_validate_json(content, strict=True)
+    except (TypeError, ValueError) as exc:
+        _reference("attempt grant receipt is invalid", exc)
+    if content != _model_content(receipt) or receipt.change_id != change_id or receipt.attempt_id != attempt_id:
+        _reference("attempt grant receipt does not match its exact attempt")
     return receipt
 
 

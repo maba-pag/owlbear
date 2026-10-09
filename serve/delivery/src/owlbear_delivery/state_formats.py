@@ -377,6 +377,14 @@ RECORD_KINDS: Final[tuple[RecordKind, ...]] = (
         1,
     ),
     _kind(
+        "attempt_grant_receipt",
+        "retry",
+        rf"{_CH}/attempt-grant-receipts/{_D}\.json",
+        (f"{_RUNTIME_RECEIPTS}:_DeliveryAttemptGrantReceipt",),
+        "R",
+        1,
+    ),
+    _kind(
         "builder_request_resolution_receipt",
         "builder",
         rf"{_CH}/builder-request-resolution-receipts/{_D}\.json",
