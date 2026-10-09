@@ -51,6 +51,7 @@ from owlbear_delivery.change_workspace import (
     ChangeWriter,
     CoordinationConflictError,
     FinalizerAcquisition,
+    PreservationFenceError,
     PromoteExternalHead,
 )
 from owlbear_delivery.delivery_contract_discovery import (
@@ -1683,6 +1684,7 @@ class _AcquisitionMixin:
                         last_reviewed_commit=handoff_context.last_reviewed_commit,
                         metadata_fingerprint=handoff_context.metadata_fingerprint,
                         retained_handoff=handoff,
+                        allow_descendant=worker_role is DeliveryWorkerRole.BUILDER,
                     ),
                 )
                 is_handoff_source = True
@@ -1756,12 +1758,18 @@ class _AcquisitionMixin:
                     retry_condition="Promote the exact adopted Change head before acquiring Build work.",
                 )
         except (OSError, RuntimeError, ValueError) as exc:
+            retry_condition = (
+                "Keep the preserved worktree and commits; resolve the reported handoff custody or ancestry "
+                "mismatch before acquiring again."
+                if isinstance(exc, PreservationFenceError)
+                else "Restore the admitted package and clean reviewed source boundary."
+            )
             return DeliveryAcquisitionFailure(
                 change_id=change_id,
                 outcome_id=outcome_id,
                 code=getattr(exc, "code", PortfolioApplicationError.code),
                 detail=str(exc),
-                retry_condition="Restore the admitted package and clean reviewed source boundary.",
+                retry_condition=retry_condition,
             )
         return _PreparedSource(package, coordination, source_head)
 
@@ -2066,6 +2074,7 @@ class _AcquisitionMixin:
                 handoff,
                 lock,
                 task_id=candidate.task_id,
+                expected_head=source.source_head,
             )
             self._publish_claim_issuer(candidate.change_id, candidate.binding.outcome_id, claim)
             candidate.runtime.activate_claim(

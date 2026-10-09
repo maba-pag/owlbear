@@ -1701,11 +1701,46 @@ def test_builder_handoff_with_ignored_churn_keeps_preserved_work_drift_for_triag
     assert _workspace_content_snapshot(launch.worktree_path) == drifted
 
 
-def test_builder_handoff_with_ignored_churn_still_refuses_a_moved_head(tmp_path: Path) -> None:
-    drift = "head"
+def test_released_builder_late_commits_are_handed_to_the_same_task_successor(tmp_path: Path) -> None:
     start = _real_now()
     now = [_iso(start)]
-    application, runtime, coordinator, _state_root, _probe, launch, _branch_head = _builder_with_workspace_changes(
+    application, runtime, coordinator, state_root, _probe, launch, branch_head = _builder_with_workspace_changes(
+        tmp_path, now
+    )
+    now[0] = _iso(start + timedelta(minutes=10))
+    application.release_stuck_worker("change-a", launch.outcome_id, launch.claim.attempt_id, launch.claim.claim_id)
+    assert coordinator.show("change-a").builder_handoff is not None
+    # The released chat resumes and keeps committing on its own task.
+    _drift_handoff_workspace(launch.worktree_path, "head")
+    late_head = _git(launch.worktree_path, "rev-parse", "HEAD")
+    assert late_head != branch_head
+    drifted = _workspace_content_snapshot(launch.worktree_path)
+    now[0] = _iso(start + timedelta(hours=2))
+
+    result = application.acquire_change_action(_continuation_request(application, "change-a"))
+
+    assert result.launch is not None, result
+    resumed = result.launch
+    assert resumed.claim.task_id == launch.task_id
+    assert resumed.source_head == late_head
+    assert resumed.last_reviewed_commit == launch.last_reviewed_commit
+    assert resumed.builder_handoff_context is not None
+    assert resumed.builder_handoff_context.branch_head == branch_head
+    assert [claim.claim_id for _outcome_id, claim in runtime.active_claims()] == [resumed.claim.claim_id]
+    assert coordinator.show("change-a").builder_handoff is None
+    assert _workspace_content_snapshot(launch.worktree_path) == drifted
+    context = application.show_build_context(
+        resumed.change_id, resumed.outcome_id, resumed.claim.attempt_id, resumed.claim.claim_id
+    )
+    assert context.launch.source_head == late_head
+    assert _builder_retry_history(context.prior_attempts) == [(1, "original", "failed", "worker-released-stuck")]
+    assert _owner_failure_code(state_root, "change-a", launch.claim.attempt_id) == "worker-released-stuck"
+
+
+def test_builder_handoff_with_ignored_churn_refuses_a_head_off_its_retained_lineage(tmp_path: Path) -> None:
+    start = _real_now()
+    now = [_iso(start)]
+    application, runtime, coordinator, _state_root, _probe, launch, branch_head = _builder_with_workspace_changes(
         tmp_path, now
     )
     _add_ignored_content(launch.worktree_path)
@@ -1717,7 +1752,10 @@ def test_builder_handoff_with_ignored_churn_still_refuses_a_moved_head(tmp_path:
     handoff = coordinator.show("change-a").builder_handoff
     assert handoff is not None
     _churn_ignored_content(launch.worktree_path)
-    _drift_handoff_workspace(launch.worktree_path, drift)
+    sibling = _git(
+        launch.worktree_path, "commit-tree", f"{branch_head}^{{tree}}", "-p", f"{branch_head}^", "-m", "sibling"
+    )
+    _git(launch.worktree_path, "reset", "--soft", sibling)
     drifted = _workspace_content_snapshot(launch.worktree_path)
     now[0] = _iso(start + timedelta(hours=1))
 
@@ -1725,6 +1763,9 @@ def test_builder_handoff_with_ignored_churn_still_refuses_a_moved_head(tmp_path:
 
     assert result.launch is None, result
     assert result.kind == "unavailable", result
+    assert result.failure is not None
+    assert result.failure.code == "ERR_WORKSPACE_PRESERVATION_FENCE"
+    assert "preserved worktree" in result.failure.retry_condition
     assert runtime.active_claims() == ()
     assert coordinator.show("change-a").builder_handoff == handoff
     assert _workspace_content_snapshot(launch.worktree_path) == drifted
