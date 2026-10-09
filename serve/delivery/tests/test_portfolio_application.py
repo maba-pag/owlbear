@@ -215,6 +215,7 @@ from owlbear_delivery.publication_provider import (
     PublicationRepository,
 )
 from owlbear_delivery.recovery import (
+    DeliverySettlementRequiredError,
     DeliveryWorkerExclusionRequiredError,
     RetryEpisodeKey,
     RetryFailureClass,
@@ -5404,6 +5405,46 @@ def builder_transition_case(tmp_path: Path, action: str):
     return application, runtimes, coordinator, state_root, launch, transition
 
 
+def retain_contained_transition(
+    application: PortfolioApplication,
+    change_id: str,
+    transition: BlockDelivery | ReturnDelivery | RetryDelivery,
+) -> None:
+    """Prove the application refuses before any effect, then retain the containment earlier releases left."""
+    runtime = application._runtimes[change_id]
+    before = runtime.frontier_bytes()
+    with pytest.raises(DeliverySettlementRequiredError, match="settle_worker_invocation"):
+        application.transition_delivery(change_id, transition)
+    assert runtime.frontier_bytes() == before
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
+        runtime.transition(transition)
+
+
+def test_raw_planner_retry_is_refused_before_any_effect_and_advance_still_applies(tmp_path: Path) -> None:
+    """A misrouted retry once left a held claim that only the dispatching chat could settle."""
+    application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING})
+    planner = application.acquire_change_action(_continuation_request(application)).launch
+    ledger = RetryLedger(state_root, "change-a")
+    before = (runtimes["change-a"].frontier_bytes(), coordinator.show("change-a"), ledger.read())
+    retry = RetryDelivery(action="retry", outcome_id=planner.outcome_id, claim_id=planner.claim.claim_id)
+
+    with pytest.raises(DeliverySettlementRequiredError, match="planner retry"):
+        application.transition_delivery("change-a", retry)
+
+    assert (runtimes["change-a"].frontier_bytes(), coordinator.show("change-a"), ledger.read()) == before
+    candidate = application.publish_delivery_plan(
+        "change-a",
+        PublishDeliveryPlan(outcome_id=planner.outcome_id, claim_id=planner.claim.claim_id, tasks=(_task(),)),
+    )
+    advanced = application.transition_delivery(
+        "change-a",
+        AdvanceDelivery(
+            action="advance", outcome_id=planner.outcome_id, claim_id=planner.claim.claim_id, output=candidate.output
+        ),
+    )
+    assert advanced.active_claim is None
+
+
 def _assert_contained_builder_views(
     application: PortfolioApplication, transition: BlockDelivery | ReturnDelivery, claim: DeliveryActiveClaim
 ) -> None:
@@ -5416,9 +5457,9 @@ def _assert_contained_builder_views(
         assert not readiness.executable
         assert readiness.operation is None
         assert readiness.action is None
-        assert "read-only" in readiness.prompt
-        assert "host worker-exclusion evidence is missing" in readiness.prompt
-        assert "does not establish" in readiness.prompt
+        assert readiness.prompt.startswith("/continue-change change-a ")
+        assert "settle_worker_invocation" in readiness.prompt
+        assert "Release stuck worker" in readiness.prompt
     for attention in (
         detail.recovery_attention,
         operator.recovery_attention,
@@ -5466,8 +5507,7 @@ def test_refused_builder_transition_does_not_refresh_stat_dirty_index(tmp_path: 
     before_coordination = coordinator.show("change-a")
     retry_ledger = RetryLedger(state_root, "change-a")
     before_retry_ledger = retry_ledger.read()
-    with pytest.raises(DeliveryWorkerExclusionRequiredError):
-        application.transition_delivery("change-a", transition)
+    retain_contained_transition(application, "change-a", transition)
     assert index.read_bytes() == before_index
     assert index.stat().st_mtime_ns == before_index_mtime
     assert product.read_bytes() == before_product
@@ -5489,8 +5529,7 @@ def test_refused_builder_transition_does_not_refresh_stat_dirty_index(tmp_path: 
 
 def test_change_selection_prioritizes_contained_builder_over_other_outcomes(tmp_path: Path) -> None:
     application, runtimes, _coordinator, _state_root, _launch, transition = builder_transition_case(tmp_path, "block")
-    with pytest.raises(DeliveryWorkerExclusionRequiredError):
-        application.transition_delivery("change-a", transition)
+    retain_contained_transition(application, "change-a", transition)
     snapshot = application._delivery_snapshot(runtimes["change-a"])
     card = application.show_work_item_view("change-a", "outcome:OUT-001").card
     other = card.model_copy(
@@ -5544,8 +5583,7 @@ def test_builder_return_without_exclusion_keeps_custody_and_retry_reservation(tm
     assert reserved.last_status == "reserved"
     assert reserved.outcome_ids == ()
 
-    with pytest.raises(DeliveryWorkerExclusionRequiredError):
-        application.transition_delivery("change-a", request)
+    retain_contained_transition(application, "change-a", request)
 
     before = DeliveryFrontier.model_validate_json(before_frontier)
     after = DeliveryFrontier.model_validate_json(runtimes["change-a"].frontier_bytes())
@@ -5614,21 +5652,18 @@ def test_builder_return_stays_contained_after_reload_and_elapsed_backoff(tmp_pat
     before_coordination = coordinator.show("change-a")
     ledger = RetryLedger(state_root, "change-a")
     before_ledger = ledger.read()
-    with pytest.raises(DeliveryWorkerExclusionRequiredError):
-        application.transition_delivery("change-a", request)
+    retain_contained_transition(application, "change-a", request)
 
     attention = runtimes["change-a"].show_binding("OUT-001").recovery_attention
     assert attention is not None
     assert attention.reason == request.reason
 
     retained_frontier = runtimes["change-a"].frontier_bytes()
-    with pytest.raises(DeliveryWorkerExclusionRequiredError):
-        application.transition_delivery("change-a", request)
+    retain_contained_transition(application, "change-a", request)
     assert runtimes["change-a"].frontier_bytes() == retained_frontier
     now += timedelta(days=1)
     reopened, reopened_coordinator, _manager = _reopen_portfolio(tmp_path, state_root, runtimes, clock=clock)
-    with pytest.raises(DeliveryWorkerExclusionRequiredError):
-        reopened.transition_delivery("change-a", request)
+    retain_contained_transition(reopened, "change-a", request)
     _assert_contained_builder_views(reopened, request, builder.claim)
     result = reopened.acquire_change_action(_continuation_request(reopened, session_id="fresh-session"))
 
@@ -5638,7 +5673,7 @@ def test_builder_return_stays_contained_after_reload_and_elapsed_backoff(tmp_pat
     assert not result.readiness.executable
     assert result.readiness.action is None
     assert result.readiness.prompt is not None
-    assert "read-only" in result.readiness.prompt
+    assert "settle_worker_invocation" in result.readiness.prompt
     assert reopened._runtimes["change-a"].show_binding("OUT-001").active_claim.claim_id == builder.claim.claim_id
     assert reopened_coordinator.show("change-a").writer.claim_id == builder.claim.claim_id
     assert reopened_coordinator.show("change-a") == before_coordination
@@ -16813,8 +16848,7 @@ def test_live_implementation_block_does_not_publish_or_release_without_exclusion
     before_workspace = _workspace_mutation_snapshot(launch.worktree_path)
     ledger = RetryLedger(state_root, "change-a")
     before_ledger = ledger.read()
-    with pytest.raises(DeliveryWorkerExclusionRequiredError):
-        application.transition_delivery("change-a", transition)
+    retain_contained_transition(application, "change-a", transition)
 
     attention = runtime.show_binding("OUT-001").recovery_attention
     assert attention is not None
@@ -16834,12 +16868,10 @@ def test_live_implementation_block_does_not_publish_or_release_without_exclusion
     assert _git(launch.worktree_path, "rev-parse", "HEAD") == candidate_head
     assert application.show_operator_context("change-a", "OUT-001").block is None
     retained_frontier = runtime.frontier_bytes()
-    with pytest.raises(DeliveryWorkerExclusionRequiredError):
-        application.transition_delivery("change-a", transition)
+    retain_contained_transition(application, "change-a", transition)
     assert runtime.frontier_bytes() == retained_frontier
     reopened, reopened_coordinator, _manager = _reopen_portfolio(tmp_path, state_root, runtimes)
-    with pytest.raises(DeliveryWorkerExclusionRequiredError):
-        reopened.transition_delivery("change-a", transition)
+    retain_contained_transition(reopened, "change-a", transition)
     _assert_contained_builder_views(reopened, transition, launch.claim)
     with pytest.raises(DeliveryRuntimeReferenceError):
         reopened.resolve_request(
@@ -16880,7 +16912,12 @@ def test_foreign_builder_transition_cannot_publish_diagnostic_attention(
     ledger = RetryLedger(state_root, "change-a")
     before_ledger = ledger.read()
     with pytest.raises(
-        (DeliveryRuntimeConflictError, DeliveryRuntimeReferenceError, DeliveryWorkerExclusionRequiredError)
+        (
+            DeliveryRuntimeConflictError,
+            DeliveryRuntimeReferenceError,
+            DeliverySettlementRequiredError,
+            DeliveryWorkerExclusionRequiredError,
+        )
     ):
         application.transition_delivery("change-a", transition)
     assert runtime.frontier_bytes() == before_frontier

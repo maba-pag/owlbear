@@ -72,7 +72,6 @@ from owlbear_delivery import (
     DeliveryStateSnapshot,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
-    DeliveryWorkerExclusionRequiredError,
     DeliveryWorkerRole,
     DesignPackageManifest,
     DesignPackageStore,
@@ -3430,8 +3429,11 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
             abandoned_commit=launch.last_reviewed_commit,
             attempt_id=launch.claim.attempt_id,
         )
-        with pytest.raises(DeliveryWorkerExclusionRequiredError):
-            application.transition_delivery(change_id, transition)
+        from serve.delivery.tests.test_portfolio_application import (  # noqa: PLC0415 - avoids a cycle.
+            retain_contained_transition,
+        )
+
+        retain_contained_transition(application, change_id, transition)
         refused = application.show_operator_context(change_id, "OUT-001")
         assert refused.active_claim is not None
         assert refused.retry_diagnostic is not None
@@ -3564,9 +3566,9 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
         assert readiness.operation is None
         assert readiness.action is None
         assert readiness.prompt is not None
-        assert "/repair-delivery" in readiness.prompt
-        assert "delivery-diagnose inspect --change-id" in readiness.prompt
-        assert "Make no MCP calls" in readiness.prompt
+        assert readiness.prompt.startswith(f"/continue-change {change_id} ")
+        assert "settle_worker_invocation" in readiness.prompt
+        assert "Release stuck worker" in readiness.prompt
     elif scenario in {"active-edited", "active-foreign-head"}:
         assert binding.active_claim is None
         assert binding.builder_handoff_context == handoff_context

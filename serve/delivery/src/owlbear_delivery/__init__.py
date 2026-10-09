@@ -351,6 +351,7 @@ from owlbear_delivery.publication_provider import (
 )
 from owlbear_delivery.recovery import (
     DeliveryRetryAttemptView,
+    DeliverySettlementRequiredError,
     DeliveryWorkerExclusionRequiredError,
     RecoveryEvidence,
     RecoveryEvidenceProvider,
@@ -598,6 +599,7 @@ __all__ = [
     "DeliveryRuntime",
     "DeliveryRuntimeConflictError",
     "DeliveryRuntimeReferenceError",
+    "DeliverySettlementRequiredError",
     "DeliverySourceBinding",
     "DeliveryStage",
     "DeliveryStartupConfig",

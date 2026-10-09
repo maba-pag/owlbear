@@ -67,6 +67,8 @@ from owlbear_delivery.delivery_runtime import (
     EngineWorkerDisposition,
     OutcomeAuthorityBinding,
     PrepareCompletedOutcomeRepair,
+    RetryDelivery,
+    ReturnDelivery,
     parse_delivery_frontier,
     repair_missing_request_provenance,
 )
@@ -88,6 +90,7 @@ from owlbear_delivery.portfolio_operating import (
 )
 from owlbear_delivery.recovery import (
     MAX_RECOVERY_INTENTS,
+    DeliverySettlementRequiredError,
     DeliveryWorkerExclusionRequiredError,
     RecoveryEvidence,
     RecoveryEvidenceReference,
@@ -131,6 +134,26 @@ from owlbear_delivery.worker_stall import (
     is_issuable_attempt_id,
 )
 from owlbear_delivery.workspace_models import recovery_authority_digest
+
+
+def _refuse_settlement_only_transition(runtime: DeliveryRuntime, request: DeliveryTransition) -> None:
+    """Refuse, before any effect, a worker-ending result that only typed settlement may apply."""
+    binding = runtime.show_binding(request.outcome_id)
+    claim = binding.active_claim
+    if claim is None or claim.claim_id != request.claim_id:
+        return
+    role = claim.worker_role
+    builder_end = (
+        role is DeliveryWorkerRole.BUILDER
+        and binding.stage is DeliveryStage.IMPLEMENTATION
+        and isinstance(request, (BlockDelivery, ReturnDelivery))
+    )
+    worker_retry = isinstance(request, RetryDelivery) and role in {
+        DeliveryWorkerRole.PLANNER,
+        DeliveryWorkerRole.BUILDER,
+    }
+    if builder_end or worker_retry:
+        raise DeliverySettlementRequiredError(role.value, request.action)
 
 
 class _RecoveryMixin:
@@ -402,6 +425,7 @@ class _RecoveryMixin:
     ) -> OutcomeAuthorityBinding:
         """Apply one validated mechanical transition through its exact runtime."""
         runtime = self._runtime(change_id, for_mutation=True)
+        _refuse_settlement_only_transition(runtime, request)
         with (
             locked_roots((self._checkpoint_lock_root(change_id),)),
             self._worker_drain_authority(

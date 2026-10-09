@@ -116,7 +116,7 @@ from owlbear_delivery.portfolio_operating import (
     DeliveryHealthView,
 )
 from owlbear_delivery.publication_provider import PublicationProviderError, PublicationProviderFailureCode
-from owlbear_delivery.recovery import DeliveryWorkerExclusionRequiredError
+from owlbear_delivery.recovery import DeliverySettlementRequiredError, DeliveryWorkerExclusionRequiredError
 from owlbear_delivery.work_items import WorkItemNextActor
 from owlbear_delivery.worker_stall import DeliveryWorkerActiveError
 from owlbear_delivery_mcp.target_models import ReportFinalizationFailureParams
@@ -329,11 +329,17 @@ async def test_builder_transition_diagnostics_survive_mcp_refusal_and_restart(tm
         )
     before_coordination = coordinator.show(CHANGE)
     payload = {"change_id": CHANGE, "transition": transition.model_dump(mode="json")}
+    before_frontier = runtimes[CHANGE].frontier_bytes()
     with pytest.raises(ToolError) as error:
         await TargetMCPAdapter(application).transition_delivery(payload)
     diagnostic = json.loads(str(error.value))
-    assert diagnostic["code"] == DeliveryWorkerExclusionRequiredError.code
+    assert diagnostic["code"] == DeliverySettlementRequiredError.code
     assert diagnostic["retry_safe"] is False
+    assert "settle_worker_invocation" in diagnostic["detail"]
+    assert runtimes[CHANGE].frontier_bytes() == before_frontier
+    # A hold that an earlier release retained must still survive restart with its owner route.
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
+        runtimes[CHANGE].transition(transition)
     retained = runtimes[CHANGE].frontier_bytes()
     reopened, reopened_coordinator, _manager = _reopen_portfolio(tmp_path, state_root, runtimes)
     adapter = TargetMCPAdapter(reopened)
@@ -359,11 +365,12 @@ async def test_builder_transition_diagnostics_survive_mcp_refusal_and_restart(tm
     assert change["readiness"]["action"] is None
     if action == "retry":
         assert change["readiness"]["next_actor"] == "none"
-    assert "read-only" in change["readiness"]["prompt"]
-    if action == "retry":
-        assert "delivery-diagnose inspect --change-id change-a" in change["readiness"]["prompt"]
-        assert "Make no MCP calls" in change["readiness"]["prompt"]
-        assert "do not retry" in change["readiness"]["prompt"]
+    prompt = change["readiness"]["prompt"]
+    assert prompt.startswith(f"/continue-change {CHANGE} ")
+    assert "In the chat that dispatched that worker" in prompt
+    assert "settle_worker_invocation" in prompt
+    assert "Release stuck worker" in prompt
+    assert "/repair-delivery" not in prompt
     assert runtimes[CHANGE].frontier_bytes() == retained
     assert reopened_coordinator.show(CHANGE) == before_coordination
 

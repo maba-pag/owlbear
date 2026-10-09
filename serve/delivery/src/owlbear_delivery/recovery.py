@@ -414,6 +414,22 @@ class DeliveryWorkerExclusionRequiredError(RuntimeError):
         )
 
 
+class DeliverySettlementRequiredError(RuntimeError):
+    """A worker-ending transition reached `transition_delivery` instead of its typed settlement."""
+
+    code = "ERR_DELIVERY_SETTLEMENT_REQUIRED"
+
+    def __init__(self, role: str, action: str) -> None:
+        self.role = role
+        self.action = action
+        super().__init__(
+            f"Nothing was recorded: a {role} {action} ends its worker invocation and is accepted only through "
+            "settle_worker_invocation. From the session that dispatched this worker, after its dispatch returned, "
+            "call settle_worker_invocation with disposition normal-return, the launch identities, and this "
+            "transition unchanged as request."
+        )
+
+
 class RetryFailureClass(StrEnum):
     """Failure classes with deliberately small, persisted retry policies."""
 

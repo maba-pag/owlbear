@@ -196,6 +196,7 @@
     "DeliveryRuntime",
     "DeliveryRuntimeConflictError",
     "DeliveryRuntimeReferenceError",
+    "DeliverySettlementRequiredError",
     "DeliverySourceBinding",
     "DeliveryStage",
     "DeliveryStartupConfig",

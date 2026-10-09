@@ -29,6 +29,7 @@ from serve.delivery.tests.test_portfolio_application import (
     _task_result,
     acceptance_budget_case,
     builder_transition_case,
+    retain_contained_transition,
 )
 from serve.delivery.tests.test_worker_stall import _HOST, _WINDOW, _iso, _issuer_path, _Probe, _real_now
 
@@ -442,8 +443,7 @@ def test_change_activity_follows_second_outcome_not_first_completed_card(tmp_pat
 
 def test_contained_builder_transition_wins_change_activity(tmp_path: Path) -> None:
     application, runtimes, _coordinator, _state_root, _launch, transition = builder_transition_case(tmp_path, "block")
-    with pytest.raises(DeliveryWorkerExclusionRequiredError):
-        application.transition_delivery("change-a", transition)
+    retain_contained_transition(application, "change-a", transition)
     snapshot = application._delivery_snapshot(runtimes["change-a"])
     contained = _card(application, "outcome:OUT-001")
     assert contained.readiness.reason_code == "builder-transition-contained"
@@ -946,8 +946,7 @@ def _stalled_worker(tmp_path: Path):
 
 def _contained_builder_transition(tmp_path: Path):
     application, _runtimes, _coordinator, state_root, _launch, transition = builder_transition_case(tmp_path, "block")
-    with pytest.raises(DeliveryWorkerExclusionRequiredError):
-        application.transition_delivery("change-a", transition)
+    retain_contained_transition(application, "change-a", transition)
     assert _card(application, "outcome:OUT-001").readiness.reason_code == "builder-transition-contained"
     return application, state_root, "step-in-progress"
 

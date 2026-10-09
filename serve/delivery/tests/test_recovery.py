@@ -41,6 +41,7 @@ from serve.delivery.tests.test_portfolio_application import (
     _settle_builder_handoff_attempt,
     _task,
     _task_result,
+    retain_contained_transition,
 )
 
 from owlbear_delivery import (
@@ -2277,8 +2278,7 @@ def test_active_builder_handoff_requires_worker_exclusion(tmp_path: Path, transi
         )
 
     try:
-        with pytest.raises(DeliveryWorkerExclusionRequiredError):
-            application.transition_delivery("change-a", request)
+        retain_contained_transition(application, "change-a", request)
 
         after_refusal = snapshot(application)
         _assert_refused_handoff_frontier(before[0], after_refusal[0], launch, request)

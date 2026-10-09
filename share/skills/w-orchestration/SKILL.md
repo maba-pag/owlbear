@@ -19,17 +19,19 @@ identify whether that exact run stopped.
 **Session-start stale-claim check.** For `/continue-change <change_id>`, call `get_change(change_id)` and
 inspect only that Change's running claims, revalidating them in the same coherent view. Do not call
 `list_changes` or inspect sibling Changes on this route. For every Planner, Builder, or Finalizer card
-with `readiness.status == "running"`, revalidate that exact claim and its running readiness in that
+with `readiness.status == "running"`, or whose `reason_code` is `retry-transition-contained` or
+`builder-transition-contained` (an earlier worker result retained while its claim stays held),
+revalidate that exact claim and its readiness in that
 coherent view. Outcome claims are in `unresolved_outcomes[].active_claim`, with
 readiness on the outcome's card; an active Finalizer is an unfinished `finalization_attempt.writer` with
 `kind: finalize`.
 Use the outcome claim's `worker_role` and `started_at`, or the Finalizer's `claimed_at`, to label
 the question with role, Change ID, outcome (or Finalizer), and start time. Copy `change_id`,
 `outcome_id`, `attempt_id`, and `claim_id` only from that same `get_change` view; use
-`outcome_id: null` for Finalizer. If the exact claim is no longer active or running, do not ask or
-release it.
+`outcome_id: null` for Finalizer. If the exact claim is no longer active or no longer in one of those
+readiness states, do not ask or release it.
 
-Ask once per revalidated running claim through `vscode/askQuestions`: was this exact run stopped or
+Ask once per revalidated claim through `vscode/askQuestions`: was this exact run stopped or
 closed? Offer `stopped/closed`, `still running`, and `unsure`. For `stopped/closed`, call
 `release_stuck_worker` exactly once with the copied identity and report its result unchanged. If it
 returns `ERR_DELIVERY_WORKER_ACTIVE`, preserve the returned retry time or process details and do
@@ -389,6 +391,9 @@ has not returned during the current session is not settled by Orchestrator. Step
 at acquisition. A rejected `transition_delivery`
 call for worker-output schema validation after the invocation ended and its owned work settled also
 uses this settlement; report the exact failure instead of forwarding or retrying the invalid transition.
+`ERR_DELIVERY_SETTLEMENT_REQUIRED` means a worker-ending result was sent to `transition_delivery` and
+nothing was recorded: route that same result once through the Step 3 `settle_worker_invocation`
+envelope with `disposition: normal-return`; never resend it to `transition_delivery`.
 
 ## Step 4 - Preserve Typed Integration Attention
 

@@ -1084,7 +1084,7 @@ def _assert_session_start_claim_guidance(orchestration: str) -> None:
     assert "Do not call `list_changes` or inspect sibling Changes on this route." in session_start
     assert 'readiness.status == "running"' in session_start
     assert "call `get_change(change_id)`" in session_start
-    assert "Ask once per revalidated running claim through `vscode/askQuestions`" in session_start
+    assert "Ask once per revalidated claim through `vscode/askQuestions`" in session_start
     assert "role, Change ID, outcome (or Finalizer), and start time" in session_start
     assert "A pre-existing running claim was not dispatched by this session" in orchestration
     assert "may belong to a prior run or another live chat" in orchestration
