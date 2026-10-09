@@ -83,11 +83,13 @@ from owlbear_delivery.portfolio_operating import (
     DeliveryHealthResolution,
 )
 from owlbear_delivery.remote_git import RemoteGitError, RemoteGitFailed, read_remote_ref, run_remote_git
+from owlbear_delivery.runtime_models import required_target_commit
 from owlbear_delivery.runtime_receipts import (
     BUILDER_ATTEMPT_GRANT_NOTE,
     builder_attempt_limit_block_id,
     builder_planning_route_block_id,
     is_builder_return_limit,
+    is_builder_target_sync_handoff,
 )
 from owlbear_delivery.runtime_transaction import (
     RuntimeTransaction,
@@ -1093,8 +1095,9 @@ def _builder_handoff_receipt_matches_snapshot(
     elif isinstance(request, BlockDelivery):
         delivery_request = request.request
         request_matches = (
-            delivery_request is not None
-            and delivery_request.resolution is None
+            required_target_commit(request.locators) is not None
+            if delivery_request is None
+            else delivery_request.resolution is None
             and delivery_request.outcome_id == context.outcome_id
             and delivery_request.request_id not in {item.request_id for item in snapshot_binding.requests}
         )
@@ -1170,7 +1173,11 @@ def _validate_local_builder_handoff_workspace(
         return active_head
 
     if (
-        (context.route == "same-outcome-design" or is_builder_return_limit(local_binding))
+        (
+            context.route == "same-outcome-design"
+            or is_builder_return_limit(local_binding)
+            or is_builder_target_sync_handoff(local_binding)
+        )
         and coordination.builder_handoff.branch_head == context.branch_head
         and workspace_manager._design_return_captured(coordination, coordination.builder_handoff)  # noqa: SLF001
     ):
@@ -1185,6 +1192,7 @@ def _validate_local_builder_handoff_workspace(
         "--verify",
         f"refs/heads/{snapshot.branch}^{{commit}}",
     )
+    # Retained uncommitted material may drift (editor restore, index refresh); the next Builder triages it.
     if not all(
         (
             metadata.change_id == snapshot.change_id,
@@ -1195,12 +1203,11 @@ def _validate_local_builder_handoff_workspace(
             metadata.registration.path == metadata.worktree_path,
             metadata.registration.branch == metadata.branch,
             metadata.registration.head == metadata.branch_head,
-            metadata.fingerprint == context.metadata_fingerprint,
             local_branch_head == context.branch_head,
             _loader_git_is_ancestor(paths.repository_root, snapshot.change_head, context.branch_head),
         )
     ):
-        _bootstrap_failure("local Builder handoff metadata or Change head differs from its captured proof")
+        _bootstrap_failure("local Builder handoff worktree or Change head differs from its captured proof")
     return context.branch_head
 
 

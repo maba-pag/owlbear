@@ -60,7 +60,8 @@ You never plan, implement, review, or schedule Delivery work.
   claims: `recover_claim` requires supported host-owned exclusion and otherwise refuses with
   `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED`; report claim-recovery attention unchanged. When the user
   explicitly states that a specific worker chat was stopped, call `release_stuck_worker` once with
-  its exact identity and report the result unchanged. Never replace that worker in the same cycle or
+  its exact identity and report the result unchanged. A Finalizer dispatch that returned without a
+  valid report, with its owned work settled, is released the same way once. Never replace that worker in the same cycle or
   forward a `dispatch_failure` to `transition_delivery`.
 - **Respect session-start claim evidence.** Before the first acquisition, follow the stale-claim
   check in `w-orchestration`: `/continue-change <change_id>` inspects only that Change

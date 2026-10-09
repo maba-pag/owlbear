@@ -18,6 +18,12 @@
     },
     "version": 1
   },
+  "attempt_grant_receipt": {
+    "fingerprints": {
+      "owlbear_delivery.runtime_receipts:_DeliveryAttemptGrantReceipt": "38c2b885c442881e28e87683b50f24296a31dce9af456412cd58a47dbc7e0963"
+    },
+    "version": 1
+  },
   "branch_publication": {
     "fingerprints": {
       "owlbear_delivery.change_publication:_PublicationOperation": "b1474441f8930f34727e02a9afb4160017588aa5bcc691d83c78893b96f4d575",

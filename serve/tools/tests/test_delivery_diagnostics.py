@@ -451,6 +451,7 @@ def _write_every_change_family(change: Path) -> dict[str, int]:
         change / "builder-invocation-receipts" / f"{digest}.json": v1,
         change / "builder-plan-promotion-receipts" / f"{digest}.json": v1,
         change / "builder-attempt-grant-receipts" / f"{digest}.json": v1,
+        change / "attempt-grant-receipts" / f"{digest}.json": v1,
         change / "builder-request-resolution-receipts" / f"{digest}.json": v1,
         change / "builder-handoff-change-intent-receipts" / digest / "head.json": v1,
         change / "builder-handoff-change-intent-receipts" / digest / f"{other}.json": v1,
@@ -488,6 +489,7 @@ def _write_every_change_family(change: Path) -> dict[str, int]:
         "builder_invocation_receipt": 1,
         "builder_plan_promotion_receipt": 1,
         "builder_attempt_grant_receipt": 1,
+        "attempt_grant_receipt": 1,
         "builder_request_resolution_receipt": 1,
         "builder_handoff_change_intent_head": 1,
         "builder_handoff_change_intent_receipt": 1,
@@ -554,7 +556,7 @@ def test_portfolio_truncation_keeps_current_records_ahead_of_receipts(tmp_path: 
     for change_id in ("change-a", "change-b", "change-c"):
         change = _add_change_authority(root, change_id)
         _write_every_change_family(change)
-        _add_action_receipt_volume(change, 30, payload_marker="PORTFOLIO-RECEIPT-SECRET")
+        _add_action_receipt_volume(change, MAX_ENTRIES // 3 + 1, payload_marker="PORTFOLIO-RECEIPT-SECRET")
 
     completed = _run_cli(root, "inspect", "--project-root", os.fspath(root), "--format", "json")
 
@@ -582,8 +584,8 @@ def test_portfolio_truncation_keeps_current_records_ahead_of_receipts(tmp_path: 
 def test_many_change_current_records_obey_entry_budget(tmp_path: Path) -> None:
     root = _root(tmp_path)
     changes = root / ".owlbear/delivery/runtime/changes"
-    for index in range(300):
-        change = changes / f"change-{index:03}"
+    for index in range(MAX_ENTRIES // 3 + 1):
+        change = changes / f"change-{index:04}"
         (change / "retry-ledger").mkdir(parents=True)
         (change / "frontier.json").write_bytes(b'{"schema_version":19,"bindings":[]}\n')
         (change / "retry-ledger/current.json").write_bytes(b'{"schema_version":1}\n')
@@ -798,6 +800,7 @@ def test_change_record_versions_match_owner_models() -> None:
             "builder_invocation_receipt": "_DeliveryBuilderInvocationSettlementReceipt",
             "builder_plan_promotion_receipt": "_DeliveryBuilderPlanPromotionReceipt",
             "builder_attempt_grant_receipt": "_DeliveryBuilderAttemptGrantReceipt",
+            "attempt_grant_receipt": "_DeliveryAttemptGrantReceipt",
             "builder_request_resolution_receipt": "_DeliveryBuilderRequestResolutionReceipt",
             "builder_handoff_change_intent_head": "_DeliveryBuilderHandoffChangeIntentHead",
             "builder_handoff_change_intent_receipt": "_DeliveryBuilderHandoffChangeIntentReceipt",
@@ -1884,6 +1887,18 @@ def test_entry_and_size_limits_are_reported_without_reading_unbounded_data(tmp_p
     assert result["counts"]["frontier"] <= MAX_ENTRIES
     assert result["counts"]["config"] == 0
     assert result["counts"]["pending_transactions"] == 0
+
+
+def test_portfolio_beyond_the_former_256_entry_budget_inspects_completely(tmp_path: Path) -> None:
+    root = _root(tmp_path)
+    changes = root / ".owlbear/delivery/runtime/changes"
+    for index in range(300):
+        (changes / f"change-{index}").mkdir()
+
+    result = inspect_delivery(root)
+
+    assert "ENTRY_LIMIT_EXCEEDED" not in result["diagnostic_codes"]
+    assert "PENDING_EFFECTS_UNKNOWN" not in result["diagnostic_codes"]
 
 
 def test_entry_limit_is_global_across_fixed_directories(tmp_path: Path) -> None:

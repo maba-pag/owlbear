@@ -1874,6 +1874,18 @@ def _tamper_builder_handoff_frontier(
     frontier_path.write_bytes(_canonical_payload(updated.model_dump(mode="json")))
 
 
+def _drift_retained_builder_workspace(worktree: Path, scenario: str) -> bytes:
+    """Rewrite retained files after settlement as an editor restore or index refresh would."""
+    dirty = worktree / "dirty-retry.txt"
+    content = dirty.read_bytes() if scenario == "drifted-same-bytes" else b"changed after settlement\n"
+    for path, data in ((dirty, content), (worktree / "committed-retry.txt", None)):
+        retained = path.read_bytes() if data is None else data
+        path.unlink()
+        path.write_bytes(retained)
+    _git(worktree, "status")
+    return content
+
+
 def _tamper_builder_handoff_host_state(
     fresh: Path,
     change_id: str,
@@ -3266,6 +3278,8 @@ def test_default_loader_rejects_unrecorded_repeated_planner_pause_on_builder_pla
         "ended-without-result",
         "host-lost",
         "released-stuck",
+        "drifted-same-bytes",
+        "drifted-content",
         "deferred",
         "forged-context",
         "missing-receipt",
@@ -3376,6 +3390,8 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
         _git(launch.worktree_path, "add", retry_file.name)
         _git(launch.worktree_path, "commit", "-m", "preserve Builder retry work")
         branch_head = _git(launch.worktree_path, "rev-parse", "HEAD")
+        if scenario.startswith("drifted-"):
+            (launch.worktree_path / "dirty-retry.txt").write_text("uncommitted retry work\n", encoding="utf-8")
         retry = RetryDelivery(
             action="retry",
             outcome_id=launch.outcome_id,
@@ -3437,6 +3453,16 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
         )
         deferred_frontier_bytes = retry_runtime.frontier_bytes()
 
+    drifted_dirty_bytes = None
+    if scenario.startswith("drifted-"):
+        assert handoff_context is not None
+        drifted_dirty_bytes = _drift_retained_builder_workspace(launch.worktree_path, scenario)
+        drifted_metadata = application._workspace_manager._capture_builder_handoff_metadata(  # noqa: SLF001
+            application._coordinator.show(change_id)  # noqa: SLF001
+        )
+        assert drifted_metadata.fingerprint != handoff_context.metadata_fingerprint
+        assert drifted_metadata.branch_head == handoff_context.branch_head
+
     negative_scenarios = {
         "forged-context",
         "missing-receipt",
@@ -3472,10 +3498,20 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
         (fresh / ".owlbear/delivery/runtime/changes" / change_id / "frontier.json").read_bytes(), strict=True
     )
     binding = next(item for item in persisted_frontier.bindings if item.outcome_id == "OUT-001")
-    if scenario in {"settled", "completed-timeout", "ended-without-result", "host-lost", "released-stuck"}:
+    if scenario in {
+        "settled",
+        "completed-timeout",
+        "ended-without-result",
+        "host-lost",
+        "released-stuck",
+        "drifted-same-bytes",
+        "drifted-content",
+    }:
         assert binding.active_claim is None
         assert binding.builder_handoff_context == handoff_context
         resumed = reloaded.acquire_frontier_work().launch_packages[0]
+        if drifted_dirty_bytes is not None:
+            assert (resumed.worktree_path / "dirty-retry.txt").read_bytes() == drifted_dirty_bytes
         assert resumed.claim.task_id == launch.task_id
         assert resumed.claim.claim_id != launch.claim.claim_id
         assert resumed.builder_handoff_context == handoff_context

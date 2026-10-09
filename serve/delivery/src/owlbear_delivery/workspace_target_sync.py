@@ -284,7 +284,7 @@ class _TargetSyncMixin:
             and action.target_head == request.expected_target
             and _is_settled_finalizer_attention_sync(coordination, action)
         )
-        updates = {"target_sync_receipt": None, "target_sync_conflict": conflict}
+        updates = {"target_sync_receipt": None, "target_sync_conflict": conflict, "target_sync_abort_receipt": None}
         if attention_sync:
             updates.update({"writer": None, "finalization_attention": None})
         self._coordinator.update(coordination.model_copy(update=updates), lock=lock)
@@ -1204,12 +1204,8 @@ class _TargetSyncMixin:
         ):
             _coordination_conflict("Builder handoff source differs from its retained exact task")
         metadata = self._capture_builder_handoff_metadata(coordination)
-        if (
-            metadata.branch_head != source.branch_head
-            or metadata.last_reviewed_commit != source.last_reviewed_commit
-            or metadata.fingerprint != source.metadata_fingerprint
-        ):
-            message = "Builder handoff workspace metadata changed before source preparation"
+        if metadata.branch_head != source.branch_head or metadata.last_reviewed_commit != source.last_reviewed_commit:
+            message = "Builder handoff workspace head changed before source preparation"
             raise PreservationFenceError(message)
         return metadata.branch_head
 

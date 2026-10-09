@@ -32,7 +32,11 @@ from owlbear_delivery.evidence import DeliveryEvidenceProjection, build_evidence
 from owlbear_delivery.finalization_reports import FinalizationAttempt
 from owlbear_delivery.merge_offer import MergeBlock, MergeBlockReason, MergeFacts, MergeOffer
 from owlbear_delivery.recovery import MAX_RETRY_HISTORY_ATTEMPTS, DeliveryRetryAttemptView
-from owlbear_delivery.runtime_receipts import is_builder_attempt_grant_block, is_builder_return_limit
+from owlbear_delivery.runtime_receipts import (
+    is_builder_attempt_grant_block,
+    is_builder_return_limit,
+    target_sync_commit,
+)
 from owlbear_delivery.target_contract import DeliveryCommitment, DeliveryContract, DeliveryDecision, DeliveryOutcome
 
 
@@ -291,6 +295,7 @@ DeliveryReadinessReason = Literal[
     "engine-action-failed",
     "engine-action-incomplete",
     "target-sync-required",
+    "target-commit-missing",
     "claim-custody-unreconciled",
     "runtime-unavailable",
     "dependency-wait",
@@ -397,6 +402,8 @@ class DeliveryReadiness(_ProjectionModel):
     next_eligible_at: str | None = None
     stop_reason: str | None = None
     retry_history: tuple[DeliveryRetryAttemptView, ...] = Field(default=(), max_length=MAX_RETRY_HISTORY_ATTEMPTS)
+    # The exhausted Planner or Finalizer attempt the user may grant one more attempt past (no Outcome block).
+    grant_attempt_id: str | None = Field(default=None, min_length=1, max_length=256)
     prompt: str | None = None
     progress: DeliveryProgress | None = None
     merge_offer: MergeOffer | None = None
@@ -415,6 +422,11 @@ class DeliveryReadiness(_ProjectionModel):
             raise ValueError(msg)
         if self.executable and self.status != "ready":
             msg = "only ready operations can be executable"
+            raise ValueError(msg)
+        if self.grant_attempt_id is not None and (
+            self.reason_code != "retry-exhausted" or self.next_actor is not WorkItemNextActor.YOU
+        ):
+            msg = "only exhausted retries the user decides offer an attempt grant"
             raise ValueError(msg)
         return self
 
@@ -645,7 +657,9 @@ _START_VERBS: dict[WorkItemActionKind, str] = {
     WorkItemActionKind.START_ORCHESTRATION: "continue this Change",
     WorkItemActionKind.FINALIZE: "finalize this Change",
     WorkItemActionKind.RECONCILE_CHECKPOINT: "publish the pending checkpoint",
-    WorkItemActionKind.SYNC_TARGET: "bring the latest target into this Change",
+    WorkItemActionKind.SYNC_TARGET: (
+        "merge the latest target into this Change; a conflict stops there for you to resolve"
+    ),
     WorkItemActionKind.MARK_READY: "mark the pull request ready",
     WorkItemActionKind.OBSERVE_ACCEPTANCE: "check the merge",
 }
@@ -672,16 +686,21 @@ _ATTENTION_HEADLINES: dict[str, str] = {
     "retry-ledger-unavailable": "Delivery cannot read its retry records; inspect the Change.",
     "settled-attention-target-drift": "The target moved after a failed verification; inspect the Change.",
     "merge-blocked": "GitHub reports the pull request cannot merge; open it to check.",
+    "target-commit-missing": (
+        "The Builder needs a commit the target branch does not have yet; get it onto the target, or revise the "
+        "Design if the Builder named the wrong commit."
+    ),
 }
-_ATTEMPT_GRANT_HEADLINE = "Automatic Builder retries are used up; grant one more attempt or inspect the Change."
+_ATTEMPT_GRANT_HEADLINE = "Automatic retries are used up; grant one more attempt or inspect the Change."
+_GRANT_ATTEMPT_ACTION = WorkItemAction(kind=WorkItemActionKind.GRANT_ATTEMPT, label="Grant one more attempt")
 
 
 def _is_attempt_grant(card: WorkItemCardView, readiness: DeliveryReadiness) -> bool:
-    """Return whether exhausted Builder readiness offers the user-only attempt grant on this card."""
+    """Return whether exhausted readiness offers the user-only attempt grant on this card."""
     return (
         readiness.reason_code == "retry-exhausted"
         and readiness.next_actor is WorkItemNextActor.YOU
-        and card.action.kind is WorkItemActionKind.GRANT_ATTEMPT
+        and (card.action.kind is WorkItemActionKind.GRANT_ATTEMPT or readiness.grant_attempt_id is not None)
     )
 
 
@@ -758,6 +777,8 @@ def derive_delivery_progress(  # noqa: PLR0913 - each keyword is one piece of re
     merged_unrecorded: bool = False,
     dependency_id: str | None = None,
     request: DeliveryRequest | None = None,
+    sync_conflict_paths: tuple[str, ...] | None = None,
+    aborted_sync_target: str | None = None,
 ) -> DeliveryProgress:
     """Map one final readiness and supplied evidence to its single user-facing situation (R3-R6).
 
@@ -767,17 +788,64 @@ def derive_delivery_progress(  # noqa: PLR0913 - each keyword is one piece of re
     ``merged_unrecorded`` reports a pull request GitHub merged whose completion Delivery has not recorded yet.
     ``dependency_id`` names the first incomplete Outcome a dependent Outcome waits on, and ``request`` is the
     card's open request, absent when a block stops the step.
+    ``sync_conflict_paths`` is the preserved target-merge conflict, when one is retained, and
+    ``aborted_sync_target`` the target head whose merge the user last aborted.
     No situation claims that work is running: custody is only "with an agent".
     """
+    publication = card.scope is WorkItemScope.CHANGE_PUBLICATION
+    conflict = sync_conflict_paths if publication or readiness.reason_code == "engine-action-failed" else None
     progress = (
         _lifecycle_progress(readiness, frontier, pause_requested=pause_requested, pause_drained=pause_drained)
         or _custody_progress(readiness, card, issuer_state, holder)
+        or _sync_conflict_progress(conflict)
         or _merge_progress(readiness, card, frontier, merged_unrecorded=merged_unrecorded)
         or _step_progress(readiness, card, at_capacity=at_capacity, dependency_id=dependency_id, request=request)
     )
-    if card.scope is WorkItemScope.CHANGE_PUBLICATION:
-        return progress.model_copy(update={"target_sync": _target_sync_availability(readiness, card, progress)})
-    return progress
+    if not publication:
+        return progress
+    if _repeats_aborted_sync(readiness, progress, aborted_sync_target):
+        when = " once the retry time passes" if progress.next_eligible_at is not None else ""
+        progress = progress.model_copy(update={"headline": _ABORTED_SYNC_HEADLINE.format(when=when)})
+    availability = (
+        "unavailable"
+        if sync_conflict_paths is not None and progress.situation not in {"done", "abandoned", "paused"}
+        else _target_sync_availability(readiness, card, progress)
+    )
+    return progress.model_copy(update={"target_sync": availability})
+
+
+_ABORTED_SYNC_HEADLINE = (
+    "You aborted merging this target; running the prompt{when} merges it again and keeps any conflict "
+    "for you to resolve."
+)
+
+
+def _sync_conflict_progress(paths: tuple[str, ...] | None) -> DeliveryProgress | None:
+    """A preserved target-merge conflict has one route: /resolve-target-conflict resolves or aborts it."""
+    if paths is None:
+        return None
+    where = f" in {paths[0]}" if len(paths) == 1 else f" in {len(paths)} files" if paths else ""
+    return _progress(
+        "ready-for-next-step",
+        f"Merging the latest target stopped on a conflict{where}; resolve it with /resolve-target-conflict.",
+        "you",
+    )
+
+
+def _repeats_aborted_sync(readiness: DeliveryReadiness, progress: DeliveryProgress, aborted: str | None) -> bool:
+    """The offered sync merges the same target the user just aborted."""
+    return (
+        aborted is not None
+        and progress.situation == "ready-for-next-step"
+        and readiness.basis.target_head == aborted
+        and (
+            readiness.reason_code == "target-sync-required"
+            or (
+                readiness.operation is WorkItemActionKind.SYNC_TARGET
+                and (readiness.executable or readiness.reason_code == "retry-backoff")
+            )
+        )
+    )
 
 
 def _lifecycle_progress(
@@ -866,7 +934,9 @@ def _merge_progress(  # noqa: PLR0911 - one return per merge situation.
         )
     if reason == "target-sync-required":
         return _progress(
-            "ready-for-next-step", "Run the prompt in Copilot Chat to bring the latest target into this Change.", "you"
+            "ready-for-next-step",
+            f"Run the prompt in Copilot Chat to {_START_VERBS[WorkItemActionKind.SYNC_TARGET]}.",
+            "you",
         )
     return _awaiting_merge_progress(readiness, card, frontier)
 
@@ -966,6 +1036,20 @@ def _request_progress(request: DeliveryRequest | None) -> DeliveryProgress:
     if request.kind.value == "decision":
         return _progress("your-decision", f"Decide: {request.summary}", "you")
     return _progress("needs-attention", f"Action needed: {request.summary}", "you")
+
+
+def _sync_next_step(card: WorkItemCardView, readiness: DeliveryReadiness) -> str | None:
+    """A pending target sync replaces the phase step it precedes."""
+    if readiness.reason_code != "target-sync-required" and not (
+        readiness.executable and readiness.operation is WorkItemActionKind.SYNC_TARGET
+    ):
+        return None
+    if (
+        readiness.reason_code == "target-sync-required"
+        and card.publication_phase is WorkItemPublicationPhase.AWAITING_MERGE
+    ):
+        return "Delivery has no recorded proof target; synchronize the target and re-finalize before merging."
+    return f"Next: {_START_VERBS[WorkItemActionKind.SYNC_TARGET]}."
 
 
 def _target_sync_availability(
@@ -1104,6 +1188,8 @@ class WorkItemProjector:
                         "action": (
                             decision.action
                             if decision.action is not None
+                            else _GRANT_ATTEMPT_ACTION
+                            if _is_attempt_grant(card, decision) and decision.grant_attempt_id is not None
                             else card.action
                             if _is_attempt_grant(card, decision)
                             else card.action
@@ -1126,7 +1212,7 @@ class WorkItemProjector:
                         ),
                         "next_actor": decision.next_actor,
                         "needs": (
-                            card.needs
+                            WorkItemNeed.YOU
                             if _is_attempt_grant(card, decision)
                             else WorkItemNeed.NONE
                             if decision.reason_code in retained_reasons
@@ -1203,22 +1289,23 @@ class WorkItemProjector:
                 f"at {offer.target_head[:12]}. Approve the merge in Cockpit, or merge the pull request in GitHub; "
                 "Delivery records completion afterward."
             )
-        if (
-            readiness.reason_code == "target-sync-required"
-            and card.publication_phase is WorkItemPublicationPhase.AWAITING_MERGE
-        ):
-            return "Delivery has no recorded proof target; synchronize the target and re-finalize before merging."
+        sync_step = _sync_next_step(card, readiness)
+        if sync_step is not None:
+            return sync_step
         if readiness.reason_code == "retry-exhausted":
             grant = _is_attempt_grant(card, readiness)
+            builder_grant = grant and readiness.grant_attempt_id is None
             owner = (
                 "Builder"
-                if card.scope is WorkItemScope.OUTCOME and (card.stage is WorkItemStage.IMPLEMENTATION or grant)
+                if card.scope is WorkItemScope.OUTCOME and (card.stage is WorkItemStage.IMPLEMENTATION or builder_grant)
                 else "Planner"
                 if card.scope is WorkItemScope.OUTCOME
+                else "Finalizer"
+                if grant
                 else "Delivery"
             )
             remedy = (
-                "Use Grant one more attempt in Cockpit to fund exactly one more Builder attempt, or inspect this "
+                f"Use Grant one more attempt in Cockpit to fund exactly one more {owner} attempt, or inspect this "
                 f"Change read-only with /inspect-change {card.change_id} first."
                 if grant
                 else f"Orchestrator can inspect this Change read-only with /inspect-change {card.change_id}; any "
@@ -1400,7 +1487,7 @@ class WorkItemProjector:
             action=action,
         )
 
-    def _outcome_needs(
+    def _outcome_needs(  # noqa: PLR0911 - one return per blocking condition, in precedence order.
         self,
         outcome: DeliveryOutcome,
         binding: OutcomeAuthorityBinding,
@@ -1410,6 +1497,8 @@ class WorkItemProjector:
         if binding.retry_diagnostic is not None:
             return WorkItemNeed.NONE, "Retry refused; host worker-exclusion evidence required"
         pending_request = next((item for item in binding.requests if item.resolution is None), None)
+        if pending_request is None and target_sync_commit(binding) is not None:
+            return WorkItemNeed.NONE, "Synchronize with the target"
         if pending_request is not None or (binding.block is not None and not binding.block.resolved):
             if pending_request is not None:
                 headline = "Decision required" if pending_request.kind.value == "decision" else "Action required"
@@ -1479,7 +1568,9 @@ class WorkItemProjector:
         return WorkItemActivity(state=WorkItemActivityState.READY)
 
     @staticmethod
-    def _outcome_action(binding: OutcomeAuthorityBinding, change_id: str) -> WorkItemAction:
+    def _outcome_action(  # noqa: PLR0911 - one return per action, in precedence order.
+        binding: OutcomeAuthorityBinding, change_id: str
+    ) -> WorkItemAction:
         if binding.retry_diagnostic is not None or (
             binding.recovery_attention is not None and binding.recovery_attention.diagnostic_transition is not None
         ):
@@ -1494,6 +1585,8 @@ class WorkItemProjector:
         pending_request = next((item for item in binding.requests if item.resolution is None), None)
         if pending_request is not None:
             return WorkItemAction(kind=WorkItemActionKind.ANSWER_REQUEST, label="Answer request")
+        if target_sync_commit(binding) is not None:
+            return WorkItemAction(kind=WorkItemActionKind.SYNC_TARGET, label="Synchronize target")
         if binding.block is not None and not binding.block.resolved and binding.block.request_id is None:
             return (
                 WorkItemAction(kind=WorkItemActionKind.GRANT_ATTEMPT, label="Grant one more attempt")

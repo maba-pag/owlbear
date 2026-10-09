@@ -135,8 +135,12 @@ proof or as evidence that the Finalizer process is closed.
 
 A missing or malformed report identity, missing or mismatched operation identity, malformed result,
 `dispatch_failure`, or a dispatch/transport that may still be running is unknown execution: do not call
-`settle_worker_invocation`, `recover_claim`, reacquire, or redispatch. If the user explicitly states that
-this exact Finalizer chat was stopped, use the separate `release_stuck_worker` route in Step 2 once;
+`settle_worker_invocation`, `recover_claim`, reacquire, or redispatch. Such a Finalizer is known ended
+only after this session's dispatch call has returned and its owned mutating terminals and asynchronous
+jobs are settled; then call `release_stuck_worker` once with the issued launch identity and
+`outcome_id: null` (Step 2), even without a user statement. Delivery records a counted
+`finalizer-ended-without-report` and refuses with `ERR_DELIVERY_WORKER_ACTIVE` while the worktree is in
+use. If the user explicitly states that this exact Finalizer chat was stopped, use the same route once;
 otherwise report the issued attempt and retain custody. A Delivery-authored
 `finalizer-ended-without-report` has `checks_state: unknown` and is not proof. If the settlement call
 errors or returns a malformed result, re-read `get_change` before retrying the identical settlement;
@@ -199,8 +203,9 @@ No agent tool approves a merge; only the user approves, in Cockpit.
 ### Continuation Refresh And Output
 
 After a `release_stuck_worker` result, report it and stop the current cycle; do not reacquire or
-dispatch a replacement in that cycle. After a released engine action, ordinary worker settlement, or
-worker transition, re-observe with `get_change` and acquire again for the same Change. Stop on the
+dispatch a replacement in that cycle. After a host-tool `dispatch_failure` (Step 2), report it and end
+the session without reacquiring or dispatching. After a released engine action, ordinary worker
+settlement, or worker transition, re-observe with `get_change` and acquire again for the same Change. Stop on the
 first yielding, unsupported, unavailable, or terminal disposition, or when readiness offers no
 further action. Report the Change identity, each acquired action and its exact disposition, forwarded
 transitions and worker settlement results, preserved engine results and failure envelopes, the
@@ -233,6 +238,10 @@ Treat `dispatch_failure` as a no-result outcome; settle it with `settle_worker_i
 Planner/Builder dispatch error, empty or `no response` result, malformed or schema-invalid output,
 or identity-mismatched result. Preserve any available failure diagnostics for the report.
 
+When a returned `dispatch_failure` reports that the worker's terminal or other host tools returned no
+output or were unavailable, this chat's host is suspect: settle it as above, then end the session
+without reacquiring or dispatching, and tell the user to continue the Change from a new chat.
+
 Only settle after Orchestrator observes that the dispatch call returned and all owned mutating
 terminals and asynchronous jobs are settled. A dispatch call that has not returned, or any owned
 mutating terminal or asynchronous job that may still be running, is not settled by Orchestrator. For a
@@ -243,7 +252,8 @@ and yield when the guard is not yet eligible.
 ### Release A User-Stopped Worker
 
 Use `release_stuck_worker` only when the user explicitly states that the specific worker chat/window
-was stopped. If that statement is ambiguous, ask which exact worker was stopped before mutating. Take
+was stopped, or for a known-ended Finalizer whose dispatch returned in this session without a valid
+report (Step 2). If a user statement is ambiguous, ask which exact worker was stopped before mutating. Take
 `change_id`, `outcome_id`, `attempt_id`, and `claim_id` unchanged from the acquisition result or one
 fresh `get_change` view; for a Finalizer attempt, pass `outcome_id: null`. Never infer identity from
 conversation, elapsed time, or a worker's missing response. Require a callable `release_stuck_worker`
@@ -348,8 +358,8 @@ settled by Orchestrator. The separate user-stopped route above may call `release
 previous-session loss is handled by Delivery at acquisition. Elapsed time and `confirmed_lost` are not
 evidence for normal settlement or `recover_claim`. Malformed Planner/Builder output is not a timeout;
 use `ended-without-result` only when its observation precondition is met. Finalizer without a valid
-report remains unknown unless Delivery settles a lost or explicitly released attempt, in which case
-its engine-authored `finalizer-ended-without-report` remains non-proof.
+report remains unknown unless Delivery settles a lost, known-ended (Step 2), or explicitly released
+attempt, in which case its engine-authored `finalizer-ended-without-report` remains non-proof.
 
 A normal Builder `return` to `design` is settled through the same typed envelope. Settlement clears
 the exact active claim, records its failed attempt, and retains the task/results lineage and managed

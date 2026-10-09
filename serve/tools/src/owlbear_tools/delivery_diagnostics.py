@@ -17,7 +17,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-MAX_ENTRIES = 256
+# A live portfolio needed 891 entries and 1.9 MB on 2026-10-08; the byte budget stays the I/O bound.
+MAX_ENTRIES = 4096
 MAX_RECORD_BYTES = 1 << 20
 MAX_TOTAL_BYTES = 8 << 20
 MAX_LOG_BYTES = 64 << 10
@@ -159,6 +160,7 @@ _CHANGE_RECORD_LAYOUT: dict[str, object] = {
     "builder-invocation-receipts": {"$digest.json": "builder_invocation_receipt"},
     "builder-plan-promotion-receipts": {"$digest.json": "builder_plan_promotion_receipt"},
     "builder-attempt-grant-receipts": {"$digest.json": "builder_attempt_grant_receipt"},
+    "attempt-grant-receipts": {"$digest.json": "attempt_grant_receipt"},
     "builder-request-resolution-receipts": {"$digest.json": "builder_request_resolution_receipt"},
     "builder-handoff-change-intent-receipts": {
         "$digest": {
@@ -202,6 +204,7 @@ _CHANGE_RECORD_VERSIONS: dict[str, tuple[int, ...] | None] = {
     "builder_invocation_receipt": (1, 2),
     "builder_plan_promotion_receipt": (1, 2),
     "builder_attempt_grant_receipt": (1,),
+    "attempt_grant_receipt": (1,),
     "builder_request_resolution_receipt": (1, 2),
     "builder_handoff_change_intent_head": (1,),
     "builder_handoff_change_intent_receipt": (1, 2),
@@ -346,6 +349,7 @@ _SAFE_LOCATORS = {
     "builder_attempt_grant_receipt": (
         ".owlbear/delivery/runtime/changes/<redacted>/builder-attempt-grant-receipts/<opaque>.json"
     ),
+    "attempt_grant_receipt": (".owlbear/delivery/runtime/changes/<redacted>/attempt-grant-receipts/<opaque>.json"),
     "builder_request_resolution_receipt": (
         ".owlbear/delivery/runtime/changes/<redacted>/builder-request-resolution-receipts/<opaque>.json"
     ),
@@ -394,7 +398,7 @@ apply and verify); migrations through `delivery-migrate` and upgrades through `/
 Anything without such a route stays contained for its owner. Do not use Git, network, provider,
 process, or manual filesystem repair commands."""
 _ENTRY_LIMIT_MAINTENANCE_PROMPT = (
-    "The 256-entry budget was exhausted, so this inspection is incomplete. Rerun the complete "
+    f"The {MAX_ENTRIES}-entry budget was exhausted, so this inspection is incomplete. Rerun the complete "
     "inspection one Change at a time with `delivery-diagnose inspect --project-root "
     "<PROJECT_ROOT> --change-id <CHANGE_ID>`, using the applicable project root and a valid "
     "Change ID. Do not manually edit any inspected file."

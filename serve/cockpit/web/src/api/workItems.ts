@@ -82,6 +82,7 @@ export type DeliveryReadinessReasonCode =
   | "engine-action-failed"
   | "engine-action-incomplete"
   | "target-sync-required"
+  | "target-commit-missing"
   | "claim-custody-unreconciled"
   | "runtime-unavailable"
   | "dependency-wait"
@@ -279,6 +280,8 @@ export interface DeliveryReadiness {
   next_eligible_at?: string | null;
   stop_reason?: string | null;
   retry_history?: DeliveryRetryAttempt[];
+  /** The exhausted Planner or Finalizer attempt the user may grant one more attempt past. */
+  grant_attempt_id?: string | null;
   prompt?: string | null;
   progress?: DeliveryProgress | null;
   merge_offer?: MergeOffer | null;
@@ -1131,6 +1134,24 @@ export function grantWorkItemAttempt(
     "blocks",
     encodeURIComponent(blockId),
     "grant-attempt",
+  ].join("/");
+  return controlRequest(grantPath, "ERR_WORK_ITEM_ATTEMPT_GRANT", {
+    expected_frontier_digest: expectedFrontierDigest,
+  });
+}
+
+/** Funds exactly one more Planner or Finalizer attempt past its exact exhausted attempt; history is kept. */
+export function grantRetryAttempt(
+  changeId: string,
+  attemptId: string,
+  expectedFrontierDigest: string,
+): Promise<unknown> {
+  const grantPath = [
+    "/api/changes",
+    encodeURIComponent(changeId),
+    "retry-attempts",
+    encodeURIComponent(attemptId),
+    "grant",
   ].join("/");
   return controlRequest(grantPath, "ERR_WORK_ITEM_ATTEMPT_GRANT", {
     expected_frontier_digest: expectedFrontierDigest,

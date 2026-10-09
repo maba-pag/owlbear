@@ -9,6 +9,7 @@ import {
   PTag,
 } from "@porsche-design-system/components-react";
 import { type ReactNode, useEffect, useState } from "react";
+import { useLocation } from "react-router";
 import {
   type BackwardMovePreview,
   type DeliveryConfirmationScope,
@@ -45,6 +46,7 @@ import {
   isContinuationPrompt,
   MERGE_BLOCK_LABELS,
   NEXT_ACTOR_LABELS,
+  OPEN_REQUEST_ANCHOR,
   PROGRESS_STAGE_LABELS,
   progressLabel,
   progressTone,
@@ -53,6 +55,7 @@ import {
   READINESS_STATUS_LABELS,
   REVISION_PROMPT_HELP,
   readinessTone,
+  retryAttemptCause,
   workItemStatus,
   workItemStatusLabel,
 } from "./workItemPresentation";
@@ -65,6 +68,33 @@ type FieldValueEvent = {
 function fieldValue(event: FieldValueEvent): string {
   const value = event.detail?.value ?? event.target?.value;
   return typeof value === "string" ? value : "";
+}
+
+const FULL_COMMIT = /\b[0-9a-f]{40}\b/g;
+
+/** Engine prose with each full commit shortened to 12 characters; the full value stays in the title. */
+export function CommitText({ text }: { text: string }) {
+  const parts: ReactNode[] = [];
+  let last = 0;
+  for (const match of text.matchAll(FULL_COMMIT)) {
+    const start = match.index ?? 0;
+    if (start > last) parts.push(text.slice(last, start));
+    parts.push(
+      <code key={start} title={match[0]}>
+        {match[0].slice(0, 12)}
+      </code>,
+    );
+    last = start + match[0].length;
+  }
+  if (last === 0) return text;
+  parts.push(text.slice(last));
+  return <>{parts}</>;
+}
+
+function focusOpenRequest(): void {
+  const target = document.getElementById(OPEN_REQUEST_ANCHOR);
+  target?.scrollIntoView?.({ block: "start" });
+  target?.focus({ preventScroll: true });
 }
 
 function ConfirmationContent({ children, onClose }: { children: ReactNode; onClose: () => void }) {
@@ -90,6 +120,7 @@ interface WorkItemDetailProps {
   onAnswerRequest: (requestId: string, resolution: DeliveryRequestResolution) => Promise<Error | null>;
   onClearBlock: (blockId: string, note: string, locators: string[]) => Promise<Error | null>;
   onGrantAttempt: (blockId: string) => Promise<Error | null>;
+  onGrantRetryAttempt: (attemptId: string) => Promise<Error | null>;
   onReleaseStuckWorker: (attemptId: string, claimId: string) => Promise<Error | null>;
   onPreviewBackward: (target: WorkItemStage) => Promise<BackwardMovePreview | null>;
   onMoveBackward: (target: WorkItemStage, reason: string, snapshotVersion: string) => Promise<Error | null>;
@@ -224,25 +255,48 @@ function RequestControl({
           compact
           name={`request-${request.request_id}-answer`}
           label="Action response"
+          description="Describe what you did. Delivery records your words as the answer and does not check them."
           value={responseText}
           disabled={pending}
           onChange={(event) => setResponseText(fieldValue(event as FieldValueEvent))}
           onInput={(event) => setResponseText(fieldValue(event as FieldValueEvent))}
         />
       ) : null}
-      <PButton className="w-fit" type="button" compact disabled={!canSubmit} onClick={() => void answer()}>
-        {pending ? "Submitting..." : "Submit answer"}
-      </PButton>
+      <div className="flex flex-wrap items-center gap-static-xs">
+        <PButton className="w-fit" type="button" compact disabled={!canSubmit} onClick={() => void answer()}>
+          {pending ? "Submitting..." : "Submit answer"}
+        </PButton>
+        {!canSubmit && !pending ? (
+          <span className="text-xs text-contrast-medium" data-testid="request-submit-hint">
+            {request.kind === "decision" ? "Select an option to submit." : "Enter a response to submit."}
+          </span>
+        ) : null}
+      </div>
     </div>
   );
+}
+
+/** Why an answered request's evidence does not count toward a criterion now, or null when it does or is unknown. */
+function uncountedReason(
+  requestId: string,
+  reference: DeliveryConfirmationScope["acceptance"][number],
+  detail: WorkItemAvailableDetailResponse,
+): string | null {
+  const criterion = detail.item.evidence?.criteria.find((item) => item.acceptance_id === reference.acceptance_id);
+  if (!criterion) return null;
+  if (criterion.acceptance_version !== reference.acceptance_version) return "Criterion changed since this answer";
+  if (criterion.evidence_truncated > 0) return null;
+  return criterion.evidence.some((item) => item.request_id === requestId) ? null : "Not counted toward acceptance";
 }
 
 function RequestScope({
   scope,
   detail,
+  answeredRequestId,
 }: {
   scope: DeliveryConfirmationScope;
   detail: WorkItemAvailableDetailResponse;
+  answeredRequestId: string | null;
 }) {
   const statements = new Map(
     (detail.item.evidence?.criteria ?? []).map((criterion) => [criterion.acceptance_id, criterion.statement]),
@@ -257,11 +311,22 @@ function RequestScope({
       <dt className="text-contrast-medium">Criteria</dt>
       <dd>
         <ul className="grid gap-1">
-          {scope.acceptance.map((reference) => (
-            <li key={reference.acceptance_id}>
-              <code>{reference.acceptance_id}</code> {statements.get(reference.acceptance_id) ?? ""}
-            </li>
-          ))}
+          {scope.acceptance.map((reference) => {
+            const uncounted = answeredRequestId ? uncountedReason(answeredRequestId, reference, detail) : null;
+            return (
+              <li key={reference.acceptance_id}>
+                <code>{reference.acceptance_id}</code> {statements.get(reference.acceptance_id) ?? ""}
+                {uncounted ? (
+                  <>
+                    {" "}
+                    <PTag compact data-testid={`request-uncounted-${reference.acceptance_id}`}>
+                      {uncounted}
+                    </PTag>
+                  </>
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       </dd>
       <dt className="text-contrast-medium">Procedure</dt>
@@ -270,33 +335,83 @@ function RequestScope({
   );
 }
 
+function RequestArticle({
+  request,
+  detail,
+  anchor,
+  superseded,
+  pending,
+  onAnswer,
+}: {
+  request: DeliveryRequest;
+  detail: WorkItemAvailableDetailResponse;
+  anchor: boolean;
+  superseded: boolean;
+  pending: boolean;
+  onAnswer: WorkItemDetailProps["onAnswerRequest"];
+}) {
+  const answered = request.resolution !== null;
+  return (
+    <article
+      id={anchor ? OPEN_REQUEST_ANCHOR : undefined}
+      tabIndex={anchor ? -1 : undefined}
+      data-testid={`request-${request.request_id}`}
+      className={["border-l-2 pl-static-sm", answered ? "border-contrast-low" : "border-info"].join(" ")}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-static-xs">
+        <strong className="text-sm">
+          <CommitText text={request.summary} />
+        </strong>
+        <PTag compact>{REQUEST_KIND_LABELS[request.kind]}</PTag>
+      </div>
+      {request.applies_to ? (
+        <RequestScope
+          scope={request.applies_to}
+          detail={detail}
+          answeredRequestId={answered ? request.request_id : null}
+        />
+      ) : null}
+      <RequestControl request={request} superseded={superseded} pending={pending} onAnswer={onAnswer} />
+    </article>
+  );
+}
+
 function RequestsSection({ detail, pendingAction, onAnswerRequest }: WorkItemDetailProps) {
-  if (detail.item.card.scope !== "outcome") return null;
-  const requests = detail.item.requests;
+  const requests = detail.item.card.scope === "outcome" ? detail.item.requests : [];
+  const open = requests.filter((request) => request.resolution === null);
+  const answered = requests.filter((request) => request.resolution !== null);
+  const firstOpenId = open[0]?.request_id ?? null;
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (firstOpenId && hash === `#${OPEN_REQUEST_ANCHOR}`) focusOpenRequest();
+  }, [firstOpenId, hash]);
   if (requests.length === 0) return null;
   const superseded = new Set(detail.item.superseded_request_ids ?? []);
+  const article = (request: DeliveryRequest) => (
+    <RequestArticle
+      key={request.request_id}
+      request={request}
+      detail={detail}
+      anchor={request.request_id === firstOpenId}
+      superseded={superseded.has(request.request_id)}
+      pending={pendingAction !== null}
+      onAnswer={onAnswerRequest}
+    />
+  );
   return (
     <section aria-labelledby="work-requests-heading">
       <PHeading id="work-requests-heading" tag="h3" size="md">
-        Requests
+        {open.length > 0 ? "Your requests" : "Requests"}
       </PHeading>
-      <div className="mt-static-sm grid gap-static-md">
-        {requests.map((request) => (
-          <article key={request.request_id} className="border-l-2 border-info pl-static-sm">
-            <div className="flex flex-wrap items-center justify-between gap-static-xs">
-              <strong className="text-sm">{request.summary}</strong>
-              <PTag compact>{REQUEST_KIND_LABELS[request.kind]}</PTag>
-            </div>
-            {request.applies_to ? <RequestScope scope={request.applies_to} detail={detail} /> : null}
-            <RequestControl
-              request={request}
-              superseded={superseded.has(request.request_id)}
-              pending={pendingAction !== null}
-              onAnswer={onAnswerRequest}
-            />
-          </article>
-        ))}
-      </div>
+      {open.length > 0 ? <div className="mt-static-sm grid gap-static-md">{open.map(article)}</div> : null}
+      {answered.length > 0 ? (
+        <details className="mt-static-sm" data-testid="answered-requests">
+          <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">
+            Answered requests ({answered.length})
+          </summary>
+          <div className="mt-static-sm grid gap-static-md">{answered.map(article)}</div>
+        </details>
+      ) : null}
     </section>
   );
 }
@@ -484,7 +599,9 @@ function ChangePauseSection(props: WorkItemDetailProps) {
   if (situation === "done" || situation === "abandoned" || phase === "abandoned") return null;
   const paused = situation === "paused" || phase === "deferred";
   const continuation = props.changeContinuationPrompt;
-  const showContinuation = !paused && continuation && continuation !== item.readiness?.prompt;
+  // A preserved target conflict has one route; a continuation from an older portfolio poll would compete with it.
+  const showContinuation =
+    !paused && continuation && continuation !== item.readiness?.prompt && !item.publication?.target_sync_conflict;
   return (
     <section aria-labelledby="change-pause-heading" className="grid gap-static-xs">
       <PHeading id="change-pause-heading" tag="h3" size="sm">
@@ -510,6 +627,15 @@ function ChangePauseSection(props: WorkItemDetailProps) {
   );
 }
 
+/** The commit a requestless Builder block's `target-commit:` locator requires; Delivery syncs until it is in. */
+function requiredTargetCommit(block: { request_id: string | null; locators: string[] }): string | null {
+  if (block.request_id !== null) return null;
+  const commits = new Set(
+    block.locators.flatMap((locator) => /^target-commit:([0-9a-f]{40})$/.exec(locator)?.slice(1, 2) ?? []),
+  );
+  return commits.size === 1 ? [...commits][0] : null;
+}
+
 function BlockSection({ detail, pendingAction, onClearBlock, onGrantAttempt }: WorkItemDetailProps) {
   const block = detail.item.block;
   const [note, setNote] = useState("");
@@ -526,8 +652,18 @@ function BlockSection({ detail, pendingAction, onClearBlock, onGrantAttempt }: W
       <PHeading id="work-block-heading" tag="h3" size="md">
         Blocked
       </PHeading>
-      <p className="mt-static-xs text-sm">{block.reason}</p>
-      <p className="mt-static-xs text-sm text-contrast-medium">Clear when: {block.unblock_condition}</p>
+      <p className="mt-static-xs text-sm">
+        <CommitText text={block.reason} />
+      </p>
+      <p className="mt-static-xs text-sm text-contrast-medium">
+        Clear when: <CommitText text={block.unblock_condition} />
+      </p>
+      {requiredTargetCommit(block) && !block.resolution_note ? (
+        <p className="mt-static-xs text-sm" data-testid="block-target-sync">
+          Delivery clears this itself: it keeps the Builder's unfinished work under refs, merges the target branch so
+          the Change contains <CommitText text={requiredTargetCommit(block) ?? ""} />, and restarts the task.
+        </p>
+      ) : null}
       {reviseDesign?.command ? (
         <div className="mt-static-md grid gap-static-sm" data-testid="block-revise-design">
           <p className="text-sm">
@@ -586,6 +722,31 @@ function BlockSection({ detail, pendingAction, onClearBlock, onGrantAttempt }: W
         </div>
       ) : null}
     </section>
+  );
+}
+
+/** Planner and Finalizer retries stop without a block; the grant names their latest exhausted attempt. */
+function RetryGrantControl({ detail, pendingAction, onGrantRetryAttempt }: WorkItemDetailProps) {
+  const { card, readiness } = detail.item;
+  const attemptId = readiness?.grant_attempt_id;
+  if (card.action.kind !== "grant-attempt" || !attemptId) return null;
+  const role = card.scope === "change-publication" ? "Finalizer" : "Planner";
+  return (
+    <div className="mt-static-sm grid gap-static-sm" data-testid="retry-grant">
+      <p className="text-sm">
+        Granting adds exactly one more {role} attempt. Earlier attempts stay recorded; if it fails again, this step
+        stops here for your decision.
+      </p>
+      <PButton
+        className="w-fit"
+        type="button"
+        compact
+        disabled={pendingAction !== null}
+        onClick={() => void onGrantRetryAttempt(attemptId)}
+      >
+        {pendingAction === "grant-attempt" ? "Granting..." : "Grant one more attempt"}
+      </PButton>
+    </div>
   );
 }
 
@@ -1270,15 +1431,20 @@ function MergeOfferSummary({ offer }: { offer: MergeOffer }) {
 function ReadinessSection({
   readiness,
   changeId,
+  openRequestId,
   children,
 }: {
   readiness: DeliveryReadiness | null | undefined;
   changeId: string;
+  openRequestId: string | null;
   children?: ReactNode;
 }) {
   if (!readiness) return null;
   const progress = readiness.progress;
   const timing = progress ? progressWaitLine(progress) : null;
+  // Answering happens in this panel; an agent prompt would only report the same request again.
+  const answerHere = readiness.operation === "answer-request" && openRequestId !== null;
+  const prompt = answerHere ? null : readiness.prompt;
   return (
     <SectionCard dataTestId="delivery-readiness" ariaLabel="Delivery readiness" className="p-static-sm">
       {progress ? (
@@ -1292,12 +1458,22 @@ function ReadinessSection({
             ) : null}
           </div>
           <p className="text-sm leading-relaxed" data-testid="readiness-headline">
-            {progress.headline}
+            <CommitText text={progress.headline} />
           </p>
         </div>
       ) : null}
       {readiness.merge_offer ? <MergeOfferSummary offer={readiness.merge_offer} /> : null}
       {children}
+      {readiness.reason_code === "retry-exhausted" && readiness.retry_history?.length ? (
+        <div className="mt-static-sm" data-testid="readiness-attempt-causes">
+          <strong className="text-sm">What happened in each attempt</strong>
+          <ol className="mt-static-xs list-decimal pl-static-md text-sm">
+            {readiness.retry_history.map((attempt) => (
+              <li key={attempt.ordinal}>{retryAttemptCause(attempt)}</li>
+            ))}
+          </ol>
+        </div>
+      ) : null}
       {readiness.merge_attempt ? (
         <p className="mt-static-xs text-sm leading-relaxed" data-testid="merge-attempt">
           <a
@@ -1311,19 +1487,34 @@ function ReadinessSection({
           (approved head {readiness.merge_attempt.approved_head.slice(0, 12)})
         </p>
       ) : null}
-      {readiness.prompt ? (
+      {answerHere ? (
+        <p className="mt-static-xs text-sm" data-testid="readiness-answer-request">
+          Answer the request in this panel; no agent prompt is needed.{" "}
+          <a
+            className="font-medium text-primary underline decoration-contrast-low underline-offset-2"
+            href={`#${OPEN_REQUEST_ANCHOR}`}
+            onClick={(event) => {
+              event.preventDefault();
+              focusOpenRequest();
+            }}
+          >
+            Go to the request
+          </a>
+        </p>
+      ) : null}
+      {prompt ? (
         <pre
           className="mt-static-xs whitespace-pre-wrap break-words rounded-md bg-contrast-low p-static-xs text-xs"
           data-testid="readiness-prompt"
         >
-          <code>{readiness.prompt}</code>
+          <code>{prompt}</code>
         </pre>
       ) : null}
-      {readiness.prompt ? (
+      {prompt ? (
         <CopyCommand
           className="mt-static-xs"
-          command={readiness.prompt}
-          label={isContinuationPrompt(readiness.prompt, changeId) ? "Copy continuation prompt" : "Copy prompt"}
+          command={prompt}
+          label={isContinuationPrompt(prompt, changeId) ? "Copy continuation prompt" : "Copy prompt"}
           helper={CONTINUATION_PROMPT_HELP}
         />
       ) : null}
@@ -1432,7 +1623,7 @@ function UnavailableChangeDetail({ detail }: { detail: WorkItemUnavailableDetail
             <p className="mt-static-xs text-sm">Coordination record: {detail.coordination_status}</p>
           ) : null}
         </SectionCard>
-        <ReadinessSection readiness={detail.readiness} changeId={detail.change_id} />
+        <ReadinessSection readiness={detail.readiness} changeId={detail.change_id} openRequestId={null} />
       </div>
     </section>
   );
@@ -1787,6 +1978,11 @@ function AbandonedTargetSyncCleanupSection(props: WorkItemDetailProps) {
   );
 }
 
+const ABORT_TARGET_SYNC_HELP = "Rolls the Change back to its reviewed head; the latest target stays unmerged.";
+const SUBMIT_RESOLVED_MERGE_HELP =
+  "Only after you resolved and staged every conflicting file in the Change worktree yourself; the target conflict " +
+  "workflow submits it for you.";
+
 function TargetSyncConflictSection(props: WorkItemDetailProps) {
   const publication = props.detail.item.publication;
   const conflict = publication?.target_sync_conflict;
@@ -1794,7 +1990,11 @@ function TargetSyncConflictSection(props: WorkItemDetailProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [actionFailed, setActionFailed] = useState(false);
   if (!publication || !conflict) return null;
-  const canExit = attention?.kind === "publication-attention";
+  // Delivery refuses conflict exits on a paused Change; Resume comes first.
+  const paused = props.detail.item.change_progress?.situation === "paused" || publication.phase === "deferred";
+  const canExit = attention?.kind === "publication-attention" && !paused;
+  const command = paused ? null : props.detail.item.card.action.command;
+  const promptOffersCommand = Boolean(command && props.detail.item.readiness?.prompt?.startsWith(command));
   const abort = async () => {
     if (!attention) return;
     const error = await props.onAbortTargetSync(attention.disposition_id, conflict.target_head, conflict.operation_id);
@@ -1807,26 +2007,11 @@ function TargetSyncConflictSection(props: WorkItemDetailProps) {
         Target sync conflict
       </PHeading>
       <p className="mt-static-xs text-sm">
-        The merge is preserved in the Change worktree. Choose an explicit exit after reviewing the conflict.
+        Merging the latest target stopped on conflicting files. Delivery keeps the merge in the Change worktree until it
+        is resolved or aborted.
       </p>
-      {props.detail.item.card.action.command ? (
-        <div className="mt-static-md">
-          <p className="text-sm">Run the target conflict workflow before submitting the resolved merge.</p>
-          <CopyCommand className="mt-static-xs" command={props.detail.item.card.action.command} />
-        </div>
-      ) : null}
-      <dl
-        className={[
-          "mt-static-md grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md",
-          "gap-y-static-xs break-all text-xs",
-        ].join(" ")}
-      >
-        <IdentityRow label="Operation" value={conflict.operation_id} />
-        <IdentityRow label="Target head" value={conflict.target_head} />
-        <IdentityRow label="Reviewed head" value={conflict.change_head_before} />
-      </dl>
       {conflict.conflict_paths.length > 0 ? (
-        <ul className="mt-static-md list-disc break-all pl-static-md text-sm">
+        <ul className="mt-static-md list-disc break-all pl-static-md text-sm" data-testid="target-sync-conflict-paths">
           {conflict.conflict_paths.map((path) => (
             <li key={path}>{path}</li>
           ))}
@@ -1834,37 +2019,81 @@ function TargetSyncConflictSection(props: WorkItemDetailProps) {
       ) : (
         <p className="mt-static-md text-sm text-contrast-medium">Git did not report individual conflict paths.</p>
       )}
-      {canExit && attention ? (
-        <div className="mt-static-md flex flex-wrap gap-static-sm">
-          <PButton
-            type="button"
-            compact
-            variant="secondary"
-            data-testid="target-sync-conflict-abort"
-            disabled={props.pendingAction !== null}
-            onClick={() => {
-              setActionFailed(false);
-              setConfirmOpen(true);
-            }}
-          >
-            {props.pendingAction === "target-sync-abort" ? "Aborting..." : "Abort target sync"}
-          </PButton>
-          <PButton
-            type="button"
-            compact
-            variant="secondary"
-            data-testid="target-sync-conflict-resolve"
-            disabled={props.pendingAction !== null}
-            onClick={() =>
-              void props.onResolveTargetSync(attention.disposition_id, conflict.target_head, conflict.operation_id)
-            }
-          >
-            {props.pendingAction === "target-sync-resolve" ? "Submitting..." : "Submit resolved merge"}
-          </PButton>
+      {command && !promptOffersCommand ? (
+        <div className="mt-static-md">
+          <p className="text-sm">Resolve them with the target conflict workflow.</p>
+          <CopyCommand className="mt-static-xs" command={command} />
         </div>
+      ) : null}
+      {canExit && attention ? (
+        <div className="mt-static-md grid gap-static-sm">
+          <div>
+            <PButton
+              type="button"
+              compact
+              variant="secondary"
+              data-testid="target-sync-conflict-abort"
+              aria={{ "aria-description": ABORT_TARGET_SYNC_HELP }}
+              disabled={props.pendingAction !== null}
+              onClick={() => {
+                setActionFailed(false);
+                setConfirmOpen(true);
+              }}
+            >
+              {props.pendingAction === "target-sync-abort" ? "Aborting..." : "Abort target sync"}
+            </PButton>
+            <p className="mt-static-xs text-xs text-contrast-medium">{ABORT_TARGET_SYNC_HELP}</p>
+          </div>
+          <div>
+            <PButton
+              type="button"
+              compact
+              variant="secondary"
+              data-testid="target-sync-conflict-resolve"
+              aria={{ "aria-description": SUBMIT_RESOLVED_MERGE_HELP }}
+              disabled={props.pendingAction !== null}
+              onClick={() =>
+                void props.onResolveTargetSync(attention.disposition_id, conflict.target_head, conflict.operation_id)
+              }
+            >
+              {props.pendingAction === "target-sync-resolve" ? "Submitting..." : "Submit resolved merge"}
+            </PButton>
+            <p className="mt-static-xs text-xs text-contrast-medium">{SUBMIT_RESOLVED_MERGE_HELP}</p>
+          </div>
+        </div>
+      ) : paused ? (
+        <p className="mt-static-md text-sm" data-testid="target-sync-conflict-paused">
+          Resume the Change to resolve or abort this conflict.
+        </p>
       ) : (
         <p className="mt-static-md text-sm text-contrast-medium">Waiting for the matching Change attention record.</p>
       )}
+      <details
+        className="mt-static-md border-t border-contrast-low pt-static-xs"
+        data-testid="target-sync-conflict-details"
+      >
+        <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">
+          Technical details
+        </summary>
+        <dl
+          className={[
+            "mt-static-xs grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md",
+            "gap-y-static-xs break-all text-xs",
+          ].join(" ")}
+        >
+          <IdentityRow label="Operation" value={conflict.operation_id} />
+          <IdentityRow label="Target head" value={conflict.target_head} />
+          <IdentityRow label="Reviewed head" value={conflict.change_head_before} />
+          <IdentityRow label="Disposition" value={attention?.disposition_id ?? null} />
+        </dl>
+        {attention?.diagnostics.length ? (
+          <ul className="mt-static-xs list-disc break-all pl-static-md text-xs">
+            {attention.diagnostics.map((diagnostic) => (
+              <li key={diagnostic}>{diagnostic}</li>
+            ))}
+          </ul>
+        ) : null}
+      </details>
       {confirmOpen ? (
         <PModal
           open
@@ -1918,9 +2147,9 @@ function TargetSyncSection(props: WorkItemDetailProps) {
   const [actionFailed, setActionFailed] = useState(false);
   if (!publication || !availability || availability === "unnecessary") return null;
   if (availability === "unavailable")
-    return (
+    return publication.target_sync_conflict ? null : (
       <p className="border-t border-contrast-low pt-static-sm text-sm text-contrast-medium" data-testid="target-sync">
-        Updating the Change from its target is unavailable while Delivery or an agent holds it.
+        Updating the Change from its target is not offered in its current state.
       </p>
     );
   const run = async () => {
@@ -2202,7 +2431,7 @@ function PublicationSection(props: WorkItemDetailProps) {
           <PHeading id="work-publication-heading" tag="h3" size="md">
             {PUBLICATION_PHASE_LABELS[publication.phase]}
           </PHeading>
-          {readiness ? (
+          {readiness && !targetSyncAttention ? (
             <StatusChip
               label={publicationStatus.label}
               tone={publicationStatus.tone}
@@ -2210,7 +2439,11 @@ function PublicationSection(props: WorkItemDetailProps) {
             />
           ) : null}
         </div>
-        <p className="mt-static-xs text-sm leading-relaxed">{invalidationReason ?? props.detail.item.card.next_step}</p>
+        {invalidationReason || !targetSyncAttention ? (
+          <p className="mt-static-xs text-sm leading-relaxed">
+            {invalidationReason ?? props.detail.item.card.next_step}
+          </p>
+        ) : null}
         {invalidationReason ? (
           <div className="mt-static-sm grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-sm gap-y-static-xs text-xs">
             <span className="text-contrast-medium">Expected</span>
@@ -2219,7 +2452,7 @@ function PublicationSection(props: WorkItemDetailProps) {
             <code>{publication.invalidated_observed_head}</code>
           </div>
         ) : null}
-        {invalidationReason ? (
+        {invalidationReason && !targetSyncAttention ? (
           <p className="mt-static-sm text-sm text-contrast-medium">Next: {props.detail.item.card.next_step}</p>
         ) : null}
         {action.command && !finalizationBlocked && !targetSyncAttention ? (
@@ -2276,7 +2509,7 @@ function PublicationSection(props: WorkItemDetailProps) {
           </ConfirmationContent>
         </PModal>
       ) : null}
-      {finalizationBlocked ? (
+      {finalizationBlocked && !targetSyncAttention ? (
         <section
           className="mt-static-md border-l-4 border-warning bg-surface p-static-sm"
           role="status"
@@ -2287,19 +2520,24 @@ function PublicationSection(props: WorkItemDetailProps) {
           </PHeading>
           <p className="mt-static-xs text-sm">Delivery cannot finalize the current Change yet.</p>
           {(publication.readiness_diagnostics ?? []).length > 0 ? (
-            <ul className="mt-static-xs list-disc pl-static-md text-sm">
-              {(publication.readiness_diagnostics ?? []).map((diagnostic) => (
-                <li key={diagnostic}>{diagnostic}</li>
-              ))}
-            </ul>
+            <details className="mt-static-xs">
+              <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">
+                Technical details
+              </summary>
+              <ul className="mt-static-xs list-disc pl-static-md text-sm">
+                {(publication.readiness_diagnostics ?? []).map((diagnostic) => (
+                  <li key={diagnostic}>{diagnostic}</li>
+                ))}
+              </ul>
+            </details>
           ) : null}
           <p className="mt-static-xs text-sm text-contrast-medium">
-            Resolve the condition, then run the continuation prompt again.
+            Follow the next step under Delivery readiness above.
           </p>
         </section>
       ) : null}
       <TargetSyncConflictSection {...props} />
-      {publication.attention ? (
+      {publication.attention && !targetSyncAttention ? (
         <div className="mt-static-md border-l-4 border-warning bg-surface p-static-sm" role="alert">
           <PHeading tag="h4" size="sm">
             Change attention
@@ -2309,14 +2547,19 @@ function PublicationSection(props: WorkItemDetailProps) {
               ? "Publication evidence needs reconciliation."
               : "Acceptance evidence needs reconciliation."}
           </p>
-          <ul className="mt-static-xs list-disc pl-static-md text-sm">
-            {publication.attention.diagnostics.map((diagnostic) => (
-              <li key={diagnostic}>{diagnostic}</li>
-            ))}
-          </ul>
-          <p className="mt-static-xs break-all font-mono text-xs">
-            Disposition: {publication.attention.disposition_id}
-          </p>
+          <details className="mt-static-xs">
+            <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">
+              Technical details
+            </summary>
+            <ul className="mt-static-xs list-disc pl-static-md text-sm">
+              {publication.attention.diagnostics.map((diagnostic) => (
+                <li key={diagnostic}>{diagnostic}</li>
+              ))}
+            </ul>
+            <p className="mt-static-xs break-all font-mono text-xs">
+              Disposition: {publication.attention.disposition_id}
+            </p>
+          </details>
         </div>
       ) : null}
       <ExternalHeadAdoptionSection {...props} />
@@ -2502,6 +2745,16 @@ export default function WorkItemDetail(
   if (isUnavailableDetail(props.detail)) return <UnavailableChangeDetail detail={props.detail} />;
   const available = { ...props, detail: props.detail };
   const { card } = props.detail.item;
+  const openRequestId =
+    card.scope === "outcome"
+      ? (props.detail.item.requests.find((request) => request.resolution === null)?.request_id ?? null)
+      : null;
+  const changeProgress = props.detail.item.change_progress;
+  // The readiness card states the same headline right below; show it once.
+  const changeHeadline =
+    changeProgress && changeProgress.headline !== props.detail.item.readiness?.progress?.headline
+      ? changeProgress.headline
+      : null;
   return (
     <section className="min-w-0" aria-labelledby="work-detail-heading" data-testid="work-item-detail">
       <div className="grid gap-static-lg">
@@ -2511,16 +2764,19 @@ export default function WorkItemDetail(
           <dl className="mt-static-md grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md py-static-xs text-sm">
             <dt className="text-contrast-medium">Progress</dt>
             <dd>{card.progress.label}</dd>
-            {props.detail.item.change_progress ? (
+            {changeProgress ? (
               <>
                 <dt className="text-contrast-medium">Change</dt>
                 <dd data-testid="change-progress">
-                  {progressLabel(props.detail.item.change_progress)}
-                  <span className="text-contrast-medium"> · {props.detail.item.change_progress.headline}</span>
-                  {progressWaitLine(props.detail.item.change_progress) ? (
-                    <span className="block text-xs text-contrast-medium">
-                      {progressWaitLine(props.detail.item.change_progress)}
+                  {progressLabel(changeProgress)}
+                  {changeHeadline ? (
+                    <span className="text-contrast-medium">
+                      {" · "}
+                      <CommitText text={changeHeadline} />
                     </span>
+                  ) : null}
+                  {progressWaitLine(changeProgress) ? (
+                    <span className="block text-xs text-contrast-medium">{progressWaitLine(changeProgress)}</span>
                   ) : null}
                 </dd>
               </>
@@ -2528,7 +2784,11 @@ export default function WorkItemDetail(
           </dl>
         </div>
         <ActionFeedback error={props.actionError} result={props.actionResult} />
-        <ReadinessSection readiness={props.detail.item.readiness} changeId={card.change_id}>
+        <ReadinessSection
+          readiness={props.detail.item.readiness}
+          changeId={card.change_id}
+          openRequestId={openRequestId}
+        >
           <MergeApprovalDialog
             offer={
               props.detail.item.readiness?.reason_code === "merge-approval-required"
@@ -2538,10 +2798,29 @@ export default function WorkItemDetail(
             pendingAction={props.pendingAction}
             onApproveMerge={props.onApproveMerge}
           />
+          <RetryGrantControl {...available} />
+          {card.scope === "outcome" &&
+          props.detail.item.readiness?.operation === "sync-target" &&
+          props.detail.item.readiness.executable ? (
+            <div className="mt-static-sm grid gap-static-xs" data-testid="outcome-target-sync">
+              <PButton
+                className="w-fit"
+                type="button"
+                compact
+                disabled={props.pendingAction !== null}
+                onClick={() => void props.onSyncTarget()}
+              >
+                {props.pendingAction === "target-sync" ? "Merging target..." : "Merge target into Change"}
+              </PButton>
+              <span className="text-xs text-contrast-medium">
+                Or run the prompt below. A conflict stops the merge for you to resolve.
+              </span>
+            </div>
+          ) : null}
         </ReadinessSection>
-        <ChangePauseSection {...available} />
-        <BlockSection {...available} />
         <RequestsSection {...available} />
+        <BlockSection {...available} />
+        <ChangePauseSection {...available} />
         <PublicationSection {...available} />
         <CourseChangesSection detail={props.detail} />
         <SemanticDetail detail={props.detail} />

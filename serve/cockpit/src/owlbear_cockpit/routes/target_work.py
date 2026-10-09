@@ -191,6 +191,16 @@ class TargetCockpitService:
         )
         return self._invoke(lambda: self._application.answer(answer, allow_user_only=True))
 
+    def grant_retry_attempt(self, change_id: str, attempt_id: str, body: GrantAttemptBody) -> object:
+        """Grant one more Planner or Finalizer attempt past its exact exhausted retry attempt."""
+        answer = DeliveryAnswer(
+            change_id=change_id,
+            kind=DeliveryAnswerKind.GRANT_ATTEMPT,
+            expected_frontier_digest=body.expected_frontier_digest,
+            attempt_id=attempt_id,
+        )
+        return self._invoke(lambda: self._application.answer(answer, allow_user_only=True))
+
     def recover_claim(
         self,
         change_id: str,
@@ -619,6 +629,15 @@ def _register_outcome_controls(router: APIRouter) -> None:
         service: _TargetService,
     ) -> object:
         return service.grant_attempt(change_id, outcome_id, block_id, body)
+
+    @router.post("/changes/{change_id}/retry-attempts/{attempt_id}/grant")
+    def grant_retry_attempt(
+        change_id: str,
+        attempt_id: str,
+        body: GrantAttemptBody,
+        service: _TargetService,
+    ) -> object:
+        return service.grant_retry_attempt(change_id, attempt_id, body)
 
     @router.post("/changes/{change_id}/outcomes/{outcome_id}/claims/recover")
     def recover_claim(

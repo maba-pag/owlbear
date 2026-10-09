@@ -650,6 +650,7 @@ _EXPECTED: dict[str, tuple[str, WorkItemActionKind | None, bool, str | None, Del
     "merge-approval-required": ("waiting", None, False, None, "your-decision"),
     "merge-checking": ("waiting", None, False, None, "waiting-on-github"),
     "merge-blocked": ("blocked", None, False, None, "needs-attention"),
+    "target-commit-missing": ("blocked", None, False, None, "needs-attention"),
     "checks-running": ("waiting", None, False, None, "waiting-on-github"),
     "provider-unavailable": ("waiting", None, False, None, "waiting-on-github"),
     "merge-in-progress": ("waiting", None, False, None, "waiting-on-github"),
@@ -793,6 +794,66 @@ def test_pre_finalization_sync_prerequisite_is_required() -> None:
     publication = _publication(publication_phase=WorkItemPublicationPhase.READY_FOR_FINALIZATION)
     progress = derive_delivery_progress(readiness, publication, _FRONTIER)
     assert (progress.situation, progress.target_sync) == ("ready-for-next-step", "required")
+    assert progress.headline == (
+        "Run the prompt in Copilot Chat to merge the latest target into this Change; "
+        "a conflict stops there for you to resolve."
+    )
+
+
+@pytest.mark.parametrize(
+    ("paths", "where"),
+    [(("web/Page.tsx",), " in web/Page.tsx"), (("a.py", "b.py"), " in 2 files"), ((), "")],
+)
+def test_preserved_sync_conflict_names_its_resolution_route(paths: tuple[str, ...], where: str) -> None:
+    failed = _readiness("blocked", "engine-action-failed", next_actor=WorkItemNextActor.YOU)
+    publication = _publication(publication_phase=WorkItemPublicationPhase.READY_FOR_FINALIZATION)
+    progress = derive_delivery_progress(failed, publication, _FRONTIER, sync_conflict_paths=paths)
+    assert (progress.situation, progress.waiting_on, progress.target_sync) == (
+        "ready-for-next-step",
+        "you",
+        "unavailable",
+    )
+    assert progress.headline == (
+        f"Merging the latest target stopped on a conflict{where}; resolve it with /resolve-target-conflict."
+    )
+    unrelated = derive_delivery_progress(failed, publication, _FRONTIER)
+    assert unrelated.situation == "needs-attention"
+    assert unrelated.headline == "A Delivery step failed; inspect the Change."
+    outcome = derive_delivery_progress(failed, _outcome_card(), _FRONTIER, sync_conflict_paths=paths)
+    assert (outcome.headline, outcome.target_sync) == (progress.headline, None)
+    exhausted = _readiness("blocked", "retry-exhausted")
+    other = derive_delivery_progress(exhausted, _outcome_card(), _FRONTIER, sync_conflict_paths=paths)
+    assert other.situation == "needs-attention"
+
+
+def test_resync_after_abort_says_it_merges_the_same_target_again() -> None:
+    target = "a" * 40
+    readiness = _readiness("ready", "ready", operation=WorkItemActionKind.SYNC_TARGET, executable=True).model_copy(
+        update={"basis": DeliveryReadinessBasis(target_head=target)}
+    )
+    publication = _publication(publication_phase=WorkItemPublicationPhase.READY_FOR_FINALIZATION)
+    again = derive_delivery_progress(readiness, publication, _FRONTIER, aborted_sync_target=target)
+    assert (again.situation, again.target_sync) == ("ready-for-next-step", "required")
+    assert again.headline.startswith("You aborted merging this target;")
+    moved = derive_delivery_progress(readiness, publication, _FRONTIER, aborted_sync_target="b" * 40)
+    assert moved.headline.startswith("Run the prompt in Copilot Chat to merge the latest target")
+    waiting = derive_delivery_progress(readiness, publication, _FRONTIER, aborted_sync_target=target, at_capacity=True)
+    assert waiting.situation == "waiting-on-dependency"
+    backoff = readiness.model_copy(
+        update={
+            "status": "waiting",
+            "reason_code": "retry-backoff",
+            "executable": False,
+            "action": None,
+            "next_eligible_at": "2026-08-04T00:00:01Z",
+        }
+    )
+    later = derive_delivery_progress(backoff, publication, _FRONTIER, aborted_sync_target=target)
+    assert (later.situation, later.next_eligible_at) == ("ready-for-next-step", "2026-08-04T00:00:01Z")
+    assert later.headline == (
+        "You aborted merging this target; running the prompt once the retry time passes merges it again and "
+        "keeps any conflict for you to resolve."
+    )
 
 
 def test_merge_attempt_waits_on_github_since_release_and_holds_target_sync() -> None:

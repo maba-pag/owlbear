@@ -111,7 +111,12 @@ from owlbear_delivery.recovery import (
     RetryLedgerCorruptError,
     RetryStopCode,
 )
-from owlbear_delivery.runtime_receipts import builder_attempt_grant_block_id, is_builder_attempt_grant_block
+from owlbear_delivery.runtime_receipts import (
+    GRANTABLE_RETRY_ACTION_KINDS,
+    builder_attempt_grant_block_id,
+    is_builder_attempt_grant_block,
+    target_sync_commit,
+)
 from owlbear_delivery.runtime_transaction import (
     TransactionPathError,
     contained_directory,
@@ -154,6 +159,20 @@ if TYPE_CHECKING:
 # Cached in place of an observation so readiness and cache-only acquisition both see the outage (D8, I9).
 _PUBLICATION_READ_FAILED: Literal["provider-unavailable"] = "provider-unavailable"
 _PROVIDER_PUBLICATION_STEPS = frozenset({WorkItemActionKind.MARK_READY, WorkItemActionKind.OBSERVE_ACCEPTANCE})
+_CONFLICT_PROMPT_KEEPS = frozenset({"change-paused", "worker-stall-wait"})
+
+
+def _blockless_grant_attempt_id(episode: RetryEpisodeSummary) -> str | None:
+    """Planner and Finalizer episodes stop without a block; the user grants past their latest settled failure."""
+    latest = episode.attempt_ids[-1] if episode.attempt_ids else None
+    if (
+        latest is None
+        or episode.key.action_kind not in GRANTABLE_RETRY_ACTION_KINDS
+        or episode.failure_class is not RetryFailureClass.MECHANICAL
+        or not episode.settled_failure(latest)
+    ):
+        return None
+    return latest
 
 
 class _ReadinessViewsMixin:
@@ -868,17 +887,6 @@ class _ReadinessViewsMixin:
         held_finalizer = self._held_finalizer_view(snapshot.contract.change_id)
         if held_finalizer is not None:
             decisions = self._with_held_finalizer_prompt(snapshot, cards, decisions)
-        if (
-            workspace_reason == "engine-action-failed"
-            and self._retained_target_sync_conflict(snapshot.contract.change_id) is not None
-        ):
-            prompt = _target_sync_conflict_prompt(snapshot.contract.change_id)
-            decisions = tuple(
-                decision.model_copy(update={"prompt": prompt})
-                if decision.reason_code == "engine-action-failed"
-                else decision
-                for decision in decisions
-            )
         if settled_attention:
             # Settled Finalizer attention names /inspect-change in its card guidance instead.
             decisions = tuple(
@@ -890,8 +898,18 @@ class _ReadinessViewsMixin:
         pause_requested, pause_drained = self._pause_request_state(snapshot)
         if pause_requested:
             decisions = self._with_pause_request_readiness(snapshot, cards, decisions)
+        conflict_paths, aborted_target = self._target_sync_exit_evidence(snapshot.contract.change_id)
+        if conflict_paths is not None:
+            decisions = self._with_target_sync_conflict_prompt(snapshot, cards, decisions)
         decisions, card_guidance = self._with_progress(
-            snapshot, cards, decisions, readiness_guidance, pause_requested=pause_requested, pause_drained=pause_drained
+            snapshot,
+            cards,
+            decisions,
+            readiness_guidance,
+            pause_requested=pause_requested,
+            pause_drained=pause_drained,
+            sync_conflict_paths=conflict_paths,
+            aborted_sync_target=aborted_target,
         )
         return WorkItemProjector(
             snapshot,
@@ -974,6 +992,8 @@ class _ReadinessViewsMixin:
         *,
         pause_requested: bool = False,
         pause_drained: bool = False,
+        sync_conflict_paths: tuple[str, ...] | None = None,
+        aborted_sync_target: str | None = None,
     ) -> tuple[tuple[DeliveryReadiness, ...], tuple[str | None, ...]]:
         """Project progress from final readiness plus read-only issuer, occupancy and provider evidence."""
         at_capacity: bool | None = None
@@ -1007,10 +1027,42 @@ class _ReadinessViewsMixin:
                 merged_unrecorded=self._merged_unrecorded(snapshot, card),
                 dependency_id=dependency_id,
                 request=request,
+                sync_conflict_paths=sync_conflict_paths,
+                aborted_sync_target=aborted_sync_target,
             )
             updated.append(decision.model_copy(update={"progress": progress}))
             card_guidance.append(custody if custody is not None else guidance)
         return tuple(updated), tuple(card_guidance)
+
+    @staticmethod
+    def _with_target_sync_conflict_prompt(
+        snapshot: DeliveryPortfolioSnapshot,
+        cards: tuple[WorkItemCardView, ...],
+        decisions: tuple[DeliveryReadiness, ...],
+    ) -> tuple[DeliveryReadiness, ...]:
+        """A preserved target merge, engine-run or direct, has one exit route; held or paused steps keep theirs."""
+        prompt = _target_sync_conflict_prompt(snapshot.contract.change_id)
+        return tuple(
+            decision.model_copy(update={"prompt": prompt})
+            if decision.status not in {"running", "complete"}
+            and decision.reason_code not in _CONFLICT_PROMPT_KEEPS
+            and (card.scope is WorkItemScope.CHANGE_PUBLICATION or decision.reason_code == "engine-action-failed")
+            else decision
+            for card, decision in zip(cards, decisions, strict=True)
+        )
+
+    def _target_sync_exit_evidence(self, change_id: str) -> tuple[tuple[str, ...] | None, str | None]:
+        """Return the preserved target-merge conflict paths and the last aborted target head, read-only."""
+        try:
+            coordination = self._workspace_manager.show(change_id)
+        except OSError, RuntimeError, ValueError:
+            return None, None
+        conflict = coordination.target_sync_conflict
+        abort = coordination.target_sync_abort_receipt
+        return (
+            conflict.conflict_paths if conflict is not None else None,
+            abort.target_head if abort is not None else None,
+        )
 
     @staticmethod
     def _merged_unrecorded(snapshot: DeliveryPortfolioSnapshot, card: WorkItemCardView) -> bool:
@@ -1536,6 +1588,7 @@ class _ReadinessViewsMixin:
             grantable = (
                 handoff_attempt_id is not None and binding is not None and is_builder_attempt_grant_block(binding)
             )
+            grant_attempt_id = None if handoff_attempt_id is not None else _blockless_grant_attempt_id(episode)
             updates.update(
                 {
                     "status": "blocked",
@@ -1543,7 +1596,10 @@ class _ReadinessViewsMixin:
                     "operation": None,
                     "executable": False,
                     "action": None,
-                    "next_actor": WorkItemNextActor.YOU if grantable else WorkItemNextActor.AGENT,
+                    "next_actor": (
+                        WorkItemNextActor.YOU if grantable or grant_attempt_id is not None else WorkItemNextActor.AGENT
+                    ),
+                    "grant_attempt_id": grant_attempt_id,
                 }
             )
         elif episode.stop_code is RetryStopCode.ACCEPTANCE_WAIT:
@@ -1570,6 +1626,9 @@ class _ReadinessViewsMixin:
 
     @classmethod
     def _with_engine_action_prompt(cls, change_id: str, readiness: DeliveryReadiness) -> DeliveryReadiness:
+        if readiness.reason_code == "retry-exhausted" and readiness.next_actor is WorkItemNextActor.YOU:
+            # The user's attempt grant is the primary action; an inspect prompt would compete with it.
+            return readiness.model_copy(update={"prompt": None})
         prompt = cls._engine_action_prompt(
             change_id,
             readiness.reason_code,
@@ -1577,22 +1636,7 @@ class _ReadinessViewsMixin:
         )
         return readiness.model_copy(update={"prompt": prompt})
 
-    def _settled_attention_sync_reason(
-        self,
-        snapshot: DeliveryPortfolioSnapshot,
-        reason: str | None,
-    ) -> str | None:
-        if reason != "settled-attention-target-drift":
-            return reason
-        if (
-            not self._supports_finalization(snapshot.frontier)
-            or self._change_branch_publisher is None
-            or self._draft_pull_request_publisher is None
-        ):
-            return reason
-        return "target-sync-required"
-
-    def _capture_action_basis(  # noqa: C901 - one ordered row per workspace and target state.
+    def _capture_action_basis(  # noqa: C901, PLR0911 - one ordered row per workspace and target state.
         self,
         snapshot: DeliveryPortfolioSnapshot,
         cards: tuple[WorkItemCardView, ...],
@@ -1610,6 +1654,12 @@ class _ReadinessViewsMixin:
         if action is not None and action.finished_at is None:
             reason, guidance = self._continuation_journal_readiness(action)
             return basis, reason, guidance
+        required = next(
+            (commit for binding in snapshot.frontier.bindings if (commit := target_sync_commit(binding)) is not None),
+            None,
+        )
+        if required is not None and not self._snapshot_has_active_claims(snapshot):
+            return (*self._target_sync_basis(basis, coordination, required), None)
         needs_workspace = self._supports_finalization(snapshot.frontier) or any(
             card.action.kind
             in {
@@ -1622,7 +1672,6 @@ class _ReadinessViewsMixin:
         )
         if needs_workspace and not self._snapshot_has_active_claims(snapshot):
             basis, reason = self._capture_readiness_workspace(snapshot, basis)
-            reason = self._settled_attention_sync_reason(snapshot, reason)
             sync = snapshot.frontier.target_sync_receipt
             pending = snapshot.frontier.pending_checkpoint
             if (
@@ -1632,7 +1681,8 @@ class _ReadinessViewsMixin:
             ):
                 if pending is not None and pending.head is not None and snapshot.frontier.published_head is None:
                     reason = "checkpoint-pending"
-                elif sync is None or sync.target_head != basis.target_head:
+                elif sync is None:
+                    # Finalization proves against the recorded target sync; a later target move needs no sync (D2).
                     reason = "target-sync-required"
             elif reason is None and merge is not None and merge.reason == "target-sync-required":
                 # U3(a): a finalized Change syncs to the provider's target head, not the unfetched local ref.
@@ -1835,9 +1885,28 @@ class _ReadinessViewsMixin:
             or report.request.expected_frontier_digest != attempt.frontier_digest
         ):
             return "finalization-failed"
-        if attempt.target_head != basis.target_head:
-            return "settled-attention-target-drift"
+        # A target-only move since the failed attempt does not stop its retry (D2).
         return workspace_reason if workspace_reason not in {None, "active-custody"} else None
+
+    def _target_sync_basis(
+        self, basis: DeliveryReadinessBasis, coordination: ChangeCoordination, required: str
+    ) -> tuple[DeliveryReadinessBasis, str]:
+        """Bind a Builder's required target commit to the reviewed and target heads a sync would merge (N13).
+
+        A commit the observed target lacks is missing once that target was merged or the commit is known locally;
+        otherwise the sync's own fetch may still bring it.
+        """
+        try:
+            target = self._workspace_manager.observed_target_head()
+            available = self._workspace_manager.includes_commit(required, target)
+            if not available and not self._workspace_manager.has_commit(required):
+                synced = coordination.target_sync_receipt
+                available = synced is None or synced.target_head != target
+        except OSError, RuntimeError, subprocess.SubprocessError, ValueError:
+            return basis, "workspace-inspection-failed"
+        reviewed = coordination.last_reviewed_commit
+        basis = basis.model_copy(update={"reviewed_head": reviewed, "candidate_head": reviewed, "target_head": target})
+        return basis, "target-sync-required" if available else "target-commit-missing"
 
     def _capture_readiness_workspace(
         self,
@@ -2135,6 +2204,8 @@ class _ReadinessViewsMixin:
             next_actor=(
                 WorkItemNextActor.NONE
                 if reason == "provider-unavailable"
+                else WorkItemNextActor.YOU
+                if reason == "target-commit-missing"
                 else WorkItemNextActor.AGENT
                 if finalization
                 else card.next_actor

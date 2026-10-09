@@ -12,30 +12,58 @@ reviewer comments may be correct, incorrect, stale, duplicated, or outside the C
 The workflow owns repair work only. It does not add external review to Delivery's internal review
 receipts or replace the finalization review.
 
-The prompt accepts `mode=start` or `mode=resume`; omitted mode means `start`. `start` owns thread
-binding, triage, preparation, and repair commits. `resume` is entered only after fresh finalization
-and owns checkpoint publication, exact-head verification, thread replies, and thread resolution.
-Never run preparation again in `resume` mode.
+The prompt accepts an optional `mode=start` or `mode=resume`; mode is an assertion, not a phase
+selector. When omitted, Step 0 derives `start-reentry`, `start`, or `resume` from current Delivery
+and PR evidence. `start-reentry` is a `start` run while Delivery is already in `review-repair`; it
+replays preparation and reuses compatible mapped commits. First-entry `start` owns triage,
+preparation, and repair commits. `resume` handles replies and resolution after fresh finalization.
+Never run preparation in `resume` or in a first-entry `start` that needs no repair.
 
-## Step 0 - Route The Requested Mode
+## Step 0 - Derive The Phase Before Mutation
 
-Validate the supplied mode before any mutation. Reject any value other than `start` or `resume`.
-Both modes bind the same native `change_id`, managed branch, and one open unmerged pull request.
+Gather read-only Delivery and PR identity in Step 1 before any mutation. For finalized phases,
+gather the trailer-map and comment evidence needed to derive the route. When the publication phase
+is `review-repair`, derive `start-reentry` from that authority alone and defer comment and trailer
+reads until `prepare_review_repair` succeeds in Step 2. Do not let the optional prompt input select
+the phase.
 
-For `start`, continue through Steps 1-5. For `resume`, skip preparation, triage, repair, and handoff
-entirely and continue directly to Step 6 after rebinding current provider and Delivery identities. A stale
-resume request cannot silently restart repair.
+| Current authoritative state | Derived phase |
+| --- | --- |
+| Publication phase is `review-repair` | `start-reentry` |
+| A current finalization exists, has no review-repair invalidation, and its `finalized_head` equals the Change head; at least one unresolved bound-PR thread mapped by a trailer reachable from that head is awaiting | `resume` |
+| The same valid finalization conditions hold, but no unresolved mapped thread is awaiting | `start` |
+| Every other state | `authority-gap: change-not-finalized` |
+
+An unresolved bound-PR thread is `awaiting` when it is mapped by a `Review-Thread` trailer
+reachable from the exact finalized head and has no viewer-authored marker reply for its newest
+mapped commit, or has a settled marker reply for it. A mapped thread is `reopened` when every
+viewer-authored marker reply for its newest mapped commit is unsettled; reopened threads do not
+select `resume` by themselves. If another awaiting mapped thread selects `resume`, reopened threads
+are re-evaluated in its Resume Order; when no awaiting thread selects `resume`, they are triaged in
+`start`.
+
+If `mode` is omitted, use the derived phase (`start-reentry` accepts `start`). If it is supplied,
+accept only `start` or `resume` and require it to match the derived phase. Refuse any other value or
+mismatch before mutation, identify the derived phase, and report the mode-free command
+`/address-pr-feedback <change-id>` so the user can rerun against current state.
+
+For either derived finalized phase (`start` or `resume`), after the mode assertion and before
+triaging, replying, or resolving any thread, call Delivery `reconcile_change_checkpoint`. Continue
+only when it reports publication and the bound PR head exactly equals `finalized_head`. If
+reconciliation does not publish or the PR head differs, stop with the exact Delivery/provider
+error, leave threads untouched, and report `/address-pr-feedback <change-id>`. `start-reentry` is
+not finalized and follows its preparation gate in Step 2 instead.
 
 ## Step 1 - Bind The Change And Pull Request
 
 Require one native Delivery `change_id` from the prompt. Use the Delivery MCP surface for Change
-authority and the `gh` CLI for GitHub review data. Do not use a GitHub MCP server for this workflow.
+authority and the `gh` CLI for GitHub review data. This step is read-only; do not prepare, reconcile,
+post, resolve, edit, or otherwise mutate while deriving the phase. Do not use a GitHub MCP server.
 
 1. Call `list_work_items` and require the requested Change publication item to be present.
-2. Call `show_finalization_context` and retain the exact branch, managed worktree, finalized head,
-   reviewed head, and publication phase. Continue only for a finalized PR. If the PR is still in
-   an earlier draft checkpoint, report `authority-gap: change-not-finalized` without replying,
-   resetting, or editing; external review repair is not supported before finalization.
+2. Call `show_finalization_context` and retain the exact Change head, managed branch and worktree,
+   reviewed head, `finalized_head`, finalization ID, publication phase, and any active
+   review-repair invalidation. Do not infer a current finalization from a prior invocation.
 3. Require `gh auth status` to succeed. Read `github_repository` from the tracked Delivery
    configuration and find the open pull request for the exact managed branch:
 
@@ -45,23 +73,36 @@ authority and the `gh` CLI for GitHub review data. Do not use a GitHub MCP serve
    ```
 
    Require exactly one open pull request, the expected repository, managed branch, target branch,
-   and current head identity. A closed or merged pull request, missing PR, multiple matches, or
-   head mismatch is a bounded stop; do not repair it through another branch or PR.
-4. Read unresolved inline review threads with `gh api graphql --paginate --slurp`. Use a query that
-   includes `reviewThreads(first: 100, after: $endCursor)`, each thread's `id`, `isResolved`,
-   `isOutdated`, location, and its comments' `id`, `url`, `body`, author, and creation time. Save
-   large raw responses only under `.owlbear/scratch/` and remove temporary files before closure.
+   and retain its observed head. A closed or merged pull request, missing PR, multiple matches, or
+   repository/branch/target mismatch is a bounded stop; do not repair it through another branch or
+   PR. For finalized phases, do not reject a stale PR head before Step 0's
+   `reconcile_change_checkpoint`; require exact equality with `finalized_head` only afterward.
+   In `review-repair`, `prepare_review_repair` validates the expected head before thread inspection.
+For a finalized phase, continue with the comment and trailer reads below to derive `resume` or
+first-entry `start`. For `review-repair`, stop after binding the exact PR here; defer viewer,
+comment, and trailer reads until `prepare_review_repair` succeeds in Step 2.
+4. Read the authenticated viewer login with `gh api user --jq .login`. Read review threads with
+   `gh api graphql --paginate --slurp`. Include `reviewThreads(first: 100, after: $endCursor)`, each
+   thread's `id`, `isResolved`, `isOutdated`, location, and the comments' `id`, `url`, `body`,
+   `author.login`, and `createdAt`. Read every page of each thread's comments; when a thread's
+   `comments` page has `hasNextPage`, fetch subsequent pages by its `endCursor` before deriving
+   marker state or triaging it. Save large raw responses only under `.owlbear/scratch/` and remove
+   temporary files before closure.
 
-   A minimal paginated query is:
+   The initial thread-page query is:
 
    ```text
-   review_query='query($owner:String!, $name:String!, $number:Int!, $endCursor:String) { repository(owner:$owner, name:$name) { pullRequest(number:$number) { reviewThreads(first:100, after:$endCursor) { nodes { id isResolved isOutdated path line startLine comments(first:100) { nodes { id url body createdAt author { login } } } } pageInfo { hasNextPage endCursor } } } } }'
+   review_query='query($owner:String!, $name:String!, $number:Int!, $endCursor:String) { repository(owner:$owner, name:$name) { pullRequest(number:$number) { reviewThreads(first:100, after:$endCursor) { nodes { id isResolved isOutdated path line startLine comments(first:100) { nodes { id url body createdAt author { login } } pageInfo { hasNextPage endCursor } } } pageInfo { hasNextPage endCursor } } } } }'
    gh api graphql --paginate --slurp -f query="$review_query" -f owner="$owner" -f name="$repo_name" -F number="$pr_number"
    ```
 
-   Keep only unresolved threads for normal work. Outdated threads still require a deliberate
-   classification, but do not automatically receive a code repair. `gh api graphql` is read-only
-   for this query; it does not alter the PR.
+   Keep only unresolved threads bound to this exact PR. Outdated threads still require a deliberate
+   classification, but do not automatically receive a code repair. Read the trailer map using the
+   single command in Step 6 at `finalized_head` for a finalized phase. In `start-reentry`, Step 2
+   reads it from the managed worktree's `HEAD` only after preparation and custody checks succeed.
+   Keep only trailer IDs matching review-thread IDs from this bound pull request. `git log` lists
+   newest commits first; when a thread appears in multiple commits, use its first (newest) full SHA.
+   These GitHub and Git reads do not alter the PR.
 
 Treat one unresolved review thread as one review comment unit. Multiple messages in one thread are
 one unit. General issue comments without a resolvable review thread are context only and are not
@@ -73,11 +114,33 @@ publication.
 
 ## Step 2 - Critically Triage Every Thread
 
-Run this step only in `start` mode.
+Run this step only for a derived `start` or `start-reentry` phase.
+
+### Start Re-entry
+
+For `start-reentry`, call Delivery `prepare_review_repair` first, before worktree inspection,
+trailer mapping, or thread triage. It must replay against the same bound PR and expected head. Stop
+on any refusal or identity mismatch; do not inspect threads for repair, edit, reply, or resolve.
+After it succeeds, re-read `show_finalization_context` and direct Git state. Require the exact
+managed branch and worktree, no current finalization, a clean worktree, and `HEAD` descending from
+the recorded reviewed head. Read the trailer map at this worktree `HEAD` with the Step 6 command
+after these custody checks and before triage. Then read every page of each bound thread's comments
+with `author.login` and `createdAt`; only then classify threads.
+
+For each unresolved bound-PR thread, keep an existing mapped, non-reopened thread classified as
+`fix` with its recorded commit and create no new commit for it. Re-triage every reopened thread and
+every thread without a mapped commit under the rules below. This preserves compatible interrupted
+repair work without repairing an already-mapped thread again.
+
+### First-Entry Start
+
+For first-entry `start`, the finalized publication fence in Step 0 has already reconciled the
+checkpoint and verified the PR head. Triage only after that fence succeeds.
 
 Before changing code, inspect the current managed Change worktree, the exact Change context, the
-reviewed diff, relevant requirements, and focused tests. For each unresolved non-outdated thread,
-write a bounded internal record containing:
+Before changing code, inspect the current managed Change worktree, the exact Change context, the
+reviewed diff, relevant requirements, and focused tests. For each unresolved non-outdated thread
+that is not retained by the re-entry rule, write a bounded internal record containing:
 
 - thread identity and reviewer claim;
 - the reviewer's problem statement and assumptions;
@@ -98,19 +161,22 @@ Use these routes:
 | Classification | Route |
 | --- | --- |
 | `fix` | Implement one bounded repair commit for this thread. |
-| `no-change` | Record the evidence and defer the reply and resolution until the repaired head is published. |
-| `duplicate` | Record the existing fix or thread reference; do not create an empty second commit, and defer the reply and resolution until publication. |
-| `stale` | Record the current evidence and defer any reply and resolution until publication if the thread remains actionable. |
+| `no-change` | Record the evidence; use the no-fix start path after the finalized head is verified. |
+| `duplicate` | Record the existing fix or thread reference; include this thread's trailer on the shared repair commit when known before commit creation. |
+| `stale` | Record the current evidence and reply only after the publication fence. |
 | `needs-user-decision` | Ask exactly one user question, leave the thread unresolved, and stop. |
 | `authority-gap` | Stop without editing; identify the missing Design, Planning, Delivery, or provider authority. |
 
-If there are no unresolved actionable threads, report `no-actionable-feedback` and do not reset the
-PR or create commits. Never turn a style preference or unsupported concern into implementation
-work without a concrete behavior or authority boundary.
+If there are no unresolved threads to triage, report `no-actionable-feedback` and do not prepare,
+reset the PR, or create commits. If triage finds no new repair commit is needed, use the no-fix
+first-entry path in Step 6; do not call `prepare_review_repair`. Never turn a style preference or
+unsupported concern into implementation work without a concrete behavior or authority boundary.
 
 ## Step 3 - Prepare The Provider And Delivery State
 
-Run this step only in `start` mode.
+Run this step only for first-entry `start` when at least one accepted `fix` needs a new repair
+commit. `start-reentry` already replayed preparation before triage in Step 2. Neither `resume` nor a
+no-fix first-entry `start` calls `prepare_review_repair`.
 
 When at least one `fix` classification is ready to implement, call the Delivery MCP operation
 `prepare_review_repair` before the first edit. It verifies the exact open, unmerged PR, returns a
@@ -149,10 +215,14 @@ Process `fix` threads in a stable order. For each thread:
    thread; repair or stop with the failure evidence.
 4. Create exactly one commit for this thread using explicit owned paths and the scoped mechanics in
    `r-workspace-governance`. Do not amend, squash, rebase, or combine this commit with another
-   actionable thread. Use a message that identifies the bounded review repair, for example:
+   actionable thread. The message passed to `commit-owned` must end with one `Review-Thread:
+   <thread node ID>` trailer line per thread addressed by this commit. Use a message that identifies
+   the bounded repair, for example:
 
    ```text
    fix: address PR feedback <short-slug> (<change-id>, address-pr-feedback)
+
+   Review-Thread: <thread node ID>
    ```
 
 5. Record the full commit SHA and proof result in the thread record before moving to the next
@@ -160,8 +230,8 @@ Process `fix` threads in a stable order. For each thread:
 
 One commit per thread means one commit per independent review conversation that warrants a code
 change. If two threads are demonstrably duplicates of the same defect, keep one repair commit,
-classify the second as `duplicate`, and reference the first commit in its reply rather than making
-an empty or duplicate commit.
+include one trailer for each thread on that same repair commit, classify the second as `duplicate`,
+and reference the first commit in its reply rather than making an empty or duplicate commit.
 
 A clean commit does not by itself authorize publication or acceptance. The repaired branch remains
 unpublished until the normal finalization and checkpoint publication steps.
@@ -170,7 +240,7 @@ unpublished until the normal finalization and checkpoint publication steps.
 
 Run this step only in `start` mode.
 
-After all eligible repairs:
+After all eligible repairs, including a `start-reentry` that retained mapped commits:
 
 1. Re-read the PR threads and current Delivery context. Require every repaired thread to have a
    recorded commit. Do not resolve repaired threads yet.
@@ -185,69 +255,125 @@ After all eligible repairs:
    ```
 
 The first invocation stops here. It must not reply to or resolve a thread before the repaired head
-is finalized and published.
+This repair path stops here. It must not reply to or resolve a thread before the repaired head is
+finalized and published. A `start-reentry` with retained mapped commits also hands off here even if
+this invocation created no new commit. Report `/finalize-change <change-id>`.
 
 ## Step 6 - Publish Then Reply And Resolve Threads
 
-Run this step only in `resume` mode. Do not call `prepare_review_repair` or any repair-edit route here.
+Use this step only for `resume`, or for a first-entry `start` whose triage created no repair commit.
+Never use it after a repair or during `start-reentry`. The only trailer read-back command for this
+workflow is:
 
-Resume `/address-pr-feedback <change-id> mode=resume` after `/finalize-change` succeeds. On that
-resumed invocation:
+```text
+git -C <worktree> log --format='%H%x09%(trailers:key=Review-Thread,valueonly,separator=%x2C)' <head>
+```
 
-1. Re-bind the exact open, unmerged pull request and re-read the unresolved review threads.
-2. Require `show_finalization_context` to report a fresh finalization ID at the new exact managed
-   head and no active review-repair invalidation. Call Delivery `reconcile_change_checkpoint` to
-   publish the new Change head and update the existing PR. Verify the repaired commit is the current
-   PR head before changing any thread.
-3. Use `gh api graphql` mutations, never a GitHub MCP server, to reply to each eligible thread.
-   For a repaired thread, include the full commit SHA and URL when available, the accepted problem
-   and fix, and the focused proof that passed. For `no-change`, `duplicate`, or `stale`, include
-   the recorded evidence and decision. Keep the reply on the original thread.
+It reads all reachable commits without a target-branch range and emits full commit SHAs plus their
+comma-separated `Review-Thread` values. Keep only trailer IDs matching review-thread IDs from this
+bound pull request. `git log` lists newest commits first; when a thread appears in multiple commits,
+use its first (newest) full SHA. Step 0 uses this same read-back to derive the phase; `start-reentry`
+uses the managed worktree's `HEAD`, while finalized phases use the exact `finalized_head`.
 
-   Pass the reply as a GraphQL variable so review text is not interpolated into the query:
+### Resume Order
 
-   ```text
-   reply_query='mutation($threadId:ID!, $body:String!) { addPullRequestReviewThreadReply(input: {pullRequestReviewThreadId: $threadId, body: $body}) { comment { id url } } }'
-   gh api graphql -f query="$reply_query" -f threadId="$thread_id" -f body="$reply_body"
-   ```
+1. Require a current finalization with no review-repair invalidation and `finalized_head` equal to
+   the Change head. Call Delivery `reconcile_change_checkpoint` before thread triage or mutation.
+   Require publication to succeed and the bound PR head to equal the finalized head; otherwise
+   stop with the exact error and `/address-pr-feedback <change-id>`.
+2. Read the trailer map at that exact finalized head.
+3. Re-evaluate every unresolved bound-PR thread that is unmapped or reopened using Step 2's
+   classification criteria. Do not prepare review repair or edit during `resume`. Any thread judged
+   `fix` stays unresolved and unreplied; report `next_command: /address-pr-feedback <change-id>`.
+   Retain the classification and evidence for every non-fix thread for the reply step.
+4. Run the shared reply and resolve procedure for all awaiting mapped threads and all re-evaluated
+   non-fix threads. A re-evaluated thread uses its current key: newest mapped repair commit when
+   mapped, or the verified PR head with `commit=none` when unmapped. Resolve only after its settled
+   current-key viewer marker is observed.
 
-4. Only after the reply succeeds, resolve that same thread and verify the returned thread has
-   `isResolved: true`:
+### No-Fix First-Entry Start
 
-   ```text
-   resolve_query='mutation($threadId:ID!) { resolveReviewThread(input: {threadId: $threadId}) { thread { id isResolved } } }'
-   gh api graphql -f query="$resolve_query" -f threadId="$thread_id"
-   ```
+After triage, when no new repair commit was created, retain the current finalization. Step 0 has
+already reconciled the checkpoint and verified that the PR head equals `finalized_head`. Do not call
+`prepare_review_repair`; use the shared procedure for triaged `no-change`, `duplicate`, or `stale`
+threads and report `next_command: none` when all eligible replies and resolutions are complete. If
+triage creates any repair commit, or the derived phase was `start-reentry`, hand off to
+`/finalize-change <change-id>` without replying or resolving.
 
-   If either mutation fails, leave the thread unresolved, retain the repair commit, report the exact
-   GitHub error, and do not claim the conversation was closed. Do not post a new top-level PR
-   comment when a thread reply is available.
+### Shared Reply And Resolve Procedure
 
-5. Leave the PR draft and do not merge it. The user owns the ready-state decision and GitHub merge;
-   Delivery records the user-owned merge later through `observe_acceptance`.
+Use `gh api graphql` mutations, never a GitHub MCP server. Keep replies on the original thread and
+pass the body as a GraphQL variable. Include the accepted problem, decision, focused proof, and full
+repair commit SHA and URL when available. Append this exact hidden marker to every reply body:
+
+`<!-- owlbear-pr-feedback thread=<thread-id> head=<head-sha> commit=<repair-sha-or-none> -->`
+
+For a mapped thread the current key is its newest mapped repair commit; for an unmapped thread the
+current key is the verified PR head with `commit=none`. The marker's `thread` must be the bound
+thread ID. Obtain the viewer login with `gh api user --jq .login`. A viewer-authored marker reply is
+settled only when no comment by another author follows it in `createdAt` order. An unsettled marker
+never counts as posted.
+
+Before every post, after any uncertain response, and before resolving, read all pages of that
+thread's comments with `author.login` and `createdAt`. Accept only a settled viewer-authored marker
+for the thread's current key. If one is already settled, never post another reply; record
+`already-posted`. Otherwise post once with a GraphQL variable:
+
+```text
+reply_query='mutation($threadId:ID!, $body:String!) { addPullRequestReviewThreadReply(input: {pullRequestReviewThreadId: $threadId, body: $body}) { comment { id url } } }'
+gh api graphql -f query="$reply_query" -f threadId="$thread_id" -f body="$reply_body"
+```
+
+If the response is uncertain, immediately reread all comment pages. If a settled current-key marker
+is visible, treat the reply as posted and continue to the resolve preflight. Without one, leave the
+thread unresolved, report the exact provider error as `reply-uncertain` (`reply_state: uncertain`),
+and do not retry or resolve in this run. On an explicit reply failure, leave it unresolved, report the exact
+provider error with `reply_state: failed`, and do not resolve.
+
+Resolve only after a fresh all-page comment read shows a settled viewer-authored marker reply for
+the current key. Resolve that same thread and require the result to show `isResolved: true`:
+
+```text
+resolve_query='mutation($threadId:ID!) { resolveReviewThread(input: {threadId: $threadId}) { thread { id isResolved } } }'
+gh api graphql -f query="$resolve_query" -f threadId="$thread_id"
+```
+
+If the marker is absent or unsettled, or the resolve mutation fails or does not return
+`isResolved: true`, leave the thread unresolved, retain its repair commit, report the exact provider
+error when present, and do not claim closure. Reply always precedes resolve. Do not post a new
+top-level PR comment when a thread reply is available. Leave the PR draft; never mark it ready or
+merge it. The user owns the ready-state decision and GitHub merge; Delivery records the user-owned
+merge later through `observe_acceptance`.
 
 The workflow may finish immediately when no code repair was needed. A repair run stops for
-finalization and is resumed only after the user invokes this prompt again with `mode=resume`. It
-must not mark the PR ready, merge the PR, or claim completion.
+finalization; the user invokes `/address-pr-feedback <change-id>` again after `/finalize-change`
+succeeds. The next command never carries a `mode` argument.
 
 ## Output Template
 
 Return a concise report in this shape:
 
 ```yaml
-kind: addressed-pr-feedback | no-actionable-feedback | blocked
+kind: "addressed-pr-feedback | no-actionable-feedback | blocked"
 change_id: <native Change ID>
+phase: "start-reentry | start | resume"
 pull_request: <repository>#<number>
-pr_state_before: draft | ready | unknown
+pr_state_before: "draft | ready | unknown"
 prepared_for_repair: true | false
 threads:
-  - thread_id: <GitHub thread node ID>
-    classification: fix | no-change | duplicate | stale | needs-user-decision | authority-gap
-    commit: <full SHA or null>
-    response_posted: true | false
-    resolved: true | false
-    proof: <bounded proof or reason>
-next_command: /finalize-change <change-id> | /address-pr-feedback <change-id> mode=resume | none
+threads: [
+   {
+      thread_id: "<GitHub thread node ID>",
+      classification: "fix | no-change | duplicate | stale | needs-user-decision | authority-gap",
+      commit: "<full SHA or null>",
+      mapped_commit_source: "trailer | new | none",
+      reopened: "true | false",
+      reply_state: "posted | already-posted | uncertain | failed | not-attempted",
+      resolved: "true | false",
+      proof: "<bounded proof or reason>"
+   }
+]
+next_command: "/finalize-change <change-id> | /address-pr-feedback <change-id> | none"
 remaining_blocker: <non-empty reason or none>
 ```
 

@@ -349,6 +349,7 @@ class _AcquisitionMixin:
                     readiness=unavailable,
                 )
             self._settle_stalled_workers((request.change_id,), checkpoint_locked=True)
+            self._prepare_target_sync(request.change_id, runtime)
         replay = self._replay_continuation_action(request, observed)
         if replay is not None:
             return replay
@@ -902,7 +903,8 @@ class _AcquisitionMixin:
             reports,
             receipt,
         )
-        return reason == "settled-attention-target-drift"
+        # A retained, still-valid attention may sync while its retry waits; its target no longer has to have moved.
+        return reason is None
 
     def _engine_action_preflight(
         self, action: ChangeContinuationAction, runtime: DeliveryRuntime
