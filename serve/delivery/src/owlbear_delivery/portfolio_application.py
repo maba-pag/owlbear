@@ -988,8 +988,9 @@ class PortfolioApplication(
             attention = coordination.finalization_attention
             if attention is None or not self._settled_revision_attention(change_id, coordination):
                 return
+            paused_frontier = runtime.frontier_bytes()
             self._require_revision_allowed(change_id, runtime, activation=False, allow_finalization_attention=True)
-            self._coordinator.release_finalization_attention(change_id, attention, lock)
+            self._coordinator.release_finalization_attention(change_id, attention, paused_frontier, lock)
 
     def _require_revision_allowed(
         self,

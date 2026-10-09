@@ -8652,6 +8652,22 @@ def test_unpaused_revision_keeps_settled_finalizer_attention(tmp_path: Path) -> 
     assert application.read_design_session("change-a") == current
 
 
+def test_finalizer_attention_release_refuses_a_frontier_changed_after_its_guard(tmp_path: Path) -> None:
+    application, coordinator, state_root, _attempt = _settled_finalizer_attention(tmp_path)
+    paused_frontier = (state_root / "changes" / "change-a" / "frontier.json").read_bytes()
+    _change_intent(application, "change-a", DeliveryChangeIntentKind.DEFER, reason="Revise after review findings")
+    retained = coordinator.show("change-a")
+    assert retained.finalization_attention is not None
+
+    with (
+        coordinator.publication_lock("change-a") as lock,
+        pytest.raises(CoordinationConflictError, match="exact clean, settled Finalizer attention"),
+    ):
+        coordinator.release_finalization_attention("change-a", retained.finalization_attention, paused_frontier, lock)
+
+    assert coordinator.show("change-a") == retained
+
+
 def test_revision_keeps_finalizer_attention_without_its_settlement_receipt(tmp_path: Path) -> None:
     application, coordinator, state_root, attempt = _settled_finalizer_attention(tmp_path)
     current = application.read_design_session("change-a")
