@@ -35,6 +35,8 @@ from owlbear_delivery import (
     DeliveryChangeIntent,
     DeliveryChangeIntentKind,
     DeliveryChangeStage,
+    DeliveryCheckpointTrigger,
+    DeliveryCheckpointTriggerKind,
     DeliveryCommandResult,
     DeliveryCommitment,
     DeliveryCommitmentClass,
@@ -51,6 +53,7 @@ from owlbear_delivery import (
     DeliveryObservation,
     DeliveryObservationReceipt,
     DeliveryOutcome,
+    DeliveryPendingCheckpoint,
     DeliveryPlanCandidate,
     DeliveryPlanningRetrySettlement,
     DeliveryPlanScope,
@@ -1388,6 +1391,43 @@ def test_loader_accepts_claim_successor_with_published_plan_candidate() -> None:
     )
 
     assert _is_unpublished_claim_successor(snapshot_frontier, local_frontier)
+
+
+@pytest.mark.parametrize(
+    ("checkpoint_head", "local_published_head", "accepted"),
+    [
+        ("1" * 40, "1" * 40, True),
+        ("2" * 40, "1" * 40, False),
+        ("2" * 40, "2" * 40, False),
+    ],
+)
+def test_loader_claim_successor_accepts_only_an_unpublished_checkpoint_at_the_published_head(
+    checkpoint_head: str, local_published_head: str, *, accepted: bool
+) -> None:
+    snapshot_frontier = DeliveryFrontier(
+        bindings=(OutcomeAuthorityBinding(outcome_id="OUT-001", plan_scope_id="SCOPE-001"),),
+        published_head="1" * 40,
+    )
+    claim = DeliveryActiveClaim(
+        attempt_id="attempt",
+        claim_id="claim",
+        owner_id="owner",
+        process_id="process",
+        started_at="2026-08-23T00:00:00Z",
+        worker_role=DeliveryWorkerRole.BUILDER,
+    )
+    local_frontier = snapshot_frontier.model_copy(
+        update={
+            "bindings": (snapshot_frontier.bindings[0].model_copy(update={"active_claim": claim}),),
+            "published_head": local_published_head,
+            "pending_checkpoint": DeliveryPendingCheckpoint(
+                head=checkpoint_head,
+                triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.VERIFIED_TASK),),
+            ),
+        }
+    )
+
+    assert _is_unpublished_claim_successor(snapshot_frontier, local_frontier) is accepted
 
 
 @pytest.mark.parametrize(
