@@ -460,6 +460,43 @@ async def test_http_refresh_search_source_has_identity_without_capture_provenanc
 
 
 @pytest.mark.asyncio
+async def test_search_source_redacts_unbound_inline_metadata_url(tmp_path: Path) -> None:
+    tool_context, app_context = _assembled_context(tmp_path / "inline-search")
+    try:
+        raw_canonical_url = "https://user:pass@fixture.example/a?token=secret&view=full"
+        ingestion = await server.knowledge_ingest(
+            tool_context,
+            text="inline metadata provenance search",
+            metadata={
+                "canonical_url": raw_canonical_url,
+                "fetched_at": "2026-10-09T00:00:00Z",
+                "content_hash": "c" * 64,
+            },
+            scope="inline-search",
+        )
+        assert isinstance(ingestion, dict)
+        document = app_context.content_store.get_document(ingestion["document_ids"][0])
+        assert document is not None
+        assert document.metadata["canonical_url"] == raw_canonical_url
+
+        search_results = await server.knowledge_search(
+            tool_context,
+            query="inline metadata provenance",
+            scopes=["inline-search"],
+            limit=10,
+        )
+        assert isinstance(search_results, list)
+        result = next(item for item in search_results if "inline metadata provenance search" in item["snippet"])
+        search_provenance = result["source"]["provenance"]
+        assert search_provenance is not None
+        assert search_provenance["canonical_url"] == "https://fixture.example/a?view=full"
+        assert "pass" not in str(search_provenance)
+        assert "secret" not in str(search_provenance)
+    finally:
+        app_context.conn.close()
+
+
+@pytest.mark.asyncio
 async def test_inline_ingest_has_content_identity_and_redacted_persistence_failures(tmp_path: Path) -> None:
     tool_context, app_context = _assembled_context(tmp_path / "inline")
     try:

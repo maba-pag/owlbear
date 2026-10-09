@@ -283,7 +283,7 @@ def _serialize_source(
     if document_metadata is not None:
         canonical_url = document_metadata.get("canonical_url")
         if isinstance(canonical_url, str):
-            provenance = {"canonical_url": canonical_url}
+            provenance = {"canonical_url": _redact_capture_url(canonical_url)}
             fetched_at = document_metadata.get("fetched_at")
             if isinstance(fetched_at, str):
                 provenance["fetched_at"] = fetched_at
