@@ -930,7 +930,12 @@ def _frontier_claims(delivery: Path, change: Path, custody: _Custody) -> list[tu
         custody.block("custody-unknown", _locator(delivery, path), "the frontier could not be classified")
         return []
     if frontier.get("pending_checkpoint"):
-        custody.block("pending-checkpoint", _locator(delivery, path), "a checkpoint publication is pending")
+        target_sync = frontier.get("target_sync_receipt") or {}
+        if target_sync.get("review_required") and not frontier.get("finalization"):
+            # No supervisor drains it before a fresh finalization, so blocking would never clear.
+            custody.note("checkpoint-awaits-review", _locator(delivery, path), "a checkpoint awaits finalization")
+        else:
+            custody.block("pending-checkpoint", _locator(delivery, path), "a checkpoint publication is pending")
     return claims
 
 
