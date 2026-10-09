@@ -9,6 +9,7 @@ import {
   PTag,
 } from "@porsche-design-system/components-react";
 import { type ReactNode, useEffect, useState } from "react";
+import { useLocation } from "react-router";
 import {
   type BackwardMovePreview,
   type DeliveryConfirmationScope,
@@ -45,6 +46,7 @@ import {
   isContinuationPrompt,
   MERGE_BLOCK_LABELS,
   NEXT_ACTOR_LABELS,
+  OPEN_REQUEST_ANCHOR,
   PROGRESS_STAGE_LABELS,
   progressLabel,
   progressTone,
@@ -65,6 +67,33 @@ type FieldValueEvent = {
 function fieldValue(event: FieldValueEvent): string {
   const value = event.detail?.value ?? event.target?.value;
   return typeof value === "string" ? value : "";
+}
+
+const FULL_COMMIT = /\b[0-9a-f]{40}\b/g;
+
+/** Engine prose with each full commit shortened to 12 characters; the full value stays in the title. */
+export function CommitText({ text }: { text: string }) {
+  const parts: ReactNode[] = [];
+  let last = 0;
+  for (const match of text.matchAll(FULL_COMMIT)) {
+    const start = match.index ?? 0;
+    if (start > last) parts.push(text.slice(last, start));
+    parts.push(
+      <code key={start} title={match[0]}>
+        {match[0].slice(0, 12)}
+      </code>,
+    );
+    last = start + match[0].length;
+  }
+  if (last === 0) return text;
+  parts.push(text.slice(last));
+  return <>{parts}</>;
+}
+
+function focusOpenRequest(): void {
+  const target = document.getElementById(OPEN_REQUEST_ANCHOR);
+  target?.scrollIntoView?.({ block: "start" });
+  target?.focus({ preventScroll: true });
 }
 
 function ConfirmationContent({ children, onClose }: { children: ReactNode; onClose: () => void }) {
@@ -224,25 +253,48 @@ function RequestControl({
           compact
           name={`request-${request.request_id}-answer`}
           label="Action response"
+          description="Describe what you did. Delivery records your words as the answer and does not check them."
           value={responseText}
           disabled={pending}
           onChange={(event) => setResponseText(fieldValue(event as FieldValueEvent))}
           onInput={(event) => setResponseText(fieldValue(event as FieldValueEvent))}
         />
       ) : null}
-      <PButton className="w-fit" type="button" compact disabled={!canSubmit} onClick={() => void answer()}>
-        {pending ? "Submitting..." : "Submit answer"}
-      </PButton>
+      <div className="flex flex-wrap items-center gap-static-xs">
+        <PButton className="w-fit" type="button" compact disabled={!canSubmit} onClick={() => void answer()}>
+          {pending ? "Submitting..." : "Submit answer"}
+        </PButton>
+        {!canSubmit && !pending ? (
+          <span className="text-xs text-contrast-medium" data-testid="request-submit-hint">
+            {request.kind === "decision" ? "Select an option to submit." : "Enter a response to submit."}
+          </span>
+        ) : null}
+      </div>
     </div>
   );
+}
+
+/** Why an answered request's evidence does not count toward a criterion now, or null when it does or is unknown. */
+function uncountedReason(
+  requestId: string,
+  reference: DeliveryConfirmationScope["acceptance"][number],
+  detail: WorkItemAvailableDetailResponse,
+): string | null {
+  const criterion = detail.item.evidence?.criteria.find((item) => item.acceptance_id === reference.acceptance_id);
+  if (!criterion) return null;
+  if (criterion.acceptance_version !== reference.acceptance_version) return "Criterion changed since this answer";
+  if (criterion.evidence_truncated > 0) return null;
+  return criterion.evidence.some((item) => item.request_id === requestId) ? null : "Not counted toward acceptance";
 }
 
 function RequestScope({
   scope,
   detail,
+  answeredRequestId,
 }: {
   scope: DeliveryConfirmationScope;
   detail: WorkItemAvailableDetailResponse;
+  answeredRequestId: string | null;
 }) {
   const statements = new Map(
     (detail.item.evidence?.criteria ?? []).map((criterion) => [criterion.acceptance_id, criterion.statement]),
@@ -257,11 +309,22 @@ function RequestScope({
       <dt className="text-contrast-medium">Criteria</dt>
       <dd>
         <ul className="grid gap-1">
-          {scope.acceptance.map((reference) => (
-            <li key={reference.acceptance_id}>
-              <code>{reference.acceptance_id}</code> {statements.get(reference.acceptance_id) ?? ""}
-            </li>
-          ))}
+          {scope.acceptance.map((reference) => {
+            const uncounted = answeredRequestId ? uncountedReason(answeredRequestId, reference, detail) : null;
+            return (
+              <li key={reference.acceptance_id}>
+                <code>{reference.acceptance_id}</code> {statements.get(reference.acceptance_id) ?? ""}
+                {uncounted ? (
+                  <>
+                    {" "}
+                    <PTag compact data-testid={`request-uncounted-${reference.acceptance_id}`}>
+                      {uncounted}
+                    </PTag>
+                  </>
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       </dd>
       <dt className="text-contrast-medium">Procedure</dt>
@@ -270,33 +333,83 @@ function RequestScope({
   );
 }
 
+function RequestArticle({
+  request,
+  detail,
+  anchor,
+  superseded,
+  pending,
+  onAnswer,
+}: {
+  request: DeliveryRequest;
+  detail: WorkItemAvailableDetailResponse;
+  anchor: boolean;
+  superseded: boolean;
+  pending: boolean;
+  onAnswer: WorkItemDetailProps["onAnswerRequest"];
+}) {
+  const answered = request.resolution !== null;
+  return (
+    <article
+      id={anchor ? OPEN_REQUEST_ANCHOR : undefined}
+      tabIndex={anchor ? -1 : undefined}
+      data-testid={`request-${request.request_id}`}
+      className={["border-l-2 pl-static-sm", answered ? "border-contrast-low" : "border-info"].join(" ")}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-static-xs">
+        <strong className="text-sm">
+          <CommitText text={request.summary} />
+        </strong>
+        <PTag compact>{REQUEST_KIND_LABELS[request.kind]}</PTag>
+      </div>
+      {request.applies_to ? (
+        <RequestScope
+          scope={request.applies_to}
+          detail={detail}
+          answeredRequestId={answered ? request.request_id : null}
+        />
+      ) : null}
+      <RequestControl request={request} superseded={superseded} pending={pending} onAnswer={onAnswer} />
+    </article>
+  );
+}
+
 function RequestsSection({ detail, pendingAction, onAnswerRequest }: WorkItemDetailProps) {
-  if (detail.item.card.scope !== "outcome") return null;
-  const requests = detail.item.requests;
+  const requests = detail.item.card.scope === "outcome" ? detail.item.requests : [];
+  const open = requests.filter((request) => request.resolution === null);
+  const answered = requests.filter((request) => request.resolution !== null);
+  const firstOpenId = open[0]?.request_id ?? null;
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (firstOpenId && hash === `#${OPEN_REQUEST_ANCHOR}`) focusOpenRequest();
+  }, [firstOpenId, hash]);
   if (requests.length === 0) return null;
   const superseded = new Set(detail.item.superseded_request_ids ?? []);
+  const article = (request: DeliveryRequest) => (
+    <RequestArticle
+      key={request.request_id}
+      request={request}
+      detail={detail}
+      anchor={request.request_id === firstOpenId}
+      superseded={superseded.has(request.request_id)}
+      pending={pendingAction !== null}
+      onAnswer={onAnswerRequest}
+    />
+  );
   return (
     <section aria-labelledby="work-requests-heading">
       <PHeading id="work-requests-heading" tag="h3" size="md">
-        Requests
+        {open.length > 0 ? "Your requests" : "Requests"}
       </PHeading>
-      <div className="mt-static-sm grid gap-static-md">
-        {requests.map((request) => (
-          <article key={request.request_id} className="border-l-2 border-info pl-static-sm">
-            <div className="flex flex-wrap items-center justify-between gap-static-xs">
-              <strong className="text-sm">{request.summary}</strong>
-              <PTag compact>{REQUEST_KIND_LABELS[request.kind]}</PTag>
-            </div>
-            {request.applies_to ? <RequestScope scope={request.applies_to} detail={detail} /> : null}
-            <RequestControl
-              request={request}
-              superseded={superseded.has(request.request_id)}
-              pending={pendingAction !== null}
-              onAnswer={onAnswerRequest}
-            />
-          </article>
-        ))}
-      </div>
+      {open.length > 0 ? <div className="mt-static-sm grid gap-static-md">{open.map(article)}</div> : null}
+      {answered.length > 0 ? (
+        <details className="mt-static-sm" data-testid="answered-requests">
+          <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">
+            Answered requests ({answered.length})
+          </summary>
+          <div className="mt-static-sm grid gap-static-md">{answered.map(article)}</div>
+        </details>
+      ) : null}
     </section>
   );
 }
@@ -528,8 +641,12 @@ function BlockSection({ detail, pendingAction, onClearBlock, onGrantAttempt }: W
       <PHeading id="work-block-heading" tag="h3" size="md">
         Blocked
       </PHeading>
-      <p className="mt-static-xs text-sm">{block.reason}</p>
-      <p className="mt-static-xs text-sm text-contrast-medium">Clear when: {block.unblock_condition}</p>
+      <p className="mt-static-xs text-sm">
+        <CommitText text={block.reason} />
+      </p>
+      <p className="mt-static-xs text-sm text-contrast-medium">
+        Clear when: <CommitText text={block.unblock_condition} />
+      </p>
       {reviseDesign?.command ? (
         <div className="mt-static-md grid gap-static-sm" data-testid="block-revise-design">
           <p className="text-sm">
@@ -1272,15 +1389,20 @@ function MergeOfferSummary({ offer }: { offer: MergeOffer }) {
 function ReadinessSection({
   readiness,
   changeId,
+  openRequestId,
   children,
 }: {
   readiness: DeliveryReadiness | null | undefined;
   changeId: string;
+  openRequestId: string | null;
   children?: ReactNode;
 }) {
   if (!readiness) return null;
   const progress = readiness.progress;
   const timing = progress ? progressWaitLine(progress) : null;
+  // Answering happens in this panel; an agent prompt would only report the same request again.
+  const answerHere = readiness.operation === "answer-request" && openRequestId !== null;
+  const prompt = answerHere ? null : readiness.prompt;
   return (
     <SectionCard dataTestId="delivery-readiness" ariaLabel="Delivery readiness" className="p-static-sm">
       {progress ? (
@@ -1294,7 +1416,7 @@ function ReadinessSection({
             ) : null}
           </div>
           <p className="text-sm leading-relaxed" data-testid="readiness-headline">
-            {progress.headline}
+            <CommitText text={progress.headline} />
           </p>
         </div>
       ) : null}
@@ -1313,19 +1435,34 @@ function ReadinessSection({
           (approved head {readiness.merge_attempt.approved_head.slice(0, 12)})
         </p>
       ) : null}
-      {readiness.prompt ? (
+      {answerHere ? (
+        <p className="mt-static-xs text-sm" data-testid="readiness-answer-request">
+          Answer the request in this panel; no agent prompt is needed.{" "}
+          <a
+            className="font-medium text-primary underline decoration-contrast-low underline-offset-2"
+            href={`#${OPEN_REQUEST_ANCHOR}`}
+            onClick={(event) => {
+              event.preventDefault();
+              focusOpenRequest();
+            }}
+          >
+            Go to the request
+          </a>
+        </p>
+      ) : null}
+      {prompt ? (
         <pre
           className="mt-static-xs whitespace-pre-wrap break-words rounded-md bg-contrast-low p-static-xs text-xs"
           data-testid="readiness-prompt"
         >
-          <code>{readiness.prompt}</code>
+          <code>{prompt}</code>
         </pre>
       ) : null}
-      {readiness.prompt ? (
+      {prompt ? (
         <CopyCommand
           className="mt-static-xs"
-          command={readiness.prompt}
-          label={isContinuationPrompt(readiness.prompt, changeId) ? "Copy continuation prompt" : "Copy prompt"}
+          command={prompt}
+          label={isContinuationPrompt(prompt, changeId) ? "Copy continuation prompt" : "Copy prompt"}
           helper={CONTINUATION_PROMPT_HELP}
         />
       ) : null}
@@ -1434,7 +1571,7 @@ function UnavailableChangeDetail({ detail }: { detail: WorkItemUnavailableDetail
             <p className="mt-static-xs text-sm">Coordination record: {detail.coordination_status}</p>
           ) : null}
         </SectionCard>
-        <ReadinessSection readiness={detail.readiness} changeId={detail.change_id} />
+        <ReadinessSection readiness={detail.readiness} changeId={detail.change_id} openRequestId={null} />
       </div>
     </section>
   );
@@ -2556,6 +2693,16 @@ export default function WorkItemDetail(
   if (isUnavailableDetail(props.detail)) return <UnavailableChangeDetail detail={props.detail} />;
   const available = { ...props, detail: props.detail };
   const { card } = props.detail.item;
+  const openRequestId =
+    card.scope === "outcome"
+      ? (props.detail.item.requests.find((request) => request.resolution === null)?.request_id ?? null)
+      : null;
+  const changeProgress = props.detail.item.change_progress;
+  // The readiness card states the same headline right below; show it once.
+  const changeHeadline =
+    changeProgress && changeProgress.headline !== props.detail.item.readiness?.progress?.headline
+      ? changeProgress.headline
+      : null;
   return (
     <section className="min-w-0" aria-labelledby="work-detail-heading" data-testid="work-item-detail">
       <div className="grid gap-static-lg">
@@ -2565,16 +2712,19 @@ export default function WorkItemDetail(
           <dl className="mt-static-md grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md py-static-xs text-sm">
             <dt className="text-contrast-medium">Progress</dt>
             <dd>{card.progress.label}</dd>
-            {props.detail.item.change_progress ? (
+            {changeProgress ? (
               <>
                 <dt className="text-contrast-medium">Change</dt>
                 <dd data-testid="change-progress">
-                  {progressLabel(props.detail.item.change_progress)}
-                  <span className="text-contrast-medium"> · {props.detail.item.change_progress.headline}</span>
-                  {progressWaitLine(props.detail.item.change_progress) ? (
-                    <span className="block text-xs text-contrast-medium">
-                      {progressWaitLine(props.detail.item.change_progress)}
+                  {progressLabel(changeProgress)}
+                  {changeHeadline ? (
+                    <span className="text-contrast-medium">
+                      {" · "}
+                      <CommitText text={changeHeadline} />
                     </span>
+                  ) : null}
+                  {progressWaitLine(changeProgress) ? (
+                    <span className="block text-xs text-contrast-medium">{progressWaitLine(changeProgress)}</span>
                   ) : null}
                 </dd>
               </>
@@ -2582,7 +2732,11 @@ export default function WorkItemDetail(
           </dl>
         </div>
         <ActionFeedback error={props.actionError} result={props.actionResult} />
-        <ReadinessSection readiness={props.detail.item.readiness} changeId={card.change_id}>
+        <ReadinessSection
+          readiness={props.detail.item.readiness}
+          changeId={card.change_id}
+          openRequestId={openRequestId}
+        >
           <MergeApprovalDialog
             offer={
               props.detail.item.readiness?.reason_code === "merge-approval-required"
@@ -2593,9 +2747,9 @@ export default function WorkItemDetail(
             onApproveMerge={props.onApproveMerge}
           />
         </ReadinessSection>
-        <ChangePauseSection {...available} />
-        <BlockSection {...available} />
         <RequestsSection {...available} />
+        <BlockSection {...available} />
+        <ChangePauseSection {...available} />
         <PublicationSection {...available} />
         <CourseChangesSection detail={props.detail} />
         <SemanticDetail detail={props.detail} />

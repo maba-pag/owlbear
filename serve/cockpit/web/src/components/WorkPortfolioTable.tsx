@@ -8,6 +8,7 @@ import { StatusChip, WorkRow } from "./DeliveryPrimitives";
 import {
   CONTINUATION_PROMPT_HELP,
   isContinuationPrompt,
+  OPEN_REQUEST_ANCHOR,
   PROGRESS_STAGE_LABELS,
   progressLabel,
   progressTone,
@@ -79,7 +80,8 @@ function ActionLink({
   const navigate = useNavigate();
   if (item.action.kind === "none" || !item.action.label || item.action.command) return null;
   const identity = { changeId: item.change_id, itemKey: item.item_key };
-  const path = workItemPath(item);
+  const path =
+    item.action.kind === "answer-request" ? `${workItemPath(item)}#${OPEN_REQUEST_ANCHOR}` : workItemPath(item);
   return (
     <PLinkPure
       href={path}
