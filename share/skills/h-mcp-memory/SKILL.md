@@ -154,8 +154,9 @@ each item has exactly `{entry_id, revision, bucket}`. A recall block places its
 The engine stores the first recorded bucket with the entry as a receipt keyed
 by task, entry, and revision. A repeated assessment with the same task, entry,
 and revision is not applied again and returns `success: true`,
-`already_applied: true`, and the first `recorded_bucket`. A different task ID
-may be assessed independently.
+`already_applied: true`, and the first `recorded_bucket`. Replaying
+`factually_wrong` after another task makes the entry disputed also returns
+`already_applied: true`. A different task ID may be assessed independently.
 
 Only receipts for the current revision are retained, up to the 20 most recent.
 When needed, oldest receipts are evicted first to keep the serialized entry at
@@ -264,7 +265,10 @@ Default behavior (when `states` is omitted): includes every non-deleted state.
 | `categories` | list[str] \| null | `null` | Optional category filter |
 | `scope_agents` | list[str] \| null | `null` | Optional agent-scope filter |
 
-Returns: metadata entries (no `content`) with fields including `id`, `revision`, `title`, `categories`, `confidence`, `state`, `scope_agents`, `source_agent`, `created_at`, `updated_at`, `approved_at`.
+Returns: metadata entries (no `content`) with fields including `id`, `revision`,
+`challenges` (each containing `task_id`, `revision`, and `recorded_at`), `title`,
+`categories`, `confidence`, `state`, `scope_agents`, `source_agent`, `created_at`,
+`updated_at`, and `approved_at`.
 
 ## read_memory
 
@@ -277,6 +281,8 @@ Reads one full entry by `entry_id`.
 Behavior:
 
 - returns full entry including `content`
+- includes `challenges`, with each record containing `task_id`, `revision`, and
+  `recorded_at`
 - errors if the entry is in `deleted` state
 
 ## recall_memory
@@ -295,7 +301,8 @@ Behavior:
 - treats omitted `categories` as all categories; this is the standard pre-flight call
 - returns `approved` entries before `curated`
 - formats each block as `## {title}`, `Entry ID: {id}`, `Revision: {revision}`, then the body; the revision line immediately follows the entry ID
-- adds `State: contested` to contested blocks, plus `Challenge task:` when `contested_by_task` is available
+- adds `State: contested` to contested blocks and one `Challenge task:` line per
+  challenge record
 - omits all other entry metadata
 - does not reject blank or wildcard callers; unrecognized callers receive universal-only guidance
 - accepts named and universal recall guidance according to the memory service's recognition rules
