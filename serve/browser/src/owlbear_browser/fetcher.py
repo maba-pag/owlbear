@@ -6,6 +6,7 @@ import asyncio
 import re
 import time
 from datetime import UTC, datetime
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
@@ -91,6 +92,11 @@ class BrowserContentFetcher:
                 return AcquisitionFailure(
                     AcquisitionStatus.DOWNLOAD_REJECTED,
                     Diagnostics("navigation", {"url": page.url}),
+                )
+            if response is not None and response.status >= HTTPStatus.BAD_REQUEST and response.status not in {401, 403}:
+                return AcquisitionFailure(
+                    AcquisitionStatus.HTTP_ERROR,
+                    Diagnostics("navigation", {"response_status": response.status}),
                 )
             try:
                 region = page.locator(request.content_selector) if request.content_selector else page.locator("body")

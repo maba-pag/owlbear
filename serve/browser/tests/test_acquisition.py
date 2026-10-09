@@ -4,7 +4,13 @@ from typing import ClassVar
 
 import pytest
 
-from owlbear_browser import AcquisitionRequest, AcquisitionStatus, AcquisitionSuccess, BrowserContentFetcher
+from owlbear_browser import (
+    AcquisitionFailure,
+    AcquisitionRequest,
+    AcquisitionStatus,
+    AcquisitionSuccess,
+    BrowserContentFetcher,
+)
 
 pytestmark = pytest.mark.browser
 
@@ -123,6 +129,59 @@ async def test_acquire_waits_for_rendered_content_and_keeps_links_inert() -> Non
     finally:
         server.shutdown()
         server.server_close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("response_status", "expected_status"),
+    [
+        (404, AcquisitionStatus.HTTP_ERROR),
+        (500, AcquisitionStatus.HTTP_ERROR),
+        (401, AcquisitionStatus.ACCESS_DENIED),
+        (403, AcquisitionStatus.ACCESS_DENIED),
+        (200, AcquisitionStatus.SUCCESS),
+    ],
+)
+async def test_acquire_classifies_main_document_http_statuses(
+    response_status: int, expected_status: AcquisitionStatus
+) -> None:
+    from playwright.async_api import Route, async_playwright  # noqa: PLC0415
+
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch()
+        try:
+            context = await browser.new_context()
+
+            async def fulfill_document(route: Route) -> None:
+                await route.fulfill(
+                    status=response_status,
+                    content_type="text/html",
+                    body='<html><body><main id="content">Rendered document</main></body></html>',
+                )
+
+            await context.route("http://pages.synthetic.example/**", fulfill_document)
+            result = await BrowserContentFetcher(context).acquire(
+                AcquisitionRequest(
+                    "http://pages.synthetic.example/page",
+                    content_selector="#content",
+                    readiness_timeout_ms=2_000,
+                )
+            )
+        finally:
+            await browser.close()
+
+    if expected_status is AcquisitionStatus.HTTP_ERROR:
+        assert isinstance(result, AcquisitionFailure)
+        assert result.status is AcquisitionStatus.HTTP_ERROR
+        assert result.diagnostics.stage == "navigation"
+        assert result.diagnostics.details == {"response_status": response_status}
+    elif expected_status is AcquisitionStatus.ACCESS_DENIED:
+        assert isinstance(result, AcquisitionFailure)
+        assert result.status is AcquisitionStatus.ACCESS_DENIED
+    else:
+        assert isinstance(result, AcquisitionSuccess)
+        assert result.status is AcquisitionStatus.SUCCESS
+        assert result.markdown.strip()
 
 
 @pytest.mark.asyncio
