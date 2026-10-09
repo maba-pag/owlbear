@@ -220,12 +220,23 @@ def test_load_counts_malformed_files_without_raising(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("title", "content", "source_agent"),
+    ("title", "content", "source_agent", "challenges"),
     [
-        ("x" * 7819, "Some content", "test-agent"),
-        ("é" * 3909 + "x", "Some content", "test-agent"),
-        ("x" * 3735, "😀" * 1024, "test-agent"),
-        ("Test Entry", "Some content", "é" * 3909 + "x"),
+        ("x" * 7828, "Some content", "test-agent", []),
+        ("é" * 3909 + "x" * 10, "Some content", "test-agent", []),
+        (
+            "x" * 3645,
+            "😀" * 1024,
+            "test-agent",
+            [
+                {
+                    "task_id": "boundary-task",
+                    "revision": "0123456789abcdef",
+                    "recorded_at": "2026-02-01T00:00:00+00:00",
+                }
+            ],
+        ),
+        ("Test Entry", "Some content", "é" * 3909 + "x" * 10, []),
     ],
     ids=["ascii-title", "multibyte-title", "multibyte-content", "multibyte-metadata"],
 )
@@ -234,6 +245,7 @@ def test_fresh_engine_reads_each_successful_boundary_write(
     title: str,
     content: str,
     source_agent: str,
+    challenges: list[dict[str, str]],
 ) -> None:
     """Successful boundary writes remain readable by a fresh MemoryEngine."""
     entry = MemoryEntry(
@@ -242,10 +254,12 @@ def test_fresh_engine_reads_each_successful_boundary_write(
             "title": title,
             "content": content,
             "source_agent": source_agent,
+            "challenges": challenges,
         }
     )
     target = tmp_path / "boundary.md"
     storage.write_entry(target, entry, memory_dir=tmp_path)
+    assert target.stat().st_size == storage.MAX_ENTRY_FILE_SIZE_BYTES
 
     fresh_engine = MemoryEngine(tmp_path)
 
@@ -334,7 +348,7 @@ def test_assessment_receipts_are_evicted_oldest_first_to_fit_file_limit(tmp_path
     entry = MemoryEntry(
         **{
             **_valid_entry_data(),
-            "title": "t" * 3000,
+            "title": "t" * 3009,
             "content": "c" * 1024,
             "state": "approved",
         }
