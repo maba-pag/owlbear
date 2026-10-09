@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TypedDict
+from typing import Literal, TypedDict
 
 _DEFAULT_KB_PATH = ".owlbear/knowledge/local.db"
 _DEFAULT_QDRANT_PATH = ".owlbear/knowledge/vectors"
@@ -55,6 +55,8 @@ class SourceInfo(TypedDict):
     last_refreshed_at: str | None
     last_checked_at: str | None
     last_error: str | None
+    health: Literal["unknown", "ok", "degraded", "failed"]
+    urls: list[str] | None
     enabled: bool
     refreshable: bool
     enrich: bool

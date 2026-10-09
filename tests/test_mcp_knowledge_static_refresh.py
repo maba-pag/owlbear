@@ -7,12 +7,14 @@ import math
 import socket
 import sqlite3
 from collections.abc import Iterable
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import httpx
 import pytest
+from mcp.server.mcpserver.exceptions import ToolError
 
 from owlbear_knowledge.embeddings import BgeM3EmbeddingProvider
 from owlbear_knowledge.fetcher import HttpxContentFetcher
@@ -32,11 +34,15 @@ class _ResponseTransport:
     def __init__(
         self,
         responses: Iterable[tuple[str, str] | Exception],
+        request_log: list[httpx.Request] | None = None,
     ) -> None:
         self.responses = list(responses)
+        self.request_log = request_log
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         assert str(request.url).startswith("https://fixture.example/")
+        if self.request_log is not None:
+            self.request_log.append(request)
         response = self.responses.pop(0)
         if isinstance(response, Exception):
             raise response
@@ -194,6 +200,7 @@ def _assembled_context(  # noqa: PLR0913
     vector_store: object | None = None,
     connection_factory: type[sqlite3.Connection] = sqlite3.Connection,
     resolver_calls: list[tuple[str, int]] | None = None,
+    request_log: list[httpx.Request] | None = None,
 ) -> tuple[SimpleNamespace, server.AppContext, object]:
     (tmp_path / ".owlbear").mkdir()
     database_path = tmp_path / ".owlbear/knowledge/local.db"
@@ -209,8 +216,9 @@ def _assembled_context(  # noqa: PLR0913
             resolver_calls.append((hostname, port))
         return await _public_fixture_resolver(hostname, port)
 
+    response_transport = _ResponseTransport(responses, request_log)
     http_fetcher = HttpxContentFetcher(
-        transport=httpx.MockTransport(_ResponseTransport(responses)),
+        transport=httpx.MockTransport(response_transport),
         resolver=resolver,
     )
     app_context = server.build_app_context(
@@ -226,16 +234,26 @@ def _assembled_context(  # noqa: PLR0913
     return tool_context, app_context, resolved_vector_store
 
 
-async def _register_fixture_source(tool_context: SimpleNamespace, urls: Iterable[str] | None = None) -> str:
+async def _register_fixture_source(
+    tool_context: SimpleNamespace,
+    urls: Iterable[str] | None = None,
+    *,
+    fetch_method: str = "http",
+) -> str:
     source_urls = list(urls) if urls is not None else [FIXTURE_URL]
     registered = await server.register_knowledge_source(
         tool_context,
         name="Static fixture article",
         kind="url_list",
-        fetch_method="http",
+        fetch_method=fetch_method,
         config={"kind": "url_list", "urls": source_urls},
     )
     return registered["id"]
+
+
+async def _listed_source(tool_context: SimpleNamespace, source_id: str) -> dict[str, object]:
+    sources = await server.list_knowledge_sources(tool_context)
+    return next(source for source in sources if source["id"] == source_id)
 
 
 def _sqlite_counts(connection: sqlite3.Connection) -> tuple[int, int, int]:
@@ -263,6 +281,237 @@ def _assert_refresh_failure(
     assert failure["retryable"] is retryable
     assert failure["message"] == message
     assert isinstance(failure["timestamp"], str)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("kind", "fetch_method", "config", "expectations"),
+    [
+        (
+            "url_list",
+            "filesystem",
+            {"kind": "url_list", "urls": ["https://user:password@fixture.example/article?token=secret"]},
+            (("http", "browser"), ("password", "token=secret")),
+        ),
+        (
+            "file_glob",
+            "http",
+            {"kind": "file_glob", "patterns": ["private-path"]},
+            (("filesystem",), ("private-path",)),
+        ),
+        ("inline", "browser", {"kind": "inline"}, (("none",), ())),
+    ],
+)
+async def test_assembled_registration_rejects_incompatible_transport_without_persisting(
+    tmp_path: Path,
+    kind: str,
+    fetch_method: str,
+    config: dict[str, object],
+    expectations: tuple[tuple[str, ...], tuple[str, ...]],
+) -> None:
+    accepted_transports, sensitive_values = expectations
+    tool_context, app_context, _vector_store = _assembled_context(tmp_path, [])
+    try:
+        before = _sqlite_counts(app_context.conn)[0]
+
+        with pytest.raises(ToolError) as exc_info:
+            await server.register_knowledge_source(
+                tool_context,
+                name="Incompatible fixture source",
+                kind=kind,
+                fetch_method=fetch_method,
+                config=config,
+            )
+
+        message = str(exc_info.value)
+        assert all(transport in message for transport in accepted_transports)
+        assert "validation error" not in message.lower()
+        assert "input_value" not in message
+        assert all(value not in message for value in sensitive_values)
+        assert _sqlite_counts(app_context.conn)[0] == before
+    finally:
+        app_context.conn.close()
+
+
+@pytest.mark.asyncio
+async def test_assembled_source_listing_projects_health_and_registered_urls(tmp_path: Path) -> None:
+    tool_context, app_context, _vector_store = _assembled_context(tmp_path, [])
+    try:
+        await server.register_knowledge_source(
+            tool_context,
+            name="Ordered URL fixture",
+            kind="url_list",
+            fetch_method="http",
+            config={"kind": "url_list", "urls": [SECOND_FIXTURE_URL, FIXTURE_URL]},
+        )
+        await server.register_knowledge_source(
+            tool_context,
+            name="File fixture",
+            kind="file_glob",
+            fetch_method="filesystem",
+            config={"kind": "file_glob", "patterns": ["*.md"]},
+        )
+        await server.register_knowledge_source(
+            tool_context,
+            name="Inline fixture",
+            kind="inline",
+            fetch_method="none",
+            config={"kind": "inline"},
+            refreshable=False,
+        )
+
+        sources = await server.list_knowledge_sources(tool_context)
+        by_name = {source["name"]: source for source in sources}
+
+        assert by_name["Ordered URL fixture"]["health"] == "unknown"
+        assert by_name["Ordered URL fixture"]["urls"] == [SECOND_FIXTURE_URL, FIXTURE_URL]
+        assert by_name["File fixture"]["health"] == "unknown"
+        assert by_name["File fixture"]["urls"] is None
+        assert by_name["Inline fixture"]["health"] == "unknown"
+        assert by_name["Inline fixture"]["urls"] is None
+        assert all(source["health"] in {"unknown", "ok", "degraded", "failed"} for source in sources)
+    finally:
+        app_context.conn.close()
+
+
+@pytest.mark.asyncio
+async def test_assembled_browser_refresh_requires_agent_capture_without_http_or_state_change(tmp_path: Path) -> None:
+    request_log: list[httpx.Request] = []
+    tool_context, app_context, _vector_store = _assembled_context(tmp_path, [], request_log=request_log)
+    try:
+        source_id = await _register_fixture_source(tool_context, fetch_method="browser")
+        before_source = await _listed_source(tool_context, source_id)
+        before_documents = _sqlite_counts(app_context.conn)[1]
+
+        response = await server.refresh_knowledge_source(tool_context, source_id)
+
+        _assert_refresh_failure(
+            response,
+            stage="acquisition",
+            code="agent_capture_required",
+            retryable=False,
+            message="Browser capture is required for this source",
+        )
+        after_source = await _listed_source(tool_context, source_id)
+        assert request_log == []
+        assert after_source["health"] == before_source["health"] == "unknown"
+        assert after_source["last_checked_at"] == before_source["last_checked_at"] is None
+        assert after_source["last_error"] == before_source["last_error"] is None
+        assert _sqlite_counts(app_context.conn)[1] == before_documents
+    finally:
+        app_context.conn.close()
+
+
+@pytest.mark.asyncio
+async def test_assembled_failed_refresh_preserves_documents_and_records_failed_health(tmp_path: Path) -> None:
+    tool_context, app_context, _vector_store = _assembled_context(
+        tmp_path,
+        [
+            ("retained article alpha", "text/plain"),
+            ("retained article beta", "text/plain"),
+            httpx.ConnectError("first transport secret"),
+            httpx.ConnectError("second transport secret"),
+        ],
+    )
+    try:
+        source_id = await _register_fixture_source(tool_context, urls=(FIXTURE_URL, SECOND_FIXTURE_URL))
+        initial = await server.refresh_knowledge_source(tool_context, source_id)
+        assert initial["sources_refreshed"] == 1
+        assert initial["documents_created"] == 2
+        before_source = await _listed_source(tool_context, source_id)
+        assert before_source["health"] == "ok"
+        assert before_source["last_error"] is None
+        before_checked_at = datetime.fromisoformat(str(before_source["last_checked_at"]))
+
+        for phrase in ("retained article alpha", "retained article beta"):
+            results = await server.knowledge_search(tool_context, phrase)
+            assert any(phrase in result["snippet"] for result in results)
+
+        response = await server.refresh_knowledge_source(tool_context, source_id)
+
+        assert response["sources_refreshed"] == 0
+        assert len(response["errors"]) == 2
+        assert all(error["stage"] == "acquisition" for error in response["errors"])
+        assert all(error["code"] == "transport_failure" for error in response["errors"])
+        assert "transport secret" not in str(response)
+        after_source = await _listed_source(tool_context, source_id)
+        assert after_source["health"] == "failed"
+        assert datetime.fromisoformat(str(after_source["last_checked_at"])) > before_checked_at
+        assert after_source["last_error"] is not None
+        assert _sqlite_counts(app_context.conn)[1] == 2
+        for phrase in ("retained article alpha", "retained article beta"):
+            results = await server.knowledge_search(tool_context, phrase)
+            assert any(phrase in result["snippet"] for result in results)
+    finally:
+        app_context.conn.close()
+
+
+@pytest.mark.asyncio
+async def test_assembled_partial_refresh_records_degraded_health(tmp_path: Path) -> None:
+    tool_context, app_context, _vector_store = _assembled_context(
+        tmp_path,
+        [("partial success phrase", "text/plain"), httpx.ConnectError("partial transport secret")],
+    )
+    try:
+        source_id = await _register_fixture_source(tool_context, urls=(FIXTURE_URL, SECOND_FIXTURE_URL))
+
+        response = await server.refresh_knowledge_source(tool_context, source_id)
+
+        assert response["sources_refreshed"] == 1
+        assert len(response["errors"]) == 1
+        assert response["errors"][0]["stage"] == "acquisition"
+        assert response["errors"][0]["code"] == "transport_failure"
+        assert "partial transport secret" not in str(response)
+        source = await _listed_source(tool_context, source_id)
+        assert source["health"] == "degraded"
+        assert source["last_error"] is not None
+    finally:
+        app_context.conn.close()
+
+
+@pytest.mark.asyncio
+async def test_assembled_successful_refresh_records_ok_health(tmp_path: Path) -> None:
+    tool_context, app_context, _vector_store = _assembled_context(
+        tmp_path,
+        [("successful article alpha", "text/plain"), ("successful article beta", "text/plain")],
+    )
+    try:
+        source_id = await _register_fixture_source(tool_context, urls=(FIXTURE_URL, SECOND_FIXTURE_URL))
+
+        response = await server.refresh_knowledge_source(tool_context, source_id)
+
+        assert response["sources_refreshed"] == 1
+        assert response["errors"] == []
+        source = await _listed_source(tool_context, source_id)
+        assert source["health"] == "ok"
+        assert source["last_error"] is None
+    finally:
+        app_context.conn.close()
+
+
+@pytest.mark.asyncio
+async def test_assembled_refresh_redacts_per_document_processing_failures(tmp_path: Path) -> None:
+    tool_context, app_context, _vector_store = _assembled_context(
+        tmp_path,
+        [("processing failure alpha", "text/plain"), ("processing failure beta", "text/plain")],
+    )
+    try:
+        source_id = await _register_fixture_source(tool_context, urls=(FIXTURE_URL, SECOND_FIXTURE_URL))
+        assert app_context.content_store is not None
+
+        with patch.object(app_context.content_store, "ingest", side_effect=RuntimeError("processing sentinel")):
+            response = await server.refresh_knowledge_source(tool_context, source_id)
+
+        assert response["sources_refreshed"] == 0
+        assert len(response["errors"]) == 2
+        assert all(error["stage"] == "persistence" for error in response["errors"])
+        assert all(error["code"] == "processing_failed" for error in response["errors"])
+        assert all(error["message"] == "Document processing failed" for error in response["errors"])
+        assert "processing sentinel" not in str(response)
+        source = await _listed_source(tool_context, source_id)
+        assert source["health"] == "failed"
+    finally:
+        app_context.conn.close()
 
 
 @pytest.mark.asyncio

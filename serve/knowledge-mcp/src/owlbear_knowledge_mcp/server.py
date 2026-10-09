@@ -79,6 +79,26 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 _WORKSPACE_MARKER = Path(".owlbear")
+_ALLOWED_FETCH_METHODS = {
+    SourceKind.URL_LIST: (FetchTransport.HTTP, FetchTransport.BROWSER),
+    SourceKind.FILE_GLOB: (FetchTransport.FILESYSTEM,),
+    SourceKind.INLINE: (FetchTransport.NONE,),
+    SourceKind.AUTHENTICATED_WEB: (FetchTransport.BROWSER,),
+}
+
+
+def _incompatible_source_transport_message(kind: str, fetch_method: str) -> str | None:
+    try:
+        source_kind = SourceKind(kind)
+        transport = FetchTransport(fetch_method)
+    except ValueError:
+        return None
+
+    allowed_transports = _ALLOWED_FETCH_METHODS[source_kind]
+    if transport in allowed_transports:
+        return None
+    accepted = ", ".join(item.value for item in allowed_transports)
+    return f"{source_kind.value} sources accept fetch transports: {accepted}"
 
 
 async def claim_enrichment_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]:
@@ -609,22 +629,31 @@ async def list_knowledge_sources(ctx: Context, scope: str | None = None) -> list
         raise ToolError(msg)
     scope = _normalize_optional_scope(scope)
     sources = store.list_sources(scope=scope)
-    return [
-        {
-            "id": s.id,
-            "name": s.name,
-            "source_type": str(getattr(s, "kind", "")),
-            "scope": s.scope,
-            "last_refreshed_at": getattr(s, "last_refreshed_at", None),
-            "last_checked_at": getattr(s, "last_checked_at", None),
-            "last_error": _sanitize_error(getattr(s, "last_error", None)),
-            "enabled": bool(getattr(s, "state", "") == "active"),
-            "refreshable": bool(getattr(s, "refreshable", False)),
-            "enrich": bool(getattr(s, "enrich", False)),
-            "fetch_method": str(getattr(s, "fetch_method", "")),
-        }
-        for s in sources
-    ]
+    source_rows: list[SourceInfo] = []
+    for source in sources:
+        source_config = getattr(source, "config", None)
+        source_urls = None
+        if getattr(source, "kind", None) == SourceKind.URL_LIST:
+            registered_urls = getattr(source_config, "urls", None)
+            source_urls = list(registered_urls) if registered_urls is not None else None
+        source_rows.append(
+            {
+                "id": source.id,
+                "name": source.name,
+                "source_type": str(getattr(source, "kind", "")),
+                "scope": source.scope,
+                "last_refreshed_at": getattr(source, "last_refreshed_at", None),
+                "last_checked_at": getattr(source, "last_checked_at", None),
+                "last_error": _sanitize_error(getattr(source, "last_error", None)),
+                "health": str(getattr(source, "health", "unknown")),
+                "urls": source_urls,
+                "enabled": bool(getattr(source, "state", "") == "active"),
+                "refreshable": bool(getattr(source, "refreshable", False)),
+                "enrich": bool(getattr(source, "enrich", False)),
+                "fetch_method": str(getattr(source, "fetch_method", "")),
+            }
+        )
+    return source_rows
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True))
@@ -720,6 +749,10 @@ async def register_knowledge_source(  # noqa: PLR0913
         msg = "source store v2 not available"
         raise ToolError(msg)
 
+    transport_error = _incompatible_source_transport_message(kind, fetch_method)
+    if transport_error is not None:
+        raise ToolError(transport_error)
+
     try:
         registration = SourceRegistration.model_validate(
             {
@@ -735,13 +768,15 @@ async def register_knowledge_source(  # noqa: PLR0913
             },
             strict=False,
         )
-    except ValidationError as exc:
-        raise ToolError(str(exc)) from exc
+    except ValidationError:
+        msg = "invalid source registration"
+        raise ToolError(msg) from None
 
     try:
         source = store.register_source(registration)
-    except ValueError as exc:
-        raise ToolError(str(exc)) from exc
+    except ValueError:
+        msg = "source registration failed"
+        raise ToolError(msg) from None
     return {
         "id": str(source.id),
         "name": str(source.name),
