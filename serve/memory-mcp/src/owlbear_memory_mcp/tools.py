@@ -392,7 +392,7 @@ async def recall_memory(
 
     Output format: concatenated markdown blocks using "## {title}" headings,
     followed by the entry ID, revision, and body. Contested entries add a state
-    marker and an available challenge-task reference between the revision and body.
+    marker and one `Challenge task:` line per record between the revision and body.
     """
     engine = _engine_from_ctx(ctx)
     category_filter = set(_coerce_categories(categories) or [])
