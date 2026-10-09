@@ -1185,6 +1185,7 @@ def _validate_local_builder_handoff_workspace(
         "--verify",
         f"refs/heads/{snapshot.branch}^{{commit}}",
     )
+    # Retained uncommitted material may drift (editor restore, index refresh); the next Builder triages it.
     if not all(
         (
             metadata.change_id == snapshot.change_id,
@@ -1195,12 +1196,11 @@ def _validate_local_builder_handoff_workspace(
             metadata.registration.path == metadata.worktree_path,
             metadata.registration.branch == metadata.branch,
             metadata.registration.head == metadata.branch_head,
-            metadata.fingerprint == context.metadata_fingerprint,
             local_branch_head == context.branch_head,
             _loader_git_is_ancestor(paths.repository_root, snapshot.change_head, context.branch_head),
         )
     ):
-        _bootstrap_failure("local Builder handoff metadata or Change head differs from its captured proof")
+        _bootstrap_failure("local Builder handoff worktree or Change head differs from its captured proof")
     return context.branch_head
 
 

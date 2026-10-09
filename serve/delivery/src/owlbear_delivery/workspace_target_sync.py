@@ -1204,12 +1204,8 @@ class _TargetSyncMixin:
         ):
             _coordination_conflict("Builder handoff source differs from its retained exact task")
         metadata = self._capture_builder_handoff_metadata(coordination)
-        if (
-            metadata.branch_head != source.branch_head
-            or metadata.last_reviewed_commit != source.last_reviewed_commit
-            or metadata.fingerprint != source.metadata_fingerprint
-        ):
-            message = "Builder handoff workspace metadata changed before source preparation"
+        if metadata.branch_head != source.branch_head or metadata.last_reviewed_commit != source.last_reviewed_commit:
+            message = "Builder handoff workspace head changed before source preparation"
             raise PreservationFenceError(message)
         return metadata.branch_head
 

@@ -3371,7 +3371,7 @@ def _assert_returned_handoff_metadata_fences(application, builder, before_worksp
     assert runtime.retry_ledger().returned_attempts(builder_episode) == 1
     assert builder_episode.reset_count == 0
     retained_metadata = application._workspace_manager._capture_builder_handoff_metadata(before_coordination)
-    stale_metadata = replace(retained_metadata, status_digest="0" * 64)
+    stale_metadata = replace(retained_metadata, branch_head="0" * 40)
     with patch.object(
         application._workspace_manager,
         "_capture_builder_handoff_metadata",
@@ -3393,7 +3393,7 @@ def _assert_returned_handoff_metadata_fences(application, builder, before_worksp
             "_capture_builder_handoff_metadata",
             side_effect=(retained_metadata, stale_metadata),
         ),
-        pytest.raises(PreservationFenceError, match="metadata changed before source preparation"),
+        pytest.raises(PreservationFenceError, match="head changed before source preparation"),
     ):
         application.acquire_change_action(_continuation_request(application, "change-a"))
     assert runtime.active_claims() == ()
@@ -3929,7 +3929,7 @@ def test_builder_decision_answer_survives_restart_and_reacquires_same_task(tmp_p
     assert set(episode.attempt_ids) == {first.claim.attempt_id, resumed.claim.attempt_id}
 
 
-def test_builder_retry_handoff_refuses_foreign_task_and_workspace_drift(tmp_path: Path) -> None:
+def test_builder_retry_handoff_refuses_foreign_task_and_keeps_workspace_drift(tmp_path: Path) -> None:
     now = ["2026-08-04T00:00:00Z"]
     application, runtime, coordinator, _state_root, first, branch_head, before_workspace, settlement = (
         _builder_retry_handoff_setup(tmp_path, now)
@@ -3990,13 +3990,12 @@ def test_builder_retry_handoff_refuses_foreign_task_and_workspace_drift(tmp_path
     drift_file.write_text("workspace changed after handoff\n", encoding="utf-8")
     drift_snapshot = _workspace_content_snapshot(first.worktree_path)
     drift_result = application.acquire_change_action(_continuation_request(application, "change-a"))
-    assert drift_result.kind == "unavailable", drift_result
-    assert drift_result.launch is None
-    assert runtime.active_claims() == ()
-    assert coordinator.show("change-a").builder_handoff == handoff
+    assert drift_result.launch is not None, drift_result
+    assert drift_result.launch.claim.worker_role is DeliveryWorkerRole.BUILDER
+    assert drift_result.launch.claim.task_id == first.claim.task_id
+    assert drift_result.launch.claim.claim_id != first.claim.claim_id
+    assert coordinator.show("change-a").builder_handoff is None
     assert _workspace_content_snapshot(first.worktree_path) == drift_snapshot
-    drift_file.unlink()
-    assert _workspace_content_snapshot(first.worktree_path) == before_workspace
 
 
 def test_batch_handoff_selects_exact_task_over_higher_ranked_independent_outcome(tmp_path: Path) -> None:
