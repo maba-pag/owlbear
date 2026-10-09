@@ -160,6 +160,15 @@ if TYPE_CHECKING:
 _PUBLICATION_READ_FAILED: Literal["provider-unavailable"] = "provider-unavailable"
 _PROVIDER_PUBLICATION_STEPS = frozenset({WorkItemActionKind.MARK_READY, WorkItemActionKind.OBSERVE_ACCEPTANCE})
 _CONFLICT_PROMPT_KEEPS = frozenset({"change-paused", "worker-stall-wait"})
+_ENGINE_ACTION_CUSTODY = frozenset(
+    {
+        "engine-action-pending",
+        "engine-action-interrupted",
+        "engine-action-failed",
+        "engine-action-incomplete",
+        "engine-action-blocked",
+    }
+)
 
 
 def _blockless_grant_attempt_id(episode: RetryEpisodeSummary) -> str | None:
@@ -2152,13 +2161,7 @@ class _ReadinessViewsMixin:
             for binding in frontier.bindings
         )
         contained = retry_contained or builder_contained
-        if contained or workspace_reason in {
-            "engine-action-pending",
-            "engine-action-interrupted",
-            "engine-action-failed",
-            "engine-action-incomplete",
-            "engine-action-blocked",
-        }:
+        if contained or workspace_reason in _ENGINE_ACTION_CUSTODY:
             status = "running" if not contained and workspace_reason == "engine-action-pending" else "blocked"
             reason = (
                 "retry-transition-contained"
@@ -2207,7 +2210,7 @@ class _ReadinessViewsMixin:
                 else WorkItemNextActor.YOU
                 if reason == "target-commit-missing"
                 else WorkItemNextActor.AGENT
-                if finalization
+                if finalization or reason in _ENGINE_ACTION_CUSTODY
                 else card.next_actor
             ),
             reason_code=reason,

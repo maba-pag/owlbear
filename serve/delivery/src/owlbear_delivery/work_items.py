@@ -1613,23 +1613,34 @@ class WorkItemProjector:
             total=len(binding.tasks),
         )
 
+    def _terminal_publication_card(self) -> WorkItemCardView | None:
+        frontier = self._snapshot.frontier
+        if frontier.change_abandonment is not None:
+            label = "Change abandoned"
+        elif frontier.change_completion is not None:
+            label = "Change completed"
+        else:
+            return None
+        return WorkItemCardView(
+            item_key="publication",
+            work_item_id=self._snapshot.contract.change_id,
+            change_id=self._snapshot.contract.change_id,
+            scope=WorkItemScope.CHANGE_PUBLICATION,
+            title="Change publication",
+            stage=None,
+            publication_phase=self._publication_phase(),
+            needs=WorkItemNeed.NONE,
+            next_actor=WorkItemNextActor.NONE,
+            next_step=label,
+            activity=WorkItemActivity(state=WorkItemActivityState.IDLE),
+            progress=WorkItemProgress(kind=WorkItemProgressKind.PUBLICATION, label=label),
+            action=WorkItemAction(),
+        )
+
     def _publication_card(self) -> WorkItemCardView:
-        if self._snapshot.frontier.change_abandonment is not None:
-            return WorkItemCardView(
-                item_key="publication",
-                work_item_id=self._snapshot.contract.change_id,
-                change_id=self._snapshot.contract.change_id,
-                scope=WorkItemScope.CHANGE_PUBLICATION,
-                title="Change publication",
-                stage=None,
-                publication_phase=self._publication_phase(),
-                needs=WorkItemNeed.NONE,
-                next_actor=WorkItemNextActor.NONE,
-                next_step="Change abandoned",
-                activity=WorkItemActivity(state=WorkItemActivityState.IDLE),
-                progress=WorkItemProgress(kind=WorkItemProgressKind.PUBLICATION, label="Change abandoned"),
-                action=WorkItemAction(),
-            )
+        terminal = self._terminal_publication_card()
+        if terminal is not None:
+            return terminal
         if self._snapshot.frontier.change_deferral is not None:
             return WorkItemCardView(
                 item_key="publication",

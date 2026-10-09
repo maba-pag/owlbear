@@ -59,12 +59,16 @@ from owlbear_delivery.publication_provider import (
     PublicationProviderError,
     PublicationProviderFailureCode,
 )
-from owlbear_delivery.work_items import WorkItemNextActor
+from owlbear_delivery.recovery import RetryStopCode
+from owlbear_delivery.work_items import WorkItemActionKind, WorkItemNextActor
 from owlbear_delivery_github.memory import InMemoryPublicationProvider
 from owlbear_delivery_mcp.target_server import assemble_target_server
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from owlbear_delivery.delivery_runtime import DeliveryRuntime
+    from owlbear_delivery.recovery import RetryEpisodeSummary
 
 _HEAD = "a" * 40
 _TARGET = "b" * 40
@@ -718,6 +722,58 @@ def test_an_approval_after_exhausted_reads_is_observed_until_completion(tmp_path
 
     assert application.reconcile_awaiting_acceptance(("change-a",))[0].status.value == "completed"
     assert (len(_completions(state_root)), len(memory.merge_request_bodies)) == (1, 1)
+
+
+def _exhausted_acceptance_episode(runtime: DeliveryRuntime, application: PortfolioApplication) -> RetryEpisodeSummary:
+    (episode,) = (
+        episode
+        for episode in runtime.retry_ledger(clock=application._clock).read().episodes
+        if episode.key.action_kind == "observe-acceptance"
+    )
+    return episode
+
+
+@pytest.mark.parametrize("ending", ["merged", "abandoned"])
+def test_a_terminal_change_ignores_its_exhausted_acceptance_reads(tmp_path: Path, ending: str) -> None:
+    application, runtime, memory, _head, _state_root = _memory_awaiting_merge(tmp_path)
+    now = [_START]
+    _with_clock(application, now)
+    for seconds in (0, 1, 3):
+        now[0] = _START + timedelta(seconds=seconds)
+        application.reconcile_awaiting_acceptance(("change-a",))
+    assert _exhausted_acceptance_episode(runtime, application).stop_code is RetryStopCode.ACCEPTANCE_WAIT
+    now[0] = _START + timedelta(hours=1)
+    if ending == "merged":
+        _approve(application)
+        memory.execute_pending_merges()
+        now[0] += timedelta(minutes=1)
+        assert application.reconcile_awaiting_acceptance(("change-a",))[0].status.value == "completed"
+    else:
+        application.set_change_intent(
+            DeliveryChangeIntent(
+                change_id="change-a",
+                kind=DeliveryChangeIntentKind.ABANDON,
+                expected_frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+                reason="No longer needed",
+            )
+        )
+    ledger_before = runtime.retry_ledger(clock=application._clock).read()
+
+    change = application.get_change("change-a")
+    detail = application.show_work_item_view("change-a", "publication")
+
+    label = {"merged": "Change completed", "abandoned": "Change abandoned"}[ending]
+    for readiness in (change.readiness, change.detail.readiness, change.detail.card.readiness, detail.readiness):
+        assert (readiness.status, readiness.reason_code, readiness.operation) == ("complete", "change-terminal", None)
+        assert (readiness.executable, readiness.next_actor, readiness.prompt) == (False, WorkItemNextActor.NONE, None)
+        assert (readiness.attempts, readiness.retry_history, readiness.stop_reason) == (0, (), None)
+        assert readiness.progress.situation == ("done" if ending == "merged" else "abandoned")
+    for card in (change.detail.card, detail.card):
+        assert (card.next_actor, card.next_step, card.progress.label) == (WorkItemNextActor.NONE, label, label)
+        assert card.action.kind is WorkItemActionKind.NONE
+    assert detail.publication.readiness_diagnostics == ("change-terminal",)
+    assert runtime.retry_ledger(clock=application._clock).read() == ledger_before
+    assert _exhausted_acceptance_episode(runtime, application).stop_code is RetryStopCode.ACCEPTANCE_WAIT
 
 
 def test_a_merged_approval_converges_after_repeated_read_failures_and_a_restart(tmp_path: Path) -> None:
