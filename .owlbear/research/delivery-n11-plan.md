@@ -261,10 +261,10 @@ cannot perform it.
 | Phase | PR | Head | Proof | Challenge | Status |
 | --- | --- | --- | --- | --- | --- |
 | N11-P | shared with N11-A | `1c4d965a5` + corrections | source probes (§2) | Sol round 1 `revision-required`; F1–F3 fix-now applied; gate closed | done |
-| N11-A | — | — | — | — | not started |
+| N11-A | #420 (stacked under N12) | `356a94501`, repairs `040a1fda9` | ruff clean; changed-scope pytest 4009 passed, 1 skipped; repair tests 13 and Cockpit 134 passed; Vitest 382; build ok; `test:e2e:work` seed failure pre-existing on `a22319bca`; LC per N12 U4 | Sol implementation round 1 `blocked`: F1 stale-replay receipt check and F3 P5–P7, N6 evidence fixed; F2 LC carried by N12 | merged `a304a31a9`, activated 2026-10-08 |
 
 ## 5. Verification gaps
 
 | Gap | Claim | Reason unproven | Evidence | Owner | Blocks |
 | --- | --- | --- | --- | --- | --- |
-| G1 | The live blocked Change continues after a grant | Live state is read-only for programme work | LC grant on the copy | User, after `/upgrade-delivery` | Nothing (post-merge activation) |
+| G1 | The live blocked Change continues after a grant | Live state is read-only for programme work | Closed 2026-10-08 by the live activation ([N12 plan](delivery-n12-plan.md) §3.7, steps 4–6) | — | Nothing |
