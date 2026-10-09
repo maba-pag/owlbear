@@ -64,7 +64,7 @@ stale     ──[resolve*]──► approved    [delete: soft → deleted]
 | `save_memory` | Create an unscoped `pending` entry from self-reported provenance; recognition is not authorization |
 | `list_memories` | List metadata sorted by curation priority, including each entry's `revision`; filters: `states`, `categories`, `scope_agents` |
 | `read_memory` | Read one full entry by `entry_id`, including its `revision`; errors on deleted entries |
-| `recall_memory` | Identity-bearing markdown blocks scoped to one agent (`## title`, `Entry ID`, `Revision` immediately after the ID, then body; contested entries add `State: contested` and an available `Challenge task:` reference); three-pool slot allocation (explore, challenge, regular) with final sort by `(state_rank, -score, id)`; constants `SLOT_EXPLORE=2`, `SLOT_CHALLENGE=2`; default limit 20 |
+| `recall_memory` | Identity-bearing markdown blocks scoped to one agent (`## title`, `Entry ID`, `Revision` immediately after the ID, then optional contested state/challenge lines and body; contested entries add one `Challenge task:` line per record); three-pool slot allocation (explore, challenge, regular) with final sort by `(state_rank, -score, id)`; constants `SLOT_EXPLORE=2`, `SLOT_CHALLENGE=2`; default limit 20 |
 | `curate_memory` | Requires `revision`; mutates fields, promotes `pending→curated` when scope is provided, or downgrades `approved→curated`; raises `TransitionError` for contested/disputed/stale |
 | `delete_memory` | Requires `revision`; hard-deletes pending entries and soft-deletes curated/approved/contested/disputed/stale entries |
 | `rename_agent_memories` | Rewrite every matching `source_agent` and `scope_agents` reference after an agent rename |
@@ -126,7 +126,7 @@ remove receipts for the previous revision.
 | `created_at` | str | UTC timestamp |
 | `updated_at` | str | UTC timestamp |
 | `approved_at` | str \| null | Set on approve, cleared on downgrade/delete |
-| `contested_by_task` | str \| null | Task ID of the first factually-wrong confirmation; null until first confirmation; cleared on resolve |
+| `challenges` | list of `{task_id, revision, recorded_at}` | Ordered records for the current dispute cycle; at most two; retained on delete and cleared on resolve |
 
 ## Agent Identity
 

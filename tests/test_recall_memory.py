@@ -26,6 +26,7 @@ from uuid import UUID
 
 import pytest
 from owlbear_memory import MemoryEngine, MemoryEntry, MemoryState, storage
+from owlbear_memory.models import ChallengeRecord
 
 
 async def _recall(*args: object, **kwargs: object) -> str:
@@ -514,8 +515,10 @@ class TestFromAC_ContestedMarker:
             content="Check this guidance before applying it.",
             state=MemoryState.CONTESTED,
             scope_agents=["builder"],
-            contested_by_task="task-243",
         )
+        entry.challenges = [
+            ChallengeRecord(task_id="task-243", revision=entry.revision, recorded_at=_TS),
+        ]
         storage.write_entry(tmp_path / f"{entry.id}.md", entry, memory_dir=tmp_path)
         engine = MemoryEngine(memory_dir=tmp_path)
         ctx = _make_ctx(engine)
@@ -535,7 +538,6 @@ class TestFromAC_ContestedMarker:
             title="Unreferenced challenge",
             state=MemoryState.CONTESTED,
             scope_agents=["builder"],
-            contested_by_task=None,
         )
         storage.write_entry(tmp_path / f"{entry.id}.md", entry, memory_dir=tmp_path)
         engine = MemoryEngine(memory_dir=tmp_path)

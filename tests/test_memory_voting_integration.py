@@ -21,6 +21,7 @@ from uuid import UUID
 import pytest
 from owlbear_memory import MemoryEngine, MemoryEntry, MemoryState, storage
 from owlbear_memory.engine import compute_score
+from owlbear_memory.models import ChallengeRecord
 
 # ---------------------------------------------------------------------------
 # Shared constants
@@ -68,12 +69,12 @@ def _make_approved_entry(  # noqa: PLR0913, PLR0917
     didnt_use_count: int = 0,
     scope_agents: list[str] | None = None,
     state: MemoryState = MemoryState.APPROVED,
-    contested_by_task: str | None = None,
+    challenge_task_ids: list[str] | None = None,
 ) -> MemoryEntry:
     agents = scope_agents if scope_agents is not None else [_AGENT]
     score = compute_score(confidence, outstanding_count, unremarkable_count)
     approved_at = _TS_APPROVED if state == MemoryState.APPROVED else None
-    return MemoryEntry(
+    entry = MemoryEntry(
         id=entry_id,
         title=title,
         content=f"Content for {title}.",
@@ -89,8 +90,12 @@ def _make_approved_entry(  # noqa: PLR0913, PLR0917
         unremarkable_count=unremarkable_count,
         didnt_use_count=didnt_use_count,
         score=score,
-        contested_by_task=contested_by_task,
     )
+    if challenge_task_ids:
+        entry.challenges = [
+            ChallengeRecord(task_id=task_id, revision=entry.revision, recorded_at=_TS) for task_id in challenge_task_ids
+        ]
+    return entry
 
 
 def _write_entry(directory: Path, entry: MemoryEntry) -> None:
@@ -466,7 +471,7 @@ class TestMemoryVotingLifecycle:
                 outstanding_count=outstanding,
                 didnt_use_count=didnt_use,
                 state=state,
-                contested_by_task="task-order" if state == MemoryState.CONTESTED else None,
+                challenge_task_ids=["task-order"] if state == MemoryState.CONTESTED else None,
             )
             _write_entry(tmp_path, entry)
 
@@ -510,7 +515,8 @@ class TestMemoryVotingStateTransitions:
         result = _record_factually_wrong(engine, _ID_TRANS_A, _TASK_A)
 
         assert result.state == MemoryState.CONTESTED
-        assert result.contested_by_task == _TASK_A
+        assert [challenge.task_id for challenge in result.challenges] == [_TASK_A]
+        assert result.challenges[0].revision == result.revision
 
     @pytest.mark.asyncio
     async def test_contested_entry_included_in_recall(self, tmp_path: Path) -> None:
@@ -521,7 +527,7 @@ class TestMemoryVotingStateTransitions:
             _ID_TRANS_A,
             "In Recall When Contested",
             state=MemoryState.CONTESTED,
-            contested_by_task=_TASK_A,
+            challenge_task_ids=[_TASK_A],
         )
         _write_entry(tmp_path, entry)
         engine = MemoryEngine(memory_dir=tmp_path)
@@ -542,6 +548,7 @@ class TestMemoryVotingStateTransitions:
         result = _record_factually_wrong(engine, _ID_TRANS_A, _TASK_B)
 
         assert result.state == MemoryState.DISPUTED
+        assert [challenge.task_id for challenge in result.challenges] == [_TASK_A, _TASK_B]
 
     @pytest.mark.asyncio
     async def test_disputed_entry_excluded_from_recall(self, tmp_path: Path) -> None:
@@ -552,7 +559,7 @@ class TestMemoryVotingStateTransitions:
             _ID_TRANS_A,
             "Excluded When Disputed",
             state=MemoryState.DISPUTED,
-            contested_by_task=_TASK_B,
+            challenge_task_ids=[_TASK_A, _TASK_B],
         )
         _write_entry(tmp_path, entry)
         engine = MemoryEngine(memory_dir=tmp_path)

@@ -134,8 +134,7 @@ def _recall_block(entry: MemoryEntry) -> str:
     lines = [f"## {entry.title}", f"Entry ID: `{entry.id}`", f"Revision: `{entry.revision}`"]
     if entry.state == MemoryState.CONTESTED:
         lines.append("State: contested")
-        if entry.contested_by_task:
-            lines.append(f"Challenge task: `{entry.contested_by_task}`")
+        lines.extend(f"Challenge task: `{challenge.task_id}`" for challenge in entry.challenges)
     lines.append(entry.content)
     return "\n".join(lines)
 
@@ -201,6 +200,14 @@ def _entry_to_dict(entry: MemoryEntry) -> dict[str, object]:
         "created_at": entry.created_at,
         "updated_at": entry.updated_at,
         "approved_at": entry.approved_at,
+        "challenges": [
+            {
+                "task_id": challenge.task_id,
+                "revision": challenge.revision,
+                "recorded_at": challenge.recorded_at,
+            }
+            for challenge in entry.challenges
+        ],
     }
 
 

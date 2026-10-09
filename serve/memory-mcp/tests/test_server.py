@@ -382,6 +382,122 @@ async def test_live_assessments_replay_first_bucket_and_allow_different_task(
 
 
 @pytest.mark.asyncio
+async def test_live_factually_wrong_projects_ordered_challenges(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Registered MCP reads expose each challenge with its revision and time."""
+    memory_dir = tmp_path / ".owlbear/memory"
+    entry = _create_entry(memory_dir, title="Challenge projection", state=MemoryState.APPROVED)
+    monkeypatch.chdir(tmp_path)
+    task_ids = ("challenge-task-a", "challenge-task-b")
+
+    async with mcp.Client(memory_mcp) as client:
+        for task_id in task_ids:
+            assessment = await client.call_tool(
+                "assess_memories",
+                {
+                    "assessments": [{"entry_id": entry.id, "revision": entry.revision, "bucket": "factually_wrong"}],
+                    "task_id": task_id,
+                },
+            )
+            assert not assessment.is_error
+            result = json.loads(_text(assessment))["results"][0]
+            assert result["success"] is True
+            assert result["already_applied"] is False
+
+        read_result = await client.call_tool("read_memory", {"entry_id": entry.id})
+        list_result = await client.call_tool("list_memories", {})
+
+    read_payload = json.loads(_text(read_result))
+    listed_payload = [json.loads(item.text) for item in list_result.content if hasattr(item, "text")]
+    challenges = read_payload["challenges"]
+    assert not read_result.is_error
+    assert not list_result.is_error
+    assert read_payload["state"] == "disputed"
+    assert read_payload["revision"] == entry.revision
+    assert [challenge["task_id"] for challenge in challenges] == list(task_ids)
+    assert [challenge["revision"] for challenge in challenges] == [entry.revision, entry.revision]
+    assert all(challenge["recorded_at"] for challenge in challenges)
+    assert all(set(challenge) == {"task_id", "revision", "recorded_at"} for challenge in challenges)
+    assert len(listed_payload) == 1
+    assert listed_payload[0]["challenges"] == challenges
+    legacy_field = "contested" + "_by_task"
+    for payload in (read_payload, listed_payload[0]):
+        assert legacy_field not in payload
+        assert "assessment_receipts" not in payload
+
+
+@pytest.mark.asyncio
+async def test_live_factually_wrong_replays_after_challenge_state_changes(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Challenge replays remain idempotent before and after the disputed transition."""
+    memory_dir = tmp_path / ".owlbear/memory"
+    entry = _create_entry(memory_dir, title="Challenge replay", state=MemoryState.APPROVED)
+    monkeypatch.chdir(tmp_path)
+    revision = entry.revision
+
+    async with mcp.Client(memory_mcp) as client:
+        first = await client.call_tool(
+            "assess_memories",
+            {
+                "assessments": [{"entry_id": entry.id, "revision": revision, "bucket": "factually_wrong"}],
+                "task_id": "challenge-task-a",
+            },
+        )
+        replay_first = await client.call_tool(
+            "assess_memories",
+            {
+                "assessments": [{"entry_id": entry.id, "revision": revision, "bucket": "factually_wrong"}],
+                "task_id": "challenge-task-a",
+            },
+        )
+        contested_read = await client.call_tool("read_memory", {"entry_id": entry.id})
+        second = await client.call_tool(
+            "assess_memories",
+            {
+                "assessments": [{"entry_id": entry.id, "revision": revision, "bucket": "factually_wrong"}],
+                "task_id": "challenge-task-b",
+            },
+        )
+        replay_second = await client.call_tool(
+            "assess_memories",
+            {
+                "assessments": [{"entry_id": entry.id, "revision": revision, "bucket": "factually_wrong"}],
+                "task_id": "challenge-task-b",
+            },
+        )
+        disputed_read = await client.call_tool("read_memory", {"entry_id": entry.id})
+
+    assert not first.is_error
+    assert not replay_first.is_error
+    assert not second.is_error
+    assert not replay_second.is_error
+    first_result = json.loads(_text(first))["results"][0]
+    replay_first_result = json.loads(_text(replay_first))["results"][0]
+    second_result = json.loads(_text(second))["results"][0]
+    replay_second_result = json.loads(_text(replay_second))["results"][0]
+    assert first_result["success"] is True
+    assert first_result["already_applied"] is False
+    assert replay_first_result["success"] is True
+    assert replay_first_result["already_applied"] is True
+    assert json.loads(_text(contested_read))["state"] == "contested"
+    assert [item["task_id"] for item in json.loads(_text(contested_read))["challenges"]] == ["challenge-task-a"]
+    assert second_result["success"] is True
+    assert second_result["already_applied"] is False
+    assert replay_second_result["success"] is True
+    assert replay_second_result["already_applied"] is True
+    disputed_payload = json.loads(_text(disputed_read))
+    assert disputed_payload["state"] == "disputed"
+    assert [item["task_id"] for item in disputed_payload["challenges"]] == [
+        "challenge-task-a",
+        "challenge-task-b",
+    ]
+
+
+@pytest.mark.asyncio
 async def test_live_assessments_reject_malformed_batches_without_mutation(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
