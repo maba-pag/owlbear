@@ -1310,7 +1310,7 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
     if operation_name in call_args:
         assert application.calls[0][1] == call_args[operation_name]
     if operation_name == "settle_worker_invocation":
-        assert application.calls[0][2] == {"host_id": "host", "session_id": "session"}
+        assert application.calls[0][2] == {"host_id": "host", "session_id": "session", "retry_reason": None}
     if operation_name == "submit_result":
         submission = application.calls[0][1][0]
         assert isinstance(submission, DeliveryResultSubmission)
