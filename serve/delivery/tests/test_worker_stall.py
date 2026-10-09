@@ -10,6 +10,7 @@ import os
 import subprocess
 import sys
 import time
+import unittest.mock
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -1735,6 +1736,43 @@ def test_released_builder_late_commits_are_handed_to_the_same_task_successor(tmp
     assert context.launch.source_head == late_head
     assert _builder_retry_history(context.prior_attempts) == [(1, "original", "failed", "worker-released-stuck")]
     assert _owner_failure_code(state_root, "change-a", launch.claim.attempt_id) == "worker-released-stuck"
+
+
+def test_builder_handoff_refuses_a_commit_landing_between_preparation_and_activation(tmp_path: Path) -> None:
+    start = _real_now()
+    now = [_iso(start)]
+    application, runtime, coordinator, _state_root, _probe, launch, _branch_head = _builder_with_workspace_changes(
+        tmp_path, now
+    )
+    now[0] = _iso(start + timedelta(minutes=10))
+    application.release_stuck_worker("change-a", launch.outcome_id, launch.claim.attempt_id, launch.claim.claim_id)
+    handoff = coordinator.show("change-a").builder_handoff
+    assert handoff is not None
+    now[0] = _iso(start + timedelta(hours=2))
+    manager = application._workspace_manager
+    prepare = manager.prepare_builder_handoff_acquisition
+    pinned_heads: list[str | None] = []
+
+    def commit_after_application_preparation(*args: object, **kwargs: object) -> object:
+        prepared = prepare(*args, **kwargs)
+        pinned_heads.append(kwargs.get("expected_head"))  # type: ignore[arg-type]
+        if len(pinned_heads) == 1:
+            _drift_handoff_workspace(launch.worktree_path, "head")
+        return prepared
+
+    with (
+        unittest.mock.patch.object(
+            manager, "prepare_builder_handoff_acquisition", side_effect=commit_after_application_preparation
+        ),
+        contextlib.suppress(change_workspace.PreservationFenceError),
+    ):
+        result = application.acquire_change_action(_continuation_request(application, "change-a"))
+        assert result.launch is None, result
+
+    assert pinned_heads == [handoff.branch_head]
+    assert runtime.active_claims() == ()
+    assert coordinator.show("change-a").builder_handoff == handoff
+    assert _git(launch.worktree_path, "rev-parse", "HEAD") != handoff.branch_head
 
 
 def test_builder_handoff_with_ignored_churn_refuses_a_head_off_its_retained_lineage(tmp_path: Path) -> None:

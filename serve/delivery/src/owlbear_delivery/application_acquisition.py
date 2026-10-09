@@ -2081,6 +2081,7 @@ class _AcquisitionMixin:
                 activation,
                 builder_handoff_participant=participant,
                 builder_handoff_lock=lock,
+                builder_handoff_source_head=source.source_head,
             )
         return writer
 
