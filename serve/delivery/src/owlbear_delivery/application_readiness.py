@@ -1636,21 +1636,6 @@ class _ReadinessViewsMixin:
         )
         return readiness.model_copy(update={"prompt": prompt})
 
-    def _settled_attention_sync_reason(
-        self,
-        snapshot: DeliveryPortfolioSnapshot,
-        reason: str | None,
-    ) -> str | None:
-        if reason != "settled-attention-target-drift":
-            return reason
-        if (
-            not self._supports_finalization(snapshot.frontier)
-            or self._change_branch_publisher is None
-            or self._draft_pull_request_publisher is None
-        ):
-            return reason
-        return "target-sync-required"
-
     def _capture_action_basis(  # noqa: C901, PLR0911 - one ordered row per workspace and target state.
         self,
         snapshot: DeliveryPortfolioSnapshot,
@@ -1687,7 +1672,6 @@ class _ReadinessViewsMixin:
         )
         if needs_workspace and not self._snapshot_has_active_claims(snapshot):
             basis, reason = self._capture_readiness_workspace(snapshot, basis)
-            reason = self._settled_attention_sync_reason(snapshot, reason)
             sync = snapshot.frontier.target_sync_receipt
             pending = snapshot.frontier.pending_checkpoint
             if (
@@ -1697,7 +1681,8 @@ class _ReadinessViewsMixin:
             ):
                 if pending is not None and pending.head is not None and snapshot.frontier.published_head is None:
                     reason = "checkpoint-pending"
-                elif sync is None or sync.target_head != basis.target_head:
+                elif sync is None:
+                    # Finalization proves against the recorded target sync; a later target move needs no sync (D2).
                     reason = "target-sync-required"
             elif reason is None and merge is not None and merge.reason == "target-sync-required":
                 # U3(a): a finalized Change syncs to the provider's target head, not the unfetched local ref.
@@ -1900,8 +1885,7 @@ class _ReadinessViewsMixin:
             or report.request.expected_frontier_digest != attempt.frontier_digest
         ):
             return "finalization-failed"
-        if attempt.target_head != basis.target_head:
-            return "settled-attention-target-drift"
+        # A target-only move since the failed attempt does not stop its retry (D2).
         return workspace_reason if workspace_reason not in {None, "active-custody"} else None
 
     def _target_sync_basis(

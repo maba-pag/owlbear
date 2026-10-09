@@ -823,7 +823,6 @@ class PortfolioCoordinator:
             or finalization_attempt.contract_digest != prior_attempt.contract_digest
             or finalization_attempt.frontier_digest != prior_attempt.frontier_digest
             or finalization_attempt.exact_head != prior_attempt.exact_head
-            or finalization_attempt.target_head != prior_attempt.target_head
         ):
             _coordination_conflict("finalizer retry does not match its retained attention")
         return True

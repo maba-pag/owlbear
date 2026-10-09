@@ -328,7 +328,6 @@ class ChangeWorkspaceManager(_WorktreeStateMixin, _PreservationMixin, _SnapshotM
             captured, head, fingerprint, paths, reason = self.capture_finalization_workspace(
                 change_id, finalizer.promoted_commits
             )
-            target_head = self.observed_target_head()
             expected_reason = "active-custody" if finalizer.expected_attention is not None else None
             if (
                 current != captured
@@ -336,7 +335,6 @@ class ChangeWorkspaceManager(_WorktreeStateMixin, _PreservationMixin, _SnapshotM
                 or fingerprint != finalizer.expected_workspace_fingerprint
                 or paths
                 or reason != expected_reason
-                or target_head != finalizer.attempt.target_head
             ):
                 _coordination_conflict("Finalizer workspace changed before acquisition")
             if finalizer.before_acquire is not None:

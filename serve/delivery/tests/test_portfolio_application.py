@@ -5984,20 +5984,67 @@ def test_continuation_acquisition_fences_a_prepared_runtime_mutation(tmp_path: P
     assert coordinator.show("change-a").writer == acquired[0].finalization.attempt.writer
 
 
-def test_continuation_finalizer_rejects_target_drift_without_releasing_custody(tmp_path: Path) -> None:
+def test_continuation_finalizer_completes_after_a_target_only_move(tmp_path: Path) -> None:
     application, runtimes, coordinator, _state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
     acquired = application.acquire_change_action(_continuation_request(application))
     attempt = acquired.finalization.attempt
     repository = application._workspace_manager.repository
     _git(repository, "commit", "--allow-empty", "-m", "target advances")
     _git(repository, "update-ref", "refs/remotes/origin/main", "HEAD")
+    assert application._workspace_manager.observed_target_head() != attempt.target_head
 
-    with pytest.raises(CoordinationConflictError, match="target head changed"):
-        application.finalize_change(
-            "change-a", _finalization_request("change-a", attempt.exact_head, attempt.writer.attempt_id)
-        )
-    assert runtimes["change-a"].finalization() is None
-    assert coordinator.show("change-a").writer == attempt.writer
+    finalized = application.finalize_change(
+        "change-a", _finalization_request("change-a", attempt.exact_head, attempt.writer.attempt_id)
+    )
+    assert finalized.exact_head == attempt.exact_head
+    assert runtimes["change-a"].finalization() == finalized
+    assert coordinator.show("change-a").writer is None
+
+
+def _advance_target(tmp_path: Path, application: PortfolioApplication, remote: Path, name: str) -> str:
+    clone = tmp_path / name
+    _git(tmp_path, "clone", str(remote), str(clone))
+    _git(clone, "config", "user.name", "Target User")
+    _git(clone, "config", "user.email", "target@example.invalid")
+    _git(clone, "commit", "--allow-empty", "-m", f"advance target ({name})")
+    _git(clone, "push", "origin", "HEAD:refs/heads/main")
+    target = _git(clone, "rev-parse", "HEAD")
+    _git(application._workspace_manager.repository, "fetch", "--no-prune", "origin", "main:refs/remotes/origin/main")
+    assert application._workspace_manager.observed_target_head() == target
+    return target
+
+
+def test_moved_target_after_sync_neither_forces_a_sync_nor_refuses_finalization(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path, {"change-a": DeliveryStage.COMPLETED}, clock=lambda: now[0]
+    )
+    _provider, remote = _attach_engine_publication(application, tmp_path)
+    synced_target = _advance_target(tmp_path, application, remote, "first")
+    sync_owner = application.acquire_change_action(_continuation_request(application))
+    assert sync_owner.engine_action is not None
+    assert sync_owner.engine_action.kind == "sync-target"
+    synchronized = _execute_engine(application, sync_owner.engine_action)
+    assert synchronized.kind == "completed", synchronized
+    assert synchronized.target_sync.target_head == synced_target
+
+    # Before finalization: dev moves again; finalization is offered against the recorded sync.
+    _advance_target(tmp_path, application, remote, "second")
+    now[0] = "2026-08-04T00:00:01Z"
+    readiness = application.get_change("change-a").readiness
+    assert (readiness.status, readiness.operation.value) == ("ready", "finalize"), readiness
+    acquired = application.acquire_change_action(_continuation_request(application))
+    assert acquired.kind == "acquired", acquired
+    attempt = acquired.finalization.attempt
+
+    # During finalization: dev moves once more; completion still succeeds.
+    _advance_target(tmp_path, application, remote, "third")
+    finalized = application.finalize_change(
+        "change-a", _finalization_request("change-a", attempt.exact_head, attempt.writer.attempt_id)
+    )
+    assert finalized.exact_head == synchronized.target_sync.merged_head
+    assert coordinator.show("change-a").writer is None
+    assert runtimes["change-a"].target_sync_receipt().target_head == synced_target
 
 
 def _owns_finalization_frontier_publication(transaction: RuntimeTransaction) -> bool:
@@ -8781,7 +8828,20 @@ def test_settled_finalizer_attention_continues_target_drift_through_engine_owner
         )
 
     state_before = protected_state()
-    if not publisher_configured or damage not in {
+    if not publisher_configured:
+        # D2: a target-only move no longer stops the retry of a settled Finalizer attention.
+        readiness = application.get_change("change-a").readiness
+        assert (readiness.status, readiness.operation.value) == ("ready", "finalize"), readiness
+        retried = application.acquire_change_action(_continuation_request(application))
+        assert retried.kind == "acquired", retried
+        assert retried.finalization.attempt.exact_head == attempt.exact_head
+        continued = RetryLedger(state_root, "change-a").episode_for_attempt(
+            retried.finalization.attempt.writer.attempt_id
+        )
+        assert continued.episode_id == finalizer_budget.episode_id
+        assert continued.total_attempts == finalizer_budget.total_attempts + 1
+        return
+    if damage not in {
         None,
         "receipt-after-reservation",
         "receipt-before-registration",
@@ -8798,18 +8858,10 @@ def test_settled_finalizer_attention_continues_target_drift_through_engine_owner
                 assert readiness.operation is None or readiness.operation.value != "sync-target"
                 assert not readiness.executable
                 assert readiness.action is None
-                if not publisher_configured:
-                    assert readiness.reason_code == "settled-attention-target-drift"
-                    assert readiness.prompt is not None
-                    assert readiness.prompt.startswith("/inspect-change change-a ")
-                    assert "Read-only" in readiness.prompt
-                    assert "Do not synchronize the target" in readiness.prompt
 
                 blocked = application.acquire_change_action(_continuation_request(application))
                 assert blocked.kind != "acquired"
                 assert blocked.reason_code != "ready"
-                if not publisher_configured:
-                    assert blocked.reason_code == "settled-attention-target-drift"
                 assert blocked.readiness is not None
                 assert blocked.readiness.status in {"blocked", "unavailable"}
                 assert not blocked.readiness.executable
@@ -8821,12 +8873,6 @@ def test_settled_finalizer_attention_continues_target_drift_through_engine_owner
         sync_with_target.assert_not_called()
         assert provider.create_calls == 0
         assert provider.draft_state_calls == 0
-        if not publisher_configured:
-            assert coordinator.show("change-a").finalization_attention == attention
-            assert coordinator.show("change-a").finalization_attempt == attempt.model_copy(
-                update={"finished_at": attention.finished_at}
-            )
-            assert runtimes["change-a"].finalization() is None
         return
 
     readiness = application.get_change("change-a").readiness
@@ -9406,8 +9452,9 @@ def test_refunded_settled_finalizer_retry_syncs_target_under_original_budget(
     assert runtimes["change-a"].active_claims() == ()
 
 
-@pytest.mark.parametrize("mismatched_field", ["contract_digest", "frontier_digest", "target_head"])
-def test_manager_rejects_stale_finalizer_attention_before_registration(  # noqa: PLR0915 - custody proof.
+# A target-only move is not stale attention (D2); see the no-publisher target-drift retry case.
+@pytest.mark.parametrize("mismatched_field", ["contract_digest", "frontier_digest"])
+def test_manager_rejects_stale_finalizer_attention_before_registration(
     tmp_path: Path, *, mismatched_field: str
 ) -> None:
     application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
@@ -9427,9 +9474,6 @@ def test_manager_rejects_stale_finalizer_attention_before_registration(  # noqa:
     assert retained_attempt is not None
     manager = application._workspace_manager
     repository = manager.repository
-    if mismatched_field == "target_head":
-        _git(repository, "commit", "--allow-empty", "-m", "advance target")
-        _git(repository, "update-ref", "refs/remotes/origin/main", "HEAD")
 
     writer = retained_attempt.writer.model_copy(
         update={
@@ -9441,11 +9485,7 @@ def test_manager_rejects_stale_finalizer_attention_before_registration(  # noqa:
         }
     )
     attempt_updates = {"writer": writer, "finished_at": None}
-    attempt_updates[mismatched_field] = (
-        manager.observed_target_head()
-        if mismatched_field == "target_head"
-        else hashlib.sha256(f"stale-{mismatched_field}".encode()).hexdigest()
-    )
+    attempt_updates[mismatched_field] = hashlib.sha256(f"stale-{mismatched_field}".encode()).hexdigest()
     retry_attempt = retained_attempt.model_copy(update=attempt_updates)
     promoted_commits = tuple(
         result.completed_commit for binding in runtimes["change-a"].bindings() for result in binding.results
@@ -14060,7 +14100,10 @@ def _loader_registered_engine_action_fixture(
     elif action_kind == "sync-target":
         frontier_path = runtime_root / "changes" / "change-a" / "frontier.json"
         frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=True)
-        frontier_path.write_bytes(_canonical(frontier.model_copy(update={"finalization": None})))
+        # Only a missing proof target requires a sync before finalization (D2), not a moved target.
+        frontier_path.write_bytes(
+            _canonical(frontier.model_copy(update={"finalization": None, "target_sync_receipt": None}))
+        )
         _git(
             application._coordinator.show("change-a").worktree_path,
             "push",
