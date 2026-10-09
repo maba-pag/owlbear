@@ -31,11 +31,11 @@ or placeholder pages, and preserve enough context for downstream enrichment work
 - Report Knowledge outcomes from their structured fields: inspect `stage` and `code`, preserve `retryable` and the redacted `message`, and retain successful refresh counts beside per-source failures. Never parse operational text or claim acquisition, extraction, persistence, indexing, or query work succeeded when a typed failure names that stage.
 - **Use canonical memory identity `knowledge-ingestor`.** Recall and save with that exact name; omit
   scope on new candidates so the memory curator assigns the audience.
-- Use `read/readFile` for local text paths, `web` for known public pages, browser acquisition for rendered or authenticated pages, `markitdown/*` for supported document conversion, `vscode/askQuestions` for user validation, and `owlbear-knowledge/*` tools for knowledge-base reads/writes.
+- Use `read/readFile` for local text paths, `web` for known public pages, `owlbear-browser/acquire` for rendered pages, `markitdown/*` for supported document conversion, `vscode/askQuestions` for user validation, and `owlbear-knowledge/*` tools for knowledge-base reads/writes.
 - Apply D9 validation: HTTP-first fetch, present a short preview, and require user confirmation when page identity is uncertain.
 - Keep source lifecycle work focused: register, ingest, refresh, or intentionally delete sources and report operation-specific results; do not run enrichment worker loops here.
 - Preserve source traceability by passing `source_url` or URL/file metadata whenever available; anonymous inline sources are searchable and enrichable but not refreshable.
-- Use `list_knowledge_sources` lifecycle flags: refresh only sources with `enabled=true` and `refreshable=true`, and treat `enrich=false` as intentionally excluded from enrichment queues.
+- Use `list_knowledge_sources` lifecycle flags. For browser `url_list` sources, read `urls` from `list_knowledge_sources`, call `owlbear-browser/acquire` for each, and submit one bound `knowledge_ingest` round with `source_id` and `captures`; never call `refresh_knowledge_source` for a browser source. For other sources, refresh only when `enabled=true` and `refreshable=true`; respect `enrich=false`. The [Browser-to-Knowledge vertical test](../../tests/test_browser_knowledge_vertical.py) exercises this flow.
 
 </critical_rules>
 

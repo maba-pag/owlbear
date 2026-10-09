@@ -22,6 +22,9 @@ Search the knowledge base for relevant context.
 
 Returns on success: `list[dict]` — ranked results with `title`, `score`, `snippet`, `retrieval_path`, `graph_context`, `entities`, `related_sources`, and `source`; `graph_context` is an empty string unless graph expansion contributes context. An empty `[]` is a successful no-match result.
 
+Each result's `source` projection includes `id`, `uri`, `name`, `url`, and `provenance`. Provenance
+is `null` or contains the available `canonical_url`, `fetched_at`, and `content_hash` values.
+
 Returns on operational failure: a serialized `KnowledgeFailure` with `stage`, `code`, `retryable`, and redacted `message`. The return union is `list[dict] | KnowledgeFailure`.
 
 Raises `ToolError` when the Knowledge service is unavailable or the search request is invalid. These are preconditions, not `KnowledgeFailure` results.
@@ -50,23 +53,59 @@ warnings as structured MCP fields. Do not parse the summary as a stable machine-
 
 Behavior:
 
-- Every direct call uses or creates the inline source named `mcp-inline-{scope}`. That source is
   active and enrichment-eligible but `refreshable` is false.
-- `source_url`, when supplied, becomes the ingested document URI/identity. It does not register or
   reuse a URL, file, or authenticated-browser source, and it does not make the inline source
   refreshable.
-- `metadata` is passed to the document request. `metadata.url` and URL-like metadata values are not
   promoted into a registered source by this tool.
-- The source's configured scope is used by the coordinator for document, chunk, and vector
   persistence. Choose `project:{id}` explicitly for project-scoped direct captures.
-- If both `source_url` and `metadata.title` are omitted, the document identity is the shared title
   `Untitled inline document` within `mcp-inline-{scope}`; a later anonymous capture replaces the
   earlier one. Set `source_url` or `metadata.title` for each capture that must remain distinct.
-- The current text adapter summarizes counts even when the coordinator records per-document
   failures. Inspect source health or use the typed refresh path when failure detail matters.
 
 Automatic graph extraction and persistence details are recorded by the coordinator, but this string
 adapter does not expose a separate `partial` status or warning field.
+Ingest one inline text document or one Browser capture round bound to a registered source.
+
+| Param | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `text` | str or null | null | Required without `source_id`; omit for a bound round |
+| `metadata` | dict or null | null | Optional document metadata; allowed in either mode |
+| `scope` | str or null | null | Inline scope, defaulting to `global`; forbidden with `source_id` |
+| `source_url` | str or null | null | Inline document URI/identity; does not register a source and is forbidden with `source_id` |
+| `source_id` | str or null | null | Active browser `url_list` source for bound mode |
+| `captures` | list of `CaptureEntry` or null | null | Required with `source_id`; one outcome for each registered URL |
+
+Returns a typed `KnowledgeIngestResult` with `source_id`, `documents_created`,
+`documents_replaced`, `documents_unchanged`, `documents_failed`, `chunks_created`, `chunks_replaced`,
+`document_ids`, `health`, and `errors`, or a typed `KnowledgeFailure`. Each failure has `stage`,
+`code`, `retryable`, and redacted `message` fields.
+
+Modes and behavior:
+
+- Inline mode supplies `text` without `source_id`. The server uses or creates the non-refreshable
+  `mcp-inline-{scope}` source; `source_url` supplies only the document URI/identity. URL-like
+  metadata does not register a source.
+- Bound mode supplies `source_id` and `captures` for an active browser `url_list` source. It rejects
+  inline `text`, `source_url`, or `scope`. Each capture has a registered `url` and exactly one of
+  `captured` or `failed`; `captured` requires `text` and may include `title`, `canonical_url`,
+  `fetched_at`, and `content_hash`.
+- Missing, duplicate, or unregistered capture entries; an omitted capture round; a missing,
+  deleted, or inactive source; a non-browser source; or `text` supplied with `source_id` raises
+  `ToolError`.
+- Round health is `ok` when all entries succeed, `degraded` when successes and failures coexist,
+  and `failed` when none succeed. Failed acquisitions and processing attempts keep the last good
+  document.
+- `browser_capture_failed` and `agent_capture_required` are acquisition-stage failures.
+  `processing_failed` and `persistence_failed` are persistence-stage failures.
+
+### Browser capture rounds
+
+For a browser `url_list` source, read `urls` from `list_knowledge_sources` in registered order, call
+Browser `acquire` for each URL, and submit exactly one bound `knowledge_ingest` call with that
+source's `source_id` and the resulting `captures`. Do not call `refresh_knowledge_source` for a
+browser source; it returns acquisition-stage `agent_capture_required` instead of acquiring pages.
+The [Browser-to-Knowledge vertical test](../../../tests/test_browser_knowledge_vertical.py)
+exercises this round, health reporting, and last-good-document behavior.
 
 ### list_knowledge_sources
 
@@ -76,7 +115,7 @@ List all registered knowledge sources.
 | --- | --- | --- | --- |
 | `scope` | str | None | Filter by scope; omit for all |
 
-Returns: `list[dict]` — source rows with `id`, `name`, `source_type`, `scope`, `last_refreshed_at`, `last_checked_at`, `last_error`, `enabled`, `refreshable`, `enrich`, and `fetch_method`; `[]` if no sources. Use `id` as the `source_id` for `refresh_knowledge_source` only when `refreshable` is true.
+Returns: `list[dict]` — source rows with `id`, `name`, `source_type`, `scope`, `last_refreshed_at`, `last_checked_at`, `last_error`, `health`, `urls`, `enabled`, `refreshable`, `enrich`, and `fetch_method`; `[]` if no sources. `health` is `unknown`, `ok`, `degraded`, or `failed`. `urls` contains the registered URL list in configuration order for `url_list` sources and is `null` otherwise.
 
 ### refresh_knowledge_source
 
@@ -94,11 +133,9 @@ Current connector boundary:
 
 - `url_list` with `fetch_method="http"` and `file_glob` with `fetch_method="filesystem"` use the
   maintained source-fetcher paths.
-- `authenticated_web` with `fetch_method="browser"` is accepted by source registration, but the
-  current Knowledge MCP process selects a placeholder browser fetcher because it does not own or
-  inject a live Browser MCP session. Refresh therefore returns an acquisition/transport failure;
-  `auth_profile` and `page_limit` are persisted configuration, not proof of working browser
-  traversal.
+- Browser `url_list` sources are updated through the [browser capture round](#browser-capture-rounds)
+  in `knowledge_ingest`. `refresh_knowledge_source` returns acquisition-stage
+  `agent_capture_required` instead of fetching those pages.
 - `inline` sources have no refresh operation. Direct `knowledge_ingest` is the manual capture path.
 
 Raises `ToolError` when the source store or ingest coordinator is unavailable, the source ID is unknown, or the source is inactive. These are preconditions, not `KnowledgeFailure` results.
@@ -109,10 +146,11 @@ Operational failures use a closed vocabulary. The runtime emits a valid `stage` 
 
 | `stage` | Admitted `code` values |
 | --- | --- |
-| `acquisition` | `url_rejected`, `dns_failure`, `transport_failure`, `http_status`, `timeout`, `response_too_large` |
+| `acquisition` | `url_rejected`, `dns_failure`, `transport_failure`, `http_status`, `timeout`, `response_too_large`, `browser_capture_failed`, `agent_capture_required` |
 | `extraction` | `unsupported_media_type`, `content_boundary_missing`, `extraction_failed` |
 | `indexing` | `embedding_failed`, `vector_write_failed` |
 | `persistence` | `persistence_failed` |
+| `persistence` | `persistence_failed`, `processing_failed` |
 | `query` | `query_embedding_failed`, `vector_query_failed` |
 
 Every serialized failure has `stage`, `code`, `retryable`, and `message`. `retryable` is the runtime's authoritative boolean; callers must not infer it from the message or code. `message` is a redacted operational summary, not a machine-readable contract and not a place to expose exception text, credentials, or other secret material.
@@ -232,7 +270,7 @@ Agent tool allowlists own callability. This handbook documents the available Kno
 | --- | --- | --- |
 | Search the knowledge base | `knowledge_search` | Natural-language query, returns ranked snippets |
 | Register a source | `register_knowledge_source` | Provide a complete source mapping with nested config |
-| Ingest a document | `knowledge_ingest` | Pass text content + optional metadata |
+| Ingest a document | `knowledge_ingest` | Pass inline text or one bound Browser capture round |
 | List registered sources | `list_knowledge_sources` | Filter by `scope` |
 | Refresh a registered source | `refresh_knowledge_source` | Re-ingests one source by source ID |
 | Remove a registered source | `delete_knowledge_source` | Destructive cascade delete after vector cleanup |
@@ -242,6 +280,10 @@ Agent tool allowlists own callability. This handbook documents the available Kno
 | Store enrichment results | `store_enrichment` | Pass `chunk_id`; marks chunk enriched after persistence |
 
 Sources listed by `list_knowledge_sources` can be passed to `refresh_knowledge_source` only when `refreshable=true`. Local file sources refresh from the workspace file path, web sources refresh through the configured fetch method, and inline direct-text sources are searchable/enrichable but intentionally non-refreshable.
+Only active, refreshable sources are candidates for `refresh_knowledge_source`. HTTP `url_list` and
+filesystem `file_glob` sources use their maintained fetcher paths; Browser `url_list` sources use
+the bound capture round above. Inline direct-text sources are searchable/enrichable but
+intentionally non-refreshable.
 
 ## Scope Conventions
 

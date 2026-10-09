@@ -27,12 +27,12 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 
 | Tool | Description |
 | --- | --- |
-| `knowledge_search` | Semantic search over the knowledge base; returns a result list on success or a typed query failure with `stage`, `code`, `retryable`, and `message` fields |
+| `knowledge_search` | Semantic search over the knowledge base; successful results include source identity and capture provenance, or a typed query failure with `stage`, `code`, `retryable`, and `message` fields |
 | `lookup_knowledge_entity` | Look up a graph entity and its neighbourhood by `entity_id`, `entity_name`, or `entity_type`; expands the graph by `expand_hops` hops (default 1); returns `entity`, `neighbourhood` (entities + edges), and `related_chunks` |
-| `list_knowledge_sources` | List registered knowledge sources, optionally filtered by scope |
-| `knowledge_ingest` | Ingest text content into the knowledge base using a per-scope shared inline source (`mcp-inline-{scope}`); `source_url` stored as document URI; response includes `documents_processed`, `chunks_created`, and `chunks_enqueued` |
+| `list_knowledge_sources` | List registered knowledge sources, optionally filtered by scope, with source health and registered URLs |
+| `knowledge_ingest` | Ingest inline text or one bound Browser capture round for a registered browser URL-list source; returns typed document and chunk counts, health, and failures |
 | `knowledge_stats` | Summary statistics: document, entity, edge, source, and chunk counts plus enrichment queue state and completion ratio |
-| `refresh_knowledge_source` | Re-ingest a registered source by source ID; response includes retained `source_id`, `sources_refreshed`, and structured `errors` fields plus additive `documents_created`, `documents_replaced`, `documents_unchanged`, `chunks_created`, and `chunks_replaced` counts; raises `ToolError` for unknown or inactive sources |
+| `refresh_knowledge_source` | Re-ingest a registered source by source ID; response includes retained `source_id`, `sources_refreshed`, structured errors, and document/chunk counts; browser URL-list sources return `agent_capture_required` and must use a bound capture round |
 | `delete_knowledge_source` | Delete a source and all its associated data (vectors, documents, chunks, entities, enrichment) via coordinator-orchestrated purge; returns a purge-result summary with status (`complete`/`partial`), completed steps, failed step, error, and per-domain sub-results (source, content, enrichment, graph) |
 | `claim_enrichment_batch` | Atomically claim a batch of chunks ready for enrichment |
 | `store_enrichment` | Persist extracted entities and local-reference edges for a claimed chunk, then mark it enriched |
@@ -53,6 +53,40 @@ projection:
   "message": "Vector search failed"
 }
 ```
+
+Each successful search result's `source` includes `source.id`, `source.uri`, `source.name`,
+`source.url`, and `source.provenance`. Provenance is `null` or contains the available
+`canonical_url`, `fetched_at`, and `content_hash` values.
+
+`list_knowledge_sources` rows include `health` (`unknown`, `ok`, `degraded`, or `failed`) and
+`urls`: the registered URL list in configuration order for `url_list` sources, and `null` for
+other source kinds.
+
+`knowledge_ingest` has two modes:
+
+- Inline mode supplies `text` without `source_id`. Optional `scope`, `source_url`, and `metadata`
+  apply to the inline document; the server uses a non-refreshable `mcp-inline-{scope}` source.
+  `source_url` is document identity only and does not register a source.
+- Bound mode supplies `source_id` and `captures` for an active browser `url_list` source. It does
+  not accept inline `text`, `source_url`, or `scope`. The captures must contain exactly one outcome
+  for every registered URL.
+
+The typed result fields are `source_id`, `documents_created`, `documents_replaced`,
+`documents_unchanged`, `documents_failed`, `chunks_created`, `chunks_replaced`, `document_ids`,
+`health`, and `errors`. Each error and a top-level operational failure has `stage`, `code`,
+`retryable`, and redacted `message` fields. `browser_capture_failed` and `agent_capture_required`
+are acquisition-stage failures; `processing_failed` and `persistence_failed` are persistence-stage
+failures. Round health is `ok` when every entry succeeds, `degraded` when some succeed and some
+fail, and `failed` when none succeed. A failed acquisition or processing attempt keeps the last good
+document.
+
+Missing, duplicate, or unregistered capture entries, a missing or deleted source, a source that is
+not an active browser `url_list`, or `text` supplied with `source_id` raise `ToolError`. For a
+browser source, read `urls` from `list_knowledge_sources`, call Browser `acquire` for each URL, then
+submit one bound `knowledge_ingest` round with that `source_id` and `captures`. Do not call
+`refresh_knowledge_source` for a browser source; it returns `agent_capture_required` instead of
+acquiring pages. The [Browser-to-Knowledge vertical test](../../tests/test_browser_knowledge_vertical.py)
+exercises this round, health reporting, and last-good-document behavior.
 
 `refresh_knowledge_source` always retains its source and additive outcome fields. Each item in
 `errors` is a structured refresh failure with `source_id`, `stage`, `code`, `retryable`,
