@@ -175,8 +175,13 @@ export function progressTone(progress: DeliveryProgress): WorkItemStatusTone {
 export function progressLabel(progress: DeliveryProgress): string {
   if (progress.situation === "waiting-on-dependency" && progress.waiting_on === "change")
     return "Waiting on another Change";
+  // The portfolio counts these as "Needs you"; the same item keeps that name everywhere.
+  if (progress.situation === "needs-attention" && progress.waiting_on === "you") return "Needs you";
   return SITUATION_LABELS[progress.situation];
 }
+
+/** Element id of a Work Item's first open request; links ending in this hash focus it. */
+export const OPEN_REQUEST_ANCHOR = "open-request";
 
 function formatClock(iso: string | null | undefined): string | null {
   if (!iso) return null;

@@ -404,13 +404,14 @@ test.describe("assembled Delivery portfolio", () => {
     const requestAction = requestRow.locator("p-link-pure", {
       hasText: "Answer request",
     });
-    await expect(requestAction).toHaveJSProperty("href", "/delivery/work-e2e/outcome%3AOUT-001");
+    await expect(requestAction).toHaveJSProperty("href", "/delivery/work-e2e/outcome%3AOUT-001#open-request");
     await requestAction.click();
     let inspected = {
       detail: page.getByTestId("work-item-detail"),
       trigger: requestTrigger,
     };
     await expect(inspected.detail.getByRole("heading", { name: "Choose release mode" })).toBeVisible();
+    await expect(inspected.detail.getByTestId("request-request-release-mode")).toBeFocused();
     await expect(page.getByTestId("work-portfolio-table")).toBeVisible();
     await expect(inspected.detail).toContainText("Resolve the bounded release decision.");
     await expect(inspected.detail).toContainText("Observe Choose release mode.");
