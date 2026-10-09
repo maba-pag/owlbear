@@ -1951,6 +1951,7 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
         *,
         builder_handoff_participant: ReplacementTransactionParticipant | None = None,
         builder_handoff_lock: PublicationLock | None = None,
+        builder_handoff_source_head: str | None = None,
     ) -> OutcomeAuthorityBinding:
         """Bind one fresh claim to a currently claimable outcome."""
         frontier, previous = self._read()
@@ -1984,6 +1985,7 @@ class DeliveryRuntime(_SettlementReplayMixin, _RuntimeReadsMixin):
             binding,
             builder_handoff_participant,
             builder_handoff_lock,
+            builder_handoff_source_head,
         )
         claimed = binding.model_copy(
             update={
