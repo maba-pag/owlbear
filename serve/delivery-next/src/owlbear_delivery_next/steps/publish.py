@@ -17,7 +17,7 @@ from owlbear_delivery_next.git.remote_git import (
 )
 from owlbear_delivery_next.github.provider import ProviderError
 from owlbear_delivery_next.loop import StepResult
-from owlbear_delivery_next.models import ErrorKind, Exit, StepKind
+from owlbear_delivery_next.models import ErrorKind, Exit, StepKind, Waiting
 from owlbear_delivery_next.steps import engine, worktree
 
 if TYPE_CHECKING:
@@ -132,7 +132,7 @@ def gate(checks: Sequence[Check], now: datetime) -> StepResult | None:
     return engine.ask(P, reason, cause_key(kind, P, first.name), engine.continue_or_pause(P))
 
 
-def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:
+def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:  # noqa: PLR0911 - one exit per observation
     """Publish the final-reviewed head; a moved target first gets an integration Builder task."""
     path, target = Path(c.names.worktree), c.names.target
     if (asked := engine.rules_changed(ctx, c)[0]) is not None:
@@ -147,8 +147,11 @@ def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:
     if (r := push(path, c, head)) is not None:
         return c, r
     pr = pull_request(ctx, c, head)
-    if pr is None or pr.draft or pr.head_sha != head:
-        state = "absent" if pr is None else "a draft" if pr.draft else f"at {pr.head_sha[:7]}"
+    if pr and pr.head_sha != head:  # GitHub reads lag a push just made: observed again shortly, never budgeted
+        reason = f"GitHub still shows the PR at {pr.head_sha[:7]} after publishing {head[:7]}"
+        return c, engine.pending(Waiting.NETWORK, reason, ctx.poll())
+    if pr is None or pr.draft:
+        state = "absent" if pr is None else "a draft"
         reason = f"the PR is {state} after publishing {head[:7]}"
         return c, StepResult(exit=Exit.RETRY, cause=cause_key(ErrorKind.NETWORK, P, "pr"), reason=reason)
     c.names.pr = pr.number

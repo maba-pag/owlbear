@@ -45,6 +45,14 @@ def repo(tmp_path):
     return tmp_path
 
 
+def test_an_unloadable_change_keeps_its_handle_from_a_new_brief(tmp_path):
+    store = Store(tmp_path)
+    path = tmp_path / "changes" / "old" / "change.json"
+    path.parent.mkdir(parents=True)
+    path.write_text('{"format": 0, "slug": 5, "handle": "c1"}')
+    assert client(store).post("/api/next/briefs", json=BRIEF).json()["change"] == "c2"
+
+
 def test_brief_errors_name_each_field(tmp_path):
     c = client(Store(tmp_path))
     bad = {
@@ -339,3 +347,23 @@ def test_yes_confirms_the_profile_but_never_an_unknown_entry():
     assert (left, confirmed.entries["github:rules"].state) == (["github:rules"], "unknown")
     assert confirmed.entries["setup:confirmed-by"].value == "--yes"
     assert confirmed.confirmed_at is not None
+
+
+def test_yes_confirms_only_the_profile_and_local_files_and_the_skill_need_their_own_consent(
+    repo, tmp_path_factory, monkeypatch
+):
+    home = tmp_path_factory.mktemp("home")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(setup, "check", lambda *_a: [])
+    monkeypatch.setattr(setup.profile, "detect", lambda *_a: Profile(version=1))
+    written = [repo / ".vscode" / "tasks.json", repo / ".mcp.json", home / ".copilot" / "skills" / "delivery"]
+    asked = []
+    assert setup.run(repo, [], yes=True, ask=lambda q: asked.append(q) or "") == 0
+    assert [p.exists() for p in written] == [False, False, False]
+    assert len(asked) == 3  # both local files and the skill were asked, never assumed
+    assert "Install the Delivery chat skill" in asked[2]
+    asked.clear()
+    assert setup.run(repo, [], yes=True, local_files="no", skill="no", ask=lambda q: asked.append(q) or "y") == 0
+    assert (asked, [p.exists() for p in written]) == ([], [False, False, False])
+    assert setup.run(repo, [], yes=True, local_files="yes", skill="yes", ask=pytest.fail) == 0
+    assert [p.exists() for p in written] == [True, True, True]

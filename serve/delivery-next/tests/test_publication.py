@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, budgets, evidence, failures, loop, profile, tools
+from owlbear_delivery_next import api, budgets, evidence, failures, loop, processes, profile, runner, tools
 from owlbear_delivery_next.git.remote_git import RemoteGitWriteUnknown, classify_write_readback, read_remote_ref
 from owlbear_delivery_next.github import merge_offer
 from owlbear_delivery_next.github.gh import GhProvider
@@ -698,6 +698,37 @@ def test_a_review_repair_of_a_conversation_task_replies_with_its_response_and_th
     assert [(h.how, h.text) for h in c.handled] == [("fixed", "Repaired.")]
 
 
+@pytest.mark.parametrize("callback", ["delivered", "replaced"])
+def test_a_builder_response_survives_the_session_replacing_the_change_and_is_replied(
+    tmp_path, clone, monkeypatch, callback
+):
+    gh = ChatGh(pr(head=A), comment("c1", "why?"))
+    cx = ctx(tmp_path, gh)
+    c, opened = follow.conversation(cx, change(worktree=str(clone)), gh.pr, StepKind.FOLLOW)
+    tid = opened.fix_task.id
+    cx.store.write(cx.lock, loop.apply(c, opened, NOW))
+    built = tools.BuildResult(summary="s", changed_paths=[], checks=[], response={"how": "fixed", "text": "Done."})
+
+    async def build(cfg):
+        getattr(cfg.journal, callback)()  # rebinds the runner's ``change`` to a copy mid-session
+        commit(clone, "fix.txt")
+        head = git(clone, "rev-parse", "HEAD")
+        return Run(cfg.session_id, "result", built, head=head, termination=processes.Termination(confirmed=True))
+
+    monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: clone)
+    monkeypatch.setattr(runner.sdk_adapter, "run", build)
+    runner._agent(cx.store, cx.lock, cx.store.read("c1"), clone)  # noqa: SLF001
+    after, head = cx.store.read("c1"), git(clone, "rev-parse", "HEAD")
+    task = next(t for t in after.plan.tasks if t.id == tid)
+    assert task.response == Response(how="fixed", text="Done.", commit=head)
+    task.done = True  # the task review passed
+    git(clone, "push", "-q", "origin", "HEAD:refs/heads/owlbear/c1")
+    gh.pr = pr(head=head)
+    _, held = follow.conversation(cx, after, gh.pr, StepKind.FOLLOW)
+    assert held is None
+    assert gh.posts == [("c1", f"Done.\n\nFixed in {head[:7]}.\n\n<!-- delivery:c1:c1:{tid} -->")]
+
+
 def test_an_unresolved_outdated_thread_blocks_the_merge(tmp_path, clone):
     gh = ChatGh(pr(head=A), thread("t1", ("h1", "o", "stale?"), outdated=True))
     c = loop.fold(change(worktree=str(clone)), [ConsentItem(at=NOW, head=A)], NOW)
@@ -917,6 +948,21 @@ def test_publish_returns_to_the_final_review_unless_head_is_the_final_reviewed_h
     _, result = publish.run(ctx(tmp_path, FakeGh(pr())), c)
     assert loop.apply(c, result, NOW).step == Step(kind=StepKind.REVIEW, mode="final")
     assert publish.reviewed(c.model_copy(update={"reviews": [final.model_copy(update={"commit": head})]}), clone, head)
+
+
+def test_a_pr_head_lagging_the_push_is_observed_again_shortly_without_budget(clone, tmp_path):
+    commit(clone, "fix.txt")
+    head = git(clone, "rev-parse", "HEAD")
+    c = change(StepKind.PUBLISH, worktree=str(clone), reviews=[Review(commit=head, inputs=Inputs(), verdict="pass")])
+    gh = FakeGh(pr(head=A))
+    gh.find_pull_request = lambda *_a: gh.pr
+    cx = ctx(tmp_path, gh)
+    _, result = publish.run(cx, c)
+    assert (result.exit, result.waiting, result.wake_at) == (Exit.PENDING, Waiting.NETWORK, cx.poll())
+    after = loop.apply(c, result, NOW)
+    assert (after.outcome.exit, after.budgets.causes) == (Exit.PENDING, {})
+    gh.pr = pr(head=head)
+    assert publish.run(cx, after)[1].exit == Exit.DONE
 
 
 # CI classification

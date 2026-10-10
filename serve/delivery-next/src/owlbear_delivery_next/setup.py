@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from importlib.resources import files
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import truststore
 
@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 
 type Probe = Callable[[list[str]], tuple[int, str]]
 type Ask = Callable[[str], str]
+type Choice = Literal["yes", "no", "ask"]
 TASK = "OwlBear Delivery host"
 SERVER = "owlbear-delivery"
 PUSH = frozenset({"WRITE", "MAINTAIN", "ADMIN"})
@@ -352,8 +353,20 @@ def ask_tty(question: str) -> str:
         return ""
 
 
-def run(repo: Path, confirms: list[tuple[str, str]], *, yes: bool, ask: Ask = ask_tty) -> int:
-    """Readiness, profile, consented writes; print each result and the start action."""
+def run(  # noqa: PLR0913 - one answer per consent
+    repo: Path,
+    confirms: list[tuple[str, str]],
+    *,
+    yes: bool,
+    local_files: Choice = "ask",
+    skill: Choice = "ask",
+    ask: Ask = ask_tty,
+) -> int:
+    """Readiness, profile, consented writes; print each result and the start action.
+
+    ``yes`` confirms the profile only (TD-11): the local files and the user-level skill each need their own
+    answer, given by flag or asked; without a terminal an unasked answer is no.
+    """
     store, python, say = Store.open(repo), sys.executable, lambda t: sys.stdout.write(t + "\n")
     prev = store.read_profile()
     checks = check(repo, prev)
@@ -379,7 +392,10 @@ def run(repo: Path, confirms: list[tuple[str, str]], *, yes: bool, ask: Ask = as
     say(f"Profile v{prof.version} confirmed and saved in {store.root}")
     start = f"`{python} -m owlbear_delivery_next.cli --repo {repo} host`"
     question = f"Write the folder-open task '{TASK}' into .vscode/tasks.json (kept out of git)?"
-    tasks = consent(repo, repo / ".vscode" / "tasks.json", lambda d: with_task(d, python), question, ask, yes=yes)
+    given, local_ask = local_files == "yes", ask if local_files == "ask" else lambda _q: ""
+    tasks = consent(
+        repo, repo / ".vscode" / "tasks.json", lambda d: with_task(d, python), question, local_ask, yes=given
+    )
     say(tasks)
     if tasks.startswith("written"):
         say(f"VS Code starts it in a trusted workspace when automatic tasks are allowed ({automatic_tasks()});")
@@ -387,11 +403,16 @@ def run(repo: Path, confirms: list[tuple[str, str]], *, yes: bool, ask: Ask = as
     else:
         say(f"Start Delivery yourself each time you open the project: {start}. Nothing advances until it runs.")
     question = "Register the Delivery chat server in .mcp.json (kept out of git)?"
-    server = consent(repo, repo / ".mcp.json", lambda d: with_server(d, python, repo), question, ask, yes=yes)
+    server = consent(repo, repo / ".mcp.json", lambda d: with_server(d, python, repo), question, local_ask, yes=given)
     say(server)
     if not server.startswith("written"):
         snippet = json.dumps(with_server({}, python, repo)["mcpServers"])
         say(f'Add this under "servers" in your user-level MCP configuration (MCP: Open User Configuration): {snippet}')
+    path = Path.home() / ".copilot" / "skills" / "delivery" / "SKILL.md"
+    question = f"Install the Delivery chat skill for you only at {path}? [y/N] "
+    if not (skill == "yes" or (skill == "ask" and ask(question).strip().lower().startswith("y"))):
+        say(f"chat skill not installed (no consent): {path}; run setup with --skill yes to install it")
+        return 0
     say(install_skill(Path.home()))
     say("To share it with this repository, copy that folder to .github/skills/delivery/ and commit it yourself.")
     return 0

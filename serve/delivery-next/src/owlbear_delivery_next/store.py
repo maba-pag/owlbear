@@ -154,6 +154,14 @@ class Store:
         """Read one Change, migrating an older format forward."""
         return _load(self._dir(slug) / "change.json", Change, FORMAT, MIGRATIONS)
 
+    def raw_handle(self, slug: str) -> str | None:
+        """The handle in the Change file without loading it, for a Change that cannot be read; None if absent."""
+        try:
+            handle = json.loads((self.root / "changes" / slug / "change.json").read_text()).get("handle")
+        except AttributeError, OSError, ValueError:
+            return None
+        return handle if isinstance(handle, str) else None
+
     def read_profile(self) -> Profile | None:
         """Read the confirmed project profile under its own format gate; None before confirmation."""
         path = self.root / "profile.json"

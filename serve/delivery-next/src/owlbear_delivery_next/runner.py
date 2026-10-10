@@ -132,7 +132,9 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     )
     run = asyncio.run(sdk_adapter.run(cfg))
     end = datetime.now(UTC)
-    result = review.recorded(change, parts.task, run, path, session_result.to_result(run, s.kind, end))
+    # The session's callbacks replace ``change``; objects taken from it before the session are stale.
+    task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
+    result = review.recorded(change, task, run, path, session_result.to_result(run, s.kind, end))
     conversation.respond(task, run.payload, run.head, result.exit)
     _log(store, lock, change, run, {"kind": s.kind, "exit": result.exit})
     if s.kind == StepKind.PLAN and result.plan:

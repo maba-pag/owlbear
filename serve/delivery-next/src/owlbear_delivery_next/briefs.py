@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import re
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -74,8 +73,11 @@ def save_brief(store: Store, body: object) -> tuple[int, dict[str, Any]]:
         return 422, {"errors": errors}
     handles = {}
     for s in (slugs := store.slugs()):
-        with contextlib.suppress(StoreError):
+        try:
             handles[store.read(s).handle] = s
+        except StoreError:  # an unloadable Change still holds its number
+            if raw := store.raw_handle(s):
+                handles.setdefault(raw, s)
     slug = handles.get(draft.change) if draft.change else new_slug(draft.title, slugs)
     if slug is None:
         return 422, {"errors": [f"change: {draft.change} is not a Change here - leave it empty for a new one"]}

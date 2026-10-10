@@ -166,6 +166,19 @@ def test_host_lock_excludes_a_second_host_and_status_shows_host_down(store, tmp_
     ]
 
 
+def test_an_unloadable_change_is_reported_once_until_its_file_changes(store, tmp_path, capsys):
+    fake = Fake(store, tmp_path)
+    path = store.root / "changes" / "c1" / "change.json"
+    path.parent.mkdir(parents=True)
+    path.write_text('{"format": 0, "slug": 5}')
+    for _ in range(3):
+        assert fake.host.tick(NOW) == []
+    assert capsys.readouterr().out.count("cannot be migrated") == 1
+    path.write_text('{"format": 0, "slug": 6, "x": 1}')
+    fake.host.tick(NOW)
+    assert capsys.readouterr().out.count("cannot be migrated") == 1
+
+
 def checking(**env):
     person = PersonCheck(id="preview", steps=["open the preview"])
     e = Environment(check="preview", command="npm run preview", directory=".", ready_url="http://127.0.0.1:4173/")

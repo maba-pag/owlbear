@@ -108,7 +108,10 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("host", help="start Delivery for this clone, or print the running host's URL")
     sub.add_parser("status", help="print every Change's status line and next action")
     up = sub.add_parser("setup", help="check readiness, confirm the profile, register the host task and chat server")
-    up.add_argument("--yes", action="store_true", help="confirm the profile and consent to both untracked local writes")
+    up.add_argument("--yes", action="store_true", help="confirm the profile (only the profile)")
+    choices = ("yes", "no", "ask")
+    up.add_argument("--local-files", choices=choices, default="ask", help="write .vscode/tasks.json and .mcp.json")
+    up.add_argument("--skill", choices=choices, default="ask", help="install the chat skill in ~/.copilot/skills")
     up.add_argument("--confirm", action="append", default=[], type=lambda v: tuple(v.split("=", 1)), help="KEY=VALUE")
     p = sub.add_parser("profile", help="detect the project profile; --confirm KEY=VALUE records the owner's answer")
     p.add_argument("--confirm", action="append", default=[], type=lambda v: tuple(v.split("=", 1)))
@@ -138,7 +141,7 @@ def main(argv: list[str] | None = None) -> int:
     if a.command == "host":
         return host.serve(a.repo.resolve())
     if a.command == "setup":
-        return setup.run(a.repo.resolve(), a.confirm, yes=a.yes)
+        return setup.run(a.repo.resolve(), a.confirm, yes=a.yes, local_files=a.local_files, skill=a.skill)
     store = Store.open(a.repo.resolve())
     if a.command == "status":
         sys.stdout.write(show_status(store, datetime.now(UTC)) + "\n")

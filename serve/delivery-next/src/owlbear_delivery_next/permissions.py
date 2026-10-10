@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import posixpath
 import re
 import shlex
 from dataclasses import dataclass
@@ -16,6 +17,7 @@ if TYPE_CHECKING:
 
 DENIED = ("git push", "git config", "git -c", "gh", "sudo")
 VALUE_FLAGS = "mFCctSuo"  # short options of git commit and push that take a value
+GIT_READ_ONLY = frozenset(("log", "show", "diff", "status", "blame", "grep", "ls-files", "rev-parse"))
 
 
 @dataclass(frozen=True)
@@ -25,6 +27,7 @@ class Policy:
     root: Path
     commands: tuple[str, ...]
     write: bool = True
+    checks: tuple[tuple[str, str], ...] = ()  # the profile's (package directory, check command) pairs
 
 
 @dataclass(frozen=True)
@@ -38,10 +41,26 @@ class Request:
     tool: str = ""
 
 
-def allowed(text: str, prefixes: Sequence[str]) -> bool:
-    """Whether *text* starts with the words of one of *prefixes*: the one allow-list rule for commands."""
+def _package(directory: str) -> str | None:
+    """The normalised relative package directory, or None for an absolute path or one that climbs with ``..``."""
+    if directory.startswith(("/", "~")) or ".." in directory.split("/"):
+        return None
+    return posixpath.normpath(directory).strip("/") or "."
+
+
+def allowed(text: str, prefixes: Sequence[str], checks: Sequence[tuple[str, str]] = ()) -> bool:
+    """Whether *text* starts with the words of one of *prefixes*: the one allow-list rule for commands.
+
+    ``git --no-pager <read-only subcommand>`` counts as that subcommand when it is allowed, and
+    ``cd <package> && <check>`` is allowed when *checks* names that check for that package directory.
+    """
     words = text.split()
-    return any(words[: len(p.split())] == p.split() for p in prefixes)
+    if words[:2] == ["git", "--no-pager"] and words[2:3] and words[2] in GIT_READ_ONLY:
+        words = ["git", *words[2:]]
+    if words[:1] == ["cd"] and words.count("&&") == 1 and words[2:3] == ["&&"]:
+        package, rest = _package(words[1]), words[3:]
+        return any(package == _package(p.strip("/") or ".") and rest[: len(c.split())] == c.split() for p, c in checks)
+    return "&&" not in words and any(words[: len(p.split())] == p.split() for p in prefixes)
 
 
 def _bypass(words: Sequence[str]) -> str | None:

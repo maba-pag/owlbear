@@ -140,6 +140,7 @@ class Host:
         self.pr_states: dict[str, PrState] = {}
         self.pr_seen: dict[str, tuple[float, Seen]] = {}
         self.launches: dict[str, list[float]] = {}
+        self.reported: dict[str, tuple[str, int | None]] = {}
         self.record = HostRecord(url="", token="", pid=os.getpid(), started_at=datetime.now(UTC))
 
     def say(self, text: str) -> None:
@@ -179,8 +180,18 @@ class Host:
             except LockHeldError:
                 continue
             except StoreError as exc:
-                self.say(f"{slug}: {exc}")
+                self._unloadable(slug, str(exc))
         return launched
+
+    def _unloadable(self, slug: str, text: str) -> None:
+        """Report an unloadable Change once, and again only after its file changes; not on every pass."""
+        try:
+            stamp = (self.store.root / "changes" / slug / "change.json").stat().st_mtime_ns
+        except OSError:
+            stamp = None
+        if self.reported.get(slug) != (text, stamp):
+            self.reported[slug] = (text, stamp)
+            self.say(f"{slug}: {text}")
 
     def _one(self, slug: str, now: datetime) -> bool:
         rec = self.runner(slug)
