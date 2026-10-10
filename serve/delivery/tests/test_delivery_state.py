@@ -5604,6 +5604,67 @@ def test_builder_return_after_answered_pause_survives_default_loader_restart(tmp
     assert reloaded.acquire_frontier_work().launch_packages[0].claim.worker_role is DeliveryWorkerRole.PLANNER
 
 
+def test_builder_return_with_pending_checkpoint_at_published_head_survives_restart(tmp_path: Path) -> None:
+    change_id = "return-pending-checkpoint"
+    restart = _builder_return_restart_fixture(tmp_path, change_id, published_head=True)
+    frontier_path = restart.fresh / ".owlbear/delivery/runtime/changes" / change_id / "frontier.json"
+    frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes())
+    assert frontier.published_head is not None
+    # A verified result queued at the published head; remote snapshots drop such a checkpoint.
+    frontier_path.write_bytes(
+        _canonical_payload(
+            frontier.model_copy(
+                update={
+                    "pending_checkpoint": DeliveryPendingCheckpoint(
+                        head=frontier.published_head,
+                        triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.VERIFIED_TASK),),
+                    )
+                }
+            ).model_dump(mode="json")
+        )
+    )
+    application = _healthy_restart(restart)
+    launch = application.acquire_frontier_work().launch_packages[0]
+    _settle_builder_launch(application, change_id, launch, _planning_return(launch, restart.original_task.task_id))
+    _healthy_restart(restart)
+
+    _promote_corrected_plan(restart, change_id, "Corrected task")
+    application = _healthy_restart(restart)
+    resumed = application.acquire_frontier_work().launch_packages[0]
+    assert resumed.claim.worker_role is DeliveryWorkerRole.BUILDER
+    _settle_builder_launch(
+        application,
+        change_id,
+        resumed,
+        BlockDelivery(
+            action="block",
+            outcome_id=resumed.outcome_id,
+            claim_id=resumed.claim.claim_id,
+            block_id="BLOCK-PILOT",
+            reason="The check needs the user.",
+            unblock_condition="The user answers.",
+            expected_evidence=("Answer",),
+            locators=(resumed.task_id,),
+            request=DeliveryRequest(
+                request_id="REQ-PILOT",
+                kind=DeliveryRequestKind.DECISION,
+                outcome_id=resumed.outcome_id,
+                summary="Run the person-only check.",
+                options=(
+                    DeliveryRequestOption(option_id="passed", label="passed"),
+                    DeliveryRequestOption(option_id="failed", label="failed"),
+                ),
+            ),
+            resume_commit=resumed.source_head,
+        ),
+    )
+    reloaded = _healthy_restart(restart)
+    binding = reloaded._runtimes[change_id].show_binding("OUT-001")  # noqa: SLF001
+    assert binding.block is not None
+    assert binding.block.block_id == "BLOCK-PILOT"
+    assert reloaded._runtimes[change_id]._read()[0].pending_checkpoint is not None  # noqa: SLF001
+
+
 # N12 I3, I4, I8: refunded returns of one task are bounded; each unpublished return restarts.
 def test_third_planning_return_stops_at_the_return_limit_across_restarts(tmp_path: Path) -> None:
     change_id = "planning-return-limit"

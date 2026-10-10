@@ -1291,7 +1291,9 @@ def _validate_local_builder_return_frontier(
     else:
         _bootstrap_failure("local Builder return has an unsupported handoff route")
 
-    if expected_frontier != local_frontier:
+    if expected_frontier != local_frontier and not _is_unpublished_checkpoint_successor(
+        expected_frontier, local_frontier
+    ):
         _bootstrap_failure("local Delivery frontier differs from its exact Builder return promotion")
 
 
