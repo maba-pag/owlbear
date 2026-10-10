@@ -7,7 +7,7 @@
 > reliably makes progress — possibly as a re-implementation with selective reuse?
 > **Status:** Analysis and recommended roadmap, revision 2 (2026-10-10): corrected after six
 > independent challenges and re-weighted by the user toward end-to-end design and failure modes
-> (§1). Decided by the user: TD-1 to TD-9 (§3.8). Every other recommendation is `autonomous` until
+> (§1). Decided by the user: TD-1 to TD-22 (§3.8). Every other recommendation is `autonomous` until
 > the user decides it.
 
 ## 1. Context and Question
@@ -212,6 +212,28 @@ choices and user choices alike as user decisions. This plan therefore treats eve
 | TD-7 | Research commits are pushed directly to `dev` | `decided` (answered question) | 2026-10-10 |
 | TD-8 | Overnight work proceeds as far as possible, without a Copilot usage limit | `decided` (answered question) | 2026-10-10 |
 | TD-9 | OwlBear is for the owner's personal use on his laptop; a colleague would at most read the repository and build their own variant | `decided`: "this project is for personal use on my laptop" | 2026-10-10 |
+| TD-10 | Delivery-next need not support OwlBear developing itself; OwlBear keeps being developed directly in chat. TD-2's open Changes still finish on the old engine | `decided`: "i dont need it to work on itself" (forked chat) | 2026-10-10 |
+| TD-11 | Setup writes `.vscode/tasks.json` (host start on folder open) and `.mcp.json` (chat tools) only with consent; nothing from OwlBear is committed into the consumer project | `decided`: approved the fork's proposal | 2026-10-10 |
+| TD-12 | Parallel Changes that overlap: do not ask by default; show "overlaps with X"; integration handles conflicts; ask only on real behavioural collisions; docs, lockfiles and generated files are ignored | `decided`: "proposal sounds good, approved" (forked chat; wording is the fork's) | 2026-10-10 |
+| TD-13 | A "New Change" button in Cockpit opens VS Code chat with the shaping skill, so no prompt is copied | `decided`: "approved the button to start chat" | 2026-10-10 |
+| TD-14 | UI changes always get visual testing of design and layout. The agent's visual check is enough for the automatic merge; the owner looks only when the brief declares a person-only check | `decided`: "there needs to always be visual testing regarding design and layout"; answered question | 2026-10-10 |
+| TD-15 | Delivery merges automatically once every gate passes, including no unanswered comments or open discussions, and pulls the result back to the local clone | `decided`: "letting the agent/delivery also merge automatically … this ofc also needs to include automated pulls back to local" | 2026-10-10 |
+| TD-16 | Routine CI fixes and reactions to comments and reviews are automated, including replying to and resolving the threads an agent fixed. When human input is still needed stays open | `decided`: "fix ci, react to comments including reviews"; answered question | 2026-10-10 |
+| TD-17 | Probes and real use run on `maba-pag`'s business Copilot seat instead of `boecht` | `decided` (forked chat) | 2026-10-10 |
+| TD-18 | The prototype (PR #449) is the base to continue, reshaped to the module rules (TD-19) | `decided` (answered question) | 2026-10-10 |
+| TD-19 | No ceilings on agent instructions: they lose detail. Instead, a language style: specialist terms instead of fillers or explanations, but not "caveman" style. For code, a size limit is fine when exceeding it means splitting into more modules, not cutting logic; interface overhead is not counted | `decided`: "strict budgets for agents dont work … we should rather define language style … for code this does work if the ceiling means splitting into more files/modules" | 2026-10-10 |
+| TD-20 | First release, before real-project use: New Change button, automatic merge with pull-back, thread replies and resolution, agent visual pre-check, Change card with a deterministic "now" line, step time, quiet warning and credits. Watcher, notifications, scanner triage and a knowledge home wait for evidence from real use | `decided` (answered question) | 2026-10-10 |
+| TD-21 | No cost question: credits are shown per Change and step, never used to stop or ask | `decided` (answered question) | 2026-10-10 |
+| TD-22 | No merge-queue support | `decided`: "i dont know what that is, so probably no" | 2026-10-10 |
+
+**User direction, not yet decisions** (forked chat, 2026-10-10): Cockpit as the communication channel
+instead of Teams, Slack or Signal; "my goal would be for delivery to just run on itself"; start
+sessions from Cockpit; more detail than "an agent is running" without rebuilding chat; a watcher
+agent that narrates, derives learnings and, later, steers; cheap subagents (for example search on the
+cheapest model) with model and reasoning effort per role; a durable home for research and learnings
+outside `.git/`. The retry policy proposed in the fork — environment failures wait and never count,
+only identical failures without progress count, then one different approach, then one question — is
+adopted as design, `autonomous`.
 
 ### 3.9 Platform migration interplay
 
