@@ -122,7 +122,9 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         model=None if model in {None, "", "auto"} else model,
         fresh=parts.message,
         previous=_previous(store, slug, s.session) if resume else {},
-        journal=sdk_adapter.Journal(lambda e: store.log(lock, slug, e), delivered, replaced),
+        journal=sdk_adapter.Journal(
+            lambda e: store.log(lock, slug, e), delivered, replaced, lambda d: store.write_now(lock, slug, d)
+        ),
         item=task.item.kind if task and task.item and s.kind == StepKind.BUILD else None,
     )
     run = asyncio.run(sdk_adapter.run(cfg))

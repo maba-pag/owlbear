@@ -24,7 +24,7 @@ from copilot.rpc import PermissionDecisionApproveOnce, PermissionDecisionReject,
 from copilot.tools import Tool, ToolInvocation, ToolResult
 
 from owlbear_delivery_next import prompts, tools
-from owlbear_delivery_next.loop import StepResult, cause_key
+from owlbear_delivery_next.loop import StepResult, cause_key, transient
 from owlbear_delivery_next.models import ErrorKind, Exit, Option, Plan, Question, StepKind, Stop, Task, Waiting
 
 if TYPE_CHECKING:
@@ -47,6 +47,12 @@ PATTERN_FIRST = frozenset({"grep", "egrep", "fgrep", "rg", "sed", "awk"})  # fir
 NULL_PATHS = frozenset({"/dev/null"})
 VALUE_FLAGS = "mFCctSuo"  # short options of git commit and push that take a value
 _REDIRECT = re.compile(r"^\d*[<>]+&?")
+_SECRET = re.compile(
+    r"\b(?:gh[pousr]_|github_pat_)\w+|(?i:bearer)\s+\S+"
+    r"|(?P<key>(?i:\w*(?:token|key|secret|password|passwd|pwd)))(?P<sep>\s*[=:]\s*)\S+"
+)
+NOW_LIMIT = 80  # characters of the now line's summary
+NOW_EVERY = 1.0  # seconds between now-line writes
 type Ending = Literal["result", "ask", "premise", "invalid", "no-result", "deadline", "missing", "unread", "error"]
 type Pids = Mapping[int, float | None]
 type Observe = Callable[[int, float | None], bool | None]
@@ -275,6 +281,24 @@ class Journal:
     event: Callable[[dict[str, Any]], None] = lambda _e: None
     delivered: Callable[[], None] = lambda: None
     replaced: Callable[[], str | None] = lambda: None
+    now: Callable[[dict[str, Any]], None] = lambda _e: None  # the latest tool call, overwritten; not activity
+
+
+def redact(text: str) -> str:
+    """Mask tokens, bearer credentials and ``key=value`` secrets."""
+    return _SECRET.sub(lambda m: f"{m['key']}{m['sep']}***" if m["key"] else "***", text)
+
+
+def summary(tool: str, arguments: Any) -> str:  # noqa: ANN401 - the SDK's JSON tool arguments
+    """One short, redacted line for a tool call: ``ran <command>`` or ``<tool> <target>``."""
+    args = arguments if isinstance(arguments, dict) else {}
+    if command := args.get("command"):
+        text = f"ran {command}"
+    else:
+        target = next((args[k] for k in ("path", "file_path", "pattern", "query", "url") if args.get(k)), "")
+        text = f"{tool} {target}"
+    text = " ".join(redact(str(text)).split())
+    return text if len(text) <= NOW_LIMIT else text[: NOW_LIMIT - 1] + "…"
 
 
 @dataclass(frozen=True)
@@ -337,6 +361,7 @@ class _Step:
         self.cfg, self.loop, self.run, self.proc = cfg, loop, Run(cfg.session_id), None
         self.done = self.turn = self.idle = False
         self.changed = asyncio.Event()
+        self.shown = float("-inf")  # monotonic time of the last now-line write
 
     def _wake(self) -> None:
         self.loop.call_soon_threadsafe(self.changed.set)
@@ -356,6 +381,17 @@ class _Step:
         elif kind == "session.idle" and self.turn:
             self.turn, self.idle = False, True
             self._wake()
+        elif kind == "tool.execution_start":
+            self.now(getattr(ev.data, "tool_name", "") or "tool", getattr(ev.data, "arguments", None))
+
+    def now(self, tool: str, arguments: Any) -> None:  # noqa: ANN401 - the SDK's JSON tool arguments
+        """Overwrite the now line with this tool call, at most once per ``NOW_EVERY`` seconds."""
+        if (t := time.monotonic()) - self.shown < NOW_EVERY:
+            return
+        self.shown = t
+        at = datetime.now(UTC).isoformat(timespec="seconds")
+        with contextlib.suppress(OSError):  # the now line is a hint; a failed write never ends the step
+            self.cfg.journal.now({"tool": tool, "summary": summary(tool, arguments), "at": at})
 
     def permission(self, request: Any, _invocation: Any) -> Any:  # noqa: ANN401 - SDK types
         req = _view(request)
@@ -656,8 +692,9 @@ def _exit(run: Run, kind: StepKind, now: datetime) -> StepResult:  # noqa: C901,
             cause = cause_key(ErrorKind.SCOPE, kind, p.stage)
             back = {StepKind.CHECK: StepKind.BUILD, StepKind.PLAN: StepKind.SHAPE}.get(kind, StepKind.PLAN)
             return StepResult(exit=Exit.BACK, back_to=back, cause=cause, reason=p.reason[:200])
-        case "deadline":
-            cause = cause_key(ErrorKind.LIVENESS, kind, "deadline")
+        case "deadline":  # an unanswered runtime start is the environment's; the step's own deadline is liveness
+            env = transient(run.detail) if run.detail != "step deadline" else None
+            cause = cause_key(env, kind, "sdk") if env else cause_key(ErrorKind.LIVENESS, kind, "deadline")
             return StepResult(exit=Exit.RETRY, cause=cause, reason=run.detail or "deadline")
         case "missing":
             return StepResult(exit=Exit.RETRY, cause=missing_cause(kind), reason=run.detail)
@@ -666,7 +703,8 @@ def _exit(run: Run, kind: StepKind, now: datetime) -> StepResult:  # noqa: C901,
                 exit=Exit.RETRY, cause=cause_key(ErrorKind.LIVENESS, kind, "transcript"), reason=run.detail
             )
         case "error":
-            return StepResult(exit=Exit.RETRY, cause=cause_key(ErrorKind.TOOLING, kind, "sdk"), reason=run.detail)
+            error = transient(run.detail) or ErrorKind.TOOLING
+            return StepResult(exit=Exit.RETRY, cause=cause_key(error, kind, "sdk"), reason=run.detail)
         case _:
             reason = f"no valid result: {run.detail}"
             return StepResult(exit=Exit.RETRY, cause=cause_key(ErrorKind.RESULT, kind), reason=reason)

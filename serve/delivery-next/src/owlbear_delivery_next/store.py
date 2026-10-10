@@ -287,3 +287,17 @@ class Store:
         lines = path.read_text().splitlines() if path.exists() else []
         lines.append(json.dumps(event, default=str, sort_keys=True))
         atomic_write(path, "\n".join(lines[-ACTIVITY_LIMIT:]) + "\n")
+
+    def now(self, slug: str) -> dict[str, Any] | None:
+        """Return the step's latest tool call, or None when none was recorded or it is unreadable."""
+        path = self._dir(slug) / "now.json"
+        try:
+            data = json.loads(path.read_text())
+        except OSError, ValueError:
+            return None
+        return data if isinstance(data, dict) else None
+
+    def write_now(self, lock: Lock, slug: str, data: dict[str, Any]) -> None:
+        """Overwrite the now line; it is a hint for status and never part of activity."""
+        lock.check(slug)
+        atomic_write(self._dir(slug) / "now.json", json.dumps(data, sort_keys=True))

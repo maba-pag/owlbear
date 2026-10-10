@@ -274,6 +274,7 @@ class Review(Record):
     inputs: Inputs
     verdict: Literal["pass", "fix"]
     round: int = 1
+    tree: str | None = None  # the reviewed tree; ``inputs.paths`` hold the engine-computed covered blobs
 
 
 class Step(Record):
@@ -301,13 +302,26 @@ class Outcome(Record):
     at: datetime
 
 
+class Score(Record):
+    """How far one work failure got: failing checks or findings, satisfied criteria, finding identities."""
+
+    failing: int = 0
+    satisfied: int = 0
+    findings: list[str] = Field(default_factory=list)
+
+
 class Budget(Record):
-    """Count of one cause and the premise it was counted under."""
+    """Count of one cause and the premise it was counted under; environment causes keep an episode instead."""
 
     count: int = 0
     premise: str = ""
     task: str | None = None
     at: datetime | None = None
+    signature: str = ""  # the last failure's stable signature
+    progress: Score | None = None  # the best score of the current streak
+    alternative: bool = False  # the one different approach was tried for this cause
+    since: datetime | None = None  # start of an environment episode
+    attempts: int = 0  # attempts in that episode; never budget
 
 
 class Budgets(Record):

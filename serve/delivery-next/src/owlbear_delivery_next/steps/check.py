@@ -69,9 +69,11 @@ def capturing(c: Change) -> bool:
 
 
 def fingerprints(c: Change, person: PersonCheck) -> dict[str, str]:
-    """Current fingerprints of the paths one person-only check depends on."""
+    """Current fingerprints of the paths one person-only check depends on; the tree id when it declares none."""
     root = Path(c.names.worktree)
-    return worktree.fingerprints(root, person.paths) if person.paths and c.names.worktree and root.is_dir() else {}
+    if not (c.names.worktree and root.is_dir()):
+        return {}
+    return worktree.fingerprints(root, person.paths) if person.paths else {loop.TREE: worktree.tree(root)}
 
 
 def declared(c: Change) -> dict[str, str]:

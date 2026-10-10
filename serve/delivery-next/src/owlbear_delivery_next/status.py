@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.loop import CONSENT, RETRY_LIMIT
-from owlbear_delivery_next.models import Exit, StepKind, Waiting
+from owlbear_delivery_next.loop import CONSENT, EPISODE_QUIET, RETRY_LIMIT, episode
+from owlbear_delivery_next.models import ErrorKind, Exit, StepKind, Waiting
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -106,13 +106,31 @@ def silent(c: Change, activity: Activity, now: datetime) -> timedelta | None:
     return now - since
 
 
-def card(c: Change, activity: Activity, events: list[dict[str, Any]], now: datetime) -> dict[str, Any]:
-    """The Change card: the step and its last logged event, step time, the quiet flag and credits."""
+def _episode(c: Change, now: datetime) -> tuple[str, bool]:
+    """The environment failure being waited out, as ``failing for <age>, attempt <n>``, and whether it is quiet."""
+    if not (b := episode(c)) or not b.since:
+        return "", False
+    kind = (c.outcome.cause or "").split(":", 1)[0] if c.outcome else ""
+    return f"{kind} failing for {_age(now - b.since)}, attempt {b.attempts}", now - b.since >= EPISODE_QUIET
+
+
+def card(
+    c: Change, activity: Activity, events: list[dict[str, Any]], now: datetime, tool: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """The Change card: the step and its latest tool call or logged event, step time, quiet flag and credits."""
     line, since = stage(c), c.step.started_at
     last = next((e for e in reversed(events) if "at" in e and "event" in e), None)
-    if last:
+    shown = datetime.fromisoformat(tool["at"]) if tool and isinstance(tool.get("at"), str) else None
+    if shown and since and shown < since:
+        shown = None  # a tool call of an earlier step
+    if shown and tool and (not last or shown > datetime.fromisoformat(last["at"])):
+        line += f" · {tool.get('summary') or tool.get('tool')} {_age(now - shown)} ago"
+    elif last:
         said = _SAID.get(last["event"], lambda e: str(e["event"]))(last)
         line += f" · {said} {_age(now - datetime.fromisoformat(last['at']))} ago"
+    failing, quiet = _episode(c, now)
+    if failing:
+        line += f" · {failing}"
     step = sum(
         (e.get("usage") or {}).get("credits") or 0.0
         for e in events
@@ -121,7 +139,7 @@ def card(c: Change, activity: Activity, events: list[dict[str, Any]], now: datet
     return {
         "now": line,
         "step_time": _age(now - since) if since and not c.finished_at else None,
-        "quiet": silent(c, activity, now) is not None,
+        "quiet": quiet or silent(c, activity, now) is not None,
         "credits": {"change": round(c.spend.credits, 2), "step": round(step, 2)},
     }
 
@@ -158,6 +176,11 @@ def status(c: Change, activity: Activity, now: datetime) -> Status:  # noqa: C90
             return Status(f"{s} · waiting for you: {o.reason}", action, "you")
         if o.waiting == Waiting.REVIEWER:  # the reason names the reviewers
             return Status(f"{s} · {o.reason} (checked {_age(now - o.at)} ago)", None, o.who)
+        if failing := _episode(c, now)[0]:
+            wake = f", next try at {o.wake_at:%H:%M}" if o.wake_at else ""
+            capacity = (o.cause or "").startswith(f"{ErrorKind.CAPACITY}:")
+            used = f" · {c.spend.credits:.2f} credits used" if capacity else ""
+            return Status(f"{s} · retrying: {o.reason} · {failing}{wake}{used}", None, o.who)
         who = _WHO.get(o.waiting, str(o.waiting)) if o.waiting else o.who
         return Status(f"{s} · waiting for {who}: {o.reason} (checked {_age(now - o.at)} ago)", None, o.who)
     if activity.runner_alive:

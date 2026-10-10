@@ -102,11 +102,18 @@ def pull_request(ctx: Ctx, c: Change, head: str) -> PullRequest | None:
 
 
 def reviewed(c: Change, path: Path, head: str) -> bool:
-    """Whether the last final review passed on exactly *head* and its recorded inputs are unchanged (P5)."""
+    """Whether the last final review passed and still holds for *head* (P5, F3).
+
+    It holds on its own commit, on an identical tree (a rebase that changed nothing), or when every path
+    changed against the target is one the review covered and each covered blob is unchanged.
+    """
     final = next((v for v in reversed(c.reviews) if v.task is None), None)
-    if final is None or final.commit != head:
-        return False
-    return review_valid(c, final, worktree.fingerprints(path, list(final.inputs.paths)))
+    if final is None or (final.commit != head and not final.tree):
+        return False  # carrying a review to another head needs its engine-recorded tree and coverage
+    if final.commit != head and worktree.tree(path, head) == final.tree:
+        return review_valid(c, final, final.inputs.paths)  # identical content: only the criteria can have moved
+    changed = None if final.commit == head else worktree.observe(path, c.names.target).changed
+    return review_valid(c, final, worktree.covered(path, list(final.inputs.paths)), changed=changed)
 
 
 def gate(checks: Sequence[Check], now: datetime) -> StepResult | None:

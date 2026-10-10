@@ -103,11 +103,27 @@ def observe(path: Path, target: str, since: str | None = None) -> Worktree:
     head_ = head(path)
     base = git(path, "merge-base", "HEAD", tracking(path, target)).strip()
     status = git(path, "status", "--porcelain=v1", "--untracked-files=all").splitlines()
-    changed = git(path, "diff", "--name-only", f"{base}..HEAD").splitlines()
+    changed = diff(path, base)
     if since:
-        task = set(git(path, "diff", "--name-only", f"{since}..HEAD").splitlines())
+        task = set(diff(path, since))
         base, changed = since, [p for p in changed if p in task]
     return Worktree(head=head_, base=base, dirty=tuple(line[3:] for line in status), changed=tuple(changed))
+
+
+def diff(path: Path, base: str, rev: str = "HEAD") -> list[str]:
+    """Paths added, modified or deleted from *base* to *rev*, both ends of a rename included (F3)."""
+    lines = git(path, "diff", "--name-status", "-M", f"{base}...{rev}").splitlines()
+    return list(dict.fromkeys(p for line in lines for p in line.split("\t")[1:]))
+
+
+def tree(path: Path, rev: str = "HEAD") -> str:
+    """Return the tree id of *rev*: equal trees are equal content whatever the commit."""
+    return git(path, "rev-parse", f"{rev}^{{tree}}").strip()
+
+
+def covered(path: Path, paths: Sequence[str]) -> dict[str, str]:
+    """Blob ids at HEAD of covered paths, an absent (deleted) path as an empty id."""
+    return dict.fromkeys(paths, "") | fingerprints(path, paths)
 
 
 def fingerprints(path: Path, paths: Sequence[str]) -> dict[str, str]:

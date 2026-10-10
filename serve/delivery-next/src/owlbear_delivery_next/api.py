@@ -125,7 +125,7 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
         return {"slug": slug, "line": s.line, "action": s.action, "actor": s.actor}
     s = status(c, act, now)
     out = {"slug": slug, "handle": c.handle, "step": c.step.kind, "line": s.line, "action": s.action, "actor": s.actor}
-    out |= card(c, act, store.events(slug), now)
+    out |= card(c, act, store.events(slug), now, store.now(slug))
     out["spend"] = c.spend.model_dump()
     out["pullback"] = c.pullback.model_dump(mode="json") if c.pullback else None
     if q := loop.open_question(c):

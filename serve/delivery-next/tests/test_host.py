@@ -304,7 +304,7 @@ def test_the_environment_launches_after_the_builder_is_gone_and_is_disposed_on_t
     waiting = store.read("c1")
     assert (waiting.outcome.who, waiting.env.pids) == ("you", {900: 2.0, 901: 2.0})
     fake.live |= {900, 901}
-    inputs = check_inputs(waiting, waiting.checks[0], {})
+    inputs = check_inputs(waiting, waiting.checks[0], check.fingerprints(waiting, waiting.checks[0]))
     store.put_inbox("c1", CheckResult(at=NOW - timedelta(hours=1), check="preview", passed=True, inputs=inputs))
     calls["left"] = [{902: "node"}]
     assert fake.host.tick() == []

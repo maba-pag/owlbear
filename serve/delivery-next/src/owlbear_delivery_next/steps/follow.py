@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next import loop, profile
 from owlbear_delivery_next.github.provider import ProviderError, classify_checks
 from owlbear_delivery_next.loop import StepResult
-from owlbear_delivery_next.models import Episode, ErrorKind, Exit, Response, StepKind, Stop, Waiting
+from owlbear_delivery_next.models import Episode, ErrorKind, Exit, Response, Score, StepKind, Stop, Waiting
 from owlbear_delivery_next.steps import check, engine
 from owlbear_delivery_next.steps import conversation as conv
 
@@ -37,7 +37,9 @@ def fix_ci(ctx: Ctx, c: Change, state: CiState, step: StepKind) -> StepResult:
     log = ctx.gh.job_log(ctx.repository, failed.job_id) if failed.job_id else ""
     detail = f"CI check `{failed.name}` failed ({failed.conclusion}); {failed.url or ''}\n{log}"
     fix = engine.task(c, f"Fix the failing CI check {failed.name}", "ci", detail)
-    return engine.back(ErrorKind.CHECKS, step, failed.name, f"fixing {failed.name}: CI failed", fix)
+    result = engine.back(ErrorKind.CHECKS, step, failed.name, f"fixing {failed.name}: CI failed", fix)
+    score = Score(failing=len(state.failed), findings=sorted(f.name for f in state.failed))
+    return result.model_copy(update={"score": score})  # fewer failing checks is progress; a new commit is not
 
 
 def waiting(state: CiState, ctx: Ctx) -> StepResult:
