@@ -191,7 +191,7 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     try:
         head = worktree.head(path)
         tree, out = visual.tree(path, head), store.visual_dir(change.slug, head)
-        shots = visual.CAPTURE(visual.root(url), change.brief.visual, out)
+        shots = visual.capped(out, visual.CAPTURE(visual.root(url), change.brief.visual, out))
     except visual.BrowserMissingError as exc:
         result = visual.missing_browser(str(exc))
     except Exception as exc:  # noqa: BLE001 - a capture error is never a pass
@@ -206,13 +206,14 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
                 message=prompts.visual(change, [(s.state, s.width, s.file) for s in shots]),
                 resume=False,
                 policy=sdk_adapter.Policy(path, prompts.GIT_READ, write=False),
-                observe=lambda: tools.Worktree(head, head, changed=()),
+                observe=lambda: tools.Worktree(head, head, changed=tuple(s.file for s in shots)),
                 checks=(),
                 journal=sdk_adapter.Journal(lambda e: store.log(lock, change.slug, e)),
                 attachments=visual.attachments(out, shots),
             )
             result, run = _review_run(store, lock, change, cfg, "visual-review")
-            judgement = run.payload if isinstance(run.payload, tools.ReviewResult) else None
+            stopped = result.exit == Exit.STOP  # a session that did not end cleanly outranks its verdict
+            judgement = run.payload if isinstance(run.payload, tools.ReviewResult) and not stopped else None
         if judgement is not None or result is None:
             change, result = visual.judged(change, head, tree, shots, verdict=judgement, now=datetime.now(UTC))
     store.write(lock, loop.apply(change, result, datetime.now(UTC)))

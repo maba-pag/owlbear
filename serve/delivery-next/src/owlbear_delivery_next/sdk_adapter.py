@@ -141,6 +141,15 @@ def _escape(root: Path, base: Path, words: Sequence[str], *, mutating: bool) -> 
     return None
 
 
+def escape(root: Path, directory: Path, command: str) -> str | None:
+    """The worker path policy for a host-run command: an unparsable command or the path it reaches outside *root*."""
+    try:
+        words = shlex.split(command)
+    except ValueError:
+        return command
+    return _escape(root.resolve(), directory, words, mutating=True)
+
+
 def _shell(policy: Policy, req: Request) -> str | None:  # noqa: PLR0911 - one reason per check
     if req.urls:
         return "shell commands that reach URLs are not allowed"

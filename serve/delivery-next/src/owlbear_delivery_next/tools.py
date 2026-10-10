@@ -161,6 +161,7 @@ class PersonCheckDraft(Args):
     name: str = Field(pattern=NAME, description="Short id of the check", examples=["preview"])
     steps: list[str] = _f(10, "What the owner does, step by step", ["Open the preview page"])
     expect: str = _f(300, "What the owner should see", "The page shows 'Hallo, Ada!'")
+    visual: bool = Field(default=False, description="Whether the owner judges how the UI looks", examples=[True])
 
 
 class VisualStateDraft(Args):
@@ -231,10 +232,13 @@ def check_brief(brief: BriefDraft) -> list[str]:
         for i, v in enumerate(brief.visual)
         if v.path.startswith("//") or ".." in PurePosixPath(v.path.split("?")[0]).parts
     ]
-    if brief.ui and not (brief.visual or brief.person_checks):
+    from owlbear_delivery_next.steps import visual  # noqa: PLC0415 - visual imports tools through its steps
+
+    person = any(p.visual for p in brief.person_checks)
+    if visual.need(ui=brief.ui, states=bool(brief.visual), person=person) == "unmet":
         errors.append(
             'visual: empty for a UI Change - add a state, e.g. {"name": "home", "path": "/", "expect": "..."}, '
-            "or a person-only check"
+            "or a person-only check with visual: true"
         )
     return errors
 
@@ -433,6 +437,10 @@ def check_recipe(recipe: CheckRecipe, tree: Worktree, launch: Sequence[str], roo
         errors.append(f'directory: {recipe.directory} is not a directory in the worktree - e.g. "packages/app"')
     if not any(recipe.command.split()[: len(c.split())] == c.split() for c in launch):
         errors.append(f"command: not an allowed launch command - use one of {', '.join(launch) or 'none'}")
+    from owlbear_delivery_next import sdk_adapter  # noqa: PLC0415 - sdk_adapter imports tools
+
+    if (outside := sdk_adapter.escape(root, where, recipe.command)) is not None:
+        errors.append(f"command: {outside} is outside the worktree - keep every path argument inside it")
     if not LOCAL_URL.fullmatch(recipe.ready_url):
         errors.append('ready_url: must be local with a port, e.g. "http://127.0.0.1:4173/"')
     return errors

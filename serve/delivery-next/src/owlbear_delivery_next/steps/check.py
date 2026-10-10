@@ -43,6 +43,8 @@ def action(c: Change, *, live: bool, paths: Mapping[str, str]) -> Action | None:
     if c.finished_at or not known or (c.step.kind, c.step.task) != (StepKind.CHECK, e.check):
         return "dispose"
     if person is None:
+        if c.intent.abandoned_at or c.stop is not None:
+            return "dispose"  # a terminal exit of the visual task; done moves the step on
         return "keep" if live and e.ready_at else "launch"  # the runner captures and settles the visual check
     a = person.answer
     if a and a.inputs and loop.check_valid(a.inputs, loop.check_inputs(c, person, paths)):

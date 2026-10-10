@@ -37,17 +37,20 @@ def visual_ok(c: Change, head: str, ui: Sequence[str]) -> bool:
     """Fail-closed visual acceptance of *head*: states need a passed result for its exact head and tree.
 
     A Change that is not UI (by brief or by *ui* diff paths) passes; a UI Change without states passes only with
-    person-only checks or the owner's "Not a UI change" for this brief version.
+    a person-only check marked ``visual`` or the owner's "Not a UI change" for this brief version and these paths.
     """
-    if c.brief.visual:
-        try:
-            tree = visual.tree(Path(c.names.worktree), head)
-        except subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError:
-            return False  # an unreadable head tree is never accepted
-        return loop.visual_valid(c, head, tree)
-    if not (c.brief.ui or ui):
-        return True
-    return bool(c.checks) or visual.not_ui(c)
+    person = any(p.visual for p in c.checks)
+    match visual.need(ui=c.brief.ui or bool(ui), states=bool(c.brief.visual), person=person):
+        case "states":
+            try:
+                tree = visual.tree(Path(c.names.worktree), head)
+            except subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError:
+                return False  # an unreadable head tree is never accepted
+            return loop.visual_valid(c, head, tree)
+        case "unmet":
+            return visual.not_ui(c, ui)
+        case _:
+            return True
 
 
 def offer(ctx: Ctx, c: Change, pr: PullRequest, state: CiState) -> StepResult:
@@ -166,8 +169,8 @@ def gate(  # noqa: C901, PLR0911 - one exit per condition
         return c, held
     if decision.block is not None:
         return _blocked(ctx, c, pr, state, decision)
-    c = visual.decide(c, ctx.now)
     ui = [] if c.brief.visual else visual.ui_paths(c, pr.head_sha)
+    c = visual.decide(c, ui, ctx.now)
     if not visual_ok(c, pr.head_sha, ui):
         return c, visual.held(c, pr.head_sha, ui)
     asking = profile.value(ctx.profile, profile.ASK) == "yes"

@@ -109,6 +109,7 @@ class VisualResult(Record):
     head: str
     tree: str
     states: dict[str, int] = Field(default_factory=dict)  # state name -> version judged
+    criteria: dict[str, int] = Field(default_factory=dict)  # criterion id -> version judged
     files: list[str] = Field(default_factory=list)  # screenshot names inside the Change's visual directory
     passed: bool = False
     findings: list[str] = Field(default_factory=list)
@@ -158,6 +159,7 @@ class PersonCheck(Record):
     criteria: list[str] = Field(default_factory=list)
     steps: list[str] = Field(default_factory=list)
     expect: str = ""
+    visual: bool = False  # the person judges how the UI looks
     paths: list[str] = Field(default_factory=list)
     procedure: int = 1
     environment: list[str] = Field(default_factory=list)
@@ -170,6 +172,7 @@ class Decision(Record):
     text: str
     origin: Literal["decided", "approved", "autonomous"]
     at: datetime
+    paths: list[str] = Field(default_factory=list)  # the UI paths a "Not a UI change" answer covers
 
 
 class Option(Record):

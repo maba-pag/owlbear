@@ -1,13 +1,18 @@
-"""Visual check: render the brief's page states in headless Chromium and judge the screenshots (B23, B24)."""
+"""Visual check: render the brief's page states in headless Chromium and judge the screenshots (B23, B24).
+
+UI detection reads paths only: markup rendered from plain JS/TS modules outside the UI directories is not
+seen here; the brief's ``ui`` flag covers that residual.
+"""
 
 from __future__ import annotations
 
 import base64
+import hashlib
 import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 from urllib.parse import urlsplit
 
 from owlbear_delivery_next.loop import StepResult, cause_key
@@ -18,13 +23,20 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
     from datetime import datetime
 
+    from playwright.sync_api import Route
+
     from owlbear_delivery_next import tools
     from owlbear_delivery_next.models import Change, VisualState
 
 UI_SUFFIXES = frozenset(
     {".html", ".htm", ".css", ".scss", ".sass", ".less", ".tsx", ".jsx", ".vue", ".svelte", ".astro"}
+    | {".hbs", ".handlebars", ".ejs", ".njk", ".twig", ".erb", ".jinja", ".jinja2", ".j2", ".liquid"}
+    | {".mdx", ".svg"}
 )
+UI_DIRS = frozenset({"components", "pages", "views", "templates", "layouts", "styles", "static", "public"})
 VIEWPORTS = ((1280, 800), (390, 844))
+MAX_HEIGHT = 6000  # px per capture; the width is the viewport's
+MAX_BYTES = 12 * 2**20  # screenshot bytes attached to one review
 SETTLE_MS = 15_000
 INSTALL = "uv run playwright install chromium"
 FILE = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}-\d{3,4}\.png$")
@@ -48,9 +60,21 @@ class Shot:
 
 
 type Capturer = Callable[[str, Sequence[VisualState], Path], list[Shot]]
+type Need = Literal["none", "states", "person", "unmet"]
 
 
-def capture(base: str, states: Sequence[VisualState], out: Path, timeout_ms: int = SETTLE_MS) -> list[Shot]:
+def need(*, ui: bool, states: bool, person: bool) -> Need:
+    """The one visual rule: states are captured; else a UI Change needs a person check with ``visual: true``."""
+    if states:
+        return "states"
+    if not ui:
+        return "none"
+    return "person" if person else "unmet"
+
+
+def capture(  # noqa: C901 - one finding per failure of the nested shot
+    base: str, states: Sequence[VisualState], out: Path, timeout_ms: int = SETTLE_MS
+) -> list[Shot]:
     """Render every state at each viewport, full page after network idle; an unanswered URL is a failed shot.
 
     Raises:
@@ -68,18 +92,37 @@ def capture(base: str, states: Sequence[VisualState], out: Path, timeout_ms: int
             raise
 
         def shot(s: VisualState, width: int, height: int) -> Shot:
-            page = browser.new_page(viewport={"width": width, "height": height})
+            page, origin, left = browser.new_page(viewport={"width": width, "height": height}), root(base), []
+
+            def guard(route: Route) -> None:  # main-frame navigation off the preview origin is aborted
+                r = route.request
+                if r.is_navigation_request() and r.frame == page.main_frame and root(r.url) != origin:
+                    left.append(root(r.url))
+                    route.abort()
+                else:
+                    route.continue_()
+
+            def away() -> Shot | None:
+                gone = left[0] if left else root(page.url) if root(page.url) != origin else ""
+                return Shot(s.name, width, error=f"state {s.name} left the preview ({gone})") if gone else None
+
+            page.route("**/*", guard)
             try:
                 response = page.goto(base + s.path, wait_until="networkidle", timeout=timeout_ms)
+                if failed := away():
+                    return failed
                 if response is None or response.status >= _HTTP_ERROR:
                     return Shot(s.name, width, error=f"{s.path} answered {response.status if response else 'nothing'}")
-                name = f"{s.name}-{width}.png"
-                page.screenshot(path=str(out / name), full_page=True, timeout=timeout_ms)
+                tall = page.evaluate("() => document.documentElement.scrollHeight")
+                if tall > MAX_HEIGHT:
+                    return Shot(s.name, width, error=f"state {s.name} is {tall}px tall, over the {MAX_HEIGHT}px cap")
+                name, clip = f"{s.name}-{width}.png", {"x": 0, "y": 0, "width": width, "height": max(tall, height)}
+                page.screenshot(path=str(out / name), full_page=True, clip=clip, timeout=timeout_ms)
             except Error as exc:
-                return Shot(s.name, width, error=f"{s.path} did not answer: {str(exc).splitlines()[0][:200]}")
+                return away() or Shot(s.name, width, error=f"{s.path} did not answer: {str(exc).splitlines()[0][:200]}")
             finally:
                 page.close()
-            return Shot(s.name, width, file=name)
+            return away() or Shot(s.name, width, file=name)
 
         try:
             return [shot(s, w, h) for s in states for w, h in VIEWPORTS]
@@ -88,6 +131,16 @@ def capture(base: str, states: Sequence[VisualState], out: Path, timeout_ms: int
 
 
 CAPTURE: Capturer = capture
+
+
+def capped(out: Path, shots: Sequence[Shot]) -> list[Shot]:
+    """Shots past the review's attachment budget become findings naming their state; never a pass."""
+    total, kept = 0, []
+    for s in shots:
+        total += (out / s.file).stat().st_size if s.file else 0
+        over = f"state {s.state} takes the screenshots over the {MAX_BYTES // 2**20} MB review cap"
+        kept.append(Shot(s.state, s.width, error=over) if s.file and total > MAX_BYTES else s)
+    return kept
 
 
 def root(ready_url: str) -> str:
@@ -101,33 +154,43 @@ def tree(path: Path, head: str) -> str:
     return worktree.git(path, "rev-parse", f"{head}^{{tree}}").strip()
 
 
+def is_ui(path: str) -> bool:
+    """A path with a UI suffix or under a UI directory."""
+    p = Path(path.lower())
+    return p.suffix in UI_SUFFIXES or any(part in UI_DIRS for part in p.parts[:-1])
+
+
 def ui_paths(c: Change, head: str) -> list[str]:
-    """Paths with a UI suffix the Change's diff touches; an unreadable diff counts as UI (fail-closed)."""
+    """UI paths the Change's diff touches, both ends of a rename; an unreadable diff counts as UI (fail-closed)."""
     try:
-        out = worktree.git(Path(c.names.worktree), "diff", "--name-only", f"origin/{c.names.target}...{head}")
+        diff = ["diff", "--name-status", "-M", f"origin/{c.names.target}...{head}"]
+        out = worktree.git(Path(c.names.worktree), *diff)
     except subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError:
         return ["(the diff could not be read)"]
-    return [p for p in out.splitlines() if any(p.lower().endswith(s) for s in UI_SUFFIXES)]
+    return sorted({p for line in out.splitlines() for p in line.split("\t")[1:] if is_ui(p)})
 
 
-def _cause(c: Change) -> str:
-    return cause_key(ErrorKind.GATE, StepKind.MERGE, f"visual-v{c.brief.version}")
+def digest(ui: Sequence[str]) -> str:
+    """The identity of one sorted set of UI paths."""
+    return hashlib.sha256("\n".join(sorted(set(ui))).encode()).hexdigest()[:12]
 
 
-def _decision(c: Change) -> str:
-    return f"Not a UI change (brief v{c.brief.version})"
+def _cause(c: Change, ui: Sequence[str]) -> str:
+    return cause_key(ErrorKind.GATE, StepKind.MERGE, f"visual-v{c.brief.version}-{digest(ui)}")
 
 
-def not_ui(c: Change) -> bool:
-    """The owner decided this brief version is not a UI change."""
-    return any(d.text == _decision(c) and d.origin == "decided" for d in c.decisions)
+def not_ui(c: Change, ui: Sequence[str]) -> bool:
+    """The owner decided this brief version is not a UI change for a set of UI paths holding every current one."""
+    prefix = f"Not a UI change (brief v{c.brief.version},"
+    return any(d.origin == "decided" and d.text.startswith(prefix) and set(ui) <= set(d.paths) for d in c.decisions)
 
 
-def decide(c: Change, now: datetime) -> Change:
-    """Record the owner's "Not a UI change" answer for this brief version as a decided Decision, once."""
-    cause = _cause(c)
-    if any(q.cause == cause and q.answer and q.answer.option == NOT_UI for q in c.questions) and not not_ui(c):
-        c.decisions.append(Decision(text=_decision(c), origin="decided", at=now))
+def decide(c: Change, ui: Sequence[str], now: datetime) -> Change:
+    """Record the owner's "Not a UI change" answer for this brief version and these UI paths, once."""
+    cause = _cause(c, ui)
+    if any(q.cause == cause and q.answer and q.answer.option == NOT_UI for q in c.questions) and not not_ui(c, ui):
+        text = f"Not a UI change (brief v{c.brief.version}, UI paths {digest(ui)})"
+        c.decisions.append(Decision(text=text, origin="decided", at=now, paths=sorted(set(ui))))
     return c
 
 
@@ -148,7 +211,7 @@ def held(c: Change, head: str, ui: Sequence[str]) -> StepResult:
         Option(id="pause", label="Pause", next="pause"),
     ]
     text = f"This Change touches UI files ({shown}) but its brief has no visual check"
-    return engine.ask(StepKind.MERGE, text, _cause(c), options)
+    return engine.ask(StepKind.MERGE, text, _cause(c, ui), options)
 
 
 def attachments(out: Path, shots: Sequence[Shot]) -> tuple[dict[str, str], ...]:
@@ -199,8 +262,10 @@ def judged(  # noqa: PLR0913 - one result from every visual input
         found = ["the screenshots were not judged"]
     passed = not found and verdict is not None and verdict.verdict == "pass"
     files = [s.file for s in shots if s.file]
-    states = {s.name: s.version for s in c.brief.visual}
-    c.visual = VisualResult(head=head, tree=tree_id, states=states, files=files, passed=passed, findings=found, at=now)
+    states, criteria = {s.name: s.version for s in c.brief.visual}, {k.id: k.version for k in c.brief.criteria}
+    c.visual = VisualResult(
+        head=head, tree=tree_id, states=states, criteria=criteria, files=files, passed=passed, findings=found, at=now
+    )
     if passed:
         reason = f"visual check of {head[:7]} passed: {len(files)} screenshots"
         return c, StepResult(exit=Exit.DONE, reason=reason, paths=check.declared(c))

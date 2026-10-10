@@ -20,7 +20,7 @@ import uvicorn
 from pydantic import ValidationError
 
 from owlbear_delivery_next import api, loop, sdk_adapter, setup, tools
-from owlbear_delivery_next.models import ErrorKind, Exit, Profile, Record, StepKind, Stop
+from owlbear_delivery_next.models import VISUAL, ErrorKind, Exit, Profile, Record, StepKind, Stop
 from owlbear_delivery_next.process_probe import ProcessTableWorktreeProbe, WorktreeProcessScanError
 from owlbear_delivery_next.status import Activity
 from owlbear_delivery_next.steps import check, engine, pullback, worktree
@@ -106,9 +106,13 @@ def _unverified(c: Change) -> bool:
 
 
 def disappeared(prior: Change, rec: RunnerRecord, now: datetime) -> bool:
-    """Whether the runner ended without committing an exit while its step was runnable."""
-    o = prior.outcome
-    return not (o and o.at >= rec.started_at) and prior.env is None and loop.next_step(prior, now) is not None
+    """Whether the runner ended without committing an exit while its step was runnable.
+
+    A person check's environment means its preparer already exited; the visual runner captures while one exists.
+    """
+    o, env = prior.outcome, prior.env
+    runner = env is None or env.check == VISUAL
+    return not (o and o.at >= rec.started_at) and runner and loop.next_step(prior, now) is not None
 
 
 def gone(kind: StepKind) -> loop.StepResult:

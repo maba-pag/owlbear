@@ -164,7 +164,7 @@ def visual_valid(c: Change, head: str | None, tree: str | None = None) -> bool:
     r = c.visual
     if r is None or not r.passed or r.head != head or (tree is not None and r.tree != tree):
         return False
-    return r.states == {s.name: s.version for s in c.brief.visual}
+    return r.states == {s.name: s.version for s in c.brief.visual} and r.criteria == _criteria(c)
 
 
 def next_check(c: Change, paths: Mapping[str, str]) -> PersonCheck | None:
@@ -516,8 +516,11 @@ def _done(c: Change, r: StepResult | None, now: datetime) -> None:  # noqa: C901
         case StepKind.PUBLISH:
             _go(c, StepKind.FOLLOW)
         case StepKind.FOLLOW | StepKind.CHECK:
-            check = next_check(c, paths)
-            if s.kind == StepKind.FOLLOW and c.brief.visual and not visual_valid(c, r.head if r else None):
+            from owlbear_delivery_next.steps import visual  # noqa: PLC0415 - visual imports loop
+
+            check, person = next_check(c, paths), any(p.visual for p in c.checks)
+            states = visual.need(ui=c.brief.ui, states=bool(c.brief.visual), person=person) == "states"
+            if s.kind == StepKind.FOLLOW and states and not visual_valid(c, r.head if r else None):
                 _go(c, StepKind.CHECK, VISUAL)  # the visual check runs before person-only checks
             elif check:
                 _go(c, StepKind.CHECK, check.id)

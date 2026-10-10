@@ -50,10 +50,10 @@ def drafted(old: Change | None, d: tools.BriefDraft, slug: str, handle: str, pro
     c.checks = []
     for p in d.person_checks:
         prev = shown.get(p.name)
-        procedure = prev.procedure + ((prev.steps, prev.expect) != (p.steps, p.expect)) if prev else 1
-        c.checks.append(
-            PersonCheck(id=p.name, criteria=ids, steps=p.steps, expect=p.expect, paths=paths, procedure=procedure)
-        )
+        changed = (prev.steps, prev.expect, prev.visual) != (p.steps, p.expect, p.visual) if prev else False
+        procedure = prev.procedure + changed if prev else 1
+        fields = {"id": p.name, "criteria": ids, "steps": p.steps, "expect": p.expect, "visual": p.visual}
+        c.checks.append(PersonCheck(**fields, paths=paths, procedure=procedure))
     c.outcome = Outcome(
         exit=Exit.PENDING, waiting=Waiting.CHAT, who="you", reason=f"approve brief v{v}", at=datetime.now(UTC)
     )
