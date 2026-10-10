@@ -184,7 +184,7 @@ the Local harness; the old Delivery keeps running on Local until M6.
 | Q6 | Sequencing with the VS Code agent-platform migration | Integrate (§3.9 option S3): the Copilot runtime is a design input of M2/M3 and the base of M4; content portability (E1) runs as an enabling track; no port of the current Delivery |
 | Q7 | Programmable loop technology | A small Python loop on the Copilot SDK as baseline candidate, compared in R8 with dynamic workflows invoked through the SDK; VS Code support for dynamic workflows is not required. Python structured output is still experimental |
 | Q8 | Switch to a third-party agent front-end | No; isolate Copilot SDK calls in ordinary modules and build no front-end abstraction (§3.10) |
-| Q9 | Status and interaction surface | Cockpit, the platform's Agents window plus the pull request, or chat only; decide after R8 with one status view as the requirement |
+| Q9 | Status and interaction surface | Cockpit, the platform's Agents window plus the pull request, or chat only; decide after R8 with one status view as the requirement. Tool rule T6 (TD-1) names Cockpit for the user's recovery decisions, so another surface needs the user to re-decide that part of T6 |
 
 **Proposed re-decisions of earlier user decisions.** These change only when the user decides again.
 
@@ -192,7 +192,7 @@ the Local harness; the old Delivery keeps running on Local until M6.
 | --- | --- | --- | --- | --- |
 | RD1 | "Bounded recovery now; explicit containment otherwise" (2026-09-25, [programme §1.1](change-continuation-delivery-redesign.md#11-requirements-from-the-user)) | Containment ends in read-only diagnosis without an exit (RC1) | Keep as is; narrow containment to genuinely unknown effects and give every stop one actionable exit (P1); broaden automatic recovery | Narrow |
 | RD2 | Use the existing VS Code Copilot Orchestrator, not Copilot CLI, sampling or another runtime (2026-09-30, same section) | VS Code 1.141's Copilot harness runs on the SDK; Local will be removed; the SDK is generally available | Keep an Orchestrator agent on the Copilot harness; move the loop into SDK code; decide after R8 | Decide after R8 |
-| RD3 | Agents push their own branch and open its PR but never merge (U-1, 2026-10-02, [execution plan](delivery-redesign-execution-plan.md)) | The user's working prompts ask agents to merge after green CI | Keep human merges; allow merges of rebuild branches after green CI and an implementation challenge | User's choice; live controller activation stays with the user either way |
+| RD3 | Agents implementing the redesign push their own branch and open its PR but never merge (U-1, 2026-10-02, [execution plan](delivery-redesign-execution-plan.md)) | The user's working prompts ask agents to merge after green CI; product merges the user approves in the status view are not affected | Keep human merges; allow merges of rebuild branches after green CI and an implementation challenge | User's choice; live controller activation stays with the user either way |
 
 **Recorded decisions.**
 
@@ -251,7 +251,9 @@ or tool allow-lists enforcing a read-only reviewer; a user-question tool; a Pyth
 driving a session with a custom agent and receiving a schema-validated result; **one round trip of
 question, answer and resume while VS Code is open**; which surface owns the session, the question and
 permission UI, the worktree, the pull request and the merge; **unattended tool permissions** (journey
-row B7); continuation after the window closes (row X1); dynamic workflows through the SDK; PR
+row B7); continuation after the window closes (row X1); **how the runtime confirms that a session
+and the commands it started have ended** (DR10), and what the user can do when it cannot; dynamic
+workflows through the SDK; PR
 creation and agent-merge behavior; **billing identity, the cost of one Change, and behavior when
 quota runs out**; **employer authorization** for local SDK or CLI use, and company policy for plugins,
 extensions and experimental flags.

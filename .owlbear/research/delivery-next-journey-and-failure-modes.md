@@ -6,10 +6,10 @@
 > **Question:** What does one Change look like end to end for a developer using OwlBear on their own
 > GitHub project, and which failure modes must the design handle — ordinary ones first — so that
 > problems found in real use need fixes, not rework?
-> **Status:** Draft, revised after an independent round-2 challenge (user experience, failure modes,
-> consumer fit, overall route; 2026-10-10). Everything here is `autonomous` until the user approves
-> the M3 design; the user directions it follows are TD-2 and TD-3 in the
-> [rebuild research](delivery-liveness-first-rebuild.md#38-decisions-reserved-for-the-user).
+> **Status:** Draft, revised after independent round-2 and round-3 challenges (user experience, failure
+> modes, consumer fit, overall route and cross-document coherence; 2026-10-10). Everything here is
+> `autonomous` until the user approves the M3 design; the user directions it follows are TD-2 and TD-3
+> in the [rebuild research](delivery-liveness-first-rebuild.md#38-decisions-reserved-for-the-user).
 
 ## 1. Context and Question
 
@@ -156,7 +156,7 @@ most projects), **O** occasional, **R** rare. Rows are ordered by likelihood wit
 | D3 | Acceptance criterion cannot be checked | C | Reviewer | Designer rewrites it as checkable or as a person-only check, visible in the brief |
 | D4 | Task too large to finish in one agent session | C | Planner size rule; build exhaustion | back to plan to split the task |
 | D5 | Brief or plan cites wrong repository facts | O | Reviewer verifies cited evidence | retry with the reviewer's findings |
-| D6 | User changes their mind after approval | O | User says so in chat or the status view | Acknowledge at once and launch no new work; let a running step reach a safe point or stop it; say plainly if a submitted push or merge can no longer be undone; back to J2 showing kept and dropped work; ask for re-approval |
+| D6 | User changes their mind after approval | O | User says so in chat or the status view | Acknowledge at once and launch no new work; let a running step reach a safe point or stop it. If a merge was submitted, observe its outcome first: merged → the Change completes and the new intent starts a new brief; not merged, or no merge submitted → back to J2 showing kept and dropped work, and ask for re-approval. Say plainly what can no longer be undone |
 | D7 | Plan overlaps another open Change | O | Overlap check on files and areas | ask: order them or proceed; conflicts are handled in J5 |
 | D8 | Plan needs something only the user has (credential, product choice) | O | Planner flags it | ask |
 | D9 | Planner and reviewer keep disagreeing | O | Round count (for example two) | ask with both positions summarized |
@@ -182,7 +182,7 @@ most projects), **O** occasional, **R** rare. Rows are ordered by likelihood wit
 | B14 | Model unavailable or timing out | O | Runtime error | retry with backoff, falling back to another allowed model tier; then stop |
 | B15 | A secret is committed | O | GitHub push protection rejects the push, or a local scan | back to build: remove it and rewrite unpublished commits; if it was published, ask the user to rotate it |
 | B16 | Disk full or similar resource exhaustion | R | Command errors | stop with the reason |
-| B17 | Project checks already fail before the task's edits | O | Profile checks on the starting revision | retry for environment causes; otherwise ask: fix first as a separate task, or proceed and record the known failure |
+| B17 | Project checks already fail before the task's edits | O | Profile checks on the starting revision | retry for environment causes; otherwise ask: fix first as a separate task, or pause. "Proceed with the failure recorded" is offered only when the Change's acceptance can be shown independently and the failure blocks no task check or required remote gate; that unchanged failure is then not treated as a new task failure |
 | B18 | Commit identity or signer unavailable or locked (GPG, keychain, hardware key) | O | Commit or signing error | ask: the exact unlock or setup action outside chat; signing is never disabled |
 | B19 | Workspace or Change branch missing on resume | O | Workspace and ref observation | Recreate from the branch and preserved work; stop if preservation cannot be confirmed |
 | B20 | LFS objects or submodules not present in a new workspace | O | Profile flags them; pointer files or empty submodules after preparation | Hydrate during preparation; failure is handled as S3 |
@@ -211,7 +211,7 @@ most projects), **O** occasional, **R** rare. Rows are ordered by likelihood wit
 | P7 | Required human reviewers or code owners | O | Effective branch rules | pending: "waiting for review by …"; that touchpoint happens in GitHub |
 | P8 | CI flaky | O | Rerun passes | Rerun once automatically |
 | P9 | GitHub API outage or rate limit | O | API errors | retry with backoff; then stop |
-| P10 | Expected or required CI missing, not triggered, cancelled, or awaiting workflow approval | O | Required checks and statuses on the current head against the effective rules | pending with bounded observation; then agent repair (for example a workflow trigger) or ask naming the owner's exact action; the gate is never downgraded |
+| P10 | Expected or required CI missing, not triggered, cancelled, or awaiting workflow approval | O | Checks and statuses on the current head against the CI declared in the profile and the effective rules | pending with bounded observation; then agent repair (for example a workflow trigger) or ask naming the owner's exact action; the gate is never downgraded |
 
 **Person-only checks and merge**
 
