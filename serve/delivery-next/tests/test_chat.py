@@ -307,9 +307,9 @@ class Popen:
 def test_new_change_opens_an_agent_chat_without_a_shell(tmp_path):
     popen = Popen()
     out = api.new_chat(tmp_path, which=lambda _n: "/bin/code", popen=popen)
-    assert out == {"started": True, "command": f"code chat -r -m agent '{api.START_PROMPT}'"}
+    assert out == {"started": True, "command": f"code chat -m agent '{api.START_PROMPT}'"}
     [(argv, kwargs)] = popen.calls
-    assert argv == ["/bin/code", "chat", "-r", "-m", "agent", api.START_PROMPT]
+    assert argv == ["/bin/code", "chat", "-m", "agent", api.START_PROMPT]
     assert kwargs["cwd"] == tmp_path
     assert kwargs["start_new_session"]
     assert "shell" not in kwargs
@@ -319,7 +319,7 @@ def test_new_change_opens_an_agent_chat_without_a_shell(tmp_path):
 def test_new_change_returns_the_command_when_code_cannot_start(tmp_path, which, fail):
     out = api.new_chat(tmp_path, which=which, popen=Popen(fail))
     assert out["started"] is False
-    assert out["command"] == f"code chat -r -m agent '{api.START_PROMPT}'"
+    assert out["command"] == f"code chat -m agent '{api.START_PROMPT}'"
     assert str(tmp_path) in out["reason"]
 
 

@@ -473,6 +473,43 @@ def test_the_screenshot_endpoint_serves_only_this_changes_recorded_files(tmp_pat
 # One real capture
 
 
+class _Missing:
+    """Playwright stand-in whose launch fails per channel with the given errors."""
+
+    def __init__(self, errors):
+        self.errors, self.tried = errors, []
+        self.chromium = SimpleNamespace(launch=self.launch)
+
+    def launch(self, *, headless, channel):
+        from playwright.sync_api import Error  # noqa: PLC0415 - the optional runtime's error type
+
+        assert headless
+        self.tried.append(channel)
+        raise Error(self.errors[channel])
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_a):
+        return False
+
+
+def test_the_installed_browser_is_tried_first_and_only_missing_browsers_fall_through(tmp_path, monkeypatch):
+    import playwright.sync_api  # noqa: PLC0415 - patched where capture imports it
+
+    gone = {"chrome": "Chromium distribution 'chrome' is not found at /x", "msedge": "… is not found at /y"}
+    pw = _Missing(gone | {None: "Executable doesn't exist at /z; run playwright install"})
+    monkeypatch.setattr(playwright.sync_api, "sync_playwright", lambda: pw)
+    with pytest.raises(visual.BrowserMissingError):
+        visual.capture("http://127.0.0.1:1", [HOME], tmp_path)
+    assert pw.tried == ["chrome", "msedge", None]
+    pw = _Missing({"chrome": "Target page, context or browser has been closed"})
+    monkeypatch.setattr(playwright.sync_api, "sync_playwright", lambda: pw)
+    with pytest.raises(playwright.sync_api.Error):  # another launch failure is not a missing browser
+        visual.capture("http://127.0.0.1:1", [HOME], tmp_path)
+    assert pw.tried == ["chrome"]
+
+
 @pytest.mark.browser
 def test_a_real_capture_of_a_local_page(tmp_path):
     site = tmp_path / "site"
@@ -485,7 +522,7 @@ def test_a_real_capture_of_a_local_page(tmp_path):
     try:
         shots = visual.capture(f"http://127.0.0.1:{server.server_port}", states, tmp_path / "out", timeout_ms=5000)
     except visual.BrowserMissingError as exc:
-        pytest.skip(f"Chromium is not installed: {exc}")
+        pytest.skip(f"no Chrome, Edge or Playwright Chromium: {exc}")
     finally:
         server.shutdown()
     assert [(s.state, s.width, bool(s.file)) for s in shots] == [

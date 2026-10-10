@@ -141,7 +141,7 @@ def new_chat(
     repo: Path, which: Callable[[str], str | None] = shutil.which, popen: Callable[..., object] = subprocess.Popen
 ) -> dict[str, Any]:
     """Open a VS Code agent chat with the fixed start prompt in *repo*; on failure, the command to run there."""
-    argv = ["code", "chat", "-r", "-m", "agent", START_PROMPT]
+    argv = ["code", "chat", "-m", "agent", START_PROMPT]
     command = shlex.join(argv)
     if not (code := which("code")):
         return {"started": False, "command": command, "reason": f"`code` is not on PATH; run this in {repo}"}

@@ -40,6 +40,8 @@ MAX_HEIGHT = 6000  # px per capture; the width is the viewport's
 MAX_BYTES = 12 * 2**20  # screenshot bytes attached to one review
 SETTLE_MS = 15_000
 INSTALL = "uv run playwright install chromium"
+CHANNELS = ("chrome", "msedge", None)  # the installed browser first; None is Playwright's own Chromium
+MISSING = ("playwright install", "Executable doesn't exist", "is not found at")  # Playwright's launch errors
 FILE = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}-\d{3,4}\.png$")
 NOT_UI = "not-ui"
 _SHOWN = 5
@@ -47,7 +49,7 @@ _HTTP_ERROR = 400
 
 
 class BrowserMissingError(RuntimeError):
-    """Chromium for Playwright is not installed."""
+    """Neither Chrome, Edge nor Playwright's Chromium is available."""
 
 
 @dataclass(frozen=True)
@@ -69,18 +71,23 @@ def capture(  # noqa: C901 - one finding per failure of the nested shot
     """Render every state at each viewport, full page after network idle; an unanswered URL is a failed shot.
 
     Raises:
-        BrowserMissingError: Playwright's Chromium is not installed.
+        BrowserMissingError: no installed Chrome or Edge, and Playwright's Chromium is not installed.
     """
     from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - optional browser runtime
 
     out.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as pw:
-        try:
-            browser = pw.chromium.launch(headless=True)
-        except Error as exc:
-            if "playwright install" in str(exc) or "Executable doesn't exist" in str(exc):
-                raise BrowserMissingError(str(exc)) from exc
-            raise
+        browser, missing = None, ""
+        for channel in CHANNELS:
+            try:
+                browser = pw.chromium.launch(headless=True, channel=channel)
+                break
+            except Error as exc:
+                if not any(m in str(exc) for m in MISSING):
+                    raise
+                missing = str(exc)
+        if browser is None:
+            raise BrowserMissingError(missing)
 
         def shot(s: VisualState, width: int, height: int) -> Shot:
             page, origin, left = browser.new_page(viewport={"width": width, "height": height}), root(base), []
