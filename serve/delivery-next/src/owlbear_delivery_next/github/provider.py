@@ -118,6 +118,15 @@ class Comment(_Model):
     url: str | None = None
 
 
+class QueueEntry(_Model):
+    """A pull request's merge queue membership and its latest add and removal events."""
+
+    queued: bool
+    added_at: datetime | None = None
+    removed_at: datetime | None = None
+    reason: str = ""
+
+
 class MergeRequest(_Model):
     """One exact-head merge; ``queue`` submits through the merge API instead of the direct merge call."""
 
@@ -236,6 +245,14 @@ class Provider(Protocol):
 
     def close_pull_request(self, repository: str, number: int) -> None:
         """Close one pull request without merging it."""
+        ...
+
+    def reopen_pull_request(self, repository: str, number: int) -> None:
+        """Reopen one closed pull request."""
+        ...
+
+    def read_queue(self, repository: str, number: int) -> QueueEntry:
+        """Read the pull request's merge queue entry and its latest add and removal events."""
         ...
 
     def observe_checks(self, repository: str, number: int, head: str) -> tuple[Check, ...]:

@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import os
-import re
 import subprocess
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
+
+import yaml
 
 from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github.gh import GhProvider
@@ -28,50 +30,93 @@ POLL, WINDOW = "poll:ci-seconds", "ci:start-window-seconds"
 SETTINGS = {METHOD: "", DELETE: "no", POLL: "20", WINDOW: "300"}  # owner settings; kept across re-detection
 CONFIRMED = "owner confirmed"
 _PREFERRED = (MergeMethod.SQUASH, MergeMethod.MERGE, MergeMethod.REBASE)
-_JOB = re.compile(r"^(\s+)([A-Za-z0-9_-]+):\s*$")
-_NAME = re.compile(r"^\s+name:\s*(.+?)\s*$")
+CI_EVENTS = frozenset({"pull_request", "pull_request_target", "merge_group"})
+HEAD_EVENTS = frozenset({"pull_request", "pull_request_target"})  # their checks report on the PR head
 
 
 def _entry(state: str, value: str, evidence: str) -> ProfileEntry:
     return ProfileEntry(state=state, value=value, evidence=evidence)  # type: ignore[arg-type]
 
 
-def jobs(text: str) -> list[str]:
-    """Return the check names of a workflow's jobs: each job's ``name`` or, without one, its key."""
-    found: list[str] = []
-    inside, job, body = False, None, None
-    for line in text.splitlines():
-        indent = len(line) - len(line.lstrip())
-        if not line.strip() or line.lstrip().startswith("#"):
-            continue
-        if indent == 0:
-            inside = line.rstrip() == "jobs:"
-        elif inside and (job is None or indent == job):
-            if m := _JOB.match(line):
-                job, body = indent, None
-                found.append(m[2])
-        elif inside and found and indent == (body := body or indent) and (n := _NAME.match(line)):
-            found[-1] = n[1].strip("'\"")
-    return found
+@dataclass(frozen=True)
+class Workflow:
+    """One workflow's trigger events and job check names; None where the file does not resolve them."""
+
+    events: frozenset[str] | None
+    jobs: tuple[str, ...] | None
 
 
-def workflows(repo: Path) -> dict[str, list[str]]:
-    """Return the pull-request workflows of *repo* and their job check names."""
-    found = {}
-    for path in sorted((repo / ".github" / "workflows").glob("*.y*ml")):
-        text = path.read_text(errors="replace")
-        if re.search(r"^\s*pull_request(_target)?\b", text, re.MULTILINE) or "[pull_request" in text:
-            found[path.name] = jobs(text)
-    return found
+def _events(on: object) -> frozenset[str] | None:
+    match on:
+        case str():
+            return frozenset({on})
+        case list() | dict() if all(isinstance(e, str) for e in on):
+            return frozenset(on)
+    return None
+
+
+def _jobs(jobs: object) -> tuple[str, ...] | None:
+    if not isinstance(jobs, dict) or not jobs:
+        return None
+    found = []
+    for key, job in jobs.items():
+        if not isinstance(job, dict) or "uses" in job or "strategy" in job:
+            return None  # reusable-workflow and matrix jobs report under derived names
+        name = job.get("name", key)
+        if not isinstance(name, str) or "${{" in name:
+            return None
+        found.append(name)
+    return tuple(found)
+
+
+def workflow(text: str) -> Workflow:
+    """Parse one workflow file: its ``on`` events and each job's ``name`` or key."""
+    try:
+        doc = yaml.safe_load(text)
+    except yaml.YAMLError:
+        return Workflow(None, None)
+    if not isinstance(doc, dict):
+        return Workflow(None, None)
+    on = doc["on"] if "on" in doc else doc.get(True)  # YAML 1.1 reads a bare `on` key as true
+    return Workflow(_events(on), _jobs(doc.get("jobs")))
+
+
+def workflows(repo: Path) -> dict[str, Workflow]:
+    """Return every workflow of *repo* by file name."""
+    paths = sorted((repo / ".github" / "workflows").glob("*.y*ml"))
+    return {p.name: workflow(p.read_text(errors="replace")) for p in paths}
+
+
+def ci_entries(flows: dict[str, Workflow]) -> dict[str, ProfileEntry]:
+    """CI workflows and declared check names; an unresolved trigger or name is unknown, never "no CI"."""
+    ci = {n: w for n, w in flows.items() if w.events is None or w.events & CI_EVENTS}
+    triggers = [n for n, w in ci.items() if w.events is None]
+    on_head = {n: w for n, w in ci.items() if w.events and w.events & HEAD_EVENTS}
+    names = [n for n, w in on_head.items() if w.jobs is None]
+    declared = ", ".join(dict.fromkeys(j for w in on_head.values() for j in w.jobs or ())) or "none"
+    flow_ev = f"unresolved trigger: {', '.join(triggers)}" if triggers else ".github/workflows CI triggers"
+    job_ev = f"unresolved check names: {', '.join(names + triggers)}" if names or triggers else "jobs"
+    return {
+        WORKFLOWS: _entry("unknown" if triggers else "known", ", ".join(ci) or "none", flow_ev),
+        DECLARED: _entry("unknown" if names or triggers else "known", declared, job_ev),
+    }
+
+
+def pre_push_hook(repo: Path) -> tuple[bool, str]:
+    """Whether an executable pre-push hook is installed, and Git's hooks path for it."""
+    out = subprocess.run(  # noqa: S603 - fixed Git executable and argument vector
+        [resolve_git_executable(), "rev-parse", "--git-path", "hooks/pre-push"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.strip()
+    path = repo / out if out else None
+    return bool(path and path.is_file() and os.access(path, os.X_OK)), out
 
 
 def _hook(repo: Path) -> ProfileEntry:
-    git = resolve_git_executable()
-    out = subprocess.run(  # noqa: S603 - fixed Git executable and argument vector
-        [git, "rev-parse", "--git-path", "hooks/pre-push"], cwd=repo, capture_output=True, text=True, check=False
-    ).stdout.strip()
-    path = repo / out if out else None
-    present = bool(path and path.is_file() and os.access(path, os.X_OK))
+    present, out = pre_push_hook(repo)
     return _entry("known", "present" if present else "none", f"git hooks path: {out or 'unknown'}")
 
 
@@ -90,7 +135,6 @@ def detect(repo: Path, gh: Provider, previous: Profile | None) -> Profile:
     """Detect the profile; owner settings, install and allow entries and still-valid confirmations are kept."""
     prev = previous or Profile()
     r = gh.read_repository()
-    flows = workflows(repo)
     host = urlparse(r.url).hostname or "github.com"
     methods = ", ".join(r.methods)
     entries = {
@@ -99,8 +143,7 @@ def detect(repo: Path, gh: Provider, previous: Profile | None) -> Profile:
         DEFAULT: _entry("known", r.default_branch, "gh repo view"),
         METHODS: _entry("known", methods or "none", "gh repo view"),
         PUSH: _entry("known", "yes" if r.can_push else "no", "gh repo view viewerPermission"),
-        WORKFLOWS: _entry("known", ", ".join(flows) or "none", ".github/workflows with a pull_request trigger"),
-        DECLARED: _entry("known", ", ".join(dict.fromkeys(j for js in flows.values() for j in js)) or "none", "jobs"),
+        **ci_entries(workflows(repo)),
         HOOKS: _hook(repo),
         **rule_entries(gh.read_rules(r.repository, r.default_branch)),
     }

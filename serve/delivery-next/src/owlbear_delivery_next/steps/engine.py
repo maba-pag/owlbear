@@ -105,10 +105,19 @@ def back(kind: ErrorKind, step: StepKind, subject: str, reason: str, fix: Task) 
     return StepResult(exit=Exit.BACK, back_to=StepKind.BUILD, cause=cause, reason=reason, fix_task=fix)
 
 
-def integrate(c: Change, step: StepKind, ref: str) -> StepResult:
+def integrate(c: Change, step: StepKind, ref: str, detail: str = "") -> StepResult:
     """Integration runs as a Builder task (DR3): merge *ref* into the branch before publishing or merging."""
     title = f"Merge {ref} into this branch with `git merge {ref}`, resolve any conflicts, run the checks, commit"
-    return back(ErrorKind.CONFLICT, step, ref, f"updating with {ref}", task(c, title, "integration"))
+    return back(ErrorKind.CONFLICT, step, ref, f"updating with {ref}", task(c, title, "integration", detail))
+
+
+def needs_target(c: Change, path: Path, reason: str, now: datetime) -> StepResult:
+    """I6: the task needs a target commit or API this branch lacks; integrate during build, then resume the task."""
+    try:
+        fetch(path, c.names.target)
+    except RemoteGitError as exc:
+        return failed(c, exc, now)
+    return integrate(c, StepKind.BUILD, f"origin/{c.names.target}", f"The Builder of {c.step.task} needs: {reason}")
 
 
 def pending(waiting: Waiting, reason: str, wake: datetime | None, who: Actor = "github") -> StepResult:

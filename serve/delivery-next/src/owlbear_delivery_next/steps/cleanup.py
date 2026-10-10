@@ -60,8 +60,36 @@ def _digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def _parts(path: Path, dirty: Sequence[str]) -> tuple[dict[str, bytes], dict[str, str]]:
+    """Archive parts: both diffs, the index listing, each index blob (conflict stages too) and the dirty files.
+
+    Returns the parts and, for each index blob, the object id its bytes must hash to.
+    """
+    index = _bytes(path, "ls-files", "--stage", "-z", "--", *dirty)
+    blobs = {}
+    for entry in filter(None, index.split(b"\0")):
+        meta, name = entry.split(b"\t", 1)
+        mode, oid, stage = meta.decode().split()
+        if mode != "160000":  # a submodule entry names a commit, not a blob
+            blobs[f"index/{stage}/{name.decode(errors='surrogateescape')}"] = oid
+    parts = {
+        "changes.diff": _bytes(path, "diff", "--binary", "HEAD"),
+        "staged.diff": _bytes(path, "diff", "--binary", "--cached"),
+        "index.txt": index.replace(b"\0", b"\n"),
+    }
+    parts |= {name: _bytes(path, "cat-file", "blob", oid) for name, oid in blobs.items()}
+    parts |= {f"files/{p}": (path / p).read_bytes() for p in dirty if (path / p).is_file()}
+    return parts, blobs
+
+
+def _oid(algorithm: str, data: bytes) -> str:
+    return hashlib.new(algorithm, b"blob %d\0" % len(data) + data).hexdigest()
+
+
 def preserve(path: Path, branch: str, inv: Inventory, dest: Path, stem: str) -> list[Path]:
-    """Bundle the named branch and archive the dirty files; raise unless both read back exactly.
+    """Bundle the named branch and archive the uncommitted work; raise unless both read back exactly.
+
+    Index blobs read back to their object ids, so a staged version the working tree replaced is restorable.
 
     Raises:
         PreservationError: A bundle or archive did not verify.
@@ -76,11 +104,8 @@ def preserve(path: Path, branch: str, inv: Inventory, dest: Path, stem: str) -> 
         saved.append(bundle)
     if inv.dirty:
         archive, expected = dest / f"{stem}.tar", {}
-        parts = {
-            "changes.diff": _bytes(path, "diff", "--binary", "HEAD"),
-            "index.txt": _bytes(path, "ls-files", "--stage", "--", *inv.dirty),
-        }
-        parts |= {f"files/{p}": (path / p).read_bytes() for p in inv.dirty if (path / p).is_file()}
+        parts, blobs = _parts(path, inv.dirty)
+        algorithm = worktree.git(path, "rev-parse", "--show-object-format").strip()
         with tarfile.open(archive, "w") as tar:
             for name, data in parts.items():
                 info = tarfile.TarInfo(name)
@@ -90,7 +115,9 @@ def preserve(path: Path, branch: str, inv: Inventory, dest: Path, stem: str) -> 
         with tarfile.open(archive) as tar:
             for name, digest in expected.items():
                 member = tar.extractfile(name)
-                if member is None or _digest(member.read()) != digest:
+                data = member.read() if member else b""
+                blob = name in blobs and blobs[name] != _oid(algorithm, data)
+                if member is None or _digest(data) != digest or blob:
                     raise PreservationError(archive, name)
         saved.append(archive)
     return saved

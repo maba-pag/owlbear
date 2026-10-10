@@ -246,12 +246,20 @@ class Budgets(Record):
 
 
 class MergeConsent(Record):
-    """Consent to merge one exact head; void when the PR head differs."""
+    """Consent to merge one exact head; void when the PR head differs. ``queued_at``: submitted to the merge queue."""
 
     head: str
     at: datetime
     channel: Channel = "status-view"
     delta: str = ""
+    queued_at: datetime | None = None
+
+
+class Episode(Record):
+    """When expected checks were first observed missing at one head (P10); cleared once none is missing."""
+
+    head: str
+    since: datetime
 
 
 class Stop(Record):
@@ -305,6 +313,7 @@ class Change(Record):
     outcome: Outcome | None = None
     budgets: Budgets = Field(default_factory=Budgets)
     consent: MergeConsent | None = None
+    missing: Episode | None = None
     stop: Stop | None = None
     blocked: Stop | None = None  # host-owned: a process survives in the worktree, so no writer starts
     env: Environment | None = None

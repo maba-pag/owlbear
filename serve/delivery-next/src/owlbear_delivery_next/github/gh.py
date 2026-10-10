@@ -22,6 +22,7 @@ from owlbear_delivery_next.github.provider import (
     MergeStatus,
     ProviderError,
     PullRequest,
+    QueueEntry,
     Refusal,
     Repository,
     Rules,
@@ -64,6 +65,12 @@ _CHECKS = """query Checks($owner: String!, $name: String!, $number: Int!) {
                           isRequired(pullRequestNumber: $number) }
         ... on StatusContext { context state targetUrl isRequired(pullRequestNumber: $number) }
       } } } } } } } }
+}"""
+_QUEUE = """query Queue($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) { pullRequest(number: $number) { mergeQueueEntry { state }
+    timelineItems(last: 20, itemTypes: [ADDED_TO_MERGE_QUEUE_EVENT, REMOVED_FROM_MERGE_QUEUE_EVENT]) {
+      nodes { __typename ... on AddedToMergeQueueEvent { createdAt }
+              ... on RemovedFromMergeQueueEvent { createdAt reason } } } } }
 }"""
 
 type Runner = Callable[[tuple[str, ...], bytes | None, float, Path | None], subprocess.CompletedProcess[bytes]]
@@ -304,6 +311,29 @@ class GhProvider:
         """Close one pull request without merging it."""
         endpoint = f"{_repo(repository)}/pulls/{number}"
         self._api("close_pull_request", "PATCH", endpoint, body={"state": "closed"}, write=True)
+
+    def reopen_pull_request(self, repository: str, number: int) -> None:
+        """Reopen one closed pull request."""
+        endpoint = f"{_repo(repository)}/pulls/{number}"
+        self._api("reopen_pull_request", "PATCH", endpoint, body={"state": "open"}, write=True)
+
+    def read_queue(self, repository: str, number: int) -> QueueEntry:
+        """Read the merge queue entry and the latest add and removal events, with the removal's reason."""
+        op, (owner, name) = "read_queue", repository.split("/", 1)
+        body = {"query": _QUEUE, "variables": {"owner": owner, "name": name, "number": number}}
+        result = self._gh(op, ("api", "--hostname", self.host, "graphql", "--input", "-"), body=body)
+        try:
+            pr = result["data"]["repository"]["pullRequest"]
+            events = {n["__typename"]: n for n in pr["timelineItems"]["nodes"]}  # the latest of each kind
+            added, removed = events.get("AddedToMergeQueueEvent"), events.get("RemovedFromMergeQueueEvent")
+            return QueueEntry(
+                queued=pr["mergeQueueEntry"] is not None,
+                added_at=added["createdAt"] if added else None,
+                removed_at=removed["createdAt"] if removed else None,
+                reason=bounded(removed.get("reason")) or "" if removed else "",
+            )
+        except (KeyError, TypeError, ValidationError) as exc:
+            _invalid(op, "GitHub returned an invalid merge queue entry", exc)
 
     def observe_checks(self, repository: str, number: int, head: str) -> tuple[Check, ...]:
         """Observe check runs and commit statuses at one exact head; a moved head is a conflict."""

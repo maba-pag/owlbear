@@ -25,7 +25,8 @@ owner's, call `ask_question` with the question, why you cannot decide it, and tw
 with what each leads to. Then stop: the step ends and resumes later with the answer as a message.
 
 When the task cannot be built as written, call `report_wrong_premise` with what is wrong and the
-evidence, then stop.
+evidence, then stop. When it needs a commit or API that is on the target branch but not in this
+branch yet, report it with stage `target`: Delivery merges the target in first, then resumes the task.
 
 In check preparation you change no code: you find how the owner's check environment starts (for
 example a preview server), verify the command, directory and readiness URL with the allowed

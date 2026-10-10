@@ -1811,6 +1811,7 @@ dependencies = [
     { name = "github-copilot-sdk" },
     { name = "psutil" },
     { name = "pydantic" },
+    { name = "pyyaml" },
     { name = "uvicorn" },
 ]
 
@@ -1820,6 +1821,7 @@ requires-dist = [
     { name = "github-copilot-sdk", specifier = "==1.0.19" },
     { name = "psutil", specifier = ">=7.2.2" },
     { name = "pydantic", specifier = ">=2.13.4" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "uvicorn", specifier = ">=0.54.0" },
 ]
 

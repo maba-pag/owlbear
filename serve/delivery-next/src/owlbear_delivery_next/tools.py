@@ -66,9 +66,13 @@ class AskQuestion(Args):
 
 
 class WrongPremise(Args):
-    """``report_wrong_premise``: the brief or plan cannot be built as written."""
+    """``report_wrong_premise``: the brief or plan cannot be built as written, or the target has what is missing."""
 
-    stage: Literal["brief", "plan"] = Field(description="Which document is wrong", examples=["plan"])
+    stage: Literal["brief", "plan", "target"] = Field(
+        description="Which document is wrong; target when the task needs a commit or API that is on the target "
+        "branch but not in this branch yet",
+        examples=["plan"],
+    )
     reason: str = _f(1000, "What is wrong", "greet() already exists with another signature.")
     evidence: list[str] = _f(10, "Paths, lines or command output that show it", ["src/greet.ts:3 exports greet(a, b)"])
 
@@ -133,7 +137,8 @@ ASK = Spec(
 )
 PREMISE = Spec(
     "report_wrong_premise",
-    "Report that the brief or plan is wrong, with evidence. Your step ends.",
+    "Report that the brief or plan is wrong, or that the task needs target-branch work this branch lacks, with "
+    "evidence. Your step ends.",
     WrongPremise,
     "premise",
 )

@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next import profile
 from owlbear_delivery_next.git.remote_git import (
     RemoteGitWriteUnknown,
     classify_write_readback,
@@ -22,12 +23,19 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.steps.engine import Ctx
 
 P = StepKind.PUBLISH
+_PUSH_FAILED = 1  # git push exits 1 when a hook or the remote refuses; transport and auth failures exit 128
+
+
+def hook_rejected(returncode: int | None, stderr: bytes, *, hook: bool) -> bool:
+    """Whether a push that read back as not applied was refused by the local pre-push hook, even a silent one."""
+    return hook and returncode == _PUSH_FAILED and b"rejected]" not in stderr
 
 
 def push(path: Path, c: Change, head: str) -> StepResult | None:  # noqa: PLR0911 - one exit per readback
     """Push HEAD to the Change branch, never forced and with hooks; an unknown result is read back first.
 
-    Only a readback that confirms absence replays the push, once; a moved remote branch is integrated.
+    Only a readback that confirms absence replays the push, once, or names a rejecting pre-push hook;
+    a moved remote branch is integrated.
     """
     ref = f"refs/heads/{c.names.branch}"
     before = read_remote_ref(path, "origin", ref)
@@ -40,16 +48,19 @@ def push(path: Path, c: Change, head: str) -> StepResult | None:  # noqa: PLR091
         try:
             run_remote_git(path, ("push", "--quiet", "origin", f"{head}:{ref}"), kind="write")
         except RemoteGitWriteUnknown as exc:
-            out = exc.result.stderr.decode(errors="replace") if exc.result else ""
-            if "hook" in out and not exc.timed_out:
-                fix = engine.task(c, "Make the pre-push hook pass, then commit", "review", out)
-                return engine.back(ErrorKind.COMMIT_POLICY, P, "pre-push", "pre-push hook rejected the push", fix)
             match classify_write_readback(read_remote_ref(path, "origin", ref), intended=head, expected_old=before):
                 case "applied":
                     return None
                 case "conflict":
                     engine.fetch(path, c.names.branch)
                     return engine.integrate(c, P, f"origin/{c.names.branch}")
+                case "not-applied" if exc.result and hook_rejected(
+                    exc.result.returncode, exc.result.stderr, hook=profile.pre_push_hook(path)[0]
+                ):
+                    out = exc.result.stderr.decode(errors="replace").strip()
+                    detail = f"{out}\nRun the hook without pushing: git push --dry-run origin HEAD:{ref}"
+                    fix = engine.task(c, "Make the pre-push hook pass, then commit", "review", detail)
+                    return engine.back(ErrorKind.COMMIT_POLICY, P, "pre-push", "pre-push hook rejected the push", fix)
                 case "not-applied":
                     continue
         else:

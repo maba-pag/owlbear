@@ -61,7 +61,7 @@ EXITS: dict[StepKind, frozenset[Exit]] = {
 }
 BACK: dict[StepKind, frozenset[StepKind]] = {
     StepKind.PLAN: frozenset({StepKind.SHAPE}),
-    StepKind.BUILD: frozenset({StepKind.PLAN, StepKind.INTEGRATE}),
+    StepKind.BUILD: frozenset({StepKind.PLAN, StepKind.INTEGRATE, StepKind.BUILD}),  # build: an I6 integration task
     StepKind.REVIEW: frozenset({StepKind.PLAN}),
     StepKind.INTEGRATE: frozenset({StepKind.PLAN}),
     StepKind.PUBLISH: frozenset({StepKind.INTEGRATE, StepKind.BUILD, StepKind.REVIEW}),
@@ -69,7 +69,7 @@ BACK: dict[StepKind, frozenset[StepKind]] = {
     StepKind.CHECK: frozenset({StepKind.BUILD}),
     StepKind.MERGE: frozenset({StepKind.INTEGRATE, StepKind.BUILD}),
 }
-_PR_CLOSED = "gate:merge:pr-closed"
+PR_CLOSED = "gate:merge:pr-closed"
 CONSENT = "gate:merge:consent"
 
 
@@ -165,16 +165,14 @@ def schedule(
         if pr_state == "merged" or c.intent.abandoned_at:
             _go(c, StepKind.CLEANUP, mode=None if pr_state == "merged" else "abandon")
             c.outcome = None
-        elif pr_state == "closed" and not any(
-            q.cause == _PR_CLOSED and (q.answer is None or c.outcome is None) for q in c.questions
-        ):
-            # An answered closed-PR question holds until the step its answer chose has run.
+        elif pr_state == "closed" and not any(q.cause == PR_CLOSED and not q.effect_observed_at for q in c.questions):
+            # A closed-PR question holds until it is answered and, for reopen, the PR is observed open again.
             _go(c, StepKind.MERGE)
             options = [
                 Option(id="abandon", label="Abandon this Change", next="abandon"),
                 Option(id="reopen", label="Reopen it and continue", next=StepKind.FOLLOW),
             ]
-            _ask(c, Question(step=StepKind.MERGE, text="The PR was closed", options=options, cause=_PR_CLOSED), now)
+            _ask(c, Question(step=StepKind.MERGE, text="The PR was closed", options=options, cause=PR_CLOSED), now)
         elif c.intent.hold and c.step.kind != StepKind.MERGE:
             _go(c, StepKind.SHAPE)
             c.intent.hold = False

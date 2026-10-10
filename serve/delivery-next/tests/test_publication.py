@@ -15,11 +15,13 @@ from owlbear_delivery_next.github.provider import (
     MergeResult,
     MergeStatus,
     PullRequest,
+    QueueEntry,
     Rules,
     classify_checks,
     merge_request_body,
 )
 from owlbear_delivery_next.models import (
+    AnswerItem,
     Brief,
     Change,
     ConsentItem,
@@ -86,7 +88,17 @@ class FakeGh:
     def __init__(self, current):
         self.pr, self.merges, self.result = current, [], MergeResult(status=MergeStatus.UNKNOWN)
         self.checks = (Check(name="test", status="completed", conclusion="success"),)
-        self.after = None
+        self.after, self.queue, self.reopened = None, QueueEntry(queued=False), []
+
+    def read_queue(self, _repo, _number):
+        return self.queue
+
+    def reopen_pull_request(self, _repo, number):
+        self.reopened.append(number)
+        self.pr = self.pr.model_copy(update={"state": "open"})
+
+    def read_comments(self, _repo, _number):
+        return ()
 
     def read_rules(self, _repo, _branch):
         return FORBIDDEN
@@ -141,9 +153,9 @@ def test_consent_holds_only_for_the_exact_head():
     assert merge_offer.consent(A, B) == "void"
 
 
-def test_a_head_change_voids_consent_shows_the_delta_and_asks_again(tmp_path):
+def test_a_head_change_voids_consent_shows_the_delta_and_asks_again(tmp_path, clone):
     gh = FakeGh(pr(head=B))
-    c = loop.fold(change(), [ConsentItem(at=NOW, head=A)], NOW)
+    c = loop.fold(change(worktree=str(clone)), [ConsentItem(at=NOW, head=A)], NOW)
     cx = ctx(tmp_path, gh)
     _, result = merge.run(cx, c)
     offer = cx.events("c1", "merge-offer")[-1]
@@ -153,11 +165,11 @@ def test_a_head_change_voids_consent_shows_the_delta_and_asks_again(tmp_path):
     assert gh.merges == []
 
 
-def test_the_merge_carries_the_consented_head_as_its_sha_guard(tmp_path):
+def test_the_merge_carries_the_consented_head_as_its_sha_guard(tmp_path, clone):
     gh = FakeGh(pr(head=A))
     gh.result = MergeResult(status=MergeStatus.MERGED, sha=B)
     gh.after = pr(head=A, state="closed", merged=True, merge_commit_sha=B)
-    c = loop.fold(change(), [ConsentItem(at=NOW, head=A)], NOW)
+    c = loop.fold(change(worktree=str(clone)), [ConsentItem(at=NOW, head=A)], NOW)
     _, result = merge.run(ctx(tmp_path, gh), c)
     assert (result.exit, gh.merges[0].expected_head_sha) == (Exit.DONE, A)
     assert merge_request_body(gh.merges[0]) == b'{"merge_method":"squash","sha":"' + A.encode() + b'"}'
@@ -239,17 +251,24 @@ def test_required_and_github_required_checks_are_expected_and_the_latest_run_win
     assert (state.running, state.missing) == (("e2e",), ("sign",))
 
 
-def test_a_check_that_never_starts_is_pending_then_asks_the_owner(tmp_path):
+def test_a_check_that_never_starts_is_pending_then_asks_the_owner_in_follow_and_merge(tmp_path, clone):
     gh, state = FakeGh(pr(head=B)), classify_checks((), ("test",), ())
     cx = ctx(tmp_path, gh)
-    cx.store.log(cx.lock, "c1", {"event": "publish", "head": B, "at": NOW.isoformat()})
+    c = follow.episode(cx, change(StepKind.FOLLOW), B, state)
     cx.now = NOW + timedelta(minutes=1)
-    _, early = follow.missing(cx, change(StepKind.FOLLOW), gh.pr, state)
-    assert (early.exit, early.waiting) == (Exit.PENDING, Waiting.CHECK_START)
+    _, early = follow.missing(cx, follow.episode(cx, c, B, state), gh.pr, state)
+    assert (early.exit, early.waiting, c.missing.since) == (Exit.PENDING, Waiting.CHECK_START, NOW)
     cx.now = NOW + timedelta(minutes=10)
-    _, late = follow.missing(cx, change(StepKind.FOLLOW), gh.pr, state)
+    _, late = follow.missing(cx, c, gh.pr, state)
     assert late.exit == Exit.ASK
     assert "test never started on PR #7" in late.reason
+    assert follow.episode(cx, c, B, classify_checks(gh.checks, ("test",), ())).missing is None
+    gh.pr, gh.checks, cx.now = pr(head=A), (), NOW
+    m = loop.fold(change(worktree=str(clone)), [ConsentItem(at=NOW, head=A)], NOW)
+    m, early = merge.run(cx, m)
+    cx.now = NOW + timedelta(minutes=10)
+    _, late = merge.run(cx, m)
+    assert (early.waiting, late.exit, late.question.options[0].next) == (Waiting.CHECK_START, Exit.ASK, StepKind.MERGE)
 
 
 def test_a_failing_check_goes_back_to_build_with_its_log(tmp_path):
@@ -295,11 +314,11 @@ def test_an_unknown_push_is_read_back_and_replayed_only_when_absent(clone, monke
 
 
 @pytest.mark.parametrize(("after", "exit_"), [("merged", Exit.DONE), ("open", Exit.RETRY)])
-def test_an_unknown_merge_is_read_back_before_any_replay(tmp_path, after, exit_):
+def test_an_unknown_merge_is_read_back_before_any_replay(tmp_path, clone, after, exit_):
     gh = FakeGh(pr(head=A))
     if after == "merged":
         gh.after = pr(head=A, state="closed", merged=True, merge_commit_sha=B)
-    c = loop.fold(change(), [ConsentItem(at=NOW, head=A)], NOW)
+    c = loop.fold(change(worktree=str(clone)), [ConsentItem(at=NOW, head=A)], NOW)
     _, result = merge.run(ctx(tmp_path, gh), c)
     assert (result.exit, len(gh.merges)) == (exit_, 1)
     if exit_ == Exit.RETRY:
@@ -331,10 +350,10 @@ def test_a_required_queue_is_submitted_without_bypass_and_enqueued_is_pending(tm
     assert (result.exit, result.waiting, gh.merges[0].queue) == (Exit.PENDING, Waiting.MERGE_QUEUE, True)
 
 
-def test_unknown_rules_make_merging_human_assisted(tmp_path):
+def test_unknown_rules_make_merging_human_assisted(tmp_path, clone):
     gh = FakeGh(pr(head=A))
     p = prof().model_copy(update={"entries": prof().entries | profile.rule_entries(FORBIDDEN)})
-    c = loop.fold(change(), [ConsentItem(at=NOW, head=A)], NOW)
+    c = loop.fold(change(worktree=str(clone)), [ConsentItem(at=NOW, head=A)], NOW)
     _, result = merge.run(ctx(tmp_path, gh, p), c)
     assert (result.exit, result.who, result.waiting) == (Exit.PENDING, "you", Waiting.OWNER_ACTION)
     assert "merge PR #7 in GitHub" in result.reason
@@ -394,3 +413,150 @@ def test_failed_preservation_stops_and_leaves_the_worktree_untouched(worktree_wi
     assert result.stop.action.startswith(f"Copy or delete {wt}")
     assert (wt / "new.txt").read_text() == "untracked\n"
     assert (wt / "kept.txt").exists()
+
+
+def test_a_staged_version_the_working_tree_replaced_is_archived_and_verified(worktree_with_work, tmp_path):
+    _, wt = worktree_with_work
+    (wt / "a.txt").write_text("staged B\n")
+    git(wt, "add", "a.txt")
+    (wt / "a.txt").write_text("worktree C\n")
+    inv = cleanup.inventory(wt, "owlbear/c2", ["origin/main"])
+    archive = cleanup.preserve(wt, "owlbear/c2", inv, tmp_path / "kept", "s")[-1]
+    with tarfile.open(archive) as tar:
+        assert tar.extractfile("index/0/a.txt").read() == b"staged B\n"
+        assert tar.extractfile("files/a.txt").read() == b"worktree C\n"
+        assert b"+staged B" in tar.extractfile("staged.diff").read()
+
+
+# CI detection from workflow files
+
+
+@pytest.mark.parametrize(
+    ("text", "events"),
+    [
+        ("on: pull_request", {"pull_request"}),
+        ("on: [push, pull_request]", {"push", "pull_request"}),
+        ("on:\n  pull_request_target:\n    types: [opened]\n  push:\n", {"pull_request_target", "push"}),
+        ("'on': merge_group", {"merge_group"}),
+    ],
+)
+def test_workflow_triggers_parse_in_every_form(text, events):
+    assert profile.workflow(text).events == frozenset(events)
+
+
+def test_unresolved_triggers_or_check_names_stay_unknown_never_no_ci():
+    flows = {
+        "ci.yml": profile.workflow("on: [push, pull_request]\njobs:\n  test:\n    name: Unit tests\n  lint: {}\n"),
+        "queue.yml": profile.workflow("on: merge_group\njobs:\n  e2e: {}\n"),
+        "push.yml": profile.workflow("on: push\njobs:\n  deploy: {}\n"),
+    }
+    e = profile.ci_entries(flows)
+    assert (e[profile.WORKFLOWS].value, e[profile.DECLARED].value) == ("ci.yml, queue.yml", "Unit tests, lint")
+    assert e[profile.DECLARED].state == "known"
+    flows["matrix.yml"] = profile.workflow("on: pull_request\njobs:\n  t:\n    strategy: {matrix: {os: [a, b]}}\n")
+    flows["bad.yml"] = profile.workflow("on: [unclosed")
+    e = profile.ci_entries(flows)
+    assert (e[profile.WORKFLOWS].state, e[profile.DECLARED].state) == ("unknown", "unknown")
+    assert "matrix.yml" in e[profile.DECLARED].evidence
+
+
+# Integration triggers
+
+
+def test_a_moved_target_integrates_before_merging_whatever_github_reports(tmp_path, clone):
+    git(clone, "commit", "-q", "--allow-empty", "-m", "elsewhere")
+    git(clone, "push", "-q", "origin", "HEAD:refs/heads/main")
+    git(clone, "reset", "-q", "--hard", "HEAD~1")
+    gh = FakeGh(pr(head=A))
+    c = loop.fold(change(worktree=str(clone)), [ConsentItem(at=NOW, head=A)], NOW)
+    _, result = merge.run(ctx(tmp_path, gh), c)
+    assert (result.back_to, result.cause, result.fix_task.origin) == (
+        StepKind.BUILD,
+        "conflict:merge:origin/main",
+        "integration",
+    )
+    assert gh.merges == []
+
+
+def test_a_builder_needing_target_work_integrates_then_resumes_its_task(clone):
+    c = change(StepKind.BUILD, worktree=str(clone))
+    c.step.task = "t1"
+    c = loop.apply(c, engine.needs_target(c, clone, "greet() exists only on main", NOW), NOW)
+    assert (c.step.task, c.plan.tasks[-1].origin) == ("t2", "integration")
+    assert "greet() exists only on main" in c.plan.tasks[-1].detail
+    for _ in ("build", "review"):
+        c = loop.apply(c, loop.StepResult(exit=Exit.DONE), NOW)
+    assert (c.step.kind, c.step.task) == (StepKind.BUILD, "t1")
+
+
+# Merge queue: membership is observed before any resubmission
+
+
+def test_queue_state_and_removal_routing():
+    later = NOW + timedelta(seconds=5)
+    assert merge_offer.queue_state(QueueEntry(queued=True), NOW) == "queued"
+    assert merge_offer.queue_state(QueueEntry(queued=False, added_at=later), NOW) == "queued"
+    assert merge_offer.queue_state(QueueEntry(queued=False, added_at=later, removed_at=later), NOW) == "removed"
+    assert merge_offer.queue_state(QueueEntry(queued=False, removed_at=NOW - timedelta(hours=1)), NOW) == "absent"
+    reasons = ("Merge conflict with main", "Required status check build failed", "manually removed")
+    assert [merge_offer.removal(r) for r in reasons] == ["conflict", "ci", "ask"]
+
+
+def test_an_unknown_queued_submission_observes_the_queue_instead_of_resending(tmp_path, clone):
+    gh = FakeGh(pr(head=A))
+    c = loop.fold(change(worktree=str(clone)), [ConsentItem(at=NOW, head=A)], NOW)
+    cx = ctx(tmp_path, gh)
+    result = merge.submit(cx, c, gh.pr, queue=True)
+    assert (result.exit, result.waiting, cx.store.read("c1").consent.queued_at) == (
+        Exit.PENDING,
+        Waiting.MERGE_QUEUE,
+        NOW,
+    )
+    gh.queue = QueueEntry(queued=True)
+    _, still = merge.run(cx, c)
+    assert (still.waiting, len(gh.merges)) == (Waiting.MERGE_QUEUE, 1)
+    gh.queue = QueueEntry(queued=False)
+    merge.run(cx, c)
+    assert len(gh.merges) == 2  # confirmed absent: sent again
+
+
+@pytest.mark.parametrize(
+    ("reason", "exit_", "origin"),
+    [("Merge conflict", Exit.BACK, "integration"), ("check test failed", Exit.BACK, "ci"), ("removed", Exit.ASK, None)],
+)
+def test_a_queue_removal_routes_its_cause_or_asks_with_it(tmp_path, clone, reason, exit_, origin):
+    gh = FakeGh(pr(head=A))
+    gh.queue = QueueEntry(queued=False, added_at=NOW, removed_at=NOW, reason=reason)
+    c = loop.fold(change(worktree=str(clone)), [ConsentItem(at=NOW, head=A)], NOW)
+    c.consent.queued_at = NOW
+    c, result = merge.run(ctx(tmp_path, gh), c)
+    assert (result.exit, result.fix_task and result.fix_task.origin, c.consent.queued_at) == (exit_, origin, None)
+    assert gh.merges == []
+    assert exit_ != Exit.ASK or reason in result.question.text
+
+
+# Reopen and the pre-push hook
+
+
+@pytest.mark.parametrize("push", ["yes", "no"])
+def test_reopen_reopens_the_pr_when_permitted_else_asks_the_owner(tmp_path, push):
+    gh = FakeGh(pr(head=B, state="closed"))
+    c, _ = loop.schedule(change(StepKind.FOLLOW), [], NOW, "closed")
+    c, _ = loop.schedule(c, [AnswerItem(at=NOW, question="q1", option="reopen")], NOW, "closed")
+    c, result = follow.run(ctx(tmp_path, gh, prof(**{profile.PUSH: ProfileEntry(state="known", value=push)})), c)
+    if push == "yes":
+        assert (result.exit, gh.reopened, bool(c.questions[0].effect_observed_at)) == (Exit.DONE, [7], True)
+    else:
+        assert (result.exit, gh.reopened, c.questions[0].effect_observed_at) == (Exit.ASK, [], None)
+        assert result.reason.startswith("Reopen PR #7 in GitHub")
+
+
+def test_a_silent_rejecting_pre_push_hook_becomes_a_builder_fix_after_readback(clone):
+    hook = clone / ".git" / "hooks" / "pre-push"
+    hook.write_text("#!/bin/sh\nexit 1\n")
+    hook.chmod(0o755)
+    result = publish.push(clone, change(StepKind.PUBLISH), git(clone, "rev-parse", "HEAD"))
+    assert (result.back_to, result.cause) == (StepKind.BUILD, "commit-policy:publish:pre-push")
+    assert read_remote_ref(clone, "origin", "refs/heads/owlbear/c1") is None
+    assert not publish.hook_rejected(128, b"fatal: Could not read from remote repository.", hook=True)
+    assert not publish.hook_rejected(1, b" ! [remote rejected] main (protected branch)", hook=True)

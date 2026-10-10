@@ -86,6 +86,8 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     run = asyncio.run(sdk_adapter.run(cfg))
     end = datetime.now(UTC)
     result = review.recorded(change, parts.task, run, path, sdk_adapter.to_result(run, s.kind, end))
+    if isinstance(p := run.payload, tools.WrongPremise) and p.stage == "target" and s.kind == StepKind.BUILD:
+        result = engine.needs_target(change, path, f"{p.reason} ({'; '.join(p.evidence)})", end)
     if answer and sdk_adapter.effect_seen(run):
         change = loop.effect_observed(change, answer.id, end)
     if isinstance(p := run.payload, tools.CheckRecipe) and result.exit == Exit.PENDING:

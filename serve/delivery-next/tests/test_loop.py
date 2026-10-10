@@ -309,11 +309,13 @@ def test_closed_pr_asks_once():
     assert (step, c.step.kind, len(c.questions)) == (None, K.MERGE, 1)
 
 
-def test_closed_pr_reopen_runs_before_the_pr_is_judged_again():
+def test_closed_pr_reopen_holds_until_the_pr_is_seen_open_again():
     c, _ = loop.schedule(change(), [], NOW, "closed")
     c, step = loop.schedule(c, [AnswerItem(at=NOW, question="q1", option="reopen")], NOW, "closed")
     assert (step.kind, len(c.questions)) == (K.FOLLOW, 1)
-    c, step = loop.schedule(loop.apply(c, StepResult(exit=Exit.DONE), NOW), [], NOW, "closed")
+    c, _ = loop.schedule(loop.apply(c, StepResult(exit=Exit.DONE), NOW), [], NOW, "closed")
+    assert len(c.questions) == 1
+    c, step = loop.schedule(loop.effect_observed(c, "q1", NOW), [], NOW, "closed")
     assert (step, len(c.questions)) == (None, 2)
 
 
