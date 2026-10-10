@@ -13,8 +13,9 @@ from urllib.parse import quote, urlencode
 from pydantic import ValidationError
 
 from owlbear_delivery_next.github.provider import (
+    MARKER,
     Check,
-    Comment,
+    ConversationItem,
     FailureCode,
     MergeMethod,
     MergeRequest,
@@ -26,6 +27,7 @@ from owlbear_delivery_next.github.provider import (
     Refusal,
     Repository,
     Rules,
+    ThreadComment,
     bounded,
     merge_request_body,
 )
@@ -72,6 +74,24 @@ _QUEUE = """query Queue($owner: String!, $name: String!, $number: Int!) {
       nodes { __typename ... on AddedToMergeQueueEvent { createdAt }
               ... on RemovedFromMergeQueueEvent { createdAt reason } } } } }
 }"""
+_CONVERSATION = """query Conversation($owner: String!, $name: String!, $number: Int!,
+    $c: String, $r: String, $t: String, $wc: Boolean!, $wr: Boolean!, $wt: Boolean!) {
+  repository(owner: $owner, name: $name) { pullRequest(number: $number) {
+    comments(first: 100, after: $c) @include(if: $wc) { pageInfo { hasNextPage endCursor }
+      nodes { id url body author { login } } }
+    reviews(first: 100, after: $r) @include(if: $wr) { pageInfo { hasNextPage endCursor }
+      nodes { id url body state author { login } } }
+    reviewThreads(first: 100, after: $t) @include(if: $wt) { pageInfo { hasNextPage endCursor }
+      nodes { id path isResolved isOutdated
+        comments(first: 100) { pageInfo { hasNextPage } nodes { id url body author { login } } } } } } }
+}"""
+_REPLY = """mutation Reply($id: ID!, $body: String!) {
+  addPullRequestReviewThreadReply(input: {pullRequestReviewThreadId: $id, body: $body}) { comment { id } }
+}"""
+_RESOLVE = """mutation Resolve($id: ID!) {
+  resolveReviewThread(input: {threadId: $id}) { thread { id isResolved } }
+}"""
+_CONNECTIONS = (("comments", "c", "wc"), ("reviews", "r", "wr"), ("reviewThreads", "t", "wt"))
 
 type Runner = Callable[[tuple[str, ...], bytes | None, float, Path | None], subprocess.CompletedProcess[bytes]]
 type Json = Any
@@ -174,6 +194,51 @@ def _check(node: Json, operation: str) -> Check:
         )
     except (KeyError, TypeError, AttributeError, ValidationError) as exc:
         _invalid(operation, "GitHub returned an invalid check", exc)
+
+
+def _login(node: Json) -> str:
+    return (node.get("author") or {}).get("login") or "ghost"
+
+
+def _thread(node: Json, operation: str) -> ConversationItem:
+    if node["comments"]["pageInfo"]["hasNextPage"]:
+        _invalid(operation, f"a review thread has more than {_MAX_CHECKS} comments")
+    comments = tuple(ThreadComment(id=c["id"], author=_login(c), body=c["body"]) for c in node["comments"]["nodes"])
+    if not comments:
+        _invalid(operation, "a review thread has no comments")
+    first = node["comments"]["nodes"][0]
+    return ConversationItem(
+        id=node["id"],
+        kind="thread",
+        author=comments[0].author,
+        body="\n".join(f"{c.author}: {c.body}" for c in comments),
+        url=first["url"],
+        path=node.get("path"),
+        resolved=node["isResolved"],
+        outdated=node["isOutdated"],
+        last_id=comments[-1].id,
+        last_by_delivery=MARKER in comments[-1].body,
+        comments=comments,
+    )
+
+
+def _items(name: str, nodes: Json, operation: str) -> list[ConversationItem]:
+    if name == "reviewThreads":
+        return [_thread(n, operation) for n in nodes]
+    kind = "comment" if name == "comments" else "review"
+    return [
+        ConversationItem(
+            id=n["id"],
+            kind=kind,
+            author=_login(n),
+            body=n["body"] or "",
+            url=n["url"],
+            last_id=n["id"],
+            last_by_delivery=MARKER in (n["body"] or ""),
+        )
+        for n in nodes
+        if kind == "comment" or (n["body"] or "").strip() or n["state"] == "CHANGES_REQUESTED"
+    ]
 
 
 class GhProvider:
@@ -354,26 +419,53 @@ class GhProvider:
             _invalid(op, f"more than {_MAX_CHECKS} checks")
         return tuple(_check(n, op) for n in rollup["contexts"]["nodes"])
 
-    def read_comments(self, repository: str, number: int) -> tuple[Comment, ...]:
-        """Read inline review threads (replies joined to their root) and review bodies asking for changes."""
-        op, base = "read_comments", f"{_repo(repository)}/pulls/{number}"
-        threads: dict[str, Comment] = {}
+    def _graphql(self, operation: str, query: str, variables: dict[str, Any], *, write: bool = False) -> Json:
+        body = {"query": query, "variables": variables}
+        return self._gh(operation, ("api", "--hostname", self.host, "graphql", "--input", "-"), body=body, write=write)
+
+    def read_conversation(self, repository: str, number: int) -> tuple[ConversationItem, ...]:
+        """Read issue comments, review bodies (non-empty or changes requested) and review threads, every page."""
+        op, (owner, name) = "read_conversation", repository.split("/", 1)
+        found: dict[str, list[ConversationItem]] = {c: [] for c, _, _ in _CONNECTIONS}
+        cursors: dict[str, str | None] = {cursor: None for _, cursor, _ in _CONNECTIONS}
+        wanted = {flag: True for _, _, flag in _CONNECTIONS}
+        while any(wanted.values()):
+            variables = {"owner": owner, "name": name, "number": number, **cursors, **wanted}
+            result = self._graphql(op, _CONVERSATION, variables)
+            try:
+                pr = result["data"]["repository"]["pullRequest"]
+                for conn, cursor, flag in _CONNECTIONS:
+                    if not wanted[flag]:
+                        continue
+                    page = pr[conn]
+                    found[conn] += _items(conn, page["nodes"], op)
+                    wanted[flag] = page["pageInfo"]["hasNextPage"]
+                    cursors[cursor] = page["pageInfo"]["endCursor"]
+            except (KeyError, TypeError, IndexError, AttributeError, ValidationError) as exc:
+                _invalid(op, "GitHub returned an invalid conversation", exc)
+        return tuple(i for conn, _, _ in _CONNECTIONS for i in found[conn])
+
+    def post_reply(self, repository: str, number: int, item: ConversationItem, body: str) -> str:
+        """Reply in a review thread, or post an issue comment quoting a comment's or review's URL."""
+        op = "post_reply"
+        if item.kind == "thread":
+            result = self._graphql(op, _REPLY, {"id": item.id, "body": body}, write=True)
+            try:
+                return str(result["data"]["addPullRequestReviewThreadReply"]["comment"]["id"])
+            except (KeyError, TypeError) as exc:
+                raise ProviderError(FailureCode.RESPONSE_UNKNOWN, op, str(result)[:200], retry_safe=False) from exc
+        endpoint = f"{_repo(repository)}/issues/{number}/comments"
+        posted = self._api(op, "POST", endpoint, body={"body": f"> {item.url}\n\n{body}"}, write=True)
         try:
-            for c in self._api(op, "GET", f"{base}/comments?per_page=100"):
-                key = f"c{c.get('in_reply_to_id') or c['id']}"
-                text = f"{c['user']['login']}: {c['body']}"
-                old = threads.get(key)
-                body = f"{old.body}\n{text}" if old else text
-                threads[key] = Comment(
-                    id=key, author=c["user"]["login"], body=body, path=c.get("path"), url=c["html_url"]
-                )
-            for r in self._api(op, "GET", f"{base}/reviews?per_page=100"):
-                if r["state"] in {"CHANGES_REQUESTED", "COMMENTED"} and (r.get("body") or "").strip():
-                    key = f"r{r['id']}"
-                    threads[key] = Comment(id=key, author=r["user"]["login"], body=r["body"], url=r["html_url"])
-        except (KeyError, TypeError, ValidationError) as exc:
-            _invalid(op, "GitHub returned invalid review comments", exc)
-        return tuple(threads.values())
+            return str(posted["node_id"])
+        except (KeyError, TypeError) as exc:
+            raise ProviderError(FailureCode.RESPONSE_UNKNOWN, op, "gh returned no id", retry_safe=False) from exc
+
+    def resolve_thread(self, thread_id: str) -> None:
+        """Resolve one review thread."""
+        result = self._graphql("resolve_thread", _RESOLVE, {"id": thread_id}, write=True)
+        if not isinstance(result, dict) or result.get("errors"):
+            raise ProviderError(FailureCode.RESPONSE_UNKNOWN, "resolve_thread", str(result)[:200], retry_safe=False)
 
     def job_log(self, repository: str, job_id: int, lines: int = 40) -> str:
         """Return the tail of one Actions job log without timestamps or escapes; empty when it cannot be read."""

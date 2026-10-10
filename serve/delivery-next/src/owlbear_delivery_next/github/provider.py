@@ -108,14 +108,35 @@ class Rules(_Model):
     strict: bool = False
 
 
-class Comment(_Model):
-    """One review comment or review body on a pull request; its id names its thread."""
+MARKER = "<!-- delivery:"
+
+
+class ThreadComment(_Model):
+    """One comment of a review thread."""
 
     id: str
     author: str
     body: str
+
+
+class ConversationItem(_Model):
+    """One issue comment, review body or review thread of a pull request; ``id`` is its node id.
+
+    A thread's ``body`` is its comments in order, each prefixed with its author; ``last_id`` is the latest
+    comment's id (the item's own id for comments and reviews).
+    """
+
+    id: str
+    kind: Literal["comment", "review", "thread"]
+    author: str
+    body: str
+    url: str = ""
     path: str | None = None
-    url: str | None = None
+    resolved: bool = False
+    outdated: bool = False
+    last_id: str
+    last_by_delivery: bool = False
+    comments: tuple[ThreadComment, ...] = ()
 
 
 class QueueEntry(_Model):
@@ -259,8 +280,16 @@ class Provider(Protocol):
         """Observe check runs and commit statuses at one exact head."""
         ...
 
-    def read_comments(self, repository: str, number: int) -> tuple[Comment, ...]:
-        """Read review comments and review bodies."""
+    def read_conversation(self, repository: str, number: int) -> tuple[ConversationItem, ...]:
+        """Read every issue comment, review body (non-empty or changes requested) and review thread."""
+        ...
+
+    def post_reply(self, repository: str, number: int, item: ConversationItem, body: str) -> str:
+        """Reply in a thread, or post an issue comment quoting a comment or review; return the new comment id."""
+        ...
+
+    def resolve_thread(self, thread_id: str) -> None:
+        """Resolve one review thread."""
         ...
 
     def job_log(self, repository: str, job_id: int, lines: int = 40) -> str:

@@ -179,6 +179,38 @@ class Question(Record):
     effect_observed_at: datetime | None = None
 
 
+class ItemRef(Record):
+    """The pull-request conversation item a task answers, at the latest comment it was opened for."""
+
+    id: str
+    kind: Literal["comment", "review", "thread"]
+    last_id: str
+    url: str = ""
+
+
+class Response(Record):
+    """How the Builder handled a conversation task; ``commit`` is the worktree HEAD of its accepted result."""
+
+    how: Literal["fixed", "answered", "no-action"]
+    text: str = Field(max_length=3000)
+    commit: str | None = None
+
+
+class Handling(Record):
+    """One conversation item handled at ``last_id``, recorded only once its reply or resolution was observed."""
+
+    item: str
+    kind: Literal["comment", "review", "thread"]
+    url: str = ""
+    last_id: str
+    how: Literal["fixed", "answered", "no-action"]
+    text: str = ""
+    task: str
+    reply_id: str | None = None
+    resolved: bool = False
+    at: datetime
+
+
 class Task(Record):
     """One plan task; fix tasks are appended without a new plan version."""
 
@@ -191,6 +223,8 @@ class Task(Record):
     done: bool = False
     fixes: str | None = None  # the task whose review findings this fix task resolves
     base: str | None = None  # HEAD when the task's build first started; its changes are measured from here
+    item: ItemRef | None = None  # the conversation item a pr-feedback task answers
+    response: Response | None = None  # the Builder's handling of that item
 
 
 class Plan(Record):
@@ -351,6 +385,7 @@ class Change(Record):
     spend: Spend = Field(default_factory=Spend)
     finished_at: datetime | None = None
     inbox_acked: list[str] = Field(default_factory=list)
+    handled: list[Handling] = Field(default_factory=list)  # pull-request conversation items, oldest first
 
 
 class ProfileEntry(Record):

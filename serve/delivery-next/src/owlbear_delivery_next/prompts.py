@@ -33,6 +33,15 @@ FINISH = """\
   commit or API that is on the target branch but not here yet, report it with stage `target`.
 - Never push, change Git configuration, skip hooks or signing, or use `gh`. Stay inside the worktree.
   Leave no process running when you finish."""
+RESPOND = """\
+## Respond
+This task answers one pull-request {kind} (the details). Pass `response` to `submit_result` with `how`:
+- `fixed`: you changed and committed code for it; `text` says what changed.
+- `answered`: it needs no code change; `text` is your reply. No commit is needed.
+- `no-action`: nothing to do (for example a bot notice); `text` is the reason. Not allowed for a thread.
+Delivery posts `text` as your reply in GitHub; do not post it yourself. If you disagree with the request
+and the owner should decide, call `ask_question` instead.
+"""
 REMINDER = (
     "Your turn ended without a result. Finish the task and call submit_result, or call ask_question or "
     "report_wrong_premise. Do not end your turn without one of these calls."
@@ -120,6 +129,7 @@ def build(
         "",
         *_allowed(allowed),
         "",
+        *([RESPOND.format(kind=task.item.kind)] if task.item else []),
         "## Finish",
         FINISH,
     ]

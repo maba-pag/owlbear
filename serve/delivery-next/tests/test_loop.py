@@ -419,12 +419,11 @@ def test_merge_consent_is_void_for_another_head():
 
 
 @pytest.mark.parametrize(
-    ("head", "comments", "moved"),
-    [("abc", [], False), ("abc", ["7"], False), ("abc", ["7", "8"], True), ("def", [], True)],
+    ("head", "opened", "moved"),
+    [("abc", [], False), ("abc", ["7"], True), ("def", [], True)],
 )
-def test_a_consent_wait_reruns_merge_for_a_new_comment_or_head(head, comments, moved):
+def test_a_consent_wait_reruns_merge_for_an_open_item_or_head(head, opened, moved):
     c, _ = _consent_asked(change())
-    c.plan.tasks.append(Task(id="pr-7", title="fix", done=True))
-    assert loop.consent_moved(c, "abc", head, comments) is moved
-    assert not loop.consent_moved(change(K.MERGE), "abc", head, comments)
+    assert loop.consent_moved(c, "abc", head, opened) is moved
+    assert not loop.consent_moved(change(K.MERGE), "abc", head, opened)
     assert loop.schedule(c, [], NOW, "open", moved=moved)[1] == (c.step if moved else None)

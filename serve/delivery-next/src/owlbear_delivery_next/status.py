@@ -111,9 +111,12 @@ def status(c: Change, activity: Activity, now: datetime) -> Status:  # noqa: C90
         who = _WHO.get(o.waiting, str(o.waiting)) if o.waiting else o.who
         return Status(f"{s} · waiting for {who}: {o.reason} (checked {_age(now - o.at)} ago)", None, o.who)
     if activity.runner_alive:
-        task = next((t.title for t in c.plan.tasks if t.id == c.step.task), None) if c.plan else None
-        task = task or next((f"check {p.id}" for p in c.checks if p.id == c.step.task), None)
-        line = f"{s} · {verb}: {task or c.brief.title or c.brief.outcome}"
+        task = next((t for t in c.plan.tasks if t.id == c.step.task), None) if c.plan else None
+        items = sum(1 for t in c.plan.tasks if t.item and not t.done) if task and task.item and c.plan else 0
+        label = (task.title if task else None) or next((f"check {p.id}" for p in c.checks if p.id == c.step.task), None)
+        line = f"{s} · {verb}: {label or c.brief.title or c.brief.outcome}"
+        if items:
+            line += f" · {items} open conversation item{'s' if items > 1 else ''}"
         last = activity.last_event_at
         if last and now - last > QUIET:
             return Status(f"{line} · no activity for {_age(now - last)}", None, "delivery")

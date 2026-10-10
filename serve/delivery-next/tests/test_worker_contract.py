@@ -53,6 +53,19 @@ def test_a_committed_result_must_name_paths_and_every_passing_check() -> None:
     assert errors[2].startswith('checks: "npm run lint" missing')
 
 
+def test_a_conversation_response_is_validated_against_the_item_kind() -> None:
+    tree = Worktree(head=BASE, base=BASE)
+    no_action = {"changed_paths": [], "checks": [], "response": {"how": "no-action", "text": "bot notice"}}
+    assert tools.check_build(build(**no_action), tree, [], "comment") == []
+    assert tools.check_build(build(**no_action), tree, [], "thread") == [
+        "response.how: no-action is not allowed for a review thread - fix it or answer it"
+    ]
+    assert tools.check_build(build(**no_action), tree, [], None)[0].startswith("response: only for")
+    assert tools.check_build(build(), Worktree(HEAD, BASE, changed=("packages/app/src/greet.ts",)), [], "review")[
+        0
+    ].startswith("response: required")
+
+
 def test_question_options_must_differ() -> None:
     q, _ = tools.parse(AskQuestion, {"question": "q", "why": "w", "options": [{"label": "A", "effect": "x"}] * 2})
     assert tools.check_question(q) == ["options: labels repeat - give each option a distinct answer"]

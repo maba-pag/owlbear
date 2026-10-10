@@ -282,6 +282,7 @@ class Session:
     checks: tuple[str, ...]
     submit: tools.Spec = tools.SUBMIT
     scope: tuple[str, ...] = ()  # the approved brief scope a plan must keep to
+    item: str | None = None  # the conversation item kind a build task answers, if any
     model: str | None = None
     fresh: str = ""  # first message of a replacement session: stored context plus the pending answer
     previous: Pids = field(default_factory=dict)  # PIDs earlier runners recorded for this session
@@ -360,7 +361,7 @@ class _Step:
             tree = self.cfg.observe()
         except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
             return [f"changes: the worktree could not be read ({type(exc).__name__}); try again"]
-        errors = tools.check_result(args, tree, self.cfg.checks, self.cfg.policy.root, self.cfg.scope)
+        errors = tools.check_result(args, tree, self.cfg.checks, self.cfg.policy.root, self.cfg.scope, self.cfg.item)
         self.run.head = None if errors else tree.head
         return errors
 

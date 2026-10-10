@@ -267,6 +267,10 @@ def create_app(store: Store, token: str, host: Host) -> FastAPI:  # noqa: C901, 
             },
             "criteria": [k.model_dump() for k in c.brief.criteria],
             "plan": [t.model_dump() for t in c.plan.tasks] if c.plan else [],
+            "handled": [
+                h.model_dump(mode="json", include={"item", "kind", "url", "how", "text", "resolved", "at"})
+                for h in c.handled
+            ],
             "question": q.model_dump(mode="json", include={"id", "text", "options"}) if q else None,
             "checks": checks,
             "pr": c.names.pr,

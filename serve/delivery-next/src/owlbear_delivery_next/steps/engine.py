@@ -12,7 +12,7 @@ from owlbear_delivery_next.git.remote_git import RemoteGitError, RemoteGitFailed
 from owlbear_delivery_next.github.provider import FailureCode, ProviderError
 from owlbear_delivery_next.loop import StepResult
 from owlbear_delivery_next.models import ErrorKind, Exit, Option, Profile, Question, StepKind, Stop, Task, Waiting
-from owlbear_delivery_next.steps import worktree
+from owlbear_delivery_next.steps import conversation, worktree
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -175,7 +175,7 @@ def unsupported(c: Change, now: datetime) -> StepResult:
 
 
 def pr_state(gh: Provider, repository: str, c: Change, offered: str | None = None) -> Seen:
-    """The PR's terminal state for the scheduler, None when unreadable; comments are read only during a consent wait."""
+    """The PR's terminal state for the scheduler, None when unreadable; reads the conversation only for consent."""
     if c.names.pr is None or not repository or c.finished_at:
         return None, False
     try:
@@ -183,10 +183,10 @@ def pr_state(gh: Provider, repository: str, c: Change, offered: str | None = Non
         state: PrState = "merged" if pr.merged else pr.state
         if state != "open" or not loop.waiting_consent(c):
             return state, False
-        comments = [t.id for t in gh.read_comments(repository, pr.number)]
+        opened = [i.id for i, _ in conversation.open_items(c, gh.read_conversation(repository, pr.number))]
     except ProviderError:
         return None, False
-    return state, loop.consent_moved(c, offered, pr.head_sha, comments)
+    return state, loop.consent_moved(c, offered, pr.head_sha, opened)
 
 
 def observe(store: Store, repo: Path, slug: str) -> Seen:

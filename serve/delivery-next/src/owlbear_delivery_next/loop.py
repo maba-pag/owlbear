@@ -177,10 +177,9 @@ def waiting_consent(c: Change) -> bool:
     return bool(o and o.exit == Exit.ASK and o.cause == CONSENT)
 
 
-def consent_moved(c: Change, offered: str | None, head: str, comments: Iterable[str]) -> bool:
-    """While waiting for consent, a review comment without its task or a head other than the offered one."""
-    known = {t.id for t in c.plan.tasks} if c.plan else set()
-    return waiting_consent(c) and (head != offered or any(f"pr-{i}" not in known for i in comments))
+def consent_moved(c: Change, offered: str | None, head: str, opened: Iterable[str]) -> bool:
+    """While waiting for consent, an open conversation item or a head other than the offered one."""
+    return waiting_consent(c) and (head != offered or any(True for _ in opened))
 
 
 def open_question(c: Change) -> Question | None:

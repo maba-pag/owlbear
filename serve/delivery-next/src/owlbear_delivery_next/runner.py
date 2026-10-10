@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next import loop, profile, prompts, sdk_adapter, setup, tools
 from owlbear_delivery_next.cli import describe
 from owlbear_delivery_next.models import Environment, Exit, Profile, StepKind, Waiting
-from owlbear_delivery_next.steps import cleanup, engine, follow, merge, publish, review, worktree
+from owlbear_delivery_next.steps import cleanup, conversation, engine, follow, merge, publish, review, worktree
 from owlbear_delivery_next.store import LockHeldError, Store, StoreError, git_common_dir
 
 if TYPE_CHECKING:
@@ -112,10 +112,12 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         fresh=parts.message,
         previous=_previous(store, slug, s.session) if resume else {},
         journal=sdk_adapter.Journal(lambda e: store.log(lock, slug, e), delivered, replaced),
+        item=task.item.kind if task and task.item and s.kind == StepKind.BUILD else None,
     )
     run = asyncio.run(sdk_adapter.run(cfg))
     end = datetime.now(UTC)
     result = review.recorded(change, parts.task, run, path, sdk_adapter.to_result(run, s.kind, end))
+    conversation.respond(task, run.payload, run.head, result.exit)
     _log(store, lock, change, run, {"kind": s.kind, "exit": result.exit})
     if s.kind == StepKind.PLAN and result.plan:
         message = prompts.plan_review(change, result.plan, path, others)

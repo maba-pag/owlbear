@@ -36,13 +36,31 @@ class CheckRun(Args):
     exit_code: int = Field(description="Its exit code; 0 means it passed", examples=[0])
 
 
+class Response(Args):
+    """How a pull-request conversation task was handled and the text Delivery posts for it."""
+
+    how: Literal["fixed", "answered", "no-action"] = Field(
+        description="fixed: your commit changes the code; answered: a reply without a code change; "
+        "no-action: nothing to do (not for review threads)",
+        examples=["answered"],
+    )
+    text: str = _f(3000, "The reply Delivery posts, or the reason no action is needed", "greet() trims the name.")
+
+
 class BuildResult(Args):
     """``submit_result`` for the build step."""
 
     summary: str = _f(2000, "What you changed and why, in a few sentences", "Added greet(name), with a test.")
-    changed_paths: list[str] = _f(200, "Repository-relative paths your commit changes", ["packages/app/src/greet.ts"])
+    changed_paths: list[str] = _f(
+        200, "Repository-relative paths your commit changes", ["packages/app/src/greet.ts"], least=0
+    )
     checks: list[CheckRun] = _f(
-        20, "Every task check you ran on your final commit", [{"command": "npm test", "exit_code": 0}]
+        20, "Every task check you ran on your final commit", [{"command": "npm test", "exit_code": 0}], least=0
+    )
+    response: Response | None = Field(
+        default=None,
+        description="Only for a pull-request conversation task: how you handled it and the text to post",
+        examples=[{"how": "answered", "text": "greet() trims the name."}],
     )
 
 
@@ -307,9 +325,27 @@ def _few(paths: Sequence[str]) -> str:
     return ", ".join(paths[:5]) + (f" and {len(paths) - 5} more" if len(paths) > 5 else "")  # noqa: PLR2004
 
 
-def check_build(result: BuildResult, tree: Worktree, checks: Sequence[str]) -> list[str]:
-    """Return field errors for a build result against the worktree HEAD the runner derives and the task's checks."""
-    errors = []
+def _response(result: BuildResult, item: str | None) -> list[str]:
+    """Errors of the ``response`` field: required for a conversation task of kind *item*, refused otherwise."""
+    r = result.response
+    if item is None:
+        return ["response: only for a pull-request conversation task - remove it"] if r else []
+    if r is None:
+        return ['response: required for this conversation task - e.g. {"how": "answered", "text": "..."}']
+    if item == "thread" and r.how == "no-action":
+        return ["response.how: no-action is not allowed for a review thread - fix it or answer it"]
+    return []
+
+
+def check_build(result: BuildResult, tree: Worktree, checks: Sequence[str], item: str | None = None) -> list[str]:
+    """Return field errors for a build result against the worktree HEAD the runner derives and the task's checks.
+
+    *item* is the conversation item kind of the task, if any; an answer or no-action needs no commit.
+    """
+    errors = _response(result, item)
+    reply = result.response is not None and result.response.how != "fixed"
+    if reply and tree.head == tree.base and not tree.dirty:
+        return errors
     if tree.head == tree.base:
         errors.append(
             f"changes: no commit since the task's base {tree.base[:12]}; commit your changes, then submit again"
@@ -367,11 +403,13 @@ def check_recipe(recipe: CheckRecipe, tree: Worktree, launch: Sequence[str], roo
     return errors
 
 
-def check_result(args: Args, tree: Worktree, checks: Sequence[str], root: Path, scope: Sequence[str] = ()) -> list[str]:
+def check_result(  # noqa: PLR0913, PLR0917 - the result, its worktree and four bounds
+    args: Args, tree: Worktree, checks: Sequence[str], root: Path, scope: Sequence[str] = (), item: str | None = None
+) -> list[str]:
     """Return the field errors of one ``submit_result`` against the worktree the runner observed and the brief scope."""
     match args:
         case BuildResult():
-            return check_build(args, tree, checks)
+            return check_build(args, tree, checks, item)
         case ReviewResult():
             return check_review(args, tree)
         case CheckRecipe():
