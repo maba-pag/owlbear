@@ -26,6 +26,7 @@ from uuid import UUID
 
 import pytest
 from owlbear_memory import MemoryEngine, MemoryEntry, MemoryState, storage
+from owlbear_memory.models import ChallengeRecord
 
 
 async def _recall(*args: object, **kwargs: object) -> str:
@@ -359,8 +360,9 @@ class TestFromAC_IdentityBearingFormat:
         assert "This is the body content." in result
         title_pos = result.index("## My Entry")
         id_pos = result.index(f"Entry ID: `{entry.id}`")
+        revision_pos = result.index(f"Revision: `{entry.revision}`")
         content_pos = result.index("This is the body content.")
-        assert title_pos < id_pos < content_pos
+        assert title_pos < id_pos < revision_pos < content_pos
 
     @pytest.mark.asyncio
     async def test_result_contains_entry_id_but_no_other_metadata(self, tmp_path: Path) -> None:
@@ -420,7 +422,9 @@ class TestFromAC_IdentityBearingFormat:
 
         result = await _recall(ctx, agent="recall-scope-tester")
 
-        assert result == f"## Format Pin Test\nEntry ID: `{entry.id}`\nPinned body text."
+        assert result == (
+            f"## Format Pin Test\nEntry ID: `{entry.id}`\nRevision: `{entry.revision}`\nPinned body text."
+        )
         for field_name in (
             "state",
             "confidence",
@@ -437,6 +441,36 @@ class TestFromAC_IdentityBearingFormat:
         assert "recall-scope-tester" not in result  # scope_agents value
         assert "2026-01-15T08:30:00Z" not in result  # created_at value
         assert "2026-02-20T14:15:00Z" not in result  # updated_at value
+
+    @pytest.mark.asyncio
+    async def test_revision_refreshes_after_edit_from_second_engine(self, tmp_path: Path) -> None:
+        """Recall reflects a content edit made through another MemoryEngine instance."""
+        entry = _make_entry(
+            id=_uuid(99),
+            title="Cross-engine revision",
+            content="Original body.",
+            state="curated",
+            scope_agents=["builder"],
+        )
+        first_engine = MemoryEngine(memory_dir=tmp_path)
+        persisted = _seed_entry(first_engine, entry)
+        ctx = _make_ctx(first_engine)
+
+        initial_result = await _recall(ctx, agent="builder")
+        initial_revision = persisted.revision
+        assert f"Entry ID: `{persisted.id}`\nRevision: `{initial_revision}`" in initial_result
+
+        second_engine = MemoryEngine(memory_dir=tmp_path)
+        edited = second_engine.edit(
+            persisted.id,
+            {"content": "Updated body."},
+            expected_updated_at=persisted.updated_at,
+        )
+
+        assert edited.revision != initial_revision
+        updated_result = await _recall(ctx, agent="builder")
+        assert f"Entry ID: `{persisted.id}`\nRevision: `{edited.revision}`" in updated_result
+        assert f"Revision: `{initial_revision}`" not in updated_result
 
     @pytest.mark.asyncio
     async def test_two_entries_keep_ids_paired_and_use_double_newline_separator(self, tmp_path: Path) -> None:
@@ -463,7 +497,8 @@ class TestFromAC_IdentityBearingFormat:
         result = await _recall(ctx, agent="builder")
 
         expected = (
-            f"## Alpha Entry\nEntry ID: `{e1.id}`\nAlpha content.\n\n## Beta Entry\nEntry ID: `{e2.id}`\nBeta content."
+            f"## Alpha Entry\nEntry ID: `{e1.id}`\nRevision: `{e1.revision}`\nAlpha content.\n\n"
+            f"## Beta Entry\nEntry ID: `{e2.id}`\nRevision: `{e2.revision}`\nBeta content."
         )
         assert result == expected
 
@@ -480,8 +515,10 @@ class TestFromAC_ContestedMarker:
             content="Check this guidance before applying it.",
             state=MemoryState.CONTESTED,
             scope_agents=["builder"],
-            contested_by_task="task-243",
         )
+        entry.challenges = [
+            ChallengeRecord(task_id="task-243", revision=entry.revision, recorded_at=_TS),
+        ]
         storage.write_entry(tmp_path / f"{entry.id}.md", entry, memory_dir=tmp_path)
         engine = MemoryEngine(memory_dir=tmp_path)
         ctx = _make_ctx(engine)
@@ -489,7 +526,7 @@ class TestFromAC_ContestedMarker:
         result = await _recall(ctx, agent="builder")
 
         assert result == (
-            f"## Challenged guidance\nEntry ID: `{entry.id}`\nState: contested\n"
+            f"## Challenged guidance\nEntry ID: `{entry.id}`\nRevision: `{entry.revision}`\nState: contested\n"
             "Challenge task: `task-243`\nCheck this guidance before applying it."
         )
 
@@ -501,7 +538,6 @@ class TestFromAC_ContestedMarker:
             title="Unreferenced challenge",
             state=MemoryState.CONTESTED,
             scope_agents=["builder"],
-            contested_by_task=None,
         )
         storage.write_entry(tmp_path / f"{entry.id}.md", entry, memory_dir=tmp_path)
         engine = MemoryEngine(memory_dir=tmp_path)
@@ -509,7 +545,10 @@ class TestFromAC_ContestedMarker:
 
         result = await _recall(ctx, agent="builder")
 
-        assert result == f"## Unreferenced challenge\nEntry ID: `{entry.id}`\nState: contested\nEntry body text."
+        assert result == (
+            f"## Unreferenced challenge\nEntry ID: `{entry.id}`\nRevision: `{entry.revision}`\n"
+            "State: contested\nEntry body text."
+        )
         assert "Challenge task:" not in result
 
     @pytest.mark.asyncio
@@ -542,24 +581,31 @@ class TestFromAC_ContestedMarker:
         engine = MemoryEngine(memory_dir=tmp_path)
         approved_live = _seed_entry(engine, approved)
         contested_live = _seed_entry(engine, contested)
-        _seed_entry(engine, curated)
+        curated_live = _seed_entry(engine, curated)
         contested_live = engine.record_factually_wrong(
             contested_live.id,
             "task-mixed-243",
-            expected_updated_at=contested_live.updated_at,
-        )
+            expected_revision=contested_live.revision,
+        ).entry
         ctx = _make_ctx(engine)
 
         result = await _recall(ctx, agent="builder")
 
         assert result == "\n\n".join(
             (
-                f"## Approved guidance\nEntry ID: `{approved_live.id}`\nApproved body.",
                 (
-                    f"## Contested guidance\nEntry ID: `{contested_live.id}`\nState: contested\n"
+                    f"## Approved guidance\nEntry ID: `{approved_live.id}`\n"
+                    f"Revision: `{approved_live.revision}`\nApproved body."
+                ),
+                (
+                    f"## Contested guidance\nEntry ID: `{contested_live.id}`\n"
+                    f"Revision: `{contested_live.revision}`\nState: contested\n"
                     "Challenge task: `task-mixed-243`\nContested body."
                 ),
-                f"## Curated guidance\nEntry ID: `{_uuid(3)}`\nCurated body.",
+                (
+                    f"## Curated guidance\nEntry ID: `{curated_live.id}`\n"
+                    f"Revision: `{curated_live.revision}`\nCurated body."
+                ),
             )
         )
 

@@ -26,7 +26,12 @@ Head cataloger for institutional memory. Agents deposit raw learnings into MCP a
 
 - **Follow the `w-mem-curation` skill** for the triage workflow, scope assignment, and conflict resolution process.
 - **Use `owlbear-memory/commit_memory_batch`** at the end of a curation session; do not use a terminal or direct Git command.
-- **Promotion = curate MCP memory.** Call `curate_memory` with non-empty `scope_agents`; do not promote new learnings by merging into thematic files.
+- **Promotion = curate MCP memory.** The required `revision` argument for `approve_memory`,
+  `curate_memory`, and `delete_memory` comes from `read_memory` or `list_memories` and covers
+  `title`, `content`, `categories`, `confidence`, and `scope_agents`, not state, counters, or
+  timestamps. A stale refusal names expected/current revisions and instructs a re-read; re-read
+  before retrying. Pass the revision to `curate_memory` with non-empty `scope_agents`; do not
+  promote new learnings by merging into thematic files.
 - **MCP is the only memory store.** Do not read from, write to, or defer into `/memories/` paths.
 - **Never call `approve_memory`.** User approval belongs to the memory review prompt, not curator autonomy.
 - **Never fabricate findings.** You consolidate what agents wrote — you do not invent new knowledge.

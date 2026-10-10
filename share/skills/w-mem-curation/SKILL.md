@@ -15,24 +15,32 @@ Maintain institutional memory by turning raw agent learnings into scoped MCP mem
 The canonical path is:
 
 ```text
-save_memory -> list_memories/read_memory -> curate_memory(scope_agents=[...]) -> recall_memory
+save_memory -> list_memories/read_memory -> curate_memory(entry_id=..., revision=..., scope_agents=[...]) -> recall_memory
 ```
 
 Curated and approved MCP entries are what future agents recall. Pending entries are unreviewed and invisible to recall. Memory curation operates on MCP entries only.
+
+## Revision-bound mutations
+
+`approve_memory`, `curate_memory`, and `delete_memory` require the current `revision` returned by
+`read_memory` or `list_memories`. This 16-character lowercase hex token covers `title`, `content`,
+`categories`, `confidence`, and `scope_agents`, not `state`, assessment counters, or timestamps. A
+stale revision is refused with an error naming the expected and current revisions and instructing
+the caller to re-read before retrying. Re-read the entry and retry with the new revision.
 
 ## State Machine
 
 | From | To | Trigger | Tool | Actor |
 | --- | --- | --- | --- | --- |
-| `pending` | `curated` | Curator validates content and assigns scope | `curate_memory(scope_agents=[...])` | curator agent |
-| `curated` | `approved` | User signs off in review prompt | `approve_memory` | human user |
-| `approved` | `curated` | Curator edits obsolete or imprecise content | `curate_memory(...)` | curator agent |
+| `pending` | `curated` | Curator validates content and assigns scope | `curate_memory(entry_id=..., revision=..., scope_agents=[...])` | curator agent |
+| `curated` | `approved` | User signs off in review prompt | `approve_memory(entry_id=..., revision=...)` | human user |
+| `approved` | `curated` | Curator edits obsolete or imprecise content | `curate_memory(entry_id=..., revision=...)` | curator agent |
 | `curated` / `approved` | `contested` | First factually-wrong assessment | `assess_memories` | builder |
 | `contested` | `disputed` | A second task reports the entry factually wrong | `assess_memories` | builder |
 | `curated` / `approved` / `contested` | `stale` | Non-use exceeds the slot-efficiency threshold | `assess_memories` | memory service |
 | `contested` / `disputed` / `stale` | `approved` | User resolves the exceptional state | Cockpit | human user |
-| `pending` | removed | Noise/duplicate pruned before commit | `delete_memory` | curator agent |
-| `curated` / `approved` / `contested` / `disputed` / `stale` | `deleted` | Superseded or invalidated guidance retired | `delete_memory` | curator agent |
+| `pending` | removed | Noise/duplicate pruned before commit | `delete_memory(entry_id=..., revision=...)` | curator agent |
+| `curated` / `approved` / `contested` / `disputed` / `stale` | `deleted` | Superseded or invalidated guidance retired | `delete_memory(entry_id=..., revision=...)` | curator agent |
 
 The curator does not approve entries. Approval is a user decision through the memory review prompt.
 The curator also does not resolve exceptional states. `curate_memory` is blocked for `contested`,
@@ -106,9 +114,9 @@ in relevance scope. A deleted agent may remain in immutable historical provenanc
 
 | Rating | MCP action |
 | --- | --- |
-| PROMOTE | Call `curate_memory(entry_id=..., scope_agents=[...])`; optionally improve title/content/categories/confidence in the same call |
+| PROMOTE | Call `curate_memory(entry_id=..., revision=entry["revision"], scope_agents=[...])`; optionally improve title/content/categories/confidence in the same call |
 | DEFER | Leave pending and, in periodic mode, include ordinary content/scope uncertainty or conflict in the return report; do not report identity-only uncertainty |
-| DELETE / DUPLICATE | Call `delete_memory(entry_id=...)` |
+| DELETE / DUPLICATE | Call `delete_memory(entry_id=..., revision=entry["revision"])` |
 | CONFLICT | Periodic: leave pending and report the conflict. Manual: ask the user, then curate/delete according to the decision |
 
 When editing an approved entry, remember `curate_memory` downgrades it to curated. That is intentional; the user must re-approve later.

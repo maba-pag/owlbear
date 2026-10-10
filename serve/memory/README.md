@@ -83,7 +83,7 @@ Pydantic `BaseModel` representing a single markdown-backed memory entry.
 | `created_at` | `str` | Timezone-aware ISO 8601 timestamp |
 | `updated_at` | `str` | Timezone-aware ISO 8601 timestamp |
 | `approved_at` | `str \| None` | Timezone-aware ISO 8601 timestamp; optional |
-| `contested_by_task` | `str \| None` | Task ID that triggered the first factually-wrong confirmation; `None` until first confirmation; cleared on `resolve()` |
+| `challenges` | `list[ChallengeRecord]` | Default `[]`; at most two records with `task_id`, challenged `revision`, and `recorded_at`; legacy values migrate on load; cleared by `resolve()` and kept by edits and tombstone deletion |
 
 ### `MemoryCategory` (StrEnum)
 
@@ -110,6 +110,26 @@ Pydantic `BaseModel` representing a single markdown-backed memory entry.
 | `disputed` | Challenged as incorrect; excluded from recall; field edits preserve this state — use `resolve()` to return to approved |
 | `stale` | Flagged as potentially outdated; excluded from recall; field edits preserve this state — use `resolve()` to return to approved |
 | `deleted` | Logically deleted (file may still exist) |
+
+### Revision-Bound Assessment Receipts
+
+The Memory MCP recall block places `Revision: {revision}` immediately after
+`Entry ID:`. An `assess_memories` batch uses one `task_id` of 1-128 printable
+ASCII characters without whitespace and items with exactly
+`{entry_id, revision, bucket}`. The revision must be the value supplied by the
+entry the caller recalled.
+
+`record_assessment` and `record_factually_wrong` return `AssessmentResult` with
+`entry`, `already_applied`, and `recorded_bucket`. The first receipt for a task,
+entry, and revision determines the bucket; a repeat returns it without another
+counter or state update. Different task IDs are assessed separately. Receipts
+are stored with the entry for its current revision only, keeping at most 20 and
+evicting the oldest first as needed to remain within 8192 bytes. The newest
+receipt is retained; if it cannot fit, the assessment is refused without
+changing counters, state, or receipts. A revision mismatch is refused before
+mutation and reports the current revision. Re-recall before submitting
+feedback about changed content. Content edits preserve assessment counters
+but remove receipts for the previous revision.
 
 ---
 
@@ -230,12 +250,12 @@ string. The universal `*` member is allowed; an empty list is allowed for pendin
 | `get_entries()` | `() → list[MemoryEntry]` | Reparsed when an entry file's name, inode, size, or `mtime_ns` changes |
 | `get_entry(id)` | `(str) → MemoryEntry` | Raises `NotFoundError` |
 | `save(...)` | `(title, content, categories, confidence, source_agent, scope_agents) → MemoryEntry` | Creates pending entry; initializes `score = confidence`, all counters to `0`; no OCC |
-| `approve(id, expected_updated_at)` | `(str, str) → MemoryEntry` | curated → approved; raises `TransitionError` / `ConcurrencyError` |
-| `resolve(id, expected_updated_at)` | `(str, str) → MemoryEntry` | contested/disputed/stale → approved; sets `approved_at`; raises `TransitionError` / `ConcurrencyError` |
-| `record_factually_wrong(id, task_id, expected_updated_at)` | `(str, str, str \| None) → MemoryEntry` | approved/curated → contested (stores `contested_by_task`, clears `approved_at`); contested + same `task_id` → no-op; contested + different `task_id` → disputed; raises `ValidationError` (empty/whitespace `task_id`), `TransitionError` (non-voteable state), `ConcurrencyError` (OCC mismatch, evaluated before state guard) |
-| `record_assessment(entry_id, bucket, expected_updated_at)` | `(str, str, str \| None) → MemoryEntry` | Increments the specified counter (`outstanding`, `unremarkable`, or `didnt_use`); recomputes `score` via `compute_score`; calls `try_stale_transition` when slot-efficiency threshold exceeded. Raises `TransitionError` (non-voteable state), `ConcurrencyError` (OCC mismatch), `ValidationError` (invalid bucket). `expected_updated_at` optional — pass `None` to skip OCC check. |
-| `edit(id, fields, expected_updated_at)` | `(str, EditPayload, str) → MemoryEntry` | State-machine rules apply; contested/disputed/stale preserve their state while fields are updated; deleted entries are blocked; raises `TransitionError` / `ConcurrencyError` |
-| `delete(id, expected_updated_at)` | `(str, str) → MemoryEntry` | Hard-delete for pending, soft-delete for curated/approved/contested/disputed/stale; raises `TransitionError` / `ConcurrencyError` |
+| `approve(id, expected_updated_at=None, *, expected_revision=None)` | `(str, str \| None) → MemoryEntry` | curated → approved; exactly one OCC token; raises `TransitionError` / `ConcurrencyError` |
+| `resolve(id, expected_updated_at)` | `(str, str) → MemoryEntry` | contested/disputed/stale → approved; sets `approved_at` and clears challenges; raises `TransitionError` / `ConcurrencyError` |
+| `record_factually_wrong(entry_id, task_id, *, expected_revision)` | `(str, str, *, expected_revision: str) → AssessmentResult` | Records the factually-wrong confirmation cycle. A repeated task, entry, and revision returns the first result; raises `TransitionError`, `ConcurrencyError` (revision mismatch), or `ValidationError` (invalid `task_id`). |
+| `record_assessment(entry_id, bucket, *, task_id, expected_revision)` | `(str, str, *, task_id: str, expected_revision: str) → AssessmentResult` | Increments the selected counter, recomputes `score`, and may transition the entry to `stale`. A repeated task, entry, and revision returns the first recorded bucket without applying again; raises `TransitionError`, `ConcurrencyError`, or `ValidationError`. |
+| `edit(id, fields, expected_updated_at=None, *, expected_revision=None)` | `(str, EditPayload, str \| None) → MemoryEntry` | State-machine rules apply; exactly one OCC token; contested/disputed/stale preserve their state while fields are updated; deleted entries are blocked; raises `TransitionError` / `ConcurrencyError` |
+| `delete(id, expected_updated_at=None, *, expected_revision=None)` | `(str, str \| None) → MemoryEntry` | Hard-delete for pending, soft-delete for curated/approved/contested/disputed/stale; exactly one OCC token; raises `TransitionError` / `ConcurrencyError` |
 | `try_stale_transition(entry)` | `(MemoryEntry) → MemoryEntry` | Reloads under the writer lock and checks the passed entry's `updated_at`; raises `ConcurrencyError` if stale, even when no transition would occur. Returns unchanged entry when the predicate is False or state is ineligible; otherwise eligible entries become stale. |
 | `load()` | `() → list[MemoryEntry]` | Force full reparse; skips malformed files (lenient) |
 
@@ -249,10 +269,12 @@ string. The universal `*` member is allowed; an empty list is allowed for pendin
 | `curated` | `approve` | `approved` | Sets `approved_at` |
 | `curated` | `edit` | `curated` | Field update only |
 | `curated` | `delete` | `deleted` | Soft-delete |
-| `approved` | `record_factually_wrong` | `contested` | Stores `contested_by_task`; clears `approved_at` |
-| `curated` | `record_factually_wrong` | `contested` | Stores `contested_by_task` |
-| `contested` | `record_factually_wrong` (same `task_id`) | `contested` | No-op; returns entry unchanged |
-| `contested` | `record_factually_wrong` (different `task_id`) | `disputed` | Excluded from recall; clears `contested_by_task` |
+| `approved` | `record_factually_wrong` | `contested` | Records the first challenge; clears `approved_at` |
+| `curated` | `record_factually_wrong` | `contested` | Records the first challenge |
+| `contested` | `record_factually_wrong` (no challenges) | `contested` | Records the first challenge on a legacy entry |
+| `contested`/`disputed` | `record_factually_wrong` (task already challenged) | (unchanged) | Returns `already_applied` without writing |
+| `contested` | `record_factually_wrong` (new task, one challenge) | `disputed` | Appends the second challenge; excluded from recall |
+| any other state | `record_factually_wrong` (new task) | — | Raises `TransitionError` |
 | `approved` | `edit` | `curated` | Clears `approved_at` |
 | `approved` | `delete` | `deleted` | Soft-delete |
 | `contested` | `resolve` | `approved` | Sets `approved_at` |
@@ -268,13 +290,20 @@ string. The universal `*` member is allowed; an empty list is allowed for pendin
 
 #### OCC
 
-Explicit lifecycle mutations (`approve`, `resolve`, `edit`, `delete`) accept `expected_updated_at` (str);
-`try_stale_transition(entry)` uses the passed entry's `updated_at` as its OCC token.
-`record_factually_wrong` and `record_assessment` also accept `expected_updated_at` but it is optional (`str | None`); pass `None` to skip the OCC check.
-Before a mutation, the engine reloads under the writer lock. If a non-`None` token does not match
-the freshly loaded entry's `updated_at`, `ConcurrencyError` is raised and the mutation does not
-overwrite the newer entry; callers should reload and resolve the stale update. `save()` creates
-new entries and does not require an OCC token.
+All mutation methods (`approve`, `resolve`, `edit`, `delete`) accept `expected_updated_at` (str).
+For methods using `expected_updated_at`, a non-`None` token that does not match the on-disk
+`entry.updated_at` raises `ConcurrencyError`. `record_factually_wrong` and `record_assessment`
+instead require `expected_revision` from the caller's recalled entry; a mismatch raises before
+state, counters, or receipts change. `save()` creates new entries and does not require an OCC token.
+
+For `approve`, `edit` (the engine operation behind MCP `curate_memory`), and `delete`, the engine
+also accepts `expected_revision`; each call must supply exactly one token. Cockpit uses
+`expected_updated_at`, while the MCP adapter uses `revision` as `expected_revision`. Both token
+forms are validated by the same `MemoryEngine` against the current entry before mutation.
+
+Before a mutation, the engine reloads under the writer lock and checks the token against the
+freshly loaded entry, so a stale token raises `ConcurrencyError` instead of overwriting a newer
+entry. `try_stale_transition(entry)` uses the passed entry's `updated_at` as its token.
 
 #### Writer model
 

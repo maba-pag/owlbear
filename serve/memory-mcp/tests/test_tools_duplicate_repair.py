@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
-from owlbear_memory import DuplicateEntryError, MemoryEngine, MemoryEntry, MemoryState, storage
+from owlbear_memory import AssessmentResult, DuplicateEntryError, MemoryEngine, MemoryEntry, MemoryState, storage
 
 from owlbear_memory_mcp import tools
 from owlbear_memory_mcp.server import AppContext
@@ -165,11 +165,12 @@ async def test_mutation_tools_translate_duplicate_errors_to_tool_errors(
         "curate_memory": lambda: tools.curate_memory(
             ctx,
             entry_id=pending.id,
+            revision=pending.revision,
             content="Updated content.",
             scope_agents=["test-agent"],
         ),
-        "delete_memory": lambda: tools.delete_memory(ctx, entry_id=pending.id),
-        "approve_memory": lambda: tools.approve_memory(ctx, entry_id=curated.id),
+        "delete_memory": lambda: tools.delete_memory(ctx, entry_id=pending.id, revision=pending.revision),
+        "approve_memory": lambda: tools.approve_memory(ctx, entry_id=curated.id, revision=curated.revision),
         "rename_agent_memories": lambda: tools.rename_agent_memories(
             ctx,
             old_name="old-agent",
@@ -198,13 +199,14 @@ async def test_curate_memory_surfaces_duplicate_repair_failure_without_changes(t
     )
     engine = MemoryEngine(tmp_path)
     ctx = _tool_context(engine, tmp_path)
+    revision = engine.get_entry(_DUPLICATE_ID).revision
     before = _directory_snapshot(tmp_path)
     original_mode = _directory_mode(tmp_path)
 
     try:
         _set_directory_mode(tmp_path, original_mode & ~0o222)
         with pytest.raises(ToolError) as raised:
-            await tools.curate_memory(ctx, entry_id=_DUPLICATE_ID, content="Must not apply.")
+            await tools.curate_memory(ctx, entry_id=_DUPLICATE_ID, revision=revision, content="Must not apply.")
     finally:
         _set_directory_mode(tmp_path, original_mode)
 
@@ -233,6 +235,7 @@ async def test_assess_memories_reports_duplicate_failure_and_continues(
     ctx = _tool_context(engine, tmp_path)
     before = _directory_snapshot(tmp_path)
     original_mode = _directory_mode(tmp_path)
+    duplicate_revision = engine.get_entry(_DUPLICATE_ID).revision
     original_record_assessment = engine.record_assessment
     failure_snapshot: tuple[tuple[str, bytes, int], ...] | None = None
 
@@ -240,14 +243,16 @@ async def test_assess_memories_reports_duplicate_failure_and_continues(
         entry_id: str,
         bucket: str,
         *,
-        expected_updated_at: str | None = None,
-    ) -> MemoryEntry:
+        task_id: str,
+        expected_revision: str,
+    ) -> AssessmentResult:
         nonlocal failure_snapshot
         try:
             return original_record_assessment(
                 entry_id,
                 bucket,
-                expected_updated_at=expected_updated_at,
+                task_id=task_id,
+                expected_revision=expected_revision,
             )
         except DuplicateEntryError:
             failure_snapshot = _directory_snapshot(tmp_path)
@@ -261,8 +266,8 @@ async def test_assess_memories_reports_duplicate_failure_and_continues(
         result = await tools.assess_memories(
             ctx,
             assessments=[
-                {"entry_id": _DUPLICATE_ID, "bucket": "outstanding"},
-                {"entry_id": later_entry.id, "bucket": "outstanding"},
+                {"entry_id": _DUPLICATE_ID, "revision": duplicate_revision, "bucket": "outstanding"},
+                {"entry_id": later_entry.id, "revision": later_entry.revision, "bucket": "outstanding"},
             ],
             task_id="task-1",
         )
@@ -273,7 +278,12 @@ async def test_assess_memories_reports_duplicate_failure_and_continues(
     assert result["results"][0]["entry_id"] == _DUPLICATE_ID
     assert result["results"][0]["success"] is False
     assert "duplicate-copy.md" in str(result["results"][0]["error"])
-    assert result["results"][1] == {"entry_id": later_entry.id, "success": True}
+    assert result["results"][1] == {
+        "entry_id": later_entry.id,
+        "success": True,
+        "already_applied": False,
+        "recorded_bucket": "outstanding",
+    }
     assert engine.get_entry(later_entry.id).outstanding_count == 1
 
 

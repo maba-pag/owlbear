@@ -13,10 +13,20 @@ from owlbear_memory.errors import (
     TransitionError,
     ValidationError,
 )
-from owlbear_memory.models import MemoryCategory, MemoryEntry, MemoryHealth, MemoryState, validate_scope_agents
+from owlbear_memory.models import (
+    AssessmentReceipt,
+    AssessmentResult,
+    MemoryCategory,
+    MemoryEntry,
+    MemoryHealth,
+    MemoryState,
+    validate_scope_agents,
+)
 from owlbear_memory.writer_lock import writer_lock
 
 __all__ = [
+    "AssessmentReceipt",
+    "AssessmentResult",
     "ConcurrencyError",
     "DuplicateEntryError",
     "LifecycleRecoveryError",

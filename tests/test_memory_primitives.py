@@ -448,9 +448,9 @@ class TestStorageWrite:
     @pytest.mark.parametrize(
         ("title", "content"),
         [
-            ("x" * 7819, "Some content"),
-            ("é" * 3909 + "x", "Some content"),
-            ("x" * 3735, "😀" * 1024),
+            ("x" * 7828, "Some content"),
+            ("é" * 3909 + "x" * 10, "Some content"),
+            ("x" * 3744, "😀" * 1024),
         ],
         ids=["ascii-title", "multibyte-title", "multibyte-content"],
     )
@@ -482,7 +482,7 @@ class TestStorageWrite:
         original = _make_valid_entry()
         storage.write_entry(target, original, memory_dir=memory_dir)
         original_bytes = target.read_bytes()
-        oversized = MemoryEntry(**{**_valid_entry_data(), "title": "x" * 7820})
+        oversized = MemoryEntry(**{**_valid_entry_data(), "title": "x" * 7829})
 
         with pytest.raises(ValueError, match=rf"serialized entry exceeds {_8KB} bytes \(got 8193\).*metadata"):
             storage.write_entry(target, oversized, memory_dir=memory_dir)
@@ -496,8 +496,8 @@ class TestStorageWrite:
     @pytest.mark.parametrize(
         ("source_agent", "expected_size"),
         [
-            ("é" * 3909 + "x", _8KB),
-            ("é" * 3909 + "xx", _8KB + 1),
+            ("é" * 3909 + "x" * 10, _8KB),
+            ("é" * 3909 + "x" * 11, _8KB + 1),
         ],
         ids=["accepted", "rejected"],
     )
@@ -540,9 +540,9 @@ class TestStorageWrite:
     @pytest.mark.parametrize(
         ("overrides", "serialized_size"),
         [
-            ({"source_agent": "x" * 9000}, 9373),
-            ({"scope_agents": ["x" * 9000]}, 9385),
-            ({"title": "x" * 3736, "content": "😀" * 1024}, 8193),
+            ({"source_agent": "x" * 9000}, 9364),
+            ({"scope_agents": ["x" * 9000]}, 9376),
+            ({"title": "x" * 3745, "content": "😀" * 1024}, 8193),
         ],
         ids=["provenance", "scope", "body-content"],
     )

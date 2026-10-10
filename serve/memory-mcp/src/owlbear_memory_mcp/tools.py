@@ -5,13 +5,14 @@ from __future__ import annotations
 import logging
 import subprocess
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from mcp.server.mcpserver.exceptions import ToolError
 from owlbear_memory import (
     ConcurrencyError,
     DuplicateEntryError,
     LifecycleRecoveryError,
+    MemoryBusyError,
     MemoryCategory,
     MemoryEngine,
     MemoryEntry,
@@ -20,7 +21,10 @@ from owlbear_memory import (
     TransitionError,
     validate_scope_agents,
 )
-from pydantic import ValidationError
+from owlbear_memory import (
+    ValidationError as MemoryValidationError,
+)
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, ValidationError, field_validator
 
 from owlbear_memory_mcp.git import commit_batch, format_git_failure
 
@@ -45,17 +49,35 @@ __all__ = [
 
 SLOT_EXPLORE = 2
 SLOT_CHALLENGE = 2
-_ASSESSMENT_BUCKETS = (
-    "outstanding",
-    "unremarkable",
-    "didnt_use",
-    "factually_wrong",
-)
+AssessmentTaskId = Annotated[StrictStr, Field(pattern=r"^[\x21-\x7e]{1,128}$")]
+
+
+class AssessmentItem(BaseModel):
+    """Strict input shape for one revision-bound assessment."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    entry_id: StrictStr
+    revision: Annotated[StrictStr, Field(pattern=r"^[0-9a-f]{16}$")]
+    bucket: Literal["outstanding", "unremarkable", "didnt_use", "factually_wrong"]
+
+
+class _AssessmentBatch(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    assessments: list[AssessmentItem] = Field(min_length=1)
+    task_id: AssessmentTaskId
+
+    @field_validator("task_id")
+    @classmethod
+    def _validate_task_id(cls, value: str) -> str:
+        if any(not "!" <= character <= "~" for character in value):
+            msg = "task_id must be 1-128 printable ASCII characters without whitespace"
+            raise ValueError(msg)
+        return value
+
+
 _LOGGER = logging.getLogger(__name__)
-
-
-def _allowed_assessment_values() -> str:
-    return ", ".join(_ASSESSMENT_BUCKETS)
 
 
 def _engine_from_ctx(ctx: Context) -> MemoryEngine:
@@ -111,11 +133,10 @@ def _recall_fallback(known_agents: list[str]) -> str:
 
 def _recall_block(entry: MemoryEntry) -> str:
     """Render one recall block with challenge context when required."""
-    lines = [f"## {entry.title}", f"Entry ID: `{entry.id}`"]
+    lines = [f"## {entry.title}", f"Entry ID: `{entry.id}`", f"Revision: `{entry.revision}`"]
     if entry.state == MemoryState.CONTESTED:
         lines.append("State: contested")
-        if entry.contested_by_task:
-            lines.append(f"Challenge task: `{entry.contested_by_task}`")
+        lines.extend(f"Challenge task: `{challenge.task_id}`" for challenge in entry.challenges)
     lines.append(entry.content)
     return "\n".join(lines)
 
@@ -166,6 +187,7 @@ def _validate_limit(limit: int | None) -> int | None:
 def _entry_to_dict(entry: MemoryEntry) -> dict[str, object]:
     return {
         "id": entry.id,
+        "revision": entry.revision,
         "title": entry.title,
         "categories": [str(category) for category in entry.categories],
         "confidence": entry.confidence,
@@ -180,6 +202,14 @@ def _entry_to_dict(entry: MemoryEntry) -> dict[str, object]:
         "created_at": entry.created_at,
         "updated_at": entry.updated_at,
         "approved_at": entry.approved_at,
+        "challenges": [
+            {
+                "task_id": challenge.task_id,
+                "revision": challenge.revision,
+                "recorded_at": challenge.recorded_at,
+            }
+            for challenge in entry.challenges
+        ],
     }
 
 
@@ -189,6 +219,10 @@ def _load_entry_or_raise(engine: MemoryEngine, entry_id: str) -> MemoryEntry:
     except NotFoundError as exc:
         msg = f"entry not found: {entry_id}"
         raise ToolError(msg) from exc
+
+
+def _stale_revision_error(exc: ConcurrencyError) -> ToolError:
+    return ToolError(f"Entry changed since it was read: {exc}. Re-read before retrying.")
 
 
 def _metadata_dict(entry: MemoryEntry) -> dict[str, object]:
@@ -360,8 +394,8 @@ async def recall_memory(
     """Return identity-bearing recall text for a single scoped agent.
 
     Output format: concatenated markdown blocks using "## {title}" headings,
-    followed by the entry ID and body. Contested entries add a state marker and
-    an available challenge-task reference between the ID and body.
+    followed by the entry ID, revision, and body. Contested entries add a state
+    marker and one `Challenge task:` line per record between the revision and body.
     """
     engine = _engine_from_ctx(ctx)
     category_filter = set(_coerce_categories(categories) or [])
@@ -423,6 +457,7 @@ async def _update_entry(  # noqa: C901, PLR0912, PLR0913
     ctx: Context,
     *,
     current: MemoryEntry,
+    revision: str,
     title: str | None = None,
     content: str | None = None,
     categories: list[MemoryCategory | str] | None = None,
@@ -472,16 +507,20 @@ async def _update_entry(  # noqa: C901, PLR0912, PLR0913
         updated = engine.edit(
             current.id,
             payload,
-            expected_updated_at=current.updated_at,
+            expected_revision=revision,
         )
-    except (TransitionError, NotFoundError, ConcurrencyError, DuplicateEntryError) as exc:
+    except MemoryBusyError as exc:
+        raise ToolError(str(exc)) from exc
+    except ConcurrencyError as exc:
+        raise _stale_revision_error(exc) from exc
+    except (TransitionError, NotFoundError, DuplicateEntryError) as exc:
         raise ToolError(str(exc)) from exc
     except ValidationError as exc:
         raise ToolError(_teaching_validation_message(exc)) from exc
     return _entry_to_dict(updated)
 
 
-async def _delete_entry(ctx: Context, *, entry_id: str) -> dict[str, Any]:
+async def _delete_entry(ctx: Context, *, entry_id: str, revision: str) -> dict[str, Any]:
     """Delete an entry.
 
     Pending entries are hard-deleted from disk; curated and approved entries
@@ -495,8 +534,12 @@ async def _delete_entry(ctx: Context, *, entry_id: str) -> dict[str, Any]:
         raise ToolError(msg)
 
     try:
-        deleted = engine.delete(current.id, expected_updated_at=current.updated_at)
-    except (TransitionError, NotFoundError, ConcurrencyError, DuplicateEntryError) as exc:
+        deleted = engine.delete(current.id, expected_revision=revision)
+    except MemoryBusyError as exc:
+        raise ToolError(str(exc)) from exc
+    except ConcurrencyError as exc:
+        raise _stale_revision_error(exc) from exc
+    except (TransitionError, NotFoundError, DuplicateEntryError) as exc:
         raise ToolError(str(exc)) from exc
 
     if current.state == MemoryState.PENDING:
@@ -513,6 +556,7 @@ async def curate_memory(  # noqa: PLR0913
     ctx: Context,
     *,
     entry_id: str,
+    revision: str,
     title: str | None = None,
     content: str | None = None,
     categories: list[MemoryCategory | str] | None = None,
@@ -525,6 +569,7 @@ async def curate_memory(  # noqa: PLR0913
     updated = await _update_entry(
         ctx,
         current=current,
+        revision=revision,
         title=title,
         content=content,
         categories=categories,
@@ -540,11 +585,11 @@ async def curate_memory(  # noqa: PLR0913
     return _with_hint(updated, hint)
 
 
-async def delete_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]:
+async def delete_memory(ctx: Context, *, entry_id: str, revision: str) -> dict[str, Any]:
     """Compatibility alias for delete semantics."""
     engine = _engine_from_ctx(ctx)
     current = _load_entry_or_raise(engine, entry_id)
-    deleted = await _delete_entry(ctx, entry_id=entry_id)
+    deleted = await _delete_entry(ctx, entry_id=entry_id, revision=revision)
     if current.state == MemoryState.PENDING:
         hint = "Hard-delete applied: pending entry removed and never committed."
     else:
@@ -584,71 +629,82 @@ async def delete_agent_memories(ctx: Context, *, agent: str) -> dict[str, int]:
     return dict(result)
 
 
-async def _approve_entry(ctx: Context, *, entry_id: str) -> dict[str, Any]:
+async def _approve_entry(ctx: Context, *, entry_id: str, revision: str) -> dict[str, Any]:
     """Promote a curated entry to approved."""
     engine = _engine_from_ctx(ctx)
     current = _load_entry_or_raise(engine, entry_id)
 
     try:
-        updated = engine.approve(current.id, expected_updated_at=current.updated_at)
-    except (TransitionError, NotFoundError, ConcurrencyError, DuplicateEntryError) as exc:
+        updated = engine.approve(current.id, expected_revision=revision)
+    except MemoryBusyError as exc:
+        raise ToolError(str(exc)) from exc
+    except ConcurrencyError as exc:
+        raise _stale_revision_error(exc) from exc
+    except (TransitionError, NotFoundError, DuplicateEntryError) as exc:
         raise ToolError(str(exc)) from exc
 
     return _entry_to_dict(updated)
 
 
-async def approve_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]:
+async def approve_memory(ctx: Context, *, entry_id: str, revision: str) -> dict[str, Any]:
     """Compatibility alias for approving curated memory entries."""
-    approved = await _approve_entry(ctx, entry_id=entry_id)
+    approved = await _approve_entry(ctx, entry_id=entry_id, revision=revision)
     return _with_hint(approved, "Entry approved. Now visible to scoped agents.")
 
 
 async def assess_memories(
     ctx: Context,
     *,
-    assessments: list[dict[str, str]],
+    assessments: list[AssessmentItem],
     task_id: str,
 ) -> dict[str, list[dict[str, object]]]:
     """Process batch assessment submissions with per-entry success/failure results."""
-    if not assessments:
-        msg = "assessments must be non-empty"
-        raise ToolError(msg)
-
-    if not task_id.strip():
-        msg = "task_id must be non-empty"
-        raise ToolError(msg)
-
-    for assessment in assessments:
-        if not isinstance(assessment, dict) or "entry_id" not in assessment or "bucket" not in assessment:
-            msg = "Each assessment must be a dict containing 'entry_id' and 'bucket' keys."
-            raise ToolError(msg)
-        bucket = assessment["bucket"]
-        if bucket not in _ASSESSMENT_BUCKETS:
-            msg = f"Invalid bucket {bucket!r}. Allowed values: {_allowed_assessment_values()}."
-            raise ToolError(msg)
+    try:
+        batch = _AssessmentBatch.model_validate({"assessments": assessments, "task_id": task_id})
+    except ValidationError as exc:
+        msg = (
+            "Invalid assessment batch. Each item requires entry_id, revision, and a supported bucket "
+            "(outstanding, unremarkable, didnt_use, factually_wrong); "
+            "task_id must be 1-128 printable ASCII characters without whitespace."
+        )
+        raise ToolError(msg) from exc
 
     engine = _engine_from_ctx(ctx)
     results: list[dict[str, object]] = []
 
-    for assessment in assessments:
-        entry_id = assessment["entry_id"]
-        bucket = assessment["bucket"]
+    for assessment in batch.assessments:
+        entry_id = assessment.entry_id
+        bucket = assessment.bucket
         try:
-            current = engine.get_entry(entry_id)
             if bucket == "factually_wrong":
-                engine.record_factually_wrong(
+                outcome = engine.record_factually_wrong(
                     entry_id,
-                    task_id,
-                    expected_updated_at=current.updated_at,
+                    batch.task_id,
+                    expected_revision=assessment.revision,
                 )
             else:
-                engine.record_assessment(
+                outcome = engine.record_assessment(
                     entry_id,
                     bucket,
-                    expected_updated_at=current.updated_at,
+                    task_id=batch.task_id,
+                    expected_revision=assessment.revision,
                 )
-            results.append({"entry_id": entry_id, "success": True})
-        except (NotFoundError, TransitionError, ConcurrencyError, DuplicateEntryError, ValidationError) as exc:
+            results.append(
+                {
+                    "entry_id": entry_id,
+                    "success": True,
+                    "already_applied": outcome.already_applied,
+                    "recorded_bucket": outcome.recorded_bucket,
+                }
+            )
+        except (
+            NotFoundError,
+            TransitionError,
+            ConcurrencyError,
+            DuplicateEntryError,
+            MemoryValidationError,
+            ValidationError,
+        ) as exc:
             results.append({"entry_id": entry_id, "success": False, "error": str(exc)})
 
     return {"results": results}

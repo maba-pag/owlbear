@@ -87,6 +87,23 @@ approval, assessment, and deletion; Cockpit is the human resolution surface for 
 MCP curation edits are blocked for all three exceptional states until the user resolves them in
 Cockpit. Tool responses include hints describing the transition or deletion branch applied.
 
+## Revision-Bound Assessment Feedback
+
+Each `recall_memory` block places `Revision: {revision}` immediately after
+`Entry ID:`. An `assess_memories` batch has a `task_id` of 1-128 printable ASCII
+characters without whitespace; each item has exactly `entry_id`, `revision`,
+and `bucket`.
+
+The engine stores one receipt with the entry for each task, entry, and current
+revision. Repeating that tuple does not apply feedback again and returns
+`already_applied: true` with the first `recorded_bucket`; a different task ID
+is a distinct assessment. Receipts are current-revision-only and bounded to 20
+entries and 8192 serialized bytes. Oldest receipts are evicted first as needed,
+while retaining the newest; if the newest cannot fit, the assessment is refused
+without effect. Stale feedback is refused with the current revision and must
+not be re-submitted until the caller re-recalls the entry. Content edits keep
+assessment counters but remove receipts for the previous revision.
+
 ## Candidate Production
 
 `save_memory` creates an unscoped pending candidate. At creation, `source_agent` must be non-blank;

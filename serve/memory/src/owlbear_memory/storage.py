@@ -17,7 +17,7 @@ from owlbear_memory.errors import NotFoundError
 from owlbear_memory.models import MemoryEntry
 
 _FRONTMATTER_PARTS = 3
-_MAX_FILE_SIZE_BYTES = 8192
+MAX_ENTRY_FILE_SIZE_BYTES = 8192
 _YAML = YAML(typ="safe")
 
 
@@ -68,8 +68,8 @@ def _read_entry_file(path: Path) -> MemoryEntry:
 
 
 def _read_entry_bytes(raw: bytes) -> MemoryEntry:
-    if len(raw) > _MAX_FILE_SIZE_BYTES:
-        msg = f"file exceeds {_MAX_FILE_SIZE_BYTES} bytes"
+    if len(raw) > MAX_ENTRY_FILE_SIZE_BYTES:
+        msg = f"file exceeds {MAX_ENTRY_FILE_SIZE_BYTES} bytes"
         raise ValueError(msg)
 
     text = raw.decode("utf-8-sig")
@@ -142,13 +142,20 @@ def _serialize_entry(entry: MemoryEntry) -> bytes:
         "created_at": entry.created_at,
         "updated_at": entry.updated_at,
         "approved_at": entry.approved_at,
-        "contested_by_task": entry.contested_by_task,
+        "challenges": [challenge.model_dump() for challenge in entry.challenges],
     }
+    if entry.assessment_receipts:
+        frontmatter["assessment_receipts"] = [receipt.model_dump() for receipt in entry.assessment_receipts]
 
     yaml_stream = StringIO()
     _YAML.dump(frontmatter, yaml_stream)
     content = f"---\n{yaml_stream.getvalue()}---\n\n{entry.content}\n"
     return content.encode("utf-8")
+
+
+def serialized_entry_size(entry: MemoryEntry) -> int:
+    """Return the canonical serialized size of one entry in bytes."""
+    return len(_serialize_entry(entry))
 
 
 def write_entry(path: Path, entry: MemoryEntry | dict[str, Any], *, memory_dir: Path) -> None:
@@ -158,9 +165,9 @@ def write_entry(path: Path, entry: MemoryEntry | dict[str, Any], *, memory_dir: 
     validated = MemoryEntry.model_validate(entry)
     serialized = _serialize_entry(validated)
     serialized_size = len(serialized)
-    if serialized_size > _MAX_FILE_SIZE_BYTES:
+    if serialized_size > MAX_ENTRY_FILE_SIZE_BYTES:
         msg = (
-            f"serialized entry exceeds {_MAX_FILE_SIZE_BYTES} bytes "
+            f"serialized entry exceeds {MAX_ENTRY_FILE_SIZE_BYTES} bytes "
             f"(got {serialized_size}); shorten the title, content, or metadata"
         )
         raise ValueError(msg)
