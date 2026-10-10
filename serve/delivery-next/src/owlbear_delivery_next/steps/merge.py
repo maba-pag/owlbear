@@ -126,6 +126,8 @@ def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:  # noqa: C901, PLR091
         return c, StepResult(exit=Exit.DONE, reason=f"PR #{pr.number} was merged in GitHub")
     if (held := queued(ctx, c, pr)) is not None:
         return c, held
+    if (fix := follow.feedback(ctx, c, pr, M)) is not None:  # a comment after CI passed, consented or not
+        return c, fix
     engine.fetch(Path(c.names.worktree), c.names.target)
     if not engine.contains(Path(c.names.worktree), f"origin/{c.names.target}"):
         return c, engine.integrate(c, M, f"origin/{c.names.target}")  # whatever GitHub's mergeable state says

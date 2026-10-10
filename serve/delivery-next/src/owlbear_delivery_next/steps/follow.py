@@ -75,6 +75,17 @@ def missing(ctx: Ctx, c: Change, pr: PullRequest, state: CiState, step: StepKind
     return c, StepResult(exit=Exit.STOP, reason=stop.reason, stop=stop)
 
 
+def feedback(ctx: Ctx, c: Change, pr: PullRequest, step: StepKind) -> StepResult | None:
+    """P3: the first review comment without its task goes back to build with that task; None when all have one."""
+    done = {t.id for t in c.plan.tasks} if c.plan else set()
+    for thread in ctx.gh.read_comments(ctx.repository, pr.number):
+        if f"pr-{thread.id}" not in done:
+            title = f"Address the review comment {thread.id}" + (f" on {thread.path}" if thread.path else "")
+            fix = engine.task(c, title, "pr-feedback", f"{thread.body}\n{thread.url or ''}", f"pr-{thread.id}")
+            return engine.back(ErrorKind.REVIEW, step, thread.id, f"fixing review comment {thread.id}", fix)
+    return None
+
+
 def _reopening(c: Change) -> Question | None:
     return next(
         (
@@ -120,12 +131,8 @@ def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:  # noqa: PLR0911 - on
     c = episode(ctx, c, pr.head_sha, state)
     if state.failed:
         return c, fix_ci(ctx, c, state, F)
-    done = {t.id for t in c.plan.tasks} if c.plan else set()
-    for thread in ctx.gh.read_comments(ctx.repository, pr.number):
-        if f"pr-{thread.id}" not in done:
-            title = f"Address the review comment {thread.id}" + (f" on {thread.path}" if thread.path else "")
-            fix = engine.task(c, title, "pr-feedback", f"{thread.body}\n{thread.url or ''}", f"pr-{thread.id}")
-            return c, engine.back(ErrorKind.REVIEW, F, thread.id, f"fixing review comment {thread.id}", fix)
+    if (fix := feedback(ctx, c, pr, F)) is not None:
+        return c, fix
     if state.missing and not state.running:
         return missing(ctx, c, pr, state)
     if state.running or state.missing:

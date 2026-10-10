@@ -10,6 +10,7 @@ from owlbear_delivery_next.git.remote_git import RemoteGitWriteUnknown, classify
 from owlbear_delivery_next.github import merge_offer
 from owlbear_delivery_next.github.provider import (
     Check,
+    Comment,
     MergeMethod,
     MergeRequest,
     MergeResult,
@@ -175,6 +176,17 @@ def test_the_merge_carries_the_consented_head_as_its_sha_guard(tmp_path, clone):
     _, result = merge.run(ctx(tmp_path, gh), c)
     assert (result.exit, gh.merges[0].expected_head_sha) == (Exit.DONE, A)
     assert merge_request_body(gh.merges[0]) == b'{"merge_method":"squash","sha":"' + A.encode() + b'"}'
+
+
+def test_a_review_comment_after_ci_goes_back_to_build_before_any_merge(tmp_path, clone):
+    gh = FakeGh(pr(head=A))
+    gh.read_comments = lambda _repo, _number: (Comment(id="r9", author="o", body="o: throw on zero"),)
+    c = loop.fold(change(worktree=str(clone)), [ConsentItem(at=NOW, head=A)], NOW)
+    c, result = merge.run(ctx(tmp_path, gh), c)
+    assert (result.exit, result.back_to, result.fix_task.id) == (Exit.BACK, StepKind.BUILD, "pr-r9")
+    assert gh.merges == []
+    after = loop.apply(c, result, NOW)
+    assert (after.step.kind, after.step.task) == (StepKind.BUILD, "pr-r9")
 
 
 class Host:
