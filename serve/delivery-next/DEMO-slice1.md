@@ -293,3 +293,31 @@ token, and the Change was paused before publish so that agent steps kept a valid
 review body, not an inline thread, and the consent-wait gap above remains. Scenario 6 showed adoption only; the
 dispose-and-relaunch branch after a restart is covered by the earlier disposable scenarios and tests. Sandbox
 rules stay unknown (HTTP 403), so branch protection and required checks were not part of these runs.
+
+## First-release flow after the reshape (TD-13 to TD-16, TD-20), 2026-10-10, times UTC
+
+Sandbox `boecht/owlbear-sandbox-protected` (ruleset: required check `test`, PR required, squash only), host at
+`6eaf62558`, model `gpt-6-luna`. Change `add-sign-value-to-the-math-helpers` (c3), brief saved and approved through
+the host API in the owner's role.
+
+| Time | Event |
+| --- | --- |
+| 17:56:49 | Brief review v1 returned a finding (the outcome read as existing state); v2 approved 17:56:56 |
+| 17:57:51 | Plan validator refused `npm --prefix packages/app test` (not a profile check); the planner corrected it |
+| 17:58:19 | Plan review rejected `npm test` without its package directory: a prompt gap, fixed in `6eaf62558` |
+| 17:59:31 | Build done (`8dd3b70`), task and final review passed, PR #8 published 18:00:15 |
+| 18:00:35 | Owner review thread on `math.ts`: "Please add a one-line doc comment above sign() …" |
+| 18:00:52 | Follow turned the thread into Builder task 2/2; fix committed, reviewed, published as `75dc604` 18:02:30 |
+| 18:02:30 | GitHub still showed the old head after the push: a short wait, not a retry |
+| 18:02:33 | Engine replied "… Fixed in 75dc604." with the Delivery marker and resolved the thread |
+| 18:02:45 | Merge gate passed; squash merge `b6cef2b` without a consent question |
+| 18:08:47 | `test` never starts on `main` (CI runs on `pull_request` only): logged after the 5-minute window |
+| 18:08:48 | Pull-back fast-forwarded the checked-out local `main` by six commits; untracked `PROBE.md` untouched |
+
+Credits 2.25 for the whole Change. Defects found by this run and the interrupted one before it, all fixed with tests:
+the Builder response lost after the session (`544e4d42c`), a wrong premise on a review request re-planning the whole
+Change (`1ed4b39f8`), the plan reviewer missing package directories (`6eaf62558`), and a never-started target check
+worded as running (`98be1d6b4`).
+
+Limits: one run; the visual check, overlap display, "ask before merge" and the New Change button were not part of it
+(covered by tests; the button's `code chat` call was checked against `code chat --help` only).
