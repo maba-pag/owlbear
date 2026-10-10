@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import threading
 from contextlib import suppress
 from io import StringIO
 from pathlib import Path
@@ -18,7 +19,15 @@ from owlbear_memory.models import MemoryEntry
 
 _FRONTMATTER_PARTS = 3
 MAX_ENTRY_FILE_SIZE_BYTES = 8192
-_YAML = YAML(typ="safe")
+# ruamel YAML instances hold parser state and are not thread-safe.
+_YAML_LOCAL = threading.local()
+
+
+def _yaml() -> YAML:
+    instance = getattr(_YAML_LOCAL, "instance", None)
+    if instance is None:
+        instance = _YAML_LOCAL.instance = YAML(typ="safe")
+    return instance
 
 
 def _pydantic_error_detail(error: PydanticValidationError) -> str:
@@ -54,7 +63,7 @@ def read_entry(path: Path) -> MemoryEntry | None:
 
 
 def _parse_frontmatter(frontmatter_raw: str) -> dict[str, Any]:
-    data = _YAML.load(frontmatter_raw)
+    data = _yaml().load(frontmatter_raw)
     if data is None:
         return {}
     if not isinstance(data, dict):
@@ -148,7 +157,7 @@ def _serialize_entry(entry: MemoryEntry) -> bytes:
         frontmatter["assessment_receipts"] = [receipt.model_dump() for receipt in entry.assessment_receipts]
 
     yaml_stream = StringIO()
-    _YAML.dump(frontmatter, yaml_stream)
+    _yaml().dump(frontmatter, yaml_stream)
     content = f"---\n{yaml_stream.getvalue()}---\n\n{entry.content}\n"
     return content.encode("utf-8")
 
