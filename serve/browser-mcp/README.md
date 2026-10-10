@@ -65,8 +65,8 @@ values for exact sensitive keys and normalized keys ending in `token`, `secret`,
 become `%5BCORRELATION%5D`. The `code` key is exact-match only, and other query bytes and paths
 remain for document identity. Diagnostic URLs with secret-like paths are replaced in full; MCP
 serialization projects the already-redacted fields.
-For a main-document response from the requested origin, HTTP errors other than 401 and 403 return
-`http_error`. Login-form or authentication-title detection takes precedence for 401/403, returning
+Any main-document status of 400 or above other than 401 and 403 returns `http_error`. Login-form or
+authentication-title detection takes precedence for 401/403, returning
 `authentication_required` before `access_denied`.
 
 ## Configuration

@@ -27,21 +27,6 @@ from owlbear_browser.contract import (
 from owlbear_browser.extractor import extract_content
 
 
-def _normalized_origin(value: str) -> tuple[str, str, int | None] | None:
-    parsed_url = urlparse(value)
-    try:
-        hostname = parsed_url.hostname
-        port = parsed_url.port
-    except ValueError:
-        return None
-    if hostname is None:
-        return None
-    scheme = parsed_url.scheme.lower()
-    if port is None:
-        port = {"http": 80, "https": 443}.get(scheme)
-    return scheme, hostname, port
-
-
 class BrowserContentFetcher:
     """ContentFetcher implementation backed by a Playwright BrowserContext."""
 
@@ -71,7 +56,6 @@ class BrowserContentFetcher:
         """Acquire and validate rendered content for a structured browser request."""
         parsed_request_url = urlparse(request.url)
         requested_origin = (parsed_request_url.scheme, parsed_request_url.netloc)
-        normalized_requested_origin = _normalized_origin(request.url)
         if parsed_request_url.scheme.lower() not in {"http", "https"} or not parsed_request_url.netloc:
             return AcquisitionFailure(
                 AcquisitionStatus.UNSUPPORTED_TARGET,
@@ -112,13 +96,7 @@ class BrowserContentFetcher:
                     AcquisitionStatus.DOWNLOAD_REJECTED,
                     Diagnostics("navigation", {"url": page.url}),
                 )
-            response_origin = _normalized_origin(response.url) if response is not None else None
-            if (
-                response is not None
-                and response.status >= HTTPStatus.BAD_REQUEST
-                and response.status not in {401, 403}
-                and response_origin == normalized_requested_origin
-            ):
+            if response is not None and response.status >= HTTPStatus.BAD_REQUEST and response.status not in {401, 403}:
                 return AcquisitionFailure(
                     AcquisitionStatus.HTTP_ERROR,
                     Diagnostics("navigation", {"response_status": response.status}),

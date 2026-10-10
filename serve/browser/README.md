@@ -68,8 +68,8 @@ for that contract.
 
 Authentication-required failures retain the page for a retry within the same fetcher. Callers must
 provide their own user interaction and cancellation policy; the package does not claim a complete
-managed-SSO workflow or concurrent session ownership model. For a main-document response from the
-requested origin, HTTP errors other than 401 and 403 return `http_error`. A 401 or 403 page with a
+managed-SSO workflow or concurrent session ownership model. Any main-document status of 400 or above
+other than 401 and 403 returns `http_error`. A 401 or 403 page with a
 login-form or authentication-title signal returns `authentication_required` before the fallback
 `access_denied` classification. See the [acquisition tests](tests/test_acquisition.py) for synthetic
 acquisition behavior and the [Browser-to-Knowledge vertical test](../../tests/test_browser_knowledge_vertical.py)
