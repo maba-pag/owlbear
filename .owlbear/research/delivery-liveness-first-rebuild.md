@@ -7,7 +7,7 @@
 > reliably makes progress — possibly as a re-implementation with selective reuse?
 > **Status:** Analysis and recommended roadmap, revision 2 (2026-10-10): corrected after six
 > independent challenges and re-weighted by the user toward end-to-end design and failure modes
-> (§1). Decided by the user: TD-1 to TD-4 (§3.8). Every other recommendation is `autonomous` until
+> (§1). Decided by the user: TD-1 to TD-8 (§3.8). Every other recommendation is `autonomous` until
 > the user decides it.
 
 ## 1. Context and Question
@@ -206,6 +206,10 @@ choices and user choices alike as user decisions. This plan therefore treats eve
 | TD-2 | The open Changes continue on the old engine in parallel until finished; their failures feed the catalogue | `decided`: "i do want to finish the open changes … i will keep them going in parallel" | 2026-10-10 |
 | TD-3 | Proof over test volume: automated tests are build artifacts and stay minimal; no tests of agent prose wording; structural checks of agent definitions remain. The concrete policy (P8) and budget are set in R4 | `decided`: "proof are important. tests are not. tests are build artifacts"; operationalization `autonomous` | 2026-10-10 |
 | TD-4 | Stay on GitHub Copilot | `decided`: "we are bound to github copilot, so we cant just switch platforms" | 2026-10-09 |
+| TD-5 | Local Copilot CLI and Copilot SDK use with the user's seat is allowed by the employer; probe tools may be installed (CLI user-level, SDK in an isolated environment) | `decided` (answered question) | 2026-10-10 |
+| TD-6 | Sandbox repository for R8 and M4 under `maba-pag`, or under `boecht` when that is the signed-in account | `decided` (answered question) | 2026-10-10 |
+| TD-7 | Research commits are pushed directly to `dev` | `decided` (answered question) | 2026-10-10 |
+| TD-8 | Overnight work proceeds as far as possible, without a Copilot usage limit | `decided` (answered question) | 2026-10-10 |
 
 ### 3.9 Platform migration interplay
 
@@ -260,7 +264,7 @@ row B7); continuation after the window closes (row X1); **how the runtime confir
 and the commands it started have ended** (DR10), and what the user can do when it cannot; dynamic
 workflows through the SDK; PR
 creation and agent-merge behavior; **billing identity, the cost of one Change, and behavior when
-quota runs out**; **employer authorization** for local SDK or CLI use, and company policy for plugins,
+quota runs out**; employer authorization for local SDK or CLI use (confirmed, TD-5), and company policy for plugins,
 extensions and experimental flags.
 
 **Risks.** Preview features may change or disappear; mitigate by depending only on R8-proven,
