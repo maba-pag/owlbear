@@ -192,6 +192,8 @@ most projects), **O** occasional, **R** rare. Rows are ordered by likelihood wit
 | B18 | Commit identity or signer unavailable or locked (GPG, keychain, hardware key) | O | Commit or signing error | ask: the exact unlock or setup action outside chat; signing is never disabled |
 | B19 | Workspace or Change branch missing on resume | O | Workspace and ref observation | Recreate from the branch and preserved work; stop if preservation cannot be confirmed |
 | B20 | LFS objects or submodules not present in a new workspace | O | Profile flags them; pointer files or empty submodules after preparation | Hydrate during preparation; failure is handled as S3 |
+| B21 | A review or fix task sees changes that are not the Change's own, because its diff base is a stale local target (found in M4) | O | Diff base is `origin/<target>` after a fetch | Design rule; a wrong-base deletion is then caught by review and repaired as a task |
+| B22 | An agent asks again for something the owner already answered (found in M4) | C | — | Prevented: every agent prompt carries the owner's answers for the Change |
 
 **Integrate with the moving target**
 
@@ -244,6 +246,7 @@ most projects), **O** occasional, **R** rare. Rows are ordered by likelihood wit
 | X6 | User wants to pause, abandon or split a Change | O | Status-view action or chat | Handled as D6 for in-flight work; pause is a stop with resume; abandon closes the PR and keeps the branch; split is back to J2 |
 | X7 | Copilot or VS Code update changes agent format, tool approval or model names | O | Readiness check or step error | stop with version information |
 | X8 | Agent skips a step or edits state directly | O | Order is enforced in code; agents change state only through their one result tool | Prevented by design (P2) |
+| X9 | The termination scan counts unrelated system processes as leftovers (found in M4 on macOS) | C | Scan limited to the step's worktree and to processes started after the step began | Design rule; real leftovers still block the next writer |
 
 **Rare, with generic handling only.** No dedicated machinery: a corrupted or half-written state file
 (atomic writes keep the previous version; stop with "restore previous"), a corrupted git repository,
