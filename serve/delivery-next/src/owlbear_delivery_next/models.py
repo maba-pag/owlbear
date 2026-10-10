@@ -209,6 +209,7 @@ class Step(Record):
     mode: str | None = None
     attempt: int = 1
     started_at: datetime | None = None
+    session: str | None = None
 
 
 class Outcome(Record):
