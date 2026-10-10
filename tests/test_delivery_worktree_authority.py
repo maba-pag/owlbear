@@ -12,7 +12,15 @@ from typing import NamedTuple
 from owlbear_delivery import ChangeWorkspaceManager, PortfolioCoordinator
 
 _REPO_ROOT = Path(__file__).parent.parent
-_SOURCE_ROOTS = tuple(sorted(path for path in (_REPO_ROOT / "serve").glob("*/src") if path.is_dir()))
+# The new core has its own design rules; these old-engine invariants are deleted at cutover.
+_NEW_CORE_PACKAGES = frozenset({"delivery-next"})
+_SOURCE_ROOTS = tuple(
+    sorted(
+        path
+        for path in (_REPO_ROOT / "serve").glob("*/src")
+        if path.is_dir() and path.parent.name not in _NEW_CORE_PACKAGES
+    )
+)
 _RETIRED_PRODUCER_SYMBOLS = frozenset(
     {
         ("TargetMCPAdapter", "list_integration_ready_changes"),
