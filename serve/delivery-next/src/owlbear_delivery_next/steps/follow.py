@@ -165,7 +165,7 @@ def _settle(
     s = replace(s, rec=rec)
     where = s.item.url or s.item.id
     if conv.reply_missing(s, items):
-        return c, engine.pending(Waiting.MERGE_QUEUE, f"waiting for Delivery's reply on {where}", ctx.poll())
+        return c, engine.pending(Waiting.GITHUB, f"waiting for Delivery's reply on {where}", ctx.poll())
     if s.item.kind == "thread" and s.item.resolved:
         rec.resolved = True
     if not conv.unresolved(s):
@@ -176,7 +176,7 @@ def _settle(
         if ctx.gh.resolve_thread(s.item.id):
             next(h for h in c.handled if h.task == rec.task).resolved = True
             return c, None
-        return c, engine.pending(Waiting.MERGE_QUEUE, f"waiting for GitHub to show {where} resolved", ctx.poll())
+        return c, engine.pending(Waiting.GITHUB, f"waiting for GitHub to show {where} resolved", ctx.poll())
     text = f"Resolving the review thread {where} did not take effect: resolve it in GitHub"
     return c, engine.ask(step, text, cause, engine.continue_or_pause(step))
 

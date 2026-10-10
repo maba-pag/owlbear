@@ -23,7 +23,7 @@ from owlbear_delivery_next import api, loop, sdk_adapter, setup, tools
 from owlbear_delivery_next.models import ErrorKind, Exit, Profile, Record, StepKind, Stop
 from owlbear_delivery_next.process_probe import ProcessTableWorktreeProbe, WorktreeProcessScanError
 from owlbear_delivery_next.status import Activity
-from owlbear_delivery_next.steps import check, engine, worktree
+from owlbear_delivery_next.steps import check, engine, pullback, worktree
 from owlbear_delivery_next.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.store import LockHeldError, Store, StoreError
 
@@ -188,6 +188,7 @@ class Host:
             c, _ = self.store.fold(lock, slug, now, state, moved=moved)
             if moved:
                 self.pr_seen.pop(slug, None)  # not applied again to the merge step's next offer
+            c = self._pull(lock, c, now)
             if rec and disappeared(prior, rec, now) and c.step == prior.step:
                 c = loop.apply(c, gone(c.step.kind), now)  # its outcome postdates the runner: charged once
                 self.say(f"{slug}: runner {rec.pid} ended without recording an exit")
@@ -211,6 +212,15 @@ class Host:
                 c, step = self._environment(lock, c, now), None
             self.store.write(lock, c)
             return step is not None
+
+    def _pull(self, lock: Lock, c: Change, now: datetime) -> Change:
+        """Run pull-back again when the owner asked to Pull, and record its result."""
+        if not c.pull_requested:
+            return c
+        c.pullback, c.pull_requested = pullback.run(self.repo, c.names.target, now), None
+        self.store.log(lock, c.slug, {"event": "pullback", "at": now.isoformat(), **c.pullback.model_dump(mode="json")})
+        self.say(f"{c.slug}: pull-back {c.pullback.state} {c.pullback.reason}".rstrip())
+        return c
 
     def _mark(self, c: Change, found: Found | None, now: datetime) -> None:
         stop = _block(found, now)

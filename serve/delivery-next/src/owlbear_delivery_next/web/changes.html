@@ -157,6 +157,14 @@ async function showDetail() {
   const pause = el("button", d.paused ? "Resume" : "Pause", { type: "button" });
   pause.onclick = () => send("/intent", { intent: d.paused ? "resume" : "pause" });
   parts.push(pause);
+  if (d.pullback) {
+    parts.push(el("p", `Pull-back: ${d.pullback.state}${d.pullback.reason ? ` (${d.pullback.reason})` : ""}`));
+    if (d.pullback.state === "behind") {
+      const pull = el("button", "Pull", { type: "button" });
+      pull.onclick = () => send("/pull", {});
+      parts.push(pull);
+    }
+  }
   for (const check of d.checks.filter((c) => c.waiting)) parts.push(checkForm(check));
   if (d.step === "shape" && d.brief.approved !== d.brief.version) {
     const list = el("ul");
@@ -181,7 +189,8 @@ async function refresh() {
   try {
     const rows = (await call("/changes")).map((c) => {
       const row = el("tr", undefined, { class: "row", tabindex: "0" });
-      row.append(el("td", c.slug), el("td", c.line), el("td", c.action || "—"));
+      const behind = c.pullback && c.pullback.state === "behind" ? ` · ${c.pullback.reason}` : "";
+      row.append(el("td", c.slug), el("td", c.line + behind), el("td", c.action || "—"));
       row.onclick = row.onkeydown = (event) => {
         if (event.type === "click" || event.key === "Enter") { selected = c.slug; refresh(); }
       };

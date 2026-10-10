@@ -8,14 +8,16 @@ import json
 import subprocess
 import tarfile
 from dataclasses import dataclass
+from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next import profile
+from owlbear_delivery_next import loop, profile
 from owlbear_delivery_next.git.remote_git import run_remote_git
+from owlbear_delivery_next.github.provider import classify_checks
 from owlbear_delivery_next.loop import StepResult
-from owlbear_delivery_next.models import ErrorKind, Exit, Stop
-from owlbear_delivery_next.steps import engine, worktree
+from owlbear_delivery_next.models import Episode, ErrorKind, Exit, StepKind, Stop, Waiting
+from owlbear_delivery_next.steps import engine, pullback, worktree
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -136,9 +138,37 @@ def _keep(ctx: Ctx, path: Path, c: Change, pr: PullRequest | None) -> list[str]:
     return keep
 
 
+def target_check(ctx: Ctx, c: Change, pr: PullRequest | None) -> tuple[Change, StepResult | None]:
+    """Watch the required and declared checks on the merge commit within the window; a failure asks the owner."""
+    sha = pr.merge_commit_sha if pr and pr.merged else None
+    if not sha or c.step.mode == "abandon" or any(q.cause == loop.TARGET and q.answer for q in c.questions):
+        return c, None
+    declared, required = profile.names(ctx.profile, profile.DECLARED), profile.names(ctx.profile, profile.REQUIRED)
+    state = classify_checks(ctx.gh.observe_commit_checks(ctx.repository, sha), declared, required)
+    target = c.names.target
+    if state.failed:
+        failed = state.failed[0]
+        where = f"{target} ({failed.url or sha[:7]})"
+        text = f"The merged result fails {failed.name} on {where}. Start a new Change to fix it."
+        return c, engine.ask(StepKind.CLEANUP, text, loop.TARGET, engine.continue_or_pause(StepKind.CLEANUP))
+    if state.running or state.missing:
+        if c.missing is None or c.missing.head != sha:
+            c.missing = Episode(head=sha, since=ctx.now)
+        window = timedelta(seconds=int(profile.value(ctx.profile, profile.WINDOW, "300")))
+        if ctx.now - c.missing.since < window:
+            reason = f"{len(state.running) + len(state.missing)} of {state.expected} checks running on {target}"
+            return c, engine.pending(Waiting.CI, reason, ctx.poll())
+        ctx.log(c.slug, "target-checks-unfinished", sha=sha, running=[*state.running, *state.missing])
+    c.missing = None
+    return c, None
+
+
 def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:
-    """Close an abandoned PR, preserve what the worktree alone holds, remove it, and write the history line."""
+    """Check the merged result, close an abandoned PR, preserve what the worktree alone holds, remove it, pull back."""
     pr = ctx.gh.read_pull_request(ctx.repository, c.names.pr) if c.names.pr else None
+    c, held = target_check(ctx, c, pr)
+    if held is not None:
+        return c, held
     if c.step.mode == "abandon" and pr and pr.state == "open":
         ctx.gh.close_pull_request(ctx.repository, pr.number)
     path, saved = Path(c.names.worktree), []
@@ -163,5 +193,8 @@ def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:
     line |= {"merge": pr.merge_commit_sha if pr else None, "preserved": [str(s) for s in saved]}
     with (ctx.store.root / "history.jsonl").open("a", encoding="utf-8") as out:
         out.write(json.dumps(line) + "\n")
+    if pr and pr.merged and c.step.mode != "abandon":
+        c.pullback = pullback.run(ctx.repo, c.names.target, ctx.now)
+        ctx.log(c.slug, "pullback", **c.pullback.model_dump(mode="json", exclude={"at"}))
     reason = f"worktree removed; {len(saved)} preservation file(s)"
     return c, StepResult(exit=Exit.DONE, reason=reason, preserved=[str(s) for s in saved])

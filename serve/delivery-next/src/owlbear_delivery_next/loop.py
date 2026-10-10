@@ -24,6 +24,7 @@ from owlbear_delivery_next.models import (
     Option,
     Outcome,
     Plan,
+    PullItem,
     Question,
     Record,
     Recovery,
@@ -59,7 +60,7 @@ EXITS: dict[StepKind, frozenset[Exit]] = {
     StepKind.FOLLOW: frozenset(Exit),
     StepKind.CHECK: frozenset(Exit),
     StepKind.MERGE: frozenset(Exit),
-    StepKind.CLEANUP: frozenset({Exit.DONE, Exit.RETRY, Exit.STOP}),
+    StepKind.CLEANUP: frozenset({Exit.DONE, Exit.RETRY, Exit.STOP, Exit.ASK, Exit.PENDING}),
 }
 BACK: dict[StepKind, frozenset[StepKind]] = {
     StepKind.PLAN: frozenset({StepKind.SHAPE}),
@@ -69,10 +70,11 @@ BACK: dict[StepKind, frozenset[StepKind]] = {
     StepKind.PUBLISH: frozenset({StepKind.INTEGRATE, StepKind.BUILD, StepKind.REVIEW}),
     StepKind.FOLLOW: frozenset({StepKind.BUILD, StepKind.PUBLISH}),  # publish: a reviewed fix not yet pushed
     StepKind.CHECK: frozenset({StepKind.BUILD}),
-    StepKind.MERGE: frozenset({StepKind.INTEGRATE, StepKind.BUILD, StepKind.PUBLISH}),
+    StepKind.MERGE: frozenset({StepKind.INTEGRATE, StepKind.BUILD, StepKind.PUBLISH, StepKind.FOLLOW}),
 }
 PR_CLOSED = "gate:merge:pr-closed"
 CONSENT = "gate:merge:consent"
+TARGET = "checks:cleanup:target"  # the merged result fails a check on the target
 
 
 class StepResult(Record):
@@ -257,13 +259,18 @@ def overlap_ask(planned: StepResult, others: Mapping[str, Iterable[str]]) -> Ste
 def next_step(c: Change, now: datetime) -> Step | None:
     """Return the step a runner should run now, or None while waiting, paused or finished."""
     o = c.outcome
-    if c.finished_at or (c.intent.paused_at and c.step.kind != StepKind.CLEANUP):
+    if c.finished_at or (c.intent.paused_at and (c.step.kind != StepKind.CLEANUP or _target_paused(c))):
         return None
     if o is None or o.exit in {Exit.DONE, Exit.BACK}:
         return c.step
     if o.exit in {Exit.ASK, Exit.STOP} or o.who == "you":
         return None
     return None if o.wake_at and o.wake_at > now else c.step
+
+
+def _target_paused(c: Change) -> bool:
+    """Cleanup runs while paused (abandon) unless the owner paused it at a failing target check."""
+    return any(q.cause == TARGET and q.answer and q.answer.option == "pause" for q in c.questions)
 
 
 def schedule(
@@ -324,6 +331,8 @@ def fold(change: Change, items: Iterable[InboxItem], now: datetime) -> Change:  
                     c.outcome = None
             case IntentItem():
                 _intent(c, item)
+            case PullItem():
+                c.pull_requested = item.at
             case _:
                 pass
     return c

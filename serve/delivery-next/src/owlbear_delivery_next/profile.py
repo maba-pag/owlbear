@@ -26,10 +26,11 @@ if TYPE_CHECKING:
 HOST, REPO, DEFAULT = "github:host", "github:repository", "github:default-branch"
 METHODS, PUSH = "github:merge-methods", "github:can-push"
 RULES, REQUIRED, QUEUE = "github:rules", "github:required-checks", "github:merge-queue"
+STRICT, RESOLUTION = "github:strict-checks", "github:conversation-resolution"
 WORKFLOWS, DECLARED = "ci:workflows", "ci:declared"
 METHOD, DELETE, HOOKS = "merge:method", "cleanup:delete-remote-branch", "git:pre-push-hook"
-POLL, WINDOW = "poll:ci-seconds", "ci:start-window-seconds"
-SETTINGS = {METHOD: "", DELETE: "no", POLL: "20", WINDOW: "300"}  # owner settings; kept across re-detection
+POLL, WINDOW, ASK = "poll:ci-seconds", "ci:start-window-seconds", "merge:ask-before"
+SETTINGS = {METHOD: "", DELETE: "no", POLL: "20", WINDOW: "300", ASK: "no"}  # owner settings; kept across re-detection
 CONFIRMED = "owner confirmed"
 _PREFERRED = (MergeMethod.SQUASH, MergeMethod.MERGE, MergeMethod.REBASE)
 CI_EVENTS = frozenset({"pull_request", "pull_request_target", "merge_group"})
@@ -171,11 +172,13 @@ def _hook(repo: Path) -> ProfileEntry:
 def rule_entries(rules: Rules) -> dict[str, ProfileEntry]:
     """Profile entries of effective rules; an HTTP 403 leaves every one unknown with GitHub's message."""
     if rules.state == "unknown":
-        return {k: _entry("unknown", "", rules.evidence) for k in (RULES, REQUIRED, QUEUE)}
+        return {k: _entry("unknown", "", rules.evidence) for k in (RULES, REQUIRED, QUEUE, STRICT, RESOLUTION)}
     return {
         RULES: _entry("known", ", ".join(rules.types) or "none", rules.evidence),
         REQUIRED: _entry("known", ", ".join(rules.required_checks) or "none", rules.evidence),
         QUEUE: _entry("known", "yes" if rules.queue_required else "no", rules.evidence),
+        STRICT: _entry("known", "yes" if rules.strict else "no", rules.evidence),
+        RESOLUTION: _entry("known", "yes" if rules.conversation_resolution else "no", rules.evidence),
     }
 
 

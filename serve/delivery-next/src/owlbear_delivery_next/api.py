@@ -28,6 +28,7 @@ from owlbear_delivery_next.models import (
     Outcome,
     PersonCheck,
     Profile,
+    PullItem,
     StepKind,
     Waiting,
 )
@@ -123,6 +124,7 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
     s = status(c, act, now)
     out = {"slug": slug, "handle": c.handle, "step": c.step.kind, "line": s.line, "action": s.action, "actor": s.actor}
     out["spend"] = c.spend.model_dump()
+    out["pullback"] = c.pullback.model_dump(mode="json") if c.pullback else None
     if q := loop.open_question(c):
         options = [o.model_dump(include={"id", "label"}) for o in q.options]
         where = "chat" if loop.ordinary(q) else "changes-page"
@@ -325,6 +327,11 @@ def create_app(store: Store, token: str, host: Host) -> FastAPI:  # noqa: C901, 
     def intent(slug: str, body: IntentBody) -> dict[str, str]:
         read(slug)
         return put(slug, IntentItem(at=datetime.now(UTC), intent=body.intent, text=body.text))
+
+    @router.post("/changes/{slug}/pull")
+    def pull(slug: str) -> dict[str, str]:
+        read(slug)
+        return put(slug, PullItem(at=datetime.now(UTC)))
 
     app.include_router(router)
     return app

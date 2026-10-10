@@ -73,7 +73,7 @@ class Waiting(StrEnum):
     REVIEWER = "reviewer"
     OWNER_ACTION = "owner-action"
     PERSON_CHECK = "person-check"
-    MERGE_QUEUE = "merge-queue"
+    GITHUB = "github"
     NETWORK = "network"
 
 
@@ -290,13 +290,21 @@ class Budgets(Record):
 
 
 class MergeConsent(Record):
-    """Consent to merge one exact head; void when the PR head differs. ``queued_at``: submitted to the merge queue."""
+    """Consent to merge one exact head; void when the PR head differs."""
 
     head: str
     at: datetime
     channel: Channel = "status-view"
     delta: str = ""
-    queued_at: datetime | None = None
+
+
+class Pullback(Record):
+    """The last attempt to bring the local target branch up to the merged remote one."""
+
+    state: Literal["updated", "behind", "skipped"]
+    reason: str = ""
+    worktree: str = ""
+    at: datetime
 
 
 class Episode(Record):
@@ -387,6 +395,8 @@ class Change(Record):
     names: Names = Field(default_factory=Names)
     spend: Spend = Field(default_factory=Spend)
     finished_at: datetime | None = None
+    pullback: Pullback | None = None
+    pull_requested: datetime | None = None  # the owner asked to pull the target again
     inbox_acked: list[str] = Field(default_factory=list)
     handled: list[Handling] = Field(default_factory=list)  # pull-request conversation items, oldest first
 
@@ -463,6 +473,13 @@ class IntentItem(_Item):
     text: str = ""
 
 
+class PullItem(_Item):
+    """Pull the merged target into the local target branch again."""
+
+    kind: Literal["pull"] = "pull"
+
+
 type InboxItem = Annotated[
-    BriefApproval | AnswerItem | CheckResult | Recovery | ConsentItem | IntentItem, Field(discriminator="kind")
+    BriefApproval | AnswerItem | CheckResult | Recovery | ConsentItem | IntentItem | PullItem,
+    Field(discriminator="kind"),
 ]

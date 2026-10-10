@@ -203,6 +203,15 @@ def install_skill(home: Path) -> str:
     return f"chat skill installed for you only (not tracked): {path}"
 
 
+def recommendations(prof: Profile) -> list[str]:
+    """Branch rules worth turning on for automatic merging; advice only, never blocking."""
+    tips = {
+        profile.STRICT: "turn on 'Require branches to be up to date before merging' for the target branch",
+        profile.RESOLUTION: "turn on 'Require conversation resolution before merging' for the target branch",
+    }
+    return [tip for key, tip in tips.items() if profile.value(prof, key) == "no"]
+
+
 def render(prof: Profile) -> str:
     """The profile grouped by known, unknown and unsupported, with evidence."""
     lines = [f"Project profile v{prof.version}"]
@@ -302,6 +311,8 @@ def run(repo: Path, confirms: list[tuple[str, str]], *, yes: bool, ask: Ask = as
     for key, value in confirms:
         prof = profile.confirm(prof, key, value, datetime.now(UTC))
     say(render(prof))
+    for tip in recommendations(prof):
+        say(f"TIP {tip}")
     prof, unknown = confirm(prof, ask, yes=yes)
     if unknown:
         hint = "Confirm with --confirm KEY=VALUE; unknown rules keep merging human-assisted"

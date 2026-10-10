@@ -104,8 +104,9 @@ class Rules(_Model):
     evidence: str
     types: tuple[str, ...] = ()
     required_checks: tuple[str, ...] = ()
-    queue_required: bool = False
+    queue_required: bool = False  # detected only: the merge queue is not supported (TD-22)
     strict: bool = False
+    conversation_resolution: bool = False
 
 
 class ThreadComment(_Model):
@@ -134,39 +135,25 @@ class ConversationItem(_Model):
     comments: tuple[ThreadComment, ...] = ()
 
 
-class QueueEntry(_Model):
-    """A pull request's merge queue membership and its latest add and removal events."""
-
-    queued: bool
-    added_at: datetime | None = None
-    removed_at: datetime | None = None
-    reason: str = ""
-
-
 class MergeRequest(_Model):
-    """One exact-head merge; ``queue`` submits through the merge API instead of the direct merge call."""
+    """One exact-head direct merge."""
 
     repository: str = Field(pattern=_REPOSITORY)
     number: int = Field(gt=0)
     expected_head_sha: str = Field(pattern=_SHA)
     method: MergeMethod
-    queue: bool = False
 
 
 def merge_request_body(request: MergeRequest) -> bytes:
-    """Return the JSON body: ``sha`` guards the head; a queued submission names no merge action and no bypass."""
+    """Return the JSON body: ``sha`` guards the head."""
     body: dict[str, object] = {"merge_method": request.method.value, "sha": request.expected_head_sha}
-    if request.queue:
-        body["bypass_rules"] = False
     return json.dumps(body, sort_keys=True, separators=(",", ":")).encode()
 
 
 class MergeStatus(StrEnum):
-    """Outcome of one merge submission; ``enqueued`` is pending, never a refusal."""
+    """Outcome of one merge submission."""
 
     MERGED = "merged"
-    ENQUEUED = "enqueued"
-    PENDING = "pending"
     REFUSED = "refused"
     UNKNOWN = "unknown"
 
@@ -267,12 +254,16 @@ class Provider(Protocol):
         """Reopen one closed pull request."""
         ...
 
-    def read_queue(self, repository: str, number: int) -> QueueEntry:
-        """Read the pull request's merge queue entry and its latest add and removal events."""
-        ...
-
     def observe_checks(self, repository: str, number: int, head: str) -> tuple[Check, ...]:
         """Observe check runs and commit statuses at one exact head."""
+        ...
+
+    def observe_commit_checks(self, repository: str, sha: str) -> tuple[Check, ...]:
+        """Observe check runs and commit statuses on one commit outside any pull request."""
+        ...
+
+    def review_request(self, repository: str, number: int) -> tuple[str | None, tuple[str, ...]]:
+        """GitHub's review decision for the PR (e.g. ``REVIEW_REQUIRED``) and its requested reviewers."""
         ...
 
     def viewer(self) -> str:

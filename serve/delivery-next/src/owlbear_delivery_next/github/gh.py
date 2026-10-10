@@ -22,7 +22,6 @@ from owlbear_delivery_next.github.provider import (
     MergeStatus,
     ProviderError,
     PullRequest,
-    QueueEntry,
     Refusal,
     Repository,
     Rules,
@@ -67,11 +66,19 @@ _CHECKS = """query Checks($owner: String!, $name: String!, $number: Int!) {
         ... on StatusContext { context state targetUrl isRequired(pullRequestNumber: $number) }
       } } } } } } } }
 }"""
-_QUEUE = """query Queue($owner: String!, $name: String!, $number: Int!) {
-  repository(owner: $owner, name: $name) { pullRequest(number: $number) { mergeQueueEntry { state }
-    timelineItems(last: 20, itemTypes: [ADDED_TO_MERGE_QUEUE_EVENT, REMOVED_FROM_MERGE_QUEUE_EVENT]) {
-      nodes { __typename ... on AddedToMergeQueueEvent { createdAt }
-              ... on RemovedFromMergeQueueEvent { createdAt reason } } } } }
+_COMMIT_CHECKS = """query CommitChecks($owner: String!, $name: String!, $oid: GitObjectID!) {
+  repository(owner: $owner, name: $name) { object(oid: $oid) { ... on Commit { oid
+    statusCheckRollup { contexts(first: 100) {
+      pageInfo { hasNextPage }
+      nodes { __typename
+        ... on CheckRun { name status conclusion detailsUrl completedAt databaseId }
+        ... on StatusContext { context state targetUrl }
+      } } } } } }
+}"""
+_REVIEWS = """query Reviews($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) { pullRequest(number: $number) { reviewDecision
+    reviewRequests(first: 20) { nodes { requestedReviewer {
+      __typename ... on User { login } ... on Team { slug } } } } } }
 }"""
 _CONVERSATION = """query Conversation($owner: String!, $name: String!, $number: Int!,
     $c: String, $r: String, $t: String, $wc: Boolean!, $wr: Boolean!, $wt: Boolean!) {
@@ -314,9 +321,16 @@ class GhProvider:
             params = [r.get("parameters") or {} for r in rules if r["type"] == "required_status_checks"]
             contexts = [c["context"] for p in params for c in p.get("required_status_checks", [])]
             strict = any(p.get("strict_required_status_checks_policy") for p in params)
+            resolution = any(
+                (r.get("parameters") or {}).get("required_review_thread_resolution")
+                for r in rules
+                if r["type"] == "pull_request"
+            )
             if isinstance(classic, dict) and (rsc := classic.get("required_status_checks")):
                 contexts += rsc.get("contexts") or []
                 strict = strict or bool(rsc.get("strict"))
+            if isinstance(classic, dict):
+                resolution = resolution or bool((classic.get("required_conversation_resolution") or {}).get("enabled"))
         except (KeyError, TypeError, AttributeError) as exc:
             _invalid(op, "GitHub returned invalid branch rules", exc)
         protection = "none" if isinstance(classic, Missing) else "set"
@@ -328,6 +342,7 @@ class GhProvider:
             required_checks=tuple(sorted(set(contexts))),
             queue_required="merge_queue" in types,
             strict=strict,
+            conversation_resolution=resolution,
         )
 
     def find_pull_request(self, repository: str, head: str, base: str) -> PullRequest | None:
@@ -380,23 +395,31 @@ class GhProvider:
         endpoint = f"{_repo(repository)}/pulls/{number}"
         self._api("reopen_pull_request", "PATCH", endpoint, body={"state": "open"}, write=True)
 
-    def read_queue(self, repository: str, number: int) -> QueueEntry:
-        """Read the merge queue entry and the latest add and removal events, with the removal's reason."""
-        op, (owner, name) = "read_queue", repository.split("/", 1)
-        body = {"query": _QUEUE, "variables": {"owner": owner, "name": name, "number": number}}
-        result = self._gh(op, ("api", "--hostname", self.host, "graphql", "--input", "-"), body=body)
+    def observe_commit_checks(self, repository: str, sha: str) -> tuple[Check, ...]:
+        """Observe check runs and commit statuses on one commit; outside a PR no check is marked required."""
+        op, (owner, name) = "observe_commit_checks", repository.split("/", 1)
+        result = self._graphql(op, _COMMIT_CHECKS, {"owner": owner, "name": name, "oid": sha})
+        try:
+            rollup = result["data"]["repository"]["object"]["statusCheckRollup"]
+        except (KeyError, TypeError) as exc:
+            _invalid(op, "GitHub returned an invalid check rollup", exc)
+        if rollup is None:
+            return ()
+        if rollup["contexts"]["pageInfo"]["hasNextPage"]:
+            _invalid(op, f"more than {_MAX_CHECKS} checks")
+        return tuple(_check({**n, "isRequired": False}, op) for n in rollup["contexts"]["nodes"])
+
+    def review_request(self, repository: str, number: int) -> tuple[str | None, tuple[str, ...]]:
+        """Read GitHub's review decision and the requested reviewers (users by login, teams by slug)."""
+        op, (owner, name) = "review_request", repository.split("/", 1)
+        result = self._graphql(op, _REVIEWS, {"owner": owner, "name": name, "number": number})
         try:
             pr = result["data"]["repository"]["pullRequest"]
-            events = {n["__typename"]: n for n in pr["timelineItems"]["nodes"]}  # the latest of each kind
-            added, removed = events.get("AddedToMergeQueueEvent"), events.get("RemovedFromMergeQueueEvent")
-            return QueueEntry(
-                queued=pr["mergeQueueEntry"] is not None,
-                added_at=added["createdAt"] if added else None,
-                removed_at=removed["createdAt"] if removed else None,
-                reason=bounded(removed.get("reason")) or "" if removed else "",
-            )
-        except (KeyError, TypeError, ValidationError) as exc:
-            _invalid(op, "GitHub returned an invalid merge queue entry", exc)
+            who = [n["requestedReviewer"] or {} for n in pr["reviewRequests"]["nodes"]]
+            names = tuple(r.get("login") or r.get("slug") for r in who if r.get("login") or r.get("slug"))
+            return pr["reviewDecision"], names
+        except (KeyError, TypeError, AttributeError) as exc:
+            _invalid(op, "GitHub returned an invalid review request", exc)
 
     def observe_checks(self, repository: str, number: int, head: str) -> tuple[Check, ...]:
         """Observe check runs and commit statuses at one exact head; a moved head is a conflict."""
@@ -522,8 +545,8 @@ class GhProvider:
             _invalid("compare", "GitHub returned an invalid comparison", exc)
 
     def request_merge(self, request: MergeRequest) -> MergeResult:
-        """Merge with ``sha`` set to the consented head; a queued submission maps ``enqueued`` to pending."""
-        endpoint = f"{_repo(request.repository)}/pulls/{request.number}/{'merge-async' if request.queue else 'merge'}"
+        """Merge directly with ``sha`` set to the gated head."""
+        endpoint = f"{_repo(request.repository)}/pulls/{request.number}/merge"
         args = ("api", "--method", "PUT", "--hostname", self.host, "-H", f"X-GitHub-Api-Version: {_API_VERSION}")
         try:
             done = self.runner(
@@ -538,34 +561,19 @@ class GhProvider:
         message = bounded(payload.get("message") if isinstance(payload, dict) else None)
         if done.returncode != 0:
             status = _status(done.stderr)
-            if request.queue and status == _CONFLICT:
-                return MergeResult(status=MergeStatus.PENDING, message=message)
             reason = _MERGE_REFUSALS.get(status or 0)
             if reason is None:
                 return MergeResult(status=MergeStatus.UNKNOWN, message=message or _message(done.stderr))
             return MergeResult(status=MergeStatus.REFUSED, refusal=reason, message=message)
-        return self._merged(payload, request, message)
+        return self._merged(payload, message)
 
     @staticmethod
-    def _merged(payload: Json, request: MergeRequest, message: str | None) -> MergeResult:  # noqa: PLR0911 - per status
+    def _merged(payload: Json, message: str | None) -> MergeResult:
         if not isinstance(payload, dict):
             return MergeResult(status=MergeStatus.UNKNOWN, message="no merge response")
-        if not request.queue:
-            if payload.get("merged") is True and isinstance(payload.get("sha"), str):
-                return MergeResult(status=MergeStatus.MERGED, sha=payload["sha"], message=message)
-            return MergeResult(status=MergeStatus.UNKNOWN, message=message)
-        details = payload.get("details") or {}
-        match payload.get("status"):
-            case "merged" if isinstance(details.get("sha"), str):
-                return MergeResult(status=MergeStatus.MERGED, sha=details["sha"], message=message)
-            case "enqueued":
-                return MergeResult(status=MergeStatus.ENQUEUED, message=message)
-            case "pending":
-                return MergeResult(status=MergeStatus.PENDING, message=message)
-            case "failed":
-                return MergeResult(status=MergeStatus.REFUSED, refusal=Refusal.RULES_FAILED, message=message)
-            case _:
-                return MergeResult(status=MergeStatus.UNKNOWN, message=message)
+        if payload.get("merged") is True and isinstance(payload.get("sha"), str):
+            return MergeResult(status=MergeStatus.MERGED, sha=payload["sha"], message=message)
+        return MergeResult(status=MergeStatus.UNKNOWN, message=message)
 
     def delete_branch(self, repository: str, branch: str) -> None:
         """Delete one remote branch; an already absent branch is fine."""

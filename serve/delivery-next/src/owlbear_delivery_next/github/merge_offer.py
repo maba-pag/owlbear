@@ -11,13 +11,11 @@ from typing import TYPE_CHECKING, Literal
 from owlbear_delivery_next.git.remote_git import classify_write_readback
 
 if TYPE_CHECKING:
-    from datetime import datetime
-
     from owlbear_delivery_next.git.remote_git import WriteReadback
-    from owlbear_delivery_next.github.provider import CiState, MergeMethod, PullRequest, QueueEntry, Rules
+    from owlbear_delivery_next.github.provider import CiState, MergeMethod, PullRequest, Rules
 
 MERGED = "merged"
-_CI = re.compile(r"\b(checks?|status|ci|fail(ed|ing|ure)?|timed out)\b")
+_REVIEW = re.compile(r"\breview", re.IGNORECASE)
 
 
 class Block(StrEnum):
@@ -35,13 +33,15 @@ class Block(StrEnum):
     BEHIND = "behind"
     CHECKING = "checking"
     PROTECTION = "protection"
+    QUEUE = "queue"
+    REVIEW_REQUIRED = "review-required"
 
 
 @dataclass(frozen=True)
 class Decision:
-    """Merge directly, submit to the merge queue, or block with a reason and detail."""
+    """Merge directly, or block with a reason and detail."""
 
-    action: Literal["merge", "queue", "block"]
+    action: Literal["merge", "block"]
     block: Block | None = None
     detail: str = ""
 
@@ -79,17 +79,22 @@ def decide(  # noqa: C901, PLR0911, PLR0912, PLR0913 - one ordered row per block
         return _blocked(Block.NO_PERMISSION)
     if method not in methods:
         return _blocked(Block.METHOD_NOT_ALLOWED, f"{method} is not allowed")
+    if rules.queue_required:
+        return _blocked(Block.QUEUE, "merge queue not supported (TD-22)")
     if pr.mergeable is False or state == "dirty":
         return _blocked(Block.CONFLICTS)
     if state == "behind":
         return _blocked(Block.BEHIND)
     if pr.mergeable is None or state in {"", "unknown"}:
         return _blocked(Block.CHECKING)
-    if rules.queue_required:
-        return Decision("queue")
     if state == "blocked":
         return _blocked(Block.PROTECTION, "GitHub reports the merge blocked by reviews or rules")
     return Decision("merge")
+
+
+def review_required(decision: str | None, refusal: str | None = None) -> bool:
+    """GitHub waits for a human review: ``REVIEW_REQUIRED``, or a merge refusal that names reviews."""
+    return decision == "REVIEW_REQUIRED" or bool(refusal and _REVIEW.search(refusal))
 
 
 def consent(head: str | None, pr_head: str) -> Literal["missing", "valid", "void"]:
@@ -100,27 +105,6 @@ def consent(head: str | None, pr_head: str) -> Literal["missing", "valid", "void
 
 
 def readback(pr: PullRequest, consented_head: str) -> WriteReadback:
-    """Classify the PR read after an unknown merge result: merged, still open at the consented head, or moved.
-
-    For a queued submission an open unchanged PR is not confirmed absence; ``queue_state`` decides.
-    """
+    """Classify the PR read after an unknown merge result: merged, still open at the sent head, or moved."""
     observed = MERGED if pr.merged else pr.head_sha if pr.state == "open" else "closed"
     return classify_write_readback(observed, intended=MERGED, expected_old=consented_head)
-
-
-def queue_state(entry: QueueEntry, submitted_at: datetime) -> Literal["queued", "removed", "absent"]:
-    """After a queue submission: queued, removed since it, or confirmed absent (no entry and no add since it)."""
-    if entry.queued:
-        return "queued"
-    removed = entry.removed_at is not None and entry.removed_at >= submitted_at
-    if removed and (entry.added_at is None or entry.removed_at >= entry.added_at):
-        return "removed"
-    return "queued" if entry.added_at is not None and entry.added_at >= submitted_at else "absent"
-
-
-def removal(reason: str) -> Literal["conflict", "ci", "ask"]:
-    """Route a queue removal by its reason: a conflict integrates, a failed check gets a fix task, else ask."""
-    text = reason.casefold()
-    if "conflict" in text:
-        return "conflict"
-    return "ci" if _CI.search(text) else "ask"

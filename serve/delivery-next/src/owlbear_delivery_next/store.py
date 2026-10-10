@@ -204,6 +204,24 @@ class Store:
             held.held = False
             os.close(fd)
 
+    @contextlib.contextmanager
+    def merge_lock(self, target: str) -> Iterator[bool]:
+        """Hold the per-target merge lock without waiting; yield False when another Change holds it."""
+        name = "merge-" + "".join(ch if ch.isalnum() or ch in "._-" else f"%{ord(ch):02X}" for ch in target) + ".lock"
+        self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
+        dir_fd = os.open(self.root, _DIR_FLAGS)
+        try:
+            fd = open_lock(dir_fd, blocking=False, name=name)
+        except BlockingIOError:
+            fd = None
+        finally:
+            os.close(dir_fd)
+        try:
+            yield fd is not None
+        finally:
+            if fd is not None:
+                os.close(fd)
+
     def holder(self, slug: str) -> Holder | None:
         """Return the live holder of the Change lock, or None when nobody holds it."""
         try:

@@ -19,7 +19,7 @@ _WHO = {
     Waiting.CI: "CI",
     Waiting.CHECK_START: "CI to start",
     Waiting.OWNER_ACTION: "your action in GitHub",
-    Waiting.MERGE_QUEUE: "GitHub",
+    Waiting.GITHUB: "GitHub",
 }
 _ACTION = {Waiting.PERSON_CHECK: "Report result", Waiting.OWNER_ACTION: "Act in GitHub", Waiting.CHAT: "Approve brief"}
 _WORK = {
@@ -108,6 +108,8 @@ def status(c: Change, activity: Activity, now: datetime) -> Status:  # noqa: C90
         if o.who == "you":
             action = _ACTION.get(o.waiting) if o.waiting else None
             return Status(f"{s} · waiting for you: {o.reason}", action, "you")
+        if o.waiting == Waiting.REVIEWER:  # the reason names the reviewers
+            return Status(f"{s} · {o.reason} (checked {_age(now - o.at)} ago)", None, o.who)
         who = _WHO.get(o.waiting, str(o.waiting)) if o.waiting else o.who
         return Status(f"{s} · waiting for {who}: {o.reason} (checked {_age(now - o.at)} ago)", None, o.who)
     if activity.runner_alive:

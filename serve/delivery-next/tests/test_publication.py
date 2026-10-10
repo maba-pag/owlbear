@@ -14,13 +14,11 @@ from owlbear_delivery_next.github.provider import (
     Check,
     ConversationItem,
     FailureCode,
-    MergeMethod,
-    MergeRequest,
     MergeResult,
     MergeStatus,
     ProviderError,
     PullRequest,
-    QueueEntry,
+    Refusal,
     Rules,
     ThreadComment,
     classify_checks,
@@ -42,6 +40,7 @@ from owlbear_delivery_next.models import (
     Plan,
     Profile,
     ProfileEntry,
+    Question,
     Response,
     Review,
     Step,
@@ -99,10 +98,16 @@ class FakeGh:
     def __init__(self, current):
         self.pr, self.merges, self.result = current, [], MergeResult(status=MergeStatus.UNKNOWN)
         self.checks = (Check(name="test", status="completed", conclusion="success"),)
-        self.after, self.queue, self.reopened = None, QueueEntry(queued=False), []
+        self.after, self.reopened, self.commit_checks, self.review = None, [], (), (None, ())
 
-    def read_queue(self, _repo, _number):
-        return self.queue
+    def observe_commit_checks(self, _repo, _sha):
+        return self.commit_checks
+
+    def review_request(self, _repo, _number):
+        return self.review
+
+    def mark_ready(self, _pr):
+        return None
 
     def reopen_pull_request(self, _repo, number):
         self.reopened.append(number)
@@ -148,11 +153,16 @@ def prof(**extra):
     return profile.confirm(p, profile.RULES, "none", NOW)
 
 
+ASKING = {profile.ASK: ProfileEntry(state="known", value="yes")}
+
+
 def ctx(tmp_path, gh, p=None, repo=None):
     return engine.Ctx(Store(tmp_path / "store"), Lock("c1"), repo or tmp_path, p or prof(), gh, NOW)
 
 
-def change(kind=StepKind.MERGE, worktree="", **fields):
+def change(kind=StepKind.MERGE, worktree="", head=A, **fields):
+    if kind == StepKind.MERGE:
+        fields.setdefault("reviews", [Review(commit=head, inputs=Inputs(), verdict="pass")])
     plan = Plan(tasks=[Task(id="t1", title="one", scope=["src"], checks=["npm test"])])
     names = Names(branch="owlbear/c1", target="main", worktree=worktree, pr=7)
     return Change(slug="c1", brief=Brief(version=1), plan=plan, step=Step(kind=kind), names=names, **fields)
@@ -169,8 +179,8 @@ def test_consent_holds_only_for_the_exact_head():
 
 def test_a_head_change_voids_consent_shows_the_delta_and_asks_again(tmp_path, clone):
     gh = FakeGh(pr(head=B))
-    c = loop.fold(change(worktree=str(clone)), [ConsentItem(at=NOW, head=A)], NOW)
-    cx = ctx(tmp_path, gh)
+    c = loop.fold(change(worktree=str(clone), head=B), [ConsentItem(at=NOW, head=A)], NOW)
+    cx = ctx(tmp_path, gh, prof(**ASKING))
     _, result = merge.run(cx, c)
     offer = cx.events("c1", "merge-offer")[-1]
     assert (result.exit, result.cause) == (Exit.ASK, loop.CONSENT)
@@ -466,7 +476,7 @@ def test_an_unacknowledged_resolve_holds_the_merge_until_a_read_shows_it(tmp_pat
     c, result = follow.conversation(cx, change(), gh.pr, StepKind.FOLLOW)
     c = handled(c, result, "answered", "Because.")
     c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
-    assert (result.exit, result.waiting, c.handled[0].resolved) == (Exit.PENDING, Waiting.MERGE_QUEUE, False)
+    assert (result.exit, result.waiting, c.handled[0].resolved) == (Exit.PENDING, Waiting.GITHUB, False)
     gh.items = [i.model_copy(update={"resolved": True}) for i in gh.items]
     c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
     assert (result, c.handled[0].resolved) == (None, True)
@@ -905,29 +915,142 @@ def test_an_unknown_merge_is_read_back_before_any_replay(tmp_path, clone, after,
         assert result.cause == "network:merge:merge"
 
 
-def test_a_required_queue_is_submitted_without_bypass_and_enqueued_is_pending(tmp_path):
-    body = merge_request_body(
-        MergeRequest(repository="o/r", number=1, expected_head_sha=A, method=MergeMethod.SQUASH, queue=True)
-    )
-    assert b'"bypass_rules":false' in body
-    assert b"merge_action" not in body
-    queued = Rules(state="known", evidence="rules merge_queue", types=("merge_queue",), queue_required=True)
-    decision = merge_offer.decide(
-        pr(head=A),
-        target="main",
-        ci=classify_checks((), (), ()),
-        rules=queued,
-        rules_confirmed=True,
-        method=MergeMethod.SQUASH,
-        methods=(MergeMethod.SQUASH,),
-        can_push=True,
-    )
-    assert decision.action == "queue"
+# Automatic merge gate (TD-15) and no merge queue (TD-22)
+
+
+def merged(gh, sha=B):
+    gh.result = MergeResult(status=MergeStatus.MERGED, sha=sha)
+    gh.after = gh.pr.model_copy(update={"state": "closed", "merged": True, "merge_commit_sha": sha})
+
+
+def test_without_ask_before_merge_a_gated_head_merges_without_consent(tmp_path, clone):
     gh = FakeGh(pr(head=A))
-    gh.result = MergeResult(status=MergeStatus.ENQUEUED)
-    c = loop.fold(change(), [ConsentItem(at=NOW, head=A)], NOW)
-    result = merge.submit(ctx(tmp_path, gh), c, gh.pr, queue=True)
-    assert (result.exit, result.waiting, gh.merges[0].queue) == (Exit.PENDING, Waiting.MERGE_QUEUE, True)
+    merged(gh)
+    _, result = merge.run(ctx(tmp_path, gh), change(worktree=str(clone)))
+    assert (result.exit, len(gh.merges), profile.value(prof(), profile.ASK, "no")) == (Exit.DONE, 1, "no")
+    asked = ctx(tmp_path, FakeGh(pr(head=A)), prof(**ASKING))
+    _, result = merge.run(asked, change(worktree=str(clone)))
+    assert (result.exit, result.cause) == (Exit.ASK, loop.CONSENT)
+
+
+def test_a_head_without_a_valid_final_review_goes_back_to_publish(tmp_path, clone):
+    gh = FakeGh(pr(head=B))
+    _, result = merge.run(ctx(tmp_path, gh), change(worktree=str(clone), head=A))
+    assert (result.exit, result.back_to, result.cause, gh.merges) == (
+        Exit.BACK,
+        StepKind.PUBLISH,
+        "gate:merge:review",
+        [],
+    )
+
+
+def test_a_required_merge_queue_is_an_owner_action_and_never_submitted(tmp_path, clone):
+    queued = Rules(state="known", evidence="rules merge_queue", types=("merge_queue",), queue_required=True)
+    gh = FakeGh(pr(head=A))
+    gh.read_rules = lambda _repo, _branch: queued
+    p = profile.confirm(prof(**profile.rule_entries(queued)), profile.RULES, "merge_queue", NOW)
+    _, result = merge.run(ctx(tmp_path, gh, p), change(worktree=str(clone)))
+    assert (result.exit, result.waiting, result.who) == (Exit.PENDING, Waiting.OWNER_ACTION, "you")
+    assert result.reason == "merge PR #7 in GitHub (merge queue not supported (TD-22))"
+    assert gh.merges == []
+
+
+def test_a_required_human_review_is_pending_naming_the_reviewers(tmp_path, clone):
+    gh = FakeGh(pr(head=A))
+    gh.review = ("REVIEW_REQUIRED", ("alice", "team/core"))
+    _, result = merge.run(ctx(tmp_path, gh), change(worktree=str(clone)))
+    assert (result.exit, result.waiting, result.reason) == (
+        Exit.PENDING,
+        Waiting.REVIEWER,
+        "waiting for review by alice, team/core",
+    )
+    assert gh.merges == []
+
+
+def test_a_refusal_naming_reviews_is_pending_and_a_moved_head_retries(tmp_path, clone):
+    gh = FakeGh(pr(head=A))
+    gh.result = MergeResult(status=MergeStatus.REFUSED, refusal=Refusal.RULES_FAILED, message="Review required")
+    _, result = merge.run(ctx(tmp_path, gh), change(worktree=str(clone)))
+    assert (result.exit, result.waiting) == (Exit.PENDING, Waiting.REVIEWER)
+    gh.result = MergeResult(status=MergeStatus.REFUSED, refusal=Refusal.HEAD_CHANGED)
+    _, result = merge.run(ctx(tmp_path, gh), change(worktree=str(clone)))
+    assert (result.exit, result.cause) == (Exit.RETRY, "conflict:merge:head")
+
+
+def test_a_held_target_lock_is_pending_and_nothing_is_merged(tmp_path, clone):
+    gh = FakeGh(pr(head=A))
+    cx = ctx(tmp_path, gh)
+    with cx.store.merge_lock("main") as mine:
+        assert mine
+        _, result = merge.run(cx, change(worktree=str(clone)))
+    assert (result.exit, result.waiting, result.who, result.reason) == (
+        Exit.PENDING,
+        Waiting.GITHUB,
+        "delivery",
+        "another Change is merging into main",
+    )
+    assert gh.merges == []
+    with cx.store.merge_lock("other") as other:
+        assert other
+
+
+def test_a_check_failing_between_the_reads_prevents_the_merge(tmp_path, clone):
+    gh = FakeGh(pr(head=A))
+    results = iter([gh.checks, (Check(name="test", status="completed", conclusion="failure"),)])
+    gh.observe_checks = lambda _repo, _number, _head: next(results)
+    _, result = merge.run(ctx(tmp_path, gh), change(worktree=str(clone)))
+    assert (result.exit, result.back_to, result.cause, gh.merges) == (
+        Exit.BACK,
+        StepKind.BUILD,
+        "checks:merge:test",
+        [],
+    )
+
+
+def test_a_conversation_item_arriving_between_the_reads_prevents_the_merge(tmp_path, clone):
+    gh = ChatGh(pr(head=A))
+    reads = iter([(), (comment("c9", "wait"),)])
+    gh.read_conversation = lambda _repo, _number: next(reads)
+    _, result = merge.run(ctx(tmp_path, gh), change(worktree=str(clone)))
+    assert (result.exit, result.fix_task.id[:6], gh.merges) == (Exit.BACK, "pr-c9-", [])
+
+
+def target_checks(gh, *checks):
+    gh.commit_checks = tuple(Check(name=n, status=s, conclusion=k, url="https://ci/1") for n, s, k in checks)
+
+
+def test_a_failing_check_on_the_merged_target_asks_and_a_passing_one_cleans_up(tmp_path):
+    gh = FakeGh(pr(head=A, state="closed", merged=True, merge_commit_sha=B))
+    target_checks(gh, ("test", "completed", "failure"))
+    cx = ctx(tmp_path, gh)
+    c = change(StepKind.CLEANUP)
+    _, result = cleanup.run(cx, c)
+    assert (result.exit, result.cause) == (Exit.ASK, loop.TARGET)
+    assert result.question.text == "The merged result fails test on main (https://ci/1). Start a new Change to fix it."
+    assert [o.id for o in result.question.options] == ["done", "pause"]
+    target_checks(gh, ("test", "completed", "success"))
+    assert cleanup.target_check(cx, change(StepKind.CLEANUP), gh.pr)[1] is None
+
+
+def test_pausing_at_a_failing_target_check_holds_cleanup_but_a_plain_pause_does_not():
+    c = change(StepKind.CLEANUP)
+    c.intent.paused_at = NOW
+    assert loop.next_step(c, NOW) == c.step
+    question = Question(step=StepKind.CLEANUP, text="fails", cause=loop.TARGET, answer=Answer(option="pause", at=NOW))
+    c.questions.append(question)
+    assert loop.next_step(c, NOW) is None
+
+
+def test_running_target_checks_wait_within_the_window_then_cleanup_proceeds(tmp_path):
+    gh = FakeGh(pr(head=A, state="closed", merged=True, merge_commit_sha=B))
+    target_checks(gh, ("test", "in_progress", None))
+    cx = ctx(tmp_path, gh)
+    c, held = cleanup.target_check(cx, change(StepKind.CLEANUP), gh.pr)
+    assert (held.exit, held.waiting) == (Exit.PENDING, Waiting.CI)
+    cx.now = NOW + timedelta(hours=1)
+    c, held = cleanup.target_check(cx, c, gh.pr)
+    assert (held, c.missing) == (None, None)
+    assert cx.events("c1", "target-checks-unfinished")[-1]["sha"] == B
 
 
 def test_unknown_rules_make_merging_human_assisted(tmp_path, clone):
@@ -1107,52 +1230,6 @@ def test_a_fix_task_has_a_short_title_and_carries_every_finding_up_to_its_bound(
     )
     assert fix.detail.endswith("\n[truncated]")
     assert not review.findings(review_, 10_000).endswith("[truncated]")
-
-
-# Merge queue: membership is observed before any resubmission
-
-
-def test_queue_state_and_removal_routing():
-    later = NOW + timedelta(seconds=5)
-    assert merge_offer.queue_state(QueueEntry(queued=True), NOW) == "queued"
-    assert merge_offer.queue_state(QueueEntry(queued=False, added_at=later), NOW) == "queued"
-    assert merge_offer.queue_state(QueueEntry(queued=False, added_at=later, removed_at=later), NOW) == "removed"
-    assert merge_offer.queue_state(QueueEntry(queued=False, removed_at=NOW - timedelta(hours=1)), NOW) == "absent"
-    reasons = ("Merge conflict with main", "Required status check build failed", "manually removed")
-    assert [merge_offer.removal(r) for r in reasons] == ["conflict", "ci", "ask"]
-
-
-def test_an_unknown_queued_submission_observes_the_queue_instead_of_resending(tmp_path, clone):
-    gh = FakeGh(pr(head=A))
-    c = loop.fold(change(worktree=str(clone)), [ConsentItem(at=NOW, head=A)], NOW)
-    cx = ctx(tmp_path, gh)
-    result = merge.submit(cx, c, gh.pr, queue=True)
-    assert (result.exit, result.waiting, cx.store.read("c1").consent.queued_at) == (
-        Exit.PENDING,
-        Waiting.MERGE_QUEUE,
-        NOW,
-    )
-    gh.queue = QueueEntry(queued=True)
-    _, still = merge.run(cx, c)
-    assert (still.waiting, len(gh.merges)) == (Waiting.MERGE_QUEUE, 1)
-    gh.queue = QueueEntry(queued=False)
-    merge.run(cx, c)
-    assert len(gh.merges) == 2  # confirmed absent: sent again
-
-
-@pytest.mark.parametrize(
-    ("reason", "exit_", "origin"),
-    [("Merge conflict", Exit.BACK, "integration"), ("check test failed", Exit.BACK, "ci"), ("removed", Exit.ASK, None)],
-)
-def test_a_queue_removal_routes_its_cause_or_asks_with_it(tmp_path, clone, reason, exit_, origin):
-    gh = FakeGh(pr(head=A))
-    gh.queue = QueueEntry(queued=False, added_at=NOW, removed_at=NOW, reason=reason)
-    c = loop.fold(change(worktree=str(clone)), [ConsentItem(at=NOW, head=A)], NOW)
-    c.consent.queued_at = NOW
-    c, result = merge.run(ctx(tmp_path, gh), c)
-    assert (result.exit, result.fix_task and result.fix_task.origin, c.consent.queued_at) == (exit_, origin, None)
-    assert gh.merges == []
-    assert exit_ != Exit.ASK or reason in result.question.text
 
 
 # Reopen and the pre-push hook
