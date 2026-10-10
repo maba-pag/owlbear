@@ -2,7 +2,9 @@
 
 MCP server that exposes browser automation tools for rendered web content. On macOS it selects
 stable Microsoft Edge with a fixed OwlBear-owned profile by default; elsewhere it selects Chromium.
-The browser launches on the first action call and launches again after its window is closed.
+The browser launches on the first action call and relaunches after the last OwlBear-owned window
+closes. Closing a shared page while another owned window remains open keeps status `ready`; the next
+action reopens the page.
 `read_text` and `snapshot` only read an open page and never launch it. Managed Edge never reads,
 copies, or controls the operator's daily Edge profile. Both `navigate` and `acquire` apply the
 explicit domain allowlist and DNS/IP preflight checks.
@@ -99,7 +101,7 @@ When `startup_state` is `unavailable`, `startup_reason` is one of these bounded 
 | --- | --- |
 | `browser_mode` | Selected mode: `managed-edge` or `chromium` |
 | `ownership` | `per-user-owned`; the server uses an OwlBear-owned profile |
-| `startup_state` | `not-launched` before the first action or after the window closes; `ready` when live; otherwise `unavailable` |
+| `startup_state` | `not-launched` before the first action or after the last OwlBear-owned window closes; `ready` while an owned window remains open, including after the shared page closes (the next action reopens it); otherwise `unavailable` |
 | `startup_reason` | A bounded startup reason above, or `null` |
 | `visible_authentication` | Whether a visible browser is available for interactive sign-in; not proof of sign-in |
 | `latest_acquisition_status` | The latest `acquire` result for this process, or `null` before an acquisition |

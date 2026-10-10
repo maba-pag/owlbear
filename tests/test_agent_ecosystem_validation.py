@@ -981,10 +981,16 @@ async def test_declared_mcp_tools_exist_in_live_registries() -> None:
     assert browser_status_tool.annotations.destructive_hint is False
 
     knowledge_ingestor_guidance = (_AGENTS_ROOT / "knowledge-ingestor.agent.md").read_text(encoding="utf-8")
+    normalized_guidance = " ".join(knowledge_ingestor_guidance.split())
     assert (
         "Use `owlbear-browser/browser_status` only for readiness diagnosis and routing; "
-        "it does not authorize ingestion or prove authenticated content."
-        in " ".join(knowledge_ingestor_guidance.split())
+        "it does not authorize ingestion or prove authenticated content." in normalized_guidance
+    )
+    assert (
+        "Treat `not-launched` as normal before the first `acquire` and after the last "
+        "OwlBear-owned window closes; the first or next `acquire` launches or relaunches "
+        "the browser. Closing a shared page while another OwlBear-owned window remains "
+        "keeps status `ready`, and the next `acquire` reopens the page." in normalized_guidance
     )
 
 

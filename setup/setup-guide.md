@@ -120,9 +120,9 @@ Browser-to-Knowledge round is ready.
    starting the Browser MCP on macOS. For Chromium mode or Cockpit's browser-backed tests, install
    Chromium for the sibling OwlBear checkout from the consumer project root:
 
-  ```shell
-  uv run --project ../owlbear playwright install chromium
-  ```
+    ```shell
+    uv run --project ../owlbear playwright install chromium
+    ```
 
    This download is not required for macOS managed Edge mode. To select Chromium explicitly on
    macOS, set `BROWSER_MODE` to `chromium` in the local `owlbear-browser` server environment; an
@@ -138,9 +138,12 @@ Browser-to-Knowledge round is ready.
    before any browser action. The first `acquire` or `navigate` call against an allowed URL launches
    the selected visible browser; complete the organization's login flow manually if needed.
 
-   **Expected result:** `acquire` on an allowed URL returns rendered content or a structured
-   acquisition result. `browser_status` reports `ready` only while a live browser session is
-   available; it does not prove sign-in or authenticated access. Exact-host entries explicitly
+    **Expected result:** `acquire` on an allowed URL returns rendered content or a structured
+    acquisition result. `browser_status` reports `ready` while an OwlBear-owned window remains open;
+    closing a shared page while another owned window remains open keeps it `ready`, and the next
+    action reopens that page. It reports `not-launched` before first use or after the last owned
+    window closes, and `unavailable` with a startup reason when launch fails. Readiness does not prove
+    sign-in or authenticated access. Exact-host entries explicitly
    permit private, loopback, and link-local DNS results for that hostname; wildcard mode does not.
    Reserved and unspecified addresses are always rejected. The current SSRF preflight does not
    fully prevent DNS rebinding or an allowlisted server redirecting to a private address; these
@@ -212,10 +215,10 @@ the repository, Delivery requests, or status.
   **Expected result:** before any browser action, `browser_status` reports `managed-edge`,
   `per-user-owned`, `not-launched`, null startup reason, and unavailable visible authentication.
   Stop if the mode is invalid; do not switch to Chromium or the operator's daily Edge profile.
-2. Call `acquire` or `navigate` with one locally supplied, operator-approved SharePoint URL. The
-  first action launches the visible Edge window with the fixed OwlBear profile. Complete first-use
-  sign-in, site trust, consent, or MFA directly in that window. Do not send credentials or session
-  material through an OwlBear tool.
+2. Call `acquire` with one locally supplied, operator-approved SharePoint URL. The first action
+  launches the visible Edge window with the fixed OwlBear profile. Complete first-use sign-in, site
+  trust, consent, or MFA directly in that window. Do not send credentials or session material through
+  an OwlBear tool.
 
   **Expected result:** the Edge window is live and the operator confirms authenticated SharePoint
   content. Browser readiness alone does not count as authentication.
@@ -224,11 +227,12 @@ the repository, Delivery requests, or status.
 
   **Expected result:** the operator confirms authenticated Confluence content in the same owned
   session; record no page content, URL, or hostname.
-4. Close the OwlBear-owned Edge window and call `browser_status`, then repeat an allowed action for
-  one approved target.
+4. Close the last OwlBear-owned Edge window and call `browser_status`, then call `acquire` for one
+  approved target. Closing only the shared page while another owned window remains open keeps status
+  `ready`; the next `acquire` reopens that page without relaunching the browser.
 
-  **Expected result:** status reports `not-launched` after the window closes; the next action
-  relaunches the fixed profile and the operator confirms the target remains authenticated.
+  **Expected result:** status reports `not-launched` after the last owned window closes; the next
+  `acquire` relaunches the fixed profile and the operator confirms the target remains authenticated.
 5. Restart the `owlbear-browser` MCP server, repeat an allowed action for each target, and confirm
   that the fixed profile retains session availability. Stop the server normally afterward.
 

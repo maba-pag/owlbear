@@ -11,7 +11,12 @@ content extraction API.
 Package map: [serve/README.md](../README.md) · Project README: [README.md](../../README.md)
 
 **Status:** Alpha. Typed acquisition results and launch mechanics are implemented; authentication
-must be confirmed for each target. Browser readiness or extension presence does not prove sign-in.
+must be confirmed for each target. Browser MCP launch is lazy: its first action opens the browser,
+and `browser_status` reports `not-launched`, `ready`, or `unavailable`. `not-launched` is normal
+before first use or after the last OwlBear-owned window closes. Closing a shared page while another
+owned window remains open keeps status `ready`; the next action reopens that page. These states
+describe launch mechanics only; readiness or extension presence does not prove SSO or authenticated
+access.
 
 ---
 
