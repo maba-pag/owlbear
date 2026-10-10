@@ -67,7 +67,7 @@ def _update(repo: Path, target: str, wt: str | None) -> tuple[str, str]:
     remote = f"origin/{target}"
     if wt is None:
         if _rev(repo, f"refs/heads/{target}") is None:
-            return "skipped", f"no local {target}"
+            return "updated", f"no local {target} branch; origin/{target} updated"
         done = run_remote_git(repo, ("fetch", "--quiet", "--no-tags", "origin", f"{target}:{target}"), kind="read")
         return ("updated", "") if done.returncode == 0 else ("behind", _first(done.stderr))
     path = Path(wt)

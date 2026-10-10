@@ -10,7 +10,7 @@ from owlbear_delivery_next.github import merge_offer
 from owlbear_delivery_next.github.merge_offer import Block
 from owlbear_delivery_next.github.provider import MergeMethod, MergeRequest, MergeStatus, Refusal
 from owlbear_delivery_next.loop import StepResult, cause_key
-from owlbear_delivery_next.models import ErrorKind, Exit, StepKind, Waiting
+from owlbear_delivery_next.models import ErrorKind, Exit, Option, StepKind, Waiting
 from owlbear_delivery_next.steps import check, engine, follow, publish
 
 if TYPE_CHECKING:
@@ -85,7 +85,29 @@ def _blocked(  # noqa: PLR0911 - one exit per block reason
             return c, engine.pending(Waiting.GITHUB, reason, ctx.poll())
 
 
-def gate(  # noqa: PLR0911 - one exit per condition
+def declared(ctx: Ctx, c: Change) -> StepResult | None:
+    """The checks that must pass are known, or the owner names them (or none) once per profile version."""
+    if profile.known(ctx.profile, profile.DECLARED):
+        return None
+    cause = cause_key(ErrorKind.GATE, M, f"declared-v{ctx.profile.version}")
+    answers = [q.answer for q in c.questions if q.cause == cause and q.answer]
+    names = ", ".join(n.strip() for n in answers[-1].text.split(",") if n.strip()) if answers else ""
+    value = "none" if answers and answers[-1].option == "none" else names
+    if value:
+        ctx.profile = profile.confirm(ctx.profile, profile.DECLARED, value, ctx.now)
+        ctx.store.write_profile(ctx.profile)
+        ctx.log(c.slug, "profile-confirmed", key=profile.DECLARED, value=value)
+        return None
+    options = [
+        Option(id="none", label="No checks", next=M),
+        Option(id="names", label="These checks (type their names)", next=M),
+        Option(id="pause", label="Pause", next="pause"),
+    ]
+    text = "Which checks must pass before merging? Name them, comma-separated, or choose none"
+    return engine.ask(M, text, cause, options)
+
+
+def gate(  # noqa: C901, PLR0911 - one exit per condition
     ctx: Ctx, c: Change, pr: PullRequest, rules: Rules
 ) -> tuple[Change, StepResult | None]:
     """Every merge condition at the PR's exact head; the first unmet one is the exit, None when it may merge."""
@@ -100,12 +122,19 @@ def gate(  # noqa: PLR0911 - one exit per condition
         return c, StepResult(
             exit=Exit.BACK, back_to=StepKind.FOLLOW, cause=cause_key(ErrorKind.GATE, M, person.id), reason=reason
         )
+    if (local := engine.head(path)) != pr.head_sha:
+        reason = f"local head {local[:7]} is not the PR head {pr.head_sha[:7]}"
+        return c, StepResult(
+            exit=Exit.BACK, back_to=StepKind.PUBLISH, cause=cause_key(ErrorKind.GATE, M, "local-head"), reason=reason
+        )
     c, held = follow.conversation(ctx, c, pr, M)  # open items, replies or resolutions hold the merge
     if held is not None:
         return c, held
     engine.fetch(path, target)
-    if not engine.contains(path, f"origin/{target}"):
+    if not engine.contains(path, f"origin/{target}", pr.head_sha):
         return c, engine.integrate(c, M, f"origin/{target}")  # whatever GitHub's mergeable state says
+    if (held := declared(ctx, c)) is not None:
+        return c, held
     state = follow.ci(ctx, pr)
     c = follow.episode(ctx, c, pr.head_sha, state)
     decision = merge_offer.decide(

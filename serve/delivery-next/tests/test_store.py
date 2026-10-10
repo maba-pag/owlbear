@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_delivery_next import status
+from owlbear_delivery_next import loop, status
 from owlbear_delivery_next import store as store_mod
 from owlbear_delivery_next.loop import StepResult, apply
 from owlbear_delivery_next.models import (
@@ -153,6 +153,15 @@ def test_inbox_written_without_the_lock_is_folded_by_its_holder(store):
     assert (change.questions[0].answer.text, step.kind) == ("FOO", StepKind.BUILD)
     assert store.read("c1") == change
     assert not list((store.root / "changes" / "c1" / "inbox").iterdir())
+
+
+def test_an_open_consent_question_is_closed_and_logged_once_ask_before_merge_is_off(store):
+    asked = StepResult(exit=Exit.ASK, question=Question(step=StepKind.MERGE, text="merge?", cause=loop.CONSENT))
+    save(store, apply(Change(slug="c1", step=Step(kind=StepKind.MERGE)), asked, NOW))
+    with store.lock("c1") as lock:
+        change, step = store.fold(lock, "c1", NOW)
+    assert (change.outcome, change.questions[0].answer.option, step.kind) == (None, loop.OBSOLETE, StepKind.MERGE)
+    assert [e["question"] for e in store.events("c1") if e["event"] == "consent-obsolete"] == [change.questions[0].id]
 
 
 def test_interrupted_fold_never_applies_an_item_twice(store, monkeypatch):

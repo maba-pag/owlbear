@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import TypeAdapter, ValidationError
 
-from owlbear_delivery_next import loop
+from owlbear_delivery_next import loop, profile
 from owlbear_delivery_next.models import FORMAT, PROFILE_FORMAT, Change, ErrorKind, InboxItem, Profile, Record, Stop
 from owlbear_delivery_next.storage_io import atomic_write, open_lock
 
@@ -259,9 +259,14 @@ class Store:
                 files.append(path)
             except ValidationError:
                 path.rename(path.with_suffix(".rejected"))
-        change, step = loop.schedule(change, items, now, pr_state, moved=moved)
+        asked = loop.open_question(change) if loop.waiting_consent(change) else None
+        asking = profile.value(self.read_profile() or Profile(), profile.ASK) == "yes"
+        change, step = loop.schedule(change, items, now, pr_state, moved=moved, asking=asking)
         change.inbox_acked = acked + [p.name for p in files]
         self.write(lock, change)
+        if asked and any(q.id == asked.id and q.answer and q.answer.option == loop.OBSOLETE for q in change.questions):
+            at = now.isoformat(timespec="seconds")
+            self.log(lock, slug, {"event": "consent-obsolete", "at": at, "question": asked.id})
         for path in present:
             path.unlink(missing_ok=True)
         return change, step

@@ -32,6 +32,7 @@ from owlbear_delivery_next.models import (
     ConsentItem,
     Criterion,
     Environment,
+    ErrorKind,
     Exit,
     Inputs,
     ItemRef,
@@ -40,7 +41,6 @@ from owlbear_delivery_next.models import (
     Plan,
     Profile,
     ProfileEntry,
-    Question,
     Response,
     Review,
     Step,
@@ -55,7 +55,7 @@ from owlbear_delivery_next.steps import check, cleanup, conversation, engine, fo
 from owlbear_delivery_next.store import Lock, Store
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
-A, B = "a" * 40, "b" * 40
+A, B = "681d75b8f76e8c9a53053a9054812a449926e2aa", "b" * 40  # A: the clone fixture's base commit (fixed dates)
 FORBIDDEN = Rules(state="unknown", evidence="HTTP 403: Upgrade to GitHub Pro")
 TIMED_OUT = "timed out"
 
@@ -73,6 +73,7 @@ def git_env(tmp_path, monkeypatch):
     for who in ("AUTHOR", "COMMITTER"):
         monkeypatch.setenv(f"GIT_{who}_NAME", "t")
         monkeypatch.setenv(f"GIT_{who}_EMAIL", "t@t")
+        monkeypatch.setenv(f"GIT_{who}_DATE", "2026-10-10T12:00:00Z")
 
 
 @pytest.fixture
@@ -85,6 +86,7 @@ def clone(tmp_path):
     git(work, "commit", "-q", "-m", "base")
     git(work, "push", "-q", "origin", "HEAD:refs/heads/main")
     git(work, "switch", "-q", "-c", "owlbear/c1")
+    assert git(work, "rev-parse", "HEAD") == A
     return work
 
 
@@ -178,15 +180,42 @@ def test_consent_holds_only_for_the_exact_head():
 
 
 def test_a_head_change_voids_consent_shows_the_delta_and_asks_again(tmp_path, clone):
-    gh = FakeGh(pr(head=B))
-    c = loop.fold(change(worktree=str(clone), head=B), [ConsentItem(at=NOW, head=A)], NOW)
+    gh = FakeGh(pr(head=A))
+    c = loop.fold(change(worktree=str(clone)), [ConsentItem(at=NOW, head=B)], NOW)
     cx = ctx(tmp_path, gh, prof(**ASKING))
     _, result = merge.run(cx, c)
     offer = cx.events("c1", "merge-offer")[-1]
     assert (result.exit, result.cause) == (Exit.ASK, loop.CONSENT)
-    assert result.reason.startswith(f"approve merging {B[:7]}, changed since {A[:7]} (1 commit(s)")
-    assert (offer["head"], offer["void"]) == (B, A)
+    assert result.reason.startswith(f"approve merging {A[:7]}, changed since {B[:7]} (1 commit(s)")
+    assert (offer["head"], offer["void"]) == (A, B)
     assert gh.merges == []
+
+
+def test_a_locally_integrated_but_unpublished_head_goes_back_to_publish_and_never_merges(tmp_path, clone):
+    git(clone, "commit", "-q", "--allow-empty", "-m", "integrated locally")
+    gh = FakeGh(pr(head=A))
+    c = loop.fold(change(worktree=str(clone)), [ConsentItem(at=NOW, head=A)], NOW)
+    _, result = merge.run(ctx(tmp_path, gh), c)
+    cause = loop.cause_key(ErrorKind.GATE, StepKind.MERGE, "local-head")
+    assert (result.exit, result.back_to, result.cause) == (Exit.BACK, StepKind.PUBLISH, cause)
+    assert gh.merges == []
+
+
+def test_unknown_declared_checks_ask_the_owner_once_per_profile_version_before_merging(tmp_path, clone):
+    gh = FakeGh(pr(head=A))
+    gh.checks = ()
+    p = prof(**{profile.DECLARED: ProfileEntry(state="unknown")})
+    cx = ctx(tmp_path, gh, p)
+    cx.store.root.mkdir()
+    c, result = merge.run(cx, change(worktree=str(clone)))
+    assert (result.exit, [o.id for o in result.question.options]) == (Exit.ASK, ["none", "names", "pause"])
+    assert result.cause.endswith(f"declared-v{p.version}")
+    assert gh.merges == []
+    c = loop.apply(c, result, NOW)
+    c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option="none")], NOW)
+    held = merge.declared(cx, c)
+    assert (held, profile.value(cx.profile, profile.DECLARED)) == (None, "none")
+    assert profile.known(cx.store.read_profile(), profile.DECLARED)
 
 
 def test_the_merge_carries_the_consented_head_as_its_sha_guard(tmp_path, clone):
@@ -810,7 +839,7 @@ def test_publish_waits_for_the_network_and_asks_for_other_readiness_fixes():
 
 def test_publish_returns_to_the_final_review_unless_head_is_the_final_reviewed_head(clone, tmp_path):
     head = git(clone, "rev-parse", "HEAD")
-    final = Review(commit=A, inputs=Inputs(), verdict="pass")
+    final = Review(commit=B, inputs=Inputs(), verdict="pass")
     c = change(StepKind.PUBLISH, worktree=str(clone), reviews=[final])
     _, result = publish.run(ctx(tmp_path, FakeGh(pr())), c)
     assert loop.apply(c, result, NOW).step == Step(kind=StepKind.REVIEW, mode="final")
@@ -1019,26 +1048,26 @@ def target_checks(gh, *checks):
     gh.commit_checks = tuple(Check(name=n, status=s, conclusion=k, url="https://ci/1") for n, s, k in checks)
 
 
-def test_a_failing_check_on_the_merged_target_asks_and_a_passing_one_cleans_up(tmp_path):
+def test_a_failing_check_on_the_merged_target_drafts_one_fix_change_and_cleanup_completes(worktree_with_work, tmp_path):
+    clone, wt = worktree_with_work
     gh = FakeGh(pr(head=A, state="closed", merged=True, merge_commit_sha=B))
     target_checks(gh, ("test", "completed", "failure"))
-    cx = ctx(tmp_path, gh)
-    c = change(StepKind.CLEANUP)
-    _, result = cleanup.run(cx, c)
-    assert (result.exit, result.cause) == (Exit.ASK, loop.TARGET)
-    assert result.question.text == "The merged result fails test on main (https://ci/1). Start a new Change to fix it."
-    assert [o.id for o in result.question.options] == ["done", "pause"]
-    target_checks(gh, ("test", "completed", "success"))
-    assert cleanup.target_check(cx, change(StepKind.CLEANUP), gh.pr)[1] is None
+    cx = ctx(tmp_path, gh, repo=clone)
+    c = change(StepKind.CLEANUP, worktree=str(wt))
+    c.names.branch = "owlbear/c2"
+    assert cleanup.target_check(cx, c, gh.pr)[1] is None
+    _, result = cleanup.run(cx, c)  # re-entry: the same failure drafts nothing more
+    assert result.exit == Exit.DONE, result.reason
+    [slug] = cx.store.slugs()
+    fix = cx.store.read(slug)
+    assert (fix.step.kind, "https://ci/1" in fix.brief.outcome) == (StepKind.SHAPE, True)
+    assert [e["fix"] for e in cx.events("c1", "fix-drafted")] == [slug]
 
 
-def test_pausing_at_a_failing_target_check_holds_cleanup_but_a_plain_pause_does_not():
+def test_a_pause_never_holds_cleanup():
     c = change(StepKind.CLEANUP)
     c.intent.paused_at = NOW
     assert loop.next_step(c, NOW) == c.step
-    question = Question(step=StepKind.CLEANUP, text="fails", cause=loop.TARGET, answer=Answer(option="pause", at=NOW))
-    c.questions.append(question)
-    assert loop.next_step(c, NOW) is None
 
 
 def test_running_target_checks_wait_within_the_window_then_cleanup_proceeds(tmp_path):
@@ -1116,6 +1145,28 @@ def test_failed_preservation_stops_and_leaves_the_worktree_untouched(worktree_wi
     assert result.stop.action.startswith(f"Copy or delete {wt}")
     assert (wt / "new.txt").read_text() == "untracked\n"
     assert (wt / "kept.txt").exists()
+
+
+def test_ignored_files_are_archived_unless_regenerable_and_large_ones_keep_the_worktree(
+    worktree_with_work, tmp_path, monkeypatch
+):
+    clone, wt = worktree_with_work
+    git(wt, "config", "core.excludesFile", str(tmp_path / "ignore"))
+    (tmp_path / "ignore").write_text(".env\nnode_modules/\n")
+    (wt / ".env").write_text("SECRET=1\n")
+    (wt / "node_modules").mkdir()
+    (wt / "node_modules" / "x.js").write_text("x\n")
+    c = change(StepKind.CLEANUP, worktree=str(wt))
+    c.names.branch, c.names.pr = "owlbear/c2", None
+    monkeypatch.setattr(cleanup, "LARGE", 1)
+    _, kept = cleanup.run(ctx(tmp_path, FakeGh(pr()), repo=clone), c)
+    assert (kept.exit, "workspace kept" in kept.reason, wt.exists()) == (Exit.DONE, True, True)
+    monkeypatch.setattr(cleanup, "LARGE", 50 * 1024 * 1024)
+    _, result = cleanup.run(ctx(tmp_path, FakeGh(pr()), repo=clone), c)
+    assert (result.exit, wt.exists()) == (Exit.DONE, False)
+    with tarfile.open(result.preserved[-1]) as tar:
+        assert tar.extractfile("files/.env").read() == b"SECRET=1\n"
+        assert not any("node_modules" in n for n in tar.getnames())
 
 
 def test_a_staged_version_the_working_tree_replaced_is_archived_and_verified(worktree_with_work, tmp_path):

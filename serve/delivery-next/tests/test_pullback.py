@@ -71,6 +71,16 @@ def test_a_target_not_checked_out_has_only_its_ref_fast_forwarded(repos):
     assert (git(repo, "branch", "--show-current"), (repo / "w.txt").read_text()) == ("work", "mine\n")
 
 
+def test_without_a_local_target_branch_only_the_remote_ref_is_updated(repos):
+    repo, other = repos
+    git(repo, "switch", "-q", "-c", "work")
+    git(repo, "branch", "-q", "-D", "main")
+    head = merged(other)
+    result = pullback.run(repo, "main", NOW)
+    assert (result.state, result.reason) == ("updated", "no local main branch; origin/main updated")
+    assert git(repo, "rev-parse", "origin/main") == head
+
+
 def test_a_dirty_target_is_behind_and_untouched_even_with_autostash(repos):
     repo, other = repos
     git(repo, "config", "merge.autostash", "true")

@@ -3,6 +3,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from owlbear_delivery_next import loop
+from owlbear_delivery_next.github import merge_offer
 from owlbear_delivery_next.loop import StepResult
 from owlbear_delivery_next.models import (
     Answer,
@@ -19,6 +20,7 @@ from owlbear_delivery_next.models import (
     Inputs,
     IntentItem,
     MergeConsent,
+    Outcome,
     PersonCheck,
     Plan,
     Question,
@@ -414,8 +416,19 @@ def test_integration_rereviews_only_when_a_recorded_input_changed(paths, criteri
 
 def test_merge_consent_is_void_for_another_head():
     c = change(consent=MergeConsent(head="a1c3f02", at=NOW))
-    assert loop.consent_valid(c, "a1c3f02")
-    assert not loop.consent_valid(c, "b7e2a91")
+    assert merge_offer.consent(c.consent.head, "a1c3f02") == "valid"
+    assert merge_offer.consent(c.consent.head, "b7e2a91") == "void"
+
+
+def test_an_open_consent_question_is_closed_as_obsolete_when_ask_before_merge_is_off():
+    c = change(K.MERGE, None, "publish")
+    q = Question(step=K.MERGE, text="approve merging abc", cause=loop.CONSENT)
+    c.questions = [q]
+    c.outcome = Outcome(exit=Exit.ASK, question=q.id, cause=loop.CONSENT, at=NOW)
+    asked, _ = loop.schedule(c.model_copy(deep=True), [], NOW)
+    assert (asked.outcome is None, asked.questions[0].answer) == (False, None)
+    closed, step = loop.schedule(c, [], NOW, asking=False)
+    assert (closed.outcome, closed.questions[0].answer.option, step.kind) == (None, loop.OBSOLETE, K.MERGE)
 
 
 @pytest.mark.parametrize(

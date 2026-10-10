@@ -74,7 +74,7 @@ BACK: dict[StepKind, frozenset[StepKind]] = {
 }
 PR_CLOSED = "gate:merge:pr-closed"
 CONSENT = "gate:merge:consent"
-TARGET = "checks:cleanup:target"  # the merged result fails a check on the target
+OBSOLETE = "obsolete"  # the answer option of a consent question closed because ask-before-merge is off
 
 
 class StepResult(Record):
@@ -168,11 +168,6 @@ def next_check(c: Change, paths: Mapping[str, str]) -> PersonCheck | None:
     return None
 
 
-def consent_valid(c: Change, head: str) -> bool:
-    """Merge consent holds only for the exact head it names."""
-    return c.consent is not None and c.consent.head == head
-
-
 def waiting_consent(c: Change) -> bool:
     """The Change waits only for the owner's consent to merge."""
     o = c.outcome
@@ -259,7 +254,7 @@ def overlap_ask(planned: StepResult, others: Mapping[str, Iterable[str]]) -> Ste
 def next_step(c: Change, now: datetime) -> Step | None:
     """Return the step a runner should run now, or None while waiting, paused or finished."""
     o = c.outcome
-    if c.finished_at or (c.intent.paused_at and (c.step.kind != StepKind.CLEANUP or _target_paused(c))):
+    if c.finished_at or (c.intent.paused_at and c.step.kind != StepKind.CLEANUP):
         return None
     if o is None or o.exit in {Exit.DONE, Exit.BACK}:
         return c.step
@@ -268,17 +263,21 @@ def next_step(c: Change, now: datetime) -> Step | None:
     return None if o.wake_at and o.wake_at > now else c.step
 
 
-def _target_paused(c: Change) -> bool:
-    """Cleanup runs while paused (abandon) unless the owner paused it at a failing target check."""
-    return any(q.cause == TARGET and q.answer and q.answer.option == "pause" for q in c.questions)
-
-
-def schedule(
-    change: Change, items: Iterable[InboxItem], now: datetime, pr_state: PrState | None = None, *, moved: bool = False
+def schedule(  # noqa: PLR0913 - the PR observation and the profile's consent setting
+    change: Change,
+    items: Iterable[InboxItem],
+    now: datetime,
+    pr_state: PrState | None = None,
+    *,
+    moved: bool = False,
+    asking: bool = True,
 ) -> tuple[Change, Step | None]:
     """Fold the inbox, observe the PR's end and intent flags, and only then apply exclusions."""
     c = fold(change, items, now)
     if not c.finished_at and c.step.kind != StepKind.CLEANUP:
+        if not asking and waiting_consent(c) and (q := open_question(c)) is not None:
+            q.answer = Answer(option=OBSOLETE, text="ask before merge is off", at=now)
+            c.outcome = None  # the merge gate runs again without asking
         if moved and waiting_consent(c):
             c.outcome = None  # the merge step runs again: it routes the comment or offers the moved head
         if pr_state == "merged" or c.intent.abandoned_at:

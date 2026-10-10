@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import hashlib
 import re
 import secrets
@@ -14,27 +13,23 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from owlbear_delivery_next import loop, profile, tools
+from owlbear_delivery_next import loop
+from owlbear_delivery_next.briefs import save_brief
 from owlbear_delivery_next.models import (
     AnswerItem,
     BriefApproval,
     Change,
     CheckResult,
     ConsentItem,
-    Criterion,
     Exit,
     IntentItem,
-    Names,
-    Outcome,
     PersonCheck,
-    Profile,
     PullItem,
-    StepKind,
     Waiting,
 )
 from owlbear_delivery_next.status import status, unloadable
 from owlbear_delivery_next.steps import check
-from owlbear_delivery_next.store import LockHeldError, StoreError
+from owlbear_delivery_next.store import StoreError
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -132,38 +127,6 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
     return out
 
 
-def drafted(old: Change | None, d: tools.BriefDraft, slug: str, handle: str, prof: Profile) -> Change:
-    """The Change with its new brief draft version, waiting for the owner's approval; criteria and checks versioned."""
-    names = Names(branch=f"owlbear/{slug}", target=profile.value(prof, profile.DEFAULT, "main"))
-    c = old or Change(slug=slug, handle=handle, profile_version=prof.version, names=names)
-    before = {k.id: k for k in c.brief.criteria}
-    criteria = []
-    for i, text in enumerate(d.criteria, 1):
-        prev = before.get(f"AC-{i}")
-        criteria.append(Criterion(id=f"AC-{i}", text=text, version=prev.version + (prev.text != text) if prev else 1))
-    v = c.brief.version + 1
-    fields = {"version": v, "title": d.title, "outcome": d.outcome, "scope": d.scope, "criteria": criteria}
-    c.brief = c.brief.model_copy(update=fields)
-    ids, paths, shown = [k.id for k in criteria], loop.coverage(c), {p.id: p for p in c.checks}
-    c.checks = []
-    for p in d.person_checks:
-        prev = shown.get(p.name)
-        procedure = prev.procedure + ((prev.steps, prev.expect) != (p.steps, p.expect)) if prev else 1
-        c.checks.append(
-            PersonCheck(id=p.name, criteria=ids, steps=p.steps, expect=p.expect, paths=paths, procedure=procedure)
-        )
-    c.outcome = Outcome(
-        exit=Exit.PENDING, waiting=Waiting.CHAT, who="you", reason=f"approve brief v{v}", at=datetime.now(UTC)
-    )
-    return c
-
-
-def new_slug(title: str, taken: list[str]) -> str:
-    """A free slug from the title."""
-    base = "-".join(re.findall(r"[a-z0-9]+", title.lower()))[:40].strip("-") or "change"
-    return next(s for n in range(1, 1000) if (s := base if n == 1 else f"{base}-{n}") not in taken)
-
-
 def create_app(store: Store, token: str, host: Host) -> FastAPI:  # noqa: C901, PLR0915 - one closure per route
     """Return the host's app: the Changes page without data, and a token-guarded API under ``/api/next``."""
     app = FastAPI(title="OwlBear Delivery", docs_url=None, redoc_url=None, openapi_url=None)
@@ -197,29 +160,10 @@ def create_app(store: Store, token: str, host: Host) -> FastAPI:  # noqa: C901, 
         return {"accepted": item.kind}
 
     def save(body: object) -> tuple[int, dict[str, Any]]:
-        draft, errors = tools.parse(tools.BriefDraft, body)
-        errors = tools.check_brief(draft) if draft else errors
-        if draft is None or errors:
-            return 422, {"errors": errors}
-        handles = {}
-        for s in (slugs := store.slugs()):
-            with contextlib.suppress(StoreError):
-                handles[store.read(s).handle] = s
-        slug = handles.get(draft.change) if draft.change else new_slug(draft.title, slugs)
-        if slug is None:
-            return 422, {"errors": [f"change: {draft.change} is not a Change here - leave it empty for a new one"]}
-        number = max((int(h[1:]) for h in handles if h[1:].isdigit()), default=0) + 1
-        try:
-            with store.lock(slug) as lock:
-                old = store.read(slug) if draft.change else None
-                if old and (old.step.kind != StepKind.SHAPE or old.finished_at):
-                    return 409, {"errors": [f"change: {draft.change} is approved; ask for changes in the Changes page"]}
-                c = drafted(old, draft, slug, f"c{number}", store.read_profile() or Profile())
-                store.write(lock, c)
-        except (LockHeldError, StoreError) as exc:
-            return 409, {"errors": [f"change: {exc}; try again"]}
-        approve = f"Approve brief v{c.brief.version} of {c.handle} in the Changes page: {link(host.record)}"
-        return 200, {"change": c.handle, "version": c.brief.version, "next": approve}
+        code, out = save_brief(store, body)
+        if code == 200:  # noqa: PLR2004 - HTTP OK
+            out["next"] = f"Approve brief v{out['version']} of {out['change']} in the Changes page: {link(host.record)}"
+        return code, out
 
     @app.get("/", response_class=HTMLResponse)
     def index() -> str:
@@ -279,6 +223,7 @@ def create_app(store: Store, token: str, host: Host) -> FastAPI:  # noqa: C901, 
             "paused": c.intent.paused_at is not None,
             "merge": merge,
             "consent": c.consent.model_dump(mode="json") if c.consent else None,
+            "fixes": [f"fix Change {e['fix']} drafted" for e in events if e.get("event") == "fix-drafted"],
             "activity": events[-20:],
         }
 
