@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -9,7 +10,7 @@ from owlbear_delivery_next import api, cli, profile, roles, sdk_adapter
 from owlbear_delivery_next.host import HostRecord
 from owlbear_delivery_next.models import Profile, ProfileEntry, RoleModel, StepKind
 from owlbear_delivery_next.permissions import Policy
-from owlbear_delivery_next.store import Store
+from owlbear_delivery_next.store import Store, StoreError
 from owlbear_delivery_next.tools import Worktree
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
@@ -50,7 +51,19 @@ def test_a_role_override_parses_a_model_with_colons():
     assert roles.parse("reviewer=vendor:model:xhigh") == ("reviewer", RoleModel(model="vendor:model", effort="xhigh"))
 
 
-@pytest.mark.parametrize("text", ["boss=m:high", "builder=m:extreme", "builder=:high", "builder", "builder=m"])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "boss=m:high",
+        "builder=m:extreme",
+        "builder=:high",
+        "builder=   :high",
+        "builder",
+        "builder=m",
+        "builder=gpt-6-luna:high",
+        "reviewer=claude-haiku-4.5:xhigh",
+    ],
+)
 def test_an_invalid_override_is_refused(text, capsys):
     with pytest.raises(ValueError, match=r"role must be|expected ROLE"):
         roles.parse(text)
@@ -58,6 +71,23 @@ def test_an_invalid_override_is_refused(text, capsys):
         cli.main(["profile", "--role", text])
     assert exc.value.code == 2
     assert "--role" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("model", "effort"), [(" ", "high"), ("gpt-6-luna", "xhigh"), ("claude-haiku-4.5", "low"), ("m", "extreme")]
+)
+def test_a_role_model_is_refused_everywhere_it_is_built(tmp_path, model, effort):
+    with pytest.raises(ValueError, match=r"model must not be empty|always runs with effort max|literal_error|Input"):
+        RoleModel(model=model, effort=effort)
+    raw = Profile().model_dump(mode="json") | {"roles": {"builder": {"model": model, "effort": effort}}}
+    (tmp_path / "profile.json").write_text(json.dumps(raw))
+    with pytest.raises(StoreError, match="cannot be migrated"):
+        Store(tmp_path).read_profile()
+
+
+def test_luna_and_haiku_accept_max_and_the_defaults_are_valid():
+    assert RoleModel(model="claude-haiku-4.5", effort="max").effort == "max"
+    assert all(RoleModel.model_validate(rm.model_dump()) == rm for rm in roles.DEFAULTS.values())
 
 
 def test_sdk_options_carry_the_model_and_reasoning_effort():

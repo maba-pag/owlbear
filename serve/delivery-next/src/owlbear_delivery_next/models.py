@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -488,6 +488,15 @@ class RoleModel(Record):
 
     model: str
     effort: Effort
+
+    @model_validator(mode="after")
+    def _valid(self) -> RoleModel:
+        """A non-blank model; luna and haiku always run at ``max`` (TD-27)."""
+        if not self.model.strip():
+            raise ValueError("model must not be empty")  # noqa: EM101, TRY003
+        if (self.model == "gpt-6-luna" or self.model.startswith("claude-haiku-")) and self.effort != "max":
+            raise ValueError(f"{self.model} always runs with effort max, got {self.effort}")  # noqa: EM102, TRY003
+        return self
 
 
 class Profile(Record):

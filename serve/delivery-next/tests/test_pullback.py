@@ -113,29 +113,157 @@ def test_local_changes_to_an_incoming_path_leave_the_target_behind_and_untouched
     assert (state(repo), (repo / "b.txt").read_text()) == (before, "mine\n")
 
 
-def test_local_commits_are_rebased_and_unrelated_local_changes_kept(repos):
+def worktrees(repo):
+    return [line for line in git(repo, "worktree", "list", "--porcelain").splitlines() if line.startswith("worktree")]
+
+
+def full(repo):
+    """HEAD, branch, status, index and every non-ignored working file."""
+    files = {p: (repo / p).read_bytes() for p in git(repo, "ls-files", "-co", "--exclude-standard").splitlines()}
+    return (*state(repo), git(repo, "ls-files", "-s"), files)
+
+
+def test_local_commits_are_replayed_and_unrelated_local_changes_kept(repos):
     repo, other = repos
-    commit(repo, "local.txt")
+    (repo / "local.txt").write_text("x\n")
+    git(repo, "add", "local.txt")
+    git(repo, "commit", "-q", "-m", "my message", "--author", "Ann <ann@a>")
     (repo / ".gitignore").write_text("edited\n")
     (repo / "new.txt").write_text("untracked\n")
-    head = merged(other)
+    head, wts = merged(other), worktrees(repo)
     result = pullback.run(repo, "main", NOW)
-    assert (result.state, result.reason) == ("updated", "rebased 1 local commits")
-    assert (git(repo, "rev-parse", "HEAD~1"), git(repo, "log", "-1", "--format=%s")) == (head, "local.txt")
+    assert (result.state, result.reason) == ("updated", "replayed 1 local commits onto the merged change")
+    assert git(repo, "rev-parse", "HEAD~1") == head
+    assert git(repo, "log", "-1", "--format=%s|%an <%ae>") == "my message|Ann <ann@a>"
     assert ((repo / ".gitignore").read_text(), (repo / "new.txt").read_text()) == ("edited\n", "untracked\n")
     assert (git(repo, "stash", "list"), git(repo, "status", "--porcelain")) == ("", "M .gitignore\n?? new.txt")
+    assert worktrees(repo) == wts
 
 
-def test_a_conflicting_rebase_is_aborted_and_everything_is_as_before(repos):
+@pytest.mark.parametrize(
+    ("diverged", "reason"), [(False, "fast-forwarded"), (True, "replayed 1 local commits onto the merged change")]
+)
+def test_a_partially_staged_file_keeps_its_index_entry_and_content(repos, diverged, reason):
+    repo, other = repos
+    commit(repo, "part.txt", "head\n")
+    git(repo, "push", "-q", "origin", "main")
+    git(other, "pull", "-q")
+    if diverged:
+        commit(repo, "local.txt")
+    (repo / "part.txt").write_text("staged\n")
+    git(repo, "add", "part.txt")
+    (repo / "part.txt").write_text("working\n")
+    entry, cached = git(repo, "ls-files", "-s", "part.txt"), git(repo, "diff", "--cached")
+    merged(other)
+    result = pullback.run(repo, "main", NOW)
+    assert (result.state, result.reason) == ("updated", reason)
+    assert (git(repo, "ls-files", "-s", "part.txt"), git(repo, "diff", "--cached")) == (entry, cached)
+    assert (repo / "part.txt").read_text() == "working\n"
+
+
+def test_a_conflicting_replay_leaves_the_local_copy_and_worktrees_as_before(repos):
     repo, other = repos
     commit(repo, "b.txt", "local commit\n")
     (repo / ".gitignore").write_text("edited\n")
-    before = state(repo)
+    before, wts = full(repo), worktrees(repo)
     merged(other)
     result = pullback.run(repo, "main", NOW)
-    assert (result.state, result.reason.startswith("local main is behind: rebase undone: ")) == ("behind", True)
-    assert (state(repo), (repo / ".gitignore").read_text()) == (before, "edited\n")
-    assert git(repo, "stash", "list") == ""
+    assert (result.state, result.reason) == (
+        "behind",
+        "local main is behind: your local commits conflict with the merged change",
+    )
+    assert (full(repo), worktrees(repo), git(repo, "stash", "list")) == (before, wts, "")
+
+
+def test_a_failing_signature_leaves_the_local_copy_untouched(repos):
+    repo, other = repos
+    commit(repo, "local.txt")
+    git(repo, "config", "commit.gpgSign", "true")
+    git(repo, "config", "gpg.program", "false")
+    before, wts = full(repo), worktrees(repo)
+    merged(other)
+    result = pullback.run(repo, "main", NOW)
+    assert result.state == "behind"
+    assert (full(repo), worktrees(repo)) == (before, wts)
+
+
+def test_a_local_merge_commit_leaves_the_target_behind(repos):
+    repo, other = repos
+    git(repo, "switch", "-q", "-c", "side")
+    commit(repo, "side.txt")
+    git(repo, "switch", "-q", "main")
+    commit(repo, "local.txt")
+    git(repo, "merge", "-q", "--no-ff", "-m", "merge side", "side")
+    before = full(repo)
+    merged(other)
+    result = pullback.run(repo, "main", NOW)
+    assert (result.state, result.reason) == ("behind", "local main is behind: local merge commits; pull manually")
+    assert full(repo) == before
+
+
+def test_a_dirty_rename_target_refused_by_reset_keep_is_untouched(repos):
+    repo, other = repos
+    commit(repo, "a.txt", "one\ntwo\nthree\nfour\n")
+    git(repo, "push", "-q", "origin", "main")
+    git(other, "pull", "-q")
+    git(repo, "mv", "a.txt", "b.txt")
+    git(repo, "commit", "-q", "-m", "rename")
+    (repo / "b.txt").write_text("one\ntwo\nthree\nfour\nmine\n")
+    before = full(repo)
+    commit(other, "a.txt", "ONE\ntwo\nthree\nfour\n")
+    git(other, "push", "-q", "origin", "main")
+    result = pullback.run(repo, "main", NOW)
+    assert result.state == "behind"
+    assert full(repo) == before
+    assert "<<<<<<<" not in (repo / "b.txt").read_text()
+
+
+def test_a_staged_rename_whose_source_the_merge_edits_is_a_collision(repos):
+    repo, other = repos
+    commit(repo, "a.txt", "one\n")
+    git(repo, "push", "-q", "origin", "main")
+    git(other, "pull", "-q")
+    git(repo, "mv", "a.txt", "b.txt")
+    (repo / "b.txt").write_text("mine\n")
+    before = full(repo)
+    commit(other, "a.txt", "ONE\n")
+    git(other, "push", "-q", "origin", "main")
+    result = pullback.run(repo, "main", NOW)
+    assert (result.state, "a.txt overlap" in result.reason) == ("behind", True)
+    assert full(repo) == before
+
+
+def test_two_worktrees_holding_the_target_leave_it_behind(repos, tmp_path):
+    repo, other = repos
+    git(repo, "worktree", "add", "-q", "--force", str(tmp_path / "second"), "main")
+    before = full(repo)
+    merged(other)
+    result = pullback.run(repo, "main", NOW)
+    assert (result.state, result.reason) == ("behind", "local main is behind: main is checked out in 2 worktrees")
+    assert full(repo) == before
+
+
+def test_a_case_only_untracked_collision_counts_when_git_ignores_case(repos):
+    repo, other = repos
+    git(repo, "config", "core.ignorecase", "true")
+    (repo / "B.TXT").write_text("mine\n")
+    before = full(repo)
+    merged(other)
+    result = pullback.run(repo, "main", NOW)
+    assert result.state == "behind"
+    assert (full(repo), (repo / "B.TXT").read_text()) == (before, "mine\n")
+
+
+def test_an_untracked_file_where_the_merge_needs_a_directory_is_a_collision(repos):
+    repo, other = repos
+    (repo / "d").write_text("mine\n")
+    before = full(repo)
+    (other / "d").mkdir()
+    commit(other, "d/f.txt")
+    git(other, "push", "-q", "origin", "main")
+    result = pullback.run(repo, "main", NOW)
+    assert (result.state, "d/f.txt overlap" in result.reason) == ("behind", True)
+    assert full(repo) == before
 
 
 def test_an_untracked_file_at_an_incoming_path_leaves_the_target_behind(repos):
@@ -166,8 +294,11 @@ def test_a_target_mid_rebase_or_bisect_is_behind(repos, op):
     assert git(repo, "rev-parse", "HEAD") == detached
 
 
-def test_an_ignored_file_the_merge_would_overwrite_is_kept_and_the_target_is_behind(repos):
+@pytest.mark.parametrize("diverged", [False, True])
+def test_an_ignored_file_the_merge_would_overwrite_is_kept_and_the_target_is_behind(repos, diverged):
     repo, other = repos
+    if diverged:
+        commit(repo, "local.txt")
     before = git(repo, "rev-parse", "HEAD")
     (repo / "keep.log").write_text("local log\n")
     commit(other, "placeholder")
@@ -176,7 +307,7 @@ def test_an_ignored_file_the_merge_would_overwrite_is_kept_and_the_target_is_beh
     git(other, "commit", "-q", "-m", "log")
     git(other, "push", "-q", "origin", "main")
     result = pullback.run(repo, "main", NOW)
-    assert (result.state, result.reason.startswith("local main is behind: ")) == ("behind", True)
+    assert (result.state, "keep.log overlap" in result.reason) == ("behind", True)
     assert ((repo / "keep.log").read_text(), git(repo, "rev-parse", "HEAD")) == ("local log\n", before)
 
 

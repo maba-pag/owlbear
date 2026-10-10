@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import get_args
 
+from pydantic import ValidationError
+
 from owlbear_delivery_next.models import Effort, Profile, Role, RoleModel, StepKind
 
 DEFAULTS: dict[Role, RoleModel] = {
@@ -38,16 +40,18 @@ def parse(text: str) -> tuple[Role, RoleModel]:
     """``ROLE=MODEL:EFFORT``.
 
     Raises:
-        ValueError: Unknown role, empty model or unknown effort.
+        ValueError: Unknown role, or a model and effort :class:`RoleModel` refuses.
     """
     role, _, rest = text.partition("=")
     model, _, effort = rest.rpartition(":")
     if role not in DEFAULTS:
         raise ValueError(f"role must be one of {', '.join(DEFAULTS)}, got {role!r}")  # noqa: EM102, TRY003
-    if not model.strip() or effort not in EFFORTS:
-        msg = f"expected ROLE=MODEL:EFFORT with effort one of {', '.join(EFFORTS)}, got {text!r}"
-        raise ValueError(msg)
-    return role, RoleModel(model=model.strip(), effort=effort)
+    try:
+        return role, RoleModel(model=model.strip(), effort=effort)
+    except ValidationError as exc:
+        why = "; ".join(e["msg"] for e in exc.errors())
+        msg = f"expected ROLE=MODEL:EFFORT with effort one of {', '.join(EFFORTS)}, got {text!r}: {why}"
+        raise ValueError(msg) from exc
 
 
 def table(profile: Profile | None) -> str:
