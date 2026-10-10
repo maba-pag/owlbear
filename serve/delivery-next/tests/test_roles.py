@@ -74,10 +74,12 @@ def test_an_invalid_override_is_refused(text, capsys):
 
 
 @pytest.mark.parametrize(
-    ("model", "effort"), [(" ", "high"), ("gpt-6-luna", "xhigh"), ("claude-haiku-4.5", "low"), ("m", "extreme")]
+    ("model", "effort"),
+    [(" ", "high"), ("auto", "high"), ("gpt-6-luna", "xhigh"), ("claude-haiku-4.5", "low"), ("m", "extreme")],
 )
 def test_a_role_model_is_refused_everywhere_it_is_built(tmp_path, model, effort):
-    with pytest.raises(ValueError, match=r"model must not be empty|always runs with effort max|literal_error|Input"):
+    refused = r"model must not be empty|must be named|always runs with effort max|literal_error|Input"
+    with pytest.raises(ValueError, match=refused):
         RoleModel(model=model, effort=effort)
     raw = Profile().model_dump(mode="json") | {"roles": {"builder": {"model": model, "effort": effort}}}
     (tmp_path / "profile.json").write_text(json.dumps(raw))
