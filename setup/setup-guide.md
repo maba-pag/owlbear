@@ -217,8 +217,8 @@ the repository, Delivery requests, or status.
   Stop if the mode is invalid; do not switch to Chromium or the operator's daily Edge profile.
 2. Call `acquire` with one locally supplied, operator-approved SharePoint URL. The first action
   launches the visible Edge window with the fixed OwlBear profile. Complete first-use sign-in, site
-  trust, consent, or MFA directly in that window. Do not send credentials or session material through
-  an OwlBear tool.
+  trust, consent, or MFA directly in that window; no interactive MCP tool participates.
+  Do not send credentials or session material through an OwlBear request or result.
 
   **Expected result:** the Edge window is live and the operator confirms authenticated SharePoint
   content. Browser readiness alone does not count as authentication.

@@ -993,8 +993,9 @@ async def test_declared_mcp_tools_exist_in_live_registries() -> None:
         "keeps status `ready`, and the next `acquire` reopens the page." in normalized_guidance
     )
     assert (
-        "Assign first-use interaction to the operator in the visible managed browser window; "
-        "never send credentials or session material through an OwlBear request or result." in normalized_guidance
+        "Assign first-use sign-in, site trust, consent, or MFA directly to the operator in the "
+        "visible managed browser window; no interactive MCP tool participates, and credentials "
+        "or session material must never pass through an OwlBear request or result." in normalized_guidance
     )
 
 
