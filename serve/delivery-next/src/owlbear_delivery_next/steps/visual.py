@@ -263,7 +263,10 @@ def judged(  # noqa: PLR0913 - one result from every visual input
     shot = next((s for s in shots if s.error), None) or next((s for s in shots if s.file), None)
     named = f" (see {shot.file or f'{shot.state} at {shot.width}px'})" if shot else ""
     title = f"Fix: the visual check of {head[:7]} failed: {found[0][:200]}{named}"
-    detail = review.findings(verdict) if verdict and verdict.findings else "\n".join(f"- {f}" for f in found)[:4000]
-    fix = engine.task(c, title, "review", detail)
+    parts = review.findings(verdict) if verdict and verdict.findings else ["\n".join(f"- {f}" for f in found)[:4000]]
+    fix = engine.task(c, title, "review", parts[0])
+    more = [engine.task(c, title, "review", d, f"t{int(fix.id[1:]) + i}") for i, d in enumerate(parts[1:], 1)]
     cause = cause_key(ErrorKind.CHECKS, StepKind.CHECK, VISUAL)
-    return c, StepResult(exit=Exit.BACK, back_to=StepKind.BUILD, cause=cause, reason=title, fix_task=fix)
+    return c, StepResult(
+        exit=Exit.BACK, back_to=StepKind.BUILD, cause=cause, reason=title, fix_task=fix, more_fixes=more
+    )

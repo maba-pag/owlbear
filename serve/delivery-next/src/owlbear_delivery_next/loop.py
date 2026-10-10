@@ -38,7 +38,7 @@ from owlbear_delivery_next.models import (
 from owlbear_delivery_next.moves import ask, enter, go, open_task, resolved
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Iterable
 
     from owlbear_delivery_next.models import Change, InboxItem
 
@@ -88,6 +88,7 @@ class StepResult(Record):
     plan: Plan | None = None
     review: Review | None = None
     fix_task: Task | None = None
+    more_fixes: list[Task] = Field(default_factory=list)  # further parts of a repair too long for one task
     paths: dict[str, str] = Field(default_factory=dict)
     preserved: list[str] = Field(default_factory=list)
     denial: str | None = None
@@ -146,29 +147,6 @@ def brief_review(change: Change, verdict: StepResult) -> tuple[Change, StepResul
     ]
     question = Question(step=StepKind.SHAPE, text=text, options=options)
     return c, StepResult(exit=Exit.ASK, reason=text, question=question)
-
-
-def overlaps(plan: Plan, others: Mapping[str, Iterable[str]]) -> dict[str, list[str]]:
-    """Each other open Change whose scope shares a path or directory with the plan's task scopes (D7)."""
-    mine = {p for t in plan.tasks for p in t.scope}
-    found = {h: sorted({p for p in scope if any(evidence.within(p, m) for m in mine)}) for h, scope in others.items()}
-    return {h: paths for h, paths in found.items() if paths}
-
-
-def overlap_ask(planned: StepResult, others: Mapping[str, Iterable[str]]) -> StepResult:
-    """An accepted plan that overlaps another open Change asks the owner to order them or proceed."""
-    found = overlaps(planned.plan, others) if planned.exit == Exit.DONE and planned.plan else {}
-    if not found:
-        return planned
-    named = "; ".join(f"{h} on {', '.join(p[:5])}" for h, p in sorted(found.items()))
-    text = f"The plan overlaps open Changes: {named}. Proceed in parallel (conflicts are resolved when updating), or "
-    text += "pause this Change until they merge?"
-    options = [
-        Option(id="proceed", label="Proceed in parallel", next="done"),
-        Option(id="order", label="Pause this Change; resume it after they merge", next="pause"),
-    ]
-    question = Question(step=StepKind.PLAN, text=text, options=options)
-    return planned.model_copy(update={"exit": Exit.ASK, "reason": text, "question": question})
 
 
 def next_step(c: Change, now: datetime) -> Step | None:
@@ -332,8 +310,6 @@ def apply(change: Change, result: StepResult, now: datetime) -> Change:
                 raise ValueError(msg)
             budgets.back(c, result, now)
         case Exit.ASK if result.question:
-            if kind == StepKind.PLAN and result.plan:
-                c.plan = result.plan  # an accepted plan that overlaps: kept for the owner's answer
             ask(c, result.question, now)
         case Exit.STOP if result.stop:
             c.stop = result.stop

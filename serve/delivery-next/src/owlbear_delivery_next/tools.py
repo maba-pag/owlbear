@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from owlbear_delivery_next import confinement, evidence
+from owlbear_delivery_next import confinement, evidence, permissions
 from owlbear_delivery_next.models import VISUAL
 
 if TYPE_CHECKING:
@@ -440,7 +440,7 @@ def check_recipe(recipe: CheckRecipe, tree: Worktree, launch: Sequence[str], roo
     where = (root / recipe.directory).resolve()
     if not (where.is_relative_to(root.resolve()) and where.is_dir()):
         errors.append(f'directory: {recipe.directory} is not a directory in the worktree - e.g. "packages/app"')
-    if not any(recipe.command.split()[: len(c.split())] == c.split() for c in launch):
+    if not permissions.allowed(recipe.command, launch):
         errors.append(f"command: not an allowed launch command - use one of {', '.join(launch) or 'none'}")
     if (outside := confinement.escape(root, where, recipe.command)) is not None:
         errors.append(f"command: {outside} is outside the worktree - keep every path argument inside it")

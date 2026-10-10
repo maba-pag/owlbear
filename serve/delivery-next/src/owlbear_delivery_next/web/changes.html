@@ -230,6 +230,7 @@ async function refresh() {
         const spent = ` · ${c.credits.change.toFixed(2)} credits (step ${c.credits.step.toFixed(2)})`;
         status.append(el("span", `${c.now}${step}${spent}${c.quiet ? " · quiet" : ""}`, { class: "card muted" }));
       }
+      for (const o of c.overlaps || []) status.append(el("span", o, { class: "card muted" }));
       row.append(el("td", c.slug), status, el("td", c.action || "—"));
       row.onclick = row.onkeydown = (event) => {
         if (event.type === "click" || event.key === "Enter") { selected = c.slug; refresh(); }

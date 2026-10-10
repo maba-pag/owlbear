@@ -111,6 +111,14 @@ def test_spend_accumulates_every_usage_report_by_model():
     )
 
 
+def test_a_resumed_session_adds_only_the_growth_of_its_cumulative_usage():
+    spend = Spend().plus({"credits": 2.0, "models": {"gpt": {"credits": 2.0, "tokens": 10}}}, "s1")
+    spend = spend.plus({"credits": 5.0, "models": {"gpt": {"credits": 5.0, "tokens": 25}}}, "s1")
+    spend = spend.plus({"credits": 1.0, "models": {"gpt": {"credits": 1.0, "tokens": 4}}}, "s2")
+    assert (spend.credits, spend.models["gpt"]) == (6.0, ModelSpend(credits=6.0, tokens=29))
+    assert Spend.model_validate_json(spend.model_dump_json()) == spend  # the last reports survive a restart
+
+
 def running(started: datetime) -> Change:
     return Change(
         slug="c1", plan=PLAN, step=Step(kind=StepKind.BUILD, task="t2", started_at=started), spend=Spend(credits=3.0)
@@ -130,6 +138,7 @@ def test_card_shows_the_last_event_step_time_and_credits():
         "step_time": "5 min",
         "quiet": False,
         "credits": {"change": 3.0, "step": 0.75},
+        "overlaps": [],
     }
 
 

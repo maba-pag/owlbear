@@ -18,8 +18,8 @@ SRC = Path(__file__).resolve().parents[1] / "src" / "owlbear_delivery_next"
 LIMIT = 400
 SUBMITS = (tools.SUBMIT, tools.REVIEW, tools.RECIPE, tools.PLAN)  # one per worker role and step
 _SKIP = (ast.Import, ast.ImportFrom, ast.TypeAlias, ast.Pass)
-_TYPE_BODY = (ast.AnnAssign, ast.Assign, ast.Pass)
 _INTERFACE_BASES = {"Protocol", "TypedDict"}
+_FIELD_CALLS = {"Field", "field"}
 
 
 def _bare(stmt: ast.stmt) -> bool:
@@ -31,6 +31,24 @@ def _bare(stmt: ast.stmt) -> bool:
     )
 
 
+def _plain(value: ast.expr | None) -> bool:
+    """No value, a literal, a dotted name or a ``Field(...)``/``field(...)`` declaration - nothing computed."""
+    if value is None or isinstance(value, ast.Name | ast.Attribute):
+        return True
+    if isinstance(value, ast.Call):
+        return getattr(value.func, "id", getattr(value.func, "attr", "")) in _FIELD_CALLS
+    try:
+        ast.literal_eval(value)
+    except ValueError, TypeError, SyntaxError, MemoryError, RecursionError:
+        return False
+    return True
+
+
+def _declaration(stmt: ast.stmt) -> bool:
+    """An annotation or assignment whose value is plain; meaningful only in module and class bodies."""
+    return isinstance(stmt, ast.AnnAssign | ast.Assign) and _plain(stmt.value)
+
+
 def _type_only(stmt: ast.stmt) -> bool:
     match stmt:
         case ast.ClassDef(bases=bases) if any(
@@ -38,14 +56,14 @@ def _type_only(stmt: ast.stmt) -> bool:
         ):
             return True
         case ast.ClassDef(body=body):
-            return all(isinstance(s, _TYPE_BODY) or _bare(s) or _type_only(s) for s in body)
+            return all(_declaration(s) or _bare(s) or isinstance(s, ast.Pass) or _type_only(s) for s in body)
         case ast.FunctionDef(body=body) | ast.AsyncFunctionDef(body=body):
             return all(_bare(s) or isinstance(s, ast.Pass) for s in body)
     return False
 
 
-def _excluded(stmt: ast.stmt) -> bool:
-    if isinstance(stmt, _SKIP) or _bare(stmt) or _type_only(stmt):
+def _excluded(stmt: ast.stmt, *, declarative: bool) -> bool:
+    if isinstance(stmt, _SKIP) or _bare(stmt) or _type_only(stmt) or (declarative and _declaration(stmt)):
         return True
     return isinstance(stmt, ast.If) and isinstance(stmt.test, ast.Name) and stmt.test.id == "TYPE_CHECKING"
 
@@ -61,16 +79,17 @@ def _span(stmt: ast.stmt) -> set[int]:
     return set(range(start, (stmt.end_lineno or stmt.lineno) + 1))
 
 
-def _statement_lines(body: list[ast.stmt]) -> set[int]:
+def _statement_lines(body: list[ast.stmt], *, declarative: bool = True) -> set[int]:
+    """Logic lines of *body*; *declarative* bodies (module, class) exclude plain declarations."""
     lines: set[int] = set()
     for stmt in body:
-        if _excluded(stmt):
+        if _excluded(stmt, declarative=declarative):
             continue
         own = _span(stmt)
         for block in _blocks(stmt):
             for child in block:
                 own -= _span(child)
-            lines |= _statement_lines(block)
+            lines |= _statement_lines(block, declarative=isinstance(stmt, ast.ClassDef))
         lines |= own
     return lines
 
@@ -132,6 +151,23 @@ def test_counter_ignores_what_is_not_logic() -> None:
         '''
     )
     assert logic_lines(snippet) == 5  # def, if, return, else, return
+
+
+@pytest.mark.parametrize(
+    ("snippet", "expected"),
+    [
+        ("LIMIT = 400\nNAMES = ('a', 'b')\nKIND = Exit.DONE\n", 0),  # plain module constants
+        ("TABLE = build()\nPAIRS = {k: 1 for k in 'ab'}\n", 2),  # computed module values are logic
+        ("class A:\n    x: int\n    y: list[int] = Field(default_factory=list)\n    z = 'z'\n", 0),
+        ("class A:\n    x: int = compute()\n", 2),  # a computed default makes the class logic
+        ("class A:\n    x: int = 0\n    items = [f(i) for i in range(3)]\n", 2),  # class line, computed body line
+        ("class A:\n    x: int = 0\n\n    def m(self):\n        return 1\n", 3),  # class, def, return
+        ("def f():\n    x = 0\n    return x\n", 3),  # function assignments always count
+        ("if flag:\n    X = 1\n", 2),  # assignments under control flow count
+    ],
+)
+def test_counter_counts_computation_in_declarations(snippet: str, expected: int) -> None:
+    assert logic_lines(snippet) == expected
 
 
 @pytest.mark.parametrize("path", _modules(), ids=lambda p: str(p.relative_to(SRC)))

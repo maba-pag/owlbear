@@ -275,6 +275,7 @@ class Review(Record):
     verdict: Literal["pass", "fix"]
     round: int = 1
     tree: str | None = None  # the reviewed tree; ``inputs.paths`` hold the engine-computed covered blobs
+    findings: list[str] = Field(default_factory=list)  # every accepted finding, complete
 
 
 class Step(Record):
@@ -404,14 +405,35 @@ class Spend(Record):
 
     credits: float = 0.0
     models: dict[str, ModelSpend] = Field(default_factory=dict)
+    last: dict[str, Spend] = Field(default_factory=dict)  # each session's latest cumulative report
 
-    def plus(self, usage: Mapping[str, Any]) -> Spend:
-        """Return the total after one session's usage report; a failed report adds nothing."""
+    def plus(self, usage: Mapping[str, Any], session: str = "") -> Spend:
+        """Return the total after one session's usage report; a failed report adds nothing.
+
+        A session's report is cumulative, so a resumed session adds only its growth since its last report.
+        """
+        if "error" in usage:
+            return self
+        reported = (usage.get("models") or {}).items()
+        now = Spend(
+            credits=usage.get("credits") or 0.0,
+            models={n: ModelSpend(credits=m["credits"], tokens=m["tokens"]) for n, m in reported},
+        )
+        was = self.last.get(session, Spend()) if session else Spend()
         models = {k: v.model_copy() for k, v in self.models.items()}
-        for name, m in (usage.get("models") or {}).items():
-            old = models.get(name, ModelSpend())
-            models[name] = ModelSpend(credits=old.credits + m["credits"], tokens=old.tokens + m["tokens"])
-        return Spend(credits=self.credits + (usage.get("credits") or 0.0), models=models)
+        for name, m in now.models.items():
+            old, prior = models.get(name, ModelSpend()), was.models.get(name, ModelSpend())
+            gain, grew = max(m.credits - prior.credits, 0.0), max(m.tokens - prior.tokens, 0)
+            models[name] = ModelSpend(credits=old.credits + gain, tokens=old.tokens + grew)
+        last = self.last | ({session: now} if session else {})
+        return Spend(credits=self.credits + max(now.credits - was.credits, 0.0), models=models, last=last)
+
+
+class Overlap(Record):
+    """Paths this Change's plan shares with another Change's scope: information, never a question (D7)."""
+
+    other: str
+    paths: list[str] = Field(default_factory=list)
 
 
 class Change(Record):
@@ -427,6 +449,7 @@ class Change(Record):
     decisions: list[Decision] = Field(default_factory=list)
     questions: list[Question] = Field(default_factory=list)
     plan: Plan | None = None
+    overlaps: list[Overlap] = Field(default_factory=list)  # recorded when the plan is accepted
     reviews: list[Review] = Field(default_factory=list)
     step: Step = Field(default_factory=lambda: Step(kind=StepKind.SHAPE))
     outcome: Outcome | None = None

@@ -148,6 +148,7 @@ def card(
         "step_time": _age(now - since) if since and not c.finished_at else None,
         "quiet": quiet or silent(c, activity, now, tool) is not None,
         "credits": {"change": round(c.spend.credits, 2), "step": round(step, 2)},
+        "overlaps": [f"overlaps with {o.other}: {', '.join(o.paths[:5])}" for o in c.overlaps],
     }
 
 

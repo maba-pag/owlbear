@@ -12,7 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from owlbear_delivery_next import api, briefs, host, loop, processes, runner, sdk_adapter, tools
+from owlbear_delivery_next import api, briefs, host, loop, permissions, processes, runner, sdk_adapter, tools
 from owlbear_delivery_next.models import (
     VISUAL,
     AnswerItem,
@@ -341,6 +341,18 @@ def test_the_launch_recipe_follows_the_worker_path_policy(tmp_path):
 
     assert any("/outside is outside the worktree" in e for e in errors("npm run preview --prefix /outside"))
     assert errors("npm run preview -- --port 4173") == []
+
+
+@pytest.mark.parametrize("command", ["npm run preview", "npm  run preview --port 1", "npm run previews", "npm run"])
+def test_the_launch_allow_list_and_the_permission_policy_share_one_rule(tmp_path, command, monkeypatch):
+    fields = {"directory": ".", "command": command, "ready_url": "http://127.0.0.1:4173/", "summary": "ran"}
+    errs = tools.check_recipe(tools.CheckRecipe(**fields), tools.Worktree("h", "h"), ["npm run preview"], tmp_path)
+    assert (not any(e.startswith("command: not an allowed") for e in errs)) is permissions.allowed(
+        command, ["npm run preview"]
+    )
+    monkeypatch.setattr(permissions, "allowed", lambda *_a: False)
+    errs = tools.check_recipe(tools.CheckRecipe(**fields), tools.Worktree("h", "h"), ["npm run preview"], tmp_path)
+    assert any(e.startswith("command: not an allowed") for e in errs)  # the recipe check asks the policy's rule
 
 
 def test_a_visual_environment_is_disposed_on_stop_or_abandon_and_its_runner_crash_is_charged(flow):

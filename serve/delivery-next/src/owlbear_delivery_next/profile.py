@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
 from dataclasses import dataclass
+from fnmatch import fnmatch
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
@@ -32,6 +34,8 @@ METHOD, DELETE, HOOKS = "merge:method", "cleanup:delete-remote-branch", "git:pre
 POLL, WINDOW, ASK = "poll:ci-seconds", "ci:start-window-seconds", "merge:ask-before"
 SETTINGS = {METHOD: "", DELETE: "no", POLL: "20", WINDOW: "300", ASK: "no"}  # owner settings; kept across re-detection
 CONFIRMED = "owner confirmed"
+DIGEST = "; workflows "  # declared-CI evidence ends with the digest of the workflow files it was read from
+FLOWS = ".github/workflows"
 _PREFERRED = (MergeMethod.SQUASH, MergeMethod.MERGE, MergeMethod.REBASE)
 CI_EVENTS = frozenset({"pull_request", "pull_request_target", "merge_group"})
 HEAD_EVENTS = frozenset({"pull_request", "pull_request_target"})  # their checks report on the PR head
@@ -132,11 +136,47 @@ def workflow(text: str) -> Workflow:
 
 def workflows(repo: Path) -> dict[str, Workflow]:
     """Return every workflow of *repo* by file name."""
-    paths = sorted((repo / ".github" / "workflows").glob("*.y*ml"))
-    return {p.name: workflow(p.read_text(errors="replace")) for p in paths}
+    return {n: workflow(t) for n, t in workflow_texts(repo).items()}
 
 
-def ci_entries(flows: dict[str, Workflow]) -> dict[str, ProfileEntry]:
+def workflow_texts(repo: Path) -> dict[str, str]:
+    """Every workflow file's text in the working tree of *repo*, by file name."""
+    paths = sorted((repo / FLOWS).glob("*.y*ml"))
+    return {p.name: p.read_text(errors="replace") for p in paths}
+
+
+def _git(repo: Path, *args: str) -> str | None:
+    done = subprocess.run(  # noqa: S603 - fixed Git executable and argument vector
+        [resolve_git_executable(), *args], cwd=repo, capture_output=True, text=True, check=False, timeout=60
+    )
+    return done.stdout if done.returncode == 0 else None
+
+
+def workflow_texts_at(repo: Path, rev: str) -> dict[str, str] | None:
+    """Every workflow file's text at commit *rev*; None when the commit is not readable here."""
+    listed = _git(repo, "ls-tree", "--name-only", rev, f"{FLOWS}/")
+    if listed is None:
+        return None
+    texts = {}
+    for path in sorted(p for p in listed.splitlines() if fnmatch(PurePosixPath(p).name, "*.y*ml")):
+        text = _git(repo, "show", f"{rev}:{path}")
+        if text is None:
+            return None
+        texts[PurePosixPath(path).name] = text
+    return texts
+
+
+def flows_digest(texts: dict[str, str]) -> str:
+    """A short digest of workflow file names and contents."""
+    return hashlib.sha256(json.dumps(sorted(texts.items())).encode()).hexdigest()[:16]
+
+
+def digest_of(entry: ProfileEntry | None) -> str:
+    """The workflow digest an entry's evidence was read from, or empty when it names none."""
+    return entry.evidence.rpartition(DIGEST)[2] if entry and DIGEST in entry.evidence else ""
+
+
+def ci_entries(flows: dict[str, Workflow], digest: str = "") -> dict[str, ProfileEntry]:
     """CI workflows and declared check names; an unresolved trigger or name is unknown, never "no CI"."""
     ci = {n: w for n, w in flows.items() if w.events is None or w.events & CI_EVENTS}
     triggers = [n for n, w in ci.items() if w.events is None]
@@ -145,6 +185,7 @@ def ci_entries(flows: dict[str, Workflow]) -> dict[str, ProfileEntry]:
     declared = ", ".join(dict.fromkeys(j for w in on_head.values() for j in w.jobs or ())) or "none"
     flow_ev = f"unresolved trigger: {', '.join(triggers)}" if triggers else ".github/workflows CI triggers"
     job_ev = f"unresolved check names: {', '.join(names + triggers)}" if names or triggers else "jobs"
+    job_ev += f"{DIGEST}{digest}" if digest else ""
     return {
         WORKFLOWS: _entry("unknown" if triggers else "known", ", ".join(ci) or "none", flow_ev),
         DECLARED: _entry("unknown" if names or triggers else "known", declared, job_ev),
@@ -182,6 +223,11 @@ def rule_entries(rules: Rules) -> dict[str, ProfileEntry]:
     }
 
 
+def _ci(repo: Path) -> dict[str, ProfileEntry]:
+    texts = workflow_texts(repo)
+    return ci_entries({n: workflow(t) for n, t in texts.items()}, flows_digest(texts))
+
+
 def detect(repo: Path, gh: Provider, previous: Profile | None) -> Profile:
     """Detect the profile; owner settings, install and allow entries and still-valid confirmations are kept."""
     prev = previous or Profile()
@@ -194,7 +240,7 @@ def detect(repo: Path, gh: Provider, previous: Profile | None) -> Profile:
         DEFAULT: _entry("known", r.default_branch, "gh repo view"),
         METHODS: _entry("known", methods or "none", "gh repo view"),
         PUSH: _entry("known", "yes" if r.can_push else "no", "gh repo view viewerPermission"),
-        **ci_entries(workflows(repo)),
+        **_ci(repo),
         HOOKS: _hook(repo),
         **package_entries(repo),
         **rule_entries(gh.read_rules(r.repository, r.default_branch)),
@@ -245,7 +291,11 @@ def value(profile: Profile, key: str, default: str = "") -> str:
 
 def names(profile: Profile, key: str) -> tuple[str, ...]:
     """Return a comma-separated entry as names; ``none`` and unknown entries give none."""
-    entry = profile.entries.get(key)
+    return listed(profile.entries.get(key))
+
+
+def listed(entry: ProfileEntry | None) -> tuple[str, ...]:
+    """Return a known comma-separated entry's names; ``none`` and unknown entries give none."""
     if entry is None or entry.state != "known" or entry.value in {"", "none"}:
         return ()
     return tuple(n.strip() for n in entry.value.split(",") if n.strip())

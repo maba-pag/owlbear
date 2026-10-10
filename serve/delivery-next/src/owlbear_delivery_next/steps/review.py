@@ -17,17 +17,27 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.session_result import Run
 
 
-TRUNCATED = "\n[truncated]"
+def lines(review: tools.ReviewResult) -> list[str]:
+    """Every finding as one line."""
+    return [f"- {f.place}: {f.problem} - fix: {f.fix}" for f in review.findings]
 
 
-def findings(review: tools.ReviewResult, limit: int = 4000) -> str:
-    """Every finding on its own line, cut to *limit* characters with an explicit marker only beyond it."""
-    text = "\n".join(f"- {f.place}: {f.problem} - fix: {f.fix}" for f in review.findings)
-    return text if len(text) <= limit else text[: limit - len(TRUNCATED)] + TRUNCATED
+def findings(review: tools.ReviewResult, limit: int = 4000) -> list[str]:
+    """Every finding on its own line, packed into parts of at most *limit* characters; none is cut or dropped.
+
+    A finding's bounded fields keep each line far below a task's detail limit.
+    """
+    parts: list[str] = []
+    for line in lines(review):
+        if parts and len(parts[-1]) + 1 + len(line) <= limit:
+            parts[-1] += "\n" + line
+        else:
+            parts.append(line)
+    return parts
 
 
 def recorded(change: Change, task: Task | None, run: Run, path: Path, result: StepResult) -> StepResult:
-    """Attach the review record and, for ``fix``, the repair task.
+    """Attach the review record and, for ``fix``, the repair task(s) carrying every finding.
 
     The covered paths are the engine's own diff of the reviewed range (both rename ends) and nothing the
     reviewer listed. The record binds their git fingerprints and the head's tree, so a later head keeps the
@@ -41,7 +51,9 @@ def recorded(change: Change, task: Task | None, run: Run, path: Path, result: St
     covered = worktree.observe(path, change.names.target, since).changed
     inputs = Inputs(criteria=criteria, paths=worktree.fingerprints(path, covered, run.head))
     tree = worktree.tree(path, run.head)
-    review = Review(task=change.step.task, commit=run.head, inputs=inputs, verdict=p.verdict, tree=tree)
+    review = Review(
+        task=change.step.task, commit=run.head, inputs=inputs, verdict=p.verdict, tree=tree, findings=lines(p)
+    )
     if p.verdict == "pass":
         return result.model_copy(update={"review": review})
     kind = change.step.kind
@@ -53,5 +65,17 @@ def recorded(change: Change, task: Task | None, run: Run, path: Path, result: St
     of = f"task {change.step.task}" if change.step.task else "the final review"
     title = f"Fix {len(p.findings)} review finding(s) of {of}"
     item = task.item if task and change.step.task else None  # a conversation task's repair answers the same item
-    fix = Task(id=f"t{n}", title=title, scope=scope, checks=checks, origin="review", detail=findings(p), item=item)
-    return result.model_copy(update={"review": review, "fix_task": fix, "score": score})
+    parts = findings(p) or [""]
+    fixes = [
+        Task(
+            id=f"t{n + i}",
+            title=title + (f" (part {i + 1} of {len(parts)})" if len(parts) > 1 else ""),
+            scope=scope,
+            checks=checks,
+            origin="review",
+            detail=part,
+            item=item,
+        )
+        for i, part in enumerate(parts)
+    ]
+    return result.model_copy(update={"review": review, "fix_task": fixes[0], "more_fixes": fixes[1:], "score": score})

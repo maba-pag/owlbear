@@ -173,21 +173,6 @@ def test_brief_review_binds_the_version_and_findings_return_to_the_owner():
     assert step.kind == K.PLAN
 
 
-def test_an_accepted_plan_overlapping_another_open_change_asks_to_order_or_proceed():
-    plan = Plan(tasks=[Task(id="t1", title="one", scope=["packages/app/src"])])
-    others = {"c2": ["packages/app"], "c3": ["packages/web"], "c4": ["."]}
-    assert loop.overlaps(plan, others) == {"c2": ["packages/app"], "c4": ["."]}
-    done = StepResult(exit=Exit.DONE, plan=plan)
-    assert loop.overlap_ask(done, {"c3": ["packages/web"]}) is done
-    c = loop.apply(change(K.PLAN, None).model_copy(update={"plan": None}), loop.overlap_ask(done, others), NOW)
-    q = loop.open_question(c)
-    assert ([o.id for o in q.options], c.plan, "c2 on packages/app" in q.text) == (["proceed", "order"], plan, True)
-    _, step = loop.schedule(c, [AnswerItem(at=NOW, question=q.id, option="proceed")], NOW)
-    assert (step.kind, step.task) == (K.BUILD, "t1")
-    paused, step = loop.schedule(c, [AnswerItem(at=NOW, question=q.id, option="order")], NOW)
-    assert (step, paused.intent.paused_at) == (None, NOW)
-
-
 def test_cause_count_survives_retry_back_replan_and_an_unobserved_answer():
     cause = failures.cause_key(ErrorKind.PROJECT_ENV, K.BUILD, "TEST_API_KEY")
     c = change()

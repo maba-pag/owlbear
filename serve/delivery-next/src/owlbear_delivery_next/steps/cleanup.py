@@ -12,7 +12,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next import briefs, profile
+from owlbear_delivery_next import briefs, budgets, profile
 from owlbear_delivery_next.git.remote_git import run_remote_git
 from owlbear_delivery_next.github.provider import classify_checks
 from owlbear_delivery_next.loop import StepResult
@@ -196,7 +196,11 @@ def fix_change(ctx: Ctx, c: Change, check: str, sha: str, url: str) -> None:
 
 
 def target_check(ctx: Ctx, c: Change, pr: PullRequest | None) -> tuple[Change, StepResult | None]:
-    """Watch the required and declared checks on the merge commit within the window; a failure drafts a fix Change."""
+    """Watch the required and declared checks on the merge commit; a failure, however late, drafts a fix Change.
+
+    Running checks keep cleanup pending with a growing poll and no deadline; the start window applies only to
+    checks that never started.
+    """
     sha = pr.merge_commit_sha if pr and pr.merged else None
     if not sha or c.step.mode == "abandon":
         return c, None
@@ -212,10 +216,12 @@ def target_check(ctx: Ctx, c: Change, pr: PullRequest | None) -> tuple[Change, S
         if c.missing is None or c.missing.head != sha:
             c.missing = Episode(head=sha, since=ctx.now)
         window = timedelta(seconds=int(profile.value(ctx.profile, profile.WINDOW, "300")))
-        if ctx.now - c.missing.since < window:
+        elapsed = ctx.now - c.missing.since
+        if state.running or elapsed < window:
             reason = f"{len(state.running) + len(state.missing)} of {state.expected} checks running on {target}"
-            return c, engine.pending(Waiting.CI, reason, ctx.poll())
-        ctx.log(c.slug, "target-checks-unfinished", sha=sha, running=[*state.running, *state.missing])
+            wake = ctx.now + max(ctx.poll() - ctx.now, min(elapsed / 2, budgets.PAUSE_CAP))
+            return c, engine.pending(Waiting.CI, reason, wake)
+        ctx.log(c.slug, "target-checks-unfinished", sha=sha, missing=list(state.missing))
     c.missing = None
     return c, None
 

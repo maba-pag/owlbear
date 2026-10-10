@@ -8,9 +8,20 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next import budgets, failures, loop, profile
+from owlbear_delivery_next.git.remote_git import RemoteGitError
 from owlbear_delivery_next.github.provider import ProviderError, classify_checks
 from owlbear_delivery_next.loop import StepResult
-from owlbear_delivery_next.models import Episode, ErrorKind, Exit, Response, Score, StepKind, Stop, Waiting
+from owlbear_delivery_next.models import (
+    Episode,
+    ErrorKind,
+    Exit,
+    Option,
+    Response,
+    Score,
+    StepKind,
+    Stop,
+    Waiting,
+)
 from owlbear_delivery_next.steps import check, engine
 from owlbear_delivery_next.steps import conversation as conv
 
@@ -24,11 +35,57 @@ MISSING = "gate:follow:missing:"
 REPOSTS = 3
 
 
-def ci(ctx: Ctx, pr: PullRequest) -> CiState:
+def ci(ctx: Ctx, pr: PullRequest, declared: tuple[str, ...]) -> CiState:
     """Classify the checks at the PR head against the declared CI and the required checks."""
     checks = ctx.gh.observe_checks(ctx.repository, pr.number, pr.head_sha)
-    declared = profile.names(ctx.profile, profile.DECLARED)
     return classify_checks(checks, declared, profile.names(ctx.profile, profile.REQUIRED))
+
+
+def _flows_at(c: Change, pr: PullRequest) -> dict[str, str] | None:
+    """The PR head's workflow files, fetching its branch once when the head is not here; None when unreadable."""
+    if not c.names.worktree:
+        return None
+    path = Path(c.names.worktree)
+    if not engine.git_ok(path, "cat-file", "-e", f"{pr.head_sha}^{{commit}}"):
+        try:
+            engine.fetch(path, pr.head_branch)
+        except RemoteGitError:
+            return None
+    return profile.workflow_texts_at(path, pr.head_sha)
+
+
+def declared(ctx: Ctx, c: Change, pr: PullRequest, step: StepKind) -> tuple[tuple[str, ...], StepResult | None]:
+    """The checks that must pass at the PR head, asking once per workflow digest when unresolved.
+
+    The profile's entry holds while its workflow evidence matches the head; else they are detected from the head.
+    """
+    entry = ctx.profile.entries.get(profile.DECLARED)
+    texts = _flows_at(c, pr)
+    if texts is None:  # never trust the profile for a head whose workflows were not read
+        return (), engine.pending(Waiting.NETWORK, f"reading the workflow files at {pr.head_sha[:7]}", ctx.poll())
+    bound, digest = profile.digest_of(entry), profile.flows_digest(texts)
+    if digest != bound:
+        entry = profile.ci_entries({n: profile.workflow(t) for n, t in texts.items()}, digest)[profile.DECLARED]
+    if entry and entry.state == "known":
+        return profile.listed(entry), None
+    cause = failures.cause_key(ErrorKind.GATE, step, f"declared-{digest}")
+    answers = [q.answer for q in c.questions if q.cause == cause and q.answer]
+    names = ", ".join(n.strip() for n in answers[-1].text.split(",") if n.strip()) if answers else ""
+    value = "none" if answers and answers[-1].option == "none" else names
+    if value and digest == bound:
+        ctx.profile = profile.confirm(ctx.profile, profile.DECLARED, value, ctx.now)
+        ctx.store.write_profile(ctx.profile)
+        ctx.log(c.slug, "profile-confirmed", key=profile.DECLARED, value=value)
+    if value:
+        return () if value == "none" else tuple(n.strip() for n in value.split(",")), None
+    options = [
+        Option(id="none", label="No checks", next=step),
+        Option(id="names", label="These checks (type their names)", next=step),
+        Option(id="pause", label="Pause", next="pause"),
+    ]
+    changed = f" (workflows changed at {pr.head_sha[:7]})" if digest != bound else ""
+    text = f"Which checks must pass before merging{changed}? Name them, comma-separated, or choose none"
+    return (), engine.ask(step, text, cause, options)
 
 
 def fix_ci(ctx: Ctx, c: Change, state: CiState, step: StepKind) -> StepResult:
@@ -264,7 +321,10 @@ def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:  # noqa: PLR0911 - on
     c, pr, held = reopen(ctx, c, pr)
     if held is not None:
         return c, held
-    state = ci(ctx, pr)
+    names, held = declared(ctx, c, pr, F)
+    if held is not None:
+        return c, held
+    state = ci(ctx, pr, names)
     c = episode(ctx, c, pr.head_sha, state)
     if state.failed:
         return c, fix_ci(ctx, c, state, F)
@@ -276,6 +336,6 @@ def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:  # noqa: PLR0911 - on
     if state.running or state.missing:
         return c, waiting(state, ctx)
     paths = check.declared(c)
-    ctx.log(c.slug, "ci", head=pr.head_sha, passed=list(state.passed), ignored=list(state.ignored))
+    ctx.log(c.slug, "ci", head=pr.head_sha, passed=list(state.passed))
     reason = f"CI passed: {', '.join(state.passed)}"
     return c, StepResult(exit=Exit.DONE, reason=reason, paths=paths, head=pr.head_sha)

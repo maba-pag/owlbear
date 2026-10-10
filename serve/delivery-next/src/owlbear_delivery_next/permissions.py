@@ -38,7 +38,8 @@ class Request:
     tool: str = ""
 
 
-def _matches(text: str, prefixes: Sequence[str]) -> bool:
+def allowed(text: str, prefixes: Sequence[str]) -> bool:
+    """Whether *text* starts with the words of one of *prefixes*: the one allow-list rule for commands."""
     words = text.split()
     return any(words[: len(p.split())] == p.split() for p in prefixes)
 
@@ -70,9 +71,9 @@ def _shell(policy: Policy, req: Request) -> str | None:  # noqa: PLR0911 - one r
         if (reached := outside(policy.root, base, words, mutating=not read_only)) is not None:
             return f"`{text}` reaches {reached}, outside the worktree"
         base = resolve(base, words[1]) if words[:1] == ["cd"] and len(words) > 1 else base
-        if _matches(text, DENIED):
+        if allowed(text, DENIED):
             return f"`{text}` is denied"
-        if not (_matches(text, policy.commands) or (read_only and all(inside(policy.root, p) for p in req.paths))):
+        if not (allowed(text, policy.commands) or (read_only and all(inside(policy.root, p) for p in req.paths))):
             return f"`{text}` is not in this step's allow list"
     return None
 
@@ -95,7 +96,7 @@ def view(r: Any) -> Request:  # noqa: ANN401 - one of the SDK's permission reque
     if kind == "shell":
         ro = tuple(c.identifier for c in r.commands if c.read_only)
         texts = [s.full_command_text for s in r.command_segments or ()] or [c.identifier for c in r.commands]
-        commands = tuple((t, _matches(t, ro)) for t in texts or [r.full_command_text])
+        commands = tuple((t, allowed(t, ro)) for t in texts or [r.full_command_text])
         return Request(kind, commands, tuple(r.possible_paths or ()), bool(r.possible_urls))
     if kind in {"read", "write"}:
         path = r.resolved_path or getattr(r, "path", None) or getattr(r, "file_name", "")

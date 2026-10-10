@@ -52,11 +52,11 @@ def resolved(c: Change, task_id: str | None) -> set[str]:
 
 
 def fix_task(c: Change, r: StepResult, fixes: str | None = None) -> str | None:
-    """Add the result's repair task to the plan once and return its id."""
+    """Add the result's repair task, and the parts of a repair too long for it, to the plan once; return its id."""
     if r.fix_task is None or c.plan is None:
         return None
     if any(t.id == r.fix_task.id for t in c.plan.tasks):
         return r.fix_task.id  # an unfinished task already in the plan is resumed, not duplicated
-    c.plan.tasks.append(r.fix_task.model_copy(update={"fixes": fixes}))
+    c.plan.tasks += [t.model_copy(update={"fixes": fixes}) for t in [r.fix_task, *r.more_fixes]]
     cover(c)
     return r.fix_task.id

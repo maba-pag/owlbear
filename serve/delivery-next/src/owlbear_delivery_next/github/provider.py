@@ -180,13 +180,12 @@ class MergeResult(_Model):
 
 @dataclass(frozen=True)
 class CiState:
-    """Expected checks at one head, by name: passed, failed, running and never started."""
+    """Checks at one head, by name: passed, failed, running and never started."""
 
     passed: tuple[str, ...] = ()
     failed: tuple[Check, ...] = ()
     running: tuple[str, ...] = ()
     missing: tuple[str, ...] = ()
-    ignored: tuple[str, ...] = ()
 
     @property
     def expected(self) -> int:
@@ -197,11 +196,11 @@ class CiState:
 def classify_checks(checks: tuple[Check, ...], declared: tuple[str, ...], required: tuple[str, ...]) -> CiState:
     """Classify the head's checks against the declared CI and required checks; a missing one is never passed (P10).
 
-    A check is expected when it is declared, required by the profile, or marked required by GitHub. The latest
-    run of a name wins; a non-expected failure is reported as ignored, not as blocking.
+    A check is expected when it ran at the head, is declared, or is required by the profile or GitHub: every
+    observed check gates the automatic merge (TD-15). The latest run of a name wins.
     """
     latest = {c.name: c for c in sorted(checks, key=lambda c: c.completed_at.timestamp() if c.completed_at else 1e12)}
-    expected = dict.fromkeys([*declared, *required, *(c.name for c in latest.values() if c.required)])
+    expected = dict.fromkeys([*declared, *required, *latest])
     passed, failed, running, missing = [], [], [], []
     for name in expected:
         c = latest.get(name)
@@ -213,10 +212,7 @@ def classify_checks(checks: tuple[Check, ...], declared: tuple[str, ...], requir
             passed.append(name)
         else:
             failed.append(c)
-    ignored = tuple(
-        n for n, c in latest.items() if n not in expected and c.conclusion and c.conclusion.casefold() not in SUCCESS
-    )
-    return CiState(tuple(passed), tuple(failed), tuple(running), tuple(missing), ignored)
+    return CiState(tuple(passed), tuple(failed), tuple(running), tuple(missing))
 
 
 class Provider(Protocol):

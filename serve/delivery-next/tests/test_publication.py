@@ -201,21 +201,66 @@ def test_a_locally_integrated_but_unpublished_head_goes_back_to_publish_and_neve
     assert gh.merges == []
 
 
-def test_unknown_declared_checks_ask_the_owner_once_per_profile_version_before_merging(tmp_path, clone):
-    gh = FakeGh(pr(head=A))
+def test_unknown_declared_checks_ask_the_owner_once_per_workflow_digest_before_merging(tmp_path, clone):
+    head, entries = ci_head(clone, "${{ inputs.n }}")
+    gh = FakeGh(pr(head=head))
     gh.checks = ()
-    p = prof(**{profile.DECLARED: ProfileEntry(state="unknown")})
+    p = prof(**entries)
     cx = ctx(tmp_path, gh, p)
     cx.store.root.mkdir()
-    c, result = merge.run(cx, change(worktree=str(clone)))
+    c, result = merge.run(cx, change(worktree=str(clone), head=head))
     assert (result.exit, [o.id for o in result.question.options]) == (Exit.ASK, ["none", "names", "pause"])
-    assert result.cause.endswith(f"declared-v{p.version}")
+    assert result.cause.endswith(f"declared-{profile.digest_of(entries[profile.DECLARED])}")
     assert gh.merges == []
     c = loop.apply(c, result, NOW)
     c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option="none")], NOW)
-    held = merge.declared(cx, c)
-    assert (held, profile.value(cx.profile, profile.DECLARED)) == (None, "none")
+    names, held = follow.declared(cx, c, gh.pr, StepKind.MERGE)
+    assert (names, held, profile.value(cx.profile, profile.DECLARED)) == ((), None, "none")
     assert profile.known(cx.store.read_profile(), profile.DECLARED)
+
+
+def _commit_workflow(clone, name, text):
+    (clone / ".github" / "workflows").mkdir(parents=True, exist_ok=True)
+    (clone / ".github" / "workflows" / name).write_text(text)
+    git(clone, "add", ".github")
+    git(clone, "commit", "-q", "-m", f"add {name}")
+    return git(clone, "rev-parse", "HEAD")
+
+
+def ci_head(clone, *names):
+    """Commit a pull-request workflow whose jobs report *names*; return the head and the profile's CI entries there."""
+    jobs = "".join(f'  j{i}: {{name: "{n}", runs-on: x}}\n' for i, n in enumerate(names))
+    head = _commit_workflow(clone, "ci.yml", f"on: pull_request\njobs:\n{jobs}")
+    texts = profile.workflow_texts_at(clone, head)
+    return head, profile.ci_entries({n: profile.workflow(t) for n, t in texts.items()}, profile.flows_digest(texts))
+
+
+def test_a_none_confirmation_does_not_survive_a_workflow_the_change_adds(tmp_path, clone):
+    texts = profile.workflow_texts_at(clone, A)
+    detected = profile.ci_entries({}, profile.flows_digest(texts))[profile.DECLARED]
+    p = prof(**{profile.DECLARED: detected.model_copy(update={"state": "unknown"})})
+    cx = ctx(tmp_path, FakeGh(pr(head=A)), profile.confirm(p, profile.DECLARED, "none", NOW))
+    cx.store.root.mkdir()
+    assert follow.declared(cx, change(worktree=str(clone)), cx.gh.pr, StepKind.FOLLOW) == ((), None)
+    matrix = "on: pull_request\njobs:\n  t:\n    strategy: {matrix: {os: [a, b]}}\n"
+    head = _commit_workflow(clone, "matrix.yml", matrix)
+    gh = FakeGh(pr(head=head))
+    gh.checks = (Check(name="t (a)", status="completed", conclusion="failure"),)
+    cx.gh = gh
+    c = change(StepKind.FOLLOW, worktree=str(clone), head=head)
+    c, result = follow.run(cx, c)
+    assert (result.exit, "workflows changed" in result.reason) == (Exit.ASK, True)
+    assert follow.run(cx, c)[1].cause == result.cause  # asked once per digest
+    c = loop.apply(c, result, NOW)
+    answer = AnswerItem(at=NOW, question=c.outcome.question, option="names", text="t (a), t (b)")
+    c, _ = loop.schedule(c, [answer], NOW)
+    _, result = follow.run(cx, c)
+    assert (result.exit, result.back_to, result.fix_task.title) == (
+        Exit.BACK,
+        StepKind.BUILD,
+        "Fix the failing CI check t (a)",
+    )
+    assert profile.value(cx.profile, profile.DECLARED) == "none"  # the Change's answer does not rewrite the profile
 
 
 def test_the_merge_carries_the_consented_head_as_its_sha_guard(tmp_path, clone):
@@ -883,7 +928,7 @@ def test_a_missing_declared_check_is_never_passed():
         Check(name="lint", status="completed", conclusion="failure"),
     )
     state = classify_checks(checks, declared=("test", "build"), required=())
-    assert (state.passed, state.missing, state.failed, state.ignored) == (("test",), ("build",), (), ("lint",))
+    assert (state.passed, state.missing, [c.name for c in state.failed]) == (("test",), ("build",), ["lint"])
 
 
 def test_required_and_github_required_checks_are_expected_and_the_latest_run_wins():
@@ -910,21 +955,54 @@ def test_a_check_that_never_starts_is_pending_then_asks_the_owner_in_follow_and_
     assert late.exit == Exit.ASK
     assert "test never started on PR #7" in late.reason
     assert follow.episode(cx, c, B, classify_checks(gh.checks, ("test",), ())).missing is None
-    gh.pr, gh.checks, cx.now = pr(head=A), (), NOW
-    m = loop.fold(change(worktree=str(clone)), [ConsentItem(at=NOW, head=A)], NOW)
+    head, entries = ci_head(clone, "test")
+    gh.pr, gh.checks, cx.now, cx.profile = pr(head=head), (), NOW, prof(**entries)
+    m = loop.fold(change(worktree=str(clone), head=head), [ConsentItem(at=NOW, head=head)], NOW)
     m, early = merge.run(cx, m)
     cx.now = NOW + timedelta(minutes=10)
     _, late = merge.run(cx, m)
     assert (early.waiting, late.exit, late.question.options[0].next) == (Waiting.CHECK_START, Exit.ASK, StepKind.MERGE)
 
 
-def test_a_failing_check_goes_back_to_build_with_its_log(tmp_path):
-    gh = FakeGh(pr(head=B))
+def test_a_failing_check_goes_back_to_build_with_its_log(tmp_path, clone):
+    head, entries = ci_head(clone, "test")
+    gh = FakeGh(pr(head=head))
     gh.checks = (Check(name="test", status="completed", conclusion="failure", job_id=9),)
-    _, result = follow.run(ctx(tmp_path, gh), change(StepKind.FOLLOW))
+    _, result = follow.run(ctx(tmp_path, gh, prof(**entries)), change(StepKind.FOLLOW, worktree=str(clone)))
     assert (result.exit, result.back_to, result.cause) == (Exit.BACK, StepKind.BUILD, "checks:follow:test")
     assert result.fix_task.origin == "ci"
     assert "fails only in CI" in result.fix_task.detail
+
+
+def test_a_failing_check_neither_declared_nor_required_blocks_the_merge_and_goes_back_to_build(tmp_path, clone):
+    head, entries = ci_head(clone, "test")
+    gh = FakeGh(pr(head=head))
+    merged(gh)
+    gh.checks += (Check(name="lint", status="completed", conclusion="failure"),)
+    _, result = merge.run(ctx(tmp_path, gh, prof(**entries)), change(worktree=str(clone), head=head))
+    assert (result.exit, result.back_to, result.cause, result.fix_task.title, gh.merges) == (
+        Exit.BACK,
+        StepKind.BUILD,
+        "checks:merge:lint",
+        "Fix the failing CI check lint",
+        [],
+    )
+
+
+def test_unreadable_workflow_files_at_the_head_are_pending_and_never_merged(tmp_path, clone, monkeypatch):
+    gh = FakeGh(pr(head=B))  # B is neither here nor fetchable: the branch was never pushed
+    _, result = follow.run(ctx(tmp_path, gh), change(StepKind.FOLLOW, worktree=str(clone)))
+    assert (result.exit, result.waiting, result.reason) == (
+        Exit.PENDING,
+        Waiting.NETWORK,
+        f"reading the workflow files at {B[:7]}",
+    )
+    gh = FakeGh(pr(head=A))
+    merged(gh)
+    monkeypatch.setattr(profile, "workflow_texts_at", lambda _repo, _rev: None)
+    c = loop.fold(change(worktree=str(clone)), [ConsentItem(at=NOW, head=A)], NOW)
+    _, result = merge.run(ctx(tmp_path, gh), c)
+    assert (result.exit, result.waiting, gh.merges) == (Exit.PENDING, Waiting.NETWORK, [])
 
 
 # Readback decisions on unknown push and merge results
@@ -1098,16 +1176,37 @@ def test_a_pause_never_holds_cleanup():
     assert loop.next_step(c, NOW) == c.step
 
 
-def test_running_target_checks_wait_within_the_window_then_cleanup_proceeds(tmp_path):
+def test_running_target_checks_have_no_deadline_and_a_late_failure_drafts_one_fix(tmp_path):
     gh = FakeGh(pr(head=A, state="closed", merged=True, merge_commit_sha=B))
     target_checks(gh, ("test", "in_progress", None))
     cx = ctx(tmp_path, gh)
+    cx.store.root.mkdir()
     c, held = cleanup.target_check(cx, change(StepKind.CLEANUP), gh.pr)
     assert (held.exit, held.waiting) == (Exit.PENDING, Waiting.CI)
-    cx.now = NOW + timedelta(hours=1)
+    first = held.wake_at - cx.now
+    cx.now = NOW + timedelta(seconds=301)
+    c, held = cleanup.target_check(cx, c, gh.pr)
+    assert (held.exit, held.wake_at - cx.now > first) == (Exit.PENDING, True)  # still running: pending, slower poll
+    target_checks(gh, ("test", "completed", "failure"))
+    c, held = cleanup.target_check(cx, c, gh.pr)
+    assert (held, len(cx.events("c1", "fix-drafted")), len(cx.store.slugs())) == (None, 1, 1)
+
+
+def test_never_started_target_checks_wait_within_the_window_then_cleanup_proceeds(tmp_path):
+    gh = FakeGh(pr(head=A, state="closed", merged=True, merge_commit_sha=B))
+    target_checks(gh)
+    cx = ctx(tmp_path, gh)
+    c, held = cleanup.target_check(cx, change(StepKind.CLEANUP), gh.pr)
+    assert (held.exit, held.waiting) == (Exit.PENDING, Waiting.CI)
+    cx.now = NOW + timedelta(seconds=301)
     c, held = cleanup.target_check(cx, c, gh.pr)
     assert (held, c.missing) == (None, None)
-    assert cx.events("c1", "target-checks-unfinished")[-1]["sha"] == B
+    assert cx.events("c1", "target-checks-unfinished")[-1] | {"at": 0} == {
+        "event": "target-checks-unfinished",
+        "at": 0,
+        "sha": B,
+        "missing": ["test"],
+    }
 
 
 def test_unknown_rules_make_merging_human_assisted(tmp_path, clone):
@@ -1293,33 +1392,35 @@ def test_a_task_is_measured_from_its_own_start_without_merged_target_paths(clone
     )
 
 
-def test_a_fix_task_has_a_short_title_and_carries_every_finding_up_to_its_bound(clone):
-    finding = {"place": "a.txt:1", "problem": "AC-1: " + "p" * 400, "fix": "f" * 400}
-    review_, _ = tools.parse(
-        tools.ReviewResult, {"verdict": "fix", "findings": [finding] * 6, "covered_paths": ["a.txt"]}
-    )
+def test_findings_beyond_one_tasks_detail_limit_are_kept_whole_across_repair_tasks(clone):
+    findings = [{"place": f"a.txt:{i}", "problem": "AC-1: " + "p" * 400, "fix": "f" * 400} for i in range(10)]
+    review_, _ = tools.parse(tools.ReviewResult, {"verdict": "fix", "findings": findings, "covered_paths": ["a.txt"]})
     c = change(StepKind.REVIEW)
     c.step.task = "t1"
     run = Run("s", "result", review_, head=worktree.head(clone))
-    fix = review.recorded(c, None, run, clone, loop.StepResult(exit=Exit.RETRY, reason="cut")).fix_task
-    assert (fix.title, fix.detail.count("- a.txt:1: AC-1: "), len(fix.detail)) == (
-        "Fix 6 review finding(s) of task t1",
-        5,
-        4000,
-    )
-    assert fix.detail.endswith("\n[truncated]")
-    assert not review.findings(review_, 10_000).endswith("[truncated]")
+    r = review.recorded(c, None, run, clone, loop.StepResult(exit=Exit.RETRY, reason="cut"))
+    lines = review.lines(review_)
+    assert (len("\n".join(lines)) > 4000, r.review.findings) == (True, lines)  # the record keeps every finding
+    tasks = [r.fix_task, *r.more_fixes]
+    assert [t.title for t in tasks] == [f"Fix 10 review finding(s) of task t1 (part {i} of 3)" for i in (1, 2, 3)]
+    assert all(len(t.detail) <= 4000 for t in tasks)
+    assert "\n".join(t.detail for t in tasks).splitlines() == lines  # none lost, none cut
+    c = loop.apply(c, r, NOW)
+    assert ([t.id for t in c.plan.tasks[-3:]], c.step.task) == (["t2", "t3", "t4"], "t2")
+    assert {t.fixes for t in c.plan.tasks[-3:]} == {"t1"}
 
 
 # Reopen and the pre-push hook
 
 
 @pytest.mark.parametrize("push", ["yes", "no"])
-def test_reopen_reopens_the_pr_when_permitted_else_asks_the_owner(tmp_path, push):
-    gh = FakeGh(pr(head=B, state="closed"))
-    c, _ = loop.schedule(change(StepKind.FOLLOW), [], NOW, "closed")
+def test_reopen_reopens_the_pr_when_permitted_else_asks_the_owner(tmp_path, clone, push):
+    head, entries = ci_head(clone, "test")
+    gh = FakeGh(pr(head=head, state="closed"))
+    c, _ = loop.schedule(change(StepKind.FOLLOW, worktree=str(clone)), [], NOW, "closed")
     c, _ = loop.schedule(c, [AnswerItem(at=NOW, question="q1", option="reopen")], NOW, "closed")
-    c, result = follow.run(ctx(tmp_path, gh, prof(**{profile.PUSH: ProfileEntry(state="known", value=push)})), c)
+    pushing = {profile.PUSH: ProfileEntry(state="known", value=push)}
+    c, result = follow.run(ctx(tmp_path, gh, prof(**entries, **pushing)), c)
     if push == "yes":
         assert (result.exit, gh.reopened, bool(c.questions[0].effect_observed_at)) == (Exit.DONE, [7], True)
     else:

@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next import (
     budgets,
     loop,
+    overlap,
     permissions,
     profile,
     prompts,
@@ -37,7 +38,7 @@ from owlbear_delivery_next.steps import (
     visual,
     worktree,
 )
-from owlbear_delivery_next.store import LockHeldError, Store, StoreError, git_common_dir
+from owlbear_delivery_next.store import LockHeldError, Store, git_common_dir
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.models import Change
@@ -74,16 +75,7 @@ def _previous(store: Store, slug: str, session: str | None) -> dict[int, float |
 
 def _others(store: Store, slug: str) -> dict[str, list[str]]:
     """Scopes of the other open Changes of this clone: their plan's task scopes, else their brief's."""
-    out = {}
-    for other in store.slugs():
-        try:
-            o = store.read(other)
-        except StoreError:
-            continue
-        scope = [p for t in o.plan.tasks for p in t.scope] if o.plan else o.brief.scope
-        if other != slug and scope and not (o.finished_at or o.intent.abandoned_at):
-            out[o.handle or other] = sorted(set(scope))
-    return out
+    return {n.handle: n.scope for n in overlap.neighbours(store, slug, datetime.now(UTC)) if not n.merged}
 
 
 def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
@@ -101,6 +93,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     if s.kind == StepKind.BUILD and task and task.base is None:
         task.base = worktree.head(path)
     since = task.base if task and s.kind in {StepKind.BUILD, StepKind.REVIEW} else None
+    start = worktree.head(path) if s.kind == StepKind.INTEGRATE else None
     store.write(lock, change)  # The session id and task base are durable before the runtime starts.
     others = _others(store, slug) if s.kind == StepKind.PLAN else {}
     parts = prompts.session(change, profile, path, others)
@@ -144,9 +137,11 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     _log(store, lock, change, run, {"kind": s.kind, "exit": result.exit})
     if s.kind == StepKind.PLAN and result.plan:
         message = prompts.plan_review(change, result.plan, path, others)
-        planned = _challenge(store, lock, change, dataclasses.replace(cfg, message=message), result)
-        result = loop.overlap_ask(planned, others)
+        result = _challenge(store, lock, change, dataclasses.replace(cfg, message=message), result)
+        if result.exit == Exit.DONE and result.plan:  # shared paths are shown, never asked about (D7)
+            change.overlaps = overlap.found(result.plan, others, overlap.generated(path))
         end = datetime.now(UTC)
+    result = overlap.integrated(store, change, path, (start, run.ending), result)
     if isinstance(p := run.payload, tools.WrongPremise) and p.stage == "target" and s.kind == StepKind.BUILD:
         result = engine.needs_target(change, path, f"{p.reason} ({'; '.join(p.evidence)})", end)
     if answer and session_result.effect_seen(run):
@@ -161,7 +156,7 @@ def _log(store: Store, lock: Lock, change: Change, run: session_result.Run, fiel
     step = {"event": "step", "at": datetime.now(UTC).isoformat(timespec="seconds"), "session": run.session_id}
     step |= fields | {"ending": run.ending, "head": run.head, "usage": run.usage}
     step["termination"] = dataclasses.asdict(run.termination) if run.termination else None
-    change.spend = change.spend.plus(run.usage)
+    change.spend = change.spend.plus(run.usage, run.session_id)
     store.write(lock, change)
     store.log(lock, change.slug, step)
     _out(json.dumps(step, default=str))
