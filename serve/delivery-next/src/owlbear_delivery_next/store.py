@@ -225,7 +225,9 @@ class Store:
         name = f"{time.time_ns():020d}-{uuid.uuid4().hex[:8]}.json"
         atomic_write(self._dir(slug) / "inbox" / name, _INBOX.dump_json(item).decode())
 
-    def fold(self, lock: Lock, slug: str, now: datetime, pr_state: PrState | None = None) -> tuple[Change, Step | None]:
+    def fold(
+        self, lock: Lock, slug: str, now: datetime, pr_state: PrState | None = None, *, moved: bool = False
+    ) -> tuple[Change, Step | None]:
         """Fold the inbox under the lock; consumed item names are saved with the Change, so a replay skips them."""
         lock.check(slug)
         change = self.read(slug)
@@ -239,7 +241,7 @@ class Store:
                 files.append(path)
             except ValidationError:
                 path.rename(path.with_suffix(".rejected"))
-        change, step = loop.schedule(change, items, now, pr_state)
+        change, step = loop.schedule(change, items, now, pr_state, moved=moved)
         change.inbox_acked = acked + [p.name for p in files]
         self.write(lock, change)
         for path in present:

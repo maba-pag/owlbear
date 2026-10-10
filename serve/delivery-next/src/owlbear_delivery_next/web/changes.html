@@ -13,12 +13,14 @@
   tr.row { cursor: pointer; } tr.row:hover, tr.row:focus { background: #f3f3f3; }
   section { margin-top: 1.5rem; } fieldset { border: 1px solid #ccc; margin: .8rem 0; }
   .muted { color: #666; } .error { color: #a00; } textarea { width: 100%; }
+  .stale { opacity: .45; pointer-events: none; }
 </style>
 </head>
 <body>
 <h1>Changes</h1>
 <p id="error" class="error" role="alert"></p>
-<table aria-label="Changes">
+<p id="seen" class="muted"></p>
+<table id="list" aria-label="Changes">
 <thead><tr><th scope="col">Change</th><th scope="col">Status</th><th scope="col">Next action</th></tr></thead>
 <tbody id="changes"></tbody></table>
 <section id="detail" aria-live="polite"></section>
@@ -30,16 +32,25 @@ if (hash.get("token")) {
   history.replaceState(null, "", location.pathname);
 }
 const token = sessionStorage.getItem("token");
-let selected = null;
+let selected = null, lastSeen = null, busy = false;
+
+class HostDown extends Error {}
+class Restarted extends Error {}
 
 async function call(path, body) {
-  const init = { headers: { Authorization: `Bearer ${token}` } };
+  const init = { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(5000) };
   if (body) {
     init.method = "POST";
     init.body = JSON.stringify(body);
     init.headers["Content-Type"] = "application/json";
   }
-  const response = await fetch(`/api/next${path}`, init);
+  let response;
+  try {
+    response = await fetch(`/api/next${path}`, init);
+  } catch {
+    throw new HostDown();
+  }
+  if (response.status === 401 && token) throw new Restarted();
   const data = await response.json();
   if (!response.ok) {
     throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail));
@@ -58,9 +69,26 @@ function send(path, body) {
   call(`/changes/${selected}${path}`, body).then(() => {
     document.activeElement.blur();
     return refresh();
-  }, (e) => {
-    document.getElementById("error").textContent = e.message;
-  });
+  }, failed);
+}
+
+function unreachable(e) {
+  const error = document.getElementById("error");
+  if (e instanceof Restarted) {
+    error.replaceChildren("Delivery restarted at a new address — open the link from chat or ",
+      el("code", "owlbear-next status"), ".");
+  } else {
+    error.replaceChildren("Delivery is not running. Start it with the VS Code task \"OwlBear Delivery host\" or ",
+      el("code", "owlbear-next host"), " in the project, then reload this page.");
+  }
+  for (const id of ["list", "detail"]) document.getElementById(id).classList.add("stale");
+  if (lastSeen) document.getElementById("seen").textContent = `last seen ${lastSeen.toLocaleTimeString()}`;
+}
+
+function failed(e) {
+  if (e instanceof HostDown || e instanceof Restarted) return unreachable(e);
+  const hint = "Open the URL the host printed, including #token=…";
+  document.getElementById("error").textContent = token ? e.message : hint;
 }
 
 function questionForm(q) {
@@ -141,6 +169,8 @@ async function showDetail() {
 }
 
 async function refresh() {
+  if (busy) return;
+  busy = true;
   try {
     const rows = (await call("/changes")).map((c) => {
       const row = el("tr", undefined, { class: "row", tabindex: "0" });
@@ -151,11 +181,14 @@ async function refresh() {
       return row;
     });
     document.getElementById("changes").replaceChildren(...rows);
-    document.getElementById("error").textContent = "";
+    lastSeen = new Date();
+    document.getElementById("error").textContent = document.getElementById("seen").textContent = "";
+    for (const id of ["list", "detail"]) document.getElementById(id).classList.remove("stale");
     await showDetail();
   } catch (e) {
-    const hint = "Open the URL the host printed, including #token=…";
-    document.getElementById("error").textContent = token ? e.message : hint;
+    failed(e);
+  } finally {
+    busy = false;
   }
 }
 

@@ -225,8 +225,8 @@ def main(argv: list[str] | None = None) -> int:
     store = Store.open(repo)
     try:
         with store.lock(args.change) as lock:
-            state = engine.observe(store, repo, args.change)
-            change, step = store.fold(lock, args.change, datetime.now(UTC), state)
+            state, moved = engine.observe(store, repo, args.change)
+            change, step = store.fold(lock, args.change, datetime.now(UTC), state, moved=moved)
             if step is None or change.env is not None:
                 _out("nothing to run; the host owns a check environment" if change.env else "nothing to run")
             elif step.kind in AGENT:

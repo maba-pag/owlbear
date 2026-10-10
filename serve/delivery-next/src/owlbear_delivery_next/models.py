@@ -186,6 +186,7 @@ class Task(Record):
     origin: Literal["plan", "review", "ci", "pr-feedback", "person-check", "integration"] = "plan"
     detail: str = Field(default="", max_length=4000)  # CI log tail, review thread or merge instruction
     done: bool = False
+    fixes: str | None = None  # the task whose review findings this fix task resolves
 
 
 class Plan(Record):

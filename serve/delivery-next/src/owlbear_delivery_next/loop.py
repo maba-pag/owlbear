@@ -41,6 +41,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.models import Change, InboxItem, PersonCheck
 
 type PrState = Literal["open", "merged", "closed"]
+type Seen = tuple[PrState | None, bool]  # the PR's end state; whether a consent wait saw a comment or a new head
 
 RETRY_LIMIT = 3
 FLAKE_LIMIT = 1
@@ -164,6 +165,18 @@ def consent_valid(c: Change, head: str) -> bool:
     return c.consent is not None and c.consent.head == head
 
 
+def waiting_consent(c: Change) -> bool:
+    """The Change waits only for the owner's consent to merge."""
+    o = c.outcome
+    return bool(o and o.exit == Exit.ASK and o.cause == CONSENT)
+
+
+def consent_moved(c: Change, offered: str | None, head: str, comments: Iterable[str]) -> bool:
+    """While waiting for consent, a review comment without its task or a head other than the offered one."""
+    known = {t.id for t in c.plan.tasks} if c.plan else set()
+    return waiting_consent(c) and (head != offered or any(f"pr-{i}" not in known for i in comments))
+
+
 def open_question(c: Change) -> Question | None:
     """The question the Change waits on, if any."""
     o = c.outcome
@@ -249,11 +262,13 @@ def next_step(c: Change, now: datetime) -> Step | None:
 
 
 def schedule(
-    change: Change, items: Iterable[InboxItem], now: datetime, pr_state: PrState | None = None
+    change: Change, items: Iterable[InboxItem], now: datetime, pr_state: PrState | None = None, *, moved: bool = False
 ) -> tuple[Change, Step | None]:
     """Fold the inbox, observe the PR's end and intent flags, and only then apply exclusions."""
     c = fold(change, items, now)
     if not c.finished_at and c.step.kind != StepKind.CLEANUP:
+        if moved and waiting_consent(c):
+            c.outcome = None  # the merge step runs again: it routes the comment or offers the moved head
         if pr_state == "merged" or c.intent.abandoned_at:
             _go(c, StepKind.CLEANUP, mode=None if pr_state == "merged" else "abandon")
             c.outcome = None
@@ -458,8 +473,9 @@ def _done(c: Change, r: StepResult | None, now: datetime) -> None:  # noqa: C901
             if r and r.review:
                 c.reviews.append(r.review)
             c.budgets.rounds.pop(_round_key(c), None)
+            resolved = _resolved(c, s.task)
             for t in c.plan.tasks if c.plan else []:
-                t.done = t.done or t.id == s.task
+                t.done = t.done or t.id in resolved
             task = _open_task(c)
             if task:
                 _go(c, StepKind.BUILD, task.id)
@@ -537,10 +553,20 @@ def _exhausted(c: Change, r: StepResult, now: datetime) -> None:
     _ask(c, Question(step=c.step.kind, text=f"{r.reason} keeps failing ({cause})", options=options, cause=cause), now)
 
 
-def _fix_task(c: Change, r: StepResult) -> str | None:
+def _resolved(c: Change, task_id: str | None) -> set[str]:
+    """The passed task and, transitively, each task whose review findings it fixed."""
+    tasks = {t.id: t for t in c.plan.tasks} if c.plan else {}
+    found: set[str] = set()
+    while task_id and task_id not in found:
+        found.add(task_id)
+        task_id = tasks[task_id].fixes if task_id in tasks else None
+    return found
+
+
+def _fix_task(c: Change, r: StepResult, fixes: str | None = None) -> str | None:
     if r.fix_task is None or c.plan is None:
         return None
-    c.plan.tasks.append(r.fix_task)
+    c.plan.tasks.append(r.fix_task.model_copy(update={"fixes": fixes}))
     _cover(c)
     return r.fix_task.id
 
@@ -571,7 +597,7 @@ def _retry(c: Change, r: StepResult, now: datetime) -> None:
                 now,
             )
         elif s.kind == StepKind.REVIEW:
-            _go(c, StepKind.BUILD, _fix_task(c, r) or s.task)
+            _go(c, StepKind.BUILD, _fix_task(c, r, s.task) or s.task)
         else:
             s.attempt += 1
         return

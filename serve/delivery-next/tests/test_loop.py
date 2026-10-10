@@ -104,6 +104,16 @@ def test_final_findings_build_their_authored_repair_task():
     assert (c.step.kind, c.step.task, c.plan.tasks[-1].id) == (K.BUILD, "f1", "f1")
 
 
+def test_a_task_whose_findings_were_fixed_is_not_built_again():
+    c = change(K.REVIEW)
+    for task in ("f1", "f2"):  # findings on t1, then on its fix f1
+        c = loop.apply(c, StepResult(exit=Exit.RETRY, fix_task=Task(id=task, title="fix", origin="review")), NOW)
+        c = loop.apply(c, StepResult(exit=Exit.DONE), NOW)
+    c = loop.apply(c, StepResult(exit=Exit.DONE), NOW)
+    assert (c.step.kind, c.step.task) == (K.BUILD, "t2")
+    assert [t.done for t in c.plan.tasks] == [True, False, True, True]
+
+
 def test_walk_from_brief_approval_to_done():
     checks = [PersonCheck(id="p1", criteria=["AC-1"], paths=["ui"])]
     c = change(K.SHAPE, None, checks=checks).model_copy(update={"plan": None})
@@ -406,3 +416,15 @@ def test_merge_consent_is_void_for_another_head():
     c = change(consent=MergeConsent(head="a1c3f02", at=NOW))
     assert loop.consent_valid(c, "a1c3f02")
     assert not loop.consent_valid(c, "b7e2a91")
+
+
+@pytest.mark.parametrize(
+    ("head", "comments", "moved"),
+    [("abc", [], False), ("abc", ["7"], False), ("abc", ["7", "8"], True), ("def", [], True)],
+)
+def test_a_consent_wait_reruns_merge_for_a_new_comment_or_head(head, comments, moved):
+    c, _ = _consent_asked(change())
+    c.plan.tasks.append(Task(id="pr-7", title="fix", done=True))
+    assert loop.consent_moved(c, "abc", head, comments) is moved
+    assert not loop.consent_moved(change(K.MERGE), "abc", head, comments)
+    assert loop.schedule(c, [], NOW, "open", moved=moved)[1] == (c.step if moved else None)

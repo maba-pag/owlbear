@@ -30,7 +30,7 @@ from owlbear_delivery_next.store import LockHeldError, Store, StoreError
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from owlbear_delivery_next.loop import PrState
+    from owlbear_delivery_next.loop import PrState, Seen
     from owlbear_delivery_next.models import Change, Environment
     from owlbear_delivery_next.store import Lock
 
@@ -134,7 +134,7 @@ class Host:
         self.spawn = spawn or self._spawn
         self.wake, self.stopped = threading.Event(), threading.Event()
         self.pr_states: dict[str, PrState] = {}
-        self.pr_seen: dict[str, tuple[float, PrState | None]] = {}
+        self.pr_seen: dict[str, tuple[float, Seen]] = {}
         self.launches: dict[str, list[float]] = {}
         self.record = HostRecord(url="", token="", pid=os.getpid(), started_at=datetime.now(UTC))
 
@@ -156,10 +156,10 @@ class Host:
         """Liveness of one Change as this host sees it."""
         return activity(self.store, slug, self.record)
 
-    def observe_pr(self, slug: str) -> PrState | None:
-        """The PR's terminal state, observed before a waiting Change is skipped; at most once per ``PR_POLL``."""
+    def observe_pr(self, slug: str) -> Seen:
+        """The PR's terminal state and consent-wait news, observed before a waiting Change is skipped; once per poll."""
         if slug in self.pr_states:
-            return self.pr_states[slug]
+            return self.pr_states[slug], False
         seen = self.pr_seen.get(slug)
         if seen is None or time.monotonic() - seen[0] > PR_POLL:
             seen = self.pr_seen[slug] = (time.monotonic(), engine.observe(self.store, self.repo, slug))
@@ -184,7 +184,10 @@ class Host:
             return False  # A live runner finishes on its own; the host never kills it.
         with self.store.lock(slug) as lock:
             prior = self.store.read(slug)  # before the inbox, which may clear a committed outcome
-            c, _ = self.store.fold(lock, slug, now, self.observe_pr(slug))
+            state, moved = self.observe_pr(slug)
+            c, _ = self.store.fold(lock, slug, now, state, moved=moved)
+            if moved:
+                self.pr_seen.pop(slug, None)  # not applied again to the merge step's next offer
             if rec and disappeared(prior, rec, now) and c.step == prior.step:
                 c = loop.apply(c, gone(c.step.kind), now)  # its outcome postdates the runner: charged once
                 self.say(f"{slug}: runner {rec.pid} ended without recording an exit")

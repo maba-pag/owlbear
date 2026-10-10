@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from owlbear_delivery_next.github.provider import Provider, Rules
-    from owlbear_delivery_next.loop import PrState
+    from owlbear_delivery_next.loop import PrState, Seen
     from owlbear_delivery_next.models import Actor, Change
     from owlbear_delivery_next.store import Lock, Store
 
@@ -174,18 +174,23 @@ def unsupported(c: Change, now: datetime) -> StepResult:
     return StepResult(exit=Exit.STOP, reason=reason, stop=stop)
 
 
-def pr_state(gh: Provider, repository: str, c: Change) -> PrState | None:
-    """The PR's terminal state for the scheduler; None when there is no PR or it cannot be read now."""
+def pr_state(gh: Provider, repository: str, c: Change, offered: str | None = None) -> Seen:
+    """The PR's terminal state for the scheduler, None when unreadable; comments are read only during a consent wait."""
     if c.names.pr is None or not repository or c.finished_at:
-        return None
+        return None, False
     try:
         pr = gh.read_pull_request(repository, c.names.pr)
+        state: PrState = "merged" if pr.merged else pr.state
+        if state != "open" or not loop.waiting_consent(c):
+            return state, False
+        comments = [t.id for t in gh.read_comments(repository, pr.number)]
     except ProviderError:
-        return None
-    return "merged" if pr.merged else pr.state
+        return None, False
+    return state, loop.consent_moved(c, offered, pr.head_sha, comments)
 
 
-def observe(store: Store, repo: Path, slug: str) -> PrState | None:
+def observe(store: Store, repo: Path, slug: str) -> Seen:
     """The PR's terminal state of one Change, read from GitHub with the profile's provider."""
     prof = store.read_profile() or Profile()
-    return pr_state(profile.provider(prof, repo), profile.value(prof, profile.REPO), store.read(slug))
+    offered = next((e.get("head") for e in reversed(store.events(slug)) if e.get("event") == "merge-offer"), None)
+    return pr_state(profile.provider(prof, repo), profile.value(prof, profile.REPO), store.read(slug), offered)
