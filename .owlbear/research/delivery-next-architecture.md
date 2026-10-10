@@ -14,6 +14,9 @@
 > layout, gate order, conversation versions, declared CI, overlap, retry classes, visual check.
 > Revision 2026-10-10 for TD-24 to TD-29: "before" screenshots, repository-rule notes, pull-back
 > with replay, role models, worktrees, agents never push, New Change without `-r`.
+> The agent runtime (SDK sessions outside VS Code) is under review: see
+> [agent runtime research](delivery-next-agent-runtime.md); it was an `autonomous` choice, never the
+> user's decision.
 
 ## 1. Context and Question
 

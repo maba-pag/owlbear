@@ -1,0 +1,231 @@
+# Delivery-next Agent Runtime: SDK Sessions Versus VS Code Chat
+
+> **Owning task:** none — runtime review for the Delivery-next rebuild
+> **Date:** 2026-10-11
+> **Question:** Delivery-next runs planner, builder, reviewer and challenger as Copilot SDK sessions
+> outside VS Code. Which tools and settings does that route lose compared with VS Code chat, and is
+> any other route feasible?
+
+## 1. Context and Question
+
+Delivery-next (`owlbear-dev-next/serve/delivery-next/`) runs each step as a Copilot SDK session. The
+runtime is the installed Copilot CLI 1.0.95 over stdio. This is route "R2+3" in
+[delivery-next-route-comparison.md](delivery-next-route-comparison.md) (L1). That recommendation is
+`autonomous`; the user never decided it.
+
+The user objects that the route loses VS Code features. The main example is the integrated browser
+with viewports. The user fears that Delivery-next would have to re-implement VS Code functions. The
+user works alone on macOS with VS Code 1.141 stable and a Copilot Business seat.
+
+Questions answered here:
+
+1. Which harnesses exist in VS Code 1.141, and which tools does each get?
+2. How do responsive checks compare: integrated browser versus fixed-viewport Python Playwright?
+3. How are model, effort and context configured in VS Code versus the SDK?
+4. How far can a host program control a VS Code chat step?
+5. What does each side have that the other lacks?
+6. Which routes are feasible, and at what cost?
+7. Which evidence is missing, and how can it be checked cheaply?
+
+The route choice is the user's decision. This document only supplies evidence.
+
+Revised 2026-10-11 after an independent review (R1). The earlier categorical recommendation is
+withdrawn. Agent Host evidence (W16, L-AH1 to L-AH3) and route F were added.
+
+## 2. Sources Studied
+
+All web pages show "Edit this page 10/7/2026" unless stated. "Local" means checked on this machine on
+2026-10-11. "User-supplied" means reported in the task and not re-run here.
+
+| ID | Source | Date | Fact used | Limits |
+| --- | --- | --- | --- | --- |
+| W1 | [Agent harnesses](https://code.visualstudio.com/docs/agents/run/agent-harnesses) | 2026-10-07 | Targets: Copilot (Agent Host), Local (extension host), Claude, Codex, Cloud. Worktree isolation only in the Agents window. Worktree sessions use Allow all. Desktop VS Code must keep running; client tools need their window connected. | Does not list tools per harness. |
+| W2 | [Agent Host concepts](https://code.visualstudio.com/docs/agents/concepts/agent-host) | 2026-10-07 | Connected clients contribute tools, such as browser tools. The host routes calls back to the client. `code agent host` runs a standalone host. Marked as under active development. | No statement about sessions created outside VS Code. |
+| W3 | [Use tools with agents](https://code.visualstudio.com/docs/agents/run/tools) | 2026-10-07 | "All client-side tools are available to the Copilot harness by default." Client tools work "only while the client is connected." Agent Host confirmations are read-only. | No per-tool list. |
+| W4 | [Browser tools](https://code.visualstudio.com/docs/agents/run/browser-tools) | 2026-10-07 | Ten tools, including `runPlaywrightCode`. Agent pages use isolated ephemeral sessions. Agents window tabs are per session. Autopilot declines share requests. Suggests verifying "at desktop and mobile viewport sizes". Recommends repo Playwright tests for repeatable checks. | Does not say how a viewport is set. |
+| W5 | [Integrated browser](https://code.visualstudio.com/docs/debugtest/integrated-browser) | 2026-10-07 | Settings list has `pageZoom` but no viewport or device setting. Full-page screenshots are experimental. | Device emulation toolbar not documented. |
+| W6 | [Tools reference](https://code.visualstudio.com/docs/agents/reference/tools-reference) | 2026-10-07 | Lists `#browser`, `#read/problems`, `#execute/createAndRunTask`, `#execute/testFailure`, `#agent/runSubagent`, `#vscode/askQuestions`. "Available references depend on your harness." | No harness column. |
+| W7 | [Custom agents](https://code.visualstudio.com/docs/agent-customization/custom-agents) | 2026-10-07 | `model` takes one name or a prioritized list. `handoffs.model` exists. No effort or context field. Agent-scoped hooks run only in Local. Agent Host reads user agents from `~/.copilot/agents`. | — |
+| W8 | [Approvals](https://code.visualstudio.com/docs/agents/run/approvals) | 2026-10-07 | Levels: Manual, Assisted (experimental, Agent Host), Allow all. Allow all is session-scoped. Autopilot is a mode. `chat.tools.global.autoApprove` and `chat.permissions.default` exist. | — |
+| W9 | [Language models](https://code.visualstudio.com/docs/agent-customization/language-models) | 2026-10-07 | Thinking effort is chosen in the model picker and remembered per session. Old effort settings are deprecated. The models editor shows context size. | No per-agent effort. No context tier. |
+| W10 | [Manage sessions](https://code.visualstudio.com/docs/agents/run/sessions/manage-sessions) | 2026-10-07 | Context control shows tokens and AI credits for a session. Copilot CLI sessions tied to a repo are discovered; sending a message lets the Agent Host adopt them. Agent Host sessions have tools to create sessions and send messages; sending always needs confirmation. | UI only; no export API for usage. |
+| W11 | [Agents window](https://code.visualstudio.com/docs/agents/run/agents-window) | 2026-10-07 | `code --agents` opens the window. Browser tabs belong to a session. Grid of parallel sessions. Automations (preview) run saved prompts on a schedule. Agent merge is experimental. | No external API to start or stop sessions. |
+| W12 | [Prompt files](https://code.visualstudio.com/docs/agent-customization/prompt-files) | 2026-10-07 | "The Local agent will be removed in a future release." Agent Host does not load prompt files. | No date. |
+| W13 | [Command line](https://code.visualstudio.com/docs/configure/command-line) | 2026-10-07 | `code chat` options: `-m`, `-a`, `--maximize`, `-r`, `-n`, stdin. `vscode://agents/new` opens a draft and does not submit it. | — |
+| W14 | [VS Code 1.141 notes](https://code.visualstudio.com/updates/v1_141) | 2026-10-07 | Copilot harness becoming the default. `send_message` between sessions on one host. External CLI sessions picked up. Sandboxing in the Copilot agent host. | No browser or effort items. |
+| W15 | [microsoft/playwright-mcp README](https://github.com/microsoft/playwright-mcp) | v0.0.83, fetched 2026-10-11 | Needs Node 18+. Options `--viewport-size`, `--device`, `--mobile`, `--headless`, `--isolated`. Parallel clients need `--isolated` or separate profiles. README recommends Playwright CLI plus skills for coding agents. | Tool list section was collapsed; `browser_resize` not confirmed. |
+| X1 | Local: `code chat --help`, VS Code 1.141.0 | 2026-10-11 | Same options as W13 plus `--profile`. No harness, model, permission, workspace or worktree option. | — |
+| X2 | Local: `copilot --help`, CLI 1.0.95 | 2026-10-11 | Flags `--model`, `--reasoning-effort` (none to max), `--context` (default, long_context), `--agent`, `--allow-all`, `--acp`, `--connect`. No `--ide` flag. | Help text only. |
+| X3 | Local plus user-supplied: `~/.copilot/ide/*.lock` and MCP `tools/list` | 2026-10-11 | One lock file exists. The IDE bridge MCP server offers six tools: `get_vscode_info`, `get_selection`, `open_diff`, `close_diff`, `get_diagnostics`, `update_session_name`. | Tool list reported by the user. |
+| X4 | Local: string search in `workbench.desktop.main.js` | 2026-10-11 | `run_playwright_code` and `screenshot_page` schemas have no viewport field. A user-facing emulation toolbar has width, height, DPR, zoom, mobile and user agent. No `setViewportSize` string. The model picker has a `contextTier` group. The prompt header parser knows a `reasoning-effort` key. R1 adds: Agent Host parses it into the custom-agent config; effort and context are forwarded on session creation and `session.setModel`. | Minified code; effect and precedence not tested. |
+| X5 | Local: Copilot extension `package.json` | 2026-10-11 | `github.copilot.chat.reasoningEffortOverride` (global). Subagent model settings for search and execution. No context-tier setting. | Extension settings apply to Local, not proven for Agent Host. |
+| X6 | Local: Delivery-next `steps/visual.py` | 2026-10-11 | Headless Chromium at 1280×800 and 390×844. Full-page captures up to 6000 px. Navigation off the preview origin is aborted. | — |
+| X7 | User-supplied: SDK `client.py` and `session.py` | 2026-10-10 | Per session: model, reasoning effort, context tier, credit cap, custom agents with own model and effort, tool allow and deny lists, MCP servers, hooks, permission handler, working directory. | Not re-read here. |
+| P1 | Probe in this VS Code chat (Local harness), integrated browser | 2026-10-11 | `run_playwright_code` ran `page.setViewportSize({width:390,height:844})`: viewport 390×844, `innerWidth` 390, `(max-width: 600px)` true; `screenshot_page` showed the mobile layout of code.visualstudio.com | Local harness only; Copilot harness not probed |
+| P2 | Probe as `maba-pag`, SDK and CLI | 2026-10-11 | SDK main agent (`agent=`) with its own model runs on the session model, or on `auto` (Sonnet) without one; CLI `--agent scout` with `model: claude-haiku-5.5` in the agent file runs on Haiku (session log) | One run each |
+| X8 | User-supplied probes as the Business seat | 2026-10-10 to 2026-10-11 | Models and efforts billed as requested. Subagents run on their own model. An SDK custom agent used as the main agent runs on the session model. | — |
+| X9 | User observation | 2026-10-11 | `code chat -m agent "<prompt>"` always opened chat in the window that had the project folder. | One observer. |
+| L1 | [delivery-next-route-comparison.md](delivery-next-route-comparison.md) | 2026-10-10 | Routes R1, R2, R2+3; R2+3 recommended as `autonomous`. | — |
+| L2 | [delivery-next-platform-probe.md](delivery-next-platform-probe.md) | 2026-10-10 | Typed results pass. Abort stops nothing; task cancel plus PID check works. Unattended permissions pass. About 25 credits per Change on Auto. | Free identity, Auto only. |
+| L3 | [owlbear-distribution-agent-host.md](owlbear-distribution-agent-host.md) | 2026-10-07 | Agent Host ignores `chat.*FilesLocations`. It reads `.mcp.json` and `~/.copilot/mcp-config.json`. | — |
+| W16 | [Agent Host Protocol](https://microsoft.github.io/agent-host-protocol/), spec "Chat Channel", "Transport", "Authentication" | 2026-10-11 (via R1) | Chat channel is Stable. A client calls `createSession` and `createChat`; `initialMessage` carries model and agent selection. `chat/turnStarted` starts a turn. `chat/toolCallConfirmed` approves or denies a tool call. `chat/turnCancelled` cancels. Errored turns can resume. Streamed state includes usage. Each chat may have its own working directory, such as a git worktree. VS Code uses WebSocket; a connection token gates the transport. | Not re-fetched here. No client built or tested. |
+| W17 | [Automations](https://code.visualstudio.com/docs/agents/run/automations) | 2026-10-11 (via R1) | Saved automations keep agent, model, permission and isolation settings. Preview. | No external trigger found. |
+| W18 | [Hooks](https://code.visualstudio.com/docs/agent-customization/hooks) | 2026-10-11 (via R1) | Hooks run in the Copilot Agent Host. Only agent-scoped frontmatter hooks are Local-only. | — |
+| W19 | [Connecting Copilot CLI to VS Code](https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/connecting-vs-code) | 2026-10-11 (via R1) | The CLI IDE bridge is a connection plus the `/ide` command. It is not a browser bridge. | — |
+| L-AH1 | Local: `code agent --help` and subcommand help, VS Code 1.141 | 2026-10-11 | "Start and interact with AI agent hosts": `host` (`--port`, connection token, `--server-data-dir`), `ps` (list sessions), `stop <session>` ("Cancel the active turn of a session"), `logs <session>` (live session events), `kill`, `endpoints` (JSON of live endpoints with tokens). | Help text only. |
+| L-AH2 | Local: `~/Library/Application Support/Code/agent-host/local-endpoint/entries/*.json` and `code agent ps --all` | 2026-10-11 | Each editor window publishes its host: `type: editor`, a unix socket under `/var/folders/.../vscode-ah-*/`, a connection token, `protocolVersion: 0.10.0`. `code agent ps --all` failed: the client offered [0.9.0], the server speaks 0.10.0. | Likely a 1.141 bug. A 0.10.0 client is untested. |
+| L-AH3 | Local: `~/Library/Application Support/Code/User/globalStorage/agent-host-config.json` | 2026-10-11 | Harness settings: edit and terminal auto-approve rules, `globalAutoApproveEnabled`, sandbox options, `agentMerge.*` (merge `never` by default), `automationsEnabled`, `automationRunTimeoutMinutes`, `modelCapabilityOverrides`, `claudeDefaultReasoningEffort`, `githubMcpServerEnabled`, `skillCharBudget`. | Keys only; effects not tested. |
+| L-AH4 | Local probe `.owlbear/scratch/ahp-probe.py` (stdlib WebSocket over the editor's unix socket, token from the registry entry, read-only) | 2026-10-11 | `initialize` with protocol 0.10.0 succeeded. Root snapshot: agents `copilotcli` ("Copilot") and `claude`, both with `multipleChats`; the unauthenticated model list shows only `auto` (config `tier`) and `hydrafusion`; root config exposes the harness settings of L-AH3; `_meta` advertises `vscode.importSession`, `vscode.detachedWorktrees`, `vscode.autonomousAutomations`; `listSessions` returned 20 `copilotcli` sessions. | No `authenticate` sent, so the full model list and session creation are untested; client-contributed tools not visible at root level |
+| R1 | Independent review (Sol) of this document | 2026-10-11 | §4 not decision-ready; CLI limits generalised to host limits; model control, viewport and effort findings; missing mechanisms; probe priorities. | Reviewer findings; bundle claims not re-checked here. |
+| D1 | User decision TD-32 | — | "We never use auto, ever." Agent definitions with a model must run on that model. | `decided` |
+
+## 3. Analysis
+
+### 3.1 Harnesses and their tools
+
+| Runtime | VS Code client tools (browser, tasks, problems, askQuestions, extension tools) | Status | Sources |
+| --- | --- | --- | --- |
+| Local (extension host) | Yes, while its window is open | To be removed in a future release | W12, W6 |
+| Copilot (Agent Host) in VS Code | Yes, advertised by the connected window | Becoming the default | W2, W3, W14 |
+| Claude or Codex on the Agent Host | Not stated per tool | Supported | W1, W10 |
+| Standalone SDK or CLI session | No; the IDE bridge gives six tools | Delivery-next today | X3, W19 |
+| Session created by an external AHP client | Unknown; this is the key probe for route F | Protocol stable for chat; no client built | W16, L-AH2 |
+
+The Local harness is not removed yet, but it is marked for removal. Its replacement is the Copilot
+harness. Local's removal does not rule out routes on the Copilot harness. VS Code tools reach that harness because the window advertises them (W2, W3). They work only
+while that window stays connected. No page lists which client tools each harness actually receives.
+The Tools tab in the Agent Customizations editor shows this per profile (W3).
+
+### 3.2 Viewport checks
+
+| Aspect | Integrated browser tools | Delivery-next `visual.py` |
+| --- | --- | --- |
+| Who acts | The agent explores in a session | The engine captures fixed states |
+| Viewport control | No viewport parameter on any tool (X4); the emulation toolbar is for the human. `run_playwright_code` with `page.setViewportSize` resizes the page: probed 2026-10-11 in a Local-harness chat, 390×844 set, `innerWidth` 390, mobile media query true, screenshot shows the mobile layout (P1) | Two fixed sizes, 1280×800 and 390×844 (X6) |
+| Repeatability | Interactive; W4 itself advises repo tests for repeatable checks | Same states every run |
+| Isolation | Per-session tabs in the Agents window (W4, W11) | Separate headless process |
+| Needs | A connected VS Code window | Chrome, Edge or Playwright Chromium |
+
+The docs promise responsive checks but do not say how the agent sets a size (W4, W5). The agent
+route is a Playwright snippet, and it works (P1): an agent in VS Code can test any viewport.
+
+### 3.3 Model, effort and context
+
+| Setting | VS Code chat | SDK or CLI |
+| --- | --- | --- |
+| Session model | Picker (W9); `initialMessage` model through AHP (W16) | `model` per session (X7, X2) |
+| Agent-file model for the main agent | `code chat -m <agent>` selects the agent; its `model:` sets the model, so selection is indirect (W7, W13) | SDK `agent=`: not enforced; the session model wins, else `auto` (P2). CLI `--agent`: enforced (P2) |
+| Subagent model | `model` in the agent file (W7) | Own model per custom agent (X7, X8) |
+| Effort | Picker, per session (W9). Global override setting (X5). Header `reasoning-effort`: implemented, undocumented, precedence unverified (X4, R1) | `reasoning_effort` per session and per agent (X7) |
+| Context tier | Picker group; forwarded on session creation and `session.setModel`; undocumented (X4, R1) | `context_tier` and `--context` (X7, X2) |
+| Credit cap | None found; AHP state streams usage (W16) | `session_limits.max_ai_credits` (X7) |
+| Who sets it | A human in the picker, the agent file, or an AHP client | The host program |
+
+Session configuration and agent-file enforcement are different things. The user decided that `auto`
+is never used and that an agent file with a model must run on it (D1). The SDK main-agent path
+breaks both unless the host copies the agent's model into the session (P2). VS Code honours the
+agent-file model when the agent is selected. Whether AHP agent selection does the same is unverified.
+
+### 3.4 Host control of a VS Code chat step
+
+| Need | Status | Evidence |
+| --- | --- | --- |
+| Start with a prompt | `code chat`: no harness, model, permission or worktree option; window follows the folder. AHP: `createSession` and `createChat` with model and agent in `initialMessage`; integration unproven. | W13, X1, X9, W16 |
+| Start in the Agents window | Documented: draft only, not submitted | W13 |
+| Hand a result to the host | Documented in part: Agent Host loads `.mcp.json`, so a Delivery MCP tool is callable | W2, L3 |
+| Run unattended | Allow all (session-scoped), Autopilot, global auto-approve rules. An AHP client can approve or deny each call with `chat/toolCallConfirmed`; integration unproven. | W8, L-AH3, W16 |
+| Parallel sessions | UI grid; through AHP, one chat per step | W11, W16 |
+| Cancel from the host | `chat/turnCancelled`; `code agent stop <session>`. Integration unproven; the 1.141 CLI cannot connect yet. | W16, L-AH1, L-AH2 |
+| Worktree isolation | Agents-window worktrees; AHP per-chat working directory | W1, W11, W16 |
+| Survive restarts | Documented: host session continues; desktop app and window must stay up for client tools | W1 |
+| Usage per step | UI context control; AHP streamed state includes usage; integration unproven | W10, W16 |
+| Step ends when the result tool is called | Unknown; an AHP client could cancel the turn after the call | W16 |
+
+The earlier "cannot cancel, configure or meter" came from `code chat` alone. It does not hold for the
+host: those controls exist in the protocol, but their integration is unproven.
+
+### 3.5 Other VS Code mechanisms
+
+| Mechanism | What it gives | Limits | Sources |
+| --- | --- | --- | --- |
+| Automations | Saved prompts that keep agent, model, permission and isolation settings | Preview; no external trigger found | W11, W17, L-AH3 |
+| Hooks | Policy around tool calls in the Copilot Agent Host | Agent-scoped frontmatter hooks are Local-only | W18, W7 |
+| Per-agent tool allowlists | `tools:` in the agent file limits a step's tools | Enforcement per harness not tested | W7 |
+| Agents-window worktrees | One worktree per session | Started from the UI; worktree sessions use Allow all | W1, W11 |
+| Extension with `vscode.lm` | Explicit model choice and cancellation from code | Needs its own tool loop and user consent | R1 |
+
+### 3.6 What each side has
+
+| Capability | SDK session | VS Code chat |
+| --- | --- | --- |
+| Start with exact config from code | Yes (X7) | Not through `code chat` (X1); through AHP, unproven (W16) |
+| Per-step model, effort, context, credit cap | Yes (X7, X8); main-agent model not enforced (P2) | Model through the agent file or AHP; effort and context undocumented (W7, W16, R1) |
+| Hooks, permission handler, typed result | Yes (X7, L2) | Hooks in the Copilot Agent Host; AHP tool-call approval (W18, W16) |
+| Stop a step | Task cancel plus PID check (L2) | `chat/turnCancelled`, `code agent stop`; unproven (W16, L-AH1) |
+| Integrated browser tools | No (X3) | Yes (W4) |
+| Problems, tasks, test failure, askQuestions UI | Diagnostics only through the bridge (X3) | Yes (W6) |
+| Extension tools | No | Yes, in a connected window (W2) |
+| Human review surface | None built in | Changes panel, grid, agent merge (W11) |
+
+### 3.7 Routes
+
+| Route | Description | Browser and viewport | Host control | Setup cost | Main risk |
+| --- | --- | --- | --- | --- | --- |
+| A | SDK as now; engine Playwright | Fixed sizes, deterministic (X6) | Full (X7) | None | Agents cannot explore the UI themselves |
+| B | Every step as a VS Code chat started by `code chat` | Interactive browser, any viewport (W4, P1) | Weak through `code chat` (X1); stronger through AHP, see F | Adapter for start, result and stop | Stop and usage readout unproven |
+| C | SDK for plan, build and review; VS Code chat only for UI checks | Interactive for one step (P1) | Weak for that step only | Adapter for one step type | Ending that step reliably is unproven |
+| D | SDK plus `@playwright/mcp` | Any size via `--viewport-size`, `--device`, `--mobile` (W15) | Full | Low: one MCP entry, Node 18+, a browser download; `--isolated` for parallel runs | Extra dependency; token cost of snapshots (W15) |
+| E1 | SDK session later continued in VS Code | Maybe, after adoption (W10, W2) | Lost once adopted | Low | Untested whether client tools attach |
+| E2 | Builder runs a small Playwright script by shell | Any size | Full | Very low; Playwright is already used (X6) | Agent must write and run the script well |
+| F | Delivery as an AHP client of the editor host or of `code agent host`; one session and chat per step | Only if a window's client tools reach externally created sessions; unknown | Model, agent, working directory, approvals, cancel and usage are in the protocol (W16); unproven | Python AHP client module plus probes | Client tools may not attach; protocol 0.x churn (L-AH2) |
+
+Route D is not the only way to give agents a viewport. Route E2 gives the same power with no new
+server, because the Python Playwright dependency already exists.
+
+Route F rests on a public protocol whose chat channel is Stable (W16). VS Code's transport is
+WebSocket over a local socket with a connection token (W16, L-AH2). The 1.141 CLI cannot connect to
+the editor host yet, because it offers protocol 0.9.0 and the host speaks 0.10.0 (L-AH2).
+
+## 4. Recommendation, Confidence, And Limits
+
+There is no categorical recommendation. The earlier one gave A and E2 almost no cost, rated B and C
+without an estimate, and treated untested controls as exclusions (R1). It is withdrawn.
+
+### Route comparison
+
+| Route | What the user keeps | What Delivery keeps | Remaining build cost | Decisive unknown |
+| --- | --- | --- | --- | --- |
+| A (with E2 or D) | No VS Code tools; viewports only through engine Playwright or a script. Agent-file models only if the host copies them into the session (P2); never `auto` if the host always sets a model | Step end, permission policy, cancellation, usage (X7, L2) | About zero; it exists | Is engine-side and scripted Playwright enough UI checking? |
+| B or C | VS Code tools, including browser and viewports (P1). Agent-file models through `code chat -m` (W7, W13) | Result through Delivery MCP (L3). Stop, usage and per-call policy unproven (3.4) | Adapter for start, result and stop | Can Delivery stop the step and read its usage? |
+| E1 | Maybe VS Code tools after adoption (W10) | Control is lost once adopted | Low | Do adopted sessions get a window's client tools? |
+| F | VS Code tools if they attach; explicit model and agent per step, so never `auto` (W16) | Tool-call approval, cancellation, usage, working directory, all in the protocol (W16) | Python AHP client module plus probes | Does a session created by an external client get a window's client tools? |
+
+Deterministic Playwright gates (X6) can coexist with any route.
+
+**Assessment (`autonomous`, confidence low to medium until the probes run):** F looks most promising
+if the probes pass. It keeps Delivery's control (approvals, cancel, usage) and gains VS Code's tools.
+C is the bounded fallback. A remains for headless runs.
+
+**The route choice is the user's decision.** Nothing here changes a recorded decision.
+
+### Probes, in priority order
+
+| Priority | Gap | Probe | Cost |
+| --- | --- | --- | --- |
+| 1 | Can a client reach the editor host (route F)? | Done (L-AH4): yes, protocol 0.10.0, root state, agents and sessions read. Next: `authenticate` with the user's Copilot token to see the full model list | No credits |
+| 2 | Decisive step probe | In a throwaway repo, create a session with a fixed-model custom agent. Run one turn that sets a viewport through the browser tools and calls a Delivery MCP result tool. Cancel it and confirm that events and processes stop. Check the model in the session log. | One short session |
+| 3 | Does `reasoning-effort` in the agent header win over the picker? | Add `reasoning-effort: low` to a test agent; check the forwarded effort in the debug log | One short chat |
+| 4 | Can route C stop a `code chat` step? | Start one with `code chat -m <agent>`; stop it with `code agent stop` once the CLI speaks 0.10.0 | One short chat |
+| 5 | Does an adopted SDK session get browser tools (E1)? | Create an SDK session in a repo, open it under the External filter, ask it to list browser tools | One short session |
+| 6 | Does `@playwright/mcp` work in an SDK session (D)? | Add it with `--headless --isolated --viewport-size 390x844`; ask for `innerWidth` | One short session |
+
+### Limits
+
+- No new VS Code chat, Agents window or Copilot session was started; P1 ran in an existing chat.
+- AHP facts (W16) and W17 to W19 come from the review (R1); they were not re-fetched here.
+- No AHP client was built; the 1.141 CLI cannot connect to the editor host (L-AH2).
+- Tool availability per harness comes from docs, not from a live tools list.
+- Bundle findings (X4, R1) come from minified code and may not reflect runtime behavior.
+- SDK option names (X7) and probe results (X8) were reported by the user, not re-run here.
+- The source log `.owlbear/sources/overview.md` was not updated, because this task allowed edits to
+  two files only.
