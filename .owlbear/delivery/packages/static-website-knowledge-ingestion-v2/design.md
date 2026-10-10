@@ -1,7 +1,7 @@
 # Static Website Knowledge Ingestion Design
 
-> Status: draft; D1, D2, and D4 accepted. Target-contract blocks revised after challenge round 2
-> (bound persistence-failure proof added to OUT-004); gates restart.
+> Status: admitted revision 2 (2026-10-10); D1, D2, D4, and D5 accepted. Adds corrective OUT-006
+> for finalization findings G10 and G11; OUT-001 through OUT-005 are unchanged. Gates restart.
 
 ## Current Ownership (observed on `dev` 4990469c1)
 
@@ -152,6 +152,23 @@ failure through the real coordinator.
 
 Reconcile the touched files listed in intent against source and tests; link the vertical test.
 
+### Finalization review corrections (OUT-006; D5, G10, G11)
+
+- Knowledge MCP `_redact_capture_url` covers at least every query name that Browser
+  `owlbear_browser.contract` redacts (`_SENSITIVE_QUERY_KEYS` plus its credential suffix rule) or
+  marks as correlation (`_CORRELATION_QUERY_KEYS`), compared case- and separator-insensitively.
+  Knowledge keeps its own key set (the import boundary forbids importing Browser); a workspace test
+  under `tests/` imports both packages and fails when a Browser-redacted or correlation name
+  survives Knowledge redaction. Dropping or masking the value are both acceptable.
+- `BrowserContentFetcher.acquire` drops the response-origin condition from `http_error`: any
+  main-document status of 400 or above other than 401/403 is `http_error`, before the redirect,
+  authentication, and content checks. Redirect policy for successful documents is unchanged
+  (`redirect_rejected` still applies to a cross-origin final page with a non-error status).
+- The two Browser READMEs drop the "from the requested origin" qualifier from the `http_error`
+  description.
+- G12 (DEC-008): the Knowledge MCP README no-op refresh sentence states that unchanged documents
+  are counted in `documents_unchanged` while created, replaced, and chunk counts are `0`.
+
 ## Outcome Ownership
 
 | Outcome | Owning paths |
@@ -161,6 +178,7 @@ Reconcile the touched files listed in intent against source and tests; link the 
 | OUT-003 | Knowledge MCP `knowledge_ingest`, its result types, `knowledge_search` source projection (`SearchSource`), Knowledge provenance redaction, Knowledge MCP tests, a workspace parity test under `tests/` |
 | OUT-004 | New vertical test file and test-only fixtures under `tests/` |
 | OUT-005 | Docs and agent files listed in intent |
+| OUT-006 | Knowledge MCP `_helpers.py` capture redaction and its tests, Browser `fetcher.py` and its acquisition tests, a workspace redaction parity test under `tests/`, the `http_error` sentence in `serve/browser/README.md` and `serve/browser-mcp/README.md`, the no-op refresh sentence in `serve/knowledge-mcp/README.md` |
 
 ## Tradeoffs And Known Weaknesses
 
@@ -269,4 +287,19 @@ acceptance:
   - "AC-031: The touched docs link the vertical test file from OUT-004, and uv run pytest tests/test_agent_ecosystem_validation.py passes."
 commitments: [COM-001, COM-002, COM-007]
 dependencies: [OUT-004]
+```
+
+```yaml target-contract
+kind: outcome
+id: OUT-006
+title: Finalization review corrections
+promise: "Captured provenance carries no credential, assertion, authorization-code, or correlation value that Browser redaction removes, every main-document error status other than 401/403 is reported as http_error regardless of the response origin, and the touched Browser and Knowledge READMEs state both behaviors and refresh counts truthfully."
+acceptance:
+  - "AC-033: Given a bound capture round whose captured canonical_url carries query parameters code, jwt, assertion, SAMLResponse, id_token, state, and nonce with distinct sentinel values, neither the knowledge_ingest result nor any knowledge_search source.provenance value contains any of the sentinels."
+  - "AC-034: A workspace test under tests/ asserts that for every query name in the Browser redaction and correlation key sets, and for client_assertion and x_api_token as names Browser redacts only by its credential suffix rule, a URL carrying that name with a sentinel value, after Knowledge capture-provenance redaction, contains no sentinel; and that Knowledge MCP source imports no owlbear_browser module."
+  - "AC-035: Given routed synthetic pages in headless Chromium where the requested URL redirects to a different-origin host whose main document returns 404 (and separately 500) with a content region, BrowserContentFetcher.acquire returns AcquisitionFailure with status http_error and diagnostics response_status 404 or 500; a different-origin redirect to a 200 page still returns redirect_rejected, and the existing AC-008 and AC-009 tests pass unchanged."
+  - "AC-036: Artifact inspection shows that serve/browser/README.md and serve/browser-mcp/README.md describe http_error for any main-document status of 400 or above other than 401/403 without an origin qualifier, and uv run test with tests/test_browser_knowledge_vertical.py, tests/test_mcp_knowledge_capture_ingest.py, and tests/test_knowledge_capture_status_parity.py passes."
+  - "AC-037: Artifact inspection shows that serve/knowledge-mcp/README.md describes a successful no-op refresh as reporting unchanged documents in documents_unchanged with created, replaced, and chunk counts 0, matching the assertions in tests/test_mcp_knowledge_static_refresh.py."
+commitments: [COM-001, COM-002, COM-006, COM-007, COM-009]
+dependencies: [OUT-002, OUT-003]
 ```
