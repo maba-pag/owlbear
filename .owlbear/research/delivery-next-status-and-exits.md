@@ -5,8 +5,9 @@
 > **Question:** What does Delivery-next record for one Change, which steps can it be in, how does
 > each step end, and how is one truthful status line with one next action derived from that?
 > **Status:** design draft; `autonomous` until the user approves M3. Revision 2026-10-10 after
-> design challenge: inbox before exclusions, host-down overlay, check environments, several
-> person-only checks, bundle and archive preservation, host crash with live runners.
+> design challenge and the full-set challenge: inbox before exclusions, host-down overlay, check
+> environments, several person-only checks, bundle and archive preservation, host crash with live
+> runners.
 
 ## 1. Context and Question
 
@@ -44,7 +45,7 @@ One versioned file per Change and one per project, outside the checkout, written
 | Decisions | U or L | text; origin `decided`, `approved` or `autonomous`; time | Origin follows the provenance rule |
 | Questions | U | id; step; kind decision or action; text; options, each naming its next step; answer, channel, time; effect check; effect observed time | An answer clears its cause only once its effect is observed |
 | Plan | L | version; ordered tasks with id, title, scope paths, checks, origin (plan, review, CI, PR feedback, person-only check, integration) | Fix tasks are appended without a new plan version |
-| Reviews | E | per task and final: reviewed commit, fingerprint of the files the Change touches, verdict, round | Valid until that fingerprint changes |
+| Reviews | E | per task and final: reviewed commit; recorded inputs: the criterion versions judged and the covered paths the reviewer returns (including files read outside the diff), each with its fingerprint; verdict; round | Re-requested only when a recorded input changes (P5), not on every commit |
 | Current step | L | kind; task id; mode; attempt; started time | Exactly one |
 | Outcome | L | exit kind or pending; cause key; reason; next actor; wake trigger or next observation; last permission denial | Exactly one per step attempt; denial shown (B7) |
 | Budgets | L | per cause key: count, premise fingerprint, last time; review rounds per task; re-plans per Change | §3.6 |
@@ -73,18 +74,24 @@ passed, worktree clean); a claim the facts do not support is B4.
 | shape | Shape | Change started, or back from plan, or intent hold released | Designer in chat; brief reviewer as runner | brief draft; reviewer verdict and findings | done, retry, ask, stop; pending on the chat |
 | plan | Plan | approved brief, no valid plan | Planner; plan challenger | ordered tasks; challenger verdict | all five |
 | build | Build n/m | open task, writer lock held | Builder | status (done, blocked, infeasible, needs-user), checks run with exit codes, question or missing item | all five |
-| review | Build n/m | new commit for the task; or all tasks done (final mode) | build reviewer, read-only | verdict, findings, covered files | all five |
+| review | Build n/m | new commit for the task; or all tasks done (final mode) | build reviewer, read-only | verdict, findings, covered paths including files read outside the diff | all five |
 | integrate | stage of caller | target moved before publish or merge; I4, I6, M2 | Builder in integration mode | status, conflict paths, checks run | all five |
 | publish | Publish | final review valid on an integrated head | none; engine with git and gh | — | all five; pending on network |
 | follow | Publish | PR open at the current head | none; observer | — | all five; pending on CI, reviewers, owner action |
-| check | Check | a declared person-only check without a valid answer | Builder only to prepare the environment | user's pass or fail and note | all five; pending on the user |
+| check | Check | a declared person-only check without a valid answer | Builder only to prepare the environment and return its launch recipe | launch recipe (Builder); user's pass or fail and note | all five; pending on the user |
 | merge | Merge | follow done; all checks valid | none | — | all five; pending on queue or mergeability |
 | cleanup | Done | PR merged, or Change abandoned | none | — | done, retry, stop |
 
-**Check environment.** Ending the Builder that prepares a person-only check does not end the
-environment it prepared, for example a local preview server. The host owns that environment's
-processes while the check is pending: it records their PIDs and the start command, restarts the
-environment after an interruption, and disposes of it before any other writer starts on the Change.
+**Check environment.** The Builder that prepares a person-only check returns a verified launch
+recipe: command, directory, and readiness URL or probe. The Builder is then fully terminated under
+the normal teardown. The host then launches the environment, for example a local preview server,
+verifies readiness and enters pending for the check. It records the environment's PIDs, relaunches
+it after an interruption, and disposes of it before any other writer starts on the Change.
+
+**Merge submission.** When the effective rules require a merge queue, `merge` submits through
+GitHub's merge API with the consented head SHA and no rule bypass. An `enqueued` response is
+pending, not a refusal; the host observes the queue, and a removal routes its cause (CI → fix task,
+conflict → integrate) or asks with the removal reason.
 
 ### 3.3 Exit and pending table
 
@@ -113,7 +120,7 @@ Every exit also records its kind, cause key, reason and time. `{S}` is the stage
 | review | ask | build with the decision, or next task if accepted | both positions (B12) | none | "{S} · waiting for you: reviewer and builder disagree on {topic}" |
 | review | back | plan | reason | cause +1; re-plan +1 | "Plan · re-planning: review found {reason}" |
 | review | stop | review on the resume condition | stop record | none | "{S} · stopped: {reason} · {action}" |
-| integrate | done | review final if covered files changed; else the calling step | caller | — | "{S} · updated with {target}" |
+| integrate | done | review final if one of its recorded inputs changed; else the calling step | caller | — | "{S} · updated with {target}" |
 | integrate | retry | integrate | conflict paths or failing check | cause +1 | "{S} · updating with {target}: retrying {cause} ({k} of 3)" |
 | integrate | ask | integrate or plan, per option | question (I5, conflict choice) | none | "{S} · waiting for you: {question}" |
 | integrate | back | plan | reason | cause +1; re-plan +1 | "Plan · re-planning: {target} changed {area}" |
@@ -131,17 +138,17 @@ Every exit also records its kind, cause key, reason and time. `{S}` is the stage
 | follow | stop | follow on the resume condition | stop record | none | "Publish · stopped: {reason} · {action}" |
 | follow | pending | follow when the observed condition changes | condition; next observation | none | "Publish · waiting for {who}: {condition} (checked {age} ago)" |
 | check | done | check for the next declared check without a valid answer; merge when none remains | answer with input fingerprint | — | "Check · waiting for you: {next check}", or after the last "Merge · waiting for you: approve merging {sha7}" |
-| check | retry | check after preparing again | preparation failure | cause +1 | "Check · preparing {check}: retrying ({k} of 3)" |
+| check | retry | check after preparing again | preparation or readiness failure | cause +1 | "Check · preparing {check}: retrying ({k} of 3)" |
 | check | ask | check after the answer | environment question | none | "Check · waiting for you: {question}" |
 | check | back | build with the user's note as a fix task (H2) | fix task | cause +1 per check | "Build · fixing: {check} failed for you" |
 | check | stop | check on the resume condition | stop record | none | "Check · stopped: {reason} · {action}" |
 | check | pending | check when the answer arrives; no timeout (H1) | steps; what changed if re-asked (H3) | none | "Check · waiting for you: {check}" |
 | merge | done | cleanup | — | — | "Done · merged PR #{pr}; cleaning up" |
 | merge | retry | merge, after observing whether it merged | cause | cause +1 | "Merge · retrying ({k} of 3): {cause}" |
-| merge | ask | merge after consent; abandon → cleanup; reopen → follow | head and delta, or the M4 choice | none | "Merge · waiting for you: approve merging {sha7}" |
-| merge | back | integrate (M2) or build (removed from queue by CI) | reason | cause +1 | "Build · updating with {target} before merging" |
+| merge | ask | merge after consent; abandon → cleanup; reopen → follow; merged in GitHub meanwhile → cleanup | head and delta, the M4 choice, or a queue removal reason | none | "Merge · waiting for you: approve merging {sha7}" |
+| merge | back | integrate (M2, or removed from the queue by a conflict) or build with a fix task (removed from the queue by CI) | reason | cause +1 | "Build · updating with {target} before merging" |
 | merge | stop | merge on the resume condition | stop record | none | "Merge · stopped: {reason} · {action}" |
-| merge | pending | merge when GitHub reports merged or removed | queue or mergeability | none | "Merge · in the merge queue (checked {age} ago)" |
+| merge | pending | merge when GitHub reports merged or removed; a removal goes back or asks | queue entry from an `enqueued` response, or mergeability | none | "Merge · in the merge queue (checked {age} ago)" |
 | cleanup | done | none: the Change is Done | bundle and archive paths; history line | — | "Done · merged PR #{pr}", plus where unmerged work was saved |
 | cleanup | retry | cleanup | cause | cause +1 | "Done · cleanup retrying ({k} of 3)" |
 | cleanup | ask, back | never: unmerged work is preserved and reported; a merge cannot be undone | — | — | — |
@@ -159,6 +166,9 @@ Every exit also records its kind, cause key, reason and time. `{S}` is the stage
 **Inbox before exclusions.** Before the host skips a Change as waiting on you, paused or stopped, it
 reconciles actionable inbox items under the Change lock: brief approval, answers, person-only check
 results, recovery choices, merge consent. A reconciled item makes the Change runnable again.
+On each poll, before skipping a Change that waits on you, it also observes its PR's terminal state:
+merged → after confirming termination, preservation and cleanup run, and no creative work starts for
+a paused or held Change; closed → the M4 `ask` in `merge`.
 Termination checks still precede launching another writer ([D4 §3.2](delivery-next-architecture.md#32-components-and-responsibilities)).
 
 **Stop actions.** One action, its actor and the resume condition; the action works without Delivery.
@@ -186,8 +196,8 @@ Termination checks still precede launching another writer ([D4 §3.2](delivery-n
 | Required check not started (P10) | host | check appears | expected-start window, then follow back (trigger fix) or ask |
 | Required reviewer (P7) | host polls reviews | review submitted | none |
 | Owner action in GitHub (P10, after ask) | host | the check starts | 3 observations, then stop |
-| Person-only check (H1) | host, which keeps the prepared environment running | answer from status view or chat | none |
-| Merge queue or mergeability (M3) | host polls PR | merged, or removed with a cause | removal routes its cause |
+| Person-only check (H1) | host, which runs the environment from the launch recipe | answer from status view or chat | none |
+| Merge queue or mergeability (M3) | host polls PR | merged, or removed with a cause | removal: CI → fix task, conflict → integrate, else ask with the reason |
 | Network outage or rate limit (S8, P9, S9) | host probe every 5 min, or the reset time | probe succeeds, or reset time passes | none |
 
 ### 3.4 Status line derivation
@@ -270,7 +280,7 @@ Fifteen kinds, shown to users and agents; each cause key starts with one.
 | Trace | Path through the model | Status text at the hardest point |
 | --- | --- | --- |
 | Session disconnects while its worker writes; a second window continues | Chat closing does not touch the runner. If the host dies, the next host (the second window's) finds the lock held by a live runner: it waits for that runner to finish or for its termination to be confirmed, observes, then continues; it never kills it blindly. A runner gone without an exit gets the termination checks, then build retries with the kept diff (`liveness`); an unverifiable PID is a stop | "Build 2/5 · not running: waiting for process 4242 (copilot) to end" |
-| User merges an older PR head while newer local commits exist | Any step's entry sees the PR merged; the active runner is ended first; cleanup bundles the Change branch with the 2 unmerged commits, archives any uncommitted files, verifies both, and reports the path | "Done · merged PR #14 · 2 unmerged commits saved in .git/owlbear-delivery/changes/login/preserved/login-1.bundle" |
+| User merges an older PR head while newer local commits exist | Any step's entry, or the host's poll while the Change waits on you, sees the PR merged; the active runner is ended first; cleanup bundles the Change branch with the 2 unmerged commits, archives any uncommitted files, verifies both, and reports the path | "Done · merged PR #14 · 2 unmerged commits saved in .git/owlbear-delivery/changes/login/preserved/login-1.bundle" |
 | Required workflow never triggers | follow pending until the expected-start window ends; back to build with a fix task (trigger paths); same cause again → ask the owner's exact action; then pending; 3 observations → stop. Gate never downgraded | "Publish · waiting for you: approve the workflow run for PR #14 in GitHub" |
 | Same missing prerequisite survives a re-plan and an answer | `project-env:TEST_API_KEY` counts 1 (build ask), 2 (retry after an unobserved answer), 3 (back to plan); next occurrence → ask with scope choice | "Build 3/5 · waiting for you: TEST_API_KEY is still not visible to the task — set it, drop AC-3, or pause?" |
 | Intent changes during a task, and again after a merge was submitted | First: hold, task finishes, back to shape with kept and dropped work, ask re-approval. Second: merge outcome observed first; merged → Done and the new intent starts a new Change; queued → ask: let it merge or remove it and revise | "Merge · waiting for you: PR #14 is in the merge queue — let it merge, or remove it and revise?" |
@@ -293,12 +303,12 @@ Fifteen kinds, shown to users and agents; each cause key starts with one.
 | B4 | Engine finds no commit → retry in a fresh session with the diff | "Build 2/5 · retrying: worker ended without a commit (1 of 3)" |
 | B6 | Step timeout → cancel, verify PIDs → retry; unverified → stop | "Build 2/5 · stopped: process 911 (vite) would not end · end it" |
 | B7 | Unlisted command denied at once; Builder adapts or asks | "Build 2/5 · implementing: parser · last denied: docker compose up" |
-| I1 | Before publish: integrate, clean; covered files unchanged → publish | "Publish · updated with main" |
+| I1 | Before publish: integrate, clean; recorded review inputs unchanged → publish | "Publish · updated with main" |
 | P1 | follow back → build fix task from CI log | "Build · fixing lint: 3 errors in api.ts" |
 | P2 | follow pending | "Publish · waiting for CI: 2 of 5 checks running (checked 1 min ago)" |
 | P3 | follow back → fix task per thread; dispute → ask | "Build · fixing review comment: rename `cfg`" |
-| H1 | check pending, no timeout | "Check · waiting for you: log in on staging and see the banner" |
-| M1 | Entry observes PR merged → cleanup | "Done · merged PR #14" |
+| H1 | Builder returns a launch recipe and is terminated; host launches the environment and verifies readiness; check pending, no timeout | "Check · waiting for you: log in on staging and see the banner" |
+| M1 | Entry, or the host's poll while the Change waits on you, observes PR merged → termination confirmed → cleanup | "Done · merged PR #14" |
 | X1 | Host gone; on next start observe, then resume | "Build 2/5 · Delivery is not running" |
 | X3 | Next start observes; moved target handled by integrate before publish | "Build 4/5 · starting: export" |
 

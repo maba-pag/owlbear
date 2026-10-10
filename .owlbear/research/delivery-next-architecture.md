@@ -5,8 +5,9 @@
 > **Question:** What is the smallest set of packages, processes, state files, agent tools and prose
 > that delivers the [charter](delivery-next-charter.md) on the Copilot SDK, and how does each part fail?
 > **Status:** design draft; `autonomous` until the user approves M3. Revision 2026-10-10 after
-> design challenge: separate host app until M6, inbox before exclusions, host-side termination scan,
-> check environments, bundle and archive preservation, brief endpoint, tool count, clone-local state.
+> design challenge and the full-set challenge: separate host app until M6, inbox before exclusions,
+> host-side termination scan, check environments, bundle and archive preservation, brief endpoint,
+> tool count, clone-local state.
 
 ## 1. Context and Question
 
@@ -59,8 +60,8 @@ source path and commit. Line targets are upper limits per module.
 | `setup.py`, `cli.py` | Readiness check, setup, entry points | new | 260 |
 | `git/remote_git.py`, `git/git_executable.py` | Bounded remote Git, write readback | copied as is | 308 |
 | `storage_io.py` | `atomic_write`, `locked_roots`, `ControllerLock` | copied as is | 188 |
-| `github/provider.py` | PR, check, rule and merge contract | `publication_provider.py`, trimmed | 350 |
-| `github/gh.py` | `gh` provider: HTTP 403 on rules means unknown, not "no rules"; required checks from the profile; merge-queue observation; GitHub Enterprise hosts | `delivery-github/github.py`, adapted | 1,150 |
+| `github/provider.py` | PR, check, rule and merge contract; `merge_request_body` no longer forces `direct_merge`, so a queued submission is expressible | `publication_provider.py`, trimmed and adapted | 350 |
+| `github/gh.py` | `gh` provider: HTTP 403 on rules means unknown, not "no rules"; required checks from the profile; queue-aware merge submission, where `enqueued` maps to pending, not refusal; merge-queue observation; GitHub Enterprise hosts | `delivery-github/github.py`, adapted | 1,150 |
 | `github/merge_offer.py` | Block reasons, attempt readback; proof fields dropped | `merge_offer.py`, adapted | 420 |
 | `process_probe.py` | `ProcessTableWorktreeProbe`, `psutil_user_processes`; claim issuer dropped. The probe skips the caller's own descendants, so the host, not the runner, runs it | `worker_stall.py`, adapted | 330 |
 | `criteria.py` | Criterion identity and version (P5 input) only; the old-contract import and legacy derivation dropped | `acceptance_criteria.py`, trimmed | 60 |
@@ -89,15 +90,20 @@ the process that serves the status view the owner of runners in both phases.
 - One scheduler thread wakes on start, wake from sleep, a new inbox item, a runner exit, or a timer.
   For each Change without a runner it first reconciles actionable inbox items under the Change lock:
   brief approval, answers, person-only check results, recovery choices, merge consent. A reconciled
-  item makes the Change runnable again. Only then does it skip Changes waiting on the user, paused
-  or stopped, and start a runner for the next step of the rest. Termination checks still precede
+  item makes the Change runnable again. Before skipping a Change that waits on the user, it observes
+  the Change's PR terminal state: merged → after confirming termination, preservation and cleanup
+  run, and no creative work starts for a paused or held Change; closed → the M4 `ask` (D3). Only
+  then does it skip Changes waiting on the user, paused or stopped, and start a runner for the next
+  step of the rest. Termination checks still precede
   launching another writer. Pending conditions are re-observed at the profile's poll intervals (D3).
 - Launches `python -m owlbear_delivery_next.runner <change>` in its own process group and records the
   PID. The next runner starts only after the previous one has exited and its termination is
   confirmed by the host's worktree scan (§3.5).
-- Owns a person-only check's prepared environment, for example a local preview server, separately
-  from the Builder that prepared it: it records the environment's PIDs and start command while the
-  check is pending, restarts it after an interruption, and disposes of it before any other writer
+- Runs a person-only check's environment, for example a local preview server, itself. The
+  preparing Builder returns a verified launch recipe (command, directory, readiness URL or probe)
+  and is then fully terminated under the normal teardown (§3.2 SDK adapter). The host then launches
+  the environment, verifies readiness, records its PIDs and enters pending for the check. It
+  relaunches the environment after an interruption and disposes of it before any other writer
   starts on the Change.
 - Detects sleep by a jump of more than 60 s between wall-clock and monotonic time, then runs an
   observation pass.
@@ -123,7 +129,7 @@ id, runtime PID and task PIDs as they appear. A runner never starts another runn
 | Questions | No `on_user_input_request` handler; the runtime's own question tool is unavailable. `ask_question` ends the step with `ask`; the answer is delivered by resuming the session and sending it as a message | P2b, P2d |
 | Permissions | Handler with the step kind's allow list (§3.6); everything else denied and recorded in the activity log | P5 |
 | Usage | `usage.get_metrics` per session into the activity log; spend per Change in the status view | P11 |
-| Termination | (1) `tasks.list`; (2) `tasks.cancel` each; (3) check listed and recorded PIDs are gone; (4) disconnect; (5) the runtime PID has exited. Then the host, after the runner exits, scans with `process_probe` for processes in the step's worktree, including the runner's former subtree, which the probe skips while it runs inside the runner. Any survivor or unverified item → `stop` naming the PIDs | P4, P4b, DR10 |
+| Termination | (1) `tasks.list`; (2) `tasks.cancel` each; (3) check listed and recorded PIDs are gone; (4) disconnect; (5) the runtime PID has exited. Then the host, after the runner exits, scans with `process_probe` for processes in the step's worktree, including the runner's former subtree, which the probe skips while it runs inside the runner. Any survivor or unverified item → `stop` naming the PIDs. The rule holds for every worker, `check` preparation included: no worktree process survives, and a check environment is launched only afterwards by the host | P4, P4b, DR10 |
 
 **State store.** Options for the location, all outside the checkout (DR11):
 
@@ -176,8 +182,14 @@ spend estimate are part of the profile.
 **Git and GitHub adapters.** Copied modules (§3.1). The loop pushes with hooks as configured, never
 with `--no-verify` or force. A failing pre-push hook becomes a builder fix step (DR3); transport or
 authentication failure becomes pending; an unknown write result is read back with
-`classify_write_readback` and replayed only on confirmed absence. Merge is the REST merge call with
-`sha` set to the consented head and the profile's method, then a readback; a merge queue is pending.
+`classify_write_readback` and replayed only on confirmed absence. Merge is queue-aware. Without a
+required merge queue it is the REST merge call with `sha` set to the consented head and the
+profile's method, then a readback. When the effective rules require a merge queue, the loop submits
+through GitHub's merge API with the consented head SHA and no rule bypass, and maps an `enqueued`
+response to pending, not refusal. Both copied sources need that adaptation: the retained
+`publication_provider.merge_request_body` forces `direct_merge`, and `serve/delivery-github` maps
+`enqueued` to refusal today. The host then observes the queue; on removal it routes the cause (CI →
+fix task, conflict → integrate) or asks with the removal reason.
 
 **Changes page.** Served by the host app before M6; a "Changes" page beside Ideas and Memory in
 Cockpit after it. Endpoints under `/api/next`:
@@ -204,8 +216,8 @@ in the inbox and wakes the scheduler. Recovery actions are only those the curren
 | --- | --- | --- | --- | --- |
 | Designer | VS Code chat, skill `delivery-shape` | The user's words, the repository | A brief draft | `save_brief`, `show_status`, `answer_question` |
 | Planner | SDK, step `plan` | Approved brief, criteria, profile commands, file scopes of other open plans | Ordered tasks with title, goal, scope paths and checks | `submit_result`, `ask_question`, `report_wrong_premise` |
-| Builder | SDK, steps `build`, `integrate`, and `check` preparation | One task, its criteria, profile commands, findings to fix | Summary, checks run with exit codes, notes | same three |
-| Reviewer | SDK, brief and plan challenge inside `shape` and `plan`, and `review` | The brief, plan or diff, criteria; read-only | Verdict `pass` or `fix`, findings with place, problem and fix; covered files | same three |
+| Builder | SDK, steps `build`, `integrate`, and `check` preparation | One task, its criteria, profile commands, findings to fix | Summary, checks run with exit codes, notes; for `check` preparation, a verified launch recipe (command, directory, readiness URL or probe) | same three |
+| Reviewer | SDK, brief and plan challenge inside `shape` and `plan`, and `review` | The brief, plan or diff, criteria; read-only | Verdict `pass` or `fix`, findings with place, problem and fix; covered paths, including files read outside the diff. The loop records them and the judged criterion versions with fingerprints, and re-requests the review only when one changes (P5) | same three |
 
 | # | Tool | One job (T1) | Fields (T5) | Ends the step with |
 | --- | --- | --- | --- | --- |
@@ -348,6 +360,23 @@ app until M6 and Cockpit as the host after it, one runner process per step, stat
 directory, six agent-facing tools of which
 three are SDK-defined per session, and worker craft in package-shipped agent prose. Probe O1, O2,
 O5 and O8 before M4 depends on them.
+
+**First vertical slice (M4).** One pre-approved, one-task sandbox Change runs through ask → answer
+→ resumed build, including one preview-environment cycle (launch recipe, Builder teardown, host
+launch and readiness, pending check, disposal). It is done when:
+
+- a real SDK worker receives a field-specific `submit_result` rejection, corrects it, asks a
+  question and terminates;
+- the answer survives the original runner's disappearance and a host restart, and launches exactly
+  one successor without another command;
+- host-down status, second-window exclusion and an orphan command preventing replacement are
+  demonstrated;
+- it ends with a checked commit, durable state in the git common directory and nothing in product
+  branches;
+- versions, tool-call outcomes and touchpoints are recorded.
+
+Publication, CI, protection and merge are later slices. Only TD-3's silent-logic checks are
+automated.
 
 **Confidence:** high that the components fit the budgets (about 8,800 of 10,500 lines, 700 of 800
 prose lines, 6 tools, 10 step kinds, 15 error kinds) and that the state location meets DR11 and DR10.
