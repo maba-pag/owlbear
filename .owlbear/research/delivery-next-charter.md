@@ -4,8 +4,9 @@
 > **Date:** 2026-10-10
 > **Question:** What is the next Delivery for, who owns what, what may the user be asked to do,
 > how does every step end, and how small must it stay?
-> **Status:** Draft for the user's approval. Only TD-1 to TD-8 in the rebuild research are the
-> user's decisions; everything else here is `autonomous` until he approves this charter.
+> **Status:** Draft for the user's approval, revised after decisions TD-10 to TD-22. Only TD-1 to
+> TD-22 in the rebuild research are the user's decisions; everything else here is `autonomous` until
+> he approves this charter.
 
 ## 1. Context and Question
 
@@ -20,8 +21,8 @@ frame for the M3 design. Later design cannot override it without the user decidi
 
 | ID | Source | Used for |
 | --- | --- | --- |
-| H01 | [Rebuild research](delivery-liveness-first-rebuild.md) | Root causes RC1–RC6, principles P1–P9, roadmap, decisions TD-1–TD-8, provenance rule |
-| H02 | [Journey and failure modes](delivery-next-journey-and-failure-modes.md) | Journey J0–J9, touchpoint budget, exit contract, catalogue, DR1–DR15 |
+| H01 | [Rebuild research](delivery-liveness-first-rebuild.md) | Root causes RC1–RC6, principles P1–P9, roadmap, decisions TD-1–TD-22, provenance rule |
+| H02 | [Journey and failure modes](delivery-next-journey-and-failure-modes.md) | Journey J0–J9, touchpoint budget, exit contract, catalogue, DR1–DR16 |
 | H03 | [Ownership map](delivery-next-ownership-map.md) | Who owns each current responsibility; what Delivery-next keeps |
 | H04 | [Route comparison](delivery-next-route-comparison.md) | Thin core on the Copilot runtime; reuse by copying |
 | H05 | [Platform probe](delivery-next-platform-probe.md) | SDK loop, loop-owned questions, default-deny permissions, termination, cost |
@@ -33,12 +34,17 @@ frame for the M3 design. Later design cannot override it without the user decidi
 
 Help the owner of a GitHub repository shape and approve a change, then deliver the intended,
 verified and independently reviewed result as a merged pull request, spending the owner's
-attention only on decisions, person-only checks and merge consent.
+attention only on the brief, genuine questions and person-only checks.
 
 ### 3.2 Operating context
 
-- One developer per installation, on their own GitHub repository, in any language or toolchain;
-  teammates may not use OwlBear.
+- OwlBear is for the owner's personal use on his laptop (TD-9). A colleague might at most read the
+  repository and build their own variant; no shared installation, distribution or support for
+  others is planned.
+- Delivery-next need not support OwlBear developing itself (TD-10); OwlBear keeps being developed
+  directly in chat.
+- The Changes it delivers land in the owner's GitHub repositories, in any language or toolchain;
+  colleagues who share such a repository may not use OwlBear.
 - VS Code with GitHub Copilot (TD-4); local Copilot CLI and SDK use is allowed (TD-5).
 - macOS or Linux laptop that sleeps, closes and restarts; often a corporate proxy and single
   sign-on.
@@ -55,7 +61,7 @@ attention only on decisions, person-only checks and merge consent.
 | GitHub | Pull requests, reviews, checks and statuses, rules and rulesets, merge, merge queue, push protection |
 | CI | The project's remote checks |
 | Copilot platform | Agent sessions, model execution, tool-permission enforcement, transcripts, skills and instructions loading |
-| **Delivery-next** | Brief and plan; the step loop with its exits, pending conditions and budgets; durable questions and answers; validity of reviews and person-only checks; merge consent bound to one head; one writer per Change; one status line; the project profile |
+| **Delivery-next** | Brief and plan; the step loop with its exits, pending conditions and retry policy; durable questions and answers; validity of reviews and person-only checks; the merge gate bound to one head and the pull-back; one writer per Change; one status line; the project profile |
 
 Delivery-next reads code facts from git and GitHub when it needs them and never stores copies.
 Anything that touches product code — installs, checks, commits with hooks, conflict resolution, CI
@@ -72,11 +78,21 @@ Changes need (TD-2) and is deleted at cutover (M6).
 ### 3.5 Touchpoints
 
 Per project: run setup and confirm the project profile. Per Change: approve the brief, answer
-genuine questions, perform the person-only checks declared in the brief, review the PR and approve
-merging its exact head (or merge in GitHub). Announced prerequisite actions — sign in again,
-approve a permission, unlock a signer, set a credential outside chat — are allowed, each with its
-exact action and resume condition. Anything else asked of the user is a defect. Setup is user-local;
-it writes tracked files only with the user's consent (DR14).
+genuine questions and perform the person-only checks the brief declares. There is no merge-consent
+touchpoint: Delivery merges automatically when the merge gate passes (TD-15, §3.6). Reviews that
+GitHub requires from people still apply; until they arrive the Change is pending "waiting for review
+by …". A profile setting "ask before merge" (default off) restores a consent question for owners
+who want it. Overlap between Changes is shown as "overlaps with X", never asked; integration handles
+conflicts and asks only when the two Changes' intents contradict; docs, lockfiles and generated
+files are ignored (TD-12). Announced prerequisite actions — sign in again, approve a permission,
+unlock a signer, set a credential outside chat — are allowed, each with its exact action and resume
+condition. Anything else asked of the user is a defect. Setup is user-local (TD-11): it writes
+`.vscode/tasks.json` and `.mcp.json` only with consent and only while they are untracked, and adds
+both to the clone's `.git/info/exclude`, so nothing is committed. `.git/info/exclude` covers only
+untracked files: if either file is already tracked, setup does not write it and shows the manual
+alternative — start the host by command, or add the chat server in the user-level MCP
+configuration. Skills and agents are installed user-level (`~/.copilot/skills/`), never in the
+project (interpretation of TD-11, `autonomous`).
 
 ### 3.6 How every step ends
 
@@ -84,16 +100,42 @@ Every step ends in exactly one exit — done, retry, ask, back, stop — or is p
 external condition, with the rules of the journey research §3.3: bounded retries carried across
 `retry` and `back`; a stop names one action, its actor and its resume condition; no exit discards
 work; replacement of a worker only after confirmed termination; replay only on confirmed absence;
-merge consent void when the head changes; required remote gates never downgraded. The design
-requirements DR1–DR15 of the journey research are binding.
+required remote gates never downgraded. The design requirements DR1–DR16 of the journey research
+are binding.
+
+**Retry policy** (`autonomous`). Failures are classified by signature. Transient environment
+outages — network, 5xx, capacity, rate limits — are pending with growing pauses and never consume
+budget; an expired sign-in is pending with the exact login command. The card shows the pending age
+and attempts, a quiet warning after 1 hour, and an ask after
+24 hours of the same environment fault. The same fault signature from Delivery's own adapter or tool
+three times is a defect: ask with the error, never wait forever. Otherwise only identical failures
+without progress count, three at most. Progress means measurably better results — fewer failing
+checks, more satisfied criteria, a resolved finding — not merely a new commit or changed error text;
+it resets the count. On exhaustion the loop tries one different approach (split, re-plan, stronger
+model), then asks one question.
+
+**Merge gate** (TD-15). Delivery merges when the exact head (SHA guard) has a valid final review;
+required and declared checks green; for UI changes a passed agent visual check (TD-14); valid
+person-only checks; every PR conversation item handled; and the target integrated. Conversation
+items are issue comments, review bodies and review threads from any author except Delivery itself;
+each is answered by a reply, resolved after a fix, or recorded on the card as "no action needed:
+<reason>" (interpretation of TD-15, `autonomous`). The host merges one Change per target branch at a
+time; immediately before the merge call it re-reads target head, PR head, checks and conversation
+and merges only if the gate still holds and the PR base contains the target head (D4 §3.2). It
+merges with the profile's method and reads the result back; a merged result that fails required
+checks on the target opens a fix Change and tells the owner. Review comments become bounded Builder
+fix tasks; after a fix Delivery replies on the thread and resolves it; on disagreement it asks the
+owner with both positions (TD-16).
 
 ### 3.7 Interaction surface and runner activation
 
 - **Conversation** — shaping a brief, discussing a question — happens in VS Code chat through
   OwlBear skills.
-- **Status and answers** live in one local status view (Cockpit), which lists every Change with
-  stage, situation, next actor and observed activity, and accepts answers, person-only check
-  results and merge consent. Chat can answer ordinary questions through the same operation. Recovery
+- **Status and answers** live in one local status view (Cockpit), which lists every Change as a
+  card with stage, situation, next actor, a deterministic "now" line (step plus last tool event),
+  step time, a quiet warning when a step is unusually silent, credits per Change and step,
+  visual-check screenshots and pull-back status, and accepts answers and person-only check results.
+  Chat can answer ordinary questions through the same operation. Recovery
   decisions stay Cockpit actions, as tool rule T6 decided; moving them to chat would need the
   user's re-decision.
 - **A local Delivery host** (the process that serves the status view) owns runners. Until cutover
@@ -106,6 +148,16 @@ requirements DR1–DR15 of the journey research are binding.
   the next step. It also starts a runner when the user starts or approves a Change, and when an
   answer or check result arrives. After a restart or wake it observes first, then resumes steps
   that are neither waiting on the user nor paused or stopped.
+- **New Change button** (TD-13). The Changes page calls the host, which runs
+  `code chat -r -m agent "<start prompt for the delivery skill>"` in the project folder; if `code` is
+  missing, the page shows the exact command.
+- **Pull-back** (TD-15). After a merge the host fetches. It fast-forwards the local target branch
+  when it is not checked out, or when it is checked out in a clean, not-diverged working copy, with
+  `git merge --ff-only --no-autostash --no-overwrite-ignore` in each worktree from
+  `git worktree list`, never `git pull`.
+  Otherwise it never stashes, resets or merges; the card shows "local <target> is behind: <reason>"
+  with a one-click pull action once that becomes possible. Unsaved editor buffers are invisible to
+  git; VS Code shows its "file changed on disk" dialog.
 - **The host starts** when VS Code opens the project, through a folder-open task. Setup asks for
   and verifies the automatic-task permission and workspace trust this needs. Where automatic start
   is unavailable, one disclosed start action exists, and the status view or chat says nothing
@@ -120,25 +172,28 @@ demonstrate answer → runner → resume with the original runner gone.
   loop, not the agent, records exits and advances.
 - Each step type has a default-deny permission policy with an explicit allow list; denials appear in
   the status line. Allow-all is never used.
-- Models are chosen per step type in the project profile, with a spend estimate shown before
-  unattended work.
+- Models and reasoning effort are chosen per role in the project profile, to be proven by the
+  `maba-pag` probe (TD-17). Credits are shown per Change and step, never used to stop or ask (TD-21).
 - Platform preview features (agent merge, Agents-window PR form, dynamic workflows) are optional
   conveniences and never required for the journey.
 
-### 3.9 Budgets
+### 3.9 Size and style rules
 
-Proposed values for TD-1's T7 and the other budgets; tests enforce them from M4 on.
+TD-19 removes the total source line budget and line ceilings on agent instructions. Tests enforce
+the countable rules from M4 on.
 
-| Budget | Limit |
+| Rule | Limit |
 | --- | --- |
-| Agent-facing Delivery tools | 6 in total, at most 3 per role; a tool with one fixed result schema per session counts once |
+| Agent-facing Delivery tools (T7, TD-1) | 6 in total, at most 3 per role; a tool with one fixed result schema per session counts once |
 | Step kinds | 10 |
 | Exit kinds | 5, plus pending |
 | Error kinds shown to users or agents | 15 |
-| Delivery-next source, including copied and adapted modules | 10,500 lines (6,000 new plus the 4,500 reused today) |
-| Delivery skill and agent prose | 800 lines |
-| Automated test code | No more than the source it tests (P8) |
-| Retries per cause | 3, carried across `retry` and `back` |
+| Agent instructions | No line ceiling; specialist terms instead of fillers and explanations, complete sentences where needed, no "caveman" style (TD-19) |
+| Modules | Follow use cases: one step kind, one adapter, the API, the host. A module over about 400 lines of logic — not counting blank lines, comments, docstrings, imports, type-only declarations and interface definitions — is split by use case |
+| Decisions | One owner per decision; a rule never lives in two modules |
+| Function complexity | ruff complexity limits per function |
+| Automated test code | No more than the source it tests (TD-3, P8) |
+| Identical failures without progress | 3, carried across `retry` and `back` (§3.6) |
 | Review rounds per task | 2 before asking the user |
 
 ### 3.10 Proof policy
@@ -149,15 +204,26 @@ real consumer use (M5). Automated tests cover only engine logic whose failure wo
 transitions, re-entry by observation, the lock, state migration and exported tool schemas. No
 assertions on agent prose wording; agent definitions get structural checks only (TD-3).
 
+UI changes always get a visual check (TD-14): the host launches the preview from the brief's render
+recipe (start command, URL or entry, the UI states to capture), takes screenshots, and a reviewer
+judges them against the criteria. The screenshots are kept with the Change and shown on its card; a
+failure becomes a Builder fix task. The owner looks only when the brief declares a person-only check.
+Shaping establishes the recipe before approval; if the project has none, it offers to add one as part
+of the Change, declare a person-only visual check in the brief, or change scope. Visual testing is
+never skipped (interpretation of TD-14, `autonomous`).
+
 ### 3.11 Non-goals
 
-Teams or several users per installation; a hosted service; forges other than GitHub; Windows;
+Teams or several users per installation; packaging or supporting OwlBear for anyone else; a hosted
+service; forges other than GitHub; Windows;
 parallel tasks inside one Change; bypassing signing, reviews, push protection or workflow approvals;
-running OwlBear's own rebuild through Delivery ("Never use Delivery to implement Delivery").
+supporting OwlBear's own development (TD-10); merge queues (TD-22); stopping or asking because of
+cost (TD-21).
 
 ### 3.12 Earlier rules this charter replaces
 
-All are agent decisions under the provenance rule of the rebuild research §3.8.
+All but the last are agent decisions under the provenance rule of the rebuild research §3.8; the
+last is replaced by the user's decision TD-15.
 
 | Earlier rule | Replaced by | Reason |
 | --- | --- | --- |
@@ -166,19 +232,21 @@ All are agent decisions under the provenance rule of the rebuild research §3.8.
 | Requirements U1–U8 | §3.5 touchpoints and §3.6 exits | Same intent, testable form |
 | Exact-commit evidence validity | Validity by recorded inputs (P5) | Re-asking on every commit (RC3) |
 | Delivery state in product branches, pinned controller releases | State outside the checkout, ordinary tags | Self-conflicts and upgrade friction (RC3) |
+| Merge consent touchpoint | Automatic merge gate (TD-15), §3.5–§3.6 | The user decided automatic merge with pull-back |
 
 ## 4. Recommendation, Confidence, and Limits
 
-**Recommendation:** approve this charter as the frame for M3, including the interaction
-arrangement of §3.7 and the budgets of §3.9.
+**Recommendation:** approve this charter as the frame for M3, including the merge gate and retry
+policy of §3.6, the interaction arrangement of §3.7 and the size and style rules of §3.9.
 
 **Confidence:** high for purpose, ownership, touchpoints, exits and proof policy — they follow from
-three challenge rounds and M1. Medium for §3.7: it fits the probe's evidence and keeps T6, but no
-part of it has run. Medium for the budget values: they are first limits, set below today's size by
-an order of magnitude, and should be adjusted only by the user.
+three challenge rounds, M1 and decisions TD-10 to TD-22. Medium for §3.7: the prototype ran a
+Changes page and host in the sandbox, but the New Change button, pull-back and the card's "now"
+line have not run. Medium for the merge gate: a merge under a ruleset with the SHA guard was proven
+in a sandbox, automatic merge with thread resolution and pull-back was not. Medium for the module
+size of about 400 lines of logic: a first value that only the user should change.
 
-**Limits:** the probe ran on a free personal Copilot account with the Auto model and an
-unprotected private repository. Model choice, cost on the employer seat, and merges under branch
-protection remain unproven until those probes are repeated (rebuild research §3.9). Delivery state
+**Limits:** the probe ran on a free personal Copilot account with the Auto model. Models, reasoning
+effort and cost on `maba-pag`'s business seat remain unproven until the `maba-pag` probe (TD-17). Delivery state
 lives in the clone's git directory ([architecture](delivery-next-architecture.md)): deleting the clone
 deletes the state of its unfinished Changes, while their branches and PRs remain on GitHub.

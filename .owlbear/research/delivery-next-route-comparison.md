@@ -13,7 +13,7 @@
 
 The rebuild research (§3.7, M1) asks for a design-level route comparison before the charter. The
 target is fixed by the [journey research](delivery-next-journey-and-failure-modes.md): stages J0–J9,
-the touchpoint budget, five exits plus pending, the failure catalogue and DR1–DR15. The user's own
+the touchpoint budget, five exits plus pending, the failure catalogue and DR1–DR16. The user's own
 direction frames the choice: Delivery "is obviously completely overbuilt … should instead have been
 a more resilient implementation that can correct inline instead of fail and require another tool to
 fix" (2026-09-11), and "this will be a huge change or maybe even re-implementation from scratch with
@@ -24,7 +24,7 @@ some re-use where beneficial" (2026-10-09). The open Changes keep running on the
 | ID | Source | Relevant fact | Limits |
 | --- | --- | --- | --- |
 | L01 | [Rebuild research](delivery-liveness-first-rebuild.md) §3.2–3.9 | RC1–RC6, P1–P9, roadmap, Q1 lean, TD-1–TD-8, platform findings F1–F5 | Agent analysis; only TD-1–TD-8 are user decisions |
-| L02 | [Journey research](delivery-next-journey-and-failure-modes.md) | Journey, touchpoint budget, exit contract, catalogue with C/O/R labels, DR1–DR15 | Likelihood labels are judgments |
+| L02 | [Journey research](delivery-next-journey-and-failure-modes.md) | Journey, touchpoint budget, exit contract, catalogue with C/O/R labels, DR1–DR16 | Likelihood labels are judgments |
 | L03 | [Tool-surface audit](delivery-tool-surface-audit.md) | 64 tools, 536 fields, author/caller split, rules T1–T8 | Counts at `753eb92` |
 | L04 | `wc -l` over [owlbear_delivery](../../serve/delivery/src/owlbear_delivery/) | 60,824 lines in 55 modules; largest: `delivery_application_loader.py` 3,106, `delivery_runtime.py` 3,064, `application_readiness.py` 2,771 | Includes docstrings |
 | L05 | [remote_git.py](../../serve/delivery/src/owlbear_delivery/remote_git.py) L14, [storage_io.py](../../serve/delivery/src/owlbear_delivery/storage_io.py) L9–L16, [git_executable.py](../../serve/delivery/src/owlbear_delivery/git_executable.py) | Only Delivery import is `git_executable`; bounded noninteractive transport, `RemoteGitWriteUnknown`, `classify_write_readback`; `atomic_write`, `locked_roots`, `ControllerLock` use stdlib only | Behavior read, not re-tested |

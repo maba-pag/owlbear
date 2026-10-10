@@ -7,7 +7,7 @@
 > reliably makes progress — possibly as a re-implementation with selective reuse?
 > **Status:** Analysis and recommended roadmap, revision 2 (2026-10-10): corrected after six
 > independent challenges and re-weighted by the user toward end-to-end design and failure modes
-> (§1). Decided by the user: TD-1 to TD-8 (§3.8). Every other recommendation is `autonomous` until
+> (§1). Decided by the user: TD-1 to TD-22 (§3.8). Every other recommendation is `autonomous` until
 > the user decides it.
 
 ## 1. Context and Question
@@ -138,7 +138,7 @@ lists (for example §13.2 of the worktree-native redesign) and assembled journey
 exist, but they faced inward: journeys exercised OwlBear on itself with hand-authored worker
 activity, no design walked a consumer's journey, and nobody catalogued ordinary failure modes. A
 sixth reframe will repeat the pattern unless the design starts from the consumer journey and its
-ordinary failures and keeps a binding size budget.
+ordinary failures and keeps binding size and style rules.
 
 ### 3.6 Target principles (recommended, not decided)
 
@@ -150,7 +150,7 @@ ordinary failures and keeps a binding size budget.
 | P4 | **Stay out of the product repository's way.** Delivery state is outside product branches; anything that touches product code — installs, checks, hooks, conflict resolution — runs inside an agent task with the fix loop; git/GitHub/CI own what they already own | Self-conflict and hook coupling (RC3) |
 | P5 | **Evidence valid until its inputs change.** A review or person-only check records what it depends on — claim, procedure, covered files, relevant environment — and is requested again only when one of those changes | Re-asking on every commit (RC3) |
 | P6 | **One user-level status per Change**, derived in one place, with one next action | 13 inconsistent fields (RC5) |
-| P7 | **Budgets and subtraction.** Explicit limits on tools, states, error codes, tests and skill prose. Tool budgets per [audit rule T7](delivery-tool-surface-audit.md#4-recommendation-confidence-and-limits) | Fix-by-addition (RC4) |
+| P7 | **Size and style rules and subtraction.** Countable limits on tools, step kinds, exits, error kinds and test volume (tool counts per [audit rule T7](delivery-tool-surface-audit.md#4-recommendation-confidence-and-limits)); modules split by use case with one owner per decision; agent instructions follow a language style instead of line ceilings (TD-19, [charter §3.9](delivery-next-charter.md#39-size-and-style-rules)) | Fix-by-addition (RC4) |
 | P8 | **Proof, not test volume** (direction TD-3). The design is proven by walking every journey stage and failure mode against the specification, then by real consumer use. Automated tests cover only engine logic whose failure would be silent; no assertions on agent prose wording; agent definitions get structural checks only | Tests of parts and wording instead of journeys (RC6) |
 | P9 | **Fixable by design.** A fix is local when it keeps four contracts intact: approved interaction, ownership, preservation and replay, and evidence validity ([journey research §3.3](delivery-next-journey-and-failure-modes.md#33-one-exit-contract-for-every-step)). A failure that requires changing one of them sends that area back to M3 | Fix-by-addition (RC4) |
 
@@ -159,14 +159,14 @@ ordinary failures and keeps a binding size budget.
 | # | Milestone | Deliverables | Exit criterion |
 | --- | --- | --- | --- |
 | M0 | **Stop growing old Delivery; let open Changes finish** | The user keeps the open Changes running (TD-2). Old-engine fixes only where those Changes need them, each naming what it later deletes. Other Delivery fix lanes are wound down after their work is preserved — no bulk cleanup. Failures seen in the open Changes become catalogue rows | No new old-engine mechanism without an open Change that needs it |
-| M1 | **Ground truth (light)** | **Ownership map:** what git, GitHub, CI and the Copilot platform already own versus what Delivery must own; the [tool-surface audit](delivery-tool-surface-audit.md) is its tool part. **Route comparison** at design level: targeted repair, thin layer over GitHub and the Copilot platform, or new core. **R8 platform probe** as a separately authorized sandbox run (§3.9). No historical census or baseline metrics | Every Delivery responsibility has an owner; the route is chosen with reasons; every R8 probe has a result. Done 2026-10-10 (L14); the employer-seat and protected-merge probes are still to repeat |
-| M2 | **Charter** | **R4** (one page): purpose, operating context, ownership, touchpoint budget, exit contract, non-goals, budgets for tools, states, error codes and tests; the earlier programme rules it supersedes, with reasons (§3.8) | User approval; later design cannot override it without re-deciding. Draft: [charter](delivery-next-charter.md) |
+| M1 | **Ground truth (light)** | **Ownership map:** what git, GitHub, CI and the Copilot platform already own versus what Delivery must own; the [tool-surface audit](delivery-tool-surface-audit.md) is its tool part. **Route comparison** at design level: targeted repair, thin layer over GitHub and the Copilot platform, or new core. **R8 platform probe** as a separately authorized sandbox run (§3.9). No historical census or baseline metrics | Every Delivery responsibility has an owner; the route is chosen with reasons; every R8 probe has a result. Done 2026-10-10 (L14); the `maba-pag` probe (TD-17) is still to run |
+| M2 | **Charter** | **R4** (one page): purpose, operating context, ownership, touchpoint budget, exit contract, non-goals, size and style rules (TD-19); the earlier programme rules it supersedes, with reasons (§3.8) | User approval; later design cannot override it without re-deciding. Draft: [charter](delivery-next-charter.md) |
 | M3 | **Watertight design** — most of the effort | **D1 end-to-end journey** and **D2 failure catalogue** for a consumer project (first draft: [journey research](delivery-next-journey-and-failure-modes.md)); **D3 status and exit model**; **D4 minimal architecture** on the Copilot runtime with the tool contract (TD-1); **D5 cutover plan** with a deletion list | Every journey stage and catalogue row has a concrete detection, exit and user-visible text; the connected traces of the journey research §3.6 hold; every necessary finding of the independent user-experience, failure-mode and consumer-fit challenges is resolved or rejected with evidence; user approval. Drafts 2026-10-10, challenged once and corrected: [status and exits](delivery-next-status-and-exits.md), [architecture](delivery-next-architecture.md), [cutover](delivery-next-cutover.md) |
 | E1 | **Content portability (enabling)** | Agents, skills and instructions that survive the rebuild moved to locations the Copilot harness reads (repository or plugin, per the [distribution research](owlbear-distribution-agent-host.md)); prompts converted to skills; `.mcp.json` registration; reviewer guards re-expressed as harness hooks or tool allow-lists. Non-Delivery content may move once R8 settles loading. Everything the Local-based Delivery needs stays in place until the open Changes finish. Delivery skills scheduled for deletion are not ported | Non-Delivery workflows run in a Copilot-harness session; Local workflows still work; M4 can load its agents |
-| M4 | **Build in vertical slices** | The journey built stage by stage on a sandbox consumer repository (non-OwlBear toolchain, CI, branch protection), each slice demonstrated end to end. The common failure rows are triggered by hand once. Automated tests only per P8 | The whole journey runs once on the sandbox; every hand-triggered common failure ends in its designed exit and, once its prerequisite is restored, continues to the next successful step; one interruption with an unconfirmed push or PR ends without lost work or duplicate effects; touchpoints stay within the budget. A failed gate returns the affected contract to M3. First slice: one sandbox Change through ask → answer → resumed build ([architecture](delivery-next-architecture.md)) |
-| M5 | **First real consumer project** | Real Changes on a consumer project | Changes merged; every problem found is fixed locally (P9); anything that changes one of the four contracts returns to M3 for that area |
-| M6 | **Cutover and deletion** | OwlBear's own Changes and the status view switched to the new core; open work finished on the old core (M0); old engine, tools, skills, tests and superseded research retired; product documentation updated | Size within R4 budgets; old Delivery skills and tools no longer exist |
-| M7 | **Budgets (continuous)** | Budget tests for tools, states, error codes and test volume; every real-use failure becomes a catalogue row | Budgets hold |
+| M4 | **Build in vertical slices** | The journey built stage by stage on a sandbox consumer repository (non-OwlBear toolchain, CI, branch protection), each slice demonstrated end to end. The common failure rows are triggered by hand once. Automated tests only per P8 | The whole journey runs once on the sandbox; every hand-triggered common failure ends in its designed exit and, once its prerequisite is restored, continues to the next successful step; one interruption with an unconfirmed push or PR ends without lost work or duplicate effects; touchpoints stay within the budget. A failed gate returns the affected contract to M3. First slice: one sandbox Change through ask → answer → resumed build ([architecture](delivery-next-architecture.md)). Slice 1 built overnight 2026-10-10 as a prototype on branch `next/m4-slice1` (draft PR #449, not merged before charter approval): engine core, SDK runner, host; each phase challenged, repaired and demonstrated live in the sandbox. Slice 2 ran the whole journey once in the sandbox — build, review, person-only check, publish, CI, consent bound to the head, merge, cleanup — plus a CI failure fixed by a Builder task and consent voided by a head change. Every failure found live or by review was fixed locally without a new exit or state (P9). Slice 3 added the chat entry, planner, brief review, setup with readiness, profile confirmation and consent-gated writes, and ran from a chat-shaped brief to a merged PR with only brief approval and merge consent as touchpoints. Next: PR #449 continues as the base, reshaped to the module rules (TD-18, TD-19); the first release before real-project use (TD-20) adds the New Change button, automatic merge with pull-back instead of merge consent, thread replies and resolution, the agent visual check, a Change card with a deterministic "now" line, step time, a quiet warning and credits |
+| M5 | **First real consumer project** | Real Changes on consumer projects; OwlBear itself keeps being developed directly in chat (TD-10) | At least two Changes merged in consumer projects; every problem found is fixed locally (P9); anything that changes one of the four contracts returns to M3 for that area |
+| M6 | **Cutover and deletion** | No switch of OwlBear's own development (TD-10). The open Changes finish on the old engine (M0, TD-2); then one deletion PR retires the old engine, tools, skills, tests and superseded research and updates product documentation | Done after the open Changes finish and two Changes merged in consumer projects; size and style rules of R4 hold; old Delivery skills and tools no longer exist |
+| M7 | **Size and style rules (continuous)** | Tests for tool counts, step kinds, exits, error kinds, test volume, module size by use case and ruff complexity; every real-use failure becomes a catalogue row | Rules hold |
 
 M1 is read-only except for the separately authorized R8 sandbox probe. M4 must not start before M2
 and M3 are approved. Most of the effort belongs in M3: past designs failed on ordinary failure
@@ -185,7 +185,7 @@ the Local harness; the old Delivery keeps running on Local until M6.
 | Q6 | Sequencing with the VS Code agent-platform migration | Integrate (§3.9 option S3): the Copilot runtime is a design input of M2/M3 and the base of M4; content portability (E1) runs as an enabling track; no port of the current Delivery |
 | Q7 | Programmable loop technology | R8 result: a small Python loop on the Copilot SDK. Dynamic workflows are not loadable in Python SDK sessions and stay optional for parallel reviews inside one step; structured output is experimental ([probe](delivery-next-platform-probe.md)) |
 | Q8 | Switch to a third-party agent front-end | No; isolate Copilot SDK calls in ordinary modules and build no front-end abstraction (§3.10) |
-| Q9 | Status and interaction surface | Charter proposal: Cockpit as status and answer surface, chat for conversation, and a local host that starts bounded runners ([charter §3.7](delivery-next-charter.md#37-interaction-surface-and-runner-activation)); this keeps tool rule T6 as decided |
+| Q9 | Status and interaction surface | Charter proposal: Cockpit as status and answer surface with a New Change button that opens VS Code chat (TD-13), chat for conversation, and a local host that starts bounded runners ([charter §3.7](delivery-next-charter.md#37-interaction-surface-and-runner-activation)); this keeps tool rule T6 as decided |
 
 **Provenance of earlier "user decisions".** Until 2026-10-10 the programme documents labelled agent
 choices and user choices alike as user decisions. This plan therefore treats every earlier record as
@@ -211,6 +211,29 @@ choices and user choices alike as user decisions. This plan therefore treats eve
 | TD-6 | Sandbox repository for R8 and M4 under `maba-pag`, or under `boecht` when that is the signed-in account | `decided` (answered question) | 2026-10-10 |
 | TD-7 | Research commits are pushed directly to `dev` | `decided` (answered question) | 2026-10-10 |
 | TD-8 | Overnight work proceeds as far as possible, without a Copilot usage limit | `decided` (answered question) | 2026-10-10 |
+| TD-9 | OwlBear is for the owner's personal use on his laptop; a colleague would at most read the repository and build their own variant | `decided`: "this project is for personal use on my laptop" | 2026-10-10 |
+| TD-10 | Delivery-next need not support OwlBear developing itself; OwlBear keeps being developed directly in chat. TD-2's open Changes still finish on the old engine | `decided`: "i dont need it to work on itself" (forked chat) | 2026-10-10 |
+| TD-11 | Setup writes `.vscode/tasks.json` (host start on folder open) and `.mcp.json` (chat tools) only with consent; nothing from OwlBear is committed into the consumer project | `decided`: approved the fork's proposal | 2026-10-10 |
+| TD-12 | Parallel Changes that overlap: do not ask by default; show "overlaps with X"; integration handles conflicts; ask only on real behavioural collisions; docs, lockfiles and generated files are ignored | `decided`: "proposal sounds good, approved" (forked chat; wording is the fork's) | 2026-10-10 |
+| TD-13 | A "New Change" button in Cockpit opens VS Code chat with the shaping skill, so no prompt is copied | `decided`: "approved the button to start chat" | 2026-10-10 |
+| TD-14 | UI changes always get visual testing of design and layout. The agent's visual check is enough for the automatic merge; the owner looks only when the brief declares a person-only check | `decided`: "there needs to always be visual testing regarding design and layout"; answered question | 2026-10-10 |
+| TD-15 | Delivery merges automatically once every gate passes, including no unanswered comments or open discussions, and pulls the result back to the local clone | `decided`: "letting the agent/delivery also merge automatically … this ofc also needs to include automated pulls back to local" | 2026-10-10 |
+| TD-16 | Routine CI fixes and reactions to comments and reviews are automated, including replying to and resolving the threads an agent fixed. When human input is still needed stays open | `decided`: "fix ci, react to comments including reviews"; answered question | 2026-10-10 |
+| TD-17 | Probes and real use run on `maba-pag`'s business Copilot seat instead of `boecht` | `decided` (forked chat) | 2026-10-10 |
+| TD-18 | The prototype (PR #449) is the base to continue, reshaped to the module rules (TD-19) | `decided` (answered question) | 2026-10-10 |
+| TD-19 | No ceilings on agent instructions: they lose detail. Instead, a language style: specialist terms instead of fillers or explanations, but not "caveman" style. For code, a size limit is fine when exceeding it means splitting into more modules, not cutting logic; interface overhead is not counted | `decided`: "strict budgets for agents dont work … we should rather define language style … for code this does work if the ceiling means splitting into more files/modules" | 2026-10-10 |
+| TD-20 | First release, before real-project use: New Change button, automatic merge with pull-back, thread replies and resolution, agent visual pre-check, Change card with a deterministic "now" line, step time, quiet warning and credits. Watcher, notifications, scanner triage and a knowledge home wait for evidence from real use | `decided` (answered question) | 2026-10-10 |
+| TD-21 | No cost question: credits are shown per Change and step, never used to stop or ask | `decided` (answered question) | 2026-10-10 |
+| TD-22 | No merge-queue support | `decided`: "i dont know what that is, so probably no" | 2026-10-10 |
+
+**User direction, not yet decisions** (forked chat, 2026-10-10): Cockpit as the communication channel
+instead of Teams, Slack or Signal; "my goal would be for delivery to just run on itself"; start
+sessions from Cockpit; more detail than "an agent is running" without rebuilding chat; a watcher
+agent that narrates, derives learnings and, later, steers; cheap subagents (for example search on the
+cheapest model) with model and reasoning effort per role; a durable home for research and learnings
+outside `.git/`. The retry policy proposed in the fork — environment failures wait and never count,
+only identical failures without progress count, then one different approach, then one question — is
+adopted as design, `autonomous`.
 
 ### 3.9 Platform migration interplay
 
@@ -317,6 +340,26 @@ catalogue for a consumer project, challenged independently (M3). Build in vertic
 sandbox consumer repository, proven by demonstration with tests only per P8 (M4). Then use it on a
 real consumer project and expect fixes, not rework (M5), and delete the old engine (M6). Integrate
 the platform migration rather than sequencing it (S3).
+
+**Status, 2026-10-10 morning.**
+
+| Milestone | State | Where |
+| --- | --- | --- |
+| M1 | Done: ownership map, route comparison, live platform probe | L14 |
+| M2 | Charter drafted and challenged; awaits approval | [charter](delivery-next-charter.md) |
+| M3 | Journey and catalogue, status and exits, architecture, cutover: drafted, challenged three times, corrected; awaits approval | L14, M3 row |
+| M4 | Prototype on branch `next/m4-slice1`, PR #449, not merged: the whole journey ran in the sandbox, from a chat-shaped brief to a merged PR, with brief approval and merge consent as the only touchpoints; twelve common failures were triggered by hand and each ended in its designed exit and continued; every failure found was fixed locally (P9). About 7,400 source lines. PR #449 continues as the base, reshaped (TD-18, TD-19), toward the first release of the M4 row (TD-20) | `serve/delivery-next/DEMO-slice1.md` on the branch |
+
+Proven since: merge under a ruleset (required check, squash only, linear history) in the public
+sandbox `boecht/owlbear-sandbox-protected` — never merged while CI was pending or red, merged the
+consented head with the `sha` guard. On the branch, the sync manifest has a `delivery-next` scope
+behind the `sync_delivery_next` input, default off: the package reaches consumer `main` only when
+that input is set at dispatch (cutover §3.2 step 5).
+
+Still unproven, needed before M5: the `maba-pag` probe on its business seat (TD-17) — models,
+reasoning effort per session and agent, context window, subagent models and cost; the folder-open
+start, skill loading and workspace trust inside VS Code; the Changes page used in a browser by the
+owner.
 
 **Confidence:** high that ordinary failures nobody designed for, together with an inward-facing
 design (RC6), explain the observed pattern; every 2026-10-09 incident was ordinary. Medium on the

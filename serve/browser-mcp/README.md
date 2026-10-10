@@ -65,6 +65,9 @@ values for exact sensitive keys and normalized keys ending in `token`, `secret`,
 become `%5BCORRELATION%5D`. The `code` key is exact-match only, and other query bytes and paths
 remain for document identity. Diagnostic URLs with secret-like paths are replaced in full; MCP
 serialization projects the already-redacted fields.
+Any main-document status of 400 or above other than 401 and 403 returns `http_error`. Login-form or
+authentication-title detection takes precedence for 401/403, returning
+`authentication_required` before `access_denied`.
 
 ## Configuration
 
@@ -94,14 +97,12 @@ Chromium is installed, an approved session is authenticated, or a Knowledge sour
 ## Browser and Knowledge Boundaries
 
 `acquire` returns rendered Markdown and a structured success/failure mapping. It does not call the
-Knowledge MCP server. The current Knowledge `authenticated_web` refresh route is registered in the
-Knowledge source model, but the Knowledge MCP process uses a placeholder browser fetcher unless a
-future adapter is explicitly wired; do not advertise registered browser refresh as a working
-end-to-end capability. For the currently supported manual path, inspect the acquisition result and
-then call `knowledge_ingest` with the captured text and an intentional scope. The current direct
-capture is inline and non-refreshable; `source_url` supplies document identity but does not bind the
-capture to a refreshable browser source. See the [Knowledge operations guide](../../share/skills/h-knowledge-ops/SKILL.md)
-for identity, anonymous-capture, and refresh semantics.
+Knowledge MCP server. An agent can acquire each URL from a registered Browser source, then submit
+the captures together in one bound `knowledge_ingest` round. This is an agent-mediated capture
+workflow, not an automatic refresh path; the Knowledge process does not own a live Browser session.
+See the [Knowledge operations guide](../../share/skills/h-knowledge-ops/SKILL.md) for the ingest
+contract and the [Browser-to-Knowledge vertical test](../../tests/test_browser_knowledge_vertical.py)
+for the exercised workflow.
 
 See the [Browser package guide](../browser/README.md), the [acquisition tests](tests/test_acquire.py),
 and the [SSRF policy tests](tests/test_ssrf_preflight.py) for the exercised browser boundary.

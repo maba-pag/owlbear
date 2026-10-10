@@ -7,6 +7,7 @@ import ipaddress
 import logging
 import os
 import socket
+from collections.abc import Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -80,13 +81,27 @@ def _is_trusted_internal_ip(ip_str: str) -> bool:
     )
 
 
-async def _check_ssrf(url: str, *, allowlist: DomainAllowlist | None = None) -> None:
+AddressResolver = Callable[[str, int], list[tuple[Any, ...]]]
+
+
+def _system_resolver(hostname: str, port: int) -> list[tuple[Any, ...]]:
+    """Resolve through the current system resolver, preserving runtime patchability."""
+    return socket.getaddrinfo(hostname, port)
+
+
+async def _check_ssrf(
+    url: str,
+    *,
+    allowlist: DomainAllowlist | None = None,
+    resolver: AddressResolver = _system_resolver,
+) -> None:
     """Pre-flight SSRF check for *url* (CWE-918).
 
     Args:
         url: URL to resolve and validate.
         allowlist: Configured hostname allowlist used to identify an exact
             trusted-internal hostname. Wildcard mode never permits private IPs.
+        resolver: Callable used to resolve the hostname and port.
 
     Raises :class:`~mcp.server.mcpserver.exceptions.ToolError` if:
 
@@ -129,7 +144,7 @@ async def _check_ssrf(url: str, *, allowlist: DomainAllowlist | None = None) -> 
     )
 
     try:
-        addrs = await asyncio.to_thread(socket.getaddrinfo, hostname, port)
+        addrs = await asyncio.to_thread(resolver, hostname, port)
     except OSError as exc:
         msg = f"DNS resolution failed for '{hostname}': {exc}"
         raise ToolError(msg) from exc
@@ -149,6 +164,7 @@ class AppContext:
     launcher: PlaywrightLauncher | None = None
     page: Any = None
     browser_diagnostic: str | None = None
+    resolver: AddressResolver = _system_resolver
     user_data_dir: str = str(_DEFAULT_USER_DATA_DIR)
     launch_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
@@ -276,7 +292,7 @@ async def _validate_destination(app_ctx: object, url: str) -> None:
     """Apply the DNS/IP preflight and allowlist before any browser work."""
     if not isinstance(app_ctx, AppContext):
         raise ToolError(_MSG_BROWSER_UNAVAILABLE)
-    await _check_ssrf(url, allowlist=app_ctx.allowlist)
+    await _check_ssrf(url, allowlist=app_ctx.allowlist, resolver=app_ctx.resolver)
     try:
         app_ctx.allowlist.check(url)
     except PermissionError as exc:

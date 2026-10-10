@@ -6,6 +6,7 @@ import asyncio
 import re
 import time
 from datetime import UTC, datetime
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
@@ -54,6 +55,7 @@ class BrowserContentFetcher:
     async def acquire(self, request: AcquisitionRequest) -> AcquisitionResult:  # noqa: C901, PLR0911, PLR0912, PLR0915
         """Acquire and validate rendered content for a structured browser request."""
         parsed_request_url = urlparse(request.url)
+        requested_origin = (parsed_request_url.scheme, parsed_request_url.netloc)
         if parsed_request_url.scheme.lower() not in {"http", "https"} or not parsed_request_url.netloc:
             return AcquisitionFailure(
                 AcquisitionStatus.UNSUPPORTED_TARGET,
@@ -93,6 +95,11 @@ class BrowserContentFetcher:
                 return AcquisitionFailure(
                     AcquisitionStatus.DOWNLOAD_REJECTED,
                     Diagnostics("navigation", {"url": page.url}),
+                )
+            if response is not None and response.status >= HTTPStatus.BAD_REQUEST and response.status not in {401, 403}:
+                return AcquisitionFailure(
+                    AcquisitionStatus.HTTP_ERROR,
+                    Diagnostics("navigation", {"response_status": response.status}),
                 )
             try:
                 region = page.locator(request.content_selector) if request.content_selector else page.locator("body")
@@ -168,7 +175,6 @@ class BrowserContentFetcher:
                     AcquisitionStatus.ACCESS_DENIED,
                     Diagnostics("validation", {"url": final_url, "signal": "access_denied"}),
                 )
-            requested_origin = (urlparse(request.url).scheme, urlparse(request.url).netloc)
             final_origin = (urlparse(final_url).scheme, urlparse(final_url).netloc)
             if redirect_chain and requested_origin != final_origin:
                 return AcquisitionFailure(

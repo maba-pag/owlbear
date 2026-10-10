@@ -260,6 +260,10 @@ to re-decide it.
 | T7 | **Budgets enforced by tests** (milestone M7): concrete limits set in the R4 charter, for example at most 15 agent-facing tools in total, at most five per role, no dead or Cockpit-only tools exposed to agents | Fix-by-addition |
 | T8 | **Measure tool-call success** during the M4 demonstration and real use (M5): invalid-argument rate, retries, wrong-tool selection | No evaluation |
 
+Under T7 the tool-count limits stay (the [charter](delivery-next-charter.md#39-size-and-style-rules)
+sets at most six agent-facing tools, at most three per role); TD-19 removes line ceilings for agent
+instructions in favour of a language style.
+
 On the Copilot runtime ([rebuild research §3.9](delivery-liveness-first-rebuild.md#39-platform-migration-interplay)),
 T2 and T3 become easier: a code-driven loop holds identities in code and asks agents only for judgment,
 and dynamic workflows request structured results with automatic format correction.
