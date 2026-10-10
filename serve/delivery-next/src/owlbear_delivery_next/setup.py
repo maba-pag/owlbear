@@ -77,6 +77,18 @@ def _network(host: str, error: str | None) -> Check:
     return Check("network", ok=False, detail=f"https://{host}: {error}"[:200], fix=fix)
 
 
+def _sign_in_failure(host: str, text: str) -> Check:
+    """The failed account's lines of ``gh auth status``, not the last account it lists; a bad GH_TOKEN is named."""
+    lines = [ln.strip() for ln in text.splitlines()]
+    start = next((i for i, ln in enumerate(lines) if ln.startswith("X ")), len(lines))
+    end = next((i for i in range(start, len(lines)) if not lines[i]), len(lines))
+    detail = " ".join(lines[start:end]) or " ".join(lines)[-160:]
+    fix = f"Run `gh auth login --hostname {host}`"
+    if "GH_TOKEN" in detail:
+        fix = f"Unset GH_TOKEN or set a valid token, then restart Delivery; or run `gh auth login --hostname {host}`"
+    return Check("github sign-in", ok=False, detail=detail[:200], fix=fix)
+
+
 def _github(host: str, probe: Probe) -> list[Check]:
     code, text = probe(["gh", "--version"])
     if code:
@@ -84,10 +96,7 @@ def _github(host: str, probe: Probe) -> list[Check]:
     out = [Check("github cli", ok=True, detail=text.splitlines()[0])]
     code, text = probe(["gh", "auth", "status", "--hostname", host])
     if code:
-        return [
-            *out,
-            Check("github sign-in", ok=False, detail=text[-160:], fix=f"Run `gh auth login --hostname {host}`"),
-        ]
+        return [*out, _sign_in_failure(host, text)]
     out.append(Check("github sign-in", ok=True, detail=f"signed in to {host}"))
     code, text = probe(["gh", "repo", "view", "--json", "nameWithOwner,viewerPermission"])
     try:

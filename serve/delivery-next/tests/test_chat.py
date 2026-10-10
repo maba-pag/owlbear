@@ -149,6 +149,19 @@ def test_readiness_gives_one_concrete_fix_per_failure():
     assert failed(READY | locked | {GPG: (0, "")}) == []
 
 
+def test_a_failed_sign_in_names_the_failed_account_not_the_last_one_listed():
+    status = (
+        "github.com\n  X Failed to log in to github.com using token (GH_TOKEN)\n  - Active account: true\n"
+        "  - The token in GH_TOKEN is invalid.\n\n  ✓ Logged in to github.com account ada (keyring)\n"
+        "  - Active account: false\n  - Token scopes: 'repo'"
+    )
+    probe = READY | {"gh auth status --hostname github.com": (1, status)}
+    *_, sign_in = setup.publishing("github.com", lambda argv: probe.get(" ".join(argv), (0, "")), None)
+    assert (sign_in.name, sign_in.ok) == ("github sign-in", False)
+    assert sign_in.detail.endswith("The token in GH_TOKEN is invalid.")
+    assert sign_in.fix.startswith("Unset GH_TOKEN")
+
+
 def test_an_unusable_ssh_signing_key_is_a_failed_check_with_one_fix(tmp_path):
     ssh = {"git config --bool commit.gpgsign": (0, "true"), "git config gpg.format": (0, "ssh")}
     ssh |= {"ssh-add -L": (0, "ssh-ed25519 AAAAkey ada")}
