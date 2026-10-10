@@ -289,7 +289,7 @@ Cockpit after it. Endpoints under `/api/next`:
 | `GET /changes/{slug}` | Brief and versions, plan, open question, person-only checks, visual-check screenshots, decisions with origin, PR link, pull-back result, activity |
 | `POST /new-change` | Run `code chat` with the delivery skill's start prompt; returns the command when `code` is missing |
 | `POST /briefs` | Create a Change or revise its brief draft (behind `save_brief`): validates the brief, returns the host-issued handle or field-specific errors |
-| `POST /changes/{slug}/brief-approval` | Approve one brief version |
+| `POST /changes/{slug}/approve-brief` | Approve one brief version |
 | `POST /changes/{slug}/answers` | Answer one question (also used by the chat tool) |
 | `POST /changes/{slug}/check-results` | Pass or fail of one person-only check, with a note |
 | `POST /changes/{slug}/merge-consent` | Only with "ask before merge": consent to merge one exact head; void when the head changes |
