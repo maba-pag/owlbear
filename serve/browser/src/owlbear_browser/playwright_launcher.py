@@ -150,8 +150,8 @@ class PlaywrightLauncher:
 
     @property
     def is_running(self) -> bool:
-        """Return whether the persistent context is launched and has not closed."""
-        return self._context is not None and not self._context_closed
+        """Return whether the persistent context is open and has at least one page."""
+        return self._context is not None and not self._context_closed and bool(self._context.pages)
 
     def _mark_context_closed(self, *_: object) -> None:
         self._context_closed = True

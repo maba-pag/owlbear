@@ -62,29 +62,45 @@ class _FakeLauncher:
         self._launch_error = launch_error
         self._page_error = page_error
         self._page_resource = page_resource
-        self.is_running = False
+        self.pages: list[_FakePage] = []
+        self.context_closed = False
+
+    @property
+    def is_running(self) -> bool:
+        return not self.context_closed and bool(self.pages)
 
     async def launch(self) -> None:
         self._calls.append("launch")
         await asyncio.sleep(0)
         if self._launch_error is not None:
             raise self._launch_error
-        self.is_running = True
+        self.context_closed = False
 
     async def page(self) -> _FakePage:
         self._calls.append("page-create")
         if self._page_error is not None:
             raise self._page_error
+        for page in self.pages:
+            if not page.is_closed():
+                return page
         if self._page_resource is not None and not self._page_resource.closed:
+            self.pages.append(self._page_resource)
             return self._page_resource
-        return _FakePage(self._calls)
+        self._page_resource = _FakePage(self._calls)
+        self.pages.append(self._page_resource)
+        return self._page_resource
 
     def set_page_error(self, error: BaseException | None) -> None:
         self._page_error = error
 
+    def close_page(self, page: _FakePage) -> None:
+        page.closed = True
+        self.pages.remove(page)
+
     async def close(self) -> None:
         self._calls.append("launcher")
-        self.is_running = False
+        self.context_closed = True
+        self.pages.clear()
 
 
 class _AsyncResource:
@@ -145,12 +161,18 @@ async def test_concurrent_first_tool_calls_launch_once_and_shutdown_closes_it() 
 @pytest.mark.asyncio
 async def test_closed_page_is_reopened_without_relaunching() -> None:
     calls: list[str] = []
+    launchers: list[_FakeLauncher] = []
 
-    with patch.object(server_module, "PlaywrightLauncher", side_effect=lambda **_: _FakeLauncher(calls)) as factory:
+    def make_launcher(**_: object) -> _FakeLauncher:
+        launchers.append(_FakeLauncher(calls))
+        return launchers[-1]
+
+    with patch.object(server_module, "PlaywrightLauncher", side_effect=make_launcher) as factory:
         async with app_lifespan(mcp) as context:
             await click(_tool_ctx(context), "#a")
             first_page = context.page
-            first_page.closed = True
+            launchers[0].pages.append(_FakePage(calls))
+            launchers[0].close_page(first_page)
             status = await browser_status(_tool_ctx(context))
             assert status["startup_state"] == "ready"
             assert status["visible_authentication"] == "available"
@@ -177,7 +199,9 @@ async def test_page_reopen_failure_does_not_mark_browser_startup_unavailable() -
         async with app_lifespan(mcp) as context:
             ctx = _tool_ctx(context)
             await click(ctx, "#a")
-            context.page.closed = True
+            other_window = _FakePage(calls)
+            launcher.pages.append(other_window)
+            launcher.close_page(context.page)
             calls_before_reopen = calls.copy()
             launcher.set_page_error(RuntimeError("/private/profile/token"))
 
@@ -210,15 +234,26 @@ async def test_closed_browser_is_relaunched_and_only_current_resources_close_at_
     ):
         async with app_lifespan(mcp) as context:
             await click(_tool_ctx(context), "#a")
-            launchers[0].is_running = False
+            launchers[0].close_page(context.page)
+            assert launchers[0].context_closed is False
+            assert launchers[0].pages == []
             calls_before_status = calls.copy()
             status = await browser_status(_tool_ctx(context))
-            assert status["startup_state"] == "not-launched"
-            assert status["startup_reason"] is None
-            assert status["visible_authentication"] == "unavailable"
-            assert status["startup_diagnostic"] is None
+            assert status == {
+                "browser_mode": "managed-edge",
+                "ownership": "per-user-owned",
+                "startup_state": "not-launched",
+                "startup_reason": None,
+                "visible_authentication": "unavailable",
+                "latest_acquisition_status": None,
+                "startup_diagnostic": None,
+            }
             assert calls == calls_before_status
             assert len(launchers) == 1
+            for reader in (read_text, snapshot):
+                with pytest.raises(ToolError, match="No browser session"):
+                    await reader(_tool_ctx(context))
+            assert calls == calls_before_status
 
             await click(_tool_ctx(context), "#b")
             assert context.launcher is launchers[1]
@@ -525,7 +560,7 @@ async def test_shutdown_defers_page_cancellation_until_launcher_cleanup() -> Non
 def test_launcher_reports_not_running_after_context_close_event() -> None:
     launcher = PlaywrightLauncher()
     assert not launcher.is_running
-    launcher._context = object()  # type: ignore[assignment]  # noqa: SLF001
+    launcher._context = SimpleNamespace(pages=[object()])  # type: ignore[assignment]  # noqa: SLF001
     assert launcher.is_running
     launcher._mark_context_closed(launcher._context)  # noqa: SLF001
     assert not launcher.is_running

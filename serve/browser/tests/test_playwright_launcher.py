@@ -110,6 +110,29 @@ async def test_managed_edge_uses_fixed_profile_and_stable_edge(monkeypatch: pyte
 
 
 @pytest.mark.asyncio
+async def test_is_running_tracks_open_pages_while_context_stays_open() -> None:
+    context = _FakeContext()
+    browser_type = _FakeBrowserType(context)
+    playwright = _FakePlaywright(browser_type)
+    launcher = PlaywrightLauncher(mode=BrowserMode.MANAGED_EDGE)
+
+    with patch.object(launcher_module, "async_playwright", return_value=_FakePlaywrightManager(playwright)):
+        await launcher.launch()
+
+    context.pages.extend((object(), object()))
+    assert launcher.is_running
+
+    context.pages.pop()
+    assert launcher.is_running
+
+    context.pages.clear()
+    assert context.closed is False
+    assert not launcher.is_running
+
+    await launcher.close()
+
+
+@pytest.mark.asyncio
 async def test_chromium_retains_extension_arguments_when_configured() -> None:
     context = _FakeContext()
     browser_type = _FakeBrowserType(context)
