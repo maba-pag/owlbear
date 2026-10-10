@@ -52,6 +52,9 @@ _PUSH = frozenset({"ADMIN", "MAINTAIN", "WRITE"})
 _READY = """mutation Ready($id: ID!) {
   markPullRequestReadyForReview(input: {pullRequestId: $id}) { pullRequest { id isDraft } }
 }"""
+_MERGED = """query Merged($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) { pullRequest(number: $number) { mergeCommit { oid } } }
+}"""
 _CHECKS = """query Checks($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) { pullRequest(number: $number) { headRefOid
     commits(last: 1) { nodes { commit { oid statusCheckRollup { contexts(first: 100) {
@@ -267,8 +270,20 @@ class GhProvider:
         return self.read_pull_request(repository, int(found[0]["number"])) if found else None
 
     def read_pull_request(self, repository: str, number: int) -> PullRequest:
-        """Read one exact pull request."""
-        return _pull(repository, self._api("read_pull_request", "GET", f"{_repo(repository)}/pulls/{number}"), "read")
+        """Read one exact pull request; a merged one gets its merge commit, which this REST version omits."""
+        pr = _pull(repository, self._api("read_pull_request", "GET", f"{_repo(repository)}/pulls/{number}"), "read")
+        if pr.merged and pr.merge_commit_sha is None:
+            owner, name = repository.split("/", 1)
+            body = {"query": _MERGED, "variables": {"owner": owner, "name": name, "number": number}}
+            found = self._gh(
+                "read_pull_request", ("api", "--hostname", self.host, "graphql", "--input", "-"), body=body
+            )
+            try:
+                sha = found["data"]["repository"]["pullRequest"]["mergeCommit"]["oid"]
+            except (KeyError, TypeError) as exc:
+                _invalid("read_pull_request", "GitHub omitted the merge commit", exc)
+            pr = pr.model_copy(update={"merge_commit_sha": sha})
+        return pr
 
     def create_pull_request(self, repository: str, head: str, base: str, title: str, body: str) -> PullRequest:
         """Create one draft pull request; an unknown outcome is read back by the caller."""

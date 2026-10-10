@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import subprocess
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Literal
 
 from owlbear_delivery_next import loop, profile
@@ -16,7 +16,6 @@ from owlbear_delivery_next.steps import worktree
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from datetime import datetime
     from pathlib import Path
 
     from owlbear_delivery_next.github.provider import Provider, Rules
@@ -50,7 +49,8 @@ class Ctx:
 
     def log(self, slug: str, event: str, **fields: object) -> None:
         """Append one activity event."""
-        self.store.log(self.lock, slug, {"event": event, "at": self.now.isoformat(timespec="seconds"), **fields})
+        at = datetime.now(UTC).isoformat(timespec="seconds")
+        self.store.log(self.lock, slug, {"event": event, "at": at, **fields})
 
     def events(self, slug: str, event: str) -> list[dict[str, object]]:
         """Return the retained activity events of one kind, oldest first."""

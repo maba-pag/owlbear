@@ -50,9 +50,18 @@ def ensure(repo: Path, common_dir: Path, slug: str, branch: str, target: str) ->
     exists = subprocess.run(  # noqa: S603 - fixed Git executable and argument vector.
         [GIT, "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"], cwd=repo, capture_output=True, check=False
     )
-    args = [str(path), branch] if exists.returncode == 0 else ["-b", branch, str(path), target]
+    args = [str(path), branch] if exists.returncode == 0 else ["-b", branch, str(path), tracking(repo, target)]
     git(repo, "worktree", "add", *args)
     return path
+
+
+def tracking(cwd: Path, target: str) -> str:
+    """``origin/<target>`` when it exists, else *target*: the local branch can lag behind merged work."""
+    ref = f"refs/remotes/origin/{target}"
+    found = subprocess.run(  # noqa: S603 - fixed Git executable and argument vector.
+        [GIT, "rev-parse", "--verify", "--quiet", ref], cwd=cwd, capture_output=True, check=False
+    )
+    return f"origin/{target}" if found.returncode == 0 else target
 
 
 def allowed(profile: Profile, kind: str) -> list[str]:
@@ -77,7 +86,7 @@ def installs(profile: Profile, scope: Sequence[str]) -> list[tuple[str, str]]:
 def observe(path: Path, target: str) -> Worktree:
     """Read the worktree's head, its base on *target*, uncommitted paths and paths changed since the base."""
     head = git(path, "rev-parse", "HEAD").strip()
-    base = git(path, "merge-base", "HEAD", target).strip()
+    base = git(path, "merge-base", "HEAD", tracking(path, target)).strip()
     status = git(path, "status", "--porcelain=v1", "--untracked-files=all").splitlines()
     changed = git(path, "diff", "--name-only", f"{base}..HEAD").splitlines()
     return Worktree(head=head, base=base, dirty=tuple(line[3:] for line in status), changed=tuple(changed))

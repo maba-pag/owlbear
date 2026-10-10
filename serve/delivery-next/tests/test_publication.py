@@ -203,7 +203,7 @@ def test_required_and_github_required_checks_are_expected_and_the_latest_run_win
 def test_a_check_that_never_starts_is_pending_then_asks_the_owner(tmp_path):
     gh, state = FakeGh(pr(head=B)), classify_checks((), ("test",), ())
     cx = ctx(tmp_path, gh)
-    cx.log("c1", "publish", head=B)
+    cx.store.log(cx.lock, "c1", {"event": "publish", "head": B, "at": NOW.isoformat()})
     cx.now = NOW + timedelta(minutes=1)
     _, early = follow.missing(cx, change(StepKind.FOLLOW), gh.pr, state)
     assert (early.exit, early.waiting) == (Exit.PENDING, Waiting.CHECK_START)
