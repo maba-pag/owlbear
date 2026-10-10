@@ -122,11 +122,11 @@ mostly cached reads, ≈ 100k cache writes, 10k output ≈ 2.8 credits); a revie
 
 ## 4. Recommendation, Confidence, and Limits
 
-**Loop.** Run Delivery's loop as a small Python program on the Copilot SDK. Every element it needs
-is proven: typed worker results (P1), agent pre-selection and read-only tool lists (P1, P6), a
-permission policy in code (P5), resume after a killed driver (P3), runtime task listing and
-cancellation (P4b), usage metrics per session (P11), and repository skills and instructions
-(P7). Do not build the core on dynamic workflows: they are experimental, JavaScript-only, not
+**Loop.** Run Delivery's loop as a small Python program on the Copilot SDK. Each building block it
+needs ran in this probe — typed worker results (P1), agent pre-selection and read-only tool lists
+(P1, P6), a permission policy in code (P5), resume after a killed driver (P3), runtime task
+listing and cancellation (P4b), usage metrics per session (P11), repository skills and
+instructions (P7) — but not their combination on a real journey. Do not build the core on dynamic workflows: they are experimental, JavaScript-only, not
 loadable in Python SDK sessions, owned by one session, and unattended resume needed
 `--allow-all-tools` (P10). They stay an option for parallel reviews inside one step. An
 Orchestrator agent in the VS Code harness would put the loop back into model prose (RC2); keep the
@@ -136,19 +136,26 @@ harness as an interactive surface.
 and end with a typed `ask` exit. The loop stores the question with the Change, shows it in the
 status view, and on answer resumes the session and sends the answer as a message (P2d). Never
 rely on a runtime-held question; a lost driver turns it into "unable to respond" and the worker
-continues (P2b).
+continues (P2b). P2d proves only that a stored answer, sent as a message, continues a resumed
+session. The answer surface (Q9) and the component that starts a runner when an answer arrives or
+VS Code reopens are not yet defined; today's Cockpit answer control records an answer but
+dispatches nothing.
 
 **Permissions (DR9, B7).** Each step type gets an explicit allow list and a handler that denies
 everything else and records the denial for the status line. Never use allow-all in Delivery
-steps; folder trust for workspace MCP servers is granted once per worktree path at setup (P8).
+steps. P8 ran with `COPILOT_ALLOW_ALL=true`, so loading workspace MCP servers under default-deny
+with folder trust is unproven; prefer one trusted worktree root set at setup, or servers configured
+explicitly in the SDK session, over a grant per worktree.
 
 **Termination (DR10, X5).** Delivery keeps its own per-Change writer lock; `check_in_use` is an
 extra signal only (P3c). Before a writer counts as ended, the loop reads `tasks.list`, cancels
 every task, checks each PID is gone, then disconnects and checks the runtime process (not the
 `copilot` launcher) has exited. The loop records task PIDs from tool events as they appear, and a
 pre-tool hook should forbid detached shells in Delivery steps (hook enforcement untested). If a
-PID cannot be checked, the step stops and names it. Wait for the typed result, not for
-`session.idle`, which never fires while background shells run (P4).
+PID cannot be checked, the step stops and names it. A valid result does not mean the writer has
+ended. The SDK's typed-result helper (`send_and_wait_typed`, SDK 1.0.19) itself completes on
+`session.idle`, which never fires while background shells run (P4). Use a result tool or event as
+the step boundary, then tear down as above.
 
 **Journey rows and design rules.**
 
@@ -159,7 +166,7 @@ PID cannot be checked, the step stops and names it. Wait for the typed result, n
 | X4 tool server restart | partly proven | P3: shutdown recorded, transcript recovery documented; restart during a write not tested |
 | X5 two windows on one Change | partly proven | P3c: cross-process in-use signal exists; no exclusion within one runtime |
 | DR5 re-entry by observation | partly proven | P3: resume plus a "check and finish" turn completed correctly; observation logic is Delivery's to build |
-| DR7 durable questions | proven for the loop-owned pattern; unproven in the runtime | P2b–P2d |
+| DR7 durable questions | loop-owned pattern proposed; answer surface and runner activation unproven | P2b–P2d |
 | DR9 unattended permissions | proven | P5 |
 | DR10 confirmed termination | partly proven | P4b proves cancel-and-verify while the runtime lives; P3 CLI and P4 show orphans otherwise |
 

@@ -108,12 +108,12 @@ deletion needs no untangling:
 | `git_executable.py` | 18 | stdlib | As is |
 | `storage_io.py`: `atomic_write`, `locked_roots`, `ControllerLock` | 188 | stdlib (L05) | Atomic state (DR11), per-Change lock (DR10) |
 | `publication_provider.py` | 476 | stdlib, pydantic (L06) | PR, check and merge contracts; `classify_publication_check` (P10); `merge_request_body` never bypasses rules |
-| `serve/delivery-github`: `GitHubCliPublicationProvider`, `effect_launcher`, `InMemoryPublicationProvider` | 2,338 | Only the provider contract; repoint `github.py` L17 from the package root (L06) | J6–J8 publication, checks, merge; in-memory double for the few P8 tests. Add merge-queue following (row M3) and verify GitHub Enterprise hosts |
+| `serve/delivery-github`: `GitHubCliPublicationProvider`, `effect_launcher`, `InMemoryPublicationProvider` | 2,338 | Only the provider contract; repoint `github.py` L17 from the package root (L06) | Adapt: J6–J8 publication, checks, merge; in-memory double for the few P8 tests. Rule reads must keep unknown visibility unknown — `_read_branch_rules` treats every HTTP 403 as "no rules" — and the profile must supply required-check identities, which the exported merge settings omit (DR1, P10). Add merge-queue following (row M3) and verify GitHub Enterprise hosts |
 | `merge_offer.py`, `merge_approval.py` | 581 | Provider contract, `storage_io` (L07) | Adapt: keep block reasons and attempt readback; drop `finalization_id`, `ready_receipt_id`, `review_id` |
 | `worker_stall.py`: `ProcessTableWorktreeProbe`, `psutil_user_processes` | 546 | None (L08) | Adapt: termination evidence for DR10, B6, X5; drop `DeliveryClaimIssuer` |
 | `acceptance_criteria.py`: `parse_acceptance_item`, `acceptance_version` | 116 | pydantic (L09) | Criterion identity and version as one P5 input |
 
-About 3.3k lines reuse as is and 1.2k with adaptation: roughly 7% of engine plus GitHub adapter.
+About 1k lines reuse as is and 3.5k with adaptation: roughly 7% of engine plus GitHub adapter.
 
 Not worth reusing as code:
 
