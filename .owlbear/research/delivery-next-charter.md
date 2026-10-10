@@ -37,8 +37,11 @@ attention only on decisions, person-only checks and merge consent.
 
 ### 3.2 Operating context
 
-- One developer per installation, on their own GitHub repository, in any language or toolchain;
-  teammates may not use OwlBear.
+- OwlBear is for the owner's personal use on his laptop (TD-9). A colleague might at most read the
+  repository and build their own variant; no shared installation, distribution or support for
+  others is planned.
+- The Changes it delivers land in the owner's GitHub repositories, in any language or toolchain;
+  colleagues who share such a repository may not use OwlBear.
 - VS Code with GitHub Copilot (TD-4); local Copilot CLI and SDK use is allowed (TD-5).
 - macOS or Linux laptop that sleeps, closes and restarts; often a corporate proxy and single
   sign-on.
@@ -151,7 +154,8 @@ assertions on agent prose wording; agent definitions get structural checks only 
 
 ### 3.11 Non-goals
 
-Teams or several users per installation; a hosted service; forges other than GitHub; Windows;
+Teams or several users per installation; packaging or supporting OwlBear for anyone else; a hosted
+service; forges other than GitHub; Windows;
 parallel tasks inside one Change; bypassing signing, reviews, push protection or workflow approvals;
 running OwlBear's own rebuild through Delivery ("Never use Delivery to implement Delivery").
 

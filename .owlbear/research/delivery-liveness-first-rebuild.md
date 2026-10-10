@@ -7,7 +7,7 @@
 > reliably makes progress — possibly as a re-implementation with selective reuse?
 > **Status:** Analysis and recommended roadmap, revision 2 (2026-10-10): corrected after six
 > independent challenges and re-weighted by the user toward end-to-end design and failure modes
-> (§1). Decided by the user: TD-1 to TD-8 (§3.8). Every other recommendation is `autonomous` until
+> (§1). Decided by the user: TD-1 to TD-9 (§3.8). Every other recommendation is `autonomous` until
 > the user decides it.
 
 ## 1. Context and Question
@@ -211,6 +211,7 @@ choices and user choices alike as user decisions. This plan therefore treats eve
 | TD-6 | Sandbox repository for R8 and M4 under `maba-pag`, or under `boecht` when that is the signed-in account | `decided` (answered question) | 2026-10-10 |
 | TD-7 | Research commits are pushed directly to `dev` | `decided` (answered question) | 2026-10-10 |
 | TD-8 | Overnight work proceeds as far as possible, without a Copilot usage limit | `decided` (answered question) | 2026-10-10 |
+| TD-9 | OwlBear is for the owner's personal use on his laptop; a colleague would at most read the repository and build their own variant | `decided`: "this project is for personal use on my laptop" | 2026-10-10 |
 
 ### 3.9 Platform migration interplay
 
@@ -327,11 +328,15 @@ the platform migration rather than sequencing it (S3).
 | M3 | Journey and catalogue, status and exits, architecture, cutover: drafted, challenged three times, corrected; awaits approval | L14, M3 row |
 | M4 | Prototype on branch `next/m4-slice1`, PR #449, not merged: the whole journey ran in the sandbox, from a chat-shaped brief to a merged PR, with brief approval and merge consent as the only touchpoints; twelve common failures were triggered by hand and each ended in its designed exit and continued; every failure found was fixed locally (P9). About 7,400 source lines | `serve/delivery-next/DEMO-slice1.md` on the branch |
 
+Proven since: merge under a ruleset (required check, squash only, linear history) in the public
+sandbox `boecht/owlbear-sandbox-protected` — never merged while CI was pending or red, merged the
+consented head with the `sha` guard. Merge queues are unavailable on user-owned repositories (HTTP
+422), so that path remains unit-checked only. The package now rides along inertly in the consumer
+projection, keeping `uv.lock` consistent.
+
 Still unproven, needed before M5: models and cost on the employer seat (the probe used a free
-account); merge under branch protection and a merge queue (the free private sandbox cannot be
-protected); the folder-open start, skill loading and workspace trust inside VS Code; the Changes
-page used in a browser. Merging PR #449 also needs the main-branch projection decided: the package is
-excluded from the consumer sync, but `uv.lock` on `dev` would list it.
+account); the folder-open start, skill loading and workspace trust inside VS Code; the Changes page
+used in a browser by the owner.
 
 **Confidence:** high that ordinary failures nobody designed for, together with an inward-facing
 design (RC6), explain the observed pattern; every 2026-10-09 incident was ordinary. Medium on the
