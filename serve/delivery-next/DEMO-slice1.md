@@ -206,3 +206,39 @@ host, runner, Copilot CLI runtime or preview.
 - Not shown live: the merge queue (`enqueued` → pending, unit-checked), unknown rules → "merge in GitHub", review
   comments → Builder task, a check that never starts, a pre-push hook rejection, an unknown push or merge result.
 - Publication does not yet verify that HEAD equals the last final-reviewed commit.
+
+## Slice 3 demonstration
+
+Date 2026-10-10, macOS. Copilot CLI 1.0.95, `github-copilot-sdk` 1.0.19, `mcp` 2.3.0, `truststore` 0.10.4,
+gh 2.102.0, git 2.56.0; model `auto`, billed `gpt-6-luna` on every agent step, no mismatch. Sandbox `main` pulled
+to `d125e59`; slice 2 state moved to `.git/owlbear-delivery/archive-slice-2/`. Code: `0667e3c53` plus the
+trust-store and `.mcp.json` fixes committed in `2cf7005c5`. Every command ran from the OwlBear worktree; the
+chat agent was simulated by a stdio MCP client (`ClientSession` over `stdio_client`, scratch script).
+
+| Stage | Evidence |
+| --- | --- |
+| Setup, first try | Readiness: `FIX network: … CERTIFICATE_VERIFY_FAILED … self-signed certificate in certificate chain`, all else ok, one fix ("set SSL_CERT_FILE …"). Defect: Python's default CA store does not hold the corporate proxy's root while `gh` and Node use the system store; readiness now uses `truststore` |
+| Setup without consent (stdin not a terminal) | Readiness all ok (network, gh 2.102.0, signed in, `boecht/owlbear-sandbox: ADMIN`, Copilot CLI 1.0.95, git identity, signing not required). Profile v1: known `install:packages/app = npm ci` (`package-lock.json`), `check:packages/app = npm test` (`scripts.test`), CI `ci.yml`/`test`, `squash`, no pre-push hook; unknown `github:rules`, `required-checks`, `merge-queue` (HTTP 403). "Profile not confirmed; nothing was saved"; no file written |
+| `setup --yes --confirm github:rules=none` | `github:rules` recorded "owner confirmed 2026-10-10; observed: HTTP 403 …"; `--yes` left `required-checks` and `merge-queue` unknown and said so; profile v3 saved with `setup:confirmed-by = --yes`. Written: `.vscode/tasks.json` (task "OwlBear Delivery host", `runOptions.runOn: folderOpen`, `${workspaceFolder}`) and `.mcp.json` (new `owlbear-delivery` stdio entry merged beside the existing `cwdprobe`). `task.allowAutomaticTasks`: not set, reported with the disclosed manual action |
+| Host | Started 06:54:24 with the task's command line (host 99919) |
+| `save_brief`, invalid | `saved: false`, `outcome: String should have at least 20 characters - e.g. "farewell(name) exists"`, `criteria: List should have at least 1 item …` |
+| `save_brief`, valid | "Add shout(text)", one criterion `shout("hi") returns "HI!"`, scope `packages/app`, no person check → `c1`, v1, next "Approve brief v1 of c1 in the Changes page"; `show_status`: "Shape · waiting for you: approve brief v1", action Approve brief. No runner started |
+| Brief approval (API) | `POST …/approve-brief {"version": 1}` 06:54:49.00 → `approved_version 1`, `approved_at` recorded; runner 1396 started 06:54:49.36 (step `plan`) |
+| Plan | First `submit_result` rejected: `tasks[0].checks: "cd packages/app && npm test" is not a check of the project profile - use one of "npm test"`; second accepted 06:55:12: t1 "Add shout(text) with a unit test", scope `packages/app/src`, `packages/app/test`, check `npm test`. Read-only challenge `pass` 06:55:35 |
+| Build, review | Commit `4681ed7` 06:56:09; task review `pass` 06:56:23, final review `pass` 06:56:41 |
+| Publish, follow | PR #5 ready at `4681ed7` 06:56:49 (title from the brief); "Publish · waiting for CI: 1 of 1 checks running"; run 38032693683 `test` passed; follow done 06:57:26 |
+| Merge consent | 06:57:30 "Merge · waiting for you: approve merging 4681ed7". `answer_question c1.q1` through chat: `answered: false`, "This is a recovery decision; make it in the Changes page", with the page URL (T6). Consent for `4681ed7…e029` via API 06:57:46 |
+| Merge, cleanup | Squash merge with the consented `sha` → `a6eb298` (GitHub merged 06:57:52); push CI on `main` success; worktree removed, nothing to preserve; history line written |
+| Done | `show_status`: "Done · merged PR #5". After `SIGINT` to the host the chat fallback read the state: `running: false`, "Delivery is not running - start it with the VS Code task 'OwlBear Delivery host', or run …", same Done line |
+
+Credits: plan 0.272, plan challenge 0.338, build 0.383, task review 0.259, final review 0.176; total 1.43.
+Approval to merge took 3 min 3 s. Touchpoints: brief approval and merge consent only. No permission denial. After
+the host stopped, `pgrep` found no host, runner or Copilot runtime. The sandbox keeps the consented
+`.vscode/tasks.json` and `.mcp.json` uncommitted; local branch `owlbear/add-shout-text` remains.
+
+Limits: VS Code did not open the sandbox, so the folder-open task, workspace trust and loading `.mcp.json` in a
+real chat session were not exercised; setup reads `task.allowAutomaticTasks` from user settings but cannot verify
+workspace trust. Signing readiness ran only its "not required" branch live. The plan challenge passed in one
+round; a challenge with findings, re-planning, the planner's `report_wrong_premise` (back to shape) and brief
+revision were not exercised live (revision before and refusal after approval are unit-tested). Deviations from D4
+line targets: `setup.py` + `cli.py` 436 (260), `api.py` 313 (300), `tools.py` 368 (300), `sdk_adapter.py` 629 (600).
