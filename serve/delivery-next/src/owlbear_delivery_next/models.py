@@ -182,6 +182,7 @@ class Task(Record):
     scope: list[str] = Field(default_factory=list)
     checks: list[str] = Field(default_factory=list)
     origin: Literal["plan", "review", "ci", "pr-feedback", "person-check", "integration"] = "plan"
+    detail: str = Field(default="", max_length=4000)  # CI log tail, review thread or merge instruction
     done: bool = False
 
 
@@ -283,6 +284,7 @@ class Names(Record):
     branch: str = ""
     target: str = ""
     worktree: str = ""
+    pr: int | None = None  # kept to find a merged or closed PR; its state is always read from GitHub
     preserved: list[str] = Field(default_factory=list)
 
 

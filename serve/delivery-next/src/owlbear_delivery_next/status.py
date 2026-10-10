@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.loop import RETRY_LIMIT
+from owlbear_delivery_next.loop import CONSENT, RETRY_LIMIT
 from owlbear_delivery_next.models import Exit, StepKind, Waiting
 
 if TYPE_CHECKING:
@@ -15,6 +15,12 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.models import Actor, Change, Stop
 
 QUIET = timedelta(minutes=10)
+_WHO = {
+    Waiting.CI: "CI",
+    Waiting.CHECK_START: "CI to start",
+    Waiting.OWNER_ACTION: "your action in GitHub",
+    Waiting.MERGE_QUEUE: "GitHub",
+}
 _WORK = {
     StepKind.SHAPE: ("Shape", "shaping", "reviewer"),
     StepKind.PLAN: ("Plan", "planning", "planner"),
@@ -82,7 +88,8 @@ def status(c: Change, activity: Activity, now: datetime) -> Status:  # noqa: C90
         if c.intent.abandoned_at:
             return Status("Abandoned · PR closed, branch kept", None, "delivery")
         saved = f" · unmerged work saved in {', '.join(c.names.preserved)}" if c.names.preserved else ""
-        return Status(f"Done · merged{saved}", None, "delivery")
+        pr = f" PR #{c.names.pr}" if c.names.pr else ""
+        return Status(f"Done · merged{pr}{saved}", None, "delivery")
     _, verb, role = _WORK[c.step.kind]
     if (b := c.blocked) and not activity.runner_alive:
         return Status(f"{s} · stopped: {b.reason}", b.action, b.actor)
@@ -93,14 +100,15 @@ def status(c: Change, activity: Activity, now: datetime) -> Status:  # noqa: C90
     if c.intent.hold and activity.runner_alive:
         return Status(f"{s} · holding for your change: finishing {c.step.kind}", None, "delivery")
     if o and o.exit == Exit.ASK:
-        return Status(f"{s} · waiting for you: {o.reason}", "Answer", "you")
+        return Status(f"{s} · waiting for you: {o.reason}", "Approve merge" if o.cause == CONSENT else "Answer", "you")
     if o and o.exit == Exit.STOP and c.stop:
         return Status(f"{s} · stopped: {c.stop.reason}", c.stop.action, c.stop.actor)
     if o and o.exit == Exit.PENDING:
         if o.who == "you":
-            action = "Report result" if o.waiting == Waiting.PERSON_CHECK else None
+            action = {Waiting.PERSON_CHECK: "Report result", Waiting.OWNER_ACTION: "Act in GitHub"}.get(o.waiting)
             return Status(f"{s} · waiting for you: {o.reason}", action, "you")
-        return Status(f"{s} · waiting for {o.waiting}: {o.reason} (checked {_age(now - o.at)} ago)", None, o.who)
+        who = _WHO.get(o.waiting, str(o.waiting)) if o.waiting else o.who
+        return Status(f"{s} · waiting for {who}: {o.reason} (checked {_age(now - o.at)} ago)", None, o.who)
     if activity.runner_alive:
         task = next((t.title for t in c.plan.tasks if t.id == c.step.task), None) if c.plan else None
         task = task or next((f"check {p.id}" for p in c.checks if p.id == c.step.task), None)

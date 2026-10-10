@@ -7,7 +7,7 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-from owlbear_delivery_next import host
+from owlbear_delivery_next import host, profile
 from owlbear_delivery_next.models import (
     AnswerItem,
     Brief,
@@ -51,14 +51,16 @@ def seed(store: Store, a: argparse.Namespace) -> None:
         if cmds:
             entries[f"allow:{kind}"] = ProfileEntry(state="known", value="\n".join(cmds), evidence="dev seed")
     models = dict.fromkeys((StepKind.BUILD, StepKind.REVIEW, StepKind.CHECK), a.model)
-    store.write_profile(Profile(version=1, confirmed_at=now, entries=entries, models=models))
+    old = store.read_profile() or Profile()
+    entries = {k: v for k, v in old.entries.items() if not k.startswith(("install:", "allow:"))} | entries
+    store.write_profile(Profile(version=old.version + 1, confirmed_at=now, entries=entries, models=models))
     criteria = [Criterion(id=f"AC-{i}", text=t) for i, t in enumerate(a.criterion, 1)]
     brief = Brief(version=1, outcome=a.outcome, scope=a.scope, criteria=criteria)
     brief.approved = [brief.model_copy(deep=True)]
     brief.approved_version, brief.approved_at = 1, now
     change = Change(
         slug=a.change,
-        profile_version=1,
+        profile_version=old.version + 1,
         brief=brief,
         plan=Plan(tasks=[Task(id="t1", title=a.title, scope=a.scope, checks=a.check)]),
         checks=[PersonCheck(id=i, criteria=[c.id for c in criteria], steps=[s]) for i, s in a.person_check],
@@ -86,6 +88,17 @@ def show_status(store: Store, now: datetime) -> str:
     return "\n".join(lines)
 
 
+def show_profile(store: Store, repo: Path, confirms: list[tuple[str, str]]) -> str:
+    """Detect the profile, apply the owner's confirmations and return every entry with its evidence."""
+    prof = profile.detect(repo, profile.provider(store.read_profile() or Profile(), repo), store.read_profile())
+    for key, value in confirms:
+        prof = profile.confirm(prof, key, value, datetime.now(UTC))
+    store.write_profile(prof)
+    lines = [f"profile v{prof.version}"]
+    lines += [f"  {k}: {e.state} {e.value!r} ({e.evidence})" for k, e in sorted(prof.entries.items())]
+    return "\n".join(lines)
+
+
 def main(argv: list[str] | None = None) -> int:
     """Run one command."""
     parser = argparse.ArgumentParser(prog="owlbear-next")
@@ -93,6 +106,8 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("host", help="start Delivery for this clone, or print the running host's URL")
     sub.add_parser("status", help="print every Change's status line and next action")
+    p = sub.add_parser("profile", help="detect the project profile; --confirm KEY=VALUE records the owner's answer")
+    p.add_argument("--confirm", action="append", default=[], type=lambda v: tuple(v.split("=", 1)))
     s = sub.add_parser("seed", help="seed a pre-approved one-task Change and a minimal profile")
     s.add_argument("change")
     s.add_argument("--title", required=True)
@@ -121,6 +136,9 @@ def main(argv: list[str] | None = None) -> int:
     store = Store.open(a.repo.resolve())
     if a.command == "status":
         sys.stdout.write(show_status(store, datetime.now(UTC)) + "\n")
+        return 0
+    if a.command == "profile":
+        sys.stdout.write(show_profile(store, a.repo.resolve(), a.confirm) + "\n")
         return 0
     if a.command == "seed":
         seed(store, a)

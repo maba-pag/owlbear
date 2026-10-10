@@ -96,12 +96,28 @@ function checkForm(check) {
   return box;
 }
 
+function mergeForm(m) {
+  const box = el("fieldset"), links = el("p"), list = el("ul");
+  box.append(el("legend", `Merge PR #${m.pr} (${m.method})`));
+  links.append(el("a", `PR #${m.pr}`, { href: m.url, target: "_blank", rel: "noopener" }), " · ",
+    el("a", "Diff summary", { href: m.diff, target: "_blank", rel: "noopener" }));
+  box.append(links, el("p", `Exact head: ${m.head}`));
+  if (m.void) box.append(el("p", `Changed since ${m.void.slice(0, 7)}: ${m.delta}`, { class: "error" }));
+  for (const c of m.checks) list.append(el("li", `${c.name}: ${c.state}`));
+  if (!m.checks.length) list.append(el("li", "no checks reported"));
+  const approve = el("button", `Approve merging ${m.head.slice(0, 7)}`, { type: "button" });
+  approve.onclick = () => send("/merge-consent", { head: m.head });
+  box.append(el("p", "Checks at this head:"), list, approve);
+  return box;
+}
+
 async function showDetail() {
   const target = document.getElementById("detail");
   if (!selected) return target.replaceChildren();
   const d = await call(`/changes/${selected}`);
   const parts = [el("h2", d.slug), el("p", d.line), el("p", d.brief.outcome, { class: "muted" })];
   if (d.question) parts.push(questionForm(d.question));
+  if (d.merge) parts.push(mergeForm(d.merge));
   for (const check of d.checks.filter((c) => c.waiting)) parts.push(checkForm(check));
   if (d.step === "shape" && d.brief.approved !== d.brief.version) {
     const approve = el("button", `Approve brief v${d.brief.version}`, { type: "button" });

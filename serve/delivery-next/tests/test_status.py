@@ -58,7 +58,7 @@ def test_finished_change_is_not_overlaid():
         (
             PUBLISHING,
             Activity(host_up=True),
-            Status("Publish · waiting for ci: 2 of 5 running (checked 1 min ago)", None, "github"),
+            Status("Publish · waiting for CI: 2 of 5 running (checked 1 min ago)", None, "github"),
         ),
         (
             build(),

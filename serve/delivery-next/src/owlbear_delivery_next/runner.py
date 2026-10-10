@@ -12,10 +12,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next import loop, prompts, sdk_adapter, tools
+from owlbear_delivery_next import loop, profile, prompts, sdk_adapter, tools
 from owlbear_delivery_next.cli import describe
 from owlbear_delivery_next.models import Environment, Exit, Profile, StepKind
-from owlbear_delivery_next.steps import later, review, worktree
+from owlbear_delivery_next.steps import cleanup, engine, follow, merge, publish, review, worktree
 from owlbear_delivery_next.store import LockHeldError, Store, git_common_dir
 
 if TYPE_CHECKING:
@@ -23,6 +23,12 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.store import Lock
 
 AGENT = frozenset({StepKind.BUILD, StepKind.REVIEW, StepKind.CHECK})
+ENGINE: dict[StepKind, engine.Step] = {
+    StepKind.PUBLISH: publish.run,
+    StepKind.FOLLOW: follow.run,
+    StepKind.MERGE: merge.run,
+    StepKind.CLEANUP: cleanup.run,
+}
 
 
 def _out(text: str) -> None:
@@ -93,6 +99,23 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     _out(json.dumps(step, default=str))
 
 
+def _engine(store: Store, lock: Lock, change: Change, repo: Path) -> None:
+    now, kind = datetime.now(UTC), change.step.kind
+    prof = store.read_profile() or Profile()
+    ctx = engine.Ctx(store, lock, repo, prof, profile.provider(prof, repo), now)
+    if kind in {StepKind.PUBLISH, StepKind.FOLLOW, StepKind.MERGE} and change.names.branch:
+        path = worktree.ensure(repo, git_common_dir(repo), change.slug, change.names.branch, change.names.target)
+        change.names.worktree = str(path)
+    step = ENGINE.get(kind)
+    change, result = engine.run(step, ctx, change) if step else (change, engine.unsupported(change, now))
+    end = datetime.now(UTC)
+    event = {"event": "step", "at": end.isoformat(timespec="seconds"), "kind": kind, "exit": result.exit}
+    event |= {"reason": result.reason, "seconds": round((end - now).total_seconds(), 1)}
+    store.log(lock, change.slug, event)
+    store.write(lock, loop.apply(change, result, end))
+    _out(json.dumps(event, default=str))
+
+
 def main(argv: list[str] | None = None) -> int:
     """Take the Change lock without waiting, fold the inbox, run the next step, write its exit and exit."""
     parser = argparse.ArgumentParser(prog="python -m owlbear_delivery_next.runner")
@@ -103,14 +126,14 @@ def main(argv: list[str] | None = None) -> int:
     store = Store.open(repo)
     try:
         with store.lock(args.change) as lock:
-            change, step = store.fold(lock, args.change, datetime.now(UTC))
+            state = engine.observe(store, repo, args.change)
+            change, step = store.fold(lock, args.change, datetime.now(UTC), state)
             if step is None or change.env is not None:
                 _out("nothing to run; the host owns a check environment" if change.env else "nothing to run")
             elif step.kind in AGENT:
                 _agent(store, lock, change, repo)
             else:
-                now = datetime.now(UTC)
-                store.write(lock, loop.apply(change, later.result(change, now), now))
+                _engine(store, lock, change, repo)
             _out(describe(store.read(args.change)))
     except LockHeldError as exc:
         _out(f"{args.change}: {exc}; another runner holds it")

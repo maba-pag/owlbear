@@ -13,7 +13,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next import loop
-from owlbear_delivery_next.models import AnswerItem, BriefApproval, CheckResult, Exit, Waiting
+from owlbear_delivery_next.models import AnswerItem, BriefApproval, CheckResult, ConsentItem, Exit, Waiting
 from owlbear_delivery_next.status import status, unloadable
 from owlbear_delivery_next.steps import check
 from owlbear_delivery_next.store import StoreError
@@ -57,6 +57,21 @@ class ApproveBody(Body):
     """Approve one brief version."""
 
     version: int = Field(ge=1)
+
+
+class ConsentBody(Body):
+    """Consent to merge one exact head; void once the PR head differs."""
+
+    head: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+
+def offer(c: Change, events: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """The merge dialog: the latest offer while the Change waits for consent to merge its exact head."""
+    o = c.outcome
+    if not (o and o.exit == Exit.ASK and o.cause == loop.CONSENT):
+        return None
+    last = next((e for e in reversed(events) if e.get("event") == "merge-offer"), None)
+    return last and last | {"diff": f"{last['url']}/files"}
 
 
 def create_app(store: Store, token: str, host: Host) -> FastAPI:  # noqa: C901, PLR0915 - one closure per route
@@ -112,7 +127,9 @@ def create_app(store: Store, token: str, host: Host) -> FastAPI:  # noqa: C901, 
     def detail(slug: str) -> dict[str, Any]:
         c = read(slug)
         o = c.outcome
-        q = next((q for q in c.questions if o and o.exit == Exit.ASK and q.id == o.question), None)
+        events = store.events(slug)
+        merge = offer(c, events)
+        q = next((q for q in c.questions if o and o.exit == Exit.ASK and q.id == o.question and not merge), None)
         waiting = o and o.exit == Exit.PENDING and o.waiting == Waiting.PERSON_CHECK and o.who == "you"
         checks = [
             {
@@ -131,14 +148,20 @@ def create_app(store: Store, token: str, host: Host) -> FastAPI:  # noqa: C901, 
             "plan": [t.model_dump() for t in c.plan.tasks] if c.plan else [],
             "question": q.model_dump(mode="json", include={"id", "text", "options"}) if q else None,
             "checks": checks,
-            "activity": store.events(slug)[-20:],
+            "pr": c.names.pr,
+            "merge": merge,
+            "consent": c.consent.model_dump(mode="json") if c.consent else None,
+            "activity": events[-20:],
         }
 
     @router.post("/changes/{slug}/answers")
     def answer(slug: str, body: AnswerBody) -> dict[str, str]:
-        q = next((q for q in read(slug).questions if q.id == body.question and q.answer is None), None)
+        c = read(slug)
+        q = next((q for q in c.questions if q.id == body.question and q.answer is None), None)
         if q is None:
             raise HTTPException(409, f"question {body.question} is not open")
+        if q.cause == loop.CONSENT:
+            raise HTTPException(409, "consent to merge goes through merge-consent with the exact head")
         if body.option is not None and body.option not in {o.id for o in q.options}:
             raise HTTPException(422, f"option {body.option} is not one of {[o.id for o in q.options]}")
         return put(slug, AnswerItem(at=datetime.now(UTC), question=q.id, option=body.option, text=body.text))
@@ -158,6 +181,14 @@ def create_app(store: Store, token: str, host: Host) -> FastAPI:  # noqa: C901, 
         if body.version != read(slug).brief.version:
             raise HTTPException(409, f"brief version {body.version} is not the current draft")
         return put(slug, BriefApproval(at=datetime.now(UTC), version=body.version))
+
+    @router.post("/changes/{slug}/merge-consent")
+    def consent(slug: str, body: ConsentBody) -> dict[str, str]:
+        merge = offer(read(slug), store.events(slug))
+        if merge is None or merge["head"] != body.head:
+            shown = merge["head"] if merge else "none"
+            raise HTTPException(409, f"head {body.head[:7]} is not the head waiting for consent ({shown[:7]})")
+        return put(slug, ConsentItem(at=datetime.now(UTC), head=body.head, delta=merge.get("delta") or ""))
 
     app.include_router(router)
     return app

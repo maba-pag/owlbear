@@ -23,7 +23,7 @@ from owlbear_delivery_next import api, loop, sdk_adapter, tools
 from owlbear_delivery_next.models import ErrorKind, Exit, Profile, Record, StepKind, Stop
 from owlbear_delivery_next.process_probe import ProcessTableWorktreeProbe, WorktreeProcessScanError
 from owlbear_delivery_next.status import Activity
-from owlbear_delivery_next.steps import check, worktree
+from owlbear_delivery_next.steps import check, engine, worktree
 from owlbear_delivery_next.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.store import LockHeldError, Store, StoreError
 
@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.store import Lock
 
 TICK = 30.0
+PR_POLL = 20.0
 FAST = 2.0  # while a runner this host did not start may still run
 SLEEP_JUMP = 60.0
 BURST = (5, 60.0)  # at most five runner launches per Change in this many seconds
@@ -120,6 +121,7 @@ class Host:
         self.spawn = spawn or self._spawn
         self.wake, self.stopped = threading.Event(), threading.Event()
         self.pr_states: dict[str, PrState] = {}
+        self.pr_seen: dict[str, tuple[float, PrState | None]] = {}
         self.launches: dict[str, list[float]] = {}
         self.record = HostRecord(url="", token="", pid=os.getpid(), started_at=datetime.now(UTC))
 
@@ -142,8 +144,13 @@ class Host:
         return activity(self.store, slug, self.record)
 
     def observe_pr(self, slug: str) -> PrState | None:
-        """The PR's terminal state, observed before a waiting Change is skipped; PRs arrive with publication."""
-        return self.pr_states.get(slug)
+        """The PR's terminal state, observed before a waiting Change is skipped; at most once per ``PR_POLL``."""
+        if slug in self.pr_states:
+            return self.pr_states[slug]
+        seen = self.pr_seen.get(slug)
+        if seen is None or time.monotonic() - seen[0] > PR_POLL:
+            seen = self.pr_seen[slug] = (time.monotonic(), engine.observe(self.store, self.repo, slug))
+        return seen[1]
 
     def tick(self, now: datetime | None = None) -> list[str]:
         """One observation pass over every Change; return those a runner was launched for."""

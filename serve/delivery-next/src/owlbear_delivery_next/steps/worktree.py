@@ -17,13 +17,13 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.models import Profile
 
-_GIT = shutil.which("git") or "git"
+GIT = shutil.which("git") or "git"
 
 
 def git(cwd: Path, *args: str) -> str:
     """Run one Git command, bounded so a hung Git cannot stall a step, and return its standard output."""
     return subprocess.run(  # noqa: S603 - fixed Git executable and argument vector.
-        [_GIT, *args], cwd=cwd, capture_output=True, text=True, check=True, timeout=60
+        [GIT, *args], cwd=cwd, capture_output=True, text=True, check=True, timeout=60
     ).stdout
 
 
@@ -48,7 +48,7 @@ def ensure(repo: Path, common_dir: Path, slug: str, branch: str, target: str) ->
     path.parent.mkdir(parents=True, exist_ok=True)
     git(repo, "worktree", "prune")
     exists = subprocess.run(  # noqa: S603 - fixed Git executable and argument vector.
-        [_GIT, "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"], cwd=repo, capture_output=True, check=False
+        [GIT, "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"], cwd=repo, capture_output=True, check=False
     )
     args = [str(path), branch] if exists.returncode == 0 else ["-b", branch, str(path), target]
     git(repo, "worktree", "add", *args)
