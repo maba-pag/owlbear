@@ -11,6 +11,8 @@ Covers:
 
 from __future__ import annotations
 
+import sys
+from concurrent.futures import ThreadPoolExecutor
 from enum import StrEnum
 from pathlib import Path
 from tempfile import mkstemp as _real_mkstemp
@@ -78,6 +80,30 @@ def _make_valid_entry() -> MemoryEntry:
 def _write_valid_file(path: Path, body: str = "Some content") -> None:
     """Write a syntactically and semantically valid memory markdown file."""
     path.write_text(_VALID_FRONTMATTER + body + "\n", encoding="utf-8")
+
+
+def test_concurrent_reads_and_writes_parse_every_entry(tmp_path: Path) -> None:
+    """Threads sharing the storage module never corrupt each other's YAML parsing."""
+    previous_interval = sys.getswitchinterval()
+    sys.setswitchinterval(1e-5)
+    entry = _make_valid_entry().model_copy(update={"content": "c" * 500})
+    paths = [tmp_path / f"{index}.md" for index in range(8)]
+    for path in paths:
+        storage.write_entry(path, entry, memory_dir=tmp_path)
+
+    def exercise(worker: int) -> int:
+        unreadable = 0
+        for _ in range(40):
+            for path in paths:
+                unreadable += storage.read_entry(path) is None
+            storage.write_entry(paths[worker], entry, memory_dir=tmp_path)
+        return unreadable
+
+    try:
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            assert sum(executor.map(exercise, range(8))) == 0
+    finally:
+        sys.setswitchinterval(previous_interval)
 
 
 # ---------------------------------------------------------------------------
