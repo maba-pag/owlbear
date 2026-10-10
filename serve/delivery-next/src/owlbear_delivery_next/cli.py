@@ -108,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("host", help="start Delivery for this clone, or print the running host's URL")
     sub.add_parser("status", help="print every Change's status line and next action")
     up = sub.add_parser("setup", help="check readiness, confirm the profile, register the host task and chat server")
-    up.add_argument("--yes", action="store_true", help="confirm the profile and consent to both tracked writes")
+    up.add_argument("--yes", action="store_true", help="confirm the profile and consent to both untracked local writes")
     up.add_argument("--confirm", action="append", default=[], type=lambda v: tuple(v.split("=", 1)), help="KEY=VALUE")
     p = sub.add_parser("profile", help="detect the project profile; --confirm KEY=VALUE records the owner's answer")
     p.add_argument("--confirm", action="append", default=[], type=lambda v: tuple(v.split("=", 1)))

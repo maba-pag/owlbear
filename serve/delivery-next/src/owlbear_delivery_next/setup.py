@@ -1,4 +1,4 @@
-"""Setup: readiness check, profile confirmation, and tracked writes only with consent (D4 §3.2, DR1, DR2, DR14)."""
+"""Setup: readiness check, profile confirmation, and consented untracked local writes (D4 §3.2, DR1, DR2, DR14)."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ import truststore
 from owlbear_delivery_next import profile
 from owlbear_delivery_next.models import Profile, ProfileEntry
 from owlbear_delivery_next.sdk_adapter import cli_path
-from owlbear_delivery_next.store import Store
+from owlbear_delivery_next.store import Store, git_common_dir
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -262,10 +262,28 @@ def with_server(data: dict[str, Any], python: str, repo: Path) -> dict[str, Any]
     return {**data, "mcpServers": {**data.get("mcpServers", {}), SERVER: server}}
 
 
-def consent(
-    path: Path, merge: Callable[[dict[str, Any]], dict[str, Any]], question: str, ask: Ask, *, yes: bool
+def untracked(repo: Path, path: Path) -> bool:
+    """Whether git reports *path* as not tracked; any other answer counts as tracked."""
+    rel = path.relative_to(repo).as_posix()
+    return probe_in(repo)(["git", "ls-files", "--error-unmatch", "--", rel])[0] == 1
+
+
+def exclude(repo: Path, path: Path) -> None:
+    """Add *path* to the clone's local ``info/exclude`` once, keeping its other lines."""
+    entry = "/" + path.relative_to(repo).as_posix()
+    file = git_common_dir(repo) / "info" / "exclude"
+    lines = file.read_text().splitlines() if file.exists() else []
+    if entry not in lines:
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text("\n".join([*lines, entry]) + "\n")
+
+
+def consent(  # noqa: PLR0913 - the file, its merge and the owner's answer
+    repo: Path, path: Path, merge: Callable[[dict[str, Any]], dict[str, Any]], question: str, ask: Ask, *, yes: bool
 ) -> str:
-    """Write the tracked file *path* only with the owner's consent; return what happened."""
+    """Write the untracked file *path* only with the owner's consent and exclude it locally; never a tracked one."""
+    if not untracked(repo, path):
+        return f"not written: {path} is tracked, and Delivery commits nothing into the project"
     if not (yes or ask(f"{question} [y/N] ").strip().lower().startswith("y")):
         return f"not written (no consent): {path}"
     try:
@@ -276,7 +294,8 @@ def consent(
         return f"not written: {path} is not plain JSON; add the entry by hand"
     path.parent.mkdir(exist_ok=True)
     path.write_text(json.dumps(merge(data), indent=2) + "\n")
-    return f"written: {path}"
+    exclude(repo, path)
+    return f"written: {path} (kept out of git by .git/info/exclude)"
 
 
 def automatic_tasks() -> str:
@@ -323,19 +342,20 @@ def run(repo: Path, confirms: list[tuple[str, str]], *, yes: bool, ask: Ask = as
     store.write_profile(prof)
     say(f"Profile v{prof.version} confirmed and saved in {store.root}")
     start = f"`{python} -m owlbear_delivery_next.cli --repo {repo} host`"
-    question = f"Write the folder-open task '{TASK}' into the tracked file .vscode/tasks.json?"
-    tasks = consent(repo / ".vscode" / "tasks.json", lambda d: with_task(d, python), question, ask, yes=yes)
+    question = f"Write the folder-open task '{TASK}' into .vscode/tasks.json (kept out of git)?"
+    tasks = consent(repo, repo / ".vscode" / "tasks.json", lambda d: with_task(d, python), question, ask, yes=yes)
     say(tasks)
     if tasks.startswith("written"):
         say(f"VS Code starts it in a trusted workspace when automatic tasks are allowed ({automatic_tasks()});")
         say(f"otherwise run the task '{TASK}' yourself.")
     else:
         say(f"Start Delivery yourself each time you open the project: {start}. Nothing advances until it runs.")
-    question = "Register the Delivery chat server in the tracked file .mcp.json?"
-    server = consent(repo / ".mcp.json", lambda d: with_server(d, python, repo), question, ask, yes=yes)
+    question = "Register the Delivery chat server in .mcp.json (kept out of git)?"
+    server = consent(repo, repo / ".mcp.json", lambda d: with_server(d, python, repo), question, ask, yes=yes)
     say(server)
     if not server.startswith("written"):
-        say("Add this server to your MCP configuration by hand: " + json.dumps(with_server({}, python, repo)))
+        snippet = json.dumps(with_server({}, python, repo)["mcpServers"])
+        say(f'Add this under "servers" in your user-level MCP configuration (MCP: Open User Configuration): {snippet}')
     say(install_skill(Path.home()))
     say("To share it with this repository, copy that folder to .github/skills/delivery/ and commit it yourself.")
     return 0

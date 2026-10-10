@@ -19,10 +19,14 @@
   section { margin-top: 1.5rem; } fieldset { border: 1px solid #ccc; margin: .8rem 0; }
   .muted { color: #666; } .error { color: #a00; } textarea { width: 100%; }
   .stale { opacity: .45; pointer-events: none; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+  .card { display: block; font-size: .85em; }
 </style>
 </head>
 <body>
-<h1>Changes</h1>
+<header><h1>Changes</h1>
+<button id="new" type="button" aria-label="Start a new Change in a VS Code chat">New Change</button></header>
+<p id="started" aria-live="polite"></p>
 <p id="error" class="error" role="alert"></p>
 <p id="seen" class="muted"></p>
 <table id="list" aria-label="Changes">
@@ -220,7 +224,13 @@ async function refresh() {
     const rows = (await call("/changes")).map((c) => {
       const row = el("tr", undefined, { class: "row", tabindex: "0" });
       const behind = c.pullback && c.pullback.state === "behind" ? ` · ${c.pullback.reason}` : "";
-      row.append(el("td", c.slug), el("td", c.line + behind), el("td", c.action || "—"));
+      const status = el("td", c.line + behind);
+      if (c.now) {
+        const step = c.step_time ? ` · step ${c.step_time}` : "";
+        const spent = ` · ${c.credits.change.toFixed(2)} credits (step ${c.credits.step.toFixed(2)})`;
+        status.append(el("span", `${c.now}${step}${spent}${c.quiet ? " · quiet" : ""}`, { class: "card muted" }));
+      }
+      row.append(el("td", c.slug), status, el("td", c.action || "—"));
       row.onclick = row.onkeydown = (event) => {
         if (event.type === "click" || event.key === "Enter") { selected = c.slug; refresh(); }
       };
@@ -240,6 +250,25 @@ async function refresh() {
 
 refresh();
 setInterval(refresh, 3000);
+
+document.getElementById("new").onclick = async (event) => {
+  const button = event.currentTarget, result = document.getElementById("started");
+  button.disabled = true;
+  result.textContent = "Opening a chat…";
+  try {
+    const r = await call("/new-change", {});
+    if (r.started) {
+      result.textContent = "A chat opened in VS Code to shape the new Change.";
+    } else {
+      result.replaceChildren(`Could not open the chat: ${r.reason}. Copy this command: `, el("code", r.command));
+    }
+  } catch (e) {
+    result.textContent = "";
+    failed(e);
+  } finally {
+    button.disabled = false;
+  }
+};
 </script>
 </body>
 </html>

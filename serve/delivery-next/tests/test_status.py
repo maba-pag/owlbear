@@ -17,7 +17,7 @@ from owlbear_delivery_next.models import (
     Task,
     Waiting,
 )
-from owlbear_delivery_next.status import Activity, Status, status
+from owlbear_delivery_next.status import Activity, Status, card, status
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 PLAN = Plan(tasks=[Task(id="t1", title="parser"), Task(id="t2", title="rate limiter")])
@@ -109,3 +109,36 @@ def test_spend_accumulates_every_usage_report_by_model():
     assert spend == Spend(
         credits=1.5, models={"gpt": ModelSpend(credits=1.0, tokens=200), "opus": ModelSpend(credits=0.5, tokens=100)}
     )
+
+
+def running(started: datetime) -> Change:
+    return Change(
+        slug="c1", plan=PLAN, step=Step(kind=StepKind.BUILD, task="t2", started_at=started), spend=Spend(credits=3.0)
+    )
+
+
+def test_card_shows_the_last_event_step_time_and_credits():
+    events = [
+        {"at": (NOW - timedelta(minutes=30)).isoformat(), "event": "step", "usage": {"credits": 2.0}},
+        {"at": (NOW - timedelta(minutes=3)).isoformat(), "event": "step", "usage": {"credits": 0.75}},
+        {"at": (NOW - timedelta(seconds=40)).isoformat(), "event": "tool", "tool": "submit_result", "accepted": True},
+    ]
+    alive = Activity(host_up=True, runner_alive=True, last_event_at=NOW - timedelta(seconds=40))
+    out = card(running(NOW - timedelta(minutes=5)), alive, events, NOW)
+    assert out == {
+        "now": "Build 2/2 · called `submit_result` 40 s ago",
+        "step_time": "5 min",
+        "quiet": False,
+        "credits": {"change": 3.0, "step": 0.75},
+    }
+
+
+@pytest.mark.parametrize(
+    ("silent", "quiet"), [(timedelta(minutes=10), False), (timedelta(minutes=10, seconds=1), True)]
+)
+def test_card_is_quiet_only_past_the_step_kind_threshold_while_running(silent, quiet):
+    c = running(NOW - timedelta(hours=1))
+    alive = Activity(host_up=True, runner_alive=True, last_event_at=NOW - silent)
+    assert card(c, alive, [], NOW)["quiet"] is quiet
+    assert card(c, Activity(host_up=True, last_event_at=NOW - silent), [], NOW)["quiet"] is False
+    assert card(PUBLISHING, Activity(host_up=True), [], NOW)["quiet"] is False

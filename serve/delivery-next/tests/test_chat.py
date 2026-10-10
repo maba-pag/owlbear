@@ -194,23 +194,91 @@ def test_the_chat_skill_installs_user_locally_and_never_over_another_skill(tmp_p
     assert path.read_text().endswith("someone else's")
 
 
-def test_no_tracked_write_without_consent(tmp_path):
+def test_no_local_write_without_consent(repo):
     asked = []
-    path = tmp_path / ".vscode" / "tasks.json"
+    path = repo / ".vscode" / "tasks.json"
     merge = lambda d: setup.with_task(d, "python")  # noqa: E731
-    assert setup.consent(path, merge, "Write?", lambda q: asked.append(q) or "", yes=False).startswith("not written")
+    no = setup.consent(repo, path, merge, "Write?", lambda q: asked.append(q) or "", yes=False)
+    assert no.startswith("not written")
     assert asked == ["Write? [y/N] "]
     assert not path.exists()
     path.parent.mkdir()
     path.write_text(json.dumps({"version": "2.0.0", "tasks": [{"label": "build"}]}))
-    assert setup.consent(path, merge, "Write?", lambda _q: "y", yes=False).startswith("written")
+    assert setup.consent(repo, path, merge, "Write?", lambda _q: "y", yes=False).startswith("written")
     tasks = json.loads(path.read_text())["tasks"]
     assert [t["label"] for t in tasks] == ["build", setup.TASK]
     assert tasks[1]["runOptions"] == {"runOn": "folderOpen"}
-    jsonc = tmp_path / ".mcp.json"
+    jsonc = repo / ".mcp.json"
     jsonc.write_text("// mine\n{}")
-    assert "not plain JSON" in setup.consent(jsonc, lambda d: d, "Write?", lambda _q: "y", yes=True)
+    assert "not plain JSON" in setup.consent(repo, jsonc, lambda d: d, "Write?", lambda _q: "y", yes=True)
     assert jsonc.read_text() == "// mine\n{}"
+
+
+def test_an_untracked_write_is_excluded_once_and_the_exclude_file_is_created(repo):
+    exclude = repo / ".git" / "info" / "exclude"
+    exclude.unlink(missing_ok=True)
+    path = repo / ".mcp.json"
+    for _ in range(2):
+        said = setup.consent(repo, path, lambda d: d | {"a": 1}, "Write?", lambda _q: "", yes=True)
+        assert said.startswith("written")
+    assert exclude.read_text() == "/.mcp.json\n"
+    exclude.write_text("# mine\n*.log\n/.mcp.json\n")
+    setup.consent(repo, repo / ".vscode" / "tasks.json", lambda d: d, "Write?", lambda _q: "", yes=True)
+    assert exclude.read_text() == "# mine\n*.log\n/.mcp.json\n/.vscode/tasks.json\n"
+    git = ["git", "status", "--porcelain"]
+    status = subprocess.run(git, cwd=repo, capture_output=True, text=True, check=True)  # noqa: S603
+    assert status.stdout == ""
+
+
+def test_a_tracked_file_is_left_untouched_with_the_manual_alternative(repo):
+    path = repo / ".mcp.json"
+    path.write_text("{}\n")
+    subprocess.run(["git", "add", ".mcp.json"], cwd=repo, check=True)  # noqa: S607
+    said = setup.consent(repo, path, lambda d: d | {"a": 1}, "Write?", lambda _q: "y", yes=True)
+    assert said.startswith("not written")
+    assert "tracked" in said
+    assert path.read_text() == "{}\n"
+    assert ".mcp.json" not in (repo / ".git" / "info" / "exclude").read_text()
+
+
+class Popen:
+    def __init__(self, fail=None):
+        self.calls, self.fail = [], fail
+
+    def __call__(self, argv, **kwargs):
+        if self.fail:
+            raise self.fail
+        self.calls.append((argv, kwargs))
+
+
+def test_new_change_opens_an_agent_chat_without_a_shell(tmp_path):
+    popen = Popen()
+    out = api.new_chat(tmp_path, which=lambda _n: "/bin/code", popen=popen)
+    assert out == {"started": True, "command": f"code chat -r -m agent '{api.START_PROMPT}'"}
+    [(argv, kwargs)] = popen.calls
+    assert argv == ["/bin/code", "chat", "-r", "-m", "agent", api.START_PROMPT]
+    assert kwargs["cwd"] == tmp_path
+    assert kwargs["start_new_session"]
+    assert "shell" not in kwargs
+
+
+@pytest.mark.parametrize(("which", "fail"), [(lambda _n: None, None), (lambda _n: "/bin/code", OSError("denied"))])
+def test_new_change_returns_the_command_when_code_cannot_start(tmp_path, which, fail):
+    out = api.new_chat(tmp_path, which=which, popen=Popen(fail))
+    assert out["started"] is False
+    assert out["command"] == f"code chat -r -m agent '{api.START_PROMPT}'"
+    assert str(tmp_path) in out["reason"]
+
+
+def test_new_change_needs_the_token_and_launches_once_per_five_seconds(tmp_path):
+    launches = []
+    app = api.create_app(Store(tmp_path), "t", Host(), launch=lambda: launches.append(1) or {"started": True})
+    anonymous = TestClient(app, base_url="http://127.0.0.1")
+    assert anonymous.post("/api/next/new-change").status_code == 401
+    c = TestClient(app, base_url="http://127.0.0.1", headers={"authorization": "Bearer t"})
+    assert c.post("/api/next/new-change").json() == {"started": True}
+    assert c.post("/api/next/new-change").status_code == 429
+    assert launches == [1]
 
 
 def test_yes_confirms_the_profile_but_never_an_unknown_entry():

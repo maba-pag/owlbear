@@ -5,6 +5,10 @@ from __future__ import annotations
 import hashlib
 import re
 import secrets
+import shlex
+import shutil
+import subprocess
+import time
 from datetime import UTC, datetime
 from importlib.resources import files
 from typing import TYPE_CHECKING, Any, Literal
@@ -27,12 +31,13 @@ from owlbear_delivery_next.models import (
     PullItem,
     Waiting,
 )
-from owlbear_delivery_next.status import status, unloadable
+from owlbear_delivery_next.status import card, status, unloadable
 from owlbear_delivery_next.steps import check, visual
 from owlbear_delivery_next.store import StoreError
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
+    from pathlib import Path
 
     from starlette.responses import Response
 
@@ -44,6 +49,8 @@ if TYPE_CHECKING:
 SLUG = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost"})
 T6 = "This is a recovery decision; make it in the Changes page"
+START_PROMPT = "Start a new Delivery Change: use the delivery skill to shape a brief with me."
+LAUNCH_GAP = 5.0  # seconds between two new-Change launches
 
 
 class Body(BaseModel):
@@ -118,6 +125,7 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
         return {"slug": slug, "line": s.line, "action": s.action, "actor": s.actor}
     s = status(c, act, now)
     out = {"slug": slug, "handle": c.handle, "step": c.step.kind, "line": s.line, "action": s.action, "actor": s.actor}
+    out |= card(c, act, store.events(slug), now)
     out["spend"] = c.spend.model_dump()
     out["pullback"] = c.pullback.model_dump(mode="json") if c.pullback else None
     if q := loop.open_question(c):
@@ -127,11 +135,36 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
     return out
 
 
-def create_app(store: Store, token: str, host: Host) -> FastAPI:  # noqa: C901, PLR0915 - one closure per route
+def new_chat(
+    repo: Path, which: Callable[[str], str | None] = shutil.which, popen: Callable[..., object] = subprocess.Popen
+) -> dict[str, Any]:
+    """Open a VS Code agent chat with the fixed start prompt in *repo*; on failure, the command to run there."""
+    argv = ["code", "chat", "-r", "-m", "agent", START_PROMPT]
+    command = shlex.join(argv)
+    if not (code := which("code")):
+        return {"started": False, "command": command, "reason": f"`code` is not on PATH; run this in {repo}"}
+    try:
+        popen(
+            [code, *argv[1:]],
+            cwd=repo,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except OSError as exc:
+        return {"started": False, "command": command, "reason": f"could not start `code` ({exc}); run this in {repo}"}
+    return {"started": True, "command": command}
+
+
+def create_app(  # noqa: C901, PLR0915 - one closure per route
+    store: Store, token: str, host: Host, *, launch: Callable[[], dict[str, Any]] | None = None
+) -> FastAPI:
     """Return the host's app: the Changes page without data, and a token-guarded API under ``/api/next``."""
     app = FastAPI(title="OwlBear Delivery", docs_url=None, redoc_url=None, openapi_url=None)
     page = files("owlbear_delivery_next").joinpath("web", "changes.html").read_text(encoding="utf-8")
     expected = f"Bearer {token}".encode()
+    launched = [-LAUNCH_GAP]
 
     @app.middleware("http")
     async def local_only(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
@@ -183,6 +216,13 @@ def create_app(store: Store, token: str, host: Host) -> FastAPI:  # noqa: C901, 
     @router.get("/changes")
     def changes() -> list[dict[str, Any]]:
         return [summary_of(slug) for slug in store.slugs()]
+
+    @router.post("/new-change")
+    def new_change() -> dict[str, Any]:
+        if (now := time.monotonic()) - launched[0] < LAUNCH_GAP:
+            raise HTTPException(429, "A new Change chat was just opened; wait a few seconds")
+        launched[0] = now
+        return launch() if launch else new_chat(host.repo)
 
     @router.get("/changes/{slug}")
     def detail(slug: str) -> dict[str, Any]:
