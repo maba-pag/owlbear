@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from owlbear_delivery_next import loop
 from owlbear_delivery_next.models import AnswerItem, BriefApproval, CheckResult, Exit, Waiting
 from owlbear_delivery_next.status import status, unloadable
+from owlbear_delivery_next.steps import check
 from owlbear_delivery_next.store import StoreError
 
 if TYPE_CHECKING:
@@ -148,7 +149,7 @@ def create_app(store: Store, token: str, host: Host) -> FastAPI:  # noqa: C901, 
         person = next((p for p in c.checks if p.id == body.check), None)
         if person is None or not (c.env and c.env.check == body.check and c.env.ready_at):
             raise HTTPException(409, f"check {body.check} is not waiting for a result")
-        inputs = loop.check_inputs(c, person, {})
+        inputs = loop.check_inputs(c, person, check.fingerprints(c, person))
         item = CheckResult(at=datetime.now(UTC), check=person.id, passed=body.passed, note=body.note, inputs=inputs)
         return put(slug, item)
 

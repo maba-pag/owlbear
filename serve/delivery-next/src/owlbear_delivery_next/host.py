@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from owlbear_delivery_next.loop import PrState
-    from owlbear_delivery_next.models import Change
+    from owlbear_delivery_next.models import Change, Environment
     from owlbear_delivery_next.store import Lock
 
 TICK = 30.0
@@ -86,15 +86,6 @@ def activity(store: Store, slug: str, host: HostRecord | None) -> Activity:
     )
 
 
-def _group(pgid: int) -> Found:
-    found: Found = {}
-    for p in psutil.process_iter(["pid", "name", "status"]):
-        with contextlib.suppress(OSError):
-            if p.info["status"] != psutil.STATUS_ZOMBIE and os.getpgid(p.pid) == pgid:
-                found[p.pid] = p.info["name"] or ""
-    return found
-
-
 def _scan(path: Path, since: datetime) -> Found:
     return dict(ProcessTableWorktreeProbe().active_processes((path,), started_after=since))
 
@@ -122,7 +113,7 @@ class Host:
         *,
         spawn: Callable[[str], RunnerRecord] | None = None,
         scan: Callable[[Path, datetime], Found] = _scan,
-        group: Callable[[int], Found] = _group,
+        group: Callable[[int], Found] = check.members,
         alive: Callable[[int, float | None], bool | None] = sdk_adapter.alive,
     ) -> None:
         self.store, self.repo, self.scan, self.group, self.alive = store, repo, scan, group, alive
@@ -173,11 +164,11 @@ class Host:
             return False  # A live runner finishes on its own; the host never kills it.
         with self.store.lock(slug) as lock:
             c, _ = self.store.fold(lock, slug, now, self.observe_pr(slug))
-            act = check.action(c, live=self._env_live(c))
+            act = self._env_action(c)
             if c.env and act in {"dispose", "settle"}:
-                if left := check.dispose(c.env.pids):
-                    return self._blocked(lock, c, dict.fromkeys(left, ""), now)
-                c = loop.apply(c, check.settle(c, now), now) if act == "settle" else c
+                if (left := self._clear(c, c.env)) is None or left:
+                    return self._blocked(lock, c, left, now)
+                c = check.settle(c, now) if act == "settle" else c
                 c.env = None
                 self.say(f"{slug}: check environment disposed")
             step = loop.next_step(c, now)
@@ -190,15 +181,18 @@ class Host:
                 self._path(slug).unlink(missing_ok=True)
                 step = loop.next_step(c, now)
             if c.env:
-                c, step = self._environment(c, now), None
+                c, step = self._environment(lock, c, now), None
             self.store.write(lock, c)
             return step is not None
 
-    def _blocked(self, lock: Lock, c: Change, found: Found | None, now: datetime) -> bool:
+    def _mark(self, c: Change, found: Found | None, now: datetime) -> None:
         stop = _block(found, now)
         if not (c.blocked and c.blocked.reason == stop.reason):
             c.blocked = stop
             self.say(f"{c.slug}: no writer starts: {stop.reason}")
+
+    def _blocked(self, lock: Lock, c: Change, found: Found | None, now: datetime) -> bool:
+        self._mark(c, found, now)
         self.store.write(lock, c)
         return False
 
@@ -218,26 +212,52 @@ class Host:
                 return None
         return found
 
-    def _env_live(self, c: Change) -> bool:
-        pids = c.env.pids if c.env else {}
-        return bool(pids) and all(self.alive(p, t) is not False for p, t in pids.items())
+    def _env_action(self, c: Change) -> check.Action | None:
+        e = c.env
+        person = next((p for p in c.checks if e and p.id == e.check), None)
+        live = bool(e and e.pids) and all(self.alive(p, t) is not False for p, t in e.pids.items())
+        return check.action(c, live=live, paths=check.fingerprints(c, person) if person else {})
 
-    def _environment(self, c: Change, now: datetime) -> Change:
+    def _clear(self, c: Change, e: Environment) -> Found | None:
+        """Dispose of all the environment may have started; an uncertain launch is found by the worktree scan."""
+        if e.launched_at and e.pgid is None and c.names.worktree:
+            try:
+                found = self.scan(Path(c.names.worktree), e.launched_at)
+            except WorktreeProcessScanError:
+                return None
+            e = e.model_copy(update={"pids": e.pids | {p: check.created(p) for p in found}})
+        return check.dispose(e)
+
+    def _environment(self, lock: Lock, c: Change, now: datetime) -> Change:
         """Launch the check environment after the preparing Builder is gone; pending once it answers."""
         e = c.env
-        if e is None or check.action(c, live=self._env_live(c)) != "launch":
+        if e is None or self._env_action(c) != "launch":
+            return c
+        if (left := self._clear(c, e)) is None or left:
+            self._mark(c, left, now)  # never a second group beside one that may still run
             return c
         root, launch = Path(c.names.worktree), worktree.allowed(self.store.read_profile() or Profile(), StepKind.CHECK)
         recipe = tools.CheckRecipe(command=e.command, directory=e.directory, ready_url=e.ready_url, summary="host")
         errors = tools.check_recipe(recipe, tools.Worktree("", ""), launch, root)
-        check.dispose(e.pids)
-        pids = None if errors else check.launch(e, root, self.store.root / "changes" / c.slug / "env.log")
-        if pids is None:
+        if errors:
             c.env = None
-            self.say(f"{c.slug}: check environment failed: {'; '.join(errors) or e.ready_url}")
-            return loop.apply(c, check.failed("; ".join(errors) or f"no answer at {e.ready_url}"), now)
+            self.say(f"{c.slug}: check environment failed: {'; '.join(errors)}")
+            return loop.apply(c, check.failed("; ".join(errors)), now)
+        c.env = e = e.model_copy(update={"pids": {}, "pgid": None, "ready_at": None, "launched_at": datetime.now(UTC)})
+        self.store.write(lock, c)
+        if proc := check.start(e, root, self.store.root / "changes" / c.slug / "env.log"):
+            c.env = e = e.model_copy(update={"pgid": proc.pid, "pids": {proc.pid: check.created(proc.pid)}})
+            self.store.write(lock, c)
+        pids = check.ready(e, proc) if proc else None
+        if pids is None:
+            if (left := self._clear(c, e)) is None or left:
+                self._mark(c, left, now)
+                return c
+            c.env = None
+            self.say(f"{c.slug}: check environment failed: no answer at {e.ready_url}")
+            return loop.apply(c, check.failed(f"no answer at {e.ready_url}"), now)
         c.env = e.model_copy(update={"pids": pids, "ready_at": datetime.now(UTC)})
-        self.say(f"{c.slug}: check environment ready at {e.ready_url}, PIDs {sorted(pids)}")
+        self.say(f"{c.slug}: check environment ready at {e.ready_url}, group {e.pgid}, PIDs {sorted(pids)}")
         return loop.apply(c, check.pending(c, c.env), now)
 
     def _launch(self, slug: str) -> bool:
@@ -292,7 +312,8 @@ def serve(repo: Path) -> int:
         lock_fd = open_lock(dir_fd, blocking=False, name="host.lock")
     except BlockingIOError:
         found = running(store)
-        sys.stdout.write(f"Delivery is already running: {found.url if found else '(starting)'}\n")
+        url = f"{found.url}#token={found.token}" if found and found.token else "(starting)"
+        sys.stdout.write(f"Delivery is already running: {url}\n")
         return 0
     finally:
         os.close(dir_fd)

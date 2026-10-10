@@ -109,3 +109,30 @@ Two earlier runs found defects, fixed before `welcome`:
 Limits: sleep detection, recorded-PID survivors after a killed runner and the PR terminal-state hook ran only in
 tests; environment relaunch after a host restart was not shown live (relaunch after interruption was). The
 Changes page was fetched but not used in a browser; answers and results went through the API with `curl`.
+
+## Repairs after review of `25c2dd89b`
+
+- Environment ownership: the host persists `launched_at` before spawning and the group id and leader PID right
+  after, before readiness. A launch without a recorded group is uncertain; the next pass scans the worktree from
+  `launched_at`, disposes of what it finds and launches only when nothing remains, else no writer starts and the
+  PIDs are named. A started but never ready environment is disposed of and relaunched.
+- Disposal signals the recorded group (`killpg`, TERM, 5 s, KILL) even without its leader, and the recorded
+  PIDs; it succeeds only when no group member or recorded PID remains. A failure keeps the environment record,
+  names the PIDs and blocks relaunch and the next writer.
+- A check result is recorded by the inbox fold and settled by the host only when its recorded inputs (criteria,
+  path fingerprints, procedure, environment) equal the current ones; the pending wait is cleared only by that
+  settlement. A settled failure settles no later round.
+- The Changes page replaces its forms after a successful submission and keeps only a focused text field or input.
+- A second `host` prints the token-bearing URL.
+
+Disposable scenarios (macOS, temporary directory, removed afterwards; no process left per `pgrep`):
+
+| Scenario | Outcome |
+| --- | --- |
+| Leader serves readiness, spawns a child ignoring SIGTERM after 2 s and exits | Recorded `[96200]`; after 3 s the leader was gone, the group held 96234. Verification over recorded PIDs alone reported confirmed. The new disposal ended 96234 with KILL after 5.3 s; group empty, `pgrep -g 96200` none |
+| Host killed (`SIGKILL`) between spawn and recording the group | Persisted `launched_at`, no group; orphan 96463 still served. The restarted host found it by the worktree scan, disposed of it, then launched one group 96470 and entered pending; only 96470 ran |
+
+## Known deviations
+
+Modules over the draft limits of the architecture, kept as they are: `sdk_adapter.py` 611 (600), `store.py` 260
+(250), `models.py` 388 (350), `loop.py` 507 (500).

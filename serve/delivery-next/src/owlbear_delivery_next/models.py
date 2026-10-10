@@ -272,6 +272,8 @@ class Environment(Record):
     directory: str
     ready_url: str
     pids: dict[int, float | None] = Field(default_factory=dict)
+    pgid: int | None = None
+    launched_at: datetime | None = None  # set before spawning; without ``pgid`` the launch is uncertain
     ready_at: datetime | None = None
 
 

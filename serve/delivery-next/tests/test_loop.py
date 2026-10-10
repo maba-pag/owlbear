@@ -128,7 +128,8 @@ def test_walk_from_brief_approval_to_done():
     assert loop.next_step(c, LATER) is None
     inputs = loop.check_inputs(c, c.checks[0], {"ui": "f1"})
     c, step = loop.schedule(c, [CheckResult(at=NOW, check="p1", passed=True, inputs=inputs)], NOW)
-    assert step.kind == K.CHECK
+    assert step is None  # recorded; the host settles it and ends the wait
+    assert c.checks[0].answer.inputs == inputs
     c = loop.apply(c, StepResult(exit=Exit.DONE, paths={"ui": "f1"}), NOW)
     assert c.step.kind == K.MERGE
     c = loop.apply(loop.apply(c, StepResult(exit=Exit.DONE), NOW), StepResult(exit=Exit.DONE, preserved=["x"]), NOW)
@@ -272,7 +273,7 @@ def _consent_asked(c):
     return loop.apply(c.model_copy(update={"step": Step(kind=K.MERGE)}), asked, NOW), ConsentItem(at=NOW, head="abc")
 
 
-@pytest.mark.parametrize("wait", [_asked, _stopped, _paused, _check_pending, _consent_asked])
+@pytest.mark.parametrize("wait", [_asked, _stopped, _paused, _consent_asked])
 def test_inbox_is_folded_before_exclusions(wait):
     c, item = wait(change(checks=[PersonCheck(id="p1")]))
     assert loop.schedule(c, [], NOW)[1] is None
@@ -285,6 +286,7 @@ def test_inbox_is_folded_before_exclusions(wait):
     [
         (_asked, CheckResult(at=NOW, check="p1", passed=True, inputs=Inputs())),
         (_asked, ConsentItem(at=NOW, head="abc")),
+        (_check_pending, CheckResult(at=NOW, check="p1", passed=True, inputs=Inputs())),
         (_check_pending, CheckResult(at=NOW, check="p2", passed=True, inputs=Inputs())),
         (_check_pending, ConsentItem(at=NOW, head="abc")),
         (_consent_asked, AnswerItem(at=NOW, question="q9")),

@@ -196,15 +196,12 @@ def fold(change: Change, items: Iterable[InboxItem], now: datetime) -> Change:  
                     c.outcome = None
             case AnswerItem():
                 _answer(c, item, now)
-            case CheckResult():
+            case CheckResult():  # recorded only; the host settles it by its inputs and ends the wait then
                 for check in c.checks:
                     if check.id == item.check:
                         check.answer = Answer(
                             text=item.note, channel=item.channel, at=item.at, passed=item.passed, inputs=item.inputs
                         )
-                o, s = c.outcome, c.step
-                if o and o.waiting == Waiting.PERSON_CHECK and (s.kind, s.task) == (StepKind.CHECK, item.check):
-                    c.outcome = None
             case Recovery(action=action) if c.stop and c.stop.action == action:
                 c.stop = c.outcome = None
             case ConsentItem():

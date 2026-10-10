@@ -6,7 +6,7 @@ import pytest
 
 from owlbear_delivery_next import cli, host
 from owlbear_delivery_next.host import Host, RunnerRecord
-from owlbear_delivery_next.loop import StepResult, apply
+from owlbear_delivery_next.loop import StepResult, apply, check_inputs
 from owlbear_delivery_next.models import (
     Answer,
     AnswerItem,
@@ -151,7 +151,7 @@ def test_host_lock_excludes_a_second_host_and_status_shows_host_down(store, tmp_
     try:
         assert child.stdout.readline().strip() == "held"
         assert host.serve(tmp_path) == 0
-        assert "already running: http://127.0.0.1:9/" in capsys.readouterr().out
+        assert "already running: http://127.0.0.1:9/#token=t\n" in capsys.readouterr().out
         assert host.running(store).pid == child.pid
         assert "Delivery is not running" not in cli.show_status(store, NOW)
     finally:
@@ -173,8 +173,9 @@ def checking(**env):
     return Change(slug="c1", plan=plan, checks=[person], step=step, env=e.model_copy(update=env))
 
 
-def answered(c, at, *, passed=True):
-    c.checks[0].answer = Answer(at=at, passed=passed, text="no greeting", inputs=Inputs())
+def answered(c, at, *, passed=True, inputs=None):
+    inputs = check_inputs(c, c.checks[0], {}) if inputs is None else inputs
+    c.checks[0].answer = Answer(at=at, passed=passed, text="no greeting", inputs=inputs)
     return c
 
 
@@ -182,50 +183,96 @@ def answered(c, at, *, passed=True):
     ("change", "live", "expected"),
     [
         (checking(), False, "launch"),
+        (checking(), True, "launch"),  # spawned but never ready: relaunched, after disposal
         (checking(ready_at=NOW), True, "keep"),
         (checking(ready_at=NOW), False, "launch"),
-        (answered(checking(ready_at=NOW), NOW - timedelta(minutes=1)), True, "keep"),
-        (answered(checking(ready_at=NOW), NOW), True, "settle"),
+        (answered(checking(ready_at=NOW), NOW - timedelta(minutes=1)), True, "settle"),  # given before a relaunch
+        (answered(checking(ready_at=NOW), NOW, inputs=Inputs()), True, "keep"),  # stale inputs
         (checking(ready_at=NOW).model_copy(update={"step": Step(kind=StepKind.BUILD, task="t2")}), True, "dispose"),
         (checking(ready_at=NOW).model_copy(update={"finished_at": NOW}), True, "dispose"),
         (Change(slug="c1"), True, None),
     ],
 )
 def test_check_environment_decisions(change, live, expected):
-    assert check.action(change, live=live) == expected
+    assert check.action(change, live=live, paths={}) == expected
 
 
-def test_a_failed_check_goes_back_to_build_with_the_owners_note():
+def test_a_failed_check_goes_back_to_build_with_the_owners_note_and_settles_no_later_round():
     c = answered(checking(ready_at=NOW), NOW, passed=False)
-    after = apply(c, check.settle(c, NOW), NOW)
+    after = check.settle(c, NOW)
     assert (after.step.kind, after.step.task, after.plan.tasks[-1].origin) == (StepKind.BUILD, "t2", "person-check")
     assert "no greeting" in after.plan.tasks[-1].title
+    again = after.model_copy(update={"step": Step(kind=StepKind.CHECK, task="preview"), "env": checking().env})
+    assert check.action(again, live=False, paths={}) == "launch"
+
+
+def test_disposal_is_verified_over_recorded_pids_and_the_whole_group_without_its_leader():
+    e = checking(pids={900: 2.0, 901: 2.0, 903: None}, pgid=900).env
+    alive = {900: False, 901: None, 903: False}
+    found = check.remaining(e, lambda p, _t: alive[p], lambda g, _leader: {902: "node"} if g == 900 else {})
+    assert found == {901: "", 902: "node"}
+
+
+def environment(store, fake, monkeypatch, **env):
+    entry = ProfileEntry(state="known", value="npm run preview")
+    store.write_profile(Profile(version=1, entries={"allow:check": entry}))
+    c = checking(**env)
+    c.names.worktree = fake.worktree
+    save(store, c)
+    calls = {"dispose": [], "start": [], "left": []}
+
+    def dispose(e):
+        calls["dispose"].append(dict(e.pids))
+        return calls["left"].pop(0) if calls["left"] else {}
+
+    def ready(e, _proc):
+        calls["durable"] = store.read("c1").env  # the group is recorded before readiness is awaited
+        return e.pids | {901: 2.0}
+
+    monkeypatch.setattr(check, "dispose", dispose)
+    monkeypatch.setattr(check, "start", lambda e, _root, _log: calls["start"].append(e.command) or Proc())
+    monkeypatch.setattr(check, "ready", ready)
+    monkeypatch.setattr(check, "created", lambda _pid: 2.0)
+    return calls
+
+
+class Proc:
+    pid = 900
+
+
+def test_an_uncertain_launch_is_disposed_from_the_worktree_scan_before_another_copy(store, tmp_path, monkeypatch):
+    fake = Fake(store, tmp_path)
+    calls = environment(store, fake, monkeypatch, launched_at=NOW)
+    fake.found, calls["left"] = {77: "npm"}, [{77: "npm"}]
+    assert fake.host.tick(NOW) == []
+    assert (calls["start"], store.read("c1").blocked.action) == ([], "End processes 77")
+    fake.found = {}
+    assert fake.host.tick(NOW) == []
+    assert (calls["dispose"][0], calls["start"]) == ({77: 2.0}, ["npm run preview"])
 
 
 def test_the_environment_launches_after_the_builder_is_gone_and_is_disposed_on_the_result(store, tmp_path, monkeypatch):
     fake = Fake(store, tmp_path)
-    disposed, launched = [], []
-    monkeypatch.setattr(check, "dispose", lambda pids: disposed.append(dict(pids)) or ())
-    monkeypatch.setattr(check, "launch", lambda e, _root, _log: launched.append(e.command) or {900: 2.0})
-    entry = ProfileEntry(state="known", value="npm run preview")
-    store.write_profile(Profile(version=1, entries={"allow:check": entry}))
-    c = checking()
-    c.names.worktree = fake.worktree
-    save(store, c)
+    calls = environment(store, fake, monkeypatch)
     (store.root / "changes" / "c1" / "runner.json").write_text(
         RunnerRecord(pid=5, created=1.0, started_at=NOW).model_dump_json()
     )
     fake.found = {55: "vite"}
     assert fake.host.tick(NOW) == []
-    assert launched == []
+    assert calls["start"] == []
     fake.found = {}
     assert fake.host.tick(NOW) == []
-    assert launched == ["npm run preview"]
+    assert calls["start"] == ["npm run preview"]
+    assert (calls["durable"].pgid, calls["durable"].pids, calls["durable"].ready_at) == (900, {900: 2.0}, None)
     waiting = store.read("c1")
-    assert (waiting.outcome.who, waiting.env.pids) == ("you", {900: 2.0})
-    fake.live.add(900)
-    store.put_inbox("c1", CheckResult(at=datetime.now(UTC), check="preview", passed=True, inputs=Inputs(procedure=1)))
+    assert (waiting.outcome.who, waiting.env.pids) == ("you", {900: 2.0, 901: 2.0})
+    fake.live |= {900, 901}
+    inputs = check_inputs(waiting, waiting.checks[0], {})
+    store.put_inbox("c1", CheckResult(at=NOW - timedelta(hours=1), check="preview", passed=True, inputs=inputs))
+    calls["left"] = [{902: "node"}]
+    assert fake.host.tick() == []
+    blocked = store.read("c1")
+    assert (blocked.blocked.action, blocked.outcome.who, blocked.env.pgid) == ("End processes 902", "you", 900)
     assert fake.host.tick() == ["c1"]
-    assert disposed[-1] == {900: 2.0}
     done = store.read("c1")
     assert (done.env, done.step.kind) == (None, StepKind.MERGE)

@@ -55,7 +55,10 @@ function el(tag, text, attrs = {}) {
 }
 
 function send(path, body) {
-  call(`/changes/${selected}${path}`, body).then(refresh, (e) => {
+  call(`/changes/${selected}${path}`, body).then(() => {
+    document.activeElement.blur();
+    return refresh();
+  }, (e) => {
     document.getElementById("error").textContent = e.message;
   });
 }
@@ -110,8 +113,8 @@ async function showDetail() {
     log.append(el("li", `${e.at || ""} ${e.event || ""} ${e.exit || e.tool || e.reason || ""}`));
   }
   parts.push(el("h3", "Recent activity"), log);
-  const typing = target.contains(document.activeElement) && document.activeElement !== document.body;
-  if (!typing) target.replaceChildren(...parts);
+  const editing = target.contains(document.activeElement) && document.activeElement.matches("textarea, input");
+  if (!editing) target.replaceChildren(...parts);
 }
 
 async function refresh() {
