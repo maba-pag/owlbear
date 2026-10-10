@@ -79,7 +79,7 @@ def pull_request(ctx: Ctx, c: Change, head: str) -> PullRequest | None:
     repo, branch, target = ctx.repository, c.names.branch, c.names.target
     pr = ctx.gh.find_pull_request(repo, branch, target)
     if pr is None:
-        title = c.plan.tasks[0].title if c.plan and c.plan.tasks else c.slug
+        title = c.brief.title or (c.plan.tasks[0].title if c.plan and c.plan.tasks else c.slug)
         try:
             pr = ctx.gh.create_pull_request(repo, branch, target, title[:200], _body(c))
         except ProviderError as exc:

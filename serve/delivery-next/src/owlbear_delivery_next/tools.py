@@ -5,7 +5,8 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal
+from pathlib import PurePosixPath
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -111,6 +112,94 @@ class CheckRecipe(Args):
     summary: str = _f(1000, "How you verified it", "Ran it, fetched the page, stopped it")
 
 
+class PlanTask(Args):
+    """One ordered task of the plan."""
+
+    title: str = _f(200, "What the task delivers", "Add farewell(name) with a test")
+    goal: str = _f(1000, "The criteria it meets and how the Builder knows it is done", "AC-1: farewell('Ada')")
+    scope: list[str] = _f(20, "Repository-relative paths or directories it may change", ["packages/app"])
+    checks: list[str] = _f(5, "Check commands from the project profile the Builder runs", ["npm test"])
+
+
+class PlanResult(Args):
+    """``submit_result`` for the plan step."""
+
+    tasks: list[PlanTask] = _f(
+        8,
+        "Ordered tasks, each small enough for one Builder session",
+        [{"title": "Add farewell", "goal": "AC-1", "scope": ["packages/app"], "checks": ["npm test"]}],
+    )
+
+
+type Criterion = Annotated[str, Field(min_length=10, max_length=500)]
+NAME = r"^[a-z0-9][a-z0-9-]{0,39}$"
+
+
+class PersonCheckDraft(Args):
+    """One check only the owner can perform, done after the PR's CI passes."""
+
+    name: str = Field(pattern=NAME, description="Short id of the check", examples=["preview"])
+    steps: list[str] = _f(10, "What the owner does, step by step", ["Open the preview page"])
+    expect: str = _f(300, "What the owner should see", "The page shows 'Hallo, Ada!'")
+
+
+class BriefDraft(Args):
+    """``save_brief``: create or revise one Change's brief draft; the host returns its handle or field errors."""
+
+    change: str = Field(
+        default="",
+        pattern=r"^(c\d{1,4})?$",
+        description="Handle of the Change to revise; empty for new",
+        examples=["c3"],
+    )
+    title: str = _f(100, "Short title of the Change", "Add a farewell function")
+    outcome: str = _f(2000, "What the owner has when it is done, in a few sentences", "farewell(name) exists", 20)
+    criteria: list[Criterion] = _f(
+        10, "Acceptance criteria, each checkable by a test or command", ["farewell('Ada') returns 'Bye, Ada!'"]
+    )
+    scope: list[str] = _f(20, "Repository-relative paths or directories the Change may touch", ["packages/app"])
+    person_checks: list[PersonCheckDraft] = Field(
+        default_factory=list,
+        max_length=5,
+        description="Checks only the owner can perform; empty when tests prove every criterion",
+        examples=[[{"name": "preview", "steps": ["Open the preview"], "expect": "The greeting shows"}]],
+    )
+
+
+def relative(path: str) -> bool:
+    """Whether *path* is repository-relative and stays inside the repository."""
+    p = PurePosixPath(path)
+    return bool(path.strip()) and not p.is_absolute() and ".." not in p.parts and not path.startswith("~")
+
+
+def check_brief(brief: BriefDraft) -> list[str]:
+    """Return field errors the schema cannot express: paths outside the repository, repeated entries."""
+    errors = [
+        f'scope[{i}]: {p} is not repository-relative - e.g. "packages/app"'
+        for i, p in enumerate(brief.scope)
+        if not relative(p)
+    ]
+    if len({c.strip().lower() for c in brief.criteria}) < len(brief.criteria):
+        errors.append("criteria: repeated criterion - state each one once")
+    if len({p.name for p in brief.person_checks}) < len(brief.person_checks):
+        errors.append("person_checks: names repeat - give each check its own name")
+    return errors
+
+
+def check_plan(plan: PlanResult, tree: Worktree, checks: Sequence[str]) -> list[str]:
+    """Return field errors for task checks outside the profile and scopes outside the repository."""
+    errors = [f"changes: uncommitted files ({_few(tree.dirty)}); planning changes nothing"] if tree.dirty else []
+    listed = ", ".join(f'"{c}"' for c in checks) or "none - ask the owner which command checks this package"
+    for i, task in enumerate(plan.tasks):
+        errors += [
+            f'tasks[{i}].checks: "{c}" is not a check of the project profile - use one of {listed}'
+            for c in task.checks
+            if c not in checks
+        ]
+        errors += [f"tasks[{i}].scope: {p} is not repository-relative" for p in task.scope if not relative(p)]
+    return errors
+
+
 @dataclass(frozen=True)
 class Spec:
     """One tool's name, description, argument model and the step ending an accepted call causes."""
@@ -150,6 +239,7 @@ RECIPE = Spec(
     CheckRecipe,
     "result",
 )
+PLAN = Spec("submit_result", "Submit the ordered plan once, after reading the code it touches.", PlanResult, "result")
 
 
 def _inline(node: object, defs: dict[str, Any]) -> object:
@@ -273,4 +363,6 @@ def check_result(args: Args, tree: Worktree, checks: Sequence[str], root: Path) 
             return check_review(args, tree)
         case CheckRecipe():
             return check_recipe(args, tree, checks, root)
+        case PlanResult():
+            return check_plan(args, tree, checks)
     return []

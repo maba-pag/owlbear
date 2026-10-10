@@ -25,15 +25,15 @@ from copilot.tools import Tool, ToolInvocation, ToolResult
 
 from owlbear_delivery_next import prompts, tools
 from owlbear_delivery_next.loop import StepResult, cause_key
-from owlbear_delivery_next.models import ErrorKind, Exit, Option, Question, StepKind, Stop, Waiting
+from owlbear_delivery_next.models import ErrorKind, Exit, Option, Plan, Question, StepKind, Stop, Task, Waiting
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 
     from copilot.session import CopilotSession
 
-DEADLINES = {StepKind.BUILD: 1200.0, StepKind.REVIEW: 600.0, StepKind.CHECK: 900.0}
-ROLES = {StepKind.BUILD: "builder", StepKind.REVIEW: "reviewer", StepKind.CHECK: "builder"}
+DEADLINES = {StepKind.PLAN: 900.0, StepKind.BUILD: 1200.0, StepKind.REVIEW: 600.0, StepKind.CHECK: 900.0}
+ROLES = {StepKind.PLAN: "planner", StepKind.BUILD: "builder", StepKind.REVIEW: "reviewer", StepKind.CHECK: "builder"}
 POLL = 5.0
 SETTLE = 10.0
 START = 60.0  # runtime start, session create or resume
@@ -599,13 +599,19 @@ def _exit(run: Run, kind: StepKind, now: datetime) -> StepResult:  # noqa: C901,
         case "result" if isinstance(p, tools.CheckRecipe):
             reason = f"starting `{p.command}` for the check"
             return StepResult(exit=Exit.PENDING, waiting=Waiting.PERSON_CHECK, reason=reason)
+        case "result" if isinstance(p, tools.PlanResult):
+            tasks = [
+                Task(id=f"t{i}", title=t.title, scope=t.scope, checks=t.checks, detail=t.goal)
+                for i, t in enumerate(p.tasks, 1)
+            ]
+            return StepResult(exit=Exit.DONE, reason=f"{len(tasks)} task(s) planned", plan=Plan(tasks=tasks))
         case "ask" if isinstance(p, tools.AskQuestion):
             options = [Option(id=f"o{i}", label=f"{o.label}: {o.effect}") for i, o in enumerate(p.options, 1)]
             question = Question(step=kind, text=f"{p.question} (why: {p.why})", options=options)
             return StepResult(exit=Exit.ASK, question=question)
         case "premise" if isinstance(p, tools.WrongPremise):
             cause = cause_key(ErrorKind.SCOPE, kind, p.stage)
-            back = StepKind.BUILD if kind == StepKind.CHECK else StepKind.PLAN
+            back = {StepKind.CHECK: StepKind.BUILD, StepKind.PLAN: StepKind.SHAPE}.get(kind, StepKind.PLAN)
             return StepResult(exit=Exit.BACK, back_to=back, cause=cause, reason=p.reason[:200])
         case "deadline":
             cause = cause_key(ErrorKind.LIVENESS, kind, "deadline")

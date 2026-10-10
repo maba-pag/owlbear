@@ -21,6 +21,7 @@ _WHO = {
     Waiting.OWNER_ACTION: "your action in GitHub",
     Waiting.MERGE_QUEUE: "GitHub",
 }
+_ACTION = {Waiting.PERSON_CHECK: "Report result", Waiting.OWNER_ACTION: "Act in GitHub", Waiting.CHAT: "Approve brief"}
 _WORK = {
     StepKind.SHAPE: ("Shape", "shaping", "reviewer"),
     StepKind.PLAN: ("Plan", "planning", "planner"),
@@ -105,7 +106,7 @@ def status(c: Change, activity: Activity, now: datetime) -> Status:  # noqa: C90
         return Status(f"{s} · stopped: {c.stop.reason}", c.stop.action, c.stop.actor)
     if o and o.exit == Exit.PENDING:
         if o.who == "you":
-            action = {Waiting.PERSON_CHECK: "Report result", Waiting.OWNER_ACTION: "Act in GitHub"}.get(o.waiting)
+            action = _ACTION.get(o.waiting) if o.waiting else None
             return Status(f"{s} · waiting for you: {o.reason}", action, "you")
         who = _WHO.get(o.waiting, str(o.waiting)) if o.waiting else o.who
         return Status(f"{s} · waiting for {who}: {o.reason} (checked {_age(now - o.at)} ago)", None, o.who)

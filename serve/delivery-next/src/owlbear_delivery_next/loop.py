@@ -144,6 +144,17 @@ def consent_valid(c: Change, head: str) -> bool:
     return c.consent is not None and c.consent.head == head
 
 
+def open_question(c: Change) -> Question | None:
+    """The question the Change waits on, if any."""
+    o = c.outcome
+    return next((q for q in c.questions if o and o.exit == Exit.ASK and q.id == o.question), None)
+
+
+def ordinary(q: Question) -> bool:
+    """A worker's question, answerable in chat; engine-raised decisions with a cause stay Changes-page actions (T6)."""
+    return q.cause is None
+
+
 def next_step(c: Change, now: datetime) -> Step | None:
     """Return the step a runner should run now, or None while waiting, paused or finished."""
     o = c.outcome
@@ -448,6 +459,8 @@ def _fix_task(c: Change, r: StepResult) -> str | None:
 
 def _retry(c: Change, r: StepResult, now: datetime) -> None:
     s = c.step
+    if s.kind == StepKind.PLAN and r.plan:
+        c.plan = r.plan  # the challenged plan: kept for the next round, or accepted as it is
     if r.cause is None:
         if s.kind not in {StepKind.SHAPE, StepKind.PLAN, StepKind.REVIEW}:
             msg = f"{s.kind} retry needs a cause"

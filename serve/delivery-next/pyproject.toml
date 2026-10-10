@@ -6,6 +6,7 @@ description = "OwlBear Delivery-next — thin step loop, state store and status 
 dependencies = [
   "fastapi>=0.142.2",
   "github-copilot-sdk==1.0.19",
+  "mcp>=2,<2.4",
   "psutil>=7.2.2",
   "pydantic>=2.13.4",
   "pyyaml>=6.0.3",

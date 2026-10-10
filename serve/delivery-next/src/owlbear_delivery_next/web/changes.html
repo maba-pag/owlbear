@@ -124,9 +124,12 @@ async function showDetail() {
   parts.push(pause);
   for (const check of d.checks.filter((c) => c.waiting)) parts.push(checkForm(check));
   if (d.step === "shape" && d.brief.approved !== d.brief.version) {
+    const list = el("ul");
+    for (const k of d.criteria) list.append(el("li", `${k.id}: ${k.text}`));
+    for (const c of d.checks) list.append(el("li", `Your check ${c.id}: ${c.steps.join("; ")}`));
     const approve = el("button", `Approve brief v${d.brief.version}`, { type: "button" });
     approve.onclick = () => send("/approve-brief", { version: d.brief.version });
-    parts.push(approve);
+    parts.push(el("h3", `Brief v${d.brief.version}: ${d.brief.title}`), list, approve);
   }
   const log = el("ol", undefined, { class: "muted" });
   for (const e of d.activity.slice(-8)) {

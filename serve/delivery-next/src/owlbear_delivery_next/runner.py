@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from owlbear_delivery_next import loop, profile, prompts, sdk_adapter, tools
 from owlbear_delivery_next.cli import describe
-from owlbear_delivery_next.models import Environment, Exit, Profile, StepKind
+from owlbear_delivery_next.models import Environment, Exit, Profile, StepKind, Waiting
 from owlbear_delivery_next.steps import cleanup, engine, follow, merge, publish, review, worktree
 from owlbear_delivery_next.store import LockHeldError, Store, git_common_dir
 
@@ -22,8 +22,17 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.models import Change
     from owlbear_delivery_next.store import Lock
 
-AGENT = frozenset({StepKind.BUILD, StepKind.REVIEW, StepKind.CHECK})
+AGENT = frozenset({StepKind.PLAN, StepKind.BUILD, StepKind.REVIEW, StepKind.CHECK})
+
+
+def _shape(_ctx: engine.Ctx, c: Change) -> tuple[Change, loop.StepResult]:
+    """Shaping happens in chat; the step waits for a revised brief and its approval."""
+    reason = f"brief needs a change: {c.outcome.reason if c.outcome else 'revise it'} · revise in chat, then approve"
+    return c, engine.pending(Waiting.CHAT, reason, None, who="you")
+
+
 ENGINE: dict[StepKind, engine.Step] = {
+    StepKind.SHAPE: _shape,
     StepKind.PUBLISH: publish.run,
     StepKind.FOLLOW: follow.run,
     StepKind.MERGE: merge.run,
@@ -86,18 +95,57 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     run = asyncio.run(sdk_adapter.run(cfg))
     end = datetime.now(UTC)
     result = review.recorded(change, parts.task, run, path, sdk_adapter.to_result(run, s.kind, end))
+    _log(store, lock, slug, run, {"kind": s.kind, "exit": result.exit})
+    if s.kind == StepKind.PLAN and result.plan:
+        result = _challenge(store, lock, change, cfg, result)
+        end = datetime.now(UTC)
     if isinstance(p := run.payload, tools.WrongPremise) and p.stage == "target" and s.kind == StepKind.BUILD:
         result = engine.needs_target(change, path, f"{p.reason} ({'; '.join(p.evidence)})", end)
     if answer and sdk_adapter.effect_seen(run):
         change = loop.effect_observed(change, answer.id, end)
     if isinstance(p := run.payload, tools.CheckRecipe) and result.exit == Exit.PENDING:
         change.env = Environment(check=s.task or "", command=p.command, directory=p.directory, ready_url=p.ready_url)
-    step = {"event": "step", "at": end.isoformat(timespec="seconds"), "session": run.session_id, "kind": s.kind}
-    step |= {"ending": run.ending, "exit": result.exit, "head": run.head, "usage": run.usage}
+    store.write(lock, loop.apply(change, result, end))
+
+
+def _log(store: Store, lock: Lock, slug: str, run: sdk_adapter.Run, fields: dict[str, object]) -> None:
+    step = {"event": "step", "at": datetime.now(UTC).isoformat(timespec="seconds"), "session": run.session_id}
+    step |= fields | {"ending": run.ending, "head": run.head, "usage": run.usage}
     step["termination"] = dataclasses.asdict(run.termination) if run.termination else None
     store.log(lock, slug, step)
-    store.write(lock, loop.apply(change, result, end))
     _out(json.dumps(step, default=str))
+
+
+def _challenge(
+    store: Store, lock: Lock, change: Change, cfg: sdk_adapter.Session, planned: loop.StepResult
+) -> loop.StepResult:
+    """The plan's independent read-only challenge: pass keeps it; findings send it back for one more round."""
+    if planned.exit != Exit.DONE or planned.plan is None:
+        return planned
+    message = prompts.plan_review(change, planned.plan, cfg.worktree)
+    model = (store.read_profile() or Profile()).models.get(StepKind.REVIEW)
+    review_cfg = dataclasses.replace(
+        cfg,
+        kind=StepKind.REVIEW,
+        session_id=f"{change.slug}-plan-review-{uuid.uuid4().hex[:8]}",
+        message=message,
+        resume=False,
+        submit=tools.REVIEW,
+        checks=(),
+        model=None if model in {None, "", "auto"} else model,
+        fresh=message,
+        previous={},
+    )
+    run = asyncio.run(sdk_adapter.run(review_cfg))
+    verdict = sdk_adapter.to_result(run, StepKind.REVIEW, datetime.now(UTC))
+    _log(store, lock, change.slug, run, {"kind": "plan-review", "exit": verdict.exit})
+    if verdict.exit == Exit.DONE:
+        return planned
+    if verdict.exit in {Exit.ASK, Exit.STOP}:
+        return verdict
+    return verdict.model_copy(
+        update={"exit": Exit.RETRY, "plan": planned.plan, "reason": f"plan review: {verdict.reason}"}
+    )
 
 
 def _engine(store: Store, lock: Lock, change: Change, repo: Path) -> None:

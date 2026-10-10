@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 from dataclasses import dataclass
+from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
@@ -32,6 +34,52 @@ CONFIRMED = "owner confirmed"
 _PREFERRED = (MergeMethod.SQUASH, MergeMethod.MERGE, MergeMethod.REBASE)
 CI_EVENTS = frozenset({"pull_request", "pull_request_target", "merge_group"})
 HEAD_EVENTS = frozenset({"pull_request", "pull_request_target"})  # their checks report on the PR head
+NODE_LOCKS = (("package-lock.json", "npm", "npm ci"), ("pnpm-lock.yaml", "pnpm", "pnpm install --frozen-lockfile"))
+NO_TEST = 'echo "Error: no test specified"'
+
+
+def _node(repo: Path, d: str) -> tuple[ProfileEntry, ProfileEntry]:
+    lock = next(((f, tool, cmd) for f, tool, cmd in NODE_LOCKS if (repo / d / f).is_file()), None)
+    install = (
+        _entry("known", lock[2], f"{d}/{lock[0]}") if lock else _entry("unknown", "", f"{d}: no npm or pnpm lockfile")
+    )
+    try:
+        test = json.loads((repo / d / "package.json").read_text()).get("scripts", {}).get("test", "")
+    except OSError, ValueError, AttributeError:
+        test = ""
+    ok = isinstance(test, str) and test and not test.startswith(NO_TEST)
+    tool = lock[1] if lock else "npm"
+    evidence = f"{d}/package.json scripts.test"
+    check = _entry("known", f"{tool} test", evidence) if ok else _entry("unknown", "", f"{evidence}: none")
+    return install, check
+
+
+def _python(repo: Path, d: str) -> tuple[ProfileEntry, ProfileEntry]:
+    locked = (repo / d / "uv.lock").is_file()
+    install = (
+        _entry("known", "uv sync --locked", f"{d}/uv.lock") if locked else _entry("unknown", "", f"{d}: no uv.lock")
+    )
+    pytest = locked and "[tool.pytest" in (repo / d / "pyproject.toml").read_text(errors="replace")
+    evidence = f"{d}/pyproject.toml [tool.pytest]"
+    return install, _entry("known", "uv run pytest", evidence) if pytest else _entry("unknown", "", f"{evidence}: none")
+
+
+def package_entries(repo: Path) -> dict[str, ProfileEntry]:
+    """Install and check commands per tracked package manifest; an undetected command is unknown, never assumed."""
+    files = subprocess.run(  # noqa: S603 - fixed Git executable and argument vector
+        [resolve_git_executable(), "ls-files", "*package.json", "*pyproject.toml"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.splitlines()
+    entries: dict[str, ProfileEntry] = {}
+    for f in files:
+        path = PurePosixPath(f)
+        d = str(path.parent)
+        install, check = (_node if path.name == "package.json" else _python)(repo, d)
+        entries |= {f"install:{d}": install, f"check:{d}": check}
+    return entries
 
 
 def _entry(state: str, value: str, evidence: str) -> ProfileEntry:
@@ -145,6 +193,7 @@ def detect(repo: Path, gh: Provider, previous: Profile | None) -> Profile:
         PUSH: _entry("known", "yes" if r.can_push else "no", "gh repo view viewerPermission"),
         **ci_entries(workflows(repo)),
         HOOKS: _hook(repo),
+        **package_entries(repo),
         **rule_entries(gh.read_rules(r.repository, r.default_branch)),
     }
     for key, default in SETTINGS.items():

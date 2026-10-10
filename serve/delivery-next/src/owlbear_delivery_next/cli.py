@@ -1,4 +1,4 @@
-"""Commands: ``host`` starts Delivery, ``status`` reads the state; ``seed``, ``answer``, ``show`` for development."""
+"""Commands: ``setup``, ``host`` starts Delivery, ``status`` reads the state; ``seed``, ``answer``, ``show`` for dev."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-from owlbear_delivery_next import host, profile
+from owlbear_delivery_next import host, profile, setup
 from owlbear_delivery_next.models import (
     AnswerItem,
     Brief,
@@ -106,6 +106,9 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("host", help="start Delivery for this clone, or print the running host's URL")
     sub.add_parser("status", help="print every Change's status line and next action")
+    up = sub.add_parser("setup", help="check readiness, confirm the profile, register the host task and chat server")
+    up.add_argument("--yes", action="store_true", help="confirm the profile and consent to both tracked writes")
+    up.add_argument("--confirm", action="append", default=[], type=lambda v: tuple(v.split("=", 1)), help="KEY=VALUE")
     p = sub.add_parser("profile", help="detect the project profile; --confirm KEY=VALUE records the owner's answer")
     p.add_argument("--confirm", action="append", default=[], type=lambda v: tuple(v.split("=", 1)))
     s = sub.add_parser("seed", help="seed a pre-approved one-task Change and a minimal profile")
@@ -133,6 +136,8 @@ def main(argv: list[str] | None = None) -> int:
     a = parser.parse_args(argv)
     if a.command == "host":
         return host.serve(a.repo.resolve())
+    if a.command == "setup":
+        return setup.run(a.repo.resolve(), a.confirm, yes=a.yes)
     store = Store.open(a.repo.resolve())
     if a.command == "status":
         sys.stdout.write(show_status(store, datetime.now(UTC)) + "\n")

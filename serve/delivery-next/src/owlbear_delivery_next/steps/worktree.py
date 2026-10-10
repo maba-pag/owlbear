@@ -83,6 +83,12 @@ def installs(profile: Profile, scope: Sequence[str]) -> list[tuple[str, str]]:
     return found
 
 
+def checks(profile: Profile) -> list[tuple[str, str]]:
+    """Return ``(package, command)`` per known check entry of the profile; plans may name only these commands."""
+    found = ((k.removeprefix("check:"), e) for k, e in profile.entries.items() if k.startswith("check:"))
+    return sorted((p, e.value) for p, e in found if e.state == "known" and e.value)
+
+
 def observe(path: Path, target: str) -> Worktree:
     """Read the worktree's head, its base on *target*, uncommitted paths and paths changed since the base."""
     head = git(path, "rev-parse", "HEAD").strip()

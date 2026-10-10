@@ -94,6 +94,7 @@ class Brief(Record):
     version: int = 0
     approved_version: int | None = None
     approved_at: datetime | None = None
+    title: str = ""
     outcome: str = ""
     scope: list[str] = Field(default_factory=list)
     non_goals: list[str] = Field(default_factory=list)
@@ -301,6 +302,7 @@ class Change(Record):
 
     format: int = FORMAT
     slug: str
+    handle: str = ""  # host-issued short handle for chat tools (T2), e.g. c3
     profile_version: int = 0
     intent: Intent = Field(default_factory=Intent)
     brief: Brief = Field(default_factory=Brief)

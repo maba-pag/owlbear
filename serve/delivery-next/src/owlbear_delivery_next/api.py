@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import re
 import secrets
@@ -13,11 +14,26 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from owlbear_delivery_next import loop
-from owlbear_delivery_next.models import AnswerItem, BriefApproval, CheckResult, ConsentItem, Exit, IntentItem, Waiting
+from owlbear_delivery_next import loop, profile, tools
+from owlbear_delivery_next.models import (
+    AnswerItem,
+    BriefApproval,
+    Change,
+    CheckResult,
+    ConsentItem,
+    Criterion,
+    Exit,
+    IntentItem,
+    Names,
+    Outcome,
+    PersonCheck,
+    Profile,
+    StepKind,
+    Waiting,
+)
 from owlbear_delivery_next.status import status, unloadable
 from owlbear_delivery_next.steps import check
-from owlbear_delivery_next.store import StoreError
+from owlbear_delivery_next.store import LockHeldError, StoreError
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -25,11 +41,13 @@ if TYPE_CHECKING:
     from starlette.responses import Response
 
     from owlbear_delivery_next.host import Host
-    from owlbear_delivery_next.models import Change, InboxItem, Inputs
+    from owlbear_delivery_next.models import InboxItem, Inputs
+    from owlbear_delivery_next.status import Activity
     from owlbear_delivery_next.store import Store
 
 SLUG = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost"})
+T6 = "This is a recovery decision; make it in the Changes page"
 
 
 class Body(BaseModel):
@@ -44,6 +62,7 @@ class AnswerBody(Body):
     question: str = Field(max_length=16)
     option: str | None = Field(default=None, max_length=64)
     text: str = Field(default="", max_length=2000)
+    channel: Literal["status-view", "chat"] = "status-view"
 
 
 class CheckBody(Body):
@@ -88,6 +107,48 @@ def offer(c: Change, events: list[dict[str, Any]]) -> dict[str, Any] | None:
     return last and last | {"diff": f"{last['url']}/files"}
 
 
+def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, Any]:
+    """One Change's status line, next action, chat handle and open question; shared with the chat fallback."""
+    try:
+        c = store.read(slug)
+    except StoreError as exc:
+        s = unloadable(exc.stop(now))
+        return {"slug": slug, "line": s.line, "action": s.action, "actor": s.actor}
+    s = status(c, act, now)
+    out = {"slug": slug, "handle": c.handle, "step": c.step.kind, "line": s.line, "action": s.action, "actor": s.actor}
+    if q := loop.open_question(c):
+        options = [o.model_dump(include={"id", "label"}) for o in q.options]
+        where = "chat" if loop.ordinary(q) else "changes-page"
+        out["question"] = {"id": f"{c.handle or slug}.{q.id}", "text": q.text, "options": options, "answer_in": where}
+    return out
+
+
+def drafted(old: Change | None, d: tools.BriefDraft, slug: str, handle: str, prof: Profile) -> Change:
+    """The Change with its new brief draft version, waiting for the owner's approval; criteria keep their versions."""
+    names = Names(branch=f"owlbear/{slug}", target=profile.value(prof, profile.DEFAULT, "main"))
+    c = old or Change(slug=slug, handle=handle, profile_version=prof.version, names=names)
+    before = {k.id: k for k in c.brief.criteria}
+    criteria = []
+    for i, text in enumerate(d.criteria, 1):
+        prev = before.get(f"AC-{i}")
+        criteria.append(Criterion(id=f"AC-{i}", text=text, version=prev.version + (prev.text != text) if prev else 1))
+    v = c.brief.version + 1
+    fields = {"version": v, "title": d.title, "outcome": d.outcome, "scope": d.scope, "criteria": criteria}
+    c.brief = c.brief.model_copy(update=fields)
+    ids = [k.id for k in criteria]
+    c.checks = [PersonCheck(id=p.name, criteria=ids, steps=p.steps, expect=p.expect) for p in d.person_checks]
+    c.outcome = Outcome(
+        exit=Exit.PENDING, waiting=Waiting.CHAT, who="you", reason=f"approve brief v{v}", at=datetime.now(UTC)
+    )
+    return c
+
+
+def new_slug(title: str, taken: list[str]) -> str:
+    """A free slug from the title."""
+    base = "-".join(re.findall(r"[a-z0-9]+", title.lower()))[:40].strip("-") or "change"
+    return next(s for n in range(1, 1000) if (s := base if n == 1 else f"{base}-{n}") not in taken)
+
+
 def create_app(store: Store, token: str, host: Host) -> FastAPI:  # noqa: C901, PLR0915 - one closure per route
     """Return the host's app: the Changes page without data, and a token-guarded API under ``/api/next``."""
     app = FastAPI(title="OwlBear Delivery", docs_url=None, redoc_url=None, openapi_url=None)
@@ -112,20 +173,38 @@ def create_app(store: Store, token: str, host: Host) -> FastAPI:  # noqa: C901, 
         except StoreError as exc:
             raise HTTPException(409, str(exc)) from exc
 
-    def summary(slug: str) -> dict[str, Any]:
-        now = datetime.now(UTC)
-        try:
-            c = store.read(slug)
-        except StoreError as exc:
-            s = unloadable(exc.stop(now))
-            return {"slug": slug, "line": s.line, "action": s.action, "actor": s.actor}
-        s = status(c, host.activity(slug), now)
-        return {"slug": slug, "step": c.step.kind, "line": s.line, "action": s.action, "actor": s.actor}
+    def summary_of(slug: str) -> dict[str, Any]:
+        return summary(store, slug, host.activity(slug), datetime.now(UTC))
 
     def put(slug: str, item: InboxItem) -> dict[str, str]:
         store.put_inbox(slug, item)
         host.wake.set()
         return {"accepted": item.kind}
+
+    def save(body: object) -> tuple[int, dict[str, Any]]:
+        draft, errors = tools.parse(tools.BriefDraft, body)
+        errors = tools.check_brief(draft) if draft else errors
+        if draft is None or errors:
+            return 422, {"errors": errors}
+        handles = {}
+        for s in (slugs := store.slugs()):
+            with contextlib.suppress(StoreError):
+                handles[store.read(s).handle] = s
+        slug = handles.get(draft.change) if draft.change else new_slug(draft.title, slugs)
+        if slug is None:
+            return 422, {"errors": [f"change: {draft.change} is not a Change here - leave it empty for a new one"]}
+        number = max((int(h[1:]) for h in handles if h[1:].isdigit()), default=0) + 1
+        try:
+            with store.lock(slug) as lock:
+                old = store.read(slug) if draft.change else None
+                if old and (old.step.kind != StepKind.SHAPE or old.finished_at):
+                    return 409, {"errors": [f"change: {draft.change} is approved; ask for changes in the Changes page"]}
+                c = drafted(old, draft, slug, f"c{number}", store.read_profile() or Profile())
+                store.write(lock, c)
+        except (LockHeldError, StoreError) as exc:
+            return 409, {"errors": [f"change: {exc}; try again"]}
+        approve = f"Approve brief v{c.brief.version} of {c.handle} in the Changes page: {host.record.url}"
+        return 200, {"change": c.handle, "version": c.brief.version, "next": approve}
 
     @app.get("/", response_class=HTMLResponse)
     def index() -> str:
@@ -133,9 +212,18 @@ def create_app(store: Store, token: str, host: Host) -> FastAPI:  # noqa: C901, 
 
     router = APIRouter(prefix="/api/next", dependencies=[Depends(auth)])
 
+    @router.post("/briefs")
+    async def brief(request: Request) -> JSONResponse:
+        try:
+            body = await request.json()
+        except ValueError:
+            body = ""
+        code, out = save(body)
+        return JSONResponse(out, status_code=code)
+
     @router.get("/changes")
     def changes() -> list[dict[str, Any]]:
-        return [summary(slug) for slug in store.slugs()]
+        return [summary_of(slug) for slug in store.slugs()]
 
     @router.get("/changes/{slug}")
     def detail(slug: str) -> dict[str, Any]:
@@ -157,8 +245,13 @@ def create_app(store: Store, token: str, host: Host) -> FastAPI:  # noqa: C901, 
             }
             for p in c.checks
         ]
-        return summary(slug) | {
-            "brief": {"version": c.brief.version, "approved": c.brief.approved_version, "outcome": c.brief.outcome},
+        return summary_of(slug) | {
+            "brief": {
+                "version": c.brief.version,
+                "approved": c.brief.approved_version,
+                "title": c.brief.title,
+                "outcome": c.brief.outcome,
+            },
             "criteria": [k.model_dump() for k in c.brief.criteria],
             "plan": [t.model_dump() for t in c.plan.tasks] if c.plan else [],
             "question": q.model_dump(mode="json", include={"id", "text", "options"}) if q else None,
@@ -178,9 +271,12 @@ def create_app(store: Store, token: str, host: Host) -> FastAPI:  # noqa: C901, 
             raise HTTPException(409, f"question {body.question} is not open")
         if q.cause == loop.CONSENT:
             raise HTTPException(409, "consent to merge goes through merge-consent with the exact head")
+        if body.channel == "chat" and not loop.ordinary(q):
+            raise HTTPException(403, T6)
         if body.option is not None and body.option not in {o.id for o in q.options}:
             raise HTTPException(422, f"option {body.option} is not one of {[o.id for o in q.options]}")
-        return put(slug, AnswerItem(at=datetime.now(UTC), question=q.id, option=body.option, text=body.text))
+        item = AnswerItem(at=datetime.now(UTC), channel=body.channel, question=q.id, option=body.option, text=body.text)
+        return put(slug, item)
 
     @router.post("/changes/{slug}/check-results")
     def check_result(slug: str, body: CheckBody) -> dict[str, str]:
