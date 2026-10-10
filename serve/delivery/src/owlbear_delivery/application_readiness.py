@@ -160,6 +160,15 @@ if TYPE_CHECKING:
 _PUBLICATION_READ_FAILED: Literal["provider-unavailable"] = "provider-unavailable"
 _PROVIDER_PUBLICATION_STEPS = frozenset({WorkItemActionKind.MARK_READY, WorkItemActionKind.OBSERVE_ACCEPTANCE})
 _CONFLICT_PROMPT_KEEPS = frozenset({"change-paused", "worker-stall-wait"})
+_ENGINE_ACTION_CUSTODY = frozenset(
+    {
+        "engine-action-pending",
+        "engine-action-interrupted",
+        "engine-action-failed",
+        "engine-action-incomplete",
+        "engine-action-blocked",
+    }
+)
 
 
 def _blockless_grant_attempt_id(episode: RetryEpisodeSummary) -> str | None:
@@ -2041,31 +2050,15 @@ class _ReadinessViewsMixin:
                 "readiness; do not replace it or infer closure."
             )
         if reason in {"retry-transition-contained", "builder-transition-contained"}:
-            if reason == "retry-transition-contained":
-                diagnostic = (
-                    "The refused RetryDelivery remains in the existing work-item retry diagnostic; "
-                    "the claim owner remains active. Make no MCP calls and query no additional "
-                    "Delivery authority. Keep it read-only: preserve the claim, stage, any existing "
-                    "managed workspace, inspected files, and retry budget; do not retry, unblock, "
-                    "restart, release, edit, repair, or dispatch a replacement. Resume requires "
-                    "verified host worker-exclusion and settlement through a supported owner path; "
-                    "this inspection establishes neither."
-                )
-            else:
-                diagnostic = (
-                    "The refused transition remains in the existing work-item recovery view; "
-                    "the current claim owner remains on its card. Do not query for additional "
-                    "Delivery authority. The submitted block or return was refused because host "
-                    "worker-exclusion evidence is missing. Keep it read-only: preserve custody, "
-                    "stage, worktree, inspected files, and retry budget; do not answer, unblock, "
-                    "restart, release, edit, repair, or dispatch a replacement. Resume requires "
-                    "verified host exclusion and settlement through a supported recovery path; "
-                    "this diagnostic does not establish that such a capability is available."
-                )
+            refused = "retry" if reason == "retry-transition-contained" else "block or return"
             return (
-                f"/repair-delivery Inspect only Change {change_id} using the bounded offline "
-                f"`delivery-diagnose inspect --change-id {change_id}` operation. "
-                f"{diagnostic}"
+                f"/continue-change {change_id} A worker {refused} reached Delivery outside its settlement and "
+                "is retained while the claim stays held. In the chat that dispatched that worker, once its "
+                "dispatch has returned, settle it with settle_worker_invocation (disposition normal-return, the "
+                "launch identities, the retained transition unchanged as request). If that chat is gone or the "
+                "worker was stopped, run this prompt in a new chat and answer its stopped-run question; Delivery "
+                "releases the claim once no process uses the worktree. Do not retry, rewrite, or dispatch a "
+                "replacement while it is held."
             )
         if reason == "engine-action-interrupted":
             return (
@@ -2152,13 +2145,7 @@ class _ReadinessViewsMixin:
             for binding in frontier.bindings
         )
         contained = retry_contained or builder_contained
-        if contained or workspace_reason in {
-            "engine-action-pending",
-            "engine-action-interrupted",
-            "engine-action-failed",
-            "engine-action-incomplete",
-            "engine-action-blocked",
-        }:
+        if contained or workspace_reason in _ENGINE_ACTION_CUSTODY:
             status = "running" if not contained and workspace_reason == "engine-action-pending" else "blocked"
             reason = (
                 "retry-transition-contained"
@@ -2208,6 +2195,11 @@ class _ReadinessViewsMixin:
                 if reason == "target-commit-missing"
                 else WorkItemNextActor.AGENT
                 if finalization
+                or (
+                    reason in _ENGINE_ACTION_CUSTODY
+                    and card.scope is WorkItemScope.CHANGE_PUBLICATION
+                    and card.next_actor is WorkItemNextActor.NONE
+                )
                 else card.next_actor
             ),
             reason_code=reason,

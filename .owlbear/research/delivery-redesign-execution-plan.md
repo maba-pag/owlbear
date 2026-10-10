@@ -163,9 +163,10 @@ the user present and the explicit authorization described in that package.
 - **Commits** use the `commit-owned` helper and the format `type: description (#N03-B, copilot)`.
 - **Push and PR authority** (user decision [U-1](#7-decisions), 2026-10-02): for this programme,
   agents may push their own `redesign/*` branch, using `--force-with-lease` only on their own branch
-  after a rebase, and may create or update that branch's PR. They never push `dev` or `main`, never
-  merge and never change repository settings. This is a scoped exception to
+  after a rebase, and may create or update that branch's PR. This is a scoped exception to
   [workspace governance](../../share/skills/r-workspace-governance/SKILL.md)'s "never push".
+  Workspace governance otherwise still applies: no pushes to `dev` or `main`, no repository-setting
+  changes, and merging only when the user grants it for the task. That default is not part of U-1.
 - Scratch output goes to the lane worktree's `.owlbear/scratch/`.
 
 ### 1.3 Servers, live state and rehearsals

@@ -25,6 +25,7 @@ class AcquisitionStatus(StrEnum):
     CONTENT_NOT_READY = "content_not_ready"
     SELECTOR_NOT_FOUND = "selector_not_found"
     ACCESS_DENIED = "access_denied"
+    HTTP_ERROR = "http_error"
     REDIRECT_REJECTED = "redirect_rejected"
     AMBIGUOUS_FINAL_PAGE = "ambiguous_final_page"
     UNSUPPORTED_TARGET = "unsupported_target"

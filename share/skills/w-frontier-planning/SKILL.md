@@ -22,7 +22,8 @@ and reviewed boundary to remain unchanged.
 
 Do not infer or repair malformed launch identity. Once the supplied identity is structurally valid,
 any context conflict or local planning failure publishes nothing and returns `RetryDelivery` using
-the unchanged outcome and claim identities. A normal Planner return with this retry is settled by
+the unchanged outcome and claim identities, with a one-line `retry_reason` (at most 240 characters)
+beside it that Cockpit shows the user. A normal Planner return with this retry is settled by
 Orchestrator through `settle_worker_invocation` using the exact launch identity; Planner returns the
 `RetryDelivery` unchanged and never calls the settlement operation itself. Settlement records the
 completed attempt without publishing a plan; fresh acquisition owns any later attempt.
@@ -46,7 +47,8 @@ or public boundaries.
 `OUT-NNN.NN` in a legacy contract). Cover every criterion: at least one task's
 `acceptance_observations` entry cites its ID and the observable that proves it, for example
 `AC-002: the CLI exits 2 on an unknown flag`. For a criterion only a person can check, name that
-procedure so the Builder can ask the user to confirm it. Bind such evidence by acceptance ID and
+procedure so the Builder can ask the user to confirm it; keep that procedure within 512 characters,
+the limit Delivery enforces on it. Bind such evidence by acceptance ID and
 exact procedure, which the Builder matches against an answered request's `applies_to`; never name a
 request ID in a task, since only the Builder's own pause creates and cites it.
 

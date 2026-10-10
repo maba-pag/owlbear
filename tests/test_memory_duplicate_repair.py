@@ -214,8 +214,12 @@ def test_every_mutator_repairs_duplicates_before_its_own_change(tmp_path: Path, 
         "edit": partial(engine.edit, _TARGET_ID, {"content": "edited target"}, target.updated_at),
         "delete": partial(engine.delete, _TARGET_ID, target.updated_at),
         "purge": partial(engine.purge, min_age_days=0),
-        "record_assessment": partial(engine.record_assessment, _TARGET_ID, "outstanding", target.updated_at),
-        "record_factually_wrong": partial(engine.record_factually_wrong, _TARGET_ID, "task-1", target.updated_at),
+        "record_assessment": partial(
+            engine.record_assessment, _TARGET_ID, "outstanding", task_id="task-1", expected_revision=target.revision
+        ),
+        "record_factually_wrong": partial(
+            engine.record_factually_wrong, _TARGET_ID, "task-1", expected_revision=target.revision
+        ),
         "try_stale_transition": partial(engine.try_stale_transition, target),
         "rename_agent": partial(engine.rename_agent, "test-agent", "renamed-agent"),
         "delete_agent": partial(engine.delete_agent, "test-agent"),

@@ -31,7 +31,7 @@ from owlbear_delivery.portfolio_application import (
     PortfolioApplicationError,
 )
 from owlbear_delivery.publication_provider import PublicationProviderError
-from owlbear_delivery.recovery import DeliveryWorkerExclusionRequiredError
+from owlbear_delivery.recovery import DeliverySettlementRequiredError, DeliveryWorkerExclusionRequiredError
 from owlbear_delivery.runtime_transaction import (
     TransactionConflictError,
     TransactionManifestError,
@@ -117,6 +117,7 @@ def classify_delivery_failure(error: Exception) -> DeliveryFailureClassification
         error,
         (
             DeliveryWorkerExclusionRequiredError,
+            DeliverySettlementRequiredError,
             DeliveryChangeDispositionConflictError,
             DeliveryActionSelectionConflictError,
             DeliveryAcceptanceEvidenceError,

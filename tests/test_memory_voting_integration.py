@@ -13,6 +13,7 @@ Behavioral coverage:
 
 from __future__ import annotations
 
+from itertools import count
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 from uuid import UUID
@@ -20,6 +21,7 @@ from uuid import UUID
 import pytest
 from owlbear_memory import MemoryEngine, MemoryEntry, MemoryState, storage
 from owlbear_memory.engine import compute_score
+from owlbear_memory.models import ChallengeRecord
 
 # ---------------------------------------------------------------------------
 # Shared constants
@@ -30,6 +32,7 @@ _TS_APPROVED = "2026-01-01T00:00:00+00:00"
 _AGENT = "integration-test-agent"
 _TASK_A = "task-alpha"
 _TASK_B = "task-beta"
+_ASSESSMENT_TASK_IDS = count()
 
 # Fixed UUIDs for AC1/AC2 tests (100-series)
 _IDS_BULK = [f"550e8400-e29b-41d4-a716-4466554811{i:02d}" for i in range(22)]
@@ -66,12 +69,12 @@ def _make_approved_entry(  # noqa: PLR0913, PLR0917
     didnt_use_count: int = 0,
     scope_agents: list[str] | None = None,
     state: MemoryState = MemoryState.APPROVED,
-    contested_by_task: str | None = None,
+    challenge_task_ids: list[str] | None = None,
 ) -> MemoryEntry:
     agents = scope_agents if scope_agents is not None else [_AGENT]
     score = compute_score(confidence, outstanding_count, unremarkable_count)
     approved_at = _TS_APPROVED if state == MemoryState.APPROVED else None
-    return MemoryEntry(
+    entry = MemoryEntry(
         id=entry_id,
         title=title,
         content=f"Content for {title}.",
@@ -87,8 +90,12 @@ def _make_approved_entry(  # noqa: PLR0913, PLR0917
         unremarkable_count=unremarkable_count,
         didnt_use_count=didnt_use_count,
         score=score,
-        contested_by_task=contested_by_task,
     )
+    if challenge_task_ids:
+        entry.challenges = [
+            ChallengeRecord(task_id=task_id, revision=entry.revision, recorded_at=_TS) for task_id in challenge_task_ids
+        ]
+    return entry
 
 
 def _write_entry(directory: Path, entry: MemoryEntry) -> None:
@@ -105,6 +112,23 @@ def _make_ctx(engine: MemoryEngine) -> MagicMock:
 def _recall_titles(result: str) -> list[str]:
     """Extract title tokens from recall_memory output (## {title} headings)."""
     return [line[3:].strip() for line in result.splitlines() if line.startswith("## ")]
+
+
+def _record_assessment(engine: MemoryEngine, entry_id: str, bucket: str) -> MemoryEntry:
+    entry = engine.get_entry(entry_id)
+    result = engine.record_assessment(
+        entry_id,
+        bucket,
+        task_id=f"voting-assessment-{next(_ASSESSMENT_TASK_IDS)}",
+        expected_revision=entry.revision,
+    )
+    return result.entry
+
+
+def _record_factually_wrong(engine: MemoryEngine, entry_id: str, task_id: str) -> MemoryEntry:
+    entry = engine.get_entry(entry_id)
+    result = engine.record_factually_wrong(entry_id, task_id=task_id, expected_revision=entry.revision)
+    return result.entry
 
 
 # ---------------------------------------------------------------------------
@@ -221,11 +245,11 @@ class TestMemoryVotingLifecycle:
         engine = MemoryEngine(memory_dir=tmp_path)
 
         # 3 outstanding, 2 unremarkable
-        entry = engine.record_assessment(_ID_SCORE_A, "outstanding")
-        entry = engine.record_assessment(_ID_SCORE_A, "outstanding")
-        entry = engine.record_assessment(_ID_SCORE_A, "outstanding")
-        entry = engine.record_assessment(_ID_SCORE_A, "unremarkable")
-        entry = engine.record_assessment(_ID_SCORE_A, "unremarkable")
+        entry = _record_assessment(engine, _ID_SCORE_A, "outstanding")
+        entry = _record_assessment(engine, _ID_SCORE_A, "outstanding")
+        entry = _record_assessment(engine, _ID_SCORE_A, "outstanding")
+        entry = _record_assessment(engine, _ID_SCORE_A, "unremarkable")
+        entry = _record_assessment(engine, _ID_SCORE_A, "unremarkable")
 
         expected_score = 0.8 + 3 * 0.1 - 2 * 0.01
         assert entry.score == pytest.approx(expected_score, abs=1e-9)
@@ -236,10 +260,10 @@ class TestMemoryVotingLifecycle:
         _write_entry(tmp_path, entry)
         engine = MemoryEngine(memory_dir=tmp_path)
 
-        engine.record_assessment(_ID_SCORE_A, "outstanding")
-        engine.record_assessment(_ID_SCORE_A, "outstanding")
-        engine.record_assessment(_ID_SCORE_A, "unremarkable")
-        result = engine.record_assessment(_ID_SCORE_A, "didnt_use")
+        _record_assessment(engine, _ID_SCORE_A, "outstanding")
+        _record_assessment(engine, _ID_SCORE_A, "outstanding")
+        _record_assessment(engine, _ID_SCORE_A, "unremarkable")
+        result = _record_assessment(engine, _ID_SCORE_A, "didnt_use")
 
         assert result.outstanding_count == 2
         assert result.unremarkable_count == 1
@@ -252,11 +276,11 @@ class TestMemoryVotingLifecycle:
         engine = MemoryEngine(memory_dir=tmp_path)
 
         for _ in range(5):
-            engine.record_assessment(_ID_SCORE_A, "outstanding")
+            _record_assessment(engine, _ID_SCORE_A, "outstanding")
         for _ in range(3):
-            engine.record_assessment(_ID_SCORE_A, "unremarkable")
+            _record_assessment(engine, _ID_SCORE_A, "unremarkable")
         for _ in range(7):
-            engine.record_assessment(_ID_SCORE_A, "didnt_use")
+            _record_assessment(engine, _ID_SCORE_A, "didnt_use")
 
         result = engine.get_entry(_ID_SCORE_A)
         assert result.outstanding_count == 5
@@ -279,8 +303,8 @@ class TestMemoryVotingLifecycle:
         _write_entry(tmp_path, entry_b)
         engine = MemoryEngine(memory_dir=tmp_path)
 
-        engine.record_assessment(_ID_SCORE_A, "outstanding")
-        engine.record_assessment(_ID_SCORE_A, "outstanding")
+        _record_assessment(engine, _ID_SCORE_A, "outstanding")
+        _record_assessment(engine, _ID_SCORE_A, "outstanding")
 
         ctx = _make_ctx(engine)
         result = await recall_memory(ctx, agent=_AGENT)
@@ -299,7 +323,7 @@ class TestMemoryVotingLifecycle:
         _write_entry(tmp_path, entry)
         engine = MemoryEngine(memory_dir=tmp_path)
 
-        engine.record_factually_wrong(_ID_SCORE_C, task_id=_TASK_A)
+        _record_factually_wrong(engine, _ID_SCORE_C, _TASK_A)
 
         ctx = _make_ctx(engine)
         result = await recall_memory(ctx, agent=_AGENT)
@@ -424,6 +448,50 @@ class TestMemoryVotingLifecycle:
         assert "RegularLow 00" not in titles
         assert "RegularLow 01" not in titles
 
+    @pytest.mark.asyncio
+    async def test_recall_id_order_matches_source_head_selection(self, tmp_path: Path) -> None:
+        """Pin selection and ordering for entries spanning all recall states and scores."""
+        from owlbear_memory_mcp.tools import recall_memory  # noqa: PLC0415
+
+        specifications = [
+            ("550e8400-e29b-41d4-a716-446655486001", "Explore approved", MemoryState.APPROVED, 0.70, 0, 0),
+            ("550e8400-e29b-41d4-a716-446655486002", "Explore contested", MemoryState.CONTESTED, 0.70, 0, 0),
+            ("550e8400-e29b-41d4-a716-446655486003", "Challenge curated", MemoryState.CURATED, 0.80, 0, 1),
+            ("550e8400-e29b-41d4-a716-446655486004", "Challenge contested", MemoryState.CONTESTED, 0.75, 1, 1),
+            ("550e8400-e29b-41d4-a716-446655486005", "Regular approved high", MemoryState.APPROVED, 0.95, 3, 0),
+            ("550e8400-e29b-41d4-a716-446655486006", "Regular curated high", MemoryState.CURATED, 0.90, 3, 0),
+            ("550e8400-e29b-41d4-a716-446655486007", "Regular contested mid", MemoryState.CONTESTED, 0.84, 4, 0),
+            ("550e8400-e29b-41d4-a716-446655486008", "Regular approved top", MemoryState.APPROVED, 0.80, 5, 0),
+        ]
+        for entry_id, title, state, confidence, outstanding, didnt_use in specifications:
+            entry = _make_approved_entry(
+                entry_id,
+                title,
+                confidence=confidence,
+                outstanding_count=outstanding,
+                didnt_use_count=didnt_use,
+                state=state,
+                challenge_task_ids=["task-order"] if state == MemoryState.CONTESTED else None,
+            )
+            _write_entry(tmp_path, entry)
+
+        engine = MemoryEngine(memory_dir=tmp_path)
+        result = await recall_memory(_make_ctx(engine), agent=_AGENT, limit=6)
+        actual_ids = [
+            line.removeprefix("Entry ID: `").removesuffix("`")
+            for line in result.splitlines()
+            if line.startswith("Entry ID: ")
+        ]
+
+        assert actual_ids == [
+            "550e8400-e29b-41d4-a716-446655486008",
+            "550e8400-e29b-41d4-a716-446655486005",
+            "550e8400-e29b-41d4-a716-446655486001",
+            "550e8400-e29b-41d4-a716-446655486004",
+            "550e8400-e29b-41d4-a716-446655486003",
+            "550e8400-e29b-41d4-a716-446655486002",
+        ]
+
 
 # ---------------------------------------------------------------------------
 # TestMemoryVotingStateTransitions — AC2
@@ -444,10 +512,11 @@ class TestMemoryVotingStateTransitions:
         _write_entry(tmp_path, entry)
         engine = MemoryEngine(memory_dir=tmp_path)
 
-        result = engine.record_factually_wrong(_ID_TRANS_A, task_id=_TASK_A)
+        result = _record_factually_wrong(engine, _ID_TRANS_A, _TASK_A)
 
         assert result.state == MemoryState.CONTESTED
-        assert result.contested_by_task == _TASK_A
+        assert [challenge.task_id for challenge in result.challenges] == [_TASK_A]
+        assert result.challenges[0].revision == result.revision
 
     @pytest.mark.asyncio
     async def test_contested_entry_included_in_recall(self, tmp_path: Path) -> None:
@@ -458,7 +527,7 @@ class TestMemoryVotingStateTransitions:
             _ID_TRANS_A,
             "In Recall When Contested",
             state=MemoryState.CONTESTED,
-            contested_by_task=_TASK_A,
+            challenge_task_ids=[_TASK_A],
         )
         _write_entry(tmp_path, entry)
         engine = MemoryEngine(memory_dir=tmp_path)
@@ -475,10 +544,11 @@ class TestMemoryVotingStateTransitions:
         _write_entry(tmp_path, entry)
         engine = MemoryEngine(memory_dir=tmp_path)
 
-        engine.record_factually_wrong(_ID_TRANS_A, task_id=_TASK_A)
-        result = engine.record_factually_wrong(_ID_TRANS_A, task_id=_TASK_B)
+        _record_factually_wrong(engine, _ID_TRANS_A, _TASK_A)
+        result = _record_factually_wrong(engine, _ID_TRANS_A, _TASK_B)
 
         assert result.state == MemoryState.DISPUTED
+        assert [challenge.task_id for challenge in result.challenges] == [_TASK_A, _TASK_B]
 
     @pytest.mark.asyncio
     async def test_disputed_entry_excluded_from_recall(self, tmp_path: Path) -> None:
@@ -489,7 +559,7 @@ class TestMemoryVotingStateTransitions:
             _ID_TRANS_A,
             "Excluded When Disputed",
             state=MemoryState.DISPUTED,
-            contested_by_task=_TASK_B,
+            challenge_task_ids=[_TASK_A, _TASK_B],
         )
         _write_entry(tmp_path, entry)
         engine = MemoryEngine(memory_dir=tmp_path)
@@ -506,10 +576,10 @@ class TestMemoryVotingStateTransitions:
         _write_entry(tmp_path, entry)
         engine = MemoryEngine(memory_dir=tmp_path)
 
-        after_first = engine.record_factually_wrong(_ID_TRANS_A, task_id=_TASK_A)
+        after_first = _record_factually_wrong(engine, _ID_TRANS_A, _TASK_A)
         assert after_first.state == MemoryState.CONTESTED
 
-        after_second = engine.record_factually_wrong(_ID_TRANS_A, task_id=_TASK_B)
+        after_second = _record_factually_wrong(engine, _ID_TRANS_A, _TASK_B)
         assert after_second.state == MemoryState.DISPUTED
 
     def test_stale_transition_via_check_slot_efficiency_threshold(self, tmp_path: Path) -> None:
@@ -522,7 +592,7 @@ class TestMemoryVotingStateTransitions:
         engine = MemoryEngine(memory_dir=tmp_path)
 
         for _ in range(51):
-            result = engine.record_assessment(_ID_STALE_A, "didnt_use")
+            result = _record_assessment(engine, _ID_STALE_A, "didnt_use")
 
         assert result.state == MemoryState.STALE
 
@@ -555,7 +625,7 @@ class TestMemoryVotingStateTransitions:
         engine = MemoryEngine(memory_dir=tmp_path)
 
         for _ in range(50):
-            result = engine.record_assessment(_ID_STALE_A, "didnt_use")
+            result = _record_assessment(engine, _ID_STALE_A, "didnt_use")
 
         assert result.state == MemoryState.APPROVED
 
@@ -578,13 +648,13 @@ class TestMemoryVotingStateTransitions:
         engine = MemoryEngine(memory_dir=tmp_path)
 
         # Entry A → contested
-        engine.record_factually_wrong(_ID_TRANS_A, task_id=_TASK_A)
+        _record_factually_wrong(engine, _ID_TRANS_A, _TASK_A)
         # Entry B → contested → disputed
-        engine.record_factually_wrong(_ID_TRANS_B, task_id=_TASK_A)
-        engine.record_factually_wrong(_ID_TRANS_B, task_id=_TASK_B)
+        _record_factually_wrong(engine, _ID_TRANS_B, _TASK_A)
+        _record_factually_wrong(engine, _ID_TRANS_B, _TASK_B)
         # Entry C → stale
         for _ in range(51):
-            engine.record_assessment(_ID_STALE_A, "didnt_use")
+            _record_assessment(engine, _ID_STALE_A, "didnt_use")
 
         ctx = _make_ctx(engine)
         result = await recall_memory(ctx, agent=_AGENT)

@@ -107,71 +107,65 @@ check below because it also depends on the selected browser and its allowlist.
 
 ### Browser readiness
 
-`MCP: List Servers` confirms that the stdio processes started; it does not prove that the selected
-browser launched or that a target is authenticated. On macOS, an unset `BROWSER_MODE` selects
-managed Edge and its fixed OwlBear profile; elsewhere it selects Chromium. The browser launches on
-the first action call, so `browser_status` initially reports `not-launched`. After the first action
-it reports whether a live browser is available, not whether the selected target is authenticated.
-Confirm stable Microsoft Edge is installed before starting the Browser MCP on macOS. To enable and
-verify the supported alpha path:
+Check MCP startup, browser capability, and Knowledge ingestion separately. A running MCP process
+does not prove that the selected browser launched, that a target is authenticated, or that a
+Browser-to-Knowledge round is ready.
 
-1. If you use Chromium mode or Cockpit's browser-backed tests, install Playwright Chromium from the
-  consumer project root:
+1. **MCP process startup:** Run **MCP: List Servers** and confirm `owlbear-browser` and
+   `owlbear-knowledge` show `running`.
+
+   **Expected result:** both stdio processes are available; this confirms startup only.
+2. **Browser readiness:** On macOS, an unset `BROWSER_MODE` selects managed Edge and its fixed
+   OwlBear profile; elsewhere it selects Chromium. Confirm stable Microsoft Edge is installed before
+   starting the Browser MCP on macOS. For Chromium mode or Cockpit's browser-backed tests, install
+   Chromium for the sibling OwlBear checkout from the consumer project root:
 
   ```shell
   uv run --project ../owlbear playwright install chromium
   ```
 
-  **Expected result:** the Playwright Chromium executable is available. This download is not
-  required for macOS managed Edge mode.
-2. If selecting Chromium explicitly on macOS, set `BROWSER_MODE` to `chromium` in the local
-  `owlbear-browser` server environment. `PLAYWRIGHT_USER_DATA_DIR` only affects Chromium; managed
-  Edge always uses `~/.owlbear/edge-profile` and ignores that override. Use an absolute path for a
-  Chromium profile override.
+   This download is not required for macOS managed Edge mode. To select Chromium explicitly on
+   macOS, set `BROWSER_MODE` to `chromium` in the local `owlbear-browser` server environment; an
+   invalid mode is reported as `invalid-mode` rather than silently falling back to another browser.
+   `PLAYWRIGHT_USER_DATA_DIR` only affects Chromium and should be an absolute path; managed Edge
+   always uses `~/.owlbear/edge-profile` and ignores that override.
 
-  **Expected result:** the MCP server uses the selected mode; an invalid mode is reported as
-  `invalid-mode` rather than silently falling back to another browser.
-3. Review the `env` member on the `owlbear-browser` entry in `.vscode/mcp.json`. Fresh setup seeds
-  wildcard testing access; replace it with exact hostnames for normal or production use:
+   Check `BROWSER_ALLOWED_DOMAINS` in the `owlbear-browser` entry of `.vscode/mcp.json`. The fresh
+   seed uses `"*"` for local testing across public sites; use exact hostnames for normal or
+   production use.
 
-  ```json
-  {
-    "env": {
-      "BROWSER_ALLOWED_DOMAINS": "example.com,docs.example.com"
-    }
-  }
-  ```
+   Restart the `owlbear-browser` MCP server and call `browser_status`; it reports `not-launched`
+   before any browser action. The first `acquire` or `navigate` call against an allowed URL launches
+   the selected visible browser; complete the organization's login flow manually if needed.
 
-  **Expected result:** requests are limited to the exact hostnames you named. Exact entries also
-  explicitly permit that hostname's private, loopback, or link-local DNS results; reserved and
-  unspecified addresses are always rejected. Wildcard mode does not grant private-address access.
-4. Restart the `owlbear-browser` MCP server and call `browser_status`; it should report
-  `not-launched` before any browser action. Then try `acquire` or `navigate` against an allowed URL.
-  This first action launches the selected visible browser; complete the organization's login flow
-  manually if needed.
+   **Expected result:** `acquire` on an allowed URL returns rendered content or a structured
+   acquisition result. `browser_status` reports `ready` only while a live browser session is
+   available; it does not prove sign-in or authenticated access. Exact-host entries explicitly
+   permit private, loopback, and link-local DNS results for that hostname; wildcard mode does not.
+   Reserved and unspecified addresses are always rejected. The current SSRF preflight does not
+   fully prevent DNS rebinding or an allowlisted server redirecting to a private address; these
+   are accepted limits, so keep the allowlist narrow. See the
+   [Browser MCP guide](../serve/browser-mcp/README.md) for the full policy.
+3. **Managed SSO readiness:** On macOS, the default is a visible managed Edge session using the
+   fixed `~/.owlbear/edge-profile`; `PLAYWRIGHT_USER_DATA_DIR` and `SSO_EXTENSION_PATH` do not
+   configure managed Edge. Call an allowed `navigate` or `acquire` action to launch the browser,
+   then verify one permitted target site with the organization's normal login flow. Chromium mode
+   uses a separate profile and can load only an explicitly configured extension directory. A ready
+   browser or loaded extension is not proof of tenant authentication, MFA, Conditional Access, or
+   device compliance. Do not collect cookies or tokens, weaken enterprise policy, or claim SSO
+   support from MCP startup.
+4. **Knowledge ingestion readiness:** Register an approved browser source with
+   `register_knowledge_source` as `kind: "url_list"` and `fetch_method: "browser"`. Call
+   `list_knowledge_sources` to get its `source_id` and registered `urls`; acquire each URL and
+   submit the captures together in one bound `knowledge_ingest` call for that source. Call
+   `list_knowledge_sources` again to check its health.
 
-  **Expected result:** the tool returns page content or its typed acquisition result. `browser_status`
-  reports `ready` only when a live browser session is available; it does not prove sign-in or
-  authenticated access. See the [Browser MCP guide](../serve/browser-mcp/README.md) for the full
-  boundary and limitations.
+   **Expected result:** a fully successful round reports `ok`. See the
+   [Knowledge operations guide](../share/skills/h-knowledge-ops/SKILL.md) for the source and
+   capture contract, including other health outcomes.
 
-- **Managed SSO readiness:** Treat managed SSO as a separate readiness check. The launcher can load an extension directory
-- **Managed SSO readiness:** On macOS, the default is a visible managed Edge session using the fixed
-  `~/.owlbear/edge-profile`; `PLAYWRIGHT_USER_DATA_DIR` and `SSO_EXTENSION_PATH` do not configure
-  managed Edge. Call an allowed `navigate` or `acquire` action to launch the browser, then verify one
-  permitted target site with the organization's normal login flow. Chromium mode uses a separate
-  profile and can load only an explicitly configured extension directory. A ready browser or loaded
-  extension is not proof of tenant authentication, MFA, Conditional Access, or device compliance.
-  Do not collect cookies or tokens, weaken enterprise policy, or claim SSO support from MCP startup.
-
-- **Knowledge ingestion readiness:** Treat Knowledge ingestion as a separate, currently agent-mediated check. After inspecting a
-  successful `acquire` result, call `knowledge_ingest` with the captured text, an intentional
-  scope, and an optional `source_url`. Direct ingestion creates or reuses a non-refreshable inline
-  source for that scope; `source_url` supplies document identity but does not attach the capture to
-  a registered browser source. Registered `authenticated_web` refresh is not a working end-to-end
-  Browser-to-Knowledge path in the current Knowledge MCP process. Use the
-  [Knowledge operations guide](../share/skills/h-knowledge-ops/SKILL.md) for the current result
-  and limitation contract.
+See the [Browser-to-Knowledge vertical test](../tests/test_browser_knowledge_vertical.py) for the
+exercised end-to-end workflow.
 
 If a customization root is missing, inspect `.vscode/settings.json` and compare its relative
 OwlBear path with the location of the checkout. If a server is missing, inspect `.vscode/mcp.json`,

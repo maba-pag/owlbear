@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
+from owlbear_memory.engine import MemoryEngine
 from owlbear_memory.errors import ConcurrencyError, NotFoundError, TransitionError
-from owlbear_memory.models import MemoryCategory, MemoryEntry, MemoryState
+from owlbear_memory.models import ChallengeRecord, MemoryCategory, MemoryEntry, MemoryState
 
 # Mined from #1670: memory route payloads, forwarding, state transitions, and errors.
 
@@ -46,6 +48,26 @@ def _make_entry(
     )
 
 
+def _create_approved_entry(engine: MemoryEngine, title: str) -> MemoryEntry:
+    pending = engine.save(
+        title=title,
+        content="Some memory content.",
+        categories=[MemoryCategory.DOMAIN_KNOWLEDGE],
+        confidence=0.9,
+        source_agent="test-agent",
+        scope_agents=["builder"],
+    )
+    curated = engine.edit(pending.id, {"scope_agents": ["builder"]}, expected_updated_at=pending.updated_at)
+    return engine.approve(curated.id, expected_updated_at=curated.updated_at)
+
+
+def _create_challenged_entry(engine: MemoryEngine, title: str, task_ids: list[str]) -> MemoryEntry:
+    entry = _create_approved_entry(engine, title)
+    for task_id in task_ids:
+        entry = engine.record_factually_wrong(entry.id, task_id=task_id, expected_revision=entry.revision).entry
+    return entry
+
+
 def _operator_projection_fields() -> set[str]:
     return {
         "id",
@@ -61,7 +83,8 @@ def _operator_projection_fields() -> set[str]:
         "created_at",
         "updated_at",
         "approved_at",
-        "contested_by_task",
+        "revision",
+        "challenges",
     }
 
 
@@ -73,8 +96,6 @@ def _operator_projection_fields() -> set[str]:
 @pytest.fixture
 def mock_engine() -> MagicMock:
     """Mock MemoryEngine with default empty entries."""
-    from owlbear_memory.engine import MemoryEngine  # noqa: PLC0415
-
     engine = MagicMock(spec=MemoryEngine)
     engine.get_entries.return_value = []
     engine.parse_errors = 0
@@ -92,6 +113,22 @@ def client(mock_engine: MagicMock):
     app.dependency_overrides[get_memory_engine] = lambda: mock_engine
     try:
         yield TestClient(app)
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def real_engine_client(tmp_path: Path):
+    """FastAPI TestClient backed by a MemoryEngine using temporary storage."""
+    from fastapi.testclient import TestClient  # noqa: PLC0415
+
+    from owlbear_cockpit.deps import get_memory_engine  # noqa: PLC0415
+    from owlbear_cockpit.main import app  # noqa: PLC0415
+
+    engine = MemoryEngine(memory_dir=tmp_path)
+    app.dependency_overrides[get_memory_engine] = lambda: engine
+    try:
+        yield TestClient(app), engine
     finally:
         app.dependency_overrides.clear()
 
@@ -153,6 +190,17 @@ class TestGetMemories:
         assert "unremarkable_count" not in item
         assert "didnt_use_count" not in item
 
+    def test_list_entry_includes_revision_and_challenges(self, client: TestClient, mock_engine: MagicMock) -> None:
+        entry = _make_entry(state=MemoryState.CONTESTED)
+        challenge = ChallengeRecord(task_id="task-alpha", revision=entry.revision, recorded_at=_NOW)
+        entry = entry.model_copy(update={"challenges": [challenge]})
+        mock_engine.get_entries.return_value = [entry]
+
+        item = client.get("/api/memories").json()["entries"][0]
+
+        assert item["revision"] == entry.revision
+        assert item["challenges"] == [challenge.model_dump()]
+
     def test_list_entry_field_values_match_engine_output(self, client: TestClient, mock_engine: MagicMock) -> None:
         """Field values in the response entry match the MemoryEntry from the engine."""
         entry = _make_entry(state=MemoryState.CURATED)
@@ -211,6 +259,58 @@ class TestGetMemories:
         body = response.json()
         assert body["entries"] == []
         assert body["parse_errors"] == 0
+
+
+class TestCockpitChallengeRoutes:
+    """Challenge projection and lifecycle behavior through Cockpit's route boundary."""
+
+    def test_edit_preserves_challenge_revision_and_returns_new_revision(self, real_engine_client) -> None:
+        client, engine = real_engine_client
+        contested = _create_challenged_entry(engine, "Contested memory", ["task-edit"])
+        original_revision = contested.revision
+        original_challenges = [challenge.model_dump() for challenge in contested.challenges]
+
+        response = client.post(
+            f"/api/memories/{contested.id}/edit",
+            json={"expected_updated_at": contested.updated_at, "title": "Edited memory"},
+        )
+
+        assert response.status_code == 200
+        entry = response.json()["entry"]
+        assert set(entry) == _operator_projection_fields()
+        assert entry["revision"] != original_revision
+        assert entry["challenges"] == original_challenges
+        assert entry["challenges"][0]["revision"] == original_revision
+
+    def test_delete_persists_disputed_tombstone_with_challenges(self, real_engine_client, tmp_path: Path) -> None:
+        client, engine = real_engine_client
+        disputed = _create_challenged_entry(engine, "Disputed memory", ["task-delete-a", "task-delete-b"])
+
+        response = client.post(
+            f"/api/memories/{disputed.id}/delete",
+            json={"expected_updated_at": disputed.updated_at},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"success": True}
+        tombstone = MemoryEngine(memory_dir=tmp_path).get_entry(disputed.id)
+        assert tombstone.state == MemoryState.DELETED
+        assert tombstone.challenges == disputed.challenges
+
+    def test_resolve_returns_approved_entry_with_no_challenges(self, real_engine_client) -> None:
+        client, engine = real_engine_client
+        contested = _create_challenged_entry(engine, "Contested memory", ["task-resolve"])
+
+        response = client.post(
+            f"/api/memories/{contested.id}/resolve",
+            json={"expected_updated_at": contested.updated_at},
+        )
+
+        assert response.status_code == 200
+        entry = response.json()["entry"]
+        assert set(entry) == _operator_projection_fields()
+        assert entry["state"] == "approved"
+        assert entry["challenges"] == []
 
 
 # ---------------------------------------------------------------------------

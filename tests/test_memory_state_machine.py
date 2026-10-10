@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 from owlbear_memory import MemoryEngine, MemoryEntry, storage
 from owlbear_memory.errors import ConcurrencyError, TransitionError
-from owlbear_memory.models import MemoryState
+from owlbear_memory.models import ChallengeRecord, MemoryState
 
 # Mined from #1840: contested, disputed, and stale state behavior.
 
@@ -454,17 +454,48 @@ class TestEditDeleteNewStates:
         assert result.title == "Updated"
         assert result.state == MemoryState.STALE
 
+    def test_edit_contested_preserves_challenges_with_original_revision(self, tmp_path: Path) -> None:
+        entry = _make_existing_entry(_ID_CONTESTED, "contested")
+        challenge = ChallengeRecord(task_id="task-1", revision=entry.revision, recorded_at=_TS)
+        entry = entry.model_copy(update={"challenges": [challenge]})
+        _write_existing_entry(tmp_path, entry)
+        engine = MemoryEngine(memory_dir=tmp_path)
+
+        result = engine.edit(_ID_CONTESTED, {"title": "Updated"}, expected_updated_at=_TS)
+
+        assert result.challenges == [challenge]
+        assert result.revision != challenge.revision
+
+    def test_delete_disputed_keeps_challenges_on_tombstone(self, tmp_path: Path) -> None:
+        entry = _make_existing_entry(_ID_DISPUTED, "disputed")
+        challenges = [
+            ChallengeRecord(task_id="task-1", revision=entry.revision, recorded_at=_TS),
+            ChallengeRecord(task_id="task-2", revision=entry.revision, recorded_at=_TS),
+        ]
+        entry = entry.model_copy(update={"challenges": challenges})
+        _write_existing_entry(tmp_path, entry)
+        engine = MemoryEngine(memory_dir=tmp_path)
+
+        result = engine.delete(_ID_DISPUTED, expected_updated_at=_TS)
+        tombstone = storage.read_entry(tmp_path / f"{_ID_DISPUTED}.md")
+
+        assert result.state == MemoryState.DELETED
+        assert result.challenges == challenges
+        assert tombstone is not None
+        assert tombstone.challenges == challenges
+
     def test_resolve_stale_clears_provenance_and_non_use_count(self, tmp_path: Path) -> None:
         """resolve() approves stale entries with a fresh non-use window."""
         entry = _make_existing_entry(_ID_STALE, "stale")
-        entry = entry.model_copy(update={"didnt_use_count": 5, "contested_by_task": "task-1"})
+        challenge = ChallengeRecord(task_id="task-1", revision=entry.revision, recorded_at=_TS)
+        entry = entry.model_copy(update={"didnt_use_count": 5, "challenges": [challenge]})
         _write_existing_entry(tmp_path, entry)
         engine = MemoryEngine(memory_dir=tmp_path)
 
         result = engine.resolve(_ID_STALE, expected_updated_at=_TS)
 
         assert result.state == MemoryState.APPROVED
-        assert result.contested_by_task is None
+        assert result.challenges == []
         assert result.didnt_use_count == 0
 
     def test_delete_contested_is_soft_delete(self, tmp_path: Path) -> None:

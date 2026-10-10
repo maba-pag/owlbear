@@ -14,7 +14,8 @@ const INITIAL_ENTRY = {
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
   approved_at: "2026-01-01T00:00:00Z",
-  contested_by_task: null,
+  revision: "0123456789abcdef",
+  challenges: [],
 };
 
 const CURRENT_ENTRY = {

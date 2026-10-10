@@ -27,7 +27,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from owlbear_knowledge.protocols.common import BoundaryModel, Metadata
 from owlbear_knowledge.protocols.content import ContentIngestResult, ContentPurgeResult
@@ -49,9 +49,24 @@ class IngestRequest(BoundaryModel):
     """
 
     source_id: str
-    documents: tuple[IngestDocument, ...] = Field(min_length=1)
+    documents: tuple[IngestDocument, ...] = Field(default_factory=tuple)
+    acquisition_failures: tuple[IngestAcquisitionFailure, ...] = Field(default_factory=tuple)
     enrich: bool = True
     metadata: Metadata = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _require_documents_or_failures(self) -> IngestRequest:
+        if not self.documents and not self.acquisition_failures:
+            msg = "At least one document or acquisition failure is required"
+            raise ValueError(msg)
+        return self
+
+
+class IngestAcquisitionFailure(BoundaryModel):
+    """One typed source-item failure that occurred before document processing."""
+
+    uri: str
+    failure: KnowledgeFailure
 
 
 class IngestDocument(BoundaryModel):

@@ -4,6 +4,27 @@
 
 External repos and resources studied during OwlBear development.
 
+## Delivery Liveness-First Rebuild and Copilot Agent Platform
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| VS Code 1.141 release notes | <https://code.visualstudio.com/updates/v1_141> | Copilot harness on the Agent Host, built on the Copilot SDK, gradually becoming the default | [rebuild research](../research/delivery-liveness-first-rebuild.md) | 2026-10-09 |
+| VS Code agent harness guide | <https://code.visualstudio.com/docs/agents/run/agent-harnesses> | Copilot harness recommended for day-to-day work; Local is the extension-host workflow; worktree isolation | [rebuild research](../research/delivery-liveness-first-rebuild.md) | 2026-10-09 |
+| VS Code Agent Host | <https://code.visualstudio.com/docs/agents/concepts/agent-host> | Session lifetime, MCP sources, harness-specific hooks | [rebuild research](../research/delivery-liveness-first-rebuild.md) | 2026-10-09 |
+| VS Code prompt files | <https://code.visualstudio.com/docs/agent-customization/prompt-files> | Prompt files deprecated for Agent Host; Local agent to be removed | [rebuild research](../research/delivery-liveness-first-rebuild.md) | 2026-10-09 |
+| VS Code customization migration | <https://code.visualstudio.com/docs/agent-customization/migrate-customizations> | Local-only location settings, prompt-to-skill conversion, no hook or tool-set migration | [rebuild research](../research/delivery-liveness-first-rebuild.md) | 2026-10-09 |
+| VS Code custom agents | <https://code.visualstudio.com/docs/agent-customization/custom-agents> | Agent locations per harness; agent `hooks:` run only in Local | [rebuild research](../research/delivery-liveness-first-rebuild.md) | 2026-10-09 |
+| GitHub Copilot SDK | <https://github.com/github/copilot-sdk> | Generally available SDK over the Copilot CLI runtime, Python package, custom agents and tools | [rebuild research](../research/delivery-liveness-first-rebuild.md) | 2026-10-09 |
+| GitHub Copilot in VS Code, September 2026 | <https://github.blog/changelog/2026-10-01-github-copilot-in-vs-code-september-2026-releases> | PR creation from sessions, agent merge, automations, attention badges | [rebuild research](../research/delivery-liveness-first-rebuild.md) | 2026-10-09 |
+| Dynamic workflows changelog | <https://github.blog/changelog/2026-10-01-dynamic-workflows-in-copilot-cli-and-the-copilot-app> | Code-defined multi-agent orchestration in Copilot CLI, the Copilot app and the SDK | [rebuild research](../research/delivery-liveness-first-rebuild.md) | 2026-10-09 |
+| Dynamic workflows concept | <https://docs.github.com/copilot/concepts/agents/dynamic-workflows> | Structured results, pause/resume, limits, availability, permissions | [rebuild research](../research/delivery-liveness-first-rebuild.md) | 2026-10-09 |
+| Using dynamic workflows | <https://docs.github.com/copilot/how-tos/use-copilot-agents/use-dynamic-workflows> | Extension-based definition, CLI runs, sharing, resume | [rebuild research](../research/delivery-liveness-first-rebuild.md) | 2026-10-09 |
+| Anthropic: Writing effective tools for agents | <https://www.anthropic.com/engineering/writing-tools-for-agents> | Tool selection, consolidation, semantic identifiers, parameter naming, actionable errors, evaluation-driven design | [tool-surface audit](../research/delivery-tool-surface-audit.md) | 2026-10-10 |
+| GitHub supported models per client | <https://docs.github.com/en/copilot/reference/ai-models/supported-models> | First-party Copilot client list | [rebuild research](../research/delivery-liveness-first-rebuild.md) | 2026-10-10 |
+| T3 Code | <https://github.com/pingdotgg/t3code> | Open-source agent control surface; supported providers; maturity | [rebuild research](../research/delivery-liveness-first-rebuild.md) | 2026-10-10 |
+| Copilot CLI ACP server | <https://docs.github.com/en/copilot/reference/copilot-cli-reference/acp-server> | GitHub-documented route for custom front-ends to drive Copilot | [rebuild research](../research/delivery-liveness-first-rebuild.md) | 2026-10-10 |
+| OpenCode providers | <https://opencode.ai/docs/providers/> | Third-party GitHub Copilot provider via device login | [rebuild research](../research/delivery-liveness-first-rebuild.md) | 2026-10-10 |
+
 ## OwlBear Distribution Under the Agent Host
 
 | Source | URL | What | Where Used | Date |

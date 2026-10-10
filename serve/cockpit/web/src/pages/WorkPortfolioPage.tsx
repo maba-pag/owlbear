@@ -324,14 +324,17 @@ function SelectedWorkItemDetail({
   onChanged,
   onClose,
   continuationPrompt,
+  onAbandoned,
 }: {
   identity: WorkItemIdentity;
   onChanged: () => void;
   onClose: () => void;
   continuationPrompt: string | null;
+  onAbandoned: (changeId: string, title: string) => void;
 }) {
   const selectedDetail = useWorkItemDetail(identity, onChanged);
-  if (selectedDetail.detail.data)
+  const detail = selectedDetail.detail.data;
+  if (detail)
     return (
       <>
         {selectedDetail.detail.error ? (
@@ -356,7 +359,7 @@ function SelectedWorkItemDetail({
           </div>
         ) : null}
         <WorkItemDetail
-          detail={selectedDetail.detail.data}
+          detail={detail}
           pendingAction={selectedDetail.pendingAction}
           actionError={selectedDetail.actionError}
           actionResult={selectedDetail.actionResult}
@@ -384,7 +387,13 @@ function SelectedWorkItemDetail({
           onResolveTargetSync={selectedDetail.resolveTargetSync}
           onDeferChange={selectedDetail.deferChange}
           onResumeChange={selectedDetail.resumeChange}
-          onAbandonChange={selectedDetail.abandonChange}
+          onAbandonChange={async (reason) => {
+            const error = await selectedDetail.abandonChange(reason);
+            if (error === null && "item" in detail) {
+              onAbandoned(identity.changeId, detail.item.change_title);
+            }
+            return error;
+          }}
           onCleanupAbandonedChange={selectedDetail.cleanupAbandonedChange}
           onDiscardAbandonedTargetSync={selectedDetail.discardAbandonedTargetSync}
           onCleanupCompletedChange={selectedDetail.cleanupCompletedChange}
@@ -402,6 +411,7 @@ function SelectedDetail(props: {
   onChanged: () => void;
   onClose: () => void;
   continuationPrompt: string | null;
+  onAbandoned: (changeId: string, title: string) => void;
 }) {
   if (props.identity.itemKey === "design") {
     return <SelectedDesignDetail changeId={props.identity.changeId} onClose={props.onClose} />;
@@ -759,6 +769,7 @@ export default function WorkPortfolioPage() {
   const [workspace, setWorkspace] = useState<"current" | "history">(() =>
     isHistoryRoute(location.pathname) ? "history" : "current",
   );
+  const [abandonedNotice, setAbandonedNotice] = useState<{ changeId: string; title: string } | null>(null);
   const { portfolio, hasData, error, isLoading, retry } = useWorkPortfolio(workspace === "history");
   const [changeFilter, setChangeFilter] = useState("");
   const [needsFilter, setNeedsFilter] = useState<WorkItemNeed | "">("");
@@ -1049,6 +1060,25 @@ export default function WorkPortfolioPage() {
         ].join(" ")}
         data-testid="work-scroll-surface"
       >
+        {abandonedNotice ? (
+          <section
+            className={[
+              "flex flex-wrap items-center gap-static-sm border-l-4",
+              "border-success bg-surface p-static-md",
+            ].join(" ")}
+            role="status"
+          >
+            <span className="min-w-0 flex-1">{abandonedNotice.title} was abandoned and is now in Change history.</span>
+            <PButton
+              type="button"
+              variant="secondary"
+              aria={{ "aria-label": "Dismiss abandonment confirmation" }}
+              onClick={() => setAbandonedNotice(null)}
+            >
+              Dismiss
+            </PButton>
+          </section>
+        ) : null}
         {workspace === "current" ? (
           <>
             {isLoading ? (
@@ -1144,6 +1174,7 @@ export default function WorkPortfolioPage() {
               onChanged={retry}
               onClose={closeInspector}
               continuationPrompt={selectedContinuationPrompt}
+              onAbandoned={(changeId, title) => setAbandonedNotice({ changeId, title })}
             />
           ) : null}
         </div>

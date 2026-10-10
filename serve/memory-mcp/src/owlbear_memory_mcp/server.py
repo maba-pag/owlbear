@@ -14,6 +14,10 @@ from owlbear_memory import MemoryCategory, MemoryEngine, MemoryState
 from pydantic import Field, StrictStr
 
 from owlbear_memory_mcp.tools import (
+    AssessmentItem,
+    AssessmentTaskId,
+)
+from owlbear_memory_mcp.tools import (
     approve_memory as approve_memory_impl,
 )
 from owlbear_memory_mcp.tools import (
@@ -73,6 +77,7 @@ _Title = Annotated[str, Field(min_length=1)]
 _Content = Annotated[str, Field(max_length=1024)]
 _Confidence = Annotated[float, Field(ge=0.7, le=1.0)]
 _Agent = Annotated[str, Field(min_length=1)]
+_Revision = Annotated[str, Field(pattern=r"^[0-9a-f]{16}$")]
 _RecallAgent = Annotated[StrictStr | Literal[0] | None, Field(default=None)]
 _Limit = Annotated[int, Field(ge=0)]
 _Categories = Annotated[list[MemoryCategory], Field(min_length=1)]
@@ -175,6 +180,7 @@ async def curate_memory(  # noqa: PLR0913
     ctx: Context,
     *,
     entry_id: str,
+    revision: _Revision,
     title: _Title | None = None,
     content: _Content | None = None,
     categories: list[MemoryCategory] | None = None,
@@ -185,6 +191,7 @@ async def curate_memory(  # noqa: PLR0913
     return await curate_memory_impl(
         ctx,
         entry_id=entry_id,
+        revision=revision,
         title=title,
         content=content,
         categories=categories,
@@ -200,9 +207,9 @@ async def commit_memory_batch(ctx: Context, *, session_type: _BatchSession) -> d
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=True))
-async def delete_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]:  # pragma: no cover
+async def delete_memory(ctx: Context, *, entry_id: str, revision: _Revision) -> dict[str, Any]:  # pragma: no cover
     """Delete a memory entry with lifecycle-aware semantics."""
-    return await delete_memory_impl(ctx, entry_id=entry_id)
+    return await delete_memory_impl(ctx, entry_id=entry_id, revision=revision)
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=True))
@@ -223,17 +230,17 @@ async def delete_agent_memories(ctx: Context, *, agent: _Agent) -> dict[str, int
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))
-async def approve_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]:  # pragma: no cover
+async def approve_memory(ctx: Context, *, entry_id: str, revision: _Revision) -> dict[str, Any]:  # pragma: no cover
     """Approve a curated memory entry."""
-    return await approve_memory_impl(ctx, entry_id=entry_id)
+    return await approve_memory_impl(ctx, entry_id=entry_id, revision=revision)
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))
 async def assess_memories(
     ctx: Context,
     *,
-    assessments: Annotated[list[dict[str, str]], Field(min_length=1)],
-    task_id: _Agent,
+    assessments: Annotated[list[AssessmentItem], Field(min_length=1)],
+    task_id: AssessmentTaskId,
 ) -> dict[str, Any]:  # pragma: no cover
     """Assess memories in batch and return per-entry outcomes."""
     return await assess_memories_impl(ctx, assessments=assessments, task_id=task_id)

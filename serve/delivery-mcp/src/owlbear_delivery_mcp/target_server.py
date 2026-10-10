@@ -119,6 +119,8 @@ from owlbear_delivery_mcp.target_models import (
     ExternalHeadPromotionRequest,
     FinalizeDeliveryChangeParams,
     FinalizeDeliveryChangeRequest,
+    GetChangeParams,
+    GetChangeRequest,
     MarkChangeReadyRequest,
     OperatorContextParams,
     OperatorContextRequest,
@@ -437,16 +439,30 @@ class TargetMCPAdapter:
         params = self._validate(EmptyParams, request)
         return await asyncio.to_thread(self._call, params, self._application.list_changes)
 
-    async def get_change(self, request: ChangeRequest) -> dict[str, object]:
-        """Return one coherent Change detail, health, and repair projection."""
-        params = self._validate(ChangeParams, request)
+    async def get_change(self, request: GetChangeRequest) -> dict[str, object]:
+        """Return one coherent Change detail, health, and repair projection.
+
+        ``view="continuation"`` omits acceptance-evidence bodies and reports only ``evidence_counts``.
+        """
+        params = self._validate(GetChangeParams, request)
         view = await asyncio.to_thread(
             self._call_adapter,
             params,
             lambda: self._application.get_change(params.change_id),
             TypeAdapter(DeliveryChangeView | DeliveryUnavailableChangeView),
         )
+        if params.view == "continuation" and isinstance(view, DeliveryChangeView):
+            return self._continuation_change_view(view)
         return self._serialize(view)
+
+    @classmethod
+    def _continuation_change_view(cls, view: DeliveryChangeView) -> dict[str, object]:
+        compact = view.model_copy(
+            update={"evidence": None, "detail": view.detail.model_copy(update={"evidence": None})}
+        )
+        payload = cls._serialize(compact)
+        payload["evidence_counts"] = None if view.evidence is None else view.evidence.counts.model_dump(mode="json")
+        return payload
 
     async def answer(self, request: AnswerRequest) -> DeliveryAnswerResponse:
         """Apply one version-bound answer to a retained Delivery request."""
@@ -746,7 +762,10 @@ class TargetMCPAdapter:
     async def show_build_context(self, request: ClaimContextRequest) -> dict[str, object]:
         """Show bounded Build context for one claim."""
         params = self._validate(ClaimContextParams, request)
-        return self._call(params, lambda: self._application.show_build_context(**params.model_dump()))
+        # Build context fetches the target for its overlap probe; keep the event loop free meanwhile.
+        return await asyncio.to_thread(
+            self._call, params, lambda: self._application.show_build_context(**params.model_dump())
+        )
 
     async def show_finalization_context(self, request: ChangeRequest) -> dict[str, object]:
         """Show engine-resolved context for one exact Change finalization."""
@@ -1091,13 +1110,15 @@ class TargetMCPAdapter:
                 params.settlement,
                 host_id=params.host_id,
                 session_id=params.session_id,
+                retry_reason=params.retry_reason,
             ),
         )
 
     async def release_stuck_worker(self, request: ReleaseStuckWorkerRequest) -> dict[str, object]:
         """Settle one user-confirmed stopped worker as a failed attempt once nothing still uses its worktree.
 
-        Use only while the claim's readiness is ``running``; Delivery settles a ``worker-stall-wait`` claim itself.
+        Use only while the claim's readiness is ``running``, ``retry-transition-contained`` or
+        ``builder-transition-contained``; Delivery settles a ``worker-stall-wait`` claim itself.
         Omit ``outcome_id`` to release the Change's Finalizer attempt. A live process using the worktree, or a
         worktree write in the last 30 seconds, fails with ``ERR_DELIVERY_WORKER_ACTIVE`` and changes nothing;
         ``retry_after`` is given only for the write case. Replaying a completed release returns its result.

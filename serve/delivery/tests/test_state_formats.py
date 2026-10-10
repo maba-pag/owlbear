@@ -355,6 +355,7 @@ _WRITER_FORMATS: dict[str, tuple[str, ...]] = {
     "retry_attempt": ("compact",),
     "retry_outcome": ("compact",),
     "retry_owner_result": ("compact",),
+    "retry_reason": ("compact",),
     "retry_repair_binding": ("compact",),
     **{kind.kind_id: ("indented",) for kind in RECORD_KINDS if kind.family_id.startswith("pull_request_")},
 }

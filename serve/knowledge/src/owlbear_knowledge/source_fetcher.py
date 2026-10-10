@@ -14,6 +14,7 @@ from owlbear_knowledge.protocols.fetcher import FetchedDocument, FetchError, Fet
 from owlbear_knowledge.protocols.sources import (
     AuthenticatedWebConfig,
     ConfiguredSourceRecord,
+    FetchTransport,
     FileGlobConfig,
     SourceKind,
     UrlListConfig,
@@ -24,7 +25,6 @@ if TYPE_CHECKING:
 
     from owlbear_knowledge.cancellation import CancelSignal
     from owlbear_knowledge.fetcher import ContentFetcher, HttpResponseFetcher
-    from owlbear_knowledge.protocols.sources import FetchTransport
 
 
 class CompositeSourceFetcher(SourceFetcher):
@@ -50,7 +50,7 @@ class CompositeSourceFetcher(SourceFetcher):
         """Fetch one source while capturing item-level failures as FetchError."""
         try:
             if source.kind is SourceKind.URL_LIST and isinstance(source.config, UrlListConfig):
-                return await self._fetch_url_list(source.config, cancel=cancel)
+                return await self._fetch_url_list(source, source.config, cancel=cancel)
             if source.kind is SourceKind.FILE_GLOB and isinstance(source.config, FileGlobConfig):
                 return await self._fetch_file_glob(source.config, cancel=cancel)
             if source.kind is SourceKind.AUTHENTICATED_WEB and isinstance(
@@ -73,10 +73,20 @@ class CompositeSourceFetcher(SourceFetcher):
 
     async def _fetch_url_list(
         self,
+        source: ConfiguredSourceRecord,
         config: UrlListConfig,
         *,
         cancel: CancelSignal | None,
     ) -> FetchResult:
+        if source.fetch_method is FetchTransport.BROWSER:
+            failure = KnowledgeFailure(
+                stage=KnowledgeFailureStage.ACQUISITION,
+                code="agent_capture_required",
+                retryable=False,
+                message="Browser capture is required for this source",
+            )
+            return FetchResult(errors=(self._fetch_error(source.id, failure),))
+
         documents: list[FetchedDocument] = []
         errors: list[FetchError] = []
         response_fetcher = self._http_response_fetcher_factory()

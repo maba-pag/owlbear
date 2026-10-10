@@ -27,6 +27,7 @@ from owlbear_knowledge.protocols.failures import (
 )
 from owlbear_knowledge.protocols.fetcher import FetchedDocument, FetchError, FetchResult
 from owlbear_knowledge.protocols.ingest import (
+    IngestRequest,
     IngestResult,
     RefreshRequest,
 )
@@ -75,12 +76,19 @@ def _make_fetched_doc(uri: str = "https://example.com/doc") -> FetchedDocument:
     )
 
 
-def _make_ingest_result(source_id: str = "src-1") -> IngestResult:
+def _make_ingest_result(
+    source_id: str = "src-1",
+    *,
+    documents_processed: int = 1,
+    documents_created: int = 1,
+    errors: tuple[KnowledgeFailure, ...] = (),
+) -> IngestResult:
     now = datetime.now(tz=UTC)
     return IngestResult(
         source_id=source_id,
-        documents_processed=1,
-        documents_created=1,
+        documents_processed=documents_processed,
+        documents_created=documents_created,
+        errors=errors,
         started_at=now,
         completed_at=now,
     )
@@ -143,7 +151,17 @@ def coordinator(
         graph=mock_graph,
         fetcher=mock_fetcher,
     )
-    c.ingest = AsyncMock(return_value=_make_ingest_result())
+
+    async def ingest(request: IngestRequest) -> IngestResult:
+        errors = tuple(item.failure for item in request.acquisition_failures)
+        return _make_ingest_result(
+            request.source_id,
+            documents_processed=len(request.documents) + len(errors),
+            documents_created=len(request.documents),
+            errors=errors,
+        )
+
+    c.ingest = AsyncMock(side_effect=ingest)
     return c
 
 
@@ -229,6 +247,12 @@ class TestFetchErrorPropagation:
         result = await coordinator.refresh(RefreshRequest())
 
         assert result.sources_refreshed == 0
+        assert len(result.ingest_results) == 1
+        assert result.ingest_results[0].documents_processed == 1
+        request = coordinator.ingest.await_args.args[0]
+        assert request.documents == ()
+        assert len(request.acquisition_failures) == 1
+        assert request.acquisition_failures[0].failure.code == "transport_failure"
 
     # ------------------------------------------------------------------
     # AC1 strengthened — field-level mapping and multi-error propagation

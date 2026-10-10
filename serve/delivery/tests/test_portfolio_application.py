@@ -215,6 +215,7 @@ from owlbear_delivery.publication_provider import (
     PublicationRepository,
 )
 from owlbear_delivery.recovery import (
+    DeliverySettlementRequiredError,
     DeliveryWorkerExclusionRequiredError,
     RetryEpisodeKey,
     RetryFailureClass,
@@ -226,7 +227,7 @@ from owlbear_delivery.runtime_models import _receipt_digest
 from owlbear_delivery.runtime_transaction import ReplacementTransactionParticipant, RuntimeTransaction
 from owlbear_delivery.state_formats import classify_kind, format_marker_bytes
 from owlbear_delivery.storage_io import locked_roots
-from owlbear_delivery.work_items import DeliveryProgress, WorkItemActionKind
+from owlbear_delivery.work_items import DeliveryProgress, WorkItemActionKind, WorkItemNextActor
 from owlbear_delivery_github import GitHubCliPublicationProvider
 
 _USER_CHECKOUT_STATES = (
@@ -3187,12 +3188,36 @@ def _settle_builder_handoff_attempt(
     application: PortfolioApplication,
     claim: DeliveryActiveClaim,
     settlement: DeliveryBuilderInvocationSettlement,
+    *,
+    retry_reason: str | None = None,
 ) -> OutcomeAuthorityBinding:
     return application.settle_worker_invocation(
         settlement,
         host_id=claim.owner_id,
         session_id=claim.process_id,
+        retry_reason=retry_reason,
     )
+
+
+@pytest.mark.parametrize(
+    ("disposition", "reason"),
+    [("completed-timeout", "The worker said why"), ("normal-return", "two\nlines"), ("normal-return", " padded")],
+)
+def test_a_retry_reason_is_refused_before_any_effect_outside_a_one_line_normal_retry(
+    tmp_path: Path, disposition: str, reason: str
+) -> None:
+    application, runtime, _coordinator, state_root, first, _head, _workspace, settlement = _builder_retry_handoff_setup(
+        tmp_path, ["2026-08-04T00:00:00Z"], add_workspace_changes=False
+    )
+    if disposition != "normal-return":
+        settlement = settlement.model_copy(update={"disposition": disposition, "request": None})
+    before = (runtime.frontier_bytes(), runtime.retry_ledger().read())
+
+    with pytest.raises(PortfolioApplicationError, match="retry reason"):
+        _settle_builder_handoff_attempt(application, first.claim, settlement, retry_reason=reason)
+
+    assert (runtime.frontier_bytes(), runtime.retry_ledger().read()) == before
+    assert not (state_root / "changes/change-a/retry-ledger/reasons").exists()
 
 
 def _seed_two_task_builder(application, runtimes, coordinator, state_root):
@@ -4350,13 +4375,17 @@ def _builder_retry_history(items) -> list[tuple[int, str, str, str | None]]:
     return [(item.ordinal, item.kind, item.status, item.failure_code) for item in items]
 
 
+_FIRST_BUILDER_RETRY_REASON = "Snapshot fixture drifted from the reviewed head; regenerate before editing"
+_THIRD_BUILDER_RETRY_REASON = "Reviewer rejected the same flaky ordering twice"
+
+
 def _exhaust_builder_retry_with_distinct_codes(tmp_path: Path):
     """Fail one Builder task three times with distinct codes across a restart; return the reopened application."""
     now = ["2026-08-04T00:00:00Z"]
     application, runtime, _coordinator, state_root, first, _head, _workspace, settlement = _builder_retry_handoff_setup(
         tmp_path, now, add_workspace_changes=False
     )
-    _settle_builder_handoff_attempt(application, first.claim, settlement)
+    _settle_builder_handoff_attempt(application, first.claim, settlement, retry_reason=_FIRST_BUILDER_RETRY_REASON)
     contexts = []
 
     now[0] = "2026-08-04T01:00:00Z"
@@ -4414,6 +4443,7 @@ def _exhaust_builder_retry_with_distinct_codes(tmp_path: Path):
                 failure_code="builder-review-failed",
             ),
         ),
+        retry_reason=_THIRD_BUILDER_RETRY_REASON,
     )
     return reopened, runtime, contexts
 
@@ -4451,6 +4481,11 @@ def test_builder_retry_history_reaches_fresh_builder_and_exhaustion_diagnosis(tm
     exhausted = next(item for item in change.unresolved_outcomes if item.outcome_id == "OUT-001")
     assert exhausted.card.readiness is not None
     assert _builder_retry_history(exhausted.card.readiness.retry_history) == expected
+    reasons = [_FIRST_BUILDER_RETRY_REASON, None, _THIRD_BUILDER_RETRY_REASON]
+    assert [item.reason for item in second_context.prior_attempts] == reasons[:1]
+    assert [item.reason for item in third_context.prior_attempts] == reasons[:2]
+    assert [item.reason for item in view.readiness.retry_history] == reasons
+    assert [item.reason for item in exhausted.card.readiness.retry_history] == reasons
 
 
 def _requestless_builder_settlement(launch, disposition: str) -> DeliveryBuilderInvocationSettlement:
@@ -5404,6 +5439,46 @@ def builder_transition_case(tmp_path: Path, action: str):
     return application, runtimes, coordinator, state_root, launch, transition
 
 
+def retain_contained_transition(
+    application: PortfolioApplication,
+    change_id: str,
+    transition: BlockDelivery | ReturnDelivery | RetryDelivery,
+) -> None:
+    """Prove the application refuses before any effect, then retain the containment earlier releases left."""
+    runtime = application._runtimes[change_id]
+    before = runtime.frontier_bytes()
+    with pytest.raises(DeliverySettlementRequiredError, match="settle_worker_invocation"):
+        application.transition_delivery(change_id, transition)
+    assert runtime.frontier_bytes() == before
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
+        runtime.transition(transition)
+
+
+def test_raw_planner_retry_is_refused_before_any_effect_and_advance_still_applies(tmp_path: Path) -> None:
+    """A misrouted retry once left a held claim that only the dispatching chat could settle."""
+    application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING})
+    planner = application.acquire_change_action(_continuation_request(application)).launch
+    ledger = RetryLedger(state_root, "change-a")
+    before = (runtimes["change-a"].frontier_bytes(), coordinator.show("change-a"), ledger.read())
+    retry = RetryDelivery(action="retry", outcome_id=planner.outcome_id, claim_id=planner.claim.claim_id)
+
+    with pytest.raises(DeliverySettlementRequiredError, match="planner retry"):
+        application.transition_delivery("change-a", retry)
+
+    assert (runtimes["change-a"].frontier_bytes(), coordinator.show("change-a"), ledger.read()) == before
+    candidate = application.publish_delivery_plan(
+        "change-a",
+        PublishDeliveryPlan(outcome_id=planner.outcome_id, claim_id=planner.claim.claim_id, tasks=(_task(),)),
+    )
+    advanced = application.transition_delivery(
+        "change-a",
+        AdvanceDelivery(
+            action="advance", outcome_id=planner.outcome_id, claim_id=planner.claim.claim_id, output=candidate.output
+        ),
+    )
+    assert advanced.active_claim is None
+
+
 def _assert_contained_builder_views(
     application: PortfolioApplication, transition: BlockDelivery | ReturnDelivery, claim: DeliveryActiveClaim
 ) -> None:
@@ -5416,9 +5491,9 @@ def _assert_contained_builder_views(
         assert not readiness.executable
         assert readiness.operation is None
         assert readiness.action is None
-        assert "read-only" in readiness.prompt
-        assert "host worker-exclusion evidence is missing" in readiness.prompt
-        assert "does not establish" in readiness.prompt
+        assert readiness.prompt.startswith("/continue-change change-a ")
+        assert "settle_worker_invocation" in readiness.prompt
+        assert "answer its stopped-run question" in readiness.prompt
     for attention in (
         detail.recovery_attention,
         operator.recovery_attention,
@@ -5466,8 +5541,7 @@ def test_refused_builder_transition_does_not_refresh_stat_dirty_index(tmp_path: 
     before_coordination = coordinator.show("change-a")
     retry_ledger = RetryLedger(state_root, "change-a")
     before_retry_ledger = retry_ledger.read()
-    with pytest.raises(DeliveryWorkerExclusionRequiredError):
-        application.transition_delivery("change-a", transition)
+    retain_contained_transition(application, "change-a", transition)
     assert index.read_bytes() == before_index
     assert index.stat().st_mtime_ns == before_index_mtime
     assert product.read_bytes() == before_product
@@ -5489,8 +5563,7 @@ def test_refused_builder_transition_does_not_refresh_stat_dirty_index(tmp_path: 
 
 def test_change_selection_prioritizes_contained_builder_over_other_outcomes(tmp_path: Path) -> None:
     application, runtimes, _coordinator, _state_root, _launch, transition = builder_transition_case(tmp_path, "block")
-    with pytest.raises(DeliveryWorkerExclusionRequiredError):
-        application.transition_delivery("change-a", transition)
+    retain_contained_transition(application, "change-a", transition)
     snapshot = application._delivery_snapshot(runtimes["change-a"])
     card = application.show_work_item_view("change-a", "outcome:OUT-001").card
     other = card.model_copy(
@@ -5544,8 +5617,7 @@ def test_builder_return_without_exclusion_keeps_custody_and_retry_reservation(tm
     assert reserved.last_status == "reserved"
     assert reserved.outcome_ids == ()
 
-    with pytest.raises(DeliveryWorkerExclusionRequiredError):
-        application.transition_delivery("change-a", request)
+    retain_contained_transition(application, "change-a", request)
 
     before = DeliveryFrontier.model_validate_json(before_frontier)
     after = DeliveryFrontier.model_validate_json(runtimes["change-a"].frontier_bytes())
@@ -5614,21 +5686,18 @@ def test_builder_return_stays_contained_after_reload_and_elapsed_backoff(tmp_pat
     before_coordination = coordinator.show("change-a")
     ledger = RetryLedger(state_root, "change-a")
     before_ledger = ledger.read()
-    with pytest.raises(DeliveryWorkerExclusionRequiredError):
-        application.transition_delivery("change-a", request)
+    retain_contained_transition(application, "change-a", request)
 
     attention = runtimes["change-a"].show_binding("OUT-001").recovery_attention
     assert attention is not None
     assert attention.reason == request.reason
 
     retained_frontier = runtimes["change-a"].frontier_bytes()
-    with pytest.raises(DeliveryWorkerExclusionRequiredError):
-        application.transition_delivery("change-a", request)
+    retain_contained_transition(application, "change-a", request)
     assert runtimes["change-a"].frontier_bytes() == retained_frontier
     now += timedelta(days=1)
     reopened, reopened_coordinator, _manager = _reopen_portfolio(tmp_path, state_root, runtimes, clock=clock)
-    with pytest.raises(DeliveryWorkerExclusionRequiredError):
-        reopened.transition_delivery("change-a", request)
+    retain_contained_transition(reopened, "change-a", request)
     _assert_contained_builder_views(reopened, request, builder.claim)
     result = reopened.acquire_change_action(_continuation_request(reopened, session_id="fresh-session"))
 
@@ -5638,7 +5707,7 @@ def test_builder_return_stays_contained_after_reload_and_elapsed_backoff(tmp_pat
     assert not result.readiness.executable
     assert result.readiness.action is None
     assert result.readiness.prompt is not None
-    assert "read-only" in result.readiness.prompt
+    assert "settle_worker_invocation" in result.readiness.prompt
     assert reopened._runtimes["change-a"].show_binding("OUT-001").active_claim.claim_id == builder.claim.claim_id
     assert reopened_coordinator.show("change-a").writer.claim_id == builder.claim.claim_id
     assert reopened_coordinator.show("change-a") == before_coordination
@@ -5736,8 +5805,8 @@ def test_engine_target_fetch_drift_is_stale_then_syncs_exact_target(tmp_path: Pa
     assert _execute_engine(application, fresh) == synchronized
 
 
-@pytest.mark.parametrize("exit_kind", ["resolve", "abort"])
-def test_engine_target_sync_conflict_exit_releases_retained_engine_custody(tmp_path: Path, exit_kind: str) -> None:
+def _engine_target_sync_conflict(tmp_path: Path):
+    """Stop a completed Change's engine publication on a real target merge conflict in product.txt."""
     application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
     runtime = runtimes["change-a"]
     head = _commit_reviewed_head(
@@ -5759,10 +5828,21 @@ def test_engine_target_sync_conflict_exit_releases_retained_engine_custody(tmp_p
     action = _engine_action(application)
     assert action.target_head == target
     blocked = _execute_engine(application, action)
-    assert blocked.kind == "blocked", blocked
-    assert blocked.failure.code == "ERR_TARGET_SYNC_CONFLICT"
+    assert (blocked.kind, blocked.failure and blocked.failure.code) == ("blocked", "ERR_TARGET_SYNC_CONFLICT"), blocked
+    return application, runtimes["change-a"], coordinator, target, action, blocked
+
+
+@pytest.mark.parametrize("exit_kind", ["resolve", "abort"])
+def test_engine_target_sync_conflict_exit_releases_retained_engine_custody(tmp_path: Path, exit_kind: str) -> None:
+    application, runtime, coordinator, target, action, blocked = _engine_target_sync_conflict(tmp_path)
     readiness = application.get_change("change-a").readiness
-    assert readiness.reason_code == "engine-action-failed"
+    outcome = application.show_work_item_view("change-a", "outcome:OUT-001").card.readiness
+    assert (readiness.reason_code, readiness.next_actor, outcome.reason_code, outcome.next_actor) == (
+        "engine-action-failed",
+        WorkItemNextActor.YOU,
+        "engine-action-failed",
+        WorkItemNextActor.NONE,
+    )
     assert readiness.prompt.startswith("/resolve-target-conflict change-a ")
     conflict_progress = DeliveryProgress(
         situation="ready-for-next-step",
@@ -8519,6 +8599,87 @@ def test_finalizer_attention_allows_only_passive_change_intents(tmp_path: Path) 
         state_root / application._finalizer_settlement_receipt_path("change-a", attempt.writer.attempt_id)
     ).is_file()
     assert FinalizationReportStore(state_root, "change-a").read().reports[0] == report
+
+
+def _settled_finalizer_attention(
+    tmp_path: Path,
+) -> tuple[PortfolioApplication, PortfolioCoordinator, Path, ChangeFinalizationAttempt]:
+    application, _runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
+    acquired = application.acquire_change_action(_continuation_request(application))
+    assert acquired.finalization is not None
+    attempt = acquired.finalization.attempt
+    report = application.report_finalization_failure(
+        _failure_request(application, attempt_key=attempt.writer.attempt_id)
+    )
+    assert isinstance(report, FinalizationReport)
+    assert isinstance(
+        application.settle_finalizer_invocation(_finalizer_settlement(application, attempt, report)),
+        FinalizerSettlementReceipt,
+    )
+    assert coordinator.show("change-a").writer.kind == "finalization-attention"
+    return application, coordinator, state_root, attempt
+
+
+def test_paused_revision_releases_settled_finalizer_attention(tmp_path: Path) -> None:
+    application, coordinator, state_root, attempt = _settled_finalizer_attention(tmp_path)
+    current = application.read_design_session("change-a")
+    _change_intent(application, "change-a", DeliveryChangeIntentKind.DEFER, reason="Revise after review findings")
+
+    revised = application.revise_design_session(
+        "change-a", current.package_id, b"revised intent\n", b"revised design\n"
+    )
+
+    assert revised.intent_bytes == b"revised intent\n"
+    released = coordinator.show("change-a")
+    assert released.writer is None
+    assert released.finalization_attention is None
+    assert released.finalization_attempt is not None
+    assert released.finalization_attempt.writer == attempt.writer
+    assert (
+        state_root / application._finalizer_settlement_receipt_path("change-a", attempt.writer.attempt_id)
+    ).is_file()
+
+
+def test_unpaused_revision_keeps_settled_finalizer_attention(tmp_path: Path) -> None:
+    application, coordinator, _state_root, _attempt = _settled_finalizer_attention(tmp_path)
+    current = application.read_design_session("change-a")
+    retained = coordinator.show("change-a")
+
+    with pytest.raises(DeliveryRevisionError, match="change-not-paused"):
+        application.revise_design_session("change-a", current.package_id, b"revised intent\n", b"revised design\n")
+
+    assert coordinator.show("change-a") == retained
+    assert application.read_design_session("change-a") == current
+
+
+def test_finalizer_attention_release_refuses_a_frontier_changed_after_its_guard(tmp_path: Path) -> None:
+    application, coordinator, state_root, _attempt = _settled_finalizer_attention(tmp_path)
+    paused_frontier = (state_root / "changes" / "change-a" / "frontier.json").read_bytes()
+    _change_intent(application, "change-a", DeliveryChangeIntentKind.DEFER, reason="Revise after review findings")
+    retained = coordinator.show("change-a")
+    assert retained.finalization_attention is not None
+
+    with (
+        coordinator.publication_lock("change-a") as lock,
+        pytest.raises(CoordinationConflictError, match="exact clean, settled Finalizer attention"),
+    ):
+        coordinator.release_finalization_attention("change-a", retained.finalization_attention, paused_frontier, lock)
+
+    assert coordinator.show("change-a") == retained
+
+
+def test_revision_keeps_finalizer_attention_without_its_settlement_receipt(tmp_path: Path) -> None:
+    application, coordinator, state_root, attempt = _settled_finalizer_attention(tmp_path)
+    current = application.read_design_session("change-a")
+    _change_intent(application, "change-a", DeliveryChangeIntentKind.DEFER, reason="Revise after review findings")
+    (state_root / application._finalizer_settlement_receipt_path("change-a", attempt.writer.attempt_id)).unlink()
+    retained = coordinator.show("change-a")
+
+    with pytest.raises(DeliveryRevisionError, match="custody-retained"):
+        application.revise_design_session("change-a", current.package_id, b"revised intent\n", b"revised design\n")
+
+    assert coordinator.show("change-a") == retained
+    assert application.read_design_session("change-a") == current
 
 
 @pytest.mark.parametrize(
@@ -16813,8 +16974,7 @@ def test_live_implementation_block_does_not_publish_or_release_without_exclusion
     before_workspace = _workspace_mutation_snapshot(launch.worktree_path)
     ledger = RetryLedger(state_root, "change-a")
     before_ledger = ledger.read()
-    with pytest.raises(DeliveryWorkerExclusionRequiredError):
-        application.transition_delivery("change-a", transition)
+    retain_contained_transition(application, "change-a", transition)
 
     attention = runtime.show_binding("OUT-001").recovery_attention
     assert attention is not None
@@ -16834,12 +16994,10 @@ def test_live_implementation_block_does_not_publish_or_release_without_exclusion
     assert _git(launch.worktree_path, "rev-parse", "HEAD") == candidate_head
     assert application.show_operator_context("change-a", "OUT-001").block is None
     retained_frontier = runtime.frontier_bytes()
-    with pytest.raises(DeliveryWorkerExclusionRequiredError):
-        application.transition_delivery("change-a", transition)
+    retain_contained_transition(application, "change-a", transition)
     assert runtime.frontier_bytes() == retained_frontier
     reopened, reopened_coordinator, _manager = _reopen_portfolio(tmp_path, state_root, runtimes)
-    with pytest.raises(DeliveryWorkerExclusionRequiredError):
-        reopened.transition_delivery("change-a", transition)
+    retain_contained_transition(reopened, "change-a", transition)
     _assert_contained_builder_views(reopened, transition, launch.claim)
     with pytest.raises(DeliveryRuntimeReferenceError):
         reopened.resolve_request(
@@ -16880,7 +17038,12 @@ def test_foreign_builder_transition_cannot_publish_diagnostic_attention(
     ledger = RetryLedger(state_root, "change-a")
     before_ledger = ledger.read()
     with pytest.raises(
-        (DeliveryRuntimeConflictError, DeliveryRuntimeReferenceError, DeliveryWorkerExclusionRequiredError)
+        (
+            DeliveryRuntimeConflictError,
+            DeliveryRuntimeReferenceError,
+            DeliverySettlementRequiredError,
+            DeliveryWorkerExclusionRequiredError,
+        )
     ):
         application.transition_delivery("change-a", transition)
     assert runtime.frontier_bytes() == before_frontier

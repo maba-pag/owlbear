@@ -34,14 +34,23 @@ later deduplicates and assigns relevance scope. Reviewers remain mutation-free a
 
 1. `list_memories(states=["pending"])` to find candidates
 2. `read_memory(entry_id=...)` for full content
-3. `curate_memory(...)` to edit/promote with scope
-4. `delete_memory(entry_id=...)` for noise/duplicates
+3. `curate_memory(entry_id=..., revision=..., scope_agents=[...])` to edit/promote with scope
+4. `delete_memory(entry_id=..., revision=...)` for noise/duplicates
 
 ### User approval flow
 
 1. Curator leaves entries in `curated`
 2. User runs the memory audit prompt for guided review
 3. Approved entries become highest-trust retrieval candidates
+
+## Revision-bound mutations
+
+`approve_memory`, `curate_memory`, and `delete_memory` require a `revision` from the current
+`read_memory` or `list_memories` result. It is a 16-character lowercase hex token derived from
+`title`, `content`, `categories`, `confidence`, and `scope_agents`; `state`, assessment counters,
+and timestamps do not affect it. A stale revision is refused with a tool error naming the expected
+and current revisions and instructing the caller to re-read before retrying. Re-read the entry and
+retry with its new revision.
 
 ### Exceptional-state resolution
 
@@ -66,7 +75,7 @@ MemoryEngine mutations and batch commits share one exclusive advisory lock on th
 directory. It coordinates same-process writers and other processes, is re-entrant on the owning
 thread, uses one bounded deadline (30 seconds by default), and creates no lock file. A busy lock is
 `MemoryBusyError`, a `ConcurrencyError` subtype. MCP mutation tools surface busy locks and stale
-`expected_updated_at` tokens as `ToolError`; a stale token is checked after reloading under the lock
+`revision` tokens as `ToolError`; a stale token is checked after reloading under the lock
 and does not overwrite newer content. Reads remain lock-free: `get_entries()` reparses when an entry
 filename, inode, size, or `mtime_ns` changes, while `load()` forces a full parse.
 
@@ -105,22 +114,22 @@ See the [memory package README](../../../serve/memory/README.md) and
 | Tool | Description | Key parameters |
 | --- | --- | --- |
 | `save_memory` | Create a new `pending` memory entry; scope is assigned later by curation | `title`, `content`, `categories`, `confidence`, `source_agent` |
-| `list_memories` | List metadata filtered by state/category/scope | `states`, `categories`, `scope_agents` |
+| `list_memories` | List metadata filtered by state/category/scope; each entry includes its revision | `states`, `categories`, `scope_agents` |
 | `recall_memory` | Recall scoped identity-bearing memory blocks for agent pre-flight | `agent`, `categories`, `limit` |
-| `read_memory` | Read one full memory entry by ID | `entry_id` |
+| `read_memory` | Read one full memory entry by ID, including its revision | `entry_id` |
 | `assess_memories` | Record whether recalled entries were useful for a substantive task attempt | `task_id`, `assessments` |
 | `commit_memory_batch` | Commit reviewed non-pending entries for one curation or review session | `session_type` (`curation` or `review`) |
-| `curate_memory` | Curator mutation and code-managed state transition tool | `entry_id`, optional mutable fields, `scope_agents` |
-| `delete_memory` | Lifecycle-aware deletion with hard/soft semantics | `entry_id` |
+| `curate_memory` | Curator mutation and code-managed state transition tool | `entry_id`, required `revision`, optional mutable fields, `scope_agents` |
+| `delete_memory` | Lifecycle-aware deletion with hard/soft semantics | `entry_id`, required `revision` |
 | `rename_agent_memories` | Rewrite provenance and scopes after an agent rename | `old_name`, `new_name` |
 | `delete_agent_memories` | Remove retired scope references, hard-delete pending orphans, and tombstone reviewed orphans | `agent` |
-| `approve_memory` | Promote `curated -> approved` | `entry_id` |
+| `approve_memory` | Promote `curated -> approved` | `entry_id`, required `revision` |
 
 ## Assessment and curation policy
 
 This is the operating decision for the current learning loop. It clarifies
-responsibility without adding a tool, scheduler, receipt protocol, or recall
-policy.
+responsibility and documents revision-bound receipts without adding a role,
+scheduler, or recall policy.
 
 ### Decision: human-assisted and sampled
 
@@ -164,13 +173,28 @@ sample and its absence must not alter a transition, trigger a recovery route,
 or block publication. The current buckets remain the measurement vocabulary:
 `outstanding`, `unremarkable`, `didnt_use`, and `factually_wrong`.
 
-The per-entry `success`/`error` result from `assess_memories` is the current
-tool-level receipt. It is not a Delivery receipt and not an idempotency key.
 Malformed batches are rejected before entry updates; valid batches may have
-mixed per-entry results. Because ordinary assessments are not promised
-idempotent, an uncertain tool response must not be blindly retried. First use
-read-only evidence or operator reconciliation to determine whether any entry
-was applied; this policy does not add feedback receipts or retry machinery.
+mixed per-entry results. A stale revision fails for that entry without
+changing it and names the current revision. Re-recall changed content before
+submitting feedback about it; do not retry stale feedback against content not
+yet seen.
+The `task_id` must be 1-128 printable ASCII characters without whitespace;
+each item has exactly `{entry_id, revision, bucket}`. A recall block places its
+`Revision:` line immediately after `Entry ID:`. Use that current token.
+
+The engine stores the first recorded bucket with the entry as a receipt keyed
+by task, entry, and revision. A repeated assessment with the same task, entry,
+and revision is not applied again and returns `success: true`,
+`already_applied: true`, and the first `recorded_bucket`. Replaying
+`factually_wrong` after another task makes the entry disputed also returns
+`already_applied: true`. A different task ID may be assessed independently.
+
+Only receipts for the current revision are retained, up to the 20 most recent.
+When needed, oldest receipts are evicted first to keep the serialized entry at
+or below 8192 bytes while retaining the newest. If the newest receipt cannot
+fit, that item fails without changing the entry, counters, or stored receipts.
+Content edits remove receipts for the previous revision; assessment counters
+persist across those edits.
 
 ### Curation trigger, visibility, and failure handling
 
@@ -231,9 +255,6 @@ signals into a new scheduler or mandatory step.
 - **Durable age/size scheduler or curation SLA:** rejected until pending-age
   and curation-latency evidence shows that opportunistic/manual handling is
   inadequate.
-- **Automatic assessment retries or a new receipt store:** rejected because
-  duplicate counter updates are possible and the feedback contract is outside
-  this policy decision.
 - **Recall-algorithm or pool changes:** deferred; usefulness measurement must
   precede any selection change.
 
@@ -275,7 +296,10 @@ Default behavior (when `states` is omitted): includes every non-deleted state.
 | `categories` | list[str] \| null | `null` | Optional category filter |
 | `scope_agents` | list[str] \| null | `null` | Optional agent-scope filter |
 
-Returns: metadata entries (no `content`) with fields including `id`, `title`, `categories`, `confidence`, `state`, `scope_agents`, `source_agent`, `created_at`, `updated_at`, `approved_at`.
+Returns: metadata entries (no `content`) with fields including `id`, `revision`,
+`challenges` (each containing `task_id`, `revision`, and `recorded_at`), `title`,
+`categories`, `confidence`, `state`, `scope_agents`, `source_agent`, `created_at`,
+`updated_at`, and `approved_at`.
 
 ## read_memory
 
@@ -288,6 +312,8 @@ Reads one full entry by `entry_id`.
 Behavior:
 
 - returns full entry including `content`
+- includes `challenges`, with each record containing `task_id`, `revision`, and
+  `recorded_at`
 - errors if the entry is in `deleted` state
 
 ## recall_memory
@@ -305,8 +331,9 @@ Behavior:
 - includes `curated`, `approved`, and `contested` entries scoped to the agent
 - treats omitted `categories` as all categories; this is the standard pre-flight call
 - returns `approved` entries before `curated`
-- formats ordinary blocks as `## {title}`, `Entry ID:`{id}``, and the body on consecutive lines
-- adds `State: contested` to contested blocks, plus `Challenge task:` when `contested_by_task` is available
+- formats each block as `## {title}`, `Entry ID: {id}`, `Revision: {revision}`, then the body; the revision line immediately follows the entry ID
+- adds `State: contested` to contested blocks and one `Challenge task:` line per
+  challenge record
 - omits all other entry metadata
 - does not reject blank or wildcard callers; unrecognized callers receive universal-only guidance
 - accepts named and universal recall guidance according to the memory service's recognition rules
@@ -319,7 +346,7 @@ caller uses the sampled assessment path, include every entry returned by
 
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
-| `task_id` | str | (required) | Non-empty identifier for the substantive task attempt |
+| `task_id` | str | (required) | 1-128 printable ASCII characters without whitespace for the substantive task attempt |
 | `assessments` | list[dict[str, str]] | (required) | Non-empty list of per-entry assessments |
 
 Each assessment item requires these fields:
@@ -327,6 +354,7 @@ Each assessment item requires these fields:
 | Field | Type | Description |
 | --- | --- | --- |
 | `entry_id` | str | Recalled memory entry identifier |
+| `revision` | str | Current 16-character lowercase hex revision from that entry's `Revision:` line |
 | `bucket` | str | One of the accepted bucket values below |
 
 | Bucket | Meaning |
@@ -343,7 +371,7 @@ Behavior:
 - entry-level failures such as a missing entry or invalid state are returned in `results` with
  `success: false`; other valid items may still succeed
 
-Returns: `results`, containing `entry_id` and `success` for each item, plus `error` for failed items.
+Returns: `results`, with `entry_id` and `success` for each item; successful items also include `already_applied` and `recorded_bucket`, while failures include `error`.
 
 ## curate_memory
 
@@ -352,6 +380,7 @@ Curator update tool for content edits and lifecycle transitions.
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
 | `entry_id` | str | (required) | Entry identifier |
+| `revision` | str | (required) | Current revision from `read_memory` or `list_memories` |
 | `title` | str \| null | `null` | Replace title |
 | `content` | str \| null | `null` | Replace markdown body |
 | `categories` | list[str] \| null | `null` | Replace categories |
@@ -401,6 +430,7 @@ Curator-only lifecycle mutation.
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
 | `entry_id` | str | (required) | Entry identifier |
+| `revision` | str | (required) | Current revision from `read_memory` or `list_memories` |
 
 Behavior:
 
@@ -417,6 +447,7 @@ Approves a curated entry.
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
 | `entry_id` | str | (required) | Entry identifier |
+| `revision` | str | (required) | Current revision from `read_memory` or `list_memories` |
 
 Behavior:
 
@@ -456,8 +487,8 @@ save_memory(
 
 ```text
 list_memories(states=["pending"], categories=["tool-usage"])
-read_memory(entry_id="...")
-curate_memory(entry_id="...", scope_agents=["builder", "build-reviewer"])
+entry = read_memory(entry_id="...")
+curate_memory(entry_id=entry["id"], revision=entry["revision"], scope_agents=["builder", "build-reviewer"])
 ```
 
 ```text
@@ -477,8 +508,10 @@ assess_memories(
 ```
 
 ```text
-delete_memory(entry_id="...")
-approve_memory(entry_id="...")
+pending = read_memory(entry_id="...")
+delete_memory(entry_id=pending["id"], revision=pending["revision"])
+curated = read_memory(entry_id="...")
+approve_memory(entry_id=curated["id"], revision=curated["revision"])
 rename_agent_memories(old_name="old-reviewer", new_name="build-reviewer")
 delete_agent_memories(agent="retired-agent")
 ```
@@ -507,7 +540,7 @@ All tools raise `ToolError` (surfaced as MCP error responses) for invalid operat
 | Error | Trigger | Example |
 | --- | --- | --- |
 | Entry not found | Invalid `entry_id` | `read_memory(entry_id="nonexistent")` |
-| Invalid state transition | Wrong source state | `approve_memory` on a `pending` entry |
+| Invalid state transition | Wrong source state | `approve_memory(entry_id=..., revision=entry["revision"])` on a `pending` entry |
 | Deleted entry access | Reading a soft-deleted entry | `read_memory` on `state=deleted` |
 | Validation failure | Bad confidence, empty title, invalid category | `save_memory(confidence=0.5, ...)` |
 | Blank or unknown agent | Not an error; returns universal-only guidance | `recall_memory(agent="")` or `recall_memory(agent="unknown-role")` |

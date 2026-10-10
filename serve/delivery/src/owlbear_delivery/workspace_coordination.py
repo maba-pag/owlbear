@@ -1368,7 +1368,6 @@ class PortfolioCoordinator:
             or metadata.branch != coordination.branch
             or metadata.worktree_path != coordination.worktree_path
             or metadata.last_reviewed_commit != handoff.last_reviewed_commit
-            or metadata.branch_head != handoff.branch_head
             or coordination.last_reviewed_commit != handoff.last_reviewed_commit
             or coordination.publication_lease is not None
             or coordination.worktree_cleanup_intent is not None
@@ -1403,3 +1402,36 @@ class PortfolioCoordinator:
             update["dirty_worktree_quarantine"] = None
         released = coordination.model_copy(update=update)
         return _replacement(self._state_root, self._coordination_path(change_id), previous, released)
+
+    def release_finalization_attention(
+        self,
+        change_id: str,
+        attention: ChangeFinalizationAttention,
+        paused_frontier: bytes,
+        lock: PublicationLock,
+    ) -> ChangeCoordination:
+        """Release one exact clean, settled Finalizer attention for a paused requirement revision."""
+        self._require_publication_lock(lock, change_id)
+        self.require_no_pending_recovery(change_id)
+        coordination, previous = self._read_coordination(change_id)
+        attempt = coordination.finalization_attempt
+        frontier_path = self._state_root / "changes" / change_id / "frontier.json"
+        if (
+            coordination.finalization_attention != attention
+            or attention.workspace_paths
+            or attempt is None
+            or coordination.writer != attempt.writer.model_copy(update={"kind": "finalization-attention"})
+            or coordination.dirty_worktree_quarantine is not None
+            or frontier_path.read_bytes() != paused_frontier
+        ):
+            _coordination_conflict("revision release requires its exact clean, settled Finalizer attention")
+        released = coordination.model_copy(update={"writer": None, "finalization_attention": None})
+        # The unchanged frontier fences a concurrent Resume, which does not take the publication lock.
+        frontier_fence = ReplacementTransactionParticipant(
+            self._state_root, frontier_path.relative_to(self._state_root), paused_frontier, paused_frontier
+        )
+        self._commit(
+            f"finalization-attention-release-{change_id}-{attention.attempt_id}",
+            (_replacement(self._state_root, self._coordination_path(change_id), previous, released), frontier_fence),
+        )
+        return released

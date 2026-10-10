@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import builtins
+import copy
 import hashlib
 import io
 import json
@@ -30,6 +31,8 @@ from serve.delivery.tests.confirmation_support import (
 )
 from serve.delivery.tests.test_delivery_progress import _complete_first_outcome, _progress_portfolio
 from serve.delivery.tests.test_portfolio_application import (
+    _FIRST_BUILDER_RETRY_REASON,
+    _THIRD_BUILDER_RETRY_REASON,
     _assert_checkpoint_branch_operation,
     _assert_loader_observation_only,
     _assert_loader_retry_recording,
@@ -38,6 +41,7 @@ from serve.delivery.tests.test_portfolio_application import (
     _canonical,
     _continuation_request,
     _engine_action,
+    _engine_target_sync_conflict,
     _exhaust_builder_retry_with_distinct_codes,
     _failure_request,
     _loader_activation_state_snapshot,
@@ -51,6 +55,7 @@ from serve.delivery.tests.test_portfolio_application import (
     _workspace_content_snapshot,
     _workspace_mutation_snapshot,
     acceptance_budget_case,
+    retain_contained_transition,
 )
 from serve.delivery.tests.test_recovery import (
     absent_host_process_case,
@@ -220,6 +225,7 @@ async def test_registered_get_change_exposes_exhausted_builder_retry_history(tmp
             "status": "failed",
             "failure_code": "builder-failed",
             "observed_at": "2026-08-04T00:00:00Z",
+            "reason": _FIRST_BUILDER_RETRY_REASON,
         },
         {
             "ordinal": 2,
@@ -234,6 +240,7 @@ async def test_registered_get_change_exposes_exhausted_builder_retry_history(tmp
             "status": "failed",
             "failure_code": "builder-review-failed",
             "observed_at": "2026-08-04T02:00:00Z",
+            "reason": _THIRD_BUILDER_RETRY_REASON,
         },
     ]
     assert runtime.retry_ledger().read() == ledger_before
@@ -1945,6 +1952,9 @@ class _BlockingFoundationalApplication(_RecordingApplication):
     def acquire_actions(self) -> _Result:
         return self._run_foundational_operation()
 
+    def show_build_context(self, **_identity: str) -> _Result:
+        return self._run_foundational_operation()
+
     def delivery_health(self) -> DeliveryHealthView:
         self.calls.append("delivery_health")
         self.health_observations.append(self.mutation_count)
@@ -2237,7 +2247,7 @@ async def test_registered_planner_retry_settlement_has_exact_client_contract(tmp
         )
 
     tool = tools["settle_worker_invocation"]
-    assert set(tool.input_schema["properties"]) == {"settlement", "host_id", "session_id"}
+    assert set(tool.input_schema["properties"]) == {"settlement", "host_id", "session_id", "retry_reason"}
     assert tool.input_schema["additionalProperties"] is False
     settlement_schema = tool.input_schema["properties"]["settlement"]
     settlement_refs = {item["$ref"].rsplit("/", 1)[-1] for item in settlement_schema["anyOf"]}
@@ -3536,6 +3546,27 @@ async def test_foundational_operations_yield_to_independent_health_requests(
 
 
 @pytest.mark.asyncio
+async def test_build_context_target_probe_yields_the_mcp_event_loop() -> None:
+    started = threading.Event()
+    release = threading.Event()
+    fallback_release = threading.Timer(1, release.set)
+    fallback_release.start()
+    adapter = TargetMCPAdapter(_BlockingFoundationalApplication("show_build_context", started, release))  # type: ignore[arg-type]
+    identity = {"change_id": "change-a", "outcome_id": "OUT-001", "attempt_id": "attempt", "claim_id": "claim"}
+    launched_at = time.monotonic()
+
+    task = asyncio.create_task(adapter.show_build_context(identity))
+    assert await asyncio.to_thread(started.wait, 2)
+    elapsed = time.monotonic() - launched_at
+    release.set()
+    result = await task
+    fallback_release.cancel()
+
+    assert elapsed < 0.5
+    assert result == {"operation": "show_build_context"}
+
+
+@pytest.mark.asyncio
 async def test_cancelled_admission_is_reconciled_without_a_blind_retry() -> None:
     started = threading.Event()
     release = threading.Event()
@@ -4066,3 +4097,94 @@ async def test_assembled_work_item_tools_observe_runtime_transition(
     assert before.structured_content["projection"]["stage"] == "completed"
     assert listed.structured_content["result"][0]["stage"] == "planning"
     assert after.structured_content["projection"]["stage"] == "planning"
+
+
+def _continuation_change_state(tmp_path: Path, state: str):
+    if state == "evidence":
+        return evidence_projection_case(tmp_path)[0]
+    if state in {"running", "held"}:
+        application, *_setup, settlement = _builder_retry_handoff_setup(
+            tmp_path, ["2026-08-04T00:00:00Z"], add_workspace_changes=False
+        )
+        if state == "held":
+            retain_contained_transition(application, "change-a", settlement.request)
+        return application
+    if state == "conflicted":
+        return _engine_target_sync_conflict(tmp_path)[0]
+    if state == "exhausted":
+        return _exhaust_builder_retry_with_distinct_codes(tmp_path)[0]
+    repository, _runtime_root, _remote, provider, application, _head_a, _head_b = _loader_composed_engine_fixture(
+        tmp_path
+    )
+    coordination = application._coordinator.runtime_root / "coordination/changes/change-a.json"  # noqa: SLF001
+    coordination.write_bytes(b"{")
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    _git(repository, "config", f"url.{_remote}.insteadOf", "https://github.com/example/project.git")
+    return load_core_delivery_application(_startup_config(), workspace_root=repository, publication_provider=provider)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("state", "marker"),
+    [
+        ("evidence", None),
+        ("running", "active-custody"),
+        ("held", "retry-transition-contained"),
+        ("conflicted", "engine-action-failed"),
+        ("exhausted", "retry-exhausted"),
+        ("unavailable", "coordination-unavailable"),
+    ],
+)
+async def test_registered_continuation_view_keeps_every_field_but_evidence_bodies(
+    tmp_path: Path, state: str, marker: str | None
+) -> None:
+    application = _continuation_change_state(tmp_path, state)
+
+    async with Client(assemble_target_server(application)) as client:
+        full = (await client.call_tool("get_change", {"change_id": "change-a"})).structured_content
+        compact = (
+            await client.call_tool("get_change", {"change_id": "change-a", "view": "continuation"})
+        ).structured_content
+
+    assert full is not None
+    if marker is not None:
+        assert full["readiness"]["reason_code"] == marker
+    expected = copy.deepcopy(full)
+    if full["kind"] == "available":
+        expected["evidence"] = None
+        expected["detail"]["evidence"] = None
+        expected["evidence_counts"] = None if full["evidence"] is None else full["evidence"]["counts"]
+    assert compact == expected
+    if state == "evidence":
+        assert full["evidence"]["criteria"]
+        assert full["detail"]["evidence"]["criteria"]
+        assert compact["evidence_counts"] == full["evidence"]["counts"]
+        assert len(json.dumps(compact)) < len(json.dumps(full)) / 2
+
+
+@pytest.mark.asyncio
+async def test_registered_settlement_keeps_the_retry_reason_for_the_next_builder(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, _runtime, _coordinator, _state_root, first, _head, _workspace, settlement = (
+        _builder_retry_handoff_setup(tmp_path, now, add_workspace_changes=False)
+    )
+    payload = {
+        "settlement": settlement.model_dump(mode="json"),
+        "host_id": first.claim.owner_id,
+        "session_id": first.claim.process_id,
+    }
+    reason = "Snapshot fixture drifted; regenerate it before editing"
+
+    async with Client(assemble_target_server(application)) as client:
+        refused = await client.call_tool("settle_worker_invocation", {**payload, "retry_reason": "two\nlines"})
+        settled = await client.call_tool("settle_worker_invocation", {**payload, "retry_reason": reason})
+
+    assert refused.is_error
+    assert not settled.is_error
+    now[0] = "2026-08-04T01:00:00Z"
+    second = application.acquire_change_action(_continuation_request(application, "change-a")).launch
+    assert second is not None
+    context = application.show_build_context(
+        second.change_id, second.outcome_id, second.claim.attempt_id, second.claim.claim_id
+    )
+    assert [(item.failure_code, item.reason) for item in context.prior_attempts] == [("builder-failed", reason)]

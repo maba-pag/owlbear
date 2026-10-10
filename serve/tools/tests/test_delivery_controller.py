@@ -641,6 +641,38 @@ _CUSTODY = {
         ["pending-checkpoint"],
         [],
     ),
+    "review-parked-checkpoint": (
+        lambda layout: _record(
+            layout,
+            f"{_CHANGE}/frontier.json",
+            {
+                "schema_version": 18,
+                "bindings": [],
+                "pending_checkpoint": {"head": "x"},
+                "target_sync_receipt": {"review_required": True},
+                "finalization": None,
+            },
+        ),
+        "gone",
+        [],
+        ["checkpoint-awaits-review"],
+    ),
+    "finalized-checkpoint-after-sync": (
+        lambda layout: _record(
+            layout,
+            f"{_CHANGE}/frontier.json",
+            {
+                "schema_version": 18,
+                "bindings": [],
+                "pending_checkpoint": {"head": "x"},
+                "target_sync_receipt": {"review_required": True},
+                "finalization": {"exact_head": "x"},
+            },
+        ),
+        "gone",
+        ["pending-checkpoint"],
+        [],
+    ),
     "publication-lease": (
         lambda layout: _coordination(layout, publication_lease={"owner_id": "o"}),
         "gone",

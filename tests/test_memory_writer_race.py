@@ -9,6 +9,7 @@ from threading import Barrier
 from time import monotonic
 from typing import Any
 from unittest.mock import patch
+from uuid import uuid4
 
 import pytest
 from owlbear_memory import ConcurrencyError, MemoryBusyError, MemoryEngine, MemoryState, storage, writer_lock
@@ -89,7 +90,9 @@ def _record_assessments(
         for _ in range(1000):
             entry = engine.get_entry(entry_id)
             try:
-                engine.record_assessment(entry_id, "outstanding", expected_updated_at=entry.updated_at)
+                engine.record_assessment(
+                    entry_id, "outstanding", task_id=f"task-{uuid4()}", expected_revision=entry.revision
+                )
             except ConcurrencyError:
                 continue
             completed += 1
@@ -101,7 +104,10 @@ def _record_assessments(
 
 def _record_after_barrier(engine: MemoryEngine, entry_id: str, barrier: Barrier) -> int:
     barrier.wait(timeout=10)
-    return engine.record_assessment(entry_id, "outstanding").outstanding_count
+    revision = engine.get_entry(entry_id).revision
+    return engine.record_assessment(
+        entry_id, "outstanding", task_id=f"task-{uuid4()}", expected_revision=revision
+    ).entry.outstanding_count
 
 
 def _pause_during_delete_agent_rollback(
@@ -153,8 +159,8 @@ def _mutating_calls(engine: MemoryEngine, entry: MemoryEntry) -> list[Callable[[
         lambda: engine.resolve(entry.id, expected_updated_at=entry.updated_at),
         lambda: engine.delete(entry.id, expected_updated_at=entry.updated_at),
         engine.purge,
-        lambda: engine.record_assessment(entry.id, "outstanding"),
-        lambda: engine.record_factually_wrong(entry.id, "task-1"),
+        lambda: engine.record_assessment(entry.id, "outstanding", task_id="task-1", expected_revision=entry.revision),
+        lambda: engine.record_factually_wrong(entry.id, "task-1", expected_revision=entry.revision),
         lambda: engine.try_stale_transition(entry),
         lambda: engine.rename_agent("test-agent", "renamed-agent"),
         lambda: engine.delete_agent("test-agent"),
@@ -396,7 +402,11 @@ def test_record_assessment_reenters_writer_lock_for_stale_transition(tmp_path: P
     entry = entry.model_copy(update={"didnt_use_count": 50})
     storage.write_entry(tmp_path / f"{entry.id}.md", entry, memory_dir=tmp_path)
 
-    updated = MemoryEngine(tmp_path).record_assessment(entry.id, "didnt_use")
+    updated = (
+        MemoryEngine(tmp_path)
+        .record_assessment(entry.id, "didnt_use", task_id="task-stale", expected_revision=entry.revision)
+        .entry
+    )
 
     assert updated.didnt_use_count == 51
     assert updated.state == MemoryState.STALE
@@ -417,8 +427,8 @@ def test_multiple_engines_complete_sequential_and_threaded_mutations(tmp_path: P
     entry = first_engine.edit(entry.id, {"scope_agents": ["test-agent"]}, expected_updated_at=entry.updated_at)
     entry = first_engine.approve(entry.id, expected_updated_at=entry.updated_at)
 
-    first_engine.record_assessment(entry.id, "outstanding")
-    second_engine.record_assessment(entry.id, "outstanding")
+    first_engine.record_assessment(entry.id, "outstanding", task_id="task-a", expected_revision=entry.revision)
+    second_engine.record_assessment(entry.id, "outstanding", task_id="task-b", expected_revision=entry.revision)
 
     barrier = Barrier(2)
     with ThreadPoolExecutor(max_workers=2) as executor:

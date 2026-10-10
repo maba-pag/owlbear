@@ -475,7 +475,7 @@ async def test_failed_ingest_preserves_scope_and_health_error_contract(runtime: 
     assert runtime.content.ingest.await_args.args[0].scope == runtime.source.scope
     health_report: SourceHealthReport = runtime.sources.record_health.call_args.args[1]
     assert health_report.health is SourceHealth.FAILED
-    assert health_report.message == "processed=1, succeeded=0, failed=1, created=0, replaced=0, unchanged=0"
+    assert health_report.message == "processed=1, succeeded=0, failed=1, failure_codes=persistence_failed"
 
 
 @pytest.mark.asyncio

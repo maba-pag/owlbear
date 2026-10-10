@@ -11,6 +11,8 @@ Covers:
 
 from __future__ import annotations
 
+import sys
+from concurrent.futures import ThreadPoolExecutor
 from enum import StrEnum
 from pathlib import Path
 from tempfile import mkstemp as _real_mkstemp
@@ -78,6 +80,30 @@ def _make_valid_entry() -> MemoryEntry:
 def _write_valid_file(path: Path, body: str = "Some content") -> None:
     """Write a syntactically and semantically valid memory markdown file."""
     path.write_text(_VALID_FRONTMATTER + body + "\n", encoding="utf-8")
+
+
+def test_concurrent_reads_and_writes_parse_every_entry(tmp_path: Path) -> None:
+    """Threads sharing the storage module never corrupt each other's YAML parsing."""
+    previous_interval = sys.getswitchinterval()
+    sys.setswitchinterval(1e-5)
+    entry = _make_valid_entry().model_copy(update={"content": "c" * 500})
+    paths = [tmp_path / f"{index}.md" for index in range(8)]
+    for path in paths:
+        storage.write_entry(path, entry, memory_dir=tmp_path)
+
+    def exercise(worker: int) -> int:
+        unreadable = 0
+        for _ in range(40):
+            for path in paths:
+                unreadable += storage.read_entry(path) is None
+            storage.write_entry(paths[worker], entry, memory_dir=tmp_path)
+        return unreadable
+
+    try:
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            assert sum(executor.map(exercise, range(8))) == 0
+    finally:
+        sys.setswitchinterval(previous_interval)
 
 
 # ---------------------------------------------------------------------------
@@ -448,9 +474,9 @@ class TestStorageWrite:
     @pytest.mark.parametrize(
         ("title", "content"),
         [
-            ("x" * 7819, "Some content"),
-            ("é" * 3909 + "x", "Some content"),
-            ("x" * 3735, "😀" * 1024),
+            ("x" * 7828, "Some content"),
+            ("é" * 3909 + "x" * 10, "Some content"),
+            ("x" * 3744, "😀" * 1024),
         ],
         ids=["ascii-title", "multibyte-title", "multibyte-content"],
     )
@@ -482,7 +508,7 @@ class TestStorageWrite:
         original = _make_valid_entry()
         storage.write_entry(target, original, memory_dir=memory_dir)
         original_bytes = target.read_bytes()
-        oversized = MemoryEntry(**{**_valid_entry_data(), "title": "x" * 7820})
+        oversized = MemoryEntry(**{**_valid_entry_data(), "title": "x" * 7829})
 
         with pytest.raises(ValueError, match=rf"serialized entry exceeds {_8KB} bytes \(got 8193\).*metadata"):
             storage.write_entry(target, oversized, memory_dir=memory_dir)
@@ -496,8 +522,8 @@ class TestStorageWrite:
     @pytest.mark.parametrize(
         ("source_agent", "expected_size"),
         [
-            ("é" * 3909 + "x", _8KB),
-            ("é" * 3909 + "xx", _8KB + 1),
+            ("é" * 3909 + "x" * 10, _8KB),
+            ("é" * 3909 + "x" * 11, _8KB + 1),
         ],
         ids=["accepted", "rejected"],
     )
@@ -540,9 +566,9 @@ class TestStorageWrite:
     @pytest.mark.parametrize(
         ("overrides", "serialized_size"),
         [
-            ({"source_agent": "x" * 9000}, 9373),
-            ({"scope_agents": ["x" * 9000]}, 9385),
-            ({"title": "x" * 3736, "content": "😀" * 1024}, 8193),
+            ({"source_agent": "x" * 9000}, 9364),
+            ({"scope_agents": ["x" * 9000]}, 9376),
+            ({"title": "x" * 3745, "content": "😀" * 1024}, 8193),
         ],
         ids=["provenance", "scope", "body-content"],
     )

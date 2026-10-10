@@ -52,6 +52,12 @@ Before reviewing entries, read these files and apply them as the source of truth
 2. `../skills/h-mcp-memory/SKILL.md` for tool contracts, allowed transitions, and batch-review helper usage.
 3. The live `owlbear-memory` tool registry; batch commits use its dedicated `commit_memory_batch` operation.
 
+`approve_memory`, `curate_memory`, and `delete_memory` each require the current `revision` from
+`read_memory` or `list_memories`. It is a 16-character lowercase hex token derived from `title`,
+`content`, `categories`, `confidence`, and `scope_agents`; it does not change with state, assessment
+counters, or timestamps. A stale revision is refused with expected and current revisions and an
+instruction to re-read before retrying. Re-read the entry before retrying with its new revision.
+
 Boundary rules:
 
 - This prompt may approve `curated` entries after explicit user approval.
@@ -277,13 +283,13 @@ After the user answers, perform exactly the selected action for the current entr
 ### Approve
 
 - Valid only when the current state is `curated`.
-- Call `owlbear-memory/approve_memory` with `entry_id`.
+- Call `owlbear-memory/approve_memory` with `entry_id` and `revision=entry["revision"]` from the current `read_memory` or `list_memories` result.
 - Record the result in the session ledger.
 - Move to the next selected entry unless the user explicitly asks to pause, stop, or end.
 
 ### Edit Before Approval
 
-- If the user provided exact edits, call `owlbear-memory/curate_memory` with only those fields.
+- If the user provided exact edits, call `owlbear-memory/curate_memory` with `entry_id`, `revision=entry["revision"]`, and only the exact edited fields.
 - If the user asked you to propose a rewrite, draft the exact replacement title/content/categories/confidence/scope first, then ask one confirmation decision before mutating.
 - Keep entries single-insight. If the content contains multiple insights, recommend splitting through `memory-curator` instead of stuffing multiple ideas into one entry.
 - After mutation, read or report the returned entry state and ledger it as changed.
@@ -293,7 +299,7 @@ After the user answers, perform exactly the selected action for the current entr
 - Treat this as destructive.
 - Selecting `Reject` or `Reject/retire` in `askQuestions` is explicit confirmation.
 - If the user gives an ambiguous freeform answer that might imply rejection, clarify before mutating.
-- Call `owlbear-memory/delete_memory` only after confirmation.
+- Call `owlbear-memory/delete_memory` with `entry_id` and `revision=entry["revision"]` only after confirmation.
 - Record whether the tool reported hard-delete or soft-delete semantics.
 
 ### Skip

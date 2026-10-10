@@ -1030,7 +1030,10 @@ def _is_unpublished_claim_successor(
     local_without_claims = local_frontier.model_copy(
         update={"bindings": tuple(binding.model_copy(update=transient_fields) for binding in local_frontier.bindings)}
     )
-    return local_has_claim and snapshot_without_claims == local_without_claims
+    return local_has_claim and (
+        snapshot_without_claims == local_without_claims
+        or _is_unpublished_checkpoint_successor(snapshot_without_claims, local_without_claims)
+    )
 
 
 def _is_unpublished_builder_handoff_successor(
@@ -1193,17 +1196,21 @@ def _validate_local_builder_handoff_workspace(
         f"refs/heads/{snapshot.branch}^{{commit}}",
     )
     # Retained uncommitted material may drift (editor restore, index refresh); the next Builder triages it.
+    head_matches = metadata.branch_head == context.branch_head or (
+        context.route == "same-task"
+        and _loader_git_is_ancestor(paths.repository_root, context.branch_head, metadata.branch_head)
+    )
     if not all(
         (
             metadata.change_id == snapshot.change_id,
             metadata.branch == snapshot.branch,
             metadata.worktree_path == coordination.worktree_path,
             metadata.last_reviewed_commit == context.last_reviewed_commit,
-            metadata.branch_head == context.branch_head,
+            head_matches,
             metadata.registration.path == metadata.worktree_path,
             metadata.registration.branch == metadata.branch,
             metadata.registration.head == metadata.branch_head,
-            local_branch_head == context.branch_head,
+            local_branch_head == metadata.branch_head,
             _loader_git_is_ancestor(paths.repository_root, snapshot.change_head, context.branch_head),
         )
     ):
@@ -1253,7 +1260,9 @@ def _validate_local_builder_handoff_frontier(
             receipt,
             paths.runtime_root,
         )
-    if expected_frontier != local_frontier:
+    if expected_frontier != local_frontier and not _is_unpublished_checkpoint_successor(
+        expected_frontier, local_frontier
+    ):
         _bootstrap_failure("local Delivery frontier contains state outside the exact Builder handoff")
 
 
@@ -1282,7 +1291,9 @@ def _validate_local_builder_return_frontier(
     else:
         _bootstrap_failure("local Builder return has an unsupported handoff route")
 
-    if expected_frontier != local_frontier:
+    if expected_frontier != local_frontier and not _is_unpublished_checkpoint_successor(
+        expected_frontier, local_frontier
+    ):
         _bootstrap_failure("local Delivery frontier differs from its exact Builder return promotion")
 
 

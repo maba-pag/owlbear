@@ -53,9 +53,15 @@ async def _capture(memory_dir: Path) -> list[dict[str, object]]:
     ):
         await session.initialize()
         for state, entry_id in EXCEPTIONAL_ENTRIES.items():
+            read_result = await session.call_tool("read_memory", {"entry_id": entry_id})
+            if read_result.is_error:
+                message = _response_text(read_result)
+                msg = f"read_memory failed for {state}: {message}"
+                raise RuntimeError(msg)
+            revision = json.loads(_response_text(read_result))["revision"]
             result = await session.call_tool(
                 "curate_memory",
-                {"entry_id": entry_id, "title": "Mutation must be rejected"},
+                {"entry_id": entry_id, "revision": revision, "title": "Mutation must be rejected"},
             )
             message = _response_text(result)
             if result.is_error is not True or state not in message:

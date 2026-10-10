@@ -23,6 +23,9 @@ from owlbear_memory.errors import (
     ValidationError,
 )
 from owlbear_memory.models import (
+    AssessmentReceipt,
+    AssessmentResult,
+    ChallengeRecord,
     MemoryCategory,
     MemoryEntry,
     MemoryHealth,
@@ -40,6 +43,8 @@ _LOGGER = logging.getLogger(__name__)
 OUTSTANDING_BOOST = 0.1
 UNREMARKABLE_PENALTY = 0.01
 STALE_THRESHOLD = 50
+_ASSESSMENT_TASK_ID_MAX_LENGTH = 128
+_ASSESSMENT_RECEIPT_WINDOW = 20
 _DUPLICATE_COPY_THRESHOLD = 2
 
 
@@ -90,7 +95,8 @@ def _matches_repair_copy(candidate: MemoryEntry, source: MemoryEntry, marked_tit
     return (
         candidate.state == MemoryState.PENDING
         and candidate.approved_at is None
-        and candidate.contested_by_task is None
+        and not candidate.challenges
+        and not candidate.assessment_receipts
         and candidate.outstanding_count == 0
         and candidate.unremarkable_count == 0
         and candidate.didnt_use_count == 0
@@ -148,7 +154,8 @@ def _write_repair_copy(
             "title": marked_title,
             "state": MemoryState.PENDING,
             "approved_at": None,
-            "contested_by_task": None,
+            "challenges": [],
+            "assessment_receipts": [],
             "outstanding_count": 0,
             "unremarkable_count": 0,
             "didnt_use_count": 0,
@@ -267,7 +274,7 @@ def repair_duplicate_ids(memory_dir: Path | str) -> None:
 
 
 def compute_score(confidence: float, outstanding_count: int, unremarkable_count: int) -> float:
-    """Compute score from confidence and assessment counters."""
+    """Compute score from assessment counters."""
     return confidence + (outstanding_count * OUTSTANDING_BOOST) - (unremarkable_count * UNREMARKABLE_PENALTY)
 
 
@@ -464,11 +471,21 @@ class MemoryEngine:
         msg = f"Entry not found: {entry_id}"
         raise NotFoundError(msg)
 
-    def approve(self, entry_id: str, expected_updated_at: str) -> MemoryEntry:
+    def approve(
+        self,
+        entry_id: str,
+        expected_updated_at: str | None = None,
+        *,
+        expected_revision: str | None = None,
+    ) -> MemoryEntry:
         """Transition curated entry to approved after OCC check."""
         with self._writer():
             entry = self.get_entry(entry_id)
-            self._validate_occ(entry, expected_updated_at)
+            self._validate_revision(
+                entry,
+                expected_updated_at=expected_updated_at,
+                expected_revision=expected_revision,
+            )
 
             if entry.state != MemoryState.CURATED:
                 msg = f"approve() not allowed from state {entry.state}"
@@ -500,7 +517,7 @@ class MemoryEngine:
                     "state": MemoryState.APPROVED,
                     "approved_at": now,
                     "updated_at": now,
-                    "contested_by_task": None,
+                    "challenges": [],
                     "didnt_use_count": 0 if entry.state == MemoryState.STALE else entry.didnt_use_count,
                 }
             )
@@ -524,11 +541,22 @@ class MemoryEngine:
             _LOGGER.info("Auto-transitioned entry %s to stale via slot-efficiency", entry.id)
             return self._write_updated_entry(updated)
 
-    def edit(self, entry_id: str, fields: EditPayload, expected_updated_at: str) -> MemoryEntry:
+    def edit(
+        self,
+        entry_id: str,
+        fields: EditPayload,
+        expected_updated_at: str | None = None,
+        *,
+        expected_revision: str | None = None,
+    ) -> MemoryEntry:
         """Apply field updates with state-machine and OCC constraints."""
         with self._writer():
             entry = self.get_entry(entry_id)
-            self._validate_occ(entry, expected_updated_at)
+            self._validate_revision(
+                entry,
+                expected_updated_at=expected_updated_at,
+                expected_revision=expected_revision,
+            )
 
             if entry.state == MemoryState.DELETED:
                 msg = "edit() not allowed from state deleted"
@@ -559,11 +587,21 @@ class MemoryEngine:
             updated = MemoryEntry.model_validate(data)
             return self._write_updated_entry(updated)
 
-    def delete(self, entry_id: str, expected_updated_at: str) -> MemoryEntry:
+    def delete(
+        self,
+        entry_id: str,
+        expected_updated_at: str | None = None,
+        *,
+        expected_revision: str | None = None,
+    ) -> MemoryEntry:
         """Hard-delete pending entries; soft-delete curated/approved entries."""
         with self._writer():
             entry = self.get_entry(entry_id)
-            self._validate_occ(entry, expected_updated_at)
+            self._validate_revision(
+                entry,
+                expected_updated_at=expected_updated_at,
+                expected_revision=expected_revision,
+            )
 
             if entry.state == MemoryState.DELETED:
                 msg = "delete() not allowed from state deleted"
@@ -680,59 +718,82 @@ class MemoryEngine:
         self,
         entry_id: str,
         task_id: str,
-        expected_updated_at: str | None = None,
-    ) -> MemoryEntry:
+        *,
+        expected_revision: str,
+    ) -> AssessmentResult:
         """Record a factually-wrong assessment via contested/disputed confirmation cycle."""
         with self._writer():
             entry = self.get_entry(entry_id)
+            previous = self._existing_assessment_result(
+                entry,
+                task_id=task_id,
+                expected_revision=expected_revision,
+            )
+            if previous is not None:
+                return previous
+            self._validate_assessment_task_id(task_id)
 
-            if expected_updated_at is not None:
-                self._validate_occ(entry, expected_updated_at)
-
-            if not task_id.strip():
-                msg = "task_id must not be empty"
-                raise ValidationError(msg)
+            if any(challenge.task_id == task_id for challenge in entry.challenges):
+                return AssessmentResult(
+                    entry=entry,
+                    already_applied=True,
+                    recorded_bucket="factually_wrong",
+                )
 
             if entry.state in {MemoryState.APPROVED, MemoryState.CURATED}:
-                updated = entry.model_copy(
-                    update={
-                        "state": MemoryState.CONTESTED,
-                        "contested_by_task": task_id,
-                        "approved_at": None,
-                        "updated_at": self._now_iso(entry.updated_at),
-                    }
-                )
-                return self._write_updated_entry(updated)
+                next_state = MemoryState.CONTESTED
+                initial_confirmation = True
+            elif entry.state == MemoryState.CONTESTED:
+                if not entry.challenges:
+                    next_state = MemoryState.CONTESTED
+                elif len(entry.challenges) == 1:
+                    next_state = MemoryState.DISPUTED
+                else:
+                    msg = "record_factually_wrong() cannot add a third challenge"
+                    raise TransitionError(msg)
+                initial_confirmation = False
+            else:
+                msg = f"record_factually_wrong() not allowed from state {entry.state}"
+                raise TransitionError(msg)
 
-            if entry.state == MemoryState.CONTESTED:
-                if entry.contested_by_task == task_id:
-                    return entry
+            write_timestamp = self._now_iso(entry.updated_at)
+            challenge = ChallengeRecord(
+                task_id=task_id,
+                revision=expected_revision,
+                recorded_at=write_timestamp,
+            )
+            challenges = [challenge] if initial_confirmation else [*entry.challenges, challenge]
+            updates: dict[str, object] = {"state": next_state, "challenges": challenges}
+            if initial_confirmation:
+                updates["approved_at"] = None
+            updated = entry.model_copy(update=updates)
 
-                updated_state = MemoryState.DISPUTED if entry.contested_by_task is not None else MemoryState.CONTESTED
-                updated = entry.model_copy(
-                    update={
-                        "state": updated_state,
-                        "contested_by_task": None if updated_state == MemoryState.DISPUTED else task_id,
-                        "updated_at": self._now_iso(entry.updated_at),
-                    }
-                )
-                return self._write_updated_entry(updated)
-
-            msg = f"record_factually_wrong() not allowed from state {entry.state}"
-            raise TransitionError(msg)
+            return self._write_assessment(
+                entry,
+                updated,
+                AssessmentReceipt(task_id=task_id, revision=expected_revision, bucket="factually_wrong"),
+                write_timestamp=write_timestamp,
+            )
 
     def record_assessment(
         self,
         entry_id: str,
         bucket: str,
-        expected_updated_at: str | None = None,
-    ) -> MemoryEntry:
+        *,
+        task_id: str,
+        expected_revision: str,
+    ) -> AssessmentResult:
         """Record counter-based assessments and recompute score."""
         with self._writer():
             entry = self.get_entry(entry_id)
-
-            if expected_updated_at is not None:
-                self._validate_occ(entry, expected_updated_at)
+            previous = self._existing_assessment_result(
+                entry,
+                task_id=task_id,
+                expected_revision=expected_revision,
+            )
+            if previous is not None:
+                return previous
+            self._validate_assessment_task_id(task_id)
 
             if entry.state not in {MemoryState.APPROVED, MemoryState.CURATED, MemoryState.CONTESTED}:
                 msg = f"record_assessment() not allowed from state {entry.state}"
@@ -758,14 +819,68 @@ class MemoryEngine:
                     "unremarkable_count": unremarkable_count,
                     "didnt_use_count": didnt_use_count,
                     "score": compute_score(entry.confidence, outstanding_count, unremarkable_count),
-                    "updated_at": self._now_iso(entry.updated_at),
                 }
             )
-            updated = self._write_updated_entry(updated)
-
             if check_slot_efficiency(updated):
-                return self.try_stale_transition(updated)
-            return updated
+                updated = updated.model_copy(update={"state": MemoryState.STALE})
+                _LOGGER.info("Auto-transitioned entry %s to stale via slot-efficiency", entry.id)
+
+            return self._write_assessment(
+                entry,
+                updated,
+                AssessmentReceipt(task_id=task_id, revision=expected_revision, bucket=bucket),
+            )
+
+    @staticmethod
+    def _validate_assessment_task_id(task_id: str) -> None:
+        if (
+            not isinstance(task_id, str)
+            or not 1 <= len(task_id) <= _ASSESSMENT_TASK_ID_MAX_LENGTH
+            or any(not "!" <= character <= "~" for character in task_id)
+        ):
+            msg = "task_id must be 1-128 printable ASCII characters without whitespace"
+            raise ValidationError(msg)
+
+    @staticmethod
+    def _existing_assessment_result(
+        entry: MemoryEntry,
+        *,
+        task_id: str,
+        expected_revision: str,
+    ) -> AssessmentResult | None:
+        current_revision = entry.revision
+        if current_revision != expected_revision:
+            msg = (
+                f"Entry {entry.id} changed since recall: expected revision {expected_revision!r}, "
+                f"current revision {current_revision!r}; feedback was not applied"
+            )
+            raise ConcurrencyError(msg)
+
+        for receipt in entry.assessment_receipts:
+            if receipt.task_id == task_id and receipt.revision == expected_revision:
+                return AssessmentResult(
+                    entry=entry,
+                    already_applied=True,
+                    recorded_bucket=receipt.bucket,
+                )
+        return None
+
+    def _write_assessment(
+        self,
+        original: MemoryEntry,
+        updated: MemoryEntry,
+        receipt: AssessmentReceipt,
+        *,
+        write_timestamp: str | None = None,
+    ) -> AssessmentResult:
+        updated = updated.model_copy(
+            update={
+                "assessment_receipts": [*original.assessment_receipts, receipt],
+                "updated_at": write_timestamp if write_timestamp is not None else self._now_iso(original.updated_at),
+            }
+        )
+        persisted = self._write_updated_entry(updated)
+        return AssessmentResult(entry=persisted, already_applied=False, recorded_bucket=receipt.bucket)
 
     def save(  # noqa: PLR0913
         self,
@@ -799,6 +914,29 @@ class MemoryEngine:
             )
             return self._write_updated_entry(entry)
 
+    def _validate_revision(
+        self,
+        entry: MemoryEntry,
+        *,
+        expected_updated_at: str | None,
+        expected_revision: str | None,
+    ) -> None:
+        """Validate exactly one optimistic concurrency token before mutation."""
+        if (expected_updated_at is None) == (expected_revision is None):
+            msg = "exactly one of expected_updated_at or expected_revision must be provided"
+            raise ValidationError(msg)
+
+        if expected_revision is not None:
+            current_revision = entry.revision
+            if current_revision != expected_revision:
+                msg = (
+                    f"Revision check failed for entry {entry.id}: expected revision "
+                    f"{expected_revision!r}, current revision {current_revision!r}"
+                )
+                raise ConcurrencyError(msg)
+        elif expected_updated_at is not None:
+            self._validate_occ(entry, expected_updated_at)
+
     def _validate_occ(self, entry: MemoryEntry, expected_updated_at: str) -> None:
         if entry.updated_at != expected_updated_at:
             msg = (
@@ -828,7 +966,24 @@ class MemoryEngine:
         self._id_to_path.pop(entry_id, None)
         self._entries = [entry for entry in self._entries if entry.id != entry_id]
 
+    @staticmethod
+    def _prepare_entry_for_write(entry: MemoryEntry) -> MemoryEntry:
+        receipts = [receipt for receipt in entry.assessment_receipts if receipt.revision == entry.revision]
+        receipts = receipts[-_ASSESSMENT_RECEIPT_WINDOW:]
+        while receipts:
+            prepared = entry.model_copy(update={"assessment_receipts": receipts})
+            if storage.serialized_entry_size(prepared) <= storage.MAX_ENTRY_FILE_SIZE_BYTES:
+                return prepared
+            if len(receipts) == 1:
+                msg = f"newest assessment receipt cannot fit within {storage.MAX_ENTRY_FILE_SIZE_BYTES} bytes"
+                raise ValidationError(msg)
+            receipts = receipts[1:]
+        if entry.assessment_receipts:
+            return entry.model_copy(update={"assessment_receipts": []})
+        return entry
+
     def _write_updated_entry(self, entry: MemoryEntry) -> MemoryEntry:
+        entry = self._prepare_entry_for_write(entry)
         path = self._id_to_path.get(entry.id, self._memory_dir / f"{entry.id}.md")
         storage.write_entry(path, entry, memory_dir=self._memory_dir)
         self._id_to_path[entry.id] = path
@@ -845,8 +1000,9 @@ class MemoryEngine:
         original_paths = {entry.id: self._id_to_path[entry.id] for entry in originals}
         affected_ids = {entry.id for entry in (*updated_entries, *deleted_entries)}
         affected_entries = [entry for entry in originals if entry.id in affected_ids]
+        prepared_entries = [self._prepare_entry_for_write(entry) for entry in updated_entries]
         try:
-            for entry in updated_entries:
+            for entry in prepared_entries:
                 storage.write_entry(original_paths[entry.id], entry, memory_dir=self._memory_dir)
             for entry in deleted_entries:
                 storage.delete_entry(original_paths[entry.id], memory_dir=self._memory_dir)

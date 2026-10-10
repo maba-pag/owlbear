@@ -148,9 +148,11 @@ async def test_mutation_tools_translate_busy_errors_from_another_process(tmp_pat
                 confidence=0.9,
                 source_agent="test-agent",
             ),
-            lambda: tools.curate_memory(ctx, entry_id=curate_entry.id, scope_agents=["test-agent"]),
-            lambda: tools.delete_memory(ctx, entry_id=delete_entry.id),
-            lambda: tools.approve_memory(ctx, entry_id=approve_entry.id),
+            lambda: tools.curate_memory(
+                ctx, entry_id=curate_entry.id, revision=curate_entry.revision, scope_agents=["test-agent"]
+            ),
+            lambda: tools.delete_memory(ctx, entry_id=delete_entry.id, revision=delete_entry.revision),
+            lambda: tools.approve_memory(ctx, entry_id=approve_entry.id, revision=approve_entry.revision),
             lambda: tools.rename_agent_memories(ctx, old_name="old-agent", new_name="new-agent"),
             lambda: tools.delete_agent_memories(ctx, agent="old-agent"),
         )
@@ -182,8 +184,8 @@ async def test_assess_memories_reports_busy_entry_and_continues(tmp_path: Path) 
         result = await tools.assess_memories(
             ctx,
             assessments=[
-                {"entry_id": blocked_entry.id, "bucket": "outstanding"},
-                {"entry_id": later_entry.id, "bucket": "outstanding"},
+                {"entry_id": blocked_entry.id, "revision": blocked_entry.revision, "bucket": "outstanding"},
+                {"entry_id": later_entry.id, "revision": later_entry.revision, "bucket": "outstanding"},
             ],
             task_id="task-1",
         )
@@ -193,7 +195,12 @@ async def test_assess_memories_reports_busy_entry_and_continues(tmp_path: Path) 
     assert result == {
         "results": [
             {"entry_id": blocked_entry.id, "success": False, "error": expected_message},
-            {"entry_id": later_entry.id, "success": True},
+            {
+                "entry_id": later_entry.id,
+                "success": True,
+                "already_applied": False,
+                "recorded_bucket": "outstanding",
+            },
         ],
     }
     assert engine.get_entry(blocked_entry.id).outstanding_count == 0
@@ -232,6 +239,7 @@ async def test_curate_memory_routes_cross_process_stale_edit_to_tool_error(
             await tools.curate_memory(
                 ctx,
                 entry_id=entry.id,
+                revision=entry.revision,
                 content="Stale curation.",
                 scope_agents=["test-agent"],
             )
@@ -242,7 +250,7 @@ async def test_curate_memory_routes_cross_process_stale_edit_to_tool_error(
         engine.edit(
             entry.id,
             {"content": "Another stale edit."},
-            expected_updated_at=entry.updated_at,
+            expected_revision=entry.revision,
         )
-    assert str(raised.value) == str(expected.value)
+    assert str(raised.value) == str(tools._stale_revision_error(expected.value))  # noqa: SLF001
     assert MemoryEngine(tmp_path).get_entry(entry.id).content == "Concurrent process wins."

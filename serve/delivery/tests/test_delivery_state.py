@@ -35,6 +35,8 @@ from owlbear_delivery import (
     DeliveryChangeIntent,
     DeliveryChangeIntentKind,
     DeliveryChangeStage,
+    DeliveryCheckpointTrigger,
+    DeliveryCheckpointTriggerKind,
     DeliveryCommandResult,
     DeliveryCommitment,
     DeliveryCommitmentClass,
@@ -51,6 +53,7 @@ from owlbear_delivery import (
     DeliveryObservation,
     DeliveryObservationReceipt,
     DeliveryOutcome,
+    DeliveryPendingCheckpoint,
     DeliveryPlanCandidate,
     DeliveryPlanningRetrySettlement,
     DeliveryPlanScope,
@@ -72,7 +75,6 @@ from owlbear_delivery import (
     DeliveryStateSnapshot,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
-    DeliveryWorkerExclusionRequiredError,
     DeliveryWorkerRole,
     DesignPackageManifest,
     DesignPackageStore,
@@ -1391,6 +1393,43 @@ def test_loader_accepts_claim_successor_with_published_plan_candidate() -> None:
 
 
 @pytest.mark.parametrize(
+    ("checkpoint_head", "local_published_head", "accepted"),
+    [
+        ("1" * 40, "1" * 40, True),
+        ("2" * 40, "1" * 40, False),
+        ("2" * 40, "2" * 40, False),
+    ],
+)
+def test_loader_claim_successor_accepts_only_an_unpublished_checkpoint_at_the_published_head(
+    checkpoint_head: str, local_published_head: str, *, accepted: bool
+) -> None:
+    snapshot_frontier = DeliveryFrontier(
+        bindings=(OutcomeAuthorityBinding(outcome_id="OUT-001", plan_scope_id="SCOPE-001"),),
+        published_head="1" * 40,
+    )
+    claim = DeliveryActiveClaim(
+        attempt_id="attempt",
+        claim_id="claim",
+        owner_id="owner",
+        process_id="process",
+        started_at="2026-08-23T00:00:00Z",
+        worker_role=DeliveryWorkerRole.BUILDER,
+    )
+    local_frontier = snapshot_frontier.model_copy(
+        update={
+            "bindings": (snapshot_frontier.bindings[0].model_copy(update={"active_claim": claim}),),
+            "published_head": local_published_head,
+            "pending_checkpoint": DeliveryPendingCheckpoint(
+                head=checkpoint_head,
+                triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.VERIFIED_TASK),),
+            ),
+        }
+    )
+
+    assert _is_unpublished_claim_successor(snapshot_frontier, local_frontier) is accepted
+
+
+@pytest.mark.parametrize(
     "update",
     [
         {"published_head": "1" * 40},
@@ -1958,7 +1997,9 @@ class _BuilderReturnRestartFixture(NamedTuple):
     remote_snapshot: bytes
 
 
-def _builder_return_restart_fixture(tmp_path: Path, change_id: str) -> _BuilderReturnRestartFixture:
+def _builder_return_restart_fixture(
+    tmp_path: Path, change_id: str, *, published_head: bool = False
+) -> _BuilderReturnRestartFixture:
     repository, remote, initial = _repository(tmp_path)
     contract, intent, design = _contract(change_id)
     state_root = tmp_path / "state"
@@ -2070,6 +2111,13 @@ def _builder_return_restart_fixture(tmp_path: Path, change_id: str) -> _BuilderR
         "bootstrap-package",
     )
     _git(repository, "push", "origin", f"{snapshot.snapshot_head}:refs/heads/{coordination.branch}")
+    if published_head:
+        published = DeliveryFrontier.model_validate_json(frontier_path.read_bytes())
+        frontier_path.write_bytes(
+            _canonical_payload(
+                published.model_copy(update={"published_head": snapshot.snapshot_head}).model_dump(mode="json")
+            )
+        )
     publisher = DeliveryStatePublisher(repository, remote=str(remote), state_branch="owlbear/delivery-state")
     publisher.publish(
         change_id=change_id,
@@ -2537,6 +2585,77 @@ def _assert_granted_claim_reloads(config: DeliveryStartupConfig, fresh: Path, ch
     assert binding.active_claim.attempt_id == attempt_id
     assert binding.block is not None
     assert binding.block.resolution_note == "The user granted one more Builder attempt."
+
+
+def test_builder_handoff_with_pending_checkpoint_at_published_head_survives_restart(tmp_path: Path) -> None:
+    change_id = "attempt-grant-pending-checkpoint"
+    restart = _builder_return_restart_fixture(tmp_path, change_id, published_head=True)
+    fresh, config, application = restart.fresh, restart.config, restart.application
+
+    def acquire(current: PortfolioApplication) -> DeliveryLaunchPackage | None:
+        episodes = current._runtimes[change_id].retry_ledger().read().episodes  # noqa: SLF001
+        eligible = [episode.next_eligible_at for episode in episodes if episode.next_eligible_at is not None]
+        if eligible:
+            resume = datetime.fromisoformat(max(eligible)) + timedelta(seconds=1)
+            current._clock = lambda: resume.isoformat().replace("+00:00", "Z")  # noqa: SLF001
+        launches = current.acquire_frontier_work().launch_packages
+        return launches[0] if launches else None
+
+    for _ in range(3):
+        launch = acquire(application)
+        assert launch is not None
+        application.settle_worker_invocation(
+            DeliveryBuilderInvocationSettlement(
+                change_id=change_id,
+                outcome_id=launch.outcome_id,
+                claim_id=launch.claim.claim_id,
+                attempt_id=launch.claim.attempt_id,
+                task_id=launch.task_id,
+                expected_last_reviewed_commit=launch.last_reviewed_commit,
+                disposition="ended-without-result",
+            ),
+            host_id=launch.claim.owner_id,
+            session_id=launch.claim.process_id,
+        )
+        application = load_delivery_application(config, workspace_root=fresh)
+
+    runtime = application._runtimes[change_id]  # noqa: SLF001
+    frontier, previous = runtime._read()  # noqa: SLF001
+    assert frontier.published_head is not None
+    assert frontier.pending_checkpoint is None
+    # A verified result queued at the published head; remote snapshots drop such a checkpoint.
+    runtime._replace(
+        previous,
+        frontier.model_copy(
+            update={
+                "pending_checkpoint": DeliveryPendingCheckpoint(
+                    head=frontier.published_head,
+                    triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.VERIFIED_TASK),),
+                )
+            }
+        ),
+    )
+
+    reloaded = load_delivery_application(config, workspace_root=fresh)
+    health = reloaded.delivery_health()
+    assert health.status.value == "healthy", health.diagnostics
+    reloaded_runtime = reloaded._runtimes[change_id]  # noqa: SLF001
+    block = reloaded_runtime.show_binding("OUT-001").block
+    assert block is not None
+    reloaded.answer(
+        DeliveryAnswer(
+            change_id=change_id,
+            kind=DeliveryAnswerKind.GRANT_ATTEMPT,
+            expected_frontier_digest=hashlib.sha256(reloaded_runtime.frontier_bytes()).hexdigest(),
+            outcome_id="OUT-001",
+            block_id=block.block_id,
+        ),
+        allow_user_only=True,
+    )
+    granted = load_delivery_application(config, workspace_root=fresh)
+    assert granted.delivery_health().status.value == "healthy"
+    assert granted.show_work_item_view(change_id, "outcome:OUT-001").readiness.reason_code != "retry-exhausted"
+    assert granted._runtimes[change_id]._read()[0].pending_checkpoint is not None  # noqa: SLF001
 
 
 def _settle_default_loader_planning_return(
@@ -3278,6 +3397,7 @@ def test_default_loader_rejects_unrecorded_repeated_planner_pause_on_builder_pla
         "ended-without-result",
         "host-lost",
         "released-stuck",
+        "released-late-commit",
         "drifted-same-bytes",
         "drifted-content",
         "deferred",
@@ -3411,8 +3531,10 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
             disposition=scenario if requestless else "normal-return",
             request=None if requestless else retry,
         )
-        if scenario in {"host-lost", "released-stuck"}:
-            settled = _settle_engine_worker_ending(application, launch, scenario)
+        if scenario in {"host-lost", "released-stuck", "released-late-commit"}:
+            settled = _settle_engine_worker_ending(
+                application, launch, "released-stuck" if scenario == "released-late-commit" else scenario
+            )
         else:
             with patch.object(application, "_clock", return_value="1970-01-02T00:00:00Z"):
                 settled = application.settle_worker_invocation(
@@ -3430,8 +3552,11 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
             abandoned_commit=launch.last_reviewed_commit,
             attempt_id=launch.claim.attempt_id,
         )
-        with pytest.raises(DeliveryWorkerExclusionRequiredError):
-            application.transition_delivery(change_id, transition)
+        from serve.delivery.tests.test_portfolio_application import (  # noqa: PLC0415 - avoids a cycle.
+            retain_contained_transition,
+        )
+
+        retain_contained_transition(application, change_id, transition)
         refused = application.show_operator_context(change_id, "OUT-001")
         assert refused.active_claim is not None
         assert refused.retry_diagnostic is not None
@@ -3462,6 +3587,15 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
         )
         assert drifted_metadata.fingerprint != handoff_context.metadata_fingerprint
         assert drifted_metadata.branch_head == handoff_context.branch_head
+
+    late_head = None
+    if scenario == "released-late-commit":
+        # The released chat resumes and commits more of its own task before it learns of the release.
+        late_file = launch.worktree_path / "late-retry.txt"
+        late_file.write_text("committed after release\n", encoding="utf-8")
+        _git(launch.worktree_path, "add", late_file.name)
+        _git(launch.worktree_path, "commit", "-m", "commit after release")
+        late_head = _git(launch.worktree_path, "rev-parse", "HEAD")
 
     negative_scenarios = {
         "forged-context",
@@ -3504,6 +3638,7 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
         "ended-without-result",
         "host-lost",
         "released-stuck",
+        "released-late-commit",
         "drifted-same-bytes",
         "drifted-content",
     }:
@@ -3512,6 +3647,9 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
         resumed = reloaded.acquire_frontier_work().launch_packages[0]
         if drifted_dirty_bytes is not None:
             assert (resumed.worktree_path / "dirty-retry.txt").read_bytes() == drifted_dirty_bytes
+        if late_head is not None:
+            assert resumed.source_head == late_head
+            assert resumed.last_reviewed_commit == launch.last_reviewed_commit
         assert resumed.claim.task_id == launch.task_id
         assert resumed.claim.claim_id != launch.claim.claim_id
         assert resumed.builder_handoff_context == handoff_context
@@ -3564,9 +3702,9 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
         assert readiness.operation is None
         assert readiness.action is None
         assert readiness.prompt is not None
-        assert "/repair-delivery" in readiness.prompt
-        assert "delivery-diagnose inspect --change-id" in readiness.prompt
-        assert "Make no MCP calls" in readiness.prompt
+        assert readiness.prompt.startswith(f"/continue-change {change_id} ")
+        assert "settle_worker_invocation" in readiness.prompt
+        assert "answer its stopped-run question" in readiness.prompt
     elif scenario in {"active-edited", "active-foreign-head"}:
         assert binding.active_claim is None
         assert binding.builder_handoff_context == handoff_context
@@ -5464,6 +5602,67 @@ def test_builder_return_after_answered_pause_survives_default_loader_restart(tmp
     assert binding == returned
     assert binding.requests == (request.model_copy(update={"resolution": answer}),)
     assert reloaded.acquire_frontier_work().launch_packages[0].claim.worker_role is DeliveryWorkerRole.PLANNER
+
+
+def test_builder_return_with_pending_checkpoint_at_published_head_survives_restart(tmp_path: Path) -> None:
+    change_id = "return-pending-checkpoint"
+    restart = _builder_return_restart_fixture(tmp_path, change_id, published_head=True)
+    frontier_path = restart.fresh / ".owlbear/delivery/runtime/changes" / change_id / "frontier.json"
+    frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes())
+    assert frontier.published_head is not None
+    # A verified result queued at the published head; remote snapshots drop such a checkpoint.
+    frontier_path.write_bytes(
+        _canonical_payload(
+            frontier.model_copy(
+                update={
+                    "pending_checkpoint": DeliveryPendingCheckpoint(
+                        head=frontier.published_head,
+                        triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.VERIFIED_TASK),),
+                    )
+                }
+            ).model_dump(mode="json")
+        )
+    )
+    application = _healthy_restart(restart)
+    launch = application.acquire_frontier_work().launch_packages[0]
+    _settle_builder_launch(application, change_id, launch, _planning_return(launch, restart.original_task.task_id))
+    _healthy_restart(restart)
+
+    _promote_corrected_plan(restart, change_id, "Corrected task")
+    application = _healthy_restart(restart)
+    resumed = application.acquire_frontier_work().launch_packages[0]
+    assert resumed.claim.worker_role is DeliveryWorkerRole.BUILDER
+    _settle_builder_launch(
+        application,
+        change_id,
+        resumed,
+        BlockDelivery(
+            action="block",
+            outcome_id=resumed.outcome_id,
+            claim_id=resumed.claim.claim_id,
+            block_id="BLOCK-PILOT",
+            reason="The check needs the user.",
+            unblock_condition="The user answers.",
+            expected_evidence=("Answer",),
+            locators=(resumed.task_id,),
+            request=DeliveryRequest(
+                request_id="REQ-PILOT",
+                kind=DeliveryRequestKind.DECISION,
+                outcome_id=resumed.outcome_id,
+                summary="Run the person-only check.",
+                options=(
+                    DeliveryRequestOption(option_id="passed", label="passed"),
+                    DeliveryRequestOption(option_id="failed", label="failed"),
+                ),
+            ),
+            resume_commit=resumed.source_head,
+        ),
+    )
+    reloaded = _healthy_restart(restart)
+    binding = reloaded._runtimes[change_id].show_binding("OUT-001")  # noqa: SLF001
+    assert binding.block is not None
+    assert binding.block.block_id == "BLOCK-PILOT"
+    assert reloaded._runtimes[change_id]._read()[0].pending_checkpoint is not None  # noqa: SLF001
 
 
 # N12 I3, I4, I8: refunded returns of one task are bounded; each unpublished return restarts.

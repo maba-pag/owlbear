@@ -70,15 +70,19 @@ reason: <recorded prerequisite failure>
 A same-task Builder claim may start with dirty, staged, or committed predecessor work, including
 work left by a `dispatch_failure`, a crash, or a settled `worker-host-lost` or
 `worker-released-stuck` attempt. Each settled no-result receipt preserves that material and records
-the failed attempt; fresh Build context supplies `prior_attempts`. The new Builder must inspect and
+the failed attempt; fresh Build context supplies `prior_attempts`, with any predecessor's
+`reason`. The new Builder must inspect and
 triage this state under the rules below before editing. Orchestrator does not clean the worktree or
 ask the user to do Git recovery. A dispatch that has not returned or whose owned mutator may still
 run remains contained and does not authorize this handoff.
 
 Inspect the assigned worktree before editing with `git status --short`, `git diff`,
-`git diff --cached`, and `git ls-files --others --exclude-standard`. Compare every changed path and
-hunk with `DeliveryBuildContext.task.maintained_surfaces`, constraints, exclusions, and the exact
-launch identity.
+`git diff --cached`, `git ls-files --others --exclude-standard`, and
+`git log --oneline <launch.last_reviewed_commit>..HEAD`. A same-task handoff's `launch.source_head`
+may be ahead of the captured `builder_handoff_context.branch_head` when a released predecessor kept
+committing; those commits are predecessor work to triage, not reviewed authority. Compare every
+changed path and hunk with `DeliveryBuildContext.task.maintained_surfaces`, constraints, exclusions,
+and the exact launch identity.
 
 - **Reuse:** When every change is compatible with this exact task, keep it, validate it, and include
   it in the eventual explicit scoped commit. Do not infer ownership from file timestamps or from the
@@ -175,8 +179,11 @@ be shown complete without user input now. To ask the user to waive a criterion o
 only a person can make, block with a Decision `request` whose `applies_to` names `kind`
 (`waive` or `confirm-check`), the `acceptance` references from the context, and the exact
 `procedure`, with options exactly `waive` and `keep-required` or `passed` and `failed` and no
-`resolution`. The user answers it in Cockpit; the `answer` tool refuses it with
-`ERR_DELIVERY_CONFIRMATION`. A resumed claim cites the answered request by `request_id` from a
+`resolution`. Every `procedure`, here and in observations, is at most 512 characters: state the
+check itself and put longer steps in the observation `locator` or a committed file, because Delivery
+rejects a longer request and the claim then stays unsettled. The user answers it in Cockpit; the
+`answer` tool refuses it with `ERR_DELIVERY_CONFIRMATION`. A resumed claim cites the answered request
+by `request_id` from a
 `waived` record, or a `human-confirmed` manual or artifact record, whose `covers` lie in that scope
 and whose `procedure` equals it; `keep-required` or `failed` confirms nothing.
 Keep these observation values for Step 3, which obtains their receipts; never calculate, copy, or
@@ -191,8 +198,10 @@ fresh review. Never amend or erase a reviewed head.
 
 Dispatch only `launch.policy.reviewer_agent` to `build-reviewer`; the reviewer agent's frontmatter
 owns its model.
-Supply the unchanged launch identity, full Build context, source and exact candidate commits, changed
-paths, focused proof, custody, ancestry, and prior evidence. The reviewer must independently resolve
+Supply the unchanged launch identity, full Build context, `launch.last_reviewed_commit` as the review
+base, the exact candidate commit, changed paths over that whole range, focused proof, custody,
+ancestry, and prior evidence. Never use `launch.source_head` as the base: inherited predecessor
+commits must reach review. The reviewer must independently resolve
 the candidate and inspect its complete diff with read-only Git; a caller summary or mutable worktree
 read does not satisfy exact-commit evidence. Require the reviewer to echo the exact commit and return
 disposition `pass | finding`, matching `finding_boundary`, and non-empty evidence.
@@ -246,7 +255,10 @@ attempt_id: <launch attempt ID>
 abandoned_commit: <exact current branch HEAD>
 ```
 
-Use `retry` for an implementation failure that cannot be repaired in this invocation.
+Use `retry` for an implementation failure that cannot be repaired in this invocation. Beside the
+unchanged transition, return `retry_reason`: one line of at most 240 characters on what failed and
+what the next Builder should do first. Delivery shows it on the Cockpit card and in the next
+Builder's `prior_attempts`; omit secrets.
 
 ```yaml
 action: return
@@ -292,6 +304,11 @@ target-sync block: the same `block` fields without `request`, with exactly one l
 its target, routes any conflict to `/resolve-target-conflict`, and starts a fresh claim for this task
 once the commit is included. That claim's `return_context` names the preserved refs; reconcile what
 still applies. Never ask the user to synchronize the target.
+
+Build context's `target_overlap` is Delivery's test merge of the reviewed head with the freshly fetched
+target. When its `status` is `conflict`, return that target-sync block before any edit, naming
+`target-commit:<target_overlap.target_head>`. `unknown` is not clean: proceed with the task, but never
+report the Change as free of target conflicts.
 
 For a normal Builder return, Orchestrator uses `settle_worker_invocation` for `retry`, `block`, or
 `return` to Planning or Design; it validates exact workspace custody and persists any bounded request
