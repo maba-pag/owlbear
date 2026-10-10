@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, loop, profile, tools
+from owlbear_delivery_next import api, budgets, evidence, failures, loop, profile, tools
 from owlbear_delivery_next.git.remote_git import RemoteGitWriteUnknown, classify_write_readback, read_remote_ref
 from owlbear_delivery_next.github import merge_offer
 from owlbear_delivery_next.github.gh import GhProvider
@@ -48,7 +48,7 @@ from owlbear_delivery_next.models import (
     Task,
     Waiting,
 )
-from owlbear_delivery_next.sdk_adapter import Run
+from owlbear_delivery_next.session_result import Run
 from owlbear_delivery_next.setup import Check as SetupCheck
 from owlbear_delivery_next.status import Activity
 from owlbear_delivery_next.steps import check, cleanup, conversation, engine, follow, merge, publish, review, worktree
@@ -196,7 +196,7 @@ def test_a_locally_integrated_but_unpublished_head_goes_back_to_publish_and_neve
     gh = FakeGh(pr(head=A))
     c = loop.fold(change(worktree=str(clone)), [ConsentItem(at=NOW, head=A)], NOW)
     _, result = merge.run(ctx(tmp_path, gh), c)
-    cause = loop.cause_key(ErrorKind.GATE, StepKind.MERGE, "local-head")
+    cause = failures.cause_key(ErrorKind.GATE, StepKind.MERGE, "local-head")
     assert (result.exit, result.back_to, result.cause) == (Exit.BACK, StepKind.PUBLISH, cause)
     assert gh.merges == []
 
@@ -813,11 +813,11 @@ def test_a_saved_person_check_is_voided_by_revised_steps_or_a_commit_in_its_scop
     c = store.read("greet")
     c.names.worktree, p = str(clone), c.checks[0]
     assert (p.paths, p.procedure) == (["app/"], 2)
-    p.answer = Answer(at=NOW, passed=True, inputs=loop.check_inputs(c, p, check.fingerprints(c, p)))
+    p.answer = Answer(at=NOW, passed=True, inputs=evidence.check_inputs(c, p, check.fingerprints(c, p)))
     for path, version in (("a.txt", None), ("app/page.ts", "preview")):
         (clone / path).write_text("2\n")
         git(clone, "commit", "-qam", path)
-        assert getattr(loop.next_check(c, check.declared(c)), "id", None) == version
+        assert getattr(evidence.next_check(c, check.declared(c)), "id", None) == version
     assert check.pending(c, env).reason.endswith("asked again: changed app/page.ts")
 
 
@@ -835,7 +835,7 @@ def test_publish_waits_for_the_network_and_asks_for_other_readiness_fixes():
 def test_offline_readiness_is_an_episode_that_asks_only_after_a_day():
     c, at = change(StepKind.PUBLISH), NOW
     offline = [SetupCheck("network", ok=False, detail="timed out", fix="Connect")]
-    while at < NOW + loop.EPISODE_ASK:
+    while at < NOW + budgets.EPISODE_ASK:
         c = loop.apply(c, publish.gate(offline, at), at)
         assert (c.outcome.exit, c.outcome.waiting) == (Exit.PENDING, Waiting.NETWORK)
         at = c.outcome.wake_at

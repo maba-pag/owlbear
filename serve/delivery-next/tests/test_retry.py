@@ -1,7 +1,8 @@
 from datetime import UTC, datetime, timedelta
 
-from owlbear_delivery_next import loop
-from owlbear_delivery_next.loop import EPISODE_ASK, PAUSE, PAUSE_CAP, StepResult
+from owlbear_delivery_next import budgets, failures, loop
+from owlbear_delivery_next.budgets import EPISODE_ASK, PAUSE, PAUSE_CAP
+from owlbear_delivery_next.loop import StepResult
 from owlbear_delivery_next.models import (
     AnswerItem,
     Brief,
@@ -35,11 +36,11 @@ def change(**fields) -> Change:
 
 
 def retry(kind: ErrorKind, reason: str, **fields) -> StepResult:
-    return StepResult(exit=Exit.RETRY, cause=loop.cause_key(kind, K.BUILD, "sdk"), reason=reason, **fields)
+    return StepResult(exit=Exit.RETRY, cause=failures.cause_key(kind, K.BUILD, "sdk"), reason=reason, **fields)
 
 
 def failing(n: int, reason: str = "test_a failed") -> StepResult:
-    cause = loop.cause_key(ErrorKind.CHECKS, K.BUILD, "uv run pytest")
+    cause = failures.cause_key(ErrorKind.CHECKS, K.BUILD, "uv run pytest")
     return StepResult(exit=Exit.RETRY, cause=cause, reason=reason, score=Score(failing=n, findings=["test_a"]))
 
 
@@ -53,7 +54,7 @@ def test_transient_failures_never_exhaust_and_their_pauses_grow_to_the_cap():
     assert pauses == sorted(pauses)
     assert (pauses[0], pauses[-1]) == (PAUSE, PAUSE_CAP)
     assert all(b.count == 0 for b in c.budgets.causes.values())
-    assert loop.episode(c).attempts == 10
+    assert budgets.episode(c).attempts == 10
 
 
 def test_a_day_of_the_same_failure_asks_and_done_starts_a_new_episode():
@@ -71,7 +72,7 @@ def test_a_changed_failure_signature_restarts_the_episode():
     c = loop.apply(change(), retry(ErrorKind.NETWORK, HTTP_503), NOW)
     c = loop.apply(c, retry(ErrorKind.NETWORK, "connection reset by peer"), NOW + EPISODE_ASK)
     assert c.outcome.exit == Exit.PENDING
-    assert (loop.episode(c).since, loop.episode(c).attempts) == (NOW + EPISODE_ASK, 1)
+    assert (budgets.episode(c).since, budgets.episode(c).attempts) == (NOW + EPISODE_ASK, 1)
 
 
 def test_the_same_delivery_defect_three_times_asks_with_the_error():
@@ -88,7 +89,7 @@ def test_the_same_delivery_defect_three_times_asks_with_the_error():
 
 def test_identical_check_failures_replan_once_to_split_then_ask():
     c = change()
-    for _ in range(loop.RETRY_LIMIT):
+    for _ in range(budgets.RETRY_LIMIT):
         c = loop.apply(c, failing(2), NOW)
         assert c.step.kind == K.BUILD
     c = loop.apply(c, failing(2), NOW)
@@ -100,14 +101,14 @@ def test_identical_check_failures_replan_once_to_split_then_ask():
 
 
 def scored(findings: list[str], satisfied: int = 0, reason: str = "test_a failed") -> StepResult:
-    cause = loop.cause_key(ErrorKind.CHECKS, K.BUILD, "uv run pytest")
+    cause = failures.cause_key(ErrorKind.CHECKS, K.BUILD, "uv run pytest")
     score = Score(failing=len(findings), satisfied=satisfied, findings=findings)
     return StepResult(exit=Exit.RETRY, cause=cause, reason=reason, score=score)
 
 
 def test_a_strict_subset_of_the_failures_resets_the_count():
     c = change()
-    for _ in range(loop.RETRY_LIMIT):
+    for _ in range(budgets.RETRY_LIMIT):
         c = loop.apply(c, scored(["test_a", "test_b"]), NOW)
     c = loop.apply(c, scored(["test_a"]), NOW)
     assert (c.outcome.exit, c.step.kind) == (Exit.RETRY, K.BUILD)
@@ -116,7 +117,7 @@ def test_a_strict_subset_of_the_failures_resets_the_count():
 
 def test_swapping_one_failure_for_another_is_not_progress():
     c = change()
-    for _ in range(loop.RETRY_LIMIT):
+    for _ in range(budgets.RETRY_LIMIT):
         c = loop.apply(c, scored(["test_a", "test_b"]), NOW)
     c = loop.apply(c, scored(["test_a", "test_c"]), NOW)
     assert (c.outcome.exit, c.step.kind) == (Exit.BACK, K.PLAN)
@@ -124,7 +125,7 @@ def test_swapping_one_failure_for_another_is_not_progress():
 
 def test_more_criteria_satisfied_without_a_new_failure_is_progress():
     c = change()
-    for _ in range(loop.RETRY_LIMIT):
+    for _ in range(budgets.RETRY_LIMIT):
         c = loop.apply(c, scored(["test_a"]), NOW)
     c = loop.apply(c, scored(["test_a"], satisfied=1), NOW)
     assert c.budgets.causes[c.outcome.cause].count == 1
@@ -132,15 +133,15 @@ def test_more_criteria_satisfied_without_a_new_failure_is_progress():
 
 def test_different_failure_signatures_are_counted_separately():
     c = change()
-    for _ in range(loop.RETRY_LIMIT):
+    for _ in range(budgets.RETRY_LIMIT):
         c = loop.apply(c, scored(["test_a"], reason="test_a failed"), NOW)
         c = loop.apply(c, scored(["test_a"], reason="lint: unused import"), NOW)
     budget = c.budgets.causes[c.outcome.cause]
-    assert (c.outcome.exit, sorted(budget.counts.values())) == (Exit.RETRY, [loop.RETRY_LIMIT] * 2)
+    assert (c.outcome.exit, sorted(budget.counts.values())) == (Exit.RETRY, [budgets.RETRY_LIMIT] * 2)
 
 
 def test_quota_is_never_asked_about_even_beyond_a_day():
-    cause = loop.cause_key(ErrorKind.CAPACITY, K.BUILD, loop.QUOTA)
+    cause = failures.cause_key(ErrorKind.CAPACITY, K.BUILD, failures.QUOTA)
     c, at = change(), NOW
     while at < NOW + EPISODE_ASK + timedelta(hours=6):
         c = loop.apply(c, StepResult(exit=Exit.RETRY, cause=cause, reason="quota exhausted"), at)

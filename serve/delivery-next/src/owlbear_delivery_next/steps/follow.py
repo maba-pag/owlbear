@@ -7,7 +7,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next import loop, profile
+from owlbear_delivery_next import budgets, failures, loop, profile
 from owlbear_delivery_next.github.provider import ProviderError, classify_checks
 from owlbear_delivery_next.loop import StepResult
 from owlbear_delivery_next.models import Episode, ErrorKind, Exit, Response, Score, StepKind, Stop, Waiting
@@ -57,7 +57,7 @@ def episode(ctx: Ctx, c: Change, head: str, state: CiState) -> Change:
     c.missing = None
     for q in c.questions:
         if q.cause and q.cause.startswith(MISSING) and q.answer and not q.effect_observed_at:
-            c = loop.effect_observed(c, q.id, ctx.now)
+            c = budgets.effect_observed(c, q.id, ctx.now)
     return c
 
 
@@ -73,7 +73,7 @@ def missing(ctx: Ctx, c: Change, pr: PullRequest, state: CiState, step: StepKind
     if asked is None:
         text = f"{names} never started on PR #{pr.number}: start or approve its workflow run in GitHub"
         return c, engine.ask(step, text, cause, engine.continue_or_pause(step))
-    c, within = loop.charge(c, cause, ctx.now)
+    c, within = budgets.charge(c, cause, ctx.now)
     if within:
         return c, engine.pending(Waiting.OWNER_ACTION, f"waiting for {names} to start after your action", ctx.poll())
     action = f"Start {names} for PR #{pr.number} in GitHub"
@@ -125,7 +125,7 @@ def _reply(  # noqa: PLR0913 - one reply needs the PR, the task, its response an
     if r.how == "fixed" and r.commit and not _published(c, pr)(r.commit):
         if not engine.contains(Path(c.names.worktree), r.commit):
             return conv.record(c, task, r, ctx.now), None  # the fix is gone: the item opens again with a new task
-        cause = loop.cause_key(ErrorKind.GATE, step, "unpublished")
+        cause = failures.cause_key(ErrorKind.GATE, step, "unpublished")
         reason = f"publishing the fix {r.commit[:7]} for {ref.url or ref.id}"
         return c, StepResult(exit=Exit.BACK, back_to=StepKind.PUBLISH, cause=cause, reason=reason)
     reply_id = conv.posted(items, ref.id, conv.marker(c.slug, ref.id, task.id), ctx.gh.viewer)
@@ -144,13 +144,13 @@ def _repost(  # noqa: PLR0913 - one repost needs the PR, the item's state and th
         rec.reply_id = replay
         return c, None
     if rec.reposts >= REPOSTS:
-        cause = loop.cause_key(ErrorKind.GATE, step, f"repost:{s.item.id}")
+        cause = failures.cause_key(ErrorKind.GATE, step, f"repost:{s.item.id}")
         asked = next((q for q in c.questions if q.cause == cause and q.answer and not q.effect_observed_at), None)
         if asked is None:
             where = s.item.url or s.item.id
             text = f"Delivery's reply on {where} keeps disappearing; reply manually or let Delivery post again"
             return c, engine.ask(step, text, cause, engine.continue_or_pause(step))
-        c = loop.effect_observed(c, asked.id, ctx.now)
+        c = budgets.effect_observed(c, asked.id, ctx.now)
         rec = next(h for h in c.handled if h.task == task)
         rec.reposts = 0
     rec.reposts += 1
@@ -172,8 +172,8 @@ def _settle(
         rec.resolved = True
     if not conv.unresolved(s):
         return c, None
-    cause = loop.cause_key(ErrorKind.GATE, step, f"resolve:{s.item.id}")
-    c, within = loop.charge(c, cause, ctx.now)
+    cause = failures.cause_key(ErrorKind.GATE, step, f"resolve:{s.item.id}")
+    c, within = budgets.charge(c, cause, ctx.now)
     if within:
         if ctx.gh.resolve_thread(s.item.id):
             next(h for h in c.handled if h.task == rec.task).resolved = True
@@ -244,12 +244,12 @@ def reopen(ctx: Ctx, c: Change, pr: PullRequest) -> tuple[Change, PullRequest, S
             ctx.log(c.slug, "reopen", pr=pr.number, error=str(exc)[:200])
         pr = ctx.gh.read_pull_request(ctx.repository, pr.number)
     if pr.state == "open":
-        return (loop.effect_observed(c, q.id, ctx.now) if q else c), pr, None
+        return (budgets.effect_observed(c, q.id, ctx.now) if q else c), pr, None
     if q is None or pr.merged:
         reason = f"PR #{pr.number} is {'merged' if pr.merged else 'closed'}"
         return c, pr, engine.pending(Waiting.CI, reason, ctx.poll())
     text = f"Reopen PR #{pr.number} in GitHub ({pr.url}: Reopen pull request), then continue"
-    return c, pr, engine.ask(F, text, loop.cause_key(ErrorKind.GATE, F, "reopen"), engine.continue_or_pause(F))
+    return c, pr, engine.ask(F, text, failures.cause_key(ErrorKind.GATE, F, "reopen"), engine.continue_or_pause(F))
 
 
 def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:  # noqa: PLR0911 - one exit per observation

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next import tools
-from owlbear_delivery_next.loop import signature
+from owlbear_delivery_next.failures import signature
 from owlbear_delivery_next.models import ErrorKind, Inputs, Review, Score, Task
 from owlbear_delivery_next.steps import worktree
 
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.loop import StepResult
     from owlbear_delivery_next.models import Change
-    from owlbear_delivery_next.sdk_adapter import Run
+    from owlbear_delivery_next.session_result import Run
 
 
 TRUNCATED = "\n[truncated]"

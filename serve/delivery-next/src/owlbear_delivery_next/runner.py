@@ -12,7 +12,17 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next import loop, profile, prompts, sdk_adapter, setup, tools
+from owlbear_delivery_next import (
+    budgets,
+    loop,
+    permissions,
+    profile,
+    prompts,
+    sdk_adapter,
+    session_result,
+    setup,
+    tools,
+)
 from owlbear_delivery_next.cli import describe
 from owlbear_delivery_next.models import Environment, Exit, Profile, StepKind, Waiting
 from owlbear_delivery_next.steps import (
@@ -102,7 +112,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
 
     def replaced() -> str | None:
         nonlocal change
-        change, within = loop.charge(change, sdk_adapter.missing_cause(s.kind), datetime.now(UTC))
+        change, within = budgets.charge(change, session_result.missing_cause(s.kind), datetime.now(UTC))
         change.step.session = f"{slug}-{s.kind}-{s.task or s.mode or 'all'}-{uuid.uuid4().hex[:8]}" if within else None
         store.write(lock, change)
         return change.step.session
@@ -114,7 +124,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         session_id=s.session or "",
         message=prompts.answer(answer) if resume and answer else parts.message,
         resume=resume,
-        policy=sdk_adapter.Policy(path, parts.allowed, write=parts.write),
+        policy=permissions.Policy(path, parts.allowed, write=parts.write),
         observe=lambda: worktree.observe(path, change.names.target, since),
         checks=parts.checks,
         submit=parts.submit,
@@ -129,7 +139,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     )
     run = asyncio.run(sdk_adapter.run(cfg))
     end = datetime.now(UTC)
-    result = review.recorded(change, parts.task, run, path, sdk_adapter.to_result(run, s.kind, end))
+    result = review.recorded(change, parts.task, run, path, session_result.to_result(run, s.kind, end))
     conversation.respond(task, run.payload, run.head, result.exit)
     _log(store, lock, change, run, {"kind": s.kind, "exit": result.exit})
     if s.kind == StepKind.PLAN and result.plan:
@@ -139,14 +149,14 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         end = datetime.now(UTC)
     if isinstance(p := run.payload, tools.WrongPremise) and p.stage == "target" and s.kind == StepKind.BUILD:
         result = engine.needs_target(change, path, f"{p.reason} ({'; '.join(p.evidence)})", end)
-    if answer and sdk_adapter.effect_seen(run):
-        change = loop.effect_observed(change, answer.id, end)
+    if answer and session_result.effect_seen(run):
+        change = budgets.effect_observed(change, answer.id, end)
     if isinstance(p := run.payload, tools.CheckRecipe) and result.exit == Exit.PENDING:
         change.env = Environment(check=s.task or "", command=p.command, directory=p.directory, ready_url=p.ready_url)
     store.write(lock, loop.apply(change, result, end))
 
 
-def _log(store: Store, lock: Lock, change: Change, run: sdk_adapter.Run, fields: dict[str, object]) -> None:
+def _log(store: Store, lock: Lock, change: Change, run: session_result.Run, fields: dict[str, object]) -> None:
     """Log one session's step event and add its usage to the Change's spend, which the log may later drop."""
     step = {"event": "step", "at": datetime.now(UTC).isoformat(timespec="seconds"), "session": run.session_id}
     step |= fields | {"ending": run.ending, "head": run.head, "usage": run.usage}
@@ -164,7 +174,7 @@ def _reviewer(store: Store, lock: Lock, change: Change, cfg: sdk_adapter.Session
 
 def _review_run(
     store: Store, lock: Lock, change: Change, cfg: sdk_adapter.Session, label: str
-) -> tuple[Result, sdk_adapter.Run]:
+) -> tuple[Result, session_result.Run]:
     """The reviewer session's verdict and its run, whose payload is the submitted review."""
     model = (store.read_profile() or Profile()).models.get(StepKind.REVIEW)
     review_cfg = dataclasses.replace(
@@ -179,7 +189,7 @@ def _review_run(
         previous={},
     )
     run = asyncio.run(sdk_adapter.run(review_cfg))
-    verdict = sdk_adapter.to_result(run, StepKind.REVIEW, datetime.now(UTC))
+    verdict = session_result.to_result(run, StepKind.REVIEW, datetime.now(UTC))
     _log(store, lock, change, run, {"kind": label, "exit": verdict.exit})
     return verdict, run
 
@@ -207,7 +217,7 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
                 session_id="",
                 message=prompts.visual(change, [(s.state, s.width, s.file) for s in shots]),
                 resume=False,
-                policy=sdk_adapter.Policy(path, prompts.GIT_READ, write=False),
+                policy=permissions.Policy(path, prompts.GIT_READ, write=False),
                 observe=lambda: tools.Worktree(head, head, changed=tuple(s.file for s in shots)),
                 checks=(),
                 journal=sdk_adapter.Journal(lambda e: store.log(lock, change.slug, e)),
@@ -247,7 +257,7 @@ def _brief_review(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         session_id="",
         message=prompts.brief_review(change, path),
         resume=False,
-        policy=sdk_adapter.Policy(path, (*prompts.GIT_READ, *extra), write=False),
+        policy=permissions.Policy(path, (*prompts.GIT_READ, *extra), write=False),
         observe=lambda: worktree.observe(path, change.names.target),
         checks=(),
         journal=sdk_adapter.Journal(lambda e: store.log(lock, change.slug, e)),

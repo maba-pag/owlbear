@@ -5,8 +5,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
-import re
-import shlex
 import shutil
 import signal
 import subprocess
@@ -15,23 +13,29 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from functools import partial
 from importlib.resources import files
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 import psutil
 from copilot import CopilotClient, RuntimeConnection
 from copilot.rpc import PermissionDecisionApproveOnce, PermissionDecisionReject, TasksCancelRequest
 from copilot.tools import Tool, ToolInvocation, ToolResult
 
-from owlbear_delivery_next import prompts, tools
-from owlbear_delivery_next.loop import QUOTA, StepResult, cause_key, quota, transient
+from owlbear_delivery_next import processes, prompts, tools
 from owlbear_delivery_next.mask import redact
-from owlbear_delivery_next.models import ErrorKind, Exit, Option, Plan, Question, StepKind, Stop, Task, Waiting
+from owlbear_delivery_next.models import StepKind
+from owlbear_delivery_next.permissions import decide, view
+from owlbear_delivery_next.processes import Termination, verdict
+from owlbear_delivery_next.session_result import Run, note_quota
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
+    from collections.abc import Awaitable, Callable, Iterable
+    from pathlib import Path
 
     from copilot.session import CopilotSession
+
+    from owlbear_delivery_next.permissions import Policy
+    from owlbear_delivery_next.processes import Pids
+    from owlbear_delivery_next.session_result import Ending
 
 DEADLINES = {StepKind.PLAN: 900.0, StepKind.BUILD: 1200.0, StepKind.REVIEW: 600.0, StepKind.CHECK: 900.0}
 ROLES = {StepKind.PLAN: "planner", StepKind.BUILD: "builder", StepKind.REVIEW: "reviewer", StepKind.CHECK: "builder"}
@@ -41,218 +45,8 @@ START = 60.0  # runtime start, session create or resume
 CALL = 30.0  # one request while the step runs
 STOP_CALL = 10.0  # one teardown request
 GRACE = 5.0  # between terminate and kill
-DENIED = ("git push", "git config", "git -c", "gh", "sudo")
-DIR_OPTIONS = frozenset({"-C", "--prefix", "--cwd", "--dir", "--git-dir", "--work-tree"})
-TEXT_OPTIONS = frozenset({"-e", "-F", "-m", "--regexp", "--message"})  # values are patterns or messages
-PATTERN_FIRST = frozenset({"grep", "egrep", "fgrep", "rg", "sed", "awk"})  # first operand is a pattern or script
-NULL_PATHS = frozenset({"/dev/null"})
-VALUE_FLAGS = "mFCctSuo"  # short options of git commit and push that take a value
-_REDIRECT = re.compile(r"^\d*[<>]+&?")
 NOW_LIMIT = 80  # characters of the now line's summary
 NOW_EVERY = 1.0  # seconds between now-line writes
-type Ending = Literal["result", "ask", "premise", "invalid", "no-result", "deadline", "missing", "unread", "error"]
-type Pids = Mapping[int, float | None]
-type Observe = Callable[[int, float | None], bool | None]
-
-
-@dataclass(frozen=True)
-class Policy:
-    """Allow list of one step kind; every other request is denied and logged (D4 §3.6)."""
-
-    root: Path
-    commands: tuple[str, ...]
-    write: bool = True
-
-
-@dataclass(frozen=True)
-class Request:
-    """The parts of a permission request the policy judges; shell commands carry the runtime's read-only flag."""
-
-    kind: str
-    commands: tuple[tuple[str, bool], ...] = ()
-    paths: tuple[str, ...] = ()
-    urls: bool = False
-    tool: str = ""
-
-
-def _matches(text: str, prefixes: Sequence[str]) -> bool:
-    words = text.split()
-    return any(words[: len(p.split())] == p.split() for p in prefixes)
-
-
-def _resolve(base: Path, path: str) -> Path:
-    p = Path(path).expanduser()
-    return (p if p.is_absolute() else base / p).resolve()
-
-
-def _inside(root: Path, path: str, base: Path | None = None) -> bool:
-    try:
-        return _resolve(base or root, path).is_relative_to(root.resolve())
-    except OSError, ValueError, RuntimeError:
-        return False
-
-
-def _bypass(words: Sequence[str]) -> str | None:
-    """Return the flag of a git command that skips hooks or signing, or forces a push."""
-    sub = next((w for w in words if w in {"commit", "push"}), "") if words[:1] == ["git"] else None
-    for w in words[1:] if sub is not None else ():
-        short = re.fullmatch(r"-([a-zA-Z]+)", w)  # a cluster sets a flag only before an option taking a value
-        flags = re.split(f"[{VALUE_FLAGS}]", short[1])[0] if short else ""
-        if w in {"--no-verify", "--no-gpg-sign"} or (sub == "commit" and "n" in flags):
-            return w
-        if sub == "push" and (w.startswith(("--force", "+")) or "f" in flags):
-            return w
-    return None
-
-
-def _texts(words: Sequence[str]) -> set[int]:
-    """Indexes of arguments read as text, not paths: pattern and message values, a pattern operand, comments."""
-    found: set[int] = set()
-    operand = bool(words) and Path(words[0]).name in PATTERN_FIRST
-    for i, word in enumerate(words[1:], 1):
-        flag, eq, _ = word.partition("=")
-        if i in found:
-            continue
-        if flag in TEXT_OPTIONS or re.fullmatch(r"-[a-zA-Z]*[eFm]", word):
-            found.add(i if eq else i + 1)
-            operand = False
-        elif operand and not word.startswith("-"):
-            found.add(i)
-            operand = False
-        elif word.startswith(("//", "/*")) and any(c.isspace() for c in word):  # a quoted comment
-            found.add(i)
-    return found
-
-
-def _escape(root: Path, base: Path, words: Sequence[str], *, mutating: bool) -> str | None:
-    """Return a ``cd`` target, directory option or mutating path argument that lies outside the worktree."""
-    if words[:1] == ["cd"]:
-        return None if _inside(root, target := (words[1:] or ["~"])[0], base) else target
-    texts = _texts(words)
-    for i, word in enumerate(words[1:], 1):
-        flag, eq, value = word.partition("=")
-        if flag in DIR_OPTIONS:
-            value = value if eq else (words[i + 1 : i + 2] or [""])[0]
-        elif i in texts:
-            continue
-        elif mutating and re.match(r"[/~]|\.\.(/|$)|.*/\.\./", value := _REDIRECT.sub("", value if eq else word)):
-            value = "" if value in NULL_PATHS else value
-        else:
-            continue
-        if value and not _inside(root, value, base):
-            return value
-    return None
-
-
-def escape(root: Path, directory: Path, command: str) -> str | None:
-    """The worker path policy for a host-run command: an unparsable command or the path it reaches outside *root*."""
-    try:
-        words = shlex.split(command)
-    except ValueError:
-        return command
-    return _escape(root.resolve(), directory, words, mutating=True)
-
-
-def _shell(policy: Policy, req: Request) -> str | None:  # noqa: PLR0911 - one reason per check
-    if req.urls:
-        return "shell commands that reach URLs are not allowed"
-    base = policy.root
-    for text, read_only in req.commands or (("", False),):
-        try:
-            words = shlex.split(text)
-        except ValueError:
-            return f"`{text}` cannot be parsed"
-        if flag := _bypass(words):
-            return f"`{text}` uses {flag}, which skips hooks or signing or forces history"
-        if (outside := _escape(policy.root, base, words, mutating=not read_only)) is not None:
-            return f"`{text}` reaches {outside}, outside the worktree"
-        base = _resolve(base, words[1]) if words[:1] == ["cd"] and len(words) > 1 else base
-        if _matches(text, DENIED):
-            return f"`{text}` is denied"
-        if not (_matches(text, policy.commands) or (read_only and all(_inside(policy.root, p) for p in req.paths))):
-            return f"`{text}` is not in this step's allow list"
-    return None
-
-
-def decide(policy: Policy, req: Request) -> str | None:
-    """Return None to allow, or the denial reason the agent and the activity log see."""
-    if req.kind == "custom-tool":
-        return None if req.tool in {s.name for s in tools.SPECS} else f"tool {req.tool} is not allowed"
-    if req.kind in {"read", "write"}:
-        if req.kind == "write" and not policy.write:
-            return "writes are not allowed in this step"
-        outside = [p for p in req.paths if not _inside(policy.root, p)]
-        return f"{req.kind} outside the worktree: {outside[0]}" if outside else None if req.paths else "no path"
-    return _shell(policy, req) if req.kind == "shell" else f"{req.kind} requests are not allowed in this step"
-
-
-def _view(r: Any) -> Request:  # noqa: ANN401 - one of the SDK's permission request classes
-    kind = getattr(r, "kind", type(r).__name__)
-    if kind == "shell":
-        ro = tuple(c.identifier for c in r.commands if c.read_only)
-        texts = [s.full_command_text for s in r.command_segments or ()] or [c.identifier for c in r.commands]
-        commands = tuple((t, _matches(t, ro)) for t in texts or [r.full_command_text])
-        return Request(kind, commands, tuple(r.possible_paths or ()), bool(r.possible_urls))
-    if kind in {"read", "write"}:
-        path = r.resolved_path or getattr(r, "path", None) or getattr(r, "file_name", "")
-        return Request(kind, paths=(path,) if path else ())
-    return Request(kind, tool=getattr(r, "tool_name", ""))
-
-
-@dataclass(frozen=True)
-class Termination:
-    """Whether every listed or recorded process of the step is gone; anything unobserved keeps it unverified."""
-
-    confirmed: bool
-    survivors: tuple[int, ...] = ()
-    unknown: tuple[int, ...] = ()
-    problems: tuple[str, ...] = ()
-
-
-def verdict(recorded: Pids, alive: Observe, problems: Sequence[str] = ()) -> Termination:
-    """Decide confirmed or unverified from one observation per recorded PID (True alive, None unknown)."""
-    states = {pid: alive(pid, created) for pid, created in recorded.items()}
-    survivors = tuple(sorted(p for p, s in states.items() if s))
-    unknown = tuple(sorted(p for p, s in states.items() if s is None))
-    return Termination(not (survivors or unknown or problems), survivors, unknown, tuple(problems))
-
-
-def alive(pid: int, created: float | None) -> bool | None:
-    """Observe one recorded process: a zombie or a reused PID is gone; an unreadable one is unknown."""
-    try:
-        p = psutil.Process(pid)
-        if p.status() == psutil.STATUS_ZOMBIE:
-            return False
-        return created is None or abs(p.create_time() - created) < 1.0
-    except psutil.NoSuchProcess:
-        return False
-    except psutil.Error, OSError:
-        return None
-
-
-def _started(pid: int) -> float:
-    return psutil.Process(pid).create_time()
-
-
-def _pgid(pid: int) -> int:
-    with contextlib.suppress(OSError):
-        return os.getpgid(pid)
-    return -1
-
-
-def targets(recorded: Pids, seen: Observe, group: Callable[[int], int], own: int) -> tuple[list[int], list[int]]:
-    """Return live PIDs whose start time proves identity, and groups they lead; an unknown start is never signalled."""
-    live = sorted(p for p, c in recorded.items() if c is not None and seen(p, c))
-    return live, [p for p in live if p != own and group(p) == p]
-
-
-def kill(recorded: Pids, sig: signal.Signals) -> list[int]:
-    """Signal recorded PIDs whose start time proves identity, and the groups they lead; return the live ones."""
-    live, groups = targets(recorded, alive, _pgid, os.getpgrp())
-    for g, send in [*((g, os.killpg) for g in groups), *((p, os.kill) for p in live)]:
-        with contextlib.suppress(OSError):
-            send(g, sig)
-    return live
 
 
 def cli_path() -> str:
@@ -315,35 +109,6 @@ class Session:
     attachments: tuple[dict[str, str], ...] = ()  # blob attachments sent with the first message
 
 
-@dataclass
-class Run:
-    """What one session produced and how it ended; ``head`` is the worktree HEAD of the accepted result."""
-
-    session_id: str
-    ending: Ending = "error"
-    payload: tools.Args | None = None
-    detail: str = ""
-    head: str | None = None
-    runtime_pid: int | None = None
-    pids: dict[int, float | None] = field(default_factory=dict)
-    usage: dict[str, Any] = field(default_factory=dict)
-    termination: Termination | None = None
-    denials: list[str] = field(default_factory=list)
-    invalid: int = 0
-    quota: bool = False  # the runtime reported the Copilot quota exhausted
-    quota_reset: datetime | None = None  # when it said the quota resets
-
-
-def missing_cause(kind: StepKind) -> str:
-    """Cause key counted each time a resumed session is reported absent."""
-    return cause_key(ErrorKind.STATE, kind, "session-missing")
-
-
-def effect_seen(run: Run) -> bool:
-    """An answer's effect is observed only when the step ends with an accepted result or a new question."""
-    return run.ending in {"result", "ask"} and run.payload is not None
-
-
 def sent(events: Iterable[Any], message: str) -> bool:
     """Whether a session transcript already holds *message* as a user message."""
     users = (getattr(e.data, "content", "") or "" for e in events if getattr(e.type, "value", e.type) == "user.message")
@@ -378,7 +143,7 @@ class _Step:
         elif kind == "tool.execution_start":
             self.now(getattr(ev.data, "tool_name", "") or "tool", getattr(ev.data, "arguments", None))
         elif kind in {"session.quota_observation", "session.error"}:
-            _quota(self.run, kind, ev.data)
+            note_quota(self.run, kind, ev.data)
 
     def now(self, tool: str, arguments: Any) -> None:  # noqa: ANN401 - the SDK's JSON tool arguments
         """Overwrite the now line with this tool call, at most once per ``NOW_EVERY`` seconds."""
@@ -390,7 +155,7 @@ class _Step:
             self.cfg.journal.now({"tool": tool, "summary": summary(tool, arguments), "at": at})
 
     def permission(self, request: Any, _invocation: Any) -> Any:  # noqa: ANN401 - SDK types
-        req = _view(request)
+        req = view(request)
         reason = decide(self.cfg.policy, req)
         if reason is None:
             return PermissionDecisionApproveOnce()
@@ -444,7 +209,7 @@ class _Step:
         new: dict[int, float | None] = {}
         for pid in (p for p in pids if p and p not in self.run.pids):
             try:
-                new[pid] = _started(pid)
+                new[pid] = processes.started(pid)
             except psutil.NoSuchProcess:
                 new.update({pid: None} if keep else {})
             except psutil.Error, OSError:
@@ -482,7 +247,7 @@ class _Step:
 
     def replace(self) -> str | None:
         """The resumed session is absent: replace it only once every earlier recorded process is observed gone."""
-        prior = verdict(self.cfg.previous, alive)
+        prior = verdict(self.cfg.previous, processes.alive)
         self.log(event="session-missing", previous=sorted(self.cfg.previous), gone=prior.confirmed)
         if not prior.confirmed:
             self.run.pids.update(self.cfg.previous)
@@ -541,7 +306,9 @@ async def _usage(session: CopilotSession, requested: str | None) -> dict[str, An
 async def _settle(recorded: Pids, problems: list[str], limit: float | None = None) -> Termination:
     end = time.monotonic() + (SETTLE if limit is None else limit)
     # Polls the OS process table; there is no event to wait on.
-    while not (result := verdict(recorded, alive, problems)).confirmed and time.monotonic() < end:  # noqa: ASYNC110
+    while (  # noqa: ASYNC110
+        not (result := verdict(recorded, processes.alive, problems)).confirmed and time.monotonic() < end
+    ):
         await asyncio.sleep(0.5)
     return result
 
@@ -551,11 +318,11 @@ async def _force(st: _Step, why: str) -> None:
     st.log(event="force-stop", reason=why, runtime_pid=st.run.runtime_pid)
     with contextlib.suppress(OSError, AttributeError):
         st.proc.terminate()
-    kill(st.run.pids, signal.SIGTERM)
+    processes.kill(st.run.pids, signal.SIGTERM)
     await _settle(st.run.pids, [], GRACE)
     with contextlib.suppress(OSError, AttributeError):
         st.proc.kill()
-    kill(st.run.pids, signal.SIGKILL)
+    processes.kill(st.run.pids, signal.SIGKILL)
 
 
 async def _teardown(client: CopilotClient, session: CopilotSession | None, st: _Step) -> Termination:  # noqa: C901
@@ -592,7 +359,7 @@ async def _teardown(client: CopilotClient, session: CopilotSession | None, st: _
     rt = st.run.runtime_pid
     if rt is None:
         problems.append("runtime PID unknown")
-    elif alive(rt, st.run.pids.get(rt)) is not False:
+    elif processes.alive(rt, st.run.pids.get(rt)) is not False:
         await _force(st, "runtime still present after stop")
     return await _settle(dict(st.run.pids), problems)
 
@@ -648,88 +415,3 @@ async def run(cfg: Session) -> Run:
     st.run.usage = await _usage(session, cfg.model) if session else {}
     st.run.termination = await _teardown(client, session, st) if client else Termination(confirmed=True)
     return st.run
-
-
-def to_result(run: Run, kind: StepKind, now: datetime) -> StepResult:
-    """Map one session's ending to the loop's step result, carrying the last permission denial."""
-    result = _exit(run, kind, now)
-    return result.model_copy(update={"denial": run.denials[-1][:300]}) if run.denials else result
-
-
-def _quota(run: Run, kind: str, data: Any) -> None:  # noqa: ANN401 - SDK event data
-    """Record an exhausted Copilot quota and its reset time from a quota observation or a session error."""
-    if kind == "session.error":
-        text = " ".join(str(getattr(data, f, "") or "") for f in ("error_type", "error_code", "message"))
-        run.quota = run.quota or (transient(text) == ErrorKind.CAPACITY and quota(text))
-        return
-    seen = getattr(data, "observation", None)
-    if getattr(seen, "capacity_state", None) != "exhausted":
-        return
-    run.quota = True
-    ms = getattr(getattr(seen, "budget_metadata", None), "reset_at_epoch_ms", None)
-    if isinstance(ms, int | float) and ms > 0:
-        run.quota_reset = datetime.fromtimestamp(ms / 1000, UTC)
-
-
-def _exit(run: Run, kind: StepKind, now: datetime) -> StepResult:  # noqa: C901, PLR0911, PLR0912 - one case per ending
-    """One exit per ending; unverified termination stops whatever the session reported; the host scans after."""
-    t = run.termination or Termination(confirmed=False, problems=("termination did not run",))
-    if not t.confirmed:
-        pids = ", ".join(str(p) for p in sorted({*t.survivors, *t.unknown}))
-        found = [f"processes {pids} still present"] if pids else []
-        stop = Stop(
-            kind=ErrorKind.LIVENESS,
-            reason="termination unverified: " + "; ".join([*found, *t.problems]),
-            action=f"End processes {pids}" if pids else "Check that no process of this step remains",
-            resume="No process of this step remains",
-            at=now,
-        )
-        return StepResult(exit=Exit.STOP, reason=stop.reason, stop=stop)
-    p = run.payload
-    if run.quota and run.ending not in {"result", "ask", "premise"}:  # the quota ended it, whatever it reported
-        reason = run.detail or "Copilot quota exhausted"
-        return StepResult(
-            exit=Exit.RETRY, cause=cause_key(ErrorKind.CAPACITY, kind, QUOTA), reason=reason, wake_at=run.quota_reset
-        )
-    match run.ending:
-        case "result" if isinstance(p, tools.BuildResult):
-            return StepResult(exit=Exit.DONE, reason=p.summary[:200])
-        case "result" if isinstance(p, tools.ReviewResult):
-            found = "; ".join(f"{f.place}: {f.problem} - fix: {f.fix}" for f in p.findings)[:1500]
-            return StepResult(exit=Exit.DONE if p.verdict == "pass" else Exit.RETRY, reason=found or "review passed")
-        case "result" if isinstance(p, tools.CheckRecipe):
-            reason = f"starting `{p.command}` for the check"
-            return StepResult(exit=Exit.PENDING, waiting=Waiting.PERSON_CHECK, reason=reason)
-        case "result" if isinstance(p, tools.PlanResult):
-            tasks = [
-                Task(id=f"t{i}", title=t.title, scope=t.scope, checks=t.checks, detail=t.goal)
-                for i, t in enumerate(p.tasks, 1)
-            ]
-            return StepResult(exit=Exit.DONE, reason=f"{len(tasks)} task(s) planned", plan=Plan(tasks=tasks))
-        case "ask" if isinstance(p, tools.AskQuestion):
-            options = [Option(id=f"o{i}", label=f"{o.label}: {o.effect}") for i, o in enumerate(p.options, 1)]
-            question = Question(step=kind, text=f"{p.question} (why: {p.why})", options=options)
-            return StepResult(exit=Exit.ASK, question=question)
-        case "premise" if isinstance(p, tools.WrongPremise):
-            cause = cause_key(ErrorKind.SCOPE, kind, p.stage)
-            back = {StepKind.CHECK: StepKind.BUILD, StepKind.PLAN: StepKind.SHAPE}.get(kind, StepKind.PLAN)
-            return StepResult(exit=Exit.BACK, back_to=back, cause=cause, reason=p.reason[:200])
-        case "deadline":  # an unanswered runtime start is the environment's; the step's own deadline is liveness
-            env = transient(run.detail) if run.detail != "step deadline" else None
-            cause = cause_key(env, kind, "sdk") if env else cause_key(ErrorKind.LIVENESS, kind, "deadline")
-            return StepResult(exit=Exit.RETRY, cause=cause, reason=run.detail or "deadline")
-        case "missing":
-            return StepResult(exit=Exit.RETRY, cause=missing_cause(kind), reason=run.detail)
-        case "unread":
-            return StepResult(
-                exit=Exit.RETRY, cause=cause_key(ErrorKind.LIVENESS, kind, "transcript"), reason=run.detail
-            )
-        case "error":
-            if transient(run.detail) == ErrorKind.CAPACITY and quota(run.detail):
-                cause = cause_key(ErrorKind.CAPACITY, kind, QUOTA)
-                return StepResult(exit=Exit.RETRY, cause=cause, reason=run.detail, wake_at=run.quota_reset)
-            error = transient(run.detail) or ErrorKind.TOOLING
-            return StepResult(exit=Exit.RETRY, cause=cause_key(error, kind, "sdk"), reason=run.detail)
-        case _:
-            reason = f"no valid result: {run.detail}"
-            return StepResult(exit=Exit.RETRY, cause=cause_key(ErrorKind.RESULT, kind), reason=reason)

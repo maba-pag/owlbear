@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Literal
 
 import psutil
 
-from owlbear_delivery_next import loop, sdk_adapter
+from owlbear_delivery_next import evidence, failures, loop, processes
 from owlbear_delivery_next.models import VISUAL, ErrorKind, Exit, StepKind, Task, Waiting
 from owlbear_delivery_next.steps import worktree
 
@@ -47,7 +47,7 @@ def action(c: Change, *, live: bool, paths: Mapping[str, str]) -> Action | None:
             return "dispose"  # a terminal exit of the visual task; done moves the step on
         return "keep" if live and e.ready_at else "launch"  # the runner captures and settles the visual check
     a = person.answer
-    if a and a.inputs and loop.check_valid(a.inputs, loop.check_inputs(c, person, paths)):
+    if a and a.inputs and evidence.check_valid(a.inputs, evidence.check_inputs(c, person, paths)):
         return "settle"  # by the result's recorded inputs (P5), whichever launch it was given for
     return "keep" if live and e.ready_at else "launch"
 
@@ -73,7 +73,7 @@ def fingerprints(c: Change, person: PersonCheck) -> dict[str, str]:
     root = Path(c.names.worktree)
     if not (c.names.worktree and root.is_dir()):
         return {}
-    return worktree.fingerprints(root, person.paths) if person.paths else {loop.TREE: worktree.tree(root)}
+    return worktree.fingerprints(root, person.paths) if person.paths else {evidence.TREE: worktree.tree(root)}
 
 
 def declared(c: Change) -> dict[str, str]:
@@ -111,7 +111,7 @@ def members(pgid: int, leader: float | None = None) -> Found:
 
 
 def remaining(
-    e: Environment, alive: sdk_adapter.Observe = sdk_adapter.alive, group: Callable[..., Found] = members
+    e: Environment, alive: processes.Observe = processes.alive, group: Callable[..., Found] = members
 ) -> Found:
     """Recorded PIDs alive or unobservable, and every live member of the recorded group."""
     found: Found = {p: "" for p, t in e.pids.items() if alive(p, t) is not False}
@@ -124,7 +124,7 @@ def dispose(e: Environment) -> Found:
     for sig, wait in ((signal.SIGTERM, GRACE), (signal.SIGKILL, 2.0)):
         if not (left := remaining(e)):
             return {}
-        sdk_adapter.kill(e.pids, sig)
+        processes.kill(e.pids, sig)
         if e.pgid and e.pgid != os.getpgrp() and members(e.pgid, e.pids.get(e.pgid)):
             with contextlib.suppress(OSError):
                 os.killpg(e.pgid, sig)
@@ -170,14 +170,14 @@ def pending(c: Change, e: Environment) -> loop.StepResult:
     person = next(p for p in c.checks if p.id == e.check)
     reason = f"{'; '.join(person.steps) or person.id} · {e.ready_url}"
     a = person.answer
-    if a and a.inputs and (what := loop.changed(a.inputs, loop.check_inputs(c, person, declared(c)))):
+    if a and a.inputs and (what := evidence.changed(a.inputs, evidence.check_inputs(c, person, declared(c)))):
         reason += f" · asked again: changed {', '.join(what)}"
     return loop.StepResult(exit=Exit.PENDING, waiting=Waiting.PERSON_CHECK, who="you", reason=reason)
 
 
 def failed(reason: str) -> loop.StepResult:
     """Preparation or readiness failed: the check is prepared again."""
-    cause = loop.cause_key(ErrorKind.PROJECT_ENV, StepKind.CHECK, "environment")
+    cause = failures.cause_key(ErrorKind.PROJECT_ENV, StepKind.CHECK, "environment")
     return loop.StepResult(exit=Exit.RETRY, cause=cause, reason=reason)
 
 
@@ -192,7 +192,7 @@ def settle(c: Change, now: datetime, paths: Mapping[str, str]) -> Change:
     last = tasks[-1] if tasks else Task(id="t0", title="")
     title = f"Fix: the check {person.id} failed for the owner: {answer.text}"
     fix = Task(id=f"t{len(tasks) + 1}", title=title, scope=last.scope, checks=last.checks, origin="person-check")
-    cause = loop.cause_key(ErrorKind.CHECKS, StepKind.CHECK, person.id)
+    cause = failures.cause_key(ErrorKind.CHECKS, StepKind.CHECK, person.id)
     result = loop.StepResult(
         exit=Exit.BACK, back_to=StepKind.BUILD, cause=cause, reason=f"{person.id} failed for you", fix_task=fix
     )

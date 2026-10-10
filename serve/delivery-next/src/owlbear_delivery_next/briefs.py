@@ -7,7 +7,7 @@ import re
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next import loop, profile, tools
+from owlbear_delivery_next import evidence, profile, tools
 from owlbear_delivery_next.models import (
     Change,
     Criterion,
@@ -46,7 +46,7 @@ def drafted(old: Change | None, d: tools.BriefDraft, slug: str, handle: str, pro
     fields = {"version": v, "title": d.title, "outcome": d.outcome, "scope": d.scope, "criteria": criteria}
     fields |= {"ui": d.ui, "visual": visual}
     c.brief = c.brief.model_copy(update=fields)
-    ids, paths, shown = [k.id for k in criteria], loop.coverage(c), {p.id: p for p in c.checks}
+    ids, paths, shown = [k.id for k in criteria], evidence.coverage(c), {p.id: p for p in c.checks}
     c.checks = []
     for p in d.person_checks:
         prev = shown.get(p.name)

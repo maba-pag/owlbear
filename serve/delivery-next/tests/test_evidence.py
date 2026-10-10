@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from owlbear_delivery_next import loop, sdk_adapter, tools
+from owlbear_delivery_next import evidence, sdk_adapter, tools
 from owlbear_delivery_next.mask import redact
 from owlbear_delivery_next.models import Brief, Change, Criterion, Inputs, Names, PersonCheck, Review, Step, StepKind
 from owlbear_delivery_next.sdk_adapter import NOW_LIMIT, Journal, summary
@@ -174,10 +174,10 @@ def test_redact_keeps_the_host_of_a_url_with_userinfo_and_ordinary_text():
 def test_a_check_answer_binds_to_its_inputs(work, paths, touched, valid):
     c = reviewed_change(work)
     person = PersonCheck(id="p1", criteria=["AC-1"], paths=paths)
-    recorded = loop.check_inputs(c, person, check.fingerprints(c, person))
+    recorded = evidence.check_inputs(c, person, check.fingerprints(c, person))
     (work / touched).write_text("changed\n")
     commit(work, "touch")
-    assert loop.check_valid(recorded, loop.check_inputs(c, person, check.fingerprints(c, person))) is valid
+    assert evidence.check_valid(recorded, evidence.check_inputs(c, person, check.fingerprints(c, person))) is valid
 
 
 def test_the_now_line_summarises_redacts_and_caps_a_tool_call():

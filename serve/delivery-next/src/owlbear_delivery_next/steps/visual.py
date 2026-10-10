@@ -12,10 +12,11 @@ import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
-from owlbear_delivery_next.loop import StepResult, cause_key
+from owlbear_delivery_next.failures import cause_key
+from owlbear_delivery_next.loop import StepResult
 from owlbear_delivery_next.models import VISUAL, Decision, ErrorKind, Exit, Option, StepKind, VisualResult
 from owlbear_delivery_next.steps import check, engine, review, worktree
 
@@ -60,16 +61,6 @@ class Shot:
 
 
 type Capturer = Callable[[str, Sequence[VisualState], Path], list[Shot]]
-type Need = Literal["none", "states", "person", "unmet"]
-
-
-def need(*, ui: bool, states: bool, person: bool) -> Need:
-    """The one visual rule: states are captured; else a UI Change needs a person check with ``visual: true``."""
-    if states:
-        return "states"
-    if not ui:
-        return "none"
-    return "person" if person else "unmet"
 
 
 def capture(  # noqa: C901 - one finding per failure of the nested shot

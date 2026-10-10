@@ -6,9 +6,11 @@ from types import SimpleNamespace
 
 import psutil
 
-from owlbear_delivery_next import sdk_adapter, tools
+from owlbear_delivery_next import processes, sdk_adapter, session_result, tools
 from owlbear_delivery_next.models import ErrorKind, Exit, StepKind
-from owlbear_delivery_next.sdk_adapter import Policy, Request, Run, Termination, decide, to_result, verdict
+from owlbear_delivery_next.permissions import Policy, Request, decide
+from owlbear_delivery_next.processes import Termination, verdict
+from owlbear_delivery_next.session_result import Run, to_result
 from owlbear_delivery_next.tools import AskQuestion, BuildResult, Worktree
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
@@ -167,20 +169,18 @@ def test_pids_are_kept_with_unknown_start_times_and_persisted_as_seen(monkeypatc
             raise psutil.NoSuchProcess(pid)
         return 100.0
 
-    monkeypatch.setattr(sdk_adapter, "_started", started)
+    monkeypatch.setattr(processes, "started", started)
     st = step()
     st.record(1, 2, 3, None)
     st.record(3, keep=True)
     assert st.run.pids == {1: 100.0, 2: None, 3: None}
     assert [e["pids"] for e in st.events] == [{"1": 100.0, "2": None}, {"3": None}]
-    live, groups = sdk_adapter.targets(
-        {1: 100.0, 2: None, 4: 50.0, 5: 60.0}, lambda *_: True, {1: 1, 4: 9, 5: 5}.get, 5
-    )
+    live, groups = processes.targets({1: 100.0, 2: None, 4: 50.0, 5: 60.0}, lambda *_: True, {1: 1, 4: 9, 5: 5}.get, 5)
     assert (live, groups) == ([1, 4, 5], [1])
 
 
 def test_a_missing_session_is_replaced_only_once_earlier_processes_are_gone(monkeypatch) -> None:
-    monkeypatch.setattr(sdk_adapter, "alive", lambda pid, _c: pid == 7)
+    monkeypatch.setattr(processes, "alive", lambda pid, _c: pid == 7)
     st = step(replaced=lambda: "s2")
     st.cfg = dataclasses.replace(st.cfg, previous={7: 1.0})
     assert (st.replace(), st.run.ending, st.run.pids) == (None, "missing", {7: 1.0})
@@ -197,12 +197,12 @@ def test_delivery_is_not_effect_and_a_delivered_answer_is_found_in_the_transcrip
     events = [ev("assistant.message", "The owner answered"), ev("user.message", "The owner answered: German\n")]
     assert sdk_adapter.sent(events, "The owner answered: German")
     assert not sdk_adapter.sent(events[:1], "The owner answered: German")
-    assert [sdk_adapter.effect_seen(Run("s", ending=e, payload=build())) for e in ("result", "ask", "deadline")] == [
+    assert [session_result.effect_seen(Run("s", ending=e, payload=build())) for e in ("result", "ask", "deadline")] == [
         True,
         True,
         False,
     ]
-    assert not sdk_adapter.effect_seen(Run("s", ending="result"))
+    assert not session_result.effect_seen(Run("s", ending="result"))
 
 
 def test_a_resumed_answer_is_read_back_before_any_send_and_an_unread_transcript_sends_nothing() -> None:
@@ -268,12 +268,12 @@ def test_an_exhausted_quota_observation_maps_its_reset_to_wake_at() -> None:
     run = Run("s1", ending="error", detail="request failed", termination=Termination(confirmed=True))
     budget = SimpleNamespace(reset_at_epoch_ms=int(datetime(2026, 10, 10, 15, tzinfo=UTC).timestamp() * 1000))
     seen = SimpleNamespace(observation=SimpleNamespace(capacity_state="exhausted", budget_metadata=budget))
-    sdk_adapter._quota(run, "session.quota_observation", seen)  # noqa: SLF001 - the SDK event mapping
+    session_result.note_quota(run, "session.quota_observation", seen)
     r = to_result(run, StepKind.BUILD, NOW)
     assert (r.exit, r.cause, r.wake_at) == (Exit.RETRY, "capacity:build:quota", datetime(2026, 10, 10, 15, tzinfo=UTC))
     error = SimpleNamespace(error_type="rate_limit", error_code="quota_exceeded", message="premium requests used up")
     other = Run("s2", ending="error", termination=Termination(confirmed=True))
-    sdk_adapter._quota(other, "session.error", error)  # noqa: SLF001 - the SDK event mapping
+    session_result.note_quota(other, "session.error", error)
     assert (other.quota, to_result(other, StepKind.BUILD, NOW).cause) == (True, "capacity:build:quota")
 
 

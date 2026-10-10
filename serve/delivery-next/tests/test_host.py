@@ -5,8 +5,9 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from owlbear_delivery_next import cli, host
+from owlbear_delivery_next.evidence import check_inputs, next_check
 from owlbear_delivery_next.host import Host, RunnerRecord
-from owlbear_delivery_next.loop import StepResult, apply, check_inputs, next_check
+from owlbear_delivery_next.loop import StepResult, apply
 from owlbear_delivery_next.models import (
     Answer,
     AnswerItem,

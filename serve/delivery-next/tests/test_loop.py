@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from owlbear_delivery_next import loop
+from owlbear_delivery_next import budgets, evidence, failures, loop
 from owlbear_delivery_next.github import merge_offer
 from owlbear_delivery_next.loop import StepResult
 from owlbear_delivery_next.models import (
@@ -50,11 +50,11 @@ def change(kind=K.BUILD, task="t1", mode=None, **fields) -> Change:
 
 def result(kind: StepKind, exit_: Exit, **fields) -> StepResult:
     extra = {
-        Exit.RETRY: {"cause": loop.cause_key(ErrorKind.CHECKS, kind, "test")},
+        Exit.RETRY: {"cause": failures.cause_key(ErrorKind.CHECKS, kind, "test")},
         Exit.ASK: {"question": Question(step=kind, text="which key?")},
         Exit.BACK: {
             "back_to": min(loop.BACK.get(kind, {K.PLAN})),
-            "cause": loop.cause_key(ErrorKind.SCOPE, kind, "x"),
+            "cause": failures.cause_key(ErrorKind.SCOPE, kind, "x"),
             "fix_task": Task(id="f1", title="fix"),
         },
         Exit.STOP: {"stop": Stop(kind=ErrorKind.LIVENESS, reason="r", action="End process 7", resume="gone", at=NOW)},
@@ -140,7 +140,7 @@ def test_walk_from_brief_approval_to_done():
         assert (c.step.kind, c.step.task, c.step.mode) == expected
     c = loop.apply(c, StepResult(exit=Exit.PENDING, waiting=Waiting.PERSON_CHECK, who="you"), NOW)
     assert loop.next_step(c, LATER) is None
-    inputs = loop.check_inputs(c, c.checks[0], {"ui": "f1"})
+    inputs = evidence.check_inputs(c, c.checks[0], {"ui": "f1"})
     c, step = loop.schedule(c, [CheckResult(at=NOW, check="p1", passed=True, inputs=inputs)], NOW)
     assert step is None  # recorded; the host settles it and ends the wait
     assert c.checks[0].answer.inputs == inputs
@@ -157,7 +157,7 @@ def test_brief_review_binds_the_version_and_findings_return_to_the_owner():
     c.brief.approved_version = None
     c, _ = loop.schedule(c, [BriefApproval(at=NOW, version=1)], NOW)
     assert (c.step.kind, loop.brief_due(c)) == (K.SHAPE, True)
-    failed = StepResult(exit=Exit.RETRY, cause=loop.cause_key(ErrorKind.TOOLING, K.REVIEW, "sdk"))
+    failed = StepResult(exit=Exit.RETRY, cause=failures.cause_key(ErrorKind.TOOLING, K.REVIEW, "sdk"))
     assert loop.brief_review(c, failed) == (c, failed)  # a failed session judged nothing
     c, asked = loop.brief_review(c, StepResult(exit=Exit.RETRY, reason="AC-1: cannot be checked"))
     c = loop.apply(c, asked, NOW)
@@ -189,7 +189,7 @@ def test_an_accepted_plan_overlapping_another_open_change_asks_to_order_or_proce
 
 
 def test_cause_count_survives_retry_back_replan_and_an_unobserved_answer():
-    cause = loop.cause_key(ErrorKind.PROJECT_ENV, K.BUILD, "TEST_API_KEY")
+    cause = failures.cause_key(ErrorKind.PROJECT_ENV, K.BUILD, "TEST_API_KEY")
     c = change()
     for exit_, extra in [(Exit.RETRY, {}), (Exit.RETRY, {}), (Exit.BACK, {"back_to": K.PLAN})]:
         c = loop.apply(c, StepResult(exit=exit_, cause=cause, **extra), NOW)
@@ -202,7 +202,7 @@ def test_cause_count_survives_retry_back_replan_and_an_unobserved_answer():
     c, step = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option="narrow")], NOW)
     assert step.kind == K.PLAN
     assert c.budgets.causes[cause].count == 4
-    assert cause not in loop.effect_observed(c, c.questions[-1].id, NOW).budgets.causes
+    assert cause not in budgets.effect_observed(c, c.questions[-1].id, NOW).budgets.causes
 
 
 def test_effect_observation_clears_a_cause_once_per_answer_and_delivery_alone_clears_nothing():
@@ -216,17 +216,17 @@ def test_effect_observation_clears_a_cause_once_per_answer_and_delivery_alone_cl
         3,
     )
     assert loop.answer_delivered(c, "q1", LATER).questions[0].delivered_at == NOW
-    c = loop.effect_observed(c, "q1", NOW)
+    c = budgets.effect_observed(c, "q1", NOW)
     c.budgets.causes["c"] = Budget(count=1)
-    assert loop.effect_observed(c, "q1", LATER).budgets.causes["c"].count == 1
+    assert budgets.effect_observed(c, "q1", LATER).budgets.causes["c"].count == 1
 
 
 def test_a_charged_cause_reports_exhaustion_after_the_retry_limit():
     c, within = change(), []
-    for _ in range(loop.RETRY_LIMIT + 1):
-        c, ok = loop.charge(c, "state:build:session-missing", NOW)
+    for _ in range(budgets.RETRY_LIMIT + 1):
+        c, ok = budgets.charge(c, "state:build:session-missing", NOW)
         within.append(ok)
-    assert within == [True] * loop.RETRY_LIMIT + [False]
+    assert within == [True] * budgets.RETRY_LIMIT + [False]
 
 
 def _profile(c):
@@ -257,7 +257,7 @@ def _other_task(c):
     ],
 )
 def test_count_resets_only_when_its_premise_changes(kind, step, premise_change, count):
-    cause = loop.cause_key(kind, step, "x")
+    cause = failures.cause_key(kind, step, "x")
     c = loop.apply(change(step), StepResult(exit=Exit.RETRY, cause=cause), NOW)
     premise_change(c)
     c = loop.apply(c, StepResult(exit=Exit.RETRY, cause=cause), NOW)
@@ -267,8 +267,8 @@ def test_count_resets_only_when_its_premise_changes(kind, step, premise_change, 
 def test_recovery_resets_network_counts_only():
     c = change()
     for kind in (ErrorKind.NETWORK, ErrorKind.CHECKS):
-        c = loop.apply(c, StepResult(exit=Exit.RETRY, cause=loop.cause_key(kind, K.BUILD)), NOW)
-    assert list(loop.recovered(c, ErrorKind.NETWORK).budgets.causes) == ["checks:build:"]
+        c = loop.apply(c, StepResult(exit=Exit.RETRY, cause=failures.cause_key(kind, K.BUILD)), NOW)
+    assert list(budgets.recovered(c, ErrorKind.NETWORK).budgets.causes) == ["checks:build:"]
 
 
 def test_third_round_of_findings_asks_and_accepting_moves_on():
@@ -294,7 +294,7 @@ def test_renamed_task_with_the_same_scope_keeps_its_review_rounds():
 
 def test_fourth_replan_asks():
     c = change()
-    c.budgets.replans = loop.REPLAN_LIMIT
+    c.budgets.replans = budgets.REPLAN_LIMIT
     c = loop.apply(c, StepResult(exit=Exit.BACK, back_to=K.PLAN, cause="scope:build:x"), NOW)
     assert (c.step.kind, c.outcome.exit) == (K.BUILD, Exit.ASK)
 
@@ -365,7 +365,7 @@ def test_closed_pr_reopen_holds_until_the_pr_is_seen_open_again():
     assert (step.kind, len(c.questions)) == (K.FOLLOW, 1)
     c, _ = loop.schedule(loop.apply(c, StepResult(exit=Exit.DONE), NOW), [], NOW, "closed")
     assert len(c.questions) == 1
-    c, step = loop.schedule(loop.effect_observed(c, "q1", NOW), [], NOW, "closed")
+    c, step = loop.schedule(budgets.effect_observed(c, "q1", NOW), [], NOW, "closed")
     assert (step, len(c.questions)) == (None, 2)
 
 
@@ -383,18 +383,18 @@ def test_next_check_needs_a_passing_answer_on_unchanged_inputs():
 
     def answer(c, check_id, passed):
         check = next(k for k in c.checks if k.id == check_id)
-        item = CheckResult(at=NOW, check=check_id, passed=passed, inputs=loop.check_inputs(c, check, paths))
+        item = CheckResult(at=NOW, check=check_id, passed=passed, inputs=evidence.check_inputs(c, check, paths))
         return loop.fold(c, [item], NOW)
 
     c = answer(c, "p1", passed=True)
-    assert loop.next_check(c, paths).id == "p2"
+    assert evidence.next_check(c, paths).id == "p2"
     c = answer(c, "p2", passed=False)
-    assert loop.next_check(c, paths).id == "p2"
+    assert evidence.next_check(c, paths).id == "p2"
     c = answer(c, "p2", passed=True)
-    assert loop.next_check(c, paths) is None
-    assert loop.next_check(c, paths | {"a": "2"}).id == "p1"
+    assert evidence.next_check(c, paths) is None
+    assert evidence.next_check(c, paths | {"a": "2"}).id == "p1"
     c.brief.criteria[0].version = 2
-    assert loop.next_check(c, paths).id == "p1"
+    assert evidence.next_check(c, paths).id == "p1"
 
 
 @pytest.mark.parametrize(

@@ -6,11 +6,12 @@ import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next import loop, profile
+from owlbear_delivery_next import evidence, loop, profile
+from owlbear_delivery_next.failures import cause_key
 from owlbear_delivery_next.github import merge_offer
 from owlbear_delivery_next.github.merge_offer import Block
 from owlbear_delivery_next.github.provider import MergeMethod, MergeRequest, MergeStatus, Refusal
-from owlbear_delivery_next.loop import StepResult, cause_key
+from owlbear_delivery_next.loop import StepResult
 from owlbear_delivery_next.models import ErrorKind, Exit, Option, StepKind, Waiting
 from owlbear_delivery_next.steps import check, engine, follow, publish, visual
 
@@ -40,13 +41,13 @@ def visual_ok(c: Change, head: str, ui: Sequence[str]) -> bool:
     a person-only check marked ``visual`` or the owner's "Not a UI change" for this brief version and these paths.
     """
     person = any(p.visual for p in c.checks)
-    match visual.need(ui=c.brief.ui or bool(ui), states=bool(c.brief.visual), person=person):
+    match evidence.need(ui=c.brief.ui or bool(ui), states=bool(c.brief.visual), person=person):
         case "states":
             try:
                 tree = visual.tree(Path(c.names.worktree), head)
             except subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError:
                 return False  # an unreadable head tree is never accepted
-            return loop.visual_valid(c, head, tree)
+            return evidence.visual_valid(c, head, tree)
         case "unmet":
             return visual.not_ui(c, ui)
         case _:
@@ -135,7 +136,7 @@ def gate(  # noqa: C901, PLR0911 - one exit per condition
         return c, StepResult(
             exit=Exit.BACK, back_to=StepKind.PUBLISH, cause=cause_key(ErrorKind.GATE, M, "review"), reason=reason
         )
-    if (person := loop.next_check(c, check.declared(c))) is not None:
+    if (person := evidence.next_check(c, check.declared(c))) is not None:
         reason = f"{person.id} needs your result again"
         return c, StepResult(
             exit=Exit.BACK, back_to=StepKind.FOLLOW, cause=cause_key(ErrorKind.GATE, M, person.id), reason=reason

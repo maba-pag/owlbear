@@ -6,7 +6,9 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.loop import CONSENT, EPISODE_QUIET, QUOTA, RETRY_LIMIT, episode
+from owlbear_delivery_next.budgets import EPISODE_QUIET, RETRY_LIMIT, episode
+from owlbear_delivery_next.failures import QUOTA
+from owlbear_delivery_next.loop import CONSENT
 from owlbear_delivery_next.mask import redact
 from owlbear_delivery_next.models import ErrorKind, Exit, StepKind, Waiting
 

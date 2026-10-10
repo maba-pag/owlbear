@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from owlbear_delivery_next import loop
+from owlbear_delivery_next import evidence, loop
 from owlbear_delivery_next.briefs import save_brief
 from owlbear_delivery_next.models import (
     AnswerItem,
@@ -243,7 +243,7 @@ def create_app(  # noqa: C901, PLR0915 - one closure per route
                 "passed": p.answer.passed if p.answer else None,
                 "waiting": bool(waiting and c.step.task == p.id),
                 "url": c.env.ready_url if c.env and c.env.check == p.id and c.env.ready_at else None,
-                "inputs": snapshot(loop.check_inputs(c, p, check.fingerprints(c, p)), p),
+                "inputs": snapshot(evidence.check_inputs(c, p, check.fingerprints(c, p)), p),
             }
             for p in c.checks
         ]
@@ -303,7 +303,7 @@ def create_app(  # noqa: C901, PLR0915 - one closure per route
         person = next((p for p in c.checks if p.id == body.check), None)
         if person is None or not (c.env and c.env.check == body.check and c.env.ready_at):
             raise HTTPException(409, f"check {body.check} is not waiting for a result")
-        inputs = loop.check_inputs(c, person, check.fingerprints(c, person))
+        inputs = evidence.check_inputs(c, person, check.fingerprints(c, person))
         if snapshot(inputs, person) != body.inputs:
             raise HTTPException(409, "This check changed since you opened it; reload")
         item = CheckResult(at=datetime.now(UTC), check=person.id, passed=body.passed, note=body.note, inputs=inputs)

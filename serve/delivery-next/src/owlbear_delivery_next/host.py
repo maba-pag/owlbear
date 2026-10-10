@@ -19,7 +19,7 @@ import psutil
 import uvicorn
 from pydantic import ValidationError
 
-from owlbear_delivery_next import api, loop, sdk_adapter, setup, tools
+from owlbear_delivery_next import api, failures, loop, processes, setup, tools
 from owlbear_delivery_next.models import VISUAL, ErrorKind, Exit, Profile, Record, StepKind, Stop
 from owlbear_delivery_next.process_probe import ProcessTableWorktreeProbe, WorktreeProcessScanError
 from owlbear_delivery_next.status import Activity
@@ -117,7 +117,7 @@ def disappeared(prior: Change, rec: RunnerRecord, now: datetime) -> bool:
 
 def gone(kind: StepKind) -> loop.StepResult:
     """One counted liveness retry for a runner that disappeared, so a repeating startup failure escalates."""
-    cause = loop.cause_key(ErrorKind.LIVENESS, kind, "runner-gone")
+    cause = failures.cause_key(ErrorKind.LIVENESS, kind, "runner-gone")
     return loop.StepResult(exit=Exit.RETRY, cause=cause, reason="the runner ended without recording an exit")
 
 
@@ -132,7 +132,7 @@ class Host:
         spawn: Callable[[str], RunnerRecord] | None = None,
         scan: Callable[[Path, datetime], Found] = _scan,
         group: Callable[[int], Found] = check.members,
-        alive: Callable[[int, float | None], bool | None] = sdk_adapter.alive,
+        alive: Callable[[int, float | None], bool | None] = processes.alive,
     ) -> None:
         self.store, self.repo, self.scan, self.group, self.alive = store, repo, scan, group, alive
         self.spawn = spawn or self._spawn

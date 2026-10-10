@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next import profile
+from owlbear_delivery_next.evidence import review_valid
+from owlbear_delivery_next.failures import cause_key
 from owlbear_delivery_next.git.remote_git import (
     RemoteGitWriteUnknown,
     classify_write_readback,
@@ -14,7 +16,7 @@ from owlbear_delivery_next.git.remote_git import (
     run_remote_git,
 )
 from owlbear_delivery_next.github.provider import ProviderError
-from owlbear_delivery_next.loop import StepResult, cause_key, review_valid
+from owlbear_delivery_next.loop import StepResult
 from owlbear_delivery_next.models import ErrorKind, Exit, StepKind
 from owlbear_delivery_next.steps import engine, worktree
 

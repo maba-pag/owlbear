@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from owlbear_delivery_next import confinement, evidence
 from owlbear_delivery_next.models import VISUAL
 
 if TYPE_CHECKING:
@@ -235,10 +236,8 @@ def check_brief(brief: BriefDraft) -> list[str]:
         for i, v in enumerate(brief.visual)
         if v.path.startswith("//") or ".." in PurePosixPath(v.path.split("?")[0]).parts
     ]
-    from owlbear_delivery_next.steps import visual  # noqa: PLC0415 - visual imports tools through its steps
-
     person = any(p.visual for p in brief.person_checks)
-    if visual.need(ui=brief.ui, states=bool(brief.visual), person=person) == "unmet":
+    if evidence.need(ui=brief.ui, states=bool(brief.visual), person=person) == "unmet":
         errors.append(
             'visual: empty for a UI Change - add a state, e.g. {"name": "home", "path": "/", "expect": "..."}, '
             "or a person-only check with visual: true"
@@ -443,9 +442,7 @@ def check_recipe(recipe: CheckRecipe, tree: Worktree, launch: Sequence[str], roo
         errors.append(f'directory: {recipe.directory} is not a directory in the worktree - e.g. "packages/app"')
     if not any(recipe.command.split()[: len(c.split())] == c.split() for c in launch):
         errors.append(f"command: not an allowed launch command - use one of {', '.join(launch) or 'none'}")
-    from owlbear_delivery_next import sdk_adapter  # noqa: PLC0415 - sdk_adapter imports tools
-
-    if (outside := sdk_adapter.escape(root, where, recipe.command)) is not None:
+    if (outside := confinement.escape(root, where, recipe.command)) is not None:
         errors.append(f"command: {outside} is outside the worktree - keep every path argument inside it")
     if not LOCAL_URL.fullmatch(recipe.ready_url):
         errors.append('ready_url: must be local with a port, e.g. "http://127.0.0.1:4173/"')

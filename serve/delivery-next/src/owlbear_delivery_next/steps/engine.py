@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Literal
 
-from owlbear_delivery_next import loop, profile
+from owlbear_delivery_next import failures, loop, profile
 from owlbear_delivery_next.git.remote_git import RemoteGitError, RemoteGitFailed, RemoteGitTimeout, run_remote_git
 from owlbear_delivery_next.github.provider import FailureCode, ProviderError
 from owlbear_delivery_next.loop import StepResult
@@ -101,7 +101,7 @@ def task(c: Change, title: str, origin: Origin, detail: str = "", tid: str | Non
 
 def back(kind: ErrorKind, step: StepKind, subject: str, reason: str, fix: Task) -> StepResult:
     """Back to build with one appended task; counted per cause."""
-    cause = loop.cause_key(kind, step, subject)
+    cause = failures.cause_key(kind, step, subject)
     return StepResult(exit=Exit.BACK, back_to=StepKind.BUILD, cause=cause, reason=reason, fix_task=fix)
 
 
@@ -142,7 +142,7 @@ def rules_changed(ctx: Ctx, c: Change) -> tuple[StepResult | None, Rules]:
     if not diffs:
         return None, rules
     text = f"Branch rules differ from the profile ({'; '.join(diffs)}); run `owlbear-next profile` to confirm them"
-    cause = loop.cause_key(ErrorKind.GATE, c.step.kind, "rules")
+    cause = failures.cause_key(ErrorKind.GATE, c.step.kind, "rules")
     return ask(c.step.kind, text, cause, continue_or_pause(c.step.kind)), rules
 
 
@@ -151,11 +151,11 @@ def failed(c: Change, exc: Exception, now: datetime) -> StepResult:
     kind = c.step.kind
     if isinstance(exc, ProviderError) and exc.code == FailureCode.AUTHENTICATION_REQUIRED:
         text = f"GitHub refused the credential ({exc}): run `gh auth login` (or `gh auth refresh`), then continue"
-        return ask(kind, text, loop.cause_key(ErrorKind.AUTH, kind, "gh"), continue_or_pause(kind))
+        return ask(kind, text, failures.cause_key(ErrorKind.AUTH, kind, "gh"), continue_or_pause(kind))
     if isinstance(exc, ProviderError) and exc.code == FailureCode.CONFLICT and not exc.retry_safe:
         stop = Stop(kind=ErrorKind.GATE, reason=str(exc), action="Resolve it in GitHub", resume="GitHub agrees", at=now)
         return StepResult(exit=Exit.STOP, reason=str(exc), stop=stop)
-    cause = loop.cause_key(classify(exc), kind, "github" if isinstance(exc, ProviderError) else "git")
+    cause = failures.cause_key(classify(exc), kind, "github" if isinstance(exc, ProviderError) else "git")
     return StepResult(exit=Exit.RETRY, cause=cause, reason=str(exc)[:300], wake_at=now + timedelta(minutes=1))
 
 
@@ -167,7 +167,7 @@ def classify(exc: Exception) -> ErrorKind:
         return ErrorKind.NETWORK if exc.code in _TRANSPORT else ErrorKind.TOOLING
     if isinstance(exc, RemoteGitTimeout) or getattr(exc, "timed_out", False):
         return ErrorKind.NETWORK
-    return loop.transient(str(exc)) or ErrorKind.TOOLING
+    return failures.transient(str(exc)) or ErrorKind.TOOLING
 
 
 _TRANSPORT = frozenset({FailureCode.UNAVAILABLE, FailureCode.TIMEOUT, FailureCode.RESPONSE_UNKNOWN})

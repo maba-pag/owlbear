@@ -12,7 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from owlbear_delivery_next import api, briefs, host, loop, runner, sdk_adapter, tools
+from owlbear_delivery_next import api, briefs, host, loop, processes, runner, sdk_adapter, tools
 from owlbear_delivery_next.models import (
     VISUAL,
     AnswerItem,
@@ -33,7 +33,8 @@ from owlbear_delivery_next.models import (
     VisualResult,
     VisualState,
 )
-from owlbear_delivery_next.sdk_adapter import Policy, Run
+from owlbear_delivery_next.permissions import Policy
+from owlbear_delivery_next.session_result import Run
 from owlbear_delivery_next.status import Activity
 from owlbear_delivery_next.steps import check, merge, visual
 from owlbear_delivery_next.store import Lock, Store
@@ -251,7 +252,7 @@ def test_an_unanswered_url_is_a_finding_and_a_capture_without_judgement_never_pa
 
 class FakeReview:
     def __init__(self, verdict="pass"):
-        self.calls, self.verdict, self.termination = [], verdict, sdk_adapter.Termination(confirmed=True)
+        self.calls, self.verdict, self.termination = [], verdict, processes.Termination(confirmed=True)
 
     async def __call__(self, cfg):
         self.calls.append(cfg)
@@ -316,7 +317,7 @@ def test_the_reviewer_must_cover_every_screenshot(flow):
 
 
 def test_an_unconfirmed_termination_wins_over_a_passing_verdict(flow):
-    flow.review.termination = sdk_adapter.Termination(confirmed=False, survivors=(123,))
+    flow.review.termination = processes.Termination(confirmed=False, survivors=(123,))
     runner._visual(flow.store, Lock("c1"), checking(flow.store, flow.clone), flow.clone)  # noqa: SLF001
     after = flow.store.read("c1")
     assert (after.outcome.exit, after.visual) == (Exit.STOP, None)
