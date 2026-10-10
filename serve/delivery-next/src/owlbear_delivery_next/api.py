@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from owlbear_delivery_next import evidence, loop
+from owlbear_delivery_next import evidence, loop, profile
 from owlbear_delivery_next.briefs import save_brief
 from owlbear_delivery_next.models import (
     AnswerItem,
@@ -29,6 +29,7 @@ from owlbear_delivery_next.models import (
     Exit,
     IntentItem,
     PersonCheck,
+    Profile,
     PullItem,
     Waiting,
 )
@@ -218,6 +219,10 @@ def create_app(  # noqa: C901, PLR0915 - one closure per route
     @router.get("/changes")
     def changes() -> list[dict[str, Any]]:
         return [summary_of(slug) for slug in store.slugs()]
+
+    @router.get("/project")
+    def project() -> dict[str, list[str]]:
+        return {"notes": profile.notes(store.read_profile() or Profile())}
 
     @router.post("/new-change")
     def new_change() -> dict[str, Any]:

@@ -7,7 +7,7 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-from owlbear_delivery_next import host, profile, setup
+from owlbear_delivery_next import host, profile, roles, setup
 from owlbear_delivery_next.models import (
     AnswerItem,
     Brief,
@@ -19,6 +19,8 @@ from owlbear_delivery_next.models import (
     Plan,
     Profile,
     ProfileEntry,
+    Role,
+    RoleModel,
     Step,
     StepKind,
     Task,
@@ -50,10 +52,9 @@ def seed(store: Store, a: argparse.Namespace) -> None:
     for kind, cmds in ((StepKind.BUILD, a.allow), (StepKind.CHECK, a.launch)):
         if cmds:
             entries[f"allow:{kind}"] = ProfileEntry(state="known", value="\n".join(cmds), evidence="dev seed")
-    models = dict.fromkeys((StepKind.BUILD, StepKind.REVIEW, StepKind.CHECK), a.model)
     old = store.read_profile() or Profile()
     entries = {k: v for k, v in old.entries.items() if not k.startswith(("install:", "allow:"))} | entries
-    store.write_profile(Profile(version=old.version + 1, confirmed_at=now, entries=entries, models=models))
+    store.write_profile(Profile(version=old.version + 1, confirmed_at=now, entries=entries, roles=old.roles))
     criteria = [Criterion(id=f"AC-{i}", text=t) for i, t in enumerate(a.criterion, 1)]
     brief = Brief(version=1, outcome=a.outcome, scope=a.scope, criteria=criteria)
     brief.approved = [brief.model_copy(deep=True)]
@@ -86,18 +87,28 @@ def show_status(store: Store, now: datetime) -> str:
             f"{slug}: {s.line}"
             + (f"\n  next: {action}" + (f" ({s.actor})" if s.actor != "you" else "") if action else "")
         )
-    return "\n".join(lines)
+    return "\n".join([*lines, roles.table(store.read_profile())])
 
 
-def show_profile(store: Store, repo: Path, confirms: list[tuple[str, str]]) -> str:
-    """Detect the profile, apply the owner's confirmations and return every entry with its evidence."""
+def show_profile(
+    store: Store, repo: Path, confirms: list[tuple[str, str]], overrides: list[tuple[Role, RoleModel]] | None = None
+) -> str:
+    """Detect the profile, apply the owner's confirmations and role overrides; return every entry and the roles."""
     prof = profile.detect(repo, profile.provider(store.read_profile() or Profile(), repo), store.read_profile())
     for key, value in confirms:
         prof = profile.confirm(prof, key, value, datetime.now(UTC))
+    prof = prof.model_copy(update={"roles": prof.roles | dict(overrides or [])})
     store.write_profile(prof)
     lines = [f"profile v{prof.version}"]
     lines += [f"  {k}: {e.state} {e.value!r} ({e.evidence})" for k, e in sorted(prof.entries.items())]
-    return "\n".join(lines)
+    return "\n".join([*lines, roles.table(prof)])
+
+
+def _role(text: str) -> tuple[Role, RoleModel]:
+    try:
+        return roles.parse(text)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -115,6 +126,7 @@ def main(argv: list[str] | None = None) -> int:
     up.add_argument("--confirm", action="append", default=[], type=lambda v: tuple(v.split("=", 1)), help="KEY=VALUE")
     p = sub.add_parser("profile", help="detect the project profile; --confirm KEY=VALUE records the owner's answer")
     p.add_argument("--confirm", action="append", default=[], type=lambda v: tuple(v.split("=", 1)))
+    p.add_argument("--role", action="append", default=[], type=_role, help="ROLE=MODEL:EFFORT model override")
     s = sub.add_parser("seed", help="seed a pre-approved one-task Change and a minimal profile")
     s.add_argument("change")
     s.add_argument("--title", required=True)
@@ -128,7 +140,6 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument(
         "--person-check", action="append", default=[], type=lambda v: tuple(v.split("=", 1)), help="ID=STEPS"
     )
-    s.add_argument("--model", default="auto")
     s.add_argument("--target", default="main")
     ans = sub.add_parser("answer", help="write an answer into the Change inbox")
     ans.add_argument("change")
@@ -147,7 +158,7 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.write(show_status(store, datetime.now(UTC)) + "\n")
         return 0
     if a.command == "profile":
-        sys.stdout.write(show_profile(store, a.repo.resolve(), a.confirm) + "\n")
+        sys.stdout.write(show_profile(store, a.repo.resolve(), a.confirm, a.role) + "\n")
         return 0
     if a.command == "seed":
         seed(store, a)

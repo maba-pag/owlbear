@@ -29,6 +29,7 @@
 <p id="started" aria-live="polite"></p>
 <p id="error" class="error" role="alert"></p>
 <p id="seen" class="muted"></p>
+<section id="notes" class="muted" aria-label="Repository settings" hidden></section>
 <table id="list" aria-label="Changes">
 <thead><tr><th scope="col">Change</th><th scope="col">Status</th><th scope="col">Next action</th></tr></thead>
 <tbody id="changes"></tbody></table>
@@ -238,6 +239,9 @@ async function refresh() {
       return row;
     });
     document.getElementById("changes").replaceChildren(...rows);
+    const notes = (await call("/project")).notes;
+    document.getElementById("notes").replaceChildren(...notes.map((n) => el("p", n)));
+    document.getElementById("notes").hidden = !notes.length;
     lastSeen = new Date();
     document.getElementById("error").textContent = document.getElementById("seen").textContent = "";
     for (const id of ["list", "detail"]) document.getElementById(id).classList.remove("stale");

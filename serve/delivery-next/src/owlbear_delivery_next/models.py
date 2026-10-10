@@ -16,6 +16,8 @@ PROFILE_FORMAT = 1
 
 type Actor = Literal["you", "admin", "delivery", "github"]
 type Channel = Literal["status-view", "chat"]
+type Role = Literal["planner", "builder", "reviewer", "challenger"]
+type Effort = Literal["low", "medium", "high", "xhigh", "max"]
 
 
 class StepKind(StrEnum):
@@ -481,6 +483,13 @@ class ProfileEntry(Record):
     evidence: str = ""
 
 
+class RoleModel(Record):
+    """The model and reasoning effort one session role runs with (TD-27)."""
+
+    model: str
+    effort: Effort
+
+
 class Profile(Record):
     """The confirmed project profile; a new version is a premise change."""
 
@@ -488,7 +497,7 @@ class Profile(Record):
     version: int = 0
     confirmed_at: datetime | None = None
     entries: dict[str, ProfileEntry] = Field(default_factory=dict)
-    models: dict[StepKind, str] = Field(default_factory=dict)
+    roles: dict[Role, RoleModel] = Field(default_factory=dict)  # per-project overrides of the role defaults
 
 
 class _Item(Record):

@@ -103,6 +103,7 @@ class Session:
     scope: tuple[str, ...] = ()  # the approved brief scope a plan must keep to
     item: str | None = None  # the conversation item kind a build task answers, if any
     model: str | None = None
+    effort: str | None = None  # the SDK's reasoning effort
     fresh: str = ""  # first message of a replacement session: stored context plus the pending answer
     previous: Pids = field(default_factory=dict)  # PIDs earlier runners recorded for this session
     journal: Journal = field(default_factory=Journal)
@@ -242,6 +243,7 @@ class _Step:
             "agent": role["name"],
             "working_directory": str(self.cfg.worktree),
             "model": self.cfg.model,
+            "reasoning_effort": self.cfg.effort,
             "on_event": self.on_event,
         }
 

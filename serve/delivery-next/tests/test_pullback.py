@@ -81,29 +81,89 @@ def test_without_a_local_target_branch_only_the_remote_ref_is_updated(repos):
     assert git(repo, "rev-parse", "origin/main") == head
 
 
-def test_a_dirty_target_is_behind_and_untouched_even_with_autostash(repos):
+def state(repo):
+    status = git(repo, "status", "--porcelain=v1", "--untracked-files=all")
+    return git(repo, "rev-parse", "HEAD"), git(repo, "rev-parse", "refs/heads/main"), status
+
+
+def test_unrelated_local_changes_survive_a_fast_forward(repos):
     repo, other = repos
-    git(repo, "config", "merge.autostash", "true")
-    before = git(repo, "rev-parse", "HEAD")
     (repo / ".gitignore").write_text("edited\n")
-    merged(other)
+    (repo / "new.txt").write_text("untracked\n")
+    head = merged(other)
     result = pullback.run(repo, "main", NOW)
-    assert (result.state, result.reason) == ("behind", "local main is behind: dirty")
-    assert (git(repo, "rev-parse", "HEAD"), (repo / ".gitignore").read_text()) == (before, "edited\n")
+    assert (result.state, git(repo, "rev-parse", "HEAD"), (repo / "b.txt").exists()) == ("updated", head, True)
+    assert ((repo / ".gitignore").read_text(), (repo / "new.txt").read_text()) == ("edited\n", "untracked\n")
     assert git(repo, "stash", "list") == ""
 
 
-def test_a_diverged_target_is_behind(repos):
+@pytest.mark.parametrize("staged", [False, True])
+def test_local_changes_to_an_incoming_path_leave_the_target_behind_and_untouched(repos, staged):
     repo, other = repos
-    commit(repo, "local.txt")
-    mine = git(repo, "rev-parse", "HEAD")
+    (repo / "b.txt").write_text("mine\n")
+    if staged:
+        git(repo, "add", "b.txt")
+    before = state(repo)
     merged(other)
     result = pullback.run(repo, "main", NOW)
-    assert (result.state, result.reason, git(repo, "rev-parse", "HEAD")) == (
+    assert (result.state, result.reason) == (
         "behind",
-        "local main is behind: diverged",
-        mine,
+        "local main is behind: your local changes to b.txt overlap the merged change",
     )
+    assert (state(repo), (repo / "b.txt").read_text()) == (before, "mine\n")
+
+
+def test_local_commits_are_rebased_and_unrelated_local_changes_kept(repos):
+    repo, other = repos
+    commit(repo, "local.txt")
+    (repo / ".gitignore").write_text("edited\n")
+    (repo / "new.txt").write_text("untracked\n")
+    head = merged(other)
+    result = pullback.run(repo, "main", NOW)
+    assert (result.state, result.reason) == ("updated", "rebased 1 local commits")
+    assert (git(repo, "rev-parse", "HEAD~1"), git(repo, "log", "-1", "--format=%s")) == (head, "local.txt")
+    assert ((repo / ".gitignore").read_text(), (repo / "new.txt").read_text()) == ("edited\n", "untracked\n")
+    assert (git(repo, "stash", "list"), git(repo, "status", "--porcelain")) == ("", "M .gitignore\n?? new.txt")
+
+
+def test_a_conflicting_rebase_is_aborted_and_everything_is_as_before(repos):
+    repo, other = repos
+    commit(repo, "b.txt", "local commit\n")
+    (repo / ".gitignore").write_text("edited\n")
+    before = state(repo)
+    merged(other)
+    result = pullback.run(repo, "main", NOW)
+    assert (result.state, result.reason.startswith("local main is behind: rebase undone: ")) == ("behind", True)
+    assert (state(repo), (repo / ".gitignore").read_text()) == (before, "edited\n")
+    assert git(repo, "stash", "list") == ""
+
+
+def test_an_untracked_file_at_an_incoming_path_leaves_the_target_behind(repos):
+    repo, other = repos
+    (repo / "b.txt").write_text("untracked\n")
+    before = state(repo)
+    merged(other)
+    result = pullback.run(repo, "main", NOW)
+    assert (result.state, "b.txt overlap" in result.reason) == ("behind", True)
+    assert (state(repo), (repo / "b.txt").read_text()) == (before, "untracked\n")
+
+
+@pytest.mark.parametrize("op", ["rebase", "bisect"])
+def test_a_target_mid_rebase_or_bisect_is_behind(repos, op):
+    repo, other = repos
+    if op == "rebase":
+        git(repo, "switch", "-q", "-c", "side", "HEAD")
+        commit(repo, "c.txt", "side\n")
+        git(repo, "switch", "-q", "main")
+        commit(repo, "c.txt", "main\n")
+        subprocess.run(["git", "rebase", "side"], cwd=repo, capture_output=True, check=False)  # noqa: S607
+    else:
+        git(repo, "bisect", "start")
+    detached = git(repo, "rev-parse", "HEAD")
+    merged(other)
+    result = pullback.run(repo, "main", NOW)
+    assert (result.state, result.reason, result.worktree) == ("behind", "local main is behind: in progress", str(repo))
+    assert git(repo, "rev-parse", "HEAD") == detached
 
 
 def test_an_ignored_file_the_merge_would_overwrite_is_kept_and_the_target_is_behind(repos):

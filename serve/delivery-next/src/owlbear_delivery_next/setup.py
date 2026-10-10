@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import truststore
 
-from owlbear_delivery_next import profile
+from owlbear_delivery_next import profile, roles
 from owlbear_delivery_next.models import Profile, ProfileEntry
 from owlbear_delivery_next.sdk_adapter import cli_path
 from owlbear_delivery_next.store import Store, git_common_dir
@@ -379,6 +379,7 @@ def run(  # noqa: PLR0913 - one answer per consent
     for key, value in confirms:
         prof = profile.confirm(prof, key, value, datetime.now(UTC))
     say(render(prof))
+    say(roles.table(prof))
     for tip in recommendations(prof):
         say(f"TIP {tip}")
     prof, unknown = confirm(prof, ask, yes=yes)

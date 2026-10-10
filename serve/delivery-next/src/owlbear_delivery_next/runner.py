@@ -19,6 +19,7 @@ from owlbear_delivery_next import (
     permissions,
     profile,
     prompts,
+    roles,
     sdk_adapter,
     session_result,
     setup,
@@ -110,7 +111,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         store.write(lock, change)
         return change.step.session
 
-    model = profile.models.get(s.kind)
+    role = roles.chosen(profile, s.kind)
     cfg = sdk_adapter.Session(
         kind=s.kind,
         worktree=path,
@@ -124,7 +125,8 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         checks=parts.checks,
         submit=parts.submit,
         scope=tuple(change.brief.scope),
-        model=None if model in {None, "", "auto"} else model,
+        model=role.model,
+        effort=role.effort,
         fresh=parts.message,
         previous=_previous(store, slug, s.session) if resume else {},
         journal=sdk_adapter.Journal(
@@ -176,7 +178,7 @@ def _review_run(
     store: Store, lock: Lock, change: Change, cfg: sdk_adapter.Session, label: str
 ) -> tuple[Result, session_result.Run]:
     """The reviewer session's verdict and its run, whose payload is the submitted review."""
-    model = (store.read_profile() or Profile()).models.get(StepKind.REVIEW)
+    role = roles.chosen(store.read_profile(), label)
     review_cfg = dataclasses.replace(
         cfg,
         kind=StepKind.REVIEW,
@@ -184,7 +186,8 @@ def _review_run(
         resume=False,
         submit=tools.REVIEW,
         checks=(),
-        model=None if model in {None, "", "auto"} else model,
+        model=role.model,
+        effort=role.effort,
         fresh=cfg.message,
         previous={},
     )

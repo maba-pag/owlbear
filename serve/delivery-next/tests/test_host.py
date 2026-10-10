@@ -163,6 +163,11 @@ def test_host_lock_excludes_a_second_host_and_status_shows_host_down(store, tmp_
         "Delivery is not running — run `owlbear-next host`",
         "c1: Build · Delivery is not running",
         "  next: Start Delivery (run `owlbear-next host`)",
+        "Models",
+        "  planner: claude-opus-5.5 effort high",
+        "  builder: gpt-6-luna effort max",
+        "  reviewer: gpt-6.1-sol effort high",
+        "  challenger: gpt-6.1-sol effort medium",
     ]
 
 

@@ -289,6 +289,24 @@ def value(profile: Profile, key: str, default: str = "") -> str:
     return entry.value if entry and entry.value else default
 
 
+def notes(profile: Profile) -> list[str]:
+    """Neutral notes on repository rules Delivery enforces itself because GitHub does not."""
+    off = [
+        t
+        for k, t in ((STRICT, "branches to be up to date"), (RESOLUTION, "conversation resolution"))
+        if value(profile, k) == "no"
+    ]
+    if not off:
+        return []
+    what, them = ("both", "them") if len(off) > 1 else ("this", "it")
+    return [
+        (
+            f"GitHub does not require {' or '.join(off)} on {value(profile, DEFAULT, 'the target')}. Delivery checks "
+            f"{what} itself; turning {them} on in the repository settings closes the last gap."
+        )
+    ]
+
+
 def names(profile: Profile, key: str) -> tuple[str, ...]:
     """Return a comma-separated entry as names; ``none`` and unknown entries give none."""
     return listed(profile.entries.get(key))
