@@ -91,6 +91,30 @@ class Criterion(Record):
     version: int = 1
 
 
+VISUAL = "visual"  # the reserved check-step task id of the engine's visual check
+
+
+class VisualState(Record):
+    """One page state the visual check renders: a path under the preview root and what it must show."""
+
+    name: str
+    path: str
+    expect: str
+    version: int = 1
+
+
+class VisualResult(Record):
+    """One judged capture of the brief's visual states at an exact head and tree."""
+
+    head: str
+    tree: str
+    states: dict[str, int] = Field(default_factory=dict)  # state name -> version judged
+    files: list[str] = Field(default_factory=list)  # screenshot names inside the Change's visual directory
+    passed: bool = False
+    findings: list[str] = Field(default_factory=list)
+    at: datetime
+
+
 class Brief(Record):
     """The user's brief: the current draft, the approved version, and each approved version's content."""
 
@@ -103,6 +127,8 @@ class Brief(Record):
     scope: list[str] = Field(default_factory=list)
     non_goals: list[str] = Field(default_factory=list)
     criteria: list[Criterion] = Field(default_factory=list)
+    ui: bool = False
+    visual: list[VisualState] = Field(default_factory=list)
     approved: list[Brief] = Field(default_factory=list)
 
 
@@ -392,6 +418,7 @@ class Change(Record):
     stop: Stop | None = None
     blocked: Stop | None = None  # host-owned: a process survives in the worktree, so no writer starts
     env: Environment | None = None
+    visual: VisualResult | None = None
     names: Names = Field(default_factory=Names)
     spend: Spend = Field(default_factory=Spend)
     finished_at: datetime | None = None

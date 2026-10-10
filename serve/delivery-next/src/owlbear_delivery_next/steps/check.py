@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Literal
 import psutil
 
 from owlbear_delivery_next import loop, sdk_adapter
-from owlbear_delivery_next.models import ErrorKind, Exit, StepKind, Task, Waiting
+from owlbear_delivery_next.models import VISUAL, ErrorKind, Exit, StepKind, Task, Waiting
 from owlbear_delivery_next.steps import worktree
 
 if TYPE_CHECKING:
@@ -39,12 +39,31 @@ def action(c: Change, *, live: bool, paths: Mapping[str, str]) -> Action | None:
     if e is None:
         return None
     person = next((p for p in c.checks if p.id == e.check), None)
-    if c.finished_at or person is None or (c.step.kind, c.step.task) != (StepKind.CHECK, e.check):
+    known = person is not None or e.check == VISUAL
+    if c.finished_at or not known or (c.step.kind, c.step.task) != (StepKind.CHECK, e.check):
         return "dispose"
+    if person is None:
+        return "keep" if live and e.ready_at else "launch"  # the runner captures and settles the visual check
     a = person.answer
     if a and a.inputs and loop.check_valid(a.inputs, loop.check_inputs(c, person, paths)):
         return "settle"  # by the result's recorded inputs (P5), whichever launch it was given for
     return "keep" if live and e.ready_at else "launch"
+
+
+def owned(e: Environment, pid: int) -> bool:
+    """The process belongs to the host-started check environment, which the host disposes of itself."""
+    if pid in e.pids:
+        return True
+    try:
+        return e.pgid is not None and os.getpgid(pid) == e.pgid
+    except OSError:
+        return False
+
+
+def capturing(c: Change) -> bool:
+    """The visual check's environment answers and the runner captures and judges it."""
+    e = c.env
+    return bool(e and e.check == VISUAL and e.ready_at) and (c.step.kind, c.step.task) == (StepKind.CHECK, VISUAL)
 
 
 def fingerprints(c: Change, person: PersonCheck) -> dict[str, str]:
@@ -140,7 +159,10 @@ def ready(e: Environment, proc: subprocess.Popen[bytes]) -> Pids | None:
 
 
 def pending(c: Change, e: Environment) -> loop.StepResult:
-    """The check waits on the owner once its environment answers."""
+    """The check waits on the owner once its environment answers; the visual check waits on its capture."""
+    if e.check == VISUAL:
+        reason = f"capturing {len(c.brief.visual)} visual states at {e.ready_url}"
+        return loop.StepResult(exit=Exit.PENDING, waiting=Waiting.REVIEWER, reason=reason)
     person = next(p for p in c.checks if p.id == e.check)
     reason = f"{'; '.join(person.steps) or person.id} · {e.ready_url}"
     a = person.answer

@@ -146,6 +146,10 @@ class Store:
         (path / "inbox").mkdir(parents=True, exist_ok=True)
         return path
 
+    def visual_dir(self, slug: str, head: str) -> Path:
+        """The screenshots of one Change's visual check at *head*."""
+        return self.root / "changes" / slug / "visual" / head[:7]
+
     def read(self, slug: str) -> Change:
         """Read one Change, migrating an older format forward."""
         return _load(self._dir(slug) / "change.json", Change, FORMAT, MIGRATIONS)

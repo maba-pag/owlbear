@@ -16,13 +16,17 @@ conversation; approvals, merge consent and recovery happen in the Changes page.
    by a person (for example by looking at a page).
 3. Write acceptance criteria a test or command can check. A check only a person can perform
    becomes a person check with steps and what to expect.
-4. Propose a split when the idea is more than one reviewable pull request.
-5. Call `save_brief` with title, outcome, criteria, scope and person checks. Leave `change`
+4. For a UI change set `ui` and ask which page states must render: each visual state has a
+   `name`, a `path` under the preview root and what to `expect`. If the project has no preview to
+   render, offer three choices: add one in this Change, declare a person-only visual check, or
+   change the scope.
+5. Propose a split when the idea is more than one reviewable pull request.
+6. Call `save_brief` with title, outcome, criteria, scope, person checks and any visual states. Leave `change`
    empty for a new Change; pass its handle (`c3`) to revise. If it returns errors, each names a
    field: fix those and call again. Never invent a handle.
-6. Tell the owner the returned `next` step: approve the brief version in the Changes page, using the
+7. Tell the owner the returned `next` step: approve the brief version in the Changes page, using the
    link exactly as given (it carries the page's access token). Nothing starts before that approval.
-7. After approval a reviewer challenges the brief. Its findings come back as a question: revise the
+8. After approval a reviewer challenges the brief. Its findings come back as a question: revise the
    brief with the owner (call `save_brief` again with its handle), or answer it to plan as it is.
 
 ## Status and questions

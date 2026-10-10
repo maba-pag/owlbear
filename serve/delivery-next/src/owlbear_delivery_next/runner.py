@@ -15,7 +15,18 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next import loop, profile, prompts, sdk_adapter, setup, tools
 from owlbear_delivery_next.cli import describe
 from owlbear_delivery_next.models import Environment, Exit, Profile, StepKind, Waiting
-from owlbear_delivery_next.steps import cleanup, conversation, engine, follow, merge, publish, review, worktree
+from owlbear_delivery_next.steps import (
+    check,
+    cleanup,
+    conversation,
+    engine,
+    follow,
+    merge,
+    publish,
+    review,
+    visual,
+    worktree,
+)
 from owlbear_delivery_next.store import LockHeldError, Store, StoreError, git_common_dir
 
 if TYPE_CHECKING:
@@ -146,6 +157,13 @@ def _log(store: Store, lock: Lock, change: Change, run: sdk_adapter.Run, fields:
 
 def _reviewer(store: Store, lock: Lock, change: Change, cfg: sdk_adapter.Session, label: str) -> Result:
     """One fresh read-only reviewer session over ``cfg.message``; its verdict as a step result."""
+    return _review_run(store, lock, change, cfg, label)[0]
+
+
+def _review_run(
+    store: Store, lock: Lock, change: Change, cfg: sdk_adapter.Session, label: str
+) -> tuple[Result, sdk_adapter.Run]:
+    """The reviewer session's verdict and its run, whose payload is the submitted review."""
     model = (store.read_profile() or Profile()).models.get(StepKind.REVIEW)
     review_cfg = dataclasses.replace(
         cfg,
@@ -161,7 +179,43 @@ def _reviewer(store: Store, lock: Lock, change: Change, cfg: sdk_adapter.Session
     run = asyncio.run(sdk_adapter.run(review_cfg))
     verdict = sdk_adapter.to_result(run, StepKind.REVIEW, datetime.now(UTC))
     _log(store, lock, change, run, {"kind": label, "exit": verdict.exit})
-    return verdict
+    return verdict, run
+
+
+def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
+    """B23: capture the brief's states from the ready environment and judge the screenshots in a reviewer session."""
+    path = worktree.ensure(repo, git_common_dir(repo), change.slug, change.names.branch, change.names.target)
+    change.names.worktree, change.step.started_at = str(path), datetime.now(UTC)
+    store.write(lock, change)
+    url = change.env.ready_url if change.env else ""
+    try:
+        head = worktree.head(path)
+        tree, out = visual.tree(path, head), store.visual_dir(change.slug, head)
+        shots = visual.CAPTURE(visual.root(url), change.brief.visual, out)
+    except visual.BrowserMissingError as exc:
+        result = visual.missing_browser(str(exc))
+    except Exception as exc:  # noqa: BLE001 - a capture error is never a pass
+        result = visual.broken(f"{type(exc).__name__}: {exc}"[:300])
+    else:
+        result, judgement = None, None
+        if shots and all(s.file for s in shots):  # a failed shot is a finding without a reviewer
+            cfg = sdk_adapter.Session(
+                kind=StepKind.REVIEW,
+                worktree=path,
+                session_id="",
+                message=prompts.visual(change, [(s.state, s.width, s.file) for s in shots]),
+                resume=False,
+                policy=sdk_adapter.Policy(path, prompts.GIT_READ, write=False),
+                observe=lambda: tools.Worktree(head, head, changed=()),
+                checks=(),
+                journal=sdk_adapter.Journal(lambda e: store.log(lock, change.slug, e)),
+                attachments=visual.attachments(out, shots),
+            )
+            result, run = _review_run(store, lock, change, cfg, "visual-review")
+            judgement = run.payload if isinstance(run.payload, tools.ReviewResult) else None
+        if judgement is not None or result is None:
+            change, result = visual.judged(change, head, tree, shots, verdict=judgement, now=datetime.now(UTC))
+    store.write(lock, loop.apply(change, result, datetime.now(UTC)))
 
 
 def _challenge(store: Store, lock: Lock, change: Change, cfg: sdk_adapter.Session, planned: Result) -> Result:
@@ -238,7 +292,9 @@ def main(argv: list[str] | None = None) -> int:
         with store.lock(args.change) as lock:
             state, moved = engine.observe(store, repo, args.change)
             change, step = store.fold(lock, args.change, datetime.now(UTC), state, moved=moved)
-            if step is None or change.env is not None:
+            if step is not None and check.capturing(change):
+                _visual(store, lock, change, repo)
+            elif step is None or change.env is not None:
                 _out("nothing to run; the host owns a check environment" if change.env else "nothing to run")
             elif step.kind in AGENT:
                 _agent(store, lock, change, repo)

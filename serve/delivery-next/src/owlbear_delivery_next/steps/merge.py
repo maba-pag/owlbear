@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -11,9 +12,11 @@ from owlbear_delivery_next.github.merge_offer import Block
 from owlbear_delivery_next.github.provider import MergeMethod, MergeRequest, MergeStatus, Refusal
 from owlbear_delivery_next.loop import StepResult, cause_key
 from owlbear_delivery_next.models import ErrorKind, Exit, Option, StepKind, Waiting
-from owlbear_delivery_next.steps import check, engine, follow, publish
+from owlbear_delivery_next.steps import check, engine, follow, publish, visual
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from owlbear_delivery_next.github.merge_offer import Decision
     from owlbear_delivery_next.github.provider import CiState, MergeResult, PullRequest, Rules
     from owlbear_delivery_next.models import Change
@@ -30,9 +33,21 @@ def checks(state: CiState) -> list[dict[str, str]]:
     return [{"name": n, "state": s} for n, s in rows]
 
 
-def visual_ok(ctx: Ctx, c: Change, head: str) -> bool:  # noqa: ARG001 - hook for a later visual check
-    """Visual acceptance of *head*; passes until a visual check exists."""
-    return True
+def visual_ok(c: Change, head: str, ui: Sequence[str]) -> bool:
+    """Fail-closed visual acceptance of *head*: states need a passed result for its exact head and tree.
+
+    A Change that is not UI (by brief or by *ui* diff paths) passes; a UI Change without states passes only with
+    person-only checks or the owner's "Not a UI change" for this brief version.
+    """
+    if c.brief.visual:
+        try:
+            tree = visual.tree(Path(c.names.worktree), head)
+        except subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError:
+            return False  # an unreadable head tree is never accepted
+        return loop.visual_valid(c, head, tree)
+    if not (c.brief.ui or ui):
+        return True
+    return bool(c.checks) or visual.not_ui(c)
 
 
 def offer(ctx: Ctx, c: Change, pr: PullRequest, state: CiState) -> StepResult:
@@ -151,8 +166,10 @@ def gate(  # noqa: C901, PLR0911 - one exit per condition
         return c, held
     if decision.block is not None:
         return _blocked(ctx, c, pr, state, decision)
-    if not visual_ok(ctx, c, pr.head_sha):
-        return c, engine.pending(Waiting.PERSON_CHECK, f"visual check of {pr.head_sha[:7]}", ctx.poll())
+    c = visual.decide(c, ctx.now)
+    ui = [] if c.brief.visual else visual.ui_paths(c, pr.head_sha)
+    if not visual_ok(c, pr.head_sha, ui):
+        return c, visual.held(c, pr.head_sha, ui)
     asking = profile.value(ctx.profile, profile.ASK) == "yes"
     if asking and merge_offer.consent(c.consent.head if c.consent else None, pr.head_sha) != "valid":
         return c, offer(ctx, c, pr, state)

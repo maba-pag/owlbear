@@ -275,4 +275,5 @@ def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:  # noqa: PLR0911 - on
         return c, waiting(state, ctx)
     paths = check.declared(c)
     ctx.log(c.slug, "ci", head=pr.head_sha, passed=list(state.passed), ignored=list(state.ignored))
-    return c, StepResult(exit=Exit.DONE, reason=f"CI passed: {', '.join(state.passed)}", paths=paths)
+    reason = f"CI passed: {', '.join(state.passed)}"
+    return c, StepResult(exit=Exit.DONE, reason=reason, paths=paths, head=pr.head_sha)

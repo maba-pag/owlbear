@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import Field
 
 from owlbear_delivery_next.models import (
+    VISUAL,
     Actor,
     Answer,
     AnswerItem,
@@ -95,6 +96,7 @@ class StepResult(Record):
     paths: dict[str, str] = Field(default_factory=dict)
     preserved: list[str] = Field(default_factory=list)
     denial: str | None = None
+    head: str | None = None  # the pull-request head a passing CI observation was for
 
 
 def cause_key(kind: ErrorKind, step: StepKind, subject: str | Iterable[str] = "") -> str:
@@ -155,6 +157,14 @@ def check_inputs(c: Change, check: PersonCheck, paths: Mapping[str, str]) -> Inp
         procedure=check.procedure,
         environment=check.environment,
     )
+
+
+def visual_valid(c: Change, head: str | None, tree: str | None = None) -> bool:
+    """A passed visual result holds only for its exact head (and tree, when given) and the current state versions."""
+    r = c.visual
+    if r is None or not r.passed or r.head != head or (tree is not None and r.tree != tree):
+        return False
+    return r.states == {s.name: s.version for s in c.brief.visual}
 
 
 def next_check(c: Change, paths: Mapping[str, str]) -> PersonCheck | None:
@@ -450,7 +460,8 @@ def _go(c: Change, kind: StepKind, task: str | None = None, mode: str | None = N
 
 def _enter(c: Change, kind: StepKind, task: str | None = None) -> None:
     s = c.step
-    keep = task or (s.task if kind in {StepKind.BUILD, StepKind.INTEGRATE} else None)
+    again = kind == s.kind == StepKind.CHECK  # an answer during a check returns to that same check
+    keep = task or (s.task if kind in {StepKind.BUILD, StepKind.INTEGRATE} or again else None)
     caller = s.mode if s.kind == StepKind.INTEGRATE else str(s.kind)
     final = "final" if kind == StepKind.REVIEW and keep is None else None  # a review without a task is final
     _go(c, kind, keep, caller if kind == StepKind.INTEGRATE else final)
@@ -506,7 +517,9 @@ def _done(c: Change, r: StepResult | None, now: datetime) -> None:  # noqa: C901
             _go(c, StepKind.FOLLOW)
         case StepKind.FOLLOW | StepKind.CHECK:
             check = next_check(c, paths)
-            if check:
+            if s.kind == StepKind.FOLLOW and c.brief.visual and not visual_valid(c, r.head if r else None):
+                _go(c, StepKind.CHECK, VISUAL)  # the visual check runs before person-only checks
+            elif check:
                 _go(c, StepKind.CHECK, check.id)
             else:
                 _go(c, StepKind.MERGE)

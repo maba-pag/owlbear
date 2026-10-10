@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from owlbear_delivery_next.models import VISUAL
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
@@ -161,6 +163,14 @@ class PersonCheckDraft(Args):
     expect: str = _f(300, "What the owner should see", "The page shows 'Hallo, Ada!'")
 
 
+class VisualStateDraft(Args):
+    """One page state the visual check renders and a reviewer judges from screenshots."""
+
+    name: str = Field(pattern=NAME, description="Short id of the state", examples=["home"])
+    path: str = Field(pattern=r"^/\S{0,199}$", description="URL path under the preview root", examples=["/settings"])
+    expect: str = _f(300, "What the rendered page must show", "The greeting is centred and readable")
+
+
 class BriefDraft(Args):
     """``save_brief``: create or revise one Change's brief draft; the host returns its handle or field errors."""
 
@@ -182,6 +192,14 @@ class BriefDraft(Args):
         description="Checks only the owner can perform; empty when tests prove every criterion",
         examples=[[{"name": "preview", "steps": ["Open the preview"], "expect": "The greeting shows"}]],
     )
+    ui: bool = Field(default=False, description="Whether the Change changes what a page shows", examples=[True])
+    visual: list[VisualStateDraft] = Field(
+        default_factory=list,
+        max_length=6,
+        description="Page states Delivery renders and a reviewer judges; required for a UI Change without "
+        "a person-only check",
+        examples=[[{"name": "home", "path": "/", "expect": "The greeting is centred"}]],
+    )
 
 
 def relative(path: str) -> bool:
@@ -201,6 +219,23 @@ def check_brief(brief: BriefDraft) -> list[str]:
         errors.append("criteria: repeated criterion - state each one once")
     if len({p.name for p in brief.person_checks}) < len(brief.person_checks):
         errors.append("person_checks: names repeat - give each check its own name")
+    errors += [
+        f'person_checks[{i}].name: "{VISUAL}" is reserved for the visual check - choose another name'
+        for i, p in enumerate(brief.person_checks)
+        if p.name == VISUAL
+    ]
+    if len({v.name for v in brief.visual}) < len(brief.visual):
+        errors.append("visual: names repeat - give each state its own name")
+    errors += [
+        f'visual[{i}].path: {v.path} must stay under the preview root - e.g. "/settings"'
+        for i, v in enumerate(brief.visual)
+        if v.path.startswith("//") or ".." in PurePosixPath(v.path.split("?")[0]).parts
+    ]
+    if brief.ui and not (brief.visual or brief.person_checks):
+        errors.append(
+            'visual: empty for a UI Change - add a state, e.g. {"name": "home", "path": "/", "expect": "..."}, '
+            "or a person-only check"
+        )
     return errors
 
 

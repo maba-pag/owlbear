@@ -10,7 +10,7 @@ from importlib.resources import files
 from typing import TYPE_CHECKING, Any, Literal
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next import loop
@@ -28,7 +28,7 @@ from owlbear_delivery_next.models import (
     Waiting,
 )
 from owlbear_delivery_next.status import status, unloadable
-from owlbear_delivery_next.steps import check
+from owlbear_delivery_next.steps import check, visual
 from owlbear_delivery_next.store import StoreError
 
 if TYPE_CHECKING:
@@ -224,8 +224,20 @@ def create_app(store: Store, token: str, host: Host) -> FastAPI:  # noqa: C901, 
             "merge": merge,
             "consent": c.consent.model_dump(mode="json") if c.consent else None,
             "fixes": [f"fix Change {e['fix']} drafted" for e in events if e.get("event") == "fix-drafted"],
+            "visual": c.visual.model_dump(mode="json") if c.visual else None,
             "activity": events[-20:],
         }
+
+    @router.get("/changes/{slug}/visual/{name}")
+    def screenshot(slug: str, name: str) -> FileResponse:
+        c = read(slug)
+        if not (c.visual and visual.FILE.fullmatch(name) and name in c.visual.files):
+            raise HTTPException(404, "no such screenshot")
+        folder = store.visual_dir(slug, c.visual.head).resolve()
+        path = (folder / name).resolve()
+        if path.parent != folder or not path.is_file():
+            raise HTTPException(404, "no such screenshot")
+        return FileResponse(path, media_type="image/png")
 
     @router.post("/changes/{slug}/answers")
     def answer(slug: str, body: AnswerBody) -> dict[str, str]:

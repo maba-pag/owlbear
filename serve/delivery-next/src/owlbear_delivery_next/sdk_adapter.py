@@ -287,6 +287,7 @@ class Session:
     fresh: str = ""  # first message of a replacement session: stored context plus the pending answer
     previous: Pids = field(default_factory=dict)  # PIDs earlier runners recorded for this session
     journal: Journal = field(default_factory=Journal)
+    attachments: tuple[dict[str, str], ...] = ()  # blob attachments sent with the first message
 
 
 @dataclass
@@ -575,7 +576,8 @@ async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None:
             st.run.session_id = sid
         session = await _call(client.create_session(session_id=sid, **opts), "session create", START)
     st.log(event="session", id=sid, resumed=resumed, resent=message != prompts.CONTINUE, runtime=st.run.runtime_pid)
-    await _call(session.send(message), "send")
+    extra = {"attachments": list(cfg.attachments)} if cfg.attachments else {}  # e.g. visual screenshots
+    await _call(session.send(message, **extra), "send")
     cfg.journal.delivered()
     return session
 

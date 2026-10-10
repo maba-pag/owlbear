@@ -145,6 +145,35 @@ function mergeForm(m) {
   return box;
 }
 
+const shots = new Map();
+
+function shot(name, at) {
+  const key = `${selected}/${name}/${at}`;
+  if (!shots.has(key)) {
+    const init = { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(5000) };
+    shots.set(key, fetch(`/api/next/changes/${selected}/visual/${encodeURIComponent(name)}`, init)
+      .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(r.statusText))))
+      .then((b) => URL.createObjectURL(b)));
+  }
+  return shots.get(key);
+}
+
+function visualSection(v) {
+  const box = el("section"), list = el("ul");
+  box.append(el("h3", `Visual check of ${v.head.slice(0, 7)}: ${v.passed ? "passed" : "failed"}`));
+  for (const f of v.findings) list.append(el("li", f));
+  box.append(list);
+  for (const name of v.files) {
+    const [, state, width] = name.match(/^(.*)-(\d+)\.png$/);
+    const img = el("img", undefined, { alt: `${state} ${width}px`, width: "160", loading: "lazy" });
+    shot(name, v.at).then((url) => { img.src = url; }, () => { img.alt += " (not available)"; });
+    const fig = el("figure");
+    fig.append(img, el("figcaption", name));
+    box.append(fig);
+  }
+  return box;
+}
+
 async function showDetail() {
   const target = document.getElementById("detail");
   if (!selected) return target.replaceChildren();
@@ -166,6 +195,7 @@ async function showDetail() {
     }
   }
   for (const check of d.checks.filter((c) => c.waiting)) parts.push(checkForm(check));
+  if (d.visual) parts.push(visualSection(d.visual));
   if (d.step === "shape" && d.brief.approved !== d.brief.version) {
     const list = el("ul");
     for (const k of d.criteria) list.append(el("li", `${k.id}: ${k.text}`));

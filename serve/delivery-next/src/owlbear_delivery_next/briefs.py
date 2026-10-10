@@ -17,6 +17,7 @@ from owlbear_delivery_next.models import (
     PersonCheck,
     Profile,
     StepKind,
+    VisualState,
     Waiting,
 )
 from owlbear_delivery_next.store import LockHeldError, StoreError
@@ -34,8 +35,16 @@ def drafted(old: Change | None, d: tools.BriefDraft, slug: str, handle: str, pro
     for i, text in enumerate(d.criteria, 1):
         prev = before.get(f"AC-{i}")
         criteria.append(Criterion(id=f"AC-{i}", text=text, version=prev.version + (prev.text != text) if prev else 1))
+    shown_states = {s.name: s for s in c.brief.visual}
+    visual = []
+    for s in d.visual:
+        prev_state = shown_states.get(s.name)
+        moved = prev_state and (prev_state.path, prev_state.expect) != (s.path, s.expect)
+        version = prev_state.version + bool(moved) if prev_state else 1
+        visual.append(VisualState(name=s.name, path=s.path, expect=s.expect, version=version))
     v = c.brief.version + 1
     fields = {"version": v, "title": d.title, "outcome": d.outcome, "scope": d.scope, "criteria": criteria}
+    fields |= {"ui": d.ui, "visual": visual}
     c.brief = c.brief.model_copy(update=fields)
     ids, paths, shown = [k.id for k in criteria], loop.coverage(c), {p.id: p for p in c.checks}
     c.checks = []

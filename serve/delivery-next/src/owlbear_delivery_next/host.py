@@ -209,7 +209,8 @@ class Host:
                 self._path(slug).unlink(missing_ok=True)
                 step = loop.next_step(c, now)
             if c.env:
-                c, step = self._environment(lock, c, now), None
+                c = self._environment(lock, c, now)
+                step = loop.next_step(c, now) if check.capturing(c) else None
             self.store.write(lock, c)
             return step is not None
 
@@ -247,7 +248,7 @@ class Host:
                 found |= self.scan(Path(c.names.worktree), since or datetime.now(UTC))
             except WorktreeProcessScanError:
                 return None
-        return found
+        return {p: v for p, v in found.items() if not (c.env and check.owned(c.env, p))}
 
     def _env_action(self, c: Change) -> check.Action | None:
         e = c.env
