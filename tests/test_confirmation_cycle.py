@@ -150,6 +150,20 @@ class TestConfirmationCycle:
         assert "challenges:" in serialized
         assert "contested_by_task" not in serialized
 
+    @pytest.mark.parametrize("legacy_task_id", ["task 1", "tâche-1", "t" * 200])
+    def test_legacy_challenge_keeps_previously_accepted_task_id(self, tmp_path: Path, legacy_task_id: str) -> None:
+        path = _write_legacy_entry(tmp_path, legacy_task_id)
+        engine = MemoryEngine(memory_dir=tmp_path)
+        migrated = engine.get_entry(_ID_CONTESTED)
+
+        assert [challenge.task_id for challenge in migrated.challenges] == [legacy_task_id]
+
+        engine.edit(_ID_CONTESTED, {"title": "Updated"}, expected_revision=migrated.revision)
+        reloaded = MemoryEngine(memory_dir=tmp_path).get_entry(_ID_CONTESTED)
+
+        assert [challenge.task_id for challenge in reloaded.challenges] == [legacy_task_id]
+        assert "contested_by_task" not in path.read_text(encoding="utf-8")
+
     def test_legacy_null_challenge_migrates_to_empty_list_and_is_removed_on_write(self, tmp_path: Path) -> None:
         path = _write_legacy_entry(tmp_path, None)
         engine = MemoryEngine(memory_dir=tmp_path)

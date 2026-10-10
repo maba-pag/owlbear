@@ -92,7 +92,8 @@ class ChallengeRecord(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    task_id: str = Field(pattern=r"^[\x21-\x7e]{1,128}$")
+    # New task IDs are validated on write; legacy contested_by_task values were unrestricted.
+    task_id: str
     revision: str = Field(pattern=r"^[0-9a-f]{16}$")
     recorded_at: str
 
