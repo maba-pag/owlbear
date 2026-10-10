@@ -21,6 +21,7 @@ from owlbear_delivery_next.github.provider import (
     merge_request_body,
 )
 from owlbear_delivery_next.models import (
+    Answer,
     AnswerItem,
     Brief,
     Change,
@@ -42,7 +43,7 @@ from owlbear_delivery_next.models import (
 )
 from owlbear_delivery_next.setup import Check as SetupCheck
 from owlbear_delivery_next.status import Activity
-from owlbear_delivery_next.steps import cleanup, engine, follow, merge, publish
+from owlbear_delivery_next.steps import check, cleanup, engine, follow, merge, publish
 from owlbear_delivery_next.store import Lock, Store
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
@@ -178,6 +179,7 @@ def test_the_merge_carries_the_consented_head_as_its_sha_guard(tmp_path, clone):
 
 class Host:
     wake = type("W", (), {"set": lambda _self: None})()
+    record = None
 
     def activity(self, _slug):
         return Activity(host_up=True)
@@ -217,6 +219,38 @@ def test_a_check_result_is_accepted_only_for_the_inputs_the_page_showed(tmp_path
     assert (stale.status_code, stale.json()["detail"]) == (409, "This check changed since you opened it; reload")
     body = {"check": "preview", "passed": True, "inputs": shown()}
     assert client.post("/api/next/changes/c1/check-results", json=body).json() == {"accepted": "check-result"}
+
+
+def test_a_saved_person_check_is_voided_by_revised_steps_or_a_commit_in_its_scope(clone, tmp_path):
+    store, url = Store(tmp_path / "store"), "http://127.0.0.1:4173/"
+    client = TestClient(
+        api.create_app(store, "t", Host()), base_url="http://127.0.0.1", headers={"authorization": "Bearer t"}
+    )
+    steps = {"name": "preview", "steps": ["Open the preview"], "expect": "Hallo, Ada!"}
+    brief = {"title": "Greet", "outcome": "The preview greets the owner.", "criteria": ["The page greets Ada"]}
+    brief |= {"scope": ["app/"], "person_checks": [steps]}
+    client.post("/api/next/briefs", json=brief)
+    env = Environment(check="preview", command="npm run preview", directory=".", ready_url=url, ready_at=NOW)
+    with store.lock("greet") as lock:
+        store.write(lock, store.read("greet").model_copy(update={"env": env}))
+    old = client.get("/api/next/changes/greet").json()["checks"][0]["inputs"]
+    client.post("/api/next/briefs", json=brief | {"change": "c1", "person_checks": [steps | {"expect": "Hi"}]})
+    result = {"check": "preview", "passed": True, "inputs": old}
+    stale = client.post("/api/next/changes/greet/check-results", json=result)
+    assert stale.json()["detail"] == "This check changed since you opened it; reload"
+    (clone / "app").mkdir()
+    (clone / "app" / "page.ts").write_text("1\n")
+    git(clone, "add", ".")
+    git(clone, "commit", "-q", "-m", "app")
+    c = store.read("greet")
+    c.names.worktree, p = str(clone), c.checks[0]
+    assert (p.paths, p.procedure) == (["app/"], 2)
+    p.answer = Answer(at=NOW, passed=True, inputs=loop.check_inputs(c, p, check.fingerprints(c, p)))
+    for path, version in (("a.txt", None), ("app/page.ts", "preview")):
+        (clone / path).write_text("2\n")
+        git(clone, "commit", "-qam", path)
+        assert getattr(loop.next_check(c, check.declared(c)), "id", None) == version
+    assert check.pending(c, env).reason.endswith("asked again: changed app/page.ts")
 
 
 def test_publish_waits_for_the_network_and_asks_for_other_readiness_fixes():
@@ -472,6 +506,7 @@ def test_unresolved_triggers_or_check_names_stay_unknown_never_no_ci():
     assert e[profile.DECLARED].state == "known"
     flows["matrix.yml"] = profile.workflow("on: pull_request\njobs:\n  t:\n    strategy: {matrix: {os: [a, b]}}\n")
     flows["bad.yml"] = profile.workflow("on: [unclosed")
+    assert profile.workflow("on: push\nenv:\n  RELEASE_TAG: 2026-02-30\njobs:\n  a: {}\n") == flows["bad.yml"]
     e = profile.ci_entries(flows)
     assert (e[profile.WORKFLOWS].state, e[profile.DECLARED].state) == ("unknown", "unknown")
     assert "matrix.yml" in e[profile.DECLARED].evidence

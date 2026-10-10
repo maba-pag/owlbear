@@ -121,7 +121,7 @@ def workflow(text: str) -> Workflow:
     """Parse one workflow file: its ``on`` events and each job's ``name`` or key."""
     try:
         doc = yaml.safe_load(text)
-    except yaml.YAMLError:
+    except yaml.YAMLError, ValueError, TypeError:  # constructors raise on odd scalars such as 2026-02-30
         return Workflow(None, None)
     if not isinstance(doc, dict):
         return Workflow(None, None)

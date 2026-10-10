@@ -98,9 +98,10 @@ def link(rec: HostRecord | None) -> str | None:
     return f"{rec.url}#token={rec.token}" if rec and rec.token else None
 
 
-def snapshot(inputs: Inputs) -> str:
-    """Opaque fingerprint of one check's inputs; relaunching its environment leaves it unchanged."""
-    return hashlib.sha256(inputs.model_dump_json().encode()).hexdigest()
+def snapshot(inputs: Inputs, person: PersonCheck) -> str:
+    """Opaque fingerprint of one check's inputs and shown instructions; a relaunch leaves it unchanged."""
+    shown = inputs.model_dump_json() + person.model_dump_json(include={"steps", "expect"})
+    return hashlib.sha256(shown.encode()).hexdigest()
 
 
 def offer(c: Change, events: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -129,7 +130,7 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
 
 
 def drafted(old: Change | None, d: tools.BriefDraft, slug: str, handle: str, prof: Profile) -> Change:
-    """The Change with its new brief draft version, waiting for the owner's approval; criteria keep their versions."""
+    """The Change with its new brief draft version, waiting for the owner's approval; criteria and checks versioned."""
     names = Names(branch=f"owlbear/{slug}", target=profile.value(prof, profile.DEFAULT, "main"))
     c = old or Change(slug=slug, handle=handle, profile_version=prof.version, names=names)
     before = {k.id: k for k in c.brief.criteria}
@@ -140,8 +141,14 @@ def drafted(old: Change | None, d: tools.BriefDraft, slug: str, handle: str, pro
     v = c.brief.version + 1
     fields = {"version": v, "title": d.title, "outcome": d.outcome, "scope": d.scope, "criteria": criteria}
     c.brief = c.brief.model_copy(update=fields)
-    ids = [k.id for k in criteria]
-    c.checks = [PersonCheck(id=p.name, criteria=ids, steps=p.steps, expect=p.expect) for p in d.person_checks]
+    ids, paths, shown = [k.id for k in criteria], loop.coverage(c), {p.id: p for p in c.checks}
+    c.checks = []
+    for p in d.person_checks:
+        prev = shown.get(p.name)
+        procedure = prev.procedure + ((prev.steps, prev.expect) != (p.steps, p.expect)) if prev else 1
+        c.checks.append(
+            PersonCheck(id=p.name, criteria=ids, steps=p.steps, expect=p.expect, paths=paths, procedure=procedure)
+        )
     c.outcome = Outcome(
         exit=Exit.PENDING, waiting=Waiting.CHAT, who="you", reason=f"approve brief v{v}", at=datetime.now(UTC)
     )
@@ -246,7 +253,7 @@ def create_app(store: Store, token: str, host: Host) -> FastAPI:  # noqa: C901, 
                 "passed": p.answer.passed if p.answer else None,
                 "waiting": bool(waiting and c.step.task == p.id),
                 "url": c.env.ready_url if c.env and c.env.check == p.id and c.env.ready_at else None,
-                "inputs": snapshot(loop.check_inputs(c, p, check.fingerprints(c, p))),
+                "inputs": snapshot(loop.check_inputs(c, p, check.fingerprints(c, p)), p),
             }
             for p in c.checks
         ]
@@ -290,7 +297,7 @@ def create_app(store: Store, token: str, host: Host) -> FastAPI:  # noqa: C901, 
         if person is None or not (c.env and c.env.check == body.check and c.env.ready_at):
             raise HTTPException(409, f"check {body.check} is not waiting for a result")
         inputs = loop.check_inputs(c, person, check.fingerprints(c, person))
-        if snapshot(inputs) != body.inputs:
+        if snapshot(inputs, person) != body.inputs:
             raise HTTPException(409, "This check changed since you opened it; reload")
         item = CheckResult(at=datetime.now(UTC), check=person.id, passed=body.passed, note=body.note, inputs=inputs)
         return put(slug, item)

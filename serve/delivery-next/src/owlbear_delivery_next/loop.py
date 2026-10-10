@@ -109,6 +109,25 @@ def inputs_valid(recorded: Inputs, current: Inputs) -> bool:
     )
 
 
+def changed(recorded: Inputs, current: Inputs) -> list[str]:
+    """Name each recorded input that no longer holds: a criterion, a path, the check's steps or its environment."""
+    names = [k for k, v in recorded.criteria.items() if current.criteria.get(k) != v]
+    names += [p for p, f in recorded.paths.items() if current.paths.get(p) != f]
+    names += ["the check's steps"] if recorded.procedure != current.procedure else []
+    return names + (["the environment"] if recorded.environment != current.environment else [])
+
+
+def coverage(c: Change) -> list[str]:
+    """Conservative paths of a person-only check: the brief's scope and every task's scope."""
+    tasks = c.plan.tasks if c.plan else []
+    return sorted({*c.brief.scope, *(p for t in tasks for p in t.scope)})
+
+
+def _cover(c: Change) -> None:
+    for check in c.checks:
+        check.paths = coverage(c)
+
+
 def _criteria(c: Change) -> dict[str, int]:
     return {k.id: k.version for k in c.brief.criteria}
 
@@ -123,7 +142,7 @@ def check_inputs(c: Change, check: PersonCheck, paths: Mapping[str, str]) -> Inp
     crit = _criteria(c)
     return Inputs(
         criteria={k: crit[k] for k in check.criteria if k in crit},
-        paths={p: paths[p] for p in check.paths if p in paths},
+        paths={k: f for k, f in paths.items() if any(_within(k, p) for p in check.paths)},
         procedure=check.procedure,
         environment=check.environment,
     )
@@ -429,6 +448,8 @@ def _done(c: Change, r: StepResult | None, now: datetime) -> None:  # noqa: C901
             c.budgets.rounds.pop(str(s.kind), None)
             if s.kind == StepKind.PLAN and r and r.plan:
                 c.plan = r.plan
+            if s.kind == StepKind.PLAN:
+                _cover(c)
             task = _open_task(c) if s.kind == StepKind.PLAN else None
             _go(c, StepKind.BUILD if s.kind == StepKind.PLAN else StepKind.PLAN, task.id if task else None)
         case StepKind.BUILD:
@@ -520,6 +541,7 @@ def _fix_task(c: Change, r: StepResult) -> str | None:
     if r.fix_task is None or c.plan is None:
         return None
     c.plan.tasks.append(r.fix_task)
+    _cover(c)
     return r.fix_task.id
 
 

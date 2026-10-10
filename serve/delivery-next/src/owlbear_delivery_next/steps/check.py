@@ -143,6 +143,9 @@ def pending(c: Change, e: Environment) -> loop.StepResult:
     """The check waits on the owner once its environment answers."""
     person = next(p for p in c.checks if p.id == e.check)
     reason = f"{'; '.join(person.steps) or person.id} · {e.ready_url}"
+    a = person.answer
+    if a and a.inputs and (what := loop.changed(a.inputs, loop.check_inputs(c, person, declared(c)))):
+        reason += f" · asked again: changed {', '.join(what)}"
     return loop.StepResult(exit=Exit.PENDING, waiting=Waiting.PERSON_CHECK, who="you", reason=reason)
 
 
