@@ -8,8 +8,13 @@
   body {
     font: 15px/1.5 system-ui, sans-serif; margin: 2rem auto; max-width: 56rem; padding: 0 1rem; color: #222;
   }
-  table { border-collapse: collapse; width: 100%; }
-  th, td { text-align: left; padding: .4rem .6rem; border-bottom: 1px solid #ddd; vertical-align: top; }
+  table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+  th, td {
+    text-align: left; padding: .4rem .6rem; border-bottom: 1px solid #ddd;
+    vertical-align: top; overflow-wrap: anywhere;
+  }
+  th:first-child { width: 22%; } th:last-child { width: 26%; }
+  @media (max-width: 36rem) { body { margin: 1rem auto; } th, td { padding: .3rem .4rem; } }
   tr.row { cursor: pointer; } tr.row:hover, tr.row:focus { background: #f3f3f3; }
   section { margin-top: 1.5rem; } fieldset { border: 1px solid #ccc; margin: .8rem 0; }
   .muted { color: #666; } .error { color: #a00; } textarea { width: 100%; }
