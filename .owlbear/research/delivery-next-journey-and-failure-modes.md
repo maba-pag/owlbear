@@ -7,7 +7,8 @@
 > GitHub project, and which failure modes must the design handle — ordinary ones first — so that
 > problems found in real use need fixes, not rework?
 > **Status:** Draft, revised after independent round-2 and round-3 challenges (user experience, failure
-> modes, consumer fit, overall route and cross-document coherence; 2026-10-10). Everything here is
+> modes, consumer fit, overall route and cross-document coherence; 2026-10-10); aligned with the M3
+> design (D3–D5), 2026-10-10. Everything here is
 > `autonomous` until the user approves the M3 design; the user directions it follows are TD-2 and TD-3
 > in the [rebuild research](delivery-liveness-first-rebuild.md#38-decisions-reserved-for-the-user).
 
@@ -31,7 +32,7 @@ design and from real use, not from test volume.
 | C02 | [Setup guide](../../setup/setup-guide.md) | Setup, verification and troubleshooting steps for a consumer project | Same |
 | C03 | [Redesign programme §1.1](change-continuation-delivery-redesign.md#11-requirements-from-the-user) U1–U8 | Earlier requirements: every action reachable from a control or a complete prompt; the user never runs tests, edits worktree files, repairs JSON or operates Git custody; agents prepare checks; resume from persisted evidence; every failure has a handler and a bounded path; repeated evidence needs an invalidated claim; approval is not certification; three model tiers | Agent-written, labelled "from the user"; input, not user decisions ([rebuild research §3.8](delivery-liveness-first-rebuild.md#38-decisions-reserved-for-the-user)) |
 | C04 | [Rebuild research §3.3](delivery-liveness-first-rebuild.md#33-the-2026-10-09-session-as-a-microcosm) | Six failures in one session, all ordinary | One day |
-| C05 | [Agent harnesses](https://code.visualstudio.com/docs/agents/run/agent-harnesses), [Agent Host](https://code.visualstudio.com/docs/agents/concepts/agent-host) | Copilot-harness sessions survive window close; per-session worktrees do not carry installed dependencies | Product documentation; behavior unprobed (R8) |
+| C05 | [Agent harnesses](https://code.visualstudio.com/docs/agents/run/agent-harnesses), [Agent Host](https://code.visualstudio.com/docs/agents/concepts/agent-host) | Copilot-harness sessions survive window close; per-session worktrees do not carry installed dependencies | Product documentation; SDK-side behavior probed (R8), Agent Host behavior unprobed |
 | C06 | Open Changes the user keeps running on the old engine (TD-2) | Further failure modes will surface there and become catalogue rows | Ongoing |
 
 ## 3. Analysis
@@ -77,13 +78,16 @@ the exact action and the condition under which work resumes. Anything else the u
 re-run a command after answering, choose an internal operation, repair state, notice an unannounced
 tool-approval prompt — is a design defect.
 
-**Surfaces.** Conversation and questions happen in chat. One status view lists every Change with its
-stage, situation and next actor; whether that is Cockpit or the platform's Agents window plus the
-pull request is open (Q9 in the rebuild research). The status shows observed activity and when it
-was observed, and says "not running" when no executor is active, so "Building 2/5" never implies work
-that is not happening. Answering a question resumes the work without re-issuing a command; if R8
-shows the runtime cannot do that, the fallback is one generic "continue" action, disclosed at J0,
-never a choice between recovery prompts.
+**Surfaces.** Conversation happens in chat: shaping the brief and answering ordinary questions. A
+local Delivery host serves a Changes page — its own small app until M6, then inside Cockpit — that
+lists every Change with its stage, situation and next actor, and accepts answers, person-only check
+results and merge consent. Recovery decisions are actions only in that page (T6). The status shows
+observed activity and when it was observed, and says "not running" when no runner is active, so
+"Building 2/5" never implies work that is not happening. The host starts when VS Code opens the
+project, through a folder-open task whose permission setup verifies; where that is unavailable, one
+Start Delivery action is disclosed at J0, and the status says nothing advances until it runs.
+Answering a question resumes the work without re-issuing a command: the host starts the next runner
+([charter §3.7](delivery-next-charter.md#37-interaction-surface-and-runner-activation)).
 
 ### 3.3 One exit contract for every step
 
@@ -116,6 +120,8 @@ Rules:
 - A worker or command is replaced only after its termination is confirmed. If liveness is unknown,
   the exit is `stop`, naming the session and how to end it. Heartbeat expiry starts that check; it
   never authorizes replacement.
+- A step ends at the worker's result event, never at runtime idleness.
+- Answers that arrive during active work are kept; the host applies them before the next step.
 - On re-entry a step first checks the world — does the commit, push, PR or merge already exist? —
   then acts. It replays only on confirmed absence; a failed observation is not absence.
 - State records intent, decisions, answers and the current step. It does not mirror facts git or
@@ -139,12 +145,12 @@ most projects), **O** occasional, **R** rare. Rows are ordered by likelihood wit
 | --- | --- | --- | --- | --- |
 | S1 | GitHub CLI missing, signed out, token expired or not SSO-authorized for the organization | C | Readiness check calls the repository API | ask: the exact command to run; resume afterwards |
 | S2 | Tool servers fail to start (dependency install, proxy, wrong Python) | C | Server health at session start | stop: the user runs setup's repair, which works without Delivery running; resumes on the next start |
-| S3 | Project install or check commands unknown or wrong, or run in the wrong package directory | C | Profile confirmation; first task check fails for environment reasons | ask once at setup; later back to the profile with the failing output |
+| S3 | Project install or check commands unknown or wrong, or run in the wrong package directory | C | Profile confirmation; first task check fails for environment reasons | ask once at setup; later ask with the failing output, whose "correct the command" option writes a new profile version, which resets that cause's retry budget |
 | S4 | Copilot signed out, no seat, or agents, MCP or models disabled by enterprise policy | O | Readiness check or runtime error | stop: what is blocked and what an administrator must allow |
 | S5 | Corporate proxy or TLS interception breaks installs | O | Install error pattern | stop: proxy settings to check |
 | S6 | OwlBear updated while Changes are open and the state format changed | O | State records its format version | Migrate automatically; if impossible, stop with "finish on the old version or migrate" |
 | S7 | Wrong folder opened, or a project without setup | O | No project profile at the workspace root | ask: run setup here, or open the configured project |
-| S8 | Network offline | O | git, GitHub or model calls fail | retry with backoff; then stop "offline", resuming on the next start |
+| S8 | Network offline | O | git, GitHub or model calls fail | retry with backoff; then pending on the host's network check, resuming by itself when the network returns |
 | S9 | Copilot rate limit or exhausted quota | O | Runtime error | retry for rate limits; stop for quota, never marking the task failed |
 
 **Shape and plan**
@@ -172,7 +178,7 @@ most projects), **O** occasional, **R** rare. Rows are ordered by likelihood wit
 | B4 | Agent ends early, claims success without changes, or runs out of context or turns | C | Engine checks diff, check results and the task's checklist | retry in a fresh session with the task and current diff (bounded); then back to plan to split |
 | B5 | Agent's result or tool arguments are invalid or over a limit | C | The tool returns a field-specific error to the authoring agent (TD-1 T3/T4) | retry by the same agent in the same session |
 | B6 | Command hangs: watch mode, interactive prompt, server start | C | Step timeout | Terminate and confirm termination, then retry with non-interactive flags; if termination cannot be confirmed, stop naming the process |
-| B7 | Agent waits on a tool-approval prompt nobody sees | C | Permission request reported by the runtime (R8); heartbeat silence alone cannot identify it | Prevented by scoped pre-approved permissions for unattended steps; otherwise the status says "waiting for you to allow a command in session X" |
+| B7 | Unattended agent needs a command outside its step's allow list | C | The step's permission handler | Denied immediately, never left waiting ([probe](delivery-next-platform-probe.md#32-results) 5); the last denial is recorded and shown in the status; if it blocks the task, the Builder ends with ask |
 | B8 | Flaky check | O | Failure does not reproduce on one rerun | retry once; record the flake; repeated flakes → ask (fix or skip with record) |
 | B9 | Task infeasible as planned | O | Builder reports a wrong assumption | back to plan with the reason |
 | B10 | Task needs a secret, environment variable or external service | O | Builder reports what is missing | ask: where to set it; secrets are never pasted into chat |
@@ -191,7 +197,7 @@ most projects), **O** occasional, **R** rare. Rows are ordered by likelihood wit
 
 | ID | Failure | L | Detection | Exit and handling |
 | --- | --- | --- | --- | --- |
-| I1 | Target moved; merge is clean and checks pass | C | Target head changed | done; re-review only if the merge changed reviewed inputs (P5) |
+| I1 | Target moved; merge is clean and checks pass | C | Target head changed; integration runs before publish, before merge, and on I4, I6 and M2 | done; re-review only if the merge changed reviewed inputs (P5) |
 | I2 | Textual conflict | O | Merge result | Task: builder resolves, checks run, reviewer reviews the resolution |
 | I3 | Semantic conflict: clean merge, failing checks | O | Checks | As B1 |
 | I4 | Someone else pushed to the Change branch | O | Push rejected as non-fast-forward | Integrate those commits as I2 or I3 |
@@ -210,7 +216,7 @@ most projects), **O** occasional, **R** rare. Rows are ordered by likelihood wit
 | P6 | PR already exists, was closed, or the remote branch was deleted | O | Query before creating | Reuse an open PR; closed → ask: reopen or abandon |
 | P7 | Required human reviewers or code owners | O | Effective branch rules | pending: "waiting for review by …"; that touchpoint happens in GitHub |
 | P8 | CI flaky | O | Rerun passes | Rerun once automatically |
-| P9 | GitHub API outage or rate limit | O | API errors | retry with backoff; then stop |
+| P9 | GitHub API outage or rate limit | O | API errors | retry with backoff; then pending on the host's network check, resuming by itself when the network returns |
 | P10 | Expected or required CI missing, not triggered, cancelled, or awaiting workflow approval | O | Checks and statuses on the current head against the CI declared in the profile and the effective rules | pending with bounded observation; then agent repair (for example a workflow trigger) or ask naming the owner's exact action; the gate is never downgraded |
 
 **Person-only checks and merge**
@@ -219,7 +225,7 @@ most projects), **O** occasional, **R** rare. Rows are ordered by likelihood wit
 | --- | --- | --- | --- | --- |
 | H1 | User unavailable for days | C | — | pending without timeout; the status names the waiting check |
 | H2 | User reports a check failed | O | Answer | back to build with the user's description as task input |
-| H3 | Later change affects a passed check | O | A recorded input of the check changed (P5) | ask again, stating what changed; otherwise keep the answer |
+| H3 | Later change affects a passed check | O | A recorded input of the check changed (P5) | pending again on the check, naming what changed; otherwise keep the answer |
 | M1 | User merged in GitHub directly | C | PR state | done: cleanup after preservation (M5) |
 | M2 | Merge blocked after approval: new target commits, a required check, a conflict | O | Merge result | back to integrate; any change to the source head voids the approval, so ask again with a short delta |
 | M3 | Merge queue | O | Queue state | pending; removal from the queue routes its cause (CI → P1, conflict → I2), otherwise stop with the reason |
@@ -230,7 +236,7 @@ most projects), **O** occasional, **R** rare. Rows are ordered by likelihood wit
 
 | ID | Failure | L | Detection | Exit and handling |
 | --- | --- | --- | --- | --- |
-| X1 | Chat closed, VS Code quit, laptop asleep or rebooted mid-step | C | A step in progress without a live executor | Status says "not running"; re-enter the step by observation when an executor resumes. The user only reopens VS Code, or nothing if the runtime continues in the background |
+| X1 | Chat closed, VS Code quit, laptop asleep or rebooted mid-step | C | A step in progress without a live executor | When the host is down, the status shows "Delivery is not running" with the Start Delivery action. On start or wake the host observes, waits for live runners to finish or their termination to be confirmed, then resumes. The user only reopens VS Code, or uses Start Delivery where automatic start is unavailable |
 | X2 | User asks unrelated things in the Change's chat | C | — | Allowed: loop state lives outside the chat |
 | X3 | Weeks pass between sessions | C | — | Resume from state plus git and GitHub; a moved target is I1 |
 | X4 | A tool server restarts during a write | O | Lost acknowledgement | Read state and effects on reconnect; replay only on confirmed absence; if observation fails, stop until it works |
@@ -253,11 +259,11 @@ clock skew, hostile repository or web content beyond the platform's own protecti
 | DR3 | **Project-facing work runs inside tasks** with the fix loop: installs, checks, commits with hooks, conflict resolution, CI fixes, review feedback. The engine's own operations never depend on project tooling; its git and GitHub calls map every failure to an exit | B1–B3, I2, I6, P1, P3 |
 | DR4 | **One exit contract** (§3.3): five exits, pending situations, bounded retries with recorded reasons; no other step outcome | All |
 | DR5 | **Re-entry by observation**: every step checks git and GitHub for its effect before acting and replays only on confirmed absence | X1, X4, P6, M1 |
-| DR6 | **Work preservation** by inventory, privately and outside publishable branches; the workspace stays untouched when capture cannot be verified | B11, B19, M5, X1 |
-| DR7 | **Durable questions** answerable from chat or the status view; answering resumes work | All `ask` exits |
+| DR6 | **Work preservation**: a bundle of the Change branch plus an archive of dirty, staged, untracked and conflicted files, kept privately outside publishable branches; the workspace stays untouched until both are verified | B11, B19, M5, X1 |
+| DR7 | **Durable questions** owned by the loop, not the runtime: a worker ends with `ask`; answers from chat or the Changes page land in the host's inbox, which the host reconciles before skipping a waiting Change, then resumes the work | All `ask` exits |
 | DR8 | **One status line** per Change, derived in one place, naming the next actor, observed activity and when it was observed | All |
-| DR9 | **Unattended permissions**: unattended steps run with scoped pre-approved permissions, or visibly wait | B7 |
-| DR10 | **One writer per Change**: a lock; replacement only after the previous writer's termination is confirmed | B6, X5 |
+| DR9 | **Unattended permissions**: default deny with an explicit allow list per step kind; denials are recorded and visible in the status; allow-all is never used | B7 |
+| DR10 | **One writer per Change**: a lock; replacement only after termination is confirmed by cancelling runtime tasks, verifying their PIDs and the runtime's exit, and a host scan of the worktree including the runner's former subtree | B6, X5 |
 | DR11 | **State outside the checkout and product branches**, versioned, with a migration path | S6 |
 | DR12 | **Small agent tools** per TD-1; the engine enforces step order | B5, X8 |
 | DR13 | **Budgets per Change**, carried across `retry` and `back` for the same cause: retries, review rounds, re-plans; model spend policy disclosed before unattended work | S9, D9, D10, B12 |
@@ -313,6 +319,9 @@ engine's history (N11–N13), the consumer setup documentation, GitHub's documen
 behavior, and two independent challenge rounds. Low on the likelihood labels, which are judgments to
 be corrected by real use.
 
-**Limits:** rows B7, X1 and DR7 depend on runtime capabilities that R8 must establish; worker
-termination (DR10) depends on what the chosen runtime can confirm. No consumer project was observed.
+**Limits:** the [platform probe](delivery-next-platform-probe.md#4-recommendation-confidence-and-limits)
+proved B7 and DR9 on its setup; X1, X4, X5, DR5 and DR10 are partly proven. DR7's answer surface and
+runner activation are designed ([charter §3.7](delivery-next-charter.md#37-interaction-surface-and-runner-activation),
+D3, D4) but not yet demonstrated. The employer seat and a protection-gated merge are still unproven.
+No consumer project was observed.
 The catalogue has not yet been reviewed by the user.
