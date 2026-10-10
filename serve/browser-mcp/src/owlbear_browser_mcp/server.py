@@ -7,11 +7,13 @@ import ipaddress
 import logging
 import os
 import socket
+import sys
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
+from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, TypedDict
 from urllib.parse import urlparse
 
 if TYPE_CHECKING:
@@ -22,18 +24,46 @@ from mcp.server.mcpserver import Context  # noqa: TC002 - MCPServer evaluates to
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
-from owlbear_browser import AcquisitionFailure, AcquisitionRequest, AcquisitionSuccess, redact_url
+from owlbear_browser import AcquisitionFailure, AcquisitionRequest, AcquisitionStatus, AcquisitionSuccess, redact_url
 from owlbear_browser._errors import AuthenticationRequired
 from owlbear_browser.extractor import extract_content
-from owlbear_browser.playwright_launcher import PlaywrightLauncher
+from owlbear_browser.playwright_launcher import (
+    BrowserMode,
+    ManagedEdgeUnavailableError,
+    ManagedProfileInUseError,
+    PlaywrightLauncher,
+)
 from owlbear_browser_mcp.allowlist import DomainAllowlist
 
-__all__ = ["AppContext", "acquire", "app_lifespan", "mcp"]
+__all__ = ["AppContext", "acquire", "app_lifespan", "browser_status", "mcp"]
 
 _ALLOWED_DOMAINS_ENV = "BROWSER_ALLOWED_DOMAINS"
-_DEFAULT_USER_DATA_DIR = Path.home() / ".owlbear" / "chromium-profile"
+_BROWSER_MODE_ENV = "BROWSER_MODE"
+_DEFAULT_CHROMIUM_USER_DATA_DIR = Path.home() / ".owlbear" / "chromium-profile"
+_DEFAULT_EDGE_USER_DATA_DIR = Path.home() / ".owlbear" / "edge-profile"
 _USER_DATA_DIR_ENV = "PLAYWRIGHT_USER_DATA_DIR"
 _LOGGER = logging.getLogger(__name__)
+
+
+class StartupReason(StrEnum):
+    EDGE_UNAVAILABLE = "edge-unavailable"
+    PROFILE_IN_USE = "profile-in-use"
+    INVALID_MODE = "invalid-mode"
+    STARTUP_FAILED = "startup-failed"
+
+
+class InvalidBrowserModeError(ValueError):
+    """Raised when BROWSER_MODE is outside the supported mode vocabulary."""
+
+
+class BrowserStatus(TypedDict):
+    browser_mode: Literal["managed-edge", "chromium"]
+    ownership: Literal["per-user-owned"]
+    startup_state: Literal["not-launched", "ready", "unavailable"]
+    startup_reason: str | None
+    visible_authentication: Literal["available", "unavailable"]
+    latest_acquisition_status: str | None
+    startup_diagnostic: str | None
 
 
 def _is_blocked_ip(ip_str: str) -> bool:
@@ -164,8 +194,11 @@ class AppContext:
     launcher: PlaywrightLauncher | None = None
     page: Any = None
     browser_diagnostic: str | None = None
+    browser_mode: BrowserMode = BrowserMode.CHROMIUM
+    startup_reason: StartupReason | None = None
+    latest_acquisition_status: AcquisitionStatus | None = None
     resolver: AddressResolver = _system_resolver
-    user_data_dir: str = str(_DEFAULT_USER_DATA_DIR)
+    user_data_dir: str = str(_DEFAULT_CHROMIUM_USER_DATA_DIR)
     launch_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 
@@ -205,9 +238,22 @@ async def app_lifespan(_server: MCPServer) -> AsyncGenerator[AppContext]:
     """Configure the allowlist and profile; the browser launches on first use."""
     domains_env = os.environ.get(_ALLOWED_DOMAINS_ENV, "")
     domains = [d.strip() for d in domains_env.split(",") if d.strip()]
+    browser_mode = BrowserMode.MANAGED_EDGE if sys.platform == "darwin" else BrowserMode.CHROMIUM
+    try:
+        browser_mode = _resolve_browser_mode()
+    except InvalidBrowserModeError as exc:
+        startup_reason = StartupReason.INVALID_MODE
+        browser_diagnostic = _safe_browser_diagnostic("browser startup", exc)
+    else:
+        startup_reason = None
+        browser_diagnostic = None
+
     app_context = AppContext(
         allowlist=DomainAllowlist(domains=domains),
-        user_data_dir=os.environ.get(_USER_DATA_DIR_ENV, str(_DEFAULT_USER_DATA_DIR)),
+        browser_diagnostic=browser_diagnostic,
+        browser_mode=browser_mode,
+        startup_reason=startup_reason,
+        user_data_dir=_resolve_user_data_dir(browser_mode),
     )
     try:
         yield app_context
@@ -232,12 +278,60 @@ def _browser_unavailable_message(app_ctx: object) -> str:
     return _MSG_NO_PAGE
 
 
+def _resolve_browser_mode() -> BrowserMode:
+    configured = os.environ.get(_BROWSER_MODE_ENV)
+    if configured is None or not configured.strip():
+        return BrowserMode.MANAGED_EDGE if sys.platform == "darwin" else BrowserMode.CHROMIUM
+    try:
+        return BrowserMode(configured.strip())
+    except ValueError as exc:
+        raise InvalidBrowserModeError from exc
+
+
+def _resolve_user_data_dir(mode: BrowserMode) -> str:
+    if mode is BrowserMode.MANAGED_EDGE:
+        return str(_DEFAULT_EDGE_USER_DATA_DIR)
+    return os.environ.get(_USER_DATA_DIR_ENV, str(_DEFAULT_CHROMIUM_USER_DATA_DIR))
+
+
+def _startup_reason(error: Exception) -> StartupReason:
+    if isinstance(error, ManagedEdgeUnavailableError):
+        return StartupReason.EDGE_UNAVAILABLE
+    if isinstance(error, ManagedProfileInUseError):
+        return StartupReason.PROFILE_IN_USE
+    if isinstance(error, InvalidBrowserModeError):
+        return StartupReason.INVALID_MODE
+    return StartupReason.STARTUP_FAILED
+
+
+def _browser_status(app_ctx: AppContext) -> BrowserStatus:
+    ready = app_ctx.launcher is not None and app_ctx.launcher.is_running
+    startup_state: Literal["not-launched", "ready", "unavailable"]
+    if app_ctx.startup_reason is not None:
+        startup_state = "unavailable"
+    elif ready:
+        startup_state = "ready"
+    else:
+        startup_state = "not-launched"
+    return {
+        "browser_mode": app_ctx.browser_mode.value,
+        "ownership": "per-user-owned",
+        "startup_state": startup_state,
+        "startup_reason": app_ctx.startup_reason.value if app_ctx.startup_reason else None,
+        "visible_authentication": "available" if ready else "unavailable",
+        "latest_acquisition_status": (
+            app_ctx.latest_acquisition_status.value if app_ctx.latest_acquisition_status else None
+        ),
+        "startup_diagnostic": app_ctx.browser_diagnostic,
+    }
+
+
 async def _launch_browser(app_ctx: AppContext) -> None:
     """Launch the owned browser and its first page, recording a safe diagnostic on failure."""
     launcher: PlaywrightLauncher | None = None
     page: Any = None
     try:
-        launcher = PlaywrightLauncher(user_data_dir=app_ctx.user_data_dir)
+        launcher = PlaywrightLauncher(user_data_dir=app_ctx.user_data_dir, mode=app_ctx.browser_mode)
         await launcher.launch()
         page = await launcher.page()
     except BaseException as exc:  # cleanup precedes control-flow re-raise or degradation.
@@ -246,10 +340,12 @@ async def _launch_browser(app_ctx: AppContext) -> None:
         if not isinstance(exc, Exception):
             raise
         app_ctx.browser_diagnostic = "; ".join(diagnostics)
+        app_ctx.startup_reason = _startup_reason(exc)
         raise ToolError(_browser_unavailable_message(app_ctx)) from None
     app_ctx.launcher = launcher
     app_ctx.page = page
     app_ctx.browser_diagnostic = None
+    app_ctx.startup_reason = None
 
 
 async def _ensure_browser(app_ctx: object, *, need_page: bool = True) -> Any:  # noqa: ANN401 - Playwright page.
@@ -257,6 +353,8 @@ async def _ensure_browser(app_ctx: object, *, need_page: bool = True) -> Any:  #
     if not isinstance(app_ctx, AppContext):
         raise ToolError(_MSG_BROWSER_UNAVAILABLE)
     async with app_ctx.launch_lock:
+        if app_ctx.startup_reason is StartupReason.INVALID_MODE:
+            raise ToolError(_browser_unavailable_message(app_ctx))
         if app_ctx.launcher is not None and not app_ctx.launcher.is_running:
             stale_launcher = app_ctx.launcher
             app_ctx.launcher = None
@@ -292,6 +390,8 @@ async def _validate_destination(app_ctx: object, url: str) -> None:
     """Apply the DNS/IP preflight and allowlist before any browser work."""
     if not isinstance(app_ctx, AppContext):
         raise ToolError(_MSG_BROWSER_UNAVAILABLE)
+    if app_ctx.startup_reason is StartupReason.INVALID_MODE:
+        raise ToolError(_browser_unavailable_message(app_ctx))
     await _check_ssrf(url, allowlist=app_ctx.allowlist, resolver=app_ctx.resolver)
     try:
         app_ctx.allowlist.check(url)
@@ -325,6 +425,23 @@ def _serialize_acquisition(result: AcquisitionSuccess | AcquisitionFailure) -> d
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False))
+async def browser_status(ctx: Context) -> BrowserStatus:
+    """Report bounded process-local browser readiness and acquisition state."""
+    app_ctx = ctx.request_context.lifespan_context
+    if not isinstance(app_ctx, AppContext):
+        return {
+            "browser_mode": BrowserMode.CHROMIUM.value,
+            "ownership": "per-user-owned",
+            "startup_state": "unavailable",
+            "startup_reason": StartupReason.STARTUP_FAILED.value,
+            "visible_authentication": "unavailable",
+            "latest_acquisition_status": None,
+            "startup_diagnostic": None,
+        }
+    return _browser_status(app_ctx)
+
+
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False))
 async def acquire(  # noqa: PLR0913
     ctx: Context,
     url: str,
@@ -354,6 +471,7 @@ async def acquire(  # noqa: PLR0913
         raise ToolError(str(exc)) from exc
     except ValueError as exc:
         raise ToolError(str(exc)) from exc
+    app_ctx.latest_acquisition_status = result.status
     return _serialize_acquisition(result)
 
 

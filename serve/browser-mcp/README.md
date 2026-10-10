@@ -1,22 +1,20 @@
 # owlbear-browser-mcp — Browser MCP Server
 
-MCP server that exposes Playwright-based browser tools to pipeline agents for rendered web content
-fetching. It launches a persistent Chromium profile on the first `navigate`, `acquire`, `click`,
-`type_input`, or `select` call rather than at server start, and launches or reopens it on the next
-such call after the window is closed. `read_text` and `snapshot` only read an open page and never
-launch the browser. A dedicated profile is created by default,
-while `PLAYWRIGHT_USER_DATA_DIR` can point to an existing profile. It does not select Microsoft
-Edge or attach to an existing browser through CDP. Both `navigate` and `acquire` apply the explicit
-domain allowlist and DNS/IP preflight checks.
+MCP server that exposes browser automation tools for rendered web content. On macOS it selects
+stable Microsoft Edge with a fixed OwlBear-owned profile by default; elsewhere it selects Chromium.
+The browser launches on the first action call and launches again after its window is closed.
+`read_text` and `snapshot` only read an open page and never launch it. Managed Edge never reads,
+copies, or controls the operator's daily Edge profile. Both `navigate` and `acquire` apply the
+explicit domain allowlist and DNS/IP preflight checks.
 
-**Use this guide when:** you need to configure the alpha browser server or change its allowlisted
-Playwright actions and accessibility-snapshot boundary.
+**Use this guide when:** you need to configure browser modes, allowlisted actions, or the
+accessibility-snapshot boundary.
 
 Package map: [serve/README.md](../README.md) · Project README: [README.md](../../README.md)
 
-**Status:** Alpha. Basic rendered-page acquisition and typed failure results are implemented, but
-target-site compatibility, approved profile policies, and managed SSO environments still need
-real-world validation.
+**Status:** Alpha. Browser startup and visible sign-in are implemented; authenticated access remains
+target-specific and requires the [managed Mac pilot](../../setup/setup-guide.md#browser-readiness).
+Browser readiness and extension presence do not prove authentication.
 
 ---
 
@@ -50,6 +48,7 @@ with exact hostnames before using the project against production or sensitive si
 | `select` | Select an option in a `<select>` element by value |
 | `read_text` | Return the current page's normalized Markdown content without navigating |
 | `snapshot` | Return the current page's Playwright ARIA accessibility snapshot in YAML |
+| `browser_status` | Report bounded process-local browser readiness and latest acquisition state |
 
 Action tools (`navigate`, `acquire`, `click`, `type_input`, `select`) launch or reopen the browser
 when needed; `read_text` and `snapshot` require an open page and raise a browser-unavailable error
@@ -69,13 +68,45 @@ Any main-document status of 400 or above other than 401 and 403 returns `http_er
 authentication-title detection takes precedence for 401/403, returning
 `authentication_required` before `access_denied`.
 
+`browser_status` describes selected browser mechanics, startup state, visible authentication
+availability, and the most recent acquisition status for this process. It has no global
+authenticated field: `ready` means the browser launched, not that a user is signed in or any target
+is accessible. Confirm authenticated access for each target separately.
+
 ## Configuration
 
 | Variable | Default | Description |
 | --- | --- | --- |
+| `BROWSER_MODE` | `managed-edge` on macOS; `chromium` elsewhere | Select `managed-edge` or `chromium`. An unset or blank value uses the platform default; any other value prevents browser startup and reports `invalid-mode`. |
 | `BROWSER_ALLOWED_DOMAINS` | _(empty; consumer seed uses `*`)_ | Comma-separated list of permitted hostnames; navigation and acquisition to any other domain are blocked. Exact entries explicitly permit that hostname's private/internal DNS results (not reserved or unspecified addresses); **required** — all domains are blocked when unset. Use `*` only for local testing; it does not permit private destinations. |
-| `PLAYWRIGHT_USER_DATA_DIR` | `~/.owlbear/chromium-profile` | Path to an existing browser profile directory for authenticated sessions; provide an absolute path because a leading `~` is not expanded |
-| `SSO_EXTENSION_PATH` | unset | Optional extension directory passed to the Chromium launcher; finding or loading it does not prove managed SSO readiness |
+| `PLAYWRIGHT_USER_DATA_DIR` | `~/.owlbear/chromium-profile` in Chromium mode | Selects the Chromium profile only; use an absolute path for an override. Managed Edge always uses `~/.owlbear/edge-profile` and ignores this setting. |
+| `SSO_EXTENSION_PATH` | unset | Optional explicit extension directory used only in Chromium mode; extension presence does not prove authentication. |
+
+### Startup reason codes
+
+When `startup_state` is `unavailable`, `startup_reason` is one of these bounded values:
+
+| Reason | Meaning |
+| --- | --- |
+| `edge-unavailable` | Stable Microsoft Edge is missing or cannot be launched in managed Edge mode |
+| `profile-in-use` | The OwlBear-managed Edge profile is already in use |
+| `invalid-mode` | `BROWSER_MODE` is not `managed-edge` or `chromium` |
+| `startup-failed` | Another browser startup failure occurred |
+
+### `browser_status` fields
+
+| Field | Meaning |
+| --- | --- |
+| `browser_mode` | Selected mode: `managed-edge` or `chromium` |
+| `ownership` | `per-user-owned`; the server uses an OwlBear-owned profile |
+| `startup_state` | `not-launched` before the first action or after the window closes; `ready` when live; otherwise `unavailable` |
+| `startup_reason` | A bounded startup reason above, or `null` |
+| `visible_authentication` | Whether a visible browser is available for interactive sign-in; not proof of sign-in |
+| `latest_acquisition_status` | The latest `acquire` result for this process, or `null` before an acquisition |
+| `startup_diagnostic` | A bounded startup diagnostic, or `null`; it does not expose profile paths or session values |
+
+The optional SSO extension is used only by Chromium startup. The core launcher requires an explicit
+`SSO_EXTENSION_PATH`; it does not search platform-specific locations.
 
 ## Dependencies
 
@@ -84,8 +115,9 @@ authentication-title detection takes precedence for 401/403, returning
 | `mcp` | MCPServer framework |
 | `owlbear-browser` | Playwright-based content fetcher (workspace package) |
 
-> **First-time setup:** From a consumer project using a sibling OwlBear checkout, install Chromium
-> with `uv run --project ../owlbear playwright install chromium` before starting the server.
+> **First-time setup:** Install Playwright Chromium with
+> `uv run --project ../owlbear playwright install chromium` when selecting Chromium mode or running
+> Cockpit browser-backed tests. Managed Edge uses stable Microsoft Edge already installed on macOS.
 
 Both tools now apply the same MCP-side policy before delegating to Playwright. Exact allowlist
 entries are the explicit approval for private, loopback, or link-local results from that hostname;

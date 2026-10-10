@@ -932,8 +932,9 @@ async def test_declared_mcp_tools_exist_in_live_registries() -> None:
     from owlbear_memory_mcp.server import mcp as memory_mcp  # noqa: PLC0415
 
     target_mcp = assemble_target_server(_TargetApplicationDouble())  # type: ignore[arg-type]
+    browser_tools = {tool.name: tool for tool in await browser_mcp.list_tools()}
     registries = {
-        "owlbear-browser": {tool.name for tool in await browser_mcp.list_tools()},
+        "owlbear-browser": set(browser_tools),
         "owlbear-delivery": {tool.name for tool in await delivery_mcp.list_tools()},
         "owlbear-knowledge": {tool.name for tool in await knowledge_mcp.list_tools()},
         "owlbear-memory": {tool.name for tool in await memory_mcp.list_tools()},
@@ -968,6 +969,23 @@ async def test_declared_mcp_tools_exist_in_live_registries() -> None:
             if tool.startswith("owlbear-delivery/")
         }
         assert declared == expected
+
+    knowledge_ingestor_tools = set(metadata["knowledge-ingestor"]["tools"])
+    assert {
+        "owlbear-browser/acquire",
+        "owlbear-browser/browser_status",
+    } <= knowledge_ingestor_tools
+    browser_status_tool = browser_tools["browser_status"]
+    assert browser_status_tool.annotations.read_only_hint is True
+    assert browser_status_tool.annotations.idempotent_hint is True
+    assert browser_status_tool.annotations.destructive_hint is False
+
+    knowledge_ingestor_guidance = (_AGENTS_ROOT / "knowledge-ingestor.agent.md").read_text(encoding="utf-8")
+    assert (
+        "Use `owlbear-browser/browser_status` only for readiness diagnosis and routing; "
+        "it does not authorize ingestion or prove authenticated content."
+        in " ".join(knowledge_ingestor_guidance.split())
+    )
 
 
 def _normalize_contract_text(content: str) -> str:

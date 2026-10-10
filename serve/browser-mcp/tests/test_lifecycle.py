@@ -7,12 +7,23 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+from mcp import Client
 from mcp.server.mcpserver.exceptions import ToolError
 
-from owlbear_browser.playwright_launcher import AuthenticationCapabilities, PlaywrightLauncher
+from owlbear_browser._errors import ManagedEdgeUnavailableError, ManagedProfileInUseError
+from owlbear_browser.playwright_launcher import AuthenticationCapabilities, BrowserMode, PlaywrightLauncher
 from owlbear_browser_mcp import server as server_module
 from owlbear_browser_mcp.allowlist import DomainAllowlist
-from owlbear_browser_mcp.server import AppContext, acquire, app_lifespan, click, mcp, read_text, snapshot
+from owlbear_browser_mcp.server import (
+    AppContext,
+    acquire,
+    app_lifespan,
+    browser_status,
+    click,
+    mcp,
+    read_text,
+    snapshot,
+)
 
 
 class _FakePage:
@@ -51,26 +62,45 @@ class _FakeLauncher:
         self._launch_error = launch_error
         self._page_error = page_error
         self._page_resource = page_resource
-        self.is_running = False
+        self.pages: list[_FakePage] = []
+        self.context_closed = False
+
+    @property
+    def is_running(self) -> bool:
+        return not self.context_closed and bool(self.pages)
 
     async def launch(self) -> None:
         self._calls.append("launch")
         await asyncio.sleep(0)
         if self._launch_error is not None:
             raise self._launch_error
-        self.is_running = True
+        self.context_closed = False
 
     async def page(self) -> _FakePage:
         self._calls.append("page-create")
         if self._page_error is not None:
             raise self._page_error
+        for page in self.pages:
+            if not page.is_closed():
+                return page
         if self._page_resource is not None and not self._page_resource.closed:
+            self.pages.append(self._page_resource)
             return self._page_resource
-        return _FakePage(self._calls)
+        self._page_resource = _FakePage(self._calls)
+        self.pages.append(self._page_resource)
+        return self._page_resource
+
+    def set_page_error(self, error: BaseException | None) -> None:
+        self._page_error = error
+
+    def close_page(self, page: _FakePage) -> None:
+        page.closed = True
+        self.pages.remove(page)
 
     async def close(self) -> None:
         self._calls.append("launcher")
-        self.is_running = False
+        self.context_closed = True
+        self.pages.clear()
 
 
 class _AsyncResource:
@@ -131,12 +161,22 @@ async def test_concurrent_first_tool_calls_launch_once_and_shutdown_closes_it() 
 @pytest.mark.asyncio
 async def test_closed_page_is_reopened_without_relaunching() -> None:
     calls: list[str] = []
+    launchers: list[_FakeLauncher] = []
 
-    with patch.object(server_module, "PlaywrightLauncher", side_effect=lambda **_: _FakeLauncher(calls)) as factory:
+    def make_launcher(**_: object) -> _FakeLauncher:
+        launchers.append(_FakeLauncher(calls))
+        return launchers[-1]
+
+    with patch.object(server_module, "PlaywrightLauncher", side_effect=make_launcher) as factory:
         async with app_lifespan(mcp) as context:
             await click(_tool_ctx(context), "#a")
             first_page = context.page
-            first_page.closed = True
+            launchers[0].pages.append(_FakePage(calls))
+            launchers[0].close_page(first_page)
+            status = await browser_status(_tool_ctx(context))
+            assert status["startup_state"] == "ready"
+            assert status["visible_authentication"] == "available"
+            assert calls == ["launch", "page-create"]
             with pytest.raises(ToolError, match="No browser session"):
                 await read_text(_tool_ctx(context))
             await click(_tool_ctx(context), "#b")
@@ -144,6 +184,38 @@ async def test_closed_page_is_reopened_without_relaunching() -> None:
 
     factory.assert_called_once()
     assert calls == ["launch", "page-create", "page-create", "page", "launcher"]
+
+
+@pytest.mark.asyncio
+async def test_page_reopen_failure_does_not_mark_browser_startup_unavailable() -> None:
+    calls: list[str] = []
+    launcher = _FakeLauncher(calls)
+
+    with (
+        patch.object(server_module.sys, "platform", "darwin"),
+        patch.dict(server_module.os.environ, {}, clear=True),
+        patch.object(server_module, "PlaywrightLauncher", return_value=launcher) as factory,
+    ):
+        async with app_lifespan(mcp) as context:
+            ctx = _tool_ctx(context)
+            await click(ctx, "#a")
+            other_window = _FakePage(calls)
+            launcher.pages.append(other_window)
+            launcher.close_page(context.page)
+            calls_before_reopen = calls.copy()
+            launcher.set_page_error(RuntimeError("/private/profile/token"))
+
+            with pytest.raises(ToolError, match=r"browser page failed \(RuntimeError\)") as error:
+                await click(ctx, "#b")
+            assert "/private/profile/token" not in str(error.value)
+            assert calls == [*calls_before_reopen, "page-create"]
+
+            status = await browser_status(ctx)
+            assert status["startup_state"] == "ready"
+            assert status["startup_reason"] is None
+            assert status["startup_diagnostic"] is None
+            assert context.launcher is launcher
+            factory.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -155,12 +227,44 @@ async def test_closed_browser_is_relaunched_and_only_current_resources_close_at_
         launchers.append(_FakeLauncher(calls))
         return launchers[-1]
 
-    with patch.object(server_module, "PlaywrightLauncher", side_effect=make_launcher):
+    with (
+        patch.object(server_module.sys, "platform", "darwin"),
+        patch.dict(server_module.os.environ, {}, clear=True),
+        patch.object(server_module, "PlaywrightLauncher", side_effect=make_launcher) as factory,
+    ):
         async with app_lifespan(mcp) as context:
             await click(_tool_ctx(context), "#a")
-            launchers[0].is_running = False
+            launchers[0].close_page(context.page)
+            assert launchers[0].context_closed is False
+            assert launchers[0].pages == []
+            calls_before_status = calls.copy()
+            status = await browser_status(_tool_ctx(context))
+            assert status == {
+                "browser_mode": "managed-edge",
+                "ownership": "per-user-owned",
+                "startup_state": "not-launched",
+                "startup_reason": None,
+                "visible_authentication": "unavailable",
+                "latest_acquisition_status": None,
+                "startup_diagnostic": None,
+            }
+            assert calls == calls_before_status
+            assert len(launchers) == 1
+            for reader in (read_text, snapshot):
+                with pytest.raises(ToolError, match="No browser session"):
+                    await reader(_tool_ctx(context))
+            assert calls == calls_before_status
+
             await click(_tool_ctx(context), "#b")
             assert context.launcher is launchers[1]
+            status = await browser_status(_tool_ctx(context))
+            assert status["startup_state"] == "ready"
+            assert status["startup_reason"] is None
+            assert status["startup_diagnostic"] is None
+            assert len(launchers) == 2
+            for launch_call in factory.call_args_list:
+                assert launch_call.kwargs["mode"] is BrowserMode.MANAGED_EDGE
+                assert launch_call.kwargs["user_data_dir"] == context.user_data_dir
             calls.append("shutdown")
 
     assert calls == ["launch", "page-create", "launcher", "launch", "page-create", "shutdown", "page", "launcher"]
@@ -191,6 +295,192 @@ async def test_launch_failure_reports_safe_diagnostic_and_next_call_retries() ->
             assert context.browser_diagnostic is None
 
     assert calls == ["launch", "page-create", "launcher", "launch", "page-create", "page", "launcher"]
+
+
+@pytest.mark.asyncio
+async def test_startup_launch_failure_closes_launcher_and_exposes_safe_diagnostic() -> None:
+    calls: list[str] = []
+    launcher = _FakeLauncher(calls, launch_error=RuntimeError("/private/profile/token"))
+
+    with patch.object(server_module, "PlaywrightLauncher", return_value=launcher):
+        async with app_lifespan(mcp) as context:
+            with pytest.raises(ToolError):
+                await click(_tool_ctx(context), "#a")
+            assert context.launcher is None
+            assert context.page is None
+            assert context.browser_diagnostic == "browser startup failed (RuntimeError)"
+            assert "/private/profile/token" not in context.browser_diagnostic
+
+    assert calls == ["launch", "launcher"]
+
+
+@pytest.mark.asyncio
+async def test_macos_omitted_mode_uses_managed_edge_profile_and_ignores_override() -> None:
+    calls: list[str] = []
+    launcher = _FakeLauncher(calls)
+    with (
+        patch.object(server_module.sys, "platform", "darwin"),
+        patch.dict(server_module.os.environ, {"PLAYWRIGHT_USER_DATA_DIR": "/private/daily"}, clear=True),
+        patch.object(server_module, "PlaywrightLauncher", return_value=launcher) as launcher_factory,
+    ):
+        async with app_lifespan(mcp) as context:
+            assert context.browser_mode is BrowserMode.MANAGED_EDGE
+            status = await browser_status(_tool_ctx(context))
+            assert status == {
+                "browser_mode": "managed-edge",
+                "ownership": "per-user-owned",
+                "startup_state": "not-launched",
+                "startup_reason": None,
+                "visible_authentication": "unavailable",
+                "latest_acquisition_status": None,
+                "startup_diagnostic": None,
+            }
+            assert calls == []
+            await click(_tool_ctx(context), "#a")
+            status = await browser_status(_tool_ctx(context))
+            assert status["startup_state"] == "ready"
+            assert status["visible_authentication"] == "available"
+
+    assert launcher_factory.call_args.kwargs["mode"] is BrowserMode.MANAGED_EDGE
+    assert launcher_factory.call_args.kwargs["user_data_dir"].endswith("/.owlbear/edge-profile")
+
+
+@pytest.mark.asyncio
+async def test_non_macos_omitted_mode_uses_chromium_profile() -> None:
+    calls: list[str] = []
+    launcher = _FakeLauncher(calls)
+    with (
+        patch.object(server_module.sys, "platform", "linux"),
+        patch.dict(server_module.os.environ, {}, clear=True),
+        patch.object(server_module, "PlaywrightLauncher", return_value=launcher) as launcher_factory,
+    ):
+        async with app_lifespan(mcp) as context:
+            assert context.browser_mode is BrowserMode.CHROMIUM
+            assert context.user_data_dir.endswith("/.owlbear/chromium-profile")
+            assert calls == []
+            await click(_tool_ctx(context), "#a")
+
+    assert launcher_factory.call_args.kwargs["mode"] is BrowserMode.CHROMIUM
+    assert launcher_factory.call_args.kwargs["user_data_dir"].endswith("/.owlbear/chromium-profile")
+
+
+@pytest.mark.asyncio
+async def test_explicit_chromium_preserves_profile_override() -> None:
+    calls: list[str] = []
+    launcher = _FakeLauncher(calls)
+    profile_override = "chromium-profile"
+    with (
+        patch.object(server_module.sys, "platform", "darwin"),
+        patch.dict(
+            server_module.os.environ,
+            {"BROWSER_MODE": "chromium", "PLAYWRIGHT_USER_DATA_DIR": profile_override},
+            clear=False,
+        ),
+        patch.object(server_module, "PlaywrightLauncher", return_value=launcher) as launcher_factory,
+    ):
+        async with app_lifespan(mcp) as context:
+            assert context.browser_mode is BrowserMode.CHROMIUM
+            assert context.user_data_dir == profile_override
+            await click(_tool_ctx(context), "#a")
+    assert launcher_factory.call_args.kwargs["mode"] is BrowserMode.CHROMIUM
+    assert launcher_factory.call_args.kwargs["user_data_dir"] == profile_override
+
+
+@pytest.mark.asyncio
+async def test_invalid_mode_reports_unavailable_without_launching() -> None:
+    with (
+        patch.dict(server_module.os.environ, {"BROWSER_MODE": "safari"}, clear=False),
+        patch.object(server_module, "PlaywrightLauncher") as launcher_factory,
+        patch.object(server_module, "_check_ssrf") as check_ssrf,
+    ):
+        async with app_lifespan(mcp) as context:
+            ctx = SimpleNamespace(request_context=SimpleNamespace(lifespan_context=context))
+            status = await browser_status(ctx)
+            assert status["startup_reason"] == "invalid-mode"
+            assert status["startup_state"] == "unavailable"
+            assert status["visible_authentication"] == "unavailable"
+            for action, arguments in (
+                (server_module.acquire, ("https://target.example.com/page",)),
+                (server_module.navigate, ("https://target.example.com/page",)),
+                (server_module.click, ("#a",)),
+                (server_module.type_input, ("#a", "value")),
+                (server_module.select, ("#a", "value")),
+            ):
+                with pytest.raises(ToolError, match="InvalidBrowserModeError"):
+                    await action(ctx, *arguments)
+    launcher_factory.assert_not_called()
+    check_ssrf.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("error", "reason"),
+    [
+        (ManagedEdgeUnavailableError(), "edge-unavailable"),
+        (ManagedProfileInUseError(), "profile-in-use"),
+        (RuntimeError("secret"), "startup-failed"),
+    ],
+)
+async def test_startup_failure_reports_bounded_reason(error: Exception, reason: str) -> None:
+    calls: list[str] = []
+    launchers = [_FakeLauncher(calls, launch_error=error), _FakeLauncher(calls)]
+    with (
+        patch.object(server_module.sys, "platform", "darwin"),
+        patch.dict(server_module.os.environ, {}, clear=True),
+        patch.object(server_module, "PlaywrightLauncher", side_effect=launchers) as factory,
+    ):
+        async with app_lifespan(mcp) as context:
+            ctx = _tool_ctx(context)
+            with pytest.raises(ToolError):
+                await click(ctx, "#a")
+            status = await browser_status(ctx)
+            assert status["startup_reason"] == reason
+            assert status["startup_state"] == "unavailable"
+            assert status["startup_diagnostic"] == f"browser startup failed ({type(error).__name__})"
+            assert set(status) == {
+                "browser_mode",
+                "ownership",
+                "startup_state",
+                "startup_reason",
+                "visible_authentication",
+                "latest_acquisition_status",
+                "startup_diagnostic",
+            }
+            assert "secret" not in str(status)
+            factory.assert_called_once()
+
+            await click(ctx, "#b")
+            status = await browser_status(ctx)
+            assert status["startup_state"] == "ready"
+            assert status["startup_reason"] is None
+            assert status["startup_diagnostic"] is None
+            assert factory.call_count == 2
+            for launch_call in factory.call_args_list:
+                assert launch_call.kwargs["mode"] is BrowserMode.MANAGED_EDGE
+                assert launch_call.kwargs["user_data_dir"] == context.user_data_dir
+
+
+@pytest.mark.asyncio
+async def test_registered_browser_status_contract() -> None:
+    calls: list[str] = []
+    launcher = _FakeLauncher(calls)
+    with patch.object(server_module, "PlaywrightLauncher", return_value=launcher):
+        async with Client(mcp) as client:
+            tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+    tool = tools["browser_status"]
+    assert tool.annotations.read_only_hint is True
+    assert tool.annotations.idempotent_hint is True
+    assert tool.annotations.destructive_hint is False
+    assert set(tool.output_schema["properties"]) == {
+        "browser_mode",
+        "ownership",
+        "startup_state",
+        "startup_reason",
+        "visible_authentication",
+        "latest_acquisition_status",
+        "startup_diagnostic",
+    }
+    assert calls == []
 
 
 @pytest.mark.asyncio
@@ -270,7 +560,7 @@ async def test_shutdown_defers_page_cancellation_until_launcher_cleanup() -> Non
 def test_launcher_reports_not_running_after_context_close_event() -> None:
     launcher = PlaywrightLauncher()
     assert not launcher.is_running
-    launcher._context = object()  # type: ignore[assignment]  # noqa: SLF001
+    launcher._context = SimpleNamespace(pages=[object()])  # type: ignore[assignment]  # noqa: SLF001
     assert launcher.is_running
     launcher._mark_context_closed(launcher._context)  # noqa: SLF001
     assert not launcher.is_running
@@ -296,9 +586,9 @@ async def test_launcher_close_attempts_all_resources_and_is_idempotent(failed_re
         error=RuntimeError(f"{failed_resource} failed") if failed_resource == "playwright" else None,
     )
     launcher._capabilities = AuthenticationCapabilities(  # noqa: SLF001
-        persistent_session=True,
+        mode=BrowserMode.CHROMIUM,
+        owned_persistent_profile=True,
         visible_manual_auth=True,
-        microsoft_sso=True,
     )
 
     with pytest.raises(RuntimeError, match=f"{failed_resource} failed"):
@@ -309,9 +599,9 @@ async def test_launcher_close_attempts_all_resources_and_is_idempotent(failed_re
     assert launcher._context is None  # noqa: SLF001
     assert launcher._pw is None  # noqa: SLF001
     assert launcher.capabilities == AuthenticationCapabilities(
-        persistent_session=False,
+        mode=BrowserMode.CHROMIUM,
+        owned_persistent_profile=False,
         visible_manual_auth=False,
-        microsoft_sso=False,
     )
 
     await launcher.close()
@@ -338,9 +628,9 @@ async def test_launcher_close_defers_cancellation_until_all_resources_attempted(
         error=asyncio.CancelledError() if cancelled_resource == "playwright" else None,
     )
     launcher._capabilities = AuthenticationCapabilities(  # noqa: SLF001
-        persistent_session=True,
+        mode=BrowserMode.CHROMIUM,
+        owned_persistent_profile=True,
         visible_manual_auth=True,
-        microsoft_sso=True,
     )
 
     with pytest.raises(asyncio.CancelledError):
@@ -351,9 +641,9 @@ async def test_launcher_close_defers_cancellation_until_all_resources_attempted(
     assert launcher._context is None  # noqa: SLF001
     assert launcher._pw is None  # noqa: SLF001
     assert launcher.capabilities == AuthenticationCapabilities(
-        persistent_session=False,
+        mode=BrowserMode.CHROMIUM,
+        owned_persistent_profile=False,
         visible_manual_auth=False,
-        microsoft_sso=False,
     )
 
     await launcher.close()

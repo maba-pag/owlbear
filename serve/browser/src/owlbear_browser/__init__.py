@@ -2,6 +2,8 @@
 
 from owlbear_browser._errors import (
     AuthenticationRequired,
+    ManagedEdgeUnavailableError,
+    ManagedProfileInUseError,
     SSOExtensionNotFoundError,
 )
 from owlbear_browser.contract import (
@@ -20,6 +22,7 @@ from owlbear_browser.extractor import extract_content
 from owlbear_browser.fetcher import BrowserContentFetcher
 from owlbear_browser.playwright_launcher import (
     AuthenticationCapabilities,
+    BrowserMode,
     PlaywrightLauncher,
     find_sso_extension,
 )
@@ -33,7 +36,10 @@ __all__ = [
     "AuthenticationCapabilities",
     "AuthenticationRequired",
     "BrowserContentFetcher",
+    "BrowserMode",
     "Diagnostics",
+    "ManagedEdgeUnavailableError",
+    "ManagedProfileInUseError",
     "PlaywrightLauncher",
     "SSOExtensionNotFoundError",
     "content_hash",

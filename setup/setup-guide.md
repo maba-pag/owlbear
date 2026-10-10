@@ -20,11 +20,17 @@ Before running setup, ensure the following are installed on your machine:
 | [GitHub CLI](https://cli.github.com/) | GitHub publication and pull-request operations | [Installation guide](https://cli.github.com/manual/installation) |
 | Git | Clone and version control | [git-scm.com](https://git-scm.com/) |
 
-> OwlBear supports macOS and Linux (Ubuntu). Windows is unsupported. Browser-backed commands still
-> require the separate Chromium download described below.
+> **Windows:** Windows is unsupported. Setup uses relative paths; if running it experimentally,
+> keep OwlBear and the project on the same drive because cross-drive paths cannot be resolved.
 
-Chromium is optional for setup. Install it later when you use the Browser MCP or run Cockpit's
-browser-backed tests; see [Verify the installation](#verify-the-installation) and the
+<!-- separate blockquotes -->
+
+> **macOS and Linux:** Python, uv, VS Code, and Git work natively on both platforms. Browser MCP
+> defaults to managed Microsoft Edge on macOS and Chromium elsewhere.
+
+Chromium is optional for setup. Install it later when you select Browser MCP Chromium mode or run
+Cockpit's browser-backed tests. Managed Edge requires stable Microsoft Edge installed on macOS; see
+[Verify the installation](#verify-the-installation) and the
 [Cockpit package guide](../serve/cockpit/README.md#browser-backed-tests).
 
 ---
@@ -88,7 +94,7 @@ Open **Chat: Open Customizations** and then **MCP: List Servers**. The exact che
 
 **Expected result:** the five seeded MCP server processes are running and the shared OwlBear
 customization roots appear in Chat Customizations. Browser capability readiness is a separate
-check below because it also depends on Chromium and its allowlist.
+check below because it also depends on the selected browser and its allowlist.
 
 ## Verify the installation
 
@@ -102,31 +108,53 @@ check below because it also depends on Chromium and its allowlist.
 ### Browser readiness
 
 Check MCP startup, browser capability, and Knowledge ingestion separately. A running MCP process
-does not prove that Chromium or a Browser-to-Knowledge round is ready.
+does not prove that the selected browser launched, that a target is authenticated, or that a
+Browser-to-Knowledge round is ready.
 
 1. **MCP process startup:** Run **MCP: List Servers** and confirm `owlbear-browser` and
    `owlbear-knowledge` show `running`.
 
    **Expected result:** both stdio processes are available; this confirms startup only.
-2. **Browser readiness:** From the consumer project root, install Chromium for the sibling OwlBear
-   checkout:
+2. **Browser readiness:** On macOS, an unset `BROWSER_MODE` selects managed Edge and its fixed
+   OwlBear profile; elsewhere it selects Chromium. Confirm stable Microsoft Edge is installed before
+   starting the Browser MCP on macOS. For Chromium mode or Cockpit's browser-backed tests, install
+   Chromium for the sibling OwlBear checkout from the consumer project root:
 
-   ```shell
-   uv run --project ../owlbear playwright install chromium
-   ```
+  ```shell
+  uv run --project ../owlbear playwright install chromium
+  ```
+
+   This download is not required for macOS managed Edge mode. To select Chromium explicitly on
+   macOS, set `BROWSER_MODE` to `chromium` in the local `owlbear-browser` server environment; an
+   invalid mode is reported as `invalid-mode` rather than silently falling back to another browser.
+   `PLAYWRIGHT_USER_DATA_DIR` only affects Chromium and should be an absolute path; managed Edge
+   always uses `~/.owlbear/edge-profile` and ignores that override.
 
    Check `BROWSER_ALLOWED_DOMAINS` in the `owlbear-browser` entry of `.vscode/mcp.json`. The fresh
    seed uses `"*"` for local testing across public sites; use exact hostnames for normal or
    production use.
 
-   **Expected result:** Chromium is installed, and `acquire` on an allowed public URL returns
-   rendered content or a structured acquisition result. Exact-host entries explicitly permit
-   private, loopback, and link-local DNS results for that hostname; wildcard mode does not.
+   Restart the `owlbear-browser` MCP server and call `browser_status`; it reports `not-launched`
+   before any browser action. The first `acquire` or `navigate` call against an allowed URL launches
+   the selected visible browser; complete the organization's login flow manually if needed.
+
+   **Expected result:** `acquire` on an allowed URL returns rendered content or a structured
+   acquisition result. `browser_status` reports `ready` only while a live browser session is
+   available; it does not prove sign-in or authenticated access. Exact-host entries explicitly
+   permit private, loopback, and link-local DNS results for that hostname; wildcard mode does not.
    Reserved and unspecified addresses are always rejected. The current SSRF preflight does not
    fully prevent DNS rebinding or an allowlisted server redirecting to a private address; these
    are accepted limits, so keep the allowlist narrow. See the
    [Browser MCP guide](../serve/browser-mcp/README.md) for the full policy.
-3. **Knowledge ingestion readiness:** Register an approved browser source with
+3. **Managed SSO readiness:** On macOS, the default is a visible managed Edge session using the
+   fixed `~/.owlbear/edge-profile`; `PLAYWRIGHT_USER_DATA_DIR` and `SSO_EXTENSION_PATH` do not
+   configure managed Edge. Call an allowed `navigate` or `acquire` action to launch the browser,
+   then verify one permitted target site with the organization's normal login flow. Chromium mode
+   uses a separate profile and can load only an explicitly configured extension directory. A ready
+   browser or loaded extension is not proof of tenant authentication, MFA, Conditional Access, or
+   device compliance. Do not collect cookies or tokens, weaken enterprise policy, or claim SSO
+   support from MCP startup.
+4. **Knowledge ingestion readiness:** Register an approved browser source with
    `register_knowledge_source` as `kind: "url_list"` and `fetch_method: "browser"`. Call
    `list_knowledge_sources` to get its `source_id` and registered `urls`; acquire each URL and
    submit the captures together in one bound `knowledge_ingest` call for that source. Call
@@ -170,6 +198,45 @@ take a profile-selection command-line argument. Noninteractive setup skips this 
 mutation.
 
 For development-only browser-backed tests, use the [Cockpit package guide](../serve/cockpit/README.md#browser-backed-tests).
+
+## Managed Mac browser pilot
+
+Run this pilot on the managed Mac before relying on SharePoint or Confluence access. Keep the two
+approved target URLs local; do not put URLs, hostnames, page content, credentials, or session files in
+the repository, Delivery requests, or status.
+
+1. Install stable Microsoft Edge and start the `owlbear-browser` MCP server. Leave
+  `BROWSER_MODE` and `PLAYWRIGHT_USER_DATA_DIR` unset for the managed default. Configure
+  `BROWSER_ALLOWED_DOMAINS` locally for only the two approved target hosts.
+
+  **Expected result:** before any browser action, `browser_status` reports `managed-edge`,
+  `per-user-owned`, `not-launched`, null startup reason, and unavailable visible authentication.
+  Stop if the mode is invalid; do not switch to Chromium or the operator's daily Edge profile.
+2. Call `acquire` or `navigate` with one locally supplied, operator-approved SharePoint URL. The
+  first action launches the visible Edge window with the fixed OwlBear profile. Complete first-use
+  sign-in, site trust, consent, or MFA directly in that window. Do not send credentials or session
+  material through an OwlBear tool.
+
+  **Expected result:** the Edge window is live and the operator confirms authenticated SharePoint
+  content. Browser readiness alone does not count as authentication.
+3. Repeat the action with one locally supplied, operator-approved Confluence URL and confirm its
+  authenticated content in the owned Edge window.
+
+  **Expected result:** the operator confirms authenticated Confluence content in the same owned
+  session; record no page content, URL, or hostname.
+4. Close the OwlBear-owned Edge window and call `browser_status`, then repeat an allowed action for
+  one approved target.
+
+  **Expected result:** status reports `not-launched` after the window closes; the next action
+  relaunches the fixed profile and the operator confirms the target remains authenticated.
+5. Restart the `owlbear-browser` MCP server, repeat an allowed action for each target, and confirm
+  that the fixed profile retains session availability. Stop the server normally afterward.
+
+  **Expected result:** both targets remain authenticated after restart, no `--no-sandbox` or
+  unsupported-flag warning appears, and only OwlBear-owned browser resources close. Record only each
+  target class (`SharePoint` or `Confluence`) and `pass` or `fail`; include no URL, hostname, page
+  content, credential, or session data. If a Delivery pilot request is active, answer it in Cockpit
+  using only those bounded outcomes.
 
 ## First successful workflow
 
