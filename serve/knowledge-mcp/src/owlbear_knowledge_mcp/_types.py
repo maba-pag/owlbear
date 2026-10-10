@@ -2,11 +2,76 @@
 
 from __future__ import annotations
 
-from typing import TypedDict
+from typing import Literal, Required, TypedDict
 
 _DEFAULT_KB_PATH = ".owlbear/knowledge/local.db"
 _DEFAULT_QDRANT_PATH = ".owlbear/knowledge/vectors"
 _MAX_ENRICHMENT_BATCH_SIZE = 100
+
+
+CaptureFailureStatus = Literal[
+    "authentication_required",
+    "content_not_ready",
+    "selector_not_found",
+    "access_denied",
+    "http_error",
+    "redirect_rejected",
+    "ambiguous_final_page",
+    "unsupported_target",
+    "download_rejected",
+    "navigation_failed",
+    "extraction_failed",
+    "tool_error",
+]
+
+
+class CapturedContent(TypedDict, total=False):
+    """Browser-captured text and optional source provenance."""
+
+    text: Required[str]
+    title: str
+    canonical_url: str
+    fetched_at: str
+    content_hash: str
+
+
+class FailedCapture(TypedDict, total=False):
+    """One failed browser acquisition entry."""
+
+    status: Required[CaptureFailureStatus]
+    message: str
+
+
+class CaptureEntry(TypedDict, total=False):
+    """One registered URL and exactly one capture outcome."""
+
+    url: Required[str]
+    captured: CapturedContent
+    failed: FailedCapture
+
+
+class KnowledgeIngestError(TypedDict):
+    """One redacted ingest failure returned by knowledge_ingest."""
+
+    stage: str
+    code: str
+    retryable: bool
+    message: str
+
+
+class KnowledgeIngestResult(TypedDict):
+    """Typed aggregate result from inline or source-bound ingestion."""
+
+    source_id: str
+    documents_created: int
+    documents_replaced: int
+    documents_unchanged: int
+    documents_failed: int
+    chunks_created: int
+    chunks_replaced: int
+    document_ids: list[str]
+    health: str
+    errors: list[KnowledgeIngestError]
 
 
 class SearchResult(TypedDict):
@@ -38,11 +103,22 @@ class RelatedSource(TypedDict):
     entity: str
 
 
+class SearchSourceProvenance(TypedDict, total=False):
+    """Capture provenance stored for a searched document."""
+
+    canonical_url: str
+    fetched_at: str
+    content_hash: str
+
+
 class SearchSource(TypedDict):
     """Source metadata attached to a search result."""
 
+    id: str
+    uri: str
     name: str
     url: str
+    provenance: SearchSourceProvenance | None
 
 
 class SourceInfo(TypedDict):
@@ -55,6 +131,8 @@ class SourceInfo(TypedDict):
     last_refreshed_at: str | None
     last_checked_at: str | None
     last_error: str | None
+    health: Literal["unknown", "ok", "degraded", "failed"]
+    urls: list[str] | None
     enabled: bool
     refreshable: bool
     enrich: bool

@@ -4,7 +4,13 @@ from typing import ClassVar
 
 import pytest
 
-from owlbear_browser import AcquisitionRequest, AcquisitionStatus, AcquisitionSuccess, BrowserContentFetcher
+from owlbear_browser import (
+    AcquisitionFailure,
+    AcquisitionRequest,
+    AcquisitionStatus,
+    AcquisitionSuccess,
+    BrowserContentFetcher,
+)
 
 pytestmark = pytest.mark.browser
 
@@ -51,8 +57,14 @@ class _FixtureHandler(BaseHTTPRequestHandler):
             return
         if self.path == "/unrelated":
             self.send_response(302)
-            self.send_header("Location", "https://example.com/other")
+            self.send_header("Location", self.server.unrelated_target_url)
             self.end_headers()
+            return
+        if self.path == "/target":
+            self.send_response(getattr(self.server, "target_status", 200))
+            self.send_header("Content-Type", "text/html")
+            self.end_headers()
+            self.wfile.write(b'<html><body><main id="content">Target content</main></body></html>')
             return
         if self.path == "/empty":
             self.send_response(200)
@@ -126,6 +138,115 @@ async def test_acquire_waits_for_rendered_content_and_keeps_links_inert() -> Non
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("request_url", "response_status", "expected_status"),
+    [
+        ("http://pages.synthetic.example/page", 404, AcquisitionStatus.HTTP_ERROR),
+        ("http://pages.synthetic.example/page", 500, AcquisitionStatus.HTTP_ERROR),
+        ("http://pages.synthetic.example/page", 401, AcquisitionStatus.ACCESS_DENIED),
+        ("http://pages.synthetic.example/page", 403, AcquisitionStatus.ACCESS_DENIED),
+        ("http://pages.synthetic.example/page", 200, AcquisitionStatus.SUCCESS),
+        ("http://pages.synthetic.example:80/page", 404, AcquisitionStatus.HTTP_ERROR),
+    ],
+)
+async def test_acquire_classifies_main_document_http_statuses(
+    request_url: str, response_status: int, expected_status: AcquisitionStatus
+) -> None:
+    from playwright.async_api import Route, async_playwright  # noqa: PLC0415
+
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch()
+        try:
+            context = await browser.new_context()
+
+            async def fulfill_document(route: Route) -> None:
+                await route.fulfill(
+                    status=response_status,
+                    content_type="text/html",
+                    body='<html><body><main id="content">Rendered document</main></body></html>',
+                )
+
+            await context.route("http://pages.synthetic.example/**", fulfill_document)
+            result = await BrowserContentFetcher(context).acquire(
+                AcquisitionRequest(
+                    request_url,
+                    content_selector="#content",
+                    readiness_timeout_ms=2_000,
+                )
+            )
+        finally:
+            await browser.close()
+
+    if expected_status is AcquisitionStatus.HTTP_ERROR:
+        assert isinstance(result, AcquisitionFailure)
+        assert result.status is AcquisitionStatus.HTTP_ERROR
+        assert result.diagnostics.stage == "navigation"
+        assert result.diagnostics.details == {"response_status": response_status}
+    elif expected_status is AcquisitionStatus.ACCESS_DENIED:
+        assert isinstance(result, AcquisitionFailure)
+        assert result.status is AcquisitionStatus.ACCESS_DENIED
+    else:
+        assert isinstance(result, AcquisitionSuccess)
+        assert result.status is AcquisitionStatus.SUCCESS
+        assert result.markdown.strip()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("response_status", "expected_status"),
+    [
+        (404, AcquisitionStatus.HTTP_ERROR),
+        (500, AcquisitionStatus.HTTP_ERROR),
+        (200, AcquisitionStatus.REDIRECT_REJECTED),
+    ],
+)
+async def test_acquire_classifies_cross_origin_redirect_statuses(
+    response_status: int, expected_status: AcquisitionStatus
+) -> None:
+    from playwright.async_api import Route, async_playwright  # noqa: PLC0415
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _FixtureHandler)
+    server.target_status = response_status
+    Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch()
+            try:
+                context = await browser.new_context()
+
+                async def redirect_to_target(route: Route) -> None:
+                    await route.fulfill(
+                        status=302,
+                        headers={"Location": f"http://127.0.0.1:{server.server_port}/target"},
+                    )
+
+                await context.route("http://pages.synthetic.example/**", redirect_to_target)
+                result = await BrowserContentFetcher(context).acquire(
+                    AcquisitionRequest(
+                        "http://pages.synthetic.example/start",
+                        content_selector="#content",
+                        readiness_timeout_ms=2_000,
+                    )
+                )
+            finally:
+                await browser.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert isinstance(result, AcquisitionFailure)
+    assert result.status is expected_status
+    if response_status >= 400:
+        assert result.diagnostics.stage == "navigation"
+        assert result.diagnostics.details == {"response_status": response_status}
+    else:
+        assert result.diagnostics.details == {
+            "url": f"http://127.0.0.1:{server.server_port}/target",
+            "signal": "unrelated_redirect",
+        }
+
+
+@pytest.mark.asyncio
 async def test_authentication_page_stays_open_and_retry_reuses_it() -> None:
     server = ThreadingHTTPServer(("127.0.0.1", 0), _FixtureHandler)
     Thread(target=server.serve_forever, daemon=True).start()
@@ -188,6 +309,11 @@ async def test_acquire_reports_missing_content_selector() -> None:
 )
 async def test_acquire_rejects_invalid_final_page_states(path: str, expected_status: AcquisitionStatus) -> None:
     server = ThreadingHTTPServer(("127.0.0.1", 0), _FixtureHandler)
+    target_server: ThreadingHTTPServer | None = None
+    if path == "/unrelated":
+        target_server = ThreadingHTTPServer(("127.0.0.1", 0), _FixtureHandler)
+        Thread(target=target_server.serve_forever, daemon=True).start()
+        server.unrelated_target_url = f"http://127.0.0.1:{target_server.server_port}/target"
     Thread(target=server.serve_forever, daemon=True).start()
     try:
         from playwright.async_api import async_playwright  # noqa: PLC0415
@@ -208,6 +334,9 @@ async def test_acquire_rejects_invalid_final_page_states(path: str, expected_sta
     finally:
         server.shutdown()
         server.server_close()
+        if target_server is not None:
+            target_server.shutdown()
+            target_server.server_close()
 
 
 @pytest.mark.asyncio

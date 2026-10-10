@@ -14,7 +14,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Annotated, Literal, Protocol, runtime_checkable
 
-from pydantic import Field
+from pydantic import Field, ValidationInfo, field_validator
 
 from owlbear_knowledge.protocols.common import BoundaryModel, Metadata
 
@@ -121,6 +121,23 @@ class SourceRegistration(BoundaryModel):
     refreshable: bool = True
     priority: int = 0
     metadata: Metadata = Field(default_factory=dict)
+
+    @field_validator("fetch_method")
+    @classmethod
+    def _validate_fetch_method(cls, fetch_method: FetchTransport, info: ValidationInfo) -> FetchTransport:
+        kind = info.data.get("kind")
+        allowed_transports = {
+            SourceKind.URL_LIST: (FetchTransport.HTTP, FetchTransport.BROWSER),
+            SourceKind.FILE_GLOB: (FetchTransport.FILESYSTEM,),
+            SourceKind.INLINE: (FetchTransport.NONE,),
+            SourceKind.AUTHENTICATED_WEB: (FetchTransport.BROWSER,),
+        }
+        accepted = allowed_transports.get(kind)
+        if accepted is not None and fetch_method not in accepted:
+            accepted_names = ", ".join(transport.value for transport in accepted)
+            msg = f"{kind.value} sources accept fetch transports: {accepted_names}"
+            raise ValueError(msg)
+        return fetch_method
 
 
 class SourceWish(BoundaryModel):
