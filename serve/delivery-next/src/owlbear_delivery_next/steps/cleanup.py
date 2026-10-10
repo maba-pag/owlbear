@@ -218,7 +218,10 @@ def target_check(ctx: Ctx, c: Change, pr: PullRequest | None) -> tuple[Change, S
         window = timedelta(seconds=int(profile.value(ctx.profile, profile.WINDOW, "300")))
         elapsed = ctx.now - c.missing.since
         if state.running or elapsed < window:
-            reason = f"{len(state.running) + len(state.missing)} of {state.expected} checks running on {target}"
+            if state.running:
+                reason = f"{len(state.running)} of {state.expected} checks running on {target}"
+            else:
+                reason = f"waiting up to {window.seconds // 60} min for {', '.join(state.missing)} to start on {target}"
             wake = ctx.now + max(ctx.poll() - ctx.now, min(elapsed / 2, budgets.PAUSE_CAP))
             return c, engine.pending(Waiting.CI, reason, wake)
         ctx.log(c.slug, "target-checks-unfinished", sha=sha, missing=list(state.missing))

@@ -1246,7 +1246,7 @@ def test_running_target_checks_have_no_deadline_and_a_late_failure_drafts_one_fi
     cx = ctx(tmp_path, gh)
     cx.store.root.mkdir()
     c, held = cleanup.target_check(cx, change(StepKind.CLEANUP), gh.pr)
-    assert (held.exit, held.waiting) == (Exit.PENDING, Waiting.CI)
+    assert (held.exit, held.waiting, held.reason) == (Exit.PENDING, Waiting.CI, "1 of 1 checks running on main")
     first = held.wake_at - cx.now
     cx.now = NOW + timedelta(seconds=301)
     c, held = cleanup.target_check(cx, c, gh.pr)
@@ -1261,7 +1261,7 @@ def test_never_started_target_checks_wait_within_the_window_then_cleanup_proceed
     target_checks(gh)
     cx = ctx(tmp_path, gh)
     c, held = cleanup.target_check(cx, change(StepKind.CLEANUP), gh.pr)
-    assert (held.exit, held.waiting) == (Exit.PENDING, Waiting.CI)
+    assert (held.exit, held.reason) == (Exit.PENDING, "waiting up to 5 min for test to start on main")
     cx.now = NOW + timedelta(seconds=301)
     c, held = cleanup.target_check(cx, c, gh.pr)
     assert (held, c.missing) == (None, None)
