@@ -6,7 +6,7 @@ import pytest
 
 from owlbear_delivery_next import cli, host
 from owlbear_delivery_next.host import Host, RunnerRecord
-from owlbear_delivery_next.loop import StepResult, apply, check_inputs
+from owlbear_delivery_next.loop import StepResult, apply, check_inputs, next_check
 from owlbear_delivery_next.models import (
     Answer,
     AnswerItem,
@@ -212,6 +212,15 @@ def test_a_passing_path_backed_answer_settles_against_current_fingerprints():
     answered(c, NOW, inputs=check_inputs(c, c.checks[0], {"src/a.ts": "f1"}))
     assert check.settle(c, NOW, {"src/a.ts": "f1"}).step.kind == StepKind.MERGE
     assert check.settle(c, NOW, {"src/a.ts": "f2"}).step == Step(kind=StepKind.CHECK, task="preview")
+
+
+def test_a_file_added_under_a_covered_directory_voids_a_passing_answer():
+    c = checking(ready_at=NOW)
+    c.checks[0].paths = ["app"]
+    answered(c, NOW, inputs=check_inputs(c, c.checks[0], {"app/main.ts": "f1"}))
+    added = {"app/main.ts": "f1", "app/banner.ts": "f2"}
+    assert next_check(c, added) is c.checks[0]
+    assert check.action(c, live=True, paths=added) == "keep"
 
 
 def test_a_runner_gone_without_an_exit_is_charged_once_and_the_fourth_asks(store, tmp_path):

@@ -110,10 +110,16 @@ def inputs_valid(recorded: Inputs, current: Inputs) -> bool:
     )
 
 
+def check_valid(recorded: Inputs, current: Inputs) -> bool:
+    """A person-only check answer holds only while its covered paths are exactly as recorded, added ones included."""
+    return recorded.paths == current.paths and inputs_valid(recorded, current)
+
+
 def changed(recorded: Inputs, current: Inputs) -> list[str]:
-    """Name each recorded input that no longer holds: a criterion, a path, the check's steps or its environment."""
+    """Name each check input that no longer holds: a criterion, a path, the check's steps or its environment."""
     names = [k for k, v in recorded.criteria.items() if current.criteria.get(k) != v]
     names += [p for p, f in recorded.paths.items() if current.paths.get(p) != f]
+    names += [p for p in current.paths if p not in recorded.paths]
     names += ["the check's steps"] if recorded.procedure != current.procedure else []
     return names + (["the environment"] if recorded.environment != current.environment else [])
 
@@ -155,7 +161,7 @@ def next_check(c: Change, paths: Mapping[str, str]) -> PersonCheck | None:
         answer = check.answer
         if not (answer and answer.passed and answer.inputs):
             return check
-        if not inputs_valid(answer.inputs, check_inputs(c, check, paths)):
+        if not check_valid(answer.inputs, check_inputs(c, check, paths)):
             return check
     return None
 

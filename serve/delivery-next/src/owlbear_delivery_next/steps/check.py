@@ -42,7 +42,7 @@ def action(c: Change, *, live: bool, paths: Mapping[str, str]) -> Action | None:
     if c.finished_at or person is None or (c.step.kind, c.step.task) != (StepKind.CHECK, e.check):
         return "dispose"
     a = person.answer
-    if a and a.inputs and loop.inputs_valid(a.inputs, loop.check_inputs(c, person, paths)):
+    if a and a.inputs and loop.check_valid(a.inputs, loop.check_inputs(c, person, paths)):
         return "settle"  # by the result's recorded inputs (P5), whichever launch it was given for
     return "keep" if live and e.ready_at else "launch"
 

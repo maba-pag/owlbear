@@ -137,6 +137,7 @@ def test_tracked_projection_roots_have_one_boundary_owner() -> None:
     assert manifest["scope_groups"]["serve"]["scopes"] == [
         "browser",
         "delivery",
+        "delivery-next",
         "knowledge",
         "cockpit",
         "tools",
@@ -151,6 +152,7 @@ def test_serve_group_projection_contains_shared_docs_and_all_packages() -> None:
     assert module.scope_names_for_group("serve") == [
         "browser",
         "delivery",
+        "delivery-next",
         "knowledge",
         "cockpit",
         "tools",
