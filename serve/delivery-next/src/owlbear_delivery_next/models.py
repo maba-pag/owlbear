@@ -180,11 +180,12 @@ class Question(Record):
 
 
 class ItemRef(Record):
-    """The pull-request conversation item a task answers, at the latest comment it was opened for."""
+    """The pull-request conversation item a task answers, at the version of its human comments it was opened for."""
 
     id: str
     kind: Literal["comment", "review", "thread"]
-    last_id: str
+    version: str
+    task: str  # the conversation task; its review repairs carry the same reference
     url: str = ""
 
 
@@ -197,14 +198,15 @@ class Response(Record):
 
 
 class Handling(Record):
-    """One conversation item handled at ``last_id``, recorded only once its reply or resolution was observed."""
+    """One conversation item handled at ``version``, recorded once its reply was observed."""
 
     item: str
     kind: Literal["comment", "review", "thread"]
     url: str = ""
-    last_id: str
+    version: str
     how: Literal["fixed", "answered", "no-action"]
     text: str = ""
+    commit: str | None = None
     task: str
     reply_id: str | None = None
     resolved: bool = False

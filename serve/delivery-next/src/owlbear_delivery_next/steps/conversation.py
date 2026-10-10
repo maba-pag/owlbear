@@ -1,18 +1,34 @@
-"""Pull-request conversation items: which are Delivery's, open, or awaiting their reply or resolution."""
+"""Pull-request conversation items: which comments are Delivery's, and which item versions are open or handled."""
 
 from __future__ import annotations
 
+import hashlib
+import json
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.github.provider import MARKER
 from owlbear_delivery_next.models import Exit, Handling, ItemRef, Response
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Callable, Iterable
     from datetime import datetime
 
     from owlbear_delivery_next.github.provider import ConversationItem, ThreadComment
     from owlbear_delivery_next.models import Change, Task
+
+MARKER = "<!-- delivery:"
+
+type Published = Callable[[str], bool]
+
+
+@dataclass(frozen=True)
+class State:
+    """One item at its current version: ``rec`` is its valid handling, None while it is open for ``task``."""
+
+    item: ConversationItem
+    version: str
+    task: str
+    rec: Handling | None
 
 
 def marker(slug: str, item: str, task: str) -> str:
@@ -20,87 +36,147 @@ def marker(slug: str, item: str, task: str) -> str:
     return f"{MARKER}{slug}:{item}:{task} -->"
 
 
-def latest(c: Change, item: str) -> Handling | None:
-    """The newest handling record of one item."""
-    return next((h for h in reversed(c.handled) if h.item == item), None)
+def _tasks(c: Change) -> list[Task]:
+    return c.plan.tasks if c.plan else []
 
 
-def newer(item: ConversationItem, since: str | None) -> list[ThreadComment]:
-    """A thread's comments after *since* (all when unknown) that Delivery did not write."""
-    ids = [x.id for x in item.comments]
-    start = ids.index(since) + 1 if since in ids else 0
-    return [x for x in item.comments[start:] if MARKER not in x.body]
+def ours(c: Change, login: str, x: ConversationItem | ThreadComment, thread: str | None = None) -> bool:
+    """Delivery wrote it: a recorded reply, or a replay by Delivery's login carrying one of its complete markers.
+
+    In a thread only that thread's markers count; every other comment is a person's, whatever it quotes.
+    """
+    if any(h.reply_id == x.id for h in c.handled):
+        return True
+    if x.author != login:
+        return False
+    refs = {(t.item.id, t.item.task) for t in _tasks(c) if t.item and thread in {None, t.item.id}}
+    return any(marker(c.slug, item, task) in x.body for item, task in refs)
 
 
-def opened_at(c: Change, item: ConversationItem) -> str | None:
-    """The latest comment id an open item must be handled at; None when it is not open."""
-    rec = latest(c, item.id)
-    if item.kind != "thread":
-        if MARKER in item.body or (rec and rec.last_id == item.last_id):
-            return None
-        return item.last_id
-    if item.resolved or (rec is None and item.last_by_delivery):
+def human(c: Change, item: ConversationItem, login: str) -> list[tuple[str, str]]:
+    """The ids and bodies of the item's comments a person wrote."""
+    if item.kind == "thread":
+        return [(x.id, x.body) for x in item.comments if not ours(c, login, x, item.id)]
+    return [] if ours(c, login, item) else [(item.id, item.body)]
+
+
+def version(item: ConversationItem, humans: list[tuple[str, str]]) -> str:
+    """A digest of the item's human comments (and a review's state): any edit, addition or deletion changes it."""
+    data = json.dumps([item.state, humans], separators=(",", ":"))
+    return hashlib.sha256(data.encode()).hexdigest()
+
+
+def _valid(rec: Handling, item: ConversationItem, published: Published | None) -> bool:
+    if rec.how == "fixed" and rec.commit and published is not None and not published(rec.commit):
+        return False  # the fix is no longer in the PR head
+    return not (item.kind == "thread" and rec.resolved and not item.resolved)  # a person reopened the thread
+
+
+def assess(c: Change, item: ConversationItem, login: str, published: Published | None = None) -> State | None:
+    """The item's state; None for Delivery's own items and resolved threads without a valid handling.
+
+    Each invalidated handling of the same version opens a new round with its own task.
+    """
+    humans = human(c, item, login)
+    if not humans:
         return None
-    fresh = newer(item, rec.last_id if rec else None)
-    return fresh[-1].id if fresh else None
+    v = version(item, humans)
+    rounds = [h for h in c.handled if h.item == item.id and h.version == v]
+    if rounds and _valid(rounds[-1], item, published):
+        return State(item, v, rounds[-1].task, rounds[-1])
+    if item.kind == "thread" and item.resolved:
+        return None
+    return State(item, v, f"pr-{item.id}-{v[:8]}" + (f"-{len(rounds) + 1}" if rounds else ""), None)
 
 
-def open_items(c: Change, items: Iterable[ConversationItem]) -> list[tuple[ConversationItem, str]]:
-    """Every open item with the comment id it is open at."""
-    return [(i, at) for i in items if (at := opened_at(c, i)) is not None]
+def states(c: Change, items: Iterable[ConversationItem], login: str, published: Published | None = None) -> list[State]:
+    """Every person's item with its state."""
+    return [s for i in items if (s := assess(c, i, login, published)) is not None]
 
 
-def unresolved(c: Change, item: ConversationItem) -> bool:
-    """A handled thread still unresolved with no newer human comment: its resolution is pending."""
-    rec = latest(c, item.id)
-    return item.kind == "thread" and not item.resolved and rec is not None and not newer(item, rec.last_id)
+def open_items(
+    c: Change, items: Iterable[ConversationItem], login: str, published: Published | None = None
+) -> list[State]:
+    """Every item whose current version is not handled."""
+    return [s for s in states(c, items, login, published) if s.rec is None]
 
 
-def task_id(item: ConversationItem, at: str) -> str:
-    """One task per item and latest comment."""
-    return f"pr-{item.id}" + ("" if at == item.id else f"-{at}")
+def reply_missing(s: State, items: Iterable[ConversationItem]) -> bool:
+    """A handled item whose required Delivery reply is not in the conversation (deleted or never posted)."""
+    if s.rec is None or s.rec.how == "no-action":
+        return False
+    ids = {x.id for x in s.item.comments} if s.item.kind == "thread" else {i.id for i in items}
+    return s.rec.reply_id not in ids
 
 
-def ref(item: ConversationItem, at: str) -> ItemRef:
-    """The item reference a conversation task carries."""
-    return ItemRef(id=item.id, kind=item.kind, last_id=at, url=item.url)
+def unresolved(s: State) -> bool:
+    """A handled thread Delivery has not yet seen resolved: the only resolution Delivery retries."""
+    rec = s.rec
+    return (
+        rec is not None
+        and s.item.kind == "thread"
+        and not s.item.resolved
+        and not rec.resolved
+        and (rec.reply_id is not None or rec.how == "no-action")
+    )
 
 
-def pending(c: Change) -> list[Task]:
-    """Done conversation tasks whose reply or no-action is not yet recorded."""
+def ref(s: State) -> ItemRef:
+    """The item reference an open item's task carries."""
+    return ItemRef(id=s.item.id, kind=s.item.kind, version=s.version, task=s.task, url=s.item.url)
+
+
+def group(c: Change, root: str) -> list[Task]:
+    """A conversation task and its review repairs, in plan order."""
+    return [t for t in _tasks(c) if t.item and t.item.task == root]
+
+
+def response(c: Change, root: str) -> Response | None:
+    """The item's effective response: the latest done task's of its group."""
+    done = [t.response for t in group(c, root) if t.done and t.response]
+    return done[-1] if done else None
+
+
+def pending(c: Change) -> list[tuple[Task, Response]]:
+    """Done conversation tasks whose reply or no-action is not yet recorded, with their effective response."""
     recorded = {h.task for h in c.handled}
-    tasks = c.plan.tasks if c.plan else []
-    return [t for t in tasks if t.done and t.item and t.response and t.id not in recorded]
+    roots = [t for t in _tasks(c) if t.item and t.id == t.item.task and t.id not in recorded]
+    return [(t, r) for t in roots if all(g.done for g in group(c, t.id)) and (r := response(c, t.id)) is not None]
 
 
-def posted(items: Iterable[ConversationItem], item: str, mark: str) -> str | None:
-    """The id of a reply already carrying *mark* (an earlier post whose acknowledgement was lost)."""
+def posted(items: Iterable[ConversationItem], item: str, mark: str, login: str) -> str | None:
+    """The id of Delivery's reply already carrying *mark* (an earlier post whose acknowledgement was lost)."""
     for i in items:
-        if i.kind != "thread" and MARKER in i.body and mark in i.body:
+        if i.kind != "thread" and i.author == login and mark in i.body:
             return i.id
         if i.kind == "thread" and i.id == item:
-            hit = next((x for x in i.comments if mark in x.body), None)
+            hit = next((x for x in i.comments if x.author == login and mark in x.body), None)
             if hit:
                 return hit.id
     return None
 
 
-def record(c: Change, task: Task, now: datetime, reply_id: str | None = None, *, resolved: bool = False) -> Change:
-    """Append the handling record once its effect was observed."""
+def reply_body(r: Response, head: str, mark: str) -> str:
+    """A reply: the response, the published PR head containing a fix, and the marker."""
+    fixed = f"\n\nFixed in {head[:7]}." if r.how == "fixed" else ""
+    return f"{r.text}{fixed}\n\n{mark}"
+
+
+def record(c: Change, task: Task, r: Response, now: datetime, reply_id: str | None = None) -> Change:
+    """Append the handling of the task's item version once its reply was observed (or none is due)."""
     assert task.item  # noqa: S101 - only pending tasks are recorded
-    assert task.response  # noqa: S101
-    item, r = task.item, task.response
+    item = task.item
     c.handled.append(
         Handling(
             item=item.id,
             kind=item.kind,
             url=item.url,
-            last_id=item.last_id,
+            version=item.version,
             how=r.how,
             text=r.text,
+            commit=r.commit,
             task=task.id,
             reply_id=reply_id,
-            resolved=resolved,
             at=now,
         )
     )

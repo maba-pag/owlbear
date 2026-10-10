@@ -40,5 +40,6 @@ def recorded(change: Change, task: Task | None, run: Run, path: Path, result: St
     scope, checks = (task.scope, task.checks) if task else ([], [])
     of = f"task {change.step.task}" if change.step.task else "the final review"
     title = f"Fix {len(p.findings)} review finding(s) of {of}"
-    fix = Task(id=f"t{n}", title=title, scope=scope, checks=checks, origin="review", detail=findings(p))
+    item = task.item if task and change.step.task else None  # a conversation task's repair answers the same item
+    fix = Task(id=f"t{n}", title=title, scope=scope, checks=checks, origin="review", detail=findings(p), item=item)
     return result.model_copy(update={"review": review, "fix_task": fix})

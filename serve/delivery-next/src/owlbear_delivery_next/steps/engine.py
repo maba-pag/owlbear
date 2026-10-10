@@ -183,7 +183,8 @@ def pr_state(gh: Provider, repository: str, c: Change, offered: str | None = Non
         state: PrState = "merged" if pr.merged else pr.state
         if state != "open" or not loop.waiting_consent(c):
             return state, False
-        opened = [i.id for i, _ in conversation.open_items(c, gh.read_conversation(repository, pr.number))]
+        items = gh.read_conversation(repository, pr.number)
+        opened = [s.item.id for s in conversation.open_items(c, items, gh.viewer())]
     except ProviderError:
         return None, False
     return state, loop.consent_moved(c, offered, pr.head_sha, opened)

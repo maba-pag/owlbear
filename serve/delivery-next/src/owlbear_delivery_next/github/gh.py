@@ -13,7 +13,6 @@ from urllib.parse import quote, urlencode
 from pydantic import ValidationError
 
 from owlbear_delivery_next.github.provider import (
-    MARKER,
     Check,
     ConversationItem,
     FailureCode,
@@ -83,7 +82,12 @@ _CONVERSATION = """query Conversation($owner: String!, $name: String!, $number: 
       nodes { id url body state author { login } } }
     reviewThreads(first: 100, after: $t) @include(if: $wt) { pageInfo { hasNextPage endCursor }
       nodes { id path isResolved isOutdated
-        comments(first: 100) { pageInfo { hasNextPage } nodes { id url body author { login } } } } } } }
+        comments(first: 100) { pageInfo { hasNextPage endCursor } nodes { id url body author { login } } } } } } }
+}"""
+_THREAD_COMMENTS = """query ThreadComments($id: ID!, $after: String) {
+  node(id: $id) { ... on PullRequestReviewThread {
+    comments(first: 100, after: $after) { pageInfo { hasNextPage endCursor }
+      nodes { id url body author { login } } } } }
 }"""
 _REPLY = """mutation Reply($id: ID!, $body: String!) {
   addPullRequestReviewThreadReply(input: {pullRequestReviewThreadId: $id, body: $body}) { comment { id } }
@@ -200,13 +204,11 @@ def _login(node: Json) -> str:
     return (node.get("author") or {}).get("login") or "ghost"
 
 
-def _thread(node: Json, operation: str) -> ConversationItem:
-    if node["comments"]["pageInfo"]["hasNextPage"]:
-        _invalid(operation, f"a review thread has more than {_MAX_CHECKS} comments")
-    comments = tuple(ThreadComment(id=c["id"], author=_login(c), body=c["body"]) for c in node["comments"]["nodes"])
+def _thread(node: Json, nodes: list[Json], operation: str) -> ConversationItem:
+    comments = tuple(ThreadComment(id=c["id"], author=_login(c), body=c["body"]) for c in nodes)
     if not comments:
         _invalid(operation, "a review thread has no comments")
-    first = node["comments"]["nodes"][0]
+    first = nodes[0]
     return ConversationItem(
         id=node["id"],
         kind="thread",
@@ -216,15 +218,11 @@ def _thread(node: Json, operation: str) -> ConversationItem:
         path=node.get("path"),
         resolved=node["isResolved"],
         outdated=node["isOutdated"],
-        last_id=comments[-1].id,
-        last_by_delivery=MARKER in comments[-1].body,
         comments=comments,
     )
 
 
-def _items(name: str, nodes: Json, operation: str) -> list[ConversationItem]:
-    if name == "reviewThreads":
-        return [_thread(n, operation) for n in nodes]
+def _items(name: str, nodes: Json) -> list[ConversationItem]:
     kind = "comment" if name == "comments" else "review"
     return [
         ConversationItem(
@@ -233,8 +231,7 @@ def _items(name: str, nodes: Json, operation: str) -> list[ConversationItem]:
             author=_login(n),
             body=n["body"] or "",
             url=n["url"],
-            last_id=n["id"],
-            last_by_delivery=MARKER in (n["body"] or ""),
+            state=n.get("state") or "",
         )
         for n in nodes
         if kind == "comment" or (n["body"] or "").strip() or n["state"] == "CHANGES_REQUESTED"
@@ -246,6 +243,7 @@ class GhProvider:
 
     def __init__(self, cwd: Path, *, host: str = "github.com", timeout: float = TIMEOUT, runner: Runner = run) -> None:
         self.cwd, self.host, self.timeout, self.runner = cwd, host, timeout, runner
+        self._viewer = ""
 
     def _gh(  # noqa: PLR0913 - one runner for reads, writes, absent statuses and raw logs
         self,
@@ -423,6 +421,26 @@ class GhProvider:
         body = {"query": query, "variables": variables}
         return self._gh(operation, ("api", "--hostname", self.host, "graphql", "--input", "-"), body=body, write=write)
 
+    def viewer(self) -> str:
+        """Read the login Delivery posts as, once per provider."""
+        if not self._viewer:
+            user = self._gh("viewer", ("api", "--hostname", self.host, "user"))
+            login = user.get("login") if isinstance(user, dict) else None
+            if not isinstance(login, str) or not login:
+                _invalid("viewer", "GitHub returned no login")
+            self._viewer = login
+        return self._viewer
+
+    def _thread_comments(self, op: str, node: Json) -> list[Json]:
+        """Every comment of one review thread, following its comment pages."""
+        page = node["comments"]
+        nodes = list(page["nodes"])
+        while page["pageInfo"]["hasNextPage"]:
+            variables = {"id": node["id"], "after": page["pageInfo"]["endCursor"]}
+            page = self._graphql(op, _THREAD_COMMENTS, variables)["data"]["node"]["comments"]
+            nodes += page["nodes"]
+        return nodes
+
     def read_conversation(self, repository: str, number: int) -> tuple[ConversationItem, ...]:
         """Read issue comments, review bodies (non-empty or changes requested) and review threads, every page."""
         op, (owner, name) = "read_conversation", repository.split("/", 1)
@@ -438,7 +456,10 @@ class GhProvider:
                     if not wanted[flag]:
                         continue
                     page = pr[conn]
-                    found[conn] += _items(conn, page["nodes"], op)
+                    if conn == "reviewThreads":
+                        found[conn] += [_thread(n, self._thread_comments(op, n), op) for n in page["nodes"]]
+                    else:
+                        found[conn] += _items(conn, page["nodes"])
                     wanted[flag] = page["pageInfo"]["hasNextPage"]
                     cursors[cursor] = page["pageInfo"]["endCursor"]
             except (KeyError, TypeError, IndexError, AttributeError, ValidationError) as exc:

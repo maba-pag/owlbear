@@ -67,9 +67,9 @@ BACK: dict[StepKind, frozenset[StepKind]] = {
     StepKind.REVIEW: frozenset({StepKind.PLAN}),
     StepKind.INTEGRATE: frozenset({StepKind.PLAN}),
     StepKind.PUBLISH: frozenset({StepKind.INTEGRATE, StepKind.BUILD, StepKind.REVIEW}),
-    StepKind.FOLLOW: frozenset({StepKind.BUILD}),
+    StepKind.FOLLOW: frozenset({StepKind.BUILD, StepKind.PUBLISH}),  # publish: a reviewed fix not yet pushed
     StepKind.CHECK: frozenset({StepKind.BUILD}),
-    StepKind.MERGE: frozenset({StepKind.INTEGRATE, StepKind.BUILD}),
+    StepKind.MERGE: frozenset({StepKind.INTEGRATE, StepKind.BUILD, StepKind.PUBLISH}),
 }
 PR_CLOSED = "gate:merge:pr-closed"
 CONSENT = "gate:merge:consent"
@@ -571,6 +571,8 @@ def _resolved(c: Change, task_id: str | None) -> set[str]:
 def _fix_task(c: Change, r: StepResult, fixes: str | None = None) -> str | None:
     if r.fix_task is None or c.plan is None:
         return None
+    if any(t.id == r.fix_task.id for t in c.plan.tasks):
+        return r.fix_task.id  # an unfinished task already in the plan is resumed, not duplicated
     c.plan.tasks.append(r.fix_task.model_copy(update={"fixes": fixes}))
     _cover(c)
     return r.fix_task.id

@@ -11,7 +11,6 @@ from owlbear_delivery_next.git.remote_git import RemoteGitWriteUnknown, classify
 from owlbear_delivery_next.github import merge_offer
 from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.provider import (
-    MARKER,
     Check,
     ConversationItem,
     MergeMethod,
@@ -35,6 +34,7 @@ from owlbear_delivery_next.models import (
     Environment,
     Exit,
     Inputs,
+    ItemRef,
     Names,
     PersonCheck,
     Plan,
@@ -108,6 +108,9 @@ class FakeGh:
 
     def read_conversation(self, _repo, _number):
         return ()
+
+    def viewer(self):
+        return "delivery"
 
     def read_rules(self, _repo, _branch):
         return FORBIDDEN
@@ -186,15 +189,15 @@ def test_the_merge_carries_the_consented_head_as_its_sha_guard(tmp_path, clone):
 
 def test_a_review_comment_after_ci_goes_back_to_build_before_any_merge(tmp_path, clone):
     gh = FakeGh(pr(head=A))
-    gh.read_conversation = lambda _repo, _number: (
-        ConversationItem(id="r9", kind="comment", author="o", body="throw on zero", last_id="r9"),
-    )
+    item = ConversationItem(id="r9", kind="comment", author="o", body="throw on zero")
+    gh.read_conversation = lambda _repo, _number: (item,)
     c = loop.fold(change(worktree=str(clone)), [ConsentItem(at=NOW, head=A)], NOW)
     c, result = merge.run(ctx(tmp_path, gh), c)
-    assert (result.exit, result.back_to, result.fix_task.id) == (Exit.BACK, StepKind.BUILD, "pr-r9")
+    tid = f"pr-r9-{conversation.version(item, [('r9', 'throw on zero')])[:8]}"
+    assert (result.exit, result.back_to, result.fix_task.id) == (Exit.BACK, StepKind.BUILD, tid)
     assert gh.merges == []
     after = loop.apply(c, result, NOW)
-    assert (after.step.kind, after.step.task) == (StepKind.BUILD, "pr-r9")
+    assert (after.step.kind, after.step.task) == (StepKind.BUILD, tid)
 
 
 # Pull-request conversation items (TD-15, TD-16)
@@ -230,10 +233,7 @@ class ChatGh(FakeGh):
 
 
 def comment(cid, body, author="o", kind="comment"):
-    url = f"https://github.com/o/r/pull/7#{cid}"
-    return ConversationItem(
-        id=cid, kind=kind, author=author, body=body, url=url, last_id=cid, last_by_delivery=MARKER in body
-    )
+    return ConversationItem(id=cid, kind=kind, author=author, body=body, url=f"https://github.com/o/r/pull/7#{cid}")
 
 
 def thread(tid, *comments, resolved=False, outdated=False):
@@ -247,8 +247,6 @@ def thread(tid, *comments, resolved=False, outdated=False):
         path="src/a.py",
         resolved=resolved,
         outdated=outdated,
-        last_id=notes[-1].id,
-        last_by_delivery=MARKER in notes[-1].body,
         comments=notes,
     )
 
@@ -268,14 +266,15 @@ def test_an_answered_comment_is_replied_to_once_and_then_the_merge_proceeds(tmp_
     c = loop.fold(change(worktree=str(clone)), [ConsentItem(at=NOW, head=A)], NOW)
     cx = ctx(tmp_path, gh)
     c, result = merge.run(cx, c)
-    assert (result.exit, result.fix_task.id, result.fix_task.item.kind) == (Exit.BACK, "pr-c1", "comment")
+    tid = result.fix_task.id
+    assert (result.exit, tid[:6], result.fix_task.item.kind) == (Exit.BACK, "pr-c1-", "comment")
     c = handled(c, result, "answered", "A list keeps the order.")
     c = c.model_copy(update={"step": Step(kind=StepKind.MERGE)})
     c = loop.fold(c, [ConsentItem(at=NOW, head=A)], NOW)
     c, result = merge.run(cx, c)
     assert result.exit == Exit.DONE, result.reason
     assert len(gh.posts) == 1
-    assert gh.posts[0][1] == "A list keeps the order.\n\n<!-- delivery:c1:c1:pr-c1 -->"
+    assert gh.posts[0][1] == f"A list keeps the order.\n\n<!-- delivery:c1:c1:{tid} -->"
     assert [(h.item, h.how, h.reply_id) for h in c.handled] == [("c1", "answered", "reply1")]
     assert follow.conversation(cx, c, gh.pr, StepKind.MERGE)[1] is None
     assert len(gh.posts) == 1
@@ -298,7 +297,7 @@ def test_a_bot_comment_handled_as_no_action_posts_nothing_and_records_the_reason
     assert [(h["item"], h["how"], h["text"]) for h in shown] == [("b1", "no-action", "automated coverage notice")]
 
 
-def test_a_fixed_thread_is_replied_to_only_once_the_fix_is_in_the_pr_head_then_resolved(tmp_path, clone):
+def test_a_fixed_thread_is_published_before_its_reply_names_the_pr_head_then_resolved(tmp_path, clone):
     git(clone, "push", "-q", "origin", "HEAD:refs/heads/owlbear/c1")
     base = git(clone, "rev-parse", "HEAD")
     (clone / "a.txt").write_text("fixed\n")
@@ -307,29 +306,32 @@ def test_a_fixed_thread_is_replied_to_only_once_the_fix_is_in_the_pr_head_then_r
     gh = ChatGh(pr(head=base), thread("t1", ("h1", "o", "off by one")))
     cx = ctx(tmp_path, gh)
     c, result = follow.conversation(cx, change(worktree=str(clone)), gh.pr, StepKind.FOLLOW)
-    assert result.fix_task.id == "pr-t1-h1"
+    tid = result.fix_task.id
+    assert tid.startswith("pr-t1-")
     c = handled(c, result, "fixed", "Now counts from zero.", fix)
     c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
-    assert (result.exit, result.waiting, gh.posts, c.handled) == (Exit.PENDING, Waiting.CI, [], [])
+    assert (result.exit, result.back_to, gh.posts, c.handled) == (Exit.BACK, StepKind.PUBLISH, [], [])
     (clone / "b.txt").write_text("later\n")
     git(clone, "add", "b.txt")
     git(clone, "commit", "-qm", "later")
     git(clone, "push", "-q", "origin", "HEAD:refs/heads/owlbear/c1")
-    gh.pr = pr(head=git(clone, "rev-parse", "HEAD"))
+    head = git(clone, "rev-parse", "HEAD")
+    gh.pr = pr(head=head)
     c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
     assert result is None
-    assert gh.posts == [("t1", f"Now counts from zero.\n\nFixed in {fix[:7]}.\n\n<!-- delivery:c1:t1:pr-t1-h1 -->")]
+    assert gh.posts == [("t1", f"Now counts from zero.\n\nFixed in {head[:7]}.\n\n<!-- delivery:c1:t1:{tid} -->")]
     assert gh.resolved == ["t1"]
+    c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
+    assert (result, gh.resolved) == (None, ["t1"])
     assert [(h.item, h.how, h.resolved) for h in c.handled] == [("t1", "fixed", True)]
 
 
 def test_a_reply_whose_acknowledgement_was_lost_is_not_posted_again(tmp_path):
-    lost = comment("x1", "> url\n\nAnswered.\n\n<!-- delivery:c1:c1:pr-c1 -->", "delivery")
     gh = ChatGh(pr(head=A), comment("c1", "why?"))
     cx = ctx(tmp_path, gh)
     c, result = follow.conversation(cx, change(), gh.pr, StepKind.FOLLOW)
     c = handled(c, result, "answered", "Answered.")
-    gh.items.append(lost)
+    gh.items.append(comment("x1", f"> url\n\nAnswered.\n\n<!-- delivery:c1:c1:{result.fix_task.id} -->", "delivery"))
     c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
     assert (result, gh.posts) == (None, [])
     assert [h.reply_id for h in c.handled] == ["x1"]
@@ -339,41 +341,170 @@ def test_a_person_commenting_during_the_fix_keeps_the_thread_open_with_a_new_tas
     gh = ChatGh(pr(head=A), thread("t1", ("h1", "o", "rename it")))
     cx = ctx(tmp_path, gh)
     c, result = follow.conversation(cx, change(), gh.pr, StepKind.FOLLOW)
+    first = result.fix_task.item.version
     c = handled(c, result, "fixed", "Renamed.", A)
     gh.before_post = lambda: gh.add("t1", ("h2", "o", "also the test"))
     c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
     assert len(gh.posts) == 1
     assert gh.resolved == []
     assert [(h.item, h.resolved) for h in c.handled] == [("t1", False)]
-    assert (result.exit, result.fix_task.id, result.fix_task.item.last_id) == (Exit.BACK, "pr-t1-h2", "h2")
+    assert (result.exit, result.fix_task.item.version != first) == (Exit.BACK, True)
+    assert result.fix_task.id == f"pr-t1-{result.fix_task.item.version[:8]}"
 
 
-def test_delivery_marked_items_never_become_tasks(tmp_path):
-    mark = "<!-- delivery:c1:x:pr-x -->"
-    gh = ChatGh(pr(head=A), comment("d1", f"Done.\n\n{mark}", "o"), thread("t1", ("h1", "o", "q"), ("d2", "o", mark)))
+def task_for(c, item, tid):
+    """A plan task carrying a conversation item reference, as an earlier round left it."""
+    ref = ItemRef(id=item, kind="thread", version="old", task=tid)
+    c.plan.tasks.append(Task(id=tid, title="answer", item=ref))
+    return conversation.marker(c.slug, item, tid)
+
+
+def test_a_person_quoting_a_full_delivery_marker_still_opens_a_task(tmp_path):
     c = change()
-    assert follow.conversation(ctx(tmp_path, gh), c, gh.pr, StepKind.FOLLOW) == (c, None)
-    assert c.plan.tasks[-1].id == "t1"
+    mark = task_for(c, "c9", "pr-c9-old")
+    gh = ChatGh(pr(head=A), comment("d1", f"Done.\n\n{mark}", "delivery"), comment("c2", f"quoting {mark}", "o"))
+    c, result = follow.conversation(ctx(tmp_path, gh), c, gh.pr, StepKind.FOLLOW)
+    assert (result.exit, result.fix_task.item.id) == (Exit.BACK, "c2")
+    assert [s.item.id for s in conversation.open_items(c, gh.items, "delivery")] == ["c2"]
+
+
+def test_an_unresolved_thread_ending_with_delivery_is_open_while_a_person_is_unanswered(tmp_path):
+    c = change()
+    mark = task_for(c, "t1", "pr-t1-old")
+    gh = ChatGh(pr(head=A), thread("t1", ("h1", "o", "q"), ("d1", "delivery", f"Done.\n\n{mark}")))
+    c, result = follow.conversation(ctx(tmp_path, gh), c, gh.pr, StepKind.FOLLOW)
+    assert (result.exit, result.fix_task.item.id, result.fix_task.id != "pr-t1-old") == (Exit.BACK, "t1", True)
+
+
+def test_editing_a_handled_issue_comment_reopens_it_with_a_new_task(tmp_path):
+    gh = ChatGh(pr(head=A), comment("c1", "why?"))
+    cx = ctx(tmp_path, gh)
+    c, result = follow.conversation(cx, change(), gh.pr, StepKind.FOLLOW)
+    first = result.fix_task.id
+    c = handled(c, result, "answered", "Because.")
+    c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
+    assert result is None
+    gh.items[0] = comment("c1", "why? and why a list?")
+    c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
+    assert (result.exit, result.fix_task.id[:6], result.fix_task.id != first) == (Exit.BACK, "pr-c1-", True)
+
+
+def test_deleting_the_latest_person_comment_does_not_spin(tmp_path):
+    gh = ChatGh(pr(head=A), thread("t1", ("h1", "o", "rename it")))
+    cx = ctx(tmp_path, gh)
+    c, result = follow.conversation(cx, change(), gh.pr, StepKind.FOLLOW)
+    c = handled(c, result, "answered", "Renamed.")
+    c, _ = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
+    c.step = Step(kind=StepKind.FOLLOW)
+    gh.add("t1", ("h2", "o", "and the test"))
+    c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
+    c = loop.apply(c, result, NOW)
+    c.step = Step(kind=StepKind.FOLLOW)
+    c, again = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
+    assert (again.exit, again.fix_task.id) == (Exit.BACK, result.fix_task.id)
+    c = loop.apply(c, again, NOW)
+    gh.items = [thread("t1", *[(x.id, x.author, x.body) for x in gh.items[0].comments if x.id != "h2"])]
+    c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
+    assert result is None
+    assert sum(t.id.startswith("pr-t1-") for t in c.plan.tasks) == 2
+
+
+def test_a_deleted_delivery_reply_is_reposted_after_looking_for_a_replay(tmp_path):
+    gh = ChatGh(pr(head=A), comment("c1", "why?"))
+    cx = ctx(tmp_path, gh)
+    c, result = follow.conversation(cx, change(), gh.pr, StepKind.FOLLOW)
+    tid = result.fix_task.id
+    c = handled(c, result, "answered", "Because.")
+    c, _ = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
+    gh.items = [i for i in gh.items if i.id != "reply1"]
+    gh.items.append(comment("x9", f"Because.\n\n<!-- delivery:c1:c1:{tid} -->", "delivery"))
+    c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
+    assert (result, len(gh.posts), c.handled[0].reply_id) == (None, 1, "x9")
+    gh.items = [i for i in gh.items if i.id != "x9"]
+    c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
+    assert (result, len(gh.posts), c.handled[0].reply_id) == (None, 2, "reply2")
+    assert gh.posts[1] == ("c1", f"Because.\n\n<!-- delivery:c1:c1:{tid} -->")
+
+
+def test_a_thread_a_person_unresolves_after_delivery_resolved_it_opens_again_unresolved(tmp_path):
+    gh = ChatGh(pr(head=A), thread("t1", ("h1", "o", "why?")))
+    cx = ctx(tmp_path, gh)
+    c, result = follow.conversation(cx, change(), gh.pr, StepKind.FOLLOW)
+    first = result.fix_task.id
+    c = handled(c, result, "answered", "Because.")
+    c, _ = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
+    c, _ = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
+    assert (gh.resolved, c.handled[0].resolved) == (["t1"], True)
+    gh.items = [i.model_copy(update={"resolved": False}) for i in gh.items]
+    c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
+    assert (result.exit, result.fix_task.id, gh.resolved) == (Exit.BACK, f"{first}-2", ["t1"])
+
+
+def test_a_force_rewritten_head_without_the_fix_reopens_the_handled_item(tmp_path, clone):
+    git(clone, "push", "-q", "origin", "HEAD:refs/heads/owlbear/c1")
+    base = git(clone, "rev-parse", "HEAD")
+    (clone / "a.txt").write_text("fixed\n")
+    git(clone, "commit", "-qam", "fix")
+    fix = git(clone, "rev-parse", "HEAD")
+    git(clone, "push", "-q", "origin", "HEAD:refs/heads/owlbear/c1")
+    gh = ChatGh(pr(head=fix), comment("c1", "off by one"))
+    cx = ctx(tmp_path, gh)
+    c, result = follow.conversation(cx, change(worktree=str(clone)), gh.pr, StepKind.FOLLOW)
+    first = result.fix_task.id
+    c = handled(c, result, "fixed", "Counts from zero.", fix)
+    c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
+    assert (result, len(gh.posts)) == (None, 1)
+    git(clone, "push", "-q", "-f", "origin", f"{base}:refs/heads/owlbear/c1")
+    gh.pr = pr(head=base)
+    c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
+    assert (result.exit, result.back_to, result.fix_task.id) == (Exit.BACK, StepKind.BUILD, f"{first}-2")
+
+
+def test_a_review_repair_of_a_conversation_task_replies_with_its_response_and_the_published_head(tmp_path, clone):
+    (clone / "a.txt").write_text("fixed\n")
+    git(clone, "commit", "-qam", "fix")
+    fix = git(clone, "rev-parse", "HEAD")
+    commit(clone, "later.txt")
+    git(clone, "push", "-q", "origin", "HEAD:refs/heads/owlbear/c1")
+    head = git(clone, "rev-parse", "HEAD")
+    gh = ChatGh(pr(head=head), comment("c1", "why?"))
+    cx = ctx(tmp_path, gh)
+    c, result = follow.conversation(cx, change(worktree=str(clone)), gh.pr, StepKind.FOLLOW)
+    c = handled(c, result, "answered", "First answer.")
+    root = c.plan.tasks[-1]
+    review_, _ = tools.parse(
+        tools.ReviewResult,
+        {"verdict": "fix", "findings": [{"place": "a", "problem": "p", "fix": "f"}], "covered_paths": ["a.txt"]},
+    )
+    c.step = Step(kind=StepKind.REVIEW, task=root.id)
+    run = Run("s", "result", review_, head=worktree.head(clone))
+    repair = review.recorded(c, root, run, clone, loop.StepResult(exit=Exit.RETRY, reason="cut")).fix_task
+    assert repair.item == root.item
+    repair.done, repair.response = True, Response(how="fixed", text="Repaired.", commit=fix)
+    c.plan.tasks.append(repair)
+    c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
+    assert result is None
+    assert gh.posts == [("c1", f"Repaired.\n\nFixed in {head[:7]}.\n\n<!-- delivery:c1:c1:{root.id} -->")]
+    assert [(h.how, h.text) for h in c.handled] == [("fixed", "Repaired.")]
 
 
 def test_an_unresolved_outdated_thread_blocks_the_merge(tmp_path, clone):
     gh = ChatGh(pr(head=A), thread("t1", ("h1", "o", "stale?"), outdated=True))
     c = loop.fold(change(worktree=str(clone)), [ConsentItem(at=NOW, head=A)], NOW)
     _, result = merge.run(ctx(tmp_path, gh), c)
-    assert (result.exit, result.fix_task.id, gh.merges) == (Exit.BACK, "pr-t1-h1", [])
+    assert (result.exit, result.fix_task.id[:6], gh.merges) == (Exit.BACK, "pr-t1-", [])
 
 
-def test_a_handled_item_awaiting_its_task_holds_the_merge_as_open(tmp_path):
+def test_an_open_item_whose_task_is_unfinished_goes_back_to_build_with_that_task(tmp_path):
     gh = ChatGh(pr(head=A), comment("c1", "why?"))
     cx = ctx(tmp_path, gh)
-    c, result = follow.conversation(cx, change(), gh.pr, StepKind.MERGE)
-    c = loop.apply(c, result, NOW)
+    c, first = follow.conversation(cx, change(), gh.pr, StepKind.MERGE)
+    c = loop.apply(c, first, NOW)
     c, result = follow.conversation(cx, c, gh.pr, StepKind.MERGE)
-    assert (result.exit, result.waiting, result.reason) == (
-        Exit.PENDING,
-        Waiting.REVIEWER,
-        "1 open conversation item(s)",
-    )
+    assert (result.exit, result.back_to, result.fix_task.id) == (Exit.BACK, StepKind.BUILD, first.fix_task.id)
+    c.step = Step(kind=StepKind.MERGE)
+    c = loop.apply(c, result, NOW)
+    assert sum(t.id == first.fix_task.id for t in c.plan.tasks) == 1
 
 
 def done(stdout):
@@ -393,10 +524,8 @@ def test_gh_reads_every_conversation_page_and_keeps_changes_requested_empty_revi
         node("r2", "", state="APPROVED"),
         node("r3", "x", state="COMMENTED"),
     ]
-    notes = {
-        "pageInfo": {"hasNextPage": False},
-        "nodes": [node("h1", "q"), node("h2", f"ok {MARKER}c1:t:p -->", author=None)],
-    }
+    notes = page([node(f"h{n}", "q") for n in range(100)], "K1")
+    more = page([node("h100", "more"), node("h101", "ok <!-- delivery:c1:t:p -->", author=None)])
     threaded = [{"id": "t1", "path": "a.py", "isResolved": False, "isOutdated": True, "comments": notes}]
     pages = [
         {
@@ -406,10 +535,14 @@ def test_gh_reads_every_conversation_page_and_keeps_changes_requested_empty_revi
         },
         {"comments": page([node("c2", "second")])},
     ]
-    calls = []
+    calls, threads = [], []
 
     def runner(argv, data, _timeout, _cwd):
-        calls.append((argv, json.loads(data)["variables"]))
+        body = json.loads(data)
+        if "ThreadComments" in body["query"]:
+            threads.append(body["variables"])
+            return done({"data": {"node": {"comments": more}}})
+        calls.append((argv, body["variables"]))
         return done({"data": {"repository": {"pullRequest": pages[len(calls) - 1]}}})
 
     items = GhProvider(tmp_path, runner=runner).read_conversation("o/r", 7)
@@ -423,14 +556,11 @@ def test_gh_reads_every_conversation_page_and_keeps_changes_requested_empty_revi
     assert calls[0][0][:4] == ("gh", "api", "--hostname", "github.com")
     assert {k: calls[1][1][k] for k in ("c", "wc", "wr", "wt")} == {"c": "C1", "wc": True, "wr": False, "wt": False}
     t = items[-1]
-    assert (t.author, t.last_id, t.last_by_delivery, t.outdated, t.comments[-1].author) == (
-        "o",
-        "h2",
-        True,
-        True,
-        "ghost",
-    )
-    assert [i.id for i, _ in conversation.open_items(change(), items)] == ["c1", "c2", "r1", "r3"]
+    assert threads == [{"id": "t1", "after": "K1"}]
+    assert (t.author, len(t.comments), t.outdated, t.comments[-1].author) == ("o", 102, True, "ghost")
+    assert (items[2].state, items[3].state) == ("CHANGES_REQUESTED", "COMMENTED")
+    opened = [s.item.id for s in conversation.open_items(change(), items, "delivery")]
+    assert opened == ["c1", "c2", "r1", "r3", "t1"]
 
 
 def test_gh_replies_in_threads_by_graphql_and_quotes_other_items_in_an_issue_comment(tmp_path):

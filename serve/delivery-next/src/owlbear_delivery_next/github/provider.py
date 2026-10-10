@@ -108,9 +108,6 @@ class Rules(_Model):
     strict: bool = False
 
 
-MARKER = "<!-- delivery:"
-
-
 class ThreadComment(_Model):
     """One comment of a review thread."""
 
@@ -122,8 +119,7 @@ class ThreadComment(_Model):
 class ConversationItem(_Model):
     """One issue comment, review body or review thread of a pull request; ``id`` is its node id.
 
-    A thread's ``body`` is its comments in order, each prefixed with its author; ``last_id`` is the latest
-    comment's id (the item's own id for comments and reviews).
+    A thread's ``body`` is its comments in order, each prefixed with its author; ``state`` is a review's state.
     """
 
     id: str
@@ -132,10 +128,9 @@ class ConversationItem(_Model):
     body: str
     url: str = ""
     path: str | None = None
+    state: str = ""
     resolved: bool = False
     outdated: bool = False
-    last_id: str
-    last_by_delivery: bool = False
     comments: tuple[ThreadComment, ...] = ()
 
 
@@ -278,6 +273,10 @@ class Provider(Protocol):
 
     def observe_checks(self, repository: str, number: int, head: str) -> tuple[Check, ...]:
         """Observe check runs and commit statuses at one exact head."""
+        ...
+
+    def viewer(self) -> str:
+        """The login Delivery posts as."""
         ...
 
     def read_conversation(self, repository: str, number: int) -> tuple[ConversationItem, ...]:

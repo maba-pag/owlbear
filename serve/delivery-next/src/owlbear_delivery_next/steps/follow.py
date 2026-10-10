@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -9,7 +10,7 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next import loop, profile
 from owlbear_delivery_next.github.provider import ProviderError, classify_checks
 from owlbear_delivery_next.loop import StepResult
-from owlbear_delivery_next.models import Episode, ErrorKind, Exit, StepKind, Stop, Waiting
+from owlbear_delivery_next.models import Episode, ErrorKind, Exit, Response, StepKind, Stop, Waiting
 from owlbear_delivery_next.steps import check, engine
 from owlbear_delivery_next.steps import conversation as conv
 
@@ -77,68 +78,109 @@ def missing(ctx: Ctx, c: Change, pr: PullRequest, state: CiState, step: StepKind
     return c, StepResult(exit=Exit.STOP, reason=stop.reason, stop=stop)
 
 
-def _in_head(c: Change, pr: PullRequest, commit: str | None) -> bool:
-    """Whether a fix commit is in the PR head."""
-    if not commit or commit == pr.head_sha:
-        return True
-    path = Path(c.names.worktree)
-    engine.fetch(path, pr.head_branch)
-    return engine.contains(path, commit, pr.head_sha)
+def _published(c: Change, pr: PullRequest) -> conv.Published:
+    """Whether a fix commit is an ancestor of the PR head; the head branch is fetched at most once."""
+    path, fetched = Path(c.names.worktree), []
+
+    def check(commit: str) -> bool:
+        if commit == pr.head_sha:
+            return True
+        if not fetched:
+            engine.fetch(path, pr.head_branch)
+            fetched.append(pr.head_branch)
+        return engine.contains(path, commit, pr.head_sha)
+
+    return check
 
 
-def _reply(
-    ctx: Ctx, c: Change, pr: PullRequest, task: Task, items: tuple[ConversationItem, ...]
+def _post(  # noqa: PLR0913 - one reply names the PR, its item, its response and its task
+    ctx: Ctx, c: Change, pr: PullRequest, item: ConversationItem, *, r: Response, task: str
+) -> str:
+    """Post one reply for *task*; the caller looked for an earlier one carrying the same marker first."""
+    body = conv.reply_body(r, pr.head_sha, conv.marker(c.slug, item.id, task))
+    reply_id = ctx.gh.post_reply(ctx.repository, pr.number, item, body)
+    ctx.log(c.slug, "reply", item=item.id, task=task, reply=reply_id)
+    return reply_id
+
+
+def _reply(  # noqa: PLR0913 - one reply needs the PR, the task, its response and the conversation read
+    ctx: Ctx,
+    c: Change,
+    pr: PullRequest,
+    task: Task,
+    r: Response,
+    *,
+    items: tuple[ConversationItem, ...],
+    step: StepKind,
 ) -> tuple[Change, StepResult | None]:
-    """P12/P13: post one handled item's reply once, then resolve its thread unless a person wrote since."""
-    ref, r = task.item, task.response
+    """P12: post one handled item's reply once; a fix not in the PR head is published first, or reopens the item."""
+    ref = task.item
     assert ref  # noqa: S101 - only pending conversation tasks reach here
-    assert r  # noqa: S101
     item = next((i for i in items if i.id == ref.id), None)
     if item is None or r.how == "no-action":
-        return conv.record(c, task, ctx.now), None
-    if r.how == "fixed" and not _in_head(c, pr, r.commit):
-        return c, engine.pending(Waiting.CI, f"the fix for {ref.url or ref.id} to reach the PR head", ctx.poll())
-    mark = conv.marker(c.slug, ref.id, task.id)
-    reply_id = conv.posted(items, ref.id, mark)
-    if reply_id is None:
-        fixed = f"\n\nFixed in {r.commit[:7]}." if r.how == "fixed" and r.commit else ""
-        reply_id = ctx.gh.post_reply(ctx.repository, pr.number, item, f"{r.text}{fixed}\n\n{mark}")
-        ctx.log(c.slug, "reply", item=ref.id, task=task.id, reply=reply_id)
-    if item.kind != "thread":
-        return conv.record(c, task, ctx.now, reply_id), None
-    now = next((i for i in ctx.gh.read_conversation(ctx.repository, pr.number) if i.id == ref.id), item)
-    resolve = not now.resolved and not conv.newer(now, ref.last_id)
-    if resolve:
-        ctx.gh.resolve_thread(ref.id)
-    return conv.record(c, task, ctx.now, reply_id, resolved=resolve or now.resolved), None
+        return conv.record(c, task, r, ctx.now), None
+    if r.how == "fixed" and r.commit and not _published(c, pr)(r.commit):
+        if not engine.contains(Path(c.names.worktree), r.commit):
+            return conv.record(c, task, r, ctx.now), None  # the fix is gone: the item opens again with a new task
+        cause = loop.cause_key(ErrorKind.GATE, step, "unpublished")
+        reason = f"publishing the fix {r.commit[:7]} for {ref.url or ref.id}"
+        return c, StepResult(exit=Exit.BACK, back_to=StepKind.PUBLISH, cause=cause, reason=reason)
+    reply_id = conv.posted(items, ref.id, conv.marker(c.slug, ref.id, task.id), ctx.gh.viewer())
+    return conv.record(c, task, r, ctx.now, reply_id or _post(ctx, c, pr, item, r=r, task=task.id)), None
+
+
+def _settle(  # noqa: PLR0913 - one handled item needs the PR, its state and the conversation read
+    ctx: Ctx, c: Change, pr: PullRequest, s: conv.State, *, items: tuple[ConversationItem, ...], step: StepKind
+) -> tuple[Change, StepResult | None]:
+    """P13: repost a deleted reply (replay first), observe a resolution, retry an unfinished one within budget."""
+    assert s.rec  # noqa: S101 - only handled items reach here
+    rec = next(h for h in c.handled if h.task == s.rec.task)  # an earlier charge copied the Change
+    s = replace(s, rec=rec)
+    if conv.reply_missing(s, items):
+        mark = conv.marker(c.slug, s.item.id, rec.task)
+        r = Response(how=rec.how, text=rec.text, commit=rec.commit)
+        rec.reply_id = conv.posted(items, s.item.id, mark, ctx.gh.viewer()) or _post(
+            ctx, c, pr, s.item, r=r, task=rec.task
+        )
+    if s.item.kind == "thread" and s.item.resolved:
+        rec.resolved = True
+    if not conv.unresolved(s):
+        return c, None
+    cause = loop.cause_key(ErrorKind.GATE, step, f"resolve:{s.item.id}")
+    c, within = loop.charge(c, cause, ctx.now)
+    if within:
+        ctx.gh.resolve_thread(s.item.id)
+        return c, None
+    text = f"Resolving the review thread {s.item.url or s.item.id} did not take effect: resolve it in GitHub"
+    return c, engine.ask(step, text, cause, engine.continue_or_pause(step))
+
+
+def _open(c: Change, s: conv.State, step: StepKind) -> StepResult:
+    """Back to build with the item version's unfinished task, or a new one."""
+    reason = f"responding to {s.item.url or s.item.id}"
+    todo = next((t for t in conv.group(c, s.task) if not t.done), None)
+    if todo is None:
+        todo = engine.task(c, conv.summary(s.item), "pr-feedback", f"{s.item.body}\n\n{s.item.url}", s.task)
+        todo.item = conv.ref(s)
+    return engine.back(ErrorKind.REVIEW, step, s.item.id, reason, todo)
 
 
 def conversation(ctx: Ctx, c: Change, pr: PullRequest, step: StepKind) -> tuple[Change, StepResult | None]:
-    """P3: pending replies and resolutions first, then the first open item goes back to build with its task."""
+    """P3: pending replies first, then handled items' replies and resolutions, then the first open item."""
     items = ctx.gh.read_conversation(ctx.repository, pr.number)
-    for task in conv.pending(c):
-        c, held = _reply(ctx, c, pr, task, items)
+    for task, r in conv.pending(c):
+        c, held = _reply(ctx, c, pr, task, r, items=items, step=step)
         if held is not None:
             return c, held
         items = ctx.gh.read_conversation(ctx.repository, pr.number)
-    for item in items:
-        if conv.unresolved(c, item):
-            ctx.gh.resolve_thread(item.id)
-            rec = conv.latest(c, item.id)
-            if rec is not None:
-                rec.resolved = True
-    known = {t.id for t in c.plan.tasks} if c.plan else set()
-    opened = conv.open_items(c, items)
-    for item, at in opened:
-        tid = conv.task_id(item, at)
-        if tid in known:
-            continue
-        fix = engine.task(c, conv.summary(item), "pr-feedback", f"{item.body}\n\n{item.url}", tid)
-        fix.item = conv.ref(item, at)
-        return c, engine.back(ErrorKind.REVIEW, step, item.id, f"responding to {item.url or item.id}", fix)
-    if opened:
-        return c, engine.pending(Waiting.REVIEWER, f"{len(opened)} open conversation item(s)", ctx.poll())
-    return c, None
+    found = conv.states(c, items, ctx.gh.viewer(), _published(c, pr))
+    for s in found:
+        if s.rec is not None:
+            c, held = _settle(ctx, c, pr, s, items=items, step=step)
+            if held is not None:
+                return c, held
+    opened = next((s for s in found if s.rec is None), None)
+    return c, None if opened is None else _open(c, opened, step)
 
 
 def _reopening(c: Change) -> Question | None:
