@@ -15,7 +15,7 @@ from owlbear_delivery_next.git.remote_git import (
 )
 from owlbear_delivery_next.github.provider import ProviderError
 from owlbear_delivery_next.loop import StepResult, cause_key, review_valid
-from owlbear_delivery_next.models import ErrorKind, Exit, StepKind, Waiting
+from owlbear_delivery_next.models import ErrorKind, Exit, StepKind
 from owlbear_delivery_next.steps import engine, worktree
 
 if TYPE_CHECKING:
@@ -104,16 +104,17 @@ def pull_request(ctx: Ctx, c: Change, head: str) -> PullRequest | None:
 def reviewed(c: Change, path: Path, head: str) -> bool:
     """Whether the last final review passed and still holds for *head* (P5, F3).
 
-    It holds on its own commit, on an identical tree (a rebase that changed nothing), or when every path
-    changed against the target is one the review covered and each covered blob is unchanged.
+    It holds on its own commit, on an identical tree, or when every path that differs between the reviewed
+    tree and *head*'s tree, a target merge's included, is one the review covered with unchanged fingerprints.
     """
     final = next((v for v in reversed(c.reviews) if v.task is None), None)
     if final is None or (final.commit != head and not final.tree):
         return False  # carrying a review to another head needs its engine-recorded tree and coverage
-    if final.commit != head and worktree.tree(path, head) == final.tree:
+    candidate = worktree.tree(path, head)
+    if final.tree == candidate:
         return review_valid(c, final, final.inputs.paths)  # identical content: only the criteria can have moved
-    changed = None if final.commit == head else worktree.observe(path, c.names.target).changed
-    return review_valid(c, final, worktree.covered(path, list(final.inputs.paths)), changed=changed)
+    changed = worktree.between(path, final.tree, candidate) if final.tree else None
+    return review_valid(c, final, worktree.fingerprints(path, list(final.inputs.paths), head), changed=changed)
 
 
 def gate(checks: Sequence[Check], now: datetime) -> StepResult | None:
@@ -122,8 +123,9 @@ def gate(checks: Sequence[Check], now: datetime) -> StepResult | None:
     if first is None:
         return None
     reason = f"{first.name}: {first.detail} · {first.fix}"
-    if first.name == "network":
-        return engine.pending(Waiting.NETWORK, reason, now + timedelta(minutes=1), who="delivery")
+    if first.name == "network":  # an environment episode like any other offline retry: asks only after a day
+        cause = cause_key(ErrorKind.NETWORK, P, "readiness")
+        return StepResult(exit=Exit.RETRY, cause=cause, reason=reason, wake_at=now + timedelta(minutes=1))
     kind = {"github sign-in": ErrorKind.AUTH, "repository": ErrorKind.POLICY}.get(first.name, ErrorKind.TOOLING)
     return engine.ask(P, reason, cause_key(kind, P, first.name), engine.continue_or_pause(P))
 

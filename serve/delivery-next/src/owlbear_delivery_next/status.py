@@ -6,7 +6,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.loop import CONSENT, EPISODE_QUIET, RETRY_LIMIT, episode
+from owlbear_delivery_next.loop import CONSENT, EPISODE_QUIET, QUOTA, RETRY_LIMIT, episode
+from owlbear_delivery_next.mask import redact
 from owlbear_delivery_next.models import ErrorKind, Exit, StepKind, Waiting
 
 if TYPE_CHECKING:
@@ -29,7 +30,7 @@ QUIET: dict[StepKind, timedelta] = {
 }  # a pending wait has no runner, so it is never quiet
 _SAID: dict[str, Callable[[dict[str, Any]], str]] = {
     "tool": lambda e: f"called `{e.get('tool')}`" + ("" if e.get("accepted", True) else " (rejected)"),
-    "denied": lambda e: f"denied `{(e.get('request') or [''])[0][:60]}`",
+    "denied": lambda e: f"denied `{redact(str((e.get('request') or [''])[0]))[:60]}`",
     "session": lambda e: "session resumed" if e.get("resumed") else "session started",
     "step": lambda e: f"{e.get('kind')} ended: {e.get('exit')}",
     "pids": lambda _e: "started a process",
@@ -98,9 +99,15 @@ def unloadable(stop: Stop) -> Status:
     return Status(f"stopped: {stop.reason}", stop.action, stop.actor)
 
 
-def silent(c: Change, activity: Activity, now: datetime) -> timedelta | None:
+def _tool_at(c: Change, tool: dict[str, Any] | None) -> datetime | None:
+    """When the current step's latest tool call (the now line) was written; None for an earlier step's."""
+    shown = datetime.fromisoformat(tool["at"]) if tool and isinstance(tool.get("at"), str) else None
+    return None if shown and c.step.started_at and shown < c.step.started_at else shown
+
+
+def silent(c: Change, activity: Activity, now: datetime, tool: dict[str, Any] | None = None) -> timedelta | None:
     """How long the running step has had no activity, once that exceeds its kind's quiet threshold."""
-    since = max((t for t in (activity.last_event_at, c.step.started_at) if t), default=None)
+    since = max((t for t in (activity.last_event_at, c.step.started_at, _tool_at(c, tool)) if t), default=None)
     if not (activity.runner_alive and since and now - since > QUIET[c.step.kind]):
         return None
     return now - since
@@ -120,9 +127,7 @@ def card(
     """The Change card: the step and its latest tool call or logged event, step time, quiet flag and credits."""
     line, since = stage(c), c.step.started_at
     last = next((e for e in reversed(events) if "at" in e and "event" in e), None)
-    shown = datetime.fromisoformat(tool["at"]) if tool and isinstance(tool.get("at"), str) else None
-    if shown and since and shown < since:
-        shown = None  # a tool call of an earlier step
+    shown = _tool_at(c, tool)
     if shown and tool and (not last or shown > datetime.fromisoformat(last["at"])):
         line += f" · {tool.get('summary') or tool.get('tool')} {_age(now - shown)} ago"
     elif last:
@@ -139,12 +144,14 @@ def card(
     return {
         "now": line,
         "step_time": _age(now - since) if since and not c.finished_at else None,
-        "quiet": quiet or silent(c, activity, now) is not None,
+        "quiet": quiet or silent(c, activity, now, tool) is not None,
         "credits": {"change": round(c.spend.credits, 2), "step": round(step, 2)},
     }
 
 
-def status(c: Change, activity: Activity, now: datetime) -> Status:  # noqa: C901, PLR0911, PLR0912 - D3 rules
+def status(  # noqa: C901, PLR0911, PLR0912 - D3 rules
+    c: Change, activity: Activity, now: datetime, tool: dict[str, Any] | None = None
+) -> Status:
     """Derive the status by the first matching rule; host-down overlays every unfinished Change."""
     s, o, stop = stage(c), c.outcome, activity.start_failure
     if not activity.host_up and not c.finished_at:
@@ -176,8 +183,11 @@ def status(c: Change, activity: Activity, now: datetime) -> Status:  # noqa: C90
             return Status(f"{s} · waiting for you: {o.reason}", action, "you")
         if o.waiting == Waiting.REVIEWER:  # the reason names the reviewers
             return Status(f"{s} · {o.reason} (checked {_age(now - o.at)} ago)", None, o.who)
+        wake = f", next try at {o.wake_at:%H:%M}" if o.wake_at else ""
+        if (o.cause or "").endswith(f":{QUOTA}"):  # never asked about: the quota resets on its own
+            used = f"{c.spend.credits:.2f} credits used"
+            return Status(f"{s} · waiting for Copilot quota to reset{wake} · {used}", None, o.who)
         if failing := _episode(c, now)[0]:
-            wake = f", next try at {o.wake_at:%H:%M}" if o.wake_at else ""
             capacity = (o.cause or "").startswith(f"{ErrorKind.CAPACITY}:")
             used = f" · {c.spend.credits:.2f} credits used" if capacity else ""
             return Status(f"{s} · retrying: {o.reason} · {failing}{wake}{used}", None, o.who)
@@ -191,10 +201,10 @@ def status(c: Change, activity: Activity, now: datetime) -> Status:  # noqa: C90
         if items:
             line += f" · {items} open conversation item{'s' if items > 1 else ''}"
         last = activity.last_event_at
-        if gap := silent(c, activity, now):
+        if gap := silent(c, activity, now, tool):
             return Status(f"{line} · no activity for {_age(gap)}", None, "delivery")
         if o and o.denial:
-            return Status(f"{line} · last denied: {o.denial}", None, "delivery")
+            return Status(f"{line} · last denied: {redact(o.denial)}", None, "delivery")
         return Status(f"{line} · {role} active {_age(now - last) if last else '0 s'} ago", None, "delivery")
     if o and o.exit == Exit.RETRY and o.wake_at and o.wake_at > now and o.cause:
         k = c.budgets.causes[o.cause].count if o.cause in c.budgets.causes else 1

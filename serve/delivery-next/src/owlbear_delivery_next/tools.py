@@ -118,8 +118,11 @@ class ReviewResult(Args):
         description="Each problem that must be fixed; empty for pass",
         examples=[[{"place": "src/greet.ts:4", "problem": "AC-1: English", "fix": "Use Hallo"}]],
     )
-    covered_paths: list[str] = _f(
-        200, "Every repository path you read, including files outside the diff", ["packages/app/src/greet.ts"]
+    covered_paths: list[str] = Field(
+        default_factory=list,
+        max_length=200,
+        description="Paths you read, as reading evidence; for a visual review every screenshot file name",
+        examples=[["packages/app/src/greet.ts"]],
     )
 
 
@@ -417,15 +420,18 @@ def check_question(question: AskQuestion) -> list[str]:
     return []
 
 
-def check_review(review: ReviewResult, tree: Worktree) -> list[str]:
-    """Return field errors for a verdict that does not match its findings or skips a changed path."""
+def check_review(review: ReviewResult, tree: Worktree, *, visual: bool = False) -> list[str]:
+    """Return field errors for a verdict that does not match its findings or, visual, skips a screenshot.
+
+    A code review's coverage is the engine's own diff; its ``covered_paths`` is only logged evidence.
+    """
     errors = []
     if review.verdict == "fix" and not review.findings:
         errors.append("findings: empty - a fix verdict names each problem with place, problem and fix")
     if review.verdict == "pass" and review.findings:
         errors.append("verdict: pass with findings - use fix, or drop findings that need no change")
-    if missing := sorted(set(tree.changed) - set(review.covered_paths)):
-        errors.append(f"covered_paths: missing {_few(missing)} - read every changed path and list it")
+    if visual and (missing := sorted(set(tree.changed) - set(review.covered_paths))):
+        errors.append(f"covered_paths: missing {_few(missing)} - look at every screenshot and list it")
     return errors
 
 
@@ -447,14 +453,21 @@ def check_recipe(recipe: CheckRecipe, tree: Worktree, launch: Sequence[str], roo
 
 
 def check_result(  # noqa: PLR0913, PLR0917 - the result, its worktree and four bounds
-    args: Args, tree: Worktree, checks: Sequence[str], root: Path, scope: Sequence[str] = (), item: str | None = None
+    args: Args,
+    tree: Worktree,
+    checks: Sequence[str],
+    root: Path,
+    scope: Sequence[str] = (),
+    item: str | None = None,
+    *,
+    visual: bool = False,
 ) -> list[str]:
     """Return the field errors of one ``submit_result`` against the worktree the runner observed and the brief scope."""
     match args:
         case BuildResult():
             return check_build(args, tree, checks, item)
         case ReviewResult():
-            return check_review(args, tree)
+            return check_review(args, tree, visual=visual)
         case CheckRecipe():
             return check_recipe(args, tree, checks, root)
         case PlanResult():

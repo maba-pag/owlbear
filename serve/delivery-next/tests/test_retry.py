@@ -99,13 +99,54 @@ def test_identical_check_failures_replan_once_to_split_then_ask():
     assert c.outcome.exit == Exit.ASK
 
 
-def test_fewer_failing_checks_reset_the_count():
+def scored(findings: list[str], satisfied: int = 0, reason: str = "test_a failed") -> StepResult:
+    cause = loop.cause_key(ErrorKind.CHECKS, K.BUILD, "uv run pytest")
+    score = Score(failing=len(findings), satisfied=satisfied, findings=findings)
+    return StepResult(exit=Exit.RETRY, cause=cause, reason=reason, score=score)
+
+
+def test_a_strict_subset_of_the_failures_resets_the_count():
     c = change()
     for _ in range(loop.RETRY_LIMIT):
-        c = loop.apply(c, failing(2), NOW)
-    c = loop.apply(c, failing(1), NOW)
+        c = loop.apply(c, scored(["test_a", "test_b"]), NOW)
+    c = loop.apply(c, scored(["test_a"]), NOW)
     assert (c.outcome.exit, c.step.kind) == (Exit.RETRY, K.BUILD)
     assert c.budgets.causes[c.outcome.cause].count == 1
+
+
+def test_swapping_one_failure_for_another_is_not_progress():
+    c = change()
+    for _ in range(loop.RETRY_LIMIT):
+        c = loop.apply(c, scored(["test_a", "test_b"]), NOW)
+    c = loop.apply(c, scored(["test_a", "test_c"]), NOW)
+    assert (c.outcome.exit, c.step.kind) == (Exit.BACK, K.PLAN)
+
+
+def test_more_criteria_satisfied_without_a_new_failure_is_progress():
+    c = change()
+    for _ in range(loop.RETRY_LIMIT):
+        c = loop.apply(c, scored(["test_a"]), NOW)
+    c = loop.apply(c, scored(["test_a"], satisfied=1), NOW)
+    assert c.budgets.causes[c.outcome.cause].count == 1
+
+
+def test_different_failure_signatures_are_counted_separately():
+    c = change()
+    for _ in range(loop.RETRY_LIMIT):
+        c = loop.apply(c, scored(["test_a"], reason="test_a failed"), NOW)
+        c = loop.apply(c, scored(["test_a"], reason="lint: unused import"), NOW)
+    budget = c.budgets.causes[c.outcome.cause]
+    assert (c.outcome.exit, sorted(budget.counts.values())) == (Exit.RETRY, [loop.RETRY_LIMIT] * 2)
+
+
+def test_quota_is_never_asked_about_even_beyond_a_day():
+    cause = loop.cause_key(ErrorKind.CAPACITY, K.BUILD, loop.QUOTA)
+    c, at = change(), NOW
+    while at < NOW + EPISODE_ASK + timedelta(hours=6):
+        c = loop.apply(c, StepResult(exit=Exit.RETRY, cause=cause, reason="quota exhausted"), at)
+        assert c.outcome.exit == Exit.PENDING
+        at = c.outcome.wake_at
+    assert "waiting for Copilot quota to reset" in status(c, Activity(host_up=True), at).line
 
 
 def test_a_new_commit_or_error_text_with_the_same_failing_check_is_not_progress():

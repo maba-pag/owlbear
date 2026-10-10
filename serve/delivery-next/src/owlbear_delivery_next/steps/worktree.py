@@ -121,13 +121,28 @@ def tree(path: Path, rev: str = "HEAD") -> str:
     return git(path, "rev-parse", f"{rev}^{{tree}}").strip()
 
 
-def covered(path: Path, paths: Sequence[str]) -> dict[str, str]:
-    """Blob ids at HEAD of covered paths, an absent (deleted) path as an empty id."""
-    return dict.fromkeys(paths, "") | fingerprints(path, paths)
+def between(path: Path, old: str, new: str) -> list[str]:
+    """Every path that differs between two trees, both rename ends included, read NUL-separated."""
+    fields = git(path, "diff", "--name-status", "-M", "-z", old, new).split("\0")
+    out, i = [], 0
+    while i < len(fields) and fields[i]:
+        n = 2 if fields[i][0] in "RC" else 1
+        out += fields[i + 1 : i + 1 + n]
+        i += 1 + n
+    return list(dict.fromkeys(out))
 
 
-def fingerprints(path: Path, paths: Sequence[str]) -> dict[str, str]:
-    """Return the object id at HEAD of each existing path, the review input that voids a verdict when it changes."""
-    inside = [p for p in paths[:200] if (path / p).resolve().is_relative_to(path.resolve())]
-    lines = git(path, "ls-tree", "HEAD", "--", *inside).splitlines() if inside else []
-    return {line.split("\t", 1)[1]: line.split()[2] for line in lines}
+def fingerprints(path: Path, paths: Sequence[str], rev: str = "HEAD") -> dict[str, str]:
+    """Return ``<mode> <type> <oid>`` at *rev* of every file at or under each path, an absent path as ``""``.
+
+    The review and check input that voids an answer when content, mode or presence changes (P5).
+    """
+    wanted = list(dict.fromkeys(p.strip("/") for p in paths))
+    inside = [p for p in wanted if p and not Path(p).is_absolute() and ".." not in Path(p).parts]
+    out = git(path, "--literal-pathspecs", "ls-tree", "-r", "-z", "--full-tree", rev, "--", *inside) if inside else ""
+    found: dict[str, str] = {}
+    for entry in filter(None, out.split("\0")):
+        meta, name = entry.split("\t", 1)
+        found[name] = meta
+    absent = {p: "" for p in wanted if p not in found and not any(k.startswith(f"{p}/") for k in found)}
+    return found | absent

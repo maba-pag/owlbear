@@ -137,8 +137,8 @@ def build(
 
 
 REVIEW_FINISH = (
-    "Call `submit_result` once with `verdict`, `findings` and `covered_paths` (every path you read; at least the "
-    "changed paths). If it is rejected, fix what each error names and call it again."
+    "Call `submit_result` once with `verdict` and `findings`; `covered_paths` may list the paths you read. "
+    "Delivery covers the changed paths itself. If it is rejected, fix what each error names and call it again."
 )
 RECIPE = (
     "Verify that it starts and that its local URL answers, then stop everything you started: no process may "

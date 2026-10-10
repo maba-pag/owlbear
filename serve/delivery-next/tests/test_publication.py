@@ -825,16 +825,44 @@ def test_publish_waits_for_the_network_and_asks_for_other_readiness_fixes():
     ok = [SetupCheck("network", ok=True, detail=""), SetupCheck("github cli", ok=True, detail="")]
     assert publish.gate(ok, NOW) is None
     net = publish.gate([SetupCheck("network", ok=False, detail="timed out", fix="Connect")], NOW)
-    assert (net.exit, net.waiting, net.wake_at, net.who) == (
-        Exit.PENDING,
-        Waiting.NETWORK,
-        NOW + timedelta(minutes=1),
-        "delivery",
-    )
+    assert (net.exit, net.cause, net.wake_at) == (Exit.RETRY, "network:publish:readiness", NOW + timedelta(minutes=1))
     fix = "Run `gh auth login --hostname github.com`"
     auth = publish.gate([*ok, SetupCheck("github sign-in", ok=False, detail="expired", fix=fix)], NOW)
     assert (auth.exit, auth.cause, auth.reason.endswith(fix)) == (Exit.ASK, "auth:publish:github sign-in", True)
     assert [o.next for o in auth.question.options] == [StepKind.PUBLISH, "pause"]
+
+
+def test_offline_readiness_is_an_episode_that_asks_only_after_a_day():
+    c, at = change(StepKind.PUBLISH), NOW
+    offline = [SetupCheck("network", ok=False, detail="timed out", fix="Connect")]
+    while at < NOW + loop.EPISODE_ASK:
+        c = loop.apply(c, publish.gate(offline, at), at)
+        assert (c.outcome.exit, c.outcome.waiting) == (Exit.PENDING, Waiting.NETWORK)
+        at = c.outcome.wake_at
+    c = loop.apply(c, publish.gate(offline, at), at)
+    assert c.outcome.exit == Exit.ASK
+
+
+@pytest.mark.parametrize(
+    ("code", "kind"),
+    [
+        (FailureCode.UNAVAILABLE, "network"),
+        (FailureCode.TIMEOUT, "network"),
+        (FailureCode.RATE_LIMITED, "capacity"),
+        (FailureCode.INVALID_RESPONSE, "tooling"),
+    ],
+)
+def test_adapter_failures_share_the_readiness_classification(code, kind):
+    result = engine.failed(change(StepKind.PUBLISH), ProviderError(code, "pr", "boom", retry_safe=True), NOW)
+    assert (result.exit, result.cause) == (Exit.RETRY, f"{kind}:publish:github")
+
+
+def test_an_invalid_provider_response_asks_after_three_of_the_same():
+    c = change(StepKind.PUBLISH)
+    for exits in (Exit.RETRY, Exit.RETRY, Exit.ASK):
+        bad = ProviderError(FailureCode.INVALID_RESPONSE, "pr", "unexpected shape", retry_safe=True)
+        c = loop.apply(c, engine.failed(c, bad, NOW), NOW)
+        assert c.outcome.exit == exits
 
 
 def test_publish_returns_to_the_final_review_unless_head_is_the_final_reviewed_head(clone, tmp_path):

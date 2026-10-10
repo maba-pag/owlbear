@@ -133,6 +133,16 @@ def test_card_shows_the_last_event_step_time_and_credits():
     }
 
 
+def test_a_recent_now_line_of_the_current_step_keeps_the_card_from_turning_quiet():
+    c = running(NOW - timedelta(hours=1))
+    alive = Activity(host_up=True, runner_alive=True, last_event_at=NOW - timedelta(minutes=30))
+    recent = {"tool": "bash", "summary": "ran uv", "at": (NOW - timedelta(minutes=1)).isoformat()}
+    stale = recent | {"at": (NOW - timedelta(hours=2)).isoformat()}
+    assert card(c, alive, [], NOW, recent)["quiet"] is False
+    assert card(c, alive, [], NOW, stale)["quiet"] is True
+    assert card(c, alive, [], NOW)["quiet"] is True
+
+
 @pytest.mark.parametrize(
     ("silent", "quiet"), [(timedelta(minutes=10), False), (timedelta(minutes=10, seconds=1), True)]
 )

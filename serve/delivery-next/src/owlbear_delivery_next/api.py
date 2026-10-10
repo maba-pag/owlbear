@@ -8,6 +8,7 @@ import secrets
 import shlex
 import shutil
 import subprocess
+import threading
 import time
 from datetime import UTC, datetime
 from importlib.resources import files
@@ -123,9 +124,10 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
     except StoreError as exc:
         s = unloadable(exc.stop(now))
         return {"slug": slug, "line": s.line, "action": s.action, "actor": s.actor}
-    s = status(c, act, now)
+    tool = store.now(slug)
+    s = status(c, act, now, tool)
     out = {"slug": slug, "handle": c.handle, "step": c.step.kind, "line": s.line, "action": s.action, "actor": s.actor}
-    out |= card(c, act, store.events(slug), now, store.now(slug))
+    out |= card(c, act, store.events(slug), now, tool)
     out["spend"] = c.spend.model_dump()
     out["pullback"] = c.pullback.model_dump(mode="json") if c.pullback else None
     if q := loop.open_question(c):
@@ -164,7 +166,7 @@ def create_app(  # noqa: C901, PLR0915 - one closure per route
     app = FastAPI(title="OwlBear Delivery", docs_url=None, redoc_url=None, openapi_url=None)
     page = files("owlbear_delivery_next").joinpath("web", "changes.html").read_text(encoding="utf-8")
     expected = f"Bearer {token}".encode()
-    launched = [-LAUNCH_GAP]
+    launched, launching = [-LAUNCH_GAP], threading.Lock()
 
     @app.middleware("http")
     async def local_only(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
@@ -219,9 +221,10 @@ def create_app(  # noqa: C901, PLR0915 - one closure per route
 
     @router.post("/new-change")
     def new_change() -> dict[str, Any]:
-        if (now := time.monotonic()) - launched[0] < LAUNCH_GAP:
-            raise HTTPException(429, "A new Change chat was just opened; wait a few seconds")
-        launched[0] = now
+        with launching:  # FastAPI runs sync routes on a thread pool; check and set as one step
+            if (now := time.monotonic()) - launched[0] < LAUNCH_GAP:
+                raise HTTPException(429, "A new Change chat was just opened; wait a few seconds")
+            launched[0] = now
         return launch() if launch else new_chat(host.repo)
 
     @router.get("/changes/{slug}")

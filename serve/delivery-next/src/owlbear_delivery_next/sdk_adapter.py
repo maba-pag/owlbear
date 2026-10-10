@@ -24,7 +24,8 @@ from copilot.rpc import PermissionDecisionApproveOnce, PermissionDecisionReject,
 from copilot.tools import Tool, ToolInvocation, ToolResult
 
 from owlbear_delivery_next import prompts, tools
-from owlbear_delivery_next.loop import StepResult, cause_key, transient
+from owlbear_delivery_next.loop import QUOTA, StepResult, cause_key, quota, transient
+from owlbear_delivery_next.mask import redact
 from owlbear_delivery_next.models import ErrorKind, Exit, Option, Plan, Question, StepKind, Stop, Task, Waiting
 
 if TYPE_CHECKING:
@@ -47,10 +48,6 @@ PATTERN_FIRST = frozenset({"grep", "egrep", "fgrep", "rg", "sed", "awk"})  # fir
 NULL_PATHS = frozenset({"/dev/null"})
 VALUE_FLAGS = "mFCctSuo"  # short options of git commit and push that take a value
 _REDIRECT = re.compile(r"^\d*[<>]+&?")
-_SECRET = re.compile(
-    r"\b(?:gh[pousr]_|github_pat_)\w+|(?i:bearer)\s+\S+"
-    r"|(?P<key>(?i:\w*(?:token|key|secret|password|passwd|pwd)))(?P<sep>\s*[=:]\s*)\S+"
-)
 NOW_LIMIT = 80  # characters of the now line's summary
 NOW_EVERY = 1.0  # seconds between now-line writes
 type Ending = Literal["result", "ask", "premise", "invalid", "no-result", "deadline", "missing", "unread", "error"]
@@ -284,11 +281,6 @@ class Journal:
     now: Callable[[dict[str, Any]], None] = lambda _e: None  # the latest tool call, overwritten; not activity
 
 
-def redact(text: str) -> str:
-    """Mask tokens, bearer credentials and ``key=value`` secrets."""
-    return _SECRET.sub(lambda m: f"{m['key']}{m['sep']}***" if m["key"] else "***", text)
-
-
 def summary(tool: str, arguments: Any) -> str:  # noqa: ANN401 - the SDK's JSON tool arguments
     """One short, redacted line for a tool call: ``ran <command>`` or ``<tool> <target>``."""
     args = arguments if isinstance(arguments, dict) else {}
@@ -338,6 +330,8 @@ class Run:
     termination: Termination | None = None
     denials: list[str] = field(default_factory=list)
     invalid: int = 0
+    quota: bool = False  # the runtime reported the Copilot quota exhausted
+    quota_reset: datetime | None = None  # when it said the quota resets
 
 
 def missing_cause(kind: StepKind) -> str:
@@ -383,6 +377,8 @@ class _Step:
             self._wake()
         elif kind == "tool.execution_start":
             self.now(getattr(ev.data, "tool_name", "") or "tool", getattr(ev.data, "arguments", None))
+        elif kind in {"session.quota_observation", "session.error"}:
+            _quota(self.run, kind, ev.data)
 
     def now(self, tool: str, arguments: Any) -> None:  # noqa: ANN401 - the SDK's JSON tool arguments
         """Overwrite the now line with this tool call, at most once per ``NOW_EVERY`` seconds."""
@@ -398,8 +394,10 @@ class _Step:
         reason = decide(self.cfg.policy, req)
         if reason is None:
             return PermissionDecisionApproveOnce()
+        reason = redact(reason)
         self.run.denials.append(reason)
-        self.log(event="denied", kind=req.kind, request=[t for t, _ in req.commands] or list(req.paths), reason=reason)
+        request = [redact(t) for t, _ in req.commands] or [redact(str(p)) for p in req.paths]
+        self.log(event="denied", kind=req.kind, request=request, reason=reason)
         return PermissionDecisionReject(feedback=f"Denied: {reason}")
 
     def _check_result(self, args: tools.Args) -> list[str]:
@@ -407,7 +405,10 @@ class _Step:
             tree = self.cfg.observe()
         except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
             return [f"changes: the worktree could not be read ({type(exc).__name__}); try again"]
-        errors = tools.check_result(args, tree, self.cfg.checks, self.cfg.policy.root, self.cfg.scope, self.cfg.item)
+        cfg = self.cfg
+        errors = tools.check_result(
+            args, tree, cfg.checks, cfg.policy.root, cfg.scope, cfg.item, visual=bool(cfg.attachments)
+        )
         self.run.head = None if errors else tree.head
         return errors
 
@@ -416,7 +417,8 @@ class _Step:
         if args is not None:
             errors = tools.check_question(args) if isinstance(args, tools.AskQuestion) else []
             errors += self._check_result(args) if spec is self.cfg.submit else []
-        self.log(event="tool", tool=spec.name, accepted=not errors, errors=errors)
+        read = list(args.covered_paths) if isinstance(args, tools.ReviewResult) else []  # evidence, not coverage
+        self.log(event="tool", tool=spec.name, accepted=not errors, errors=errors, **({"read": read} if read else {}))
         if self.done:
             return ToolResult(text_result_for_llm="The step has already ended. Stop now.", result_type="rejected")
         if errors:
@@ -654,7 +656,22 @@ def to_result(run: Run, kind: StepKind, now: datetime) -> StepResult:
     return result.model_copy(update={"denial": run.denials[-1][:300]}) if run.denials else result
 
 
-def _exit(run: Run, kind: StepKind, now: datetime) -> StepResult:  # noqa: C901, PLR0911 - one case per ending
+def _quota(run: Run, kind: str, data: Any) -> None:  # noqa: ANN401 - SDK event data
+    """Record an exhausted Copilot quota and its reset time from a quota observation or a session error."""
+    if kind == "session.error":
+        text = " ".join(str(getattr(data, f, "") or "") for f in ("error_type", "error_code", "message"))
+        run.quota = run.quota or (transient(text) == ErrorKind.CAPACITY and quota(text))
+        return
+    seen = getattr(data, "observation", None)
+    if getattr(seen, "capacity_state", None) != "exhausted":
+        return
+    run.quota = True
+    ms = getattr(getattr(seen, "budget_metadata", None), "reset_at_epoch_ms", None)
+    if isinstance(ms, int | float) and ms > 0:
+        run.quota_reset = datetime.fromtimestamp(ms / 1000, UTC)
+
+
+def _exit(run: Run, kind: StepKind, now: datetime) -> StepResult:  # noqa: C901, PLR0911, PLR0912 - one case per ending
     """One exit per ending; unverified termination stops whatever the session reported; the host scans after."""
     t = run.termination or Termination(confirmed=False, problems=("termination did not run",))
     if not t.confirmed:
@@ -669,6 +686,11 @@ def _exit(run: Run, kind: StepKind, now: datetime) -> StepResult:  # noqa: C901,
         )
         return StepResult(exit=Exit.STOP, reason=stop.reason, stop=stop)
     p = run.payload
+    if run.quota and run.ending not in {"result", "ask", "premise"}:  # the quota ended it, whatever it reported
+        reason = run.detail or "Copilot quota exhausted"
+        return StepResult(
+            exit=Exit.RETRY, cause=cause_key(ErrorKind.CAPACITY, kind, QUOTA), reason=reason, wake_at=run.quota_reset
+        )
     match run.ending:
         case "result" if isinstance(p, tools.BuildResult):
             return StepResult(exit=Exit.DONE, reason=p.summary[:200])
@@ -703,6 +725,9 @@ def _exit(run: Run, kind: StepKind, now: datetime) -> StepResult:  # noqa: C901,
                 exit=Exit.RETRY, cause=cause_key(ErrorKind.LIVENESS, kind, "transcript"), reason=run.detail
             )
         case "error":
+            if transient(run.detail) == ErrorKind.CAPACITY and quota(run.detail):
+                cause = cause_key(ErrorKind.CAPACITY, kind, QUOTA)
+                return StepResult(exit=Exit.RETRY, cause=cause, reason=run.detail, wake_at=run.quota_reset)
             error = transient(run.detail) or ErrorKind.TOOLING
             return StepResult(exit=Exit.RETRY, cause=cause_key(error, kind, "sdk"), reason=run.detail)
         case _:

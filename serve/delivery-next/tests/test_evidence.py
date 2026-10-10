@@ -3,7 +3,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from owlbear_delivery_next import loop, sdk_adapter
+from owlbear_delivery_next import loop, sdk_adapter, tools
+from owlbear_delivery_next.mask import redact
 from owlbear_delivery_next.models import Brief, Change, Criterion, Inputs, Names, PersonCheck, Review, Step, StepKind
 from owlbear_delivery_next.sdk_adapter import NOW_LIMIT, Journal, summary
 from owlbear_delivery_next.steps import check, publish, worktree
@@ -52,7 +53,7 @@ def reviewed_change(work) -> Change:
     paths = worktree.observe(work, "main").changed
     review = Review(
         commit=head,
-        inputs=Inputs(criteria={"AC-1": 1}, paths=worktree.covered(work, list(paths))),
+        inputs=Inputs(criteria={"AC-1": 1}, paths=worktree.fingerprints(work, list(paths))),
         verdict="pass",
         tree=worktree.tree(work, head),
     )
@@ -91,6 +92,78 @@ def test_the_changed_set_names_both_ends_of_a_rename(work):
     git(work, "mv", "c.txt", "f.txt")
     commit(work, "rename")
     assert set(worktree.diff(work, base)) == {"c.txt", "f.txt"}
+
+
+def test_integrating_a_target_commit_that_adds_a_file_voids_the_final_review(work):
+    c = reviewed_change(work)
+    git(work, "switch", "-q", "-c", "side", "origin/main")
+    (work / "z.txt").write_text("z\n")
+    commit(work, "target adds z")
+    git(work, "switch", "-q", "owlbear/c1")
+    git(work, "merge", "-q", "--no-edit", "side")
+    head = git(work, "rev-parse", "HEAD")
+    assert "z.txt" in worktree.between(work, c.reviews[-1].tree, head)
+    assert not publish.reviewed(c, work, head)
+
+
+def test_a_mode_change_voids_a_fingerprint(work):
+    before = worktree.fingerprints(work, ["a.txt"])
+    (work / "a.txt").chmod(0o755)
+    commit(work, "chmod")
+    after = worktree.fingerprints(work, ["a.txt"])
+    assert before["a.txt"].startswith("100644 blob")
+    assert after["a.txt"].startswith("100755 blob")
+
+
+def test_fingerprints_name_spaces_unicode_absence_and_more_than_200_paths(work):
+    names = ["with space.txt", "ünï cødé.txt", *(f"many/{i}.txt" for i in range(250))]
+    (work / "many").mkdir()
+    for name in names:
+        (work / name).write_text(name)
+    commit(work, "many")
+    prints = worktree.fingerprints(work, [*names, "gone.txt"])
+    assert all(prints[n].startswith("100644 blob ") for n in names)
+    assert (len(prints), prints["gone.txt"]) == (len(names) + 1, "")
+    assert len(worktree.fingerprints(work, ["many"])) == 250
+
+
+def test_a_code_review_over_more_than_200_changed_paths_needs_no_listing(work):
+    for i in range(250):
+        (work / f"n{i}.txt").write_text(str(i))
+    commit(work, "wide")
+    c = reviewed_change(work)
+    assert len(c.reviews[-1].inputs.paths) > 200
+    assert publish.reviewed(c, work, git(work, "rev-parse", "HEAD"))
+    tree = SimpleNamespace(changed=[f"n{i}.txt" for i in range(250)])
+    review = tools.ReviewResult(verdict="pass")
+    assert tools.check_review(review, tree) == []
+    assert tools.check_review(review, tree, visual=True) != []
+
+
+@pytest.mark.parametrize(
+    ("text", "secret"),
+    [
+        pytest.param("Authorization: token abc123def", "abc123def", id="authorization-any-scheme"),
+        pytest.param("git clone https://ada:pa55w0rd@github.com/x", "pa55w0rd", id="url-userinfo"),
+        pytest.param("curl -H 'X-Api-Key: k3yv4lue' --header=\"Cookie: s=c00kie\"", "k3yv4lue", id="header-flag"),
+        pytest.param("GH_TOKEN=unquoted1 x", "unquoted1", id="assignment-unquoted"),
+        pytest.param("DB_PASSWORD='quoted two'", "quoted two", id="assignment-quoted"),
+        pytest.param("echo ghp_abcdefghijklmnop github_pat_11AAbb", "ghp_abcdefghijklmnop", id="github-token"),
+        pytest.param("sig=" + "ab12" * 10, "ab12" * 10, id="hex-blob"),
+        pytest.param("data: " + "QUJD" * 10 + "==", "QUJD" * 10, id="base64-blob"),
+    ],
+)
+def test_redact_masks_each_credential_pattern(text, secret):
+    out = redact(text)
+    assert secret not in out
+    assert "***" in out
+
+
+def test_redact_keeps_the_host_of_a_url_with_userinfo_and_ordinary_text():
+    assert redact("https://ada:pw@github.com/x") == "https://***@github.com/x"
+    assert redact("uv run pytest -q tests/a.py") == "uv run pytest -q tests/a.py"
+    assert "github_pat_11AAbb" not in redact("github_pat_11AAbb")
+    assert "c00kie" not in redact("curl --header='Cookie: s=c00kie'")
 
 
 @pytest.mark.parametrize(

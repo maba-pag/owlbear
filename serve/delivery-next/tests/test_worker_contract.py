@@ -264,6 +264,19 @@ def test_deadline_retries_unless_termination_is_unverified_and_carries_the_last_
     )
 
 
+def test_an_exhausted_quota_observation_maps_its_reset_to_wake_at() -> None:
+    run = Run("s1", ending="error", detail="request failed", termination=Termination(confirmed=True))
+    budget = SimpleNamespace(reset_at_epoch_ms=int(datetime(2026, 10, 10, 15, tzinfo=UTC).timestamp() * 1000))
+    seen = SimpleNamespace(observation=SimpleNamespace(capacity_state="exhausted", budget_metadata=budget))
+    sdk_adapter._quota(run, "session.quota_observation", seen)  # noqa: SLF001 - the SDK event mapping
+    r = to_result(run, StepKind.BUILD, NOW)
+    assert (r.exit, r.cause, r.wake_at) == (Exit.RETRY, "capacity:build:quota", datetime(2026, 10, 10, 15, tzinfo=UTC))
+    error = SimpleNamespace(error_type="rate_limit", error_code="quota_exceeded", message="premium requests used up")
+    other = Run("s2", ending="error", termination=Termination(confirmed=True))
+    sdk_adapter._quota(other, "session.error", error)  # noqa: SLF001 - the SDK event mapping
+    assert (other.quota, to_result(other, StepKind.BUILD, NOW).cause) == (True, "capacity:build:quota")
+
+
 def test_termination_is_confirmed_only_when_every_recorded_pid_is_observed_gone() -> None:
     states = {1: False, 2: False}
     assert verdict({1: 10.0, 2: None}, lambda pid, _: states[pid]).confirmed

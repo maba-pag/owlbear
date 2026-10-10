@@ -29,17 +29,17 @@ def findings(review: tools.ReviewResult, limit: int = 4000) -> str:
 def recorded(change: Change, task: Task | None, run: Run, path: Path, result: StepResult) -> StepResult:
     """Attach the review record and, for ``fix``, the repair task.
 
-    The covered paths are the engine's own diff of the reviewed range (both rename ends) plus those the
-    reviewer listed; the submit check already refused a review that missed one. The record binds their
-    blob ids and the head's tree, so a later head keeps the review only with identical covered content.
+    The covered paths are the engine's own diff of the reviewed range (both rename ends) and nothing the
+    reviewer listed. The record binds their git fingerprints and the head's tree, so a later head keeps the
+    review only with identical covered content.
     """
     p = run.payload
     if not (isinstance(p, tools.ReviewResult) and run.head):
         return result
     criteria = {c.id: c.version for c in change.brief.criteria}
     since = task.base if task and change.step.task else None
-    covered = [*worktree.observe(path, change.names.target, since).changed, *p.covered_paths]
-    inputs = Inputs(criteria=criteria, paths=worktree.covered(path, list(dict.fromkeys(covered))))
+    covered = worktree.observe(path, change.names.target, since).changed
+    inputs = Inputs(criteria=criteria, paths=worktree.fingerprints(path, covered, run.head))
     tree = worktree.tree(path, run.head)
     review = Review(task=change.step.task, commit=run.head, inputs=inputs, verdict=p.verdict, tree=tree)
     if p.verdict == "pass":

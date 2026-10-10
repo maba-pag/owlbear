@@ -318,6 +318,7 @@ class Budget(Record):
     task: str | None = None
     at: datetime | None = None
     signature: str = ""  # the last failure's stable signature
+    counts: dict[str, int] = Field(default_factory=dict)  # work failures per normalised signature
     progress: Score | None = None  # the best score of the current streak
     alternative: bool = False  # the one different approach was tried for this cause
     since: datetime | None = None  # start of an environment episode

@@ -64,10 +64,12 @@ PAUSE_CAP = timedelta(minutes=30)
 EPISODE_QUIET = timedelta(hours=1)
 EPISODE_ASK = timedelta(hours=24)
 TREE = ":tree"  # the fingerprint key of a check without declared paths
+QUOTA = "quota"  # the cause subject of an exhausted Copilot quota: waited out, never asked about
+_QUOTA = re.compile(r"quota|premium requests?|credits", re.IGNORECASE)
 _CAPACITY = re.compile(r"\b429\b|rate.?limit|capacity|overloaded|quota|credits", re.IGNORECASE)
 _NETWORK = re.compile(
     r"\b(?:status|http|code|error)\W{0,3}5\d\d\b|\b5\d\d (?:internal|bad gateway|service unavailable|gateway)"
-    r"|timed? ?out|timeout|connection|unreachable|temporar|runtime start|network",
+    r"|timed? ?out|timeout|connection|unreachable|temporar|runtime start|network|could not resolve",
     re.IGNORECASE,
 )
 _NOISE = (
@@ -140,6 +142,11 @@ def transient(text: str) -> ErrorKind | None:
     if _CAPACITY.search(text):
         return ErrorKind.CAPACITY
     return ErrorKind.NETWORK if _NETWORK.search(text) else None
+
+
+def quota(text: str) -> bool:
+    """Whether a capacity failure text is the Copilot quota, not a provider rate limit."""
+    return bool(_QUOTA.search(text))
 
 
 def _kind(cause: str | None) -> str:
@@ -634,10 +641,10 @@ def _round_key(c: Change) -> str:
 
 
 def _progress(c: Change, cause: str, score: Score | None) -> bool:
-    """Record *score* against the streak's best; True when it is strictly better.
+    """Record *score* against the streak's best; True when it is progress, which then becomes the best.
 
-    Better is fewer failing, more satisfied, or a previous finding resolved without more failing.
-    The best only improves, so alternating scores are not progress.
+    Progress is a strict subset of the best's failures, or more criteria satisfied with no new failure.
+    Swapping one failure for another is not progress, and the best moves only on progress.
     """
     if score is None:
         return False
@@ -646,49 +653,53 @@ def _progress(c: Change, cause: str, score: Score | None) -> bool:
     if best is None:
         budget.progress = score
         return False
-    resolved = bool(set(best.findings) - set(score.findings)) and score.failing <= best.failing
-    better = score.failing < best.failing or score.satisfied > best.satisfied or resolved
-    budget.progress = Score(
-        failing=min(score.failing, best.failing),
-        satisfied=max(score.satisfied, best.satisfied),
-        findings=sorted(set(best.findings) & set(score.findings)),
-    )
+    now, was = set(score.findings), set(best.findings)
+    better = now < was or (now <= was and score.satisfied > best.satisfied)
+    if better:
+        budget.progress = score
     return better
 
 
-def _count(c: Change, cause: str, now: datetime, score: Score | None = None) -> int:
-    """Count one identical failure of *cause*; a premise change or progress starts the count again."""
+def _count(c: Change, cause: str, now: datetime, score: Score | None = None, reason: str = "") -> int:
+    """Count one failure of *cause* under its normalised signature; a premise change or progress resets."""
     budget = c.budgets.causes.get(cause)
     if budget is None or _premise(c, cause, budget.task) not in {None, budget.premise}:
         budget = Budget(alternative=budget.alternative if budget else False)
         c.budgets.causes[cause] = budget
-    count = 0 if _progress(c, cause, score) else budget.count
+    sig = signature(_kind(cause), str(c.step.kind), reason)
+    counts = {} if _progress(c, cause, score) else dict(budget.counts)
+    counts[sig] = counts.get(sig, 0) + 1
     task = c.step.task
     premise = _premise(c, cause, task) or budget.premise
-    update = {"count": count + 1, "premise": premise, "task": task, "at": now}
+    update = {"count": counts[sig], "counts": counts, "signature": sig, "premise": premise, "task": task, "at": now}
     c.budgets.causes[cause] = budget.model_copy(update=update)
-    return count + 1
+    return counts[sig]
 
 
 def _environment(c: Change, r: StepResult, now: datetime) -> None:
-    """Wait out a network or capacity failure with growing pauses; ask only after a day of the same failure."""
+    """Wait out a network or capacity failure with growing pauses; ask only after a day of the same failure.
+
+    An exhausted Copilot quota is never asked about: it waits for its reset time, else the capped pause.
+    """
     cause, kind = r.cause or "", _kind(r.cause)
-    sig = signature(kind, str(c.step.kind), r.reason)
+    quota = cause.endswith(f":{QUOTA}")
+    sig = signature(kind, str(c.step.kind), "quota" if quota else r.reason)
     b = c.budgets.causes.get(cause)
     if b is None or b.since is None or b.signature != sig:
         b = Budget(signature=sig, since=now)
     b = b.model_copy(update={"attempts": b.attempts + 1, "at": now})
     c.budgets.causes[cause] = b
-    if now - (b.since or now) >= EPISODE_ASK:
+    if not quota and now - (b.since or now) >= EPISODE_ASK:
         text = f"{kind} keeps failing for {c.step.kind} since {b.since:%Y-%m-%d %H:%M}; last error: {r.reason}"
         _ask(c, Question(step=c.step.kind, text=text, options=_resolve_or_pause(), cause=cause), now)
         return
-    if kind == ErrorKind.CAPACITY and r.wake_at:
+    if kind == ErrorKind.CAPACITY and r.wake_at and r.wake_at > now:
         wake = r.wake_at  # a quota or rate limit resets at its own time
     else:
         base = r.wake_at - now if r.wake_at and r.wake_at > now else PAUSE
         wake = now + min(base * 2 ** min(b.attempts - 1, 10), PAUSE_CAP)
-    c.outcome = Outcome(exit=Exit.PENDING, cause=cause, reason=r.reason, waiting=Waiting.NETWORK, wake_at=wake, at=now)
+    reason = "waiting for Copilot quota to reset" if quota else r.reason
+    c.outcome = Outcome(exit=Exit.PENDING, cause=cause, reason=reason, waiting=Waiting.NETWORK, wake_at=wake, at=now)
 
 
 def _defect(c: Change, r: StepResult, now: datetime) -> None:
@@ -807,7 +818,7 @@ def _retry(c: Change, r: StepResult, now: datetime) -> None:
         _defect(c, r, now)
         return
     limit = FLAKE_LIMIT if s.kind == StepKind.FOLLOW else RETRY_LIMIT
-    if _count(c, r.cause, now, r.score) > limit:
+    if _count(c, r.cause, now, r.score, r.reason) > limit:
         _exhausted(c, r, now)
     else:
         s.attempt += 1
@@ -822,7 +833,7 @@ def _back(c: Change, r: StepResult, now: datetime) -> None:
     if r.cause is None:
         msg = f"{s.kind} back needs a cause"
         raise ValueError(msg)
-    if _count(c, r.cause, now, r.score) > RETRY_LIMIT:
+    if _count(c, r.cause, now, r.score, r.reason) > RETRY_LIMIT:
         _exhausted(c, r, now)
         return
     if target == StepKind.PLAN:

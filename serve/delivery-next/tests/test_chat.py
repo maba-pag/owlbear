@@ -1,5 +1,9 @@
+import contextlib
 import json
 import subprocess
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
@@ -241,6 +245,34 @@ def test_a_tracked_file_is_left_untouched_with_the_manual_alternative(repo):
     assert ".mcp.json" not in (repo / ".git" / "info" / "exclude").read_text()
 
 
+def test_an_untracked_link_to_a_tracked_file_is_refused_and_its_target_untouched(repo, tmp_path):
+    (repo / "real.json").write_text("{}\n")
+    subprocess.run(["git", "add", "real.json"], cwd=repo, check=True)  # noqa: S607
+    (repo / ".mcp.json").symlink_to("real.json")
+    said = setup.consent(repo, repo / ".mcp.json", lambda d: d | {"a": 1}, "Write?", lambda _q: "y", yes=True)
+    assert said.startswith("not written")
+    assert "symbolic link" in said
+    assert (repo / "real.json").read_text() == "{}\n"
+    (tmp_path / "elsewhere").mkdir()
+    (repo / ".vscode").symlink_to(tmp_path / "elsewhere")
+    linked = setup.consent(repo, repo / ".vscode" / "tasks.json", lambda d: d, "Write?", lambda _q: "y", yes=True)
+    assert "symbolic link" in linked
+    assert not (tmp_path / "elsewhere" / "tasks.json").exists()
+
+
+def test_a_file_tracked_while_the_owner_answers_is_not_written(repo):
+    path = repo / ".mcp.json"
+    path.write_text("{}\n")
+
+    def answer(_q):
+        subprocess.run(["git", "add", ".mcp.json"], cwd=repo, check=True)  # noqa: S607
+        return "y"
+
+    said = setup.consent(repo, path, lambda d: d | {"a": 1}, "Write?", answer, yes=False)
+    assert (said.startswith("not written"), "tracked" in said) == (True, True)
+    assert path.read_text() == "{}\n"
+
+
 class Popen:
     def __init__(self, fail=None):
         self.calls, self.fail = [], fail
@@ -279,6 +311,23 @@ def test_new_change_needs_the_token_and_launches_once_per_five_seconds(tmp_path)
     assert c.post("/api/next/new-change").json() == {"started": True}
     assert c.post("/api/next/new-change").status_code == 429
     assert launches == [1]
+
+
+def test_two_concurrent_new_change_calls_launch_once(tmp_path, monkeypatch):
+    meet = threading.Barrier(2)
+
+    def monotonic():
+        with contextlib.suppress(threading.BrokenBarrierError):  # both meet here only without the lock
+            meet.wait(timeout=0.3)
+        return time.monotonic()
+
+    monkeypatch.setattr(api, "time", SimpleNamespace(monotonic=monotonic))
+    launches = []
+    app = api.create_app(Store(tmp_path), "t", Host(), launch=lambda: launches.append(1) or {"started": True})
+    c = TestClient(app, base_url="http://127.0.0.1", headers={"authorization": "Bearer t"})
+    with ThreadPoolExecutor(2) as pool:
+        codes = sorted(pool.map(lambda _i: c.post("/api/next/new-change").status_code, range(2)))
+    assert (codes, launches) == ([200, 429], [1])
 
 
 def test_yes_confirms_the_profile_but_never_an_unknown_entry():

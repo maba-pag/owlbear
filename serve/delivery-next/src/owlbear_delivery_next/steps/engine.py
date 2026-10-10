@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Literal
 
 from owlbear_delivery_next import loop, profile
-from owlbear_delivery_next.git.remote_git import RemoteGitError, RemoteGitFailed, run_remote_git
+from owlbear_delivery_next.git.remote_git import RemoteGitError, RemoteGitFailed, RemoteGitTimeout, run_remote_git
 from owlbear_delivery_next.github.provider import FailureCode, ProviderError
 from owlbear_delivery_next.loop import StepResult
 from owlbear_delivery_next.models import ErrorKind, Exit, Option, Profile, Question, StepKind, Stop, Task, Waiting
@@ -147,7 +147,7 @@ def rules_changed(ctx: Ctx, c: Change) -> tuple[StepResult | None, Rules]:
 
 
 def failed(c: Change, exc: Exception, now: datetime) -> StepResult:
-    """Map provider and remote Git failures: sign-in asks with the command; the rest retry later."""
+    """Map provider and remote Git failures: sign-in asks with the command; the rest retry as classified."""
     kind = c.step.kind
     if isinstance(exc, ProviderError) and exc.code == FailureCode.AUTHENTICATION_REQUIRED:
         text = f"GitHub refused the credential ({exc}): run `gh auth login` (or `gh auth refresh`), then continue"
@@ -155,8 +155,22 @@ def failed(c: Change, exc: Exception, now: datetime) -> StepResult:
     if isinstance(exc, ProviderError) and exc.code == FailureCode.CONFLICT and not exc.retry_safe:
         stop = Stop(kind=ErrorKind.GATE, reason=str(exc), action="Resolve it in GitHub", resume="GitHub agrees", at=now)
         return StepResult(exit=Exit.STOP, reason=str(exc), stop=stop)
-    cause = loop.cause_key(ErrorKind.NETWORK, kind, "github" if isinstance(exc, ProviderError) else "git")
+    cause = loop.cause_key(classify(exc), kind, "github" if isinstance(exc, ProviderError) else "git")
     return StepResult(exit=Exit.RETRY, cause=cause, reason=str(exc)[:300], wake_at=now + timedelta(minutes=1))
+
+
+def classify(exc: Exception) -> ErrorKind:
+    """A typed transport failure is the environment's episode; any other provider or Git failure is a defect."""
+    if isinstance(exc, ProviderError):
+        if exc.code == FailureCode.RATE_LIMITED:
+            return ErrorKind.CAPACITY
+        return ErrorKind.NETWORK if exc.code in _TRANSPORT else ErrorKind.TOOLING
+    if isinstance(exc, RemoteGitTimeout) or getattr(exc, "timed_out", False):
+        return ErrorKind.NETWORK
+    return loop.transient(str(exc)) or ErrorKind.TOOLING
+
+
+_TRANSPORT = frozenset({FailureCode.UNAVAILABLE, FailureCode.TIMEOUT, FailureCode.RESPONSE_UNKNOWN})
 
 
 def run(step: Step, ctx: Ctx, c: Change) -> tuple[Change, StepResult]:
