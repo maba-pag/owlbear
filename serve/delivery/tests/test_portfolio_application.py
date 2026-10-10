@@ -8601,6 +8601,87 @@ def test_finalizer_attention_allows_only_passive_change_intents(tmp_path: Path) 
     assert FinalizationReportStore(state_root, "change-a").read().reports[0] == report
 
 
+def _settled_finalizer_attention(
+    tmp_path: Path,
+) -> tuple[PortfolioApplication, PortfolioCoordinator, Path, ChangeFinalizationAttempt]:
+    application, _runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
+    acquired = application.acquire_change_action(_continuation_request(application))
+    assert acquired.finalization is not None
+    attempt = acquired.finalization.attempt
+    report = application.report_finalization_failure(
+        _failure_request(application, attempt_key=attempt.writer.attempt_id)
+    )
+    assert isinstance(report, FinalizationReport)
+    assert isinstance(
+        application.settle_finalizer_invocation(_finalizer_settlement(application, attempt, report)),
+        FinalizerSettlementReceipt,
+    )
+    assert coordinator.show("change-a").writer.kind == "finalization-attention"
+    return application, coordinator, state_root, attempt
+
+
+def test_paused_revision_releases_settled_finalizer_attention(tmp_path: Path) -> None:
+    application, coordinator, state_root, attempt = _settled_finalizer_attention(tmp_path)
+    current = application.read_design_session("change-a")
+    _change_intent(application, "change-a", DeliveryChangeIntentKind.DEFER, reason="Revise after review findings")
+
+    revised = application.revise_design_session(
+        "change-a", current.package_id, b"revised intent\n", b"revised design\n"
+    )
+
+    assert revised.intent_bytes == b"revised intent\n"
+    released = coordinator.show("change-a")
+    assert released.writer is None
+    assert released.finalization_attention is None
+    assert released.finalization_attempt is not None
+    assert released.finalization_attempt.writer == attempt.writer
+    assert (
+        state_root / application._finalizer_settlement_receipt_path("change-a", attempt.writer.attempt_id)
+    ).is_file()
+
+
+def test_unpaused_revision_keeps_settled_finalizer_attention(tmp_path: Path) -> None:
+    application, coordinator, _state_root, _attempt = _settled_finalizer_attention(tmp_path)
+    current = application.read_design_session("change-a")
+    retained = coordinator.show("change-a")
+
+    with pytest.raises(DeliveryRevisionError, match="change-not-paused"):
+        application.revise_design_session("change-a", current.package_id, b"revised intent\n", b"revised design\n")
+
+    assert coordinator.show("change-a") == retained
+    assert application.read_design_session("change-a") == current
+
+
+def test_finalizer_attention_release_refuses_a_frontier_changed_after_its_guard(tmp_path: Path) -> None:
+    application, coordinator, state_root, _attempt = _settled_finalizer_attention(tmp_path)
+    paused_frontier = (state_root / "changes" / "change-a" / "frontier.json").read_bytes()
+    _change_intent(application, "change-a", DeliveryChangeIntentKind.DEFER, reason="Revise after review findings")
+    retained = coordinator.show("change-a")
+    assert retained.finalization_attention is not None
+
+    with (
+        coordinator.publication_lock("change-a") as lock,
+        pytest.raises(CoordinationConflictError, match="exact clean, settled Finalizer attention"),
+    ):
+        coordinator.release_finalization_attention("change-a", retained.finalization_attention, paused_frontier, lock)
+
+    assert coordinator.show("change-a") == retained
+
+
+def test_revision_keeps_finalizer_attention_without_its_settlement_receipt(tmp_path: Path) -> None:
+    application, coordinator, state_root, attempt = _settled_finalizer_attention(tmp_path)
+    current = application.read_design_session("change-a")
+    _change_intent(application, "change-a", DeliveryChangeIntentKind.DEFER, reason="Revise after review findings")
+    (state_root / application._finalizer_settlement_receipt_path("change-a", attempt.writer.attempt_id)).unlink()
+    retained = coordinator.show("change-a")
+
+    with pytest.raises(DeliveryRevisionError, match="custody-retained"):
+        application.revise_design_session("change-a", current.package_id, b"revised intent\n", b"revised design\n")
+
+    assert coordinator.show("change-a") == retained
+    assert application.read_design_session("change-a") == current
+
+
 @pytest.mark.parametrize(
     ("damage", "expected_reason"),
     [

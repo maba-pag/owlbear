@@ -202,6 +202,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
     from pathlib import Path
 
+    from owlbear_delivery.change_workspace import ChangeCoordination
     from owlbear_delivery.completed_history import (
         CompletedChangePage,
         CompletedChangeRecord,
@@ -950,13 +951,14 @@ class PortfolioApplication(
         self._reconcile_runtimes()
         runtime = self._runtimes.get(change_id)
         if runtime is not None and self._require_revision_allowed(
-            change_id, runtime, activation=False, allow_design_return=True
+            change_id, runtime, activation=False, allow_design_return=True, allow_finalization_attention=True
         ):
             try:
                 runtime.release_design_return()
             except DesignReturnWorkspaceError as exc:
                 raise DeliveryRevisionError(exc.reason, str(exc)) from exc
         if runtime is not None:
+            self._release_revision_finalization_attention(change_id, runtime)
             self._require_revision_allowed(change_id, runtime, activation=False)
             # Package replacement clears its authority, after which a pending state publication can never publish.
             self._replay_pending_state_publications(change_id)
@@ -968,17 +970,46 @@ class PortfolioApplication(
                 raise DeliveryRevisionError(*refusal)
         return self._package_store.revise(change_id, expected_package_id, intent_bytes, design_bytes)
 
+    def _settled_revision_attention(self, change_id: str, coordination: ChangeCoordination) -> bool:
+        """Return whether the only Finalizer custody is clean attention backed by its exact settlement receipt."""
+        attention = coordination.finalization_attention
+        if attention is None or attention.workspace_paths or coordination.dirty_worktree_quarantine is not None:
+            return False
+        try:
+            receipt = self._read_finalizer_settlement_receipt(change_id, attention.attempt_id)
+        except OSError, RuntimeError, ValueError:
+            return False
+        return self._finalizer_attention_matches_receipt(coordination, receipt)
+
+    def _release_revision_finalization_attention(self, change_id: str, runtime: DeliveryRuntime) -> None:
+        """Release settled Finalizer attention for a paused revision; the revised contract supersedes its attempt."""
+        with self._coordinator.publication_lock(change_id) as lock:
+            coordination = self._coordinator.show(change_id)
+            attention = coordination.finalization_attention
+            if attention is None or not self._settled_revision_attention(change_id, coordination):
+                return
+            paused_frontier = runtime.frontier_bytes()
+            self._require_revision_allowed(change_id, runtime, activation=False, allow_finalization_attention=True)
+            self._coordinator.release_finalization_attention(change_id, attention, paused_frontier, lock)
+
     def _require_revision_allowed(
-        self, change_id: str, runtime: DeliveryRuntime, *, activation: bool, allow_design_return: bool = False
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+        *,
+        activation: bool,
+        allow_design_return: bool = False,
+        allow_finalization_attention: bool = False,
     ) -> bool:
         """Refuse a requirement revision unless the admitted Change is paused, quiescent and nonterminal (I1).
 
         With ``allow_design_return`` a retained Design-route or return-limit handoff is accepted; returns whether one
-        is retained.
+        is retained. With ``allow_finalization_attention`` clean, settled Finalizer attention is accepted.
         """
         frontier = parse_delivery_frontier(runtime.frontier_bytes())[0]
         coordination = self._coordinator.show(change_id)
         action = coordination.continuation_action
+        settled_attention = allow_finalization_attention and self._settled_revision_attention(change_id, coordination)
         design_return = allow_design_return and any(
             binding.builder_handoff_context is not None
             and (binding.builder_handoff_context.route == "same-outcome-design" or is_builder_return_limit(binding))
@@ -1007,7 +1038,7 @@ class PortfolioApplication(
                 not design_return
                 and (
                     any(binding.builder_handoff_context is not None for binding in frontier.bindings)
-                    or coordination.writer is not None
+                    or (coordination.writer is not None and not settled_attention)
                     or coordination.builder_handoff is not None
                 )
             )

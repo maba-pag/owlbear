@@ -2017,6 +2017,8 @@ _COORDINATOR_PAUSE_CLASSES: dict[str, frozenset[str]] = {
         }
     ),
     "pause-policy": frozenset({"record_pause_request", "clear_pause_request"}),
+    # Reached only from revise_design_session behind the paused-Change revision gate.
+    "application-gated": frozenset({"release_finalization_attention"}),
     "token": frozenset({"drain_authority", "drain_permits", "current_drain_authority", "continuation_execution"}),
     "lock": frozenset({"acquisition_lock", "publication_lock", "recovery_lock"}),
     "read": frozenset(
