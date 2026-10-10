@@ -118,6 +118,9 @@ async function showDetail() {
   const parts = [el("h2", d.slug), el("p", d.line), el("p", d.brief.outcome, { class: "muted" })];
   if (d.question) parts.push(questionForm(d.question));
   if (d.merge) parts.push(mergeForm(d.merge));
+  const pause = el("button", d.paused ? "Resume" : "Pause", { type: "button" });
+  pause.onclick = () => send("/intent", { intent: d.paused ? "resume" : "pause" });
+  parts.push(pause);
   for (const check of d.checks.filter((c) => c.waiting)) parts.push(checkForm(check));
   if (d.step === "shape" && d.brief.approved !== d.brief.version) {
     const approve = el("button", `Approve brief v${d.brief.version}`, { type: "button" });

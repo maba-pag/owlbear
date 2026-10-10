@@ -6,14 +6,14 @@ import re
 import secrets
 from datetime import UTC, datetime
 from importlib.resources import files
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next import loop
-from owlbear_delivery_next.models import AnswerItem, BriefApproval, CheckResult, ConsentItem, Exit, Waiting
+from owlbear_delivery_next.models import AnswerItem, BriefApproval, CheckResult, ConsentItem, Exit, IntentItem, Waiting
 from owlbear_delivery_next.status import status, unloadable
 from owlbear_delivery_next.steps import check
 from owlbear_delivery_next.store import StoreError
@@ -63,6 +63,13 @@ class ConsentBody(Body):
     """Consent to merge one exact head; void once the PR head differs."""
 
     head: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+
+class IntentBody(Body):
+    """Pause, resume or abandon the Change."""
+
+    intent: Literal["pause", "resume", "abandon"]
+    text: str = Field(default="", max_length=500)
 
 
 def offer(c: Change, events: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -149,6 +156,7 @@ def create_app(store: Store, token: str, host: Host) -> FastAPI:  # noqa: C901, 
             "question": q.model_dump(mode="json", include={"id", "text", "options"}) if q else None,
             "checks": checks,
             "pr": c.names.pr,
+            "paused": c.intent.paused_at is not None,
             "merge": merge,
             "consent": c.consent.model_dump(mode="json") if c.consent else None,
             "activity": events[-20:],
@@ -189,6 +197,11 @@ def create_app(store: Store, token: str, host: Host) -> FastAPI:  # noqa: C901, 
             shown = merge["head"] if merge else "none"
             raise HTTPException(409, f"head {body.head[:7]} is not the head waiting for consent ({shown[:7]})")
         return put(slug, ConsentItem(at=datetime.now(UTC), head=body.head, delta=merge.get("delta") or ""))
+
+    @router.post("/changes/{slug}/intent")
+    def intent(slug: str, body: IntentBody) -> dict[str, str]:
+        read(slug)
+        return put(slug, IntentItem(at=datetime.now(UTC), intent=body.intent, text=body.text))
 
     app.include_router(router)
     return app
