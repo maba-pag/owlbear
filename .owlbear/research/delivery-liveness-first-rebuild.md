@@ -318,6 +318,21 @@ sandbox consumer repository, proven by demonstration with tests only per P8 (M4)
 real consumer project and expect fixes, not rework (M5), and delete the old engine (M6). Integrate
 the platform migration rather than sequencing it (S3).
 
+**Status, 2026-10-10 morning.**
+
+| Milestone | State | Where |
+| --- | --- | --- |
+| M1 | Done: ownership map, route comparison, live platform probe | L14 |
+| M2 | Charter drafted and challenged; awaits approval | [charter](delivery-next-charter.md) |
+| M3 | Journey and catalogue, status and exits, architecture, cutover: drafted, challenged three times, corrected; awaits approval | L14, M3 row |
+| M4 | Prototype on branch `next/m4-slice1`, PR #449, not merged: the whole journey ran in the sandbox, from a chat-shaped brief to a merged PR, with brief approval and merge consent as the only touchpoints; twelve common failures were triggered by hand and each ended in its designed exit and continued; every failure found was fixed locally (P9). About 7,400 source lines | `serve/delivery-next/DEMO-slice1.md` on the branch |
+
+Still unproven, needed before M5: models and cost on the employer seat (the probe used a free
+account); merge under branch protection and a merge queue (the free private sandbox cannot be
+protected); the folder-open start, skill loading and workspace trust inside VS Code; the Changes
+page used in a browser. Merging PR #449 also needs the main-branch projection decided: the package is
+excluded from the consumer sync, but `uv.lock` on `dev` would list it.
+
 **Confidence:** high that ordinary failures nobody designed for, together with an inward-facing
 design (RC6), explain the observed pattern; every 2026-10-09 incident was ordinary. Medium on the
 relative weight of RC1–RC5, because self-use data is thin and is deliberately not refined further.
