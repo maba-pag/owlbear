@@ -299,7 +299,9 @@ def plan(change: Change, profile: Profile, worktree: Path, others: Mapping[str, 
     return "\n".join([*lines, "", "## Finish", PLAN_FINISH])
 
 
-def plan_review(change: Change, candidate: Plan, worktree: Path, others: Mapping[str, Sequence[str]]) -> str:
+def plan_review(
+    change: Change, candidate: Plan, profile: Profile, worktree: Path, others: Mapping[str, Sequence[str]]
+) -> str:
     """Return the first message of the read-only challenge of a plan."""
     return "\n".join(
         [
@@ -309,6 +311,9 @@ def plan_review(change: Change, candidate: Plan, worktree: Path, others: Mapping
             *_plan_lines(candidate),
             "",
             *_brief(change),
+            "",
+            "## Packages (project profile; the Builder runs each check from its package directory)",
+            *(_packages(profile) or ["- none known"]),
             *_others(others),
             "",
             "## Judge",

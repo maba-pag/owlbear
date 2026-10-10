@@ -139,7 +139,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     conversation.respond(task, run.payload, run.head, result.exit)
     _log(store, lock, change, run, {"kind": s.kind, "exit": result.exit})
     if s.kind == StepKind.PLAN and result.plan:
-        message = prompts.plan_review(change, result.plan, path, others)
+        message = prompts.plan_review(change, result.plan, profile, path, others)
         result = _challenge(store, lock, change, dataclasses.replace(cfg, message=message), result)
         if result.exit == Exit.DONE and result.plan:  # shared paths are shown, never asked about (D7)
             change.overlaps = overlap.found(result.plan, others, overlap.generated(path))

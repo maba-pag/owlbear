@@ -6,8 +6,8 @@ from types import SimpleNamespace
 
 import psutil
 
-from owlbear_delivery_next import processes, sdk_adapter, session_result, tools
-from owlbear_delivery_next.models import ErrorKind, Exit, StepKind
+from owlbear_delivery_next import processes, prompts, sdk_adapter, session_result, tools
+from owlbear_delivery_next.models import Change, ErrorKind, Exit, Plan, Profile, ProfileEntry, StepKind, Task
 from owlbear_delivery_next.permissions import Policy, Request, decide
 from owlbear_delivery_next.processes import Termination, verdict
 from owlbear_delivery_next.session_result import Run, to_result
@@ -26,6 +26,15 @@ def build(**changes) -> BuildResult:
     result, errors = tools.parse(BuildResult, {**GOOD, **changes})
     assert errors == []
     return result
+
+
+def test_the_plan_reviewer_sees_where_each_check_runs() -> None:
+    entry = ProfileEntry(state="known", value="npm test", evidence="packages/app/package.json")
+    profile = Profile(entries={"check:packages/app": entry})
+    plan = Plan(tasks=[Task(id="t1", title="Add sign", scope=["packages/app"], checks=["npm test"])])
+    text = prompts.plan_review(Change(slug="s"), plan, profile, Path("/w"), {})
+    assert "- `packages/app`: install `none`, check `npm test`" in text
+    assert "runs each check from its package directory" in text
 
 
 def test_schema_errors_name_the_field_and_the_agent_cannot_name_a_commit() -> None:
