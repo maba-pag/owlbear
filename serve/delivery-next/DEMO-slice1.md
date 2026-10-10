@@ -136,3 +136,73 @@ Disposable scenarios (macOS, temporary directory, removed afterwards; no process
 
 Modules over the draft limits of the architecture, kept as they are: `sdk_adapter.py` 611 (600), `store.py` 260
 (250), `models.py` 388 (350), `loop.py` 507 (500).
+
+## Slice 2 demonstration
+
+Date 2026-10-10, macOS. Copilot CLI 1.0.95, `github-copilot-sdk` 1.0.19, gh 2.102.0, git 2.56.0, Node 24.21.0,
+FastAPI 0.142.2, uvicorn 0.54.0; model `auto`, billed `gpt-6-luna` on every agent step. Sandbox `main` at
+`0d0dff4`; phase C state moved to `.git/owlbear-delivery/archive-phase-c/`. Code: `fc3880d5b`, `add0d16ae`,
+then `81f53d258` (fix below) from 06:05 UTC on.
+
+```text
+owlbear-next --repo ~/Projects/owlbear-sandbox profile                       # detect
+owlbear-next --repo ~/Projects/owlbear-sandbox profile --confirm github:rules=none
+owlbear-next --repo ~/Projects/owlbear-sandbox seed greeter|clamp|clock ...   # pre-approved one-task Changes
+owlbear-next --repo ~/Projects/owlbear-sandbox host
+```
+
+Detected profile (v2; v3 after the confirmation): repository `boecht/owlbear-sandbox`, default branch `main`, methods squash/merge/rebase (chosen
+`squash`), workflow `ci.yml` declaring check `test`, no pre-push hook, delete remote branch `no`. Rules, required
+checks and merge queue: **unknown** (`HTTP 403: Upgrade to GitHub Pro …`). Unknown rules make merging
+human-assisted (unit-checked); the owner confirmation `github:rules=none` records the 403 it saw and holds while
+GitHub keeps answering the same, so direct merging was allowed. Re-reads before every publish and merge matched.
+
+### Main journey: `greeter` (PR #3), times UTC
+
+| Stage | Evidence |
+| --- | --- |
+| Build → review → final review | 05:56:32 → 05:57:59; commit `01c1d88` (`greet.ts`, `preview.ts`, test, script) |
+| Publish | 05:58:06, 6.8 s: branch pushed with hooks, draft PR #3 created and marked ready |
+| Follow | 05:58:09 pending "1 of 1 checks running"; run 38029299361 `test` passed; 05:58:31 "CI passed: test" |
+| Check (preview) | Recipe accepted 05:59:04; host served `<p>Hallo, Ada!</p>` at 05:59:05; result `pass` via API 05:59:51; environment disposed |
+| Merge consent | 05:59:54 "Merge · waiting for you: approve merging 01c1d88" (offer: PR, diff link, head, `test: passed`) |
+| Failure (b) | Paused, consent for `01c1d88` via API 06:00:07, owner commit `0b5e2d9` pushed from a temporary clone, local commit `af24cd9` and untracked `scratch.txt` added in the worktree; resumed 06:00:28 → "approve merging 0b5e2d9, changed since 01c1d88 (1 commit(s): docs: describe the greeting (owner edit after consent) · files: packages/app/GREETING.md)". Consent for `01c1d88` then refused with 409; re-consent for `0b5e2d9` 06:00:39 |
+| Merge | Run 38029432961 on `0b5e2d9` completed 06:00:41; squash merge with `sha=0b5e2d9…` → `7417fba` (GitHub merged 06:00:43); readback merged |
+| Cleanup | Kept refs `origin/main`, `0b5e2d9`: 1 unmerged commit → `greeter-1.bundle` (verified), `scratch.txt` → `greeter-1.tar` (read back); worktree removed; history line |
+| Done | "Done · merged PR #3 · unmerged work saved in …/greeter-1.bundle, …/greeter-1.tar" |
+
+Credits 1.23. Touchpoints: check result, merge consent (twice: once voided by the injected head change).
+
+### Failure (a): `clock` (PR #4), CI fails, Builder fixes
+
+The brief stated, wrongly, that CI runs in Europe/Berlin; the test asserted `'14:00'` for `12:00Z`.
+
+| Stage | Evidence |
+| --- | --- |
+| Publish, follow | `bec55c1`, run 38029444971 failed: `'12:00' !== '14:00'`; 06:01:22 follow `back` → task t2 "Fix the failing CI check test" carrying the log tail (cause `checks:follow:test`, 1 of 3) |
+| Fix | t2 made the test zone-independent (`fb8f27c`, `3bd51bb`); reviews passed |
+| Integrate before publish | 06:03:33 publish `back`: `origin/main` had moved (`7417fba`) → t3 merged it (`21b3ba5`) |
+| Defect found | The final review diffed against the stale local `main`, saw `greeter`'s files as part of the Change and t4 removed them (`53d60ba`, local only). Paused at 06:05:07; fixed in `81f53d258` (base on `origin/<target>`); resumed 06:06:06. The corrected final review flagged the deletions, t5 restored them (`182e149`); net diff `time.ts` and its test only |
+| Publish, follow, merge | 06:09:15 PR head `182e149`; "Publish · waiting for CI: 1 of 1 checks running (checked 8 s ago)"; run 38029946489 passed; consent through the Changes page merge dialog 06:10:27; squash merge → `d125e59`; cleanup with nothing to preserve |
+
+Credits 4.14 (2.0 of them after the defect). Touchpoints: merge consent; pause and resume were my containment.
+
+### Other runs
+
+- `clamp`: the final reviewer refused the brief's deliberate CI-only failing test three times (the Builder kept it
+  because the brief demanded it) → "waiting for you: Findings remain after 2 rounds". Abandoned through the intent
+  API: 3 unmerged commits bundled (`clamp-1.bundle`, verified), worktree removed, no PR. Credits 2.49.
+- Sandbox `main` CI after both merges: run 38030022257 success. PRs #3 and #4 merged; #1 and #2 untouched.
+
+Total credits 7.86. After `SIGINT` to the host, `status` printed "Delivery is not running" and `pgrep` found no
+host, runner, Copilot CLI runtime or preview.
+
+### Limits and deviations
+
+- The person-only check ran after follow, as D3 orders it, not before publish.
+- Failure (a) used a wrong-premise brief, not an injected commit; `clamp`, the injected version, was correctly
+  stopped by review.
+- Event timestamps before `81f53d258` are the step's start time, not the event's.
+- Not shown live: the merge queue (`enqueued` → pending, unit-checked), unknown rules → "merge in GitHub", review
+  comments → Builder task, a check that never starts, a pre-push hook rejection, an unknown push or merge result.
+- Publication does not yet verify that HEAD equals the last final-reviewed commit.
