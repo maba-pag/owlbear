@@ -154,13 +154,28 @@ def test_cause_count_survives_retry_back_replan_and_an_unobserved_answer():
     assert cause not in loop.effect_observed(c, c.questions[-1].id, NOW).budgets.causes
 
 
-def test_effect_observation_clears_a_cause_once_per_answer():
+def test_effect_observation_clears_a_cause_once_per_answer_and_delivery_alone_clears_nothing():
     q = Question(id="q1", step=K.BUILD, text="key?", cause="c", answer=Answer(at=NOW))
     c = change(questions=[q])
     c.budgets.causes["c"] = Budget(count=3)
+    c = loop.answer_delivered(c, "q1", NOW)
+    assert (c.questions[0].delivered_at, c.questions[0].effect_observed_at, c.budgets.causes["c"].count) == (
+        NOW,
+        None,
+        3,
+    )
+    assert loop.answer_delivered(c, "q1", LATER).questions[0].delivered_at == NOW
     c = loop.effect_observed(c, "q1", NOW)
     c.budgets.causes["c"] = Budget(count=1)
     assert loop.effect_observed(c, "q1", LATER).budgets.causes["c"].count == 1
+
+
+def test_a_charged_cause_reports_exhaustion_after_the_retry_limit():
+    c, within = change(), []
+    for _ in range(loop.RETRY_LIMIT + 1):
+        c, ok = loop.charge(c, "state:build:session-missing", NOW)
+        within.append(ok)
+    assert within == [True] * loop.RETRY_LIMIT + [False]
 
 
 def _profile(c):

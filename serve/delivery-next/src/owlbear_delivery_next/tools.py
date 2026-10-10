@@ -42,15 +42,10 @@ class BuildResult(Args):
         description="Repository-relative paths your commit changes",
         examples=[["packages/app/src/greet.ts"]],
     )
-    commit: str = Field(
-        pattern=r"^[0-9a-f]{7,40}$",
-        description="SHA of the commit you created; it must be the worktree HEAD",
-        examples=["3f2c1ab"],
-    )
     checks: list[CheckRun] = Field(
         min_length=1,
         max_length=20,
-        description="Every task check you ran on that commit",
+        description="Every task check you ran on your final commit",
         examples=[[{"command": "npm test", "exit_code": 0}]],
     )
 
@@ -109,26 +104,33 @@ class WrongPremise(Args):
 
 @dataclass(frozen=True)
 class Spec:
-    """One tool's name, description and argument model."""
+    """One tool's name, description, argument model and the step ending an accepted call causes."""
 
     name: str
     description: str
     model: type[Args]
+    ending: Literal["result", "ask", "premise"]
 
 
 SUBMIT = Spec(
     "submit_result",
-    "Submit this step's result once: after committing your work and running every task check on that commit.",
+    "Submit this step's result once: after committing your work and running every task check on that commit. "
+    "Delivery reads the commit from the worktree HEAD.",
     BuildResult,
+    "result",
 )
 ASK = Spec(
     "ask_question",
     "Ask the owner one question when a decision is theirs or something you need is missing. Your step ends; "
     "it resumes with the answer.",
     AskQuestion,
+    "ask",
 )
 PREMISE = Spec(
-    "report_wrong_premise", "Report that the brief or plan is wrong, with evidence. Your step ends.", WrongPremise
+    "report_wrong_premise",
+    "Report that the brief or plan is wrong, with evidence. Your step ends.",
+    WrongPremise,
+    "premise",
 )
 SPECS = (SUBMIT, ASK, PREMISE)
 
@@ -186,21 +188,14 @@ def _few(paths: Sequence[str]) -> str:
 
 
 def check_build(result: BuildResult, tree: Worktree, checks: Sequence[str]) -> list[str]:
-    """Return field errors for a build result against the observed worktree and the task's checks."""
+    """Return field errors for a build result against the worktree HEAD the runner derives and the task's checks."""
     errors = []
     if tree.head == tree.base:
         errors.append(
-            f"commit: HEAD of the worktree is {tree.head[:12]}, the task's base; commit your changes, then submit again"
-        )
-    elif not tree.head.startswith(result.commit):
-        errors.append(
-            f"commit: HEAD of the worktree is {tree.head[:12]}, not {result.commit}; "
-            "commit your changes, then submit again with the HEAD SHA"
+            f"changes: no commit since the task's base {tree.base[:12]}; commit your changes, then submit again"
         )
     if tree.dirty:
-        errors.append(
-            f"commit: the worktree has uncommitted changes ({_few(tree.dirty)}); commit them, then submit again"
-        )
+        errors.append(f"changes: uncommitted files ({_few(tree.dirty)}); commit them, then submit again")
     if tree.head != tree.base:
         if missing := sorted(set(tree.changed) - set(result.changed_paths)):
             errors.append(f"changed_paths: missing {_few(missing)} - list every path your commit changes")

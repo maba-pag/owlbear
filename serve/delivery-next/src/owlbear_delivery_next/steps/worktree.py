@@ -1,14 +1,12 @@
-"""The Change worktree under the user data root, its install commands and its observed state (D4 §3.2)."""
+"""The Change worktree under the user data root, its packages' install commands and its observed state (D4 §3.2)."""
 
 from __future__ import annotations
 
 import hashlib
 import os
-import shlex
 import shutil
 import subprocess
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -19,14 +17,13 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.models import Profile
 
-INSTALL_TIMEOUT = 900
 _GIT = shutil.which("git") or "git"
 
 
 def git(cwd: Path, *args: str) -> str:
-    """Run one Git command and return its standard output unchanged."""
+    """Run one Git command, bounded so a hung Git cannot stall a step, and return its standard output."""
     return subprocess.run(  # noqa: S603 - fixed Git executable and argument vector.
-        [_GIT, *args], cwd=cwd, capture_output=True, text=True, check=True
+        [_GIT, *args], cwd=cwd, capture_output=True, text=True, check=True, timeout=60
     ).stdout
 
 
@@ -58,18 +55,8 @@ def ensure(repo: Path, common_dir: Path, slug: str, branch: str, target: str) ->
     return path
 
 
-@dataclass(frozen=True)
-class Install:
-    """One install command run for a package of the task."""
-
-    package: str
-    command: str
-    exit_code: int
-    tail: str
-
-
 def installs(profile: Profile, scope: Sequence[str]) -> list[tuple[str, str]]:
-    """Return ``(package, command)`` for each known install entry whose package holds a scope path."""
+    """Return ``(package, command)`` per known install entry holding a scope path; the Builder runs them (DR3)."""
     found = []
     for key, entry in profile.entries.items():
         package = key.removeprefix("install:")
@@ -79,28 +66,6 @@ def installs(profile: Profile, scope: Sequence[str]) -> list[tuple[str, str]]:
         if package in {"", "."} or any(p.strip("/") == package.strip("/") or p.startswith(prefix) for p in scope):
             found.append((package, entry.value))
     return found
-
-
-def install(path: Path, profile: Profile, scope: Sequence[str]) -> list[Install]:
-    """Run the install commands for the task's packages; stop at the first failure."""
-    done = []
-    for package, command in installs(profile, scope):
-        try:
-            run = subprocess.run(  # noqa: S603 - command from the confirmed profile, no shell.
-                shlex.split(command),
-                cwd=path / package,
-                capture_output=True,
-                text=True,
-                timeout=INSTALL_TIMEOUT,
-                check=False,
-            )
-            code, tail = run.returncode, (run.stdout + run.stderr)[-400:]
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            code, tail = -1, type(exc).__name__
-        done.append(Install(package, command, code, tail))
-        if code != 0:
-            break
-    return done
 
 
 def observe(path: Path, target: str) -> Worktree:

@@ -239,6 +239,11 @@ class Store:
             path.unlink(missing_ok=True)
         return change, step
 
+    def events(self, slug: str) -> list[dict[str, Any]]:
+        """Return the retained activity events, oldest first."""
+        path = self._dir(slug) / "activity.jsonl"
+        return [json.loads(line) for line in path.read_text().splitlines() if line] if path.exists() else []
+
     def log(self, lock: Lock, slug: str, event: dict[str, Any]) -> None:
         """Append one activity event, keeping only the last ``ACTIVITY_LIMIT``."""
         lock.check(slug)

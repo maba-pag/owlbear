@@ -161,7 +161,7 @@ class Answer(Record):
 
 
 class Question(Record):
-    """A durable question; its cause clears only once the answer's effect is observed."""
+    """A durable question; its answer is delivered to a session, and its cause clears once the effect is observed."""
 
     id: str = ""
     step: StepKind
@@ -170,6 +170,7 @@ class Question(Record):
     options: list[Option] = Field(default_factory=list)
     cause: str | None = None
     answer: Answer | None = None
+    delivered_at: datetime | None = None
     effect_observed_at: datetime | None = None
 
 

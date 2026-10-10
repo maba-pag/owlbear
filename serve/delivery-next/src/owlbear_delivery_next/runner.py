@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from owlbear_delivery_next import loop, prompts, sdk_adapter
 from owlbear_delivery_next.cli import describe
-from owlbear_delivery_next.models import ErrorKind, Exit, Profile, StepKind
+from owlbear_delivery_next.models import Profile, StepKind
 from owlbear_delivery_next.process_probe import ProcessTableWorktreeProbe, WorktreeProcessScanError
 from owlbear_delivery_next.steps import worktree
 from owlbear_delivery_next.store import LockHeldError, Store, git_common_dir
@@ -41,6 +41,12 @@ def _out(text: str) -> None:
     sys.stdout.write(text + "\n")
 
 
+def _previous(store: Store, slug: str, session: str | None) -> dict[int, float | None]:
+    """PIDs earlier runners persisted for *session*; they remain in the activity log when a runner is killed."""
+    pids = [e.get("pids", {}) for e in store.events(slug) if e.get("event") == "pids" and e.get("session") == session]
+    return {int(p): c for found in pids for p, c in found.items()}
+
+
 def _build(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     now, s, slug = datetime.now(UTC), change.step, change.slug
     task = next(t for t in change.plan.tasks if t.id == s.task) if change.plan else None
@@ -50,14 +56,6 @@ def _build(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     profile = store.read_profile() or Profile()
     path = worktree.ensure(repo, git_common_dir(repo), slug, change.names.branch, change.names.target)
     change.names.worktree = str(path)
-    installs = worktree.install(path, profile, task.scope)
-    runs = [dataclasses.asdict(i) for i in installs]
-    store.log(lock, slug, {"event": "install", "at": now.isoformat(timespec="seconds"), "runs": runs})
-    if failed := next((i for i in installs if i.exit_code), None):
-        cause = loop.cause_key(ErrorKind.PROJECT_ENV, StepKind.BUILD, failed.package)
-        result = loop.StepResult(exit=Exit.RETRY, cause=cause, reason=f"`{failed.command}` failed: {failed.tail}")
-        store.write(lock, loop.apply(change, result, now))
-        return
     answer = _pending_answer(change)
     resume = bool(answer and s.session)
     if not resume:
@@ -65,25 +63,37 @@ def _build(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     s.started_at = now
     store.write(lock, change)  # The session id is durable before the runtime starts.
     extra, pairs = profile.entries.get(f"allow:{s.kind}"), worktree.installs(profile, task.scope)
-    allowed = (
-        *sdk_adapter.GIT_BUILD,
-        "cd",
-        *(c for _, c in pairs),
-        *task.checks,
-        *(extra.value.split("\n") if extra else ()),
-    )
-    packages = [p for p, _ in pairs]
+    extras = extra.value.split("\n") if extra else []
+    allowed = (*sdk_adapter.GIT_BUILD, "cd", *(c for _, c in pairs), *task.checks, *extras)
+    fresh = prompts.build(change, task, path, pairs, allowed)
+
+    def delivered() -> None:
+        nonlocal change
+        change = loop.answer_delivered(change, answer.id if answer else "", datetime.now(UTC))
+        store.write(lock, change)
+
+    def replaced() -> str | None:
+        nonlocal change
+        change, within = loop.charge(change, sdk_adapter.missing_cause(StepKind.BUILD), datetime.now(UTC))
+        change.step.session = f"{slug}-{s.kind}-{s.task}-{uuid.uuid4().hex[:8]}" if within else None
+        store.write(lock, change)
+        return change.step.session
+
     model = profile.models.get(StepKind.BUILD)
     cfg = sdk_adapter.Session(
         kind=StepKind.BUILD,
         worktree=path,
         session_id=s.session or "",
-        message=prompts.answer(answer) if resume and answer else prompts.build(change, task, path, packages, allowed),
+        message=prompts.answer(answer) if resume and answer else fresh,
         resume=resume,
         policy=sdk_adapter.Policy(path, tuple(allowed)),
         observe=lambda: worktree.observe(path, change.names.target),
         checks=tuple(task.checks),
         model=None if model in {None, "", "auto"} else model,
+        fresh=fresh,
+        readback=bool(answer and answer.delivered_at),
+        previous=_previous(store, slug, s.session) if resume else {},
+        journal=sdk_adapter.Journal(lambda e: store.log(lock, slug, e), delivered, replaced),
     )
     run = asyncio.run(sdk_adapter.run(cfg))
     scanned = _scan(path, now)
@@ -92,23 +102,20 @@ def _build(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         run.termination = dataclasses.replace(run.termination, confirmed=False, problems=problems)
     end = datetime.now(UTC)
     result = sdk_adapter.to_result(run, StepKind.BUILD, end, scanned or ())
-    if answer and run.delivered:
+    if answer and sdk_adapter.effect_seen(run):
         change = loop.effect_observed(change, answer.id, end)
     step = {
         "event": "step",
         "at": end.isoformat(timespec="seconds"),
         "session": run.session_id,
-        "resumed": resume,
         "ending": run.ending,
         "exit": result.exit,
-        "runtime_pid": run.runtime_pid,
-        "recorded_pids": sorted(run.pids),
+        "head": run.head,
         "termination": dataclasses.asdict(run.termination) if run.termination else None,
         "scanned": scanned,
         "usage": run.usage,
     }
-    for event in [*run.events, step]:
-        store.log(lock, slug, event)
+    store.log(lock, slug, step)
     store.write(lock, loop.apply(change, result, end))
     _out(json.dumps(step, default=str))
 

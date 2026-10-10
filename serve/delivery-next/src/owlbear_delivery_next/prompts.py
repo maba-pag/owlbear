@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shlex
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.models import StepKind
@@ -15,16 +16,21 @@ if TYPE_CHECKING:
 LIMIT = 1500
 FINISH = """\
 1. Implement the task in the worktree, run every check, then `git add` and `git commit` your work.
-2. Call `submit_result` once with the summary, changed_paths, commit (the HEAD SHA) and checks. If it is
-   rejected, fix what each error names and call it again.
+2. Call `submit_result` once with the summary, changed_paths and checks; Delivery reads your commit from the
+   worktree HEAD. If it is rejected, fix what each error names and call it again.
 
 - If a decision belongs to the owner, or something you need is missing, call `ask_question` instead of
   guessing, then stop.
 - If the brief or plan is wrong, call `report_wrong_premise` with evidence, then stop.
-- Never push, change Git configuration or use `gh`. Leave no process running when you finish."""
+- Never push, change Git configuration, skip hooks or signing, or use `gh`. Stay inside the worktree.
+  Leave no process running when you finish."""
 REMINDER = (
     "Your turn ended without a result. Finish the task and call submit_result, or call ask_question or "
     "report_wrong_premise. Do not end your turn without one of these calls."
+)
+CONTINUE = (
+    "Your previous step was interrupted after the owner's answer reached you. Continue the task from where you "
+    "stopped: implement it, run the checks, commit, then call submit_result."
 )
 
 
@@ -49,9 +55,11 @@ def answer_text(question: Question) -> str:
     return _one(" - ".join(part for part in (label, a.text) if part))
 
 
-def build(change: Change, task: Task, worktree: Path, packages: Sequence[str], allowed: Sequence[str]) -> str:
+def build(
+    change: Change, task: Task, worktree: Path, installs: Sequence[tuple[str, str]], allowed: Sequence[str]
+) -> str:
     """Return the first message of a build session."""
-    brief = change.brief
+    brief, packages = change.brief, [p for p, _ in installs]
     lines = [
         (
             f"You build one task of the Change `{change.slug}` in the worktree {worktree} "
@@ -73,14 +81,19 @@ def build(change: Change, task: Task, worktree: Path, packages: Sequence[str], a
         lines += ["", "Answers you already have:", *(f"- {_one(q.text)}: {answer_text(q)}" for q in answered)]
     lines += [
         "",
+        "## Prepare",
+        "The worktree is fresh. First install the dependencies of the task's packages:",
+        *(f"- `cd {shlex.quote(str(worktree / p))} && {c}`" for p, c in installs),
+        *(["- nothing to install"] if not installs else []),
+        "If an install fails and you cannot fix it inside the task, call `ask_question` with the failing output.",
+        "",
         "## Checks",
         f"Run each from the package directory ({', '.join(packages) or 'repository root'}) on your final commit:",
         *(f"- `{c}`" for c in task.checks),
         "",
         "## Allowed shell commands",
-        "Reading and editing files inside the worktree is allowed. Shell commands other than these are denied: "
-        + ", ".join(f"`{a}`" for a in allowed)
-        + ".",
+        "Reading and editing files inside the worktree is allowed. `cd` only to directories inside the worktree. "
+        "Shell commands other than these are denied: " + ", ".join(f"`{a}`" for a in allowed) + ".",
         "",
         "## Finish",
         FINISH,

@@ -252,6 +252,21 @@ def _answer(c: Change, item: AnswerItem, now: datetime) -> None:
         _enter(c, StepKind(target))
 
 
+def answer_delivered(change: Change, question_id: str, now: datetime) -> Change:
+    """Record that a session acknowledged the answer; delivery alone resets no budget."""
+    c = change.model_copy(deep=True)
+    for q in c.questions:
+        if q.id == question_id and q.answer is not None and q.delivered_at is None:
+            q.delivered_at = now
+    return c
+
+
+def charge(change: Change, cause: str, now: datetime) -> tuple[Change, bool]:
+    """Count one occurrence of *cause* outside a step exit; False once it exceeds the retry limit."""
+    c = change.model_copy(deep=True)
+    return c, _count(c, cause, now) <= RETRY_LIMIT
+
+
 def effect_observed(change: Change, question_id: str, now: datetime) -> Change:
     """Record that an answer's effect was observed; only then, and only once, does its cause's count reset."""
     c = change.model_copy(deep=True)
