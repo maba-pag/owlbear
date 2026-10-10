@@ -23,16 +23,22 @@ from owlbear_delivery_next.models import (
     Brief,
     Change,
     ConsentItem,
+    Criterion,
+    Environment,
     Exit,
+    Inputs,
     Names,
+    PersonCheck,
     Plan,
     Profile,
     ProfileEntry,
+    Review,
     Step,
     StepKind,
     Task,
     Waiting,
 )
+from owlbear_delivery_next.status import Activity
 from owlbear_delivery_next.steps import cleanup, engine, follow, merge, publish
 from owlbear_delivery_next.store import Lock, Store
 
@@ -157,23 +163,56 @@ def test_the_merge_carries_the_consented_head_as_its_sha_guard(tmp_path):
     assert merge_request_body(gh.merges[0]) == b'{"merge_method":"squash","sha":"' + A.encode() + b'"}'
 
 
+class Host:
+    wake = type("W", (), {"set": lambda _self: None})()
+
+    def activity(self, _slug):
+        return Activity(host_up=True)
+
+
 def test_consent_api_accepts_only_the_offered_head(tmp_path):
     store = Store(tmp_path / "store")
     c = loop.apply(change(), engine.ask(StepKind.MERGE, "approve merging bbbbbbb", loop.CONSENT), NOW)
     store.write(Lock("c1"), c)
     store.log(Lock("c1"), "c1", {"event": "merge-offer", "head": B, "url": "u", "checks": [], "delta": ""})
-
-    class Host:
-        wake = type("W", (), {"set": lambda _self: None})()
-
-        def activity(self, _slug):
-            return None
-
     app = api.create_app(store, "t", Host())
     client = TestClient(app, base_url="http://127.0.0.1", headers={"authorization": "Bearer t"})
     assert client.post("/api/next/changes/c1/merge-consent", json={"head": A}).status_code == 409
     assert client.post("/api/next/changes/c1/answers", json={"question": "q1"}).status_code == 409
     assert client.post("/api/next/changes/c1/merge-consent", json={"head": B}).json() == {"accepted": "merge-consent"}
+
+
+def test_a_check_result_is_accepted_only_for_the_inputs_the_page_showed(tmp_path):
+    store, url = Store(tmp_path / "store"), "http://127.0.0.1:4173/"
+    env = Environment(check="preview", command="npm run preview", directory=".", ready_url=url, ready_at=NOW)
+    c = change(StepKind.CHECK, checks=[PersonCheck(id="preview", criteria=["AC-1"])], env=env)
+    c.brief.criteria = [Criterion(id="AC-1", text="greets")]
+    store.write(Lock("c1"), c)
+    client = TestClient(
+        api.create_app(store, "t", Host()), base_url="http://127.0.0.1", headers={"authorization": "Bearer t"}
+    )
+
+    def shown():
+        return client.get("/api/next/changes/c1").json()["checks"][0]["inputs"]
+
+    old = shown()
+    store.write(Lock("c1"), c.model_copy(update={"env": env.model_copy(update={"pids": {9: 1.0}, "launched_at": NOW})}))
+    assert shown() == old  # a relaunch alone changes no input
+    c.brief.criteria[0].version = 2
+    store.write(Lock("c1"), c)
+    stale = client.post("/api/next/changes/c1/check-results", json={"check": "preview", "passed": True, "inputs": old})
+    assert (stale.status_code, stale.json()["detail"]) == (409, "This check changed since you opened it; reload")
+    body = {"check": "preview", "passed": True, "inputs": shown()}
+    assert client.post("/api/next/changes/c1/check-results", json=body).json() == {"accepted": "check-result"}
+
+
+def test_publish_returns_to_the_final_review_unless_head_is_the_final_reviewed_head(clone, tmp_path):
+    head = git(clone, "rev-parse", "HEAD")
+    final = Review(commit=A, inputs=Inputs(), verdict="pass")
+    c = change(StepKind.PUBLISH, worktree=str(clone), reviews=[final])
+    _, result = publish.run(ctx(tmp_path, FakeGh(pr())), c)
+    assert loop.apply(c, result, NOW).step == Step(kind=StepKind.REVIEW, mode="final")
+    assert publish.reviewed(c.model_copy(update={"reviews": [final.model_copy(update={"commit": head})]}), clone, head)
 
 
 # CI classification

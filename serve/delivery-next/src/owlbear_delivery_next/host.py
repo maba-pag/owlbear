@@ -104,6 +104,18 @@ def _unverified(c: Change) -> bool:
     return bool(c.stop and c.stop.kind == ErrorKind.LIVENESS and c.outcome and c.outcome.exit == Exit.STOP)
 
 
+def disappeared(prior: Change, rec: RunnerRecord, now: datetime) -> bool:
+    """Whether the runner ended without committing an exit while its step was runnable."""
+    o = prior.outcome
+    return not (o and o.at >= rec.started_at) and prior.env is None and loop.next_step(prior, now) is not None
+
+
+def gone(kind: StepKind) -> loop.StepResult:
+    """One counted liveness retry for a runner that disappeared, so a repeating startup failure escalates."""
+    cause = loop.cause_key(ErrorKind.LIVENESS, kind, "runner-gone")
+    return loop.StepResult(exit=Exit.RETRY, cause=cause, reason="the runner ended without recording an exit")
+
+
 class Host:
     """The scheduler: observes every Change, folds inboxes and starts at most one runner per Change."""
 
@@ -170,12 +182,16 @@ class Host:
         if rec and self.alive(rec.pid, rec.created) is not False:
             return False  # A live runner finishes on its own; the host never kills it.
         with self.store.lock(slug) as lock:
+            prior = self.store.read(slug)  # before the inbox, which may clear a committed outcome
             c, _ = self.store.fold(lock, slug, now, self.observe_pr(slug))
+            if rec and disappeared(prior, rec, now) and c.step == prior.step:
+                c = loop.apply(c, gone(c.step.kind), now)  # its outcome postdates the runner: charged once
+                self.say(f"{slug}: runner {rec.pid} ended without recording an exit")
             act = self._env_action(c)
             if c.env and act in {"dispose", "settle"}:
                 if (left := self._clear(c, c.env)) is None or left:
                     return self._blocked(lock, c, left, now)
-                c = check.settle(c, now) if act == "settle" else c
+                c = check.settle(c, now, check.declared(c)) if act == "settle" else c
                 c.env = None
                 self.say(f"{slug}: check environment disposed")
             step = loop.next_step(c, now)
@@ -278,6 +294,7 @@ class Host:
         return True
 
     def _spawn(self, slug: str) -> RunnerRecord:
+        started = datetime.now(UTC)  # before the runner can commit, so its exit is later than this
         argv = [sys.executable, "-m", "owlbear_delivery_next.runner", slug, "--repo", str(self.repo)]
         with (self.store.root / "changes" / slug / "runner.log").open("ab") as out:
             proc = subprocess.Popen(  # noqa: S603 - this interpreter and a fixed module
@@ -292,7 +309,7 @@ class Host:
         created = None
         with contextlib.suppress(psutil.Error):
             created = psutil.Process(proc.pid).create_time()
-        return RunnerRecord(pid=proc.pid, created=created, started_at=datetime.now(UTC))
+        return RunnerRecord(pid=proc.pid, created=created, started_at=started)
 
     def run(self) -> None:
         """Scheduler thread: wake on start, inbox items, runner exits, the timer, and after sleep."""

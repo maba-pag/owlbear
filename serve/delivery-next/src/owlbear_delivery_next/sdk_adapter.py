@@ -45,7 +45,7 @@ DIR_OPTIONS = frozenset({"-C", "--prefix", "--cwd", "--dir", "--git-dir", "--wor
 NULL_PATHS = frozenset({"/dev/null"})
 VALUE_FLAGS = "mFCctSuo"  # short options of git commit and push that take a value
 _REDIRECT = re.compile(r"^\d*[<>]+&?")
-type Ending = Literal["result", "ask", "premise", "invalid", "no-result", "deadline", "missing", "error"]
+type Ending = Literal["result", "ask", "premise", "invalid", "no-result", "deadline", "missing", "unread", "error"]
 type Pids = Mapping[int, float | None]
 type Observe = Callable[[int, float | None], bool | None]
 
@@ -259,7 +259,6 @@ class Session:
     submit: tools.Spec = tools.SUBMIT
     model: str | None = None
     fresh: str = ""  # first message of a replacement session: stored context plus the pending answer
-    readback: bool = False  # the answer was delivered before: read the transcript before sending it again
     previous: Pids = field(default_factory=dict)  # PIDs earlier runners recorded for this session
     journal: Journal = field(default_factory=Journal)
 
@@ -519,13 +518,22 @@ async def _teardown(client: CopilotClient, session: CopilotSession | None, st: _
 
 
 async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None:
-    """Resume or create the session and send the first message; the answer counts as delivered once acknowledged."""
+    """Resume or create the session and send the first message; the answer counts as delivered once acknowledged.
+
+    A resumed session's transcript is read before its pending answer is sent, whatever was recorded locally;
+    an unread transcript sends nothing.
+    """
     cfg, opts = st.cfg, st.options()
     sid, message, resumed = cfg.session_id, cfg.message, False
     if cfg.resume and await _call(client.get_session_metadata(sid), "session lookup") is not None:
         session = await _call(client.resume_session(sid, **opts), "session resume", START)
         resumed = True
-        if cfg.readback and sent(await _call(session.get_events(), "transcript read"), message):
+        try:
+            events = await _call(session.get_events(), "transcript read")
+        except Exception as exc:  # noqa: BLE001 - an unobserved transcript never authorizes a resend
+            st.finish("unread", detail=f"transcript read failed ({type(exc).__name__}); the answer was not resent")
+            return session
+        if sent(events, message):
             message = prompts.CONTINUE
     else:
         if cfg.resume:
@@ -543,10 +551,10 @@ async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None:
 async def run(cfg: Session) -> Run:
     """Open or resume the session, send the message, wait for the result boundary, then tear down within bounds."""
     st = _Step(cfg, asyncio.get_running_loop())
-    client = CopilotClient(connection=RuntimeConnection.for_stdio(path=cli_path()))
-    session = None
+    client, session = None, None
     try:
         async with asyncio.timeout(DEADLINES.get(cfg.kind, 1200.0) + START + CALL):
+            client = CopilotClient(connection=RuntimeConnection.for_stdio(path=cli_path()))
             await _call(client.start(), "runtime start", START)
             st.runtime(client)
             session = await _open(client, st)
@@ -557,7 +565,7 @@ async def run(cfg: Session) -> Run:
     except Exception as exc:  # noqa: BLE001 - any SDK failure ends the step with retry after teardown
         st.finish("error", detail=f"{type(exc).__name__}: {exc}"[:300])
     st.run.usage = await _usage(session, cfg.model) if session else {}
-    st.run.termination = await _teardown(client, session, st)
+    st.run.termination = await _teardown(client, session, st) if client else Termination(confirmed=True)
     return st.run
 
 
@@ -567,7 +575,7 @@ def to_result(run: Run, kind: StepKind, now: datetime) -> StepResult:
     return result.model_copy(update={"denial": run.denials[-1][:300]}) if run.denials else result
 
 
-def _exit(run: Run, kind: StepKind, now: datetime) -> StepResult:  # noqa: PLR0911
+def _exit(run: Run, kind: StepKind, now: datetime) -> StepResult:  # noqa: C901, PLR0911 - one case per ending
     """One exit per ending; unverified termination stops whatever the session reported; the host scans after."""
     t = run.termination or Termination(confirmed=False, problems=("termination did not run",))
     if not t.confirmed:
@@ -604,6 +612,10 @@ def _exit(run: Run, kind: StepKind, now: datetime) -> StepResult:  # noqa: PLR09
             return StepResult(exit=Exit.RETRY, cause=cause, reason=run.detail or "deadline")
         case "missing":
             return StepResult(exit=Exit.RETRY, cause=missing_cause(kind), reason=run.detail)
+        case "unread":
+            return StepResult(
+                exit=Exit.RETRY, cause=cause_key(ErrorKind.LIVENESS, kind, "transcript"), reason=run.detail
+            )
         case "error":
             return StepResult(exit=Exit.RETRY, cause=cause_key(ErrorKind.TOOLING, kind, "sdk"), reason=run.detail)
         case _:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 import secrets
 from datetime import UTC, datetime
@@ -24,7 +25,7 @@ if TYPE_CHECKING:
     from starlette.responses import Response
 
     from owlbear_delivery_next.host import Host
-    from owlbear_delivery_next.models import Change, InboxItem
+    from owlbear_delivery_next.models import Change, InboxItem, Inputs
     from owlbear_delivery_next.store import Store
 
 SLUG = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
@@ -51,6 +52,7 @@ class CheckBody(Body):
     check: str = Field(max_length=64)
     passed: bool
     note: str = Field(default="", max_length=2000)
+    inputs: str = Field(pattern=r"^[0-9a-f]{64}$")  # the snapshot of the check the page showed
 
 
 class ApproveBody(Body):
@@ -70,6 +72,11 @@ class IntentBody(Body):
 
     intent: Literal["pause", "resume", "abandon"]
     text: str = Field(default="", max_length=500)
+
+
+def snapshot(inputs: Inputs) -> str:
+    """Opaque fingerprint of one check's inputs; relaunching its environment leaves it unchanged."""
+    return hashlib.sha256(inputs.model_dump_json().encode()).hexdigest()
 
 
 def offer(c: Change, events: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -146,6 +153,7 @@ def create_app(store: Store, token: str, host: Host) -> FastAPI:  # noqa: C901, 
                 "passed": p.answer.passed if p.answer else None,
                 "waiting": bool(waiting and c.step.task == p.id),
                 "url": c.env.ready_url if c.env and c.env.check == p.id and c.env.ready_at else None,
+                "inputs": snapshot(loop.check_inputs(c, p, check.fingerprints(c, p))),
             }
             for p in c.checks
         ]
@@ -181,6 +189,8 @@ def create_app(store: Store, token: str, host: Host) -> FastAPI:  # noqa: C901, 
         if person is None or not (c.env and c.env.check == body.check and c.env.ready_at):
             raise HTTPException(409, f"check {body.check} is not waiting for a result")
         inputs = loop.check_inputs(c, person, check.fingerprints(c, person))
+        if snapshot(inputs) != body.inputs:
+            raise HTTPException(409, "This check changed since you opened it; reload")
         item = CheckResult(at=datetime.now(UTC), check=person.id, passed=body.passed, note=body.note, inputs=inputs)
         return put(slug, item)
 

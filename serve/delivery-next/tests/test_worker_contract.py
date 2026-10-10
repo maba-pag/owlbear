@@ -173,6 +173,30 @@ def test_delivery_is_not_effect_and_a_delivered_answer_is_found_in_the_transcrip
     assert not sdk_adapter.effect_seen(Run("s", ending="result"))
 
 
+def test_a_resumed_answer_is_read_back_before_any_send_and_an_unread_transcript_sends_nothing() -> None:
+    sends: list[str] = []
+    user = SimpleNamespace(type=SimpleNamespace(value="user.message"), data=SimpleNamespace(content="m"))
+
+    async def events(found):
+        if found is None:
+            raise TimeoutError
+        return found
+
+    async def send(message):
+        sends.append(message)
+
+    for found in ([user], [], None):
+        session = SimpleNamespace(get_events=lambda f=found: events(f), send=send)
+        client = SimpleNamespace(get_session_metadata=lambda _s: asyncio.sleep(0, {}))
+        client.resume_session = lambda _s, s=session, **_o: asyncio.sleep(0, s)
+        st = step()
+        asyncio.run(sdk_adapter._open(client, st))  # noqa: SLF001
+    assert sends == [sdk_adapter.prompts.CONTINUE, "m"]
+    st.run.termination = Termination(confirmed=True)
+    r = to_result(st.run, StepKind.BUILD, NOW)
+    assert (r.exit, r.cause) == (Exit.RETRY, f"{ErrorKind.LIVENESS}:build:transcript")
+
+
 def test_a_hung_runtime_stop_is_bounded_and_falls_back_to_signals(monkeypatch) -> None:
     calls: list[str] = []
 

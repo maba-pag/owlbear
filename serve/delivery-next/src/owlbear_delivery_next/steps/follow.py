@@ -93,6 +93,6 @@ def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:  # noqa: PLR0911 - on
         return missing(ctx, c, pr, state)
     if state.running or state.missing:
         return c, waiting(state, ctx)
-    paths = {k: v for p in c.checks for k, v in check.fingerprints(c, p).items()}
+    paths = check.declared(c)
     ctx.log(c.slug, "ci", head=pr.head_sha, passed=list(state.passed), ignored=list(state.ignored))
     return c, StepResult(exit=Exit.DONE, reason=f"CI passed: {', '.join(state.passed)}", paths=paths)

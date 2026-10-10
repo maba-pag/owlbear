@@ -80,7 +80,6 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         submit=parts.submit,
         model=None if model in {None, "", "auto"} else model,
         fresh=parts.message,
-        readback=bool(answer and answer.delivered_at),
         previous=_previous(store, slug, s.session) if resume else {},
         journal=sdk_adapter.Journal(lambda e: store.log(lock, slug, e), delivered, replaced),
     )

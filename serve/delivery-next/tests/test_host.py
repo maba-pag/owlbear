@@ -199,11 +199,39 @@ def test_check_environment_decisions(change, live, expected):
 
 def test_a_failed_check_goes_back_to_build_with_the_owners_note_and_settles_no_later_round():
     c = answered(checking(ready_at=NOW), NOW, passed=False)
-    after = check.settle(c, NOW)
+    after = check.settle(c, NOW, {})
     assert (after.step.kind, after.step.task, after.plan.tasks[-1].origin) == (StepKind.BUILD, "t2", "person-check")
     assert "no greeting" in after.plan.tasks[-1].title
     again = after.model_copy(update={"step": Step(kind=StepKind.CHECK, task="preview"), "env": checking().env})
     assert check.action(again, live=False, paths={}) == "launch"
+
+
+def test_a_passing_path_backed_answer_settles_against_current_fingerprints():
+    c = checking(ready_at=NOW)
+    c.checks[0].paths = ["src/a.ts"]
+    answered(c, NOW, inputs=check_inputs(c, c.checks[0], {"src/a.ts": "f1"}))
+    assert check.settle(c, NOW, {"src/a.ts": "f1"}).step.kind == StepKind.MERGE
+    assert check.settle(c, NOW, {"src/a.ts": "f2"}).step == Step(kind=StepKind.CHECK, task="preview")
+
+
+def test_a_runner_gone_without_an_exit_is_charged_once_and_the_fourth_asks(store, tmp_path):
+    fake = Fake(store, tmp_path)
+    save(store, asking(fake).model_copy(update={"outcome": None}))
+    clock, spawn = [NOW], fake.host.spawn
+    fake.host.spawn = lambda s: spawn(s).model_copy(update={"started_at": clock[0] + timedelta(seconds=1)})
+    assert fake.host.tick(NOW) == ["c1"]
+    for n in range(1, 5):
+        fake.live.clear()
+        clock[0] = NOW + timedelta(minutes=n)
+        assert fake.host.tick(clock[0]) == (["c1"] if n < 4 else [])
+        assert fake.host.tick(clock[0]) == []  # the replacement is alive; nothing is charged twice
+    c = store.read("c1")
+    assert (c.outcome.exit, c.outcome.cause) == (Exit.ASK, "liveness:build:runner-gone")
+    later = NOW + timedelta(hours=1)
+    committed = apply(c, StepResult(exit=Exit.DONE), later)
+    rec = RunnerRecord(pid=1, created=1.0, started_at=later - timedelta(seconds=5))
+    assert not host.disappeared(committed, rec, later)
+    assert host.disappeared(committed, rec.model_copy(update={"started_at": later + timedelta(seconds=1)}), later)
 
 
 def test_disposal_is_verified_over_recorded_pids_and_the_whole_group_without_its_leader():

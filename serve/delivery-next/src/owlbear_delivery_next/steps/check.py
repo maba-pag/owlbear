@@ -53,6 +53,11 @@ def fingerprints(c: Change, person: PersonCheck) -> dict[str, str]:
     return worktree.fingerprints(root, person.paths) if person.paths and c.names.worktree and root.is_dir() else {}
 
 
+def declared(c: Change) -> dict[str, str]:
+    """Current fingerprints of every declared check's paths, against which a recorded answer stays valid."""
+    return {k: v for p in c.checks for k, v in fingerprints(c, p).items()}
+
+
 def answers(url: str) -> bool:
     """Whether the local readiness URL answers without an error status."""
     try:
@@ -147,12 +152,13 @@ def failed(reason: str) -> loop.StepResult:
     return loop.StepResult(exit=Exit.RETRY, cause=cause, reason=reason)
 
 
-def settle(c: Change, now: datetime) -> Change:
-    """A pass moves on; a fail goes back to build with the owner's note as a fix task (H2)."""
+def settle(c: Change, now: datetime, paths: Mapping[str, str]) -> Change:
+    """A pass moves on, judged against the current *paths*; a fail goes back to build with the owner's note (H2)."""
     person = next(p for p in c.checks if p.id == c.step.task)
     answer = person.answer
     if answer is None or answer.passed:
-        return loop.apply(c, loop.StepResult(exit=Exit.DONE, reason=f"{person.id} passed for you at {now:%H:%M}"), now)
+        reason = f"{person.id} passed for you at {now:%H:%M}"
+        return loop.apply(c, loop.StepResult(exit=Exit.DONE, reason=reason, paths=dict(paths)), now)
     tasks = c.plan.tasks if c.plan else []
     last = tasks[-1] if tasks else Task(id="t0", title="")
     title = f"Fix: the check {person.id} failed for the owner: {answer.text}"

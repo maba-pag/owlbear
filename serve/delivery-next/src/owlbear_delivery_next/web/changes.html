@@ -90,8 +90,9 @@ function checkForm(check) {
     box.append(el("p", "Open: "), link);
   }
   const pass = el("button", "Passed", { type: "button" }), fail = el("button", "Failed", { type: "button" });
-  pass.onclick = () => send("/check-results", { check: check.id, passed: true, note: note.value });
-  fail.onclick = () => send("/check-results", { check: check.id, passed: false, note: note.value });
+  const result = (passed) => ({ check: check.id, passed, note: note.value, inputs: check.inputs });
+  pass.onclick = () => send("/check-results", result(true));
+  fail.onclick = () => send("/check-results", result(false));
   box.append(note, pass, fail);
   return box;
 }

@@ -12,9 +12,9 @@ from owlbear_delivery_next.git.remote_git import (
     run_remote_git,
 )
 from owlbear_delivery_next.github.provider import ProviderError
-from owlbear_delivery_next.loop import StepResult, cause_key
+from owlbear_delivery_next.loop import StepResult, cause_key, review_valid
 from owlbear_delivery_next.models import ErrorKind, Exit, StepKind
-from owlbear_delivery_next.steps import engine
+from owlbear_delivery_next.steps import engine, worktree
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.github.provider import PullRequest
@@ -85,8 +85,16 @@ def pull_request(ctx: Ctx, c: Change, head: str) -> PullRequest | None:
     return pr
 
 
+def reviewed(c: Change, path: Path, head: str) -> bool:
+    """Whether the last final review passed on exactly *head* and its recorded inputs are unchanged (P5)."""
+    final = next((v for v in reversed(c.reviews) if v.task is None), None)
+    if final is None or final.commit != head:
+        return False
+    return review_valid(c, final, worktree.fingerprints(path, list(final.inputs.paths)))
+
+
 def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:
-    """Publish the reviewed head; a moved target first gets an integration Builder task."""
+    """Publish the final-reviewed head; a moved target first gets an integration Builder task."""
     path, target = Path(c.names.worktree), c.names.target
     if (asked := engine.rules_changed(ctx, c)[0]) is not None:
         return c, asked
@@ -94,6 +102,9 @@ def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:
     if not engine.contains(path, f"origin/{target}"):
         return c, engine.integrate(c, P, f"origin/{target}")
     head = engine.head(path)
+    if not reviewed(c, path, head):
+        cause, reason = cause_key(ErrorKind.GATE, P, "unreviewed"), f"no valid final review of {head[:7]}"
+        return c, StepResult(exit=Exit.BACK, back_to=StepKind.REVIEW, cause=cause, reason=reason)
     if (r := push(path, c, head)) is not None:
         return c, r
     pr = pull_request(ctx, c, head)

@@ -64,7 +64,7 @@ BACK: dict[StepKind, frozenset[StepKind]] = {
     StepKind.BUILD: frozenset({StepKind.PLAN, StepKind.INTEGRATE}),
     StepKind.REVIEW: frozenset({StepKind.PLAN}),
     StepKind.INTEGRATE: frozenset({StepKind.PLAN}),
-    StepKind.PUBLISH: frozenset({StepKind.INTEGRATE, StepKind.BUILD}),
+    StepKind.PUBLISH: frozenset({StepKind.INTEGRATE, StepKind.BUILD, StepKind.REVIEW}),
     StepKind.FOLLOW: frozenset({StepKind.BUILD}),
     StepKind.CHECK: frozenset({StepKind.BUILD}),
     StepKind.MERGE: frozenset({StepKind.INTEGRATE, StepKind.BUILD}),
@@ -332,7 +332,8 @@ def _enter(c: Change, kind: StepKind, task: str | None = None) -> None:
     s = c.step
     keep = task or (s.task if kind in {StepKind.BUILD, StepKind.INTEGRATE} else None)
     caller = s.mode if s.kind == StepKind.INTEGRATE else str(s.kind)
-    _go(c, kind, keep, caller if kind == StepKind.INTEGRATE else None)
+    final = "final" if kind == StepKind.REVIEW and keep is None else None  # a review without a task is final
+    _go(c, kind, keep, caller if kind == StepKind.INTEGRATE else final)
 
 
 def _open_task(c: Change) -> Task | None:
