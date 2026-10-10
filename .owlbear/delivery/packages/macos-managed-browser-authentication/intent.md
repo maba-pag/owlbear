@@ -175,11 +175,19 @@ basis: user prompt 2026-10-09, confirmed decision 2 (option A, three-state brows
 statement: browser_status startup_state is not-launched, ready, or unavailable; not-launched holds before the first action call and after window close with null reason and visible authentication unavailable; unavailable with a reason means the last launch failed and the next action call retries without Chromium fallback; invalid-mode is reported from server start; browser_status never launches the browser.
 ```
 
+```yaml target-contract
+kind: decision
+id: DEC-011
+origin: approved
+basis: user chat 2026-10-11 approving the finalization-review repair route (finalization report 3b8336ca, OUT-001.13 unmet at 28b817f)
+statement: Every action tool call, including acquire, reopens a closed shared page on a running managed Edge without relaunching it, so the visible OwlBear-owned window and its shared page stay available after the operator closes only that page; acquire no longer skips the shared page as dev's lazy-launch path did.
+```
+
 ## Evidence And Limits
 
 An earlier 2026-09-07 managed-Mac pilot used Playwright 1.62.0 and a new isolated Edge profile. SharePoint displayed authenticated Carrera Online immediately. Jira required `Login Windows` and one Microsoft trust confirmation, then opened AUDIT-124 without credential entry. Both remained authenticated after Edge restart. Three temporary-profile Edge launch/close cycles passed with `chromium_sandbox=True`. One interactive pilot close lost the driver connection; a later close passed, and #234 remains the general cleanup owner. This SharePoint/Jira observation is retained as historical browser/profile evidence and does not satisfy the revised SharePoint/Confluence acceptance target.
 
-Microsoft documents signed-in Edge integration with managed macOS SSO. Playwright documents stable Edge channels, exclusive user-data directories, and unsupported concurrent profile use. Current source confirms bundled Chromium launch, Windows extension inference, divergent profile defaults, and no status tool. Observed on dev `b49039234`: since `d4ce5ffa8`, `app_lifespan` configures the allowlist and profile without launching; `_ensure_browser` launches on action calls, replaces a launcher that is no longer running, and reopens a closed shared page on a running launcher; `read_text` and `snapshot` use `_require_live_page` and never launch.
+Microsoft documents signed-in Edge integration with managed macOS SSO. Playwright documents stable Edge channels, exclusive user-data directories, and unsupported concurrent profile use. Current source confirms bundled Chromium launch, Windows extension inference, divergent profile defaults, and no status tool. Observed on dev `b49039234`: since `d4ce5ffa8`, `app_lifespan` configures the allowlist and profile without launching; `_ensure_browser` launches on action calls, replaces a launcher that is no longer running, and reopens a closed shared page on a running launcher, except that `acquire` calls it with `need_page=False` and so does not reopen the page (finalization review at `28b817f`); `read_text` and `snapshot` use `_require_live_page` and never launch.
 
 The earlier pilot confirms browser/session availability through the owned page, not B2's structured classification. Device policy can change. First-use trust, consent, MFA, or profile sign-in can require operator interaction. The authenticated disposable pilot profile is not a durable artifact and must be removed outside the agent write boundary. A revised managed-Mac pilot remains required for the approved SharePoint/Confluence targets. The setup-guide pilot procedure is the operator action boundary: it supplies the two approved URLs locally, requires the operator's confirmation that authenticated access is available, and retains only bounded non-sensitive outcome evidence.
 
@@ -224,7 +232,7 @@ statement: Missing Edge, invalid mode, unusable Edge, or profile contention prod
 kind: commitment
 id: COM-003
 class: protected-request
-decisions: [DEC-003, DEC-009]
+decisions: [DEC-003, DEC-009, DEC-011]
 statement: B1 first-use sign-in, site trust, consent, or MFA occurs directly in the visible lifespan-owned Edge window without B1 sending session material through an agent or MCP tool.
 ```
 
