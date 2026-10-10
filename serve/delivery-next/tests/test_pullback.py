@@ -5,6 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next import api
+from owlbear_delivery_next.git.remote_git import RemoteGitTimeout
 from owlbear_delivery_next.host import Host
 from owlbear_delivery_next.models import Change, Names, Step, StepKind
 from owlbear_delivery_next.status import Activity
@@ -347,3 +348,131 @@ def test_the_pull_action_is_queued_by_the_api_and_rerun_by_the_host(repos):
     assert (c.pullback.state, c.pull_requested, git(repo, "rev-parse", "HEAD")) == ("updated", None, head)
     assert store.events("c1")[-1]["event"] == "pullback"
     assert h._pull(Lock("c1"), c, NOW) is c  # noqa: SLF001 - no request: nothing runs
+
+
+def test_a_path_the_replay_moves_into_an_ignored_file_is_a_collision(repos):
+    repo, other = repos
+    (repo / "old").mkdir()
+    commit(repo, "old/a.txt", "one\ntwo\nthree\n")
+    git(repo, "push", "-q", "origin", "main")
+    git(other, "pull", "-q")
+    (repo / "old" / "local.log").write_text("committed\n")
+    git(repo, "add", "-f", "old/local.log")
+    git(repo, "commit", "-q", "-m", "local log")
+    git(repo, "config", "merge.directoryRenames", "true")
+    git(other, "mv", "old", "new")
+    git(other, "commit", "-q", "-m", "rename")
+    git(other, "push", "-q", "origin", "main")
+    (repo / "new").mkdir()
+    (repo / "new" / "local.log").write_text("mine\n")
+    head = git(repo, "rev-parse", "HEAD")
+    result = pullback.run(repo, "main", NOW)
+    assert (result.state, "new/local.log overlap" in result.reason) == ("behind", True)
+    assert ((repo / "new" / "local.log").read_text(), git(repo, "rev-parse", "HEAD")) == ("mine\n", head)
+
+
+def test_a_branch_switch_before_the_update_leaves_both_branches_alone(repos, monkeypatch):
+    repo, other = repos
+    head, guard = git(repo, "rev-parse", "HEAD"), pullback._guard  # noqa: SLF001 - the step before mutation
+
+    def switch(wt, paths, *, fold):
+        git(repo, "switch", "-q", "-c", "other")
+        return guard(wt, paths, fold=fold)
+
+    monkeypatch.setattr(pullback, "_guard", switch)
+    merged(other)
+    result = pullback.run(repo, "main", NOW)
+    assert (result.state, "HEAD moved" in result.reason) == ("behind", True)
+    assert (git(repo, "rev-parse", "other"), git(repo, "rev-parse", "main")) == (head, head)
+    assert not (repo / "b.txt").exists()
+
+
+def test_a_failing_checkout_filter_restores_the_local_copy_and_a_retry_succeeds(repos):
+    repo, other = repos
+    commit(repo, ".gitattributes", "*.x filter=x\n")
+    git(repo, "push", "-q", "origin", "main")
+    git(other, "pull", "-q")
+    git(repo, "config", "filter.x.smudge", "false")
+    git(repo, "config", "filter.x.required", "true")
+    before = full(repo)
+    commit(other, "a.txt")
+    commit(other, "z.x")
+    git(other, "push", "-q", "origin", "main")
+    head = git(other, "rev-parse", "HEAD")
+    result = pullback.run(repo, "main", NOW)
+    assert (result.state, "external filter 'false' failed" in result.reason) == ("behind", True)
+    assert "partial update" not in result.reason
+    assert full(repo) == before
+    git(repo, "config", "filter.x.smudge", "cat")
+    result = pullback.run(repo, "main", NOW)
+    assert (result.state, git(repo, "rev-parse", "HEAD"), (repo / "z.x").read_text()) == ("updated", head, "x\n")
+
+
+GIT_TIMEOUT = subprocess.TimeoutExpired("git", 120)
+
+
+def timeout(*_args, **_kwargs):
+    raise GIT_TIMEOUT
+
+
+@pytest.mark.parametrize(
+    ("module", "name", "error"),
+    [
+        (pullback.engine, "fetch", RemoteGitTimeout("fetch exceeded 30 s")),
+        (pullback, "holders", GIT_TIMEOUT),
+        (pullback, "rev", GIT_TIMEOUT),
+        (pullback, "_submodules", GIT_TIMEOUT),
+    ],
+)
+def test_a_timeout_anywhere_leaves_the_target_behind(repos, monkeypatch, module, name, error):
+    repo, other = repos
+    before = full(repo)
+    reason = "git timed out" if error is GIT_TIMEOUT else str(error)
+    merged(other)
+
+    def fail(*_args, **_kwargs):
+        raise error
+
+    monkeypatch.setattr(module, name, fail)
+    result = pullback.run(repo, "main", NOW)
+    assert (result.state, result.reason) == ("behind", f"local main is behind: {reason}")
+    assert full(repo) == before
+
+
+def test_an_intentionally_empty_local_commit_is_replayed_with_its_metadata(repos):
+    repo, other = repos
+    git(repo, "commit", "-q", "--allow-empty", "-m", "marker", "--author", "Ann <ann@a>")
+    head = merged(other)
+    result = pullback.run(repo, "main", NOW)
+    assert (result.state, git(repo, "rev-parse", "HEAD~1")) == ("updated", head)
+    assert git(repo, "log", "-1", "--format=%s|%an <%ae>") == "marker|Ann <ann@a>"
+
+
+def test_a_local_commit_already_upstream_is_kept_as_an_empty_commit(repos):
+    repo, other = repos
+    (repo / "b.txt").write_text("x\n")
+    git(repo, "add", "b.txt")
+    git(repo, "commit", "-q", "-m", "same patch", "--author", "Ann <ann@a>")
+    head = merged(other)
+    result = pullback.run(repo, "main", NOW)
+    assert (result.state, git(repo, "rev-parse", "HEAD~1")) == ("updated", head)
+    assert git(repo, "log", "-1", "--format=%s|%an <%ae>") == "same patch|Ann <ann@a>"
+    assert git(repo, "diff", "HEAD~1", "HEAD") == ""
+
+
+def test_a_locked_temporary_worktree_is_removed_even_if_remove_times_out(repos, monkeypatch):
+    repo, other = repos
+    commit(repo, "local.txt")
+    real, wts = pullback.pullback_replay.git, worktrees(repo)
+
+    def flaky(path, *args):
+        if args[:1] == ("cherry-pick",):
+            real(path, "worktree", "lock", str(path))
+        if args[:2] == ("worktree", "remove"):
+            timeout()
+        return real(path, *args)
+
+    monkeypatch.setattr(pullback.pullback_replay, "git", flaky)
+    merged(other)
+    result = pullback.run(repo, "main", NOW)
+    assert (result.state, worktrees(repo)) == ("updated", wts)
