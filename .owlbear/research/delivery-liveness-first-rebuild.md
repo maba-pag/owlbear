@@ -7,7 +7,7 @@
 > reliably makes progress — possibly as a re-implementation with selective reuse?
 > **Status:** Analysis and recommended roadmap, revision 2 (2026-10-10): corrected after six
 > independent challenges and re-weighted by the user toward end-to-end design and failure modes
-> (§1). Decided by the user: TD-1 to TD-32 (§3.8). Every other recommendation is `autonomous` until
+> (§1). Decided by the user: TD-1 to TD-37 (§3.8). Every other recommendation is `autonomous` until
 > the user decides it.
 
 ## 1. Context and Question
@@ -235,6 +235,11 @@ choices and user choices alike as user decisions. This plan therefore treats eve
 | TD-30 | PR comments: every human comment is answered; the agent judges bot comments (acts on real findings, records "no action needed" for notices); no `@owlbear` mention gate | `decided`: "suggestion 2 is accepted" | 2026-10-11 |
 | TD-31 | Code size and complexity: default rules of tools such as SonarQube or Snyk serve as guidance for deciding whether code is still acceptable or needs a split or rework, with wiggle room, not as a hard tool gate; SonarQube itself is not used (licence), Snyk perhaps later | `decided`: "take these default rules as an instruction to decide whether something is still acceptable or needs a split or rework, but with some wiggle room, other than a hard tool" | 2026-10-11 |
 | TD-32 | Delivery never uses the `auto` model; every session names its model | `decided`: "we never use auto, ever" | 2026-10-11 |
+| TD-33 | Module size: agents aim for at most 400 lines per module; a test fails at 500 raw lines, without excluding comments or structure (replaces the logic-line counter of TD-19's implementation) | `decided` (answered question, the user's own proposal) | 2026-10-11 |
+| TD-34 | Runtime split, provided observability, outputs and limits are equal: only steps that need VS Code tools run as VS Code agent sessions; the others run via SDK or CLI, whichever uses fewer resources and has the needed features and observability. Observability means first a watcher agent that can read, steer and stop, second the user reading the chat log | `decided`: "only the steps that need vs code tools run in vs code agent mode, the rest runs via sdk or cli … observability for me means two things …" | 2026-10-11 |
+| TD-35 | Execution mode switch: "managed" (each step runs where its requirements say) or "all in VS Code" (for watching); the user can switch at any time and the next chat that starts uses the new mode. VS Code being open is fine; when it is not running, Delivery starts it instead of only reporting it | `decided`: "how about just managed or everything in vs code … if you or sol have no veto, id like that" (subject to a veto from the agent or Sol) | 2026-10-11 |
+| TD-36 | If sessions started by Delivery do not receive VS Code's tools, the fallback is route C: Delivery opens VS Code chats via `code chat -m <agent>` for UI and browser steps, results through the Delivery MCP server | `decided` (answered question) | 2026-10-11 |
+| TD-37 | Overnight 2026-10-11: probe, design, build, test and more; `maba-pag` was added as a collaborator to both sandbox repositories; VS Code stays open and the Mac awake | `decided` (answered questions) | 2026-10-11 |
 
 **User direction, not yet decisions** (2026-10-10, cornerstone walkthrough): whether three roles are
 enough is open ("i dont want to actively decide that three roles are enough"); the brief and plan
