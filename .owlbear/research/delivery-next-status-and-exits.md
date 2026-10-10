@@ -4,13 +4,16 @@
 > **Date:** 2026-10-10
 > **Question:** What does Delivery-next record for one Change, which steps can it be in, how does
 > each step end, and how is one truthful status line with one next action derived from that?
-> **Status:** design draft; `autonomous` until the user approves M3. Revision 2026-10-10 after
+> **Status:** approved with the charter (TD-23); amendments TD-24 to TD-29; the rest is `autonomous`
+> design. Revision 2026-10-10 after
 > design challenge and the full-set challenge: inbox before exclusions, host-down overlay, check
 > environments, several person-only checks, bundle and archive preservation, host crash with live
 > runners. Revision 2026-10-10 for TD-10 to TD-22: merge gate without consent, pull-back, visual
 > check, thread replies, overlap as information, retry policy, no merge queue. Revision 2026-10-10
 > aligned with the M4 reshape (`adfb5a77c`): gate order, every observed check, declared CI per
 > workflow digest, conversation versions, behavioural collisions, retry classes, visual binding.
+> Revision 2026-10-10 for TD-24 to TD-29: "before" screenshots, neutral notes on repository rules,
+> pull-back with replay, role models.
 
 ## 1. Context and Question
 
@@ -28,7 +31,7 @@ architecture is left to D4.
 | D02 | [Journey and failure modes](delivery-next-journey-and-failure-modes.md) §3.2–§3.6 | J0–J9, merge gate, pull-back, exit contract and rules, catalogue rows, DR1–DR16, eight connected traces |
 | D03 | [Ownership map](delivery-next-ownership-map.md) §4 | Minimal Change and profile records; what is never stored |
 | D04 | [Platform probe](delivery-next-platform-probe.md) §3.2, §4 | Loop-owned questions (P2b, P2d); typed-result helper waits on idle, so a result event is the step boundary; termination by `tasks.cancel` plus PID and runtime-exit checks (P4b); default-deny permissions (P5) |
-| D05 | [Rebuild research](delivery-liveness-first-rebuild.md) §3.6, §3.8 | Principles P1–P9; decisions TD-1–TD-22; the adopted retry policy |
+| D05 | [Rebuild research](delivery-liveness-first-rebuild.md) §3.6, §3.8 | Principles P1–P9; decisions TD-1–TD-29; the adopted retry policy |
 | D06 | [Tool-surface audit §4](delivery-tool-surface-audit.md#4-recommendation-confidence-and-limits) | Tool rules T1–T8, especially T2 (no identities from agents) and T6 (recovery is engine or user) |
 | D07 | [work_items.py](../../serve/delivery/src/owlbear_delivery/work_items.py) `DeliverySituation`, [status model rethink](delivery-status-model-rethink.md) §3.3 | Vocabulary only: "waiting on", "with an agent" is not proof of running |
 
@@ -49,14 +52,14 @@ One versioned file per Change and one per project, outside the checkout, written
 | Questions | U | id; step; kind decision or action; text; options, each naming its next step; answer, channel, time; effect check; effect observed time | An answer clears its cause only once its effect is observed |
 | Plan | L | version; ordered tasks with id, title, scope paths, checks, origin (plan, review, CI, PR feedback, person-only check, integration) | Fix tasks are appended without a new plan version |
 | Reviews | E | per task and final: reviewed commit and its tree id; recorded inputs: the criterion versions judged and the covered paths, each with its fingerprint; the local check results relied on, each with the tree it ran on; verdict; round | The engine computes covered paths from git (`git diff --name-status -M base...head`, including additions, deletions and renames), never from the reviewer's return (`autonomous`). Valid while no path outside the covered set changed and the covered fingerprints are equal; a new head needs fresh proof for its changed paths (P5) |
-| Visual check | E | reviewed head and its tree id; render recipe version and states; screenshot paths with page and viewport; criterion versions judged; verdict and findings; or the owner's "Not a UI change" with the UI path set it covers | UI changes only; kept with the Change and shown on its card; bound to head, tree, states and criterion versions, so a new head with changed UI paths re-runs it; "Not a UI change" holds only for its UI path set |
+| Visual check | E | reviewed head and its tree id; render recipe version and states; screenshot paths with page and viewport; criterion versions judged; verdict and findings; "before" screenshot paths captured at the target commit, or the reason they are missing (TD-24); or the owner's "Not a UI change" with the UI path set it covers | UI changes only; kept with the Change and shown on its card, "before" beside "after"; bound to head, tree, states and criterion versions, so a new head with changed UI paths re-runs it; "before" is captured once and never gates; "Not a UI change" holds only for its UI path set |
 | Conversation handling | L | per PR conversation item: id and version digest; recorded reply id; fix id and commit; reposts; "no action needed: <reason>" | A reopened or edited item is a new version with a new task; a fix counts only while its commit is in the PR head; 3 reposts of a deleted reply, then ask |
 | Overlap | L | other Change; shared paths, ignoring docs, lockfiles and generated files | Shown on the card, never asked (TD-12) |
 | Current step | L | kind; task id; mode; attempt; started time; credits so far | Exactly one |
 | Outcome | L | exit kind or pending; cause key; reason; next actor; wake trigger or next observation; last permission denial | Exactly one per step attempt; denial shown (B7) |
 | Budgets | L | per cause key: count, failure fingerprint, progress fingerprint, alternative tried, last time; review rounds per task; re-plans per Change | §3.6 |
 | Merge consent | U | head SHA; time; channel; delta shown | Only when the profile asks before merge; void when the PR head is not that SHA |
-| Pull-back | L | merged SHA; per worktree from `git worktree list`: fast-forwarded, or behind with its reason; "submodules changed" when a gitlink moved | A "behind" result offers Pull until it succeeds |
+| Pull-back | L | merged SHA; the worktree holding the target, if any; updated (fast-forwarded, or local commits replayed), or behind with its reason; "submodules changed" when a gitlink moved | A "behind" result offers Pull until it succeeds (TD-26) |
 | Writer lock | L | host id; runner PID and start time; runtime PID; session id; task PIDs with start times; acquired; heartbeat; last tool event | One writer per Change (DR10) |
 | Stop record | L | error kind; one action; actor; resume condition; time | Cleared when the resume condition is observed |
 | Names and preserved work | L | Change branch, target branch, worktree path; paths of the bundle and archive files holding preserved work | Names only; heads come from git; preserved work is never pushed (DR6) |
@@ -64,7 +67,7 @@ One versioned file per Change and one per project, outside the checkout, written
 **Never stored:** heads, push state, PR number or state, checks, GitHub reviews and review threads,
 mergeability, merge result; each step reads them at entry (DR5). **Project profile:** profile version, confirmed
 time, entries known, unknown or unsupported with evidence (DR1), merge method, "ask before merge"
-(default off), per-role model and reasoning effort, per-step allow list,
+(default off), per-role model and reasoning effort overriding the defaults (TD-27), per-step allow list,
 poll intervals, expected-start window for required checks, step timeouts. **Host record:** host id,
 PID, start time, heartbeat; it tells the status function whether the host runs.
 
@@ -96,6 +99,10 @@ from the brief's render recipe. The Builder is then fully terminated under
 the normal teardown. The host then launches the environment, for example a local preview server,
 verifies readiness and enters pending for the check, or starts the visual review. It records the environment's PIDs, relaunches
 it after an interruption, and disposes of it before any other writer starts on the Change.
+
+**Before capture** (TD-24; mechanics `autonomous`). For a UI Change the host captures the "before"
+states once, before the first build task, in the Change's worktree at the target commit with the
+same render recipe. A failure is noted on the card (B25) and the run continues; it never gates.
 
 **Merge gate** (as built, `autonomous` order). `merge` re-reads the profile rules and the PR (merged
 → cleanup), evaluates the gate, takes the host's merge lock for the target (pending while another
@@ -131,15 +138,20 @@ digest, unreadable workflows wait; unknown CI never counts as none (interpretati
 checks keep it pending; a failure drafts one fix Change for the owner's approval, and this Change
 continues to preservation, cleanup and pull-back. Without GitHub's "require branches to be up to
 date" and "require conversation resolution", a change between re-read and merge is that documented
-residual risk (TD-9). Merge queues are not supported (TD-22).
+residual risk (TD-9); while either is off, the Changes page shows a neutral note (TD-25). Merge
+queues are not supported (TD-22).
 
-**Pull-back.** `cleanup` first fetches, then inspects every worktree from `git worktree list`. If the
-local target branch is not checked out, or is checked out clean (no untracked files in paths the
-update touches) and not diverged, it fast-forwards it with
-`git merge --ff-only --no-autostash --no-overwrite-ignore`, never `git pull`. Otherwise it never
-stashes, resets or merges; it records "behind" with the reason and the card offers Pull, which runs
-the same fast-forward once it is possible. Submodules are not updated; a changed gitlink adds
-"submodules changed" to the notice.
+**Pull-back** (TD-26). `cleanup` fetches and assumes the local copy is dirty. A target no worktree
+holds is fast-forwarded as a ref. Otherwise exactly one worktree must hold it, on its branch, with
+no operation in progress. The guard compares the real old→new tree diff — both ends of renames,
+deletions, directory prefixes, case-folding — with local changes and untracked and ignored files; a
+collision or a local merge commit records "behind", nothing touched. Local commits are replayed with
+`git cherry-pick --allow-empty --empty=keep` in a temporary detached worktree. After re-checking
+branch and commit, `git read-tree -m -u <old> <new>` and
+`git update-ref refs/heads/<target> <new> <old>` apply the update; a failed partial update is
+reconciled, or reported with the exact `git checkout -- <paths>`. No stash, in-place rebase or
+reset. Every failure records "behind" with its reason and the card offers Pull, which runs the same
+update. Submodules are not updated; a changed gitlink adds "submodules changed" to the notice.
 
 ### 3.3 Exit and pending table
 
@@ -284,7 +296,7 @@ next_actor) → (line, action)`. Rules apply in order; the first match wins.
 | 10 | Stopped | "Build 4/5 · stopped: commit signing key locked" | Unlock the key (you) |
 | 11 | Paused | "Plan · paused by you 2 days ago" | Resume |
 | 12 | Done with leftovers | "Done · merged PR #14 · 2 unmerged commits saved in .git/owlbear-delivery/changes/login/preserved/login-1.bundle" | none |
-| 13 | Local target behind | "Done · merged PR #14 · local main is behind: uncommitted changes in your checkout" | Pull |
+| 13 | Local target behind | "Done · merged PR #14 · local main is behind: your local changes to src/app.ts overlap the merged change" | Pull |
 
 ### 3.5 Error kinds
 
@@ -375,7 +387,7 @@ Fifteen kinds, shown to users and agents; each cause key starts with one.
 | P3 | follow back → fix task per conversation item that needs one → after the fix is published the engine posts the Builder's reply once (marker) and resolves the thread; other items are answered or recorded "no action needed: <reason>"; dispute → ask with both positions | "Build · fixing review comment: rename `cfg`" |
 | H1 | Builder returns a launch recipe and is terminated; host launches the environment and verifies readiness; check pending, no timeout | "Check · waiting for you: log in on staging and see the banner" |
 | M1 | Entry, or the host's poll while the Change waits on you, observes PR merged → termination confirmed → cleanup with pull-back | "Done · merged PR #14" |
-| M7 | cleanup fetches; in `git worktree list` the checked-out local target is dirty → no fast-forward; "behind" recorded; Pull offered | "Done · merged PR #14 · local main is behind: uncommitted changes in your checkout" |
+| M7 | cleanup fetches; the one worktree holding main has an uncommitted change to a path the merged diff changes → nothing touched; "behind" recorded; Pull offered | "Done · merged PR #14 · local main is behind: your local changes to src/app.ts overlap the merged change" |
 | X1 | Host gone; on next start observe, then resume | "Build 2/5 · Delivery is not running" |
 | X3 | Next start observes; moved target handled by integrate before publish | "Build 4/5 · starting: export" |
 

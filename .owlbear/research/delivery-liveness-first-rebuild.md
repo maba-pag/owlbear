@@ -7,7 +7,7 @@
 > reliably makes progress — possibly as a re-implementation with selective reuse?
 > **Status:** Analysis and recommended roadmap, revision 2 (2026-10-10): corrected after six
 > independent challenges and re-weighted by the user toward end-to-end design and failure modes
-> (§1). Decided by the user: TD-1 to TD-22 (§3.8). Every other recommendation is `autonomous` until
+> (§1). Decided by the user: TD-1 to TD-29 (§3.8). Every other recommendation is `autonomous` until
 > the user decides it.
 
 ## 1. Context and Question
@@ -225,6 +225,20 @@ choices and user choices alike as user decisions. This plan therefore treats eve
 | TD-20 | First release, before real-project use: New Change button, automatic merge with pull-back, thread replies and resolution, agent visual pre-check, Change card with a deterministic "now" line, step time, quiet warning and credits. Watcher, notifications, scanner triage and a knowledge home wait for evidence from real use | `decided` (answered question) | 2026-10-10 |
 | TD-21 | No cost question: credits are shown per Change and step, never used to stop or ask | `decided` (answered question) | 2026-10-10 |
 | TD-22 | No merge-queue support | `decided`: "i dont know what that is, so probably no" | 2026-10-10 |
+| TD-23 | Charter and design approved on the basis of nine cornerstones (what it is, touchpoints, merge gate, PR comments, after the merge, failures, agents and safety, models, approval), with TD-24 to TD-29 as amendments | `decided` (answered question) | 2026-10-10 |
+| TD-24 | Visual changes: before and after screenshots are captured and shown to the owner without interrupting the run, so the owner can intervene or simply see the difference | `decided`: "screenshots of the before/after are created and presented to the user. this does not interrupt the process" | 2026-10-10 |
+| TD-25 | When the target repository lacks "require branches to be up to date" or "require conversation resolution", Delivery shows a visible note, not a warning, and does not require them | `decided`: "make it a visible note, but not a warning" | 2026-10-10 |
+| TD-26 | Pull-back assumes the local copy is dirty (memories and other local files change constantly) and must update it reliably without conflicts, by rebase where needed, without losing local work | `decided`: "we have to assume local copy is never clean … we need a reliable mechanism to pull without conflicts and sometimes that could even mean a rebase" | 2026-10-10 |
+| TD-27 | Models and reasoning effort per role: luna and haiku always at `max`; reviews on `gpt-6.1-sol` at `high`; challenges on `gpt-6.1-sol` at `medium`; planning on `claude-opus-5.5` at `high` (a step down to `medium` stays open until real Changes show the difference); shaping in VS Code chat on Opus | `decided`: "if we use luna, we always use max, same for haiku … sol is the perfect reviewer … high … medium for challengers … for planning … opus 5.5, probably on high" | 2026-10-10 |
+| TD-28 | Work happens in worktrees for the first release; containers are looked at before a later decision | `decided`: "its probably fine for a v1" | 2026-10-10 |
+| TD-29 | Agents never push; Delivery performs every git and GitHub write | `decided`: "agree on agents never push...Github write" | 2026-10-10 |
+
+**User direction, not yet decisions** (2026-10-10, cornerstone walkthrough): whether three roles are
+enough is open ("i dont want to actively decide that three roles are enough"); the brief and plan
+reviews act as challengers, and cheap helper subagents on `claude-haiku-5.5` (code research, small
+lookups) may help. Answering only comments that address Delivery (for example `@owlbear`) was raised
+as a question. Code-size and complexity rules could build on SonarQube, Snyk or Aikido rules and
+later be enforced by such a tool in CI.
 
 **User direction, not yet decisions** (forked chat, 2026-10-10): Cockpit as the communication channel
 instead of Teams, Slack or Signal; "my goal would be for delivery to just run on itself"; start

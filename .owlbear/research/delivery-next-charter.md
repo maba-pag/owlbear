@@ -4,9 +4,9 @@
 > **Date:** 2026-10-10
 > **Question:** What is the next Delivery for, who owns what, what may the user be asked to do,
 > how does every step end, and how small must it stay?
-> **Status:** Draft for the user's approval, revised after decisions TD-10 to TD-22. Only TD-1 to
-> TD-22 in the rebuild research are the user's decisions; everything else here is `autonomous` until
-> he approves this charter.
+> **Status:** Approved by the user on the basis of nine cornerstones (TD-23), with amendments TD-24
+> to TD-29 in the rebuild research §3.8. TD-1 to TD-29 are the user's decisions; everything else
+> here is `autonomous` design.
 
 ## 1. Context and Question
 
@@ -21,7 +21,7 @@ frame for the M3 design. Later design cannot override it without the user decidi
 
 | ID | Source | Used for |
 | --- | --- | --- |
-| H01 | [Rebuild research](delivery-liveness-first-rebuild.md) | Root causes RC1–RC6, principles P1–P9, roadmap, decisions TD-1–TD-22, provenance rule |
+| H01 | [Rebuild research](delivery-liveness-first-rebuild.md) | Root causes RC1–RC6, principles P1–P9, roadmap, decisions TD-1–TD-29, provenance rule |
 | H02 | [Journey and failure modes](delivery-next-journey-and-failure-modes.md) | Journey J0–J9, touchpoint budget, exit contract, catalogue, DR1–DR16 |
 | H03 | [Ownership map](delivery-next-ownership-map.md) | Who owns each current responsibility; what Delivery-next keeps |
 | H04 | [Route comparison](delivery-next-route-comparison.md) | Thin core on the Copilot runtime; reuse by copying |
@@ -63,7 +63,8 @@ attention only on the brief, genuine questions and person-only checks.
 | Copilot platform | Agent sessions, model execution, tool-permission enforcement, transcripts, skills and instructions loading |
 | **Delivery-next** | Brief and plan; the step loop with its exits, pending conditions and retry policy; durable questions and answers; validity of reviews and person-only checks; the merge gate bound to one head and the pull-back; one writer per Change; one status line; the project profile |
 
-Delivery-next reads code facts from git and GitHub when it needs them and never stores copies.
+Agents never push: Delivery performs every git and GitHub write (TD-29). Delivery-next reads code
+facts from git and GitHub when it needs them and never stores copies.
 Anything that touches product code — installs, checks, commits with hooks, conflict resolution, CI
 fixes, review feedback — runs inside an agent task with the fix loop, never as an engine operation
 (DR3). Custody, receipts, fences, recovery routes, a remote state branch and custom refs are dropped.
@@ -72,7 +73,8 @@ fixes, review feedback — runs inside an agent task with the fix loop, never as
 
 A new thin core beside the old engine, in its own package, built on the Copilot runtime: a small
 Python loop drives agent sessions through the Copilot SDK and uses git and GitHub through copied,
-adapted modules (route comparison §3.4). The old engine stays frozen except for fixes the open
+adapted modules (route comparison §3.4). Each Change works in a git worktree in the first release;
+containers are looked at before a later decision (TD-28). The old engine stays frozen except for fixes the open
 Changes need (TD-2) and is deleted at cutover (M6).
 
 ### 3.5 Touchpoints
@@ -140,7 +142,7 @@ resolves it; on disagreement it asks the owner with both positions (TD-16).
 - **Status and answers** live in one local status view (Cockpit), which lists every Change as a
   card with stage, situation, next actor, a deterministic "now" line (step plus last tool event),
   step time, a quiet warning when a step is unusually silent, credits per Change and step,
-  visual-check screenshots and pull-back status, and accepts answers and person-only check results.
+  "before" and "after" screenshots of UI Changes side by side (TD-24) and pull-back status, and accepts answers and person-only check results.
   Chat can answer ordinary questions through the same operation. Recovery
   decisions stay Cockpit actions, as tool rule T6 decided; moving them to chat would need the
   user's re-decision.
@@ -155,15 +157,23 @@ resolves it; on disagreement it asks the owner with both positions (TD-16).
   answer or check result arrives. After a restart or wake it observes first, then resumes steps
   that are neither waiting on the user nor paused or stopped.
 - **New Change button** (TD-13). The Changes page calls the host, which runs
-  `code chat -r -m agent "<start prompt for the delivery skill>"` in the project folder; if `code` is
-  missing, the page shows the exact command.
-- **Pull-back** (TD-15). After a merge the host fetches. It fast-forwards the local target branch
-  when it is not checked out, or when it is checked out in a clean, not-diverged working copy, with
-  `git merge --ff-only --no-autostash --no-overwrite-ignore` in each worktree from
-  `git worktree list`, never `git pull`.
-  Otherwise it never stashes, resets or merges; the card shows "local <target> is behind: <reason>"
-  with a one-click pull action once that becomes possible. Unsaved editor buffers are invisible to
-  git; VS Code shows its "file changed on disk" dialog.
+  `code chat -m agent "<start prompt for the delivery skill>"` in the project folder, without `-r`:
+  `-r` uses the last active window, which may belong to another project. Whether VS Code reuses the
+  project's open window is confirmed in the user's VS Code check; the fallback is a
+  `vscode://agents/new?prompt=…&workspace=…` link, which prepares a draft in the Agents window. If
+  `code` is missing, the page shows the exact command.
+- **Pull-back** (TD-15, TD-26). After a merge the host fetches and assumes the local copy is dirty.
+  A target branch no worktree holds is fast-forwarded as a ref; otherwise exactly one worktree must
+  hold it, on its branch, with no operation in progress. The guard compares the real old→new tree
+  diff — both ends of renames, deletions, directory prefixes, case-folding — with local changes and
+  untracked and ignored files. A collision or a local merge commit leaves the target behind with
+  nothing touched. Local commits are replayed with `git cherry-pick --allow-empty --empty=keep` in a
+  temporary detached worktree, never in the user's copy. After re-checking branch and commit the host
+  applies the update with `git read-tree -m -u <old> <new>` and
+  `git update-ref refs/heads/<target> <new> <old>`; a failed partial update is reconciled, or reported
+  with the exact `git checkout -- <paths>`. It never stashes, rebases in place or resets. Every
+  failure shows "local <target> is behind: <reason>" with the Pull button. Unsaved editor buffers are
+  invisible to git; VS Code shows its "file changed on disk" dialog.
 - **The host starts** when VS Code opens the project, through a folder-open task. Setup asks for
   and verifies the automatic-task permission and workspace trust this needs. Where automatic start
   is unavailable, one disclosed start action exists, and the status view or chat says nothing
@@ -178,8 +188,12 @@ demonstrate answer → runner → resume with the original runner gone.
   loop, not the agent, records exits and advances.
 - Each step type has a default-deny permission policy with an explicit allow list; denials appear in
   the status line. Allow-all is never used.
-- Models and reasoning effort are chosen per role in the project profile, to be proven by the
-  `maba-pag` probe (TD-17). Credits are shown per Change and step, never used to stop or ask (TD-21).
+- Models and reasoning effort are chosen per role (TD-27): planner `claude-opus-5.5` high; builder
+  `gpt-6-luna` max (build and check preparation); reviewer `gpt-6.1-sol` high (task, final and
+  visual review); challenger `gpt-6.1-sol` medium (brief and plan review). A project overrides a role
+  with `profile --role ROLE=MODEL:EFFORT`. Shaping happens in the owner's own VS Code chat with the
+  model he chooses. The `maba-pag` probe (TD-17, 2026-10-10) showed requested models and efforts are
+  billed as requested. Credits are shown per Change and step, never used to stop or ask (TD-21).
 - Platform preview features (agent merge, Agents-window PR form, dynamic workflows) are optional
   conveniences and never required for the journey.
 
@@ -212,7 +226,10 @@ assertions on agent prose wording; agent definitions get structural checks only 
 
 UI changes always get a visual check (TD-14): the host launches the preview from the brief's render
 recipe (start command, URL or entry, up to six UI states to capture), takes screenshots at desktop
-and phone sizes, and a reviewer judges them against the criteria. A Change is UI when the brief's
+and phone sizes, and a reviewer judges them against the criteria. "Before" screenshots of the same
+states are captured once from the target, before the first build task, and shown beside the
+"after" ones on the card without interrupting the run (TD-24); if the recipe cannot render the
+target, the card says so and the run continues. A Change is UI when the brief's
 `ui` flag says so or its diff touches UI files or folders; "Not a UI change" holds only for the UI
 paths it was given for. The screenshots are kept with the Change and shown on its card; a
 failure becomes a Builder fix task. The owner looks only when the brief declares a person-only check.
@@ -254,7 +271,8 @@ line have not run. Medium for the merge gate: a merge under a ruleset with the S
 in a sandbox, automatic merge with thread resolution and pull-back was not. Medium for the module
 size of about 400 lines of logic: a first value that only the user should change.
 
-**Limits:** the probe ran on a free personal Copilot account with the Auto model. Models, reasoning
-effort and cost on `maba-pag`'s business seat remain unproven until the `maba-pag` probe (TD-17). Delivery state
+**Limits:** the platform probe ran on a free personal Copilot account with the Auto model; the
+`maba-pag` probe (2026-10-10) settled model and effort billing on the business seat (TD-27), not a
+full Change. Delivery state
 lives in the clone's git directory ([architecture](delivery-next-architecture.md)): deleting the clone
 deletes the state of its unfinished Changes, while their branches and PRs remain on GitHub.

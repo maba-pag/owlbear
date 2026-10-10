@@ -4,13 +4,16 @@
 > **Date:** 2026-10-10
 > **Question:** What is the smallest set of packages, processes, state files, agent tools and prose
 > that delivers the [charter](delivery-next-charter.md) on the Copilot SDK, and how does each part fail?
-> **Status:** design draft; `autonomous` until the user approves M3. Revision 2026-10-10 after
+> **Status:** approved with the charter (TD-23); amendments TD-24 to TD-29; the rest is `autonomous`
+> design. Revision 2026-10-10 after
 > design challenge and the full-set challenge: separate host app until M6, inbox before exclusions,
 > host-side termination scan, check environments, bundle and archive preservation, brief endpoint,
 > tool count, clone-local state. Revision 2026-10-10 for TD-10 to TD-22: module rules instead of line
 > targets, merge gate and pull-back, visual check, thread replies, New Change, consented local files,
 > no merge queue. Revision 2026-10-10 aligned with the M4 reshape (phases A–E, `adfb5a77c`): module
 > layout, gate order, conversation versions, declared CI, overlap, retry classes, visual check.
+> Revision 2026-10-10 for TD-24 to TD-29: "before" screenshots, repository-rule notes, pull-back
+> with replay, role models, worktrees, agents never push, New Change without `-r`.
 
 ## 1. Context and Question
 
@@ -63,8 +66,10 @@ the logic-line measure.
 | `profile.py` | Detect, confirm and re-read the project profile, including declared CI bound to a workflow digest, merge method, "ask before merge", and model and reasoning effort per role | new | 312 |
 | `steps/` `engine`, `worktree`, `review`, `publish`, `follow`, `check`, `merge`, `cleanup` | Engine parts of steps: shared exits, workspace, review, push and PR, CI, declared checks and conversation handling, person-only checks, merge gate and guarded merge, preservation and cleanup | new; the optional "ask before merge" consent keeps the head-bound rule of `merge_approval.py` | 1,640 |
 | `steps/conversation.py` | Which PR conversation items are Delivery's, and which item versions are open or handled | new | 199 |
-| `steps/visual.py` | Visual check: UI detection, Playwright capture of the brief's states, screenshots to the reviewer, result bound to head and tree | new | 272 |
-| `steps/pullback.py` | Fetch and fast-forward the local target after a merge, or record "behind" with its reason; also serves the Pull action | new | 96 |
+| `steps/visual.py` | Visual check: UI detection, Playwright capture of the brief's states in the installed Chrome, then Edge, then Playwright's Chromium, screenshots to the reviewer, result bound to head and tree | new | 279 (`833dcd06d`) |
+| `steps/pullback.py` | Fetch and update the local target after a merge without losing local work (TD-26): holders, guard against collisions, or "behind" with its reason; also serves the Pull action | new | 230 (`833dcd06d`) |
+| `steps/pullback_replay.py` | Replay local commits in a temporary detached worktree; apply the update with `read-tree` and a guarded `update-ref` | new | 189 (`833dcd06d`) |
+| `roles.py` | Session role per step kind, default model and effort per role, project overrides (TD-27) | new | 63 (`833dcd06d`) |
 | `prompts.py` | Bounded context for each agent step | new | 402 |
 | `sdk_adapter.py` | Session, agent, model and reasoning effort, result boundary, usage, teardown | new | 417 |
 | `session_result.py` | What one worker session produced, mapped to the loop's step result | new | 129 |
@@ -138,9 +143,12 @@ the process that serves the status view the owner of runners in both phases.
 - Detects sleep by a jump of more than 60 s between wall-clock and monotonic time, then runs an
   observation pass.
 - Starts new Changes for the New Change button: `POST /api/next/new-change` runs
-  `code chat -r -m agent "<start prompt for the delivery skill>"` in the project folder, as an
-  argument list without a shell and with a fixed prompt. If `code` is not on the path, the endpoint
-  returns that exact command and the page shows it (S12).
+  `code chat -m agent "<start prompt for the delivery skill>"` in the project folder, as an
+  argument list without a shell and with a fixed prompt. It omits `-r`, which uses the last active
+  window, possibly another project's; whether VS Code reuses the project's open window is confirmed
+  in the user's VS Code check, with `vscode://agents/new?prompt=…&workspace=…` (a draft in the
+  Agents window) as fallback. If `code` is not on the path, the endpoint returns that exact command
+  and the page shows it (S12).
 - Starts through a VS Code folder-open task ("OwlBear Delivery host", `runOn: folderOpen`). Setup
   writes `.vscode/tasks.json` only with consent and only while it is untracked, adds it to the
   clone's `.git/info/exclude` so nothing is committed (TD-11, DR14), and verifies workspace trust and
@@ -161,7 +169,7 @@ id, runtime PID and task PIDs as they appear. A runner never starts another runn
 | --- | --- | --- |
 | Runtime | Installed Copilot CLI via `RuntimeConnection.for_stdio(path=…)`; path and version from readiness. Stdio ties the runtime to the runner | P3; runtime download blocked by the proxy (S02) |
 | Agent | One custom agent per role from the package's `agents/`, pre-selected; repository instructions and skills load as the platform loads them | P1, P6, P7 |
-| Model | Model and reasoning effort per role from the profile; defaults wait for the `maba-pag` seat probe (TD-17, O1). After each step the billed model from usage metrics is compared; a mismatch shows in the status line, and becomes `ask` only if the profile marks the model as required | P6 silent fallback, P11 |
+| Model | Model and reasoning effort per role (TD-27): planner `claude-opus-5.5` high; builder `gpt-6-luna` max (build, integrate, check preparation); reviewer `gpt-6.1-sol` high (task, final and visual review); challenger `gpt-6.1-sol` medium (brief and plan review). `luna` and `haiku` run only at `max`. A project overrides a role with `profile --role ROLE=MODEL:EFFORT`. The session model counts; a custom agent's own model is ignored. After each step the billed model from usage metrics is compared; a mismatch shows in the status line, and becomes `ask` only if the profile marks the model as required | P6 silent fallback, P11; `maba-pag` probe 2026-10-10: requested models and efforts billed as requested, `auto` routed to `claude-sonnet-5.5`, subagent models honoured, most models with 1M context |
 | Result boundary | The step ends when a result tool call is accepted; the handler validates and returns field errors to the same agent (T3, T4). Never wait on `session.idle`. A turn that ends without a result gets one reminder, then `retry`. Each step kind has a deadline | P1, P4 |
 | Questions | No `on_user_input_request` handler; the runtime's own question tool is unavailable. `ask_question` ends the step with `ask`; the answer is delivered by resuming the session and sending it as a message | P2b, P2d |
 | Permissions | Handler with the step kind's allow list (§3.6); everything else denied and recorded in the activity log | P5 |
@@ -190,7 +198,7 @@ unfinished Changes, while their branches and PRs remain on GitHub. Layout:
   changes/<slug>/inbox/       answers, check results, approvals, consent, intents
   changes/<slug>/activity.jsonl   last 200 events: steps, denials, usage, tool-call outcomes
   changes/<slug>/preserved/   bundle and archive files of unfinished work
-  changes/<slug>/visual/      visual-check screenshots per reviewed head
+  changes/<slug>/visual/      "before" screenshots and visual-check screenshots per reviewed head
 ```
 
 - Writes use `atomic_write`; the previous file is kept as `.prev`. A newer `format` → `stop`
@@ -209,18 +217,20 @@ unfinished Changes, while their branches and PRs remain on GitHub. Layout:
   path (M11, `autonomous`).
 - Worktrees live under one user data root (`~/Library/Application Support/OwlBear/worktrees/` or
   `$XDG_DATA_HOME/owlbear/worktrees/`), keyed by repository name and a short hash of the common
-  directory, so setup grants folder trust once (P8).
+  directory, so setup grants folder trust once (P8). Worktrees, not containers, isolate Changes in
+  the first release (TD-28; O12).
 
 **Project profile.** Detected with `gh repo view --json`, `gh api` for branch rules and protection,
 `.github/workflows/`, manifests and lockfiles per package, hook and signing configuration,
 `.gitattributes` and `.gitmodules`. Each entry is known, unknown or unsupported with its evidence
 (DR1); an HTTP 403 on rules is unknown. The user confirms it in the status view at setup; each
 Change records the profile version it started with. Effective rules and required checks are re-read
-before publish and before merge; a difference becomes `ask` showing it. Model and reasoning effort
-per role, the merge method and "ask before merge" (default off) are part of the profile; a merge
+before publish and before merge; a difference becomes `ask` showing it. Overrides of the role models
+(TD-27), the merge method and "ask before merge" (default off) are part of the profile; a merge
 queue in the rules is marked unsupported (TD-22).
 
-**Git and GitHub adapters.** Copied modules (§3.1). The loop pushes with hooks as configured, never
+**Git and GitHub adapters.** Copied modules (§3.1). Agents never push; Delivery performs every git
+and GitHub write (TD-29). The loop pushes with hooks as configured, never
 with `--no-verify` or force. A failing pre-push hook becomes a builder fix step (DR3); transport or
 authentication failure becomes pending; an unknown write result is read back with
 `classify_write_readback` and replayed only on confirmed absence.
@@ -228,9 +238,10 @@ authentication failure becomes pending; an unknown write result is read back wit
 - **Merge.** `steps/merge.py` re-reads the rules, evaluates the gate, takes the merge lock for the
   target, re-reads the PR and evaluates the gate again in the order of D3 §3.2; the first unmet
   condition is the exit. Then the REST merge call with `sha` set to the gated head and the profile's
-  method, then a readback. Setup recommends GitHub's "require branches to be up to date" and
-  "require conversation resolution" where the plan allows, and the profile records whether they are
-  on. Without them, a change between re-read and merge is a documented residual risk for personal
+  method, then a readback. The profile records whether GitHub's "require branches to be up to date"
+  and "require conversation resolution" are on; while either is off, `GET /api/next/project` returns
+  a neutral note the Changes page shows, and setup prints a tip (TD-25). Without them, a change
+  between re-read and merge is a documented residual risk for personal
   use (TD-9). After the merge the engine watches the target checks at the merge commit: running
   checks keep it pending; a failure drafts one fix Change for the owner's approval while the original
   continues to preservation, cleanup and pull-back. No merge queue (TD-22); a required queue sends
@@ -252,14 +263,19 @@ authentication failure becomes pending; an unknown write result is read back wit
   posting and never posts twice (P12). A deleted reply is reposted at most 3 times, then the owner
   is asked. A fix counts only while its commit is in the PR head. Before resolving it re-reads the
   thread; a newer comment not by Delivery means no resolution and a new feedback item (P13).
-- **Pull-back.** `git fetch`, then each worktree from `git worktree list` is inspected. If the target
-  is not checked out, `git fetch origin <target>:<target>`, which git refuses unless it
-  fast-forwards; if it is checked out clean (no untracked files in paths the update touches) and not
-  diverged, `git merge --ff-only --no-autostash --no-overwrite-ignore` there — never `git pull` with
-  the user's configuration. Otherwise no stash, reset or merge: "behind" with the reason and Pull.
-  Submodules are not updated; a changed gitlink adds "submodules changed" to the notice. Hooks and
-  LFS filters run as with the user's own `git merge`. Unsaved editor buffers are invisible to git;
-  VS Code shows its "file changed on disk" dialog.
+- **Pull-back** (TD-26). `git fetch`, and the local copy is assumed dirty. A target no worktree
+  holds is updated with `git fetch origin <target>:<target>`, which git refuses unless it
+  fast-forwards. Several holders, a detached HEAD or an operation in progress → "behind". With one
+  holder, the guard compares the real old→new tree diff — both ends of renames, deletions, directory
+  prefixes, case-folding — with local changes and untracked and ignored files; a collision or a
+  local merge commit → "behind", nothing touched. Local commits are replayed with
+  `git cherry-pick --allow-empty --empty=keep` in a temporary detached worktree, never in the user's
+  copy. After re-checking branch and commit, `git read-tree -m -u <old> <new>` and
+  `git update-ref refs/heads/<target> <new> <old>` apply the update; a failed partial update is
+  reconciled, or reported with the exact `git checkout -- <paths>`. No stash, `git pull`, in-place
+  rebase or reset. Every failure → "behind" with its reason and Pull. Submodules are not updated; a
+  changed gitlink adds "submodules changed" to the notice. Unsaved editor buffers are invisible to
+  git; VS Code shows its "file changed on disk" dialog.
 
 **Visual check.** For UI changes the final review runs in visual mode on the exact head. The brief
 records a render recipe: start command, URL or entry, a `ui` flag, and up to six `visual` states to
@@ -273,12 +289,19 @@ establishes it before approval; if the project has none, shaping offers to add o
 Change, declare a person-only visual check in the brief (TD-14), or change scope; visual testing is
 never skipped (interpretation of TD-14, `autonomous`). The host launches the preview from that
 recipe, as verified by the Builder; `steps/visual.py` captures the named UI states with Playwright
-for Python, stores the PNGs under
+for Python in the installed Chrome, then Edge, then Playwright's own Chromium, stores the PNGs under
 `changes/<slug>/visual/` and passes them to the reviewer, who judges them with `submit_result`; the
 reviewer may name further views for one more capture. Playwright, not the OwlBear browser MCP: the
 MCP has no screenshot tool, worker sessions run without MCP servers (P8), and Playwright is already a
-workspace dependency of `owlbear-browser`. The engine captures, so the reviewer keeps three tools.
+workspace dependency of `owlbear-browser`. VS Code's integrated browser is reachable only from chat
+inside VS Code, not from workers outside it. The engine captures, so the reviewer keeps three tools.
 A recipe that fails or a missing browser at runtime is B24.
+
+"Before" screenshots (TD-24; not yet built). For UI Changes the host captures the same states once,
+in the Change's worktree at the target commit with the same render recipe, before the first build
+task (`autonomous`). The card shows them beside the "after" ones without interrupting the run. If
+the recipe cannot render the target, the card says so and the run continues (B25); the "before"
+capture never gates.
 
 **Changes page.** Served by the host app before M6; a "Changes" page beside Ideas and Memory in
 Cockpit after it. Endpoints under `/api/next`:
@@ -286,8 +309,9 @@ Cockpit after it. Endpoints under `/api/next`:
 | Endpoint | Purpose |
 | --- | --- |
 | `GET /changes` | Every Change card: status line, "now" line (step plus last tool event), step time, quiet warning, credits, overlaps, next actor |
-| `GET /changes/{slug}` | Brief and versions, plan, open question, person-only checks, visual-check screenshots, decisions with origin, PR link, pull-back result, activity |
-| `POST /new-change` | Run `code chat` with the delivery skill's start prompt; returns the command when `code` is missing |
+| `GET /changes/{slug}` | Brief and versions, plan, open question, person-only checks, "before" and visual-check screenshots, decisions with origin, PR link, pull-back result, activity |
+| `GET /project` | Neutral notes on repository rules that GitHub does not require and Delivery checks itself (TD-25) |
+| `POST /new-change` | Run `code chat -m agent` with the delivery skill's start prompt; returns the command when `code` is missing |
 | `POST /briefs` | Create a Change or revise its brief draft (behind `save_brief`): validates the brief, returns the host-issued handle or field-specific errors |
 | `POST /changes/{slug}/approve-brief` | Approve one brief version |
 | `POST /changes/{slug}/answers` | Answer one question (also used by the chat tool) |
@@ -383,7 +407,7 @@ treated as absence (A05 §3.3).
 | Step kind | Allowed | Denied explicitly |
 | --- | --- | --- |
 | Brief challenge in `shape`, `plan`, `review` | Read, search, read-only `git` (`log`, `diff`, `show`, `status`) | Writes, every other shell command, URL fetch |
-| `build`, `integrate`, `check` preparation | Read; write inside the worktree; shell for the profile's install and check commands; `git` `add`, `commit`, `merge`, `status`, `diff`, `log`, `restore` | `git push`, `git config`, `gh`, removal outside the worktree, detached shells where the request shows them |
+| `build`, `integrate`, `check` preparation | Read; write inside the worktree; shell for the profile's install and check commands; `git` `add`, `commit`, `merge`, `status`, `diff`, `log`, `restore` | `git push` (agents never push, TD-29), `git config`, `gh`, removal outside the worktree, detached shells where the request shows them |
 | `publish`, `follow`, `merge`, `cleanup` | No agent | — |
 
 - **Default deny.** Unlisted requests are denied and recorded; allow-all is never used (P5).
@@ -435,25 +459,29 @@ the state records. Differences to settle in the M3 challenge:
 
 | ID | Question | For | Why it matters |
 | --- | --- | --- | --- |
-| O1 | Which models and reasoning efforts per role on `maba-pag`'s business seat (TD-17)? | Probe (R8 repeat) | Profile defaults per role; P6 showed silent fallback |
 | O2 | Merge, rule and required-review reads on a protected repository | Probe in a `maba-pag` sandbox | `gh.py` 403 handling, required-check identities, required reviews |
 | O3 | Do SDK-created sessions appear in the VS Code Agents window? | Probe | Could replace parts of the status view later (Q9) |
 | O5 | Do user-level tasks support `runOn: folderOpen`? | Probe | Would avoid writing a tracked `.vscode/tasks.json` |
 | O7 | Do permission requests show a shell's `detach` flag; do pre-tool hooks work in SDK sessions? | Probe | Detached shells outlive the runtime (P4) |
 | O8 | How do consumers get a Copilot CLI behind a TLS-intercepting proxy? | Probe, setup | The SDK's runtime download failed (S02) |
 | O10 | Can an SDK session take screenshots as image input? | Probe | The visual check hands PNGs to the reviewer |
-| O11 | Which stronger model may the retry policy switch to? (`autonomous`) | Profile, after O1 | The prototype has no profile setting for it, so the only alternative before asking is a re-plan |
+| O11 | Which stronger model may the retry policy switch to? (`autonomous`) | Profile | The prototype has no profile setting for it, so the only alternative before asking is a re-plan |
+| O12 | Containers instead of worktrees for a later release? (TD-28) | Investigation, then user decision | Worktrees share the host's tools, caches and network |
+| O13 | How many roles, and cheap helper subagents on `claude-haiku-5.5`? (user direction) | User decision | Cost and context per step; subagent models are honoured |
+| O14 | Answer only PR comments that address Delivery? (user direction) | User decision | Changes the gate's "every conversation item handled"; GitHub reports app bots reliably as type `Bot`, while machine users look like people |
+| O15 | SonarQube-style rules for the code Delivery builds? (user direction) | User decision | A further gate or review input |
 
-Settled in revision 2026-10-10: O4, `submit_result` counts as one tool (charter §3.9), so the total
+Settled in revision 2026-10-10: O1, the role models and efforts (TD-27) after the `maba-pag` probe;
+O4, `submit_result` counts as one tool (charter §3.9), so the total
 stays 6; O6, clone-local state is a stated limitation (§3.2, §4); O9, Cockpit is not modified
 before M6 because the host is its own app until then.
 
 ## 4. Recommendation, Confidence, and Limits
 
-**Recommendation (`autonomous`):** build `serve/delivery-next/` as laid out in §3.1: its own host
+**Recommendation (`autonomous`, approved with the charter, TD-23):** build `serve/delivery-next/` as laid out in §3.1: its own host
 app until M6 and Cockpit as the host after it, one runner process per step, state in the common git
 directory, six agent-facing tools of which
-three are SDK-defined per session, and worker craft in package-shipped agent prose. Probe O1, O2,
+three are SDK-defined per session, and worker craft in package-shipped agent prose. Probe O2,
 O5, O8 and O10 before M4 depends on them.
 
 **First vertical slice (M4).** One pre-approved, one-task sandbox Change runs through ask → answer
@@ -476,8 +504,8 @@ automated.
 **Confidence:** high that the components keep the limits (6 tools, 10 step kinds, 15 error kinds)
 and that the state location meets DR11 and DR10.
 Medium for the host app and the termination protocol: both follow probe evidence, but
-neither has run as a whole. Low for the folder-open start, per-role model selection and the visual
-check's image input, which depend on O5, O1 and O10.
+neither has run as a whole. Low for the folder-open start and the visual check's image input, which
+depend on O5 and O10.
 
 **Limits:** the reshaped prototype (`adfb5a77c`) is proven by its package tests with fakes and
 disposable repositories, plus one real Playwright capture; the reshaped flow has not yet run live

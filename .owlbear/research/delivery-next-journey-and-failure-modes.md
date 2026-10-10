@@ -6,12 +6,12 @@
 > **Question:** What does one Change look like end to end for a developer using OwlBear on their own
 > GitHub project, and which failure modes must the design handle — ordinary ones first — so that
 > problems found in real use need fixes, not rework?
-> **Status:** Draft, revised after independent round-2 and round-3 challenges (user experience, failure
-> modes, consumer fit, overall route and cross-document coherence; 2026-10-10); aligned with the M3
-> design (D3–D5), 2026-10-10; revised for decisions TD-10 to TD-22, 2026-10-10; aligned with the M4
-> reshape (`adfb5a77c`), 2026-10-10. Everything else here
-> is `autonomous` until the user approves the M3 design; the user decisions it follows are TD-2, TD-3
-> and TD-10 to TD-22 in the [rebuild research](delivery-liveness-first-rebuild.md#38-decisions-reserved-for-the-user).
+> **Status:** Approved with the charter (TD-23); amendments TD-24 to TD-29. Earlier: revised after
+> independent round-2 and round-3 challenges, aligned with the M3 design (D3–D5), revised for TD-10
+> to TD-22 and aligned with the M4 reshape (`adfb5a77c`), all 2026-10-10. The user decisions it
+> follows are TD-2, TD-3 and TD-10 to TD-29 in the
+> [rebuild research](delivery-liveness-first-rebuild.md#38-decisions-reserved-for-the-user);
+> everything else here is `autonomous`.
 
 ## 1. Context and Question
 
@@ -62,14 +62,14 @@ state lives outside the checkout (DR11, DR14).
 
 | Stage | The user does | The user sees | The system does |
 | --- | --- | --- | --- |
-| J0 Set up (once per project) | Runs setup; confirms the detected project profile; consents to the two local files | Host and repository, base and push repositories, default and target branch, install and check commands per package, CI and required checks, protections, signing, hooks, merge method, "ask before merge" (default off); what is supported, human-assisted or unsupported; where the status view is | Detects the profile; checks GitHub CLI, Copilot and git identity; writes `.vscode/tasks.json` and `.mcp.json` where untracked and adds both to `.git/info/exclude`; recommends "require branches to be up to date" and "require conversation resolution" where allowed |
-| J1 Start or return | Opens VS Code; presses New Change on the Changes page, or picks a waiting Change | Changes waiting for them first, with what happened since; nothing else, or one concrete fix for a broken prerequisite | Readiness check: authentication, servers, state, OwlBear version; New Change runs `code chat` with the delivery skill's start prompt in the project folder |
+| J0 Set up (once per project) | Runs setup; confirms the detected project profile; consents to the two local files | Host and repository, base and push repositories, default and target branch, install and check commands per package, CI and required checks, protections, signing, hooks, merge method, "ask before merge" (default off); what is supported, human-assisted or unsupported; where the status view is | Detects the profile; checks GitHub CLI, Copilot and git identity; writes `.vscode/tasks.json` and `.mcp.json` where untracked and adds both to `.git/info/exclude`; records whether "require branches to be up to date" and "require conversation resolution" are on and prints a tip where they are off (TD-25) |
+| J1 Start or return | Opens VS Code; presses New Change on the Changes page, or picks a waiting Change | Changes waiting for them first, with what happened since; nothing else, or one concrete fix for a broken prerequisite | Readiness check: authentication, servers, state, OwlBear version; New Change runs `code chat -m agent` with the delivery skill's start prompt in the project folder |
 | J2 Shape | Answers questions one at a time; approves the brief | Brief: outcome, acceptance criteria, scope and non-goals, person-only checks, for UI changes a render recipe, a split proposal if it is too big | Designer works from repository evidence; independent reviewer challenges the brief |
 | J3 Plan | Nothing (can look) | Ordered task list with the checks each task must pass; "overlaps with X" where another open Change touches the same files | Planner; independent challenge; overlap check against other open Changes, shown, never asked |
-| J4 Build | Nothing | "Build 2/5" with a "now" line (step plus last tool event), step time, a quiet warning and credits | Per task: prepare the workspace, implement, run project checks, commit, independent review, fix loop |
+| J4 Build | Nothing | "Build 2/5" with a "now" line (step plus last tool event), step time, a quiet warning and credits | Per task: prepare the workspace, implement, run project checks, commit, independent review, fix loop; for UI Changes, before the first task, "before" screenshots from the target (TD-24) |
 | J5 Stay current | Nothing | "Updating with `main`" | Integrates the moved target; conflicts are resolved as a task with checks and review |
 | J6 Publish | Nothing | Pull-request link, "waiting for CI" | Pushes, opens or updates the PR, follows CI, fixes failures and review feedback as tasks; replies on and resolves each thread it fixed |
-| J7 Visual and person-only checks | Performs each declared person-only check and answers pass or fail | Screenshots of the agent visual check on the card; for person-only checks, exact steps and what to look for | For UI changes the host launches the preview from the brief's render recipe, takes screenshots and a reviewer judges them against the criteria; failure → fix task. Prepares the environment for person-only checks; keeps each result valid until its inputs change |
+| J7 Visual and person-only checks | Performs each declared person-only check and answers pass or fail | "Before" and "after" screenshots side by side on the card (TD-24); for person-only checks, exact steps and what to look for | For UI changes the host launches the preview from the brief's render recipe, takes screenshots and a reviewer judges them against the criteria; failure → fix task. Prepares the environment for person-only checks; keeps each result valid until its inputs change |
 | J8 Merge | Nothing; reviews in GitHub only where GitHub requires a human review | "Merging PR #14 at a1c3f02", or what the merge gate still waits for | Merges automatically when the merge gate passes, under the host's merge lock for the target, after a final re-read, with the profile's merge method and the head as SHA guard, then reads back. "Ask before merge" adds one consent question |
 | J9 Pull back and done | Nothing, or presses Pull when the local target was behind | Summary and merged PR; "local main is behind: <reason>" with Pull when pull-back could not run | Pulls the merge back to the local target (pull-back); removes branch and workspace after a preservation check; records history |
 
@@ -88,7 +88,7 @@ local Delivery host serves a Changes page — its own small app until M6, then i
 lists every Change with its stage, situation and next actor, starts new Changes (New Change button),
 and accepts answers and person-only check results. Each Change card shows a "now" line (step plus
 last tool event), step time, a quiet warning when no activity is seen, credits per Change and step,
-visual-check screenshots, overlaps and decision origins (`decided` for brief approvals, answers and
+"before" and "after" screenshots of UI Changes, overlaps and decision origins (`decided` for brief approvals, answers and
 owner choices; `autonomous` for agent choices). Recovery decisions are actions only in that page (T6). The status shows
 observed activity and when it was observed, and says "not running" when no runner is active, so
 "Building 2/5" never implies work that is not happening. The host starts when VS Code opens the
@@ -109,21 +109,26 @@ action needed: <reason>", for example a bot preview link or a coverage report (i
 TD-15, `autonomous`). The host evaluates the gate, takes one merge lock per target branch, re-reads
 the PR and evaluates the gate again ([D3 §3.2](delivery-next-status-and-exits.md)); a target that
 is not an ancestor of the PR head sends the Change back to integrate (`autonomous`). It merges with
-the profile's method and reads the result back. Setup recommends GitHub's "require branches to be up
-to date" and "require conversation resolution" where allowed, and the profile records whether they
-are on. Without them, a change between the re-read and the merge is a documented residual risk for
+the profile's method and reads the result back. The profile records whether GitHub's "require
+branches to be up to date" and "require conversation resolution" are on; while either is off, the
+Changes page shows a neutral note and setup prints a tip (TD-25). Without them, a change between the re-read and the merge is a documented residual risk for
 personal use (TD-9): after the merge Delivery watches the target checks, and a failure drafts one
 fix Change for the owner's approval.
 
-**Pull-back.** After the merge Delivery fetches and inspects every worktree from `git worktree list`.
-If the local target branch is not checked out, or is checked out in a clean working copy (no
-untracked files in paths the update touches) that has not diverged, it fast-forwards it with
-`git merge --ff-only --no-autostash --no-overwrite-ignore`, never `git pull` with the user's
-configuration. Otherwise it never stashes, resets or merges: the card shows "local <target> is
-behind: <reason>" with a one-click Pull once pulling becomes possible. Submodules are not updated; if
-the update changes a gitlink, the notice says "submodules changed". Hooks and LFS filters run as
-with the user's own `git merge`. Unsaved editor buffers are invisible to git; VS Code shows its own
-"file changed on disk" dialog.
+**Pull-back** (TD-26). After the merge Delivery fetches and assumes the local copy is dirty. A
+target no worktree holds is fast-forwarded as a ref. Otherwise exactly one worktree from
+`git worktree list` must hold it, on its branch (no detached HEAD) and with no operation in
+progress. The guard compares the real old→new tree diff — both ends of renames, deletions,
+directory prefixes, case-folding — with local changes and untracked and ignored files; a collision
+or a local merge commit leaves the target behind, nothing touched. Local commits are replayed with
+`git cherry-pick --allow-empty --empty=keep` in a temporary detached worktree, never in the user's
+copy. After re-checking branch and commit, Delivery applies the update with
+`git read-tree -m -u <old> <new>` and `git update-ref refs/heads/<target> <new> <old>`. A failed
+partial update is reconciled, or reported with the exact `git checkout -- <paths>`. No stash, no
+in-place rebase, no reset. Every failure shows "local <target> is behind: <reason>" with the Pull
+button. Submodules are not updated; if the update changes a gitlink, the notice says "submodules
+changed". Unsaved editor buffers are invisible to git; VS Code shows its own "file changed on disk"
+dialog.
 
 ### 3.3 One exit contract for every step
 
@@ -200,7 +205,7 @@ most projects), **O** occasional, **R** rare. Rows are ordered by likelihood wit
 | S9 | Copilot rate limit or exhausted quota | O | Runtime error | pending with growing pauses; exhausted quota names its reset time; never marks the task failed |
 | S10 | Python cannot reach GitHub through a TLS-intercepting corporate proxy, while `gh` and Node can (found in M4) | C on corporate laptops | Readiness check | Prevented: OwlBear's own HTTP calls use the system trust store |
 | S11 | The Copilot SDK runtime download is blocked by the proxy (found in R8) | C on corporate laptops | Readiness check | Prevented: the SDK runs on the installed Copilot CLI |
-| S12 | The `code` command-line launcher is missing, so New Change cannot open chat | O | The host's `code chat` call fails to start | The page shows the exact command to run in the project folder |
+| S12 | The `code` command-line launcher is missing, so New Change cannot open chat | O | The host's `code chat -m agent` call fails to start | The page shows the exact command to run in the project folder. `code chat` runs without `-r`, which would use the last active window, possibly another project's; whether VS Code reuses the project's window is confirmed in the user's VS Code check, with a `vscode://agents/new?prompt=…&workspace=…` draft as fallback |
 
 **Shape and plan**
 
@@ -245,6 +250,7 @@ most projects), **O** occasional, **R** rare. Rows are ordered by likelihood wit
 | B22 | An agent asks again for something the owner already answered (found in M4) | C | — | Prevented: every agent prompt carries the owner's answers for the Change |
 | B23 | The agent visual check fails | O | Reviewer verdict on the screenshots against the criteria | back to build with a fix task naming the screenshot and finding |
 | B24 | The visual check cannot run at runtime: the render recipe fails or the browser is missing | O | Preview start from the recipe, readiness or browser start fails | ask with the concrete fix (for example the browser install command or the failing recipe step); the gate is never skipped. A missing recipe is caught in shaping, before approval |
+| B25 | The "before" capture fails: the recipe cannot render the target | O | Preview start or readiness at the target commit fails, before the first build task | Noted on the card ("before" not available: <reason>); the run continues and the "after" check still gates (TD-24) |
 
 **Integrate with the moving target**
 
@@ -287,7 +293,7 @@ most projects), **O** occasional, **R** rare. Rows are ordered by likelihood wit
 | M3 | Rules require a merge queue | O | Profile | Out of scope (TD-22): J0 marks it unsupported; no queue submission or observation |
 | M4 | PR closed without merging | O | PR state | ask: abandon or reopen |
 | M5 | Cleanup finds uncommitted files, or local commits missing from the merged head | O | Workspace status; compare local commits with the merged head | Preserve privately and report; never delete unpreserved work |
-| M7 | Pull-back cannot fast-forward: a checked-out local target is dirty, has untracked files in paths the update touches, or has diverged | C | `git worktree list`, working-copy status and ancestry after the fetch | Fast-forward only with `git merge --ff-only --no-autostash --no-overwrite-ignore`; never `git pull`, stash, reset or merge; card shows "local <target> is behind: <reason>" with Pull once possible; a changed gitlink adds "submodules changed". Unsaved editor buffers are invisible to git; VS Code shows its "file changed on disk" dialog |
+| M7 | Pull-back cannot update the local target: it is checked out in several worktrees, on a detached HEAD or mid-operation; a local change, untracked or ignored file collides with the merged diff; local merge commits exist; or a Git command fails | C | `git worktree list`, the old→new tree diff against local changes, ancestry, Git results | The local copy is assumed dirty; any collision leaves it behind with nothing touched; local commits are replayed in a temporary detached worktree; no stash, in-place rebase or reset (TD-26). Card shows "local <target> is behind: <reason>" with the Pull button; a failed partial update is reconciled or reported with the exact `git checkout -- <paths>`; a changed gitlink adds "submodules changed" |
 | M8 | GitHub requires a human review before merging | O | Effective rules; review decision on the PR | pending: "waiting for review by …"; the review happens in GitHub |
 | M9 | The target moves while the merge gate is evaluated | O | Re-read under the merge lock: the target is not an ancestor of the PR head | No merge; back to integrate; the gate is re-evaluated for the new head. Without "require branches to be up to date", a move after the re-read is the residual risk: the post-merge target-check watch drafts one fix Change for approval if checks fail on the target |
 | M10 | A comment arrives while the merge gate is evaluated | O | Re-read under the merge lock finds an unhandled conversation item | No merge; the item becomes feedback (P3, P11). Without "require conversation resolution", a comment after the re-read is shown on the card after the merge |
@@ -319,7 +325,7 @@ clock skew, hostile repository or web content beyond the platform's own protecti
 | --- | --- | --- |
 | DR1 | **Project profile** at setup, each entry marked known, unknown or unsupported with its evidence: host and repository root; push and PR-base repositories (forks); default and target branch; per-package install and check commands with directory, runtime and covered scope; credential references; LFS and submodules; CI and required checks; effective branch rules and rulesets (reviews, code owners, linear history, signing); merge methods; hooks. Re-read the effective rules before publishing and merging; re-detect on request | S3, B2, B3, B18, B20, P4, P5, P7, P10, M3 |
 | DR2 | **Readiness check** at every start and before publishing; a failure yields one concrete fix | S1, S2, S4, S6, X7 |
-| DR3 | **Project-facing work runs inside tasks** with the fix loop: installs, checks, commits with hooks, conflict resolution, CI fixes, review feedback. The engine's own operations never depend on project tooling; its git and GitHub calls map every failure to an exit | B1–B3, I2, I6, P1, P3 |
+| DR3 | **Project-facing work runs inside tasks** with the fix loop: installs, checks, commits with hooks, conflict resolution, CI fixes, review feedback. The engine's own operations never depend on project tooling; its git and GitHub calls map every failure to an exit. Agents never push; Delivery performs every git and GitHub write (TD-29) | B1–B3, I2, I6, P1, P3 |
 | DR4 | **One exit contract** (§3.3): five exits, pending situations, bounded retries with recorded reasons; no other step outcome | All |
 | DR5 | **Re-entry by observation**: every step checks git and GitHub for its effect before acting and replays only on confirmed absence | X1, X4, P6, M1 |
 | DR6 | **Work preservation**: a bundle of the Change branch plus an archive of dirty, staged, untracked and conflicted files, kept privately outside publishable branches; the workspace stays untouched until both are verified; a workspace with Git LFS or submodules with local changes is never retired ("workspace kept: <reason>") | B11, B19, M5, M11, X1 |
@@ -332,7 +338,7 @@ clock skew, hostile repository or web content beyond the platform's own protecti
 | DR13 | **Budgets per Change** under the retry policy (§3.3), carried across `retry` and `back` for the same cause: identical failures, review rounds, re-plans; environment failures never count; credits shown per Change and step, never a cost question | S8, S9, D9, D10, B12, B14 |
 | DR14 | **Footprint and support statement**: setup is user-local; it writes `.vscode/tasks.json` and `.mcp.json` only with consent and only while untracked, and lists them in `.git/info/exclude`, so nothing is committed; skills and agents are installed user-level; J0 states what is supported, human-assisted, unknown or unsupported, and never offers to bypass signing, reviews, push protection or workflow approvals | J0, X10 |
 | DR15 | **Merge gate** (§3.2): Delivery merges the exact head automatically once the gate passes, without a consent touchpoint unless the profile asks before merge; one merge lock per target; the gate evaluated before and again after taking the lock, with the PR re-read; a new head re-evaluates the gate; every check observed at the head gates; required remote gates are never downgraded to local checks | M2, M8, M9, M10, P3, P10, P11, P12, P13, B23 |
-| DR16 | **Pull-back** (§3.2): after a merge, fast-forward the local target with `git merge --ff-only --no-autostash --no-overwrite-ignore` only when it is not checked out, or is checked out clean and not diverged, in every worktree; never `git pull`, stash, reset or merge; otherwise a "behind" notice with Pull | M1, M7 |
+| DR16 | **Pull-back** (§3.2, TD-26): after a merge, update the local target without losing local work: assume it dirty; refuse on any collision of the real tree diff with local, untracked or ignored files, on local merge commits, several holders, a detached HEAD or an operation in progress; replay local commits in a temporary worktree; apply with `git read-tree -m -u` and a guarded `git update-ref`; never stash, rebase in place or reset; otherwise a "behind" notice with its reason and Pull | M1, M7 |
 
 ### 3.6 Proof without test volume
 
@@ -359,7 +365,8 @@ clock skew, hostile repository or web content beyond the platform's own protecti
 - **Visual check (M4).** A UI change in the sandbox gets the agent visual check: the host launches
   the preview from the brief's render recipe, takes screenshots and a reviewer judges them against
   the criteria. One deliberately broken layout must fail it and return a fix task; the screenshots
-  appear on the Change card. Captures need `uv run playwright install chromium` once.
+  appear on the Change card beside the "before" ones. Captures use the installed Chrome, then Edge,
+  then Playwright's own Chromium, which needs `uv run playwright install chromium` once.
 - **Real use (M5).** The first real consumer project. Problems found there become catalogue rows
   mapped to existing exits.
 - **Automated tests (P8).** Only for engine logic whose failure would be silent: exit transitions,
@@ -394,7 +401,7 @@ be corrected by real use.
 **Limits:** the [platform probe](delivery-next-platform-probe.md#4-recommendation-confidence-and-limits)
 proved B7 and DR9 on its setup; X1, X4, X5, DR5 and DR10 are partly proven. DR7's answer surface and
 runner activation are designed ([charter §3.7](delivery-next-charter.md#37-interaction-surface-and-runner-activation),
-D3, D4) but not yet demonstrated. The `maba-pag` business seat (TD-17), a protection-gated automatic
-merge, pull-back and the visual check are still unproven.
+D3, D4) but not yet demonstrated. The `maba-pag` probe settled model billing (TD-27); a
+protection-gated automatic merge, pull-back and the visual check are still unproven in a full run.
 No consumer project was observed.
-The catalogue has not yet been reviewed by the user.
+The user approved the catalogue with the charter on its nine cornerstones (TD-23), not row by row.
