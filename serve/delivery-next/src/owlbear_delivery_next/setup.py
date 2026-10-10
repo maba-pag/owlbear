@@ -22,7 +22,7 @@ import truststore
 from owlbear_delivery_next import profile, roles
 from owlbear_delivery_next.models import Profile, ProfileEntry
 from owlbear_delivery_next.sdk_adapter import cli_path
-from owlbear_delivery_next.store import Store, git_common_dir
+from owlbear_delivery_next.store import Store, StoreError, git_common_dir
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -368,7 +368,11 @@ def run(  # noqa: PLR0913 - one answer per consent
     answer, given by flag or asked; without a terminal an unasked answer is no.
     """
     store, python, say = Store.open(repo), sys.executable, lambda t: sys.stdout.write(t + "\n")
-    prev = store.read_profile()
+    try:
+        prev = store.read_profile()
+    except StoreError as exc:  # setup replaces a profile it cannot read; confirming saves the new one
+        say(f"The saved profile cannot be read ({exc}); detecting a new one.")
+        prev = None
     checks = check(repo, prev)
     say("Readiness")
     say("\n".join(f"  {'ok ' if c.ok else 'FIX'} {c.name}: {c.detail}" for c in checks))

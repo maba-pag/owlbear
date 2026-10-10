@@ -380,3 +380,15 @@ def test_yes_confirms_only_the_profile_and_local_files_and_the_skill_need_their_
     assert (asked, [p.exists() for p in written]) == ([], [False, False, False])
     assert setup.run(repo, [], yes=True, local_files="yes", skill="yes", ask=pytest.fail) == 0
     assert [p.exists() for p in written] == [True, True, True]
+
+
+def test_setup_replaces_a_saved_profile_it_cannot_read(repo, tmp_path_factory, monkeypatch, capsys):
+    monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("home")))
+    monkeypatch.setattr(setup, "check", lambda *_a: [])
+    monkeypatch.setattr(setup.profile, "detect", lambda *_a: Profile(version=1))
+    store = Store.open(repo)
+    store.root.mkdir(parents=True, exist_ok=True)
+    (store.root / "profile.json").write_text('{"format": 1, "models": {}}')
+    assert setup.run(repo, [], yes=True, local_files="no", skill="no") == 0
+    assert "cannot be read" in capsys.readouterr().out
+    assert store.read_profile().confirmed_at is not None
