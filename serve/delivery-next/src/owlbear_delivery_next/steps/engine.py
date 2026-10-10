@@ -150,7 +150,7 @@ def failed(c: Change, exc: Exception, now: datetime) -> StepResult:
     """Map provider and remote Git failures: sign-in asks with the command; the rest retry later."""
     kind = c.step.kind
     if isinstance(exc, ProviderError) and exc.code == FailureCode.AUTHENTICATION_REQUIRED:
-        text = "GitHub sign-in expired: run `gh auth login` (or `gh auth refresh`), then continue"
+        text = f"GitHub refused the credential ({exc}): run `gh auth login` (or `gh auth refresh`), then continue"
         return ask(kind, text, loop.cause_key(ErrorKind.AUTH, kind, "gh"), continue_or_pause(kind))
     if isinstance(exc, ProviderError) and exc.code == FailureCode.CONFLICT and not exc.retry_safe:
         stop = Stop(kind=ErrorKind.GATE, reason=str(exc), action="Resolve it in GitHub", resume="GitHub agrees", at=now)
@@ -184,7 +184,7 @@ def pr_state(gh: Provider, repository: str, c: Change, offered: str | None = Non
         if state != "open" or not loop.waiting_consent(c):
             return state, False
         items = gh.read_conversation(repository, pr.number)
-        opened = [s.item.id for s in conversation.open_items(c, items, gh.viewer())]
+        opened = [s.item.id for s in conversation.open_items(c, items, gh.viewer)]
     except ProviderError:
         return None, False
     return state, loop.consent_moved(c, offered, pr.head_sha, opened)

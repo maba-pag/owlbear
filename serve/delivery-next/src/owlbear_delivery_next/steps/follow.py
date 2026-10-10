@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 
 F = StepKind.FOLLOW
 MISSING = "gate:follow:missing:"
+REPOSTS = 3
 
 
 def ci(ctx: Ctx, pr: PullRequest) -> CiState:
@@ -125,23 +126,46 @@ def _reply(  # noqa: PLR0913 - one reply needs the PR, the task, its response an
         cause = loop.cause_key(ErrorKind.GATE, step, "unpublished")
         reason = f"publishing the fix {r.commit[:7]} for {ref.url or ref.id}"
         return c, StepResult(exit=Exit.BACK, back_to=StepKind.PUBLISH, cause=cause, reason=reason)
-    reply_id = conv.posted(items, ref.id, conv.marker(c.slug, ref.id, task.id), ctx.gh.viewer())
+    reply_id = conv.posted(items, ref.id, conv.marker(c.slug, ref.id, task.id), ctx.gh.viewer)
     return conv.record(c, task, r, ctx.now, reply_id or _post(ctx, c, pr, item, r=r, task=task.id)), None
 
 
-def _settle(  # noqa: PLR0913 - one handled item needs the PR, its state and the conversation read
+def _repost(  # noqa: PLR0913 - one repost needs the PR, the item's state and the conversation read
     ctx: Ctx, c: Change, pr: PullRequest, s: conv.State, *, items: tuple[ConversationItem, ...], step: StepKind
 ) -> tuple[Change, StepResult | None]:
-    """P13: repost a deleted reply (replay first), observe a resolution, retry an unfinished one within budget."""
+    """P13: adopt a replay of a deleted reply, else repost it; after ``REPOSTS`` reposts the owner decides."""
+    assert s.rec  # noqa: S101 - only handled items reach here
+    task = s.rec.task
+    mark = conv.marker(c.slug, s.item.id, task)
+    rec = next(h for h in c.handled if h.task == task)
+    if replay := conv.posted(items, s.item.id, mark, ctx.gh.viewer):
+        rec.reply_id = replay
+        return c, None
+    if rec.reposts >= REPOSTS:
+        cause = loop.cause_key(ErrorKind.GATE, step, f"repost:{s.item.id}")
+        asked = next((q for q in c.questions if q.cause == cause and q.answer and not q.effect_observed_at), None)
+        if asked is None:
+            where = s.item.url or s.item.id
+            text = f"Delivery's reply on {where} keeps disappearing; reply manually or let Delivery post again"
+            return c, engine.ask(step, text, cause, engine.continue_or_pause(step))
+        c = loop.effect_observed(c, asked.id, ctx.now)
+        rec = next(h for h in c.handled if h.task == task)
+        rec.reposts = 0
+    rec.reposts += 1
+    rec.reply_id = _post(ctx, c, pr, s.item, r=Response(how=rec.how, text=rec.text, commit=rec.commit), task=task)
+    return c, None
+
+
+def _settle(
+    ctx: Ctx, c: Change, s: conv.State, *, items: tuple[ConversationItem, ...], step: StepKind
+) -> tuple[Change, StepResult | None]:
+    """P13: observe a resolution, retry an unfinished one within budget; a reply not yet visible holds the merge."""
     assert s.rec  # noqa: S101 - only handled items reach here
     rec = next(h for h in c.handled if h.task == s.rec.task)  # an earlier charge copied the Change
     s = replace(s, rec=rec)
+    where = s.item.url or s.item.id
     if conv.reply_missing(s, items):
-        mark = conv.marker(c.slug, s.item.id, rec.task)
-        r = Response(how=rec.how, text=rec.text, commit=rec.commit)
-        rec.reply_id = conv.posted(items, s.item.id, mark, ctx.gh.viewer()) or _post(
-            ctx, c, pr, s.item, r=r, task=rec.task
-        )
+        return c, engine.pending(Waiting.MERGE_QUEUE, f"waiting for Delivery's reply on {where}", ctx.poll())
     if s.item.kind == "thread" and s.item.resolved:
         rec.resolved = True
     if not conv.unresolved(s):
@@ -149,9 +173,11 @@ def _settle(  # noqa: PLR0913 - one handled item needs the PR, its state and the
     cause = loop.cause_key(ErrorKind.GATE, step, f"resolve:{s.item.id}")
     c, within = loop.charge(c, cause, ctx.now)
     if within:
-        ctx.gh.resolve_thread(s.item.id)
-        return c, None
-    text = f"Resolving the review thread {s.item.url or s.item.id} did not take effect: resolve it in GitHub"
+        if ctx.gh.resolve_thread(s.item.id):
+            next(h for h in c.handled if h.task == rec.task).resolved = True
+            return c, None
+        return c, engine.pending(Waiting.MERGE_QUEUE, f"waiting for GitHub to show {where} resolved", ctx.poll())
+    text = f"Resolving the review thread {where} did not take effect: resolve it in GitHub"
     return c, engine.ask(step, text, cause, engine.continue_or_pause(step))
 
 
@@ -166,17 +192,29 @@ def _open(c: Change, s: conv.State, step: StepKind) -> StepResult:
 
 
 def conversation(ctx: Ctx, c: Change, pr: PullRequest, step: StepKind) -> tuple[Change, StepResult | None]:
-    """P3: pending replies first, then handled items' replies and resolutions, then the first open item."""
+    """P3: pending replies, reposts of deleted ones, then resolutions and the first open item.
+
+    Every post is followed by a fresh read: resolutions and the result use only the latest one.
+    """
     items = ctx.gh.read_conversation(ctx.repository, pr.number)
     for task, r in conv.pending(c):
         c, held = _reply(ctx, c, pr, task, r, items=items, step=step)
         if held is not None:
             return c, held
         items = ctx.gh.read_conversation(ctx.repository, pr.number)
-    found = conv.states(c, items, ctx.gh.viewer(), _published(c, pr))
+    published = _published(c, pr)
+    found = conv.states(c, items, ctx.gh.viewer, published)
+    missing = [s for s in found if conv.reply_missing(s, items)]
+    for s in missing:
+        c, held = _repost(ctx, c, pr, s, items=items, step=step)
+        if held is not None:
+            return c, held
+    if missing:
+        items = ctx.gh.read_conversation(ctx.repository, pr.number)
+        found = conv.states(c, items, ctx.gh.viewer, published)
     for s in found:
         if s.rec is not None:
-            c, held = _settle(ctx, c, pr, s, items=items, step=step)
+            c, held = _settle(ctx, c, s, items=items, step=step)
             if held is not None:
                 return c, held
     opened = next((s for s in found if s.rec is None), None)

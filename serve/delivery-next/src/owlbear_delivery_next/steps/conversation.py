@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 MARKER = "<!-- delivery:"
 
 type Published = Callable[[str], bool]
+type Login = Callable[[], str]  # read only when a comment carries a Delivery marker
 
 
 @dataclass(frozen=True)
@@ -40,20 +41,18 @@ def _tasks(c: Change) -> list[Task]:
     return c.plan.tasks if c.plan else []
 
 
-def ours(c: Change, login: str, x: ConversationItem | ThreadComment, thread: str | None = None) -> bool:
+def ours(c: Change, login: Login, x: ConversationItem | ThreadComment, thread: str | None = None) -> bool:
     """Delivery wrote it: a recorded reply, or a replay by Delivery's login carrying one of its complete markers.
 
     In a thread only that thread's markers count; every other comment is a person's, whatever it quotes.
     """
     if any(h.reply_id == x.id for h in c.handled):
         return True
-    if x.author != login:
-        return False
     refs = {(t.item.id, t.item.task) for t in _tasks(c) if t.item and thread in {None, t.item.id}}
-    return any(marker(c.slug, item, task) in x.body for item, task in refs)
+    return any(marker(c.slug, item, task) in x.body for item, task in refs) and x.author == login()
 
 
-def human(c: Change, item: ConversationItem, login: str) -> list[tuple[str, str]]:
+def human(c: Change, item: ConversationItem, login: Login) -> list[tuple[str, str]]:
     """The ids and bodies of the item's comments a person wrote."""
     if item.kind == "thread":
         return [(x.id, x.body) for x in item.comments if not ours(c, login, x, item.id)]
@@ -72,9 +71,10 @@ def _valid(rec: Handling, item: ConversationItem, published: Published | None) -
     return not (item.kind == "thread" and rec.resolved and not item.resolved)  # a person reopened the thread
 
 
-def assess(c: Change, item: ConversationItem, login: str, published: Published | None = None) -> State | None:
-    """The item's state; None for Delivery's own items and resolved threads without a valid handling.
+def assess(c: Change, item: ConversationItem, login: Login, published: Published | None = None) -> State | None:
+    """The item's state; None for Delivery's own items and resolved threads Delivery never handled.
 
+    A resolved thread whose every handling is invalid (its fix left the PR head, or its version changed) is open.
     Each invalidated handling of the same version opens a new round with its own task.
     """
     humans = human(c, item, login)
@@ -84,18 +84,20 @@ def assess(c: Change, item: ConversationItem, login: str, published: Published |
     rounds = [h for h in c.handled if h.item == item.id and h.version == v]
     if rounds and _valid(rounds[-1], item, published):
         return State(item, v, rounds[-1].task, rounds[-1])
-    if item.kind == "thread" and item.resolved:
+    if item.kind == "thread" and item.resolved and not any(h.item == item.id for h in c.handled):
         return None
     return State(item, v, f"pr-{item.id}-{v[:8]}" + (f"-{len(rounds) + 1}" if rounds else ""), None)
 
 
-def states(c: Change, items: Iterable[ConversationItem], login: str, published: Published | None = None) -> list[State]:
+def states(
+    c: Change, items: Iterable[ConversationItem], login: Login, published: Published | None = None
+) -> list[State]:
     """Every person's item with its state."""
     return [s for i in items if (s := assess(c, i, login, published)) is not None]
 
 
 def open_items(
-    c: Change, items: Iterable[ConversationItem], login: str, published: Published | None = None
+    c: Change, items: Iterable[ConversationItem], login: Login, published: Published | None = None
 ) -> list[State]:
     """Every item whose current version is not handled."""
     return [s for s in states(c, items, login, published) if s.rec is None]
@@ -144,13 +146,13 @@ def pending(c: Change) -> list[tuple[Task, Response]]:
     return [(t, r) for t in roots if all(g.done for g in group(c, t.id)) and (r := response(c, t.id)) is not None]
 
 
-def posted(items: Iterable[ConversationItem], item: str, mark: str, login: str) -> str | None:
+def posted(items: Iterable[ConversationItem], item: str, mark: str, login: Login) -> str | None:
     """The id of Delivery's reply already carrying *mark* (an earlier post whose acknowledgement was lost)."""
     for i in items:
-        if i.kind != "thread" and i.author == login and mark in i.body:
+        if i.kind != "thread" and mark in i.body and i.author == login():
             return i.id
         if i.kind == "thread" and i.id == item:
-            hit = next((x for x in i.comments if x.author == login and mark in x.body), None)
+            hit = next((x for x in i.comments if mark in x.body and x.author == login()), None)
             if hit:
                 return hit.id
     return None

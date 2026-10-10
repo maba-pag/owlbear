@@ -422,12 +422,19 @@ class GhProvider:
         return self._gh(operation, ("api", "--hostname", self.host, "graphql", "--input", "-"), body=body, write=write)
 
     def viewer(self) -> str:
-        """Read the login Delivery posts as, once per provider."""
+        """Read the login Delivery posts as, once per provider; a credential that cannot read it is a capability gap."""
         if not self._viewer:
-            user = self._gh("viewer", ("api", "--hostname", self.host, "user"))
+            try:
+                user = self._gh("viewer", ("api", "--hostname", self.host, "user"))
+            except ProviderError:
+                user = None
             login = user.get("login") if isinstance(user, dict) else None
             if not isinstance(login, str) or not login:
-                _invalid("viewer", "GitHub returned no login")
+                detail = (
+                    "the GitHub credential cannot read /user, which Delivery needs to recognise its own replies; "
+                    "use a user token via `gh auth login`"
+                )
+                raise ProviderError(FailureCode.AUTHENTICATION_REQUIRED, "viewer", detail, retry_safe=False)
             self._viewer = login
         return self._viewer
 
@@ -482,11 +489,15 @@ class GhProvider:
         except (KeyError, TypeError) as exc:
             raise ProviderError(FailureCode.RESPONSE_UNKNOWN, op, "gh returned no id", retry_safe=False) from exc
 
-    def resolve_thread(self, thread_id: str) -> None:
-        """Resolve one review thread."""
+    def resolve_thread(self, thread_id: str) -> bool:
+        """Resolve one review thread; True only when GitHub acknowledges it resolved."""
         result = self._graphql("resolve_thread", _RESOLVE, {"id": thread_id}, write=True)
         if not isinstance(result, dict) or result.get("errors"):
             raise ProviderError(FailureCode.RESPONSE_UNKNOWN, "resolve_thread", str(result)[:200], retry_safe=False)
+        try:
+            return result["data"]["resolveReviewThread"]["thread"]["isResolved"] is True
+        except KeyError, TypeError:
+            return False
 
     def job_log(self, repository: str, job_id: int, lines: int = 40) -> str:
         """Return the tail of one Actions job log without timestamps or escapes; empty when it cannot be read."""

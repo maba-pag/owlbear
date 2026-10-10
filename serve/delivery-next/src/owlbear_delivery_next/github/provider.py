@@ -276,7 +276,7 @@ class Provider(Protocol):
         ...
 
     def viewer(self) -> str:
-        """The login Delivery posts as."""
+        """The login Delivery posts as; a credential that cannot read it raises ``AUTHENTICATION_REQUIRED``."""
         ...
 
     def read_conversation(self, repository: str, number: int) -> tuple[ConversationItem, ...]:
@@ -287,8 +287,8 @@ class Provider(Protocol):
         """Reply in a thread, or post an issue comment quoting a comment or review; return the new comment id."""
         ...
 
-    def resolve_thread(self, thread_id: str) -> None:
-        """Resolve one review thread."""
+    def resolve_thread(self, thread_id: str) -> bool:
+        """Resolve one review thread; True only when the mutation acknowledges it resolved."""
         ...
 
     def job_log(self, repository: str, job_id: int, lines: int = 40) -> str:

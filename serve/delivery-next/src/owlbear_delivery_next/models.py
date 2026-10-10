@@ -210,6 +210,7 @@ class Handling(Record):
     task: str
     reply_id: str | None = None
     resolved: bool = False
+    reposts: int = 0
     at: datetime
 
 
