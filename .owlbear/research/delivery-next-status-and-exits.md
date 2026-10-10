@@ -4,7 +4,9 @@
 > **Date:** 2026-10-10
 > **Question:** What does Delivery-next record for one Change, which steps can it be in, how does
 > each step end, and how is one truthful status line with one next action derived from that?
-> **Status:** design draft; `autonomous` until the user approves M3
+> **Status:** design draft; `autonomous` until the user approves M3. Revision 2026-10-10 after
+> design challenge: inbox before exclusions, host-down overlay, check environments, several
+> person-only checks, bundle and archive preservation, host crash with live runners.
 
 ## 1. Context and Question
 
@@ -49,7 +51,7 @@ One versioned file per Change and one per project, outside the checkout, written
 | Merge consent | U | head SHA; time; channel; delta shown | Void when the PR head is not that SHA |
 | Writer lock | L | host id; runner PID and start time; runtime PID; session id; task PIDs with start times; acquired; heartbeat; last tool event | One writer per Change (DR10) |
 | Stop record | L | error kind; one action; actor; resume condition; time | Cleared when the resume condition is observed |
-| Names and preserved work | L | Change branch, target branch, worktree path; private local branches or paths holding preserved work | Names only; heads come from git; preserved work is never pushed (DR6) |
+| Names and preserved work | L | Change branch, target branch, worktree path; paths of the bundle and archive files holding preserved work | Names only; heads come from git; preserved work is never pushed (DR6) |
 
 **Never stored:** heads, push state, PR number or state, checks, GitHub reviews, mergeability,
 merge result; each step reads them at entry (DR5). **Project profile:** profile version, confirmed
@@ -78,6 +80,11 @@ passed, worktree clean); a claim the facts do not support is B4.
 | check | Check | a declared person-only check without a valid answer | Builder only to prepare the environment | user's pass or fail and note | all five; pending on the user |
 | merge | Merge | follow done; all checks valid | none | — | all five; pending on queue or mergeability |
 | cleanup | Done | PR merged, or Change abandoned | none | — | done, retry, stop |
+
+**Check environment.** Ending the Builder that prepares a person-only check does not end the
+environment it prepared, for example a local preview server. The host owns that environment's
+processes while the check is pending: it records their PIDs and the start command, restarts the
+environment after an interruption, and disposes of it before any other writer starts on the Change.
 
 ### 3.3 Exit and pending table
 
@@ -123,7 +130,7 @@ Every exit also records its kind, cause key, reason and time. `{S}` is the stage
 | follow | back | build with an appended fix task | fix task with CI log or comment thread | cause +1 per check or thread | "Build · fixing {check}: {summary}" |
 | follow | stop | follow on the resume condition | stop record | none | "Publish · stopped: {reason} · {action}" |
 | follow | pending | follow when the observed condition changes | condition; next observation | none | "Publish · waiting for {who}: {condition} (checked {age} ago)" |
-| check | done | merge | answer with input fingerprint | — | "Merge · waiting for you: approve merging {sha7}" |
+| check | done | check for the next declared check without a valid answer; merge when none remains | answer with input fingerprint | — | "Check · waiting for you: {next check}", or after the last "Merge · waiting for you: approve merging {sha7}" |
 | check | retry | check after preparing again | preparation failure | cause +1 | "Check · preparing {check}: retrying ({k} of 3)" |
 | check | ask | check after the answer | environment question | none | "Check · waiting for you: {question}" |
 | check | back | build with the user's note as a fix task (H2) | fix task | cause +1 per check | "Build · fixing: {check} failed for you" |
@@ -135,7 +142,7 @@ Every exit also records its kind, cause key, reason and time. `{S}` is the stage
 | merge | back | integrate (M2) or build (removed from queue by CI) | reason | cause +1 | "Build · updating with {target} before merging" |
 | merge | stop | merge on the resume condition | stop record | none | "Merge · stopped: {reason} · {action}" |
 | merge | pending | merge when GitHub reports merged or removed | queue or mergeability | none | "Merge · in the merge queue (checked {age} ago)" |
-| cleanup | done | none: the Change is Done | preserved work; history line | — | "Done · merged PR #{pr}" |
+| cleanup | done | none: the Change is Done | bundle and archive paths; history line | — | "Done · merged PR #{pr}", plus where unmerged work was saved |
 | cleanup | retry | cleanup | cause | cause +1 | "Done · cleanup retrying ({k} of 3)" |
 | cleanup | ask, back | never: unmerged work is preserved and reported; a merge cannot be undone | — | — | — |
 | cleanup | stop | cleanup on the resume condition | stop record; workspace untouched | none | "Done · cleanup stopped: could not save {path} · {action}" |
@@ -148,6 +155,11 @@ Every exit also records its kind, cause key, reason and time. `{S}` is the stage
 | Resume (user) | Clears paused; current step re-enters by observation | "{S} · resuming" |
 | Intent change (D6) | Hold flag; running step finishes; merge outcome observed first if submitted; then shape | "{S} · holding for your change: finishing {step}" |
 | Abandon (user) | Hold; then cleanup in abandon mode (close PR, keep branch) | "Abandoned · PR closed, branch kept" |
+
+**Inbox before exclusions.** Before the host skips a Change as waiting on you, paused or stopped, it
+reconciles actionable inbox items under the Change lock: brief approval, answers, person-only check
+results, recovery choices, merge consent. A reconciled item makes the Change runnable again.
+Termination checks still precede launching another writer ([D4 §3.2](delivery-next-architecture.md#32-components-and-responsibilities)).
 
 **Stop actions.** One action, its actor and the resume condition; the action works without Delivery.
 
@@ -174,33 +186,35 @@ Every exit also records its kind, cause key, reason and time. `{S}` is the stage
 | Required check not started (P10) | host | check appears | expected-start window, then follow back (trigger fix) or ask |
 | Required reviewer (P7) | host polls reviews | review submitted | none |
 | Owner action in GitHub (P10, after ask) | host | the check starts | 3 observations, then stop |
-| Person-only check (H1) | host | answer from status view or chat | none |
+| Person-only check (H1) | host, which keeps the prepared environment running | answer from status view or chat | none |
 | Merge queue or mergeability (M3) | host polls PR | merged, or removed with a cause | removal routes its cause |
 | Network outage or rate limit (S8, P9, S9) | host probe every 5 min, or the reset time | probe succeeds, or reset time passes | none |
 
 ### 3.4 Status line derivation
 
-One function, shared by the status view and the chat skill, which reads the state file directly so
-it works when the host is down: `status(stage, step, outcome, activity, now, next_actor) → (line,
-action)`. Rules apply in order; the first match wins.
+One function, shared by the status view and the chat skill, which reads the state file directly
+(read-only) so it works when the host is down: `status(stage, step, outcome, activity, now,
+next_actor) → (line, action)`. Rules apply in order; the first match wins.
 
-1. Done or abandoned → "Done · …" or "Abandoned · …"; action none.
-2. Paused → "{S} · paused by you {age} ago"; action Resume. Runner still alive → "pausing".
-3. ask → "{S} · waiting for you: {question}"; action Answer. Host down → append " · Delivery not running".
-4. stop → "{S} · stopped: {reason}"; action = the stop action, with its actor if not you.
-5. pending → "{S} · waiting for {who}: {condition} (checked {age} ago)"; action none, or the check.
-6. Runner alive → "{S} · {verb}: {task} · {role} active {age} ago"; action none. No tool event for
+1. Host not running, for every unfinished Change, including pending CI and open questions →
+   "{S} · Delivery is not running"; action Start Delivery, the disclosed start action. If the last
+   start failed (S2), the line and action are that stop's.
+2. Done or abandoned → "Done · …" or "Abandoned · …"; action none.
+3. Paused → "{S} · paused by you {age} ago"; action Resume. Runner still alive → "pausing".
+4. ask → "{S} · waiting for you: {question}"; action Answer.
+5. stop → "{S} · stopped: {reason}"; action = the stop action, with its actor if not you.
+6. pending → "{S} · waiting for {who}: {condition} (checked {age} ago)"; action none, or the check.
+7. Runner alive → "{S} · {verb}: {task} · {role} active {age} ago"; action none. No tool event for
    10 min → "· no activity for {age}"; the step timeout then terminates, confirms and retries.
-7. Retry scheduled → "{S} · retrying: {cause} ({k} of 3) at {time}"; action none.
-8. No live runner → host up: "{S} · not running: starting {role}", or "waiting for process {pid}
-   to end"; host down: "{S} · not running: Delivery is not started"; action Start Delivery.
-   Liveness is observed only (lock PIDs and start times, heartbeats, last tool event).
+8. Retry scheduled → "{S} · retrying: {cause} ({k} of 3) at {time}"; action none.
+9. No live runner → "{S} · not running: starting {role}", or "waiting for process {pid} to end";
+   action none. Liveness is observed only (lock PIDs and start times, heartbeats, last tool event).
 
 | # | Situation | Line | Action |
 | --- | --- | --- | --- |
 | 1 | Builder working | "Build 2/5 · implementing: rate limiter · builder active 40 s ago" | none |
 | 2 | Not running, host up | "Build 2/5 · not running: starting builder" | none |
-| 3 | Host not started | "Build 2/5 · not running: Delivery is not started" | Start Delivery |
+| 3 | Host not running | "Build 2/5 · Delivery is not running" | Start Delivery |
 | 4 | Checks failing | "Build 3/5 · retrying: checks failed in web (2 of 3)" | none |
 | 5 | Question | "Build 3/5 · waiting for you: which variable holds the test API key?" | Answer |
 | 6 | Brief approval | "Shape · waiting for you: approve brief v2" | Answer |
@@ -209,7 +223,7 @@ action)`. Rules apply in order; the first match wins.
 | 9 | Consent voided | "Merge · waiting for you: approve merging b7e2a91, changed since a1c3f02" | Answer |
 | 10 | Stopped | "Build 4/5 · stopped: commit signing key locked" | Unlock the key (you) |
 | 11 | Paused | "Plan · paused by you 2 days ago" | Resume |
-| 12 | Done with leftovers | "Done · merged PR #14 · 2 unmerged commits kept on owlbear/kept/login-1" | none |
+| 12 | Done with leftovers | "Done · merged PR #14 · 2 unmerged commits saved in .git/owlbear-delivery/changes/login/preserved/login-1.bundle" | none |
 
 ### 3.5 Error kinds
 
@@ -255,8 +269,8 @@ Fifteen kinds, shown to users and agents; each cause key starts with one.
 
 | Trace | Path through the model | Status text at the hardest point |
 | --- | --- | --- |
-| Session disconnects while its worker writes; a second window continues | Chat closing does not touch the runner. If the host dies, the next host (the second window's) finds the lock with live PIDs: it cancels and kills the recorded PIDs, verifies them gone, then build retries with the kept diff (`liveness`); an unverifiable PID is a stop | "Build 2/5 · not running: waiting for process 4242 (copilot) to end" |
-| User merges an older PR head while newer local commits exist | Any step's entry sees the PR merged; the active runner is ended first; cleanup preserves the 2 unmerged commits on a private branch and reports them | "Done · merged PR #14 · 2 unmerged commits kept on owlbear/kept/login-1" |
+| Session disconnects while its worker writes; a second window continues | Chat closing does not touch the runner. If the host dies, the next host (the second window's) finds the lock held by a live runner: it waits for that runner to finish or for its termination to be confirmed, observes, then continues; it never kills it blindly. A runner gone without an exit gets the termination checks, then build retries with the kept diff (`liveness`); an unverifiable PID is a stop | "Build 2/5 · not running: waiting for process 4242 (copilot) to end" |
+| User merges an older PR head while newer local commits exist | Any step's entry sees the PR merged; the active runner is ended first; cleanup bundles the Change branch with the 2 unmerged commits, archives any uncommitted files, verifies both, and reports the path | "Done · merged PR #14 · 2 unmerged commits saved in .git/owlbear-delivery/changes/login/preserved/login-1.bundle" |
 | Required workflow never triggers | follow pending until the expected-start window ends; back to build with a fix task (trigger paths); same cause again → ask the owner's exact action; then pending; 3 observations → stop. Gate never downgraded | "Publish · waiting for you: approve the workflow run for PR #14 in GitHub" |
 | Same missing prerequisite survives a re-plan and an answer | `project-env:TEST_API_KEY` counts 1 (build ask), 2 (retry after an unobserved answer), 3 (back to plan); next occurrence → ask with scope choice | "Build 3/5 · waiting for you: TEST_API_KEY is still not visible to the task — set it, drop AC-3, or pause?" |
 | Intent changes during a task, and again after a merge was submitted | First: hold, task finishes, back to shape with kept and dropped work, ask re-approval. Second: merge outcome observed first; merged → Done and the new intent starts a new Change; queued → ask: let it merge or remove it and revise | "Merge · waiting for you: PR #14 is in the merge queue — let it merge, or remove it and revise?" |
@@ -285,7 +299,7 @@ Fifteen kinds, shown to users and agents; each cause key starts with one.
 | P3 | follow back → fix task per thread; dispute → ask | "Build · fixing review comment: rename `cfg`" |
 | H1 | check pending, no timeout | "Check · waiting for you: log in on staging and see the banner" |
 | M1 | Entry observes PR merged → cleanup | "Done · merged PR #14" |
-| X1 | Host gone; on next start observe, then resume | "Build 2/5 · not running: Delivery is not started" |
+| X1 | Host gone; on next start observe, then resume | "Build 2/5 · Delivery is not running" |
 | X3 | Next start observes; moved target handled by integrate before publish | "Build 4/5 · starting: export" |
 
 **Rows that did not fit, and the smallest fix:**

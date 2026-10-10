@@ -96,7 +96,10 @@ requirements DR1–DR15 of the journey research are binding.
   results and merge consent. Chat can answer ordinary questions through the same operation. Recovery
   decisions stay Cockpit actions, as tool rule T6 decided; moving them to chat would need the
   user's re-decision.
-- **A local Delivery host** (the process that serves the status view) owns runners. A runner is a
+- **A local Delivery host** (the process that serves the status view) owns runners. Until cutover
+  (M6) the host is its own small app serving the Changes page, so the pinned old Cockpit stays
+  untouched for the open Changes; at M6 the page and its routes move into Cockpit. Recovery
+  decisions are actions in that page in both phases (T6). A runner is a
   bounded process: it drives one step through the SDK, records the exit, and ends. The host starts
   the next runner after `done`, `retry` or `back` once the previous worker's termination is
   confirmed, re-observes pending conditions, and keeps answers that arrive during active work for
@@ -128,7 +131,7 @@ Proposed values for TD-1's T7 and the other budgets; tests enforce them from M4 
 
 | Budget | Limit |
 | --- | --- |
-| Agent-facing Delivery tools | 6 in total, at most 3 per role |
+| Agent-facing Delivery tools | 6 in total, at most 3 per role; a tool with one fixed result schema per session counts once |
 | Step kinds | 10 |
 | Exit kinds | 5, plus pending |
 | Error kinds shown to users or agents | 15 |
@@ -176,4 +179,6 @@ an order of magnitude, and should be adjusted only by the user.
 
 **Limits:** the probe ran on a free personal Copilot account with the Auto model and an
 unprotected private repository. Model choice, cost on the employer seat, and merges under branch
-protection remain unproven until those probes are repeated (rebuild research §3.9).
+protection remain unproven until those probes are repeated (rebuild research §3.9). Delivery state
+lives in the clone's git directory ([architecture](delivery-next-architecture.md)): deleting the clone
+deletes the state of its unfinished Changes, while their branches and PRs remain on GitHub.

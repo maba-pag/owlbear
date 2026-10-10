@@ -5,7 +5,9 @@
 > **Question:** How do the old and new Delivery coexist until cutover, which content moves so the
 > Copilot harness loads it, under which gates and in which order does OwlBear switch, what exactly
 > is deleted, and how is a failed cutover rolled back?
-> **Status:** design draft; `autonomous` until the user approves M3
+> **Status:** design draft; `autonomous` until the user approves M3. Revision 2026-10-10 after
+> design challenge: separate host app until M6, switch and rollback launchers, lane gate G6,
+> deletion-list corrections, no partial syncs to `main` before cutover.
 
 ## 1. Context and Question
 
@@ -38,8 +40,8 @@ workflow or an existing file.
 
 | Phase | Old Delivery | New core | Content and loading |
 | --- | --- | --- | --- |
-| Now to G4 (M3–M5) | Runs the open Changes from the pinned controller on Local; fixes only for them (M0) | Built and proven on the sandbox consumer repository; not registered in OwlBear's workspace | E1 moves non-Delivery content; Delivery content stays in `share/` |
-| M6 switch | Unregistered; source deleted in one PR | Registered for OwlBear and consumers; Cockpit shows its status view | `share/` removed; product docs rewritten |
+| Now to G4 (M3–M5) | Runs the open Changes from the pinned controller on Local; fixes only for them (M0) | Built and proven on the sandbox consumer repository as its own host app with a small Changes page; not registered in OwlBear's workspace; Cockpit unchanged | E1 moves non-Delivery content; Delivery content stays in `share/` |
+| M6 switch | Unregistered; source deleted in one PR | Registered for OwlBear and consumers; its Changes page and host routes move into Cockpit | `share/` removed; product docs rewritten |
 | Retention window | Pinned release and state kept on disk for rollback | Runs OwlBear's own Changes | — |
 | After window | Live state, refs and releases removed with the user's confirmation | Sole Delivery | — |
 
@@ -66,13 +68,19 @@ workflow or an existing file.
    list (§3.6 "Copied first"). No old package (`cockpit`, `tools`, `delivery*`) depends on or imports
    the new one before M6.
 3. Distinct names everywhere: Python module, console scripts, MCP server name
-   (`owlbear-delivery-next`), state root outside the checkout, branch prefix, and a host port other
-   than Cockpit's 8420.
+   (`owlbear-delivery-next`), state root outside the checkout, branch prefix, and its own host launch
+   command and port other than Cockpit's 8420. Before M6 the host is a separate app in
+   `serve/delivery-next/` with its own small Changes page; Cockpit is not modified, because fixes
+   for the open Changes are released from `dev` to the pinned controller.
 4. M4 runs on the sandbox repository, whose own `.mcp.json` registers the new server from a dev
    checkout. OwlBear's workspace gets no new-core registration before M6, so no OwlBear chat sees
    two Delivery servers.
 5. Add the package to ruff `src` in [pyproject.toml](../../pyproject.toml); leave the sync manifest
-   unchanged until M6, so consumer `main` keeps today's content.
+   unchanged until M6, so consumer `main` keeps today's content. The sync workflow replaces the
+   selected scopes from current `dev`, so between the first E1 move and cutover no partial `share`
+   or `infra` sync to `main` runs unless the projection, loading configuration and lock membership
+   move together. The new package never appears in a published lock early, and moved content never
+   vanishes from consumer `share/`.
 6. Before any controller upgrade an open Change needs, the upgrade's live-compatibility gate must
    pass at that dev head; a failure blocks the upgrade, not the new package.
 
@@ -136,7 +144,7 @@ them into consumers with consent (C2).
 | G3 | M5 consumer Changes merged; every finding fixed locally or returned to M3 and closed | PR links |
 | G4 | B1 `macos-managed-browser-authentication`, `memory-revision-binding` and `static-website-knowledge-ingestion-v2` each completed and cleaned up on the old engine, or parked by the user's explicit decision | User, Cockpit history |
 | G5 | No old-engine worker or claim running; no retained Change worktree without a decision | Cockpit (old view) |
-| G6 | Every lane worktree is merged, preserved as a branch, or confirmed by the user as not touching §3.6 paths | User |
+| G6 | Before a lane worktree is retired, its committed, dirty and untracked work and detached heads are preserved; otherwise the exact worktree is kept. A branch alone does not preserve dirty or untracked files | User |
 | G7 | Charter budgets hold for the new core (M7 tests) and E1 is done | Budget tests |
 
 A parked Change keeps its branch and PR in git and GitHub. It restarts as a new Change on the new
@@ -148,13 +156,16 @@ core whose brief names that branch; old state is not migrated.
    point.
 2. Register `owlbear-delivery-next` in `.mcp.json`; remove `owlbear-delivery` from `.vscode/mcp.json`
    and the `chat.*FilesLocations` settings.
-3. Repoint Cockpit's `/delivery` route to the new status view; repoint `atomic_write` imports in
-   `main.py` and `routes/ideas.py`; remove the checkpoint supervisor.
+3. Move the Changes page and host routes into Cockpit; remove Cockpit's unconditional old-engine
+   imports and routers (`main.py` L40–L47 with the `target_work` router; the `atomic_write` import
+   in `routes/ideas.py`, repointed to the copied module) and the checkpoint supervisor.
 4. Delete §3.6 rows 1–14 and apply the edits listed under the table.
 5. Rewrite the product documents (§3.7).
 6. Prove: `uv run test`, `npm test` and `uv run test-e2e` pass; the new core's budget tests pass; one
    OwlBear Change starts, reaches its first `done` exit and shows one status line.
-7. Merge, then run the next OwlBear Change on the new core.
+7. Merge. Stop the old launchers (`.owlbear/controller/bin/cockpit`, `bin/delivery-mcp`), start the
+   new host launcher (Cockpit with the Changes page), verify one status line per Change, then run
+   the next OwlBear Change on the new core.
 
 **Switch for consumers** (no consumer uses the old Delivery):
 
@@ -171,8 +182,8 @@ core whose brief names that branch; old state is not migrated.
 | Failure | Action |
 | --- | --- |
 | A gate fails before the PR merges | Do not merge; old path untouched |
-| The new core fails on OwlBear after the merge, inside the retention window | `git revert` the deletion PR; this restores the `owlbear-delivery` registration and Local locations. The pinned release is self-contained (`git archive` plus its own `.venv`), and state, worktrees and refs were kept, so the old engine resumes. Re-dispatch `sync-to-main` from the reverted `dev` |
-| A Change already started on the new core | Stays on the new core; its state is not converted back |
+| The new core fails on OwlBear after the merge, inside the retention window | `git revert` the deletion PR; this restores the `owlbear-delivery` registration and Local locations. Restart the retained old launchers (`.owlbear/controller/bin/cockpit`, `bin/delivery-mcp`). The pinned release is self-contained (`git archive` plus its own `.venv`), and state, worktrees and refs were kept, so the old engine resumes. Re-dispatch `sync-to-main` from the reverted `dev` |
+| A Change already started on the new core | Keeps its state but stays paused until a compatible host runs again; its state is not converted back |
 
 The retention window ends when two OwlBear Changes have merged on the new core. Then, with the
 user's confirmation for each destructive step: remove `.owlbear/controller/`,
@@ -190,9 +201,9 @@ deletion PR, per the route comparison §3.4.
 | 1 | Engine | `serve/delivery/` (55 modules 60,824; tests 143 files 86,366; packaging 270) | 200 | 147,460 | `remote_git`, `git_executable`, `storage_io`, `publication_provider`, `merge_offer`, `merge_approval`, `worker_stall`, `acceptance_criteria` (2,215 lines) |
 | 2 | MCP server | `serve/delivery-mcp/` (64 tools) | 10 | 9,588 | None; new tools follow T1–T8 |
 | 3 | GitHub adapter | `serve/delivery-github/` | 11 | 5,560 | `github.py`, `effect_launcher.py`, `memory.py` (2,344), adapted |
-| 4 | Controller tools | `serve/tools/src/owlbear_tools/delivery_*.py` (6), `scripts/delivery-diagnose`, `tests/test_delivery_*` (6), `tests/fixtures/delivery_lc` | 14 | 10,013 | None |
+| 4 | Controller tools | Under `serve/tools/`: `src/owlbear_tools/delivery_*.py` (6), `scripts/delivery-diagnose`, `tests/test_delivery_*` (6), `tests/fixtures/delivery_lc` | 14 | 10,013 | None |
 | 5 | Cockpit backend | `routes/target_work.py`, `target_models.py`, `target_context.py`, `tests/test_target_context_startup.py` | 4 | 1,875 | None |
-| 6 | Cockpit views | `api/workItems.ts`, `CompletedHistoryWorkspace`, `DeliveryPrimitives`, `DesignWorkDetail`, `DesignWorkSection`, `MergeApprovalDialog`, `PortfolioOperatingSummary`, `WorkItemDetail`, `WorkPortfolioTable`, `designWorkPresentation`, `workItemPresentation`, `useCleanupFlow`, `useWorkItems`, `WorkPortfolioPage` | 14 | 8,511 | Patterns only (table, merge dialog), per D4 |
+| 6 | Cockpit views | `api/workItems.ts`, `CompletedHistoryWorkspace`, `DeliveryPrimitives`, `DesignWorkDetail`, `DesignWorkSection`, `MergeApprovalDialog`, `PortfolioOperatingSummary`, `WorkItemDetail`, `WorkPortfolioTable`, `designWorkPresentation`, `workItemPresentation`, `useWorkItems`, `WorkPortfolioPage`; `useCleanupFlow` stays (it implements `useMemoryPurgeFlow` for `MemoryTab.tsx`) | 13 | 8,394 | Patterns only (table, merge dialog), per D4 |
 | 7 | Cockpit unit tests | `__tests__/WorkItemDetail.*` (8), `WorkPortfolio*` (6), `workPortfolioHarness.tsx` | 15 | 8,224 | None |
 | 8 | Cockpit e2e | `e2e/work-portfolio.spec.ts`, `support/seed-work-portfolio-delivery.py`, `start-work-portfolio-stack.mjs`, `fake-gh.mjs` | 4 | 2,562 | `fake-gh.mjs` if D4's proof needs it |
 | 9 | Workspace tests | `tests/test_delivery_journey.py`, `test_delivery_worktree_authority.py`, `test_cockpit_work_items.py`, `tests/fixtures/delivery-authority/` (26) | 29 | 7,445 | None |
@@ -201,15 +212,18 @@ deletion PR, per the route comparison §3.4.
 | 12 | Prompts | `continue-change`, `design`, `inspect-change`, `finalize-change`, `address-pr-feedback`, `repair-delivery`, `resolve-delivery-attention`, `resolve-target-conflict`, `upgrade-delivery` | 9 | 233 | None |
 | 13 | Seed | `seed/.owlbear/delivery/runtime/host.json` | 1 | 5 | None |
 | 14 | Research | 53 superseded Delivery documents (`delivery-*` except `delivery-next-*`, the rebuild research and the tool-surface audit; `change-continuation-delivery-redesign`, `target-delivery-information-flow-*`, `agent-driven-delivery-redefinition`, `cockpit-delivery-admission-visibility-remediation`, `user-delivery-cockpit-flow`) and `cockpit-work-items-redesign-evidence/` (5) | 58 | 28,673 | Archived by the `delivery-v1-final` tag; links from kept documents point to it |
-| | **Total** | | **390** | **234,018** | 4,559 lines copied |
+| | **Total** | | **389** | **233,901** | 4,559 lines copied |
 
-Code and tests (rows 1–9, 13) are 302 files and 201,243 lines; agent content (rows 10–12) is 30
+Code and tests (rows 1–9, 13) are 301 files and 201,126 lines; agent content (rows 10–12) is 30
 files and 4,102 lines; research is 58 files and 28,673 lines. The 64 MCP tools and the six
 controller console scripts (`delivery-controller`, `delivery-lc`, `delivery-migrate`,
 `delivery-repair`, `delivery-diagnose`, `target-branch`) disappear with rows 2 and 4.
 
 **Edits in the same PR:** root `pyproject.toml` (`pythonpath` and three ruff `src` entries);
 `serve/cockpit/pyproject.toml` and `serve/tools/pyproject.toml` (old dependencies and scripts);
+`serve/tools/src/owlbear_tools/project.py`, which imports `_delivery_config_status` from
+`delivery_config` (remove or replace the old Delivery diagnostic; `doctor`, `setup-project` and
+`hooks-install` keep working), and its entries in the command catalogue `commands.py`; `uv.lock`;
 `setup/init.py` (Delivery config and registration); seed `mcp.json` and `settings.json` L63–L64;
 `.vscode/mcp.json`, `.vscode/settings.json`; sync manifest and `sync-to-main.yml`;
 `.owlbear/scripts/validate_agents.py`; and the tests that name the old engine
@@ -244,6 +258,7 @@ their `seed/.owlbear/hooks/` copies and their tests; `share/README.md`, `share/W
 | An open Change never finishes | G4 accepts an explicit park; branch and PR stay; restart as a new Change on the new core; no state migration |
 | A consumer already set up with the old Delivery | None exists (user); re-running setup removes the old entry; the release note names the old `.owlbear/delivery/` files the user may delete |
 | A controller upgrade for an open Change picks up the new package | `--locked --package` installs only controller packages; one-way isolation (§3.2 step 2); live-compatibility gate before upgrade |
+| A partial `share` or `infra` sync to `main` between the first E1 move and cutover publishes the new package in a lock or drops moved content from consumer `share/` | No such sync unless projection, loading configuration and lock membership move together (§3.2 step 5) |
 | Harness sessions see the old `owlbear-delivery` server through the forwarded `.vscode/mcp.json` | Delivery skills stay Local-only; operate old Changes only from Local chats |
 | Repo `.mcp.json` memory or knowledge server writes into a session worktree | Register them only after primary-worktree resolution (§3.3) |
 | Plugin or instruction loading behaves differently than documented | E1 probes (a)–(c); `.github/` fallback |
