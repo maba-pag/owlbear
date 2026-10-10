@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OwlBear Delivery · Changes</title>
+<style>
+  body {
+    font: 15px/1.5 system-ui, sans-serif; margin: 2rem auto; max-width: 56rem; padding: 0 1rem; color: #222;
+  }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: .4rem .6rem; border-bottom: 1px solid #ddd; vertical-align: top; }
+  tr.row { cursor: pointer; } tr.row:hover, tr.row:focus { background: #f3f3f3; }
+  section { margin-top: 1.5rem; } fieldset { border: 1px solid #ccc; margin: .8rem 0; }
+  .muted { color: #666; } .error { color: #a00; } textarea { width: 100%; }
+</style>
+</head>
+<body>
+<h1>Changes</h1>
+<p id="error" class="error" role="alert"></p>
+<table aria-label="Changes">
+<thead><tr><th scope="col">Change</th><th scope="col">Status</th><th scope="col">Next action</th></tr></thead>
+<tbody id="changes"></tbody></table>
+<section id="detail" aria-live="polite"></section>
+<script>
+"use strict";
+const hash = new URLSearchParams(location.hash.slice(1));
+if (hash.get("token")) {
+  sessionStorage.setItem("token", hash.get("token"));
+  history.replaceState(null, "", location.pathname);
+}
+const token = sessionStorage.getItem("token");
+let selected = null;
+
+async function call(path, body) {
+  const init = { headers: { Authorization: `Bearer ${token}` } };
+  if (body) {
+    init.method = "POST";
+    init.body = JSON.stringify(body);
+    init.headers["Content-Type"] = "application/json";
+  }
+  const response = await fetch(`/api/next${path}`, init);
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail));
+  }
+  return data;
+}
+
+function el(tag, text, attrs = {}) {
+  const node = document.createElement(tag);
+  if (text !== undefined) node.textContent = text;
+  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
+  return node;
+}
+
+function send(path, body) {
+  call(`/changes/${selected}${path}`, body).then(refresh, (e) => {
+    document.getElementById("error").textContent = e.message;
+  });
+}
+
+function questionForm(q) {
+  const form = el("form"), box = el("fieldset");
+  box.append(el("legend", `Question ${q.id}: ${q.text}`));
+  for (const o of q.options) {
+    const label = el("label"), radio = el("input", undefined, { type: "radio", name: "option", value: o.id });
+    label.append(radio, ` ${o.label}`);
+    box.append(label, el("br"));
+  }
+  const text = el("textarea", undefined, { name: "text", rows: "2", "aria-label": "Your answer in words" });
+  box.append(text, el("button", "Answer", { type: "submit" }));
+  form.append(box);
+  form.onsubmit = (event) => {
+    event.preventDefault();
+    const option = form.querySelector("input[name=option]:checked");
+    send("/answers", { question: q.id, option: option ? option.value : null, text: text.value });
+  };
+  return form;
+}
+
+function checkForm(check) {
+  const box = el("fieldset"), note = el("textarea", undefined, { rows: "2", "aria-label": "Note" });
+  box.append(el("legend", `Check ${check.id}`), el("p", check.steps.join("; ")));
+  if (check.url) {
+    const link = el("a", check.url, { href: check.url, target: "_blank", rel: "noopener" });
+    box.append(el("p", "Open: "), link);
+  }
+  const pass = el("button", "Passed", { type: "button" }), fail = el("button", "Failed", { type: "button" });
+  pass.onclick = () => send("/check-results", { check: check.id, passed: true, note: note.value });
+  fail.onclick = () => send("/check-results", { check: check.id, passed: false, note: note.value });
+  box.append(note, pass, fail);
+  return box;
+}
+
+async function showDetail() {
+  const target = document.getElementById("detail");
+  if (!selected) return target.replaceChildren();
+  const d = await call(`/changes/${selected}`);
+  const parts = [el("h2", d.slug), el("p", d.line), el("p", d.brief.outcome, { class: "muted" })];
+  if (d.question) parts.push(questionForm(d.question));
+  for (const check of d.checks.filter((c) => c.waiting)) parts.push(checkForm(check));
+  if (d.step === "shape" && d.brief.approved !== d.brief.version) {
+    const approve = el("button", `Approve brief v${d.brief.version}`, { type: "button" });
+    approve.onclick = () => send("/approve-brief", { version: d.brief.version });
+    parts.push(approve);
+  }
+  const log = el("ol", undefined, { class: "muted" });
+  for (const e of d.activity.slice(-8)) {
+    log.append(el("li", `${e.at || ""} ${e.event || ""} ${e.exit || e.tool || e.reason || ""}`));
+  }
+  parts.push(el("h3", "Recent activity"), log);
+  const typing = target.contains(document.activeElement) && document.activeElement !== document.body;
+  if (!typing) target.replaceChildren(...parts);
+}
+
+async function refresh() {
+  try {
+    const rows = (await call("/changes")).map((c) => {
+      const row = el("tr", undefined, { class: "row", tabindex: "0" });
+      row.append(el("td", c.slug), el("td", c.line), el("td", c.action || "—"));
+      row.onclick = row.onkeydown = (event) => {
+        if (event.type === "click" || event.key === "Enter") { selected = c.slug; refresh(); }
+      };
+      return row;
+    });
+    document.getElementById("changes").replaceChildren(...rows);
+    document.getElementById("error").textContent = "";
+    await showDetail();
+  } catch (e) {
+    const hint = "Open the URL the host printed, including #token=…";
+    document.getElementById("error").textContent = token ? e.message : hint;
+  }
+}
+
+refresh();
+setInterval(refresh, 3000);
+</script>
+</body>
+</html>

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -10,8 +11,10 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from pathlib import Path
 
 INVALID_LIMIT = 3
+LOCAL_URL = re.compile(r"http://(127\.0\.0\.1|localhost):\d{1,5}(/\S*)?")
 
 
 class Args(BaseModel):
@@ -20,67 +23,45 @@ class Args(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+def _f(limit: int, description: str, example: object, least: int = 1) -> Any:  # noqa: ANN401 - a pydantic FieldInfo
+    """A bounded field with its description and one example (T5)."""
+    return Field(min_length=least, max_length=limit, description=description, examples=[example])
+
+
 class CheckRun(Args):
     """One check command the agent ran and its exit code."""
 
-    command: str = Field(min_length=1, description="The command as listed in the task", examples=["npm test"])
+    command: str = _f(300, "The command as listed in the task", "npm test")
     exit_code: int = Field(description="Its exit code; 0 means it passed", examples=[0])
 
 
 class BuildResult(Args):
     """``submit_result`` for the build step."""
 
-    summary: str = Field(
-        min_length=1,
-        max_length=2000,
-        description="What you changed and why, in a few sentences",
-        examples=["Added greet(name) returning a German greeting, with a test."],
-    )
-    changed_paths: list[str] = Field(
-        min_length=1,
-        max_length=200,
-        description="Repository-relative paths your commit changes",
-        examples=[["packages/app/src/greet.ts"]],
-    )
-    checks: list[CheckRun] = Field(
-        min_length=1,
-        max_length=20,
-        description="Every task check you ran on your final commit",
-        examples=[[{"command": "npm test", "exit_code": 0}]],
+    summary: str = _f(2000, "What you changed and why, in a few sentences", "Added greet(name), with a test.")
+    changed_paths: list[str] = _f(200, "Repository-relative paths your commit changes", ["packages/app/src/greet.ts"])
+    checks: list[CheckRun] = _f(
+        20, "Every task check you ran on your final commit", [{"command": "npm test", "exit_code": 0}]
     )
 
 
 class AskOption(Args):
     """One answer the owner can choose and where it leads."""
 
-    label: str = Field(
-        min_length=1, max_length=200, description="The answer as the owner picks it", examples=["German"]
-    )
-    effect: str = Field(
-        min_length=1,
-        max_length=300,
-        description="What you will do if it is chosen",
-        examples=["greet() returns 'Hallo, <name>!'"],
-    )
+    label: str = _f(200, "The answer as the owner picks it", "German")
+    effect: str = _f(300, "What you will do if it is chosen", "greet() returns 'Hallo, <name>!'")
 
 
 class AskQuestion(Args):
     """``ask_question``: one question for the owner; the step ends and resumes with the answer."""
 
-    question: str = Field(
-        min_length=1, max_length=500, description="One question", examples=["Which language should greet() use?"]
-    )
-    why: str = Field(
-        min_length=1,
-        max_length=500,
-        description="Why you cannot decide it yourself",
-        examples=["The brief calls the greeting language a product decision."],
-    )
-    options: list[AskOption] = Field(
-        min_length=2,
-        max_length=5,
-        description="Two to five distinct answers, each leading somewhere",
-        examples=[[{"label": "German", "effect": "Hallo"}, {"label": "English", "effect": "Hello"}]],
+    question: str = _f(500, "One question", "Which language should greet() use?")
+    why: str = _f(500, "Why you cannot decide it yourself", "The brief calls the greeting language a product decision.")
+    options: list[AskOption] = _f(
+        5,
+        "Two to five distinct answers, each leading somewhere",
+        [{"label": "German", "effect": "Hallo"}, {"label": "English", "effect": "Hello"}],
+        least=2,
     )
 
 
@@ -88,18 +69,42 @@ class WrongPremise(Args):
     """``report_wrong_premise``: the brief or plan cannot be built as written."""
 
     stage: Literal["brief", "plan"] = Field(description="Which document is wrong", examples=["plan"])
-    reason: str = Field(
-        min_length=1,
-        max_length=1000,
-        description="What is wrong",
-        examples=["greet() already exists with another signature."],
+    reason: str = _f(1000, "What is wrong", "greet() already exists with another signature.")
+    evidence: list[str] = _f(10, "Paths, lines or command output that show it", ["src/greet.ts:3 exports greet(a, b)"])
+
+
+class Finding(Args):
+    """One problem the change must fix."""
+
+    place: str = _f(300, "File and line or area", "src/greet.ts:4")
+    problem: str = _f(500, "What is wrong, naming the criterion", "AC-1: English")
+    fix: str = _f(500, "The change that resolves it", "Use Hallo")
+
+
+class ReviewResult(Args):
+    """``submit_result`` for the review step."""
+
+    verdict: Literal["pass", "fix"] = Field(
+        description="pass when every criterion holds and nothing must change, else fix", examples=["pass"]
     )
-    evidence: list[str] = Field(
-        min_length=1,
-        max_length=10,
-        description="Paths, lines or command output that show it",
-        examples=[["packages/app/src/greet.ts:3 exports greet(name, lang)"]],
+    findings: list[Finding] = Field(
+        default_factory=list,
+        max_length=20,
+        description="Each problem that must be fixed; empty for pass",
+        examples=[[{"place": "src/greet.ts:4", "problem": "AC-1: English", "fix": "Use Hallo"}]],
     )
+    covered_paths: list[str] = _f(
+        200, "Every repository path you read, including files outside the diff", ["packages/app/src/greet.ts"]
+    )
+
+
+class CheckRecipe(Args):
+    """``submit_result`` for check preparation: how the host starts the environment the owner checks."""
+
+    command: str = _f(200, "One allowed launch command", "npm run preview")
+    directory: str = _f(300, "Repository-relative directory to run it in", "packages/app")
+    ready_url: str = _f(300, "Local URL that answers once the environment is ready", "http://127.0.0.1:4173/")
+    summary: str = _f(1000, "How you verified it", "Ran it, fetched the page, stopped it")
 
 
 @dataclass(frozen=True)
@@ -133,6 +138,13 @@ PREMISE = Spec(
     "premise",
 )
 SPECS = (SUBMIT, ASK, PREMISE)
+REVIEW = Spec("submit_result", "Submit your review verdict once, after reading the diff.", ReviewResult, "result")
+RECIPE = Spec(
+    "submit_result",
+    "Submit the verified launch recipe once, after you stopped everything you started.",
+    CheckRecipe,
+    "result",
+)
 
 
 def _inline(node: object, defs: dict[str, Any]) -> object:
@@ -219,4 +231,41 @@ def check_question(question: AskQuestion) -> list[str]:
     labels = [o.label.strip().lower() for o in question.options]
     if len(set(labels)) < len(labels):
         return ["options: labels repeat - give each option a distinct answer"]
+    return []
+
+
+def check_review(review: ReviewResult, tree: Worktree) -> list[str]:
+    """Return field errors for a verdict that does not match its findings or skips a changed path."""
+    errors = []
+    if review.verdict == "fix" and not review.findings:
+        errors.append("findings: empty - a fix verdict names each problem with place, problem and fix")
+    if review.verdict == "pass" and review.findings:
+        errors.append("verdict: pass with findings - use fix, or drop findings that need no change")
+    if missing := sorted(set(tree.changed) - set(review.covered_paths)):
+        errors.append(f"covered_paths: missing {_few(missing)} - read every changed path and list it")
+    return errors
+
+
+def check_recipe(recipe: CheckRecipe, tree: Worktree, launch: Sequence[str], root: Path) -> list[str]:
+    """Return field errors for a recipe the host could not run: outside the worktree, unlisted or not local."""
+    errors = [f"changes: uncommitted files ({_few(tree.dirty)}); commit or revert them"] if tree.dirty else []
+    where = (root / recipe.directory).resolve()
+    if not (where.is_relative_to(root.resolve()) and where.is_dir()):
+        errors.append(f'directory: {recipe.directory} is not a directory in the worktree - e.g. "packages/app"')
+    if not any(recipe.command.split()[: len(c.split())] == c.split() for c in launch):
+        errors.append(f"command: not an allowed launch command - use one of {', '.join(launch) or 'none'}")
+    if not LOCAL_URL.fullmatch(recipe.ready_url):
+        errors.append('ready_url: must be local with a port, e.g. "http://127.0.0.1:4173/"')
+    return errors
+
+
+def check_result(args: Args, tree: Worktree, checks: Sequence[str], root: Path) -> list[str]:
+    """Return the field errors of one ``submit_result`` against the worktree the runner observed."""
+    match args:
+        case BuildResult():
+            return check_build(args, tree, checks)
+        case ReviewResult():
+            return check_review(args, tree)
+        case CheckRecipe():
+            return check_recipe(args, tree, checks, root)
     return []

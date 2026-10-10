@@ -25,22 +25,21 @@ from copilot.tools import Tool, ToolInvocation, ToolResult
 
 from owlbear_delivery_next import prompts, tools
 from owlbear_delivery_next.loop import StepResult, cause_key
-from owlbear_delivery_next.models import ErrorKind, Exit, Option, Question, StepKind, Stop
+from owlbear_delivery_next.models import ErrorKind, Exit, Option, Question, StepKind, Stop, Waiting
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 
     from copilot.session import CopilotSession
 
-DEADLINES = {StepKind.BUILD: 1200.0}
-ROLES = {StepKind.BUILD: "builder"}
+DEADLINES = {StepKind.BUILD: 1200.0, StepKind.REVIEW: 600.0, StepKind.CHECK: 900.0}
+ROLES = {StepKind.BUILD: "builder", StepKind.REVIEW: "reviewer", StepKind.CHECK: "builder"}
 POLL = 5.0
 SETTLE = 10.0
 START = 60.0  # runtime start, session create or resume
 CALL = 30.0  # one request while the step runs
 STOP_CALL = 10.0  # one teardown request
 GRACE = 5.0  # between terminate and kill
-GIT_BUILD = tuple(f"git {c}" for c in "add commit merge status diff log restore show rev-parse".split())  # noqa: SIM905
 DENIED = ("git push", "git config", "git -c", "gh", "sudo")
 DIR_OPTIONS = frozenset({"-C", "--prefix", "--cwd", "--dir", "--git-dir", "--work-tree"})
 NULL_PATHS = frozenset({"/dev/null"})
@@ -211,11 +210,12 @@ def targets(recorded: Pids, seen: Observe, group: Callable[[int], int], own: int
     return live, [p for p in live if p != own and group(p) == p]
 
 
-def _kill(recorded: Pids, sig: signal.Signals) -> list[int]:
+def kill(recorded: Pids, sig: signal.Signals) -> list[int]:
+    """Signal recorded PIDs whose start time proves identity, and the groups they lead; return the live ones."""
     live, groups = targets(recorded, alive, _pgid, os.getpgrp())
-    for g, kill in [*((g, os.killpg) for g in groups), *((p, os.kill) for p in live)]:
+    for g, send in [*((g, os.killpg) for g in groups), *((p, os.kill) for p in live)]:
         with contextlib.suppress(OSError):
-            kill(g, sig)
+            send(g, sig)
     return live
 
 
@@ -256,6 +256,7 @@ class Session:
     policy: Policy
     observe: Callable[[], tools.Worktree]
     checks: tuple[str, ...]
+    submit: tools.Spec = tools.SUBMIT
     model: str | None = None
     fresh: str = ""  # first message of a replacement session: stored context plus the pending answer
     readback: bool = False  # the answer was delivered before: read the transcript before sending it again
@@ -330,20 +331,20 @@ class _Step:
         self.log(event="denied", kind=req.kind, request=[t for t, _ in req.commands] or list(req.paths), reason=reason)
         return PermissionDecisionReject(feedback=f"Denied: {reason}")
 
-    def _check_build(self, args: tools.BuildResult) -> list[str]:
+    def _check_result(self, args: tools.Args) -> list[str]:
         try:
             tree = self.cfg.observe()
         except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
             return [f"changes: the worktree could not be read ({type(exc).__name__}); try again"]
-        errors = tools.check_build(args, tree, self.cfg.checks)
+        errors = tools.check_result(args, tree, self.cfg.checks, self.cfg.policy.root)
         self.run.head = None if errors else tree.head
         return errors
 
     def _handle(self, spec: tools.Spec, inv: ToolInvocation) -> ToolResult:
         args, errors = tools.parse(spec.model, inv.arguments)
         if args is not None:
-            errors = self._check_build(args) if isinstance(args, tools.BuildResult) else []
-            errors += tools.check_question(args) if isinstance(args, tools.AskQuestion) else []
+            errors = tools.check_question(args) if isinstance(args, tools.AskQuestion) else []
+            errors += self._check_result(args) if spec is self.cfg.submit else []
         self.log(event="tool", tool=spec.name, accepted=not errors, errors=errors)
         if self.done:
             return ToolResult(text_result_for_llm="The step has already ended. Stop now.", result_type="rejected")
@@ -362,7 +363,7 @@ class _Step:
             Tool(
                 s.name, s.description, partial(self._handle, s), tools.schema(s), skip_permission=True, is_terminal=True
             )
-            for s in tools.SPECS
+            for s in (self.cfg.submit, tools.ASK, tools.PREMISE)
         ]
 
     def record(self, *pids: int | None, keep: bool = False) -> None:
@@ -471,11 +472,11 @@ async def _force(st: _Step, why: str) -> None:
     st.log(event="force-stop", reason=why, runtime_pid=st.run.runtime_pid)
     with contextlib.suppress(OSError, AttributeError):
         st.proc.terminate()
-    _kill(st.run.pids, signal.SIGTERM)
+    kill(st.run.pids, signal.SIGTERM)
     await _settle(st.run.pids, [], GRACE)
     with contextlib.suppress(OSError, AttributeError):
         st.proc.kill()
-    _kill(st.run.pids, signal.SIGKILL)
+    kill(st.run.pids, signal.SIGKILL)
 
 
 async def _teardown(client: CopilotClient, session: CopilotSession | None, st: _Step) -> Termination:  # noqa: C901
@@ -560,34 +561,44 @@ async def run(cfg: Session) -> Run:
     return st.run
 
 
-def to_result(run: Run, kind: StepKind, now: datetime, scanned: Sequence[tuple[int, str]] = ()) -> StepResult:
+def to_result(run: Run, kind: StepKind, now: datetime) -> StepResult:
     """Map one session's ending to the loop's step result, carrying the last permission denial."""
-    result = _exit(run, kind, now, scanned)
+    result = _exit(run, kind, now)
     return result.model_copy(update={"denial": run.denials[-1][:300]}) if run.denials else result
 
 
-def _exit(run: Run, kind: StepKind, now: datetime, scanned: Sequence[tuple[int, str]]) -> StepResult:  # noqa: PLR0911
-    """One exit per ending; unverified termination or a scan survivor stops, whatever the session reported."""
+def _exit(run: Run, kind: StepKind, now: datetime) -> StepResult:  # noqa: PLR0911
+    """One exit per ending; unverified termination stops whatever the session reported; the host scans after."""
     t = run.termination or Termination(confirmed=False, problems=("termination did not run",))
-    if not t.confirmed or scanned:
-        pids = ", ".join(str(p) for p in sorted({*t.survivors, *t.unknown, *(pid for pid, _ in scanned)}))
+    if not t.confirmed:
+        pids = ", ".join(str(p) for p in sorted({*t.survivors, *t.unknown}))
         found = [f"processes {pids} still present"] if pids else []
-        reason = "termination unverified: " + "; ".join([*found, *t.problems])
-        action = f"End processes {pids}" if pids else "Check that no process of this step remains"
-        gone = "No process of this step remains"
-        stop = Stop(kind=ErrorKind.LIVENESS, reason=reason, action=action, resume=gone, at=now)
+        stop = Stop(
+            kind=ErrorKind.LIVENESS,
+            reason="termination unverified: " + "; ".join([*found, *t.problems]),
+            action=f"End processes {pids}" if pids else "Check that no process of this step remains",
+            resume="No process of this step remains",
+            at=now,
+        )
         return StepResult(exit=Exit.STOP, reason=stop.reason, stop=stop)
     p = run.payload
     match run.ending:
         case "result" if isinstance(p, tools.BuildResult):
             return StepResult(exit=Exit.DONE, reason=p.summary[:200])
+        case "result" if isinstance(p, tools.ReviewResult):
+            found = "; ".join(f"{f.place}: {f.problem} - fix: {f.fix}" for f in p.findings)[:1500]
+            return StepResult(exit=Exit.DONE if p.verdict == "pass" else Exit.RETRY, reason=found or "review passed")
+        case "result" if isinstance(p, tools.CheckRecipe):
+            reason = f"starting `{p.command}` for the check"
+            return StepResult(exit=Exit.PENDING, waiting=Waiting.PERSON_CHECK, reason=reason)
         case "ask" if isinstance(p, tools.AskQuestion):
             options = [Option(id=f"o{i}", label=f"{o.label}: {o.effect}") for i, o in enumerate(p.options, 1)]
             question = Question(step=kind, text=f"{p.question} (why: {p.why})", options=options)
             return StepResult(exit=Exit.ASK, question=question)
         case "premise" if isinstance(p, tools.WrongPremise):
             cause = cause_key(ErrorKind.SCOPE, kind, p.stage)
-            return StepResult(exit=Exit.BACK, back_to=StepKind.PLAN, cause=cause, reason=p.reason[:200])
+            back = StepKind.BUILD if kind == StepKind.CHECK else StepKind.PLAN
+            return StepResult(exit=Exit.BACK, back_to=back, cause=cause, reason=p.reason[:200])
         case "deadline":
             cause = cause_key(ErrorKind.LIVENESS, kind, "deadline")
             return StepResult(exit=Exit.RETRY, cause=cause, reason=run.detail or "deadline")

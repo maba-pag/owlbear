@@ -162,10 +162,17 @@ class Store:
     def write(self, lock: Lock, change: Change) -> None:
         """Write one Change atomically, keeping the previous file as ``.prev``."""
         lock.check(change.slug)
-        path = self._dir(change.slug) / "change.json"
-        if path.exists():
-            atomic_write(path.with_name("change.json.prev"), path.read_text())
-        atomic_write(path, change.model_dump_json(indent=1))
+        path, text = self._dir(change.slug) / "change.json", change.model_dump_json(indent=1)
+        old = path.read_text() if path.exists() else None
+        if old == text:
+            return
+        if old is not None:
+            atomic_write(path.with_name("change.json.prev"), old)
+        atomic_write(path, text)
+
+    def slugs(self) -> list[str]:
+        """Return every Change of this clone."""
+        return sorted(p.parent.name for p in (self.root / "changes").glob("*/change.json"))
 
     def restore(self, lock: Lock, slug: str) -> None:
         """Replace the current Change file with its previous version."""

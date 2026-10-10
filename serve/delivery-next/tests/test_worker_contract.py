@@ -218,5 +218,6 @@ def test_termination_is_confirmed_only_when_every_recorded_pid_is_observed_gone(
 def test_a_valid_result_still_stops_while_a_step_process_survives() -> None:
     run = Run("s1", ending="result", payload=build(), termination=Termination(confirmed=True))
     assert to_result(run, StepKind.BUILD, NOW).exit == Exit.DONE
-    stopped = to_result(run, StepKind.BUILD, NOW, scanned=[(17494, "sh")])
+    run.termination = Termination(confirmed=False, survivors=(17494,))
+    stopped = to_result(run, StepKind.BUILD, NOW)
     assert (stopped.exit, stopped.stop.action) == (Exit.STOP, "End processes 17494")

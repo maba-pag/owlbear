@@ -61,3 +61,51 @@ Total 1.24 credits. `main` stayed at `0d0dff4`; new local branches `owlbear/gree
 `owlbear/noverify2`; nothing pushed. After the runs `pgrep` found no Copilot runtime, `npm` or test process of
 these steps. Not exercised live: an early submit (field error on `changes`), a step deadline or hung call, a
 killed runner with answer readback, and a missing session; these are covered by fake-driven tests only.
+
+## Phase C demonstration
+
+Date 2026-10-10, macOS. Copilot CLI 1.0.95, `github-copilot-sdk` 1.0.19, FastAPI 0.142.2, uvicorn 0.54.0,
+Node 24.21.0, model `auto` (billed `gpt-6-luna` on every step, no mismatch). Phase B Changes were moved to
+`.git/owlbear-delivery/archive-phase-b/` first. Seed (one task, one person-only check, launch command
+`npm run preview`), then the host; every later step was started by the host:
+
+```text
+owlbear-next --repo ~/Projects/owlbear-sandbox seed welcome --title "Add greet(name) and a local preview page" \
+  --outcome "... 'npm run preview' serves http://127.0.0.1:4173/ ... the greeting language is a product decision ..." \
+  --scope packages/app --check "npm test" --install "packages/app=npm ci" --launch "npm run preview" \
+  --person-check "preview=Open the preview and confirm the greeting shows"
+owlbear-next --repo ~/Projects/owlbear-sandbox host
+```
+
+Run `welcome` (times UTC):
+
+| Done criterion | Evidence |
+| --- | --- |
+| Host launches the Builder by itself → `ask` | Host 71227 started 05:02:09 and launched runner 71229 at once; `ask` q1 at 05:02:19 (Other language, English, Spanish); termination confirmed, no tasks listed |
+| Second host prints the URL and exits 0 | `Delivery is already running: http://127.0.0.1:59161/`, exit 0. API without token → 401; foreign `Host` header → 403 |
+| Answer through the API launches exactly one successor | `curl POST /api/next/changes/welcome/answers` (o3, "German: greet('Ada') returns 'Hallo, Ada!'") at 05:02:37.03; runner 73170 started 05:02:37.09; `delivered_at` 05:02:37.97, `effect_observed_at` 05:03:31.95 |
+| Host killed while a runner is active; restart waits, observes, continues | `kill -9` host at 05:02:41; runner 73170 lived on in its own session; `status`: "welcome: Build 1/1 · Delivery is not running / next: Start Delivery (run `owlbear-next host`)". New host 73542 at 05:02:47 showed "implementing … builder active 12 s ago", waited; the runner ended 05:03:31 (`done`, commit `ea6d120`); after the termination check the host launched one runner, 73949, at 05:03:33 |
+| Review runs | Task review `pass` 05:04:05 and final review `pass` 05:04:37 on `ea6d120`, each with covered-path fingerprints; read-only policy; `submit_result` accepted first time |
+| Check preparation returns a launch recipe | Publish and follow are slice stubs ("not published: publication is a later slice"). Check runner 74256: one URL request denied, then recipe `npm run preview`, `packages/app`, `http://127.0.0.1:4173/` accepted 05:05:03; termination confirmed |
+| Host launches the preview, verifies readiness, status shows the waiting check | 05:05:04 "check environment ready … PIDs [74689, 74715]" (npm, pgid 74689, parent host; node `src/preview.ts`). `curl` → `<p>Hallo, Ada!</p>`. Status `Check · waiting for you: Open the preview and confirm the greeting shows · http://127.0.0.1:4173/`, next: Report result. Killing node 74715 → host relaunched at 05:05:35 (PIDs 75895, 75918) |
+| Orphan blocks the next writer; removal resumes | `sh -c 'while true; do sleep 5; done'` (77042) started outside Delivery in `packages/app` of the worktree |
+| Check result disposes the environment; Change reaches a defined end | `POST …/check-results` (pass) 05:05:48 → "check environment disposed" (preview refused) → "no writer starts: processes still present: 77042 (bash), 77045 (sleep)"; status "Merge · stopped: … / next: End processes 77042, 77045". `kill 77042` at 05:05:54; next tick 05:06:18 launched runner 77694 → "Merge · waiting for you: Publishing and merging are a later slice; the checked work is on branch owlbear/welcome" |
+
+Credits: build ask 0.114, build 0.557, task review 0.218, final review 0.261, check preparation 0.344; total
+1.49. Touchpoints: the answer and the check result only (the environment kill and the orphan were injected
+faults). `owlbear/welcome` holds `ea6d120` (`greet.ts`, `preview.ts`, two tests, `package.json`); `npm test`
+in the worktree: 4 pass, 0 fail. `main` stayed at `0d0dff4`, nothing was pushed and the sandbox checkout is
+clean. After `SIGINT` to the host, `pgrep` found no host, runner, preview, orphan or Copilot runtime;
+`host.json` was removed and `status` showed "Delivery is not running".
+
+Two earlier runs found defects, fixed before `welcome`:
+
+- `hello` (0.09 credits): the host's scan without a start time counted unreadable system daemons (`lsd`,
+  `UserEventAgent`, …) as leftovers and blocked. The scan now passes the runner's or step's start time.
+- `greeting` (0.90 credits): my answer chose "English" with the text "German instead"; the Builder built
+  German, and the reviewer, whose prompt lacked the owner's answers, asked again. Every agent prompt now carries
+  the owner's answers. This run also showed host kill and restart with no duplicate runner.
+
+Limits: sleep detection, recorded-PID survivors after a killed runner and the PR terminal-state hook ran only in
+tests; environment relaunch after a host restart was not shown live (relaunch after interruption was). The
+Changes page was fetched but not used in a browser; answers and results went through the API with `curl`.

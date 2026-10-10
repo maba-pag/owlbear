@@ -264,6 +264,17 @@ class Stop(Record):
     at: datetime
 
 
+class Environment(Record):
+    """A person-only check's environment: the Builder's launch recipe and the PIDs the host started from it."""
+
+    check: str
+    command: str
+    directory: str
+    ready_url: str
+    pids: dict[int, float | None] = Field(default_factory=dict)
+    ready_at: datetime | None = None
+
+
 class Names(Record):
     """Names only; heads always come from git."""
 
@@ -291,6 +302,8 @@ class Change(Record):
     budgets: Budgets = Field(default_factory=Budgets)
     consent: MergeConsent | None = None
     stop: Stop | None = None
+    blocked: Stop | None = None  # host-owned: a process survives in the worktree, so no writer starts
+    env: Environment | None = None
     names: Names = Field(default_factory=Names)
     finished_at: datetime | None = None
     inbox_acked: list[str] = Field(default_factory=list)

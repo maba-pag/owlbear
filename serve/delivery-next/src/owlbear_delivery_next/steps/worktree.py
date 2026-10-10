@@ -55,6 +55,12 @@ def ensure(repo: Path, common_dir: Path, slug: str, branch: str, target: str) ->
     return path
 
 
+def allowed(profile: Profile, kind: str) -> list[str]:
+    """Return the profile's extra shell commands for one step kind; for ``check`` they are the launch commands."""
+    extra = profile.entries.get(f"allow:{kind}")
+    return extra.value.split("\n") if extra else []
+
+
 def installs(profile: Profile, scope: Sequence[str]) -> list[tuple[str, str]]:
     """Return ``(package, command)`` per known install entry holding a scope path; the Builder runs them (DR3)."""
     found = []
@@ -75,3 +81,10 @@ def observe(path: Path, target: str) -> Worktree:
     status = git(path, "status", "--porcelain=v1", "--untracked-files=all").splitlines()
     changed = git(path, "diff", "--name-only", f"{base}..HEAD").splitlines()
     return Worktree(head=head, base=base, dirty=tuple(line[3:] for line in status), changed=tuple(changed))
+
+
+def fingerprints(path: Path, paths: Sequence[str]) -> dict[str, str]:
+    """Return the object id at HEAD of each existing path, the review input that voids a verdict when it changes."""
+    inside = [p for p in paths[:200] if (path / p).resolve().is_relative_to(path.resolve())]
+    lines = git(path, "ls-tree", "HEAD", "--", *inside).splitlines() if inside else []
+    return {line.split("\t", 1)[1]: line.split()[2] for line in lines}
