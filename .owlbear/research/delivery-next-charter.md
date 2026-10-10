@@ -82,9 +82,11 @@ genuine questions and perform the person-only checks the brief declares. There i
 touchpoint: Delivery merges automatically when the merge gate passes (TD-15, §3.6). Reviews that
 GitHub requires from people still apply; until they arrive the Change is pending "waiting for review
 by …". A profile setting "ask before merge" (default off) restores a consent question for owners
-who want it. Overlap between Changes is shown as "overlaps with X", never asked; integration handles
-conflicts and asks only when the two Changes' intents contradict; docs, lockfiles and generated
-files are ignored (TD-12). Announced prerequisite actions — sign in again, approve a permission,
+who want it. Overlap between Changes is recorded and shown as "overlaps with X", never asked; docs,
+lockfiles and generated files are ignored. Integration asks only on a behavioural collision — a
+Builder-resolved conflict, or an integration ending in a question, that touches the scope of another
+open Change or one merged in the last 14 days — with the options keep this behaviour, adopt the
+other's, or pause (TD-12; this test is `autonomous`). Announced prerequisite actions — sign in again, approve a permission,
 unlock a signer, set a credential outside chat — are allowed, each with its exact action and resume
 condition. Anything else asked of the user is a defect. Setup is user-local (TD-11): it writes
 `.vscode/tasks.json` and `.mcp.json` only with consent and only while they are untracked, and adds
@@ -103,29 +105,33 @@ work; replacement of a worker only after confirmed termination; replay only on c
 required remote gates never downgraded. The design requirements DR1–DR16 of the journey research
 are binding.
 
-**Retry policy** (`autonomous`). Failures are classified by signature. Transient environment
-outages — network, 5xx, capacity, rate limits — are pending with growing pauses and never consume
-budget; an expired sign-in is pending with the exact login command. The card shows the pending age
-and attempts, a quiet warning after 1 hour, and an ask after
-24 hours of the same environment fault. The same fault signature from Delivery's own adapter or tool
-three times is a defect: ask with the error, never wait forever. Otherwise only identical failures
-without progress count, three at most. Progress means measurably better results — fewer failing
-checks, more satisfied criteria, a resolved finding — not merely a new commit or changed error text;
-it resets the count. On exhaustion the loop tries one different approach (split, re-plan, stronger
-model), then asks one question.
+**Retry policy** (`autonomous`). Failures are classified by normalised signature (numbers, SHAs and
+temporary paths removed). Environment faults — network and capacity — are pending with growing
+pauses from 1 minute, capped at 30, and never consume budget; quota waits only for its reset; an
+expired sign-in asks the owner to run the exact login command, then continue. The card shows the pending age and
+attempts, goes quiet after 1 hour, and asks after 24 hours of the same signature. The same Delivery
+defect signature — tooling, state or an invalid result — three times is asked with the error, never
+waited on. Otherwise only identical failures without progress count, three at most per signature.
+Progress means a strict improvement with no new failure — fewer failing checks, more satisfied
+criteria, a resolved finding — not merely a new commit or changed error text; it resets the count.
+On exhaustion of a check, review, scope, commit-policy or conflict cause the loop tries one re-plan,
+then asks one question. A stronger model is not yet an alternative (D4 O11).
 
 **Merge gate** (TD-15). Delivery merges when the exact head (SHA guard) has a valid final review;
-required and declared checks green; for UI changes a passed agent visual check (TD-14); valid
-person-only checks; every PR conversation item handled; and the target integrated. Conversation
-items are issue comments, review bodies and review threads from any author except Delivery itself;
-each is answered by a reply, resolved after a fix, or recorded on the card as "no action needed:
-<reason>" (interpretation of TD-15, `autonomous`). The host merges one Change per target branch at a
-time; immediately before the merge call it re-reads target head, PR head, checks and conversation
-and merges only if the gate still holds and the PR base contains the target head (D4 §3.2). It
-merges with the profile's method and reads the result back; a merged result that fails required
-checks on the target opens a fix Change and tells the owner. Review comments become bounded Builder
-fix tasks; after a fix Delivery replies on the thread and resolves it; on disagreement it asks the
-owner with both positions (TD-16).
+every check observed at that head passed, with declared and required checks started; for UI
+changes a passed agent visual check (TD-14); valid person-only checks; every PR conversation item
+handled; and the target integrated. A failing check that was not declared becomes a fix task. The
+declared CI is bound to a digest of the head's workflow files; unknown check names are asked once
+per digest, unreadable workflows wait, and unknown CI never counts as none. Conversation items are
+issue comments, review bodies and review threads; an item is Delivery's only by a recorded reply or
+its own marked comment. Each other item version is answered by a reply, resolved after a fix, or
+recorded on the card as "no action needed: <reason>"; an edited or reopened item is a new version
+(interpretation of TD-15, `autonomous`). The host merges one Change per target branch at a time:
+it evaluates the gate, takes the target's merge lock, re-reads the PR and evaluates the gate again
+in the order of D3 §3.2. It merges with the profile's method and reads the result back. After the
+merge it watches the target checks; a failure drafts one fix Change for the owner's approval.
+Review comments become bounded Builder fix tasks; after a fix Delivery replies on the thread and
+resolves it; on disagreement it asks the owner with both positions (TD-16).
 
 ### 3.7 Interaction surface and runner activation
 
@@ -205,8 +211,10 @@ transitions, re-entry by observation, the lock, state migration and exported too
 assertions on agent prose wording; agent definitions get structural checks only (TD-3).
 
 UI changes always get a visual check (TD-14): the host launches the preview from the brief's render
-recipe (start command, URL or entry, the UI states to capture), takes screenshots, and a reviewer
-judges them against the criteria. The screenshots are kept with the Change and shown on its card; a
+recipe (start command, URL or entry, up to six UI states to capture), takes screenshots at desktop
+and phone sizes, and a reviewer judges them against the criteria. A Change is UI when the brief's
+`ui` flag says so or its diff touches UI files or folders; "Not a UI change" holds only for the UI
+paths it was given for. The screenshots are kept with the Change and shown on its card; a
 failure becomes a Builder fix task. The owner looks only when the brief declares a person-only check.
 Shaping establishes the recipe before approval; if the project has none, it offers to add one as part
 of the Change, declare a person-only visual check in the brief, or change scope. Visual testing is

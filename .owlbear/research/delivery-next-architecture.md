@@ -9,7 +9,8 @@
 > host-side termination scan, check environments, bundle and archive preservation, brief endpoint,
 > tool count, clone-local state. Revision 2026-10-10 for TD-10 to TD-22: module rules instead of line
 > targets, merge gate and pull-back, visual check, thread replies, New Change, consented local files,
-> no merge queue.
+> no merge queue. Revision 2026-10-10 aligned with the M4 reshape (phases A–E, `adfb5a77c`): module
+> layout, gate order, conversation versions, declared CI, overlap, retry classes, visual check.
 
 ## 1. Context and Question
 
@@ -43,48 +44,63 @@ New workspace member `serve/delivery-next/`, distribution `owlbear-delivery-next
 `owlbear_delivery_next`. The existing `members = ["serve/*"]` picks it up. It never imports
 `owlbear_delivery` or `owlbear_delivery_github`; copied files start with one comment naming their
 source path and commit. Modules follow use cases (TD-19). The "Current" column gives raw line counts
-on the prototype branch `next/m4-slice1` (2026-10-10), not targets.
+(`wc -l`) on the prototype branch `next/m4-slice1` at `adfb5a77c` (2026-10-10), not targets and not
+the logic-line measure.
 
 | Module | Responsibility | Origin | Current |
 | --- | --- | --- | --- |
-| `models.py` | Change, profile, step, exit, pending, question and inbox records, each with `format` | new | 430 |
-| `store.py` | State paths, atomic read and write, version gate and forward migration, per-Change lock, inbox | new, over `storage_io` | 262 |
-| `loop.py` | Choose the next step, apply its exit, budgets per cause under the retry policy, re-entry dispatch | new | 639 |
-| `status.py` | The one status line, the "now" line and next actor (DR8) | new | 128 |
-| `profile.py` | Detect, confirm and re-read the project profile, including merge method, "ask before merge", and model and reasoning effort per role | new | 259 |
-| `steps/` `engine`, `worktree`, `review`, `publish`, `follow`, `check`, `merge`, `cleanup` | Engine parts of steps: shared exits, workspace, review, push and PR, CI and review threads, person-only checks, merge gate and guarded merge, preservation and cleanup | new; the optional "ask before merge" consent keeps the head-bound rule of `merge_approval.py` | 1,155 |
-| `steps/pullback.py` | Fetch and fast-forward the local target after a merge, or record "behind" with its reason; also serves the Pull action | new | — |
-| `steps/visual.py` | Visual check: capture screenshots of the host-launched preview with Playwright, hand them to the reviewer, keep them with the Change | new | — |
-| `prompts.py` | Bounded context for each agent step | new | 356 |
-| `sdk_adapter.py` | Session, agent, model and reasoning effort, permission handler, result boundary, usage, teardown | new | 660 |
-| `tools.py` | The six tool schemas and their validators | new | 381 |
-| `runner.py` | Process entry: one Change, one step | new | 254 |
-| `host.py` | Scheduler, runner launcher, startup observation, host lock, check and preview environments, termination scan, New Change launch | new | 373 |
-| `api.py` | Status-view HTTP router | new | 326 |
+| `models.py` | Change, profile, step, exit, pending, question and inbox records, each with `format` | new | 553 |
+| `store.py` | State paths, atomic read and write, version gate and forward migration, per-Change lock, merge lock per target, inbox | new, over `storage_io` | 303 |
+| `loop.py` | Choose the next step, apply its exit and the inbox, re-entry dispatch | new | 376 |
+| `moves.py` | Where a Change goes next, the questions it asks and the tasks it opens | new | 62 |
+| `failures.py` | Cause keys, failure classes (environment, Delivery defect, splittable work) and normalised signatures | new | 66 |
+| `budgets.py` | Count failures per signature, growing pauses for environment faults, ask once a budget is spent | new | 284 |
+| `evidence.py` | When a recorded review, check or visual answer holds, and what a Change must show | new | 119 |
+| `briefs.py` | Validate and write a new Change or a new brief version | new | 92 |
+| `overlap.py` | Shared paths between Changes as information; behavioural collisions at integration | new | 164 |
+| `status.py` | The one status line, the "now" line and next actor (DR8) | new | 217 |
+| `mask.py` | The one sanitiser of command text Delivery shows or persists | new | 38 |
+| `profile.py` | Detect, confirm and re-read the project profile, including declared CI bound to a workflow digest, merge method, "ask before merge", and model and reasoning effort per role | new | 312 |
+| `steps/` `engine`, `worktree`, `review`, `publish`, `follow`, `check`, `merge`, `cleanup` | Engine parts of steps: shared exits, workspace, review, push and PR, CI, declared checks and conversation handling, person-only checks, merge gate and guarded merge, preservation and cleanup | new; the optional "ask before merge" consent keeps the head-bound rule of `merge_approval.py` | 1,640 |
+| `steps/conversation.py` | Which PR conversation items are Delivery's, and which item versions are open or handled | new | 199 |
+| `steps/visual.py` | Visual check: UI detection, Playwright capture of the brief's states, screenshots to the reviewer, result bound to head and tree | new | 272 |
+| `steps/pullback.py` | Fetch and fast-forward the local target after a merge, or record "behind" with its reason; also serves the Pull action | new | 96 |
+| `prompts.py` | Bounded context for each agent step | new | 402 |
+| `sdk_adapter.py` | Session, agent, model and reasoning effort, result boundary, usage, teardown | new | 417 |
+| `session_result.py` | What one worker session produced, mapped to the loop's step result | new | 129 |
+| `permissions.py`, `confinement.py` | Allow list and denials per step kind; which paths a command reaches and whether they stay in the worktree | new | 183 |
+| `processes.py` | Recorded step processes by PID and start time, signalling, termination verdict | new | 74 |
+| `tools.py` | The six tool schemas and their validators | new | 472 |
+| `runner.py` | Process entry: one Change, one step | new | 320 |
+| `host.py` | Scheduler, runner launcher, startup observation, host lock, check and preview environments, termination scan, New Change launch | new | 388 |
+| `api.py` | Status-view HTTP router | new | 337 |
 | `mcp_server.py` | Three chat tools; a client of the host, with a read-only status fallback | new | 152 |
-| `setup.py`, `cli.py` | Readiness check, setup with consented local files, entry points | new | 489 |
+| `setup.py`, `cli.py` | Readiness check, setup with consented local files, entry points | new | 556 |
 | `git/remote_git.py`, `git/git_executable.py` | Bounded remote Git, write readback | copied as is | 310 |
 | `storage_io.py` | `atomic_write`, `locked_roots`, `ControllerLock` | copied, trimmed | 56 |
-| `github/provider.py` | PR, check, rule, review-thread and merge contract; direct merge only (TD-22) | `publication_provider.py`, trimmed and adapted | 280 |
-| `github/gh.py` | `gh` provider: HTTP 403 on rules means unknown, not "no rules"; required checks from the profile; required reviews; PR conversation items (issue comments, review bodies, review threads) read, replied to and resolved with `gh api graphql`; `sha`-guarded merge; GitHub Enterprise hosts | `delivery-github/github.py`, adapted | 449 |
-| `github/merge_offer.py` | Merge gate block reasons, attempt readback; proof fields dropped | `merge_offer.py`, adapted | 126 |
+| `github/provider.py` | PR, check, rule, review-thread and merge contract; direct merge only (TD-22) | `publication_provider.py`, trimmed and adapted | 295 |
+| `github/gh.py`, `gh_client.py`, `gh_checks.py`, `gh_conversation.py` | `gh` provider split by use case: client and hosts, PR and rules (HTTP 403 means unknown), checks and logs at a head, conversation items read, replied to and resolved with `gh api graphql`; `sha`-guarded merge | `delivery-github/github.py`, adapted | 632 |
+| `github/merge_offer.py` | Merge gate block reasons, attempt readback; proof fields dropped | `merge_offer.py`, adapted | 110 |
 | `process_probe.py` | `ProcessTableWorktreeProbe`, `psutil_user_processes`; claim issuer dropped. The probe skips the caller's own descendants, so the host, not the runner, runs it | `worker_stall.py`, adapted | 326 |
-| `criteria.py` | Criterion identity and version (P5 input) only; the old-contract import and legacy derivation dropped | `acceptance_criteria.py`, trimmed | — |
-| Changes page | List, Change card, detail, New Change, answer, check result, brief approval, Pull, recovery actions | new; `web/changes.html` served by the host app before M6, moved to Cockpit web `src/pages/changes/` at M6, reusing shell, theme, `usePollingFetch`, table and dialog patterns | 206 |
+| `criteria.py` | Criterion identity and version (P5 input) | not built: no separate module on the branch | — |
+| Changes page | List, Change card, detail, New Change, answer, check result, brief approval, Pull, recovery actions | new; `web/changes.html` served by the host app before M6, moved to Cockpit web `src/pages/changes/` at M6, reusing shell, theme, `usePollingFetch`, table and dialog patterns | 275 |
 
 **Module rules (TD-19).** One owner per decision. A module over about 400 lines of logic — not
 counting blank lines, comments, docstrings, imports, type-only declarations and interface
 definitions — is split by use case, never trimmed of logic. Ruff complexity limits apply per
 function. There is no total source budget; the tool limits (≤ 6 agent-facing, ≤ 3 per role), ≤ 10
-step kinds, five exits plus pending and ≤ 15 error kinds stay. About 40 lines are added to Cockpit
+step kinds, five exits plus pending and ≤ 15 error kinds stay. `tests/test_module_rules.py`
+enforces ≤ 400 logic lines per module, ≤ 10 step kinds, ≤ 15 error kinds, exactly five exits plus
+pending and the tool limits. About 40 lines are added to Cockpit
 `main.py` at M6. Not copied: `effect_launcher.py` (a merge call
 guarded by `sha`, then a readback, replaces the frozen-body launch) and the in-memory provider, which
 moves to tests as a fake. Agent prose in `agents/` follows the language style (§3.4), not a ceiling.
 
-Measured after M4 slices 1–3 (prototype branch `next/m4-slice1`, 2026-10-10): 7,373 source lines
-including copied modules, 2,019 test lines, 119 lines of agent and skill prose. These are current
-sizes, not budgets. `loop.py`, `sdk_adapter.py` and `github/gh.py` are the modules to measure
-against the logic-line rule; `models.py` is mostly type-only declarations.
+Measured after the M4 reshape (`adfb5a77c`, 2026-10-10, `wc -l`): 9,956 Python source lines
+including copied modules, plus 275 lines of HTML for the Changes page; 4,605 test lines; 123 lines of
+agent and skill prose. These are current sizes, not budgets. Four modules exceed 400 raw lines
+(`models.py`, `tools.py`, `sdk_adapter.py`, `prompts.py`); the module-rule test passes them on logic
+lines.
 
 ### 3.2 Components and responsibilities
 
@@ -209,26 +225,33 @@ with `--no-verify` or force. A failing pre-push hook becomes a builder fix step 
 authentication failure becomes pending; an unknown write result is read back with
 `classify_write_readback` and replayed only on confirmed absence.
 
-- **Merge.** The host holds one merge lock per target branch. Immediately before the merge call the
-  engine re-reads the target head, the PR head, checks and every conversation item, and merges only
-  if the gate (D3 §3.2) still holds and the PR base already contains the target head; otherwise it
-  goes back to integrate (`autonomous`). Then the REST merge call with `sha` set to the gated head
-  and the profile's method, then a readback. Setup recommends GitHub's "require branches to be up to
-  date" and "require conversation resolution" where the plan allows, and the profile records whether
-  they are on. Without them, a change between re-read and merge is a documented residual risk for
-  personal use (TD-9), recovered by the readback: if the merged result fails required checks on the
-  target, Delivery opens a fix Change and tells the owner. No merge queue (TD-22);
-  `merge_request_body` stays direct. A required human review is pending ("waiting for review by …").
+- **Merge.** `steps/merge.py` re-reads the rules, evaluates the gate, takes the merge lock for the
+  target, re-reads the PR and evaluates the gate again in the order of D3 §3.2; the first unmet
+  condition is the exit. Then the REST merge call with `sha` set to the gated head and the profile's
+  method, then a readback. Setup recommends GitHub's "require branches to be up to date" and
+  "require conversation resolution" where the plan allows, and the profile records whether they are
+  on. Without them, a change between re-read and merge is a documented residual risk for personal
+  use (TD-9). After the merge the engine watches the target checks at the merge commit: running
+  checks keep it pending; a failure drafts one fix Change for the owner's approval while the original
+  continues to preservation, cleanup and pull-back. No merge queue (TD-22); a required queue sends
+  the merge to GitHub. A required human review is pending ("waiting for review by …").
+- **Declared CI.** The profile's declared-CI entry is bound to a digest of the workflow files at the
+  PR head. Changed workflows are detected again; check names Delivery cannot resolve are asked once
+  per digest; unreadable workflows keep the gate waiting. Unknown CI never counts as "no CI"
+  (interpretation of TD-15, `autonomous`).
 - **Conversation and review threads.** The gate covers every PR conversation item regardless of
   author or API type: issue comments, review bodies (`gh api graphql`, `pullRequest.comments` and
-  `reviews`) and review threads (`pullRequest.reviewThreads`); items Delivery authored are excluded.
-  Each other item is handled for its exact ID: answered by a reply, resolved after a fix, or recorded
-  "no action needed: <reason>" and shown on the card (interpretation of TD-15, `autonomous`). The
-  Builder writes reply text; the engine posts it (`addPullRequestReviewThreadReply` or an issue
-  comment) and resolves (`resolveReviewThread`). Each reply carries the hidden marker
-  `<!-- delivery:<change>:<item-id>:<fix-id> -->`; the engine looks for it before posting and never
-  posts twice (P12). Before resolving it re-reads the thread; a newer comment not by Delivery means
-  no resolution and a new feedback item (P13).
+  `reviews`) and review threads (`pullRequest.reviewThreads`). An item is Delivery's only by a
+  recorded reply id, or when it is the viewer's own comment carrying the complete marker. Each other
+  item is handled for its exact ID and version digest: answered by a reply, resolved after a fix, or
+  recorded "no action needed: <reason>" and shown on the card (interpretation of TD-15,
+  `autonomous`). A reopened or edited item is a new version and gets a new task. The Builder writes
+  reply text; the engine posts it (`addPullRequestReviewThreadReply` or an issue comment) and
+  resolves (`resolveReviewThread`); an acknowledged item is resolved too. Each reply carries the
+  hidden marker `<!-- delivery:<change>:<item-id>:<fix-id> -->`; the engine looks for it before
+  posting and never posts twice (P12). A deleted reply is reposted at most 3 times, then the owner
+  is asked. A fix counts only while its commit is in the PR head. Before resolving it re-reads the
+  thread; a newer comment not by Delivery means no resolution and a new feedback item (P13).
 - **Pull-back.** `git fetch`, then each worktree from `git worktree list` is inspected. If the target
   is not checked out, `git fetch origin <target>:<target>`, which git refuses unless it
   fast-forwards; if it is checked out clean (no untracked files in paths the update touches) and not
@@ -239,7 +262,13 @@ authentication failure becomes pending; an unknown write result is read back wit
   VS Code shows its "file changed on disk" dialog.
 
 **Visual check.** For UI changes the final review runs in visual mode on the exact head. The brief
-records a render recipe: start command, URL or entry, and the UI states to capture. Shaping
+records a render recipe: start command, URL or entry, a `ui` flag, and up to six `visual` states to
+capture; a person-only check may be marked `visual: true`. A Change is UI when the brief says so or
+its diff touches UI suffixes or folders, rename endpoints included; the owner's "Not a UI change"
+holds only for that brief version and that UI path set. Captures are 1280×800 and 390×844, at most
+6000 px high and 12 MB per review, with same-origin navigation only; the result is bound to head,
+tree, states and criterion versions. Residual: JS or TS markup rendered outside UI folders is caught
+only by the brief's `ui` flag. Shaping
 establishes it before approval; if the project has none, shaping offers to add one as part of the
 Change, declare a person-only visual check in the brief (TD-14), or change scope; visual testing is
 never skipped (interpretation of TD-14, `autonomous`). The host launches the preview from that
@@ -341,7 +370,7 @@ server per window → host over loopback HTTP with the token.
 | Runner crash | Runner gone, no exit recorded | Termination check (§3.2) and the host's worktree scan. Verified → `retry` (`liveness`); unverified → `stop` with "end processes …" | Observe, then resume the recorded session with a "check and finish" message (P3) |
 | Runtime crash | Connection lost inside the runner | Runner ends; the host's worktree scan finds survivors; none → `retry`, else `stop` | As above |
 | Network loss | Transport errors from git, `gh` or the SDK | pending with growing pauses on the host's network probe (`network`); age and attempts on the card, ask after 24 hours of the same fault (D3 §3.3); an unknown write is read back on return | Observation when the probe succeeds |
-| Sign-in expired | Authentication errors, readiness | pending with the exact login command (`auth`) | Readiness passes |
+| Sign-in expired | Authentication errors, readiness | ask: run the exact login command, then continue (`auth`) | The owner answers "Done, continue" |
 | Worker hangs | Step deadline; no tool activity for the step kind's limit | Teardown → `retry` | New or resumed session |
 | Repeated denial | Same command denied twice in a step | `ask`: allow it for this step kind in the profile? | Next step uses the updated list |
 
@@ -413,6 +442,7 @@ the state records. Differences to settle in the M3 challenge:
 | O7 | Do permission requests show a shell's `detach` flag; do pre-tool hooks work in SDK sessions? | Probe | Detached shells outlive the runtime (P4) |
 | O8 | How do consumers get a Copilot CLI behind a TLS-intercepting proxy? | Probe, setup | The SDK's runtime download failed (S02) |
 | O10 | Can an SDK session take screenshots as image input? | Probe | The visual check hands PNGs to the reviewer |
+| O11 | Which stronger model may the retry policy switch to? (`autonomous`) | Profile, after O1 | The prototype has no profile setting for it, so the only alternative before asking is a re-plan |
 
 Settled in revision 2026-10-10: O4, `submit_result` counts as one tool (charter §3.9), so the total
 stays 6; O6, clone-local state is a stated limitation (§3.2, §4); O9, Cockpit is not modified
@@ -449,8 +479,10 @@ Medium for the host app and the termination protocol: both follow probe evidence
 neither has run as a whole. Low for the folder-open start, per-role model selection and the visual
 check's image input, which depend on O5, O1 and O10.
 
-**Limits:** no code was run for this revision. Current sizes are raw prototype line counts, not the
-logic-line measure of TD-19.
+**Limits:** the reshaped prototype (`adfb5a77c`) is proven by its package tests with fakes and
+disposable repositories, plus one real Playwright capture; the reshaped flow has not yet run live
+against GitHub and Copilot, and CI skips draft PRs. Current sizes are raw prototype line counts; the
+logic-line measure of TD-19 is enforced by the prototype's module-rule test.
 State is clone-local: deleting the clone deletes unfinished Change state; branches and PRs remain on
 GitHub. D3 was read as a parallel draft; its later edits may change names (§3.8). The probe evidence comes from one macOS laptop, a
 free personal identity, Auto models and an unprotected private repository.

@@ -348,7 +348,7 @@ the platform migration rather than sequencing it (S3).
 | M1 | Done: ownership map, route comparison, live platform probe | L14 |
 | M2 | Charter drafted and challenged; awaits approval | [charter](delivery-next-charter.md) |
 | M3 | Journey and catalogue, status and exits, architecture, cutover: drafted, challenged three times, corrected; awaits approval | L14, M3 row |
-| M4 | Prototype on branch `next/m4-slice1`, PR #449, not merged: the whole journey ran in the sandbox, from a chat-shaped brief to a merged PR, with brief approval and merge consent as the only touchpoints; twelve common failures were triggered by hand and each ended in its designed exit and continued; every failure found was fixed locally (P9). About 7,400 source lines. PR #449 continues as the base, reshaped (TD-18, TD-19), toward the first release of the M4 row (TD-20) | `serve/delivery-next/DEMO-slice1.md` on the branch |
+| M4 | Prototype on branch `next/m4-slice1`, PR #449, not merged: the whole journey ran in the sandbox, from a chat-shaped brief to a merged PR, with brief approval and merge consent as the only touchpoints; twelve common failures were triggered by hand and each ended in its designed exit and continued; every failure found was fixed locally (P9). Reshape phases A–E done on PR #449 (draft) at `adfb5a77c`, with Sol challenges per phase; CI skips draft PRs (repository rule), so local proof only; about 9,960 source lines. Remaining: live demo of the reshaped flow on the sandbox, `maba-pag` probe (TD-17) | `serve/delivery-next/DEMO-slice1.md` on the branch |
 
 Proven since: merge under a ruleset (required check, squash only, linear history) in the public
 sandbox `boecht/owlbear-sandbox-protected` — never merged while CI was pending or red, merged the

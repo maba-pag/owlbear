@@ -8,7 +8,9 @@
 > design challenge and the full-set challenge: inbox before exclusions, host-down overlay, check
 > environments, several person-only checks, bundle and archive preservation, host crash with live
 > runners. Revision 2026-10-10 for TD-10 to TD-22: merge gate without consent, pull-back, visual
-> check, thread replies, overlap as information, retry policy, no merge queue.
+> check, thread replies, overlap as information, retry policy, no merge queue. Revision 2026-10-10
+> aligned with the M4 reshape (`adfb5a77c`): gate order, every observed check, declared CI per
+> workflow digest, conversation versions, behavioural collisions, retry classes, visual binding.
 
 ## 1. Context and Question
 
@@ -41,13 +43,15 @@ One versioned file per Change and one per project, outside the checkout, written
 | --- | --- | --- | --- |
 | Format and profile | L | format version; profile path and the profile version seen at step entry | Migrate forward or stop (S6); a newer profile is a premise change |
 | Intent | U | the user's words; paused (time, reason); abandoned (time); hold for intent change | Flags are read at every step boundary (D6, X6) |
-| Brief | U | draft versions; approved version and time; outcome, scope, non-goals, split; acceptance criteria with id, text, version; for UI changes the render recipe (start command, URL or entry, UI states to capture) or a declared person-only visual check | Approval is the touchpoint; drafts are L; criterion version is a check input |
+| Brief | U | draft versions; approved version and time; outcome, scope, non-goals, split; acceptance criteria with id, text, version; for UI changes the render recipe (start command, URL or entry, a `ui` flag, up to six `visual` states to capture) or a declared person-only check marked `visual: true` | Approval is the touchpoint; drafts are L; criterion version is a check input |
 | Person-only checks | U | id; criteria refs; steps; what to look for; recorded inputs (criterion version, procedure version, covered paths, environment labels); answer (pass or fail, note, time, input fingerprint at answer) | Valid while the current fingerprint equals the recorded one (P5) |
 | Decisions | U or L | text; origin: `decided` for brief approvals, answers and owner choices, `autonomous` for agent choices, `approved` for content of an approved brief; time | Shown in the Change detail |
 | Questions | U | id; step; kind decision or action; text; options, each naming its next step; answer, channel, time; effect check; effect observed time | An answer clears its cause only once its effect is observed |
 | Plan | L | version; ordered tasks with id, title, scope paths, checks, origin (plan, review, CI, PR feedback, person-only check, integration) | Fix tasks are appended without a new plan version |
 | Reviews | E | per task and final: reviewed commit and its tree id; recorded inputs: the criterion versions judged and the covered paths, each with its fingerprint; the local check results relied on, each with the tree it ran on; verdict; round | The engine computes covered paths from git (`git diff --name-status -M base...head`, including additions, deletions and renames), never from the reviewer's return (`autonomous`). Valid while no path outside the covered set changed and the covered fingerprints are equal; a new head needs fresh proof for its changed paths (P5) |
-| Visual check | E | reviewed head and its tree id; render recipe version; screenshot paths with page and viewport; criterion versions judged; verdict and findings | UI changes only; kept with the Change and shown on its card; bound to the tree it ran on, so a new head with changed UI paths re-runs it |
+| Visual check | E | reviewed head and its tree id; render recipe version and states; screenshot paths with page and viewport; criterion versions judged; verdict and findings; or the owner's "Not a UI change" with the UI path set it covers | UI changes only; kept with the Change and shown on its card; bound to head, tree, states and criterion versions, so a new head with changed UI paths re-runs it; "Not a UI change" holds only for its UI path set |
+| Conversation handling | L | per PR conversation item: id and version digest; recorded reply id; fix id and commit; reposts; "no action needed: <reason>" | A reopened or edited item is a new version with a new task; a fix counts only while its commit is in the PR head; 3 reposts of a deleted reply, then ask |
+| Overlap | L | other Change; shared paths, ignoring docs, lockfiles and generated files | Shown on the card, never asked (TD-12) |
 | Current step | L | kind; task id; mode; attempt; started time; credits so far | Exactly one |
 | Outcome | L | exit kind or pending; cause key; reason; next actor; wake trigger or next observation; last permission denial | Exactly one per step attempt; denial shown (B7) |
 | Budgets | L | per cause key: count, failure fingerprint, progress fingerprint, alternative tried, last time; review rounds per task; re-plans per Change | §3.6 |
@@ -93,19 +97,41 @@ the normal teardown. The host then launches the environment, for example a local
 verifies readiness and enters pending for the check, or starts the visual review. It records the environment's PIDs, relaunches
 it after an interruption, and disposes of it before any other writer starts on the Change.
 
-**Merge gate.** `merge` takes the host's merge lock for the target branch. Immediately before the
-merge call it re-reads the target head, the PR head, checks and every conversation item, and merges
-only when the exact head has: a valid final review; required and declared checks green; for UI
-changes a passed visual check; valid person-only checks; every conversation item handled; and a PR
-base that contains the target head — otherwise back to integrate. Conversation items are issue
-comments, review bodies and review threads from any author except Delivery; each is answered,
-resolved after a fix, or recorded "no action needed: <reason>" on the card (interpretation of
-TD-15, `autonomous`). It merges with the profile's method, `sha` set to that head and no rule
-bypass, then reads back. If the merged result fails required checks on the target, Delivery opens a
-fix Change and tells the owner; without GitHub's "require branches to be up to date" and "require
-conversation resolution", a change between re-read and merge is that documented residual risk
-(TD-9). No consent is asked unless the profile sets "ask before merge". Merge queues are not
-supported (TD-22).
+**Merge gate** (as built, `autonomous` order). `merge` re-reads the profile rules and the PR (merged
+→ cleanup), evaluates the gate, takes the host's merge lock for the target (pending while another
+Change holds it), re-reads the PR and evaluates the gate again. The first unmet condition is the
+exit:
+
+1. PR open, on the target base, not a draft (draft → marked ready, pending).
+2. A valid final review, computed by the engine from the reviewed tree to the candidate → else back
+   to publish.
+3. Valid person-only checks → else back to follow.
+4. Local head equals the PR head → else back to publish.
+5. Every conversation item handled: none open, no reply or resolution pending.
+6. After a fetch, the target is an ancestor of the PR head → else back to integrate.
+7. Declared CI known for the head's workflow digest (see below).
+8. Every check observed at the PR head passed; a failing check that was not declared is a fix task
+   too. Declared and required checks must have started.
+9. GitHub's block reasons: rules, permission, method and no required queue. Failed checks → fix
+   task; running → pending, or missing-only → not started; conflicts or behind → integrate; queue or
+   other assisted blocks → owner action "merge in GitHub".
+10. Mergeable; a required human review is pending.
+11. For UI changes a passed visual check (or a valid "Not a UI change").
+12. Consent, only with "ask before merge".
+
+Then it merges with the profile's method, `sha` set to that head and no rule bypass (head changed →
+retry as a conflict; not mergeable → retry the gate), and reads back (applied; not applied → retry
+as network; moved). Conversation items are issue comments, review bodies and review threads; an
+item is Delivery's only by a recorded reply id or its own marked comment. Each other item version is
+answered, resolved after a fix, or recorded "no action needed: <reason>" on the card
+(interpretation of TD-15, `autonomous`). The declared-CI entry is bound to a digest of the workflow
+files at the PR head: changed workflows are detected again, unknown check names are asked once per
+digest, unreadable workflows wait; unknown CI never counts as none (interpretation of TD-15,
+`autonomous`). After the merge the host watches the target checks at the merge commit: running
+checks keep it pending; a failure drafts one fix Change for the owner's approval, and this Change
+continues to preservation, cleanup and pull-back. Without GitHub's "require branches to be up to
+date" and "require conversation resolution", a change between re-read and merge is that documented
+residual risk (TD-9). Merge queues are not supported (TD-22).
 
 **Pull-back.** `cleanup` first fetches, then inspects every worktree from `git worktree list`. If the
 local target branch is not checked out, or is checked out clean (no untracked files in paths the
@@ -144,7 +170,7 @@ Every exit also records its kind, cause key, reason and time. `{S}` is the stage
 | review | stop | review on the resume condition | stop record | none | "{S} · stopped: {reason} · {action}" |
 | integrate | done | review final if one of its recorded inputs changed; else the calling step | caller | — | "{S} · updated with {target}" |
 | integrate | retry | integrate | conflict paths or failing check | cause +1 | "{S} · updating with {target}: retrying {cause} ({k} of 3)" |
-| integrate | ask | integrate or plan, per option | question (I5, conflict choice, contradicting intents of overlapping Changes) | none | "{S} · waiting for you: {question}" |
+| integrate | ask | integrate or plan, per option | question (I5, conflict choice, a behavioural collision: keep this behaviour, adopt the other's, pause) | none | "{S} · waiting for you: {question}" |
 | integrate | back | plan | reason | cause +1; re-plan +1 | "Plan · re-planning: {target} changed {area}" |
 | integrate | stop | integrate on the resume condition | stop record | none | "{S} · stopped: {reason} · {action}" |
 | publish | done | follow | nothing; branch and PR stay in GitHub | — | "Publish · waiting for CI on PR #{pr}" |
@@ -213,12 +239,15 @@ Termination checks still precede launching another writer ([D4 §3.2](delivery-n
 | --- | --- | --- | --- |
 | Draft brief in chat | Designer skill | User continues in chat | none |
 | CI running (P2) | host polls checks | completion seen; poll 1 → 10 min | none while running |
-| Required check not started (P10) | host | check appears | expected-start window, then follow back (trigger fix) or ask |
+| Declared or required check not started (P10) | host | check appears | expected-start window, then follow back (trigger fix) or ask |
+| Workflow files at the PR head unreadable | host | files readable | none; the gate waits, never treats CI as none |
 | Required reviewer (P7, M8) | host polls reviews | review submitted | none |
 | Owner action in GitHub (P10, after ask) | host | the check starts | 3 observations, then stop |
 | Person-only check (H1) | host, which runs the environment from the launch recipe | answer from status view or chat | none |
 | Mergeability after the gate passed (M2) | host polls PR | mergeable, or a new head that re-evaluates the gate | none |
-| Environment failure: network, sign-in, rate limit, quota, model, runtime or tool hiccup (S1, S8, S9, P9, B14) | host probe or readiness, with growing pauses (1 → 2 → 5 → 15 → 30 min), or the reset time | probe or readiness succeeds, or reset time passes | none; the card shows pending age and attempts; quiet warning after 1 hour; ask after 24 hours of the same environment fault, or at once when the same fault signature from Delivery's own adapter or tool repeats 3 times (a defect, asked with the error). An expired sign-in is shown with the exact login command; exhausted credits or quota wait for the reset and show the credits (TD-21) |
+| Merge lock held by another Change | host | lock released | none |
+| Target checks after the merge (M10) | host polls checks at the merge commit | completion | none; a failure drafts one fix Change for approval |
+| Environment failure: `network` or `capacity` (S1, S8, S9, P9, B14) | host probe or readiness, with growing pauses from 1 min, capped at 30 min, or the reset time | probe or readiness succeeds, or reset time passes | none; the card shows pending age and attempts; quiet after 1 hour; ask after 24 hours of the same signature. Quota only waits for its reset and is never asked. An expired sign-in is shown with the exact login command; exhausted credits show the credits (TD-21) |
 
 ### 3.4 Status line derivation
 
@@ -271,10 +300,10 @@ Fifteen kinds, shown to users and agents; each cause key starts with one.
 | `project-env` | Install or check command wrong, dependencies, LFS, submodules, missing secret, preview or browser missing | S3, B2, B10, B20, B24 | retry, then ask |
 | `checks` | Project checks or CI fail, flaky, failing before the task, visual check fails | B1, B8, B17, B23, I3, P1, P8 | retry or back to build, then ask |
 | `commit-policy` | Hook rejects, signer locked, secret blocked | B3, B15, B18 | retry; ask; back |
-| `result` | Agent result invalid, empty, early end, context exhausted | B4, B5 | retry, then back to plan |
+| `result` | Agent result invalid, empty, early end, context exhausted | B4, B5 | retry; the same signature 3 times is a Delivery defect → ask |
 | `liveness` | Hang, timeout, unconfirmed termination, second writer | B6, X1, X4, X5 | retry after confirmed end; else stop |
 | `scope` | Edits outside task scope or worktree, user edits clash | B11, B13 | retry; ask; stop |
-| `conflict` | Textual or semantic conflict, foreign pushes, target gone, contradicting intents of overlapping Changes | I2, I4, I5, M2, M9, D7 | integrate; ask |
+| `conflict` | Textual or semantic conflict, foreign pushes, target gone, a behavioural collision with another open or recently merged Change | I2, I4, I5, M2, M9, D7 | integrate; ask |
 | `review` | Review rounds exhausted, planner or reviewer disagreement, feedback arriving during a fix or the gate | D9, B12, P3, P13, M10 | retry, then ask |
 | `gate` | Rule blocks push or merge, required check or review missing, PR closed | P5, P6, P10, M4, M8 | pending; back; ask |
 | `state` | Format, unreadable state, preservation unconfirmed, workspace kept, local target behind | S6, B19, M5, M11, M7 | stop; M7 is a done notice with Pull; M11 is a done notice "workspace kept: <reason>" |
@@ -284,17 +313,19 @@ Fifteen kinds, shown to users and agents; each cause key starts with one.
 - **Cause key** = error kind + step kind + subject, where the subject is normalized: the check
   command id, the missing item's name, the sorted conflict paths, the hook id, the comment thread
   id. The task id is not part of the key, so a cause survives re-planning and fix tasks (D10).
-- **Environment failures never count.** `auth`, `network` and `capacity` causes are pending with
-  growing pauses (§3.3) and consume no budget. Faults are classified by signature: the same fault
-  signature from Delivery's own adapter or tool three times is a defect and becomes `ask` with the
-  error (`autonomous`).
-- **Identical failures per cause: 3**, counted on `retry` and `back` only when the failure
-  fingerprint repeats without progress. Progress means measurably better results — fewer failing
-  checks, more satisfied criteria, a resolved finding — not merely a new commit or changed error
-  text (`autonomous`).
-  Progress resets the count. On the third the step tries one different approach — split the task,
-  re-plan, or a stronger model — recorded on the cause; if that also fails, `ask` with a genuine
-  choice (revise requirement, narrow scope, pause), or `stop` when no choice exists.
+- **Environment failures never count.** `network` and `capacity` causes are pending with growing
+  pauses (§3.3) and consume no budget; the same signature for 24 hours → `ask`; quota waits for
+  its reset. **Delivery defects:** the same `tooling`, `state` or `result` signature three times →
+  `ask` with the error (`autonomous`). Signatures normalise numbers, SHAs and temporary paths.
+- **Identical failures per signature: 3**, counted on `retry` and `back` only when the failure
+  fingerprint repeats without progress. Progress means a strict improvement with no new failure —
+  fewer failing checks, more satisfied criteria, a resolved finding — not merely a new commit or
+  changed error text (`autonomous`).
+  Progress resets the count. On the third, `checks`, `review`, `scope`, `commit-policy` and
+  `conflict` causes get one re-plan as the different approach, recorded on the cause; if that also
+  fails, `ask` with a genuine choice (revise requirement, narrow scope, pause), or `stop` when no
+  choice exists. A stronger model is not yet an alternative: the profile has no setting for it
+  (D4 O11).
 - **Review rounds: 2** per task, brief and plan; the third set of findings becomes `ask` with both
   positions summarized. **Flakes: 1** rerun per check and head.
 - **Re-plans: 3** per Change from any cause; the fourth becomes `ask`: narrow the brief or split.
@@ -317,7 +348,7 @@ Fifteen kinds, shown to users and agents; each cause key starts with one.
 | Same missing prerequisite survives a re-plan and an answer | `project-env:TEST_API_KEY` counts 1 (build ask), 2 (retry after an unobserved answer), 3 (back to plan); next occurrence → ask with scope choice | "Build 3/5 · waiting for you: TEST_API_KEY is still not visible to the task — set it, drop AC-3, or pause?" |
 | Intent changes during a task, and again after a merge was submitted | First: hold, task finishes, back to shape with kept and dropped work, ask re-approval. Second: merge outcome observed first; merged → Done and the new intent starts a new Change; not merged → back to shape | "Merge · holding for your change: observing whether PR #14 merged" |
 | Gate passes on head A, integration makes head B, then merge | merge entry re-reads the PR head and re-evaluates the gate for it; reviews and checks whose recorded inputs changed run again; the merge call carries that head SHA as GitHub's guard, so a later push fails the call and goes back to integrate | "Merge · waiting for CI on b7e2a91 (merged main, 1 conflict resolved)" |
-| Target moves while the gate is evaluated (M9) | under the target's merge lock the final re-read finds the PR base missing the new target head → no merge call; back to integrate; the gate runs again for the new head. A move after the re-read is caught by post-merge readback: failing required checks on the target open a fix Change and tell the owner | "Merge · updating with main: main moved during the merge check" |
+| Target moves while the gate is evaluated (M9) | under the target's merge lock the final re-read finds the PR base missing the new target head → no merge call; back to integrate; the gate runs again for the new head. A move after the re-read is caught by the post-merge target-check watch: a failure drafts one fix Change for approval | "Merge · updating with main: main moved during the merge check" |
 | Comment arrives while the gate is evaluated (M10) | the final re-read finds a conversation item not by Delivery and not handled → no merge call; follow back with a fix task, a reply, or "no action needed: <reason>"; the gate runs again | "Publish · handling new comment from @dana before merging" |
 
 **Common catalogue rows:**
