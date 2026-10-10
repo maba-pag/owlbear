@@ -8,6 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
+from urllib.parse import urlencode
 
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
@@ -248,6 +249,49 @@ async def test_bound_capture_round_is_typed_idempotent_and_replaces_documents(tm
         snippets = await _snippets(tool_context, scope)
         assert any("alpha replacement capture" in snippet for snippet in snippets)
         assert all("alpha original capture" not in snippet for snippet in snippets)
+    finally:
+        app_context.conn.close()
+
+
+@pytest.mark.asyncio
+async def test_bound_capture_round_redacts_browser_query_values_from_provenance(tmp_path: Path) -> None:
+    tool_context, app_context = _assembled_context(tmp_path)
+    try:
+        scope = "capture-provenance-redaction"
+        source_id = await _register_browser_source(tool_context, [_URL_A], scope=scope)
+        query_values = {
+            name: f"sentinel-{name}-unique"
+            for name in ("code", "jwt", "assertion", "SAMLResponse", "id_token", "state", "nonce")
+        }
+        canonical_url = f"https://fixture.example/a-canonical?{urlencode(query_values)}"
+
+        ingest_result = await server.knowledge_ingest(
+            tool_context,
+            source_id=source_id,
+            captures=[
+                _captured(
+                    _URL_A,
+                    "capture provenance redaction content",
+                    title="Captured redaction target",
+                    canonical_url=canonical_url,
+                ),
+            ],
+        )
+        assert isinstance(ingest_result, dict)
+        assert ingest_result["documents_created"] == 1
+        assert all(sentinel not in str(ingest_result) for sentinel in query_values.values())
+
+        document = app_context.content_store.get_document(ingest_result["document_ids"][0])
+        assert document is not None
+        assert all(sentinel not in document.metadata["canonical_url"] for sentinel in query_values.values())
+
+        search_results = await server.knowledge_search(tool_context, query="provenance redaction", scopes=[scope])
+        assert isinstance(search_results, list)
+        assert len(search_results) == 1
+        assert search_results[0]["source"]["uri"] == _URL_A
+        provenance = search_results[0]["source"]["provenance"]
+        assert isinstance(provenance, dict)
+        assert all(sentinel not in str(value) for value in provenance.values() for sentinel in query_values.values())
     finally:
         app_context.conn.close()
 

@@ -30,6 +30,33 @@ _CAPTURE_FAILURE_STATUSES = frozenset(get_args(CaptureFailureStatus))
 _CREDENTIAL_QUERY_TOKENS = frozenset(
     {"auth", "authorization", "cookie", "credential", "key", "passwd", "password", "secret", "session", "sig"}
 )
+_SENSITIVE_QUERY_KEYS = frozenset(
+    {
+        "apikey",
+        "accesstoken",
+        "authorization",
+        "authcode",
+        "clientsecret",
+        "code",
+        "cookie",
+        "idtoken",
+        "password",
+        "refreshtoken",
+        "secret",
+        "samlrequest",
+        "samlresponse",
+        "sessionid",
+        "sid",
+        "signature",
+        "sig",
+        "ticket",
+        "token",
+        "jwt",
+        "assertion",
+    }
+)
+_CORRELATION_QUERY_KEYS = frozenset({"state", "sessionstate", "nonce"})
+_CREDENTIAL_QUERY_SUFFIXES = ("token", "secret", "signature", "password", "credential", "assertion")
 _CREDENTIAL_QUERY_MARKERS = (
     "token",
     "secret",
@@ -60,7 +87,14 @@ def _sanitize_error(raw: str | None) -> str | None:
 def _is_credential_query_parameter(name: str) -> bool:
     normalized = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", name).lower()
     tokens = set(re.split(r"[^a-z0-9]+", normalized))
-    return bool(tokens & _CREDENTIAL_QUERY_TOKENS) or any(marker in normalized for marker in _CREDENTIAL_QUERY_MARKERS)
+    normalized_key = re.sub(r"[^a-z0-9]", "", name.casefold())
+    return (
+        bool(tokens & _CREDENTIAL_QUERY_TOKENS)
+        or any(marker in normalized for marker in _CREDENTIAL_QUERY_MARKERS)
+        or normalized_key in _SENSITIVE_QUERY_KEYS
+        or normalized_key in _CORRELATION_QUERY_KEYS
+        or normalized_key.endswith(_CREDENTIAL_QUERY_SUFFIXES)
+    )
 
 
 def _redact_capture_url(url: str) -> str:

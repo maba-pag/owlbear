@@ -90,8 +90,9 @@ exercises this round, health reporting, and last-good-document behavior.
 
 `refresh_knowledge_source` always retains its source and additive outcome fields. Each item in
 `errors` is a structured refresh failure with `source_id`, `stage`, `code`, `retryable`,
-`message`, and `timestamp` fields. A successful no-op refresh has `sources_refreshed: 1`, all
-document and chunk counts set to `0`, and an empty `errors` list. For a URL-list source with one
+`message`, and `timestamp` fields. A successful no-op refresh has `sources_refreshed: 1`, reports
+unchanged documents in `documents_unchanged`, sets `documents_created`, `documents_replaced`,
+`chunks_created`, and `chunks_replaced` to `0`, and returns an empty `errors` list. For a URL-list source with one
 successful and one failed URL, successful document and chunk counts remain present, the source is
 counted as refreshed, and the failed item is represented in `errors`.
 
