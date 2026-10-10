@@ -12,6 +12,7 @@ ALLOWED_IMPORTS: dict[str, frozenset[str]] = {
     "owlbear_delivery": frozenset(),
     "owlbear_delivery_github": frozenset({"owlbear_delivery"}),
     "owlbear_delivery_mcp": frozenset({"owlbear_delivery", "owlbear_delivery_github"}),
+    "owlbear_delivery_next": frozenset(),
     "owlbear_knowledge": frozenset({"owlbear_web_content"}),
     "owlbear_knowledge_mcp": frozenset({"owlbear_knowledge"}),
     "owlbear_memory": frozenset(),

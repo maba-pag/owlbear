@@ -44,6 +44,7 @@ line-length = 120
 src = [
   "serve/delivery/src",
   "serve/delivery-github/src",
+  "serve/delivery-next/src",
   "serve/knowledge/src",
   "serve/delivery-mcp/src",
   "serve/knowledge-mcp/src",

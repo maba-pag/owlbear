@@ -3,6 +3,7 @@
     "share": ["share"],
     "browser": ["serve/browser", "serve/browser-mcp"],
     "delivery": ["serve/delivery", "serve/delivery-mcp", "serve/delivery-github"],
+    "delivery-next": ["serve/delivery-next"],
     "knowledge": ["serve/knowledge", "serve/knowledge-mcp"],
     "cockpit": ["serve/cockpit"],
     "tools": ["serve/tools"],
@@ -30,7 +31,7 @@
   },
   "scope_groups": {
     "serve": {
-      "scopes": ["browser", "delivery", "knowledge", "cockpit", "tools", "memory", "web-content"],
+      "scopes": ["browser", "delivery", "delivery-next", "knowledge", "cockpit", "tools", "memory", "web-content"],
       "paths": ["serve/README.md"]
     }
   },

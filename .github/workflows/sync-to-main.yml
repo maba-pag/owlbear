@@ -24,6 +24,10 @@ name: Sync dev to main
         description: "serve/delivery/ + serve/delivery-mcp/ + serve/delivery-github/"
         type: boolean
         default: false
+      sync_delivery_next:
+        description: "serve/delivery-next/ (inert until cutover)"
+        type: boolean
+        default: false
       sync_knowledge:
         description: "serve/knowledge/ + serve/knowledge-mcp/"
         type: boolean
@@ -71,6 +75,7 @@ jobs:
       SYNC_BROWSER: ${{ inputs.sync_browser }}
       SYNC_WEB_CONTENT: ${{ inputs.sync_web_content }}
       SYNC_DELIVERY: ${{ inputs.sync_delivery }}
+      SYNC_DELIVERY_NEXT: ${{ inputs.sync_delivery_next }}
       SYNC_KNOWLEDGE: ${{ inputs.sync_knowledge }}
       SYNC_COCKPIT: ${{ inputs.sync_cockpit }}
       SYNC_TOOLS: ${{ inputs.sync_tools }}
@@ -103,6 +108,7 @@ jobs:
           browser_paths=$(manifest_paths browser)
           web_content_paths=$(manifest_paths web-content)
           delivery_paths=$(manifest_paths delivery)
+          delivery_next_paths=$(manifest_paths delivery-next)
           knowledge_paths=$(manifest_paths knowledge)
           cockpit_paths=$(manifest_paths cockpit)
           tools_paths=$(manifest_paths tools)
@@ -112,7 +118,7 @@ jobs:
           serve_scope_count=$(printf '%s\n' "$serve_scope_names" | wc -w | tr -d ' ')
           for serve_scope in $serve_scope_names; do
             case "$serve_scope" in
-              browser|delivery|knowledge|cockpit|tools|memory|web-content) ;;
+              browser|delivery|delivery-next|knowledge|cockpit|tools|memory|web-content) ;;
               *)
                 echo "::error::Unsupported serve scope in sync manifest: $serve_scope"
                 exit 1
@@ -170,6 +176,7 @@ jobs:
             echo "BROWSER_PATHS=$browser_paths"
             echo "WEB_CONTENT_PATHS=$web_content_paths"
             echo "DELIVERY_PATHS=$delivery_paths"
+            echo "DELIVERY_NEXT_PATHS=$delivery_next_paths"
             echo "KNOWLEDGE_PATHS=$knowledge_paths"
             echo "COCKPIT_PATHS=$cockpit_paths"
             echo "TOOLS_PATHS=$tools_paths"

@@ -1,0 +1,557 @@
+"""Delivery-next state records for one Change (D3 §3.1 to §3.3)."""
+
+from __future__ import annotations
+
+from datetime import datetime
+from enum import StrEnum
+from typing import TYPE_CHECKING, Annotated, Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+FORMAT = 1
+PROFILE_FORMAT = 1
+
+type Actor = Literal["you", "admin", "delivery", "github"]
+type Channel = Literal["status-view", "chat"]
+
+
+class StepKind(StrEnum):
+    """The ten step kinds."""
+
+    SHAPE = "shape"
+    PLAN = "plan"
+    BUILD = "build"
+    REVIEW = "review"
+    INTEGRATE = "integrate"
+    PUBLISH = "publish"
+    FOLLOW = "follow"
+    CHECK = "check"
+    MERGE = "merge"
+    CLEANUP = "cleanup"
+
+
+class Exit(StrEnum):
+    """The five exits, plus pending on a named external condition."""
+
+    DONE = "done"
+    RETRY = "retry"
+    ASK = "ask"
+    BACK = "back"
+    STOP = "stop"
+    PENDING = "pending"
+
+
+class ErrorKind(StrEnum):
+    """The fifteen error kinds; every cause key starts with one."""
+
+    AUTH = "auth"
+    POLICY = "policy"
+    TOOLING = "tooling"
+    NETWORK = "network"
+    CAPACITY = "capacity"
+    PROJECT_ENV = "project-env"
+    CHECKS = "checks"
+    COMMIT_POLICY = "commit-policy"
+    RESULT = "result"
+    LIVENESS = "liveness"
+    SCOPE = "scope"
+    CONFLICT = "conflict"
+    REVIEW = "review"
+    GATE = "gate"
+    STATE = "state"
+
+
+class Waiting(StrEnum):
+    """Pending conditions; none consumes budget."""
+
+    CHAT = "chat"
+    CI = "ci"
+    CHECK_START = "check-start"
+    REVIEWER = "reviewer"
+    OWNER_ACTION = "owner-action"
+    PERSON_CHECK = "person-check"
+    GITHUB = "github"
+    NETWORK = "network"
+
+
+class Record(BaseModel):
+    """Strict base: unknown fields are a format error, not silently dropped."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class Criterion(Record):
+    """One acceptance criterion; its version is a review and check input."""
+
+    id: str
+    text: str
+    version: int = 1
+
+
+VISUAL = "visual"  # the reserved check-step task id of the engine's visual check
+
+
+class VisualState(Record):
+    """One page state the visual check renders: a path under the preview root and what it must show."""
+
+    name: str
+    path: str
+    expect: str
+    version: int = 1
+
+
+class VisualResult(Record):
+    """One judged capture of the brief's visual states at an exact head and tree."""
+
+    head: str
+    tree: str
+    states: dict[str, int] = Field(default_factory=dict)  # state name -> version judged
+    criteria: dict[str, int] = Field(default_factory=dict)  # criterion id -> version judged
+    files: list[str] = Field(default_factory=list)  # screenshot names inside the Change's visual directory
+    passed: bool = False
+    findings: list[str] = Field(default_factory=list)
+    at: datetime
+
+
+class Brief(Record):
+    """The user's brief: the current draft, the approved version, and each approved version's content."""
+
+    version: int = 0
+    approved_version: int | None = None
+    approved_at: datetime | None = None
+    reviewed: int | None = None  # the version the brief reviewer judged (J2)
+    title: str = ""
+    outcome: str = ""
+    scope: list[str] = Field(default_factory=list)
+    non_goals: list[str] = Field(default_factory=list)
+    criteria: list[Criterion] = Field(default_factory=list)
+    ui: bool = False
+    visual: list[VisualState] = Field(default_factory=list)
+    approved: list[Brief] = Field(default_factory=list)
+
+
+class Intent(Record):
+    """The user's words and the flags read at every step boundary."""
+
+    words: str = ""
+    paused_at: datetime | None = None
+    pause_reason: str = ""
+    abandoned_at: datetime | None = None
+    hold: bool = False
+
+
+class Inputs(Record):
+    """What a review or person-only check depended on; valid while unchanged (P5)."""
+
+    criteria: dict[str, int] = Field(default_factory=dict)
+    paths: dict[str, str] = Field(default_factory=dict)
+    procedure: int = 0
+    environment: list[str] = Field(default_factory=list)
+
+
+class PersonCheck(Record):
+    """One person-only check declared in the brief."""
+
+    id: str
+    criteria: list[str] = Field(default_factory=list)
+    steps: list[str] = Field(default_factory=list)
+    expect: str = ""
+    visual: bool = False  # the person judges how the UI looks
+    paths: list[str] = Field(default_factory=list)
+    procedure: int = 1
+    environment: list[str] = Field(default_factory=list)
+    answer: Answer | None = None
+
+
+class Decision(Record):
+    """One recorded decision with its provenance."""
+
+    text: str
+    origin: Literal["decided", "approved", "autonomous"]
+    at: datetime
+    paths: list[str] = Field(default_factory=list)  # the UI paths a "Not a UI change" answer covers
+
+
+class Option(Record):
+    """One answer option; ``next`` names the step it leads to, or ``done``, ``pause`` or ``abandon``."""
+
+    id: str
+    label: str
+    next: StepKind | Literal["done", "pause", "abandon"] | None = None
+
+
+class Answer(Record):
+    """How and when a question or person-only check was answered; a check also records pass and inputs."""
+
+    option: str | None = None
+    text: str = ""
+    channel: Channel = "status-view"
+    at: datetime
+    passed: bool | None = None
+    inputs: Inputs | None = None
+
+
+class Question(Record):
+    """A durable question; its answer is delivered to a session, and its cause clears once the effect is observed."""
+
+    id: str = ""
+    step: StepKind
+    kind: Literal["decision", "action"] = "decision"
+    text: str
+    options: list[Option] = Field(default_factory=list)
+    cause: str | None = None
+    answer: Answer | None = None
+    delivered_at: datetime | None = None
+    effect_observed_at: datetime | None = None
+
+
+class ItemRef(Record):
+    """The pull-request conversation item a task answers, at the version of its human comments it was opened for."""
+
+    id: str
+    kind: Literal["comment", "review", "thread"]
+    version: str
+    task: str  # the conversation task; its review repairs carry the same reference
+    url: str = ""
+
+
+class Response(Record):
+    """How the Builder handled a conversation task; ``commit`` is the worktree HEAD of its accepted result."""
+
+    how: Literal["fixed", "answered", "no-action"]
+    text: str = Field(max_length=3000)
+    commit: str | None = None
+
+
+class Handling(Record):
+    """One conversation item handled at ``version``, recorded once its reply was observed."""
+
+    item: str
+    kind: Literal["comment", "review", "thread"]
+    url: str = ""
+    version: str
+    how: Literal["fixed", "answered", "no-action"]
+    text: str = ""
+    commit: str | None = None
+    task: str
+    reply_id: str | None = None
+    resolved: bool = False
+    reposts: int = 0
+    at: datetime
+
+
+class Task(Record):
+    """One plan task; fix tasks are appended without a new plan version."""
+
+    id: str
+    title: str
+    scope: list[str] = Field(default_factory=list)
+    checks: list[str] = Field(default_factory=list)
+    origin: Literal["plan", "review", "ci", "pr-feedback", "person-check", "integration"] = "plan"
+    detail: str = Field(default="", max_length=4000)  # CI log tail, review thread or merge instruction
+    done: bool = False
+    fixes: str | None = None  # the task whose review findings this fix task resolves
+    base: str | None = None  # HEAD when the task's build first started; its changes are measured from here
+    item: ItemRef | None = None  # the conversation item a pr-feedback task answers
+    response: Response | None = None  # the Builder's handling of that item
+
+
+class Plan(Record):
+    """Ordered tasks of one plan version."""
+
+    version: int = 1
+    tasks: list[Task] = Field(default_factory=list)
+
+
+class Review(Record):
+    """One review verdict and its recorded inputs; ``task`` is None for the final review."""
+
+    task: str | None = None
+    commit: str
+    inputs: Inputs
+    verdict: Literal["pass", "fix"]
+    round: int = 1
+    tree: str | None = None  # the reviewed tree; ``inputs.paths`` hold the engine-computed covered blobs
+    findings: list[str] = Field(default_factory=list)  # every accepted finding, complete
+
+
+class Step(Record):
+    """The one current step; ``mode`` is ``final`` for review, the caller for integrate, ``abandon``."""
+
+    kind: StepKind
+    task: str | None = None
+    mode: str | None = None
+    attempt: int = 1
+    started_at: datetime | None = None
+    session: str | None = None
+
+
+class Outcome(Record):
+    """Exactly one exit or pending condition per step attempt."""
+
+    exit: Exit
+    cause: str | None = None
+    reason: str = ""
+    who: Actor = "delivery"
+    waiting: Waiting | None = None
+    wake_at: datetime | None = None
+    question: str | None = None
+    denial: str | None = None
+    at: datetime
+
+
+class Score(Record):
+    """How far one work failure got: failing checks or findings, satisfied criteria, finding identities."""
+
+    failing: int = 0
+    satisfied: int = 0
+    findings: list[str] = Field(default_factory=list)
+
+
+class Budget(Record):
+    """Count of one cause and the premise it was counted under; environment causes keep an episode instead."""
+
+    count: int = 0
+    premise: str = ""
+    task: str | None = None
+    at: datetime | None = None
+    signature: str = ""  # the last failure's stable signature
+    counts: dict[str, int] = Field(default_factory=dict)  # work failures per normalised signature
+    progress: Score | None = None  # the best score of the current streak
+    alternative: bool = False  # the one different approach was tried for this cause
+    since: datetime | None = None  # start of an environment episode
+    attempts: int = 0  # attempts in that episode; never budget
+
+
+class Budgets(Record):
+    """Per-cause retries, review rounds per subject and re-plans per Change."""
+
+    causes: dict[str, Budget] = Field(default_factory=dict)
+    rounds: dict[str, int] = Field(default_factory=dict)
+    replans: int = 0
+
+
+class MergeConsent(Record):
+    """Consent to merge one exact head; void when the PR head differs."""
+
+    head: str
+    at: datetime
+    channel: Channel = "status-view"
+    delta: str = ""
+
+
+class Pullback(Record):
+    """The last attempt to bring the local target branch up to the merged remote one."""
+
+    state: Literal["updated", "behind", "skipped"]
+    reason: str = ""
+    worktree: str = ""
+    at: datetime
+
+
+class Episode(Record):
+    """When expected checks were first observed missing at one head (P10), or a PR first lagged a pushed head."""
+
+    head: str
+    since: datetime
+    pr: int | None = None
+
+
+class Stop(Record):
+    """One action, its actor and the condition that resumes the step."""
+
+    kind: ErrorKind
+    reason: str
+    action: str
+    actor: Actor = "you"
+    resume: str
+    at: datetime
+
+
+class Environment(Record):
+    """A person-only check's environment: the Builder's launch recipe and the PIDs the host started from it."""
+
+    check: str
+    command: str
+    directory: str
+    ready_url: str
+    pids: dict[int, float | None] = Field(default_factory=dict)
+    pgid: int | None = None
+    launched_at: datetime | None = None  # set before spawning; without ``pgid`` the launch is uncertain
+    ready_at: datetime | None = None
+
+
+class Names(Record):
+    """Names only; heads always come from git."""
+
+    branch: str = ""
+    target: str = ""
+    worktree: str = ""
+    pr: int | None = None  # kept to find a merged or closed PR; its state is always read from GitHub
+    preserved: list[str] = Field(default_factory=list)
+
+
+class ModelSpend(Record):
+    """Credits and tokens one model used for a Change."""
+
+    credits: float = 0.0
+    tokens: int = 0
+
+
+class Spend(Record):
+    """Cumulative usage of a Change's sessions; kept here because the activity log drops old events."""
+
+    credits: float = 0.0
+    models: dict[str, ModelSpend] = Field(default_factory=dict)
+    last: dict[str, Spend] = Field(default_factory=dict)  # each session's high-water marks, per field
+
+    def plus(self, usage: Mapping[str, Any], session: str = "") -> Spend:
+        """Return the total after one session's usage report; a failed report adds nothing.
+
+        A session's report is cumulative, so a resumed session adds only its growth over its high-water marks;
+        a field a report omits or lowers keeps its mark.
+        """
+        if "error" in usage:
+            return self
+        was = self.last.get(session, Spend()) if session else Spend()
+        marks, models = dict(was.models), {k: v.model_copy() for k, v in self.models.items()}
+        for name, m in (usage.get("models") or {}).items():
+            prior = marks.get(name, ModelSpend())
+            marks[name] = high = ModelSpend(
+                credits=max(prior.credits, m.get("credits") or 0.0), tokens=max(prior.tokens, m.get("tokens") or 0)
+            )
+            old = models.get(name, ModelSpend())
+            models[name] = ModelSpend(
+                credits=old.credits + high.credits - prior.credits, tokens=old.tokens + high.tokens - prior.tokens
+            )
+        mark = Spend(credits=max(was.credits, usage.get("credits") or 0.0), models=marks)
+        last = self.last | ({session: mark} if session else {})
+        return Spend(credits=self.credits + mark.credits - was.credits, models=models, last=last)
+
+
+class Overlap(Record):
+    """Paths this Change's plan shares with another Change's scope: information, never a question (D7)."""
+
+    other: str
+    paths: list[str] = Field(default_factory=list)
+
+
+class Change(Record):
+    """The whole durable record of one Change."""
+
+    format: int = FORMAT
+    slug: str
+    handle: str = ""  # host-issued short handle for chat tools (T2), e.g. c3
+    profile_version: int = 0
+    intent: Intent = Field(default_factory=Intent)
+    brief: Brief = Field(default_factory=Brief)
+    checks: list[PersonCheck] = Field(default_factory=list)
+    decisions: list[Decision] = Field(default_factory=list)
+    questions: list[Question] = Field(default_factory=list)
+    plan: Plan | None = None
+    overlaps: list[Overlap] = Field(default_factory=list)  # recorded when the plan is accepted
+    reviews: list[Review] = Field(default_factory=list)
+    step: Step = Field(default_factory=lambda: Step(kind=StepKind.SHAPE))
+    outcome: Outcome | None = None
+    budgets: Budgets = Field(default_factory=Budgets)
+    consent: MergeConsent | None = None
+    missing: Episode | None = None
+    lag: Episode | None = None  # GitHub's PR head behind a pushed branch head
+    stop: Stop | None = None
+    blocked: Stop | None = None  # host-owned: a process survives in the worktree, so no writer starts
+    env: Environment | None = None
+    visual: VisualResult | None = None
+    names: Names = Field(default_factory=Names)
+    spend: Spend = Field(default_factory=Spend)
+    finished_at: datetime | None = None
+    pullback: Pullback | None = None
+    pull_requested: datetime | None = None  # the owner asked to pull the target again
+    inbox_acked: list[str] = Field(default_factory=list)
+    handled: list[Handling] = Field(default_factory=list)  # pull-request conversation items, oldest first
+
+
+class ProfileEntry(Record):
+    """One detected project fact with its evidence (DR1); an HTTP 403 on rules is unknown."""
+
+    state: Literal["known", "unknown", "unsupported"]
+    value: str = ""
+    evidence: str = ""
+
+
+class Profile(Record):
+    """The confirmed project profile; a new version is a premise change."""
+
+    format: int = PROFILE_FORMAT
+    version: int = 0
+    confirmed_at: datetime | None = None
+    entries: dict[str, ProfileEntry] = Field(default_factory=dict)
+    models: dict[StepKind, str] = Field(default_factory=dict)
+
+
+class _Item(Record):
+    at: datetime
+    channel: Channel = "status-view"
+
+
+class BriefApproval(_Item):
+    """Approve one brief version."""
+
+    kind: Literal["brief-approval"] = "brief-approval"
+    version: int
+
+
+class AnswerItem(_Item):
+    """Answer one open question."""
+
+    kind: Literal["answer"] = "answer"
+    question: str
+    option: str | None = None
+    text: str = ""
+
+
+class CheckResult(_Item):
+    """Pass or fail of one person-only check, with the inputs shown to the user."""
+
+    kind: Literal["check-result"] = "check-result"
+    check: str
+    passed: bool
+    note: str = ""
+    inputs: Inputs
+
+
+class Recovery(_Item):
+    """The user performed the current stop's action."""
+
+    kind: Literal["recovery"] = "recovery"
+    action: str
+
+
+class ConsentItem(_Item):
+    """Consent to merge one exact head."""
+
+    kind: Literal["merge-consent"] = "merge-consent"
+    head: str
+    delta: str = ""
+
+
+class IntentItem(_Item):
+    """Pause, resume, abandon, or change the intent."""
+
+    kind: Literal["intent"] = "intent"
+    intent: Literal["pause", "resume", "abandon", "change"]
+    text: str = ""
+
+
+class PullItem(_Item):
+    """Pull the merged target into the local target branch again."""
+
+    kind: Literal["pull"] = "pull"
+
+
+type InboxItem = Annotated[
+    BriefApproval | AnswerItem | CheckResult | Recovery | ConsentItem | IntentItem | PullItem,
+    Field(discriminator="kind"),
+]

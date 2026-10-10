@@ -1,0 +1,203 @@
+"""Person-only check environments: the host launches the Builder's recipe, verifies readiness and disposes of it."""
+
+from __future__ import annotations
+
+import contextlib
+import os
+import shlex
+import signal
+import subprocess
+import threading
+import time
+import urllib.request
+from pathlib import Path
+from typing import TYPE_CHECKING, Literal
+
+import psutil
+
+from owlbear_delivery_next import evidence, failures, loop, processes
+from owlbear_delivery_next.models import VISUAL, ErrorKind, Exit, StepKind, Task, Waiting
+from owlbear_delivery_next.steps import worktree
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
+    from datetime import datetime
+
+    from owlbear_delivery_next.models import Change, Environment, PersonCheck
+
+READY_WITHIN = 60.0
+GRACE = 5.0
+type Action = Literal["launch", "keep", "dispose", "settle"]
+type Pids = dict[int, float | None]
+type Found = dict[int, str]
+_LOCAL = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # loopback never goes through a proxy
+
+
+def action(c: Change, *, live: bool, paths: Mapping[str, str]) -> Action | None:
+    """What the host does with the Change's environment; dispose and settle come before any other writer."""
+    e = c.env
+    if e is None:
+        return None
+    person = next((p for p in c.checks if p.id == e.check), None)
+    known = person is not None or e.check == VISUAL
+    if c.finished_at or not known or (c.step.kind, c.step.task) != (StepKind.CHECK, e.check):
+        return "dispose"
+    if person is None:
+        if c.intent.abandoned_at or c.stop is not None:
+            return "dispose"  # a terminal exit of the visual task; done moves the step on
+        return "keep" if live and e.ready_at else "launch"  # the runner captures and settles the visual check
+    a = person.answer
+    if a and a.inputs and evidence.check_valid(a.inputs, evidence.check_inputs(c, person, paths)):
+        return "settle"  # by the result's recorded inputs (P5), whichever launch it was given for
+    return "keep" if live and e.ready_at else "launch"
+
+
+def owned(e: Environment, pid: int) -> bool:
+    """The process belongs to the host-started check environment, which the host disposes of itself."""
+    if pid in e.pids:
+        return True
+    try:
+        return e.pgid is not None and os.getpgid(pid) == e.pgid
+    except OSError:
+        return False
+
+
+def capturing(c: Change) -> bool:
+    """The visual check's environment answers and the runner captures and judges it."""
+    e = c.env
+    return bool(e and e.check == VISUAL and e.ready_at) and (c.step.kind, c.step.task) == (StepKind.CHECK, VISUAL)
+
+
+def fingerprints(c: Change, person: PersonCheck) -> dict[str, str]:
+    """Current fingerprints of the paths one person-only check depends on; the tree id when it declares none."""
+    root = Path(c.names.worktree)
+    if not (c.names.worktree and root.is_dir()):
+        return {}
+    return worktree.fingerprints(root, person.paths) if person.paths else {evidence.TREE: worktree.tree(root)}
+
+
+def declared(c: Change) -> dict[str, str]:
+    """Current fingerprints of every declared check's paths, against which a recorded answer stays valid."""
+    return {k: v for p in c.checks for k, v in fingerprints(c, p).items()}
+
+
+def answers(url: str) -> bool:
+    """Whether the local readiness URL answers without an error status."""
+    try:
+        with _LOCAL.open(url, timeout=2) as response:
+            return response.status < 400  # noqa: PLR2004 - HTTP error range
+    except OSError, ValueError:
+        return False
+
+
+def created(pid: int) -> float | None:
+    """Start time of a live process, None when unreadable; an unknown start is never signalled."""
+    with contextlib.suppress(psutil.Error):
+        return psutil.Process(pid).create_time()
+    return None
+
+
+def members(pgid: int, leader: float | None = None) -> Found:
+    """Live members of one recorded group; none once its id names a newer process, as then the group ended."""
+    found: Found = {}
+    for p in psutil.process_iter(["name", "status", "create_time"]):
+        with contextlib.suppress(OSError, psutil.Error):
+            if p.info["status"] == psutil.STATUS_ZOMBIE or os.getpgid(p.pid) != pgid:
+                continue
+            if p.pid == pgid and leader is not None and abs(p.info["create_time"] - leader) >= 1.0:
+                return {}
+            found[p.pid] = p.info["name"] or ""
+    return found
+
+
+def remaining(
+    e: Environment, alive: processes.Observe = processes.alive, group: Callable[..., Found] = members
+) -> Found:
+    """Recorded PIDs alive or unobservable, and every live member of the recorded group."""
+    found: Found = {p: "" for p, t in e.pids.items() if alive(p, t) is not False}
+    return found | (group(e.pgid, e.pids.get(e.pgid)) if e.pgid else {})
+
+
+def dispose(e: Environment) -> Found:
+    """Signal the whole group, even without its leader, and the recorded PIDs, TERM then KILL; return what remains."""
+    left: Found = {}
+    for sig, wait in ((signal.SIGTERM, GRACE), (signal.SIGKILL, 2.0)):
+        if not (left := remaining(e)):
+            return {}
+        processes.kill(e.pids, sig)
+        if e.pgid and e.pgid != os.getpgrp() and members(e.pgid, e.pids.get(e.pgid)):
+            with contextlib.suppress(OSError):
+                os.killpg(e.pgid, sig)
+        end = time.monotonic() + wait
+        while (left := remaining(e)) and time.monotonic() < end:
+            time.sleep(0.2)
+    return left
+
+
+def start(e: Environment, root: Path, log: Path) -> subprocess.Popen[bytes] | None:
+    """Spawn the recipe as leader of its own session and group; the caller records it before waiting."""
+    try:
+        with log.open("ab") as out:
+            proc = subprocess.Popen(  # noqa: S603 - argument vector of an allow-listed launch command
+                shlex.split(e.command),
+                cwd=root / e.directory,
+                stdin=subprocess.DEVNULL,
+                stdout=out,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+    except OSError, ValueError:
+        return None
+    threading.Thread(target=proc.wait, daemon=True).start()  # reaps the leader whenever it ends
+    return proc
+
+
+def ready(e: Environment, proc: subprocess.Popen[bytes]) -> Pids | None:
+    """Wait for the readiness URL; return the group's PIDs once it answers, else None."""
+    end = time.monotonic() + READY_WITHIN
+    while time.monotonic() < end and proc.returncode is None:
+        if answers(e.ready_url):
+            return e.pids | {p: created(p) for p in members(proc.pid, e.pids.get(proc.pid))}
+        time.sleep(0.5)
+    return None
+
+
+def pending(c: Change, e: Environment) -> loop.StepResult:
+    """The check waits on the owner once its environment answers; the visual check waits on its capture."""
+    if e.check == VISUAL:
+        reason = f"capturing {len(c.brief.visual)} visual states at {e.ready_url}"
+        return loop.StepResult(exit=Exit.PENDING, waiting=Waiting.REVIEWER, reason=reason)
+    person = next(p for p in c.checks if p.id == e.check)
+    reason = f"{'; '.join(person.steps) or person.id} · {e.ready_url}"
+    a = person.answer
+    if a and a.inputs and (what := evidence.changed(a.inputs, evidence.check_inputs(c, person, declared(c)))):
+        reason += f" · asked again: changed {', '.join(what)}"
+    return loop.StepResult(exit=Exit.PENDING, waiting=Waiting.PERSON_CHECK, who="you", reason=reason)
+
+
+def failed(reason: str) -> loop.StepResult:
+    """Preparation or readiness failed: the check is prepared again."""
+    cause = failures.cause_key(ErrorKind.PROJECT_ENV, StepKind.CHECK, "environment")
+    return loop.StepResult(exit=Exit.RETRY, cause=cause, reason=reason)
+
+
+def settle(c: Change, now: datetime, paths: Mapping[str, str]) -> Change:
+    """A pass moves on, judged against the current *paths*; a fail goes back to build with the owner's note (H2)."""
+    person = next(p for p in c.checks if p.id == c.step.task)
+    answer = person.answer
+    if answer is None or answer.passed:
+        reason = f"{person.id} passed for you at {now:%H:%M}"
+        return loop.apply(c, loop.StepResult(exit=Exit.DONE, reason=reason, paths=dict(paths)), now)
+    tasks = c.plan.tasks if c.plan else []
+    last = tasks[-1] if tasks else Task(id="t0", title="")
+    title = f"Fix: the check {person.id} failed for the owner: {answer.text}"
+    fix = Task(id=f"t{len(tasks) + 1}", title=title, scope=last.scope, checks=last.checks, origin="person-check")
+    cause = failures.cause_key(ErrorKind.CHECKS, StepKind.CHECK, person.id)
+    result = loop.StepResult(
+        exit=Exit.BACK, back_to=StepKind.BUILD, cause=cause, reason=f"{person.id} failed for you", fix_task=fix
+    )
+    after = loop.apply(c, result, now)
+    for p in after.checks:
+        if p.id == person.id and p.answer:
+            p.answer.inputs = None  # a settled failure settles no later round
+    return after
