@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 FORMAT = 1
 PROFILE_FORMAT = 1
@@ -187,6 +190,7 @@ class Task(Record):
     detail: str = Field(default="", max_length=4000)  # CI log tail, review thread or merge instruction
     done: bool = False
     fixes: str | None = None  # the task whose review findings this fix task resolves
+    base: str | None = None  # HEAD when the task's build first started; its changes are measured from here
 
 
 class Plan(Record):
@@ -299,6 +303,28 @@ class Names(Record):
     preserved: list[str] = Field(default_factory=list)
 
 
+class ModelSpend(Record):
+    """Credits and tokens one model used for a Change."""
+
+    credits: float = 0.0
+    tokens: int = 0
+
+
+class Spend(Record):
+    """Cumulative usage of a Change's sessions; kept here because the activity log drops old events."""
+
+    credits: float = 0.0
+    models: dict[str, ModelSpend] = Field(default_factory=dict)
+
+    def plus(self, usage: Mapping[str, Any]) -> Spend:
+        """Return the total after one session's usage report; a failed report adds nothing."""
+        models = {k: v.model_copy() for k, v in self.models.items()}
+        for name, m in (usage.get("models") or {}).items():
+            old = models.get(name, ModelSpend())
+            models[name] = ModelSpend(credits=old.credits + m["credits"], tokens=old.tokens + m["tokens"])
+        return Spend(credits=self.credits + (usage.get("credits") or 0.0), models=models)
+
+
 class Change(Record):
     """The whole durable record of one Change."""
 
@@ -322,6 +348,7 @@ class Change(Record):
     blocked: Stop | None = None  # host-owned: a process survives in the worktree, so no writer starts
     env: Environment | None = None
     names: Names = Field(default_factory=Names)
+    spend: Spend = Field(default_factory=Spend)
     finished_at: datetime | None = None
     inbox_acked: list[str] = Field(default_factory=list)
 

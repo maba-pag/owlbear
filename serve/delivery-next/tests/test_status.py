@@ -7,8 +7,10 @@ from owlbear_delivery_next.models import (
     ErrorKind,
     Exit,
     Intent,
+    ModelSpend,
     Outcome,
     Plan,
+    Spend,
     Step,
     StepKind,
     Stop,
@@ -96,4 +98,14 @@ def test_pause_wins_over_a_question():
     paused.intent.paused_at = NOW - timedelta(days=2)
     assert status(paused, Activity(host_up=True), NOW) == Status(
         "Build 2/2 · paused by you 2 days ago", "Resume", "you"
+    )
+
+
+def test_spend_accumulates_every_usage_report_by_model():
+    spend = Spend()
+    for model in ("gpt", "gpt", "opus"):
+        spend = spend.plus({"credits": 0.5, "models": {model: {"credits": 0.5, "tokens": 100}}})
+    spend = spend.plus({"error": "TimeoutError"})
+    assert spend == Spend(
+        credits=1.5, models={"gpt": ModelSpend(credits=1.0, tokens=200), "opus": ModelSpend(credits=0.5, tokens=100)}
     )

@@ -122,6 +122,7 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
         return {"slug": slug, "line": s.line, "action": s.action, "actor": s.actor}
     s = status(c, act, now)
     out = {"slug": slug, "handle": c.handle, "step": c.step.kind, "line": s.line, "action": s.action, "actor": s.actor}
+    out["spend"] = c.spend.model_dump()
     if q := loop.open_question(c):
         options = [o.model_dump(include={"id", "label"}) for o in q.options]
         where = "chat" if loop.ordinary(q) else "changes-page"

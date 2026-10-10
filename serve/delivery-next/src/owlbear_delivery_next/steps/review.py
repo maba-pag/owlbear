@@ -16,6 +16,15 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.sdk_adapter import Run
 
 
+TRUNCATED = "\n[truncated]"
+
+
+def findings(review: tools.ReviewResult, limit: int = 4000) -> str:
+    """Every finding on its own line, cut to *limit* characters with an explicit marker only beyond it."""
+    text = "\n".join(f"- {f.place}: {f.problem} - fix: {f.fix}" for f in review.findings)
+    return text if len(text) <= limit else text[: limit - len(TRUNCATED)] + TRUNCATED
+
+
 def recorded(change: Change, task: Task | None, run: Run, path: Path, result: StepResult) -> StepResult:
     """Attach the review record (criteria and covered-path fingerprints) and, for ``fix``, the repair task."""
     p = run.payload
@@ -29,5 +38,7 @@ def recorded(change: Change, task: Task | None, run: Run, path: Path, result: St
     n = len(change.plan.tasks) + 1 if change.plan else 1
     task = task or (change.plan.tasks[-1] if change.plan and change.plan.tasks else None)
     scope, checks = (task.scope, task.checks) if task else ([], [])
-    fix = Task(id=f"t{n}", title=f"Fix review findings: {result.reason}", scope=scope, checks=checks, origin="review")
+    of = f"task {change.step.task}" if change.step.task else "the final review"
+    title = f"Fix {len(p.findings)} review finding(s) of {of}"
+    fix = Task(id=f"t{n}", title=title, scope=scope, checks=checks, origin="review", detail=findings(p))
     return result.model_copy(update={"review": review, "fix_task": fix})

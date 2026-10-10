@@ -89,6 +89,19 @@ def test_plan_checks_come_from_the_profile():
     ]
 
 
+def test_plan_scopes_stay_within_the_approved_brief():
+    tasks = [{"title": "t", "goal": "AC-1", "scope": s, "checks": ["make"]} for s in ([".", "packages/app/src"],)]
+    tasks += [{"title": "t", "goal": "AC-1", "scope": [s], "checks": ["make"]} for s in ("packages", ".github/ci.yml")]
+    plan, _ = tools.parse(tools.PlanResult, {"tasks": tasks})
+    outside = "is outside the approved brief scope packages/app; keep to the brief or report_wrong_premise to widen it"
+    assert tools.check_plan(plan, tools.Worktree("a", "a"), ["make"], ["packages/app"]) == [
+        f"tasks[0].scope: . {outside}",
+        f"tasks[1].scope: packages {outside}",
+        f"tasks[2].scope: .github/ci.yml {outside}",
+    ]
+    assert tools.check_plan(plan, tools.Worktree("a", "a"), ["make"], []) == []
+
+
 def test_chat_refuses_recovery_decisions(repo):
     store = Store.open(repo)
     closed = [Option(id="abandon", label="Abandon", next="abandon"), Option(id="reopen", label="Reopen")]

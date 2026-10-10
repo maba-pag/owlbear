@@ -93,6 +93,25 @@ def test_commands_reaching_outside_the_worktree_are_denied_before_the_allow_list
     assert decide(policy, shell("npm test 2>/dev/null")) is None
 
 
+def test_patterns_messages_and_comments_are_not_paths(tmp_path: Path) -> None:
+    policy = Policy(tmp_path, ("git commit", "git -C", "grep", "sed"))
+    for text in [
+        "grep -qxF '// keep in sync' src/a.ts",
+        "grep -c /api/ src/a.ts",
+        "grep -e /x -e /y src",
+        "git commit -m '/api: fix'",
+        "sed -i '/^debug/d' src/a.ts",
+    ]:
+        assert decide(policy, shell(text)) is None, text
+    for text, target in [
+        ("grep -e x /etc/passwd", "/etc/passwd"),
+        ("sed -i s/a/b/ /etc/hosts", "/etc/hosts"),
+        ("grep -qxF '// x' //etc/hosts", "//etc/hosts"),
+        ("git -C /elsewhere commit -m '// x'", "/elsewhere"),
+    ]:
+        assert decide(policy, shell(text)) == f"`{text}` reaches {target}, outside the worktree"
+
+
 def test_hook_signing_and_force_bypasses_are_denied(tmp_path: Path) -> None:
     policy = Policy(tmp_path, ("git add", "git commit", "git merge", "git push"))
     for text, flag in [

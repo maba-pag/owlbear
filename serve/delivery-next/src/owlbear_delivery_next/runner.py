@@ -76,7 +76,11 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     if not resume:
         s.session = f"{slug}-{s.kind}-{s.task or s.mode or 'all'}-{uuid.uuid4().hex[:8]}"
     s.started_at = now
-    store.write(lock, change)  # The session id is durable before the runtime starts.
+    task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
+    if s.kind == StepKind.BUILD and task and task.base is None:
+        task.base = worktree.head(path)
+    since = task.base if task and s.kind in {StepKind.BUILD, StepKind.REVIEW} else None
+    store.write(lock, change)  # The session id and task base are durable before the runtime starts.
     others = _others(store, slug) if s.kind == StepKind.PLAN else {}
     parts = prompts.session(change, profile, path, others)
 
@@ -100,9 +104,10 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         message=prompts.answer(answer) if resume and answer else parts.message,
         resume=resume,
         policy=sdk_adapter.Policy(path, parts.allowed, write=parts.write),
-        observe=lambda: worktree.observe(path, change.names.target),
+        observe=lambda: worktree.observe(path, change.names.target, since),
         checks=parts.checks,
         submit=parts.submit,
+        scope=tuple(change.brief.scope),
         model=None if model in {None, "", "auto"} else model,
         fresh=parts.message,
         previous=_previous(store, slug, s.session) if resume else {},
@@ -111,10 +116,11 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     run = asyncio.run(sdk_adapter.run(cfg))
     end = datetime.now(UTC)
     result = review.recorded(change, parts.task, run, path, sdk_adapter.to_result(run, s.kind, end))
-    _log(store, lock, slug, run, {"kind": s.kind, "exit": result.exit})
+    _log(store, lock, change, run, {"kind": s.kind, "exit": result.exit})
     if s.kind == StepKind.PLAN and result.plan:
         message = prompts.plan_review(change, result.plan, path, others)
-        result = loop.overlap_ask(_challenge(store, lock, dataclasses.replace(cfg, message=message), result), others)
+        planned = _challenge(store, lock, change, dataclasses.replace(cfg, message=message), result)
+        result = loop.overlap_ask(planned, others)
         end = datetime.now(UTC)
     if isinstance(p := run.payload, tools.WrongPremise) and p.stage == "target" and s.kind == StepKind.BUILD:
         result = engine.needs_target(change, path, f"{p.reason} ({'; '.join(p.evidence)})", end)
@@ -125,15 +131,18 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     store.write(lock, loop.apply(change, result, end))
 
 
-def _log(store: Store, lock: Lock, slug: str, run: sdk_adapter.Run, fields: dict[str, object]) -> None:
+def _log(store: Store, lock: Lock, change: Change, run: sdk_adapter.Run, fields: dict[str, object]) -> None:
+    """Log one session's step event and add its usage to the Change's spend, which the log may later drop."""
     step = {"event": "step", "at": datetime.now(UTC).isoformat(timespec="seconds"), "session": run.session_id}
     step |= fields | {"ending": run.ending, "head": run.head, "usage": run.usage}
     step["termination"] = dataclasses.asdict(run.termination) if run.termination else None
-    store.log(lock, slug, step)
+    change.spend = change.spend.plus(run.usage)
+    store.write(lock, change)
+    store.log(lock, change.slug, step)
     _out(json.dumps(step, default=str))
 
 
-def _reviewer(store: Store, lock: Lock, cfg: sdk_adapter.Session, label: str) -> Result:
+def _reviewer(store: Store, lock: Lock, change: Change, cfg: sdk_adapter.Session, label: str) -> Result:
     """One fresh read-only reviewer session over ``cfg.message``; its verdict as a step result."""
     model = (store.read_profile() or Profile()).models.get(StepKind.REVIEW)
     review_cfg = dataclasses.replace(
@@ -149,15 +158,15 @@ def _reviewer(store: Store, lock: Lock, cfg: sdk_adapter.Session, label: str) ->
     )
     run = asyncio.run(sdk_adapter.run(review_cfg))
     verdict = sdk_adapter.to_result(run, StepKind.REVIEW, datetime.now(UTC))
-    _log(store, lock, lock.slug, run, {"kind": label, "exit": verdict.exit})
+    _log(store, lock, change, run, {"kind": label, "exit": verdict.exit})
     return verdict
 
 
-def _challenge(store: Store, lock: Lock, cfg: sdk_adapter.Session, planned: Result) -> Result:
+def _challenge(store: Store, lock: Lock, change: Change, cfg: sdk_adapter.Session, planned: Result) -> Result:
     """The plan's independent read-only challenge: pass keeps it; findings send it back for one more round."""
     if planned.exit != Exit.DONE or planned.plan is None:
         return planned
-    verdict = _reviewer(store, lock, cfg, "plan-review")
+    verdict = _reviewer(store, lock, change, cfg, "plan-review")
     if verdict.exit == Exit.DONE:
         return planned
     if verdict.exit in {Exit.ASK, Exit.STOP}:
@@ -184,7 +193,7 @@ def _brief_review(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         checks=(),
         journal=sdk_adapter.Journal(lambda e: store.log(lock, change.slug, e)),
     )
-    change, result = loop.brief_review(change, _reviewer(store, lock, cfg, "brief-review"))
+    change, result = loop.brief_review(change, _reviewer(store, lock, change, cfg, "brief-review"))
     store.write(lock, loop.apply(change, result, datetime.now(UTC)))
 
 

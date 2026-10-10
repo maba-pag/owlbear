@@ -89,13 +89,25 @@ def checks(profile: Profile) -> list[tuple[str, str]]:
     return sorted((p, e.value) for p, e in found if e.state == "known" and e.value)
 
 
-def observe(path: Path, target: str) -> Worktree:
-    """Read the worktree's head, its base on *target*, uncommitted paths and paths changed since the base."""
-    head = git(path, "rev-parse", "HEAD").strip()
+def head(path: Path) -> str:
+    """Return the worktree's HEAD commit."""
+    return git(path, "rev-parse", "HEAD").strip()
+
+
+def observe(path: Path, target: str, since: str | None = None) -> Worktree:
+    """Read the worktree's head, its base, uncommitted paths and paths changed since the base.
+
+    The base is *since* (a task's start) when given, else the merge base on *target*. Paths a target merge
+    brought in, unchanged against the target, are not the task's changes.
+    """
+    head_ = head(path)
     base = git(path, "merge-base", "HEAD", tracking(path, target)).strip()
     status = git(path, "status", "--porcelain=v1", "--untracked-files=all").splitlines()
     changed = git(path, "diff", "--name-only", f"{base}..HEAD").splitlines()
-    return Worktree(head=head, base=base, dirty=tuple(line[3:] for line in status), changed=tuple(changed))
+    if since:
+        task = set(git(path, "diff", "--name-only", f"{since}..HEAD").splitlines())
+        base, changed = since, [p for p in changed if p in task]
+    return Worktree(head=head_, base=base, dirty=tuple(line[3:] for line in status), changed=tuple(changed))
 
 
 def fingerprints(path: Path, paths: Sequence[str]) -> dict[str, str]:

@@ -145,6 +145,8 @@ async function showDetail() {
   if (!selected) return target.replaceChildren();
   const d = await call(`/changes/${selected}`);
   const parts = [el("h2", d.slug), el("p", d.line), el("p", d.brief.outcome, { class: "muted" })];
+  const models = Object.entries(d.spend.models).map(([m, u]) => `${m} ${u.tokens} tokens`).join(", ");
+  parts.push(el("p", `Spent ${d.spend.credits.toFixed(2)} credits${models ? ` (${models})` : ""}`, { class: "muted" }));
   if (d.question) parts.push(questionForm(d.question));
   if (d.merge) parts.push(mergeForm(d.merge));
   const pause = el("button", d.paused ? "Resume" : "Pause", { type: "button" });

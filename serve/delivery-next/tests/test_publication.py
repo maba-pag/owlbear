@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, loop, profile
+from owlbear_delivery_next import api, loop, profile, tools
 from owlbear_delivery_next.git.remote_git import RemoteGitWriteUnknown, classify_write_readback, read_remote_ref
 from owlbear_delivery_next.github import merge_offer
 from owlbear_delivery_next.github.provider import (
@@ -42,9 +42,10 @@ from owlbear_delivery_next.models import (
     Task,
     Waiting,
 )
+from owlbear_delivery_next.sdk_adapter import Run
 from owlbear_delivery_next.setup import Check as SetupCheck
 from owlbear_delivery_next.status import Activity
-from owlbear_delivery_next.steps import check, cleanup, engine, follow, merge, publish
+from owlbear_delivery_next.steps import check, cleanup, engine, follow, merge, publish, review, worktree
 from owlbear_delivery_next.store import Lock, Store
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
@@ -551,6 +552,45 @@ def test_a_builder_needing_target_work_integrates_then_resumes_its_task(clone):
     for _ in ("build", "review"):
         c = loop.apply(c, loop.StepResult(exit=Exit.DONE), NOW)
     assert (c.step.kind, c.step.task) == (StepKind.BUILD, "t1")
+
+
+def commit(cwd, name):
+    (cwd / name).write_text(f"{name}\n")
+    git(cwd, "add", name)
+    git(cwd, "commit", "-q", "-m", name)
+
+
+def test_a_task_is_measured_from_its_own_start_without_merged_target_paths(clone):
+    commit(clone, "b.txt")
+    since = worktree.head(clone)
+    git(clone, "switch", "-q", "main")
+    commit(clone, "d.txt")
+    git(clone, "push", "-q", "origin", "main")
+    git(clone, "switch", "-q", "owlbear/c1")
+    commit(clone, "c.txt")
+    git(clone, "merge", "-q", "--no-edit", "origin/main")
+    assert (worktree.observe(clone, "main", since).changed, worktree.observe(clone, "main").changed) == (
+        ("c.txt",),
+        ("b.txt", "c.txt"),
+    )
+
+
+def test_a_fix_task_has_a_short_title_and_carries_every_finding_up_to_its_bound(clone):
+    finding = {"place": "a.txt:1", "problem": "AC-1: " + "p" * 400, "fix": "f" * 400}
+    review_, _ = tools.parse(
+        tools.ReviewResult, {"verdict": "fix", "findings": [finding] * 6, "covered_paths": ["a.txt"]}
+    )
+    c = change(StepKind.REVIEW)
+    c.step.task = "t1"
+    run = Run("s", "result", review_, head=worktree.head(clone))
+    fix = review.recorded(c, None, run, clone, loop.StepResult(exit=Exit.RETRY, reason="cut")).fix_task
+    assert (fix.title, fix.detail.count("- a.txt:1: AC-1: "), len(fix.detail)) == (
+        "Fix 6 review finding(s) of task t1",
+        5,
+        4000,
+    )
+    assert fix.detail.endswith("\n[truncated]")
+    assert not review.findings(review_, 10_000).endswith("[truncated]")
 
 
 # Merge queue: membership is observed before any resubmission

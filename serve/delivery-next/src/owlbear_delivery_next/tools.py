@@ -186,10 +186,17 @@ def check_brief(brief: BriefDraft) -> list[str]:
     return errors
 
 
-def check_plan(plan: PlanResult, tree: Worktree, checks: Sequence[str]) -> list[str]:
-    """Return field errors for task checks outside the profile and scopes outside the repository."""
+def within(path: str, scope: Sequence[str]) -> bool:
+    """Whether *path* is one of the *scope* paths or lies under one; an empty or root scope holds every path."""
+    parts = PurePosixPath(path).parts
+    return not scope or any(parts[: len(s := PurePosixPath(p).parts)] == s for p in scope)
+
+
+def check_plan(plan: PlanResult, tree: Worktree, checks: Sequence[str], scope: Sequence[str] = ()) -> list[str]:
+    """Return field errors for task checks outside the profile and scopes outside the repository or the brief."""
     errors = [f"changes: uncommitted files ({_few(tree.dirty)}); planning changes nothing"] if tree.dirty else []
     listed = ", ".join(f'"{c}"' for c in checks) or "none - ask the owner which command checks this package"
+    brief = ", ".join(scope)
     for i, task in enumerate(plan.tasks):
         errors += [
             f'tasks[{i}].checks: "{c}" is not a check of the project profile - use one of {listed}'
@@ -197,6 +204,12 @@ def check_plan(plan: PlanResult, tree: Worktree, checks: Sequence[str]) -> list[
             if c not in checks
         ]
         errors += [f"tasks[{i}].scope: {p} is not repository-relative" for p in task.scope if not relative(p)]
+        errors += [
+            f"tasks[{i}].scope: {p} is outside the approved brief scope {brief}; keep to the brief or "
+            "report_wrong_premise to widen it"
+            for p in task.scope
+            if relative(p) and not within(p, scope)
+        ]
     return errors
 
 
@@ -354,8 +367,8 @@ def check_recipe(recipe: CheckRecipe, tree: Worktree, launch: Sequence[str], roo
     return errors
 
 
-def check_result(args: Args, tree: Worktree, checks: Sequence[str], root: Path) -> list[str]:
-    """Return the field errors of one ``submit_result`` against the worktree the runner observed."""
+def check_result(args: Args, tree: Worktree, checks: Sequence[str], root: Path, scope: Sequence[str] = ()) -> list[str]:
+    """Return the field errors of one ``submit_result`` against the worktree the runner observed and the brief scope."""
     match args:
         case BuildResult():
             return check_build(args, tree, checks)
@@ -364,5 +377,5 @@ def check_result(args: Args, tree: Worktree, checks: Sequence[str], root: Path) 
         case CheckRecipe():
             return check_recipe(args, tree, checks, root)
         case PlanResult():
-            return check_plan(args, tree, checks)
+            return check_plan(args, tree, checks, scope)
     return []

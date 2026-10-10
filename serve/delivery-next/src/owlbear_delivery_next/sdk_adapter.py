@@ -42,6 +42,8 @@ STOP_CALL = 10.0  # one teardown request
 GRACE = 5.0  # between terminate and kill
 DENIED = ("git push", "git config", "git -c", "gh", "sudo")
 DIR_OPTIONS = frozenset({"-C", "--prefix", "--cwd", "--dir", "--git-dir", "--work-tree"})
+TEXT_OPTIONS = frozenset({"-e", "-F", "-m", "--regexp", "--message"})  # values are patterns or messages
+PATTERN_FIRST = frozenset({"grep", "egrep", "fgrep", "rg", "sed", "awk"})  # first operand is a pattern or script
 NULL_PATHS = frozenset({"/dev/null"})
 VALUE_FLAGS = "mFCctSuo"  # short options of git commit and push that take a value
 _REDIRECT = re.compile(r"^\d*[<>]+&?")
@@ -100,14 +102,36 @@ def _bypass(words: Sequence[str]) -> str | None:
     return None
 
 
+def _texts(words: Sequence[str]) -> set[int]:
+    """Indexes of arguments read as text, not paths: pattern and message values, a pattern operand, comments."""
+    found: set[int] = set()
+    operand = bool(words) and Path(words[0]).name in PATTERN_FIRST
+    for i, word in enumerate(words[1:], 1):
+        flag, eq, _ = word.partition("=")
+        if i in found:
+            continue
+        if flag in TEXT_OPTIONS or re.fullmatch(r"-[a-zA-Z]*[eFm]", word):
+            found.add(i if eq else i + 1)
+            operand = False
+        elif operand and not word.startswith("-"):
+            found.add(i)
+            operand = False
+        elif word.startswith(("//", "/*")) and any(c.isspace() for c in word):  # a quoted comment
+            found.add(i)
+    return found
+
+
 def _escape(root: Path, base: Path, words: Sequence[str], *, mutating: bool) -> str | None:
     """Return a ``cd`` target, directory option or mutating path argument that lies outside the worktree."""
     if words[:1] == ["cd"]:
         return None if _inside(root, target := (words[1:] or ["~"])[0], base) else target
+    texts = _texts(words)
     for i, word in enumerate(words[1:], 1):
         flag, eq, value = word.partition("=")
         if flag in DIR_OPTIONS:
             value = value if eq else (words[i + 1 : i + 2] or [""])[0]
+        elif i in texts:
+            continue
         elif mutating and re.match(r"[/~]|\.\.(/|$)|.*/\.\./", value := _REDIRECT.sub("", value if eq else word)):
             value = "" if value in NULL_PATHS else value
         else:
@@ -257,6 +281,7 @@ class Session:
     observe: Callable[[], tools.Worktree]
     checks: tuple[str, ...]
     submit: tools.Spec = tools.SUBMIT
+    scope: tuple[str, ...] = ()  # the approved brief scope a plan must keep to
     model: str | None = None
     fresh: str = ""  # first message of a replacement session: stored context plus the pending answer
     previous: Pids = field(default_factory=dict)  # PIDs earlier runners recorded for this session
@@ -335,7 +360,7 @@ class _Step:
             tree = self.cfg.observe()
         except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
             return [f"changes: the worktree could not be read ({type(exc).__name__}); try again"]
-        errors = tools.check_result(args, tree, self.cfg.checks, self.cfg.policy.root)
+        errors = tools.check_result(args, tree, self.cfg.checks, self.cfg.policy.root, self.cfg.scope)
         self.run.head = None if errors else tree.head
         return errors
 
@@ -453,7 +478,13 @@ async def _usage(session: CopilotSession, requested: str | None) -> dict[str, An
     except Exception as exc:  # noqa: BLE001 - experimental RPC; usage is reported, never required
         return {"error": type(exc).__name__}
     nano = getattr(m, "total_nano_aiu", None)
-    models = sorted((getattr(m, "model_metrics", None) or {}).keys())
+    models = {
+        name: {
+            "credits": (getattr(mm, "total_nano_aiu", None) or 0) / 1e9,
+            "tokens": mm.usage.input_tokens + mm.usage.output_tokens,
+        }
+        for name, mm in (getattr(m, "model_metrics", None) or {}).items()
+    }
     mismatch = bool(requested and models and requested not in models)
     return {"credits": None if nano is None else nano / 1e9, "models": models, "model_mismatch": mismatch}
 
