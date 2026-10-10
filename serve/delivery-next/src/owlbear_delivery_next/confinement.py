@@ -14,7 +14,9 @@ DIR_OPTIONS = frozenset({"-C", "--prefix", "--cwd", "--dir", "--git-dir", "--wor
 TEXT_OPTIONS = frozenset({"-e", "-F", "-m", "--regexp", "--message"})  # values are patterns or messages
 PATTERN_FIRST = frozenset({"grep", "egrep", "fgrep", "rg", "sed", "awk"})  # first operand is a pattern or script
 NULL_PATHS = frozenset({"/dev/null"})
+GIT_OUTPUT = frozenset({"diff", "log", "show"})  # git subcommands whose ``-o`` names an output file
 _REDIRECT = re.compile(r"^\d*[<>]+&?")
+_GIT_VALUE = frozenset({"-C", "-c", "--git-dir", "--work-tree"})
 
 
 def resolve(base: Path, path: str) -> Path:
@@ -50,18 +52,38 @@ def _texts(words: Sequence[str]) -> set[int]:
     return found
 
 
+def git_subcommand(words: Sequence[str]) -> str:
+    """The subcommand of a ``git`` command line, skipping global options and their values; else ``""``."""
+    skip = False
+    for w in words[1:] if words[:1] == ["git"] else ():
+        if skip or w in _GIT_VALUE:
+            skip = not skip
+        elif not w.startswith("-"):
+            return w
+    return ""
+
+
+def _output(flag: str, words: Sequence[str]) -> bool:
+    """Whether *flag* names a file the command writes: ``--output`` or a git diff/log/show ``-o``."""
+    return flag == "--output" or (flag == "-o" and git_subcommand(words) in GIT_OUTPUT)
+
+
 def outside(root: Path, base: Path, words: Sequence[str], *, mutating: bool) -> str | None:
-    """Return a ``cd`` target, directory option or mutating path argument that lies outside the worktree."""
+    """Return a ``cd`` target, directory or output option, redirect or mutating operand that lies outside the worktree.
+
+    Every checked path is resolved through symbolic links, so a link inside the worktree cannot reach out of it.
+    """
     if words[:1] == ["cd"]:
         return None if inside(root, target := (words[1:] or ["~"])[0], base) else target
     texts = _texts(words)
     for i, word in enumerate(words[1:], 1):
         flag, eq, value = word.partition("=")
-        if flag in DIR_OPTIONS:
+        if flag in DIR_OPTIONS or _output(flag, words):
             value = value if eq else (words[i + 1 : i + 2] or [""])[0]
         elif i in texts:
             continue
-        elif mutating and re.match(r"[/~]|\.\.(/|$)|.*/\.\./", value := _REDIRECT.sub("", value if eq else word)):
+        elif mutating or _REDIRECT.match(word) or _REDIRECT.fullmatch(words[i - 1]):
+            value = _REDIRECT.sub("", value if eq else word)
             value = "" if value in NULL_PATHS else value
         else:
             continue

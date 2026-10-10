@@ -53,6 +53,19 @@ def test_an_unloadable_change_keeps_its_handle_from_a_new_brief(tmp_path):
     assert client(store).post("/api/next/briefs", json=BRIEF).json()["change"] == "c2"
 
 
+def test_a_handle_once_issued_is_never_issued_again(tmp_path):
+    store, c = Store(tmp_path), client(Store(tmp_path))
+    assert [c.post("/api/next/briefs", json=BRIEF).json()["change"] for _ in range(2)] == ["c1", "c2"]
+    (tmp_path / "changes" / "add-farewell-2" / "change.json").write_text('{"handle": "c')  # truncated
+    odd = tmp_path / "changes" / "odd" / "change.json"
+    odd.parent.mkdir()
+    odd.write_text('{"format": 0, "handle": "x999"}')  # not a handle the host issues
+    assert c.post("/api/next/briefs", json=BRIEF).json()["change"] == "c3"
+    for name in ("add-farewell-2", "add-farewell-3"):  # a restore or loss leaves only c1 readable
+        (tmp_path / "changes" / name / "change.json").unlink()
+    assert (store.issued(), c.post("/api/next/briefs", json=BRIEF).json()["change"]) == (3, "c4")
+
+
 def test_brief_errors_name_each_field(tmp_path):
     c = client(Store(tmp_path))
     bad = {

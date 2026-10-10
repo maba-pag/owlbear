@@ -119,6 +119,17 @@ def test_a_resumed_session_adds_only_the_growth_of_its_cumulative_usage():
     assert Spend.model_validate_json(spend.model_dump_json()) == spend  # the last reports survive a restart
 
 
+def test_a_missing_or_lower_usage_field_keeps_the_sessions_high_water_mark():
+    spend = Spend()
+    for used, tokens in ((2.0, 10), (None, None), (5.0, 25)):
+        spend = spend.plus({"credits": used, "models": {"gpt": {"credits": used, "tokens": tokens}}}, "s1")
+    assert (spend.credits, spend.models["gpt"]) == (5.0, ModelSpend(credits=5.0, tokens=25))
+    spend = Spend()
+    for used in (5.0, 3.0, 5.0):
+        spend = spend.plus({"credits": used, "models": {"gpt": {"credits": used, "tokens": 9}}}, "s1")
+    assert (spend.credits, spend.models["gpt"]) == (5.0, ModelSpend(credits=5.0, tokens=9))
+
+
 def running(started: datetime) -> Change:
     return Change(
         slug="c1", plan=PLAN, step=Step(kind=StepKind.BUILD, task="t2", started_at=started), spend=Spend(credits=3.0)

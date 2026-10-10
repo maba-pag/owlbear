@@ -6,6 +6,7 @@ import contextlib
 import fcntl
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -35,6 +36,7 @@ MIGRATIONS: Migrations = {}
 PROFILE_MIGRATIONS: Migrations = {}
 _DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 _INBOX: TypeAdapter[InboxItem] = TypeAdapter(InboxItem)
+HANDLE = re.compile(r"c\d{1,4}")  # the only handle shape the host issues
 
 
 class Holder(Record):
@@ -160,7 +162,20 @@ class Store:
             handle = json.loads((self.root / "changes" / slug / "change.json").read_text()).get("handle")
         except AttributeError, OSError, ValueError:
             return None
-        return handle if isinstance(handle, str) else None
+        return handle if isinstance(handle, str) and HANDLE.fullmatch(handle) else None
+
+    def issued(self) -> int:
+        """The highest handle number ever issued here, kept apart so a lost or restored Change file never frees one."""
+        try:
+            number = json.loads((self.root / "handles.json").read_text()).get("issued")
+        except AttributeError, OSError, ValueError:
+            return 0
+        return number if isinstance(number, int) else 0
+
+    def issue(self, number: int) -> None:
+        """Record *number* as issued, atomically; the mark never goes down."""
+        if number > self.issued():
+            atomic_write(self.root / "handles.json", json.dumps({"issued": number}))
 
     def read_profile(self) -> Profile | None:
         """Read the confirmed project profile under its own format gate; None before confirmation."""

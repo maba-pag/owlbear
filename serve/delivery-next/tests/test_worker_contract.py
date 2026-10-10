@@ -151,6 +151,72 @@ def test_hook_signing_and_force_bypasses_are_denied(tmp_path: Path) -> None:
     assert decide(policy, shell("git commit -m 'fix -n handling'", "git commit -mn")) is None
 
 
+def test_allowed_commands_cannot_write_through_a_symlink_or_output_option(tmp_path: Path) -> None:
+    root, away = tmp_path / "wt", tmp_path / "away"
+    root.mkdir()
+    away.mkdir()
+    (root / "link").symlink_to(away)
+    text = "git --no-pager diff --output=link/out"
+    for write in (True, False):
+        policy = Policy(root, ("git diff", "git add"), write=write)
+        assert decide(policy, shell(text, read_only=True)) == f"`{text}` reaches link/out, outside the worktree"
+        assert decide(policy, shell("git diff", read_only=True, paths=(str(away / "x"),))) is not None
+    assert (
+        decide(Policy(root, ("git add",)), shell("git add link/x"))
+        == "`git add link/x` reaches link/x, outside the worktree"
+    )
+    read = Policy(root, ("git diff", "git log"), write=False)
+    assert decide(read, shell("git diff --output=x", read_only=True)) == (
+        "`git diff --output=x` uses --output=x, which writes in a read-only step"
+    )
+    assert "uses -o" in decide(read, shell("git log -o x", read_only=True))
+    assert "uses --ext-diff" in decide(read, shell("git diff --ext-diff", read_only=True))
+    assert "uses a redirect" in decide(read, shell("git log >> notes", read_only=True))
+    assert decide(read, shell("git diff --textconv HEAD", read_only=True)) is None
+
+
+def test_a_prefix_cannot_smuggle_a_second_command(tmp_path: Path) -> None:
+    policy = Policy(tmp_path, ("npm test", "git commit"))
+    for text in [
+        "npm test; rm -rf src",
+        "npm test || rm x",
+        "npm test | sh",
+        "npm test & rm x",
+        "npm test > x",
+        "npm test < x",
+        "npm test $(rm x)",
+        "npm test `rm x`",
+        'npm test "$(rm x)"',
+    ]:
+        assert decide(policy, shell(text)) == f"`{text}` is not in this step's allow list", text
+    for text in ["npm test 2>/dev/null", "npm test 2>&1", "git commit -m 'a; b | `c` $(d)'"]:
+        assert decide(policy, shell(text)) is None, text
+
+
+def test_a_package_check_runs_only_in_its_package_and_alone(tmp_path: Path) -> None:
+    root, away = tmp_path / "wt", tmp_path / "away"
+    (root / "packages" / "app").mkdir(parents=True)
+    away.mkdir()
+    (root / "escape").symlink_to(away)
+    checks = (("packages/app", "npm test"), ("escape", "npm test"))
+    policy = Policy(root, ("git add",), checks=checks)
+    assert decide(policy, shell("cd packages/app && npm test")) is None
+    assert decide(policy, shell("cd packages/app/ && npm test -- --run")) is None
+    for text in [
+        "cd packages/app && npm test && rm x",
+        "cd packages/app && npm test; rm x",
+        "cd packages/app && npm test | sh",
+        "cd packages/app && npm test > x",
+        "cd packages/app && FOO=1 npm test",
+        "cd packages/app && npm test $(rm x)",
+        "cd packages && npm test",
+        "cd . && npm test",
+    ]:
+        assert decide(policy, shell(text)) == f"`{text}` is not in this step's allow list", text
+    assert "outside the worktree" in decide(policy, shell("cd escape && npm test"))
+    assert decide(Policy(root, ("git add",)), shell("cd packages/app && npm test")) is not None
+
+
 def step(**cfg) -> sdk_adapter._Step:
     log: list[dict] = []
     journal = sdk_adapter.Journal(event=log.append, **cfg)

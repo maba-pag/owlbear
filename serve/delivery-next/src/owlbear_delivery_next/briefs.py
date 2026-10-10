@@ -19,7 +19,7 @@ from owlbear_delivery_next.models import (
     VisualState,
     Waiting,
 )
-from owlbear_delivery_next.store import LockHeldError, StoreError
+from owlbear_delivery_next.store import HANDLE, LockHeldError, StoreError
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.store import Store
@@ -81,12 +81,15 @@ def save_brief(store: Store, body: object) -> tuple[int, dict[str, Any]]:
     slug = handles.get(draft.change) if draft.change else new_slug(draft.title, slugs)
     if slug is None:
         return 422, {"errors": [f"change: {draft.change} is not a Change here - leave it empty for a new one"]}
-    number = max((int(h[1:]) for h in handles if h[1:].isdigit()), default=0) + 1
+    number = max((int(h[1:]) for h in handles if HANDLE.fullmatch(h)), default=0)
+    number = max(number, store.issued()) + 1
     try:
         with store.lock(slug) as lock:
             old = store.read(slug) if draft.change else None
             if old and (old.step.kind != StepKind.SHAPE or old.finished_at):
                 return 409, {"errors": [f"change: {draft.change} is approved; ask for changes in the Changes page"]}
+            if old is None:
+                store.issue(number)  # reserved before the Change file holds it
             c = drafted(old, draft, slug, f"c{number}", store.read_profile() or Profile())
             store.write(lock, c)
     except (LockHeldError, StoreError) as exc:

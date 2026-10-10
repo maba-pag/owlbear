@@ -117,7 +117,9 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         session_id=s.session or "",
         message=prompts.answer(answer) if resume and answer else parts.message,
         resume=resume,
-        policy=permissions.Policy(path, parts.allowed, write=parts.write),
+        policy=permissions.Policy(
+            path, parts.allowed, write=parts.write, checks=tuple(worktree.checks(profile)) if parts.write else ()
+        ),
         observe=lambda: worktree.observe(path, change.names.target, since),
         checks=parts.checks,
         submit=parts.submit,

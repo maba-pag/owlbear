@@ -30,8 +30,12 @@ def enter(c: Change, kind: StepKind, task: str | None = None) -> None:
 
 
 def open_task(c: Change) -> Task | None:
-    """The first unfinished plan task."""
-    return next((t for t in c.plan.tasks if not t.done), None) if c.plan else None
+    """The first unfinished plan task, or its first unfinished repair part, which runs before any later task."""
+    tasks = c.plan.tasks if c.plan else []
+    task = next((t for t in tasks if not t.done), None)
+    while task and (part := next((t for t in tasks if t.fixes == task.id and not t.done), None)):
+        task = part
+    return task
 
 
 def ask(c: Change, question: Question, now: datetime) -> None:
@@ -42,12 +46,14 @@ def ask(c: Change, question: Question, now: datetime) -> None:
 
 
 def resolved(c: Change, task_id: str | None) -> set[str]:
-    """The passed task and, transitively, each task whose review findings it fixed."""
+    """The passed task and, transitively, each task whose review findings it fixed once all its repair parts pass."""
     tasks = {t.id: t for t in c.plan.tasks} if c.plan else {}
     found: set[str] = set()
     while task_id and task_id not in found:
         found.add(task_id)
         task_id = tasks[task_id].fixes if task_id in tasks else None
+        if any(t.fixes == task_id and not t.done and t.id not in found for t in tasks.values()):
+            break  # another part of the same repair is still open
     return found
 
 

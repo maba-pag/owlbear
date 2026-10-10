@@ -726,8 +726,12 @@ def test_a_builder_response_survives_the_session_replacing_the_change_and_is_rep
     tid = opened.fix_task.id
     cx.store.write(cx.lock, loop.apply(c, opened, NOW))
     built = tools.BuildResult(summary="s", changed_paths=[], checks=[], response={"how": "fixed", "text": "Done."})
+    entry = ProfileEntry(state="known", value="npm test", evidence="packages/app/package.json")
+    cx.store.write_profile(Profile(version=1, entries={"check:packages/app": entry}))
+    policies = []
 
     async def build(cfg):
+        policies.append(cfg.policy)
         getattr(cfg.journal, callback)()  # rebinds the runner's ``change`` to a copy mid-session
         commit(clone, "fix.txt")
         head = git(clone, "rev-parse", "HEAD")
@@ -736,6 +740,7 @@ def test_a_builder_response_survives_the_session_replacing_the_change_and_is_rep
     monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: clone)
     monkeypatch.setattr(runner.sdk_adapter, "run", build)
     runner._agent(cx.store, cx.lock, cx.store.read("c1"), clone)  # noqa: SLF001
+    assert policies[0].checks == (("packages/app", "npm test"),)  # the Builder may run a check in its package
     after, head = cx.store.read("c1"), git(clone, "rev-parse", "HEAD")
     task = next(t for t in after.plan.tasks if t.id == tid)
     assert task.response == Response(how="fixed", text="Done.", commit=head)
@@ -979,8 +984,28 @@ def test_a_pr_head_lagging_the_push_is_observed_again_shortly_without_budget(clo
     assert (result.exit, result.waiting, result.wake_at) == (Exit.PENDING, Waiting.NETWORK, cx.poll())
     after = loop.apply(c, result, NOW)
     assert (after.outcome.exit, after.budgets.causes) == (Exit.PENDING, {})
+    cx.now = NOW + timedelta(minutes=9)
+    assert publish.run(cx, after)[1].exit == Exit.PENDING  # within ten minutes of the first lag
+    cx.now = NOW + timedelta(minutes=10)
+    _, asked = publish.run(cx, after)
+    assert (asked.exit, [o.label for o in asked.question.options]) == (Exit.ASK, ["Done, continue", "Pause"])
+    assert all(s in asked.reason for s in (gh.pr.url, A, head))
+    assert publish.run(cx, after)[1].exit == Exit.PENDING  # after "Done, continue" a new ten-minute window starts
     gh.pr = pr(head=head)
     assert publish.run(cx, after)[1].exit == Exit.DONE
+    assert after.lag is None
+
+
+def test_a_pr_head_lag_with_a_moved_branch_republishes_instead_of_waiting(clone, tmp_path, monkeypatch):
+    head = git(clone, "rev-parse", "HEAD")
+    c, gh = change(StepKind.PUBLISH, worktree=str(clone)), FakeGh(pr(head=A))
+    monkeypatch.setattr(publish, "read_remote_ref", lambda *_a: B)
+    pushed = []
+    monkeypatch.setattr(
+        publish, "push", lambda _p, _c, h: pushed.append(h) or engine.integrate(c, StepKind.PUBLISH, "x")
+    )
+    result = publish.lagging(ctx(tmp_path, gh), c, gh.pr, head)
+    assert (result.exit, pushed, c.lag) == (Exit.BACK, [head], None)
 
 
 # CI classification
@@ -1256,6 +1281,21 @@ def test_running_target_checks_have_no_deadline_and_a_late_failure_drafts_one_fi
     assert (held, len(cx.events("c1", "fix-drafted")), len(cx.store.slugs())) == (None, 1, 1)
 
 
+def test_a_failed_target_check_drafts_its_fix_and_waits_for_the_others(tmp_path):
+    gh = FakeGh(pr(head=A, state="closed", merged=True, merge_commit_sha=B))
+    target_checks(gh, ("test", "completed", "failure"), ("lint", "in_progress", None))
+    cx = ctx(tmp_path, gh)
+    cx.store.root.mkdir()
+    c, held = cleanup.target_check(cx, change(StepKind.CLEANUP), gh.pr)
+    assert (held.exit, len(cx.events("c1", "fix-drafted"))) == (Exit.PENDING, 1)
+    c, held = cleanup.target_check(cx, c, gh.pr)
+    assert (held.exit, len(cx.store.slugs())) == (Exit.PENDING, 1)  # the same failure drafts once
+    target_checks(gh, ("test", "completed", "failure"), ("lint", "completed", "failure"))
+    c, held = cleanup.target_check(cx, c, gh.pr)
+    assert (held, [e["key"].split(":")[1] for e in cx.events("c1", "fix-drafted")]) == (None, ["test", "lint"])
+    assert len(cx.store.slugs()) == 2
+
+
 def test_never_started_target_checks_wait_within_the_window_then_cleanup_proceeds(tmp_path):
     gh = FakeGh(pr(head=A, state="closed", merged=True, merge_commit_sha=B))
     target_checks(gh)
@@ -1472,6 +1512,17 @@ def test_findings_beyond_one_tasks_detail_limit_are_kept_whole_across_repair_tas
     c = loop.apply(c, r, NOW)
     assert ([t.id for t in c.plan.tasks[-3:]], c.step.task) == (["t2", "t3", "t4"], "t2")
     assert {t.fixes for t in c.plan.tasks[-3:]} == {"t1"}
+
+
+def test_a_repaired_task_resolves_only_after_every_part_and_the_parts_run_before_later_tasks():
+    c = change(StepKind.REVIEW)
+    c.plan.tasks += [Task(id="t2", title="two")] + [Task(id=f"t{i}", title="part", fixes="t1") for i in (3, 4, 5)]
+    c.step.task, steps = "t3", []
+    for _ in range(3):
+        c = loop.apply(c, loop.StepResult(exit=Exit.DONE, reason="pass"), NOW)
+        steps.append((c.step.task, c.plan.tasks[0].done))
+        c.step = Step(kind=StepKind.REVIEW, task=c.step.task)
+    assert steps == [("t4", False), ("t5", False), ("t2", True)]
 
 
 # Reopen and the pre-push hook

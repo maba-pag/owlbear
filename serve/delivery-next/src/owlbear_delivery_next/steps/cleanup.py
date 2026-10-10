@@ -198,8 +198,8 @@ def fix_change(ctx: Ctx, c: Change, check: str, sha: str, url: str) -> None:
 def target_check(ctx: Ctx, c: Change, pr: PullRequest | None) -> tuple[Change, StepResult | None]:
     """Watch the required and declared checks on the merge commit; a failure, however late, drafts a fix Change.
 
-    Running checks keep cleanup pending with a growing poll and no deadline; the start window applies only to
-    checks that never started.
+    Running checks keep cleanup pending with a growing poll and no deadline, failed ones or not; the start window
+    applies only to checks that never started.
     """
     sha = pr.merge_commit_sha if pr and pr.merged else None
     if not sha or c.step.mode == "abandon":
@@ -209,9 +209,6 @@ def target_check(ctx: Ctx, c: Change, pr: PullRequest | None) -> tuple[Change, S
     target = c.names.target
     for failed in state.failed:
         fix_change(ctx, c, failed.name, sha, failed.url or "")
-    if state.failed:
-        c.missing = None
-        return c, None
     if state.running or state.missing:
         if c.missing is None or c.missing.head != sha:
             c.missing = Episode(head=sha, since=ctx.now)

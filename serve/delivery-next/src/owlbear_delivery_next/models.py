@@ -353,10 +353,11 @@ class Pullback(Record):
 
 
 class Episode(Record):
-    """When expected checks were first observed missing at one head (P10); cleared once none is missing."""
+    """When expected checks were first observed missing at one head (P10), or a PR first lagged a pushed head."""
 
     head: str
     since: datetime
+    pr: int | None = None
 
 
 class Stop(Record):
@@ -405,28 +406,30 @@ class Spend(Record):
 
     credits: float = 0.0
     models: dict[str, ModelSpend] = Field(default_factory=dict)
-    last: dict[str, Spend] = Field(default_factory=dict)  # each session's latest cumulative report
+    last: dict[str, Spend] = Field(default_factory=dict)  # each session's high-water marks, per field
 
     def plus(self, usage: Mapping[str, Any], session: str = "") -> Spend:
         """Return the total after one session's usage report; a failed report adds nothing.
 
-        A session's report is cumulative, so a resumed session adds only its growth since its last report.
+        A session's report is cumulative, so a resumed session adds only its growth over its high-water marks;
+        a field a report omits or lowers keeps its mark.
         """
         if "error" in usage:
             return self
-        reported = (usage.get("models") or {}).items()
-        now = Spend(
-            credits=usage.get("credits") or 0.0,
-            models={n: ModelSpend(credits=m["credits"], tokens=m["tokens"]) for n, m in reported},
-        )
         was = self.last.get(session, Spend()) if session else Spend()
-        models = {k: v.model_copy() for k, v in self.models.items()}
-        for name, m in now.models.items():
-            old, prior = models.get(name, ModelSpend()), was.models.get(name, ModelSpend())
-            gain, grew = max(m.credits - prior.credits, 0.0), max(m.tokens - prior.tokens, 0)
-            models[name] = ModelSpend(credits=old.credits + gain, tokens=old.tokens + grew)
-        last = self.last | ({session: now} if session else {})
-        return Spend(credits=self.credits + max(now.credits - was.credits, 0.0), models=models, last=last)
+        marks, models = dict(was.models), {k: v.model_copy() for k, v in self.models.items()}
+        for name, m in (usage.get("models") or {}).items():
+            prior = marks.get(name, ModelSpend())
+            marks[name] = high = ModelSpend(
+                credits=max(prior.credits, m.get("credits") or 0.0), tokens=max(prior.tokens, m.get("tokens") or 0)
+            )
+            old = models.get(name, ModelSpend())
+            models[name] = ModelSpend(
+                credits=old.credits + high.credits - prior.credits, tokens=old.tokens + high.tokens - prior.tokens
+            )
+        mark = Spend(credits=max(was.credits, usage.get("credits") or 0.0), models=marks)
+        last = self.last | ({session: mark} if session else {})
+        return Spend(credits=self.credits + mark.credits - was.credits, models=models, last=last)
 
 
 class Overlap(Record):
@@ -456,6 +459,7 @@ class Change(Record):
     budgets: Budgets = Field(default_factory=Budgets)
     consent: MergeConsent | None = None
     missing: Episode | None = None
+    lag: Episode | None = None  # GitHub's PR head behind a pushed branch head
     stop: Stop | None = None
     blocked: Stop | None = None  # host-owned: a process survives in the worktree, so no writer starts
     env: Environment | None = None

@@ -17,7 +17,7 @@ from owlbear_delivery_next.git.remote_git import (
 )
 from owlbear_delivery_next.github.provider import ProviderError
 from owlbear_delivery_next.loop import StepResult
-from owlbear_delivery_next.models import ErrorKind, Exit, StepKind, Waiting
+from owlbear_delivery_next.models import Episode, ErrorKind, Exit, StepKind, Waiting
 from owlbear_delivery_next.steps import engine, worktree
 
 if TYPE_CHECKING:
@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.steps.engine import Ctx
 
 P = StepKind.PUBLISH
+LAG = timedelta(minutes=10)  # GitHub's PR head may trail a confirmed push this long before the owner is asked
 _PUSH_FAILED = 1  # git push exits 1 when a hook or the remote refuses; transport and auth failures exit 128
 
 
@@ -132,6 +133,26 @@ def gate(checks: Sequence[Check], now: datetime) -> StepResult | None:
     return engine.ask(P, reason, cause_key(kind, P, first.name), engine.continue_or_pause(P))
 
 
+def lagging(ctx: Ctx, c: Change, pr: PullRequest, head: str) -> StepResult:
+    """The PR shows another head: re-publish when the branch itself differs, else wait, then ask after ``LAG``."""
+    path = Path(c.names.worktree)
+    if read_remote_ref(path, "origin", f"refs/heads/{c.names.branch}") != head:
+        c.lag = None
+        reason = f"the branch no longer holds {head[:7]}; published again"
+        return push(path, c, head) or engine.pending(Waiting.NETWORK, reason, ctx.poll())
+    if c.lag is None or (c.lag.head, c.lag.pr) != (head, pr.number):
+        c.lag = Episode(head=head, pr=pr.number, since=ctx.now)
+    if ctx.now - c.lag.since < LAG:  # GitHub reads lag a push just made: observed again shortly, never budgeted
+        reason = f"GitHub still shows the PR at {pr.head_sha[:7]} after publishing {head[:7]}"
+        return engine.pending(Waiting.NETWORK, reason, ctx.poll())
+    text = (
+        f"GitHub still shows {pr.url} at {pr.head_sha} although its branch holds {head} after "
+        f"{LAG.seconds // 60} min; check the PR on GitHub, then continue"
+    )
+    c.lag = None  # an answered question starts a new window
+    return engine.ask(P, text, cause_key(ErrorKind.NETWORK, P, "pr-head"), engine.continue_or_pause(P))
+
+
 def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:  # noqa: PLR0911 - one exit per observation
     """Publish the final-reviewed head; a moved target first gets an integration Builder task."""
     path, target = Path(c.names.worktree), c.names.target
@@ -147,9 +168,9 @@ def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:  # noqa: PLR0911 - on
     if (r := push(path, c, head)) is not None:
         return c, r
     pr = pull_request(ctx, c, head)
-    if pr and pr.head_sha != head:  # GitHub reads lag a push just made: observed again shortly, never budgeted
-        reason = f"GitHub still shows the PR at {pr.head_sha[:7]} after publishing {head[:7]}"
-        return c, engine.pending(Waiting.NETWORK, reason, ctx.poll())
+    if pr and pr.head_sha != head:
+        return c, lagging(ctx, c, pr, head)
+    c.lag = None
     if pr is None or pr.draft:
         state = "absent" if pr is None else "a draft"
         reason = f"the PR is {state} after publishing {head[:7]}"

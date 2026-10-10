@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import posixpath
+import itertools
 import re
 import shlex
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next import tools
-from owlbear_delivery_next.confinement import inside, outside, resolve
+from owlbear_delivery_next.confinement import GIT_OUTPUT, NULL_PATHS, git_subcommand, inside, outside, resolve
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 DENIED = ("git push", "git config", "git -c", "gh", "sudo")
 VALUE_FLAGS = "mFCctSuo"  # short options of git commit and push that take a value
 GIT_READ_ONLY = frozenset(("log", "show", "diff", "status", "blame", "grep", "ls-files", "rev-parse"))
+_HARMLESS = re.compile(r"\d*>>?\s*/dev/null\b|\d*>&\d+")  # discarded output or a descriptor copy
 
 
 @dataclass(frozen=True)
@@ -41,26 +42,70 @@ class Request:
     tool: str = ""
 
 
-def _package(directory: str) -> str | None:
-    """The normalised relative package directory, or None for an absolute path or one that climbs with ``..``."""
-    if directory.startswith(("/", "~")) or ".." in directory.split("/"):
-        return None
-    return posixpath.normpath(directory).strip("/") or "."
+def metachars(text: str) -> set[str]:
+    """Shell operators of *text* outside quotes, and command substitution outside single quotes."""
+    found: set[str] = set()
+    quote, escaped = "", False
+    for i, ch in enumerate(text):
+        if escaped or (ch == "\\" and quote != "'"):
+            escaped = not escaped
+        elif quote == "'":
+            quote = "" if ch == "'" else quote
+        elif ch == "`" or text.startswith("$(", i):
+            found.add("`" if ch == "`" else "$(")
+        elif quote:
+            quote = "" if ch == '"' else quote
+        elif ch in "'\"":
+            quote = ch
+        elif ch in ";|&<>":
+            found.add(ch)
+    return found
 
 
-def allowed(text: str, prefixes: Sequence[str], checks: Sequence[tuple[str, str]] = ()) -> bool:
-    """Whether *text* starts with the words of one of *prefixes*: the one allow-list rule for commands.
-
-    ``git --no-pager <read-only subcommand>`` counts as that subcommand when it is allowed, and
-    ``cd <package> && <check>`` is allowed when *checks* names that check for that package directory.
-    """
+def _prefixed(text: str, prefixes: Sequence[str]) -> bool:
     words = text.split()
     if words[:2] == ["git", "--no-pager"] and words[2:3] and words[2] in GIT_READ_ONLY:
         words = ["git", *words[2:]]
-    if words[:1] == ["cd"] and words.count("&&") == 1 and words[2:3] == ["&&"]:
-        package, rest = _package(words[1]), words[3:]
-        return any(package == _package(p.strip("/") or ".") and rest[: len(c.split())] == c.split() for p, c in checks)
-    return "&&" not in words and any(words[: len(p.split())] == p.split() for p in prefixes)
+    return any(words[: len(p.split())] == p.split() for p in prefixes)
+
+
+def _package_check(text: str, checks: Sequence[tuple[str, str]], root: Path | None) -> bool:
+    """``cd <package> && <check>`` and nothing more, the package resolving inside *root* to a profile package."""
+    head, _, tail = text.partition("&&")
+    cd = head.split()
+    if root is None or len(cd) != 2 or metachars(head) or metachars(tail):  # noqa: PLR2004 - ``cd`` and its target
+        return False
+    target, rest = resolve(root, cd[1]), tail.split()
+    return target.is_relative_to(root.resolve()) and any(
+        target == resolve(root, p) and rest[: len(c.split())] == c.split() for p, c in checks
+    )
+
+
+def allowed(
+    text: str, prefixes: Sequence[str], checks: Sequence[tuple[str, str]] = (), root: Path | None = None
+) -> bool:
+    """Whether *text* starts with the words of one of *prefixes*: the one allow-list rule for commands.
+
+    ``git --no-pager <read-only subcommand>`` counts as that subcommand when it is allowed. The tail may hold
+    no shell operator or substitution except a redirect to ``/dev/null`` or a descriptor, so a prefix cannot
+    smuggle a second command. ``cd <package> && <check>`` is allowed when *checks* names that check for the
+    package directory *cd* resolves to inside *root*.
+    """
+    if text.split()[:1] == ["cd"] and "&&" in text:
+        return _package_check(text, checks, root)
+    return not metachars(_HARMLESS.sub("", text)) and _prefixed(text, prefixes)
+
+
+def _read_only_write(text: str, words: Sequence[str]) -> str | None:
+    """The redirect or git option by which a command would write in a read-only step."""
+    if ">" in metachars(text):
+        return "a redirect"
+    sub = git_subcommand(words)
+    for w in words[1:] if sub else ():
+        flag = w.partition("=")[0]
+        if flag in {"--output", "--ext-diff"} or (flag == "-o" and sub in GIT_OUTPUT):
+            return w
+    return None
 
 
 def _bypass(words: Sequence[str]) -> str | None:
@@ -76,10 +121,21 @@ def _bypass(words: Sequence[str]) -> str | None:
     return None
 
 
+def _reach(policy: Policy, base: Path, words: Sequence[str], *, read_only: bool) -> tuple[str | None, Path]:
+    """The first place outside the worktree each ``&&`` part reaches, and the directory the command ends in."""
+    for part in (list(g) for amp, g in itertools.groupby(words, lambda w: w == "&&") if not amp):
+        if (reached := outside(policy.root, base, part, mutating=not read_only)) is not None:
+            return str(reached), base
+        base = resolve(base, part[1]) if part[:1] == ["cd"] and len(part) > 1 else base
+    return None, base
+
+
 def _shell(policy: Policy, req: Request) -> str | None:  # noqa: PLR0911 - one reason per check
     if req.urls:
         return "shell commands that reach URLs are not allowed"
     base = policy.root
+    if out := next((p for p in req.paths if p not in NULL_PATHS and not inside(policy.root, p)), None):
+        return f"the command reaches {out}, outside the worktree"
     for text, read_only in req.commands or (("", False),):
         try:
             words = shlex.split(text)
@@ -87,12 +143,14 @@ def _shell(policy: Policy, req: Request) -> str | None:  # noqa: PLR0911 - one r
             return f"`{text}` cannot be parsed"
         if flag := _bypass(words):
             return f"`{text}` uses {flag}, which skips hooks or signing or forces history"
-        if (reached := outside(policy.root, base, words, mutating=not read_only)) is not None:
+        reached, base = _reach(policy, base, words, read_only=read_only)
+        if reached is not None:
             return f"`{text}` reaches {reached}, outside the worktree"
-        base = resolve(base, words[1]) if words[:1] == ["cd"] and len(words) > 1 else base
-        if allowed(text, DENIED):
+        if not policy.write and (flag := _read_only_write(text, words)):
+            return f"`{text}` uses {flag}, which writes in a read-only step"
+        if _prefixed(text, DENIED):
             return f"`{text}` is denied"
-        if not (allowed(text, policy.commands) or (read_only and all(inside(policy.root, p) for p in req.paths))):
+        if not (allowed(text, policy.commands, policy.checks, policy.root) or read_only):
             return f"`{text}` is not in this step's allow list"
     return None
 
