@@ -48,7 +48,8 @@
     "biome.json",
     "store",
     "tests",
-    "serve/cockpit/web"
+    "serve/cockpit/web",
+    "serve/delivery-next"
   ],
   "source_only_paths": ["README.md"]
 }
