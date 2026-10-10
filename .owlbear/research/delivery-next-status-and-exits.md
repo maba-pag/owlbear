@@ -23,7 +23,7 @@ architecture is left to D4.
 | ID | Source | Used for |
 | --- | --- | --- |
 | D01 | [Charter](delivery-next-charter.md) §3.3–§3.11 | Ownership, touchpoints, exits, host and runners, budgets, proof policy |
-| D02 | [Journey and failure modes](delivery-next-journey-and-failure-modes.md) §3.2–§3.6 | J0–J9, merge gate, pull-back, exit contract and rules, catalogue rows, DR1–DR16, six connected traces |
+| D02 | [Journey and failure modes](delivery-next-journey-and-failure-modes.md) §3.2–§3.6 | J0–J9, merge gate, pull-back, exit contract and rules, catalogue rows, DR1–DR16, eight connected traces |
 | D03 | [Ownership map](delivery-next-ownership-map.md) §4 | Minimal Change and profile records; what is never stored |
 | D04 | [Platform probe](delivery-next-platform-probe.md) §3.2, §4 | Loop-owned questions (P2b, P2d); typed-result helper waits on idle, so a result event is the step boundary; termination by `tasks.cancel` plus PID and runtime-exit checks (P4b); default-deny permissions (P5) |
 | D05 | [Rebuild research](delivery-liveness-first-rebuild.md) §3.6, §3.8 | Principles P1–P9; decisions TD-1–TD-22; the adopted retry policy |
@@ -41,18 +41,18 @@ One versioned file per Change and one per project, outside the checkout, written
 | --- | --- | --- | --- |
 | Format and profile | L | format version; profile path and the profile version seen at step entry | Migrate forward or stop (S6); a newer profile is a premise change |
 | Intent | U | the user's words; paused (time, reason); abandoned (time); hold for intent change | Flags are read at every step boundary (D6, X6) |
-| Brief | U | draft versions; approved version and time; outcome, scope, non-goals, split; acceptance criteria with id, text, version | Approval is the touchpoint; drafts are L; criterion version is a check input |
+| Brief | U | draft versions; approved version and time; outcome, scope, non-goals, split; acceptance criteria with id, text, version; for UI changes the render recipe (start command, URL or entry, UI states to capture) or a declared person-only visual check | Approval is the touchpoint; drafts are L; criterion version is a check input |
 | Person-only checks | U | id; criteria refs; steps; what to look for; recorded inputs (criterion version, procedure version, covered paths, environment labels); answer (pass or fail, note, time, input fingerprint at answer) | Valid while the current fingerprint equals the recorded one (P5) |
 | Decisions | U or L | text; origin: `decided` for brief approvals, answers and owner choices, `autonomous` for agent choices, `approved` for content of an approved brief; time | Shown in the Change detail |
 | Questions | U | id; step; kind decision or action; text; options, each naming its next step; answer, channel, time; effect check; effect observed time | An answer clears its cause only once its effect is observed |
 | Plan | L | version; ordered tasks with id, title, scope paths, checks, origin (plan, review, CI, PR feedback, person-only check, integration) | Fix tasks are appended without a new plan version |
-| Reviews | E | per task and final: reviewed commit; recorded inputs: the criterion versions judged and the covered paths the reviewer returns (including files read outside the diff), each with its fingerprint; verdict; round | Re-requested only when a recorded input changes (P5), not on every commit |
-| Visual check | E | reviewed head; preview URL; screenshot paths with page and viewport; criterion versions judged; verdict and findings | UI changes only; kept with the Change and shown on its card; a new head with changed UI inputs re-runs it |
+| Reviews | E | per task and final: reviewed commit and its tree id; recorded inputs: the criterion versions judged and the covered paths, each with its fingerprint; the local check results relied on, each with the tree it ran on; verdict; round | The engine computes covered paths from git (`git diff --name-status -M base...head`, including additions, deletions and renames), never from the reviewer's return (`autonomous`). Valid while no path outside the covered set changed and the covered fingerprints are equal; a new head needs fresh proof for its changed paths (P5) |
+| Visual check | E | reviewed head and its tree id; render recipe version; screenshot paths with page and viewport; criterion versions judged; verdict and findings | UI changes only; kept with the Change and shown on its card; bound to the tree it ran on, so a new head with changed UI paths re-runs it |
 | Current step | L | kind; task id; mode; attempt; started time; credits so far | Exactly one |
 | Outcome | L | exit kind or pending; cause key; reason; next actor; wake trigger or next observation; last permission denial | Exactly one per step attempt; denial shown (B7) |
 | Budgets | L | per cause key: count, failure fingerprint, progress fingerprint, alternative tried, last time; review rounds per task; re-plans per Change | §3.6 |
 | Merge consent | U | head SHA; time; channel; delta shown | Only when the profile asks before merge; void when the PR head is not that SHA |
-| Pull-back | L | merged SHA; local target result: fast-forwarded, or behind with its reason | A "behind" result offers Pull until it succeeds |
+| Pull-back | L | merged SHA; per worktree from `git worktree list`: fast-forwarded, or behind with its reason; "submodules changed" when a gitlink moved | A "behind" result offers Pull until it succeeds |
 | Writer lock | L | host id; runner PID and start time; runtime PID; session id; task PIDs with start times; acquired; heartbeat; last tool event | One writer per Change (DR10) |
 | Stop record | L | error kind; one action; actor; resume condition; time | Cleared when the resume condition is observed |
 | Names and preserved work | L | Change branch, target branch, worktree path; paths of the bundle and archive files holding preserved work | Names only; heads come from git; preserved work is never pushed (DR6) |
@@ -78,31 +78,42 @@ passed, worktree clean); a claim the facts do not support is B4.
 | shape | Shape | Change started, or back from plan, or intent hold released | Designer in chat; brief reviewer as runner | brief draft; reviewer verdict and findings | done, retry, ask, stop; pending on the chat |
 | plan | Plan | approved brief, no valid plan | Planner; plan challenger | ordered tasks; challenger verdict | all five |
 | build | Build n/m | open task, writer lock held | Builder | status (done, blocked, infeasible, needs-user), checks run with exit codes, question or missing item | all five |
-| review | Build n/m | new commit for the task; or all tasks done (final mode; for UI changes also the visual check) | build reviewer, read-only; in visual mode with screenshots of the host-launched preview | verdict, findings, covered paths including files read outside the diff | all five |
+| review | Build n/m | new commit for the task; or all tasks done (final mode; for UI changes also the visual check) | build reviewer, read-only; in visual mode with screenshots of the host-launched preview | verdict, findings | all five |
 | integrate | stage of caller | target moved before publish or merge; I4, I6, M2 | Builder in integration mode | status, conflict paths, checks run | all five |
 | publish | Publish | final review valid on an integrated head | none; engine with git and gh | — | all five; pending on network |
-| follow | Publish | PR open at the current head | none; observer; Builder for thread replies after a fix | — | all five; pending on CI, reviewers, owner action |
+| follow | Publish | PR open at the current head | none; observer; Builder writes reply text after a fix, the engine posts and resolves | — | all five; pending on CI, reviewers, owner action |
 | check | Check | a declared person-only check without a valid answer | Builder only to prepare the environment and return its launch recipe | launch recipe (Builder); user's pass or fail and note | all five; pending on the user |
 | merge | Merge | follow done; the merge gate passes | none | — | all five; pending on a required human review or mergeability |
 | cleanup | Done | PR merged, or Change abandoned | none | — | done, retry, stop |
 
 **Check environment.** The Builder that prepares a person-only check or a visual check returns a
-verified launch recipe: command, directory, and readiness URL or probe. The Builder is then fully terminated under
+verified launch recipe: command, directory, and readiness URL or probe; for a visual check it starts
+from the brief's render recipe. The Builder is then fully terminated under
 the normal teardown. The host then launches the environment, for example a local preview server,
 verifies readiness and enters pending for the check, or starts the visual review. It records the environment's PIDs, relaunches
 it after an interruption, and disposes of it before any other writer starts on the Change.
 
-**Merge gate.** `merge` re-reads the PR at entry and merges only when its exact head has: a valid
-final review; required and declared checks green; for UI changes a passed visual check; valid
-person-only checks; no unresolved review threads (issue comments from bots or people never block);
-the target integrated. It merges with the profile's method, `sha` set to that head and no rule
-bypass, then reads back. No consent is asked unless the profile sets "ask before merge". Merge
-queues are not supported (TD-22).
+**Merge gate.** `merge` takes the host's merge lock for the target branch. Immediately before the
+merge call it re-reads the target head, the PR head, checks and every conversation item, and merges
+only when the exact head has: a valid final review; required and declared checks green; for UI
+changes a passed visual check; valid person-only checks; every conversation item handled; and a PR
+base that contains the target head — otherwise back to integrate. Conversation items are issue
+comments, review bodies and review threads from any author except Delivery; each is answered,
+resolved after a fix, or recorded "no action needed: <reason>" on the card (interpretation of
+TD-15, `autonomous`). It merges with the profile's method, `sha` set to that head and no rule
+bypass, then reads back. If the merged result fails required checks on the target, Delivery opens a
+fix Change and tells the owner; without GitHub's "require branches to be up to date" and "require
+conversation resolution", a change between re-read and merge is that documented residual risk
+(TD-9). No consent is asked unless the profile sets "ask before merge". Merge queues are not
+supported (TD-22).
 
-**Pull-back.** `cleanup` first fetches. If the local target branch is not checked out, or is checked
-out clean and not diverged, it fast-forwards it. Otherwise it never stashes, resets or merges; it
-records "behind" with the reason and the card offers Pull, which runs the same fast-forward once it
-is possible.
+**Pull-back.** `cleanup` first fetches, then inspects every worktree from `git worktree list`. If the
+local target branch is not checked out, or is checked out clean (no untracked files in paths the
+update touches) and not diverged, it fast-forwards it with
+`git merge --ff-only --no-autostash --no-overwrite-ignore`, never `git pull`. Otherwise it never
+stashes, resets or merges; it records "behind" with the reason and the card offers Pull, which runs
+the same fast-forward once it is possible. Submodules are not updated; a changed gitlink adds
+"submodules changed" to the notice.
 
 ### 3.3 Exit and pending table
 
@@ -145,7 +156,7 @@ Every exit also records its kind, cause key, reason and time. `{S}` is the stage
 | follow | done | check if a check lacks a valid answer; else merge | — | — | "Check · waiting for you: {check}" |
 | follow | retry | follow, after one rerun | flake per check and head | 1 per check and head | "Publish · re-running {check} once (flaky)" |
 | follow | ask | follow or build, per option | question (P3 dispute with both positions, P10 owner action) | none | "Publish · waiting for you: {question}" |
-| follow | back | build with an appended fix task; once the fix is published, the agent replies on the thread and resolves it | fix task with CI log or review thread | cause +1 per check or thread | "Build · fixing {check}: {summary}" |
+| follow | back | build with an appended fix task; once the fix is published, the engine posts the Builder's reply once (hidden marker) and resolves the thread unless a newer comment not by Delivery arrived | fix task with CI log or conversation item | cause +1 per check or item | "Build · fixing {check}: {summary}" |
 | follow | stop | follow on the resume condition | stop record | none | "Publish · stopped: {reason} · {action}" |
 | follow | pending | follow when the observed condition changes | condition; next observation | none | "Publish · waiting for {who}: {condition} (checked {age} ago)" |
 | check | done | check for the next declared check without a valid answer; merge when none remains | answer with input fingerprint | — | "Check · waiting for you: {next check}", or after the last "Merge · merging PR #{pr} at {sha7}" |
@@ -207,7 +218,7 @@ Termination checks still precede launching another writer ([D4 §3.2](delivery-n
 | Owner action in GitHub (P10, after ask) | host | the check starts | 3 observations, then stop |
 | Person-only check (H1) | host, which runs the environment from the launch recipe | answer from status view or chat | none |
 | Mergeability after the gate passed (M2) | host polls PR | mergeable, or a new head that re-evaluates the gate | none |
-| Environment failure: network, sign-in, rate limit, quota, model, runtime or tool hiccup (S1, S8, S9, P9, B14) | host probe or readiness, with growing pauses (1 → 2 → 5 → 15 → 30 min), or the reset time | probe or readiness succeeds, or reset time passes | none; an action the user must take (sign in, raise quota) is shown as an announced prerequisite |
+| Environment failure: network, sign-in, rate limit, quota, model, runtime or tool hiccup (S1, S8, S9, P9, B14) | host probe or readiness, with growing pauses (1 → 2 → 5 → 15 → 30 min), or the reset time | probe or readiness succeeds, or reset time passes | none; the card shows pending age and attempts; quiet warning after 1 hour; ask after 24 hours of the same environment fault, or at once when the same fault signature from Delivery's own adapter or tool repeats 3 times (a defect, asked with the error). An expired sign-in is shown with the exact login command; exhausted credits or quota wait for the reset and show the credits (TD-21) |
 
 ### 3.4 Status line derivation
 
@@ -263,20 +274,24 @@ Fifteen kinds, shown to users and agents; each cause key starts with one.
 | `result` | Agent result invalid, empty, early end, context exhausted | B4, B5 | retry, then back to plan |
 | `liveness` | Hang, timeout, unconfirmed termination, second writer | B6, X1, X4, X5 | retry after confirmed end; else stop |
 | `scope` | Edits outside task scope or worktree, user edits clash | B11, B13 | retry; ask; stop |
-| `conflict` | Textual or semantic conflict, foreign pushes, target gone, contradicting intents of overlapping Changes | I2, I4, I5, M2, D7 | integrate; ask |
-| `review` | Review rounds exhausted, planner or reviewer disagreement | D9, B12, P3 | retry, then ask |
+| `conflict` | Textual or semantic conflict, foreign pushes, target gone, contradicting intents of overlapping Changes | I2, I4, I5, M2, M9, D7 | integrate; ask |
+| `review` | Review rounds exhausted, planner or reviewer disagreement, feedback arriving during a fix or the gate | D9, B12, P3, P13, M10 | retry, then ask |
 | `gate` | Rule blocks push or merge, required check or review missing, PR closed | P5, P6, P10, M4, M8 | pending; back; ask |
-| `state` | Format, unreadable state, preservation unconfirmed, local target behind | S6, B19, M5, M7 | stop; M7 is a done notice with Pull |
+| `state` | Format, unreadable state, preservation unconfirmed, workspace kept, local target behind | S6, B19, M5, M11, M7 | stop; M7 is a done notice with Pull; M11 is a done notice "workspace kept: <reason>" |
 
 ### 3.6 Budgets
 
 - **Cause key** = error kind + step kind + subject, where the subject is normalized: the check
   command id, the missing item's name, the sorted conflict paths, the hook id, the comment thread
   id. The task id is not part of the key, so a cause survives re-planning and fix tasks (D10).
-- **Environment failures never count.** `auth`, `network` and `capacity` causes, and runtime or tool
-  hiccups, are pending with growing pauses (§3.3) and consume no budget.
+- **Environment failures never count.** `auth`, `network` and `capacity` causes are pending with
+  growing pauses (§3.3) and consume no budget. Faults are classified by signature: the same fault
+  signature from Delivery's own adapter or tool three times is a defect and becomes `ask` with the
+  error (`autonomous`).
 - **Identical failures per cause: 3**, counted on `retry` and `back` only when the failure
-  fingerprint repeats without progress (a new commit, fewer failing checks, a changed error).
+  fingerprint repeats without progress. Progress means measurably better results — fewer failing
+  checks, more satisfied criteria, a resolved finding — not merely a new commit or changed error
+  text (`autonomous`).
   Progress resets the count. On the third the step tries one different approach — split the task,
   re-plan, or a stronger model — recorded on the cause; if that also fails, `ask` with a genuine
   choice (revise requirement, narrow scope, pause), or `stop` when no choice exists.
@@ -302,6 +317,8 @@ Fifteen kinds, shown to users and agents; each cause key starts with one.
 | Same missing prerequisite survives a re-plan and an answer | `project-env:TEST_API_KEY` counts 1 (build ask), 2 (retry after an unobserved answer), 3 (back to plan); next occurrence → ask with scope choice | "Build 3/5 · waiting for you: TEST_API_KEY is still not visible to the task — set it, drop AC-3, or pause?" |
 | Intent changes during a task, and again after a merge was submitted | First: hold, task finishes, back to shape with kept and dropped work, ask re-approval. Second: merge outcome observed first; merged → Done and the new intent starts a new Change; not merged → back to shape | "Merge · holding for your change: observing whether PR #14 merged" |
 | Gate passes on head A, integration makes head B, then merge | merge entry re-reads the PR head and re-evaluates the gate for it; reviews and checks whose recorded inputs changed run again; the merge call carries that head SHA as GitHub's guard, so a later push fails the call and goes back to integrate | "Merge · waiting for CI on b7e2a91 (merged main, 1 conflict resolved)" |
+| Target moves while the gate is evaluated (M9) | under the target's merge lock the final re-read finds the PR base missing the new target head → no merge call; back to integrate; the gate runs again for the new head. A move after the re-read is caught by post-merge readback: failing required checks on the target open a fix Change and tell the owner | "Merge · updating with main: main moved during the merge check" |
+| Comment arrives while the gate is evaluated (M10) | the final re-read finds a conversation item not by Delivery and not handled → no merge call; follow back with a fix task, a reply, or "no action needed: <reason>"; the gate runs again | "Publish · handling new comment from @dana before merging" |
 
 **Common catalogue rows:**
 
@@ -320,14 +337,14 @@ Fifteen kinds, shown to users and agents; each cause key starts with one.
 | B4 | Engine finds no commit → retry in a fresh session with the diff | "Build 2/5 · retrying: worker ended without a commit (1 of 3)" |
 | B6 | Step timeout → cancel, verify PIDs → retry; unverified → stop | "Build 2/5 · stopped: process 911 (vite) would not end · end it" |
 | B7 | Unlisted command denied at once; Builder adapts or asks | "Build 2/5 · implementing: parser · last denied: docker compose up" |
-| B23 | Final review in visual mode: host launches the preview, reviewer judges screenshots; fail → fix task naming the screenshot | "Build 5/5 · fixing: header overlaps the menu at 390 px" |
+| B23 | Final review in visual mode: host launches the preview from the brief's render recipe, reviewer judges screenshots; fail → fix task naming the screenshot | "Build 5/5 · fixing: header overlaps the menu at 390 px" |
 | I1 | Before publish: integrate, clean; recorded review inputs unchanged → publish | "Publish · updated with main" |
 | P1 | follow back → build fix task from CI log | "Build · fixing lint: 3 errors in api.ts" |
 | P2 | follow pending | "Publish · waiting for CI: 2 of 5 checks running (checked 1 min ago)" |
-| P3 | follow back → fix task per review thread → after the fix is published the agent replies and resolves the thread; dispute → ask with both positions | "Build · fixing review comment: rename `cfg`" |
+| P3 | follow back → fix task per conversation item that needs one → after the fix is published the engine posts the Builder's reply once (marker) and resolves the thread; other items are answered or recorded "no action needed: <reason>"; dispute → ask with both positions | "Build · fixing review comment: rename `cfg`" |
 | H1 | Builder returns a launch recipe and is terminated; host launches the environment and verifies readiness; check pending, no timeout | "Check · waiting for you: log in on staging and see the banner" |
 | M1 | Entry, or the host's poll while the Change waits on you, observes PR merged → termination confirmed → cleanup with pull-back | "Done · merged PR #14" |
-| M7 | cleanup fetches; checked-out local target is dirty → no fast-forward; "behind" recorded; Pull offered | "Done · merged PR #14 · local main is behind: uncommitted changes in your checkout" |
+| M7 | cleanup fetches; in `git worktree list` the checked-out local target is dirty → no fast-forward; "behind" recorded; Pull offered | "Done · merged PR #14 · local main is behind: uncommitted changes in your checkout" |
 | X1 | Host gone; on next start observe, then resume | "Build 2/5 · Delivery is not running" |
 | X3 | Next start observes; moved target handled by integrate before publish | "Build 4/5 · starting: export" |
 

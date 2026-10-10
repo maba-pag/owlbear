@@ -352,8 +352,9 @@ the platform migration rather than sequencing it (S3).
 
 Proven since: merge under a ruleset (required check, squash only, linear history) in the public
 sandbox `boecht/owlbear-sandbox-protected` — never merged while CI was pending or red, merged the
-consented head with the `sha` guard. The package now rides along inertly in the consumer
-projection, keeping `uv.lock` consistent.
+consented head with the `sha` guard. On the branch, the sync manifest has a `delivery-next` scope
+behind the `sync_delivery_next` input, default off: the package reaches consumer `main` only when
+that input is set at dispatch (cutover §3.2 step 5).
 
 Still unproven, needed before M5: the `maba-pag` probe on its business seat (TD-17) — models,
 reasoning effort per session and agent, context window, subagent models and cost; the folder-open

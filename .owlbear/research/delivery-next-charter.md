@@ -22,7 +22,7 @@ frame for the M3 design. Later design cannot override it without the user decidi
 | ID | Source | Used for |
 | --- | --- | --- |
 | H01 | [Rebuild research](delivery-liveness-first-rebuild.md) | Root causes RC1–RC6, principles P1–P9, roadmap, decisions TD-1–TD-22, provenance rule |
-| H02 | [Journey and failure modes](delivery-next-journey-and-failure-modes.md) | Journey J0–J9, touchpoint budget, exit contract, catalogue, DR1–DR15 |
+| H02 | [Journey and failure modes](delivery-next-journey-and-failure-modes.md) | Journey J0–J9, touchpoint budget, exit contract, catalogue, DR1–DR16 |
 | H03 | [Ownership map](delivery-next-ownership-map.md) | Who owns each current responsibility; what Delivery-next keeps |
 | H04 | [Route comparison](delivery-next-route-comparison.md) | Thin core on the Copilot runtime; reuse by copying |
 | H05 | [Platform probe](delivery-next-platform-probe.md) | SDK loop, loop-owned questions, default-deny permissions, termination, cost |
@@ -86,9 +86,13 @@ who want it. Overlap between Changes is shown as "overlaps with X", never asked;
 conflicts and asks only when the two Changes' intents contradict; docs, lockfiles and generated
 files are ignored (TD-12). Announced prerequisite actions — sign in again, approve a permission,
 unlock a signer, set a credential outside chat — are allowed, each with its exact action and resume
-condition. Anything else asked of the user is a defect. Setup is user-local: it writes
-`.vscode/tasks.json` and `.mcp.json` only with consent and adds both to the clone's
-`.git/info/exclude`, so nothing is committed (TD-11).
+condition. Anything else asked of the user is a defect. Setup is user-local (TD-11): it writes
+`.vscode/tasks.json` and `.mcp.json` only with consent and only while they are untracked, and adds
+both to the clone's `.git/info/exclude`, so nothing is committed. `.git/info/exclude` covers only
+untracked files: if either file is already tracked, setup does not write it and shows the manual
+alternative — start the host by command, or add the chat server in the user-level MCP
+configuration. Skills and agents are installed user-level (`~/.copilot/skills/`), never in the
+project (interpretation of TD-11, `autonomous`).
 
 ### 3.6 How every step ends
 
@@ -96,21 +100,32 @@ Every step ends in exactly one exit — done, retry, ask, back, stop — or is p
 external condition, with the rules of the journey research §3.3: bounded retries carried across
 `retry` and `back`; a stop names one action, its actor and its resume condition; no exit discards
 work; replacement of a worker only after confirmed termination; replay only on confirmed absence;
-required remote gates never downgraded. The design requirements DR1–DR15 of the journey research
+required remote gates never downgraded. The design requirements DR1–DR16 of the journey research
 are binding.
 
-**Retry policy** (`autonomous`). Environment failures — network, auth, capacity, runtime or tool
-hiccups — are pending with growing pauses and never consume budget. Only identical failures without
-progress count, three at most; progress resets the count. On exhaustion the loop tries one different
-approach (split, re-plan, stronger model), then asks one question.
+**Retry policy** (`autonomous`). Failures are classified by signature. Transient environment
+outages — network, 5xx, capacity, rate limits — are pending with growing pauses and never consume
+budget; an expired sign-in is pending with the exact login command. The card shows the pending age
+and attempts, a quiet warning after 1 hour, and an ask after
+24 hours of the same environment fault. The same fault signature from Delivery's own adapter or tool
+three times is a defect: ask with the error, never wait forever. Otherwise only identical failures
+without progress count, three at most. Progress means measurably better results — fewer failing
+checks, more satisfied criteria, a resolved finding — not merely a new commit or changed error text;
+it resets the count. On exhaustion the loop tries one different approach (split, re-plan, stronger
+model), then asks one question.
 
 **Merge gate** (TD-15). Delivery merges when the exact head (SHA guard) has a valid final review;
 required and declared checks green; for UI changes a passed agent visual check (TD-14); valid
-person-only checks; no unresolved review threads; and the target integrated. Only review threads
-count as discussions; bot or informational issue comments do not block. It merges with the
-profile's method and reads the result back. Review comments become bounded Builder fix tasks; after
-a fix the agent replies on the thread and resolves it; on disagreement it asks the owner with both
-positions (TD-16).
+person-only checks; every PR conversation item handled; and the target integrated. Conversation
+items are issue comments, review bodies and review threads from any author except Delivery itself;
+each is answered by a reply, resolved after a fix, or recorded on the card as "no action needed:
+<reason>" (interpretation of TD-15, `autonomous`). The host merges one Change per target branch at a
+time; immediately before the merge call it re-reads target head, PR head, checks and conversation
+and merges only if the gate still holds and the PR base contains the target head (D4 §3.2). It
+merges with the profile's method and reads the result back; a merged result that fails required
+checks on the target opens a fix Change and tells the owner. Review comments become bounded Builder
+fix tasks; after a fix Delivery replies on the thread and resolves it; on disagreement it asks the
+owner with both positions (TD-16).
 
 ### 3.7 Interaction surface and runner activation
 
@@ -137,7 +152,9 @@ positions (TD-16).
   `code chat -r -m agent "<start prompt for the delivery skill>"` in the project folder; if `code` is
   missing, the page shows the exact command.
 - **Pull-back** (TD-15). After a merge the host fetches. It fast-forwards the local target branch
-  when it is not checked out, or when it is checked out in a clean, not-diverged working copy.
+  when it is not checked out, or when it is checked out in a clean, not-diverged working copy, with
+  `git merge --ff-only --no-autostash --no-overwrite-ignore` in each worktree from
+  `git worktree list`, never `git pull`.
   Otherwise it never stashes, resets or merges; the card shows "local <target> is behind: <reason>"
   with a one-click pull action once that becomes possible. Unsaved editor buffers are invisible to
   git; VS Code shows its "file changed on disk" dialog.
@@ -187,10 +204,13 @@ real consumer use (M5). Automated tests cover only engine logic whose failure wo
 transitions, re-entry by observation, the lock, state migration and exported tool schemas. No
 assertions on agent prose wording; agent definitions get structural checks only (TD-3).
 
-UI changes always get a visual check (TD-14): a reviewer step opens the host-launched preview in a
-browser, takes screenshots and judges them against the criteria. The screenshots are kept with the
-Change and shown on its card; a failure becomes a Builder fix task. The owner looks only when the
-brief declares a person-only check.
+UI changes always get a visual check (TD-14): the host launches the preview from the brief's render
+recipe (start command, URL or entry, the UI states to capture), takes screenshots, and a reviewer
+judges them against the criteria. The screenshots are kept with the Change and shown on its card; a
+failure becomes a Builder fix task. The owner looks only when the brief declares a person-only check.
+Shaping establishes the recipe before approval; if the project has none, it offers to add one as part
+of the Change, declare a person-only visual check in the brief, or change scope. Visual testing is
+never skipped (interpretation of TD-14, `autonomous`).
 
 ### 3.11 Non-goals
 

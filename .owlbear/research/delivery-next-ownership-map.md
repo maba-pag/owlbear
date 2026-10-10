@@ -24,7 +24,7 @@ verdicts are cited as P1–P12; "unproven" names what R8 did not establish.
 | ID | Source | Relevant fact | Limits |
 | --- | --- | --- | --- |
 | L01 | [Rebuild research](delivery-liveness-first-rebuild.md) §3.4–§3.9 | RC1–RC6, P1–P9, M0–M7, TD-1–TD-8, platform findings F1–F5 | Only TD-1–TD-8 are user decisions |
-| L02 | [Journey research](delivery-next-journey-and-failure-modes.md) | J0–J9, five exits plus pending, catalogue rows, DR1–DR15 | Likelihood labels are judgments |
+| L02 | [Journey research](delivery-next-journey-and-failure-modes.md) | J0–J9, five exits plus pending, catalogue rows, DR1–DR16 | Likelihood labels are judgments |
 | L03 | [Route comparison](delivery-next-route-comparison.md) §3.4 | Reuse list of eight items, ~4.5k lines, copied not imported | Coupling read statically |
 | L04 | [Platform probe](delivery-next-platform-probe.md) §3.2, §4 | Verdicts P1–P12 | One laptop, free identity, Auto models, private unprotected repository |
 | L05 | [Tool-surface audit](delivery-tool-surface-audit.md) | 64 tools, recovery families, rules T1–T8 | Counts at `753eb92` |

@@ -66,7 +66,7 @@ on the prototype branch `next/m4-slice1` (2026-10-10), not targets.
 | `git/remote_git.py`, `git/git_executable.py` | Bounded remote Git, write readback | copied as is | 310 |
 | `storage_io.py` | `atomic_write`, `locked_roots`, `ControllerLock` | copied, trimmed | 56 |
 | `github/provider.py` | PR, check, rule, review-thread and merge contract; direct merge only (TD-22) | `publication_provider.py`, trimmed and adapted | 280 |
-| `github/gh.py` | `gh` provider: HTTP 403 on rules means unknown, not "no rules"; required checks from the profile; required reviews; review threads read, replied to and resolved with `gh api graphql`; `sha`-guarded merge; GitHub Enterprise hosts | `delivery-github/github.py`, adapted | 449 |
+| `github/gh.py` | `gh` provider: HTTP 403 on rules means unknown, not "no rules"; required checks from the profile; required reviews; PR conversation items (issue comments, review bodies, review threads) read, replied to and resolved with `gh api graphql`; `sha`-guarded merge; GitHub Enterprise hosts | `delivery-github/github.py`, adapted | 449 |
 | `github/merge_offer.py` | Merge gate block reasons, attempt readback; proof fields dropped | `merge_offer.py`, adapted | 126 |
 | `process_probe.py` | `ProcessTableWorktreeProbe`, `psutil_user_processes`; claim issuer dropped. The probe skips the caller's own descendants, so the host, not the runner, runs it | `worker_stall.py`, adapted | 326 |
 | `criteria.py` | Criterion identity and version (P5 input) only; the old-contract import and legacy derivation dropped | `acceptance_criteria.py`, trimmed | — |
@@ -126,10 +126,12 @@ the process that serves the status view the owner of runners in both phases.
   argument list without a shell and with a fixed prompt. If `code` is not on the path, the endpoint
   returns that exact command and the page shows it (S12).
 - Starts through a VS Code folder-open task ("OwlBear Delivery host", `runOn: folderOpen`). Setup
-  writes `.vscode/tasks.json` only with consent, adds it to the clone's `.git/info/exclude` so
-  nothing is committed (TD-11, DR14), and verifies workspace trust and
-  `task.allowAutomaticTasks`. Without them, the disclosed start action is "Run task: OwlBear Delivery
-  host", and the status view and chat say nothing advances until it runs.
+  writes `.vscode/tasks.json` only with consent and only while it is untracked, adds it to the
+  clone's `.git/info/exclude` so nothing is committed (TD-11, DR14), and verifies workspace trust and
+  `task.allowAutomaticTasks`. `.git/info/exclude` covers only untracked files: a tracked
+  `.vscode/tasks.json` is not written, and setup shows the manual alternative. Without the task, the
+  disclosed start action is "Run task: OwlBear Delivery host" or the host's start command, and the
+  status view and chat say nothing advances until it runs.
 
 **Runner.** One Change, one step, then exit. It takes the Change lock without waiting (held → exit;
 the host tries again), folds the inbox, observes git and GitHub for the step's effect (DR5), acts,
@@ -186,7 +188,9 @@ unfinished Changes, while their branches and PRs remain on GitHub. Layout:
   ref; a raw commit SHA cannot be bundled) and archives dirty, staged, untracked and conflicted files
   separately: `git diff --binary` for tracked changes, the index state including conflict stages,
   and an archive of untracked files. The workspace stays untouched until `git bundle verify` and an
-  archive read-back succeed. No new refs, no push.
+  archive read-back succeed. No new refs, no push. If the workspace uses Git LFS or has submodules
+  with local changes, cleanup does not retire it: the card shows "workspace kept: <reason>" with its
+  path (M11, `autonomous`).
 - Worktrees live under one user data root (`~/Library/Application Support/OwlBear/worktrees/` or
   `$XDG_DATA_HOME/owlbear/worktrees/`), keyed by repository name and a short hash of the common
   directory, so setup grants folder trust once (P8).
@@ -205,27 +209,47 @@ with `--no-verify` or force. A failing pre-push hook becomes a builder fix step 
 authentication failure becomes pending; an unknown write result is read back with
 `classify_write_readback` and replayed only on confirmed absence.
 
-- **Merge.** When the merge gate passes (D3 §3.2), the REST merge call with `sha` set to the gated
-  head and the profile's method, then a readback. No merge queue (TD-22); `merge_request_body`
-  stays direct. A required human review is pending ("waiting for review by …").
-- **Review threads.** Read with `gh api graphql` (`pullRequest.reviewThreads`). After a fix is
-  published, the Builder's reply is posted with `addPullRequestReviewThreadReply` and the thread is
-  closed with `resolveReviewThread`. Only review threads count toward the gate; issue comments never
-  block.
-- **Pull-back.** `git fetch`; if the target is not checked out, `git fetch origin
-  <target>:<target>`, which git refuses unless it fast-forwards; if it is checked out clean and not
-  diverged, `git merge --ff-only` there. Otherwise no stash, reset or merge: "behind" with the reason
-  and Pull. Unsaved editor buffers are invisible to git; VS Code shows its "file changed on disk"
-  dialog.
+- **Merge.** The host holds one merge lock per target branch. Immediately before the merge call the
+  engine re-reads the target head, the PR head, checks and every conversation item, and merges only
+  if the gate (D3 §3.2) still holds and the PR base already contains the target head; otherwise it
+  goes back to integrate (`autonomous`). Then the REST merge call with `sha` set to the gated head
+  and the profile's method, then a readback. Setup recommends GitHub's "require branches to be up to
+  date" and "require conversation resolution" where the plan allows, and the profile records whether
+  they are on. Without them, a change between re-read and merge is a documented residual risk for
+  personal use (TD-9), recovered by the readback: if the merged result fails required checks on the
+  target, Delivery opens a fix Change and tells the owner. No merge queue (TD-22);
+  `merge_request_body` stays direct. A required human review is pending ("waiting for review by …").
+- **Conversation and review threads.** The gate covers every PR conversation item regardless of
+  author or API type: issue comments, review bodies (`gh api graphql`, `pullRequest.comments` and
+  `reviews`) and review threads (`pullRequest.reviewThreads`); items Delivery authored are excluded.
+  Each other item is handled for its exact ID: answered by a reply, resolved after a fix, or recorded
+  "no action needed: <reason>" and shown on the card (interpretation of TD-15, `autonomous`). The
+  Builder writes reply text; the engine posts it (`addPullRequestReviewThreadReply` or an issue
+  comment) and resolves (`resolveReviewThread`). Each reply carries the hidden marker
+  `<!-- delivery:<change>:<item-id>:<fix-id> -->`; the engine looks for it before posting and never
+  posts twice (P12). Before resolving it re-reads the thread; a newer comment not by Delivery means
+  no resolution and a new feedback item (P13).
+- **Pull-back.** `git fetch`, then each worktree from `git worktree list` is inspected. If the target
+  is not checked out, `git fetch origin <target>:<target>`, which git refuses unless it
+  fast-forwards; if it is checked out clean (no untracked files in paths the update touches) and not
+  diverged, `git merge --ff-only --no-autostash --no-overwrite-ignore` there — never `git pull` with
+  the user's configuration. Otherwise no stash, reset or merge: "behind" with the reason and Pull.
+  Submodules are not updated; a changed gitlink adds "submodules changed" to the notice. Hooks and
+  LFS filters run as with the user's own `git merge`. Unsaved editor buffers are invisible to git;
+  VS Code shows its "file changed on disk" dialog.
 
-**Visual check.** For UI changes the final review runs in visual mode on the exact head. The host
-launches the preview from the Builder's launch recipe; `steps/visual.py` captures the pages and
-viewports named by the brief's UI criteria with Playwright for Python, stores the PNGs under
+**Visual check.** For UI changes the final review runs in visual mode on the exact head. The brief
+records a render recipe: start command, URL or entry, and the UI states to capture. Shaping
+establishes it before approval; if the project has none, shaping offers to add one as part of the
+Change, declare a person-only visual check in the brief (TD-14), or change scope; visual testing is
+never skipped (interpretation of TD-14, `autonomous`). The host launches the preview from that
+recipe, as verified by the Builder; `steps/visual.py` captures the named UI states with Playwright
+for Python, stores the PNGs under
 `changes/<slug>/visual/` and passes them to the reviewer, who judges them with `submit_result`; the
 reviewer may name further views for one more capture. Playwright, not the OwlBear browser MCP: the
 MCP has no screenshot tool, worker sessions run without MCP servers (P8), and Playwright is already a
 workspace dependency of `owlbear-browser`. The engine captures, so the reviewer keeps three tools.
-A missing browser or preview is B24.
+A recipe that fails or a missing browser at runtime is B24.
 
 **Changes page.** Served by the host app before M6; a "Changes" page beside Ideas and Memory in
 Cockpit after it. Endpoints under `/api/next`:
@@ -255,7 +279,7 @@ in the inbox and wakes the scheduler. Recovery actions are only those the curren
 | Designer | VS Code chat, skill `delivery` | The user's words, the repository | A brief draft | `save_brief`, `show_status`, `answer_question` |
 | Planner | SDK, step `plan` | Approved brief, criteria, profile commands, file scopes of other open plans | Ordered tasks with title, goal, scope paths and checks | `submit_result`, `ask_question`, `report_wrong_premise` |
 | Builder | SDK, steps `build`, `integrate`, and `check` preparation | One task, its criteria, profile commands, findings to fix | Summary, checks run with exit codes, notes; for `check` preparation, a verified launch recipe (command, directory, readiness URL or probe) | same three |
-| Reviewer | SDK, brief and plan challenge inside `shape` and `plan`, and `review`, including visual mode | The brief, plan or diff, criteria; in visual mode the screenshots; read-only | Verdict `pass` or `fix`, findings with place, problem and fix; covered paths, including files read outside the diff. The loop records them and the judged criterion versions with fingerprints, and re-requests the review only when one changes (P5) | same three |
+| Reviewer | SDK, brief and plan challenge inside `shape` and `plan`, and `review`, including visual mode | The brief, plan or diff, criteria; in visual mode the screenshots; read-only | Verdict `pass` or `fix`, findings with place, problem and fix. The engine computes the covered paths deterministically from git (`git diff --name-status -M base...head`, including additions, deletions and renames), never from the reviewer's return, and records them, the judged criterion versions with fingerprints, and the tree each local check and visual capture ran on. Any path changed outside the covered set invalidates the review; a new head needs fresh proof for its changed paths (P5, `autonomous`) | same three |
 
 | # | Tool | One job (T1) | Fields (T5) | Ends the step with |
 | --- | --- | --- | --- | --- |
@@ -290,13 +314,14 @@ in the Changes page (T6).
 
 | Artefact | Purpose | Loaded by | Location | Current lines |
 | --- | --- | --- | --- | --- |
-| Skill `delivery` | Shape or revise a Change with the user and save the brief; status, answers, the start action when the host is down (read-only status then); the New Change start prompt | VS Code harness | OwlBear agent plugin for consumers; `.github/skills/` in this repository (E1) | 36 |
+| Skill `delivery` | Shape or revise a Change with the user and save the brief; status, answers, the start action when the host is down (read-only status then); the New Change start prompt | VS Code harness | User-level (`~/.copilot/skills/`) for consumers, never in the project; `.github/skills/` in this repository (E1) | 36 |
 | Agents `planner`, `builder`, `reviewer` | Worker craft, including condensed `h-ac-quality` rules and the visual review | Runner, as SDK custom agents | Package `owlbear_delivery_next/agents/`; nothing in consumer repositories | 83 |
 
 No line ceilings (TD-19): prose follows a language style instead — specialist terms, no fillers or
 explanations, not telegraphic. Worker craft lives in agent prose because skill use inside SDK sessions is
 untested (P7). The chat MCP server is registered in the clone's `.mcp.json`, written with consent and
-listed in `.git/info/exclude`; its
+listed in `.git/info/exclude`; if `.mcp.json` is already tracked, setup does not write it and shows
+how to add the server in the user-level MCP configuration instead. Its
 `cwd` is the session directory, from which it finds the store through the common git directory, so
 worktree sessions reach the same store (A07). Old Delivery skills stay in their Local locations until
 M6 and are not ported; `/ideate` is unchanged.
@@ -315,8 +340,8 @@ server per window → host over loopback HTTP with the token.
 | Host crash | Runner holds the Change lock in its own process group | Runner finishes and records its exit | New host waits for the live runner to finish or its termination to be confirmed, observes, then continues; it never kills it blindly |
 | Runner crash | Runner gone, no exit recorded | Termination check (§3.2) and the host's worktree scan. Verified → `retry` (`liveness`); unverified → `stop` with "end processes …" | Observe, then resume the recorded session with a "check and finish" message (P3) |
 | Runtime crash | Connection lost inside the runner | Runner ends; the host's worktree scan finds survivors; none → `retry`, else `stop` | As above |
-| Network loss | Transport errors from git, `gh` or the SDK | `retry`, then pending on the host's network probe (`network`); an unknown write is read back on return | Observation when the probe succeeds |
-| Sign-in expired | Authentication errors, readiness | `ask` with the exact sign-in command (`auth`) | Readiness passes |
+| Network loss | Transport errors from git, `gh` or the SDK | pending with growing pauses on the host's network probe (`network`); age and attempts on the card, ask after 24 hours of the same fault (D3 §3.3); an unknown write is read back on return | Observation when the probe succeeds |
+| Sign-in expired | Authentication errors, readiness | pending with the exact login command (`auth`) | Readiness passes |
 | Worker hangs | Step deadline; no tool activity for the step kind's limit | Teardown → `retry` | New or resumed session |
 | Repeated denial | Same command denied twice in a step | `ask`: allow it for this step kind in the profile? | Next step uses the updated list |
 

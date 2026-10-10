@@ -78,12 +78,14 @@ every step uses git, setup, the sync workflow or an existing file.
 4. M4 runs on the sandbox repository, whose own `.mcp.json` registers the new server from a dev
    checkout. OwlBear's workspace gets no new-core registration (TD-10), so no OwlBear chat sees
    two Delivery servers.
-5. Add the package to ruff `src` in [pyproject.toml](../../pyproject.toml); leave the sync manifest
-   unchanged until M6, so consumer `main` keeps today's content. The sync workflow replaces the
-   selected scopes from current `dev`, so between the first E1 move and cutover no partial `share`
-   or `infra` sync to `main` runs unless the projection, loading configuration and lock membership
-   move together. The new package never appears in a published lock early, and moved content never
-   vanishes from consumer `share/`.
+5. Add the package to ruff `src` in [pyproject.toml](../../pyproject.toml). The sync manifest on the
+   prototype branch `next/m4-slice1` has a `delivery-next` scope behind the `sync_delivery_next`
+   input of `sync-to-main.yml`, default off: the package reaches consumer `main` only when that
+   input is set at dispatch. It stays off until M6, so consumer `main` keeps today's content. The
+   sync workflow replaces the selected scopes from current `dev`, so between the first E1 move and
+   cutover no partial `share` or `infra` sync to `main` runs unless the projection, loading
+   configuration and lock membership move together. The new package never appears in a published
+   lock early, and moved content never vanishes from consumer `share/`.
 6. Before any controller upgrade an open Change needs, the upgrade's live-compatibility gate must
    pass at that dev head; a failure blocks the upgrade, not the new package.
 
@@ -103,8 +105,8 @@ every step uses git, setup, the sync workflow or an existing file.
 
 | Content | Target | Loaded by |
 | --- | --- | --- |
-| Product agents and skills, converted prompts | New plugin root `plugin/` (working name) per the Agent Plugins spec, option C3 of C05 | Harness via `chat.pluginLocations` (dev) or plugin install (consumers); Local via the same setting |
-| Product instruction stubs | Dev: `.github/instructions/`; consumers: setup copies them into `.github/instructions/` with consent (DR14) | Harness and Local |
+| Product agents and skills, converted prompts | New plugin root `plugin/` (working name) per the Agent Plugins spec, option C3 of C05 | Harness via `chat.pluginLocations` (dev) or user-level plugin install (consumers), never in the project; Local via the same setting |
+| Product instruction stubs | Dev: `.github/instructions/`; consumers: installed user-level with the skills, never copied into the project (DR14) | Harness and Local |
 | `owlbear-system` instructions | Merged into [.github/copilot-instructions.md](../../.github/copilot-instructions.md) and the seed copy; Delivery text rewritten at M6 | Harness (probe row 7) and Local |
 | Dev-only skills, prompts, instructions | `.github/skills/`, `.github/instructions/` (already consumer-excluded) | Harness and Local |
 | Delivery-next worker agents and craft | Inside the new package, passed to SDK sessions; rewritten from `designer`, `planner`, `builder`, the challengers, `build-reviewer`, `h-ac-quality` | SDK only; not E1 |
@@ -132,8 +134,8 @@ filters by agent is proven; until then its guard is advisory under the harness.
 agent and one skill in a harness session and in Local; (b) a `.mcp.json` server is visible in both
 and not duplicated; (c) an `applyTo` instruction in `.github/instructions/` applies in the harness.
 If (a) fails, product agents and skills go to `.github/agents/` and `.github/skills/` instead
-(proven, probe row 6–7): the manifest lists product skill directories individually and setup copies
-them into consumers with consent (C2).
+(proven, probe row 6–7): the manifest lists product skill directories individually, and for
+consumers setup installs them user-level (`~/.copilot/skills/`), never into the project (DR14).
 
 **E1 done:** ideate, memory curation, knowledge ingestion and the audits run in a harness session;
 `/continue-change` still runs in Local for the open Changes.
@@ -178,8 +180,9 @@ core whose brief names that branch; old state is not migrated.
 1. In the same PR: `setup/init.py` stops writing `.owlbear/delivery/config.json` and the state branch
    setting and writes the new registration, plugin location and project profile (D4); re-running
    setup removes an existing `owlbear-delivery` entry. Seed `mcp.json` and `settings.json` follow.
-2. Sync manifest: drop the `delivery` scope paths, add the new package and `plugin/`, remove the
-   `share` scope; update the `sync_delivery` input of [sync-to-main.yml](../../.github/workflows/sync-to-main.yml).
+2. Sync manifest: drop the `delivery` scope paths, sync the `delivery-next` scope by default, add
+   `plugin/`, remove the `share` scope; update the `sync_delivery` and `sync_delivery_next` inputs of
+   [sync-to-main.yml](../../.github/workflows/sync-to-main.yml).
 3. Dispatch `sync-to-main` with all scopes after the merge; run setup on a fresh clone of `main`
    into the sandbox and walk J0.
 
