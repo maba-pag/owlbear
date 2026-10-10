@@ -88,8 +88,7 @@ class Chat:
         if q is None:
             return {"answered": False, "error": f"question: {question} is not open"}
         if not loop.ordinary(q):
-            rec = host.running(self.store)
-            return {"answered": False, "error": f"{api.T6} ({rec.url if rec else 'start Delivery first'})"}
+            return {"answered": False, "error": api.T6, "changes_page": getattr(host.running(self.store), "url", None)}
         body = {"question": qid, "option": option or None, "text": text, "channel": "chat"}
         code, out = self.call("POST", f"/changes/{slug}/answers", body)
         return {"answered": code == OK, **out}

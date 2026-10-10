@@ -113,7 +113,7 @@ def status(c: Change, activity: Activity, now: datetime) -> Status:  # noqa: C90
     if activity.runner_alive:
         task = next((t.title for t in c.plan.tasks if t.id == c.step.task), None) if c.plan else None
         task = task or next((f"check {p.id}" for p in c.checks if p.id == c.step.task), None)
-        line = f"{s} · {verb}: {task or c.brief.outcome}"
+        line = f"{s} · {verb}: {task or c.brief.title or c.brief.outcome}"
         last = activity.last_event_at
         if last and now - last > QUIET:
             return Status(f"{line} · no activity for {_age(now - last)}", None, "delivery")

@@ -59,7 +59,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     answer = open_[-1] if open_ else None
     resume = bool(answer and s.session)
     if not resume:
-        s.session = f"{slug}-{s.kind}-{s.task or s.mode}-{uuid.uuid4().hex[:8]}"
+        s.session = f"{slug}-{s.kind}-{s.task or s.mode or 'all'}-{uuid.uuid4().hex[:8]}"
     s.started_at = now
     store.write(lock, change)  # The session id is durable before the runtime starts.
     parts = prompts.session(change, profile, path)
@@ -72,7 +72,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     def replaced() -> str | None:
         nonlocal change
         change, within = loop.charge(change, sdk_adapter.missing_cause(s.kind), datetime.now(UTC))
-        change.step.session = f"{slug}-{s.kind}-{s.task}-{uuid.uuid4().hex[:8]}" if within else None
+        change.step.session = f"{slug}-{s.kind}-{s.task or s.mode or 'all'}-{uuid.uuid4().hex[:8]}" if within else None
         store.write(lock, change)
         return change.step.session
 

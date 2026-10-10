@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import ssl
 import subprocess
 import sys
 import urllib.error
@@ -12,6 +13,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+import truststore
 
 from owlbear_delivery_next import profile
 from owlbear_delivery_next.models import Profile, ProfileEntry
@@ -52,9 +55,11 @@ def probe_in(cwd: Path) -> Probe:
 
 
 def reach(host: str) -> str | None:
-    """None when ``https://<host>`` answers through the configured proxy, else the error."""
+    """None when ``https://<host>`` answers through the configured proxy and the system trust store, else the error."""
+    https = urllib.request.HTTPSHandler(context=truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT))
+    request = urllib.request.Request(f"https://{host}/", method="HEAD")
     try:
-        urllib.request.urlopen(urllib.request.Request(f"https://{host}/", method="HEAD"), timeout=10).close()
+        urllib.request.build_opener(https).open(request, timeout=10).close()
     except urllib.error.HTTPError:
         return None
     except (urllib.error.URLError, OSError) as exc:
@@ -188,6 +193,7 @@ def with_server(data: dict[str, Any], python: str, repo: Path) -> dict[str, Any]
         "type": "stdio",
         "command": python,
         "args": ["-m", "owlbear_delivery_next.mcp_server", "--repo", str(repo)],
+        "tools": ["*"],
     }
     return {**data, "mcpServers": {**data.get("mcpServers", {}), SERVER: server}}
 
