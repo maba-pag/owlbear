@@ -73,6 +73,11 @@ guarded by `sha`, then a readback, replaces the frozen-body launch) and the in-m
 moves to tests as a fake and counts against the test budget. Agent prose in `agents/` counts against
 the prose budget (§3.4), not source.
 
+Measured after M4 slices 1–3 (prototype branch `next/m4-slice1`, 2026-10-10): 7,373 source lines
+including copied modules, 2,019 test lines, 119 lines of agent and skill prose. Totals stay inside
+the charter budgets; per-module targets above are guidance, and five modules exceed theirs
+(`sdk_adapter`, `tools`, `api`, `setup`/`cli`, `models`).
+
 ### 3.2 Components and responsibilities
 
 **Host.** Before M6 the host is its own small app in `serve/delivery-next/`: `host.py`, `api.py` and

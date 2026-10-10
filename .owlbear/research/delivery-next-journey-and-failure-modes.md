@@ -152,6 +152,8 @@ most projects), **O** occasional, **R** rare. Rows are ordered by likelihood wit
 | S7 | Wrong folder opened, or a project without setup | O | No project profile at the workspace root | ask: run setup here, or open the configured project |
 | S8 | Network offline | O | git, GitHub or model calls fail | retry with backoff; then pending on the host's network check, resuming by itself when the network returns |
 | S9 | Copilot rate limit or exhausted quota | O | Runtime error | retry for rate limits; stop for quota, never marking the task failed |
+| S10 | Python cannot reach GitHub through a TLS-intercepting corporate proxy, while `gh` and Node can (found in M4) | C on corporate laptops | Readiness check | Prevented: OwlBear's own HTTP calls use the system trust store |
+| S11 | The Copilot SDK runtime download is blocked by the proxy (found in R8) | C on corporate laptops | Readiness check | Prevented: the SDK runs on the installed Copilot CLI |
 
 **Shape and plan**
 
