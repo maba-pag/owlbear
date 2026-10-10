@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime  # noqa: TC003 - pydantic resolves StepResult fields at runtime
+from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Literal
 
 from pydantic import Field
@@ -153,6 +154,67 @@ def open_question(c: Change) -> Question | None:
 def ordinary(q: Question) -> bool:
     """A worker's question, answerable in chat; engine-raised decisions with a cause stay Changes-page actions (T6)."""
     return q.cause is None
+
+
+def brief_ready(c: Change) -> bool:
+    """Planning starts only from the approved current brief version its reviewer judged (J2)."""
+    b = c.brief
+    return b.approved_version == b.version == b.reviewed
+
+
+def brief_due(c: Change) -> bool:
+    """The approved current brief version still waits for its independent review."""
+    b = c.brief
+    return b.approved_version == b.version and b.reviewed != b.version
+
+
+def brief_review(change: Change, verdict: StepResult) -> tuple[Change, StepResult]:
+    """Bind the reviewer's verdict to the brief version: pass plans; findings ask the owner to revise or approve."""
+    c = change.model_copy(deep=True)
+    findings = verdict.exit == Exit.BACK or (verdict.exit == Exit.RETRY and verdict.cause is None)
+    if verdict.exit != Exit.DONE and not findings:
+        return c, verdict  # the session failed or asked: counted or answered, then reviewed again
+    c.brief.reviewed = c.brief.version
+    if not findings:
+        return c, verdict
+    text = f"Brief v{c.brief.version} review: {verdict.reason}"
+    options = [
+        Option(id="change", label="Revise the brief in chat", next=StepKind.SHAPE),
+        Option(id="split", label="Split it into smaller Changes in chat", next=StepKind.SHAPE),
+        Option(id="approve", label="Plan from this brief as it is", next="done"),
+    ]
+    question = Question(step=StepKind.SHAPE, text=text, options=options)
+    return c, StepResult(exit=Exit.ASK, reason=text, question=question)
+
+
+def _within(a: str, b: str) -> bool:
+    """One path contains the other; an empty or root scope contains every path."""
+    pa, pb = (tuple(x for x in PurePosixPath(p).parts if x != "/") for p in (a, b))
+    n = min(len(pa), len(pb))
+    return pa[:n] == pb[:n]
+
+
+def overlaps(plan: Plan, others: Mapping[str, Iterable[str]]) -> dict[str, list[str]]:
+    """Each other open Change whose scope shares a path or directory with the plan's task scopes (D7)."""
+    mine = {p for t in plan.tasks for p in t.scope}
+    found = {h: sorted({p for p in scope if any(_within(p, m) for m in mine)}) for h, scope in others.items()}
+    return {h: paths for h, paths in found.items() if paths}
+
+
+def overlap_ask(planned: StepResult, others: Mapping[str, Iterable[str]]) -> StepResult:
+    """An accepted plan that overlaps another open Change asks the owner to order them or proceed."""
+    found = overlaps(planned.plan, others) if planned.exit == Exit.DONE and planned.plan else {}
+    if not found:
+        return planned
+    named = "; ".join(f"{h} on {', '.join(p[:5])}" for h, p in sorted(found.items()))
+    text = f"The plan overlaps open Changes: {named}. Proceed in parallel (conflicts are resolved when updating), or "
+    text += "pause this Change until they merge?"
+    options = [
+        Option(id="proceed", label="Proceed in parallel", next="done"),
+        Option(id="order", label="Pause this Change; resume it after they merge", next="pause"),
+    ]
+    question = Question(step=StepKind.PLAN, text=text, options=options)
+    return planned.model_copy(update={"exit": Exit.ASK, "reason": text, "question": question})
 
 
 def next_step(c: Change, now: datetime) -> Step | None:
@@ -321,6 +383,8 @@ def apply(change: Change, result: StepResult, now: datetime) -> Change:
         case Exit.BACK:
             _back(c, result, now)
         case Exit.ASK if result.question:
+            if kind == StepKind.PLAN and result.plan:
+                c.plan = result.plan  # an accepted plan that overlaps: kept for the owner's answer
             _ask(c, result.question, now)
         case Exit.STOP if result.stop:
             c.stop = result.stop
@@ -360,6 +424,8 @@ def _done(c: Change, r: StepResult | None, now: datetime) -> None:  # noqa: C901
     paths = r.paths if r else {}
     match s.kind:
         case StepKind.SHAPE | StepKind.PLAN:
+            if s.kind == StepKind.SHAPE and not brief_ready(c):
+                return  # the shape step reviews the approved version first
             c.budgets.rounds.pop(str(s.kind), None)
             if s.kind == StepKind.PLAN and r and r.plan:
                 c.plan = r.plan

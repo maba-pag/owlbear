@@ -62,7 +62,9 @@ class Chat:
         """Every Change (or one) with its line, next action and open question; read from the state when down."""
         code, rows = self.call("GET", "/changes")
         rec = host.running(self.store)
-        out: dict[str, Any] = {"running": code == OK, "changes_page": rec.url if rec and code == OK else None}
+        out: dict[str, Any] = {"running": code == OK, "changes_page": api.link(rec) if code == OK else None}
+        if code == OK and rec:
+            out["readiness"] = "checking" if rec.ready is None else rec.ready or "ok"
         if code != OK:
             now = datetime.now(UTC)
             rows = [api.summary(self.store, s, host.activity(self.store, s, None), now) for s in self.store.slugs()]
@@ -88,7 +90,7 @@ class Chat:
         if q is None:
             return {"answered": False, "error": f"question: {question} is not open"}
         if not loop.ordinary(q):
-            return {"answered": False, "error": api.T6, "changes_page": getattr(host.running(self.store), "url", None)}
+            return {"answered": False, "error": api.T6, "changes_page": api.link(host.running(self.store))}
         body = {"question": qid, "option": option or None, "text": text, "channel": "chat"}
         code, out = self.call("POST", f"/changes/{slug}/answers", body)
         return {"answered": code == OK, **out}

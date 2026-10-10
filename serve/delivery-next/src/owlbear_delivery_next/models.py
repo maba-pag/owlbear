@@ -94,6 +94,7 @@ class Brief(Record):
     version: int = 0
     approved_version: int | None = None
     approved_at: datetime | None = None
+    reviewed: int | None = None  # the version the brief reviewer judged (J2)
     title: str = ""
     outcome: str = ""
     scope: list[str] = Field(default_factory=list)

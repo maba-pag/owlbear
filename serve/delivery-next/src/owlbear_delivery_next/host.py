@@ -19,7 +19,7 @@ import psutil
 import uvicorn
 from pydantic import ValidationError
 
-from owlbear_delivery_next import api, loop, sdk_adapter, tools
+from owlbear_delivery_next import api, loop, sdk_adapter, setup, tools
 from owlbear_delivery_next.models import ErrorKind, Exit, Profile, Record, StepKind, Stop
 from owlbear_delivery_next.process_probe import ProcessTableWorktreeProbe, WorktreeProcessScanError
 from owlbear_delivery_next.status import Activity
@@ -49,6 +49,7 @@ class HostRecord(Record):
     token: str
     pid: int
     started_at: datetime
+    ready: list[str] | None = None  # failed readiness facts with their fix; None while the check runs
 
 
 class RunnerRecord(Record):
@@ -336,8 +337,7 @@ def serve(repo: Path) -> int:
         lock_fd = open_lock(dir_fd, blocking=False, name="host.lock")
     except BlockingIOError:
         found = running(store)
-        url = f"{found.url}#token={found.token}" if found and found.token else "(starting)"
-        sys.stdout.write(f"Delivery is already running: {url}\n")
+        sys.stdout.write(f"Delivery is already running: {api.link(found) or '(starting)'}\n")
         return 0
     finally:
         os.close(dir_fd)
@@ -348,7 +348,16 @@ def serve(repo: Path) -> int:
     host.record = host.record.model_copy(update={"url": url, "token": token})
     atomic_write(store.root / "host.json", host.record.model_dump_json())
     (store.root / "host.json").chmod(0o600)
-    host.say(f"Delivery host {os.getpid()} on {url}#token={token}")
+    host.say(f"Delivery host {os.getpid()} on {api.link(host.record)}")
+
+    def ready() -> None:
+        failed = [f"{c.name}: {c.detail} · fix: {c.fix}" for c in setup.check(repo, store.read_profile()) if not c.ok]
+        host.record = host.record.model_copy(update={"ready": failed})
+        if not host.stopped.is_set():
+            atomic_write(store.root / "host.json", host.record.model_dump_json())
+        host.say("readiness: " + ("; ".join(failed) or "ok"))
+
+    threading.Thread(target=ready, daemon=True, name="readiness").start()
     threading.Thread(target=host.run, daemon=True, name="scheduler").start()
     server = uvicorn.Server(uvicorn.Config(api.create_app(store, token, host), log_level="warning"))
     try:

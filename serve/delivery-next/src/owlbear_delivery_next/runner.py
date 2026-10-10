@@ -12,23 +12,24 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next import loop, profile, prompts, sdk_adapter, tools
+from owlbear_delivery_next import loop, profile, prompts, sdk_adapter, setup, tools
 from owlbear_delivery_next.cli import describe
 from owlbear_delivery_next.models import Environment, Exit, Profile, StepKind, Waiting
 from owlbear_delivery_next.steps import cleanup, engine, follow, merge, publish, review, worktree
-from owlbear_delivery_next.store import LockHeldError, Store, git_common_dir
+from owlbear_delivery_next.store import LockHeldError, Store, StoreError, git_common_dir
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.models import Change
     from owlbear_delivery_next.store import Lock
 
 AGENT = frozenset({StepKind.PLAN, StepKind.BUILD, StepKind.REVIEW, StepKind.CHECK})
+type Result = loop.StepResult
 
 
 def _shape(_ctx: engine.Ctx, c: Change) -> tuple[Change, loop.StepResult]:
     """Shaping happens in chat; the step waits for a revised brief and its approval."""
-    reason = f"brief needs a change: {c.outcome.reason if c.outcome else 'revise it'} · revise in chat, then approve"
-    return c, engine.pending(Waiting.CHAT, reason, None, who="you")
+    why = c.outcome.reason if c.outcome else f"brief v{c.brief.version} is not approved for planning"
+    return c, engine.pending(Waiting.CHAT, f"brief needs a change: {why} · revise in chat, then approve", None, "you")
 
 
 ENGINE: dict[StepKind, engine.Step] = {
@@ -50,6 +51,20 @@ def _previous(store: Store, slug: str, session: str | None) -> dict[int, float |
     return {int(p): c for found in pids for p, c in found.items()}
 
 
+def _others(store: Store, slug: str) -> dict[str, list[str]]:
+    """Scopes of the other open Changes of this clone: their plan's task scopes, else their brief's."""
+    out = {}
+    for other in store.slugs():
+        try:
+            o = store.read(other)
+        except StoreError:
+            continue
+        scope = [p for t in o.plan.tasks for p in t.scope] if o.plan else o.brief.scope
+        if other != slug and scope and not (o.finished_at or o.intent.abandoned_at):
+            out[o.handle or other] = sorted(set(scope))
+    return out
+
+
 def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     now, s, slug = datetime.now(UTC), change.step, change.slug
     profile = store.read_profile() or Profile()
@@ -62,7 +77,8 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         s.session = f"{slug}-{s.kind}-{s.task or s.mode or 'all'}-{uuid.uuid4().hex[:8]}"
     s.started_at = now
     store.write(lock, change)  # The session id is durable before the runtime starts.
-    parts = prompts.session(change, profile, path)
+    others = _others(store, slug) if s.kind == StepKind.PLAN else {}
+    parts = prompts.session(change, profile, path, others)
 
     def delivered() -> None:
         nonlocal change
@@ -97,7 +113,8 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     result = review.recorded(change, parts.task, run, path, sdk_adapter.to_result(run, s.kind, end))
     _log(store, lock, slug, run, {"kind": s.kind, "exit": result.exit})
     if s.kind == StepKind.PLAN and result.plan:
-        result = _challenge(store, lock, change, cfg, result)
+        message = prompts.plan_review(change, result.plan, path, others)
+        result = loop.overlap_ask(_challenge(store, lock, dataclasses.replace(cfg, message=message), result), others)
         end = datetime.now(UTC)
     if isinstance(p := run.payload, tools.WrongPremise) and p.stage == "target" and s.kind == StepKind.BUILD:
         result = engine.needs_target(change, path, f"{p.reason} ({'; '.join(p.evidence)})", end)
@@ -116,29 +133,31 @@ def _log(store: Store, lock: Lock, slug: str, run: sdk_adapter.Run, fields: dict
     _out(json.dumps(step, default=str))
 
 
-def _challenge(
-    store: Store, lock: Lock, change: Change, cfg: sdk_adapter.Session, planned: loop.StepResult
-) -> loop.StepResult:
-    """The plan's independent read-only challenge: pass keeps it; findings send it back for one more round."""
-    if planned.exit != Exit.DONE or planned.plan is None:
-        return planned
-    message = prompts.plan_review(change, planned.plan, cfg.worktree)
+def _reviewer(store: Store, lock: Lock, cfg: sdk_adapter.Session, label: str) -> Result:
+    """One fresh read-only reviewer session over ``cfg.message``; its verdict as a step result."""
     model = (store.read_profile() or Profile()).models.get(StepKind.REVIEW)
     review_cfg = dataclasses.replace(
         cfg,
         kind=StepKind.REVIEW,
-        session_id=f"{change.slug}-plan-review-{uuid.uuid4().hex[:8]}",
-        message=message,
+        session_id=f"{lock.slug}-{label}-{uuid.uuid4().hex[:8]}",
         resume=False,
         submit=tools.REVIEW,
         checks=(),
         model=None if model in {None, "", "auto"} else model,
-        fresh=message,
+        fresh=cfg.message,
         previous={},
     )
     run = asyncio.run(sdk_adapter.run(review_cfg))
     verdict = sdk_adapter.to_result(run, StepKind.REVIEW, datetime.now(UTC))
-    _log(store, lock, change.slug, run, {"kind": "plan-review", "exit": verdict.exit})
+    _log(store, lock, lock.slug, run, {"kind": label, "exit": verdict.exit})
+    return verdict
+
+
+def _challenge(store: Store, lock: Lock, cfg: sdk_adapter.Session, planned: Result) -> Result:
+    """The plan's independent read-only challenge: pass keeps it; findings send it back for one more round."""
+    if planned.exit != Exit.DONE or planned.plan is None:
+        return planned
+    verdict = _reviewer(store, lock, cfg, "plan-review")
     if verdict.exit == Exit.DONE:
         return planned
     if verdict.exit in {Exit.ASK, Exit.STOP}:
@@ -146,6 +165,33 @@ def _challenge(
     return verdict.model_copy(
         update={"exit": Exit.RETRY, "plan": planned.plan, "reason": f"plan review: {verdict.reason}"}
     )
+
+
+def _brief_review(store: Store, lock: Lock, change: Change, repo: Path) -> None:
+    """J2: the reviewer challenges the approved brief version; pass plans, findings go back to the owner."""
+    path = worktree.ensure(repo, git_common_dir(repo), change.slug, change.names.branch, change.names.target)
+    change.names.worktree, change.step.started_at = str(path), datetime.now(UTC)
+    store.write(lock, change)
+    extra = worktree.allowed(store.read_profile() or Profile(), StepKind.REVIEW)
+    cfg = sdk_adapter.Session(
+        kind=StepKind.REVIEW,
+        worktree=path,
+        session_id="",
+        message=prompts.brief_review(change, path),
+        resume=False,
+        policy=sdk_adapter.Policy(path, (*prompts.GIT_READ, *extra), write=False),
+        observe=lambda: worktree.observe(path, change.names.target),
+        checks=(),
+        journal=sdk_adapter.Journal(lambda e: store.log(lock, change.slug, e)),
+    )
+    change, result = loop.brief_review(change, _reviewer(store, lock, cfg, "brief-review"))
+    store.write(lock, loop.apply(change, result, datetime.now(UTC)))
+
+
+def _ready(prof: Profile, path: Path, now: datetime) -> Result | None:
+    """DR2 before publishing: the publishing readiness facts, their first failure as its exit."""
+    host = profile.value(prof, profile.HOST, "github.com")
+    return publish.gate(setup.publishing(host, setup.probe_in(path), setup.reach(host)), now)
 
 
 def _engine(store: Store, lock: Lock, change: Change, repo: Path) -> None:
@@ -156,7 +202,11 @@ def _engine(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         path = worktree.ensure(repo, git_common_dir(repo), change.slug, change.names.branch, change.names.target)
         change.names.worktree = str(path)
     step = ENGINE.get(kind)
-    change, result = engine.run(step, ctx, change) if step else (change, engine.unsupported(change, now))
+    gated = _ready(prof, Path(change.names.worktree or repo), now) if kind == StepKind.PUBLISH else None
+    if gated:
+        result = gated
+    else:
+        change, result = engine.run(step, ctx, change) if step else (change, engine.unsupported(change, now))
     end = datetime.now(UTC)
     event = {"event": "step", "at": end.isoformat(timespec="seconds"), "kind": kind, "exit": result.exit}
     event |= {"reason": result.reason, "seconds": round((end - now).total_seconds(), 1)}
@@ -181,6 +231,8 @@ def main(argv: list[str] | None = None) -> int:
                 _out("nothing to run; the host owns a check environment" if change.env else "nothing to run")
             elif step.kind in AGENT:
                 _agent(store, lock, change, repo)
+            elif step.kind == StepKind.SHAPE and loop.brief_due(change):
+                _brief_review(store, lock, change, repo)
             else:
                 _engine(store, lock, change, repo)
             _out(describe(store.read(args.change)))

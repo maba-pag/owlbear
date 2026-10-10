@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next import api, loop, setup, tools
+from owlbear_delivery_next.host import HostRecord
 from owlbear_delivery_next.mcp_server import NOT_RUNNING, Chat
 from owlbear_delivery_next.models import Change, Exit, Option, Outcome, Profile, ProfileEntry, Question, StepKind
 from owlbear_delivery_next.status import Activity
@@ -23,7 +24,7 @@ BRIEF = {
 
 class Host:
     wake = SimpleNamespace(set=lambda: None)
-    record = SimpleNamespace(url="http://127.0.0.1:9/")
+    record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=NOW)  # noqa: S106 - test token
 
     def activity(self, _slug):
         return Activity(host_up=True)
@@ -59,7 +60,9 @@ def test_brief_errors_name_each_field(tmp_path):
 def test_a_saved_brief_waits_for_approval_of_its_exact_version(tmp_path):
     store = Store(tmp_path)
     c = client(store)
-    assert c.post("/api/next/briefs", json=BRIEF).json()["change"] == "c1"
+    saved = c.post("/api/next/briefs", json=BRIEF).json()
+    assert (saved["change"], saved["next"].endswith("page: http://127.0.0.1:9/#token=tok")) == ("c1", True)
+    assert api.link(Host.record.model_copy(update={"token": ""})) is None  # a starting host has no link yet
     slug = store.slugs()[0]
     assert loop.next_step(store.read(slug), NOW) is None
     revised = {**BRIEF, "change": "c1", "criteria": ["farewell('Ada') returns 'Bye bye, Ada!'"]}
@@ -71,7 +74,8 @@ def test_a_saved_brief_waits_for_approval_of_its_exact_version(tmp_path):
     }
     with store.lock(slug) as lock:
         change, step = store.fold(lock, slug, NOW)
-    assert (change.brief.approved_version, step.kind) == (2, StepKind.PLAN)
+        assert (change.brief.approved_version, step.kind, loop.brief_due(change)) == (2, StepKind.SHAPE, True)
+        store.write(lock, loop.apply(*loop.brief_review(change, loop.StepResult(exit=Exit.DONE)), NOW))
     assert c.post("/api/next/briefs", json=revised).status_code == 409
 
 
@@ -143,6 +147,25 @@ def test_readiness_gives_one_concrete_fix_per_failure():
     locked = {"git config --bool commit.gpgsign": (0, "true"), "git config user.signingkey": (0, "ABC"), GPG: (2, "")}
     assert [n for n, _ in failed(READY | locked)] == ["commit signing"]
     assert failed(READY | locked | {GPG: (0, "")}) == []
+
+
+def test_an_unusable_ssh_signing_key_is_a_failed_check_with_one_fix(tmp_path):
+    ssh = {"git config --bool commit.gpgsign": (0, "true"), "git config gpg.format": (0, "ssh")}
+    ssh |= {"ssh-add -L": (0, "ssh-ed25519 AAAAkey ada")}
+    (tmp_path / "bad.pub").write_text("not a key")
+    for key in (tmp_path / "missing", tmp_path / "bad.pub"):
+        [(name, fix)] = failed(READY | ssh | {"git config user.signingkey": (0, str(key))})
+        assert (name, fix.startswith("Set `git config user.signingkey`")) == ("commit signing", True)
+    assert failed(READY | ssh | {"git config user.signingkey": (0, "key::ssh-ed25519 AAAAkey")}) == []
+
+
+def test_the_chat_skill_installs_user_locally_and_never_over_another_skill(tmp_path):
+    assert setup.install_skill(tmp_path).startswith("chat skill installed for you only (not tracked)")
+    path = tmp_path / ".copilot" / "skills" / "delivery" / "SKILL.md"
+    assert "save_brief" in path.read_text()
+    path.write_text("---\nname: delivery\n---\nsomeone else's")
+    assert "holds another skill" in setup.install_skill(tmp_path)
+    assert path.read_text().endswith("someone else's")
 
 
 def test_no_tracked_write_without_consent(tmp_path):

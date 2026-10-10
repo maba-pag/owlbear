@@ -75,6 +75,7 @@ def show_status(store: Store, now: datetime) -> str:
     """Return every Change's status line and next action from the state files, with the host-down overlay."""
     record = host.running(store)
     lines = [] if record else [f"Delivery is not running — {START}"]
+    lines += [f"Readiness: {r}" for r in (record and record.ready) or []]
     for slug in store.slugs():
         try:
             s = status(store.read(slug), host.activity(store, slug, record), now)

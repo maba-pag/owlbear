@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 
     from starlette.responses import Response
 
-    from owlbear_delivery_next.host import Host
+    from owlbear_delivery_next.host import Host, HostRecord
     from owlbear_delivery_next.models import InboxItem, Inputs
     from owlbear_delivery_next.status import Activity
     from owlbear_delivery_next.store import Store
@@ -91,6 +91,11 @@ class IntentBody(Body):
 
     intent: Literal["pause", "resume", "abandon"]
     text: str = Field(default="", max_length=500)
+
+
+def link(rec: HostRecord | None) -> str | None:
+    """The Changes-page URL with its token, as the host prints it; None until the host has one."""
+    return f"{rec.url}#token={rec.token}" if rec and rec.token else None
 
 
 def snapshot(inputs: Inputs) -> str:
@@ -203,7 +208,7 @@ def create_app(store: Store, token: str, host: Host) -> FastAPI:  # noqa: C901, 
                 store.write(lock, c)
         except (LockHeldError, StoreError) as exc:
             return 409, {"errors": [f"change: {exc}; try again"]}
-        approve = f"Approve brief v{c.brief.version} of {c.handle} in the Changes page: {host.record.url}"
+        approve = f"Approve brief v{c.brief.version} of {c.handle} in the Changes page: {link(host.record)}"
         return 200, {"change": c.handle, "version": c.brief.version, "next": approve}
 
     @app.get("/", response_class=HTMLResponse)

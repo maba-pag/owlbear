@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -14,12 +15,16 @@ from owlbear_delivery_next.git.remote_git import (
 )
 from owlbear_delivery_next.github.provider import ProviderError
 from owlbear_delivery_next.loop import StepResult, cause_key, review_valid
-from owlbear_delivery_next.models import ErrorKind, Exit, StepKind
+from owlbear_delivery_next.models import ErrorKind, Exit, StepKind, Waiting
 from owlbear_delivery_next.steps import engine, worktree
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from datetime import datetime
+
     from owlbear_delivery_next.github.provider import PullRequest
     from owlbear_delivery_next.models import Change
+    from owlbear_delivery_next.setup import Check
     from owlbear_delivery_next.steps.engine import Ctx
 
 P = StepKind.PUBLISH
@@ -102,6 +107,18 @@ def reviewed(c: Change, path: Path, head: str) -> bool:
     if final is None or final.commit != head:
         return False
     return review_valid(c, final, worktree.fingerprints(path, list(final.inputs.paths)))
+
+
+def gate(checks: Sequence[Check], now: datetime) -> StepResult | None:
+    """DR2 before publishing: the first failed readiness fact becomes its exit, carrying its one fix."""
+    first = next((c for c in checks if not c.ok), None)
+    if first is None:
+        return None
+    reason = f"{first.name}: {first.detail} · {first.fix}"
+    if first.name == "network":
+        return engine.pending(Waiting.NETWORK, reason, now + timedelta(minutes=1), who="delivery")
+    kind = {"github sign-in": ErrorKind.AUTH, "repository": ErrorKind.POLICY}.get(first.name, ErrorKind.TOOLING)
+    return engine.ask(P, reason, cause_key(kind, P, first.name), engine.continue_or_pause(P))
 
 
 def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:

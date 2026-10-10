@@ -109,7 +109,9 @@ def test_walk_from_brief_approval_to_done():
     c = change(K.SHAPE, None, checks=checks).model_copy(update={"plan": None})
     c.brief.approved_version = None
     c, step = loop.schedule(c, [BriefApproval(at=NOW, version=1)], NOW)
-    assert (step.kind, c.brief.approved[0].version, c.brief.approved[0].criteria) == (K.PLAN, 1, c.brief.criteria)
+    assert (step.kind, c.brief.approved[0].version, c.brief.approved[0].criteria) == (K.SHAPE, 1, c.brief.criteria)
+    c = loop.apply(*loop.brief_review(c, StepResult(exit=Exit.DONE, reason="review passed")), NOW)
+    assert (c.step.kind, c.brief.reviewed) == (K.PLAN, 1)
     review = Review(commit="abc", inputs=Inputs(criteria={"AC-1": 1}), verdict="pass")
     walk = [
         (StepResult(exit=Exit.DONE, plan=change().plan), (K.BUILD, "t1", None)),
@@ -136,6 +138,42 @@ def test_walk_from_brief_approval_to_done():
     assert c.finished_at == NOW
     assert c.names.preserved == ["x"]
     assert loop.next_step(c, LATER) is None
+
+
+def test_brief_review_binds_the_version_and_findings_return_to_the_owner():
+    c = change(K.SHAPE, None).model_copy(update={"plan": None})
+    c.brief.approved_version = None
+    c, _ = loop.schedule(c, [BriefApproval(at=NOW, version=1)], NOW)
+    assert (c.step.kind, loop.brief_due(c)) == (K.SHAPE, True)
+    failed = StepResult(exit=Exit.RETRY, cause=loop.cause_key(ErrorKind.TOOLING, K.REVIEW, "sdk"))
+    assert loop.brief_review(c, failed) == (c, failed)  # a failed session judged nothing
+    c, asked = loop.brief_review(c, StepResult(exit=Exit.RETRY, reason="AC-1: cannot be checked"))
+    c = loop.apply(c, asked, NOW)
+    q = loop.open_question(c)
+    assert (c.brief.reviewed, c.step.kind, [o.id for o in q.options]) == (1, K.SHAPE, ["change", "split", "approve"])
+    assert (loop.ordinary(q), "AC-1: cannot be checked" in q.text) == (True, True)
+    revised, step = loop.schedule(c, [AnswerItem(at=NOW, question=q.id, option="change")], NOW)
+    assert (step.kind, loop.brief_due(revised)) == (K.SHAPE, False)  # the runner waits for the chat
+    revised.brief.version = 2
+    revised, _ = loop.schedule(revised, [BriefApproval(at=NOW, version=2)], NOW)
+    assert (revised.step.kind, loop.brief_due(revised)) == (K.SHAPE, True)
+    _, step = loop.schedule(c, [AnswerItem(at=NOW, question=q.id, option="approve")], NOW)
+    assert step.kind == K.PLAN
+
+
+def test_an_accepted_plan_overlapping_another_open_change_asks_to_order_or_proceed():
+    plan = Plan(tasks=[Task(id="t1", title="one", scope=["packages/app/src"])])
+    others = {"c2": ["packages/app"], "c3": ["packages/web"], "c4": ["."]}
+    assert loop.overlaps(plan, others) == {"c2": ["packages/app"], "c4": ["."]}
+    done = StepResult(exit=Exit.DONE, plan=plan)
+    assert loop.overlap_ask(done, {"c3": ["packages/web"]}) is done
+    c = loop.apply(change(K.PLAN, None).model_copy(update={"plan": None}), loop.overlap_ask(done, others), NOW)
+    q = loop.open_question(c)
+    assert ([o.id for o in q.options], c.plan, "c2 on packages/app" in q.text) == (["proceed", "order"], plan, True)
+    _, step = loop.schedule(c, [AnswerItem(at=NOW, question=q.id, option="proceed")], NOW)
+    assert (step.kind, step.task) == (K.BUILD, "t1")
+    paused, step = loop.schedule(c, [AnswerItem(at=NOW, question=q.id, option="order")], NOW)
+    assert (step, paused.intent.paused_at) == (None, NOW)
 
 
 def test_cause_count_survives_retry_back_replan_and_an_unobserved_answer():

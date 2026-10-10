@@ -11,6 +11,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from importlib.resources import files
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -98,6 +99,27 @@ def _github(host: str, probe: Probe) -> list[Check]:
     return [*out, Check("repository", ok=repo.get("viewerPermission") in PUSH, detail=detail, fix=fix)]
 
 
+def _ssh(key: str, probe: Probe) -> Check:
+    """An SSH signing key: a literal key or a key file, which must be a readable OpenSSH public key in the agent."""
+    path = None if key.startswith(("ssh-", "key::")) else Path(key).expanduser()
+    pub_path = path if path is None or path.suffix == ".pub" else path.with_name(path.name + ".pub")
+    setting = "Set `git config user.signingkey` to your OpenSSH public key file, e.g. ~/.ssh/id_ed25519.pub"
+    try:
+        pub = pub_path.read_text() if pub_path else key.removeprefix("key::")
+    except (OSError, UnicodeDecodeError) as exc:
+        return Check("commit signing", ok=False, detail=f"ssh key {pub_path}: {exc}"[:200], fix=setting)
+    words = pub.split()
+    if len(words) < 2 or not words[0].startswith(("ssh-", "ecdsa-", "sk-")):  # noqa: PLR2004 - type and key
+        return Check(
+            "commit signing", ok=False, detail=f"ssh key {pub_path or key[:40]}: not a public key", fix=setting
+        )
+    ok = words[1] in probe(["ssh-add", "-L"])[1]
+    private = pub_path.with_suffix("") if pub_path else "<your private key>"
+    return Check(
+        "commit signing", ok=ok, detail=f"ssh key {'in' if ok else 'not in'} the agent", fix=f"Run `ssh-add {private}`"
+    )
+
+
 def _signing(probe: Probe) -> Check:
     if probe(["git", "config", "--bool", "commit.gpgsign"])[1].strip() != "true":
         return Check("commit signing", ok=True, detail="not required")
@@ -108,13 +130,7 @@ def _signing(probe: Probe) -> Check:
             "commit signing", ok=False, detail=f"{fmt} required, no key", fix="Set `git config user.signingkey`"
         )
     if fmt == "ssh":
-        path = Path(key.removeprefix("key::")).expanduser()
-        text = key.removeprefix("key::") if key.startswith(("ssh-", "key::")) else None
-        pub = text or (path if path.suffix == ".pub" else path.with_name(path.name + ".pub")).read_text()
-        ok = pub.split()[1] in probe(["ssh-add", "-L"])[1]
-        return Check(
-            "commit signing", ok=ok, detail=f"ssh key {'in' if ok else 'not in'} the agent", fix=f"Run `ssh-add {path}`"
-        )
+        return _ssh(key, probe)
     if fmt != "openpgp":
         return Check("commit signing", ok=True, detail=f"{fmt}: not verified by setup")
     sign = [
@@ -135,9 +151,14 @@ def _signing(probe: Probe) -> Check:
     return Check("commit signing", ok=ok, detail=f"gpg key {key} {'unlocked' if ok else 'locked or missing'}", fix=fix)
 
 
+def publishing(host: str, probe: Probe, network: str | None) -> list[Check]:
+    """The readiness facts publishing needs: the network, the GitHub CLI, sign-in and push permission."""
+    return [_network(host, network), *_github(host, probe)]
+
+
 def readiness(host: str, probe: Probe, network: str | None, copilot: str | None) -> list[Check]:
     """Every readiness fact, in the order a fix should be applied."""
-    out = [_network(host, network), *_github(host, probe)]
+    out = publishing(host, probe, network)
     code, text = probe([copilot, "--version"]) if copilot else (127, "not found")
     fix = "Install the Copilot CLI (`npm install -g @github/copilot`) or set COPILOT_CLI_PATH"
     out.append(Check("copilot cli", ok=code == 0, detail=f"{copilot}: {text.splitlines()[0] if text else ''}", fix=fix))
@@ -146,6 +167,31 @@ def readiness(host: str, probe: Probe, network: str | None, copilot: str | None)
     fix = 'Run `git config --global user.name "Your Name"` and `git config --global user.email you@example.com`'
     out.append(Check("git identity", ok=ok, detail=f"{name[1]} <{email[1]}>" if ok else "not set", fix=fix))
     return [*out, _signing(probe)]
+
+
+def check(repo: Path, prof: Profile | None) -> list[Check]:
+    """The readiness check of this clone (DR2), run by setup and at every host start."""
+    host = profile.value(prof or Profile(), profile.HOST, "github.com")
+    try:
+        copilot: str | None = cli_path()
+    except FileNotFoundError:
+        copilot = None
+    return readiness(host, probe_in(repo), reach(host), copilot)
+
+
+def install_skill(home: Path) -> str:
+    """Install the chat skill where Copilot loads personal skills; never over another skill of that name."""
+    text = files("owlbear_delivery_next").joinpath("skills", "delivery", "SKILL.md").read_text(encoding="utf-8")
+    path = home / ".copilot" / "skills" / "delivery" / "SKILL.md"
+    try:
+        old = path.read_text(encoding="utf-8") if path.exists() else text
+        if old != text and "save_brief" not in old:
+            return f"chat skill not installed: {path} holds another skill named delivery; move it, then run setup again"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        return f"chat skill not installed: {path}: {exc}"
+    return f"chat skill installed for you only (not tracked): {path}"
 
 
 def render(prof: Profile) -> str:
@@ -237,12 +283,7 @@ def run(repo: Path, confirms: list[tuple[str, str]], *, yes: bool, ask: Ask = as
     """Readiness, profile, consented writes; print each result and the start action."""
     store, python, say = Store.open(repo), sys.executable, lambda t: sys.stdout.write(t + "\n")
     prev = store.read_profile()
-    host = profile.value(prev or Profile(), profile.HOST, "github.com")
-    try:
-        copilot: str | None = cli_path()
-    except FileNotFoundError:
-        copilot = None
-    checks = readiness(host, probe_in(repo), reach(host), copilot)
+    checks = check(repo, prev)
     say("Readiness")
     say("\n".join(f"  {'ok ' if c.ok else 'FIX'} {c.name}: {c.detail}" for c in checks))
     if failed := [c for c in checks if not c.ok]:
@@ -275,4 +316,6 @@ def run(repo: Path, confirms: list[tuple[str, str]], *, yes: bool, ask: Ask = as
     say(server)
     if not server.startswith("written"):
         say("Add this server to your MCP configuration by hand: " + json.dumps(with_server({}, python, repo)))
+    say(install_skill(Path.home()))
+    say("To share it with this repository, copy that folder to .github/skills/delivery/ and commit it yourself.")
     return 0

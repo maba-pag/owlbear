@@ -242,3 +242,19 @@ workspace trust. Signing readiness ran only its "not required" branch live. The 
 round; a challenge with findings, re-planning, the planner's `report_wrong_premise` (back to shape) and brief
 revision were not exercised live (revision before and refusal after approval are unit-tested). Deviations from D4
 line targets: `setup.py` + `cli.py` 436 (260), `api.py` 313 (300), `tools.py` 368 (300), `sdk_adapter.py` 629 (600).
+
+## Slice 3 repairs
+
+Date 2026-10-10, macOS, sandbox `boecht/owlbear-sandbox`; every command ran from the OwlBear worktree.
+
+| Repair | Change and evidence |
+| --- | --- |
+| Token-bearing links | `save_brief`'s `next`, `show_status`'s `changes_page` and the T6 refusal give the host's `URL#token=…` (`api.link`). Live: the stdio client's `show_status` returned `http://127.0.0.1:61868/#token=…`, identical to the host's start line |
+| Brief review gate | Approval keeps the Change in shape until the reviewer judges that exact version (`Brief.reviewed`); pass plans, findings ask the owner to revise, split or plan as it is; a new version is reviewed again. Unit-tested; not run live |
+| SSH signing readiness | A missing, unreadable or malformed key is a failed check with one fix. Unit-tested |
+| Overlap check | The planner and plan challenger see other open Changes' scopes; an accepted plan that overlaps asks "proceed" or "order" (pause), keeping the plan. Unit-tested |
+| Skill install | Setup wrote `~/.copilot/skills/delivery/SKILL.md` ("chat skill installed for you only (not tracked)") and offers no tracked copy; `copilot skill list` showed it under Personal skills. VS Code loading from that location is not yet verified |
+| Readiness gates | Host start ran readiness ("07:21:27 readiness: ok"; `show_status` `readiness: ok`). Before publish, a failed fact becomes pending on the network or an ask carrying its fix (e.g. `gh auth login`). Unit-tested |
+
+Setup rerun: readiness all ok, profile v4 saved with `--yes`. After `SIGINT` to host 33150, `pgrep` found no
+Delivery-next process and `host.json` was gone.

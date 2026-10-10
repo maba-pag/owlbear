@@ -10,7 +10,7 @@ from owlbear_delivery_next.models import Exit, StepKind
 from owlbear_delivery_next.steps import worktree as wt
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
     from pathlib import Path
 
     from owlbear_delivery_next.models import Change, PersonCheck, Plan, Profile, Question, Task
@@ -215,7 +215,14 @@ def _packages(profile: Profile) -> list[str]:
     return [f"- `{p}`: install `{inst.get(p, 'none')}`, check `{chk.get(p, 'none')}`" for p in sorted({*inst, *chk})]
 
 
-def plan(change: Change, profile: Profile, worktree: Path) -> str:
+def _others(others: Mapping[str, Sequence[str]]) -> list[str]:
+    if not others:
+        return []
+    lines = ["", "## Other open Changes in this clone (avoid their scopes where the brief allows)"]
+    return lines + [f"- {h}: {', '.join(s[:10])}" for h, s in sorted(others.items())]
+
+
+def plan(change: Change, profile: Profile, worktree: Path, others: Mapping[str, Sequence[str]]) -> str:
     """Return the first message of a read-only planning session."""
     lines = [
         f"You plan the Change `{change.slug}` from its approved brief in the worktree {worktree}. You only read.",
@@ -225,6 +232,7 @@ def plan(change: Change, profile: Profile, worktree: Path) -> str:
         "",
         "## Packages (project profile)",
         *(_packages(profile) or ["- none known: ask the owner which commands install and check the code"]),
+        *_others(others),
     ]
     if change.checks:
         lines += ["", "## Owner's checks after CI (not tasks)", *(f"- {p.id}: {_one(p.expect)}" for p in change.checks)]
@@ -234,7 +242,7 @@ def plan(change: Change, profile: Profile, worktree: Path) -> str:
     return "\n".join([*lines, "", "## Finish", PLAN_FINISH])
 
 
-def plan_review(change: Change, candidate: Plan, worktree: Path) -> str:
+def plan_review(change: Change, candidate: Plan, worktree: Path, others: Mapping[str, Sequence[str]]) -> str:
     """Return the first message of the read-only challenge of a plan."""
     return "\n".join(
         [
@@ -244,11 +252,43 @@ def plan_review(change: Change, candidate: Plan, worktree: Path) -> str:
             *_plan_lines(candidate),
             "",
             *_brief(change),
+            *_others(others),
             "",
             "## Judge",
             (
                 "Every criterion is met by a task's goal and its checks would catch a failure; tasks are in a "
-                "buildable order and each fits one session; scopes match the code. Findings only for what must change."
+                "buildable order and each fits one session; scopes match the code and touch other open Changes' "
+                "scopes only where the brief needs it. Findings only for what must change."
+            ),
+            "",
+            "## Allowed",
+            "Read files. Shell: only `git log`, `git diff`, `git show`, `git status`.",
+            "",
+            "## Finish",
+            REVIEW_FINISH,
+        ]
+    )
+
+
+def brief_review(change: Change, worktree: Path) -> str:
+    """Return the first message of the read-only challenge of the approved brief version before planning."""
+    checks = [f"- {p.id}: {_one(' / '.join(p.steps))} · expect {_one(p.expect)}" for p in change.checks]
+    head = f"You challenge brief v{change.brief.version} of the Change `{change.slug}` before it is planned, in the "
+    return "\n".join(
+        [
+            f"{head}worktree {worktree}. You only read; there is no diff yet.",
+            "",
+            *_brief(change),
+            f"Scope: {', '.join(change.brief.scope) or 'not limited'}",
+            "Person-only checks:",
+            *(checks or ["- none"]),
+            "",
+            "## Judge",
+            (
+                "Findings only for: criteria that contradict each other or the code; a criterion no test or command "
+                "can check and no person-only check covers; a behaviour only a person can confirm without a "
+                "person-only check; repository facts the brief cites that the code does not support; a brief larger "
+                "than one reviewable pull request (propose the split as the fix). Place: the criterion id or field."
             ),
             "",
             "## Allowed",
@@ -279,14 +319,14 @@ class Parts(NamedTuple):
     task: Task | None
 
 
-def session(change: Change, profile: Profile, path: Path) -> Parts:
+def session(change: Change, profile: Profile, path: Path, others: Mapping[str, Sequence[str]]) -> Parts:
     """Compose the session parts of the current step: build, read-only review, or check preparation."""
     s, tasks = change.step, change.plan.tasks if change.plan else []
     task = next((t for t in tasks if t.id == s.task), None)
     extra = wt.allowed(profile, s.kind)
     if s.kind == StepKind.PLAN:
         checks = tuple(dict.fromkeys(c for _, c in wt.checks(profile)))
-        message = plan(change, profile, path)
+        message = plan(change, profile, path, others)
         return Parts(message, (*GIT_READ, *extra), write=False, checks=checks, submit=tools.PLAN, task=None)
     if s.kind == StepKind.REVIEW:
         message = review(change, task, path, wt.observe(path, change.names.target))

@@ -20,13 +20,16 @@ conversation; approvals, merge consent and recovery happen in the Changes page.
 5. Call `save_brief` with title, outcome, criteria, scope and person checks. Leave `change`
    empty for a new Change; pass its handle (`c3`) to revise. If it returns errors, each names a
    field: fix those and call again. Never invent a handle.
-6. Tell the owner the returned `next` step: approve the brief version in the Changes page.
-   Nothing starts before that approval.
+6. Tell the owner the returned `next` step: approve the brief version in the Changes page, using the
+   link exactly as given (it carries the page's access token). Nothing starts before that approval.
+7. After approval a reviewer challenges the brief. Its findings come back as a question: revise the
+   brief with the owner (call `save_brief` again with its handle), or answer it to plan as it is.
 
 ## Status and questions
 
 - Call `show_status` when the owner asks what is happening. Repeat each line as given. If it
-  says Delivery is not running, give its start action; nothing advances until it runs.
+  says Delivery is not running, give its start action; nothing advances until it runs. If
+  `readiness` lists a problem, give the owner its fix.
 - A question with `answer_in: chat` is a worker's question: put it to the owner as it stands,
   then call `answer_question` with its id, the chosen option id and the owner's words.
 - A question with `answer_in: changes-page`, merge consent and every stop are the owner's

@@ -40,6 +40,7 @@ from owlbear_delivery_next.models import (
     Task,
     Waiting,
 )
+from owlbear_delivery_next.setup import Check as SetupCheck
 from owlbear_delivery_next.status import Activity
 from owlbear_delivery_next.steps import cleanup, engine, follow, merge, publish
 from owlbear_delivery_next.store import Lock, Store
@@ -216,6 +217,22 @@ def test_a_check_result_is_accepted_only_for_the_inputs_the_page_showed(tmp_path
     assert (stale.status_code, stale.json()["detail"]) == (409, "This check changed since you opened it; reload")
     body = {"check": "preview", "passed": True, "inputs": shown()}
     assert client.post("/api/next/changes/c1/check-results", json=body).json() == {"accepted": "check-result"}
+
+
+def test_publish_waits_for_the_network_and_asks_for_other_readiness_fixes():
+    ok = [SetupCheck("network", ok=True, detail=""), SetupCheck("github cli", ok=True, detail="")]
+    assert publish.gate(ok, NOW) is None
+    net = publish.gate([SetupCheck("network", ok=False, detail="timed out", fix="Connect")], NOW)
+    assert (net.exit, net.waiting, net.wake_at, net.who) == (
+        Exit.PENDING,
+        Waiting.NETWORK,
+        NOW + timedelta(minutes=1),
+        "delivery",
+    )
+    fix = "Run `gh auth login --hostname github.com`"
+    auth = publish.gate([*ok, SetupCheck("github sign-in", ok=False, detail="expired", fix=fix)], NOW)
+    assert (auth.exit, auth.cause, auth.reason.endswith(fix)) == (Exit.ASK, "auth:publish:github sign-in", True)
+    assert [o.next for o in auth.question.options] == [StepKind.PUBLISH, "pause"]
 
 
 def test_publish_returns_to_the_final_review_unless_head_is_the_final_reviewed_head(clone, tmp_path):

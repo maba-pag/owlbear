@@ -156,7 +156,7 @@ def test_inbox_written_without_the_lock_is_folded_by_its_holder(store):
 
 
 def test_interrupted_fold_never_applies_an_item_twice(store, monkeypatch):
-    save(store, Change(slug="c1", brief=Brief(version=1)))
+    save(store, Change(slug="c1", brief=Brief(version=1, reviewed=1)))
     store.put_inbox("c1", BriefApproval(at=NOW, version=1))
 
     def killed(*_args, **_kwargs):
