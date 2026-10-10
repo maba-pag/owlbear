@@ -15,6 +15,7 @@ members = [
     "owlbear-delivery",
     "owlbear-delivery-github",
     "owlbear-delivery-mcp",
+    "owlbear-delivery-next",
     "owlbear-knowledge",
     "owlbear-knowledge-mcp",
     "owlbear-memory",
@@ -1787,6 +1788,17 @@ requires-dist = [
     { name = "owlbear-delivery-github", editable = "serve/delivery-github" },
     { name = "pydantic", specifier = ">=2.13.4" },
 ]
+
+[[package]]
+name = "owlbear-delivery-next"
+version = "0.1.0"
+source = { editable = "serve/delivery-next" }
+dependencies = [
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pydantic", specifier = ">=2.13.4" }]
 
 [[package]]
 name = "owlbear-knowledge"

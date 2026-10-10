@@ -1,0 +1,222 @@
+"""Delivery-next state store in ``<git-common-dir>/owlbear-delivery/`` (D4 §3.2)."""
+
+from __future__ import annotations
+
+import contextlib
+import fcntl
+import json
+import os
+import shutil
+import socket
+import subprocess
+import time
+import uuid
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
+
+from pydantic import TypeAdapter, ValidationError
+
+from owlbear_delivery_next import loop
+from owlbear_delivery_next.models import FORMAT, Change, ErrorKind, InboxItem, Record, Step, Stop
+from owlbear_delivery_next.storage_io import atomic_write, open_lock
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator
+    from pathlib import Path
+
+    from owlbear_delivery_next.loop import PrState
+
+STORE_DIR = "owlbear-delivery"
+ACTIVITY_LIMIT = 200
+# Forward migrations of a Change record, keyed by the format they upgrade from.
+MIGRATIONS: dict[int, Callable[[dict[str, Any]], dict[str, Any]]] = {}
+_DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+_INBOX: TypeAdapter[InboxItem] = TypeAdapter(InboxItem)
+
+
+class Holder(Record):
+    """Who holds a Change's writer lock; written into the lock file for the status line."""
+
+    pid: int
+    host: str
+    since: datetime
+
+
+class StoreError(Exception):
+    """State that cannot be used; the loop shows it as a ``state`` stop."""
+
+    action = "Restore the previous state"
+    resume = "State loads"
+
+    def stop(self, now: datetime) -> Stop:
+        """Return the stop record for this error."""
+        return Stop(kind=ErrorKind.STATE, reason=str(self), action=self.action, resume=self.resume, at=now)
+
+
+class FormatTooNewError(StoreError):
+    """The state was written by a newer OwlBear."""
+
+    action = "Upgrade OwlBear"
+    resume = "State loads on the newer OwlBear"
+
+
+class LockHeldError(RuntimeError):
+    """Another process holds the Change's writer lock."""
+
+    def __init__(self, holder: Holder | None) -> None:
+        super().__init__(f"Change lock held by {holder.pid if holder else 'an unknown process'}")
+        self.holder = holder
+
+
+class Lock:
+    """Proof that this process holds one Change's writer lock."""
+
+    def __init__(self, slug: str) -> None:
+        self.slug = slug
+        self.held = True
+
+    def check(self, slug: str) -> None:
+        """Raise unless this lock is held for *slug*."""
+        if not (self.held and self.slug == slug):
+            msg = f"writer lock for {slug} is not held"
+            raise RuntimeError(msg)
+
+
+def git_common_dir(cwd: Path) -> Path:
+    """Return the clone's common git directory; the same from every worktree."""
+    git = shutil.which("git") or "git"
+    out = subprocess.run(  # noqa: S603 - fixed Git executable and argument vector.
+        [git, "rev-parse", "--git-common-dir"], cwd=cwd, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    return (cwd / out).resolve()
+
+
+class Store:
+    """Change records, locks, inboxes and activity logs of one clone."""
+
+    def __init__(self, root: Path) -> None:
+        self.root = root
+
+    @classmethod
+    def open(cls, cwd: Path) -> Store:
+        """Open or create the store for the clone containing *cwd* and gate its format."""
+        store = cls(git_common_dir(cwd) / STORE_DIR)
+        store.root.mkdir(mode=0o700, exist_ok=True)
+        marker = store.root / "format"
+        found = int(marker.read_text()) if marker.exists() else 0
+        if found > FORMAT:
+            msg = f"store format {found} is newer than {FORMAT}"
+            raise FormatTooNewError(msg)
+        if found < FORMAT:
+            atomic_write(marker, f"{FORMAT}\n")
+        return store
+
+    def _dir(self, slug: str) -> Path:
+        path = self.root / "changes" / slug
+        (path / "inbox").mkdir(parents=True, exist_ok=True)
+        return path
+
+    def read(self, slug: str) -> Change:
+        """Read one Change, migrating an older format forward."""
+        try:
+            data = json.loads((self._dir(slug) / "change.json").read_text())
+        except (OSError, ValueError) as exc:
+            msg = f"state of {slug} is unreadable"
+            raise StoreError(msg) from exc
+        version = data.get("format", 0)
+        if version > FORMAT:
+            msg = f"{slug} has format {version}, newer than {FORMAT}"
+            raise FormatTooNewError(msg)
+        try:
+            while version < FORMAT:
+                data = MIGRATIONS[version](data)
+                version += 1
+                data["format"] = version
+            return Change.model_validate(data)
+        except (KeyError, ValidationError) as exc:
+            msg = f"state of {slug} cannot be migrated to format {FORMAT}"
+            raise StoreError(msg) from exc
+
+    def write(self, lock: Lock, change: Change) -> None:
+        """Write one Change atomically, keeping the previous file as ``.prev``."""
+        lock.check(change.slug)
+        path = self._dir(change.slug) / "change.json"
+        if path.exists():
+            atomic_write(path.with_name("change.json.prev"), path.read_text())
+        atomic_write(path, change.model_dump_json(indent=1))
+
+    def restore(self, lock: Lock, slug: str) -> None:
+        """Replace the current Change file with its previous version."""
+        lock.check(slug)
+        path = self._dir(slug) / "change.json"
+        atomic_write(path, path.with_name("change.json.prev").read_text())
+
+    @contextlib.contextmanager
+    def lock(self, slug: str) -> Iterator[Lock]:
+        """Hold the Change's writer lock without waiting and record its holder.
+
+        Raises:
+            LockHeldError: Another process holds the lock.
+        """
+        dir_fd = os.open(self._dir(slug), _DIR_FLAGS)
+        try:
+            fd = open_lock(dir_fd, blocking=False, name="lock")
+        except BlockingIOError as exc:
+            raise LockHeldError(self.holder(slug)) from exc
+        finally:
+            os.close(dir_fd)
+        held = Lock(slug)
+        try:
+            record = Holder(pid=os.getpid(), host=socket.gethostname(), since=datetime.now(UTC))
+            os.ftruncate(fd, 0)
+            os.pwrite(fd, record.model_dump_json().encode(), 0)
+            yield held
+        finally:
+            held.held = False
+            os.close(fd)
+
+    def holder(self, slug: str) -> Holder | None:
+        """Return the live holder of the Change lock, or None when nobody holds it."""
+        try:
+            fd = os.open(self._dir(slug) / "lock", os.O_RDONLY | os.O_NOFOLLOW)
+        except FileNotFoundError:
+            return None
+        try:
+            fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+        except BlockingIOError:
+            with contextlib.suppress(ValidationError):
+                return Holder.model_validate_json(os.pread(fd, 4096, 0))
+            return None
+        finally:
+            os.close(fd)
+        return None
+
+    def put_inbox(self, slug: str, item: InboxItem) -> None:
+        """Write one inbox item without the Change lock; only a lock holder folds it."""
+        name = f"{time.time_ns():020d}-{uuid.uuid4().hex[:8]}.json"
+        atomic_write(self._dir(slug) / "inbox" / name, _INBOX.dump_json(item).decode())
+
+    def fold(self, lock: Lock, slug: str, now: datetime, pr_state: PrState | None = None) -> tuple[Change, Step | None]:
+        """Fold the inbox under the lock, then return the Change and the step to run, if any."""
+        lock.check(slug)
+        files: list[Path] = []
+        items: list[InboxItem] = []
+        for path in sorted((self._dir(slug) / "inbox").glob("*.json")):
+            try:
+                items.append(_INBOX.validate_json(path.read_bytes()))
+                files.append(path)
+            except ValidationError:
+                path.rename(path.with_suffix(".rejected"))
+        change, step = loop.schedule(self.read(slug), items, now, pr_state)
+        self.write(lock, change)
+        for path in files:
+            path.unlink()
+        return change, step
+
+    def log(self, lock: Lock, slug: str, event: dict[str, Any]) -> None:
+        """Append one activity event, keeping only the last ``ACTIVITY_LIMIT``."""
+        lock.check(slug)
+        path = self._dir(slug) / "activity.jsonl"
+        lines = path.read_text().splitlines() if path.exists() else []
+        lines.append(json.dumps(event, default=str, sort_keys=True))
+        atomic_write(path, "\n".join(lines[-ACTIVITY_LIMIT:]) + "\n")
