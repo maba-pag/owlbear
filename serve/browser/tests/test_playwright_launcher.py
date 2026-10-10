@@ -25,6 +25,11 @@ class _FakeContext:
         self.closed = False
         self._listeners: dict[str, Callable[..., None]] = {}
 
+    async def new_page(self) -> object:
+        page = object()
+        self.pages.append(page)
+        return page
+
     def on(self, event: str, callback: Callable[..., None]) -> None:
         self._listeners[event] = callback
 
@@ -129,6 +134,26 @@ async def test_is_running_tracks_open_pages_while_context_stays_open() -> None:
     assert context.closed is False
     assert not launcher.is_running
 
+    await launcher.close()
+
+
+@pytest.mark.asyncio
+async def test_new_shared_page_always_creates_page_in_owned_context() -> None:
+    context = _FakeContext()
+    browser_type = _FakeBrowserType(context)
+    playwright = _FakePlaywright(browser_type)
+    launcher = PlaywrightLauncher(mode=BrowserMode.MANAGED_EDGE)
+
+    with patch.object(launcher_module, "async_playwright", return_value=_FakePlaywrightManager(playwright)):
+        with pytest.raises(RuntimeError, match="Launcher not started"):
+            await launcher.new_shared_page()
+        await launcher.launch()
+        existing_page = object()
+        context.pages.append(existing_page)
+        page = await launcher.new_shared_page()
+
+    assert page is not existing_page
+    assert context.pages == [existing_page, page]
     await launcher.close()
 
 

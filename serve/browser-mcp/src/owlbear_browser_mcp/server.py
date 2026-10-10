@@ -365,7 +365,7 @@ async def _ensure_browser(app_ctx: object, *, need_page: bool = True) -> Any:  #
             await _launch_browser(app_ctx)
         elif need_page and (app_ctx.page is None or app_ctx.page.is_closed()):
             try:
-                app_ctx.page = await app_ctx.launcher.page()
+                app_ctx.page = await app_ctx.launcher.new_shared_page()
             except Exception as exc:  # noqa: BLE001 - any page failure becomes a safe typed tool error.
                 app_ctx.page = None
                 msg = f"{_MSG_BROWSER_UNAVAILABLE}: {_safe_browser_diagnostic('browser page', exc)}"
@@ -464,7 +464,7 @@ async def acquire(  # noqa: PLR0913
         )
     except ValueError as exc:
         raise ToolError(str(exc)) from exc
-    await _ensure_browser(app_ctx, need_page=False)
+    await _ensure_browser(app_ctx)
     try:
         result = await app_ctx.launcher.acquire(request)
     except PermissionError as exc:

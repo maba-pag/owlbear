@@ -216,6 +216,13 @@ class PlaywrightLauncher:
             return await self._context.new_page()
         return self._context.pages[0]
 
+    async def new_shared_page(self) -> Page:
+        """Create a dedicated shared page in the persistent context."""
+        if self._context is None:
+            msg = "Launcher not started — call launch() first"
+            raise RuntimeError(msg)
+        return await self._context.new_page()
+
     async def close(self) -> None:
         """Close the persistent context and stop the Playwright instance."""
         fetcher = self._fetcher

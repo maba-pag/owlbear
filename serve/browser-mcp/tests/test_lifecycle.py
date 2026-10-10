@@ -90,6 +90,14 @@ class _FakeLauncher:
         self.pages.append(self._page_resource)
         return self._page_resource
 
+    async def new_shared_page(self) -> _FakePage:
+        self._calls.append("page-create")
+        if self._page_error is not None:
+            raise self._page_error
+        self._page_resource = _FakePage(self._calls)
+        self.pages.append(self._page_resource)
+        return self._page_resource
+
     def set_page_error(self, error: BaseException | None) -> None:
         self._page_error = error
 
@@ -171,7 +179,8 @@ async def test_closed_page_is_reopened_without_relaunching() -> None:
         async with app_lifespan(mcp) as context:
             await click(_tool_ctx(context), "#a")
             first_page = context.page
-            launchers[0].pages.append(_FakePage(calls))
+            other_page = _FakePage(calls)
+            launchers[0].pages.append(other_page)
             launchers[0].close_page(first_page)
             status = await browser_status(_tool_ctx(context))
             assert status["startup_state"] == "ready"
@@ -181,6 +190,7 @@ async def test_closed_page_is_reopened_without_relaunching() -> None:
                 await read_text(_tool_ctx(context))
             await click(_tool_ctx(context), "#b")
             assert context.page is not first_page
+            assert context.page is not other_page
 
     factory.assert_called_once()
     assert calls == ["launch", "page-create", "page-create", "page", "launcher"]
