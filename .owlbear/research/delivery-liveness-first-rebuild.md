@@ -7,7 +7,7 @@
 > reliably makes progress — possibly as a re-implementation with selective reuse?
 > **Status:** Analysis and recommended roadmap, revision 2 (2026-10-10): corrected after six
 > independent challenges and re-weighted by the user toward end-to-end design and failure modes
-> (§1). Decided by the user: TD-1 to TD-3 (§3.8). Every other recommendation is `autonomous` until
+> (§1). Decided by the user: TD-1 to TD-4 (§3.8). Every other recommendation is `autonomous` until
 > the user decides it.
 
 ## 1. Context and Question
@@ -33,7 +33,7 @@ the companion [journey research](delivery-next-journey-and-failure-modes.md).
 
 | ID | Source | Relevant fact | Limits |
 | --- | --- | --- | --- |
-| L01 | [Redesign programme](change-continuation-delivery-redesign.md) §1 | States the product promise: one `/continue-change` per Change; the user never operates Delivery internals (U1–U5); failures have an owner and a bounded path | Requirements text, not behavior |
+| L01 | [Redesign programme](change-continuation-delivery-redesign.md) §1 | States the product promise: one `/continue-change` per Change; the user never operates Delivery internals (U1–U5); failures have an owner and a bounded path | Agent-written requirements text labelled "from the user" (§3.8), not behavior |
 | L02 | [Execution plan](delivery-redesign-execution-plan.md) | Programme declared complete 2026-10-06 (N10-M); N11–N13 followed as incident phases | Status as recorded by agents |
 | L03 | Earlier reframes: [operating-model reframe](delivery-operating-model-reframe.md) (2026-07-25), [agent-driven redefinition](agent-driven-delivery-redefinition.md) (2026-08-02), [worktree-native redesign](delivery-worktree-native-redesign.md) (2026-08-10), [status-model rethink](delivery-status-model-rethink.md) (2026-10-07) | Four prior direction resets before this one | Read at header level only |
 | L04 | `find`/`wc` over `serve/delivery*`, `serve/cockpit*` | Size figures in §3.2 | Line counts include docstrings and blank lines |
@@ -114,7 +114,7 @@ Every item below is an ordinary failure mode, not an obscure one.
 
 | ID | Root cause | Mechanism | Evidence |
 | --- | --- | --- | --- |
-| RC1 | **Containment without an exit** | The user-selected boundary (2026-09-25) is "bounded recovery now; explicit containment otherwise". Recovery coverage stayed narrow and containment ends in read-only diagnosis instead of an actionable exit, so unanticipated ordinary states become freezes that need the user | L01 §1.1, §3.3 items 2 and 4 |
+| RC1 | **Containment without an exit** | The programme's recovery rule (2026-09-25) is "bounded recovery now; explicit containment otherwise". Recovery coverage stayed narrow and containment ends in read-only diagnosis instead of an actionable exit, so unanticipated ordinary states become freezes that need the user | L01 §1.1, §3.3 items 2 and 4 |
 | RC2 | **A deterministic loop executed by LLM prose** | The orchestrator is a skill, not code: a model copies 64-hex identities and basis fields and forwards large JSON transitions under ~2,100 lines of rules. The engine validates afterwards and can reject irreversibly (`retry_safe: false`). Normal-path tools require 5–12 copied hex identities each and use nested unions of up to 75 fields ([tool-surface audit](delivery-tool-surface-audit.md)) | §3.2, §3.3 item 4 |
 | RC3 | **Entanglement with the managed repository** | Delivery state lives in product branches (self-conflicts), product hooks run in engine commits, worktrees lack dependencies, and the target moves continuously. Reviews and person-only checks do not record which inputs they depend on, so each target movement can re-ask them | §3.3 items 1, 2, 6 |
 | RC4 | **Fix-by-addition** | Incidents mostly add a state, error code, tool, recovery route, prompt, or document: 72 of 81 production fix commits on Delivery since 2026-10-01 grew the code. Agent-authored plans, challenges and reviews produce precise contracts faster than whole journeys are proven | §3.2, L02, L03 |
@@ -159,7 +159,7 @@ ordinary failures and keeps a binding size budget.
 | --- | --- | --- | --- |
 | M0 | **Stop growing old Delivery; let open Changes finish** | The user keeps the open Changes running (TD-2). Old-engine fixes only where those Changes need them, each naming what it later deletes. Other Delivery fix lanes are wound down after their work is preserved — no bulk cleanup. Failures seen in the open Changes become catalogue rows | No new old-engine mechanism without an open Change that needs it |
 | M1 | **Ground truth (light)** | **Ownership map:** what git, GitHub, CI and the Copilot platform already own versus what Delivery must own; the [tool-surface audit](delivery-tool-surface-audit.md) is its tool part. **Route comparison** at design level: targeted repair, thin layer over GitHub and the Copilot platform, or new core. **R8 platform probe** as a separately authorized sandbox run (§3.9). No historical census or baseline metrics | Every Delivery responsibility has an owner; the route is chosen with reasons; every R8 probe has a result |
-| M2 | **Charter** | **R4** (one page): purpose, operating context, ownership, touchpoint budget, exit contract, non-goals, budgets for tools, states, error codes and tests; explicit re-decisions RD1–RD2 (§3.8) | User approval; later design cannot override it without re-deciding |
+| M2 | **Charter** | **R4** (one page): purpose, operating context, ownership, touchpoint budget, exit contract, non-goals, budgets for tools, states, error codes and tests; the earlier programme rules it supersedes, with reasons (§3.8) | User approval; later design cannot override it without re-deciding |
 | M3 | **Watertight design** — most of the effort | **D1 end-to-end journey** and **D2 failure catalogue** for a consumer project (first draft: [journey research](delivery-next-journey-and-failure-modes.md)); **D3 status and exit model**; **D4 minimal architecture** on the Copilot runtime with the tool contract (TD-1); **D5 cutover plan** with a deletion list | Every journey stage and catalogue row has a concrete detection, exit and user-visible text; the connected traces of the journey research §3.6 hold; every necessary finding of the independent user-experience, failure-mode and consumer-fit challenges is resolved or rejected with evidence; user approval |
 | E1 | **Content portability (enabling)** | Agents, skills and instructions that survive the rebuild moved to locations the Copilot harness reads (repository or plugin, per the [distribution research](owlbear-distribution-agent-host.md)); prompts converted to skills; `.mcp.json` registration; reviewer guards re-expressed as harness hooks or tool allow-lists. Non-Delivery content may move once R8 settles loading. Everything the Local-based Delivery needs stays in place until the open Changes finish. Delivery skills scheduled for deletion are not ported | Non-Delivery workflows run in a Copilot-harness session; Local workflows still work; M4 can load its agents |
 | M4 | **Build in vertical slices** | The journey built stage by stage on a sandbox consumer repository (non-OwlBear toolchain, CI, branch protection), each slice demonstrated end to end. The common failure rows are triggered by hand once. Automated tests only per P8 | The whole journey runs once on the sandbox; every hand-triggered common failure ends in its designed exit and, once its prerequisite is restored, continues to the next successful step; one interruption with an unconfirmed push or PR ends without lost work or duplicate effects; touchpoints stay within the budget. A failed gate returns the affected contract to M3 |
@@ -186,24 +186,26 @@ the Local harness; the old Delivery keeps running on Local until M6.
 | Q8 | Switch to a third-party agent front-end | No; isolate Copilot SDK calls in ordinary modules and build no front-end abstraction (§3.10) |
 | Q9 | Status and interaction surface | Cockpit, the platform's Agents window plus the pull request, or chat only; decide after R8 with one status view as the requirement. Tool rule T6 (TD-1) names Cockpit for the user's recovery decisions, so another surface needs the user to re-decide that part of T6 |
 
-**Proposed re-decisions of earlier user decisions.** These change only when the user decides again.
+**Provenance of earlier "user decisions".** Until 2026-10-10 the programme documents labelled agent
+choices and user choices alike as user decisions. This plan therefore treats every earlier record as
+`autonomous` unless the user's own words are found; superseding one only needs its reason recorded.
 
-| ID | Earlier decision (origin `decided`) | What changed | Options | Recommendation |
-| --- | --- | --- | --- | --- |
-| RD1 | "Bounded recovery now; explicit containment otherwise" (2026-09-25, [programme §1.1](change-continuation-delivery-redesign.md#11-requirements-from-the-user)) | Containment ends in read-only diagnosis without an exit (RC1) | Keep as is; narrow containment to genuinely unknown effects and give every stop one actionable exit (P1); broaden automatic recovery | Narrow |
-| RD2 | Use the existing VS Code Copilot Orchestrator, not Copilot CLI, sampling or another runtime (2026-09-30, same section) | VS Code 1.141's Copilot harness runs on the SDK; Local will be removed; the SDK is generally available | Keep an Orchestrator agent on the Copilot harness; move the loop into SDK code; decide after R8 | Decide after R8 |
-
-Merge authority is not among these. The user's decision U-1 (2026-10-02) granted agents push and PR
-authority; the "never merge" sentence beside it in the execution plan was the workspace-governance
-default, not part of U-1. The user grants merging per task in his own prompts.
+| Earlier record | User's own words found | Treatment here |
+| --- | --- | --- |
+| "Bounded recovery now; explicit containment otherwise" ([programme §1.1](change-continuation-delivery-redesign.md#11-requirements-from-the-user), 2026-09-25) | None; the phrase appears only in agent-written plans and checks | `autonomous`; superseded by P1, because containment ended in read-only diagnosis (RC1) |
+| Native VS Code Orchestrator, not Copilot CLI, sampling or another runtime (same section, 2026-09-30) | A question and a proposal: "why we would need the gh copilot cli … we have vs code copilot to use", and the Orchestrator re-dispatching the Builder on retry | Rule text `autonomous`. The concern still holds: the Copilot SDK is the runtime VS Code's Copilot harness already uses, not an extra tool. Where the loop runs is settled after R8 (Q7) |
+| Requirements U1–U8 (same section, "from the user") | No direct source; consistent with the user's 2026-09-11/12 complaints that Delivery is overbuilt and asks him to do things he cannot understand | `autonomous` input; the touchpoint budget and exit contract of the journey research replace them |
+| U-1 push and PR authority with "never merge" ([execution plan](delivery-redesign-execution-plan.md), 2026-10-02) | Per-task grants: "commit and push your changes, run ci … you have my explicit authorization"; "auth to implement, commit, push, run ci, merge" (2026-10-02/03) | Push, PR and merge are granted per task in the user's prompts; "never merge" was the workspace-governance default |
+| "Never use Delivery to implement Delivery" ([workspace instructions](../../.github/copilot-instructions.md)) | Creating a Change inside Delivery for monumental changes to Delivery "will never work" (2026-09-11) | The user's direction; kept |
 
 **Recorded decisions.**
 
 | ID | Decision | Origin | Date |
 | --- | --- | --- | --- |
-| TD-1 | Agent-facing tools follow rules T1–T8 of the [tool-surface audit](delivery-tool-surface-audit.md#4-recommendation-confidence-and-limits); T7 budget values are set in R4 | `decided` (user, in chat) | 2026-10-10 |
-| TD-2 | The open Changes continue on the old engine in parallel until finished; their failures feed the catalogue | `decided` (user, in chat) | 2026-10-10 |
-| TD-3 | Proof over test volume: automated tests are build artifacts and stay minimal; no tests of agent prose wording; structural checks of agent definitions remain. The concrete policy (P8) and budget are set in R4 | `decided` (user, in chat); operationalization `autonomous` | 2026-10-10 |
+| TD-1 | Agent-facing tools follow rules T1–T8 of the [tool-surface audit](delivery-tool-surface-audit.md#4-recommendation-confidence-and-limits); T7 budget values are set in R4 | `decided`: "make your proposed rules accepted decisions" | 2026-10-10 |
+| TD-2 | The open Changes continue on the old engine in parallel until finished; their failures feed the catalogue | `decided`: "i do want to finish the open changes … i will keep them going in parallel" | 2026-10-10 |
+| TD-3 | Proof over test volume: automated tests are build artifacts and stay minimal; no tests of agent prose wording; structural checks of agent definitions remain. The concrete policy (P8) and budget are set in R4 | `decided`: "proof are important. tests are not. tests are build artifacts"; operationalization `autonomous` | 2026-10-10 |
+| TD-4 | Stay on GitHub Copilot | `decided`: "we are bound to github copilot, so we cant just switch platforms" | 2026-10-09 |
 
 ### 3.9 Platform migration interplay
 
@@ -304,8 +306,8 @@ candidates that drive Copilot through ACP or the SDK, not through direct model a
 
 **Recommendation:** treat this as a re-founding with the weight on design. Let the open Changes
 finish on the old engine while it stops growing (M0). Keep the groundwork light: ownership map,
-route comparison and the R8 platform probe (M1). Make the charter a set of explicit user decisions,
-including RD1–RD2 (M2). Put most of the effort into a watertight end-to-end journey and failure
+route comparison and the R8 platform probe (M1). Make the charter a set of explicit user decisions
+(M2). Put most of the effort into a watertight end-to-end journey and failure
 catalogue for a consumer project, challenged independently (M3). Build in vertical slices on a
 sandbox consumer repository, proven by demonstration with tests only per P8 (M4). Then use it on a
 real consumer project and expect fixes, not rework (M5), and delete the old engine (M6). Integrate

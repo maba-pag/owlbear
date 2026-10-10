@@ -29,7 +29,7 @@ design and from real use, not from test volume.
 | --- | --- | --- | --- |
 | C01 | [Consumer README](../../README-consumer.md) | Today's promise: `/ideate`, `/design`, `/continue-change`; Cockpit; human merge; requires Python 3.14, uv, GitHub CLI, a GitHub `origin`, VS Code with Copilot; macOS or Linux | Describes the current product, never exercised on a consumer project since its redesigns |
 | C02 | [Setup guide](../../setup/setup-guide.md) | Setup, verification and troubleshooting steps for a consumer project | Same |
-| C03 | [Redesign programme §1.1](change-continuation-delivery-redesign.md#11-requirements-from-the-user) U1–U8 | Recorded user requirements: every action reachable from a control or a complete prompt; the user never runs tests, edits worktree files, repairs JSON or operates Git custody; agents prepare checks; resume from persisted evidence; every failure has a handler and a bounded path; repeated evidence needs an invalidated claim; approval is not certification; three model tiers | Requirements text |
+| C03 | [Redesign programme §1.1](change-continuation-delivery-redesign.md#11-requirements-from-the-user) U1–U8 | Earlier requirements: every action reachable from a control or a complete prompt; the user never runs tests, edits worktree files, repairs JSON or operates Git custody; agents prepare checks; resume from persisted evidence; every failure has a handler and a bounded path; repeated evidence needs an invalidated claim; approval is not certification; three model tiers | Agent-written, labelled "from the user"; input, not user decisions ([rebuild research §3.8](delivery-liveness-first-rebuild.md#38-decisions-reserved-for-the-user)) |
 | C04 | [Rebuild research §3.3](delivery-liveness-first-rebuild.md#33-the-2026-10-09-session-as-a-microcosm) | Six failures in one session, all ordinary | One day |
 | C05 | [Agent harnesses](https://code.visualstudio.com/docs/agents/run/agent-harnesses), [Agent Host](https://code.visualstudio.com/docs/agents/concepts/agent-host) | Copilot-harness sessions survive window close; per-session worktrees do not carry installed dependencies | Product documentation; behavior unprobed (R8) |
 | C06 | Open Changes the user keeps running on the old engine (TD-2) | Further failure modes will surface there and become catalogue rows | Ongoing |
@@ -72,7 +72,7 @@ written into tracked files requires the user's consent, and Delivery state lives
 **Touchpoint budget.** Per project: run setup and confirm the profile. Per Change: approve the brief,
 answer genuine questions (each one plain question), perform the person-only checks declared in the
 brief, review the PR and approve the merge. Announced prerequisite actions are allowed exceptions
-(U3): sign in again, approve a permission, unlock a signer, set a credential outside chat — each with
+(as in earlier requirement U3): sign in again, approve a permission, unlock a signer, set a credential outside chat — each with
 the exact action and the condition under which work resumes. Anything else the user must do —
 re-run a command after answering, choose an internal operation, repair state, notice an unannounced
 tool-approval prompt — is a design defect.
