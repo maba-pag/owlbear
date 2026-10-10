@@ -992,6 +992,10 @@ async def test_declared_mcp_tools_exist_in_live_registries() -> None:
         "the browser. Closing a shared page while another OwlBear-owned window remains "
         "keeps status `ready`, and the next `acquire` reopens the page." in normalized_guidance
     )
+    assert (
+        "Assign first-use interaction to the operator in the visible managed browser window; "
+        "never send credentials or session material through an OwlBear request or result." in normalized_guidance
+    )
 
 
 def _normalize_contract_text(content: str) -> str:
