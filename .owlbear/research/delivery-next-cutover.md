@@ -3,28 +3,31 @@
 > **Owning task:** none — M3 D5 of the [liveness-first rebuild](delivery-liveness-first-rebuild.md)
 > **Date:** 2026-10-10
 > **Question:** How do the old and new Delivery coexist until cutover, which content moves so the
-> Copilot harness loads it, under which gates and in which order does OwlBear switch, what exactly
-> is deleted, and how is a failed cutover rolled back?
+> Copilot harness loads it, under which gates is the old engine deleted, what exactly is deleted,
+> and how is a failed cutover rolled back?
 > **Status:** design draft; `autonomous` until the user approves M3. Revision 2026-10-10 after
 > design challenge: separate host app until M6, switch and rollback launchers, lane gate G6,
-> deletion-list corrections, no partial syncs to `main` before cutover.
+> deletion-list corrections, no partial syncs to `main` before cutover. Revised after TD-10: no
+> switch of OwlBear's own development.
 
 ## 1. Context and Question
 
 The rebuild chose a thin core on the Copilot runtime beside the old engine (route R2+3). The open
 Changes keep running on the old engine until they finish (TD-2), and the old engine runs only on
-the Local harness, which "will be removed in a future release" (rebuild §3.9 F2). M6 retires the
-old engine. This document is the D5 deliverable: coexistence rules for M4 and M5, the E1 content
-move, the M6 gates and switch order, a rollback path, the deletion list with measured sizes, the
-documentation changes and the risks. It adds no mechanism; every step uses git, setup, the sync
-workflow or an existing file.
+the Local harness, which "will be removed in a future release" (rebuild §3.9 F2). Delivery-next
+need not support OwlBear developing itself (TD-10): OwlBear keeps being developed directly in chat,
+so cutover switches nothing for OwlBear's own development. Cutover is: the open Changes finish on
+the old engine, then one deletion PR retires it (M6). This document is the D5 deliverable:
+coexistence rules for M4 and M5, the E1 content move, the M6 gates and order, a rollback path, the
+deletion list with measured sizes, the documentation changes and the risks. It adds no mechanism;
+every step uses git, setup, the sync workflow or an existing file.
 
 ## 2. Sources Studied
 
 | ID | Source | Used for | Limits |
 | --- | --- | --- | --- |
-| C01 | [Rebuild research](delivery-liveness-first-rebuild.md) §3.7–§3.9 | M0–M7, E1, TD-1–TD-8, option S3, provenance rule | Only TD-1–TD-8 are user decisions |
-| C02 | [Charter draft](delivery-next-charter.md) §3.4, §3.7, §3.9, §3.11 | Route, Cockpit as status surface, budgets, "Never use Delivery to implement Delivery" | Draft, not approved |
+| C01 | [Rebuild research](delivery-liveness-first-rebuild.md) §3.7–§3.9 | M0–M7, E1, TD-1–TD-22, option S3, provenance rule | Only TD-1–TD-22 are user decisions |
+| C02 | [Charter draft](delivery-next-charter.md) §3.4, §3.7, §3.9, §3.11 | Route, Cockpit as status surface, size and style rules, non-goals | Draft, not approved |
 | C03 | [Ownership map](delivery-next-ownership-map.md) §4 | 47 of 55 engine modules unnecessary; agents, skills, prompts and tools dropped | Classified by docstring and purpose |
 | C04 | [Route comparison](delivery-next-route-comparison.md) §3.4 | Eight reuse items, copied not imported | Coupling read statically |
 | C05 | [Distribution research](owlbear-distribution-agent-host.md) F1–F4, §3.5, §5 | `share/` invisible to the harness; plugin content option C3; `.mcp.json` `cwd` follows the session; agent hooks run only in Local | Static reading of VS Code 1.140 |
@@ -41,8 +44,8 @@ workflow or an existing file.
 | Phase | Old Delivery | New core | Content and loading |
 | --- | --- | --- | --- |
 | Now to G4 (M3–M5) | Runs the open Changes from the pinned controller on Local; fixes only for them (M0) | Built and proven on the sandbox consumer repository as its own host app with a small Changes page; not registered in OwlBear's workspace; Cockpit unchanged | E1 moves non-Delivery content; Delivery content stays in `share/` |
-| M6 switch | Unregistered; source deleted in one PR | Registered for OwlBear and consumers; its Changes page and host routes move into Cockpit | `share/` removed; product docs rewritten |
-| Retention window | Pinned release and state kept on disk for rollback | Runs OwlBear's own Changes | — |
+| M6 deletion | Unregistered; source deleted in one PR | Registered for consumers only (TD-10); its Changes page and host routes move into Cockpit | `share/` removed; product docs rewritten |
+| Retention window | Pinned release and state kept on disk for rollback | Runs consumer Changes | — |
 | After window | Live state, refs and releases removed with the user's confirmation | Sole Delivery | — |
 
 ### 3.2 Coexistence while M4 and M5 run
@@ -73,7 +76,7 @@ workflow or an existing file.
    `serve/delivery-next/` with its own small Changes page; Cockpit is not modified, because fixes
    for the open Changes are released from `dev` to the pinned controller.
 4. M4 runs on the sandbox repository, whose own `.mcp.json` registers the new server from a dev
-   checkout. OwlBear's workspace gets no new-core registration before M6, so no OwlBear chat sees
+   checkout. OwlBear's workspace gets no new-core registration (TD-10), so no OwlBear chat sees
    two Delivery servers.
 5. Add the package to ruff `src` in [pyproject.toml](../../pyproject.toml); leave the sync manifest
    unchanged until M6, so consumer `main` keeps today's content. The sync workflow replaces the
@@ -137,35 +140,38 @@ them into consumers with consent (C2).
 
 ### 3.4 Cutover gates and order (M6)
 
+Cutover is: the open Changes finish on the old engine (TD-2), then one deletion PR. OwlBear's own
+development is not switched (TD-10).
+
 | Gate | Condition | Checked by |
 | --- | --- | --- |
 | G1 | M3 approved by the user (D1–D5) | User |
 | G2 | M4 exit criterion met on the sandbox, including the interruption case | Demonstration record |
-| G3 | M5 consumer Changes merged; every finding fixed locally or returned to M3 and closed | PR links |
+| G3 | Two Changes merged in consumer projects (M5); every finding fixed locally or returned to M3 and closed | PR links |
 | G4 | B1 `macos-managed-browser-authentication`, `memory-revision-binding` and `static-website-knowledge-ingestion-v2` each completed and cleaned up on the old engine, or parked by the user's explicit decision | User, Cockpit history |
 | G5 | No old-engine worker or claim running; no retained Change worktree without a decision | Cockpit (old view) |
 | G6 | Before a lane worktree is retired, its committed, dirty and untracked work and detached heads are preserved; otherwise the exact worktree is kept. A branch alone does not preserve dirty or untracked files | User |
-| G7 | Charter budgets hold for the new core (M7 tests) and E1 is done | Budget tests |
+| G7 | Charter size and style rules hold for the new core (M7 tests) and E1 is done | Rule tests |
 
 A parked Change keeps its branch and PR in git and GitHub. It restarts as a new Change on the new
 core whose brief names that branch; old state is not migrated.
 
-**Switch for OwlBear's repository** (one deletion PR on `dev`, user-approved):
+**Deletion PR on OwlBear's repository** (one PR on `dev`, user-approved):
 
 1. Tag the current `dev` head `delivery-v1-final` and push the tag; it is the archive and rollback
    point.
-2. Register `owlbear-delivery-next` in `.mcp.json`; remove `owlbear-delivery` from `.vscode/mcp.json`
-   and the `chat.*FilesLocations` settings.
+2. Remove `owlbear-delivery` from `.vscode/mcp.json` and the `chat.*FilesLocations` settings;
+   register no new core for OwlBear (TD-10).
 3. Move the Changes page and host routes into Cockpit; remove Cockpit's unconditional old-engine
    imports and routers (`main.py` L40–L47 with the `target_work` router; the `atomic_write` import
    in `routes/ideas.py`, repointed to the copied module) and the checkpoint supervisor.
 4. Delete §3.6 rows 1–14 and apply the edits listed under the table.
 5. Rewrite the product documents (§3.7).
-6. Prove: `uv run test`, `npm test` and `uv run test-e2e` pass; the new core's budget tests pass; one
-   OwlBear Change starts, reaches its first `done` exit and shows one status line.
-7. Merge. Stop the old launchers (`.owlbear/controller/bin/cockpit`, `bin/delivery-mcp`), start the
-   new host launcher (Cockpit with the Changes page), verify one status line per Change, then run
-   the next OwlBear Change on the new core.
+6. Prove: `uv run test`, `npm test` and `uv run test-e2e` pass; the new core's rule tests pass; one
+   sandbox consumer Change starts from a fresh setup, reaches its first `done` exit and shows one
+   status line.
+7. Merge. Stop the old launchers (`.owlbear/controller/bin/cockpit`, `bin/delivery-mcp`); OwlBear
+   development continues directly in chat.
 
 **Switch for consumers** (no consumer uses the old Delivery):
 
@@ -182,10 +188,11 @@ core whose brief names that branch; old state is not migrated.
 | Failure | Action |
 | --- | --- |
 | A gate fails before the PR merges | Do not merge; old path untouched |
-| The new core fails on OwlBear after the merge, inside the retention window | `git revert` the deletion PR; this restores the `owlbear-delivery` registration and Local locations. Restart the retained old launchers (`.owlbear/controller/bin/cockpit`, `bin/delivery-mcp`). The pinned release is self-contained (`git archive` plus its own `.venv`), and state, worktrees and refs were kept, so the old engine resumes. Re-dispatch `sync-to-main` from the reverted `dev` |
+| The deletion breaks OwlBear or the new core fails for consumers after the merge, inside the retention window | `git revert` the deletion PR; this restores the `owlbear-delivery` registration and Local locations. Restart the retained old launchers (`.owlbear/controller/bin/cockpit`, `bin/delivery-mcp`). The pinned release is self-contained (`git archive` plus its own `.venv`), and state, worktrees and refs were kept, so the old engine resumes. Re-dispatch `sync-to-main` from the reverted `dev` |
 | A Change already started on the new core | Keeps its state but stays paused until a compatible host runs again; its state is not converted back |
 
-The retention window ends when two OwlBear Changes have merged on the new core. Then, with the
+The retention window ends when two more Changes have merged on the new core in consumer projects.
+Then, with the
 user's confirmation for each destructive step: remove `.owlbear/controller/`,
 `.owlbear/delivery/` (42 tracked files, 3,189 lines; 3.0 GB of worktrees),
 `.owlbear/delivery-migrations/`, the remote branch `owlbear/delivery-state`, the 23
@@ -243,7 +250,7 @@ their `seed/.owlbear/hooks/` copies and their tests; `share/README.md`, `share/W
 | [README.md](../../README.md) | Replace the Delivery description with the new journey in five lines and link the operating guide |
 | [README-consumer.md](../../README-consumer.md) | Install: plugin location, `.mcp.json`, profile confirmation, host start permission; remove the old Delivery section |
 | [setup/setup-guide.md](../../setup/setup-guide.md) | Copilot harness as the default session target; setup steps of J0; no controller |
-| [setup/operating-owlbear.md](../../setup/operating-owlbear.md) | Replace the Delivery chapters (74 mentions) with start, status, answers, person-only checks and merge consent; remove repair, attention, upgrade and target-conflict procedures |
+| [setup/operating-owlbear.md](../../setup/operating-owlbear.md) | Replace the Delivery chapters (74 mentions) with start, status, answers, person-only checks, automatic merge and pull-back; remove repair, attention, upgrade and target-conflict procedures |
 | [setup/sharing-guide.md](../../setup/sharing-guide.md) | Plugin instead of `chat.*FilesLocations`; drop stance-hook text if the hook goes |
 | [.github/copilot-instructions.md](../../.github/copilot-instructions.md) | Remove "Direct Delivery Redesign"; update branch contents, directory table (`plugin/`, `.github/agents`, `.github/skills`) and test mapping; take over `owlbear-system` content |
 | [cloud-agent.instructions.md](../../.github/instructions/cloud-agent.instructions.md) | Remove "Delivery Redesign Tasks" |
@@ -269,11 +276,12 @@ their `seed/.owlbear/hooks/` copies and their tests; `share/README.md`, `share/W
 ## 4. Recommendation, Confidence, and Limits
 
 **Recommendation (`autonomous`):** keep the old path frozen and untouched except for M0 fixes, add
-the new package with one-way isolation and no OwlBear registration before M6, do E1 now for
-non-Delivery content only, and switch OwlBear and consumers in one reviewed deletion PR after G1–G7,
-with the `delivery-v1-final` tag and the retained pinned release as the rollback path. Decisions for
+the new package with one-way isolation and no OwlBear registration (TD-10), do E1 now for
+non-Delivery content only, let the open Changes finish on the old engine (TD-2), then switch
+consumers and delete the old engine in one reviewed deletion PR after G1–G7, with the
+`delivery-v1-final` tag and the retained pinned release as the rollback path. Decisions for
 the user: the content home (plugin root, or `.github/` copies if probe (a) fails), and the
-retention-window condition (two merged Changes on the new core).
+retention-window condition (two more Changes merged in consumer projects).
 
 **Confidence:** high for the coexistence rules and the deletion inventory (measured, import-checked).
 Medium for E1 locations: plugin and instruction loading in the harness is documented and statically

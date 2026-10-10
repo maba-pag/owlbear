@@ -8,9 +8,9 @@
 > problems found in real use need fixes, not rework?
 > **Status:** Draft, revised after independent round-2 and round-3 challenges (user experience, failure
 > modes, consumer fit, overall route and cross-document coherence; 2026-10-10); aligned with the M3
-> design (D3–D5), 2026-10-10. Everything here is
-> `autonomous` until the user approves the M3 design; the user directions it follows are TD-2 and TD-3
-> in the [rebuild research](delivery-liveness-first-rebuild.md#38-decisions-reserved-for-the-user).
+> design (D3–D5), 2026-10-10; revised for decisions TD-10 to TD-22, 2026-10-10. Everything else here
+> is `autonomous` until the user approves the M3 design; the user decisions it follows are TD-2, TD-3
+> and TD-10 to TD-22 in the [rebuild research](delivery-liveness-first-rebuild.md#38-decisions-reserved-for-the-user).
 
 ## 1. Context and Question
 
@@ -42,7 +42,7 @@ design and from real use, not from test volume.
 One developer with VS Code, a Copilot seat (possibly enterprise-managed) and their own GitHub
 repository, often on a corporate laptop with a proxy and single sign-on. The repository can use any
 language and toolchain, and may have CI or none, branch protection with required checks or reviews,
-pre-commit hooks, signed commits, a merge queue, a non-`main` default branch, a monorepo layout,
+pre-commit hooks, signed commits, a merge queue (unsupported, TD-22), a non-`main` default branch, a monorepo layout,
 private package registries or a GitHub Enterprise host.
 
 Delivery must not assume OwlBear's own toolchain (uv, pytest, npm). Unknown repository properties
@@ -51,28 +51,30 @@ setup recognizes only `github.com` remotes and defaults non-interactive targets 
 and Planner skills prescribe `uv lock`, and the seeded test resolver falls back to pytest. None of
 that carries over.
 
-Teammates who do not use OwlBear share the repository. Setup is user-local by default; anything
-written into tracked files requires the user's consent, and Delivery state lives outside the checkout
-(DR11, DR14).
+Teammates who do not use OwlBear share the repository. Setup is user-local: it writes
+`.vscode/tasks.json` and `.mcp.json` only with the user's consent and lists both in the clone's
+`.git/info/exclude`, so nothing is committed; Delivery state lives outside the checkout (DR11, DR14).
 
 ### 3.2 The journey
 
 | Stage | The user does | The user sees | The system does |
 | --- | --- | --- | --- |
-| J0 Set up (once per project) | Runs setup; confirms the detected project profile | Host and repository, base and push repositories, default and target branch, install and check commands per package, CI and required checks, protections, signing, hooks, merge method; what is supported, human-assisted or unsupported; where the status view is | Detects the profile; checks GitHub CLI, Copilot and git identity; registers tool servers |
-| J1 Start or return | Opens VS Code; says what they want or picks a waiting Change | Changes waiting for them first, with what happened since; nothing else, or one concrete fix for a broken prerequisite | Readiness check: authentication, servers, state, OwlBear version |
+| J0 Set up (once per project) | Runs setup; confirms the detected project profile; consents to the two local files | Host and repository, base and push repositories, default and target branch, install and check commands per package, CI and required checks, protections, signing, hooks, merge method, "ask before merge" (default off); what is supported, human-assisted or unsupported; where the status view is | Detects the profile; checks GitHub CLI, Copilot and git identity; writes `.vscode/tasks.json` and `.mcp.json` and adds both to `.git/info/exclude` |
+| J1 Start or return | Opens VS Code; presses New Change on the Changes page, or picks a waiting Change | Changes waiting for them first, with what happened since; nothing else, or one concrete fix for a broken prerequisite | Readiness check: authentication, servers, state, OwlBear version; New Change runs `code chat` with the delivery skill's start prompt in the project folder |
 | J2 Shape | Answers questions one at a time; approves the brief | Brief: outcome, acceptance criteria, scope and non-goals, person-only checks, a split proposal if it is too big | Designer works from repository evidence; independent reviewer challenges the brief |
-| J3 Plan | Nothing (can look) | Ordered task list with the checks each task must pass | Planner; independent challenge; overlap check against other open Changes |
-| J4 Build | Nothing | "Building task 2 of 5: …" | Per task: prepare the workspace, implement, run project checks, commit, independent review, fix loop |
+| J3 Plan | Nothing (can look) | Ordered task list with the checks each task must pass; "overlaps with X" where another open Change touches the same files | Planner; independent challenge; overlap check against other open Changes, shown, never asked |
+| J4 Build | Nothing | "Build 2/5" with a "now" line (step plus last tool event), step time, a quiet warning and credits | Per task: prepare the workspace, implement, run project checks, commit, independent review, fix loop |
 | J5 Stay current | Nothing | "Updating with `main`" | Integrates the moved target; conflicts are resolved as a task with checks and review |
-| J6 Publish | Nothing | Pull-request link, "waiting for CI" | Pushes, opens or updates the PR, follows CI, fixes failures and review comments as tasks |
-| J7 Person-only checks | Performs each declared check and answers pass or fail | Exact steps and what to look for | Prepares the environment; keeps the answer valid until its inputs change |
-| J8 Merge | Reviews the PR and approves merging that exact source head, or merges in GitHub | "Ready to merge": diff summary, proof, required checks | Merges when green with the profile's merge method; follows a merge queue. A changed source head voids the approval and shows a short delta for renewed consent |
-| J9 Done | Nothing | Summary and merged PR | Removes branch and workspace after a preservation check; records history |
+| J6 Publish | Nothing | Pull-request link, "waiting for CI" | Pushes, opens or updates the PR, follows CI, fixes failures and review threads as tasks; replies on and resolves each thread it fixed |
+| J7 Visual and person-only checks | Performs each declared person-only check and answers pass or fail | Screenshots of the agent visual check on the card; for person-only checks, exact steps and what to look for | For UI changes a reviewer opens the host-launched preview in a browser, takes screenshots and judges them against the criteria; failure → fix task. Prepares the environment for person-only checks; keeps each result valid until its inputs change |
+| J8 Merge | Nothing; reviews in GitHub only where GitHub requires a human review | "Merging PR #14 at a1c3f02", or what the merge gate still waits for | Merges automatically when the merge gate passes, with the profile's merge method and the head as SHA guard, then reads back. "Ask before merge" adds one consent question |
+| J9 Pull back and done | Nothing, or presses Pull when the local target was behind | Summary and merged PR; "local main is behind: <reason>" with Pull when pull-back could not run | Pulls the merge back to the local target (pull-back); removes branch and workspace after a preservation check; records history |
 
-**Touchpoint budget.** Per project: run setup and confirm the profile. Per Change: approve the brief,
-answer genuine questions (each one plain question), perform the person-only checks declared in the
-brief, review the PR and approve the merge. Announced prerequisite actions are allowed exceptions
+**Touchpoint budget.** Per project: run setup, confirm the profile and consent to the two local
+files. Per Change: approve the brief, answer genuine questions (each one plain question) and perform
+the person-only checks declared in the brief. There is no merge consent: Delivery merges when the
+merge gate passes. Human reviews that GitHub requires still happen in GitHub. The profile setting
+"ask before merge" (default off) restores one consent question. Announced prerequisite actions are allowed exceptions
 (as in earlier requirement U3): sign in again, approve a permission, unlock a signer, set a credential outside chat — each with
 the exact action and the condition under which work resumes. Anything else the user must do —
 re-run a command after answering, choose an internal operation, repair state, notice an unannounced
@@ -80,14 +82,28 @@ tool-approval prompt — is a design defect.
 
 **Surfaces.** Conversation happens in chat: shaping the brief and answering ordinary questions. A
 local Delivery host serves a Changes page — its own small app until M6, then inside Cockpit — that
-lists every Change with its stage, situation and next actor, and accepts answers, person-only check
-results and merge consent. Recovery decisions are actions only in that page (T6). The status shows
+lists every Change with its stage, situation and next actor, starts new Changes (New Change button),
+and accepts answers and person-only check results. Each Change card shows a "now" line (step plus
+last tool event), step time, a quiet warning when no activity is seen, credits per Change and step,
+visual-check screenshots, overlaps and decision origins (`decided` for brief approvals, answers and
+owner choices; `autonomous` for agent choices). Recovery decisions are actions only in that page (T6). The status shows
 observed activity and when it was observed, and says "not running" when no runner is active, so
 "Building 2/5" never implies work that is not happening. The host starts when VS Code opens the
 project, through a folder-open task whose permission setup verifies; where that is unavailable, one
 Start Delivery action is disclosed at J0, and the status says nothing advances until it runs.
 Answering a question resumes the work without re-issuing a command: the host starts the next runner
 ([charter §3.7](delivery-next-charter.md#37-interaction-surface-and-runner-activation)).
+
+**Merge gate.** Delivery merges only the exact head (SHA guard) that has: a valid final review;
+required and declared checks green; for UI changes a passed agent visual check; valid person-only
+checks; no unresolved review threads (only review threads count; bot or informational issue comments
+do not block); the target integrated. It merges with the profile's method and reads the result back.
+
+**Pull-back.** After the merge Delivery fetches. If the local target branch is not checked out, or is
+checked out in a clean working copy that has not diverged, it fast-forwards it. Otherwise it never
+stashes, resets or merges: the card shows "local <target> is behind: <reason>" with a one-click Pull
+once pulling becomes possible. Unsaved editor buffers are invisible to git; VS Code shows its own
+"file changed on disk" dialog.
 
 ### 3.3 One exit contract for every step
 
@@ -96,21 +112,25 @@ Every step — design, plan, task, integrate, publish, check, merge — ends in 
 | Exit | Meaning | The user sees |
 | --- | --- | --- |
 | done | The step's postcondition is verified in its owning store: git or GitHub for code, PRs and merges; Delivery state for approvals and answers | Progress |
-| retry | Transient, or fixable by the agent; bounded count with the reason recorded | "Retrying: checks failed (2 of 3)" |
+| retry | Fixable by the agent; identical failures without progress are counted, with the reason recorded | "Retrying: checks failed (2 of 3)" |
 | ask | Needs information or a decision only the user has; one question whose every option leads to a defined step | The question, in chat and in the status view |
 | back | The step showed an earlier stage was wrong: task infeasible → plan; scope wrong → brief | "Re-planning: the API the task relies on does not exist" |
 | stop | Cannot continue safely, or retries are exhausted; work preserved; one action that resumes | The reason and that one action |
 
-A step that is waiting on an external condition — CI, a reviewer, a merge queue, the user's
-person-only check — is **pending**, not exited. Pending records the condition, who acts, and who
+A step that is waiting on an external condition — CI, a reviewer, the user's person-only check, an
+environment failure — is **pending**, not exited. Pending records the condition, who acts, and who
 observes it next and when; it consumes no retry budget. A wait that cannot progress (a required check
 that never starts) becomes `ask` or `stop`.
 
 Rules:
 
-- Every retry budget ends in `ask` or `stop`, never in a silent loop. Budgets carry across `retry` and
-  `back` for the same cause until its premise changes. Answering a request clears it only once its
-  effect is observed.
+- Retry policy (`autonomous`, adopted from the fork): environment failures — network,
+  authentication, capacity, runtime or tool hiccups — are pending with growing pauses and never
+  consume budget. Only identical failures without progress count (3); progress resets the count. On
+  exhaustion the step tries one different approach (split, re-plan, stronger model), then asks one
+  question; never a silent loop. Counts carry across `retry` and `back` for the same cause until its
+  premise changes. Answering a request clears it only once its effect is observed.
+- No cost question (TD-21): credits are shown per Change and step, never used to stop or ask.
 - A `stop` names one action, who performs it, and the condition under which work resumes. The action
   works even when Delivery's own tool server is down. "Diagnose" and raw error output are not actions.
 - No exit discards work. Preservation inventories staged, unstaged, untracked and conflicted files and
@@ -143,17 +163,18 @@ most projects), **O** occasional, **R** rare. Rows are ordered by likelihood wit
 
 | ID | Failure | L | Detection | Exit and handling |
 | --- | --- | --- | --- | --- |
-| S1 | GitHub CLI missing, signed out, token expired or not SSO-authorized for the organization | C | Readiness check calls the repository API | ask: the exact command to run; resume afterwards |
+| S1 | GitHub CLI missing, signed out, token expired or not SSO-authorized for the organization | C | Readiness check calls the repository API | pending with growing pauses, showing the exact command as an announced prerequisite action; resumes when readiness passes |
 | S2 | Tool servers fail to start (dependency install, proxy, wrong Python) | C | Server health at session start | stop: the user runs setup's repair, which works without Delivery running; resumes on the next start |
 | S3 | Project install or check commands unknown or wrong, or run in the wrong package directory | C | Profile confirmation; first task check fails for environment reasons | ask once at setup; later ask with the failing output, whose "correct the command" option writes a new profile version, which resets that cause's retry budget |
 | S4 | Copilot signed out, no seat, or agents, MCP or models disabled by enterprise policy | O | Readiness check or runtime error | stop: what is blocked and what an administrator must allow |
 | S5 | Corporate proxy or TLS interception breaks installs | O | Install error pattern | stop: proxy settings to check |
 | S6 | OwlBear updated while Changes are open and the state format changed | O | State records its format version | Migrate automatically; if impossible, stop with "finish on the old version or migrate" |
 | S7 | Wrong folder opened, or a project without setup | O | No project profile at the workspace root | ask: run setup here, or open the configured project |
-| S8 | Network offline | O | git, GitHub or model calls fail | retry with backoff; then pending on the host's network check, resuming by itself when the network returns |
-| S9 | Copilot rate limit or exhausted quota | O | Runtime error | retry for rate limits; stop for quota, never marking the task failed |
+| S8 | Network offline | O | git, GitHub or model calls fail | pending with growing pauses on the host's network check, resuming by itself when the network returns |
+| S9 | Copilot rate limit or exhausted quota | O | Runtime error | pending with growing pauses; exhausted quota names its reset time; never marks the task failed |
 | S10 | Python cannot reach GitHub through a TLS-intercepting corporate proxy, while `gh` and Node can (found in M4) | C on corporate laptops | Readiness check | Prevented: OwlBear's own HTTP calls use the system trust store |
 | S11 | The Copilot SDK runtime download is blocked by the proxy (found in R8) | C on corporate laptops | Readiness check | Prevented: the SDK runs on the installed Copilot CLI |
+| S12 | The `code` command-line launcher is missing, so New Change cannot open chat | O | The host's `code chat` call fails to start | The page shows the exact command to run in the project folder |
 
 **Shape and plan**
 
@@ -165,7 +186,7 @@ most projects), **O** occasional, **R** rare. Rows are ordered by likelihood wit
 | D4 | Task too large to finish in one agent session | C | Planner size rule; build exhaustion | back to plan to split the task |
 | D5 | Brief or plan cites wrong repository facts | O | Reviewer verifies cited evidence | retry with the reviewer's findings |
 | D6 | User changes their mind after approval | O | User says so in chat or the status view | Acknowledge at once and launch no new work; let a running step reach a safe point or stop it. If a merge was submitted, observe its outcome first: merged → the Change completes and the new intent starts a new brief; not merged, or no merge submitted → back to J2 showing kept and dropped work, and ask for re-approval. Say plainly what can no longer be undone |
-| D7 | Plan overlaps another open Change | O | Overlap check on files and areas | ask: order them or proceed; conflicts are handled in J5 |
+| D7 | Plan overlaps another open Change | O | Overlap check on files and areas; docs, lockfiles and generated files are ignored | Shown as "overlaps with X", never asked; integration handles conflicts (J5); ask only when integration finds the two Changes' intents contradict |
 | D8 | Plan needs something only the user has (credential, product choice) | O | Planner flags it | ask |
 | D9 | Planner and reviewer keep disagreeing | O | Round count (for example two) | ask with both positions summarized |
 | D10 | The same cause returns after re-planning or an answered request | O | Carried episode budget; the prerequisite is observed again | ask with a genuine scope decision, or stop with work preserved |
@@ -174,7 +195,7 @@ most projects), **O** occasional, **R** rare. Rows are ordered by likelihood wit
 
 | ID | Failure | L | Detection | Exit and handling |
 | --- | --- | --- | --- | --- |
-| B1 | Project checks fail after implementation | C | Check exit code | retry: the builder fixes (bounded); then ask: revise the requirement, or pause with work preserved |
+| B1 | Project checks fail after implementation | C | Check exit code | retry: the builder fixes; three identical failures without progress → one different approach, then ask: revise the requirement, or pause with work preserved |
 | B2 | New workspace lacks installed dependencies | C | Workspace preparation step before every task | Run the profile's install command for the task's package; failure is handled as S3 |
 | B3 | Pre-commit hook rewrites files or rejects the commit | C | Commit result | retry: stage the hook's fixes and re-run the affected checks, or fix the finding; hooks are project policy and are never bypassed |
 | B4 | Agent ends early, claims success without changes, or runs out of context or turns | C | Engine checks diff, check results and the task's checklist | retry in a fresh session with the task and current diff (bounded); then back to plan to split |
@@ -187,7 +208,7 @@ most projects), **O** occasional, **R** rare. Rows are ordered by likelihood wit
 | B11 | Agent edits outside the task's scope or outside its workspace | O | Diff against plan scope; main checkout dirty check | Scope: reviewer finding and retry. Outside the workspace: stop listing the files; the user keeps or reverts them, both preserved |
 | B12 | Reviewer keeps rejecting | O | Round count | ask with the disagreement summarized |
 | B13 | User edits files in the Change workspace while it runs | O | Unexpected diff at a step boundary | Include the edits and tell the reviewer; if they clash with the agent's edits, ask |
-| B14 | Model unavailable or timing out | O | Runtime error | retry with backoff, falling back to another allowed model tier; then stop |
+| B14 | Model unavailable or timing out | O | Runtime error | pending with growing pauses; a lasting outage switches to another allowed model |
 | B15 | A secret is committed | O | GitHub push protection rejects the push, or a local scan | back to build: remove it and rewrite unpublished commits; if it was published, ask the user to rotate it |
 | B16 | Disk full or similar resource exhaustion | R | Command errors | stop with the reason |
 | B17 | Project checks already fail before the task's edits | O | Profile checks on the starting revision | retry for environment causes; otherwise ask: fix first as a separate task, or pause. "Proceed with the failure recorded" is offered only when the Change's acceptance can be shown independently and the failure blocks no task check or required remote gate; that unchanged failure is then not treated as a new task failure |
@@ -196,6 +217,8 @@ most projects), **O** occasional, **R** rare. Rows are ordered by likelihood wit
 | B20 | LFS objects or submodules not present in a new workspace | O | Profile flags them; pointer files or empty submodules after preparation | Hydrate during preparation; failure is handled as S3 |
 | B21 | A review or fix task sees changes that are not the Change's own, because its diff base is a stale local target (found in M4) | O | Diff base is `origin/<target>` after a fetch | Design rule; a wrong-base deletion is then caught by review and repaired as a task |
 | B22 | An agent asks again for something the owner already answered (found in M4) | C | — | Prevented: every agent prompt carries the owner's answers for the Change |
+| B23 | The agent visual check fails | O | Reviewer verdict on the screenshots against the criteria | back to build with a fix task naming the screenshot and finding |
+| B24 | The visual check cannot run: preview or browser missing | O | Preview readiness or browser start fails | ask with the concrete fix (for example the browser install command); the gate is never skipped |
 
 **Integrate with the moving target**
 
@@ -214,14 +237,15 @@ most projects), **O** occasional, **R** rare. Rows are ordered by likelihood wit
 | --- | --- | --- | --- | --- |
 | P1 | CI fails | C | Check runs and commit statuses on the current head | Task: builder fixes from the CI logs (bounded); then ask |
 | P2 | CI is slow | C | Checks pending | pending: "waiting for CI", observed time shown; no user action |
-| P3 | Review comments from people or Copilot code review | O (C where review is enabled) | PR review events | Task: address the feedback (bounded); disagreement → ask |
+| P3 | Review comments from people or Copilot code review | O (C where review is enabled) | Unresolved PR review threads | Task per thread: fix (bounded); after the fix the agent replies on the thread and resolves it; disagreement → ask the owner with both positions |
 | P4 | Project intentionally has no CI | O | Profile, confirmed at J0 | Local checks are the declared gate, stated in the brief and the PR |
 | P5 | Push rejected by authentication or branch rules | O | Push result | Authentication → S1; branch rule → ask, and record it in the profile |
 | P6 | PR already exists, was closed, or the remote branch was deleted | O | Query before creating | Reuse an open PR; closed → ask: reopen or abandon |
 | P7 | Required human reviewers or code owners | O | Effective branch rules | pending: "waiting for review by …"; that touchpoint happens in GitHub |
 | P8 | CI flaky | O | Rerun passes | Rerun once automatically |
-| P9 | GitHub API outage or rate limit | O | API errors | retry with backoff; then pending on the host's network check, resuming by itself when the network returns |
+| P9 | GitHub API outage or rate limit | O | API errors | pending with growing pauses on the host's network check, resuming by itself when GitHub answers |
 | P10 | Expected or required CI missing, not triggered, cancelled, or awaiting workflow approval | O | Checks and statuses on the current head against the CI declared in the profile and the effective rules | pending with bounded observation; then agent repair (for example a workflow trigger) or ask naming the owner's exact action; the gate is never downgraded |
+| P11 | A bot or informational comment is never resolved | C | Comment is an issue comment, not a review thread | Does not block: only review threads count toward the merge gate |
 
 **Person-only checks and merge**
 
@@ -230,11 +254,13 @@ most projects), **O** occasional, **R** rare. Rows are ordered by likelihood wit
 | H1 | User unavailable for days | C | — | pending without timeout; the status names the waiting check |
 | H2 | User reports a check failed | O | Answer | back to build with the user's description as task input |
 | H3 | Later change affects a passed check | O | A recorded input of the check changed (P5) | pending again on the check, naming what changed; otherwise keep the answer |
-| M1 | User merged in GitHub directly | C | PR state | done: cleanup after preservation (M5) |
-| M2 | Merge blocked after approval: new target commits, a required check, a conflict | O | Merge result | back to integrate; any change to the source head voids the approval, so ask again with a short delta |
-| M3 | Merge queue | O | Queue state | pending; removal from the queue routes its cause (CI → P1, conflict → I2), otherwise stop with the reason |
+| M1 | User merged in GitHub directly | C | PR state | done: pull-back, then cleanup after preservation (M5) |
+| M2 | Merge blocked after the gate passed: new target commits, a required check, a conflict | O | Merge result or SHA guard | back to integrate; the gate is re-evaluated for the new head |
+| M3 | Rules require a merge queue | O | Profile | Out of scope (TD-22): J0 marks it unsupported; no queue submission or observation |
 | M4 | PR closed without merging | O | PR state | ask: abandon or reopen |
 | M5 | Cleanup finds uncommitted files, or local commits missing from the merged head | O | Workspace status; compare local commits with the merged head | Preserve privately and report; never delete unpreserved work |
+| M7 | Pull-back cannot fast-forward: the checked-out local target is dirty or has diverged | C | Working-copy status and ancestry after the fetch | Never stash, reset or merge; card shows "local <target> is behind: <reason>" with Pull once possible. Unsaved editor buffers are invisible to git; VS Code shows its "file changed on disk" dialog |
+| M8 | GitHub requires a human review before merging | O | Effective rules; review decision on the PR | pending: "waiting for review by …"; the review happens in GitHub |
 
 **Cross-cutting**
 
@@ -249,6 +275,7 @@ most projects), **O** occasional, **R** rare. Rows are ordered by likelihood wit
 | X7 | Copilot or VS Code update changes agent format, tool approval or model names | O | Readiness check or step error | stop with version information |
 | X8 | Agent skips a step or edits state directly | O | Order is enforced in code; agents change state only through their one result tool | Prevented by design (P2) |
 | X9 | The termination scan counts unrelated system processes as leftovers (found in M4 on macOS) | C | Scan limited to the step's worktree and to processes started after the step began | Design rule; real leftovers still block the next writer |
+| X10 | Consented local files show up as untracked changes | C | — | Prevented: setup adds `.vscode/tasks.json` and `.mcp.json` to `.git/info/exclude` |
 
 **Rare, with generic handling only.** No dedicated machinery: a corrupted or half-written state file
 (atomic writes keep the previous version; stop with "restore previous"), a corrupted git repository,
@@ -259,7 +286,7 @@ clock skew, hostile repository or web content beyond the platform's own protecti
 
 | ID | Requirement | Rows |
 | --- | --- | --- |
-| DR1 | **Project profile** at setup, each entry marked known, unknown or unsupported with its evidence: host and repository root; push and PR-base repositories (forks); default and target branch; per-package install and check commands with directory, runtime and covered scope; credential references; LFS and submodules; CI and required checks; effective branch rules and rulesets (reviews, code owners, linear history, signing); merge methods and queue; hooks. Re-read the effective rules before publishing and merging; re-detect on request | S3, B2, B3, B18, B20, P4, P5, P7, P10, M3 |
+| DR1 | **Project profile** at setup, each entry marked known, unknown or unsupported with its evidence: host and repository root; push and PR-base repositories (forks); default and target branch; per-package install and check commands with directory, runtime and covered scope; credential references; LFS and submodules; CI and required checks; effective branch rules and rulesets (reviews, code owners, linear history, signing); merge methods; hooks. Re-read the effective rules before publishing and merging; re-detect on request | S3, B2, B3, B18, B20, P4, P5, P7, P10, M3 |
 | DR2 | **Readiness check** at every start and before publishing; a failure yields one concrete fix | S1, S2, S4, S6, X7 |
 | DR3 | **Project-facing work runs inside tasks** with the fix loop: installs, checks, commits with hooks, conflict resolution, CI fixes, review feedback. The engine's own operations never depend on project tooling; its git and GitHub calls map every failure to an exit | B1–B3, I2, I6, P1, P3 |
 | DR4 | **One exit contract** (§3.3): five exits, pending situations, bounded retries with recorded reasons; no other step outcome | All |
@@ -271,9 +298,10 @@ clock skew, hostile repository or web content beyond the platform's own protecti
 | DR10 | **One writer per Change**: a lock; replacement only after termination is confirmed by cancelling runtime tasks, verifying their PIDs and the runtime's exit, and a host scan of the worktree including the runner's former subtree | B6, X5 |
 | DR11 | **State outside the checkout and product branches**, versioned, with a migration path | S6 |
 | DR12 | **Small agent tools** per TD-1; the engine enforces step order | B5, X8 |
-| DR13 | **Budgets per Change**, carried across `retry` and `back` for the same cause: retries, review rounds, re-plans; model spend policy disclosed before unattended work | S9, D9, D10, B12 |
-| DR14 | **Footprint and support statement**: setup is user-local by default and writes tracked files only with consent; J0 states what is supported, human-assisted, unknown or unsupported, and never offers to bypass signing, reviews, push protection or workflow approvals | J0 |
-| DR15 | **Merge consent is bound to the reviewed source head**; required remote gates are never downgraded to local checks | M2, P10 |
+| DR13 | **Budgets per Change** under the retry policy (§3.3), carried across `retry` and `back` for the same cause: identical failures, review rounds, re-plans; environment failures never count; credits shown per Change and step, never a cost question | S8, S9, D9, D10, B12, B14 |
+| DR14 | **Footprint and support statement**: setup is user-local; it writes `.vscode/tasks.json` and `.mcp.json` only with consent and lists them in `.git/info/exclude`, so nothing is committed; J0 states what is supported, human-assisted, unknown or unsupported, and never offers to bypass signing, reviews, push protection or workflow approvals | J0, X10 |
+| DR15 | **Merge gate** (§3.2): Delivery merges the exact head automatically once the gate passes, without a consent touchpoint unless the profile asks before merge; a new head re-evaluates the gate; required remote gates are never downgraded to local checks | M2, M8, P10, P11, B23 |
+| DR16 | **Pull-back** (§3.2): after a merge, fast-forward the local target only when it is not checked out, or is checked out clean and not diverged; never stash, reset or merge; otherwise a "behind" notice with Pull | M1, M7 |
 
 ### 3.6 Proof without test volume
 
@@ -286,14 +314,18 @@ clock skew, hostile repository or web content beyond the platform's own protecti
   - a required workflow never triggers for this PR;
   - the same missing prerequisite survives a re-plan and an answered request;
   - the user changes intent during an active task, and again after a merge was submitted;
-  - the merge is approved on head A, integration produces head B, then merge is attempted.
+  - the merge gate passes on head A, integration produces head B, then merge is attempted.
 - **Practice proof (M4).** One end-to-end run on a sandbox consumer repository with a non-OwlBear
   toolchain in a nested package, CI with a required check, and branch protection. The cheap common
   failures are triggered by hand once: failing check, hook rejection, moved target with a conflict,
-  closed chat mid-task, expired GitHub CLI login, CI failure, review comment, PR merged in GitHub.
+  closed chat mid-task, expired GitHub CLI login, CI failure, review comment, PR merged in GitHub,
+  pull-back onto a dirty checked-out target.
   Each continues after its prerequisite is restored until the next successful step. One interruption
   leaves unfinished work and an unconfirmed push or PR, and must end without lost work or duplicate
   effects. User touchpoints are counted against the budget.
+- **Visual check (M4).** A UI change in the sandbox gets the agent visual check: the reviewer opens
+  the host-launched preview, takes screenshots and judges them against the criteria. One deliberately
+  broken layout must fail it and return a fix task; the screenshots appear on the Change card.
 - **Real use (M5).** The first real consumer project. Problems found there become catalogue rows
   mapped to existing exits.
 - **Automated tests (P8).** Only for engine logic whose failure would be silent: exit transitions,
@@ -309,13 +341,14 @@ clock skew, hostile repository or web content beyond the platform's own protecti
 | Separate recovery prompts: repair, attention, target conflict | Exits inside the loop; at most one generic action per stop |
 | Custody, claims, bases and attempts on the card | Stage, situation and next actor |
 | Engine-owned merge runs product hooks and fails opaquely | Integration is a task with checks and the fix loop |
+| The user merges every PR | Automatic merge when the merge gate passes, then pull-back to the local clone |
 | Limits unknown to the authoring agent | Field-specific errors returned to the author |
 | Assumes OwlBear's own toolchain | Project profile confirmed at setup |
 
 ## 4. Recommendation, Confidence, and Limits
 
 **Recommendation:** use §3.2–3.6 as the first draft of D1 and D2 in M3. The charter (R4) adopts the
-touchpoint budget, the exit contract and DR1–DR15 as binding; the remaining M3 documents (status
+touchpoint budget, the exit contract and DR1–DR16 as binding; the remaining M3 documents (status
 model, architecture, cutover) are written against this catalogue.
 
 **Confidence:** medium-high that the common rows cover the ordinary failures of agent-driven work on a
@@ -327,6 +360,7 @@ be corrected by real use.
 **Limits:** the [platform probe](delivery-next-platform-probe.md#4-recommendation-confidence-and-limits)
 proved B7 and DR9 on its setup; X1, X4, X5, DR5 and DR10 are partly proven. DR7's answer surface and
 runner activation are designed ([charter §3.7](delivery-next-charter.md#37-interaction-surface-and-runner-activation),
-D3, D4) but not yet demonstrated. The employer seat and a protection-gated merge are still unproven.
+D3, D4) but not yet demonstrated. The `maba-pag` business seat (TD-17), a protection-gated automatic
+merge, pull-back and the visual check are still unproven.
 No consumer project was observed.
 The catalogue has not yet been reviewed by the user.
