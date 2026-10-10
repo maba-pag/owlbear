@@ -70,6 +70,7 @@ BACK: dict[StepKind, frozenset[StepKind]] = {
     StepKind.MERGE: frozenset({StepKind.INTEGRATE, StepKind.BUILD}),
 }
 _PR_CLOSED = "gate:merge:pr-closed"
+CONSENT = "gate:merge:consent"
 
 
 class StepResult(Record):
@@ -164,10 +165,13 @@ def schedule(
         if pr_state == "merged" or c.intent.abandoned_at:
             _go(c, StepKind.CLEANUP, mode=None if pr_state == "merged" else "abandon")
             c.outcome = None
-        elif pr_state == "closed" and not any(q.cause == _PR_CLOSED and q.answer is None for q in c.questions):
+        elif pr_state == "closed" and not any(
+            q.cause == _PR_CLOSED and (q.answer is None or c.outcome is None) for q in c.questions
+        ):
+            # An answered closed-PR question holds until the step its answer chose has run.
             _go(c, StepKind.MERGE)
             options = [
-                Option(id="abandon", label="Abandon this Change", next=StepKind.CLEANUP),
+                Option(id="abandon", label="Abandon this Change", next="abandon"),
                 Option(id="reopen", label="Reopen it and continue", next=StepKind.FOLLOW),
             ]
             _ask(c, Question(step=StepKind.MERGE, text="The PR was closed", options=options, cause=_PR_CLOSED), now)
@@ -178,13 +182,15 @@ def schedule(
     return c, next_step(c, now)
 
 
-def fold(change: Change, items: Iterable[InboxItem], now: datetime) -> Change:  # noqa: C901 - one case per item kind
+def fold(change: Change, items: Iterable[InboxItem], now: datetime) -> Change:  # noqa: C901, PLR0912 - per item kind
     """Apply inbox items in arrival order; a reconciled item makes the Change runnable again."""
     c = change.model_copy(deep=True)
     for item in items:
         match item:
             case BriefApproval(version=version) if version == c.brief.version:
                 c.brief.approved_version, c.brief.approved_at = version, item.at
+                if all(b.version != version for b in c.brief.approved):
+                    c.brief.approved.append(c.brief.model_copy(deep=True, update={"approved": []}))
                 if c.step.kind == StepKind.SHAPE:
                     _done(c, None, now)
                     c.outcome = None
@@ -196,22 +202,24 @@ def fold(change: Change, items: Iterable[InboxItem], now: datetime) -> Change:  
                         check.answer = Answer(
                             text=item.note, channel=item.channel, at=item.at, passed=item.passed, inputs=item.inputs
                         )
-                        _wake(c)
+                o, s = c.outcome, c.step
+                if o and o.waiting == Waiting.PERSON_CHECK and (s.kind, s.task) == (StepKind.CHECK, item.check):
+                    c.outcome = None
             case Recovery(action=action) if c.stop and c.stop.action == action:
                 c.stop = c.outcome = None
             case ConsentItem():
                 c.consent = MergeConsent(head=item.head, at=item.at, channel=item.channel, delta=item.delta)
-                _wake(c)
+                if c.outcome and c.outcome.cause == CONSENT:
+                    answer = AnswerItem(
+                        at=item.at, channel=item.channel, question=c.outcome.question or "", text=item.head
+                    )
+                    _answer(c, answer, now)
+                    c.outcome = None
             case IntentItem():
                 _intent(c, item)
             case _:
                 pass
     return c
-
-
-def _wake(c: Change) -> None:
-    if c.outcome and c.outcome.who == "you" and c.outcome.exit != Exit.STOP:
-        c.outcome = None
 
 
 def _intent(c: Change, item: IntentItem) -> None:
@@ -238,15 +246,17 @@ def _answer(c: Change, item: AnswerItem, now: datetime) -> None:
         c.intent.paused_at, c.intent.pause_reason = now, q.text
     elif target == "done":
         _done(c, None, now)
+    elif target == "abandon":
+        c.intent.abandoned_at = item.at
     elif target is not None:
         _enter(c, StepKind(target))
 
 
 def effect_observed(change: Change, question_id: str, now: datetime) -> Change:
-    """Record that an answer's effect was observed; only then does its cause's count reset."""
+    """Record that an answer's effect was observed; only then, and only once, does its cause's count reset."""
     c = change.model_copy(deep=True)
     for q in c.questions:
-        if q.id == question_id and q.answer is not None:
+        if q.id == question_id and q.answer is not None and q.effect_observed_at is None:
             q.effect_observed_at = now
             if q.cause:
                 c.budgets.causes.pop(q.cause, None)
@@ -338,7 +348,7 @@ def _done(c: Change, r: StepResult | None, now: datetime) -> None:  # noqa: C901
         case StepKind.REVIEW:
             if r and r.review:
                 c.reviews.append(r.review)
-            c.budgets.rounds.pop(s.task or "final", None)
+            c.budgets.rounds.pop(_round_key(c), None)
             for t in c.plan.tasks if c.plan else []:
                 t.done = t.done or t.id == s.task
             task = _open_task(c)
@@ -375,8 +385,17 @@ def _premise(c: Change, cause: str, task_id: str | None) -> str | None:
         return f"profile:{c.profile_version}"
     if step in {StepKind.SHAPE, StepKind.PLAN} or kind == ErrorKind.REVIEW:
         return f"brief:{c.brief.approved_version}"
+    return _scope(c, task_id)
+
+
+def _scope(c: Change, task_id: str | None) -> str | None:
     task = next((t for t in c.plan.tasks if t.id == task_id), None) if c.plan else None
     return "scope:" + ",".join(sorted(task.scope)) if task else None
+
+
+def _round_key(c: Change) -> str:
+    """Review rounds count per task scope, so a renamed task with the same scope keeps its rounds."""
+    return _scope(c, c.step.task) or c.step.mode or str(c.step.kind)
 
 
 def _count(c: Change, cause: str, now: datetime) -> int:
@@ -422,7 +441,10 @@ def _retry(c: Change, r: StepResult, now: datetime) -> None:
         if s.kind not in {StepKind.SHAPE, StepKind.PLAN, StepKind.REVIEW}:
             msg = f"{s.kind} retry needs a cause"
             raise ValueError(msg)
-        key = s.task or s.mode or str(s.kind)
+        if s.mode == "final" and r.fix_task is None:
+            msg = 'fix_task: empty - final review findings need a repair task, e.g. Task(id="f1", title="fix")'
+            raise ValueError(msg)
+        key = _round_key(c)
         c.budgets.rounds[key] = c.budgets.rounds.get(key, 0) + 1
         if c.budgets.rounds[key] > ROUND_LIMIT:
             fix = StepKind.BUILD if s.kind == StepKind.REVIEW else s.kind
@@ -454,7 +476,10 @@ def _back(c: Change, r: StepResult, now: datetime) -> None:
     if target is None or target not in BACK.get(s.kind, frozenset()):
         msg = f"{s.kind} cannot go back to {target}"
         raise ValueError(msg)
-    if r.cause and _count(c, r.cause, now) > RETRY_LIMIT:
+    if r.cause is None:
+        msg = f"{s.kind} back needs a cause"
+        raise ValueError(msg)
+    if _count(c, r.cause, now) > RETRY_LIMIT:
         _exhausted(c, r, now)
         return
     if target == StepKind.PLAN:

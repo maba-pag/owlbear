@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import TypeAdapter, ValidationError
 
 from owlbear_delivery_next import loop
-from owlbear_delivery_next.models import FORMAT, Change, ErrorKind, InboxItem, Record, Step, Stop
+from owlbear_delivery_next.models import FORMAT, PROFILE_FORMAT, Change, ErrorKind, InboxItem, Profile, Record, Stop
 from owlbear_delivery_next.storage_io import atomic_write, open_lock
 
 if TYPE_CHECKING:
@@ -25,11 +25,14 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from owlbear_delivery_next.loop import PrState
+    from owlbear_delivery_next.models import Step
 
 STORE_DIR = "owlbear-delivery"
 ACTIVITY_LIMIT = 200
-# Forward migrations of a Change record, keyed by the format they upgrade from.
-MIGRATIONS: dict[int, Callable[[dict[str, Any]], dict[str, Any]]] = {}
+type Migrations = dict[int, Callable[[dict[str, Any]], dict[str, Any]]]
+# Forward migrations of a Change or profile record, keyed by the format they upgrade from.
+MIGRATIONS: Migrations = {}
+PROFILE_MIGRATIONS: Migrations = {}
 _DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 _INBOX: TypeAdapter[InboxItem] = TypeAdapter(InboxItem)
 
@@ -91,6 +94,29 @@ def git_common_dir(cwd: Path) -> Path:
     return (cwd / out).resolve()
 
 
+def _load[T: Record](path: Path, model: type[T], current: int, migrations: Migrations) -> T:
+    """Read one versioned record, refusing a newer format and migrating an older one forward."""
+    name = path.parent.name if path.name == "change.json" else path.stem
+    try:
+        data = json.loads(path.read_text())
+        version = int(data.get("format", 0))
+    except (AttributeError, OSError, TypeError, ValueError) as exc:
+        msg = f"state of {name} is unreadable"
+        raise StoreError(msg) from exc
+    if version > current:
+        msg = f"{name} has format {version}, newer than {current}"
+        raise FormatTooNewError(msg)
+    try:
+        while version < current:
+            data = migrations[version](data)
+            version += 1
+            data["format"] = version
+        return model.model_validate(data)
+    except (KeyError, TypeError, ValueError) as exc:
+        msg = f"state of {name} cannot be migrated to format {current}"
+        raise StoreError(msg) from exc
+
+
 class Store:
     """Change records, locks, inboxes and activity logs of one clone."""
 
@@ -103,7 +129,11 @@ class Store:
         store = cls(git_common_dir(cwd) / STORE_DIR)
         store.root.mkdir(mode=0o700, exist_ok=True)
         marker = store.root / "format"
-        found = int(marker.read_text()) if marker.exists() else 0
+        try:
+            found = int(marker.read_text()) if marker.exists() else 0
+        except (OSError, ValueError) as exc:
+            msg = "store format marker is unreadable"
+            raise StoreError(msg) from exc
         if found > FORMAT:
             msg = f"store format {found} is newer than {FORMAT}"
             raise FormatTooNewError(msg)
@@ -118,24 +148,16 @@ class Store:
 
     def read(self, slug: str) -> Change:
         """Read one Change, migrating an older format forward."""
-        try:
-            data = json.loads((self._dir(slug) / "change.json").read_text())
-        except (OSError, ValueError) as exc:
-            msg = f"state of {slug} is unreadable"
-            raise StoreError(msg) from exc
-        version = data.get("format", 0)
-        if version > FORMAT:
-            msg = f"{slug} has format {version}, newer than {FORMAT}"
-            raise FormatTooNewError(msg)
-        try:
-            while version < FORMAT:
-                data = MIGRATIONS[version](data)
-                version += 1
-                data["format"] = version
-            return Change.model_validate(data)
-        except (KeyError, ValidationError) as exc:
-            msg = f"state of {slug} cannot be migrated to format {FORMAT}"
-            raise StoreError(msg) from exc
+        return _load(self._dir(slug) / "change.json", Change, FORMAT, MIGRATIONS)
+
+    def read_profile(self) -> Profile | None:
+        """Read the confirmed project profile under its own format gate; None before confirmation."""
+        path = self.root / "profile.json"
+        return _load(path, Profile, PROFILE_FORMAT, PROFILE_MIGRATIONS) if path.exists() else None
+
+    def write_profile(self, profile: Profile) -> None:
+        """Write the project profile atomically."""
+        atomic_write(self.root / "profile.json", profile.model_dump_json(indent=1))
 
     def write(self, lock: Lock, change: Change) -> None:
         """Write one Change atomically, keeping the previous file as ``.prev``."""
@@ -197,20 +219,24 @@ class Store:
         atomic_write(self._dir(slug) / "inbox" / name, _INBOX.dump_json(item).decode())
 
     def fold(self, lock: Lock, slug: str, now: datetime, pr_state: PrState | None = None) -> tuple[Change, Step | None]:
-        """Fold the inbox under the lock, then return the Change and the step to run, if any."""
+        """Fold the inbox under the lock; consumed item names are saved with the Change, so a replay skips them."""
         lock.check(slug)
+        change = self.read(slug)
+        present = sorted((self._dir(slug) / "inbox").glob("*.json"))
+        acked = [n for n in change.inbox_acked if n in {p.name for p in present}]
         files: list[Path] = []
         items: list[InboxItem] = []
-        for path in sorted((self._dir(slug) / "inbox").glob("*.json")):
+        for path in (p for p in present if p.name not in acked):
             try:
                 items.append(_INBOX.validate_json(path.read_bytes()))
                 files.append(path)
             except ValidationError:
                 path.rename(path.with_suffix(".rejected"))
-        change, step = loop.schedule(self.read(slug), items, now, pr_state)
+        change, step = loop.schedule(change, items, now, pr_state)
+        change.inbox_acked = acked + [p.name for p in files]
         self.write(lock, change)
-        for path in files:
-            path.unlink()
+        for path in present:
+            path.unlink(missing_ok=True)
         return change, step
 
     def log(self, lock: Lock, slug: str, event: dict[str, Any]) -> None:

@@ -5,9 +5,11 @@ import pytest
 from owlbear_delivery_next import loop
 from owlbear_delivery_next.loop import StepResult
 from owlbear_delivery_next.models import (
+    Answer,
     AnswerItem,
     Brief,
     BriefApproval,
+    Budget,
     Change,
     CheckResult,
     ConsentItem,
@@ -48,9 +50,13 @@ def result(kind: StepKind, exit_: Exit, **fields) -> StepResult:
     extra = {
         Exit.RETRY: {"cause": loop.cause_key(ErrorKind.CHECKS, kind, "test")},
         Exit.ASK: {"question": Question(step=kind, text="which key?")},
-        Exit.BACK: {"back_to": min(loop.BACK.get(kind, {K.PLAN})), "fix_task": Task(id="f1", title="fix")},
+        Exit.BACK: {
+            "back_to": min(loop.BACK.get(kind, {K.PLAN})),
+            "cause": loop.cause_key(ErrorKind.SCOPE, kind, "x"),
+            "fix_task": Task(id="f1", title="fix"),
+        },
         Exit.STOP: {"stop": Stop(kind=ErrorKind.LIVENESS, reason="r", action="End process 7", resume="gone", at=NOW)},
-        Exit.PENDING: {"waiting": Waiting.PERSON_CHECK, "who": "you"},
+        Exit.PENDING: {"waiting": Waiting.CI, "who": "github"},
     }.get(exit_, {})
     return StepResult(exit=exit_, **(extra | fields))
 
@@ -59,9 +65,7 @@ def resume_items(c: Change) -> list:
     o = c.outcome
     if o.exit == Exit.ASK:
         return [AnswerItem(at=NOW, question=o.question)]
-    if o.exit == Exit.STOP:
-        return [Recovery(at=NOW, action=c.stop.action)]
-    return [ConsentItem(at=NOW, head="abc")] if o.who == "you" else []
+    return [Recovery(at=NOW, action=c.stop.action)] if o.exit == Exit.STOP else []
 
 
 @pytest.mark.parametrize(("kind", "exit_"), [(k, e) for k, exits in loop.EXITS.items() for e in sorted(exits)])
@@ -82,12 +86,30 @@ def test_back_only_to_an_allowed_step():
         loop.apply(change(K.REVIEW), result(K.REVIEW, Exit.BACK, back_to=K.BUILD), NOW)
 
 
+@pytest.mark.parametrize(
+    ("step", "step_result", "error"),
+    [
+        (Step(kind=K.BUILD, task="t1"), StepResult(exit=Exit.BACK, back_to=K.PLAN), "back needs a cause"),
+        (Step(kind=K.REVIEW, mode="final"), StepResult(exit=Exit.RETRY, reason="naming"), "fix_task: empty"),
+    ],
+)
+def test_results_without_their_required_record_are_invalid(step, step_result, error):
+    with pytest.raises(ValueError, match=error):
+        loop.apply(change().model_copy(update={"step": step}), step_result, NOW)
+
+
+def test_final_findings_build_their_authored_repair_task():
+    fix = StepResult(exit=Exit.RETRY, fix_task=Task(id="f1", title="fix", origin="review"))
+    c = loop.apply(change(K.REVIEW, None, "final"), fix, NOW)
+    assert (c.step.kind, c.step.task, c.plan.tasks[-1].id) == (K.BUILD, "f1", "f1")
+
+
 def test_walk_from_brief_approval_to_done():
     checks = [PersonCheck(id="p1", criteria=["AC-1"], paths=["ui"])]
     c = change(K.SHAPE, None, checks=checks).model_copy(update={"plan": None})
     c.brief.approved_version = None
     c, step = loop.schedule(c, [BriefApproval(at=NOW, version=1)], NOW)
-    assert step.kind == K.PLAN
+    assert (step.kind, c.brief.approved[0].version, c.brief.approved[0].criteria) == (K.PLAN, 1, c.brief.criteria)
     review = Review(commit="abc", inputs=Inputs(criteria={"AC-1": 1}), verdict="pass")
     walk = [
         (StepResult(exit=Exit.DONE, plan=change().plan), (K.BUILD, "t1", None)),
@@ -130,6 +152,15 @@ def test_cause_count_survives_retry_back_replan_and_an_unobserved_answer():
     assert step.kind == K.PLAN
     assert c.budgets.causes[cause].count == 4
     assert cause not in loop.effect_observed(c, c.questions[-1].id, NOW).budgets.causes
+
+
+def test_effect_observation_clears_a_cause_once_per_answer():
+    q = Question(id="q1", step=K.BUILD, text="key?", cause="c", answer=Answer(at=NOW))
+    c = change(questions=[q])
+    c.budgets.causes["c"] = Budget(count=3)
+    c = loop.effect_observed(c, "q1", NOW)
+    c.budgets.causes["c"] = Budget(count=1)
+    assert loop.effect_observed(c, "q1", LATER).budgets.causes["c"].count == 1
 
 
 def _profile(c):
@@ -186,10 +217,19 @@ def test_third_round_of_findings_asks_and_accepting_moves_on():
     assert (step.kind, step.task) == (K.BUILD, "t2")
 
 
+def test_renamed_task_with_the_same_scope_keeps_its_review_rounds():
+    c = change(K.REVIEW)
+    for task in ("t1", "t1b", "t1c"):
+        c.plan.tasks[0].id = task
+        c.step = Step(kind=K.REVIEW, task=task)
+        c = loop.apply(c, StepResult(exit=Exit.RETRY, reason="naming"), NOW)
+    assert c.outcome.exit == Exit.ASK
+
+
 def test_fourth_replan_asks():
     c = change()
     c.budgets.replans = loop.REPLAN_LIMIT
-    c = loop.apply(c, StepResult(exit=Exit.BACK, back_to=K.PLAN), NOW)
+    c = loop.apply(c, StepResult(exit=Exit.BACK, back_to=K.PLAN, cause="scope:build:x"), NOW)
     assert (c.step.kind, c.outcome.exit) == (K.BUILD, Exit.ASK)
 
 
@@ -207,16 +247,37 @@ def _paused(c):
 
 
 def _check_pending(c):
-    c = loop.apply(c.model_copy(update={"step": Step(kind=K.CHECK, task="p1")}), result(K.CHECK, Exit.PENDING), NOW)
+    pending = result(K.CHECK, Exit.PENDING, waiting=Waiting.PERSON_CHECK, who="you")
+    c = loop.apply(c.model_copy(update={"step": Step(kind=K.CHECK, task="p1")}), pending, NOW)
     return c, CheckResult(at=NOW, check="p1", passed=True, inputs=Inputs())
 
 
-@pytest.mark.parametrize("wait", [_asked, _stopped, _paused, _check_pending])
+def _consent_asked(c):
+    asked = StepResult(exit=Exit.ASK, question=Question(step=K.MERGE, text="approve abc", cause=loop.CONSENT))
+    return loop.apply(c.model_copy(update={"step": Step(kind=K.MERGE)}), asked, NOW), ConsentItem(at=NOW, head="abc")
+
+
+@pytest.mark.parametrize("wait", [_asked, _stopped, _paused, _check_pending, _consent_asked])
 def test_inbox_is_folded_before_exclusions(wait):
     c, item = wait(change(checks=[PersonCheck(id="p1")]))
     assert loop.schedule(c, [], NOW)[1] is None
     c, step = loop.schedule(c, [item], NOW)
     assert step == c.step
+
+
+@pytest.mark.parametrize(
+    ("wait", "item"),
+    [
+        (_asked, CheckResult(at=NOW, check="p1", passed=True, inputs=Inputs())),
+        (_asked, ConsentItem(at=NOW, head="abc")),
+        (_check_pending, CheckResult(at=NOW, check="p2", passed=True, inputs=Inputs())),
+        (_check_pending, ConsentItem(at=NOW, head="abc")),
+        (_consent_asked, AnswerItem(at=NOW, question="q9")),
+    ],
+)
+def test_unrelated_items_leave_a_wait_in_place(wait, item):
+    c, _ = wait(change(checks=[PersonCheck(id="p1"), PersonCheck(id="p2")]))
+    assert loop.schedule(c, [item], NOW)[1] is None
 
 
 def test_merged_pr_reaches_cleanup_while_paused_and_waiting():
@@ -229,6 +290,22 @@ def test_closed_pr_asks_once():
     c, step = loop.schedule(change(), [], NOW, "closed")
     c, step = loop.schedule(c, [], NOW, "closed")
     assert (step, c.step.kind, len(c.questions)) == (None, K.MERGE, 1)
+
+
+def test_closed_pr_reopen_runs_before_the_pr_is_judged_again():
+    c, _ = loop.schedule(change(), [], NOW, "closed")
+    c, step = loop.schedule(c, [AnswerItem(at=NOW, question="q1", option="reopen")], NOW, "closed")
+    assert (step.kind, len(c.questions)) == (K.FOLLOW, 1)
+    c, step = loop.schedule(loop.apply(c, StepResult(exit=Exit.DONE), NOW), [], NOW, "closed")
+    assert (step, len(c.questions)) == (None, 2)
+
+
+def test_closed_pr_abandon_cleans_up_as_abandoned():
+    c, _ = loop.schedule(change(), [], NOW, "closed")
+    c, step = loop.schedule(c, [AnswerItem(at=NOW, question="q1", option="abandon")], NOW, "closed")
+    assert (step.kind, step.mode) == (K.CLEANUP, "abandon")
+    c = loop.apply(c, StepResult(exit=Exit.DONE), NOW)
+    assert (c.finished_at, c.intent.abandoned_at) == (NOW, NOW)
 
 
 def test_next_check_needs_a_passing_answer_on_unchanged_inputs():

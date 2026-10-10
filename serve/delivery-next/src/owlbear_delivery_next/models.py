@@ -9,6 +9,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 FORMAT = 1
+PROFILE_FORMAT = 1
 
 type Actor = Literal["you", "admin", "delivery", "github"]
 type Channel = Literal["status-view", "chat"]
@@ -88,7 +89,7 @@ class Criterion(Record):
 
 
 class Brief(Record):
-    """The user's brief: the current draft version and the approved one."""
+    """The user's brief: the current draft, the approved version, and each approved version's content."""
 
     version: int = 0
     approved_version: int | None = None
@@ -97,6 +98,7 @@ class Brief(Record):
     scope: list[str] = Field(default_factory=list)
     non_goals: list[str] = Field(default_factory=list)
     criteria: list[Criterion] = Field(default_factory=list)
+    approved: list[Brief] = Field(default_factory=list)
 
 
 class Intent(Record):
@@ -140,11 +142,11 @@ class Decision(Record):
 
 
 class Option(Record):
-    """One answer option; ``next`` names the step it leads to, ``done`` accepts, ``pause`` pauses."""
+    """One answer option; ``next`` names the step it leads to, or ``done``, ``pause`` or ``abandon``."""
 
     id: str
     label: str
-    next: StepKind | Literal["done", "pause"] | None = None
+    next: StepKind | Literal["done", "pause", "abandon"] | None = None
 
 
 class Answer(Record):
@@ -289,6 +291,25 @@ class Change(Record):
     stop: Stop | None = None
     names: Names = Field(default_factory=Names)
     finished_at: datetime | None = None
+    inbox_acked: list[str] = Field(default_factory=list)
+
+
+class ProfileEntry(Record):
+    """One detected project fact with its evidence (DR1); an HTTP 403 on rules is unknown."""
+
+    state: Literal["known", "unknown", "unsupported"]
+    value: str = ""
+    evidence: str = ""
+
+
+class Profile(Record):
+    """The confirmed project profile; a new version is a premise change."""
+
+    format: int = PROFILE_FORMAT
+    version: int = 0
+    confirmed_at: datetime | None = None
+    entries: dict[str, ProfileEntry] = Field(default_factory=dict)
+    models: dict[StepKind, str] = Field(default_factory=dict)
 
 
 class _Item(Record):

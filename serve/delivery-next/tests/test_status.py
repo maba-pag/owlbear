@@ -6,6 +6,7 @@ from owlbear_delivery_next.models import (
     Change,
     ErrorKind,
     Exit,
+    Intent,
     Outcome,
     Plan,
     Step,
@@ -73,6 +74,16 @@ def test_finished_change_is_not_overlaid():
             build(),
             Activity(host_up=True, holder_pid=4242),
             Status("Build 2/2 · not running: waiting for process 4242 to end", None, "delivery"),
+        ),
+        (
+            build(intent=Intent(hold=True)),
+            Activity(host_up=True, runner_alive=True),
+            Status("Build 2/2 · holding for your change: finishing build", None, "delivery"),
+        ),
+        (
+            build(outcome=Outcome(exit=Exit.RETRY, denial="docker compose up", at=NOW)),
+            Activity(host_up=True, runner_alive=True, last_event_at=NOW),
+            Status("Build 2/2 · implementing: rate limiter · last denied: docker compose up", None, "delivery"),
         ),
     ],
 )

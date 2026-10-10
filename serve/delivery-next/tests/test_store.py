@@ -3,12 +3,25 @@ import os
 import subprocess
 import sys
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
+from owlbear_delivery_next import status
 from owlbear_delivery_next import store as store_mod
 from owlbear_delivery_next.loop import StepResult, apply
-from owlbear_delivery_next.models import AnswerItem, Change, Exit, Question, Step, StepKind
+from owlbear_delivery_next.models import (
+    AnswerItem,
+    Brief,
+    BriefApproval,
+    Change,
+    Exit,
+    Profile,
+    ProfileEntry,
+    Question,
+    Step,
+    StepKind,
+)
 from owlbear_delivery_next.store import FormatTooNewError, LockHeldError, Store, StoreError
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
@@ -60,11 +73,33 @@ def test_every_worktree_opens_the_same_store_in_the_common_git_dir(repo, store):
     assert Store.open(repo.parent / "wt").root == store.root == (repo / ".git" / "owlbear-delivery").resolve()
 
 
-def test_newer_store_format_is_refused_with_an_upgrade_stop(repo, store):
-    (store.root / "format").write_text("99\n")
-    with pytest.raises(FormatTooNewError) as err:
+@pytest.mark.parametrize(("marker", "action"), [("99\n", "Upgrade OwlBear"), ("x\n", "Restore the previous state")])
+def test_unusable_store_format_is_refused_with_its_stop(repo, store, marker, action):
+    (store.root / "format").write_text(marker)
+    with pytest.raises(StoreError) as err:
         Store.open(repo)
-    assert err.value.stop(NOW).action == "Upgrade OwlBear"
+    assert err.value.stop(NOW).action == action
+
+
+@pytest.mark.parametrize("text", ["{broken", "[]", '{"format": "x"}', '{"format": null}', '{"format": 1, "slug": 3}'])
+def test_malformed_state_is_a_store_error_with_a_restore_stop(store, text):
+    save(store, Change(slug="c1"))
+    (store.root / "changes" / "c1" / "change.json").write_text(text)
+    with pytest.raises(StoreError) as err:
+        store.read("c1")
+    assert status.unloadable(err.value.stop(NOW)).action == "Restore the previous state"
+
+
+def test_profile_has_its_own_format_gate(store, monkeypatch):
+    assert store.read_profile() is None
+    store.write_profile(Profile(version=2, entries={"rules": ProfileEntry(state="unknown", evidence="HTTP 403")}))
+    assert store.read_profile().entries["rules"].state == "unknown"
+    monkeypatch.setattr(store_mod, "PROFILE_FORMAT", 2)
+    with pytest.raises(StoreError, match="cannot be migrated"):
+        store.read_profile()
+    monkeypatch.setattr(store_mod, "PROFILE_FORMAT", 0)
+    with pytest.raises(FormatTooNewError):
+        store.read_profile()
 
 
 def test_change_records_migrate_forward_or_refuse(store, monkeypatch):
@@ -118,6 +153,24 @@ def test_inbox_written_without_the_lock_is_folded_by_its_holder(store):
     assert (change.questions[0].answer.text, step.kind) == ("FOO", StepKind.BUILD)
     assert store.read("c1") == change
     assert not list((store.root / "changes" / "c1" / "inbox").iterdir())
+
+
+def test_interrupted_fold_never_applies_an_item_twice(store, monkeypatch):
+    save(store, Change(slug="c1", brief=Brief(version=1)))
+    store.put_inbox("c1", BriefApproval(at=NOW, version=1))
+
+    def killed(*_args, **_kwargs):
+        msg = "killed"
+        raise OSError(msg)
+
+    monkeypatch.setattr(Path, "unlink", killed)
+    with store.lock("c1") as lock, pytest.raises(OSError, match="killed"):
+        store.fold(lock, "c1", NOW)
+    monkeypatch.undo()
+    save(store, apply(store.read("c1"), StepResult(exit=Exit.BACK, back_to=StepKind.SHAPE, cause="scope:plan:"), NOW))
+    with store.lock("c1") as lock:
+        assert store.fold(lock, "c1", NOW)[1].kind == StepKind.SHAPE
+        assert store.fold(lock, "c1", NOW)[0].inbox_acked == []
 
 
 def test_activity_keeps_only_the_last_events(store, monkeypatch):

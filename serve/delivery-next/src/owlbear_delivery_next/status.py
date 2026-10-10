@@ -15,26 +15,17 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.models import Actor, Change, Stop
 
 QUIET = timedelta(minutes=10)
-_STAGE = {
-    StepKind.SHAPE: "Shape",
-    StepKind.PLAN: "Plan",
-    StepKind.PUBLISH: "Publish",
-    StepKind.FOLLOW: "Publish",
-    StepKind.CHECK: "Check",
-    StepKind.MERGE: "Merge",
-    StepKind.CLEANUP: "Done",
-}
 _WORK = {
-    StepKind.SHAPE: ("shaping", "reviewer"),
-    StepKind.PLAN: ("planning", "planner"),
-    StepKind.BUILD: ("implementing", "builder"),
-    StepKind.REVIEW: ("reviewing", "reviewer"),
-    StepKind.INTEGRATE: ("updating with the target", "builder"),
-    StepKind.CHECK: ("preparing", "builder"),
-    StepKind.PUBLISH: ("publishing", "delivery"),
-    StepKind.FOLLOW: ("following", "delivery"),
-    StepKind.MERGE: ("merging", "delivery"),
-    StepKind.CLEANUP: ("cleaning up", "delivery"),
+    StepKind.SHAPE: ("Shape", "shaping", "reviewer"),
+    StepKind.PLAN: ("Plan", "planning", "planner"),
+    StepKind.BUILD: ("Build", "implementing", "builder"),
+    StepKind.REVIEW: ("Build", "reviewing", "reviewer"),
+    StepKind.INTEGRATE: ("Build", "updating with the target", "builder"),
+    StepKind.CHECK: ("Check", "preparing", "builder"),
+    StepKind.PUBLISH: ("Publish", "publishing", "delivery"),
+    StepKind.FOLLOW: ("Publish", "following", "delivery"),
+    StepKind.MERGE: ("Merge", "merging", "delivery"),
+    StepKind.CLEANUP: ("Done", "cleaning up", "delivery"),
 }
 
 
@@ -59,15 +50,11 @@ class Status:
 
 
 def _age(delta: timedelta) -> str:
-    seconds = int(delta.total_seconds())
-    if seconds < 60:  # noqa: PLR2004 - one minute
-        return f"{seconds} s"
-    if seconds < 3600:  # noqa: PLR2004 - one hour
-        return f"{seconds // 60} min"
-    if seconds < 86400:  # noqa: PLR2004 - one day
-        return f"{seconds // 3600} h"
-    days = seconds // 86400
-    return f"{days} day{'s' if days > 1 else ''}"
+    n = int(delta.total_seconds())
+    for size, unit in ((86400, "day"), (3600, "h"), (60, "min")):
+        if n >= size:
+            return f"{n // size} {unit}{'s' if unit == 'day' and n >= 2 * size else ''}"
+    return f"{n} s"
 
 
 def stage(c: Change) -> str:
@@ -76,7 +63,12 @@ def stage(c: Change) -> str:
     if kind in {StepKind.BUILD, StepKind.REVIEW} and c.plan and c.plan.tasks:
         ids = [t.id for t in c.plan.tasks]
         return f"Build {ids.index(c.step.task) + 1 if c.step.task in ids else len(ids)}/{len(ids)}"
-    return _STAGE.get(kind, "Build")
+    return _WORK[kind][0]
+
+
+def unloadable(stop: Stop) -> Status:
+    """Status of a Change whose state cannot load, from the store error's stop (restore or upgrade)."""
+    return Status(f"stopped: {stop.reason}", stop.action, stop.actor)
 
 
 def status(c: Change, activity: Activity, now: datetime) -> Status:  # noqa: C901, PLR0911, PLR0912 - D3 rules
@@ -91,11 +83,13 @@ def status(c: Change, activity: Activity, now: datetime) -> Status:  # noqa: C90
             return Status("Abandoned · PR closed, branch kept", None, "delivery")
         saved = f" · unmerged work saved in {', '.join(c.names.preserved)}" if c.names.preserved else ""
         return Status(f"Done · merged{saved}", None, "delivery")
-    verb, role = _WORK[c.step.kind]
+    _, verb, role = _WORK[c.step.kind]
     if c.intent.paused_at:
         if activity.runner_alive:
             return Status(f"{s} · pausing: finishing {c.step.kind}", None, "delivery")
         return Status(f"{s} · paused by you {_age(now - c.intent.paused_at)} ago", "Resume", "you")
+    if c.intent.hold and activity.runner_alive:
+        return Status(f"{s} · holding for your change: finishing {c.step.kind}", None, "delivery")
     if o and o.exit == Exit.ASK:
         return Status(f"{s} · waiting for you: {o.reason}", "Answer", "you")
     if o and o.exit == Exit.STOP and c.stop:
@@ -111,6 +105,8 @@ def status(c: Change, activity: Activity, now: datetime) -> Status:  # noqa: C90
         last = activity.last_event_at
         if last and now - last > QUIET:
             return Status(f"{line} · no activity for {_age(now - last)}", None, "delivery")
+        if o and o.denial:
+            return Status(f"{line} · last denied: {o.denial}", None, "delivery")
         return Status(f"{line} · {role} active {_age(now - last) if last else '0 s'} ago", None, "delivery")
     if o and o.exit == Exit.RETRY and o.wake_at and o.wake_at > now and o.cause:
         k = c.budgets.causes[o.cause].count if o.cause in c.budgets.causes else 1
