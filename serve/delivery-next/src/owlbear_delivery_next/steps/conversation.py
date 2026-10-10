@@ -7,7 +7,10 @@ import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.models import Exit, Handling, ItemRef, Response
+from owlbear_delivery_next import tools
+from owlbear_delivery_next.failures import cause_key
+from owlbear_delivery_next.loop import StepResult
+from owlbear_delivery_next.models import ErrorKind, Exit, Handling, ItemRef, Option, Question, Response, StepKind
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
@@ -190,6 +193,28 @@ def respond(task: Task | None, payload: object, head: str | None, exit_: Exit) -
     r = getattr(payload, "response", None)
     if task is not None and task.item is not None and r is not None and exit_ == Exit.DONE:
         task.response = Response(how=r.how, text=r.text, commit=head)
+
+
+def disputed(task: Task | None, payload: object, result: StepResult) -> StepResult:
+    """A conversation task never re-plans the Change: a reported wrong brief or plan asks the owner instead."""
+    p = payload
+    if task is None or task.item is None or result.exit != Exit.BACK or not isinstance(p, tools.WrongPremise):
+        return result
+    if p.stage == "target":
+        return result
+    request = task.detail.split("\n\n")[0][:300]
+    text = (
+        f"A reviewer asks: {request} ({task.item.url}). The Builder reports: {p.reason[:300]} "
+        f"({'; '.join(p.evidence)[:300]}). How should Delivery respond?"
+    )
+    options = [
+        Option(id="implement", label="Implement the request", next=StepKind.BUILD),
+        Option(id="decline", label="Do not implement it; reply with my reason (type it)", next=StepKind.BUILD),
+        Option(id="pause", label="Pause", next="pause"),
+    ]
+    cause = cause_key(ErrorKind.REVIEW, StepKind.BUILD, f"dispute-{task.item.id}")
+    question = Question(step=StepKind.BUILD, text=text, cause=cause, options=options)
+    return StepResult(exit=Exit.ASK, reason=text, cause=cause, question=question)
 
 
 def summary(item: ConversationItem) -> str:

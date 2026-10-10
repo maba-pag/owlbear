@@ -448,6 +448,24 @@ def task_for(c, item, tid):
     return conversation.marker(c.slug, item, tid)
 
 
+def test_a_wrong_premise_on_a_review_request_asks_the_owner_instead_of_replanning_the_change():
+    ref = ItemRef(id="t1", kind="thread", version="v", task="pr-t1-v", url="https://x/pull/7#r1")
+    task = Task(id="pr-t1-v", title="answer", item=ref, detail="boecht: handle min > max\n\nhttps://x/pull/7#r1")
+    replan = loop.StepResult(exit=Exit.BACK, back_to=StepKind.PLAN, cause="scope:build:brief", reason="not in brief")
+    premise = tools.WrongPremise(stage="brief", reason="not in the brief", evidence=["src/math.ts:1"])
+    asked = conversation.disputed(task, premise, replan)
+    assert (asked.exit, asked.back_to, [o.next for o in asked.question.options]) == (
+        Exit.ASK,
+        None,
+        [StepKind.BUILD, StepKind.BUILD, "pause"],
+    )
+    assert "handle min > max" in asked.question.text
+    assert "not in the brief" in asked.question.text
+    target = tools.WrongPremise(stage="target", reason="needs main", evidence=["x"])
+    assert conversation.disputed(task, target, replan) is replan  # a missing target commit still integrates
+    assert conversation.disputed(Task(id="t", title="plan task"), premise, replan) is replan
+
+
 def test_a_person_quoting_a_full_delivery_marker_still_opens_a_task(tmp_path):
     c = change()
     mark = task_for(c, "c9", "pr-c9-old")

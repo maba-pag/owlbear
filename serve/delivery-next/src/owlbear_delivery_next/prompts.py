@@ -39,8 +39,10 @@ This task answers one pull-request {kind} (the details). Pass `response` to `sub
 - `fixed`: you changed and committed code for it; `text` says what changed.
 - `answered`: it needs no code change; `text` is your reply. No commit is needed.
 - `no-action`: nothing to do (for example a bot notice); `text` is the reason. Not allowed for a thread.
-Delivery posts `text` as your reply in GitHub; do not post it yourself. If you disagree with the request
-and the owner should decide, call `ask_question` instead.
+Delivery posts `text` as your reply in GitHub; do not post it yourself. A request inside this task's scope
+that contradicts no criterion of the brief is part of this Change: implement it. If the code already does it,
+answer where. If it contradicts a criterion or needs paths outside the scope, call `ask_question` with both
+positions; never report a wrong premise for a review request.
 """
 REMINDER = (
     "Your turn ended without a result. Finish the task and call submit_result, or call ask_question or "
