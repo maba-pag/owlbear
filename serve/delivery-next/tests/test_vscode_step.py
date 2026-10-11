@@ -746,6 +746,8 @@ def test_a_turn_without_a_result_is_reminded_once_then_retried(wt: Path, tmp_pat
 
 
 def test_a_cold_window_without_the_agent_is_retried_once(wt: Path, tmp_path: Path) -> None:
+    (wt / ".vscode").mkdir()
+    (wt / ".vscode" / "settings.json").write_text('{ // mine\n  "a": 1,\n}\n')
     a = Adapted(wt, tmp_path / "steps" / "4.json", [[USAGE, {"type": "chat/turnComplete"}]], [GOOD])
     windows = iter([[{"agent": ""}], [{"agent": WINDOW}]])
     launch = a.host.launch
@@ -760,6 +762,19 @@ def test_a_cold_window_without_the_agent_is_retried_once(wt: Path, tmp_path: Pat
     assert len(a.host.launched) == 2
     assert [e["end"] for e in a.events if e.get("event") == "vscode-step"] == ["no-agent", "complete"]
     assert run.ending == "result"
+    assert (wt / ".vscode" / "settings.json").read_text() == '{ // mine\n  "a": 1,\n}\n'
+
+
+def test_a_chat_without_the_agent_whose_cancel_is_unconfirmed_is_not_retried(wt: Path, tmp_path: Path) -> None:
+    a = Adapted(wt, tmp_path / "steps" / "7.json", [], [])
+    a.host.on_launch = [{"agent": ""}]
+    a.host.ignore_cancel = True
+    run = a.run()
+
+    assert len(a.host.launched) == 1
+    assert run.ending == "error"
+    assert run.termination.confirmed is False
+    assert "cancel" in run.termination.problems[0]
 
 
 def test_an_unreachable_editor_ends_in_a_retry_and_restores_the_files(wt: Path, tmp_path: Path) -> None:

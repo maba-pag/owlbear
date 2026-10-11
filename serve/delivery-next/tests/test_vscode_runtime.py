@@ -14,7 +14,7 @@ import psutil
 import pytest
 from mcp import Client, StdioServerParameters
 
-from owlbear_delivery_next import cli, leftovers, runner, sdk_adapter, step_mcp
+from owlbear_delivery_next import cli, leftovers, runner, sdk_adapter, step_mcp, tools
 from owlbear_delivery_next import window_files as wf
 from owlbear_delivery_next.models import StepKind
 from owlbear_delivery_next.permissions import Policy
@@ -94,6 +94,24 @@ def test_window_files_never_reach_a_commit_and_are_restored(repo: Path) -> None:
     assert not (repo / wf.agent_path("builder")).exists()
     assert git(repo, "ls-files", "-v", wf.SETTINGS).startswith("H ")
     assert git(repo, "status", "--porcelain") == ""
+
+
+def test_a_locally_edited_tracked_file_is_refused_and_kept(repo: Path) -> None:
+    (repo / ".mcp.json").write_text("{}\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "mcp")
+    (repo / ".mcp.json").write_text('{"mcpServers": {}}\n')
+    with pytest.raises(wf.SettingsError, match="local edits"):
+        wf.place(repo, wf.MCP, wf.mcp(Path("/inbox.json")))
+    assert (repo / ".mcp.json").read_text() == '{"mcpServers": {}}\n'
+    assert git(repo, "ls-files", "-v", wf.MCP).startswith("H ")
+
+
+def test_a_closed_gate_accepts_nothing_more() -> None:
+    g = gate()
+    assert g.finish("deadline", None, "step deadline") is False
+    assert g.call(tools.SUBMIT, GOOD) == ("The step has already ended. Stop now.", False)
+    assert (g.run.ending, g.run.head, g.run.payload) == ("deadline", None, None)
 
 
 def test_a_second_placement_is_undone_back_to_the_first_state(repo: Path) -> None:
@@ -226,7 +244,9 @@ def test_only_what_a_shell_started_counts_as_the_agents(monkeypatch, chain, expe
     assert leftovers.agent_started(1234) is expected
 
 
-@pytest.mark.parametrize(("exe", "expected"), [("/opt/node", True), ("/usr/libexec/lsd", False), ("", False)])
+@pytest.mark.parametrize(
+    ("exe", "expected"), [("/opt/node", True), ("/usr/bin/git", True), ("/usr/libexec/lsd", False), ("", False)]
+)
 def test_a_detached_process_counts_unless_it_is_the_systems(monkeypatch, exe, expected) -> None:
     monkeypatch.setattr(leftovers.psutil, "Process", lambda _pid: FakeProc("x", exe, FakeProc("launchd", ""), ppid=1))
     assert leftovers.agent_started(1234) is expected

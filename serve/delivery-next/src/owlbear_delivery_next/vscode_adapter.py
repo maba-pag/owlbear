@@ -97,6 +97,8 @@ class _Driver:
         self.cfg.journal.event({"at": datetime.now(UTC).isoformat(timespec="seconds"), **event})
 
     def pin(self, folder: Path, model: str) -> None:
+        if any(p.rel == wf.SETTINGS for p in self.placed):
+            return  # pinned by an earlier attempt of this step
         try:
             self.placed.append(wf.place(folder, wf.SETTINGS, wf.settings(model)))
         except OSError as exc:
@@ -124,21 +126,26 @@ class _Driver:
             )
             out = Step(conn, spec, self.deny, hooks=hooks).run(self.control, limit=DEADLINES.get(cfg.kind, 1200.0))
             self.log(event="vscode-step", attempt=attempt, end=out.end, detail=out.detail, session=out.session)
-            if out.end != "no-agent":
+            if out.end != "no-agent" or out.cancel_confirmed is False:
                 break
         return out
 
     def step(self, inbox: Path) -> Outcome:
+        """Run the attempts and close the gate before the inbox stops, so nothing is accepted afterwards."""
         cfg, conn = self.cfg, None
         try:
             self.placed.append(wf.place(cfg.worktree, wf.MCP, wf.mcp(inbox)))
             self.placed.append(wf.place(cfg.worktree, wf.agent_path(self.role), wf.agent(self.role)))
             with Inbox(self.gate, inbox):
                 conn = self.env.connect(cfg.worktree)
-                return self.drive(conn)
+                out = self.drive(conn)
+                _ending(out, self.run, self.gate)
+                return out
         except (OSError, KeyError, TypeError, wf.SettingsError, ahp.HostError, subprocess.SubprocessError) as exc:
             end = "closed" if self.control.started.is_set() else "error"
-            return Outcome(end, f"{type(exc).__name__}: {exc}"[:300])
+            out = Outcome(end, f"{type(exc).__name__}: {exc}"[:300])
+            _ending(out, self.run, self.gate)
+            return out
         finally:
             if close := getattr(conn, "close", None):
                 close()
@@ -146,18 +153,18 @@ class _Driver:
                 self.log(event="window-file", problem=problem)
 
 
-def _ending(out: Outcome, run: Run, *, accepted: bool) -> None:
-    """A model mismatch voids any result; otherwise an accepted call stands and anything else is a retry."""
+def _ending(out: Outcome, run: Run, gate: Gate) -> None:
+    """Close the gate with the runtime's ending; a model mismatch voids any result, else an accepted call stands."""
     if out.end == "wrong-model":
-        run.ending, run.payload, run.head, run.detail = "error", None, None, f"wrong model: {out.detail}"[:300]
-    elif accepted:
-        return
+        detail = f"wrong model: {out.detail}"[:300]
+        gate.finish("error", None, detail)
+        run.ending, run.payload, run.head, run.detail = "error", None, None, detail
     elif out.end == "complete":
-        run.ending, run.detail = "no-result", "the turn ended without a result"
+        gate.finish("no-result", None, "the turn ended without a result")
     elif out.end == "timeout":
-        run.ending, run.detail = "deadline", "step deadline"
+        gate.finish("deadline", None, "step deadline")
     else:
-        run.ending, run.detail = "error", f"VS Code step {out.end}: {out.detail}"[:300]
+        gate.finish("error", None, f"VS Code step {out.end}: {out.detail}"[:300])
 
 
 def _usage(out: Outcome, model: str | None) -> dict[str, Any]:
@@ -187,7 +194,6 @@ def run(cfg: Session, inbox: Path, env: Env | None = None) -> Run:
     started = driver.control.started.is_set()
     if started:
         cfg.journal.delivered()
-    _ending(out, result, accepted=driver.gate.done)
     result.usage = _usage(out, cfg.model)
     result.termination = _termination(out, env.settle(cfg.worktree, since), started=started)
     return result

@@ -27,11 +27,13 @@ class Gate:
         self.done = False
         self._lock = threading.Lock()
 
-    def finish(self, ending: Ending, payload: tools.Args | None = None, detail: str = "") -> None:
-        """End the step once; the first ending is kept."""
+    def finish(self, ending: Ending, payload: tools.Args | None = None, detail: str = "") -> bool:
+        """End the step once and close the gate; the first ending is kept. Return whether it had already ended."""
         with self._lock:
+            was = self.done
             self._finish(ending, payload, detail)
         self.ended()
+        return was
 
     def _finish(self, ending: Ending, payload: tools.Args | None, detail: str) -> None:
         if not self.done:

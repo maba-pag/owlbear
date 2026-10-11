@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 EDITOR = ("/Visual Studio Code", "/.vscode/extensions/", "/.vscode-insiders/")  # the app, its harness, extensions
-SYSTEM = ("/System/", "/usr/", "/bin/", "/sbin/", "/Library/Apple/")
+SYSTEM = ("/System/", "/usr/libexec/", "/usr/sbin/", "/sbin/", "/Library/Apple/")  # daemons; /usr/bin tools count
 GRACE = 5.0
 
 
@@ -47,10 +47,18 @@ def agent_started(pid: int) -> bool:
     return detached and bool(exe) and not exe.startswith(SYSTEM)
 
 
+def _since(pid: int, since: datetime) -> bool:
+    """Proven to have started after the step began; an unreadable start never makes a process a target."""
+    try:
+        return psutil.Process(pid).create_time() >= since.timestamp() - 1.0
+    except psutil.Error, OSError:
+        return False
+
+
 def scan(root: Path, since: datetime) -> list[int]:
     """The agent-started processes still working in ``root`` that began after ``since``."""
     found = ProcessTableWorktreeProbe().active_processes((root,), started_after=since)
-    return sorted(pid for pid, _ in found if agent_started(pid))
+    return sorted(pid for pid, _ in found if _since(pid, since) and agent_started(pid))
 
 
 def settle(

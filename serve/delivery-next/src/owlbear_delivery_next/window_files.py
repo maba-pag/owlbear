@@ -117,7 +117,12 @@ class Placed:
 def _git(folder: Path, *args: str) -> None:
     code, text = setup.probe_in(folder)(["git", *args])
     if code:
-        raise SettingsError(f"git {' '.join(args[:2])}: {text[:200]}")  # noqa: EM102, TRY003
+        raise SettingsError(f"git {' '.join(args[:2])}: {text[:200] or f'exit {code}'}")  # noqa: EM102, TRY003
+
+
+def _skipped(folder: Path, rel: str) -> bool:
+    """Marked ``skip-worktree``: an earlier step of Delivery's that did not end cleanly placed it."""
+    return setup.probe_in(folder)(["git", "ls-files", "-v", "--", rel])[1].startswith("S ")
 
 
 def place(folder: Path, rel: str, render: Render) -> Placed:
@@ -126,6 +131,8 @@ def place(folder: Path, rel: str, render: Render) -> Placed:
     if part := setup.linked_part(folder, path):
         raise SettingsError(f"{part} is a symbolic link; Delivery writes nothing through it")  # noqa: EM102, TRY003
     tracked = not setup.untracked(folder, path)
+    if tracked and not _skipped(folder, rel) and setup.probe_in(folder)(["git", "diff", "--quiet", "--", rel])[0]:
+        raise SettingsError(f"{rel} has local edits; Delivery never overwrites them")  # noqa: EM102, TRY003
     old = path.read_text() if path.is_file() else None
     text = render(old)
     path.parent.mkdir(parents=True, exist_ok=True)
