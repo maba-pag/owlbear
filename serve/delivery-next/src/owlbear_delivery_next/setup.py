@@ -285,8 +285,8 @@ def consent(  # noqa: PLR0913 - the file, its merge and the owner's answer
     repo: Path, path: Path, merge: Callable[[dict[str, Any]], dict[str, Any]], question: str, ask: Ask, *, yes: bool
 ) -> str:
     """Write the untracked file *path* only with the owner's consent and exclude it locally; never a tracked one."""
-    if refused := _refused(repo, path):
-        return refused
+    if why := refused(repo, path):
+        return why
     if not (yes or ask(f"{question} [y/N] ").strip().lower().startswith("y")):
         return f"not written (no consent): {path}"
     try:
@@ -296,23 +296,23 @@ def consent(  # noqa: PLR0913 - the file, its merge and the owner's answer
     if not isinstance(data, dict):
         return f"not written: {path} is not plain JSON; add the entry by hand"
     path.parent.mkdir(exist_ok=True)
-    if refused := _refused(repo, path):  # it may have been added or linked while the owner answered
-        return refused
-    _replace(path, json.dumps(merge(data), indent=2) + "\n")
+    if why := refused(repo, path):  # it may have been added or linked while the owner answered
+        return why
+    replace_text(path, json.dumps(merge(data), indent=2) + "\n")
     exclude(repo, path)
     return f"written: {path} (kept out of git by .git/info/exclude)"
 
 
-def _refused(repo: Path, path: Path) -> str | None:
+def refused(repo: Path, path: Path) -> str | None:
     """Why *path* must not be written: a symbolic link on its way inside *repo*, or tracked."""
-    if linked := _linked(repo, path):
+    if linked := linked_part(repo, path):
         return f"not written: {linked} is a symbolic link; add the entry by hand"
     if not untracked(repo, path):
         return f"not written: {path} is tracked, and Delivery commits nothing into the project"
     return None
 
 
-def _linked(repo: Path, path: Path) -> Path | None:
+def linked_part(repo: Path, path: Path) -> Path | None:
     """The first of *path*'s components inside *repo*, itself included, that is a symbolic link."""
     at = repo
     for part in path.relative_to(repo).parts:
@@ -322,7 +322,7 @@ def _linked(repo: Path, path: Path) -> Path | None:
     return None
 
 
-def _replace(path: Path, text: str) -> None:
+def replace_text(path: Path, text: str) -> None:
     """Write *path* through a temporary file in its directory and an atomic rename, which never follows a link."""
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
     try:

@@ -7,7 +7,6 @@ import contextlib
 import os
 import shutil
 import signal
-import subprocess
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -25,6 +24,7 @@ from owlbear_delivery_next.mask import redact
 from owlbear_delivery_next.models import StepKind
 from owlbear_delivery_next.permissions import decide, view
 from owlbear_delivery_next.processes import Termination, verdict
+from owlbear_delivery_next.results import ENDED, Gate
 from owlbear_delivery_next.session_result import Run, note_quota
 
 if TYPE_CHECKING:
@@ -119,9 +119,14 @@ def sent(events: Iterable[Any], message: str) -> bool:
 class _Step:
     def __init__(self, cfg: Session, loop: asyncio.AbstractEventLoop) -> None:
         self.cfg, self.loop, self.run, self.proc = cfg, loop, Run(cfg.session_id), None
-        self.done = self.turn = self.idle = False
+        self.turn = self.idle = False
+        self.gate = Gate(cfg, self.run, self.log, self._wake)
         self.changed = asyncio.Event()
         self.shown = float("-inf")  # monotonic time of the last now-line write
+
+    @property
+    def done(self) -> bool:
+        return self.gate.done
 
     def _wake(self) -> None:
         self.loop.call_soon_threadsafe(self.changed.set)
@@ -130,9 +135,7 @@ class _Step:
         self.cfg.journal.event({"at": datetime.now(UTC).isoformat(timespec="seconds"), **event})
 
     def finish(self, ending: Ending, payload: tools.Args | None = None, detail: str = "") -> None:
-        if not self.done:
-            self.done, self.run.ending, self.run.payload, self.run.detail = True, ending, payload, detail
-        self._wake()
+        self.gate.finish(ending, payload, detail)
 
     def on_event(self, ev: Any) -> None:  # noqa: ANN401 - SDK session event
         kind = getattr(ev.type, "value", str(ev.type))
@@ -166,43 +169,18 @@ class _Step:
         self.log(event="denied", kind=req.kind, request=request, reason=reason)
         return PermissionDecisionReject(feedback=f"Denied: {reason}")
 
-    def _check_result(self, args: tools.Args) -> list[str]:
-        try:
-            tree = self.cfg.observe()
-        except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
-            return [f"changes: the worktree could not be read ({type(exc).__name__}); try again"]
-        cfg = self.cfg
-        errors = tools.check_result(
-            args, tree, cfg.checks, cfg.policy.root, cfg.scope, cfg.item, visual=bool(cfg.attachments)
-        )
-        self.run.head = None if errors else tree.head
-        return errors
-
     def _handle(self, spec: tools.Spec, inv: ToolInvocation) -> ToolResult:
-        args, errors = tools.parse(spec.model, inv.arguments)
-        if args is not None:
-            errors = tools.check_question(args) if isinstance(args, tools.AskQuestion) else []
-            errors += self._check_result(args) if spec is self.cfg.submit else []
-        read = list(args.covered_paths) if isinstance(args, tools.ReviewResult) else []  # evidence, not coverage
-        self.log(event="tool", tool=spec.name, accepted=not errors, errors=errors, **({"read": read} if read else {}))
-        if self.done:
-            return ToolResult(text_result_for_llm="The step has already ended. Stop now.", result_type="rejected")
-        if errors:
-            self.run.invalid += 1
-            if self.run.invalid >= tools.INVALID_LIMIT:
-                self.finish("invalid", detail="; ".join(errors)[:300])
-            lines = "\n".join(f"- {e}" for e in errors)
-            text = f"Rejected. Fix each field, then call again:\n{lines}"
-            return ToolResult(text_result_for_llm=text, result_type="failure")
-        self.finish(spec.ending, args)
-        return ToolResult(text_result_for_llm="Accepted. Your step has ended: stop now and start nothing else.")
+        text, ok = self.gate.call(spec, inv.arguments)
+        if ok:
+            return ToolResult(text_result_for_llm=text)
+        return ToolResult(text_result_for_llm=text, result_type="rejected" if text == ENDED else "failure")
 
     def tools(self) -> list[Tool]:
         return [
             Tool(
                 s.name, s.description, partial(self._handle, s), tools.schema(s), skip_permission=True, is_terminal=True
             )
-            for s in (self.cfg.submit, tools.ASK, tools.PREMISE)
+            for s in self.gate.specs
         ]
 
     def record(self, *pids: int | None, keep: bool = False) -> None:

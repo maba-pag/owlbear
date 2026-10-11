@@ -255,6 +255,18 @@ def test_pids_are_kept_with_unknown_start_times_and_persisted_as_seen(monkeypatc
     assert (live, groups) == ([1, 4, 5], [1])
 
 
+def test_a_late_call_never_changes_the_accepted_result_or_its_head() -> None:
+    trees = iter([Worktree(HEAD, BASE, changed=("packages/app/src/greet.ts",)), Worktree(BASE, BASE)])
+    st = step()
+    st.cfg = dataclasses.replace(st.cfg, observe=lambda: next(trees), checks=("npm test",))
+    st.gate.cfg = st.cfg
+    accepted = st._handle(tools.SUBMIT, SimpleNamespace(arguments=GOOD))  # noqa: SLF001
+    late = st._handle(tools.SUBMIT, SimpleNamespace(arguments={**GOOD, "summary": "Other."}))  # noqa: SLF001
+    assert (accepted.result_type, late.result_type) == ("success", "rejected")
+    assert (st.run.ending, st.run.head, st.run.payload.summary) == ("result", HEAD, "Added greet().")
+    assert [e["accepted"] for e in st.events if e.get("event") == "tool"] == [True, False]
+
+
 def test_a_missing_session_is_replaced_only_once_earlier_processes_are_gone(monkeypatch) -> None:
     monkeypatch.setattr(processes, "alive", lambda pid, _c: pid == 7)
     st = step(replaced=lambda: "s2")
