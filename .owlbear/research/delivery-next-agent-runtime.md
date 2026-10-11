@@ -87,6 +87,11 @@ All web pages show "Edit this page 10/7/2026" unless stated. "Local" means check
 | P9 | Probe `probe_h3.py` with agent header `reasoning-effort: low` and workspace `chat.defaultModel` | 2026-10-11 | Model followed `chat.defaultModel`; the turn ran at `medium`, so the header was ignored. Window effort comes from per-model user configuration, global for all chats. A turn sent over AHP with `thinkingLevel` ran at that level (P7). | One run |
 | P10 | Probe `probe5.py`, throwaway repo, `isolation: folder`, `autoApprove: autoApprove` | 2026-10-11 | `permissions.deny` with `bash`, `shell` or `shell(touch)` did not stop a shell call; files were written inside and outside the repo. `sandboxEnabled: on` let the in-repo write through, blocked the write outside, and the agent then asked for confirmation to leave the sandbox. | One run per case; Delivery's answer to that confirmation not tested |
 | R2 | Independent review (Sol) of P3 to P8 and the C+ recommendation | 2026-10-11 | First-turn cancel is not a TD-32 guarantee; session discovery must bind to nonce, folder and agent; the combined C+ lifecycle was not shown in one correlated run; "46 tools" means advertised, not proven across tab switch or reload; session auto-approve weakens TD-29; the result channel is decided (TD-36). | Reviewer findings |
+| P11 | Correlated C+ run: `live_c.py` with the real `vscode_step.Step`, throwaway repo and worktree, agent `cprobe`, `gpt-6-luna`/`medium`, the user's own chat open in the same window, user present | 2026-10-11 | **Binding:** a cold window's first turn had no agent, so the driver found no match and did nothing. **Model:** the first turn's message said `gpt-6-luna` but was billed to `mai-code-1.1-flash` (`autoModeResolved`); a warm window ignored `chat.defaultModel` and started on `hydrafusion`. Cancelling that turn within 1 s recorded no usage. Every turn Delivery sent was billed to `gpt-6-luna` (5 runs). **Sandbox on:** browser at 390×844, file edit, `git commit` in the worktree and internet worked. `uv` failed without a prompt (`~/.local/share/uv/python`: Operation not permitted). The Python stdio MCP result server failed to start (`No module named 'encodings'`), so no result arrived. `curl` to localhost and a write outside the worktree asked for confirmation; Delivery denied both and nothing was written. **Sandbox off:** all of these worked, and the outside write went through without asking. **Mode:** in `interactive` the agent gave the result call to a background sub-agent and ended its turn; only a steering message resumed it. In `autopilot` it finished in one turn and called the result tool itself. **MCP:** the harness loaded servers only from `.mcp.json`; a `.vscode/mcp.json` server was not loaded and VS Code offered to migrate it. **Leak:** the agent's `git add -A` committed the `.vscode/settings.json` Delivery wrote. **Reload:** the user reloaded the window during a 75 s shell call; the turn continued, the result arrived, Delivery's connection stayed up. **Stop:** Delivery's stop after 30 s was confirmed at once and the `sleep 120` process was gone. | One window, one run per check; tab switching not separately verified |
+| D2 | User decision on window tool approval | 2026-10-11 | "auto-approve on. sandbox on only if it actually works and doesnt limit any tools or functionality we need." | `decided` |
+| D3 | User decision on `chat.defaultToCopilotHarness` | 2026-10-11 | "accept. experimental has no real meaning in vs code, other than that the default value will change during later rollout. its not like it will go away." | `decided` |
+| D4 | User decision on agent mode, after P11 | 2026-10-11 | "i see no reason not to use autopilot always, epecially since interactive does not describe the interaction level we want" | `decided` |
+| D5 | User decision on the sandbox, after P11 | 2026-10-11 | "off, but validate if a hook could help to prevent writes outside. but i see it as low risk" | `decided` |
 
 ## 3. Analysis
 
@@ -227,14 +232,14 @@ TD-35's "all in VS Code" mode.
 
 Corrections from the review (R2), all accepted:
 
-- The first-turn cancel is a cost saver, not the TD-32 guarantee. The guarantee is a workspace
-  `chat.defaultModel` set to the step's model before `code chat` runs (P9); Delivery fails closed
-  if it cannot verify the first turn's model.
+- The first-turn cancel is a cost saver, not the TD-32 guarantee. P11 showed that neither the
+  message's model field nor `chat.defaultModel` is a guarantee either. The driver now judges each
+  turn by the model in its billed usage, cancels a turn billed to another model, and fails closed if
+  the window's first turn ran before Delivery could cancel it (`2e069ee03`).
 - Delivery acts only on a session it can bind: a nonce in the `code chat` prompt, the folder and the
   agent must match. Anything ambiguous means no action, so the user's own chats are never touched.
-- Each probe showed one part. One correlated run of the whole lifecycle (concurrent user chat,
-  cancel, browser plus result, tab switch, window reload) is still missing. Until it passes, C+ is
-  not used unattended, so TD-35's "all in VS Code" mode waits on it.
+- Each probe showed one part. The correlated run (P11) has now passed: concurrent user chat, nonce
+  binding, cancel, browser plus result, steering, window reload and stop.
 - The result channel is the Delivery MCP server, as TD-36 decided. A client tool over AHP also
   worked (P6); using it instead needs the user's re-decision.
 
@@ -242,14 +247,19 @@ Corrections from the review (R2), all accepted:
 (`vscode_step.py`) exist on PR #449 with fake-host tests. A second review by Sol found the driver
 unsafe for unattended use; the fixes are in `9e9071777`: model pinned before launch, acknowledged
 cancels, busy and user-turn refusal, steering correlated by text, WebSocket ping and close handled.
-The runner does not call it. It stays unwired until the correlated probe passes and the user
-chooses the approval policy, and it may only target a Delivery-owned worktree, because the
-settings it writes apply to the whole folder.
+The runner does not call it yet.
 
-One C+ choice is open for the user: **window tool approval.** Window tools ran only under session
-auto-approve (P6), which also covers the shell. `permissions.deny` does not narrow it; `sandboxEnabled:
-on` keeps writes inside the repo and turns an escape into a confirmation Delivery can deny (P10).
-Whether that is enough for TD-29 is the user's call.
+**C+ session settings (from D2 to D5):** session auto-approve on, `mode: autopilot`, sandbox off,
+because the sandbox blocked `uv` and Python MCP servers (P11). Pull-back still takes only the
+worktree's commits; nothing stops a write elsewhere on disk while the step runs (user: low risk).
+
+Open follow-ups (`autonomous`):
+
+- Check whether a hook can block writes outside the worktree (D5).
+- Declare the Delivery result server, and other servers steps need, in `.mcp.json`; the harness
+  ignores `.vscode/mcp.json` (P11).
+- Keep Delivery's model-pin settings file out of the agent's commits (P11).
+- Wire the driver into the runner; that is the user's next decision.
 
 For steps without VS Code tools, TD-34 allows SDK or CLI. Sessions created over AHP (F) are a
 third option with the same controls, and they show in VS Code's session list (P3).
@@ -261,7 +271,7 @@ third option with the same controls, and they show in VS Code's session list (P3
 | Priority | Gap | Probe | Cost |
 | --- | --- | --- | --- |
 | 1 | Can a client reach the editor host (route F)? | Done (L-AH4): yes, protocol 0.10.0, root state, agents and sessions read. Next: `authenticate` with the user's Copilot token to see the full model list | No credits |
-| 2 | Decisive step probe | Done in parts (P3, P6 to P8). Still open: one correlated C+ run with a concurrent user chat, nonce binding, cancel, browser plus MCP result, tab switch and window reload (R2) | One short session |
+| 2 | Decisive step probe | Done (P11) | — |
 | 3 | Does `reasoning-effort` in the agent header win over the picker? | Done (P9): ignored; AHP `thinkingLevel` per turn works | — |
 | 4 | Can route C stop a `code chat` step? | Done through AHP `chat/turnCancelled` (P7); `code agent stop` waits for a 0.10.0 CLI | — |
 | 5 | Does an adopted SDK session get browser tools (E1)? | Create an SDK session in a repo, open it under the External filter, ask it to list browser tools | One short session |
@@ -269,8 +279,8 @@ third option with the same controls, and they show in VS Code's session list (P3
 
 ### Limits
 
-- P3 to P10 ran once each, as `maba-pag`, in a throwaway repo or `owlbear-sandbox`; one window.
-- `chat.defaultToCopilotHarness` is experimental and read at window start; it may change or vanish.
+- P3 to P11 ran once each, as `maba-pag`, in a throwaway repo or `owlbear-sandbox`; one window.
+- `chat.defaultToCopilotHarness` is experimental and read at window start (accepted, D3).
 - A cancelled first turn recorded no usage (P7); billing for it was not checked separately.
 - AHP facts (W16) and W17 to W19 come from the review (R1); they were not re-fetched here.
 - The AHP client is a scratch probe, not product code; the 1.141 CLI cannot connect (L-AH2).
