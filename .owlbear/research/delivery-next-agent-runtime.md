@@ -78,6 +78,15 @@ All web pages show "Edit this page 10/7/2026" unless stated. "Local" means check
 | L-AH4 | Local probe `.owlbear/scratch/ahp-probe.py` (stdlib WebSocket over the editor's unix socket, token from the registry entry, read-only) | 2026-10-11 | `initialize` with protocol 0.10.0 succeeded. Root snapshot: agents `copilotcli` ("Copilot") and `claude`, both with `multipleChats`; the unauthenticated model list shows only `auto` (config `tier`) and `hydrafusion`; root config exposes the harness settings of L-AH3; `_meta` advertises `vscode.importSession`, `vscode.detachedWorktrees`, `vscode.autonomousAutomations`; `listSessions` returned 20 `copilotcli` sessions. | No `authenticate` sent, so the full model list and session creation are untested; client-contributed tools not visible at root level |
 | R1 | Independent review (Sol) of this document | 2026-10-11 | §4 not decision-ready; CLI limits generalised to host limits; model control, viewport and effort findings; missing mechanisms; probe priorities. | Reviewer findings; bundle claims not re-checked here. |
 | D1 | User decision TD-32 | — | "We never use auto, ever." Agent definitions with a model must run on that model. | `decided` |
+| P3 | Probe `.owlbear/scratch/ahp/probe1.py`: Delivery as AHP 0.10.0 client of the editor host, `authenticate` with the `gh` token (`maba-pag`), `createSession` (provider `copilotcli`) in a throwaway repo | 2026-10-11 | Model list fills only after `authenticate`; before it, only `auto` and `hydrafusion`. Delivery's own client tool (`submit_result`) was called and approved by Delivery. A turn with an explicit message model ran on that model. `chat/turnCancelled` ended the turn and its process. The session got no window tools. Default `isolation: worktree` made `<repo>.worktrees/<slug>` on branch `agents/<slug>`. A turn with only an agent (file model Haiku) ran on `claude-sonnet-5`. | One run per check |
+| P4 | Probe `probe2.py` plus `resolveSessionConfig` | 2026-10-11 | Session config: `isolation` folder or worktree (fixed at creation), `sandboxEnabled`, `autoApprove` default/assisted/autoApprove, `permissions` allow/deny, `mode` interactive/plan/autopilot, `shellInitScripts`, `branch`, worktree options. In worktree isolation with `autoApprove: default`, a shell call ran without confirmation. | Schema values for this host only |
+| P5 | Local: string search in `workbench.desktop.main.js` (1.141) | 2026-10-11 | A window publishes its tools to a session only after it claims the session through a turn sent from that window. It runs a client tool only if the session is open in it. `code chat` runs `newChat` then `chat.open` with the query. `chat.defaultToCopilotHarness` (experimental, read at startup) makes new chats use the Copilot harness. The window model comes from `chat.defaultModel`, else the first available model. | Minified code; behaviour checked by P6 and P7 |
+| P6 | Probes `probe_h1.py`, `probe_h2.py` in `owlbear-sandbox` with workspace setting `chat.defaultToCopilotHarness: true` | 2026-10-11 | `code chat -m agent` created an AHP session that Delivery saw, with the window as active client (46 tools, browser tools included). Delivery added its client tool (`session/activeClientSet`), set `autoApprove: autoApprove` (`session/configChanged`) and started a `gpt-6-luna` turn. The agent ran `openBrowserPage`, `runPlaywrightCode` with `setViewportSize` 390×844, `readPage` (heading "Hello H2 390"), `screenshotPage`, then Delivery's `submit_result`. Without session auto-approve, the first window tool hung and was denied; Delivery's cancel ended the turn. | One page, one run |
+| P7 | Probes `probe_h3.py`, `probe_h4.py`, same window | 2026-10-11 | `code chat -m <agent>` applied the agent (message `agent.uri`) but not its `model:`. The model was the first available one (logged `firstAvailable`): `auto` before the host had a model list, then `claude-haiku-5.5` even with `gpt-6-luna` in the agent file. A workspace `chat.defaultModel` was honoured (`configuredDefault`). Delivery cancelled the window's first turn 0.6 s after `code chat`, with no usage recorded. Its own turn with `gpt-6-luna`/`max` ran in that session with the window's tools. | No billing check beyond turn usage |
+| P8 | Probe `probe4.py`, throwaway repo, `isolation: folder`, `autoApprove: default` | 2026-10-11 | A shell call waited for Delivery's decision; Delivery denied it; the file was not created; the agent reported the denial. A steering message (`chat/pendingMessageSet`) sent during a turn ran as the next turn right after it and was obeyed. | One run per check |
+| P9 | Probe `probe_h3.py` with agent header `reasoning-effort: low` and workspace `chat.defaultModel` | 2026-10-11 | Model followed `chat.defaultModel`; the turn ran at `medium`, so the header was ignored. Window effort comes from per-model user configuration, global for all chats. A turn sent over AHP with `thinkingLevel` ran at that level (P7). | One run |
+| P10 | Probe `probe5.py`, throwaway repo, `isolation: folder`, `autoApprove: autoApprove` | 2026-10-11 | `permissions.deny` with `bash`, `shell` or `shell(touch)` did not stop a shell call; files were written inside and outside the repo. `sandboxEnabled: on` let the in-repo write through, blocked the write outside, and the agent then asked for confirmation to leave the sandbox. | One run per case; Delivery's answer to that confirmation not tested |
+| R2 | Independent review (Sol) of P3 to P8 and the C+ recommendation | 2026-10-11 | First-turn cancel is not a TD-32 guarantee; session discovery must bind to nonce, folder and agent; the combined C+ lifecycle was not shown in one correlated run; "46 tools" means advertised, not proven across tab switch or reload; session auto-approve weakens TD-29; the result channel is decided (TD-36). | Reviewer findings |
 
 ## 3. Analysis
 
@@ -89,7 +98,8 @@ All web pages show "Edit this page 10/7/2026" unless stated. "Local" means check
 | Copilot (Agent Host) in VS Code | Yes, advertised by the connected window | Becoming the default | W2, W3, W14 |
 | Claude or Codex on the Agent Host | Not stated per tool | Supported | W1, W10 |
 | Standalone SDK or CLI session | No; the IDE bridge gives six tools | Delivery-next today | X3, W19 |
-| Session created by an external AHP client | Unknown; this is the key probe for route F | Protocol stable for chat; no client built | W16, L-AH2 |
+| Session created by an external AHP client | No: the session gets no window tools | Probed | P3, P5 |
+| Session started in a window by `code chat`, then driven over AHP | Yes: all 46 window tools, including the browser | Probed; needs the Copilot harness setting | P6, P7 |
 
 The Local harness is not removed yet, but it is marked for removal. Its replacement is the Copilot
 harness. Local's removal does not rule out routes on the Copilot harness. VS Code tools reach that harness because the window advertises them (W2, W3). They work only
@@ -116,7 +126,7 @@ route is a Playwright snippet, and it works (P1): an agent in VS Code can test a
 | Session model | Picker (W9); `initialMessage` model through AHP (W16) | `model` per session (X7, X2) |
 | Agent-file model for the main agent | `code chat -m <agent>` selects the agent; its `model:` sets the model, so selection is indirect (W7, W13) | SDK `agent=`: not enforced; the session model wins, else `auto` (P2). CLI `--agent`: enforced (P2) |
 | Subagent model | `model` in the agent file (W7) | Own model per custom agent (X7, X8) |
-| Effort | Picker, per session (W9). Global override setting (X5). Header `reasoning-effort`: implemented, undocumented, precedence unverified (X4, R1) | `reasoning_effort` per session and per agent (X7) |
+| Effort | Picker (W9); per-model user configuration, global (X5, P9). Header `reasoning-effort` ignored by `code chat` on the Copilot harness (P9). AHP `thinkingLevel` per turn works (P7) | `reasoning_effort` per session and per agent (X7) |
 | Context tier | Picker group; forwarded on session creation and `session.setModel`; undocumented (X4, R1) | `context_tier` and `--context` (X7, X2) |
 | Credit cap | None found; AHP state streams usage (W16) | `session_limits.max_ai_credits` (X7) |
 | Who sets it | A human in the picker, the agent file, or an AHP client | The host program |
@@ -177,7 +187,8 @@ host: those controls exist in the protocol, but their integration is unproven.
 | D | SDK plus `@playwright/mcp` | Any size via `--viewport-size`, `--device`, `--mobile` (W15) | Full | Low: one MCP entry, Node 18+, a browser download; `--isolated` for parallel runs | Extra dependency; token cost of snapshots (W15) |
 | E1 | SDK session later continued in VS Code | Maybe, after adoption (W10, W2) | Lost once adopted | Low | Untested whether client tools attach |
 | E2 | Builder runs a small Playwright script by shell | Any size | Full | Very low; Playwright is already used (X6) | Agent must write and run the script well |
-| F | Delivery as an AHP client of the editor host or of `code agent host`; one session and chat per step | Only if a window's client tools reach externally created sessions; unknown | Model, agent, working directory, approvals, cancel and usage are in the protocol (W16); unproven | Python AHP client module plus probes | Client tools may not attach; protocol 0.x churn (L-AH2) |
+| F | Delivery as an AHP client of the editor host or of `code agent host`; one session and chat per step | No window tools in sessions Delivery creates (P3) | Model, approvals, cancel, steering and usage probed (P3, P8) | Python AHP client module | Protocol 0.x churn (L-AH2) |
+| C+ | Route C started by `code chat` in a Copilot-harness window, then driven over AHP: Delivery cancels the window's first turn, joins with its result tool, sends each turn with model and effort | Interactive, any viewport (P6) | Model, effort, cancel, steering, usage and result probed (P6 to P8) | Python AHP client module plus workspace settings | Experimental harness setting; window tools need session auto-approve, only `sandboxEnabled` confines it (P6, P10); full lifecycle not yet shown in one run (R2) |
 
 Route D is not the only way to give agents a viewport. Route E2 gives the same power with no new
 server, because the Python Playwright dependency already exists.
@@ -206,6 +217,35 @@ Deterministic Playwright gates (X6) can coexist with any route.
 if the probes pass. It keeps Delivery's control (approvals, cancel, usage) and gains VS Code's tools.
 C is the bounded fallback. A remains for headless runs.
 
+**Update after the probes (`autonomous`, confidence medium):** F fails its decisive probe: sessions
+Delivery creates get no VS Code tools (P3). That triggers TD-36 (route C). Plain route C would break
+TD-32 and TD-27: the window ignores the agent file's model and may run `auto` (P7). C+ keeps TD-36's
+entry point and fixes that: Delivery cancels the window's first turn before any usage and sends
+each turn itself with model and effort (P7). It also gives the watcher read, steer and stop (P6,
+P8), and the user reads the same chat in the window. Recommended for VS Code-tool steps and for
+TD-35's "all in VS Code" mode.
+
+Corrections from the review (R2), all accepted:
+
+- The first-turn cancel is a cost saver, not the TD-32 guarantee. The guarantee is a workspace
+  `chat.defaultModel` set to the step's model before `code chat` runs (P9); Delivery fails closed
+  if it cannot verify the first turn's model.
+- Delivery acts only on a session it can bind: a nonce in the `code chat` prompt, the folder and the
+  agent must match. Anything ambiguous means no action, so the user's own chats are never touched.
+- Each probe showed one part. One correlated run of the whole lifecycle (concurrent user chat,
+  cancel, browser plus result, tab switch, window reload) is still missing. Until it passes, C+ is
+  not used unattended, so TD-35's "all in VS Code" mode waits on it.
+- The result channel is the Delivery MCP server, as TD-36 decided. A client tool over AHP also
+  worked (P6); using it instead needs the user's re-decision.
+
+One C+ choice is open for the user: **window tool approval.** Window tools ran only under session
+auto-approve (P6), which also covers the shell. `permissions.deny` does not narrow it; `sandboxEnabled:
+on` keeps writes inside the repo and turns an escape into a confirmation Delivery can deny (P10).
+Whether that is enough for TD-29 is the user's call.
+
+For steps without VS Code tools, TD-34 allows SDK or CLI. Sessions created over AHP (F) are a
+third option with the same controls, and they show in VS Code's session list (P3).
+
 **The route choice is the user's decision.** Nothing here changes a recorded decision.
 
 ### Probes, in priority order
@@ -213,17 +253,19 @@ C is the bounded fallback. A remains for headless runs.
 | Priority | Gap | Probe | Cost |
 | --- | --- | --- | --- |
 | 1 | Can a client reach the editor host (route F)? | Done (L-AH4): yes, protocol 0.10.0, root state, agents and sessions read. Next: `authenticate` with the user's Copilot token to see the full model list | No credits |
-| 2 | Decisive step probe | In a throwaway repo, create a session with a fixed-model custom agent. Run one turn that sets a viewport through the browser tools and calls a Delivery MCP result tool. Cancel it and confirm that events and processes stop. Check the model in the session log. | One short session |
-| 3 | Does `reasoning-effort` in the agent header win over the picker? | Add `reasoning-effort: low` to a test agent; check the forwarded effort in the debug log | One short chat |
-| 4 | Can route C stop a `code chat` step? | Start one with `code chat -m <agent>`; stop it with `code agent stop` once the CLI speaks 0.10.0 | One short chat |
+| 2 | Decisive step probe | Done in parts (P3, P6 to P8). Still open: one correlated C+ run with a concurrent user chat, nonce binding, cancel, browser plus MCP result, tab switch and window reload (R2) | One short session |
+| 3 | Does `reasoning-effort` in the agent header win over the picker? | Done (P9): ignored; AHP `thinkingLevel` per turn works | — |
+| 4 | Can route C stop a `code chat` step? | Done through AHP `chat/turnCancelled` (P7); `code agent stop` waits for a 0.10.0 CLI | — |
 | 5 | Does an adopted SDK session get browser tools (E1)? | Create an SDK session in a repo, open it under the External filter, ask it to list browser tools | One short session |
 | 6 | Does `@playwright/mcp` work in an SDK session (D)? | Add it with `--headless --isolated --viewport-size 390x844`; ask for `innerWidth` | One short session |
 
 ### Limits
 
-- No new VS Code chat, Agents window or Copilot session was started; P1 ran in an existing chat.
+- P3 to P10 ran once each, as `maba-pag`, in a throwaway repo or `owlbear-sandbox`; one window.
+- `chat.defaultToCopilotHarness` is experimental and read at window start; it may change or vanish.
+- A cancelled first turn recorded no usage (P7); billing for it was not checked separately.
 - AHP facts (W16) and W17 to W19 come from the review (R1); they were not re-fetched here.
-- No AHP client was built; the 1.141 CLI cannot connect to the editor host (L-AH2).
+- The AHP client is a scratch probe, not product code; the 1.141 CLI cannot connect (L-AH2).
 - Tool availability per harness comes from docs, not from a live tools list.
 - Bundle findings (X4, R1) come from minified code and may not reflect runtime behavior.
 - SDK option names (X7) and probe results (X8) were reported by the user, not re-run here.
