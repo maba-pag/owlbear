@@ -137,7 +137,42 @@ The idea is refined enough only when:
 - no active understanding contradicts another part of the idea.
 
 Present a compact recap and ask one final question: whether it matches the user's idea and is ready
-for the caller's planning destination. If the user identifies a gap, resume the relevant branch.
+for the caller's planning destination. Run the Read-Back first. If the user identifies a gap, resume
+the relevant branch.
+
+## Read-Back
+
+Play back the session's choices once before the final recap question, so a misunderstanding
+surfaces before anything is built. Cover every choice the user made and your own consequential
+choices: those that change what the user sees or does, cost, safety or reversibility. List the
+latter with a one-line consequence; the user may add or remove items. The Read-Back never replaces
+asking an important decision when it arises. It is an exception to Core Method rules 2 and 3: it
+batches up to eight questions per `askQuestions` round and gives no recommendation.
+
+One decision per question, paraphrased at the level of the user's intent, never quoting the record:
+
+- close variants of the recorded choice, as many as really differ in consequence (one to four),
+  the matching one at a varying position and never verbatim; put a one-line consequence in the
+  option's secondary text where it distinguishes the variants;
+- one or two other directions where real ones exist;
+- then, always in this order: "take your recommendation", "none of these: show me more options",
+  "explain first";
+- no recommendation mark; free text stays open.
+
+When the direction itself is in doubt (the user signals doubt, new evidence challenges it, or no
+meaningful variants exist), ask the direction first with balanced alternatives, then the variants of
+the chosen direction, and say why.
+
+| Answer | Record and next step |
+| --- | --- |
+| A variant or other direction | `decided`, limited to what the answer establishes |
+| Take your recommendation | State your choice and its reasons; record it as `autonomous` |
+| Show me more options | Ask again with a bounded set across directions, each with benefits, costs, risks and its own percentage that it is a good choice (percentages do not add up); mark your recommendation |
+| Explain first | Explain the subject and each option's consequences neutrally, then ask again |
+| Free text | Never record it as written. Offer the readings that really differ (two to five), each filling the gaps the answer leaves differently, plus "your words as written", "show me more readings" and "explain first"; record the reading the user chooses |
+
+Record each outcome on the choice itself: re-confirmed, changed with the chosen wording, or
+delegated. Repeat the Read-Back of a confirmed choice only when its context changed.
 
 ## Refined Idea Summary
 
@@ -207,3 +242,5 @@ This invents a design before the idea's outcome and normal workflow are understo
 - **Disappearing remainder:** require explicit exclusions.
 - **Destination leakage:** leave planning mechanics to the caller.
 - **Chat-only understanding:** finish with the confirmed Refined Idea Summary.
+- **Padded read-back:** a variant that differs only in wording, or an option nobody would choose.
+- **Recorded free text:** a free-text answer written into a record without the user choosing a reading.

@@ -19,7 +19,7 @@ Load these with `read_file` immediately before the named work:
 
 | Skill | Load when |
 | --- | --- |
-| `w-idea-refinement` | `/ideate` input is too rough to state the intended outcome and Product Promise |
+| `w-idea-refinement` | `/ideate` input is too rough to state the intended outcome and Product Promise; its Read-Back before the approval question (Step 10) and for free-text answers (Step 6) |
 | `h-codebase-orientation` | Locating current owners, interfaces, tests, and normal workflows |
 | `w-research` | A material external or repository claim needs durable source-grounded research |
 | `h-module-design` | Reviewing proposed ownership, interfaces, locality, or dependency placement |
@@ -183,8 +183,9 @@ Use `askQuestions` for exactly one material decision and then stop for the user'
 **Confidence:** <calibrated confidence and remaining uncertainty>
 ```
 
-Do not bundle a second choice into the prompt. Do not ask for facts discoverable from source. After
-the answer, persist the decision and affected intent or design through Step 3, mark superseded
+Do not bundle a second choice into the prompt. Do not ask for facts discoverable from source. A
+free-text answer is recorded only as the reading the user chooses (`w-idea-refinement`, Read-Back).
+After the answer, persist the decision and affected intent or design through Step 3, mark superseded
 decisions explicitly in authored bytes, and recompute dependent open questions. Ambiguous answers
 remain pending and do not authorize downstream admission.
 
@@ -287,6 +288,8 @@ silent assumptions.
 ## Step 10 - Obtain Explicit Approval And Admit
 
 Ask one final admission question only after the complete candidate and all gate evidence are ready.
+Before it, run the Read-Back of `w-idea-refinement` for the decisions recorded or changed in this
+session; a changed decision returns to Step 6.
 The approval covers product intent, accepted exclusions, material decisions, architecture,
 commitments, outcomes, planning scopes, and known limits for the displayed digest. The user does not
 certify dependency mechanics.
