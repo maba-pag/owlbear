@@ -33,6 +33,7 @@ if TYPE_CHECKING:
 
     from copilot.session import CopilotSession
 
+    from owlbear_delivery_next.models import ItemRef
     from owlbear_delivery_next.permissions import Policy
     from owlbear_delivery_next.processes import Pids
     from owlbear_delivery_next.session_result import Ending
@@ -101,7 +102,7 @@ class Session:
     checks: tuple[str, ...]
     submit: tools.Spec = tools.SUBMIT
     scope: tuple[str, ...] = ()  # the approved brief scope a plan must keep to
-    item: str | None = None  # the conversation item kind a build task answers, if any
+    item: ItemRef | None = None  # the conversation item a build task answers, if any
     model: str | None = None
     effort: str | None = None  # the SDK's reasoning effort
     fresh: str = ""  # first message of a replacement session: stored context plus the pending answer

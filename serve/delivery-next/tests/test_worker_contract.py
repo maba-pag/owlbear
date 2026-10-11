@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import psutil
 
 from owlbear_delivery_next import processes, prompts, sdk_adapter, session_result, tools
-from owlbear_delivery_next.models import Change, ErrorKind, Exit, Plan, StepKind, Task
+from owlbear_delivery_next.models import Change, ErrorKind, Exit, ItemRef, Plan, StepKind, Task
 from owlbear_delivery_next.permissions import Policy, Request, decide
 from owlbear_delivery_next.processes import Termination, verdict
 from owlbear_delivery_next.profile_record import Profile, ProfileEntry
@@ -65,17 +65,22 @@ def test_a_committed_result_must_name_paths_and_every_passing_check() -> None:
     assert errors[2].startswith('checks: "npm run lint" missing')
 
 
-def test_a_conversation_response_is_validated_against_the_item_kind() -> None:
+def test_only_a_bot_comment_or_review_may_be_left_without_a_reply() -> None:
     tree = Worktree(head=BASE, base=BASE)
-    no_action = {"changed_paths": [], "checks": [], "response": {"how": "no-action", "text": "bot notice"}}
-    assert tools.check_build(build(**no_action), tree, [], "comment") == []
-    assert tools.check_build(build(**no_action), tree, [], "thread") == [
-        "response.how: no-action is not allowed for a review thread - fix it or answer it"
-    ]
-    assert tools.check_build(build(**no_action), tree, [], None)[0].startswith("response: only for")
-    assert tools.check_build(build(), Worktree(HEAD, BASE, changed=("packages/app/src/greet.ts",)), [], "review")[
-        0
-    ].startswith("response: required")
+    no_action = build(changed_paths=[], checks=[], response={"how": "no-action", "text": "bot notice"})
+    refused = "response.how: no-action is only for a bot's comment or review - fix it or answer it"
+
+    def ref(kind, *, bot):
+        return ItemRef(id="i", kind=kind, version="v", task="t", bot=bot)
+
+    assert tools.check_build(no_action, tree, [], ref("comment", bot=True)) == []
+    assert tools.check_build(no_action, tree, [], ref("review", bot=True)) == []
+    for kind, bot in (("comment", False), ("review", False), ("thread", False), ("thread", True)):
+        assert tools.check_build(no_action, tree, [], ref(kind, bot=bot)) == [refused], (kind, bot)
+    assert tools.check_build(no_action, tree, [], None)[0].startswith("response: only for")
+    assert tools.check_build(
+        build(), Worktree(HEAD, BASE, changed=("packages/app/src/greet.ts",)), [], ref("review", bot=False)
+    )[0].startswith("response: required")
 
 
 def test_question_options_must_differ() -> None:

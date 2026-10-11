@@ -12,9 +12,9 @@ _CONVERSATION = """query Conversation($owner: String!, $name: String!, $number: 
     $c: String, $r: String, $t: String, $wc: Boolean!, $wr: Boolean!, $wt: Boolean!) {
   repository(owner: $owner, name: $name) { pullRequest(number: $number) {
     comments(first: 100, after: $c) @include(if: $wc) { pageInfo { hasNextPage endCursor }
-      nodes { id url body author { login } } }
+      nodes { id url body author { login __typename } } }
     reviews(first: 100, after: $r) @include(if: $wr) { pageInfo { hasNextPage endCursor }
-      nodes { id url body state author { login } } }
+      nodes { id url body state author { login __typename } } }
     reviewThreads(first: 100, after: $t) @include(if: $wt) { pageInfo { hasNextPage endCursor }
       nodes { id path isResolved isOutdated
         comments(first: 100) { pageInfo { hasNextPage endCursor } nodes { id url body author { login } } } } } } }
@@ -62,6 +62,7 @@ def _items(name: str, nodes: Json) -> list[ConversationItem]:
             id=n["id"],
             kind=kind,
             author=_login(n),
+            bot=(n.get("author") or {}).get("__typename") == "Bot",
             body=n["body"] or "",
             url=n["url"],
             state=n.get("state") or "",

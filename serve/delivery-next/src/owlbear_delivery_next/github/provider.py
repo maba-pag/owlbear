@@ -121,6 +121,7 @@ class ConversationItem(_Model):
     """One issue comment, review body or review thread of a pull request; ``id`` is its node id.
 
     A thread's ``body`` is its comments in order, each prefixed with its author; ``state`` is a review's state.
+    ``bot`` marks a comment or review written by a GitHub App account.
     """
 
     id: str
@@ -128,6 +129,7 @@ class ConversationItem(_Model):
     author: str
     body: str
     url: str = ""
+    bot: bool = False
     path: str | None = None
     state: str = ""
     resolved: bool = False

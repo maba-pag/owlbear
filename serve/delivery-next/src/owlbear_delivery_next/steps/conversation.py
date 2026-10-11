@@ -128,7 +128,7 @@ def unresolved(s: State) -> bool:
 
 def ref(s: State) -> ItemRef:
     """The item reference an open item's task carries."""
-    return ItemRef(id=s.item.id, kind=s.item.kind, version=s.version, task=s.task, url=s.item.url)
+    return ItemRef(id=s.item.id, kind=s.item.kind, version=s.version, task=s.task, url=s.item.url, bot=s.item.bot)
 
 
 def group(c: Change, root: str) -> list[Task]:

@@ -217,6 +217,12 @@ class ItemRef(Record):
     version: str
     task: str  # the conversation task; its review repairs carry the same reference
     url: str = ""
+    bot: bool = False  # written by a GitHub App account
+
+    @property
+    def notice(self) -> bool:
+        """A bot's comment or review: the only item a builder may leave without a reply (TD-30)."""
+        return self.bot and self.kind != "thread"
 
 
 class Response(Record):

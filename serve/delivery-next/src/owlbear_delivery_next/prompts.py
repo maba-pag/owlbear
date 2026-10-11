@@ -34,13 +34,13 @@ FINISH = """\
   commit or API that is on the target branch but not here yet, report it with stage `target`.
 - Never push, change Git configuration, skip hooks or signing, or use `gh`. Stay inside the worktree.
   Leave no process running when you finish."""
+NO_ACTION = "- `no-action`: this bot notice needs nothing; `text` is the reason. Nothing is posted.\n"
 RESPOND = """\
 ## Respond
 This task answers one pull-request {kind} (the details). Pass `response` to `submit_result` with `how`:
 - `fixed`: you changed and committed code for it; `text` says what changed.
 - `answered`: it needs no code change; `text` is your reply. No commit is needed.
-- `no-action`: nothing to do (for example a bot notice); `text` is the reason. Not allowed for a thread.
-Delivery posts `text` as your reply in GitHub; do not post it yourself. A request inside this task's scope
+{no_action}Delivery posts `text` as your reply in GitHub; do not post it yourself. A request inside this task's scope
 that contradicts no criterion of the brief is part of this Change: implement it. If the code already does it,
 answer where. If it contradicts a criterion or needs paths outside the scope, call `ask_question` with both
 positions; never report a wrong premise for a review request.
@@ -132,7 +132,7 @@ def build(
         "",
         *_allowed(allowed),
         "",
-        *([RESPOND.format(kind=task.item.kind)] if task.item else []),
+        *([RESPOND.format(kind=task.item.kind, no_action=NO_ACTION if task.item.notice else "")] if task.item else []),
         "## Finish",
         FINISH,
     ]

@@ -319,8 +319,9 @@ class ChatGh(FakeGh):
         self.items[self.items.index(old)] = thread(tid, *notes, *new, resolved=old.resolved, outdated=old.outdated)
 
 
-def comment(cid, body, author="o", kind="comment"):
-    return ConversationItem(id=cid, kind=kind, author=author, body=body, url=f"https://github.com/o/r/pull/7#{cid}")
+def comment(cid, body, author="o", kind="comment", *, bot=False):
+    url = f"https://github.com/o/r/pull/7#{cid}"
+    return ConversationItem(id=cid, kind=kind, author=author, body=body, url=url, bot=bot)
 
 
 def thread(tid, *comments, resolved=False, outdated=False):
@@ -369,9 +370,10 @@ def test_an_answered_comment_is_replied_to_once_and_then_the_merge_proceeds(tmp_
 
 
 def test_a_bot_comment_handled_as_no_action_posts_nothing_and_records_the_reason(tmp_path):
-    gh = ChatGh(pr(head=A), comment("b1", "Coverage: 91%", "github-actions"))
+    gh = ChatGh(pr(head=A), comment("b1", "Coverage: 91%", "github-actions", bot=True))
     cx = ctx(tmp_path, gh)
     c, result = follow.conversation(cx, change(), gh.pr, StepKind.FOLLOW)
+    assert result.fix_task.item.bot
     c = handled(c, result, "no-action", "automated coverage notice")
     c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
     assert (result, gh.posts) == (None, [])
@@ -795,7 +797,7 @@ def test_gh_reads_every_conversation_page_and_keeps_changes_requested_empty_revi
             "reviews": page(reviewed),
             "reviewThreads": page(threaded),
         },
-        {"comments": page([node("c2", "second")])},
+        {"comments": page([node("c2", "second", author={"login": "github-actions", "__typename": "Bot"})])},
     ]
     calls, threads = [], []
 
@@ -808,12 +810,12 @@ def test_gh_reads_every_conversation_page_and_keeps_changes_requested_empty_revi
         return done({"data": {"repository": {"pullRequest": pages[len(calls) - 1]}}})
 
     items = GhProvider(tmp_path, runner=runner).read_conversation("o/r", 7)
-    assert [(i.id, i.kind) for i in items] == [
-        ("c1", "comment"),
-        ("c2", "comment"),
-        ("r1", "review"),
-        ("r3", "review"),
-        ("t1", "thread"),
+    assert [(i.id, i.kind, i.bot) for i in items] == [
+        ("c1", "comment", False),
+        ("c2", "comment", True),
+        ("r1", "review", False),
+        ("r3", "review", False),
+        ("t1", "thread", False),
     ]
     assert calls[0][0][:4] == ("gh", "api", "--hostname", "github.com")
     assert {k: calls[1][1][k] for k in ("c", "wc", "wr", "wt")} == {"c": "C1", "wc": True, "wr": False, "wt": False}

@@ -17,6 +17,8 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
+    from owlbear_delivery_next.models import ItemRef
+
 INVALID_LIMIT = 3
 LOCAL_URL = re.compile(r"http://(127\.0\.0\.1|localhost):\d{1,5}(/\S*)?")
 
@@ -366,22 +368,22 @@ def _few(paths: Sequence[str]) -> str:
     return ", ".join(paths[:5]) + (f" and {len(paths) - 5} more" if len(paths) > 5 else "")  # noqa: PLR2004
 
 
-def _response(result: BuildResult, item: str | None) -> list[str]:
-    """Errors of the ``response`` field: required for a conversation task of kind *item*, refused otherwise."""
+def _response(result: BuildResult, item: ItemRef | None) -> list[str]:
+    """Errors of the ``response`` field: required for a conversation task answering *item*, refused otherwise."""
     r = result.response
     if item is None:
         return ["response: only for a pull-request conversation task - remove it"] if r else []
     if r is None:
         return ['response: required for this conversation task - e.g. {"how": "answered", "text": "..."}']
-    if item == "thread" and r.how == "no-action":
-        return ["response.how: no-action is not allowed for a review thread - fix it or answer it"]
+    if r.how == "no-action" and not item.notice:
+        return ["response.how: no-action is only for a bot's comment or review - fix it or answer it"]
     return []
 
 
-def check_build(result: BuildResult, tree: Worktree, checks: Sequence[str], item: str | None = None) -> list[str]:
+def check_build(result: BuildResult, tree: Worktree, checks: Sequence[str], item: ItemRef | None = None) -> list[str]:
     """Return field errors for a build result against the worktree HEAD the runner derives and the task's checks.
 
-    *item* is the conversation item kind of the task, if any; an answer or no-action needs no commit.
+    *item* is the conversation item the task answers, if any; an answer or no-action needs no commit.
     """
     errors = _response(result, item)
     reply = result.response is not None and result.response.how != "fixed"
@@ -455,7 +457,7 @@ def check_result(  # noqa: PLR0913, PLR0917 - the result, its worktree and four 
     checks: Sequence[str],
     root: Path,
     scope: Sequence[str] = (),
-    item: str | None = None,
+    item: ItemRef | None = None,
     *,
     visual: bool = False,
 ) -> list[str]:

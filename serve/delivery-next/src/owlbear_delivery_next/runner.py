@@ -142,7 +142,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         journal=sdk_adapter.Journal(
             lambda e: store.log(lock, slug, e), delivered, replaced, lambda d: store.write_now(lock, slug, d)
         ),
-        item=task.item.kind if task and task.item and s.kind == StepKind.BUILD else None,
+        item=task.item if task and task.item and s.kind == StepKind.BUILD else None,
     )
     run = _session(store, cfg)
     end = datetime.now(UTC)
