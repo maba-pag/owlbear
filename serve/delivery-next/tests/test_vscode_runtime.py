@@ -319,7 +319,7 @@ def test_the_cli_switches_the_runtime_and_shows_it(tmp_path: Path, monkeypatch) 
         cli.main(["profile", "--runtime", "auto"])
 
 
-def test_connect_opens_the_step_folder_window_even_when_a_host_answers(tmp_path, monkeypatch):
+def test_connect_uses_a_running_host_without_opening_a_window(tmp_path, monkeypatch):
     calls: list[object] = []
     monkeypatch.setattr(ahp, "endpoint", lambda: "entry")
     monkeypatch.setattr(ahp, "connect", lambda entry, _client, _token: calls.append(("connect", entry)) or "conn")
@@ -327,4 +327,4 @@ def test_connect_opens_the_step_folder_window_even_when_a_host_answers(tmp_path,
     monkeypatch.setattr(vscode_adapter, "launch_code_chat", lambda args, cwd: calls.append(("open", args, cwd)))
 
     assert vscode_adapter.connect(tmp_path) == "conn"
-    assert calls == [("open", ["code", str(tmp_path)], tmp_path), ("connect", "entry")]
+    assert calls == [("connect", "entry")]

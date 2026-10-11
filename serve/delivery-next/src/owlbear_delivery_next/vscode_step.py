@@ -1,10 +1,12 @@
-"""Route C+ (TD-36): a step started by ``code chat -m <agent>`` in a Copilot-harness window, then driven over AHP.
+"""Route C+ (TD-36): a step started by ``code chat`` in its folder's Copilot-harness window, then driven over AHP.
 
-The window gives the step VS Code's tools (P6). Delivery pins the model in the folder's settings before launch,
-binds only the session it launched (nonce, folder and agent; R2), cancels the window's first turn and waits for
-the host to confirm it, and runs the real turn with an explicit model and effort (TD-27, TD-32). A turn billed to
-any other model fails closed. ``folder`` must be a Delivery-owned worktree: the settings apply to every chat in
-that folder. The step's result travels through the step's MCP relay (TD-36), not through this module.
+``code chat`` opens or reuses the window on its working directory, which gives the step VS Code's tools (P6).
+Delivery pins the model in the folder's settings before launch, binds only the session it launched (nonce and
+folder; R2), cancels the window's first turn and waits for the host to confirm it, and runs the real turn with an
+explicit model, effort and agent file (TD-27, TD-32). The host ignores an agent it does not list, so the step
+fails closed unless the session lists the agent file. A turn billed to any other model fails closed. ``folder``
+must be a Delivery-owned worktree: the settings apply to every chat in that folder. The step's result travels
+through the step's MCP relay (TD-36), not through this module.
 """
 
 from __future__ import annotations
@@ -17,6 +19,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
+from urllib.parse import unquote
 
 from owlbear_delivery_next.ahp import ROOT, HostError
 from owlbear_delivery_next.window_files import SettingsError, write_window_settings
@@ -30,6 +33,7 @@ if TYPE_CHECKING:
 _TERMINAL = ("chat/turnComplete", "chat/turnCancelled", "chat/error")
 FOLLOW_UP_GRACE = 10.0  # seconds to wait for a steering message to start its own turn (P8)
 ACK = 10.0  # seconds to wait for the host to confirm a cancel or a config change
+LISTED = 10.0  # seconds to wait for the session to list the step's agent file; the host took 0.4 s live
 
 type End = Literal[
     "complete",
@@ -57,7 +61,7 @@ class StepSpec:
     """One VS Code step: where, which agent, which model and effort, what to do, and the session config."""
 
     folder: Path
-    agent: str
+    agent: Path  # the agent file inside ``folder``; the host lists only agents in watched folders
     model: str
     effort: str
     prompt: str
@@ -69,6 +73,11 @@ class StepSpec:
     def bootstrap(self) -> str:
         """The ``code chat`` prompt; its nonce identifies the session Delivery may act on."""
         return f"OwlBear step {self.nonce}: wait for Delivery's instructions."
+
+    @property
+    def agent_uri(self) -> str:
+        """The agent file as the host names it in a session's customizations."""
+        return self.agent.resolve().as_uri()
 
 
 @dataclass(frozen=True)
@@ -139,7 +148,6 @@ class _Bound:
     chat: str
     turn: Json
     active: bool
-    agent_ok: bool = True
 
 
 class Step:
@@ -163,7 +171,7 @@ class Step:
         out, bound = self._open(control, bind_limit)
         if bound is None or not self._ready(out, bound, control):
             return out
-        agent = (bound.turn.get("message") or {}).get("agent")
+        agent = {"uri": self.spec.agent_uri}
         deadline = self.clock() + limit
         self._turn(out, agent, control, deadline, self.spec.prompt)
         if out.end == "complete" and self.spec.reminder and not (control.stop.is_set() or control.settled.is_set()):
@@ -180,18 +188,13 @@ class Step:
         before = self._sessions()
         if busy := self._busy(before):
             return Outcome("folder-busy", f"session {busy} still runs a turn in this folder"), None
-        self.launch(["code", "chat", "-m", self.spec.agent, self.spec.bootstrap], self.spec.folder)
+        self.launch(["code", "chat", "-m", "agent", self.spec.bootstrap], self.spec.folder)
         bound = self._bind(before, self.clock() + bind_limit)
         if bound is None:
-            return Outcome("unbound", "no single session matched nonce, folder and agent"), None
+            return Outcome("unbound", "no single session matched nonce and folder"), None
         return Outcome("complete", session=bound.session, chat=bound.chat), bound
 
     def _ready(self, out: Outcome, bound: _Bound, control: Control) -> bool:  # noqa: PLR0911 - one guard each
-        if not bound.agent_ok:
-            if bound.active:
-                self._cancel(out, bound.turn["id"])
-            out.end, out.detail = "no-agent", "the window started the chat without the step's agent"
-            return False
         if not bound.active:
             out.end, out.detail = "bootstrap-ran", "the window's first turn ran before Delivery could cancel it"
             return False
@@ -200,6 +203,9 @@ class Step:
             return False
         if not self._configure(bound.session):
             out.end, out.detail = "config-refused", f"host did not apply {self.spec.config}"
+            return False
+        if not self._listed(bound.session):
+            out.end, out.detail = "no-agent", f"the session does not list {self.spec.agent_uri}"
             return False
         if control.stop.is_set():
             out.end = "stopped"
@@ -215,6 +221,20 @@ class Step:
     def _chat(self, chat: str) -> Json:
         return self.conn.request("subscribe", {"channel": chat})["snapshot"]["state"]
 
+    def _listed(self, session: str) -> bool:
+        """Wait, at most ``LISTED`` seconds, until the session's customizations list the step's agent file."""
+        deadline = self.clock() + LISTED
+        while True:
+            state = self.conn.request("subscribe", {"channel": session})["snapshot"]["state"]
+            kids = (k for c in state.get("customizations") or [] for k in c.get("children") or [])
+            if any(
+                k.get("type") == "agent" and unquote(k.get("uri", "")) == unquote(self.spec.agent_uri) for k in kids
+            ):
+                return True
+            if self.clock() >= deadline:
+                return False
+            self.conn.next_event(0.2)
+
     def _busy(self, sessions: list[Json]) -> str | None:
         """A session in this folder that still runs a turn, e.g. an earlier step whose runner died."""
         folder = self.spec.folder.resolve().as_uri()
@@ -225,10 +245,9 @@ class Step:
         return None
 
     def _bind(self, before: list[Json], deadline: float) -> _Bound | None:
-        """The one new session in this folder whose first turn has the nonce; one with the step's agent wins."""
+        """The one new session in this folder whose first turn has the nonce."""
         known = {s["resource"] for s in before}
         folder = self.spec.folder.resolve().as_uri()
-        suffix = f"/{self.spec.agent}.agent.md"
         while self.clock() < deadline:
             found: list[_Bound] = []
             for s in self._sessions():
@@ -238,14 +257,11 @@ class Step:
                 state = self.conn.request("subscribe", {"channel": chat})["snapshot"]["state"] if chat else {}
                 active = state.get("activeTurn")
                 turn = active or next(iter(state.get("turns") or []), None)
-                msg = (turn or {}).get("message") or {}
-                uri = (msg.get("agent") or {}).get("uri") or ""
-                if turn and self.spec.nonce in (msg.get("text") or ""):
-                    found.append(_Bound(s["resource"], chat, turn, active is not None, uri.endswith(suffix)))
-            ours = [b for b in found if b.agent_ok] or found
-            if len(ours) == 1:
-                return ours[0]
-            if len(ours) > 1:
+                if turn and self.spec.nonce in ((turn.get("message") or {}).get("text") or ""):
+                    found.append(_Bound(s["resource"], chat, turn, active is not None))
+            if len(found) == 1:
+                return found[0]
+            if len(found) > 1:
                 return None  # ambiguous: act on nothing (R2)
             self.conn.next_event(0.1)
         return None

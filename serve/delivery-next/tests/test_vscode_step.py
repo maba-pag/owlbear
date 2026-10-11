@@ -28,7 +28,7 @@ from owlbear_delivery_next.vscode_step import (
 )
 from owlbear_delivery_next.window_files import DEFAULT_MODEL, HARNESS, SettingsError, write_window_settings
 
-MODEL, EFFORT, AGENT = "gpt-6-luna", "max", "builder"
+MODEL, EFFORT, AGENT = "gpt-6-luna", "max", ".github/agents/owlbear-builder.agent.md"
 
 
 class FakeHost:
@@ -43,6 +43,8 @@ class FakeHost:
         self.accept_config = True
         self.ignore_cancel = False
         self.boot_active = True
+        self.listed = [(folder / AGENT).resolve().as_uri()]  # agent files the sessions list
+        self.listed_at = 0.0  # host clock time from which the sessions list them
         self.pinned: list[tuple[Path, str]] = []
         self.sent: list[tuple[str, dict]] = []
         self.events: list[dict] = []
@@ -66,7 +68,6 @@ class FakeHost:
         *,
         nonce: str,
         folder: Path | None = None,
-        agent: str = AGENT,
         model: str = MODEL,
         text: str | None = None,
     ) -> str:
@@ -75,7 +76,6 @@ class FakeHost:
         msg = {
             "text": text if text is not None else f"OwlBear step {nonce}: wait for Delivery's instructions.",
             "model": {"id": model, "config": {"thinkingLevel": "high"}},
-            "agent": {"uri": f"file://{folder or self.folder}/.github/agents/{agent}.agent.md"},
         }
         turn = {"id": f"boot{n}", "message": msg}
         self.items.append(
@@ -95,7 +95,12 @@ class FakeHost:
         channel = params["channel"]
         if channel in self.chats:
             return {"snapshot": {"state": self.chats[channel]}}
-        return {"snapshot": {"state": {"config": {"values": self.config[channel]}}}}
+        agents = [{"type": "agent", "uri": u} for u in self.listed] if self.t >= self.listed_at else []
+        state = {
+            "config": {"values": self.config[channel]},
+            "customizations": [{"type": "directory", "children": agents}],
+        }
+        return {"snapshot": {"state": state}}
 
     def dispatch(self, channel: str, action: dict) -> None:
         self.sent.append((channel, action))
@@ -133,7 +138,13 @@ class FakeHost:
 
 def spec(folder: Path, **kw: object) -> StepSpec:
     return StepSpec(
-        folder=folder, agent=AGENT, model=MODEL, effort=EFFORT, prompt="Check the page at 390px.", nonce="n0nce", **kw
+        folder=folder,
+        agent=folder / AGENT,
+        model=MODEL,
+        effort=EFFORT,
+        prompt="Check the page at 390px.",
+        nonce="n0nce",
+        **kw,
     )
 
 
@@ -165,14 +176,14 @@ def test_step_binds_its_session_cancels_bootstrap_and_runs_named_model(tmp_path:
     assert host.pinned == [(tmp_path, MODEL)]
     assert json.loads((tmp_path / ".vscode" / "settings.json").read_text())[DEFAULT_MODEL] == MODEL
     assert out.cancel_confirmed is True
-    assert host.launched == [["code", "chat", "-m", AGENT, "OwlBear step n0nce: wait for Delivery's instructions."]]
+    assert host.launched == [["code", "chat", "-m", "agent", "OwlBear step n0nce: wait for Delivery's instructions."]]
     assert host.actions("chat/turnCancelled") == [
         ("ahp-chat://default/c0", {"type": "chat/turnCancelled", "turnId": "boot0", "duration": 0})
     ]
     assert host.config["copilotcli:/s0"] == {"sandboxEnabled": "on"}
     ((_, started),) = host.actions("chat/turnStarted")
     assert started["message"]["model"] == {"id": MODEL, "config": {"thinkingLevel": EFFORT}}
-    assert started["message"]["agent"]["uri"].endswith("/builder.agent.md")
+    assert started["message"]["agent"] == {"uri": (tmp_path / AGENT).resolve().as_uri()}
     assert seen == [ToolCall("openBrowserPage", "http://x", None)]
     ((_, confirm),) = host.actions("chat/toolCallConfirmed")
     assert confirm["approved"] is True
@@ -183,12 +194,12 @@ def test_step_binds_its_session_cancels_bootstrap_and_runs_named_model(tmp_path:
 def test_step_never_touches_the_users_chats(tmp_path: Path) -> None:
     other = tmp_path / "other"
     other.mkdir()
-    host = FakeHost(tmp_path, [{"text": "my own question"}, {"folder": other}, {"agent": "planner"}, {}], [DONE])
+    host = FakeHost(tmp_path, [{"text": "my own question"}, {"folder": other}, {}], [DONE])
     out = step(host, spec(tmp_path)).run(Control(), limit=60)
 
     assert out.end == "complete"
-    assert out.session == "copilotcli:/s3"
-    assert {c for c, _ in host.sent} <= {"ahp-chat://default/c3", "copilotcli:/s3"}
+    assert out.session == "copilotcli:/s2"
+    assert {c for c, _ in host.sent} <= {"ahp-chat://default/c2", "copilotcli:/s2"}
 
 
 def test_step_acts_on_nothing_when_two_sessions_match(tmp_path: Path) -> None:
@@ -229,13 +240,24 @@ def test_a_bootstrap_that_already_ran_fails_closed(tmp_path: Path) -> None:
     assert host.sent == []
 
 
-def test_a_chat_without_the_agent_is_cancelled_and_reported(tmp_path: Path) -> None:
-    host = FakeHost(tmp_path, [{"agent": ""}], [DONE])
+def test_an_agent_the_session_does_not_list_starts_no_turn(tmp_path: Path) -> None:
+    host = FakeHost(tmp_path, [{}], [DONE])
+    host.listed = [(Path.home() / ".copilot/agents/owlbear-builder.agent.md").as_uri()]
     out = step(host, spec(tmp_path)).run(Control(), limit=60)
 
-    assert out.end == "no-agent"
+    assert (out.end, out.detail) == ("no-agent", f"the session does not list {(tmp_path / AGENT).resolve().as_uri()}")
     assert [a["turnId"] for _, a in host.actions("chat/turnCancelled")] == ["boot0"]
     assert host.actions("chat/turnStarted") == []
+
+
+def test_the_turn_waits_until_the_session_lists_the_agent(tmp_path: Path) -> None:
+    host = FakeHost(tmp_path, [{}], [DONE])
+    host.listed_at = 3.0
+    out = step(host, spec(tmp_path)).run(Control(), limit=60)
+
+    assert out.end == "complete"
+    ((_, started),) = host.actions("chat/turnStarted")
+    assert started["message"]["agent"] == {"uri": (tmp_path / AGENT).resolve().as_uri()}
 
 
 def test_a_turn_still_running_in_the_folder_launches_nothing(tmp_path: Path) -> None:
@@ -316,7 +338,7 @@ def test_a_stop_before_launch_launches_nothing(tmp_path: Path) -> None:
 
 def test_auto_is_refused_before_anything_launches(tmp_path: Path) -> None:
     host = FakeHost(tmp_path, [{"model": "auto"}], [DONE])
-    s = StepSpec(folder=tmp_path, agent=AGENT, model="auto", effort=EFFORT, prompt="x", nonce="n0nce")
+    s = StepSpec(folder=tmp_path, agent=tmp_path / AGENT, model="auto", effort=EFFORT, prompt="x", nonce="n0nce")
     out = step(host, s).run(Control(), limit=60)
 
     assert out.end == "settings-refused"
@@ -640,7 +662,6 @@ def test_endpoint_is_none_without_a_running_editor_host(tmp_path: Path) -> None:
 
 HEAD, BASE = "a" * 40, "b" * 40
 GOOD = {"summary": "Added greet().", "changed_paths": ["src/greet.ts"], "checks": []}
-WINDOW = "owlbear-builder"
 USAGE = {"type": "chat/usage", "usage": {"model": MODEL, "inputTokens": 100, "outputTokens": 20}}
 
 
@@ -670,7 +691,7 @@ class Adapted:
     """One adapter run against the fake host; ``submit`` is what the agent sends through the relay per turn."""
 
     def __init__(self, folder: Path, inbox: Path, scripts: list[list[dict]], submit: list[dict | None]) -> None:
-        self.host = FakeHost(folder, [{"agent": WINDOW}], scripts)
+        self.host = FakeHost(folder, [{}], scripts)
         self.inbox, self.submit, self.replies = inbox, submit, []
         self.events: list[dict] = []
         self.delivered: list[int] = []
@@ -699,7 +720,6 @@ class Adapted:
             clock=self.host.clock,
             settle=lambda *_a: self.settled,
             reminder="Call submit_result.",
-            wait=lambda _s: None,
         )
 
     def run(self) -> session_result.Run:
@@ -719,7 +739,7 @@ def test_a_vscode_session_returns_the_gated_result_and_leaves_no_window_files(wt
     assert run.usage == {"credits": None, "models": {MODEL: {"credits": 0.0, "tokens": 120}}, "model_mismatch": False}
     assert (run.termination.confirmed, a.delivered, a.texts()) == (True, [1], ["Build it."])
     assert a.host.config["copilotcli:/s0"] == vscode_adapter.CONFIG
-    assert a.host.launched[0][:4] == ["code", "chat", "-m", WINDOW]
+    assert a.host.launched[0][:4] == ["code", "chat", "-m", "agent"]
     assert git(wt, "status", "--porcelain", "--ignored") == ""
     assert not (tmp_path / "steps" / "1.json").exists()
     assert not (wt / ".github").exists()
@@ -748,31 +768,21 @@ def test_a_turn_without_a_result_is_reminded_once_then_retried(wt: Path, tmp_pat
     assert session_result.to_result(run, StepKind.BUILD, datetime.now(UTC)).exit == Exit.RETRY
 
 
-def test_a_cold_window_without_the_agent_is_retried_once(wt: Path, tmp_path: Path) -> None:
+def test_an_unlisted_agent_ends_the_step_and_restores_the_users_settings(wt: Path, tmp_path: Path) -> None:
     (wt / ".vscode").mkdir()
     (wt / ".vscode" / "settings.json").write_text('{ // mine\n  "a": 1,\n}\n')
     a = Adapted(wt, tmp_path / "steps" / "4.json", [[USAGE, {"type": "chat/turnComplete"}]], [GOOD])
-    windows = iter([[{"agent": ""}], [{"agent": WINDOW}]])
-    launch = a.host.launch
-
-    def cold(args: list[str], cwd: Path) -> None:
-        a.host.on_launch = next(windows)
-        launch(args, cwd)
-
-    a.env = vscode_adapter.Env(
-        connect=a.env.connect, launch=cold, clock=a.host.clock, settle=a.env.settle, wait=lambda _s: None
-    )
+    a.host.listed = []
     run = a.run()
 
-    assert len(a.host.launched) == 2
-    assert [e["end"] for e in a.events if e.get("event") == "vscode-step"] == ["no-agent", "complete"]
-    assert run.ending == "result"
+    assert len(a.host.launched) == 1
+    assert [e["end"] for e in a.events if e.get("event") == "vscode-step"] == ["no-agent"]
+    assert (run.ending, a.texts(), a.delivered) == ("error", [], [])
     assert (wt / ".vscode" / "settings.json").read_text() == '{ // mine\n  "a": 1,\n}\n'
 
 
-def test_a_chat_without_the_agent_whose_cancel_is_unconfirmed_is_not_retried(wt: Path, tmp_path: Path) -> None:
+def test_an_unconfirmed_bootstrap_cancel_is_a_termination_problem(wt: Path, tmp_path: Path) -> None:
     a = Adapted(wt, tmp_path / "steps" / "7.json", [], [])
-    a.host.on_launch = [{"agent": ""}]
     a.host.ignore_cancel = True
     run = a.run()
 
