@@ -15,7 +15,7 @@ from owlbear_delivery_next.tools import Worktree
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from owlbear_delivery_next.models import Profile
+    from owlbear_delivery_next.profile_record import Profile
 
 GIT = shutil.which("git") or "git"
 

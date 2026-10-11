@@ -11,7 +11,8 @@ from owlbear_delivery_next import failures, loop, profile
 from owlbear_delivery_next.git.remote_git import RemoteGitError, RemoteGitFailed, RemoteGitTimeout, run_remote_git
 from owlbear_delivery_next.github.provider import FailureCode, ProviderError
 from owlbear_delivery_next.loop import StepResult
-from owlbear_delivery_next.models import ErrorKind, Exit, Option, Profile, Question, StepKind, Stop, Task, Waiting
+from owlbear_delivery_next.models import ErrorKind, Exit, Option, Question, StepKind, Stop, Task, Waiting
+from owlbear_delivery_next.profile_record import Profile
 from owlbear_delivery_next.steps import conversation, worktree
 
 if TYPE_CHECKING:

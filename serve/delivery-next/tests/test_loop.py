@@ -4,27 +4,22 @@ import pytest
 
 from owlbear_delivery_next import budgets, evidence, failures, loop
 from owlbear_delivery_next.github import merge_offer
+from owlbear_delivery_next.inbox import AnswerItem, BriefApproval, CheckResult, ConsentItem, IntentItem, Recovery
 from owlbear_delivery_next.loop import StepResult
 from owlbear_delivery_next.models import (
     Answer,
-    AnswerItem,
     Brief,
-    BriefApproval,
     Budget,
     Change,
-    CheckResult,
-    ConsentItem,
     Criterion,
     ErrorKind,
     Exit,
     Inputs,
-    IntentItem,
     MergeConsent,
     Outcome,
     PersonCheck,
     Plan,
     Question,
-    Recovery,
     Review,
     Step,
     StepKind,

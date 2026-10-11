@@ -24,12 +24,11 @@ from owlbear_delivery_next.github.provider import (
     classify_checks,
     merge_request_body,
 )
+from owlbear_delivery_next.inbox import AnswerItem, ConsentItem
 from owlbear_delivery_next.models import (
     Answer,
-    AnswerItem,
     Brief,
     Change,
-    ConsentItem,
     Criterion,
     Environment,
     ErrorKind,
@@ -39,8 +38,6 @@ from owlbear_delivery_next.models import (
     Names,
     PersonCheck,
     Plan,
-    Profile,
-    ProfileEntry,
     Response,
     Review,
     Step,
@@ -48,6 +45,7 @@ from owlbear_delivery_next.models import (
     Task,
     Waiting,
 )
+from owlbear_delivery_next.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.session_result import Run
 from owlbear_delivery_next.setup import Check as SetupCheck
 from owlbear_delivery_next.status import Activity

@@ -26,7 +26,8 @@ from owlbear_delivery_next import (
     tools,
 )
 from owlbear_delivery_next.cli import describe
-from owlbear_delivery_next.models import Environment, Exit, Profile, StepKind, Waiting
+from owlbear_delivery_next.models import Environment, Exit, StepKind, Waiting
+from owlbear_delivery_next.profile_record import Profile
 from owlbear_delivery_next.steps import (
     check,
     cleanup,

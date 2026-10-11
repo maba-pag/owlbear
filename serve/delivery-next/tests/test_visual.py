@@ -13,9 +13,9 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from owlbear_delivery_next import api, briefs, host, loop, permissions, processes, runner, sdk_adapter, tools
+from owlbear_delivery_next.inbox import AnswerItem
 from owlbear_delivery_next.models import (
     VISUAL,
-    AnswerItem,
     Brief,
     Change,
     Criterion,
@@ -25,7 +25,6 @@ from owlbear_delivery_next.models import (
     Names,
     PersonCheck,
     Plan,
-    Profile,
     Step,
     StepKind,
     Stop,
@@ -34,6 +33,7 @@ from owlbear_delivery_next.models import (
     VisualState,
 )
 from owlbear_delivery_next.permissions import Policy
+from owlbear_delivery_next.profile_record import Profile
 from owlbear_delivery_next.session_result import Run
 from owlbear_delivery_next.status import Activity
 from owlbear_delivery_next.steps import check, merge, visual

@@ -9,24 +9,26 @@ from pydantic import Field
 
 from owlbear_delivery_next import budgets, evidence
 from owlbear_delivery_next.failures import DEFECT, ENVIRONMENT, kind_of
-from owlbear_delivery_next.models import (
-    VISUAL,
-    Actor,
-    Answer,
+from owlbear_delivery_next.inbox import (
     AnswerItem,
     BriefApproval,
     CheckResult,
     ConsentItem,
-    Exit,
     IntentItem,
+    PullItem,
+    Recovery,
+)
+from owlbear_delivery_next.models import (
+    VISUAL,
+    Actor,
+    Answer,
+    Exit,
     MergeConsent,
     Option,
     Outcome,
     Plan,
-    PullItem,
     Question,
     Record,
-    Recovery,
     Review,
     Score,
     Step,
@@ -40,7 +42,8 @@ from owlbear_delivery_next.moves import ask, enter, go, open_task, resolved
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from owlbear_delivery_next.models import Change, InboxItem
+    from owlbear_delivery_next.inbox import InboxItem
+    from owlbear_delivery_next.models import Change
 
 type PrState = Literal["open", "merged", "closed"]
 type Seen = tuple[PrState | None, bool]  # the PR's end state; whether a consent wait saw a comment or a new head

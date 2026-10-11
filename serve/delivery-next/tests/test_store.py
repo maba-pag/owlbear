@@ -9,19 +9,10 @@ import pytest
 
 from owlbear_delivery_next import loop, status
 from owlbear_delivery_next import store as store_mod
+from owlbear_delivery_next.inbox import AnswerItem, BriefApproval
 from owlbear_delivery_next.loop import StepResult, apply
-from owlbear_delivery_next.models import (
-    AnswerItem,
-    Brief,
-    BriefApproval,
-    Change,
-    Exit,
-    Profile,
-    ProfileEntry,
-    Question,
-    Step,
-    StepKind,
-)
+from owlbear_delivery_next.models import Brief, Change, Exit, Question, Step, StepKind
+from owlbear_delivery_next.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.store import FormatTooNewError, LockHeldError, Store, StoreError
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)

@@ -2,9 +2,9 @@ from datetime import UTC, datetime, timedelta
 
 from owlbear_delivery_next import budgets, failures, loop
 from owlbear_delivery_next.budgets import EPISODE_ASK, PAUSE, PAUSE_CAP
+from owlbear_delivery_next.inbox import AnswerItem
 from owlbear_delivery_next.loop import StepResult
 from owlbear_delivery_next.models import (
-    AnswerItem,
     Brief,
     Change,
     Criterion,

@@ -20,8 +20,9 @@ import uvicorn
 from pydantic import ValidationError
 
 from owlbear_delivery_next import api, failures, loop, processes, setup, tools
-from owlbear_delivery_next.models import VISUAL, ErrorKind, Exit, Profile, Record, StepKind, Stop
+from owlbear_delivery_next.models import VISUAL, ErrorKind, Exit, Record, StepKind, Stop
 from owlbear_delivery_next.process_probe import ProcessTableWorktreeProbe, WorktreeProcessScanError
+from owlbear_delivery_next.profile_record import Profile
 from owlbear_delivery_next.status import Activity
 from owlbear_delivery_next.steps import check, engine, pullback, worktree
 from owlbear_delivery_next.storage_io import atomic_write, open_lock

@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import truststore
 
 from owlbear_delivery_next import profile, roles
-from owlbear_delivery_next.models import Profile, ProfileEntry
+from owlbear_delivery_next.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.sdk_adapter import cli_path
 from owlbear_delivery_next.store import Store, StoreError, git_common_dir
 

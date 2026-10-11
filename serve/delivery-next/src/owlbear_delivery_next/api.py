@@ -20,19 +20,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next import evidence, loop, profile
 from owlbear_delivery_next.briefs import save_brief
-from owlbear_delivery_next.models import (
-    AnswerItem,
-    BriefApproval,
-    Change,
-    CheckResult,
-    ConsentItem,
-    Exit,
-    IntentItem,
-    PersonCheck,
-    Profile,
-    PullItem,
-    Waiting,
-)
+from owlbear_delivery_next.inbox import AnswerItem, BriefApproval, CheckResult, ConsentItem, IntentItem, PullItem
+from owlbear_delivery_next.models import Change, Exit, PersonCheck, Waiting
+from owlbear_delivery_next.profile_record import Profile
 from owlbear_delivery_next.status import card, status, unloadable
 from owlbear_delivery_next.steps import check, visual
 from owlbear_delivery_next.store import StoreError
@@ -44,7 +34,8 @@ if TYPE_CHECKING:
     from starlette.responses import Response
 
     from owlbear_delivery_next.host import Host, HostRecord
-    from owlbear_delivery_next.models import InboxItem, Inputs
+    from owlbear_delivery_next.inbox import InboxItem
+    from owlbear_delivery_next.models import Inputs
     from owlbear_delivery_next.status import Activity
     from owlbear_delivery_next.store import Store
 

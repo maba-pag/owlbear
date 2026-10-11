@@ -14,11 +14,11 @@ from owlbear_delivery_next.models import (
     Names,
     Outcome,
     PersonCheck,
-    Profile,
     StepKind,
     VisualState,
     Waiting,
 )
+from owlbear_delivery_next.profile_record import Profile
 from owlbear_delivery_next.store import HANDLE, LockHeldError, StoreError
 
 if TYPE_CHECKING:

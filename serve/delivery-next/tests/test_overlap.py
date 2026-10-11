@@ -4,19 +4,9 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from owlbear_delivery_next import loop, overlap
+from owlbear_delivery_next.inbox import AnswerItem
 from owlbear_delivery_next.loop import StepResult
-from owlbear_delivery_next.models import (
-    AnswerItem,
-    Brief,
-    Change,
-    Exit,
-    Overlap,
-    Plan,
-    Question,
-    Step,
-    StepKind,
-    Task,
-)
+from owlbear_delivery_next.models import Brief, Change, Exit, Overlap, Plan, Question, Step, StepKind, Task
 from owlbear_delivery_next.status import Activity, card
 from owlbear_delivery_next.store import Store
 

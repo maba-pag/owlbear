@@ -8,8 +8,9 @@ from fastapi.testclient import TestClient
 
 from owlbear_delivery_next import api, cli, profile, roles, sdk_adapter
 from owlbear_delivery_next.host import HostRecord
-from owlbear_delivery_next.models import Profile, ProfileEntry, RoleModel, StepKind
+from owlbear_delivery_next.models import StepKind
 from owlbear_delivery_next.permissions import Policy
+from owlbear_delivery_next.profile_record import Profile, ProfileEntry, RoleModel
 from owlbear_delivery_next.store import Store, StoreError
 from owlbear_delivery_next.tools import Worktree
 

@@ -4,15 +4,14 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING, Annotated, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
 FORMAT = 1
-PROFILE_FORMAT = 1
 
 type Actor = Literal["you", "admin", "delivery", "github"]
 type Channel = Literal["status-view", "chat"]
@@ -473,105 +472,3 @@ class Change(Record):
     pull_requested: datetime | None = None  # the owner asked to pull the target again
     inbox_acked: list[str] = Field(default_factory=list)
     handled: list[Handling] = Field(default_factory=list)  # pull-request conversation items, oldest first
-
-
-class ProfileEntry(Record):
-    """One detected project fact with its evidence (DR1); an HTTP 403 on rules is unknown."""
-
-    state: Literal["known", "unknown", "unsupported"]
-    value: str = ""
-    evidence: str = ""
-
-
-class RoleModel(Record):
-    """The model and reasoning effort one session role runs with (TD-27)."""
-
-    model: str
-    effort: Effort
-
-    @model_validator(mode="after")
-    def _valid(self) -> RoleModel:
-        """A named model, never ``auto`` (TD-32); luna and haiku always run at ``max`` (TD-27)."""
-        if not self.model.strip():
-            raise ValueError("model must not be empty")  # noqa: EM101, TRY003
-        if self.model.strip().lower() == "auto":
-            raise ValueError("model must be named; auto is never used (TD-32)")  # noqa: EM101, TRY003
-        if (self.model == "gpt-6-luna" or self.model.startswith("claude-haiku-")) and self.effort != "max":
-            raise ValueError(f"{self.model} always runs with effort max, got {self.effort}")  # noqa: EM102, TRY003
-        return self
-
-
-class Profile(Record):
-    """The confirmed project profile; a new version is a premise change."""
-
-    format: int = PROFILE_FORMAT
-    version: int = 0
-    confirmed_at: datetime | None = None
-    entries: dict[str, ProfileEntry] = Field(default_factory=dict)
-    roles: dict[Role, RoleModel] = Field(default_factory=dict)  # per-project overrides of the role defaults
-
-
-class _Item(Record):
-    at: datetime
-    channel: Channel = "status-view"
-
-
-class BriefApproval(_Item):
-    """Approve one brief version."""
-
-    kind: Literal["brief-approval"] = "brief-approval"
-    version: int
-
-
-class AnswerItem(_Item):
-    """Answer one open question."""
-
-    kind: Literal["answer"] = "answer"
-    question: str
-    option: str | None = None
-    text: str = ""
-
-
-class CheckResult(_Item):
-    """Pass or fail of one person-only check, with the inputs shown to the user."""
-
-    kind: Literal["check-result"] = "check-result"
-    check: str
-    passed: bool
-    note: str = ""
-    inputs: Inputs
-
-
-class Recovery(_Item):
-    """The user performed the current stop's action."""
-
-    kind: Literal["recovery"] = "recovery"
-    action: str
-
-
-class ConsentItem(_Item):
-    """Consent to merge one exact head."""
-
-    kind: Literal["merge-consent"] = "merge-consent"
-    head: str
-    delta: str = ""
-
-
-class IntentItem(_Item):
-    """Pause, resume, abandon, or change the intent."""
-
-    kind: Literal["intent"] = "intent"
-    intent: Literal["pause", "resume", "abandon", "change"]
-    text: str = ""
-
-
-class PullItem(_Item):
-    """Pull the merged target into the local target branch again."""
-
-    kind: Literal["pull"] = "pull"
-
-
-type InboxItem = Annotated[
-    BriefApproval | AnswerItem | CheckResult | Recovery | ConsentItem | IntentItem | PullItem,
-    Field(discriminator="kind"),
-]

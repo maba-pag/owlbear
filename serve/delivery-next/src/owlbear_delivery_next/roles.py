@@ -6,7 +6,8 @@ from typing import get_args
 
 from pydantic import ValidationError
 
-from owlbear_delivery_next.models import Effort, Profile, Role, RoleModel, StepKind
+from owlbear_delivery_next.models import Effort, Role, StepKind
+from owlbear_delivery_next.profile_record import Profile, RoleModel
 
 DEFAULTS: dict[Role, RoleModel] = {
     "planner": RoleModel(model="claude-opus-5.5", effort="high"),

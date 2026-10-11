@@ -17,7 +17,7 @@ import yaml
 from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.provider import MergeMethod
-from owlbear_delivery_next.models import Profile, ProfileEntry
+from owlbear_delivery_next.profile_record import Profile, ProfileEntry
 
 if TYPE_CHECKING:
     from datetime import datetime

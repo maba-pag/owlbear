@@ -7,27 +7,24 @@ import pytest
 from owlbear_delivery_next import cli, host
 from owlbear_delivery_next.evidence import check_inputs, next_check
 from owlbear_delivery_next.host import Host, RunnerRecord
+from owlbear_delivery_next.inbox import AnswerItem, CheckResult, IntentItem
 from owlbear_delivery_next.loop import StepResult, apply
 from owlbear_delivery_next.models import (
     Answer,
-    AnswerItem,
     Change,
-    CheckResult,
     Environment,
     Exit,
     Inputs,
-    IntentItem,
     Names,
     PersonCheck,
     Plan,
-    Profile,
-    ProfileEntry,
     Question,
     Step,
     StepKind,
     Task,
 )
 from owlbear_delivery_next.process_probe import WorktreeProcessScanError
+from owlbear_delivery_next.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.status import Activity, status
 from owlbear_delivery_next.steps import check
 from owlbear_delivery_next.store import Store

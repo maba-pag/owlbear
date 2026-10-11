@@ -18,7 +18,9 @@ from typing import TYPE_CHECKING, Any
 from pydantic import TypeAdapter, ValidationError
 
 from owlbear_delivery_next import loop, profile
-from owlbear_delivery_next.models import FORMAT, PROFILE_FORMAT, Change, ErrorKind, InboxItem, Profile, Record, Stop
+from owlbear_delivery_next.inbox import InboxItem
+from owlbear_delivery_next.models import FORMAT, Change, ErrorKind, Record, Stop
+from owlbear_delivery_next.profile_record import PROFILE_FORMAT, Profile
 from owlbear_delivery_next.storage_io import atomic_write, open_lock
 
 if TYPE_CHECKING:

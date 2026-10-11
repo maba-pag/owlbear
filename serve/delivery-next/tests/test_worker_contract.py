@@ -7,9 +7,10 @@ from types import SimpleNamespace
 import psutil
 
 from owlbear_delivery_next import processes, prompts, sdk_adapter, session_result, tools
-from owlbear_delivery_next.models import Change, ErrorKind, Exit, Plan, Profile, ProfileEntry, StepKind, Task
+from owlbear_delivery_next.models import Change, ErrorKind, Exit, Plan, StepKind, Task
 from owlbear_delivery_next.permissions import Policy, Request, decide
 from owlbear_delivery_next.processes import Termination, verdict
+from owlbear_delivery_next.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.session_result import Run, to_result
 from owlbear_delivery_next.tools import AskQuestion, BuildResult, Worktree
 

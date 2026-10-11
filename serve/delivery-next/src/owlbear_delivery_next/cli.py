@@ -8,8 +8,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from owlbear_delivery_next import host, profile, roles, setup
+from owlbear_delivery_next.inbox import AnswerItem
 from owlbear_delivery_next.models import (
-    AnswerItem,
     Brief,
     Change,
     Criterion,
@@ -17,14 +17,12 @@ from owlbear_delivery_next.models import (
     Names,
     PersonCheck,
     Plan,
-    Profile,
-    ProfileEntry,
     Role,
-    RoleModel,
     Step,
     StepKind,
     Task,
 )
+from owlbear_delivery_next.profile_record import Profile, ProfileEntry, RoleModel
 from owlbear_delivery_next.status import status, unloadable
 from owlbear_delivery_next.store import Store, StoreError
 

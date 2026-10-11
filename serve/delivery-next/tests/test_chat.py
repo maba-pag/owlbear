@@ -13,7 +13,8 @@ from fastapi.testclient import TestClient
 from owlbear_delivery_next import api, loop, setup, tools
 from owlbear_delivery_next.host import HostRecord
 from owlbear_delivery_next.mcp_server import NOT_RUNNING, Chat
-from owlbear_delivery_next.models import Change, Exit, Option, Outcome, Profile, ProfileEntry, Question, StepKind
+from owlbear_delivery_next.models import Change, Exit, Option, Outcome, Question, StepKind
+from owlbear_delivery_next.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.status import Activity
 from owlbear_delivery_next.store import Store
 
