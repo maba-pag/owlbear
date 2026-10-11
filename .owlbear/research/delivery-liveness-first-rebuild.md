@@ -509,6 +509,10 @@ Owner readings confirmed 2026-10-11 (TD-43; meanings, not decisions; the decisio
   - Temporary errors: Delivery retries, now and later.
   - A tool available in another runtime: Delivery moves the step there.
   - A tool that exists nowhere: a planning error, fixed in planning.
+- R7 (2026-10-12) Screenshots are desktop only, at widths between 1280 and 2400. The exact widths
+  are a setting (default 1280, 1920, 2400), never below 1280.
+- R8 (2026-10-12) The visual check collects browser console errors. Errors that were not in the
+  "before" capture fail the check; existing ones are only reported.
 
 Research questions from the readings (step 3), on top of the unknowns U1 to U5:
 
