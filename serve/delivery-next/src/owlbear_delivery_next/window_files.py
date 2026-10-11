@@ -24,7 +24,7 @@ SETTINGS, MCP = ".vscode/settings.json", ".mcp.json"
 SERVER = "owlbear-step"
 RESULTS = (
     "Your result tools come from the `owlbear-step` MCP server: `submit_result`, `ask_question` and "
-    "`report_wrong_premise`. Never push, and never write outside this folder."
+    "`report_wrong_premise`. Never push."
 )
 
 type Render = Callable[[str | None], str]
