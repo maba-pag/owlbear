@@ -98,7 +98,7 @@ def _remove(wt: Path, tmp: Path) -> str:
     names = {f"worktree {tmp}", f"worktree {tmp.resolve()}"}
     try:
         listed = set(git(wt, "worktree", "list", "--porcelain").stdout.splitlines())
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired, OSError:
         listed = names
     if names & listed or os.path.lexists(tmp):
         _LOG.warning("pull-back could not remove temporary worktree %s", tmp)

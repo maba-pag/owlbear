@@ -199,9 +199,9 @@ def _pull(wt: Path, target: str) -> tuple[str, str]:
     new, note = pullback_replay.replay(wt, base, old, remote)
     try:
         before = pullback_replay.apply(wt, ref, old, new, guard)
+        state, reason = _checked(wt, f"replayed {count} local commits onto the merged change", before)
     except (BehindError, subprocess.TimeoutExpired, OSError) as exc:
         raise BehindError("; ".join(filter(None, (_reason(exc), note)))) from exc
-    state, reason = _checked(wt, f"replayed {count} local commits onto the merged change", before)
     return state, "; ".join(filter(None, (reason, note)))
 
 
