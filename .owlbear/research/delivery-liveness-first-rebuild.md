@@ -471,9 +471,54 @@ Phase 2 status, 2026-10-11 ([runtime research P14](delivery-next-agent-runtime.m
   model and effort. It passed 3 of 3 with a window tool and an image, and Sol verified the host
   records. Build items: TD-48 in `vscode_step`, C7 attachments, and a proof covering Opus, Sol and a
   full step.
-- Open: TD-35's wording. The owner wants tools and visibility as separate settings, per agent and
-  maybe per task, across the runtimes. A plan is being drafted and Sol-challenged before the owner
-  decides.
+- Open: TD-35's wording, now worked as a planned topic (steps 0 to 7, approved by the owner;
+  builds of TD-48 and C7 held until it is through). Step 1 cleanup: 45 probe sessions and ten probe
+  folders removed with consent; disposing a session also deletes its host record, so the six P14
+  records were copied first to `.owlbear/scratch/ahp/c6/records/`.
+
+Owner readings confirmed 2026-10-11 (TD-43; meanings, not decisions; the decisions follow in step 5):
+
+- R1 Visibility levels only add. A chat is visible if its agent (or step) needs it, if its Change
+  is set to always visible, or if the global switch is on. "Agent needs to be visible" is a
+  requirement: it cannot work unseen, for example because it asks the owner. The Change and global
+  settings are watching wishes, switchable at any time and effective from the next session.
+- R2 Visibility is set per agent. Tool needs are set per agent as the default, with a per-task
+  addition only where a task really needs more.
+- R3 A config page, which does not exist yet (the old Cockpit has none), shows the global visibility
+  switch and every OwlBear agent. Per agent it sets visible yes/no, default runtime, model, effort
+  and context window size.
+  - Its runtime picker shows the tools each runtime adds to the common baseline, and the agent's
+    tools it would lack there.
+  - A Change or task may add visibility and tool categories, never remove them. Model, effort and
+    context size are plain defaults that a task does not change.
+  - The agent file lists the most the agent could ever need. A step's needed set is the agent's
+    default categories plus its task's additions. Delivery leaves the agent's default runtime only
+    when the needed set is not available there.
+  - The owner's earlier words, not offered back as a separate reading: runtimes "differ in tools
+    and visibility and models and access to mcp and internet search and maybe even more, and that
+    needs to be transparent"; unneeded runtimes such as CLI and cloud can be switched off in config.
+- R4 Before steps move between runtimes, the owner wants to know whether a role behaves the same
+  and delivers the same quality when its tools differ.
+- R5 Watching is only seeing: a watched step behaves exactly as unwatched (tools, model, mode,
+  permissions, result). A step's tools follow from its needs alone. Extra tools a runtime offers are
+  hidden, and a runtime with too few is not used for that step.
+  - Tools come in a few coarse categories (for example browser use). Each agent has a default set,
+    and a task can only add whole categories, never remove basics or adjust single tools.
+  - About 80% of tasks run with the defaults.
+- R6 A missing tool reaches the owner only when he can act on it (install, enable, sign in).
+  - Temporary errors: Delivery retries, now and later.
+  - A tool available in another runtime: Delivery moves the step there.
+  - A tool that exists nowhere: a planning error, fixed in planning.
+
+Research questions from the readings (step 3), on top of the unknowns U1 to U5:
+
+- Q-A Which settings can be passed when a session starts or a message is sent, instead of living in
+  the agent file: model, effort, context size, tools, agent, mode, others? Should model, effort and
+  context size leave the agent definition for OwlBear's config?
+- Q-B How does an agent cope when its definition or linked skills mention tools a run does not
+  have? One definition per agent or near-identical variants? Should skills be required reading or
+  read when needed, and how big is the risk that a needed skill goes unread? The owner wants
+  research plus the assistant's and Sol's opinions.
 
 ## 4. Recommendation, Confidence, and Limits
 
