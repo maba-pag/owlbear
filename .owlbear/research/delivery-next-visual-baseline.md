@@ -132,6 +132,8 @@ the owner's journey and has no route yet.
 - The reviewer receives the "after" screenshots and the current starting point (the retake, else the
   shaping set), labelled `before/…` and `after/…` per state and viewport. Prompt: judge "after"
   against each expectation; "before" shows the starting point and is not judged.
+- The reviewer may answer "unsure" for a state, naming what it cannot judge; the owner is then asked
+  to look at that state's screenshots on the card (TD-14 as read back on 2026-10-11).
 - Budget: "after" images come first within the 12 MB review cap. "Before" images are downscaled, then
   omitted, with a named note when they do not fit. A "before" image never causes a finding, so a full
   budget never becomes a product fix task.
@@ -161,10 +163,8 @@ the owner's journey and has no route yet.
   `scheme-light-dark`.
 - Remove: the 3-second decision, the `pds` flag and every native-control branch (`button`, `field`,
   `choice`, `external`, `pullbackNote`, the row button), the `.no-pds` CSS and its notice.
-- Diagnostic only: if `componentsReady()` (S6) has not resolved 10 seconds after a render, show one
-  plain line: "The Porsche Design System did not load from cdn.ui.porsche.com; check the network and
-  reload." This catches a failed core and a failed component chunk alike; it is a message, not an
-  alternative rendering.
+- Nothing else: no own load diagnostic (the owner's read-back of TD-39: "PDS's documented CDN loading,
+  nothing else").
 - Cockpit is unchanged; whether its own mirror (S8) should follow PDS is a separate question.
 
 ### 3.7 Removed as-built behaviour
@@ -182,9 +182,9 @@ before new files are added.
 | Slice | Content | Proof |
 | --- | --- | --- |
 | 1 Ports | §3.5, with check preparation receiving a port (§3.4 first bullet) and the template/port split | Two concurrent launches of a real `python -m http.server {port}`, each serving different content, render their own content; a server ignoring the port fails with the named reason and is disposed; the host's "after" launch refuses an answering URL; a relaunch gets a new port and keeps the check's answer |
-| 2 PDS | §3.6 | Page test; browser check with the CDN reachable, with the core blocked, and with one component chunk blocked (diagnostic shown in both failure cases) |
+| 2 PDS | §3.6 | Page test; browser check with the CDN reachable |
 | 3 Recipe and shaping capture | §3.2, §3.3, G2 | `save_brief` over MCP stores `ui`, `visual`, `recipe`; through the host's capture rule, a shaping draft gets one capture at the target tip whose PNG shows the target's content (as `test_before.py` does today); a revision saved during a running capture succeeds; an expectations-only edit or a state rename does not recapture and keeps the pictures; a killed capture runner ends its attempt as interrupted while its preview is alive, leaves no process and is not relaunched; "Capture again" retries a failed attempt; approval before the capture finishes is refused by API and fold; the page shows each state with its screenshots |
-| 4 Visual check | §3.4 | Preparation prompt carries the brief's recipe and port; a target whose UI paths changed since shaping gets a retake showing the new target's content, an unchanged one none; reviewer attachments carry labelled before and after; an over-budget "before" is downscaled or omitted with a note and never yields a fix task |
+| 4 Visual check | §3.4 | Preparation prompt carries the brief's recipe and port; a target whose UI paths changed since shaping gets a retake showing the new target's content, an unchanged one none; reviewer attachments carry labelled before and after; an "unsure" state asks the owner to look at it; an over-budget "before" is downscaled or omitted with a note and never yields a fix task |
 | 5 Live | One UI Change in `owlbear-sandbox` from chat: shaping meets G5 and offers the three choices; the Change fixes the preview in itself; a second Change gets a design reference; its visual check fails once on a deliberately broken layout, returns a fix task and then passes (the M4 proof); an owner's own server on 4173 stays untouched and uncaptured | Card with both sets; page screenshots; activity log |
 
 Docs updated with the slices: the TD-24 sentence of [charter §3.10](delivery-next-charter.md#L227);
@@ -257,6 +257,9 @@ errors in this plan:
 - **D-A.** A non-decision presented as one, with an option no owner would choose. Replaced by the
   recorded exception in §5.
 - **R6.** The API-origin risk had been dismissed with a wrong argument. Added as a risk.
+
+The owner's read-back of the same day changed two parts: the PDS load diagnostic is dropped (TD-39:
+"nothing else"), and the owner also looks at a state the visual reviewer is unsure about (TD-14).
 
 Third round on §3.3 and D-A: 2.1 to 2.5 closed; no new defect except one. Disposition:
 
