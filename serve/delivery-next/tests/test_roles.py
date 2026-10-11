@@ -21,12 +21,12 @@ NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
     ("session", "model", "effort"),
     [
         (StepKind.PLAN, "claude-opus-5.5", "high"),
-        (StepKind.BUILD, "gpt-6-luna", "max"),
-        (StepKind.CHECK, "gpt-6-luna", "max"),
-        (StepKind.REVIEW, "gpt-6.1-sol", "high"),
-        ("visual-review", "gpt-6.1-sol", "high"),
-        ("plan-review", "gpt-6.1-sol", "medium"),
-        ("brief-review", "gpt-6.1-sol", "medium"),
+        (StepKind.BUILD, "claude-opus-5.5", "medium"),
+        (StepKind.CHECK, "claude-opus-5.5", "medium"),
+        (StepKind.REVIEW, "gpt-6.1-sol", "xhigh"),
+        ("visual-review", "gpt-6.1-sol", "xhigh"),
+        ("plan-review", "gpt-6.1-sol", "high"),
+        ("brief-review", "gpt-6.1-sol", "high"),
     ],
 )
 def test_each_session_runs_with_its_roles_model_and_effort(session, model, effort):
@@ -45,7 +45,7 @@ def test_a_project_override_wins_and_is_marked_in_the_table():
     assert roles.chosen(prof, StepKind.BUILD) == RoleModel(model="m-1", effort="low")
     assert roles.chosen(prof, StepKind.REVIEW) == roles.DEFAULTS["reviewer"]
     assert "builder: m-1 effort low (project)" in roles.table(prof)
-    assert "reviewer: gpt-6.1-sol effort high\n" in roles.table(prof)
+    assert "reviewer: gpt-6.1-sol effort xhigh\n" in roles.table(prof)
 
 
 def test_a_role_override_parses_a_model_with_colons():
@@ -61,8 +61,6 @@ def test_a_role_override_parses_a_model_with_colons():
         "builder=   :high",
         "builder",
         "builder=m",
-        "builder=gpt-6-luna:high",
-        "reviewer=claude-haiku-4.5:xhigh",
     ],
 )
 def test_an_invalid_override_is_refused(text, capsys):
@@ -76,10 +74,10 @@ def test_an_invalid_override_is_refused(text, capsys):
 
 @pytest.mark.parametrize(
     ("model", "effort"),
-    [(" ", "high"), ("auto", "high"), ("gpt-6-luna", "xhigh"), ("claude-haiku-4.5", "low"), ("m", "extreme")],
+    [(" ", "high"), ("auto", "high"), ("AUTO", "low"), ("m", "extreme")],
 )
 def test_a_role_model_is_refused_everywhere_it_is_built(tmp_path, model, effort):
-    refused = r"model must not be empty|must be named|always runs with effort max|literal_error|Input"
+    refused = r"model must not be empty|must be named|literal_error|Input"
     with pytest.raises(ValueError, match=refused):
         RoleModel(model=model, effort=effort)
     raw = Profile().model_dump(mode="json") | {"roles": {"builder": {"model": model, "effort": effort}}}
@@ -88,8 +86,9 @@ def test_a_role_model_is_refused_everywhere_it_is_built(tmp_path, model, effort)
         Store(tmp_path).read_profile()
 
 
-def test_luna_and_haiku_accept_max_and_the_defaults_are_valid():
-    assert RoleModel(model="claude-haiku-4.5", effort="max").effort == "max"
+def test_luna_low_and_haiku_medium_load_and_the_defaults_are_valid():
+    assert roles.parse("builder=gpt-6-luna:low") == ("builder", RoleModel(model="gpt-6-luna", effort="low"))
+    assert roles.parse("reviewer=claude-haiku-5.5:medium")[1].effort == "medium"
     assert all(RoleModel.model_validate(rm.model_dump()) == rm for rm in roles.DEFAULTS.values())
 
 
@@ -100,7 +99,7 @@ def test_sdk_options_carry_the_model_and_reasoning_effort():
         model=rm.model, effort=rm.effort,
     )  # fmt: skip
     opts = sdk_adapter._Step(cfg, SimpleNamespace(call_soon_threadsafe=lambda *_: None)).options()  # noqa: SLF001
-    assert (opts["model"], opts["reasoning_effort"]) == ("gpt-6-luna", "max")
+    assert (opts["model"], opts["reasoning_effort"]) == ("claude-opus-5.5", "medium")
 
 
 def rules(strict: str, resolution: str) -> Profile:

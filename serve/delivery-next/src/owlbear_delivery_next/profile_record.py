@@ -29,13 +29,11 @@ class RoleModel(Record):
 
     @model_validator(mode="after")
     def _valid(self) -> RoleModel:
-        """A named model, never ``auto`` (TD-32); luna and haiku always run at ``max`` (TD-27)."""
+        """A named model, never ``auto`` (TD-32)."""
         if not self.model.strip():
             raise ValueError("model must not be empty")  # noqa: EM101, TRY003
         if self.model.strip().lower() == "auto":
             raise ValueError("model must be named; auto is never used (TD-32)")  # noqa: EM101, TRY003
-        if (self.model == "gpt-6-luna" or self.model.startswith("claude-haiku-")) and self.effort != "max":
-            raise ValueError(f"{self.model} always runs with effort max, got {self.effort}")  # noqa: EM102, TRY003
         return self
 
 

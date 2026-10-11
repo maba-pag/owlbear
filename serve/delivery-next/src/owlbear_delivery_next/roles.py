@@ -11,9 +11,9 @@ from owlbear_delivery_next.profile_record import Profile, RoleModel
 
 DEFAULTS: dict[Role, RoleModel] = {
     "planner": RoleModel(model="claude-opus-5.5", effort="high"),
-    "builder": RoleModel(model="gpt-6-luna", effort="max"),
-    "reviewer": RoleModel(model="gpt-6.1-sol", effort="high"),
-    "challenger": RoleModel(model="gpt-6.1-sol", effort="medium"),
+    "builder": RoleModel(model="claude-opus-5.5", effort="medium"),
+    "reviewer": RoleModel(model="gpt-6.1-sol", effort="xhigh"),
+    "challenger": RoleModel(model="gpt-6.1-sol", effort="high"),
 }
 EFFORTS: tuple[str, ...] = get_args(Effort.__value__)
 SESSIONS: dict[str, Role] = {
