@@ -15,6 +15,7 @@ import contextlib
 import logging
 import os
 import shutil
+import stat
 import subprocess
 import tempfile
 from pathlib import Path
@@ -114,16 +115,26 @@ def replay(wt: Path, base: str, old: str, remote: str) -> tuple[str, str]:
         raise BehindError(msg)
     tmp = Path(tempfile.mkdtemp(prefix="owlbear-pullback-"))
     try:
-        must(wt, "worktree", "add", "--quiet", "--detach", str(tmp), remote)
-        done = git(tmp, "cherry-pick", "--allow-empty", "--empty=keep", f"{base}..{old}")
-        if done.returncode != 0:
-            conflict = bool(git(tmp, "ls-files", "-u").stdout.strip())
-            git(tmp, "cherry-pick", "--abort")
-            raise BehindError("your local commits conflict with the merged change" if conflict else first(done.stderr))
-        head = must(tmp, "rev-parse", "HEAD").strip()
-    finally:
-        note = _remove(wt, tmp)
-    return head, note
+        head = _pick(wt, tmp, f"{base}..{old}", remote)
+    except BehindError as exc:
+        if note := _remove(wt, tmp):
+            msg = f"{exc}; {note}"
+            raise BehindError(msg) from exc
+        raise
+    except BaseException:
+        _remove(wt, tmp)
+        raise
+    return head, _remove(wt, tmp)
+
+
+def _pick(wt: Path, tmp: Path, commits: str, remote: str) -> str:
+    must(wt, "worktree", "add", "--quiet", "--detach", str(tmp), remote)
+    done = git(tmp, "cherry-pick", "--allow-empty", "--empty=keep", commits)
+    if done.returncode != 0:
+        conflict = bool(git(tmp, "ls-files", "-u").stdout.strip())
+        git(tmp, "cherry-pick", "--abort")
+        raise BehindError("your local commits conflict with the merged change" if conflict else first(done.stderr))
+    return must(tmp, "rev-parse", "HEAD").strip()
 
 
 def _in_tree(wt: Path, commit: str, paths: list[str]) -> set[str]:
@@ -142,47 +153,68 @@ def _left(wt: Path, old: str, paths: list[str]) -> list[str]:
 
 
 def _blobs(wt: Path, commit: str, paths: list[str]) -> dict[str, str]:
-    """Object id of each of *paths* in *commit*."""
+    """Mode of each of *paths* in *commit*."""
     found: dict[str, str] = {}
     for entry in split_z(must(wt, "--literal-pathspecs", "ls-tree", "-r", "-z", commit, "--", *paths)):
         meta, _, path = entry.partition("\t")
-        found[path] = meta.split()[2]
+        found[path] = meta.split()[0]
     return found
 
 
-def _hash(wt: Path, rel: str) -> str | None:
-    """The object id Git would store for the entry at *rel*: None if absent, empty if not a file or link."""
+type Entry = tuple[object, ...] | None
+_UNKNOWN: Entry = ("unknown",)  # never equal to a disk entry: the path is kept
+
+
+def _entry(wt: Path, rel: str) -> Entry:
+    """What is on disk at *rel*, as checkout would write it: None for nothing or an empty directory."""
     file = wt / rel
     if file.is_symlink():
-        done = subprocess.run(  # noqa: S603 - fixed Git executable and argument vector
-            [worktree.GIT, "hash-object", "--stdin", "--no-filters"],
-            cwd=wt,
-            input=str(file.readlink()).encode(),
-            capture_output=True,
-            check=True,
-            timeout=120,
-        )
-        return done.stdout.decode().strip()
+        return ("link", str(file.readlink()).encode())
+    if file.is_dir():
+        return None if not any(file.iterdir()) else ("dir",)
     if not file.exists():
         return None
-    return must(wt, "hash-object", "--", rel).strip() if file.is_file() else ""
+    return ("file", bool(file.stat().st_mode & stat.S_IXUSR), file.read_bytes())
+
+
+def _want(wt: Path, commit: str, rel: str, modes: dict[str, str]) -> Entry:
+    """What checking out *rel* from *commit* writes, with its filters; unknown if Git cannot say."""
+    mode = modes.get(rel)
+    if mode is None:
+        return None
+    kind = {"120000": "link", "100644": "file", "100755": "file"}.get(mode)
+    args = ("cat-file", "blob") if kind == "link" else ("cat-file", "--filters")
+    try:
+        done = subprocess.run(  # noqa: S603 - fixed Git executable and argument vector
+            [worktree.GIT, *args, f"{commit}:{rel}"], cwd=wt, capture_output=True, check=False, timeout=120
+        )
+    except subprocess.TimeoutExpired:
+        return _UNKNOWN
+    if kind is None or done.returncode != 0:
+        return _UNKNOWN
+    return ("link", done.stdout) if kind == "link" else ("file", mode == "100755", done.stdout)
 
 
 def _undo(wt: Path, old: str, new: str, paths: list[str]) -> list[str]:
-    """Put back from *old* each path that holds exactly what *new* has; the paths holding anything else."""
-    was, wrote, kept, restore = _blobs(wt, old, paths), _blobs(wt, new, paths), [], []
-    for rel in paths:
-        now = _hash(wt, rel)
-        if now == was.get(rel):
+    """Put back from *old*, deepest first, each path holding exactly what *new* writes; the others are kept.
+
+    Each path is restored right after it is compared, so a save can only be lost in that short window.
+    """
+    was, wrote, kept = _blobs(wt, old, paths), _blobs(wt, new, paths), []
+    for rel in sorted(paths, key=lambda p: p.count("/"), reverse=True):
+        now = _entry(wt, rel)
+        if now == _want(wt, old, rel, was):
             continue
-        if now != wrote.get(rel):
+        if now != _want(wt, new, rel, wrote):
             kept.append(rel)  # neither old nor new: written by someone else during pull-back
-        elif rel in was:
-            restore.append(rel)
-        else:
-            (wt / rel).unlink()
-    if restore:
-        git(wt, "--literal-pathspecs", "checkout", old, "--", *restore)
+            continue
+        target = wt / rel
+        if target.is_dir() and not target.is_symlink():
+            target.rmdir()  # empty: what read-tree left after its files were removed
+        elif now is not None:
+            target.unlink()
+        if rel in was:
+            git(wt, "--literal-pathspecs", "checkout", old, "--", rel)
     return kept
 
 
@@ -214,11 +246,16 @@ def _unapply(wt: Path, ref: str, old: str, new: str, why: str) -> NoReturn:
     if rev(wt, ref) == old and git(wt, "symbolic-ref", "-q", "HEAD").stdout.strip() == ref:
         try:
             back = git(wt, "read-tree", "-m", "-u", new, old).returncode == 0
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired, OSError:
             back = False
         if back:
             msg = f"{ref} did not move ({why}); the local copy was put back"
             raise BehindError(msg)
+        msg = (
+            f"manual check needed: {ref} is at {old[:12]} but the index and files may be partly at {new[:12]} "
+            f"({why}); compare `git status` with `git diff {old[:12]} {new[:12]} --stat`"
+        )
+        raise BehindError(msg)
     at = (rev(wt, ref) or "?")[:12]
     msg = (
         f"manual check needed: index and files are at {new[:12]} but {ref} is at {at} ({why}); "
@@ -253,6 +290,8 @@ def apply(wt: Path, ref: str, old: str, new: str, guard: Callable[[list[str]], L
         why = "" if done.returncode == 0 else first(done.stderr)
     except subprocess.TimeoutExpired:
         why = "git timed out"
+    except OSError as exc:
+        why = str(exc)
     if why:
         _unapply(wt, ref, old, new, why)
     if rev(wt, "HEAD") != new:

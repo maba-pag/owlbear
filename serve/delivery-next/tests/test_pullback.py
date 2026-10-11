@@ -502,13 +502,16 @@ def test_work_written_while_the_tree_update_runs_is_never_rolled_back(repos, mon
     assert git(repo, "rev-parse", "HEAD") == head
 
 
-def test_a_ref_that_fails_to_move_puts_the_local_copy_back(repos, monkeypatch):
+@pytest.mark.parametrize("failure", ["refused", "oserror"])
+def test_a_ref_that_fails_to_move_puts_the_local_copy_back(repos, monkeypatch, failure):
     repo, other = repos
     (repo / ".gitignore").write_text("edited\n")
     real, before = pullback.pullback_replay.git, full(repo)
 
     def locked(path, *args):
         if args[:1] == ("update-ref",):
+            if failure == "oserror":
+                raise OSError(24, "Too many open files")
             return subprocess.CompletedProcess(args, 1, "", "fatal: cannot lock ref 'refs/heads/main'\n")
         return real(path, *args)
 
@@ -535,9 +538,10 @@ def test_a_switch_to_a_branch_containing_the_merge_does_not_count_as_updated(rep
     assert git(repo, "rev-parse", "main") == head
 
 
-def test_a_temporary_worktree_that_survives_cleanup_is_reported(repos, monkeypatch):
+@pytest.mark.parametrize("conflict", [False, True])
+def test_a_temporary_worktree_that_survives_cleanup_is_reported(repos, monkeypatch, conflict):
     repo, other = repos
-    commit(repo, "local.txt")
+    commit(repo, "b.txt" if conflict else "local.txt", "local commit\n")
     real, left = pullback.pullback_replay.git, []
 
     def stuck(path, *args):
@@ -552,8 +556,33 @@ def test_a_temporary_worktree_that_survives_cleanup_is_reported(repos, monkeypat
     result = pullback.run(repo, "main", NOW)
     monkeypatch.undo()
     git(repo, "worktree", "remove", "--force", left[0])
-    assert result.state == "updated"
+    assert result.state == ("behind" if conflict else "updated")
     assert "was not removed" in result.reason
+
+
+def test_a_failed_tree_update_undoes_type_changes_directories_and_filtered_files(repos):
+    repo, other = repos
+    (repo / "l").symlink_to(".gitignore")
+    commit(repo, "d", "file\n")
+    commit(repo, ".gitattributes", "*.x filter=x\n*.y filter=y\n")
+    git(repo, "add", "l")
+    git(repo, "commit", "-q", "-m", "link")
+    git(repo, "push", "-q", "origin", "main")
+    git(other, "pull", "-q")
+    for key, value in [("x.smudge", "false"), ("x.required", "true"), ("y.smudge", "tr a-z A-Z"), ("y.clean", "cat")]:
+        git(repo, "config", f"filter.{key}", value)
+    before = full(repo)
+    git(other, "rm", "-q", "d", "l")
+    (other / "l").write_text(".gitignore")
+    (other / "d").mkdir()
+    for name in ("l", "d/f", "a.y", "z.x"):
+        commit(other, name, (other / name).read_text() if name == "l" else "lower\n")
+    git(other, "push", "-q", "origin", "main")
+    result = pullback.run(repo, "main", NOW)
+    assert (result.state, "external filter 'false' failed" in result.reason) == ("behind", True)
+    assert ("kept" in result.reason, "partial update" in result.reason) == (False, False)
+    assert (full(repo), (repo / "l").is_symlink(), (repo / "d").read_text()) == (before, True, "file\n")
+    assert not (repo / "a.y").exists()
 
 
 def test_a_filesystem_error_leaves_the_target_behind(repos, monkeypatch):

@@ -190,7 +190,10 @@ def _pull(wt: Path, target: str) -> tuple[str, str]:
         return _checked(wt, "fast-forwarded", pullback_replay.apply(wt, ref, old, remote, guard))
     count = must(wt, "rev-list", "--count", f"{base}..{old}").strip()
     new, note = pullback_replay.replay(wt, base, old, remote)
-    before = pullback_replay.apply(wt, ref, old, new, guard)
+    try:
+        before = pullback_replay.apply(wt, ref, old, new, guard)
+    except BehindError as exc:
+        raise BehindError("; ".join(filter(None, (str(exc), note)))) from exc
     state, reason = _checked(wt, f"replayed {count} local commits onto the merged change", before)
     return state, "; ".join(filter(None, (reason, note)))
 
