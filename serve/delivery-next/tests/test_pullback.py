@@ -1,3 +1,6 @@
+import os
+import re
+import stat
 import subprocess
 from datetime import UTC, datetime
 
@@ -597,4 +600,140 @@ def test_a_filesystem_error_leaves_the_target_behind(repos, monkeypatch):
     merged(other)
     result = pullback.run(repo, "main", NOW)
     assert (result.state, "No space left" in result.reason) == ("behind", True)
+    assert full(repo) == before
+
+
+def fail_on_x(repo, other):
+    """Share ``*.x filter=x`` and make that filter fail in *repo*: a tree update stops at ``z.x``."""
+    commit(repo, ".gitattributes", "*.x filter=x\n")
+    git(repo, "push", "-q", "origin", "main")
+    git(other, "pull", "-q")
+    git(repo, "config", "filter.x.smudge", "false")
+    git(repo, "config", "filter.x.required", "true")
+
+
+def stopped_at_x(result):
+    assert (result.state, "external filter 'false' failed" in result.reason) == ("behind", True)
+    assert ("kept" in result.reason, "partial update" in result.reason) == (False, False)
+
+
+def test_a_directory_replaced_by_a_symlink_is_restored_without_writing_through_it(repos):
+    repo, other = repos
+    elsewhere = repo.parent / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "f").write_text("file\n")
+    (repo / "d").mkdir()
+    commit(repo, "d/f", "file\n")
+    fail_on_x(repo, other)
+    before, old = full(repo), git(repo, "rev-parse", "HEAD")
+    git(other, "rm", "-q", "-r", "d")
+    (other / "d").symlink_to("../elsewhere")
+    git(other, "add", "d")
+    commit(other, "z.x")
+    git(other, "push", "-q", "origin", "main")
+    git(repo, "fetch", "-q")
+    new = git(repo, "rev-parse", "origin/main")
+    with pytest.raises(pullback.BehindError, match="external filter 'false' failed") as failed:
+        pullback.pullback_replay.apply(repo, "refs/heads/main", old, new, lambda _paths: {})  # the guard refuses d
+    assert ("kept" in str(failed.value), "partial update" in str(failed.value)) == (False, False)
+    assert (full(repo), (repo / "d").is_symlink(), (elsewhere / "f").read_text()) == (before, False, "file\n")
+
+
+def test_attributes_the_update_changes_do_not_mislabel_the_files_it_wrote(repos):
+    repo, other = repos
+    commit(repo, ".gitattributes", "f text eol=crlf\n*.x filter=x\n")
+    commit(repo, "f", "a\nb\n")
+    (repo / "f").unlink()
+    git(repo, "checkout", "--", "f")  # as checkout writes it, with CRLF
+    git(repo, "push", "-q", "origin", "main")
+    git(other, "pull", "-q")
+    git(repo, "config", "filter.x.smudge", "false")
+    git(repo, "config", "filter.x.required", "true")
+    before = full(repo)
+    commit(other, ".gitattributes", "*.x filter=x\n")
+    commit(other, "f", "a\nb\nc\n")
+    commit(other, "z.x")
+    git(other, "push", "-q", "origin", "main")
+    stopped_at_x(pullback.run(repo, "main", NOW))
+    assert (full(repo), (repo / "f").read_bytes()) == (before, b"a\r\nb\r\n")
+
+
+def test_an_exec_bit_the_update_set_is_undone(repos):
+    repo, other = repos
+    commit(repo, "run.sh", "echo\n")
+    fail_on_x(repo, other)
+    before = full(repo)
+    (other / "run.sh").chmod(0o755)
+    git(other, "commit", "-q", "-am", "exec")
+    commit(other, "z.x")
+    git(other, "push", "-q", "origin", "main")
+    stopped_at_x(pullback.run(repo, "main", NOW))
+    assert (full(repo), os.access(repo / "run.sh", os.X_OK)) == (before, False)
+
+
+def test_a_fifo_left_at_an_incoming_path_is_kept_without_being_read(repos, monkeypatch):
+    repo, other = repos
+    guard = pullback._guard  # noqa: SLF001 - the last step before mutation
+
+    def fifo_after_guard(wt, paths, *, fold):
+        found = guard(wt, paths, fold=fold)
+        os.mkfifo(repo / "b.txt")
+        return found
+
+    monkeypatch.setattr(pullback, "_guard", fifo_after_guard)
+    head = git(repo, "rev-parse", "HEAD")
+    merged(other)
+    result = pullback.run(repo, "main", NOW)
+    assert (result.state, "b.txt appeared during pull-back and were kept" in result.reason) == ("behind", True)
+    assert (stat.S_ISFIFO((repo / "b.txt").lstat().st_mode), git(repo, "rev-parse", "HEAD")) == (True, head)
+
+
+@pytest.mark.parametrize("step", [("cherry-pick",), ("diff", "--name-status")])
+def test_a_timeout_during_or_after_the_replay_keeps_the_cleanup_note(repos, monkeypatch, step):
+    repo, other = repos
+    commit(repo, "local.txt")
+    real, left = pullback.pullback_replay.git, []
+
+    def stuck(path, *args):
+        if args[:2] in {("worktree", "remove"), ("worktree", "prune")}:
+            left.append(args[-1])
+            return subprocess.CompletedProcess(args, 1, "", "fatal: busy\n")
+        if args[: len(step)] == step:
+            timeout()
+        return real(path, *args)
+
+    monkeypatch.setattr(pullback.pullback_replay, "git", stuck)
+    monkeypatch.setattr(pullback.pullback_replay.shutil, "rmtree", lambda *_a, **_k: None)
+    merged(other)
+    result = pullback.run(repo, "main", NOW)
+    monkeypatch.undo()
+    git(repo, "worktree", "remove", "--force", left[0])
+    assert (result.state, "git timed out" in result.reason, "was not removed" in result.reason) == (
+        "behind",
+        True,
+        True,
+    )
+
+
+def test_a_failed_reverse_names_a_recovery_that_restores_the_local_copy(repos, monkeypatch):
+    repo, other = repos
+    real, before, trees = pullback.pullback_replay.git, full(repo), []
+
+    def stuck(path, *args):
+        if args[:1] == ("update-ref",):
+            return subprocess.CompletedProcess(args, 1, "", "fatal: cannot lock ref 'refs/heads/main'\n")
+        if args[:1] == ("read-tree",):
+            trees.append(args)
+            if len(trees) > 1:
+                return subprocess.CompletedProcess(args, 1, "", "fatal: reverse failed\n")
+        return real(path, *args)
+
+    monkeypatch.setattr(pullback.pullback_replay, "git", stuck)
+    merged(other)
+    result = pullback.run(repo, "main", NOW)
+    assert (result.state, "manual check needed" in result.reason) == ("behind", True)
+    assert full(repo) != before
+    command = re.search(r"then run `([^`]+)`", result.reason)
+    assert command is not None
+    subprocess.run(["bash", "-c", command[1]], cwd=repo, check=True, capture_output=True)  # noqa: S603, S607
     assert full(repo) == before

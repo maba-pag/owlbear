@@ -6,7 +6,9 @@ result) is applied by a two-tree ``read-tree -m -u`` (which keeps index entries 
 refuses if a changing path has local changes) and a compare-and-swap ``update-ref`` of the expected branch, after
 the caller's guard checked every path the update itself changes. If ``read-tree`` fails after writing some files
 and the index is untouched, only the paths that hold exactly what it wrote are restored from *old*; anything else
-is someone's work and stays. If the ref then fails to move, the update is reversed, or the exact recovery named.
+is someone's work and stays. Entries are compared as checkout writes them, with the attributes of the commit
+that wrote them, never through a symlink and never by reading a special file. If the ref then fails to move, the
+update is reversed, or the exact recovery named.
 """
 
 from __future__ import annotations
@@ -18,7 +20,7 @@ import shutil
 import stat
 import subprocess
 import tempfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, NoReturn
 
 from owlbear_delivery_next.steps import worktree
@@ -116,9 +118,10 @@ def replay(wt: Path, base: str, old: str, remote: str) -> tuple[str, str]:
     tmp = Path(tempfile.mkdtemp(prefix="owlbear-pullback-"))
     try:
         head = _pick(wt, tmp, f"{base}..{old}", remote)
-    except BehindError as exc:
+    except (BehindError, subprocess.TimeoutExpired, OSError) as exc:
+        reason = "git timed out" if isinstance(exc, subprocess.TimeoutExpired) else str(exc)
         if note := _remove(wt, tmp):
-            msg = f"{exc}; {note}"
+            msg = f"{reason}; {note}"
             raise BehindError(msg) from exc
         raise
     except BaseException:
@@ -138,7 +141,8 @@ def _pick(wt: Path, tmp: Path, commits: str, remote: str) -> str:
 
 
 def _in_tree(wt: Path, commit: str, paths: list[str]) -> set[str]:
-    return set(split_z(must(wt, "--literal-pathspecs", "ls-tree", "-r", "-z", "--name-only", commit, "--", *paths)))
+    args = ("ls-tree", "-r", "-t", "-z", "--name-only", commit, "--", *paths)
+    return set(split_z(must(wt, "--literal-pathspecs", *args)))
 
 
 def _diff(wt: Path, *args: str) -> set[str]:
@@ -153,9 +157,9 @@ def _left(wt: Path, old: str, paths: list[str]) -> list[str]:
 
 
 def _blobs(wt: Path, commit: str, paths: list[str]) -> dict[str, str]:
-    """Mode of each of *paths* in *commit*."""
+    """Mode of each of *paths* in *commit*, and of the directories that hold them."""
     found: dict[str, str] = {}
-    for entry in split_z(must(wt, "--literal-pathspecs", "ls-tree", "-r", "-z", commit, "--", *paths)):
+    for entry in split_z(must(wt, "--literal-pathspecs", "ls-tree", "-r", "-t", "-z", commit, "--", *paths)):
         meta, _, path = entry.partition("\t")
         found[path] = meta.split()[0]
     return found
@@ -165,56 +169,100 @@ type Entry = tuple[object, ...] | None
 _UNKNOWN: Entry = ("unknown",)  # never equal to a disk entry: the path is kept
 
 
+def _beyond(wt: Path, rel: str) -> Path | None:
+    """The entry above *rel* that is a symlink or not a directory; Git never reads or writes through it."""
+    here = wt
+    for part in PurePosixPath(rel).parts[:-1]:
+        here /= part
+        if here.is_symlink() or not here.is_dir():
+            return here if os.path.lexists(here) else None
+    return None
+
+
 def _entry(wt: Path, rel: str) -> Entry:
-    """What is on disk at *rel*, as checkout would write it: None for nothing or an empty directory."""
+    """What is on disk at *rel* as Git sees it: None for nothing, a kind that never matches for a special file."""
     file = wt / rel
-    if file.is_symlink():
-        return ("link", str(file.readlink()).encode())
-    if file.is_dir():
-        return None if not any(file.iterdir()) else ("dir",)
-    if not file.exists():
-        return None
-    return ("file", bool(file.stat().st_mode & stat.S_IXUSR), file.read_bytes())
+    try:
+        if _beyond(wt, rel) is not None or not os.path.lexists(file):
+            return None
+        st = file.lstat()
+        if stat.S_ISLNK(st.st_mode):
+            return ("link", os.fsencode(file.readlink()))
+        if stat.S_ISDIR(st.st_mode):
+            return ("dir",)
+        return _regular(file, st)
+    except OSError:
+        return ("unreadable",)
+
+
+def _regular(file: Path, st: os.stat_result) -> Entry:
+    """A regular file's kind, exec bit and bytes; opened without following a link or blocking on a FIFO."""
+    if not stat.S_ISREG(st.st_mode):
+        return ("special", stat.S_IFMT(st.st_mode))
+    with os.fdopen(os.open(file, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK), "rb") as fd:
+        if not stat.S_ISREG(os.fstat(fd.fileno()).st_mode):
+            return ("special", 0)
+        return ("file", bool(st.st_mode & stat.S_IXUSR), fd.read())
 
 
 def _want(wt: Path, commit: str, rel: str, modes: dict[str, str]) -> Entry:
-    """What checking out *rel* from *commit* writes, with its filters; unknown if Git cannot say."""
+    """What checking out *rel* from *commit* writes, with *commit*'s attributes; unknown if Git cannot say."""
     mode = modes.get(rel)
     if mode is None:
         return None
+    if mode == "040000":
+        return ("dir",)
     kind = {"120000": "link", "100644": "file", "100755": "file"}.get(mode)
     args = ("cat-file", "blob") if kind == "link" else ("cat-file", "--filters")
     try:
         done = subprocess.run(  # noqa: S603 - fixed Git executable and argument vector
-            [worktree.GIT, *args, f"{commit}:{rel}"], cwd=wt, capture_output=True, check=False, timeout=120
+            [worktree.GIT, f"--attr-source={commit}", *args, f"{commit}:{rel}"],
+            cwd=wt,
+            capture_output=True,
+            check=False,
+            timeout=120,
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired, OSError:
         return _UNKNOWN
     if kind is None or done.returncode != 0:
         return _UNKNOWN
     return ("link", done.stdout) if kind == "link" else ("file", mode == "100755", done.stdout)
 
 
+def _clear(wt: Path, rel: str, new: str, wrote: dict[str, str]) -> bool:
+    """Remove what the update wrote at *rel*, or the entry it wrote above it; False if anything else is there."""
+    target = wt / rel
+    try:
+        if (above := _beyond(wt, rel)) is not None:
+            up = above.relative_to(wt).as_posix()
+            if _entry(wt, up) != _want(wt, new, up, wrote):
+                return False
+            above.unlink()
+        elif target.is_dir() and not target.is_symlink():
+            target.rmdir()  # only empty: what read-tree left after its files were removed
+        elif os.path.lexists(target):
+            target.unlink()
+    except OSError:
+        return False
+    return True
+
+
 def _undo(wt: Path, old: str, new: str, paths: list[str]) -> list[str]:
     """Put back from *old*, deepest first, each path holding exactly what *new* writes; the others are kept.
 
-    Each path is restored right after it is compared, so a save can only be lost in that short window.
+    Each path is restored right after it is compared, so a save can only be lost in that short window. A file
+    that holds exactly *new*'s content is taken for the update's, whoever wrote it.
     """
     was, wrote, kept = _blobs(wt, old, paths), _blobs(wt, new, paths), []
     for rel in sorted(paths, key=lambda p: p.count("/"), reverse=True):
         now = _entry(wt, rel)
         if now == _want(wt, old, rel, was):
             continue
-        if now != _want(wt, new, rel, wrote):
+        if now != _want(wt, new, rel, wrote) or not _clear(wt, rel, new, wrote):
             kept.append(rel)  # neither old nor new: written by someone else during pull-back
             continue
-        target = wt / rel
-        if target.is_dir() and not target.is_symlink():
-            target.rmdir()  # empty: what read-tree left after its files were removed
-        elif now is not None:
-            target.unlink()
         if rel in was:
-            git(wt, "--literal-pathspecs", "checkout", old, "--", rel)
+            git(wt, f"--attr-source={old}", "--literal-pathspecs", "checkout", old, "--", rel)
     return kept
 
 
@@ -253,7 +301,9 @@ def _unapply(wt: Path, ref: str, old: str, new: str, why: str) -> NoReturn:
             raise BehindError(msg)
         msg = (
             f"manual check needed: {ref} is at {old[:12]} but the index and files may be partly at {new[:12]} "
-            f"({why}); compare `git status` with `git diff {old[:12]} {new[:12]} --stat`"
+            f"({why}); save any edits of your own to the files `git diff --name-only {old} {new}` lists, then run "
+            f"`git diff --name-only --no-renames -z {old} {new} | "
+            f"git restore --source={old} --staged --worktree --pathspec-from-file=- --pathspec-file-nul`"
         )
         raise BehindError(msg)
     at = (rev(wt, ref) or "?")[:12]
