@@ -352,6 +352,20 @@ def test_two_concurrent_new_change_calls_launch_once(tmp_path, monkeypatch):
     assert (codes, launches) == ([200, 429], [1])
 
 
+def test_the_page_loads_the_vendored_design_system_without_the_token(tmp_path):
+    c = TestClient(api.create_app(Store(tmp_path), "t", Host()), base_url="http://127.0.0.1")
+    page = c.get("/").text
+    assert all(f"/assets/pds/{n}" in page for n in api.PDS)
+    css, js = c.get("/assets/pds/index.css"), c.get("/assets/pds/load.mjs")
+    assert (css.headers["content-type"].split(";")[0], js.headers["content-type"].split(";")[0]) == (
+        "text/css",
+        "text/javascript",
+    )
+    assert "--p-color-canvas" in css.text
+    assert "export" in js.text
+    assert [c.get(f"/assets/pds/{n}").status_code for n in ("x.js", "..%2Fchanges.html")] == [404, 404]
+
+
 def test_yes_confirms_the_profile_but_never_an_unknown_entry():
     unknown = ProfileEntry(state="unknown", evidence="HTTP 403")
     prof = Profile(version=2, entries={"github:rules": unknown})

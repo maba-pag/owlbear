@@ -15,7 +15,7 @@ from importlib.resources import files
 from typing import TYPE_CHECKING, Any, Literal
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next import evidence, loop, profile
@@ -31,8 +31,6 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
     from pathlib import Path
 
-    from starlette.responses import Response
-
     from owlbear_delivery_next.host import Host, HostRecord
     from owlbear_delivery_next.inbox import InboxItem
     from owlbear_delivery_next.models import Inputs, VisualResult
@@ -40,6 +38,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.store import Store
 
 SLUG = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
+PDS = {"index.css": "text/css", "load.mjs": "text/javascript"}  # the vendored Porsche Design System 4.8.0 files
 LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost"})
 T6 = "This is a recovery decision; make it in the Changes page"
 START_PROMPT = "Start a new Delivery Change: use the delivery skill to shape a brief with me."
@@ -195,6 +194,13 @@ def create_app(  # noqa: C901, PLR0915 - one closure per route
     @app.get("/", response_class=HTMLResponse)
     def index() -> str:
         return page
+
+    @app.get("/assets/pds/{name}")
+    def pds(name: str) -> Response:
+        if name not in PDS:
+            raise HTTPException(404, "no such asset")
+        body = files("owlbear_delivery_next").joinpath("web", "pds", name).read_bytes()
+        return Response(body, media_type=PDS[name], headers={"Cache-Control": "max-age=3600"})
 
     router = APIRouter(prefix="/api/next", dependencies=[Depends(auth)])
 

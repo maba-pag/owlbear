@@ -1,39 +1,90 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="scheme-light-dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OwlBear Delivery · Changes</title>
+<link rel="stylesheet" href="/assets/pds/index.css">
+<script type="module">
+  import { load } from "/assets/pds/load.mjs";
+  load();
+</script>
 <style>
-  body {
-    font: 15px/1.5 system-ui, sans-serif; margin: 2rem auto; max-width: 56rem; padding: 0 1rem; color: #222;
+  :not(:defined) { visibility: hidden; }
+  .no-pds :not(:defined) { visibility: visible; }
+  [hidden], main > p-text:empty { display: none !important; }
+  #detail:not(:empty) { display: grid; gap: var(--p-spacing-static-md); }
+  body { background: var(--p-color-canvas); color: var(--p-color-primary); }
+  main {
+    display: grid; gap: var(--p-spacing-fluid-md); max-width: 72rem; margin: 0 auto;
+    padding: var(--p-spacing-fluid-lg) var(--p-spacing-fluid-md);
   }
-  table { border-collapse: collapse; width: 100%; table-layout: fixed; }
-  th, td {
-    text-align: left; padding: .4rem .6rem; border-bottom: 1px solid #ddd;
-    vertical-align: top; overflow-wrap: anywhere;
+  header {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+    gap: var(--p-spacing-static-md);
   }
-  th:first-child { width: 22%; } th:last-child { width: 26%; }
-  @media (max-width: 36rem) { body { margin: 1rem auto; } th, td { padding: .3rem .4rem; } }
-  tr.row { cursor: pointer; } tr.row:hover, tr.row:focus { background: #f3f3f3; }
-  section { margin-top: 1.5rem; } fieldset { border: 1px solid #ccc; margin: .8rem 0; }
-  .muted { color: #666; } .error { color: #a00; } textarea { width: 100%; }
+  .panel {
+    display: grid; gap: var(--p-spacing-static-md); padding: var(--p-spacing-fluid-sm);
+    background: var(--p-color-surface); border-radius: var(--p-radius-lg);
+  }
+  .panel > p-button, .panel > p-link-pure, .panel > button, .panel > a { justify-self: start; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--p-spacing-static-sm); }
+  .meta { display: block; margin-top: var(--p-spacing-static-xs); }
+  .shots {
+    display: grid; gap: var(--p-spacing-static-md);
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 24rem), 1fr));
+  }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--p-spacing-static-sm); margin: 0; }
+  .pair figcaption { grid-column: 1 / -1; font-size: var(--p-typescale-xs); }
+  .shots img {
+    display: block; width: 100%; height: auto;
+    border: 1px solid var(--p-color-contrast-lower); border-radius: var(--p-radius-md);
+  }
+  .missing {
+    display: grid; place-items: center; min-height: 6rem; padding: var(--p-spacing-static-sm);
+    border: 1px dashed var(--p-color-contrast-low); border-radius: var(--p-radius-md);
+  }
+  ul, ol { margin: 0; padding-inline-start: var(--p-spacing-static-lg); }
+  li { font-size: var(--p-typescale-sm); }
   .stale { opacity: .45; pointer-events: none; }
-  header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-  .card { display: block; font-size: .85em; }
+  /* Without the PDS CDN the page keeps working: native controls, and layout for the display elements. */
+  .no-pds body { font-family: system-ui, sans-serif; }
+  .no-pds p-text, .no-pds p-heading, .no-pds p-inline-notification { display: block; }
+  .no-pds p-table { display: table; width: 100%; border-collapse: collapse; }
+  .no-pds p-table-head { display: table-header-group; font-weight: 600; }
+  .no-pds p-table-body { display: table-row-group; }
+  .no-pds p-table-head-row, .no-pds p-table-row { display: table-row; }
+  .no-pds p-table-head-cell, .no-pds p-table-cell {
+    display: table-cell; padding: var(--p-spacing-static-sm); vertical-align: top;
+    border-bottom: 1px solid var(--p-color-contrast-lower);
+  }
+  .no-pds p-tag { font-weight: 600; }
+  .no-pds p-inline-notification { padding: var(--p-spacing-static-sm); border-inline-start: 4px solid; }
+  .field, fieldset { display: grid; gap: var(--p-spacing-static-xs); }
+  textarea { font: inherit; }
 </style>
 </head>
 <body>
-<header><h1>Changes</h1>
-<button id="new" type="button" aria-label="Start a new Change in a VS Code chat">New Change</button></header>
-<p id="started" aria-live="polite"></p>
-<p id="error" class="error" role="alert"></p>
-<p id="seen" class="muted"></p>
-<section id="notes" class="muted" aria-label="Repository settings" hidden></section>
-<table id="list" aria-label="Changes">
-<thead><tr><th scope="col">Change</th><th scope="col">Status</th><th scope="col">Next action</th></tr></thead>
-<tbody id="changes"></tbody></table>
+<main>
+<header>
+  <p-heading size="2xl"><h1>Changes</h1></p-heading>
+</header>
+<p id="offline" role="status" hidden>The Porsche Design System did not load from cdn.ui.porsche.com, so the page
+  uses plain controls. Reload to try again.</p>
+<p-text id="started" aria-live="polite"></p-text>
+<p-inline-notification id="error" state="error" dismiss-button="false" hidden></p-inline-notification>
+<p-text id="seen" color="contrast-medium" size="xs"></p-text>
+<section id="notes" class="panel" aria-label="Repository settings" hidden></section>
+<p-table id="list" caption="Changes">
+  <p-table-head><p-table-head-row>
+    <p-table-head-cell>Change</p-table-head-cell>
+    <p-table-head-cell>Status</p-table-head-cell>
+    <p-table-head-cell>Next action</p-table-head-cell>
+  </p-table-head-row></p-table-head>
+  <p-table-body id="changes"></p-table-body>
+</p-table>
 <section id="detail" aria-live="polite"></section>
+</main>
 <script>
 "use strict";
 const hash = new URLSearchParams(location.hash.slice(1));
@@ -42,7 +93,7 @@ if (hash.get("token")) {
   history.replaceState(null, "", location.pathname);
 }
 const token = sessionStorage.getItem("token");
-let selected = null, lastSeen = null, busy = false;
+let selected = null, lastSeen = null, busy = false, pds = false;
 
 class HostDown extends Error {}
 class Restarted extends Error {}
@@ -82,13 +133,18 @@ function send(path, body) {
   }, failed);
 }
 
-function unreachable(e) {
+function notify(...nodes) {
   const error = document.getElementById("error");
+  error.replaceChildren(...nodes);
+  error.hidden = !nodes.length;
+}
+
+function unreachable(e) {
   if (e instanceof Restarted) {
-    error.replaceChildren("Delivery restarted at a new address — open the link from chat or ",
+    notify("Delivery restarted at a new address — open the link from chat or ",
       el("code", "owlbear-next status"), ".");
   } else {
-    error.replaceChildren("Delivery is not running. Start it with the VS Code task \"OwlBear Delivery host\" or ",
+    notify("Delivery is not running. Start it with the VS Code task \"OwlBear Delivery host\" or ",
       el("code", "owlbear-next host"), " in the project, then reload this page.");
   }
   for (const id of ["list", "detail"]) document.getElementById(id).classList.add("stale");
@@ -97,85 +153,184 @@ function unreachable(e) {
 
 function failed(e) {
   if (e instanceof HostDown || e instanceof Restarted) return unreachable(e);
-  const hint = "Open the URL the host printed, including #token=…";
-  document.getElementById("error").textContent = token ? e.message : hint;
+  notify(token ? e.message : "Open the URL the host printed, including #token=…");
+}
+
+function text(value, attrs = {}) {
+  return el("p-text", value, attrs);
+}
+
+function list(items, tag = "ul") {
+  const node = el(tag);
+  for (const item of items) node.append(el("li", item));
+  return node;
+}
+
+function heading(level, title, size) {
+  const node = el("p-heading", undefined, { size });
+  node.append(el(`h${level}`, title));
+  return node;
+}
+
+function button(label, onclick, attrs = {}) {
+  const node = pds
+    ? el("p-button", label, { type: "button", compact: "true", ...attrs })
+    : el("button", label, { type: "button" });
+  node.onclick = onclick;
+  return node;
+}
+
+function waiting(node, on) {
+  if (pds) node.loading = on;
+  else node.disabled = on;
+}
+
+function external(label, href) {
+  const link = el("a", label, { href, target: "_blank", rel: "noopener" });
+  if (!pds) return link;
+  const pure = el("p-link-pure", undefined, { icon: "external" });
+  pure.append(link);
+  return pure;
+}
+
+function field(label) {
+  if (pds) {
+    const node = el("p-textarea", undefined, { label, rows: "2" });
+    return [node, () => node.value || ""];
+  }
+  const node = el("label", label, { class: "field" }), input = el("textarea", undefined, { rows: "2" });
+  node.append(input);
+  return [node, () => input.value];
+}
+
+function choice(label, options) {
+  if (pds) {
+    const node = el("p-radio-group", undefined, { name: "option", label });
+    for (const o of options) node.append(el("p-radio-group-option", undefined, { value: o.id, label: o.label }));
+    return [node, () => node.value || null];
+  }
+  const node = el("fieldset");
+  node.append(el("legend", label));
+  for (const o of options) {
+    const item = el("label");
+    item.append(el("input", undefined, { type: "radio", name: "option", value: o.id }), ` ${o.label}`);
+    node.append(item);
+  }
+  return [node, () => node.querySelector(":checked")?.value ?? null];
+}
+
+function panel(title, ...children) {
+  const box = el("section", undefined, { class: "panel" });
+  box.append(heading(3, title, "md"), ...children);
+  return box;
+}
+
+function row(...children) {
+  const node = el("div", undefined, { class: "row" });
+  node.append(...children);
+  return node;
 }
 
 function questionForm(q) {
-  const form = el("form"), box = el("fieldset");
-  box.append(el("legend", `Question ${q.id}: ${q.text}`));
-  for (const o of q.options) {
-    const label = el("label"), radio = el("input", undefined, { type: "radio", name: "option", value: o.id });
-    label.append(radio, ` ${o.label}`);
-    box.append(label, el("br"));
-  }
-  const text = el("textarea", undefined, { name: "text", rows: "2", "aria-label": "Your answer in words" });
-  box.append(text, el("button", "Answer", { type: "submit" }));
-  form.append(box);
-  form.onsubmit = (event) => {
-    event.preventDefault();
-    const option = form.querySelector("input[name=option]:checked");
-    send("/answers", { question: q.id, option: option ? option.value : null, text: text.value });
-  };
-  return form;
+  const [options, option] = choice("Choose an option", q.options), [words, said] = field("Your answer in words");
+  const answer = () => send("/answers", { question: q.id, option: option(), text: said() });
+  const box = panel(`Question ${q.id}`, text(q.text, { weight: "semibold" }));
+  if (q.options.length) box.append(options);
+  box.append(words, button("Answer", answer));
+  return box;
 }
 
 function checkForm(check) {
-  const box = el("fieldset"), note = el("textarea", undefined, { rows: "2", "aria-label": "Note" });
-  box.append(el("legend", `Check ${check.id}`), el("p", check.steps.join("; ")));
-  if (check.url) {
-    const link = el("a", check.url, { href: check.url, target: "_blank", rel: "noopener" });
-    box.append(el("p", "Open: "), link);
-  }
-  const pass = el("button", "Passed", { type: "button" }), fail = el("button", "Failed", { type: "button" });
-  const result = (passed) => ({ check: check.id, passed, note: note.value, inputs: check.inputs });
-  pass.onclick = () => send("/check-results", result(true));
-  fail.onclick = () => send("/check-results", result(false));
-  box.append(note, pass, fail);
+  const [note, noted] = field("Note");
+  const box = panel(`Check ${check.id}`, list(check.steps, "ol"));
+  if (check.expect) box.append(text(`Expected: ${check.expect}`, { color: "contrast-medium" }));
+  if (check.url) box.append(external(check.url, check.url));
+  const result = (passed) => ({ check: check.id, passed, note: noted(), inputs: check.inputs });
+  box.append(note, row(
+    button("Passed", () => send("/check-results", result(true)), { icon: "check" }),
+    button("Failed", () => send("/check-results", result(false)), { variant: "secondary", icon: "close" }),
+  ));
   return box;
 }
 
 function mergeForm(m) {
-  const box = el("fieldset"), links = el("p"), list = el("ul");
-  box.append(el("legend", `Merge PR #${m.pr} (${m.method})`));
-  links.append(el("a", `PR #${m.pr}`, { href: m.url, target: "_blank", rel: "noopener" }), " · ",
-    el("a", "Diff summary", { href: m.diff, target: "_blank", rel: "noopener" }));
-  box.append(links, el("p", `Exact head: ${m.head}`));
-  if (m.void) box.append(el("p", `Changed since ${m.void.slice(0, 7)}: ${m.delta}`, { class: "error" }));
-  for (const c of m.checks) list.append(el("li", `${c.name}: ${c.state}`));
-  if (!m.checks.length) list.append(el("li", "no checks reported"));
-  const approve = el("button", `Approve merging ${m.head.slice(0, 7)}`, { type: "button" });
-  approve.onclick = () => send("/merge-consent", { head: m.head });
-  box.append(el("p", "Checks at this head:"), list, approve);
+  const links = row(external(`PR #${m.pr}`, m.url), external("Diff summary", m.diff));
+  const box = panel(`Merge PR #${m.pr} (${m.method})`, links, text(`Exact head: ${m.head}`, { size: "xs" }));
+  if (m.void) box.append(text(`Changed since ${m.void.slice(0, 7)}: ${m.delta}`, { color: "error" }));
+  const checks = m.checks.length ? m.checks.map((c) => `${c.name}: ${c.state}`) : ["no checks reported"];
+  box.append(text("Checks at this head:"), list(checks),
+    button(`Approve merging ${m.head.slice(0, 7)}`, () => send("/merge-consent", { head: m.head })));
   return box;
+}
+
+function pullbackNote(p) {
+  const behind = p.state === "behind", title = `Pull-back: ${p.state}`, pull = () => send("/pull", {});
+  if (!pds) {
+    const box = panel(title, text(p.reason || ""));
+    if (behind) box.append(button("Pull", pull));
+    return box;
+  }
+  const note = el("p-inline-notification", p.reason || "", {
+    state: behind ? "warning" : "success", heading: title, "heading-tag": "h3", "dismiss-button": "false",
+  });
+  if (behind) {
+    note.setAttribute("action-label", "Pull");
+    note.setAttribute("action-icon", "refresh");
+    note.addEventListener("action", pull);
+  }
+  return note;
 }
 
 const shots = new Map();
 
-function shot(name, at) {
-  const key = `${selected}/${name}/${at}`;
+function shot(kind, name, at) {
+  const key = `${selected}/${kind}/${name}/${at}`;
   if (!shots.has(key)) {
     const init = { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(5000) };
-    shots.set(key, fetch(`/api/next/changes/${selected}/visual/${encodeURIComponent(name)}`, init)
+    shots.set(key, fetch(`/api/next/changes/${selected}/${kind}/${encodeURIComponent(name)}`, init)
       .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(r.statusText))))
       .then((b) => URL.createObjectURL(b)));
   }
   return shots.get(key);
 }
 
-function visualSection(v) {
-  const box = el("section"), list = el("ul");
-  box.append(el("h3", `Visual check of ${v.head.slice(0, 7)}: ${v.passed ? "passed" : "failed"}`));
-  for (const f of v.findings) list.append(el("li", f));
-  box.append(list);
+function image(kind, name, at, alt) {
+  const link = el("a", undefined, { target: "_blank", rel: "noopener" });
+  const img = el("img", undefined, { alt, loading: "lazy" });
+  link.append(img);
+  shot(kind, name, at).then((url) => { img.src = link.href = url; }, () => { img.alt += " (not available)"; });
+  return link;
+}
+
+function visualSection(v, b) {
+  const verdict = el("p-tag", v.passed ? "Passed" : "Failed", { variant: v.passed ? "success" : "error" });
+  const title = text(`Visual check of ${v.head.slice(0, 7)}`, { weight: "semibold" });
+  const box = panel("Before and after", row(title, verdict));
+  if (v.findings.length) box.append(list(v.findings));
+  if (b && b.findings.length) {
+    box.append(text(`Before: ${b.findings.join("; ")}`, { size: "xs", color: "contrast-medium" }));
+  }
+  const grid = el("div", undefined, { class: "shots" });
   for (const name of v.files) {
     const [, state, width] = name.match(/^(.*)-(\d+)\.png$/);
-    const img = el("img", undefined, { alt: `${state} ${width}px`, width: "160", loading: "lazy" });
-    shot(name, v.at).then((url) => { img.src = url; }, () => { img.alt += " (not available)"; });
-    const fig = el("figure");
-    fig.append(img, el("figcaption", name));
-    box.append(fig);
+    const before = b && b.files.includes(name)
+      ? image("before", name, b.at, `${state} at ${width}px before the Change, at ${b.head.slice(0, 7)}`)
+      : text("Before not available", { class: "missing", size: "xs", color: "contrast-medium" });
+    const fig = el("figure", undefined, { class: "pair" });
+    fig.append(before, image("visual", name, v.at, `${state} at ${width}px with the Change, at ${v.head.slice(0, 7)}`),
+      el("figcaption", `${state} \u00b7 ${width}px \u00b7 before | after`));
+    grid.append(fig);
   }
+  box.append(grid);
+  return box;
+}
+
+function beforeSection(b) {
+  const box = panel(`Before the Change${b.head ? `, at ${b.head.slice(0, 7)}` : ""}`);
+  if (b.findings.length) box.append(text(`Not available: ${b.findings.join("; ")}`, { color: "contrast-medium" }));
+  const grid = el("div", undefined, { class: "shots" });
+  for (const name of b.files) grid.append(image("before", name, b.at, `${name} before the Change`));
+  box.append(grid);
   return box;
 }
 
@@ -183,39 +338,51 @@ async function showDetail() {
   const target = document.getElementById("detail");
   if (!selected) return target.replaceChildren();
   const d = await call(`/changes/${selected}`);
-  const parts = [el("h2", d.slug), el("p", d.line), el("p", d.brief.outcome, { class: "muted" })];
   const models = Object.entries(d.spend.models).map(([m, u]) => `${m} ${u.tokens} tokens`).join(", ");
-  parts.push(el("p", `Spent ${d.spend.credits.toFixed(2)} credits${models ? ` (${models})` : ""}`, { class: "muted" }));
+  const spent = `Spent ${d.spend.credits.toFixed(2)} credits${models ? ` (${models})` : ""}`;
+  const pause = button(d.paused ? "Resume" : "Pause", () => send("/intent", { intent: d.paused ? "resume" : "pause" }),
+    { variant: "secondary", icon: d.paused ? "play" : "pause" });
+  const parts = [
+    row(heading(2, d.slug, "xl"), pause), text(d.line),
+    text(d.brief.outcome, { color: "contrast-medium" }), text(spent, { size: "xs", color: "contrast-medium" }),
+  ];
+  if (d.pullback) parts.push(pullbackNote(d.pullback));
   if (d.question) parts.push(questionForm(d.question));
   if (d.merge) parts.push(mergeForm(d.merge));
-  const pause = el("button", d.paused ? "Resume" : "Pause", { type: "button" });
-  pause.onclick = () => send("/intent", { intent: d.paused ? "resume" : "pause" });
-  parts.push(pause);
-  if (d.pullback) {
-    parts.push(el("p", `Pull-back: ${d.pullback.state}${d.pullback.reason ? ` (${d.pullback.reason})` : ""}`));
-    if (d.pullback.state === "behind") {
-      const pull = el("button", "Pull", { type: "button" });
-      pull.onclick = () => send("/pull", {});
-      parts.push(pull);
-    }
-  }
   for (const check of d.checks.filter((c) => c.waiting)) parts.push(checkForm(check));
-  if (d.visual) parts.push(visualSection(d.visual));
+  if (d.visual) parts.push(visualSection(d.visual, d.before));
+  else if (d.before) parts.push(beforeSection(d.before));
   if (d.step === "shape" && d.brief.approved !== d.brief.version) {
-    const list = el("ul");
-    for (const k of d.criteria) list.append(el("li", `${k.id}: ${k.text}`));
-    for (const c of d.checks) list.append(el("li", `Your check ${c.id}: ${c.steps.join("; ")}`));
-    const approve = el("button", `Approve brief v${d.brief.version}`, { type: "button" });
-    approve.onclick = () => send("/approve-brief", { version: d.brief.version });
-    parts.push(el("h3", `Brief v${d.brief.version}: ${d.brief.title}`), list, approve);
+    const items = [
+      ...d.criteria.map((k) => `${k.id}: ${k.text}`),
+      ...d.checks.map((c) => `Your check ${c.id}: ${c.steps.join("; ")}`),
+    ];
+    const version = d.brief.version;
+    const approve = button(`Approve brief v${version}`, () => send("/approve-brief", { version }));
+    parts.push(panel(`Brief v${version}: ${d.brief.title}`, list(items), approve));
   }
-  const log = el("ol", undefined, { class: "muted" });
-  for (const e of d.activity.slice(-8)) {
-    log.append(el("li", `${e.at || ""} ${e.event || ""} ${e.exit || e.tool || e.reason || ""}`));
-  }
-  parts.push(el("h3", "Recent activity"), log);
-  const editing = target.contains(document.activeElement) && document.activeElement.matches("textarea, input");
+  const log = d.activity.slice(-8).map((e) => `${e.at || ""} ${e.event || ""} ${e.exit || e.tool || e.reason || ""}`);
+  parts.push(panel("Recent activity", list(log, "ol")));
+  const editing = target.contains(document.activeElement)
+    && document.activeElement.matches("textarea, input, p-textarea, p-radio-group");
   if (!editing) target.replaceChildren(...parts);
+}
+
+function cell(child, attrs = {}) {
+  const node = el("p-table-cell", undefined, attrs);
+  node.append(child);
+  return node;
+}
+
+function meta(value, color = "contrast-medium") {
+  return text(value, { size: "xs", color, class: "meta" });
+}
+
+function badge(c) {
+  if (/(^|· )stopped:/.test(c.line)) return ["error", "Stopped"];
+  if (c.line.startsWith("Done")) return ["success", "Done"];
+  const next = { you: ["warning", "Your turn"], admin: ["warning", "Admin"], github: ["secondary", "GitHub"] };
+  return next[c.actor] || ["info", "Delivery"];
 }
 
 async function refresh() {
@@ -223,27 +390,32 @@ async function refresh() {
   busy = true;
   try {
     const rows = (await call("/changes")).map((c) => {
-      const row = el("tr", undefined, { class: "row", tabindex: "0" });
-      const behind = c.pullback && c.pullback.state === "behind" ? ` · ${c.pullback.reason}` : "";
-      const status = el("td", c.line + behind);
+      const open = pds
+        ? el("p-button-pure", c.slug, { type: "button", icon: "arrow-right", "align-label": "start" })
+        : el("button", c.slug, { type: "button" });
+      if (c.slug === selected) open.setAttribute(pds ? "active" : "aria-current", "true");
+      open.onclick = () => { selected = c.slug; refresh(); };
+      const [variant, label] = badge(c);
+      const status = el("p-table-cell", undefined, { multiline: "true" });
+      status.append(row(el("p-tag", label, { variant, compact: "true" }), text(c.line, { tag: "span" })));
+      if (c.pullback && c.pullback.state === "behind") status.append(meta(c.pullback.reason, "warning"));
       if (c.now) {
         const step = c.step_time ? ` · step ${c.step_time}` : "";
         const spent = ` · ${c.credits.change.toFixed(2)} credits (step ${c.credits.step.toFixed(2)})`;
-        status.append(el("span", `${c.now}${step}${spent}${c.quiet ? " · quiet" : ""}`, { class: "card muted" }));
+        status.append(meta(`${c.now}${step}${spent}${c.quiet ? " · quiet" : ""}`));
       }
-      for (const o of c.overlaps || []) status.append(el("span", o, { class: "card muted" }));
-      row.append(el("td", c.slug), status, el("td", c.action || "—"));
-      row.onclick = row.onkeydown = (event) => {
-        if (event.type === "click" || event.key === "Enter") { selected = c.slug; refresh(); }
-      };
-      return row;
+      for (const o of c.overlaps || []) status.append(meta(o));
+      const line = el("p-table-row");
+      line.append(cell(open), status, cell(text(c.action || "—"), { multiline: "true" }));
+      return line;
     });
     document.getElementById("changes").replaceChildren(...rows);
     const notes = (await call("/project")).notes;
-    document.getElementById("notes").replaceChildren(...notes.map((n) => el("p", n)));
+    document.getElementById("notes").replaceChildren(...notes.map((n) => text(n, { size: "xs" })));
     document.getElementById("notes").hidden = !notes.length;
     lastSeen = new Date();
-    document.getElementById("error").textContent = document.getElementById("seen").textContent = "";
+    notify();
+    document.getElementById("seen").textContent = "";
     for (const id of ["list", "detail"]) document.getElementById(id).classList.remove("stale");
     await showDetail();
   } catch (e) {
@@ -253,12 +425,9 @@ async function refresh() {
   }
 }
 
-refresh();
-setInterval(refresh, 3000);
-
-document.getElementById("new").onclick = async (event) => {
-  const button = event.currentTarget, result = document.getElementById("started");
-  button.disabled = true;
+async function newChange(event) {
+  const trigger = event.currentTarget, result = document.getElementById("started");
+  waiting(trigger, true);
   result.textContent = "Opening a chat…";
   try {
     const r = await call("/new-change", {});
@@ -271,9 +440,24 @@ document.getElementById("new").onclick = async (event) => {
     result.textContent = "";
     failed(e);
   } finally {
-    button.disabled = false;
+    waiting(trigger, false);
   }
-};
+}
+
+async function start() {
+  // The PDS components load from its CDN (PDS 4 has no local delivery), so the page picks its controls once.
+  const loaded = customElements.whenDefined("p-button").then(() => true);
+  pds = await Promise.race([loaded, new Promise((resolve) => setTimeout(resolve, 3000, false))]);
+  if (!pds) {
+    document.documentElement.classList.add("no-pds");
+    document.getElementById("offline").hidden = false;
+  }
+  document.querySelector("header").append(button("New Change", newChange, { icon: "add" }));
+  refresh();
+  setInterval(refresh, 3000);
+}
+
+start();
 </script>
 </body>
 </html>
