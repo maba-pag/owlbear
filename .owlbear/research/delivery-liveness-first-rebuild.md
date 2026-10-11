@@ -251,6 +251,14 @@ choices and user choices alike as user decisions. This plan therefore treats eve
 | TD-46 | Intended writes outside the worktree: Delivery's own state, temporary files and the user's tool caches; anything else is stopped by the watcher unless the brief names it | `decided`: "Allowed: Delivery's own state, temporary files, the user's tool caches; anything else is stopped unless the brief names it" (chosen among three) | 2026-10-11 |
 | TD-47 | The watcher agent's model and effort are chosen after the benchmark of TD-27 | `decided`: "Decide after the benchmark (N2)" | 2026-10-11 |
 | TD-48 | A VS Code window step starts with a shell-only first turn (`code chat "!echo <nonce>"`, no model call), so the window owns the chat and serves its tools. Delivery waits until the agent host lists the step's model, then sends every turn with model and effort. Guards: a turn on any other model stops the step; a model that never appears ends it with a reason. Replaces the cancelled first turn; resolves C6 ([runtime research P14](delivery-next-agent-runtime.md)) | `decided`: "Build this route with the guards" (chosen among five, the recommendation) | 2026-10-11 |
+| TD-49 | Screenshot method (read-back of charter §3.10, which was `approved` but never asked).
+- Delivery captures each UI state itself with a headless browser, at the configured desktop widths (R7).
+- A state may contain simple steps such as clicks or typing before the screenshot.
+- The capture collects console errors; errors new since "before" fail the check (R8).
+- The reviewer judges images and errors.
+- A task can add the tool category "browser use" for the reviewer, to explore in a window beyond the states; console access there is untested.
+
+Amends charter §3.10's "desktop and phone sizes" | `decided`: chose "As the first, plus: a task can add 'browser use' for the reviewer, to explore in a window beyond the states (console there untested)" among four variants and the TD-41 closing options, after the readings R7 and R8 | 2026-10-12 |
 
 **User direction, not yet decisions** (2026-10-10, cornerstone walkthrough): whether three roles are
 enough is open ("i dont want to actively decide that three roles are enough"); the brief and plan
