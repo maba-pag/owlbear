@@ -10,7 +10,9 @@ from owlbear_delivery_next.host import Host, RunnerRecord
 from owlbear_delivery_next.inbox import AnswerItem, CheckResult, IntentItem
 from owlbear_delivery_next.loop import StepResult, apply
 from owlbear_delivery_next.models import (
+    VISUAL,
     Answer,
+    Brief,
     Change,
     Environment,
     Exit,
@@ -22,6 +24,8 @@ from owlbear_delivery_next.models import (
     Step,
     StepKind,
     Task,
+    VisualResult,
+    VisualState,
 )
 from owlbear_delivery_next.process_probe import WorktreeProcessScanError
 from owlbear_delivery_next.profile_record import Profile, ProfileEntry
@@ -329,3 +333,20 @@ def test_the_environment_launches_after_the_builder_is_gone_and_is_disposed_on_t
     assert fake.host.tick() == ["c1"]
     done = store.read("c1")
     assert (done.env, done.step.kind) == (None, StepKind.MERGE)
+
+
+def test_the_visual_launch_waits_for_one_before_capture_and_its_runner_is_not_charged(store, tmp_path, monkeypatch):
+    fake = Fake(store, tmp_path)
+    calls = environment(store, fake, monkeypatch)
+    c = store.read("c1")
+    c.checks, c.step, c.env = [], Step(kind=StepKind.CHECK, task=VISUAL), c.env.model_copy(update={"check": VISUAL})
+    c.brief = Brief(version=1, ui=True, visual=[VisualState(name="home", path="/", expect="a greeting")])
+    save(store, c)
+    assert (fake.host.tick(NOW), calls["start"]) == (["c1"], [])  # a runner renders the "before" states first
+    c = store.read("c1")
+    c.before = VisualResult(head="b" * 40, tree="t", at=NOW)
+    save(store, c)
+    fake.live.clear()
+    assert fake.host.tick(NOW) == ["c1"]  # then the preview starts and the capture runner follows
+    after = store.read("c1")
+    assert (calls["start"], after.outcome.waiting, after.outcome.cause) == (["npm run preview"], "reviewer", None)

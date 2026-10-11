@@ -30,6 +30,7 @@ from owlbear_delivery_next.cli import describe
 from owlbear_delivery_next.models import Environment, Exit, StepKind, Waiting
 from owlbear_delivery_next.profile_record import Profile
 from owlbear_delivery_next.steps import (
+    before,
     check,
     cleanup,
     conversation,
@@ -243,6 +244,19 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     store.write(lock, loop.apply(change, result, datetime.now(UTC)))
 
 
+def _before(store: Store, lock: Lock, change: Change, repo: Path) -> None:
+    """TD-24: render the brief's states at the merge-base once, before the visual check's own preview starts."""
+    change.before = shots = before.capture(
+        change,
+        repo,
+        lambda base: store.before_dir(change.slug, base),
+        store.read_profile() or Profile(),
+        lambda e: store.log(lock, change.slug, e),
+    )
+    store.write(lock, change)
+    _out("; ".join([f"before: {len(shots.files)} screenshots at {shots.head[:7]}", *shots.findings]))
+
+
 def _challenge(store: Store, lock: Lock, change: Change, cfg: sdk_adapter.Session, planned: Result) -> Result:
     """The plan's independent read-only challenge: pass keeps it; findings send it back for one more round."""
     if planned.exit != Exit.DONE or planned.plan is None:
@@ -319,6 +333,8 @@ def main(argv: list[str] | None = None) -> int:
             change, step = store.fold(lock, args.change, datetime.now(UTC), state, moved=moved)
             if step is not None and check.capturing(change):
                 _visual(store, lock, change, repo)
+            elif step is not None and before.due(change):
+                _before(store, lock, change, repo)
             elif step is None or change.env is not None:
                 _out("nothing to run; the host owns a check environment" if change.env else "nothing to run")
             elif step.kind in AGENT:

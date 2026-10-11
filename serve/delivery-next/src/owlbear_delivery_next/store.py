@@ -154,6 +154,10 @@ class Store:
         """The screenshots of one Change's visual check at *head*."""
         return self.root / "changes" / slug / "visual" / head[:7]
 
+    def before_dir(self, slug: str, base: str) -> Path:
+        """The "before" screenshots of one Change at its merge-base *base* (TD-24)."""
+        return self.root / "changes" / slug / "before" / base[:7]
+
     def read(self, slug: str) -> Change:
         """Read one Change, migrating an older format forward."""
         return _load(self._dir(slug) / "change.json", Change, FORMAT, MIGRATIONS)

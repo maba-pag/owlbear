@@ -24,7 +24,7 @@ from owlbear_delivery_next.models import VISUAL, ErrorKind, Exit, Record, StepKi
 from owlbear_delivery_next.process_probe import ProcessTableWorktreeProbe, WorktreeProcessScanError
 from owlbear_delivery_next.profile_record import Profile
 from owlbear_delivery_next.status import Activity
-from owlbear_delivery_next.steps import check, engine, pullback, worktree
+from owlbear_delivery_next.steps import before, check, engine, pullback, worktree
 from owlbear_delivery_next.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.store import LockHeldError, Store, StoreError
 
@@ -110,10 +110,11 @@ def disappeared(prior: Change, rec: RunnerRecord, now: datetime) -> bool:
     """Whether the runner ended without committing an exit while its step was runnable.
 
     A person check's environment means its preparer already exited; the visual runner captures while one exists.
+    A "before" capture the runner recorded counts as its exit (TD-24).
     """
-    o, env = prior.outcome, prior.env
+    o, env, b = prior.outcome, prior.env, prior.before
     runner = env is None or env.check == VISUAL
-    return not (o and o.at >= rec.started_at) and runner and loop.next_step(prior, now) is not None
+    return not any(r and r.at >= rec.started_at for r in (o, b)) and runner and loop.next_step(prior, now) is not None
 
 
 def gone(kind: StepKind) -> loop.StepResult:
@@ -226,7 +227,7 @@ class Host:
                 step = loop.next_step(c, now)
             if c.env:
                 c = self._environment(lock, c, now)
-                step = loop.next_step(c, now) if check.capturing(c) else None
+                step = loop.next_step(c, now) if check.capturing(c) or before.due(c) else None
             self.store.write(lock, c)
             return step is not None
 
@@ -285,8 +286,8 @@ class Host:
     def _environment(self, lock: Lock, c: Change, now: datetime) -> Change:
         """Launch the check environment after the preparing Builder is gone; pending once it answers."""
         e = c.env
-        if e is None or self._env_action(c) != "launch":
-            return c
+        if e is None or self._env_action(c) != "launch" or before.due(c):
+            return c  # the runner renders the "before" states with this recipe first (TD-24)
         if (left := self._clear(c, e)) is None or left:
             self._mark(c, left, now)  # never a second group beside one that may still run
             return c

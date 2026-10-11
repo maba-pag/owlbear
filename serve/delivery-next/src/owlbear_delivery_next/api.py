@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.host import Host, HostRecord
     from owlbear_delivery_next.inbox import InboxItem
-    from owlbear_delivery_next.models import Inputs
+    from owlbear_delivery_next.models import Inputs, VisualResult
     from owlbear_delivery_next.status import Activity
     from owlbear_delivery_next.store import Store
 
@@ -264,19 +264,26 @@ def create_app(  # noqa: C901, PLR0915 - one closure per route
             "consent": c.consent.model_dump(mode="json") if c.consent else None,
             "fixes": [f"fix Change {e['fix']} drafted" for e in events if e.get("event") == "fix-drafted"],
             "visual": c.visual.model_dump(mode="json") if c.visual else None,
+            "before": c.before.model_dump(mode="json") if c.before else None,
             "activity": events[-20:],
         }
 
-    @router.get("/changes/{slug}/visual/{name}")
-    def screenshot(slug: str, name: str) -> FileResponse:
-        c = read(slug)
-        if not (c.visual and visual.FILE.fullmatch(name) and name in c.visual.files):
+    def png(shots: VisualResult | None, folder_of: Callable[[str], Path], name: str) -> FileResponse:
+        if not (shots and visual.FILE.fullmatch(name) and name in shots.files):
             raise HTTPException(404, "no such screenshot")
-        folder = store.visual_dir(slug, c.visual.head).resolve()
+        folder = folder_of(shots.head).resolve()
         path = (folder / name).resolve()
         if path.parent != folder or not path.is_file():
             raise HTTPException(404, "no such screenshot")
         return FileResponse(path, media_type="image/png")
+
+    @router.get("/changes/{slug}/visual/{name}")
+    def screenshot(slug: str, name: str) -> FileResponse:
+        return png(read(slug).visual, lambda head: store.visual_dir(slug, head), name)
+
+    @router.get("/changes/{slug}/before/{name}")
+    def before_screenshot(slug: str, name: str) -> FileResponse:
+        return png(read(slug).before, lambda base: store.before_dir(slug, base), name)
 
     @router.post("/changes/{slug}/answers")
     def answer(slug: str, body: AnswerBody) -> dict[str, str]:

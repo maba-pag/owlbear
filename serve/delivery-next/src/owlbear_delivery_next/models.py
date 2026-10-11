@@ -465,6 +465,7 @@ class Change(Record):
     blocked: Stop | None = None  # host-owned: a process survives in the worktree, so no writer starts
     env: Environment | None = None
     visual: VisualResult | None = None
+    before: VisualResult | None = None  # TD-24: the states at the merge-base, captured once; never gates
     names: Names = Field(default_factory=Names)
     spend: Spend = Field(default_factory=Spend)
     finished_at: datetime | None = None
