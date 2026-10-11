@@ -246,6 +246,10 @@ choices and user choices alike as user decisions. This plan therefore treats eve
 | TD-41 | Read-back of decisions (pattern P6): close variants of the recorded decision, as many as really differ in consequence (1 to 4, the matching one at varying positions), one or two other directions where real ones exist, and at the end "take your recommendation" (the result is the assistant's `autonomous` choice, with reasons), "none of these: show me more options" (a bounded set across directions, each with pros, cons, risks and a confidence), and "explain first"; free text always open; no recommendation mark. When the direction itself is in doubt, the direction is asked first, then the nuances, with the reason stated. Used at the end of ideation and before design approval, and for consequential choices of the assistant | `decided`: "P6 adaptive, with a direction check", chosen among five patterns with the assistant's and Sol's confidences; the owner's direction: "3 options in the same direction … + i let you decide + another direction + none of the above, find more options … + explain first" | 2026-10-11 |
 | TD-42 | Confidence in a "more options" follow-up: a separate percentage per option that it is a good choice, not adding up across the options | `decided`: "A separate percentage per option that it is a good choice, not adding up" (chosen among four) | 2026-10-11 |
 | TD-43 | A free-text answer is never recorded as written: the assistant offers the readings it sees, filling gaps differently (as many as really differ, 2 to 5), plus "your words as written", "show me more readings" and "explain first"; the owner chooses the one meant | `decided`: "for my free text, give me multiple options on how you understood them, or could understand them, including filling the parts i maybe forgot, and let me choose the one i emant, not the one i wrote"; format chosen among five: "As in round 3 …" | 2026-10-11 |
+| TD-44 | Until the watcher agent exists, steps may run outside VS Code (SDK or CLI); the owner reads their logs afterwards | `decided`: "SDK steps may run meanwhile; only their logs can be read afterwards" (chosen among three, against the assistant's recommendation to run every step in VS Code) | 2026-10-11 |
+| TD-45 | The SDK route keeps its hard guard against writes outside the worktree permanently; in VS Code the watcher governs such writes (D6) | `decided`: "Keep it permanently on the SDK route" (chosen among three) | 2026-10-11 |
+| TD-46 | Intended writes outside the worktree: Delivery's own state, temporary files and the user's tool caches; anything else is stopped by the watcher unless the brief names it | `decided`: "Allowed: Delivery's own state, temporary files, the user's tool caches; anything else is stopped unless the brief names it" (chosen among three) | 2026-10-11 |
+| TD-47 | The watcher agent's model and effort are chosen after the benchmark of TD-27 | `decided`: "Decide after the benchmark (N2)" | 2026-10-11 |
 
 **User direction, not yet decisions** (2026-10-10, cornerstone walkthrough): whether three roles are
 enough is open ("i dont want to actively decide that three roles are enough"); the brief and plan
@@ -412,6 +416,32 @@ or refined about half of them; the rows above carry the new wording. New or chan
 | N8 | Later: one shared documents repository for all projects, a folder per project | TD-7 |
 | N9 | Remove the instruction rule against writes outside the worktree now; the watcher's stop (retried once with its reason, then the owner) replaces it | D6 |
 | N10 | Autopilot agents raise decision or action requests that block their whole task; agents with the question tool run interactive | D4 |
+
+### 3.12 Repair plan, 2026-10-11
+
+Order: settled small repairs first; two live probes that decide how C6 and C7 are fixed; the watcher
+designed with the owner, built and proven (it carries TD-20, TD-34, D5 and D6); the planned visual
+work, whose live proof waits for a runtime the owner can follow; then the remaining runtime and
+design-first items. Each code item is one commit on `next/m4-slice1` with the smallest test that
+fails without it and a Sol review of the diff. Sol challenged this plan once; its findings are folded
+in (watcher build and proof added, C6 probe replaced, N3 and the SDK guard added, TD-41/43 coverage
+widened).
+
+| Phase | Item | Approach | Proof |
+| --- | --- | --- | --- |
+| 1 Settled repairs | TD-27 roles, N3 | `roles.py`: builder `claude-opus-5.5` `medium` (also the default), reviewer `gpt-6.1-sol` `xhigh`, challenger `gpt-6.1-sol` `high`; planner stays Opus `high`. `RoleModel` drops the rule that Luna and Haiku run only at `max`, keeps the refusal of `auto` | A configured `gpt-6-luna` `low` and `claude-haiku-5.5` `medium` load; `auto` is refused; the next useful real review reports `gpt-6.1-sol` `xhigh` |
+| 1 | C4 human replies (TD-30) | `no-action` refused for every human-authored item, not only review threads | A human issue comment answered `no-action` is rejected; a bot notice still passes |
+| 1 | N9 outside writes (D6, TD-45) | Delete the rule from `agents/builder.md`; the SDK route's hard guard stays | Deletion inspected |
+| 2 Probes | C6 first turn (TD-32) | P7, P9 and P11 showed a cold window's first turn ignores the agent file's model and effort. Probe instead: create the working chat over the agent host in the window's session with `initialMessage.model` and its thinking level, without a bootstrap turn, and check that VS Code's tools still attach | For every turn, including any cancelled one, the requested model and effort equal the ones the host reports running; billing corroborates; VS Code tools listed |
+| 2 | C7 screenshots in VS Code (TD-35) | An agent host message with an `EmbeddedResource` PNG attachment that holds a fact absent from the prompt and file name | The model states that fact |
+| 3 Watcher | N1 design | Ideation and design with the owner, Read-Back included: what it reads (SDK events, agent host chat), how it steers (steering message) and stops (turn cancel and the session's processes), which outside actions are allowed or stopped, D6's retry once then ask, its model and effort | Owner-approved design |
+| 3 | N2 benchmark (TD-27, TD-47) | Luna `max` vs Haiku `high`, Haiku `xhigh` vs Sol `low` on OwlBear's own tasks, quality and cost; informs the cheap tier and the watcher's model, chosen with the owner | Results table; owner's choice |
+| 3 | N1 build | Watcher for both runtimes, on the model chosen after N2; stops writes outside the worktree except Delivery's state, temporary files, tool caches and what the brief names (TD-46) | Live: it reads a running step, steers it once, stops an unwanted outside write, the step is retried once with its reason, a second stop asks the owner |
+| 4 Visual baseline | C1, C2, N6 | [Visual-baseline plan](delivery-next-visual-baseline.md) slices 1 to 5; until the watcher exists, steps may run outside VS Code with their logs read afterwards (TD-44) | As in that plan |
+| 5 Runtime | TD-34 dispatch, N5 (TD-36), N4/N10 (D4) | Steps needing VS Code tools start there; a session reporting missing tools is retried once in VS Code. Agent mode follows the role's question tool instead of the fixed `autopilot` in `vscode_adapter.CONFIG`; Delivery's `ask_question` (which already blocks the task until answered) stays available to all roles; an action-request kind is added only if missing | Per item |
+| 5 | TD-41 to TD-43 in Delivery | Read-back before brief approval in the delivery skill; free-text answers to Delivery questions offered as readings to choose from, with the question tool's option limit raised from five to eight | An unconfirmed free-text answer is not recorded as authority; the chosen reading is |
+| 6 Design first | C3 collision test, C5 change of mind | Short design each, Sol-challenged, then build | Per design |
+| Later | N7 account split, N8 documents repository, TD-10 review | When the first real project starts | — |
 
 ## 4. Recommendation, Confidence, and Limits
 
