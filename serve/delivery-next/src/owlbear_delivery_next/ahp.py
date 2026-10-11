@@ -19,6 +19,7 @@ ROOT = "ahp-root://"
 ENTRIES = Path.home() / "Library/Application Support/Code/agent-host/local-endpoint/entries"
 _TEXT, _CLOSE, _PING, _PONG = 1, 8, 9, 10
 _GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"  # RFC 6455 handshake constant
+IO_TIMEOUT = 15.0
 
 type Json = dict[str, Any]
 
@@ -48,6 +49,7 @@ class Connection:
         """Connect and upgrade; raises ``HostError`` when the host refuses."""
         self.client_id = client_id
         self._sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self._sock.settimeout(IO_TIMEOUT)  # bounds connect, upgrade and every send; an idle read just waits again
         self._sock.connect(path)
         key = base64.b64encode(os.urandom(16)).decode()
         self._sock.sendall(
@@ -84,7 +86,10 @@ class Connection:
     def _exact(self, n: int) -> bytes:
         buf = b""
         while len(buf) < n:
-            chunk = self._sock.recv(n - len(buf))
+            try:
+                chunk = self._sock.recv(n - len(buf))
+            except TimeoutError:
+                continue
             if not chunk:
                 raise HostError("closed")  # noqa: EM101
             buf += chunk

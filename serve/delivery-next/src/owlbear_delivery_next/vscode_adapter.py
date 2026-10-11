@@ -74,11 +74,10 @@ class Env:
 
 def _grace(control: Control) -> Callable[[], None]:
     """Once the step has its result, give the agent ``GRACE`` seconds to end its turn, then stop it."""
-    armed = threading.Event()
 
     def ended() -> None:
-        if not armed.is_set():
-            armed.set()
+        if not control.settled.is_set():
+            control.settled.set()
             timer = threading.Timer(GRACE, control.stop.set)
             timer.daemon = True
             timer.start()

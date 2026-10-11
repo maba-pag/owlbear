@@ -3,15 +3,21 @@ import hashlib
 import json
 import queue
 import socket
+import subprocess
 import tempfile
 import threading
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
-from owlbear_delivery_next import ahp
+from owlbear_delivery_next import ahp, sdk_adapter, session_result, step_mcp, vscode_adapter
 from owlbear_delivery_next.ahp import HostError
+from owlbear_delivery_next.models import Exit, StepKind
+from owlbear_delivery_next.permissions import Policy
+from owlbear_delivery_next.processes import Termination
+from owlbear_delivery_next.tools import Worktree
 from owlbear_delivery_next.vscode_step import (
     ACK,
     Control,
@@ -600,7 +606,181 @@ def test_an_upgrade_without_the_right_accept_key_is_refused() -> None:
         server.close()
 
 
+def test_a_silent_upgrade_fails_within_the_io_bound_and_idle_reads_keep_waiting(monkeypatch) -> None:
+    monkeypatch.setattr(ahp, "IO_TIMEOUT", 0.2)
+    path = Path(tempfile.mkdtemp(dir="/tmp")) / "s.sock"
+    silent = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    silent.bind(str(path))
+    silent.listen(1)
+    try:
+        with pytest.raises(TimeoutError):
+            ahp.Connection(str(path), "secret", "owlbear-delivery-test")
+    finally:
+        silent.close()
+
+    def serve(conn: socket.socket) -> None:
+        first = _ws_recv(conn)
+        threading.Event().wait(0.6)  # idle for three read timeouts, then answer
+        _ws_send(conn, {"jsonrpc": "2.0", "id": first["id"], "result": {"ok": True}})
+
+    path, server = _host(serve)
+    conn = ahp.Connection(str(path), "secret", "owlbear-delivery-test")
+    try:
+        assert conn.request("listSessions", {}, timeout=5) == {"ok": True}
+    finally:
+        conn.close()
+        server.close()
+
+
 def test_endpoint_is_none_without_a_running_editor_host(tmp_path: Path) -> None:
     assert ahp.endpoint(tmp_path / "missing") is None
     (tmp_path / "a.json").write_text('{"endpoint": {"path": "/x"}}')
     assert ahp.endpoint(tmp_path) == {"endpoint": {"path": "/x"}}
+
+
+HEAD, BASE = "a" * 40, "b" * 40
+GOOD = {"summary": "Added greet().", "changed_paths": ["src/greet.ts"], "checks": []}
+WINDOW = "owlbear-builder"
+USAGE = {"type": "chat/usage", "usage": {"model": MODEL, "inputTokens": 100, "outputTokens": 20}}
+
+
+def git(cwd: Path, *args: str) -> str:
+    done = subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)  # noqa: S603, S607
+    return done.stdout.strip()
+
+
+@pytest.fixture
+def wt(tmp_path: Path, monkeypatch) -> Path:
+    (tmp_path / "gitconfig").write_text("")
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "gitconfig"))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    for who in ("AUTHOR", "COMMITTER"):
+        monkeypatch.setenv(f"GIT_{who}_NAME", "t")
+        monkeypatch.setenv(f"GIT_{who}_EMAIL", "t@t")
+    path = tmp_path / "wt"
+    path.mkdir()
+    git(path, "init", "-q", "-b", "main")
+    (path / "README.md").write_text("x\n")
+    git(path, "add", "-A")
+    git(path, "commit", "-qm", "init")
+    return path
+
+
+class Adapted:
+    """One adapter run against the fake host; ``submit`` is what the agent sends through the relay per turn."""
+
+    def __init__(self, folder: Path, inbox: Path, scripts: list[list[dict]], submit: list[dict | None]) -> None:
+        self.host = FakeHost(folder, [{"agent": WINDOW}], scripts)
+        self.inbox, self.submit, self.replies = inbox, submit, []
+        self.events: list[dict] = []
+        self.delivered: list[int] = []
+        self.files_during: list[bool] = []
+        original = self.host.dispatch
+
+        def dispatch(channel: str, action: dict) -> None:
+            if action["type"] == "chat/turnStarted":
+                self.files_during.append(str(inbox) in (folder / ".mcp.json").read_text())
+                if self.submit and (args := self.submit.pop(0)) is not None:
+                    body = {"name": "submit_result", "arguments": args}
+                    self.replies.append(step_mcp.forward(inbox, "POST", "/call", body))
+            original(channel, action)
+
+        self.host.dispatch = dispatch
+        journal = sdk_adapter.Journal(event=self.events.append, delivered=lambda: self.delivered.append(1))
+        self.cfg = sdk_adapter.Session(
+            StepKind.BUILD, folder, "s1", "Build it.", resume=False, policy=Policy(folder, ()),
+            observe=lambda: Worktree(HEAD, BASE, changed=("src/greet.ts",)), checks=(), model=MODEL, effort=EFFORT,
+            journal=journal,
+        )  # fmt: skip
+        self.settled = Termination(confirmed=True)
+        self.env = vscode_adapter.Env(
+            connect=lambda _f: self.host,
+            launch=self.host.launch,
+            clock=self.host.clock,
+            settle=lambda *_a: self.settled,
+            reminder="Call submit_result.",
+        )
+
+    def run(self) -> session_result.Run:
+        return vscode_adapter.run(self.cfg, self.inbox, self.env)
+
+    def texts(self) -> list[str]:
+        return [a["message"]["text"] for _, a in self.host.actions("chat/turnStarted")]
+
+
+def test_a_vscode_session_returns_the_gated_result_and_leaves_no_window_files(wt: Path, tmp_path: Path) -> None:
+    a = Adapted(wt, tmp_path / "steps" / "1.json", [[USAGE, {"type": "chat/turnComplete"}]], [GOOD])
+    run = a.run()
+
+    assert a.replies[0]["ok"] is True
+    assert a.files_during == [True]
+    assert (run.ending, run.head, run.payload.summary) == ("result", HEAD, "Added greet().")
+    assert run.usage == {"credits": None, "models": {MODEL: {"credits": 0.0, "tokens": 120}}, "model_mismatch": False}
+    assert (run.termination.confirmed, a.delivered, a.texts()) == (True, [1], ["Build it."])
+    assert a.host.config["copilotcli:/s0"] == vscode_adapter.CONFIG
+    assert a.host.launched[0][:4] == ["code", "chat", "-m", WINDOW]
+    assert git(wt, "status", "--porcelain", "--ignored") == ""
+    assert not (tmp_path / "steps" / "1.json").exists()
+    assert session_result.to_result(run, StepKind.BUILD, datetime.now(UTC)).exit == Exit.DONE
+
+
+def test_a_result_from_a_turn_billed_to_another_model_is_discarded(wt: Path, tmp_path: Path) -> None:
+    other = {"type": "chat/usage", "usage": {"model": "mai-code-1.1-flash", "inputTokens": 1, "outputTokens": 1}}
+    a = Adapted(wt, tmp_path / "steps" / "2.json", [[other, {"type": "chat/turnComplete"}]], [GOOD])
+    run = a.run()
+
+    assert a.replies[0]["ok"] is True
+    assert (run.ending, run.payload, run.head) == ("error", None, None)
+    assert "mai-code-1.1-flash" in run.detail
+    assert run.usage["model_mismatch"] is True
+
+
+def test_a_turn_without_a_result_is_reminded_once_then_retried(wt: Path, tmp_path: Path) -> None:
+    done = [USAGE, {"type": "chat/turnComplete"}]
+    a = Adapted(wt, tmp_path / "steps" / "3.json", [done, done], [None, None])
+    run = a.run()
+
+    assert a.texts() == ["Build it.", "Call submit_result."]
+    assert (run.ending, run.usage["models"][MODEL]["tokens"]) == ("no-result", 240)
+    assert session_result.to_result(run, StepKind.BUILD, datetime.now(UTC)).exit == Exit.RETRY
+
+
+def test_a_cold_window_without_the_agent_is_retried_once(wt: Path, tmp_path: Path) -> None:
+    a = Adapted(wt, tmp_path / "steps" / "4.json", [[USAGE, {"type": "chat/turnComplete"}]], [GOOD])
+    windows = iter([[{"agent": ""}], [{"agent": WINDOW}]])
+    launch = a.host.launch
+
+    def cold(args: list[str], cwd: Path) -> None:
+        a.host.on_launch = next(windows)
+        launch(args, cwd)
+
+    a.env = vscode_adapter.Env(connect=a.env.connect, launch=cold, clock=a.host.clock, settle=a.env.settle)
+    run = a.run()
+
+    assert len(a.host.launched) == 2
+    assert [e["end"] for e in a.events if e.get("event") == "vscode-step"] == ["no-agent", "complete"]
+    assert run.ending == "result"
+
+
+def test_an_unreachable_editor_ends_in_a_retry_and_restores_the_files(wt: Path, tmp_path: Path) -> None:
+    a = Adapted(wt, tmp_path / "steps" / "5.json", [], [])
+
+    def refuse(_folder: Path) -> ahp.Transport:
+        raise HostError("no agent host")  # noqa: EM101, TRY003
+
+    a.env = vscode_adapter.Env(connect=refuse, settle=a.env.settle)
+    run = a.run()
+
+    assert (run.ending, run.detail) == ("error", "VS Code step error: HostError: no agent host")
+    assert (run.termination.confirmed, a.delivered) == (True, [])
+    assert git(wt, "status", "--porcelain", "--ignored") == ""
+
+
+def test_a_process_left_in_the_worktree_stops_the_step(wt: Path, tmp_path: Path) -> None:
+    a = Adapted(wt, tmp_path / "steps" / "6.json", [[USAGE, {"type": "chat/turnComplete"}]], [GOOD])
+    a.settled = Termination(confirmed=False, survivors=(4242,))
+    run = a.run()
+
+    result = session_result.to_result(run, StepKind.BUILD, datetime.now(UTC))
+    assert (run.ending, result.exit) == ("result", Exit.STOP)
+    assert "4242" in result.reason

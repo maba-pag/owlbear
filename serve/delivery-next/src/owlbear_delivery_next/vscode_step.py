@@ -87,6 +87,7 @@ class Control:
     stop: threading.Event = field(default_factory=threading.Event)
     steering: queue.Queue[str] = field(default_factory=queue.Queue)
     started: threading.Event = field(default_factory=threading.Event)  # set once Delivery's first turn started
+    settled: threading.Event = field(default_factory=threading.Event)  # set once Delivery holds the step's result
 
 
 @dataclass
@@ -165,7 +166,7 @@ class Step:
         agent = (bound.turn.get("message") or {}).get("agent")
         deadline = self.clock() + limit
         self._turn(out, agent, control, deadline, self.spec.prompt)
-        if out.end == "complete" and self.spec.reminder and not control.stop.is_set():
+        if out.end == "complete" and self.spec.reminder and not (control.stop.is_set() or control.settled.is_set()):
             self._turn(out, agent, control, deadline, self.spec.reminder)
         return out
 
