@@ -238,6 +238,14 @@ Corrections from the review (R2), all accepted:
 - The result channel is the Delivery MCP server, as TD-36 decided. A client tool over AHP also
   worked (P6); using it instead needs the user's re-decision.
 
+**Driver status (`autonomous`):** a stdlib AHP client (`ahp.py`) and a C+ step driver
+(`vscode_step.py`) exist on PR #449 with fake-host tests. A second review by Sol found the driver
+unsafe for unattended use; the fixes are in `9e9071777`: model pinned before launch, acknowledged
+cancels, busy and user-turn refusal, steering correlated by text, WebSocket ping and close handled.
+The runner does not call it. It stays unwired until the correlated probe passes and the user
+chooses the approval policy, and it may only target a Delivery-owned worktree, because the
+settings it writes apply to the whole folder.
+
 One C+ choice is open for the user: **window tool approval.** Window tools ran only under session
 auto-approve (P6), which also covers the shell. `permissions.deny` does not narrow it; `sandboxEnabled:
 on` keeps writes inside the repo and turns an escape into a confirmation Delivery can deny (P10).

@@ -16,7 +16,7 @@
 > with replay, role models, worktrees, agents never push, New Change without `-r`.
 > The agent runtime (SDK sessions outside VS Code) is under review: see
 > [agent runtime research](delivery-next-agent-runtime.md); it was an `autonomous` choice, never the
-> user's decision.
+> user's decision. Route C (TD-36) has an unwired C+ driver on PR #449; see that document.
 
 ## 1. Context and Question
 
