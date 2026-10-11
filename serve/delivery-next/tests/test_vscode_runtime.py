@@ -14,7 +14,7 @@ import psutil
 import pytest
 from mcp import Client, StdioServerParameters
 
-from owlbear_delivery_next import cli, leftovers, runner, sdk_adapter, step_mcp, tools
+from owlbear_delivery_next import ahp, cli, leftovers, runner, sdk_adapter, step_mcp, tools, vscode_adapter
 from owlbear_delivery_next import window_files as wf
 from owlbear_delivery_next.models import StepKind
 from owlbear_delivery_next.permissions import Policy
@@ -317,3 +317,14 @@ def test_the_cli_switches_the_runtime_and_shows_it(tmp_path: Path, monkeypatch) 
     assert cli.show_profile(store, tmp_path, []).endswith("Runtime: vscode")
     with pytest.raises(SystemExit):
         cli.main(["profile", "--runtime", "auto"])
+
+
+def test_connect_opens_the_step_folder_window_even_when_a_host_answers(tmp_path, monkeypatch):
+    calls: list[object] = []
+    monkeypatch.setattr(ahp, "endpoint", lambda: "entry")
+    monkeypatch.setattr(ahp, "connect", lambda entry, _client, _token: calls.append(("connect", entry)) or "conn")
+    monkeypatch.setattr(vscode_adapter, "_token", lambda: "t")
+    monkeypatch.setattr(vscode_adapter, "launch_code_chat", lambda args, cwd: calls.append(("open", args, cwd)))
+
+    assert vscode_adapter.connect(tmp_path) == "conn"
+    assert calls == [("open", ["code", str(tmp_path)], tmp_path), ("connect", "entry")]

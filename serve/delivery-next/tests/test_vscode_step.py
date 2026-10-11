@@ -699,6 +699,7 @@ class Adapted:
             clock=self.host.clock,
             settle=lambda *_a: self.settled,
             reminder="Call submit_result.",
+            wait=lambda _s: None,
         )
 
     def run(self) -> session_result.Run:
@@ -721,6 +722,8 @@ def test_a_vscode_session_returns_the_gated_result_and_leaves_no_window_files(wt
     assert a.host.launched[0][:4] == ["code", "chat", "-m", WINDOW]
     assert git(wt, "status", "--porcelain", "--ignored") == ""
     assert not (tmp_path / "steps" / "1.json").exists()
+    assert not (wt / ".github").exists()
+    assert not (wt / ".vscode").exists()
     assert session_result.to_result(run, StepKind.BUILD, datetime.now(UTC)).exit == Exit.DONE
 
 
@@ -756,7 +759,9 @@ def test_a_cold_window_without_the_agent_is_retried_once(wt: Path, tmp_path: Pat
         a.host.on_launch = next(windows)
         launch(args, cwd)
 
-    a.env = vscode_adapter.Env(connect=a.env.connect, launch=cold, clock=a.host.clock, settle=a.env.settle)
+    a.env = vscode_adapter.Env(
+        connect=a.env.connect, launch=cold, clock=a.host.clock, settle=a.env.settle, wait=lambda _s: None
+    )
     run = a.run()
 
     assert len(a.host.launched) == 2

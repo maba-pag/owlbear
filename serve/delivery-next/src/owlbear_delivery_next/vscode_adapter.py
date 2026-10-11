@@ -35,7 +35,8 @@ if TYPE_CHECKING:
 CONFIG = {"autoApprove": "autoApprove", "sandboxEnabled": "off", "mode": "autopilot"}  # the owner's D2, D4, D5
 GRACE = 30.0  # seconds an agent has to end its turn after its result was accepted
 START = 60.0  # seconds a started editor has to publish its agent host
-ATTEMPTS = 2  # a cold window's first chat has no agent (P11); the next one finds it
+ATTEMPTS = 8  # a freshly opened window's first chats have no agent until it has loaded the agent files (P11)
+WARM = 10.0  # seconds between attempts while the window loads
 
 
 def _token() -> str:
@@ -45,13 +46,17 @@ def _token() -> str:
 
 
 def connect(folder: Path) -> ahp.Connection:
-    """Connect to the editor's agent host; start VS Code on ``folder`` when no host answers (TD-35)."""
+    """Open or focus ``folder``'s window, then connect to the editor's agent host (TD-35).
+
+    ``code chat`` reaches the focused window, and only a window on ``folder`` knows the step's agent
+    (live run), so the folder's window is opened even when a host already answers.
+    """
     entry = ahp.endpoint()
     client = f"owlbear-delivery-{uuid.uuid4().hex[:8]}"
+    launch_code_chat(["code", str(folder)], folder)
     if entry is not None:
         with contextlib.suppress(OSError, ahp.HostError):
             return ahp.connect(entry, client, _token())
-    launch_code_chat(["code", str(folder)], folder)
     end = time.monotonic() + START
     while time.monotonic() < end:
         time.sleep(1)
@@ -70,6 +75,7 @@ class Env:
     clock: Callable[[], float] = time.monotonic
     settle: Callable[[Path, datetime], Termination] = leftovers.settle
     reminder: str = field(default=prompts.REMINDER)
+    wait: Callable[[float], None] = time.sleep
 
 
 def _grace(control: Control) -> Callable[[], None]:
@@ -126,8 +132,9 @@ class _Driver:
             )
             out = Step(conn, spec, self.deny, hooks=hooks).run(self.control, limit=DEADLINES.get(cfg.kind, 1200.0))
             self.log(event="vscode-step", attempt=attempt, end=out.end, detail=out.detail, session=out.session)
-            if out.end != "no-agent" or out.cancel_confirmed is False:
+            if out.end != "no-agent" or out.cancel_confirmed is False or attempt == ATTEMPTS:
                 break
+            self.env.wait(WARM)
         return out
 
     def step(self, inbox: Path) -> Outcome:

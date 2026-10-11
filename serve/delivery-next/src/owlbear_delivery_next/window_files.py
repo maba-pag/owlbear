@@ -6,6 +6,7 @@ one is marked ``skip-worktree``; ``restore`` puts back what the step found.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import sys
 from dataclasses import dataclass
@@ -112,6 +113,7 @@ class Placed:
     rel: str
     tracked: bool
     old: str | None  # an untracked file's content before the step; None when it did not exist
+    made: tuple[str, ...] = ()  # folders the placement created, deepest first
 
 
 def _git(folder: Path, *args: str) -> None:
@@ -135,13 +137,14 @@ def place(folder: Path, rel: str, render: Render) -> Placed:
         raise SettingsError(f"{rel} has local edits; Delivery never overwrites them")  # noqa: EM102, TRY003
     old = path.read_text() if path.is_file() else None
     text = render(old)
+    made = tuple(str(d.relative_to(folder)) for d in path.parents if d.is_relative_to(folder) and not d.exists())
     path.parent.mkdir(parents=True, exist_ok=True)
     if tracked:
         _git(folder, "update-index", "--skip-worktree", "--", rel)
     else:
         setup.exclude(folder, path)
     setup.replace_text(path, text)
-    return Placed(rel, tracked, None if tracked else old)
+    return Placed(rel, tracked, None if tracked else old, made)
 
 
 def restore(folder: Path, placed: Sequence[Placed]) -> list[str]:
@@ -157,6 +160,9 @@ def restore(folder: Path, placed: Sequence[Placed]) -> list[str]:
                 path.unlink(missing_ok=True)
             else:
                 setup.replace_text(path, p.old)
+            for d in p.made:
+                with contextlib.suppress(OSError):  # a folder something else filled stays
+                    (folder / d).rmdir()
         except (OSError, SettingsError) as exc:
             problems.append(f"{p.rel}: {exc}")
     return problems
