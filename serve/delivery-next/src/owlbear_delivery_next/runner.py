@@ -24,6 +24,7 @@ from owlbear_delivery_next import (
     session_result,
     setup,
     tools,
+    vscode_adapter,
 )
 from owlbear_delivery_next.cli import describe
 from owlbear_delivery_next.models import Environment, Exit, StepKind, Waiting
@@ -78,6 +79,13 @@ def _previous(store: Store, slug: str, session: str | None) -> dict[int, float |
 def _others(store: Store, slug: str) -> dict[str, list[str]]:
     """Scopes of the other open Changes of this clone: their plan's task scopes, else their brief's."""
     return {n.handle: n.scope for n in overlap.neighbours(store, slug, datetime.now(UTC)) if not n.merged}
+
+
+def _session(store: Store, cfg: sdk_adapter.Session) -> session_result.Run:
+    """Run one agent session where the profile's runtime says (TD-35); screenshots go through the SDK only."""
+    if (store.read_profile() or Profile()).runtime == "vscode" and not cfg.attachments:
+        return vscode_adapter.run(cfg, store.root / "steps" / f"{uuid.uuid4().hex}.json")
+    return asyncio.run(sdk_adapter.run(cfg))
 
 
 def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
@@ -135,7 +143,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         ),
         item=task.item.kind if task and task.item and s.kind == StepKind.BUILD else None,
     )
-    run = asyncio.run(sdk_adapter.run(cfg))
+    run = _session(store, cfg)
     end = datetime.now(UTC)
     # The session's callbacks replace ``change``; objects taken from it before the session are stale.
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
@@ -192,7 +200,7 @@ def _review_run(
         fresh=cfg.message,
         previous={},
     )
-    run = asyncio.run(sdk_adapter.run(review_cfg))
+    run = _session(store, review_cfg)
     verdict = session_result.to_result(run, StepKind.REVIEW, datetime.now(UTC))
     _log(store, lock, change, run, {"kind": label, "exit": verdict.exit})
     return verdict, run

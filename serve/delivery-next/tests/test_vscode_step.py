@@ -14,16 +14,13 @@ from owlbear_delivery_next import ahp
 from owlbear_delivery_next.ahp import HostError
 from owlbear_delivery_next.vscode_step import (
     ACK,
-    DEFAULT_MODEL,
-    HARNESS,
     Control,
     Hooks,
-    SettingsError,
     Step,
     StepSpec,
     ToolCall,
-    write_window_settings,
 )
+from owlbear_delivery_next.window_files import DEFAULT_MODEL, HARNESS, SettingsError, write_window_settings
 
 MODEL, EFFORT, AGENT = "gpt-6-luna", "max", "builder"
 
@@ -198,6 +195,7 @@ def test_step_acts_on_nothing_when_two_sessions_match(tmp_path: Path) -> None:
 
 def test_step_ignores_sessions_that_existed_before_launch(tmp_path: Path) -> None:
     host = FakeHost(tmp_path, [], [DONE])
+    host.boot_active = False
     host.add(nonce="n0nce")
     out = step(host, spec(tmp_path)).run(Control(), limit=60, bind_limit=5)
 
@@ -223,6 +221,51 @@ def test_a_bootstrap_that_already_ran_fails_closed(tmp_path: Path) -> None:
 
     assert out.end == "bootstrap-ran"
     assert host.sent == []
+
+
+def test_a_chat_without_the_agent_is_cancelled_and_reported(tmp_path: Path) -> None:
+    host = FakeHost(tmp_path, [{"agent": ""}], [DONE])
+    out = step(host, spec(tmp_path)).run(Control(), limit=60)
+
+    assert out.end == "no-agent"
+    assert [a["turnId"] for _, a in host.actions("chat/turnCancelled")] == ["boot0"]
+    assert host.actions("chat/turnStarted") == []
+
+
+def test_a_turn_still_running_in_the_folder_launches_nothing(tmp_path: Path) -> None:
+    host = FakeHost(tmp_path, [{}], [DONE])
+    host.add(nonce="earlier")
+    out = step(host, spec(tmp_path)).run(Control(), limit=60)
+
+    assert (out.end, host.launched, host.sent) == ("folder-busy", [], [])
+
+
+def test_a_turn_that_ends_without_a_result_gets_one_reminder(tmp_path: Path) -> None:
+    usage = {"type": "chat/usage", "usage": {"model": MODEL, "inputTokens": 100, "outputTokens": 20}}
+    host = FakeHost(tmp_path, [{}], [[usage, {"type": "chat/turnComplete"}], [usage, {"type": "chat/turnComplete"}]])
+    control = Control()
+    out = step(host, spec(tmp_path, reminder="Call submit_result.")).run(control, limit=60)
+
+    texts = [a["message"]["text"] for _, a in host.actions("chat/turnStarted")]
+    assert texts == ["Check the page at 390px.", "Call submit_result."]
+    assert (out.end, out.tokens, control.started.is_set()) == ("complete", {MODEL: 240}, True)
+
+
+def test_a_stopped_turn_gets_no_reminder(tmp_path: Path) -> None:
+    host = FakeHost(tmp_path, [{}], [[{"type": "chat/turnComplete"}], DONE])
+    control = Control()
+    original = host.next_event
+
+    def next_event(timeout: float) -> dict | None:
+        ev = original(timeout)
+        if ev and ev["params"]["action"]["type"] == "chat/turnComplete":
+            control.stop.set()
+        return ev
+
+    host.next_event = next_event
+    step(host, spec(tmp_path, reminder="Call submit_result.")).run(control, limit=60)
+
+    assert len(host.actions("chat/turnStarted")) == 1
 
 
 def test_step_fails_closed_when_host_ignores_the_config(tmp_path: Path) -> None:
@@ -427,7 +470,16 @@ def test_window_settings_pin_harness_and_model_and_keep_other_keys(tmp_path: Pat
     }
 
 
-@pytest.mark.parametrize(("content", "model"), [("{ // mine\n}", MODEL), ("[]", MODEL), (None, "auto"), (None, " ")])
+@pytest.mark.parametrize(
+    ("content", "model"),
+    [
+        ("[]", MODEL),
+        ('{ // mine\n  "chat.defaultModel": "x",\n}', MODEL),
+        ("// x\n[1,]", MODEL),
+        (None, "auto"),
+        (None, " "),
+    ],
+)
 def test_window_settings_fail_closed(tmp_path: Path, content: str | None, model: str) -> None:
     if content is not None:
         (tmp_path / ".vscode").mkdir()
@@ -436,6 +488,16 @@ def test_window_settings_fail_closed(tmp_path: Path, content: str | None, model:
         write_window_settings(tmp_path, model)
     if content is not None:
         assert (tmp_path / ".vscode" / "settings.json").read_text() == content
+
+
+def test_settings_with_comments_get_the_pins_after_the_opening_brace(tmp_path: Path) -> None:
+    (tmp_path / ".vscode").mkdir()
+    (tmp_path / ".vscode" / "settings.json").write_text('// team settings\n{ // mine\n  "a": 1,\n}\n')
+    write_window_settings(tmp_path, MODEL)
+
+    assert (tmp_path / ".vscode" / "settings.json").read_text() == (
+        f'// team settings\n{{\n  "{HARNESS}": true,\n  "{DEFAULT_MODEL}": "{MODEL}", // mine\n  "a": 1,\n}}\n'
+    )
 
 
 def _ws_send(conn: socket.socket, obj: dict | bytes, op: int = 1) -> None:

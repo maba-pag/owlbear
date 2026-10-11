@@ -22,7 +22,7 @@ from owlbear_delivery_next.models import (
     StepKind,
     Task,
 )
-from owlbear_delivery_next.profile_record import Profile, ProfileEntry, RoleModel
+from owlbear_delivery_next.profile_record import Profile, ProfileEntry, RoleModel, Runtime
 from owlbear_delivery_next.status import status, unloadable
 from owlbear_delivery_next.store import Store, StoreError
 
@@ -89,17 +89,21 @@ def show_status(store: Store, now: datetime) -> str:
 
 
 def show_profile(
-    store: Store, repo: Path, confirms: list[tuple[str, str]], overrides: list[tuple[Role, RoleModel]] | None = None
+    store: Store,
+    repo: Path,
+    confirms: list[tuple[str, str]],
+    overrides: list[tuple[Role, RoleModel]] | None = None,
+    runtime: Runtime | None = None,
 ) -> str:
-    """Detect the profile, apply the owner's confirmations and role overrides; return every entry and the roles."""
+    """Detect the profile, apply the owner's confirmations, role overrides and runtime; return all of it."""
     prof = profile.detect(repo, profile.provider(store.read_profile() or Profile(), repo), store.read_profile())
     for key, value in confirms:
         prof = profile.confirm(prof, key, value, datetime.now(UTC))
-    prof = prof.model_copy(update={"roles": prof.roles | dict(overrides or [])})
+    prof = prof.model_copy(update={"roles": prof.roles | dict(overrides or []), "runtime": runtime or prof.runtime})
     store.write_profile(prof)
     lines = [f"profile v{prof.version}"]
     lines += [f"  {k}: {e.state} {e.value!r} ({e.evidence})" for k, e in sorted(prof.entries.items())]
-    return "\n".join([*lines, roles.table(prof)])
+    return "\n".join([*lines, roles.table(prof), f"Runtime: {prof.runtime}"])
 
 
 def _role(text: str) -> tuple[Role, RoleModel]:
@@ -125,6 +129,9 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("profile", help="detect the project profile; --confirm KEY=VALUE records the owner's answer")
     p.add_argument("--confirm", action="append", default=[], type=lambda v: tuple(v.split("=", 1)))
     p.add_argument("--role", action="append", default=[], type=_role, help="ROLE=MODEL:EFFORT model override")
+    p.add_argument(
+        "--runtime", choices=("managed", "vscode"), help="where agent steps run from the next one on (TD-35)"
+    )
     s = sub.add_parser("seed", help="seed a pre-approved one-task Change and a minimal profile")
     s.add_argument("change")
     s.add_argument("--title", required=True)
@@ -156,7 +163,7 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.write(show_status(store, datetime.now(UTC)) + "\n")
         return 0
     if a.command == "profile":
-        sys.stdout.write(show_profile(store, a.repo.resolve(), a.confirm, a.role) + "\n")
+        sys.stdout.write(show_profile(store, a.repo.resolve(), a.confirm, a.role, a.runtime) + "\n")
         return 0
     if a.command == "seed":
         seed(store, a)

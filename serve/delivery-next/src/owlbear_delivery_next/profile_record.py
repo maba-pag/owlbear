@@ -10,6 +10,7 @@ from pydantic import Field, model_validator
 from owlbear_delivery_next.models import Effort, Record, Role
 
 PROFILE_FORMAT = 1
+type Runtime = Literal["managed", "vscode"]
 
 
 class ProfileEntry(Record):
@@ -46,3 +47,4 @@ class Profile(Record):
     confirmed_at: datetime | None = None
     entries: dict[str, ProfileEntry] = Field(default_factory=dict)
     roles: dict[Role, RoleModel] = Field(default_factory=dict)  # per-project overrides of the role defaults
+    runtime: Runtime = "managed"  # TD-35: managed runs agent steps through the SDK; vscode runs them in VS Code

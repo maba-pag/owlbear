@@ -2,12 +2,9 @@
 
 The window gives the step VS Code's tools (P6). Delivery pins the model in the folder's settings before launch,
 binds only the session it launched (nonce, folder and agent; R2), cancels the window's first turn and waits for
-the host to confirm it, and runs the real turn with an explicit model and effort (TD-27, TD-32). A first turn on
+the host to confirm it, and runs the real turn with an explicit model and effort (TD-27, TD-32). A turn billed to
 any other model fails closed. ``folder`` must be a Delivery-owned worktree: the settings apply to every chat in
-that folder. The step's result travels through the Delivery MCP server (TD-36), not through this module.
-
-This driver is not wired into the runner: unattended use waits for the correlated lifecycle probe and the
-user's approval-policy decision (R2, TD-29).
+that folder. The step's result travels through the step's MCP relay (TD-36), not through this module.
 """
 
 from __future__ import annotations
@@ -19,9 +16,10 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 from owlbear_delivery_next.ahp import ROOT, HostError
+from owlbear_delivery_next.window_files import SettingsError, write_window_settings
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -29,7 +27,6 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.ahp import Json, Transport
 
-HARNESS, DEFAULT_MODEL = "chat.defaultToCopilotHarness", "chat.defaultModel"
 _TERMINAL = ("chat/turnComplete", "chat/turnCancelled", "chat/error")
 FOLLOW_UP_GRACE = 10.0  # seconds to wait for a steering message to start its own turn (P8)
 ACK = 10.0  # seconds to wait for the host to confirm a cancel or a config change
@@ -47,36 +44,12 @@ type End = Literal[
     "settings-refused",
     "cancel-unconfirmed",
     "bootstrap-ran",
+    "no-agent",
+    "folder-busy",
     "busy",
     "user-turn",
     "steering-unrun",
 ]
-
-
-class SettingsError(ValueError):
-    """The worktree's VS Code settings cannot be updated safely."""
-
-
-def write_window_settings(folder: Path, model: str) -> None:
-    """Pin the Copilot harness and the step's model for the window of ``folder`` before ``code chat`` runs.
-
-    Other keys are kept. A settings file that is not plain JSON (comments, trailing commas) is left alone and
-    the step fails closed, because a rewrite would drop the user's content.
-    """
-    if not model.strip() or model.strip().lower() == "auto":
-        raise SettingsError("the step model must be named; auto is never used (TD-32)")  # noqa: EM101, TRY003
-    path = folder / ".vscode" / "settings.json"
-    current: dict[str, Any] = {}
-    if path.exists():
-        try:
-            current = json.loads(path.read_text())
-        except ValueError as exc:
-            raise SettingsError(f"{path} is not plain JSON; set {DEFAULT_MODEL} by hand") from exc  # noqa: EM102,TRY003
-        if not isinstance(current, dict):
-            raise SettingsError(f"{path} is not a JSON object")  # noqa: EM102, TRY003
-    current |= {HARNESS: True, DEFAULT_MODEL: model}
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(current, indent=2) + "\n")
 
 
 @dataclass(frozen=True)
@@ -90,6 +63,7 @@ class StepSpec:
     prompt: str
     config: Json = field(default_factory=dict)  # e.g. autoApprove or sandboxEnabled; the user's choice (TD-29)
     nonce: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
+    reminder: str = ""  # sent once as a new turn when the real turn completes before Delivery stops it
 
     @property
     def bootstrap(self) -> str:
@@ -112,6 +86,7 @@ class Control:
 
     stop: threading.Event = field(default_factory=threading.Event)
     steering: queue.Queue[str] = field(default_factory=queue.Queue)
+    started: threading.Event = field(default_factory=threading.Event)  # set once Delivery's first turn started
 
 
 @dataclass
@@ -126,6 +101,7 @@ class Outcome:
     tools: dict[str, str] = field(default_factory=dict)  # tool call id -> tool name, in call order
     denied: list[str] = field(default_factory=list)
     usage: Json | None = None
+    tokens: dict[str, int] = field(default_factory=dict)  # billed model -> input plus output tokens of Delivery's turns
     cancel_confirmed: bool | None = None  # set when Delivery cancelled a turn: did the host confirm it?
 
 
@@ -162,6 +138,7 @@ class _Bound:
     chat: str
     turn: Json
     active: bool
+    agent_ok: bool = True
 
 
 class Step:
@@ -180,38 +157,56 @@ class Step:
         hooks = hooks or Hooks()
         self.launch, self.clock, self.settings = hooks.launch, hooks.clock, hooks.settings
 
-    def run(self, control: Control, limit: float, bind_limit: float = 60) -> Outcome:  # noqa: PLR0911 - one guard each
+    def run(self, control: Control, limit: float, bind_limit: float = 60) -> Outcome:
         """Pin, launch, bind, cancel the bootstrap, check the model, configure, run; act only on the bound session."""
+        out, bound = self._open(control, bind_limit)
+        if bound is None or not self._ready(out, bound, control):
+            return out
+        agent = (bound.turn.get("message") or {}).get("agent")
+        deadline = self.clock() + limit
+        self._turn(out, agent, control, deadline, self.spec.prompt)
+        if out.end == "complete" and self.spec.reminder and not control.stop.is_set():
+            self._turn(out, agent, control, deadline, self.spec.reminder)
+        return out
+
+    def _open(self, control: Control, bind_limit: float) -> tuple[Outcome, _Bound | None]:
         if control.stop.is_set():
-            return Outcome("stopped", "stopped before launch")
+            return Outcome("stopped", "stopped before launch"), None
         try:
             self.settings(self.spec.folder, self.spec.model)
         except SettingsError as exc:
-            return Outcome("settings-refused", str(exc))
+            return Outcome("settings-refused", str(exc)), None
         before = self._sessions()
+        if busy := self._busy(before):
+            return Outcome("folder-busy", f"session {busy} still runs a turn in this folder"), None
         self.launch(["code", "chat", "-m", self.spec.agent, self.spec.bootstrap], self.spec.folder)
         bound = self._bind(before, self.clock() + bind_limit)
         if bound is None:
-            return Outcome("unbound", "no single session matched nonce, folder and agent")
-        out = Outcome("complete", session=bound.session, chat=bound.chat)
+            return Outcome("unbound", "no single session matched nonce, folder and agent"), None
+        return Outcome("complete", session=bound.session, chat=bound.chat), bound
+
+    def _ready(self, out: Outcome, bound: _Bound, control: Control) -> bool:  # noqa: PLR0911 - one guard each
+        if not bound.agent_ok:
+            if bound.active:
+                self._cancel(out, bound.turn["id"])
+            out.end, out.detail = "no-agent", "the window started the chat without the step's agent"
+            return False
         if not bound.active:
             out.end, out.detail = "bootstrap-ran", "the window's first turn ran before Delivery could cancel it"
-            return out
+            return False
         if not self._cancel(out, bound.turn["id"]):
             out.end, out.detail = "cancel-unconfirmed", "the window's first turn did not stop"
-            return out
+            return False
         if not self._configure(bound.session):
             out.end, out.detail = "config-refused", f"host did not apply {self.spec.config}"
-            return out
+            return False
         if control.stop.is_set():
             out.end = "stopped"
-            return out
+            return False
         if self._chat(bound.chat).get("activeTurn"):
             out.end, out.detail = "busy", "another turn runs in the bound chat"
-            return out
-        agent = (bound.turn.get("message") or {}).get("agent")
-        self._turn(out, agent, control, self.clock() + limit)
-        return out
+            return False
+        return True
 
     def _sessions(self) -> list[Json]:
         return self.conn.request("listSessions", {"channel": ROOT}).get("items", [])
@@ -219,7 +214,17 @@ class Step:
     def _chat(self, chat: str) -> Json:
         return self.conn.request("subscribe", {"channel": chat})["snapshot"]["state"]
 
+    def _busy(self, sessions: list[Json]) -> str | None:
+        """A session in this folder that still runs a turn, e.g. an earlier step whose runner died."""
+        folder = self.spec.folder.resolve().as_uri()
+        for s in sessions:
+            chat = s.get("defaultChat")
+            if chat and folder in (s.get("workingDirectories") or []) and self._chat(chat).get("activeTurn"):
+                return s["resource"]
+        return None
+
     def _bind(self, before: list[Json], deadline: float) -> _Bound | None:
+        """The one new session in this folder whose first turn has the nonce; one with the step's agent wins."""
         known = {s["resource"] for s in before}
         folder = self.spec.folder.resolve().as_uri()
         suffix = f"/{self.spec.agent}.agent.md"
@@ -234,11 +239,12 @@ class Step:
                 turn = active or next(iter(state.get("turns") or []), None)
                 msg = (turn or {}).get("message") or {}
                 uri = (msg.get("agent") or {}).get("uri") or ""
-                if turn and self.spec.nonce in (msg.get("text") or "") and uri.endswith(suffix):
-                    found.append(_Bound(s["resource"], chat, turn, active is not None))
-            if len(found) == 1:
-                return found[0]
-            if len(found) > 1:
+                if turn and self.spec.nonce in (msg.get("text") or ""):
+                    found.append(_Bound(s["resource"], chat, turn, active is not None, uri.endswith(suffix)))
+            ours = [b for b in found if b.agent_ok] or found
+            if len(ours) == 1:
+                return ours[0]
+            if len(ours) > 1:
                 return None  # ambiguous: act on nothing (R2)
             self.conn.next_event(0.1)
         return None
@@ -287,10 +293,11 @@ class Step:
         )
         out.turns.append(turn)
 
-    def _turn(self, out: Outcome, agent: Json | None, control: Control, deadline: float) -> None:
+    def _turn(self, out: Outcome, agent: Json | None, control: Control, deadline: float, text: str) -> None:
         """Follow the turn and each steering follow-up; a turn Delivery did not ask for ends Delivery's part."""
         chat = out.chat or ""
-        self._start(out, agent, self.spec.prompt)
+        self._start(out, agent, text)
+        control.started.set()
         pending: list[str] = []  # steering texts sent but not yet started as a turn, oldest first
         running, grace = True, None
         while True:
@@ -363,8 +370,11 @@ class Step:
         if kind == "chat/toolCallStart":
             out.tools[call_id] = str(action.get("toolName"))
         elif kind == "chat/usage":
-            out.usage = action.get("usage")
-            billed = (out.usage or {}).get("model")
+            out.usage = action.get("usage") or {}
+            billed = out.usage.get("model")
+            if billed:
+                spent = int(out.usage.get("inputTokens") or 0) + int(out.usage.get("outputTokens") or 0)
+                out.tokens[billed] = out.tokens.get(billed, 0) + spent
             if billed and billed != self.spec.model:  # the message's model field is no proof (live probe)
                 out.end, out.detail = "wrong-model", f"the turn was billed to {billed}, step needs {self.spec.model}"
         elif kind == "chat/toolCallReady" and not action.get("confirmed"):
