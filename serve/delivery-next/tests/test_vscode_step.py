@@ -39,6 +39,7 @@ class FakeHost:
         self.on_launch, self.scripts = sessions_on_launch, scripts
         self.accept_config = True
         self.ignore_cancel = False
+        self.boot_active = True
         self.pinned: list[tuple[Path, str]] = []
         self.sent: list[tuple[str, dict]] = []
         self.events: list[dict] = []
@@ -81,7 +82,7 @@ class FakeHost:
                 "workingDirectories": [(folder or self.folder).resolve().as_uri()],
             }
         )
-        self.chats[chat] = {"activeTurn": turn, "turns": []}
+        self.chats[chat] = {"activeTurn": turn if self.boot_active else None, "turns": [turn]}
         self.config[resource] = {}
         return resource
 
@@ -204,13 +205,24 @@ def test_step_ignores_sessions_that_existed_before_launch(tmp_path: Path) -> Non
     assert host.sent == []
 
 
-def test_step_fails_closed_when_window_started_on_another_model(tmp_path: Path) -> None:
-    host = FakeHost(tmp_path, [{"model": "auto"}], [DONE])
+def test_a_turn_billed_to_another_model_is_cancelled(tmp_path: Path) -> None:
+    script = [{"type": "chat/usage", "usage": {"model": "mai-code-1.1-flash"}}, {"type": "chat/turnComplete"}]
+    host = FakeHost(tmp_path, [{"model": "auto"}], [script])
     out = step(host, spec(tmp_path)).run(Control(), limit=60)
 
     assert out.end == "wrong-model"
-    assert "auto" in out.detail
-    assert [a["type"] for _, a in host.sent] == ["chat/turnCancelled"]
+    assert "mai-code-1.1-flash" in out.detail
+    ((_, started),) = host.actions("chat/turnStarted")
+    assert host.actions("chat/turnCancelled")[-1][1]["turnId"] == started["turnId"]
+
+
+def test_a_bootstrap_that_already_ran_fails_closed(tmp_path: Path) -> None:
+    host = FakeHost(tmp_path, [{}], [DONE])
+    host.boot_active = False
+    out = step(host, spec(tmp_path)).run(Control(), limit=60)
+
+    assert out.end == "bootstrap-ran"
+    assert host.sent == []
 
 
 def test_step_fails_closed_when_host_ignores_the_config(tmp_path: Path) -> None:

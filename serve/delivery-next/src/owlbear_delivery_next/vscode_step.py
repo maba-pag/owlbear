@@ -46,6 +46,7 @@ type End = Literal[
     "config-refused",
     "settings-refused",
     "cancel-unconfirmed",
+    "bootstrap-ran",
     "busy",
     "user-turn",
     "steering-unrun",
@@ -193,12 +194,11 @@ class Step:
         if bound is None:
             return Outcome("unbound", "no single session matched nonce, folder and agent")
         out = Outcome("complete", session=bound.session, chat=bound.chat)
-        if bound.active and not self._cancel(out, bound.turn["id"]):
-            out.end, out.detail = "cancel-unconfirmed", "the window's first turn did not stop"
+        if not bound.active:
+            out.end, out.detail = "bootstrap-ran", "the window's first turn ran before Delivery could cancel it"
             return out
-        first = ((bound.turn.get("message") or {}).get("model") or {}).get("id")
-        if first != self.spec.model:
-            out.end, out.detail = "wrong-model", f"window started on {first}, step needs {self.spec.model}"
+        if not self._cancel(out, bound.turn["id"]):
+            out.end, out.detail = "cancel-unconfirmed", "the window's first turn did not stop"
             return out
         if not self._configure(bound.session):
             out.end, out.detail = "config-refused", f"host did not apply {self.spec.config}"
@@ -322,7 +322,10 @@ class Step:
                 self._observe(out, chat, action)
 
     def _halted(self, out: Outcome, control: Control, deadline: float, *, running: bool) -> bool:
-        """On stop or timeout, cancel the running turn and wait for the host to confirm it."""
+        """On stop, timeout or a turn billed to another model, cancel the running turn and wait for the host."""
+        if out.end == "wrong-model":
+            self._cancel(out, out.turns[-1])
+            return True
         if not control.stop.is_set() and self.clock() < deadline:
             return False
         out.end = "stopped" if control.stop.is_set() else "timeout"
@@ -361,6 +364,9 @@ class Step:
             out.tools[call_id] = str(action.get("toolName"))
         elif kind == "chat/usage":
             out.usage = action.get("usage")
+            billed = (out.usage or {}).get("model")
+            if billed and billed != self.spec.model:  # the message's model field is no proof (live probe)
+                out.end, out.detail = "wrong-model", f"the turn was billed to {billed}, step needs {self.spec.model}"
         elif kind == "chat/toolCallReady" and not action.get("confirmed"):
             call = ToolCall(
                 name=out.tools.get(call_id, ""),
