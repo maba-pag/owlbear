@@ -32,7 +32,7 @@ FINISH = """\
   guessing, then stop.
 - If the brief or plan is wrong, call `report_wrong_premise` with evidence, then stop. If the task needs a
   commit or API that is on the target branch but not here yet, report it with stage `target`.
-- Never push, change Git configuration, skip hooks or signing, or use `gh`. Stay inside the worktree.
+- Never push, change Git configuration, skip hooks or signing, or use `gh`.
   Leave no process running when you finish."""
 NO_ACTION = "- `no-action`: this bot notice needs nothing; `text` is the reason. Nothing is posted.\n"
 RESPOND = """\
