@@ -132,8 +132,9 @@ the owner's journey and has no route yet.
 - The reviewer receives the "after" screenshots and the current starting point (the retake, else the
   shaping set), labelled `before/…` and `after/…` per state and viewport. Prompt: judge "after"
   against each expectation; "before" shows the starting point and is not judged.
-- The reviewer may answer "unsure" for a state, naming what it cannot judge; the owner is then asked
-  to look at that state's screenshots on the card (TD-14 as read back on 2026-10-11).
+- The reviewer may answer "unsure" for a state, naming what it cannot judge; the merge then waits
+  until the owner has looked at that state's screenshots on the card, as for a declared person-only
+  check (TD-14 as read back on 2026-10-11).
 - Budget: "after" images come first within the 12 MB review cap. "Before" images are downscaled, then
   omitted, with a named note when they do not fit. A "before" image never causes a finding, so a full
   budget never becomes a product fix task.
