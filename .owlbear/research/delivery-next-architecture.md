@@ -300,8 +300,10 @@ workspace dependency of `owlbear-browser`. VS Code's integrated browser is reach
 inside VS Code, not from workers outside it. The engine captures, so the reviewer keeps three tools.
 A recipe that fails or a missing browser at runtime is B24.
 
-"Before" screenshots (TD-24; built, mechanics `autonomous`). The brief carries no render recipe; the
-first verified one is the recipe the preparing Builder returns at the visual check. So a runner
+"Before" screenshots (TD-24; built, mechanics `autonomous`; timing open with the owner). As built, the
+brief carries no render recipe, contrary to the visual-check design above, which has shaping establish
+it before approval; the first verified recipe is the one the preparing Builder returns at the visual
+check. So a runner
 captures once per UI Change at the visual check, after that recipe is known and before the host
 launches the "after" preview on the same port. It checks out the merge-base of the Change and its
 tracking target in a temporary detached worktree, runs the profile's install commands for the
