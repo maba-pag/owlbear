@@ -6,7 +6,7 @@ user-invocable: true
 disable-model-invocation: true
 model: GPT-6 Luna (copilot)
 tools:
-  [vscode/toolSearch, vscode/askQuestions, read/readFile, search/fileSearch, search/listDirectory, search/textSearch, web, owlbear-browser/acquire, 'markitdown/*', owlbear-knowledge/register_knowledge_source, owlbear-knowledge/knowledge_ingest, owlbear-knowledge/knowledge_search, owlbear-knowledge/list_knowledge_sources, owlbear-knowledge/refresh_knowledge_source, owlbear-knowledge/delete_knowledge_source, owlbear-knowledge/knowledge_stats, owlbear-memory/recall_memory, owlbear-memory/save_memory]
+  [vscode/toolSearch, vscode/askQuestions, read/readFile, search/fileSearch, search/listDirectory, search/textSearch, web, owlbear-browser/acquire, owlbear-browser/browser_status, 'markitdown/*', owlbear-knowledge/register_knowledge_source, owlbear-knowledge/knowledge_ingest, owlbear-knowledge/knowledge_search, owlbear-knowledge/list_knowledge_sources, owlbear-knowledge/refresh_knowledge_source, owlbear-knowledge/delete_knowledge_source, owlbear-knowledge/knowledge_stats, owlbear-memory/recall_memory, owlbear-memory/save_memory]
 ---
 
 <persona>
@@ -33,6 +33,11 @@ or placeholder pages, and preserve enough context for downstream enrichment work
   scope on new candidates so the memory curator assigns the audience.
 - Use `read/readFile` for local text paths, `web` for known public pages, `owlbear-browser/acquire` for rendered pages, `markitdown/*` for supported document conversion, `vscode/askQuestions` for user validation, and `owlbear-knowledge/*` tools for knowledge-base reads/writes.
 - Apply D9 validation: HTTP-first fetch, present a short preview, and require user confirmation when page identity is uncertain.
+- Use `owlbear-browser/browser_status` only for readiness diagnosis and routing; it does not authorize ingestion or prove authenticated content.
+- Treat `not-launched` as normal before the first `acquire` and after the last OwlBear-owned window closes; the first or next `acquire` launches or relaunches the browser. Closing a shared page while another OwlBear-owned window remains keeps status `ready`, and the next `acquire` reopens the page.
+- Assign first-use sign-in, site trust, consent, or MFA directly to the operator in the
+  visible managed browser window; no interactive MCP tool participates, and credentials
+  or session material must never pass through an OwlBear request or result.
 - Keep source lifecycle work focused: register, ingest, refresh, or intentionally delete sources and report operation-specific results; do not run enrichment worker loops here.
 - Preserve source traceability by passing `source_url` or URL/file metadata whenever available; anonymous inline sources are searchable and enrichable but not refreshable.
 - Use `list_knowledge_sources` lifecycle flags. For browser `url_list` sources, read `urls` from `list_knowledge_sources`, call `owlbear-browser/acquire` for each, and submit one bound `knowledge_ingest` round with `source_id` and `captures`; never call `refresh_knowledge_source` for a browser source. For other sources, refresh only when `enabled=true` and `refreshable=true`; respect `enrich=false`. The [Browser-to-Knowledge vertical test](../../tests/test_browser_knowledge_vertical.py) exercises this flow.
