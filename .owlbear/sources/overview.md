@@ -5078,3 +5078,15 @@ No external sources — analysis based entirely on codebase static analysis of `
 | PDS v3 Modal configurator docs | <https://designsystem.porsche.com/v3/components/modal/configurator/> | PModal component behavior: native dialog, focus trap, top-layer, dismiss event, controlled open prop | `.owlbear/research/1635-cleanup-repair-pmodal-migration.md` | 2026-05-17 |
 | PDS v3 Modal accessibility docs | <https://designsystem.porsche.com/v3/components/modal/accessibility/> | ARIA support: aria-label, role (dialog/alertdialog), keyboard behavior (Tab trap, Escape), focus return | `.owlbear/research/1635-cleanup-repair-pmodal-migration.md` | 2026-05-17 |
 | RFC 9110 §8.8.2 Last-Modified | <https://httpwg.org/specs/rfc9110.html#field.last-modified> | Prior art for two-field timestamp model (Last-Modified vs Date semantics) | `.owlbear/research/refresh-honesty-two-field-timestamps.md` | 2026-05-18 |
+
+## Delivery-next Visual Baseline, PDS Loading and Preview Ports
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PDS v4 initialization, vanilla JS | <https://designsystem.porsche.com/v4/must-know/initialization/vanilla-js/> | `load()` fetches the core chunk from the CDN, which registers every tag and loads component chunks on use; `:not(:defined)` hides undefined tags | [visual baseline](../research/delivery-next-visual-baseline.md) | 2026-10-11 |
+| PDS v4 performance, CDN | <https://designsystem.porsche.com/v4/must-know/performance/cdn/> | Components, icons, fonts and styles from `cdn.ui.porsche.com`; only `cdn: 'auto' \| 'cn'` configurable | [visual baseline](../research/delivery-next-visual-baseline.md) | 2026-10-11 |
+| PDS v4 components ready | <https://designsystem.porsche.com/v4/developing/components-ready/> | `componentsReady()` resolves when all used components are loaded; `whenDefined` proves registration only | [visual baseline](../research/delivery-next-visual-baseline.md) | 2026-10-11 |
+| PDS issue #4730 | <https://github.com/porsche-design-system/porsche-design-system/issues/4730> | CDN-free local delivery is a goal of an open v5 spike | [visual baseline](../research/delivery-next-visual-baseline.md) | 2026-10-11 |
+| Vite server options and CLI | <https://vite.dev/config/server-options#server-strictport>, <https://vite.dev/guide/cli> | `--port`, `--strictPort`; Vite moves to the next free port without it | [visual baseline](../research/delivery-next-visual-baseline.md) | 2026-10-11 |
+| Next.js CLI | <https://nextjs.org/docs/app/api-reference/cli/next> | `-p/--port` or `PORT` env; `npm run` needs `--` to forward flags | [visual baseline](../research/delivery-next-visual-baseline.md) | 2026-10-11 |
+| Playwright web server | <https://playwright.dev/docs/test-webserver> | With `reuseExistingServer: false`, refuses an answering URL, then waits for it; no ownership check | [visual baseline](../research/delivery-next-visual-baseline.md) | 2026-10-11 |
