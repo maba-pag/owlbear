@@ -146,10 +146,17 @@ def _local(wt: Path, paths: list[str]) -> Local:
 def _guard(wt: Path, incoming: list[str], *, fold: bool) -> Local:
     """The state of every local change, unless one collides with a path the update changes.
 
+    Local attribute files are refused too: checkout would write with attributes no commit holds, and rollback
+    compares against the commits' attributes.
+
     Raises:
-        BehindError: A local path collides.
+        BehindError: A local path collides, or an attribute file has local changes.
     """
     dirty = _dirty(wt)
+    loose = split_z(must(wt, "ls-files", "--others", "-z", "--", ":(glob)**/.gitattributes"))
+    if attrs := sorted({p for p in [*dirty, *loose] if PurePosixPath(p).name == ".gitattributes"}):
+        msg = f"local changes to {', '.join(attrs[:SHOWN])} would change how files are written; commit or undo them"
+        raise BehindError(msg)
     if hits := _collisions(wt, incoming, dirty, fold=fold):
         msg = f"your local changes to {', '.join(hits[:SHOWN])} overlap the merged change"
         raise BehindError(msg)

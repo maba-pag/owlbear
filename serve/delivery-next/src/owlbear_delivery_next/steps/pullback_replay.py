@@ -302,8 +302,8 @@ def _unapply(wt: Path, ref: str, old: str, new: str, why: str) -> NoReturn:
         msg = (
             f"manual check needed: {ref} is at {old[:12]} but the index and files may be partly at {new[:12]} "
             f"({why}); save any edits of your own to the files `git diff --name-only {old} {new}` lists, then run "
-            f"`git diff --name-only --no-renames -z {old} {new} | "
-            f"git restore --source={old} --staged --worktree --pathspec-from-file=- --pathspec-file-nul`"
+            f"`git diff --name-only --no-renames -z {old} {new} | git --literal-pathspecs "
+            f"restore --source={old} --staged --worktree --pathspec-from-file=- --pathspec-file-nul`"
         )
         raise BehindError(msg)
     at = (rev(wt, ref) or "?")[:12]

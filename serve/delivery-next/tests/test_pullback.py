@@ -717,6 +717,12 @@ def test_a_timeout_during_or_after_the_replay_keeps_the_cleanup_note(repos, monk
 
 def test_a_failed_reverse_names_a_recovery_that_restores_the_local_copy(repos, monkeypatch):
     repo, other = repos
+    commit(repo, "item1", "one\n")
+    git(repo, "push", "-q", "origin", "main")
+    git(other, "pull", "-q")
+    (repo / "item1").write_text("staged\n")
+    git(repo, "add", "item1")
+    (repo / "item1").write_text("mine\n")
     real, before, trees = pullback.pullback_replay.git, full(repo), []
 
     def stuck(path, *args):
@@ -729,11 +735,28 @@ def test_a_failed_reverse_names_a_recovery_that_restores_the_local_copy(repos, m
         return real(path, *args)
 
     monkeypatch.setattr(pullback.pullback_replay, "git", stuck)
-    merged(other)
+    merged(other, "item[1]")  # a name that is also a pattern matching item1
     result = pullback.run(repo, "main", NOW)
     assert (result.state, "manual check needed" in result.reason) == ("behind", True)
     assert full(repo) != before
     command = re.search(r"then run `([^`]+)`", result.reason)
     assert command is not None
     subprocess.run(["bash", "-c", command[1]], cwd=repo, check=True, capture_output=True)  # noqa: S603, S607
+    assert full(repo) == before
+
+
+@pytest.mark.parametrize("loose", [False, True])
+def test_local_attribute_files_keep_the_target_behind(repos, loose):
+    repo, other = repos
+    (repo / "sub").mkdir()
+    (repo / "sub" / ".gitattributes").write_text("*.txt eol=crlf\n")
+    if not loose:
+        git(repo, "add", "sub/.gitattributes")
+    before = full(repo)
+    merged(other)
+    result = pullback.run(repo, "main", NOW)
+    assert (result.state, "sub/.gitattributes would change how files are written" in result.reason) == (
+        "behind",
+        True,
+    )
     assert full(repo) == before
