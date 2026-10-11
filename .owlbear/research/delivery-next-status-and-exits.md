@@ -100,9 +100,13 @@ the normal teardown. The host then launches the environment, for example a local
 verifies readiness and enters pending for the check, or starts the visual review. It records the environment's PIDs, relaunches
 it after an interruption, and disposes of it before any other writer starts on the Change.
 
-**Before capture** (TD-24; mechanics `autonomous`). For a UI Change the host captures the "before"
-states once, before the first build task, in the Change's worktree at the target commit with the
-same render recipe. A failure is noted on the card (B25) and the run continues; it never gates.
+**Before capture** (TD-24; mechanics `autonomous`, as built). For a UI Change a runner captures the
+"before" states once at the visual check, after the preparing Builder returned the recipe and before
+the host launches the "after" preview: the same recipe at the merge-base in a temporary detached
+worktree, after the profile's install commands, with every started process journaled and disposed
+of. A failure, including a port that already answers, is noted on the card (B25) and the run
+continues; it never gates. The charter's "before the first build task" awaits the owner's decision
+on this later moment.
 
 **Merge gate** (as built, `autonomous` order). `merge` re-reads the profile rules and the PR (merged
 → cleanup), evaluates the gate, takes the host's merge lock for the target (pending while another

@@ -300,14 +300,25 @@ workspace dependency of `owlbear-browser`. VS Code's integrated browser is reach
 inside VS Code, not from workers outside it. The engine captures, so the reviewer keeps three tools.
 A recipe that fails or a missing browser at runtime is B24.
 
-"Before" screenshots (TD-24; not yet built). For UI Changes the host captures the same states once,
-in the Change's worktree at the target commit with the same render recipe, before the first build
-task (`autonomous`). The card shows them beside the "after" ones without interrupting the run. If
-the recipe cannot render the target, the card says so and the run continues (B25); the "before"
-capture never gates.
+"Before" screenshots (TD-24; built, mechanics `autonomous`). The brief carries no render recipe; the
+first verified one is the recipe the preparing Builder returns at the visual check. So a runner
+captures once per UI Change at the visual check, after that recipe is known and before the host
+launches the "after" preview on the same port. It checks out the merge-base of the Change and its
+tracking target in a temporary detached worktree, runs the profile's install commands for the
+Change's scope, launches the same recipe there, captures the brief's states and disposes of all it
+started: the preview in the scope that started it, each installer with its process group, and every
+PID journaled first so the host finds a dead runner's processes. The card shows the pairs beside the
+"after" ones. Any failure, including a port that already answers, is a card note (B25); the capture
+never gates. Deviation awaiting the owner: the charter says "before the first build task"; the
+as-built moment is later, at the commit the Change started from unless its branch was updated since.
+States changed after the capture are not retaken. Known limit, shared with the "after" preview:
+readiness proves that the URL answers, not that the launched group owns the listener.
 
 **Changes page.** Served by the host app before M6; a "Changes" page beside Ideas and Memory in
-Cockpit after it. Endpoints under `/api/next`:
+Cockpit after it. As built it uses the Porsche Design System 4.8.0 like Cockpit, with its loader and
+stylesheet vendored but its components from `cdn.ui.porsche.com`; Cockpit instead mirrors them
+(`sync-pds-assets.mjs`). Without them within 3 s the page builds native controls, so every action
+keeps working offline. Endpoints under `/api/next`:
 
 | Endpoint | Purpose |
 | --- | --- |
