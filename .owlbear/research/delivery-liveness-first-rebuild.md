@@ -443,6 +443,22 @@ widened).
 | 6 Design first | C3 collision test, C5 change of mind | Short design each, Sol-challenged, then build | Per design |
 | Later | N7 account split, N8 documents repository, TD-10 review | When the first real project starts | — |
 
+Phase 1 status, 2026-10-11, pushed to `next/m4-slice1` at `2eee8762f`, 601 tests pass:
+
+- TD-27 and N3 in `d4d30fa39`.
+- C4 in `eca659d2f`. GitHub's author type `Bot` marks a comment or review as a bot's. Only those may
+  end as `no-action`; the builder prompt offers `no-action` only for them; review threads still need
+  a fix or an answer.
+- N9 in `f50347733` and `2eee8762f`. The rule is gone from `agents/builder.md`, the build prompt
+  and the VS Code window instructions.
+- Sol reviewed all four commits.
+  - Accepted: the VS Code window copy of the rule (repaired in `2eee8762f`).
+  - Rejected: re-validating stored pre-C4 `no-action` handlings. Delivery Next is unreleased, and
+    no stored Change has one.
+- Open for the N1 design: the build prompt's allowed-command section still says "`cd` only to
+  directories inside the worktree". It describes the SDK guard (TD-45), but the VS Code route has no
+  such guard.
+
 ## 4. Recommendation, Confidence, and Limits
 
 **Recommendation:** treat this as a re-founding with the weight on design. Let the open Changes
