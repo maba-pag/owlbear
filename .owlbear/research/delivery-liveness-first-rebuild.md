@@ -250,6 +250,7 @@ choices and user choices alike as user decisions. This plan therefore treats eve
 | TD-45 | The SDK route keeps its hard guard against writes outside the worktree permanently; in VS Code the watcher governs such writes (D6) | `decided`: "Keep it permanently on the SDK route" (chosen among three) | 2026-10-11 |
 | TD-46 | Intended writes outside the worktree: Delivery's own state, temporary files and the user's tool caches; anything else is stopped by the watcher unless the brief names it | `decided`: "Allowed: Delivery's own state, temporary files, the user's tool caches; anything else is stopped unless the brief names it" (chosen among three) | 2026-10-11 |
 | TD-47 | The watcher agent's model and effort are chosen after the benchmark of TD-27 | `decided`: "Decide after the benchmark (N2)" | 2026-10-11 |
+| TD-48 | A VS Code window step starts with a shell-only first turn (`code chat "!echo <nonce>"`, no model call), so the window owns the chat and serves its tools. Delivery waits until the agent host lists the step's model, then sends every turn with model and effort. Guards: a turn on any other model stops the step; a model that never appears ends it with a reason. Replaces the cancelled first turn; resolves C6 ([runtime research P14](delivery-next-agent-runtime.md)) | `decided`: "Build this route with the guards" (chosen among five, the recommendation) | 2026-10-11 |
 
 **User direction, not yet decisions** (2026-10-10, cornerstone walkthrough): whether three roles are
 enough is open ("i dont want to actively decide that three roles are enough"); the brief and plan
@@ -458,6 +459,21 @@ Phase 1 status, 2026-10-11, pushed to `next/m4-slice1` at `2eee8762f`, 601 tests
 - Open for the N1 design: the build prompt's allowed-command section still says "`cd` only to
   directories inside the worktree". It describes the SDK guard (TD-45), but the VS Code route has no
   such guard.
+
+Phase 2 status, 2026-10-11 ([runtime research P14](delivery-next-agent-runtime.md)):
+
+- C7: a PNG sent as an `embeddedResource` attachment over the agent host reaches the model. It
+  passed in 2 runs in a Delivery-created session and 3 in window chats. The fix is to send VS Code
+  steps' screenshots that way instead of through the SDK. Left and right were swapped in 2 of 7
+  runs at Luna `low`, so position claims need a stronger model or a labelled image.
+- C6: probably caused by the agent host offering only Auto for a moment after each new window opens.
+  TD-48 decides the route: a shell-only first turn, wait for the model list, then turns that name
+  model and effort. It passed 3 of 3 with a window tool and an image, and Sol verified the host
+  records. Build items: TD-48 in `vscode_step`, C7 attachments, and a proof covering Opus, Sol and a
+  full step.
+- Open: TD-35's wording. The owner wants tools and visibility as separate settings, per agent and
+  maybe per task, across the runtimes. A plan is being drafted and Sol-challenged before the owner
+  decides.
 
 ## 4. Recommendation, Confidence, and Limits
 
