@@ -128,9 +128,12 @@ function el(tag, text, attrs = {}) {
 }
 
 function send(path, body) {
-  call(`/changes/${shown.slug}${path}`, body).then(() => {  // the Change whose form the person used
-    draft = false;
-    document.activeElement.blur();
+  const origin = shown;  // the rendered detail whose form the person used
+  call(`/changes/${origin.slug}${path}`, body).then(() => {
+    if (shown === origin) {  // a later detail keeps its own draft
+      draft = false;
+      document.activeElement.blur();
+    }
     return refresh();
   }, failed);
 }
@@ -376,7 +379,7 @@ async function showDetail() {
   }
   const log = d.activity.slice(-8).map((e) => `${e.at || ""} ${e.event || ""} ${e.exit || e.tool || e.reason || ""}`);
   parts.push(panel("Recent activity", list(log, "ol")));
-  const asked = d.checks.filter((c) => c.waiting).map((c) => c.id);
+  const asked = d.checks.filter((c) => c.waiting).map((c) => [c.id, c.url, c.inputs]);
   const forms = JSON.stringify([d.slug, d.question?.id, d.merge?.head, asked, d.brief.version, d.brief.approved,
     d.pullback?.state, d.paused]);
   const editing = target.contains(document.activeElement)

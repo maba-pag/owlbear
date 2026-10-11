@@ -52,14 +52,16 @@ def _run(argv: list[str], cwd: Path, log: Callable[[dict[str, Any]], None]) -> s
         )  # fmt: skip
     except OSError as exc:
         return f"`{shlex.join(argv)}` did not start: {exc}"
+    created = check.created(proc.pid)
     try:
-        _journal(log, {proc.pid: check.created(proc.pid)})
+        _journal(log, {proc.pid: created})
         out, _ = proc.communicate(timeout=INSTALL_WITHIN)
     except subprocess.TimeoutExpired:
         return f"`{shlex.join(argv)}` took over {INSTALL_WITHIN:.0f} s"
     finally:  # timed out, interrupted or done: nothing of its group outlives the temporary worktree
-        with contextlib.suppress(OSError):
-            os.killpg(proc.pid, signal.SIGKILL)
+        if check.members(proc.pid, created):  # not once its id names a newer group
+            with contextlib.suppress(OSError):
+                os.killpg(proc.pid, signal.SIGKILL)
         with contextlib.suppress(subprocess.TimeoutExpired):
             proc.communicate(timeout=5)  # an escaped child may hold the pipe open
     if proc.returncode:
