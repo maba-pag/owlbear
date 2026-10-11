@@ -143,18 +143,27 @@ def _local(wt: Path, paths: list[str]) -> Local:
     return {p: (index.get(p, ""), _digest(wt / p)) for p in paths}
 
 
+def _attributes(wt: Path, incoming: list[str], dirty: list[str], *, fold: bool) -> list[str]:
+    """Changed or untracked ``.gitattributes`` files in a directory that holds a path the update changes."""
+    key: Callable[[str], str] = str.casefold if fold else str
+    magic = "glob,icase" if fold else "glob"
+    loose = split_z(must(wt, "ls-files", "--others", "-z", "--", f":({magic})**/.gitattributes"))
+    attrs = {p for p in [*dirty, *loose] if key(PurePosixPath(p).name) == key(".gitattributes")}
+    under = [(str(PurePosixPath(a).parent), a) for a in attrs]
+    return sorted(a for d, a in under if d == "." or any(key(p).startswith(key(f"{d}/")) for p in incoming))
+
+
 def _guard(wt: Path, incoming: list[str], *, fold: bool) -> Local:
     """The state of every local change, unless one collides with a path the update changes.
 
-    Local attribute files are refused too: checkout would write with attributes no commit holds, and rollback
-    compares against the commits' attributes.
+    Local attribute files over a changing path are refused too: checkout would write with attributes no commit
+    holds, and rollback compares against the commits' attributes.
 
     Raises:
-        BehindError: A local path collides, or an attribute file has local changes.
+        BehindError: A local path collides, or an attribute file over one has local changes.
     """
     dirty = _dirty(wt)
-    loose = split_z(must(wt, "ls-files", "--others", "-z", "--", ":(glob)**/.gitattributes"))
-    if attrs := sorted({p for p in [*dirty, *loose] if PurePosixPath(p).name == ".gitattributes"}):
+    if attrs := _attributes(wt, incoming, dirty, fold=fold):
         msg = f"local changes to {', '.join(attrs[:SHOWN])} would change how files are written; commit or undo them"
         raise BehindError(msg)
     if hits := _collisions(wt, incoming, dirty, fold=fold):

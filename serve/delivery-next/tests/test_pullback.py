@@ -745,18 +745,28 @@ def test_a_failed_reverse_names_a_recovery_that_restores_the_local_copy(repos, m
     assert full(repo) == before
 
 
-@pytest.mark.parametrize("loose", [False, True])
-def test_local_attribute_files_keep_the_target_behind(repos, loose):
+@pytest.mark.parametrize(
+    ("attrs", "staged", "behind"),
+    [
+        ("sub/.gitattributes", True, True),
+        ("sub/.gitattributes", False, True),
+        (".GITATTRIBUTES", False, True),  # Git reads it where the file system folds case
+        ("vendor/.gitattributes", False, False),  # holds no path the update changes
+    ],
+)
+def test_local_attribute_files_over_changed_paths_keep_the_target_behind(repos, attrs, staged, behind):
     repo, other = repos
-    (repo / "sub").mkdir()
-    (repo / "sub" / ".gitattributes").write_text("*.txt eol=crlf\n")
-    if not loose:
-        git(repo, "add", "sub/.gitattributes")
+    if attrs == ".GITATTRIBUTES" and git(repo, "config", "--bool", "core.ignorecase") != "true":
+        pytest.skip("the file system is case-sensitive")
+    (repo / attrs).parent.mkdir(exist_ok=True)
+    (repo / attrs).write_text("*.txt eol=crlf\n")
+    if staged:
+        git(repo, "add", attrs)
     before = full(repo)
-    merged(other)
+    (other / "sub").mkdir()
+    merged(other, "sub/b.txt")
     result = pullback.run(repo, "main", NOW)
-    assert (result.state, "sub/.gitattributes would change how files are written" in result.reason) == (
-        "behind",
-        True,
+    assert (result.state, f"{attrs} would change how files are written" in result.reason) == (
+        ("behind", True) if behind else ("updated", False)
     )
-    assert full(repo) == before
+    assert (full(repo) == before, (repo / attrs).read_text()) == (behind, "*.txt eol=crlf\n")
