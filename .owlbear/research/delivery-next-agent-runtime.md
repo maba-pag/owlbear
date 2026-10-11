@@ -92,6 +92,8 @@ All web pages show "Edit this page 10/7/2026" unless stated. "Local" means check
 | D3 | User decision on `chat.defaultToCopilotHarness` | 2026-10-11 | "accept. experimental has no real meaning in vs code, other than that the default value will change during later rollout. its not like it will go away." | `decided` |
 | D4 | User decision on agent mode, after P11 | 2026-10-11 | "i see no reason not to use autopilot always, epecially since interactive does not describe the interaction level we want" | `decided` |
 | D5 | User decision on the sandbox, after P11 | 2026-10-11 | "off, but validate if a hook could help to prevent writes outside. but i see it as low risk" | `decided` |
+| D6 | User decision on a write-outside hook | 2026-10-11 | No hook; the rule in the agent's instructions is enough. | `decided` |
+| P12 | Live end-to-end run of `vscode_adapter.run` (runtime `vscode`): throwaway repo and worktree, role `builder`, `gpt-6-luna`/`max`, user absent | 2026-10-11 | **Binding:** `code chat` reaches the focused window. When no window is open on the worktree, the chat has no agent, however long Delivery waits (runs 1 and 2, 6 attempts). With the worktree's window opened first, a git-excluded agent file attached, and a freshly opened window found it after about 22 s (run 3, attempt 4). **Result:** the agent committed `src/greet.py` only and called `submit_result` through the stdio relay and the inbox; Delivery accepted it, gave a 30 s grace, and the step ended `complete`. **Model:** the bootstrap turn was cancelled; Delivery's turn ran with `thinkingLevel: max` and all usage (450,772 tokens) was billed to `gpt-6-luna`. **Cleanup:** settings, `.mcp.json` and the agent file were removed, the worktree was clean, and no process survived. | One run; 9537d29c7 |
 
 ## 3. Analysis
 
@@ -247,7 +249,10 @@ Corrections from the review (R2), all accepted:
 (`vscode_step.py`) exist on PR #449 with fake-host tests. A second review by Sol found the driver
 unsafe for unattended use; the fixes are in `9e9071777`: model pinned before launch, acknowledged
 cancels, busy and user-turn refusal, steering correlated by text, WebSocket ping and close handled.
-The runner does not call it yet.
+The runner calls it when the profile's runtime is `vscode` (`profile --runtime vscode`) and the
+step has no attachments; otherwise it uses the SDK. The adapter places the agent, the `.mcp.json`
+relay and the model pin for the step only, opens the worktree's window, retries a chat without the
+agent up to 8 times 10 s apart, and restores every file afterwards. Live run: P12.
 
 **C+ session settings (from D2 to D5):** session auto-approve on, `mode: autopilot`, sandbox off,
 because the sandbox blocked `uv` and Python MCP servers (P11). Pull-back still takes only the
@@ -255,11 +260,10 @@ worktree's commits; nothing stops a write elsewhere on disk while the step runs 
 
 Open follow-ups (`autonomous`):
 
-- Check whether a hook can block writes outside the worktree (D5).
-- Declare the Delivery result server, and other servers steps need, in `.mcp.json`; the harness
-  ignores `.vscode/mcp.json` (P11).
-- Keep Delivery's model-pin settings file out of the agent's commits (P11).
-- Wire the driver into the runner; that is the user's next decision.
+- No `now` line during VS Code steps; bootstrap usage is not counted.
+- The step's window stays open; the clone's `info/exclude` keeps its entries.
+- Screenshot attachments still go to the SDK.
+- P12 ran once; a reused warm window and a concurrent user chat were not re-run with the adapter.
 
 For steps without VS Code tools, TD-34 allows SDK or CLI. Sessions created over AHP (F) are a
 third option with the same controls, and they show in VS Code's session list (P3).
