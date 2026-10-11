@@ -4,8 +4,8 @@
 > **Date:** 2026-10-11
 > **Question:** How do the three decisions fit the approved journey end to end, what must change in
 > code and docs, and in what order is it built and proven?
-> **Status:** plan, revised after Sol challenges (§6); one decision open for the owner (§5, D-A);
-> nothing built
+> **Status:** plan, revised after Sol challenges (§6) and the retrospective review of 2026-10-11
+> (§7); nothing built
 
 ## 1. Context, decisions and gaps
 
@@ -124,12 +124,14 @@ the owner's journey and has no route yet.
 - The check-preparation Builder receives the brief's recipe and a concrete free port from Delivery,
   verifies the recipe in the worktree on that port, and may return an adjusted recipe (for example a
   renamed script) that keeps `{port}`. Person-check preparation also receives a port.
-- No retake. The design reference stays the shaping capture, as the owner asked ("compare design
-  phase versus overall result"). The capture at the visual check of `7f8a72077` is removed.
-- The reviewer receives the "after" screenshots and the design reference, labelled `before/…` and
-  `after/…` per state and viewport. Prompt: judge "after" against each expectation; the design
-  reference shows the starting point and is not judged, since the target may have moved since
-  shaping.
+- Retake, as agreed in TD-38: at the visual check, if the merge-base differs from the shaping
+  baseline commit and the diff between them touches UI paths (the existing UI-path rule), Delivery
+  captures "before" again at the merge-base, before launching "after" (the capture of `600636899`,
+  launched through §3.5). The retake is its own immutable set (§3.3 Storage). The shaping set stays
+  the design reference on the card.
+- The reviewer receives the "after" screenshots and the current starting point (the retake, else the
+  shaping set), labelled `before/…` and `after/…` per state and viewport. Prompt: judge "after"
+  against each expectation; "before" shows the starting point and is not judged.
 - Budget: "after" images come first within the 12 MB review cap. "Before" images are downscaled, then
   omitted, with a named note when they do not fit. A "before" image never causes a finding, so a full
   budget never becomes a product fix task.
@@ -167,7 +169,7 @@ the owner's journey and has no route yet.
 
 ### 3.7 Removed as-built behaviour
 
-- The capture at the visual check (`before.due` at CHECK) and its host rules.
+- The capture at the visual check runs only as the retake (§3.4), not for every UI Change.
 - The free choice of the visual check's recipe by the preparing Builder.
 - The page's native fallback.
 
@@ -182,26 +184,25 @@ before new files are added.
 | 1 Ports | §3.5, with check preparation receiving a port (§3.4 first bullet) and the template/port split | Two concurrent launches of a real `python -m http.server {port}`, each serving different content, render their own content; a server ignoring the port fails with the named reason and is disposed; the host's "after" launch refuses an answering URL; a relaunch gets a new port and keeps the check's answer |
 | 2 PDS | §3.6 | Page test; browser check with the CDN reachable, with the core blocked, and with one component chunk blocked (diagnostic shown in both failure cases) |
 | 3 Recipe and shaping capture | §3.2, §3.3, G2 | `save_brief` over MCP stores `ui`, `visual`, `recipe`; through the host's capture rule, a shaping draft gets one capture at the target tip whose PNG shows the target's content (as `test_before.py` does today); a revision saved during a running capture succeeds; an expectations-only edit or a state rename does not recapture and keeps the pictures; a killed capture runner ends its attempt as interrupted while its preview is alive, leaves no process and is not relaunched; "Capture again" retries a failed attempt; approval before the capture finishes is refused by API and fold; the page shows each state with its screenshots |
-| 4 Visual check | §3.4 | Preparation prompt carries the brief's recipe and port; reviewer attachments carry labelled before and after; an over-budget "before" is downscaled or omitted with a note and never yields a fix task |
+| 4 Visual check | §3.4 | Preparation prompt carries the brief's recipe and port; a target whose UI paths changed since shaping gets a retake showing the new target's content, an unchanged one none; reviewer attachments carry labelled before and after; an over-budget "before" is downscaled or omitted with a note and never yields a fix task |
 | 5 Live | One UI Change in `owlbear-sandbox` from chat: shaping meets G5 and offers the three choices; the Change fixes the preview in itself; a second Change gets a design reference; its visual check fails once on a deliberately broken layout, returns a fix task and then passes (the M4 proof); an owner's own server on 4173 stays untouched and uncaptured | Card with both sets; page screenshots; activity log |
 
 Docs updated with the slices: the TD-24 sentence of [charter §3.10](delivery-next-charter.md#L227);
 J2, J4, J7, B24, B25 of the [journey](delivery-next-journey-and-failure-modes.md); "Visual check" and
 the "Before" paragraph of the [architecture](delivery-next-architecture.md); the brief row, "Check
-environment" and "Before capture" of [status and exits](delivery-next-status-and-exits.md); DR3 if
-D-A takes option 1.
+environment" and "Before capture" of [status and exits](delivery-next-status-and-exits.md); the DR3
+exception of §5.
 
-## 5. Decision for the owner, risks and confidence
+## 5. Recorded exception, risks and confidence
 
-**D-A: who runs the project's install for the shaping capture?** The approved design says project
-installs run inside agent tasks with a fix loop (DR3), so a failing install gets repaired by an agent.
-The capture built yesterday runs the profile's install commands directly in its temporary checkout,
-and the plan reuses it.
-
-| Option | Meaning | Pros | Cons and risks | Confidence |
-| --- | --- | --- | --- | --- |
-| 1. Exception to DR3 for the disposable baseline (recommended) | Delivery runs the profile's install commands directly in the temporary checkout; a failure is a B25 note with the command's last line and "Capture again", no repair | No agent session per capture (no credits; likely faster, not measured); the screenshots show exactly the target commit on the card; the checkout is thrown away, so a repair would not persist anyway | A target that needs a repair to install gets no design reference until the owner fixes it (for example the profile's install command); DR3 gains one named exception | 0.8 |
-| 2. Follow DR3 | An agent session installs, and may repair, in the temporary checkout before each capture | No exception; a broken install can still yield a reference | A paid agent session per capture and retry; a repair that touches tracked source or generated UI makes the screenshots show the repaired target, not the commit named on the card, unless repairs are limited to the environment or the reference is marked as adjusted; repairs are lost with the checkout | 0.2 |
+**Install for the capture (`autonomous`, supersedes DR3 for the capture's throwaway checkout
+only).** DR3 (approved) runs project installs inside agent tasks so failures get fixed. For the
+capture, Delivery runs the profile's install commands directly in the temporary checkout; a failure
+is a B25 note with the command's last line, and the owner fixes the cause (for example the profile's
+install command) and presses "Capture again". Reason: a "before" must show the target commit as it
+is; screenshots of a state an agent repaired would not be a valid starting point, and the repair
+would be lost with the checkout. The owner's question on the earlier framing as a decision: "does
+taking screenshots from a broken install make sense? what question is that?"
 
 | # | Risk | Why it matters | Settled by |
 | --- | --- | --- | --- |
@@ -209,11 +210,11 @@ and the plan reuses it.
 | R2 | The review cap of 12 MB with before and after | Today's cap names over-budget states as findings, which can become fix tasks | §3.4 budget rule; measured in slice 4 |
 | R3 | Install and start time at shaping | The owner waits before approving | Background capture, key reuse; slice 5 measures only a small project |
 | R4 | A project whose preview cannot take a port | No design reference until it can | §3.2 choices; M4 meets it on purpose (G5) |
-| R5 | The target moves between shaping and the visual check | The design reference may differ from the result in ways this Change did not cause | The reviewer does not judge the reference (§3.4); the card labels it with its commit and date |
+| R5 | The target moves between shaping and the visual check | The design reference may differ from the result in ways this Change did not cause | The retake (§3.4) when the target's UI paths changed; the reviewer does not judge "before"; the card labels each set with its commit and date |
+| R6 | A front end that calls a separately running API which allows only one browser origin | On an assigned port its requests are refused, so the screenshots show missing data. "Same-origin navigation" does not prevent this: it limits page navigation, not API requests. The assistant wrongly called this risk theoretical when the owner chose TD-40 | Not present in the M4 sandbox; unknown for the first real project. The shaping capture shows it; the recipe then sets the API's allowed origin, or uses the project's dev-server proxy |
 
-Confidence that the plan implements TD-38 to TD-40 without contradicting the approved journey, given
-D-A option 1: 0.8. Lowest: R1 (unverified) and the capture scheduling rule in §3.3 (new host
-behaviour).
+Confidence that the plan implements TD-38 to TD-40 without contradicting the approved journey: 0.8.
+Lowest: R1 (unverified) and the capture scheduling rule in §3.3 (new host behaviour).
 
 ## 6. Challenge record
 
@@ -228,8 +229,8 @@ items; no reversal of TD-38 to TD-40 proposed. Dispositions:
 | 4 | Capture vs Change lock, scheduling while waiting on the owner, approval enforcement, D6 | Accepted for the first three (§3.3); D6 is pre-existing, recorded as G6, out of scope |
 | 5 | Check preparation has no port | Accepted: §3.4 |
 | 6 | Stored records and relaunch | Template/port split and fresh port accepted (§3.5); migration rejected: no real records before M4, no-legacy rule |
-| 7 | Cache key wider than storage; one `before` record; retakes | Accepted by simplification: immutable sets per key, labelled attachments, retake removed (owner's own words) |
-| 8 | Direct installs contradict DR3 | Raised to the owner as D-A |
+| 7 | Cache key wider than storage; one `before` record; retakes | Accepted: immutable sets per key, labelled attachments. Removing the retake was wrong: the owner had agreed to it in TD-38; restored in §7 |
+| 8 | Direct installs contradict DR3 | First raised as D-A; replaced by a recorded exception in §7 |
 | 9 | Slice boundaries and discriminating proof | Accepted: preparation in slice 1; content-specific proofs; M4 broken-layout and owner-server cases in slice 5 |
 | 10 | R2 overstated; no combined budget | Accepted: R2 corrected, §3.4 budget rule |
 
@@ -243,6 +244,19 @@ not ready until the capture lifecycle and D-A's framing were complete. Dispositi
 | 2.3 | A failed capture was cached for good | Accepted: owner-triggered retry, no automatic retry (§3.3) |
 | 2.4 | Renamed states lose their pictures | Accepted: files and pairing by path and viewport (§3.3 Storage) |
 | 2.5 | D-A option 2 omits that repairs can alter the reference | Accepted: D-A table; timings marked unmeasured |
+
+## 7. Corrections from the retrospective review of 2026-10-11
+
+A Sol review of the whole delivery-next history (record in
+[the rebuild research](delivery-liveness-first-rebuild.md), "Retrospective review") found three
+errors in this plan:
+
+- **Retake.** The plan had dropped the retake, saying "as the owner asked". The owner had agreed to
+  the proposal that contained it ("1: agree"); the quoted words were the owner's earlier view, given
+  as not yet decided. Restored in §3.4, §3.7, slice 4 and R5; TD-38 restated with what was agreed.
+- **D-A.** A non-decision presented as one, with an option no owner would choose. Replaced by the
+  recorded exception in §5.
+- **R6.** The API-origin risk had been dismissed with a wrong argument. Added as a risk.
 
 Third round on §3.3 and D-A: 2.1 to 2.5 closed; no new defect except one. Disposition:
 

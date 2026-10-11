@@ -105,8 +105,8 @@ it after an interruption, and disposes of it before any other writer starts on t
 the host launches the "after" preview: the same recipe at the merge-base in a temporary detached
 worktree, after the profile's install commands, with every started process journaled and disposed
 of. A failure, including a port that already answers, is noted on the card (B25) and the run
-continues; it never gates. The charter's "before the first build task" awaits the owner's decision
-on this later moment.
+continues; it never gates. Superseded by TD-38 (capture in shaping; this capture remains as the
+retake) and TD-40 (free port per preview); see the [visual-baseline plan](delivery-next-visual-baseline.md).
 
 **Merge gate** (as built, `autonomous` order). `merge` re-reads the profile rules and the PR (merged
 → cleanup), evaluates the gate, takes the host's merge lock for the target (pending while another

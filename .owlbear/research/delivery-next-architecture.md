@@ -300,7 +300,9 @@ workspace dependency of `owlbear-browser`. VS Code's integrated browser is reach
 inside VS Code, not from workers outside it. The engine captures, so the reviewer keeps three tools.
 A recipe that fails or a missing browser at runtime is B24.
 
-"Before" screenshots (TD-24; built, mechanics `autonomous`; timing open with the owner). As built, the
+"Before" screenshots (TD-24 as built at `600636899`; superseded by TD-38 and TD-40, see the
+[visual-baseline plan](delivery-next-visual-baseline.md): the capture moves to shaping, this one
+remains as the retake at the visual check, previews get a free port). As built, the
 brief carries no render recipe, contrary to the visual-check design above, which has shaping establish
 it before approval; the first verified recipe is the one the preparing Builder returns at the visual
 check. So a runner
@@ -311,10 +313,7 @@ Change's scope, launches the same recipe there, captures the brief's states and 
 started: the preview in the scope that started it, each installer with its process group, and every
 PID journaled first so the host finds a dead runner's processes. The card shows the pairs beside the
 "after" ones. Any failure, including a port that already answers, is a card note (B25); the capture
-never gates. Deviation awaiting the owner: the charter says "before the first build task"; the
-as-built moment is later, at the commit the Change started from unless its branch was updated since.
-States changed after the capture are not retaken. Known limit, shared with the "after" preview:
-readiness proves that the URL answers, not that the launched group owns the listener.
+never gates. States changed after the capture are not retaken.
 
 **Changes page.** Served by the host app before M6; a "Changes" page beside Ideas and Memory in
 Cockpit after it. As built it uses the Porsche Design System 4.8.0 like Cockpit, with its loader and

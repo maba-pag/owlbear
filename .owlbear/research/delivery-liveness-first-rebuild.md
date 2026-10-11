@@ -240,7 +240,7 @@ choices and user choices alike as user decisions. This plan therefore treats eve
 | TD-35 | Execution mode switch: "managed" (each step runs where its requirements say) or "all in VS Code" (for watching); the user can switch at any time and the next chat that starts uses the new mode. VS Code being open is fine; when it is not running, Delivery starts it instead of only reporting it | `decided`: "how about just managed or everything in vs code … if you or sol have no veto, id like that" (subject to a veto from the agent or Sol) | 2026-10-11 |
 | TD-36 | If sessions started by Delivery do not receive VS Code's tools, the fallback is route C: Delivery opens VS Code chats via `code chat -m <agent>` for UI and browser steps, results through the Delivery MCP server | `decided` (answered question) | 2026-10-11 |
 | TD-37 | Overnight 2026-10-11: probe, design, build, test and more; `maba-pag` was added as a collaborator to both sandbox repositories; VS Code stays open and the Mac awake | `decided` (answered questions) | 2026-10-11 |
-| TD-38 | "Before" screenshots are part of shaping: once a Change is known to alter a page, shaping establishes the render recipe, captures the current pages from the target and writes the visual states against them; the comparison is design state against overall result, per Change, not per task. Replaces the charter's "before the first build task"; TD-24 stays. Plan: [visual baseline](delivery-next-visual-baseline.md) | `decided`: "agree" to "before" in shaping as design input, compared per Change ("it might be enough to compare deisgn phase versus overall result") | 2026-10-11 |
+| TD-38 | "Before" screenshots are part of shaping: once a Change is known to alter a page, shaping establishes the render recipe, captures the current pages from the target and writes the visual states against them; approval waits until that capture has finished. The comparison is per Change, not per task. At the visual check, if the target's UI paths changed since the shaping capture, "before" is retaken from the new starting point and the shaping set stays the design reference. Replaces the charter's "before the first build task"; TD-24 stays. Plan: [visual baseline](delivery-next-visual-baseline.md) | `decided`: "1: agree" to the assistant's proposal of 2026-10-11 containing exactly these points. The owner's earlier view, given as not yet decided: "i feel like it might be enough to compare deisgn phase versus overall result, not on a per task basis" | 2026-10-11 |
 | TD-39 | The Changes page loads the Porsche Design System the way PDS documents it, from its CDN, without an own fallback rendering | `decided`: "A" ("i would prefer the way pds recommends … the fewer deviations from pds the better") | 2026-10-11 |
 | TD-40 | Every preview run gets a free port chosen by Delivery; recipes take the port as a placeholder | `decided`: "3 is confiremd option 3 now" | 2026-10-11 |
 
@@ -362,6 +362,38 @@ modules and build no front-end abstraction. A broader comparison of agent
 front-ends is worthwhile only if R8 shows the Copilot harness cannot host the skeleton; then compare
 candidates that drive Copilot through ACP or the SDK, not through direct model access.
 
+### 3.11 Retrospective review, 2026-10-11
+
+At the owner's request one Sol instance reviewed the assistant's plans and records since the rebuild
+began, stage by stage in the order they were discussed (material in `.owlbear/scratch/retro-review/`,
+not tracked). Limit: answers given in question dialogs are not stored in any readable log, so rows
+whose origin is "answered question" can be checked only against their own quotes.
+
+Patterns it found, with examples: proposals hardened into owner decisions (the merge prohibition
+corrected on 2026-10-10; the dropped retake of TD-38); code treated as the specification (the brief's
+missing render recipe written into the design as fact); claims beyond the evidence (the prototype
+"ran from a chat-shaped brief" while the chat was a scripted client; port risks dismissed with a
+wrong argument); consequential choices handed to the owner after building, without context.
+
+Records corrected the same day: TD-38 restated with what the owner agreed; the M4 status above;
+the charter's TD-24 sentence; the as-built "before" paragraphs of the architecture and status docs;
+the [visual-baseline plan](delivery-next-visual-baseline.md) §7.
+
+Code contradicting the decided or approved design, verified at `600636899` and queued for repair:
+
+| # | Contradiction | Decided or approved rule |
+| --- | --- | --- |
+| C1 | The brief has no render recipe; the chat tool drops `ui` and visual states | Charter §3.10; TD-38 |
+| C2 | Previews start without a free port or a check that the address is free | TD-40 |
+| C3 | A resolved integration conflict that touches another Change's scope always asks, even when no behaviour contradicts | TD-12: "ask only on real behavioural collisions" |
+| C4 | `no-action` is refused only for review threads, so a human's PR comment can stay unanswered | TD-30: every human comment is answered |
+| C5 | An approved brief cannot be changed; the API knows only pause, resume and abandon | Journey D6 |
+| C6 | The VS Code driver lets the window's first turn start on the window's default model, then cancels it | TD-32: "we never use auto, ever" |
+| C7 | "All in VS Code" still runs steps with screenshot attachments through the SDK | TD-35 |
+
+C6 and C7 need research first (whether VS Code can start a chat turn with a named model, and take
+attachments), then the owner's call only if the platform cannot comply.
+
 ## 4. Recommendation, Confidence, and Limits
 
 **Recommendation:** treat this as a re-founding with the weight on design. Let the open Changes
@@ -380,7 +412,7 @@ the platform migration rather than sequencing it (S3).
 | M1 | Done: ownership map, route comparison, live platform probe | L14 |
 | M2 | Charter drafted and challenged; awaits approval | [charter](delivery-next-charter.md) |
 | M3 | Journey and catalogue, status and exits, architecture, cutover: drafted, challenged three times, corrected; awaits approval | L14, M3 row |
-| M4 | Prototype on branch `next/m4-slice1`, PR #449, not merged: the whole journey ran in the sandbox, from a chat-shaped brief to a merged PR, with brief approval and merge consent as the only touchpoints; twelve common failures were triggered by hand and each ended in its designed exit and continued; every failure found was fixed locally (P9). Reshape phases A–E done on PR #449 (draft), with Sol challenges per phase and a final re-check; CI skips draft PRs (repository rule), so local proof: the full Python suite passed at `372f3c2a7` (5,601 passed). Live run of the reshaped first-release flow on the protected sandbox (PR #8): owner review thread fixed, replied to and resolved by Delivery, automatic merge without consent, pull-back of the checked-out `main`; four defects it found were fixed with tests. Remaining: `maba-pag` probe (TD-17); visual check, overlap display and the New Change button not yet run live | `serve/delivery-next/DEMO-slice1.md` on the branch |
+| M4 | Prototype on branch `next/m4-slice1`, PR #449, not merged: the whole journey ran in the sandbox from a brief to a merged PR, with the chat simulated by a scripted MCP client (no real chat session was exercised; the chat tool cannot save UI fields, G2 of the [visual-baseline plan](delivery-next-visual-baseline.md)), with brief approval and merge consent as the only touchpoints; twelve common failures were triggered by hand and each ended in its designed exit and continued; every failure found was fixed locally (P9). Reshape phases A–E done on PR #449 (draft), with Sol challenges per phase and a final re-check; CI skips draft PRs (repository rule), so local proof: the full Python suite passed at `372f3c2a7` (5,601 passed). Live run of the reshaped first-release flow on the protected sandbox (PR #8): owner review thread fixed, replied to and resolved by Delivery, automatic merge without consent, pull-back of the checked-out `main`; four defects it found were fixed with tests. Remaining: `maba-pag` probe (TD-17); visual check, overlap display and the New Change button not yet run live | `serve/delivery-next/DEMO-slice1.md` on the branch |
 
 Proven since: merge under a ruleset (required check, squash only, linear history) in the public
 sandbox `boecht/owlbear-sandbox-protected` — never merged while CI was pending or red, merged the

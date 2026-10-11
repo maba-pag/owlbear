@@ -88,7 +88,9 @@ who want it. Overlap between Changes is recorded and shown as "overlaps with X",
 lockfiles and generated files are ignored. Integration asks only on a behavioural collision — a
 Builder-resolved conflict, or an integration ending in a question, that touches the scope of another
 open Change or one merged in the last 14 days — with the options keep this behaviour, adopt the
-other's, or pause (TD-12; this test is `autonomous`). Announced prerequisite actions — sign in again, approve a permission,
+other's, or pause (TD-12; this test is `autonomous`, and as built it asks on every such resolved
+conflict, more often than TD-12's "real behavioural collisions"; repair C3 in the rebuild research
+§3.11). Announced prerequisite actions — sign in again, approve a permission,
 unlock a signer, set a credential outside chat — are allowed, each with its exact action and resume
 condition. Anything else asked of the user is a defect. Setup is user-local (TD-11): it writes
 `.vscode/tasks.json` and `.mcp.json` only with consent and only while they are untracked, and adds
@@ -227,9 +229,10 @@ assertions on agent prose wording; agent definitions get structural checks only 
 UI changes always get a visual check (TD-14): the host launches the preview from the brief's render
 recipe (start command, URL or entry, up to six UI states to capture), takes screenshots at desktop
 and phone sizes, and a reviewer judges them against the criteria. "Before" screenshots of the same
-states are captured once from the target, before the first build task, and shown beside the
-"after" ones on the card without interrupting the run (TD-24); if the recipe cannot render the
-target, the card says so and the run continues. A Change is UI when the brief's
+states are captured in shaping, before approval, and serve as the design reference; when the
+target's UI paths changed by the visual check, "before" is retaken from the new starting point. They
+are shown beside the "after" ones on the card without interrupting the run (TD-24, timing TD-38); if
+the recipe cannot render the target, the card says so and the run continues. A Change is UI when the brief's
 `ui` flag says so or its diff touches UI files or folders; "Not a UI change" holds only for the UI
 paths it was given for. The screenshots are kept with the Change and shown on its card; a
 failure becomes a Builder fix task. The owner looks only when the brief declares a person-only check.
