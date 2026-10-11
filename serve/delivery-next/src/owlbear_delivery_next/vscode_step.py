@@ -21,7 +21,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
-from owlbear_delivery_next.ahp import ROOT
+from owlbear_delivery_next.ahp import ROOT, HostError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -244,16 +244,20 @@ class Step:
         return None
 
     def _cancel(self, out: Outcome, turn: str) -> bool:
-        """Cancel ``turn`` and wait until the host no longer runs it."""
+        """Cancel ``turn`` and wait, at most ``ACK`` seconds, until the host no longer runs it."""
         chat = out.chat or ""
-        self.conn.dispatch(chat, {"type": "chat/turnCancelled", "turnId": turn, "duration": 0})
-        deadline = self.clock() + ACK
-        while self.clock() < deadline:
-            if (self._chat(chat).get("activeTurn") or {}).get("id") != turn:
-                out.cancel_confirmed = True
-                return True
-            self.conn.next_event(0.2)
         out.cancel_confirmed = False
+        deadline = self.clock() + ACK
+        try:
+            self.conn.dispatch(chat, {"type": "chat/turnCancelled", "turnId": turn, "duration": 0})
+            while (left := deadline - self.clock()) > 0:
+                state = self.conn.request("subscribe", {"channel": chat}, timeout=left)["snapshot"]["state"]
+                if (state.get("activeTurn") or {}).get("id") != turn:
+                    out.cancel_confirmed = True
+                    return True
+                self.conn.next_event(0.2)
+        except HostError:
+            return False
         return False
 
     def _configure(self, session: str) -> bool:
@@ -337,9 +341,11 @@ class Step:
         return True
 
     def _steer(self, chat: str, control: Control) -> list[str]:
+        """Send queued steering; each text carries a step-unique tag so a user's identical text never matches."""
         sent: list[str] = []
         while not control.steering.empty():
-            text = control.steering.get_nowait()
+            tag = uuid.uuid4().hex[:8]
+            text = f"{control.steering.get_nowait()}\n\n(OwlBear steering {self.spec.nonce}-{tag})"
             message = {"text": text, "origin": {"kind": "user"}}
             self.conn.dispatch(
                 chat,

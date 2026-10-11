@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import json
+import queue
 import socket
 import tempfile
 import threading
@@ -10,7 +11,9 @@ from pathlib import Path
 import pytest
 
 from owlbear_delivery_next import ahp
+from owlbear_delivery_next.ahp import HostError
 from owlbear_delivery_next.vscode_step import (
+    ACK,
     DEFAULT_MODEL,
     HARNESS,
     Control,
@@ -349,8 +352,47 @@ def test_steering_runs_as_a_follow_up_turn_that_the_step_waits_for(tmp_path: Pat
 
     assert out.end == "complete"
     ((_, steer),) = host.actions("chat/pendingMessageSet")
-    assert steer["message"]["text"] == "Also check 1280px."
+    assert steer["message"]["text"].startswith("Also check 1280px.\n\n(OwlBear steering n0nce-")
     assert out.turns[-1] == "follow-up"
+
+
+def test_a_user_turn_with_the_same_words_as_pending_steering_is_not_adopted(tmp_path: Path) -> None:
+    script = [
+        {"type": "chat/turnComplete"},
+        {"type": "chat/turnStarted", "turnId": "user", "message": {"text": "continue"}},
+        {"type": "chat/toolCallReady", "turnId": "user", "toolCallId": "u1", "confirmed": None},
+    ]
+    host = FakeHost(tmp_path, [{}], [script])
+    control = Control()
+    control.steering.put("continue")
+    out = step(host, spec(tmp_path)).run(control, limit=60)
+
+    assert out.end == "user-turn"
+    assert host.actions("chat/toolCallConfirmed") == []
+
+
+def test_a_stalled_snapshot_during_stop_ends_unconfirmed_within_the_ack_window(tmp_path: Path) -> None:
+    host = FakeHost(
+        tmp_path,
+        [{}],
+        [[{"type": "chat/toolCallReady", "toolCallId": "t1", "toolInput": "x", "confirmed": None}]],
+    )
+    timeouts: list[float] = []
+    original = host.request
+
+    def request(method: str, params: dict, timeout: float = 60) -> dict:
+        if host.actions("chat/turnStarted") and method == "subscribe":
+            timeouts.append(timeout)
+            raise HostError("subscribe: no answer")  # noqa: EM101, TRY003
+        return original(method, params, timeout)
+
+    host.request = request
+    control = Control()
+    out = step(host, spec(tmp_path), lambda _c: control.stop.set() or True).run(control, limit=60)
+
+    assert (out.end, out.cancel_confirmed) == ("stopped", False)
+    assert timeouts
+    assert all(t <= ACK for t in timeouts)
 
 
 def test_closed_connection_ends_the_step(tmp_path: Path) -> None:
@@ -454,19 +496,19 @@ def test_connection_speaks_websocket_json_rpc_over_the_local_socket() -> None:
 
 
 def test_a_server_close_is_answered_and_later_requests_fail_at_once() -> None:
-    replies: list[tuple[int, bytes]] = []
+    replies: queue.Queue[tuple[int, bytes]] = queue.Queue()
 
     def serve(conn: socket.socket) -> None:
         _ws_recv(conn)
         _ws_send(conn, b"\x03\xe8", op=8)
-        replies.append(_ws_frame(conn))
+        replies.put(_ws_frame(conn))
 
     path, server = _host(serve)
     conn = ahp.Connection(str(path), "secret", "owlbear-delivery-test")
     try:
         with pytest.raises(ahp.HostError, match="connection closed"):
             conn.request("listSessions", {}, timeout=5)
-        assert replies == [(8, b"\x03\xe8")]
+        assert replies.get(timeout=5) == (8, b"\x03\xe8")
         assert conn.next_event(1) == {"method": "closed", "params": {"error": "server closed"}}
         with pytest.raises(ahp.HostError, match="connection closed"):
             conn.request("listSessions", {}, timeout=30)
